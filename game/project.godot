@@ -16,6 +16,10 @@ config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://assets/icons/icon_256x256.png"
 config/windows_native_icon="res://assets/icons/icon.ico"
 
+[autoload]
+
+SimClock="*res://src/autoload/sim_clock.gd"
+
 [display]
 
 window/stretch/mode="canvas_items"

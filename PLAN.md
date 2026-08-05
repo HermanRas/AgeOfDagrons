@@ -1018,7 +1018,7 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 | 0.2c | `licence_audit.py` + `assets/LICENCES.md` + `CREDITS.md`; CI fails on undeclared assets | **[MVP]** |
 | 0.3 | `AssetPacks` autoload: manifest check, download, checksum verify, `load_resource_pack()`, `DownloadScreen` (§3.2) | **[MVP]** |
 | 0.4 | `GameDataRegistry` + JSON schemas + `*Def` classes; hand-enter the ~6 MVP entities | **[MVP]** |
-| 0.5 | Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`, `SimSystem`, `Command`, `SpatialHash`. Headless, no view | **[MVP]** |
+| 0.5 | ✅ **DONE** — Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`/`SimUnit`, `SimSystem` (`CommandSystem`/`TaskSystem`/`MovementSystem`), `Command` (`MoveCommand`/`StopCommand`), `SpatialHash`. Straight-line movement only -- no map/pathfinding until 2.1. Verified headless: 9/9 tests, exit 0 | **[MVP]** |
 | 0.6 | `Net`: `host_solo()` loopback, command RPC up, snapshot RPC down, `EntityViewPool` interpolation | **[MVP]** |
 | 0.7 | Test harness: headless sim tests, `state_hash()`, replay record/play, `StressTest.tscn`, CI grep on the `sim/` boundary | **[MVP]** |
 | 0.8 | `.gdignore` in raw-art folders; document the non-synced art_source path (§2.6) | **[MVP]** |
