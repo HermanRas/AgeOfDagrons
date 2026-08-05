@@ -43,3 +43,13 @@ func get_view(id: int) -> EntityView:
 func advance_all(delta: float) -> void:
 	for view in _active.values():
 		view.advance(delta)
+
+
+## For callers that need to enumerate what's currently visible -- e.g.
+## StressTest.tscn drawing a placeholder marker per active view, since real
+## sprites don't exist until phase 0.2b/0.9.
+func active_views() -> Array[EntityView]:
+	var views: Array[EntityView] = []
+	for v in _active.values():
+		views.append(v)
+	return views

@@ -7,6 +7,10 @@ extends Node
 
 var world: SimWorld = null
 
+## Cost of the last world.step() alone, excluding snapshot building/broadcast
+## -- what PLAN.md 3.1's "sim tick cost < 5ms per 100ms tick" budget means.
+var last_step_usec: int = 0
+
 var _on_tick: Callable = Callable()
 
 
@@ -29,7 +33,9 @@ func stop() -> void:
 
 
 func _handle_tick(_tick: int) -> void:
+	var started := Time.get_ticks_usec()
 	world.step()
+	last_step_usec = Time.get_ticks_usec() - started
 	if _on_tick.is_valid():
 		for p in world.players:
 			_on_tick.call(p.id, SnapshotSystem.build(world, p.id))

@@ -31,7 +31,7 @@ func test_leave_tears_down_cleanly_so_hosting_again_works() -> void:
 
 func test_submit_command_reaches_the_world_and_a_snapshot_comes_back() -> void:
 	Net.host_solo()
-	var v := Net._host.world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	var v := Net.host().world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
 
 	var snapshots: Array[Dictionary] = []
 	Net.snapshot_received.connect(func(s: Dictionary) -> void: snapshots.append(s))

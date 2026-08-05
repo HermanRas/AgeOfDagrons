@@ -50,6 +50,13 @@ func is_server() -> bool:
 	return _host != null
 
 
+## Null on a client. Exists for tools that need direct read access to the
+## authoritative world -- StressTest.tscn's perf counters, tests -- without
+## reaching into the underscore-prefixed field from outside.
+func host() -> SimHost:
+	return _host
+
+
 func local_player_id() -> int:
 	return _local_player_id
 

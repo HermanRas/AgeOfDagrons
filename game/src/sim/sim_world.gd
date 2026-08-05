@@ -103,3 +103,30 @@ func entities_in_rect(rect: Rect2i) -> Array[SimEntity]:
 		if e != null and e.alive:
 			found.append(e)
 	return found
+
+
+## Desync/regression detection (PLAN.md 7.7 layer 3): the same MatchConfig +
+## command log run twice must hash identically. Dictionary iteration order in
+## `entities` isn't guaranteed, so entity ids are sorted before folding them
+## in -- without that, two identically-behaving runs could still hash
+## differently for no reason but map insertion order.
+func state_hash() -> int:
+	var ids := entities.keys()
+	ids.sort()
+
+	var parts: Array = [tick]
+	for id in ids:
+		var e: SimEntity = entities[id]
+		parts.append([e.id, e.def_id, e.owner_id, e.pos.x, e.pos.y, e.hp, e.alive])
+		if e is SimUnit:
+			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing])
+
+	for p in players:
+		var stock_keys := p.stock.keys()
+		stock_keys.sort()
+		var stock: Array = []
+		for k in stock_keys:
+			stock.append([k, p.stock[k]])
+		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock])
+
+	return hash(parts)

@@ -84,7 +84,7 @@ The Godot project stays in the Drive folder for now (`AOD_Mobile\game\`) but **s
 | **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0) — imports 0 A.D. actor XML, resolving mesh + props + textures. **Does not import animations**; those load separately from `art/animation/*.dae` onto the armature | needed for 0.9 |
 | **0 A.D. art** | `git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git` into `art_source\`. **Shallow clone matters** — full history is ~8.3 GB | needed for 0.9 |
 | **git** | 2.47.1 | ✅ installed |
-| **Test framework** | **GdUnit4** (MIT) — explicit 4.7.1 support and a first-party GitHub Action (§7.7) | needed for 0.7 |
+| **Test framework** | **Custom `TestCase`/`run_tests.tscn` harness** (built 0.1–0.7), kept instead of GdUnit4 — already covers headless tests, `state_hash()`, replays and the `sim/` boundary check with zero dependencies. GdUnit4 remains an option later if a real need (parallel execution, richer reporting) shows up | done at 0.7 |
 
 Notes on the 0 A.D. checkout:
 
@@ -1030,7 +1030,7 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 | 0.4 | `GameDataRegistry` + JSON schemas + `*Def` classes; hand-enter the ~6 MVP entities | **[MVP]** |
 | 0.5 | ✅ **DONE** — Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`/`SimUnit`, `SimSystem` (`CommandSystem`/`TaskSystem`/`MovementSystem`), `Command` (`MoveCommand`/`StopCommand`), `SpatialHash`. Straight-line movement only -- no map/pathfinding until 2.1. Verified headless: 9/9 tests, exit 0 | **[MVP]** |
 | 0.6 | ✅ **DONE** — `Net` autoload: `host_solo()` (real ENet server bound to 127.0.0.1), `submit_command()`/`_recv_command` RPC up, `SnapshotSystem` + `_recv_snapshot` RPC down; `SimHost` owns the server-side `SimWorld`, driven by `SimClock`. View layer: `Iso`, `EntityView`/`EntityViewPool` (pooled, interpolated), `GameView.apply_snapshot()`. `host_open()`/`join()` (remote multiplayer) deferred -- out of MVP scope (§10). Verified headless: 22/22 tests, exit 0 | **[MVP]** |
-| 0.7 | Test harness: headless sim tests, `state_hash()`, replay record/play, `StressTest.tscn`, CI grep on the `sim/` boundary | **[MVP]** |
+| 0.7 | ✅ **DONE** — `SimWorld.state_hash()` + regression tests, `Replay` (record/play, JSON round trip), `sim/` boundary check (as a headless test, not a separate Python grep — one CI command), `StressTest.tscn` (50 units through the real `host_solo()` path; desktop run: 0.48/0.04/2.15 ms tick cost, 60/45/61 fps, 59 draw calls — on-device numbers still needed). GdUnit4 deliberately not adopted (see §1.3). 29/29 tests, exit 0 | **[MVP]** |
 | 0.8 | `.gdignore` in raw-art folders; document the non-synced art_source path (§2.6) | **[MVP]** |
 | 0.9 | `render_3d_to_iso.py` + `bake_sprites.py` + `verify_atlas.py` + `build_packs.py` — proven end-to-end on one unit | **[MVP]** |
 
