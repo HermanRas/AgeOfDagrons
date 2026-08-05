@@ -19,6 +19,7 @@ config/windows_native_icon="res://assets/icons/icon.ico"
 [autoload]
 
 SimClock="*res://src/autoload/sim_clock.gd"
+Net="*res://src/autoload/net.gd"
 
 [display]
 

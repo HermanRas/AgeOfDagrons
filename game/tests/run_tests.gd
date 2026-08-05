@@ -1,13 +1,20 @@
 ## Headless test runner. CI entry point.
 ##
-##     godot --headless --path game/ --script res://tests/run_tests.gd
+##     godot --headless --path game/ res://tests/run_tests.tscn
 ##
 ## Exit code 0 = all passed, 1 = one or more failures.
 ##
 ## Discovers every `test_*.gd` under res://tests/ recursively, instantiates it,
-## and runs each `test_*` method. No scene tree, no window, no rendering --
-## which is only possible because src/sim/ holds no Node types (PLAN.md 4).
-extends SceneTree
+## and runs each `test_*` method. No window, no rendering -- which is only
+## possible because src/sim/ holds no Node types (PLAN.md 4).
+##
+## This is a scene script (a Node under run_tests.tscn), not a --script
+## SceneTree override: a custom --script MainLoop skips the normal main-scene
+## boot sequence that parents autoload singletons under the tree root, which
+## silently breaks anything needing get_tree()/get_multiplayer() (e.g. Net) --
+## discovered building phase 0.6. A real scene, even headless, boots exactly
+## like the shipped game does, so autoloads work the same way here as on device.
+extends Node
 
 const TEST_ROOT := "res://tests/"
 
@@ -18,7 +25,7 @@ var _assertions := 0
 var _failure_log: Array[String] = []
 
 
-func _initialize() -> void:
+func _ready() -> void:
 	var started := Time.get_ticks_msec()
 
 	print_rich("[b]AOD test run[/b]  Godot %s" % Engine.get_version_info().string)
@@ -38,14 +45,14 @@ func _initialize() -> void:
 		printerr("       expected at least one test_*.gd")
 		printerr("       if scripts were renamed, rebuild the class cache with --import")
 		_report(started)
-		quit(1)
+		get_tree().quit(1)
 		return
 
 	for path in files:
 		_run_file(path)
 
 	_report(started)
-	quit(1 if _failed > 0 else 0)
+	get_tree().quit(1 if _failed > 0 else 0)
 
 
 func _discover(dir_path: String) -> Array[String]:

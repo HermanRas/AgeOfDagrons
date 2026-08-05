@@ -370,8 +370,11 @@ AOD_Mobile/
     │   ├── game/
     │   └── ui/
     ├── tests/                  # headless — see §7.7
-    │   ├── run_tests.gd        # CI entry point, sets exit code
+    │   ├── run_tests.tscn      # CI entry point
+    │   ├── run_tests.gd        # discovers/runs test_*.gd, sets exit code
     │   ├── sim/                # SimWorld, systems, commands
+    │   ├── net/                # Net, SimHost
+    │   ├── view/               # Iso, EntityViewPool, GameView
     │   └── replays/            # recorded command logs used as regression fixtures
     └── addons/                 # GUT or GdUnit4
 ```
@@ -829,11 +832,18 @@ GDScript everywhere. Profile on the target Android device. Move a hot loop to GD
 Four distinct layers, deliberately — most of the value is in the first one.
 
 **1. Headless sim tests (the important layer).**
-Because `src/sim/` is plain GDScript with no `Node`, no textures, and no input, it can be tested with no engine window, no scene, and no rendering. This is the payoff of the §1.1 architecture and it's why the boundary rule is enforced by CI.
+Because `src/sim/` is plain GDScript with no `Node`, no textures, and no input, it can be tested with no window and no rendering. This is the payoff of the §1.1 architecture and it's why the boundary rule is enforced by CI.
 
 ```
-godot --headless --path game/ --script res://tests/run_tests.gd
+godot --headless --path game/ res://tests/run_tests.tscn
 ```
+
+The runner (`run_tests.gd`) is a Node under that minimal scene, not a `--script`
+`SceneTree` override. A custom `--script` MainLoop skips the normal main-scene
+boot sequence that parents autoload singletons under the tree root, which
+silently breaks anything needing `get_tree()`/`get_multiplayer()` -- discovered
+building 0.6's `Net` autoload. A real scene, even headless, boots exactly like
+the shipped game does.
 
 Exit code 0 = pass, non-zero = fail, so CI needs nothing else. Test shape:
 
@@ -1019,7 +1029,7 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 | 0.3 | `AssetPacks` autoload: manifest check, download, checksum verify, `load_resource_pack()`, `DownloadScreen` (§3.2) | **[MVP]** |
 | 0.4 | `GameDataRegistry` + JSON schemas + `*Def` classes; hand-enter the ~6 MVP entities | **[MVP]** |
 | 0.5 | ✅ **DONE** — Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`/`SimUnit`, `SimSystem` (`CommandSystem`/`TaskSystem`/`MovementSystem`), `Command` (`MoveCommand`/`StopCommand`), `SpatialHash`. Straight-line movement only -- no map/pathfinding until 2.1. Verified headless: 9/9 tests, exit 0 | **[MVP]** |
-| 0.6 | `Net`: `host_solo()` loopback, command RPC up, snapshot RPC down, `EntityViewPool` interpolation | **[MVP]** |
+| 0.6 | ✅ **DONE** — `Net` autoload: `host_solo()` (real ENet server bound to 127.0.0.1), `submit_command()`/`_recv_command` RPC up, `SnapshotSystem` + `_recv_snapshot` RPC down; `SimHost` owns the server-side `SimWorld`, driven by `SimClock`. View layer: `Iso`, `EntityView`/`EntityViewPool` (pooled, interpolated), `GameView.apply_snapshot()`. `host_open()`/`join()` (remote multiplayer) deferred -- out of MVP scope (§10). Verified headless: 22/22 tests, exit 0 | **[MVP]** |
 | 0.7 | Test harness: headless sim tests, `state_hash()`, replay record/play, `StressTest.tscn`, CI grep on the `sim/` boundary | **[MVP]** |
 | 0.8 | `.gdignore` in raw-art folders; document the non-synced art_source path (§2.6) | **[MVP]** |
 | 0.9 | `render_3d_to_iso.py` + `bake_sprites.py` + `verify_atlas.py` + `build_packs.py` — proven end-to-end on one unit | **[MVP]** |
