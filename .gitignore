@@ -39,6 +39,8 @@ build/
 *.apk
 *.aab
 *.pck
+*.idsig          # adb incremental-install signature, regenerated per install
+*.apk.idsig
 *.zip.md5
 *.exp
 *.lib
