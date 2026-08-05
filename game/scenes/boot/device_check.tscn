@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cxbhcnnoh2dsa"]
 
-[ext_resource type="Script" path="res://src/view/device_check.gd" id="1_devchk"]
+[ext_resource type="Script" uid="uid://b1ccr77swg81d" path="res://src/view/device_check.gd" id="1_devchk"]
 
-[node name="DeviceCheck" type="Control"]
+[node name="DeviceCheck" type="Control" unique_id=860929961]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

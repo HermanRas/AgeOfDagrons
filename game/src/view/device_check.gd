@@ -56,7 +56,9 @@ func _ready() -> void:
 	_info.add_theme_font_size_override("bold_font_size", 22)
 	add_child(_info)
 
-	_print_static_report()
+	# Populate immediately so the first frame already shows data rather than
+	# a blank panel; _process refreshes it from then on.
+	_info.text = _build_report()
 
 
 func _process(delta: float) -> void:
