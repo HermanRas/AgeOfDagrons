@@ -166,15 +166,20 @@ All need foundation / construction / complete / damaged / rubble.
 
 ### 2.6 Audio — full set
 
-| Category | Status | Notes |
-|---|---|---|
-| Per-unit selection/acknowledge voices | ⬜ TODO | Large volume. 0 A.D. voices are civ-specific — may not fit |
-| Combat sfx (melee, ranged, siege) | ⬜ TODO | 0 A.D. candidate |
-| Building sfx per type | ⬜ TODO | |
-| Ambient loops (birds, wind, water) | ⬜ TODO | |
-| Age advancement sting | ⬜ TODO | |
-| Victory / defeat music | ⬜ TODO | |
-| In-game music tracks | ⬜ TODO | 0 A.D. soundtrack |
+0 A.D. audio is confirmed available and licence-clean: `binaries/data/mods/public/audio/` holds `.ogg` files plus XML descriptors under CC-BY-SA 3.0, in `actor`, `ambient`, `attack`, `groups`, `interface`, `music`, `resource` and `voice` subtrees.
+
+| Category | 0 A.D. path | Status | Notes |
+|---|---|---|---|
+| Combat sfx (melee, ranged, siege) | `audio/attack/` | 🟨 SOURCED | Direct reuse likely |
+| Resource-gathering sfx | `audio/resource/` | 🟨 SOURCED | Maps onto `work_chop` / `work_mine` |
+| Building sfx per type | `audio/actor/` | 🟨 SOURCED | |
+| Ambient loops (birds, wind, water) | `audio/ambient/` | 🟨 SOURCED | |
+| UI sfx | `audio/interface/` | 🟨 SOURCED | |
+| In-game + menu music | `audio/music/` | 🟨 SOURCED | Ancient-warfare orchestral; check fantasy fit |
+| Per-unit selection/acknowledge voices | `audio/voice/{greek,latin,napatan,persian}/` | ⬜ TODO | **Civilisation- and language-specific** — spoken Greek/Latin will not suit a medieval-fantasy setting. Either use `voice/global/` only, or source/record fresh |
+| Age advancement sting | — | ⬜ TODO | |
+| Victory / defeat music | — | ⬜ TODO | |
+| Dragon roar / fire breath | — | 🎨 BESPOKE | No source exists |
 
 ---
 
@@ -199,6 +204,7 @@ These cannot come from any pack and must be commissioned or hand-drawn. Budget e
 
 Tracked in PLAN.md §13:
 
-1. **0 A.D. render pipeline** — can `render_3d_to_iso.py` produce clean 8-direction sheets? Validate on one unit (phase 0.9) before committing to the villager. If it fails, **Widelands** (already 2D isometric, licence-compatible) is the fallback for units and buildings.
-2. **0 A.D. audio coverage** — how much is usable for a dragon-fantasy setting vs how much needs CC0 sourcing (`freesound.org`) or commissioning.
-3. **Icon volume** — tech and unit icons are individually trivial but numerous. Decide whether to crop from sprites, generate, or commission a set.
+1. **0 A.D. render pipeline** — can `render_3d_to_iso.py` produce clean 8-direction sheets? **Nobody has done 0 A.D.→2D sprite conversion before**, so this is unproven. Validate on one unit (phase 0.9) before committing to the villager. If it fails, **Widelands** (already 2D isometric, licence-compatible) is the fallback for units and buildings, **Unknown Horizons** for terrain.
+2. **Actor→entity mapping** — 0 A.D.'s roster is ancient warfare (hoplites, war elephants, Persian cavalry); ours is medieval fantasy. Needs a hand-picked mapping from their actor XML to our `vis.*` IDs, and some entities will have no good match.
+3. **Voice audio** — 0 A.D.'s unit voices are civilisation-specific spoken language. Decide between `voice/global/` only, fresh sourcing, or no unit voices at all.
+4. **Icon volume** — tech and unit icons are individually trivial but numerous. Decide whether to crop from sprites, generate, or commission a set.

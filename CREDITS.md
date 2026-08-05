@@ -12,10 +12,21 @@ Per-asset provenance is tracked in `game/assets/LICENCES.md` and enforced in CI 
 ## Art
 
 ### 0 A.D. — Wildfire Games
-**Used for:** unit, building, terrain and prop sprites, rendered from the project's 3D models to 2D isometric sprite sheets.
-**Source:** https://play0ad.com
-**Licence:** CC-BY-SA 3.0
-**Note:** Derived sprite sheets are themselves distributed under CC-BY-SA 3.0.
+
+Original author: **Wildfire Games** — http://www.wildfiregames.com/
+Licence: **Creative Commons Attribution-ShareAlike 3.0** — http://creativecommons.org/licenses/by-sa/3.0/
+Project home: https://play0ad.com
+
+**Used for:** unit, building, terrain and prop sprites, rendered from Wildfire Games'
+3D models to 2D isometric sprite sheets; and sound effects and music.
+
+**Modifications:** 3D meshes and animations were rendered to 2D isometric sprite sheets
+and packed into texture atlases. Audio was re-encoded and re-mixed. All such derived
+works are released under CC-BY-SA 3.0, as the licence requires.
+
+> The three elements above — the CC-BY-SA 3.0 link, the name "Wildfire Games", and the
+> wildfiregames.com link — are required verbatim by `art/LICENSE.txt` and
+> `audio/LICENSE.txt` in the 0 A.D. repository. Do not abbreviate them.
 
 > *Status: planned. Nothing from 0 A.D. is in the project yet — see [ASSET_MISSING.md](ASSET_MISSING.md).*
 
@@ -37,7 +48,23 @@ Per-asset provenance is tracked in `game/assets/LICENCES.md` and enforced in CI 
 
 ## Audio
 
-*None yet — see [ASSET_MISSING.md](ASSET_MISSING.md) §1.6 and §2.6.*
+Sourced from **0 A.D.** — see the entry under *Art* above; the same three-part attribution
+applies to `audio/` as to `art/`.
+
+*None integrated yet — see [ASSET_MISSING.md](ASSET_MISSING.md) §1.6 and §2.6.*
+
+---
+
+## Tools
+
+These are build-time only and ship nothing into the game, but are credited as used.
+
+| Tool | Source | Licence |
+|---|---|---|
+| **blender_pyrogenesis_importer** — Stanley Sweet | https://github.com/StanleySweet/blender_pyrogenesis_importer | GPL-2.0 |
+| **blender_directional_spritesheets** — Maghwyn | https://github.com/Maghwyn/blender_directional_spritesheets | MIT |
+| **GdUnit4** | https://github.com/godot-gdunit-labs/gdUnit4 | MIT |
+| **Blender** | https://www.blender.org | GPL |
 
 ---
 

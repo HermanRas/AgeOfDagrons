@@ -22,7 +22,7 @@ Missing-asset tracking lives in [ASSET_MISSING.md](ASSET_MISSING.md).
 |---|---|
 | Engine | **Godot 4.7.1-stable** (`Godot_v4.7.1-stable_win64`) |
 | Language | **GDScript** |
-| Renderer | **Mobile** renderer, 2D |
+| Renderer | **Compatibility** (`gl_compatibility`), 2D — *not* the Mobile renderer. Vulkan-Mobile driver crashes cluster on older Mali/MediaTek/Adreno parts, and the Mobile renderer supports **fewer** Android devices ([godot#111729](https://github.com/godotengine/godot/issues/111729)) for no 2D benefit |
 | Orientation | Landscape, locked |
 | Licence | **Open source. Art under CC-BY-SA 3.0** (§2.2) |
 | Session model | **Always client–server, even solo** (§1.1) |
@@ -77,13 +77,20 @@ The Godot project stays in the Drive folder for now (`AOD_Mobile\game\`) but **s
 
 | Requirement | Version / notes | Status |
 |---|---|---|
-| **Godot** | `4.7.1-stable_win64` | ✅ installed |
-| **Android export** | Godot's Android build template + JDK 17 + Android SDK (platform-tools for `adb`). Godot's editor can install most of this — verify at 0.1 | needed for 0.1 |
-| **Python** | 3.11+ with `Pillow` (image ops) — venv in `tools_env\` | needed for 0.3 / 0.9 |
-| **Blender** | **Pin one LTS and stay on it** — the `bpy` API breaks between majors and the render script depends on it. Version to confirm against 0 A.D.'s mesh format (§13.2 item 2) | needed for 0.9 |
-| **0 A.D. art** | Clone/checkout into `art_source\`. **Get the art *source* repo, not the released game** — shipped binaries carry compiled assets, which are harder to import than source meshes | needed for 0.9 |
+| **Godot** | `4.7.1-stable_win64` (current stable, released 14 Jul 2026) | ✅ installed |
+| **Android export** | Godot's Android build template + JDK 17 + Android SDK (platform-tools for `adb`). The editor installs most of it — verify at 0.1 | needed for 0.1 |
+| **Python** | 3.11+ with `Pillow` — venv in `tools_env\` | needed for 0.3 / 0.9 |
+| **Blender** | **4.5 LTS — hard pin, do not use 5.x.** COLLADA (`.dae`) import was *removed* in Blender 5.0 and 0 A.D.'s meshes are `.dae`. 4.5 LTS is the last version with it (supported to Jul 2027) | needed for 0.9 |
+| **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0) — imports 0 A.D. actor XML, resolving mesh + props + textures. **Does not import animations**; those load separately from `art/animation/*.dae` onto the armature | needed for 0.9 |
+| **0 A.D. art** | `git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git` into `art_source\`. **Shallow clone matters** — full history is ~8.3 GB | needed for 0.9 |
 | **git** | 2.47.1 | ✅ installed |
-| **Test framework** | GUT or GdUnit4, added as an addon (§7.7) | needed for 0.7 |
+| **Test framework** | **GdUnit4** (MIT) — explicit 4.7.1 support and a first-party GitHub Action (§7.7) | needed for 0.7 |
+
+Notes on the 0 A.D. checkout:
+
+- Art lives **in the main repo** at `binaries/data/mods/public/art/` — there is no separate art repo to fetch.
+- **Clone the repo; do not mine the game installer.** Releases ship a built `public.zip` where `.dae`→`.pmd`/`.psa` and `.png`→`.dds`. Those compiled formats have no maintained Blender importer.
+- GitHub `0ad/0ad` is **archived** (Sept 2024) — browsable and useful for reference, but frozen. Gitea is upstream.
 
 Nothing in this table blocks phases 0.1 or 0.5 — the Blender/0 A.D. items only gate the art track.
 
@@ -113,18 +120,39 @@ AudioManager.play_sfx(&"villager.chop")
 
 0 A.D. is a 3D game; `tools/render_3d_to_iso.py` renders its models to 8-direction sprite sheets. Terrain comes from the same source — its ground textures are tileable, so the same Blender scene renders them to isometric tiles at the project camera angle. Single source keeps palette and style coherent and keeps attribution to one entry.
 
+Repo layout we consume (`binaries/data/mods/public/`):
+
+| Path | Contents |
+|---|---|
+| `art/meshes/{skeletal,structural,props,gaia,flora}` | `.dae` COLLADA meshes |
+| `art/animation/{biped/{citizen,infantry,gatherer,…},quadraped,mechanical}` | `.dae` animations — note `biped/gatherer`, directly relevant to the villager |
+| `art/textures/skins/…` | mostly `.png`, some `.dds` |
+| `art/actors/{units,structures,fauna,flora,props}` | XML tying mesh + textures + animations + props together, grouped into variants |
+| `audio/{actor,ambient,attack,interface,music,resource,voice}` | `.ogg` + XML descriptors |
+
+Pipeline shape: **actor XML → Blender (via the pyrogenesis importer) → attach animation `.dae` → render 8 × 45° orthographic → `bake_sprites.py`.** The importer resolves meshes/textures/props but not animations, so attaching animations is our script's job.
+
+No prior art exists for 0 A.D.→2D sprite conversion. [`Maghwyn/blender_directional_spritesheets`](https://github.com/Maghwyn/blender_directional_spritesheets) (MIT) is the best reference for the rotation loop; expect to write our own ~150-line script rather than adopt one.
+
 **The GUI stays the dragon theme** from the itch.io packs. It does not come from 0 A.D.
 
 Any additional source is added only on an explicit note from the project owner, and must be recorded in `LICENCES.md` and `CREDITS.md` at the same time.
 
 ### 2.3 Attribution obligations
 
-CC-BY-SA 3.0 requires attribution and share-alike. Non-negotiable, and cheap if done from the start:
+0 A.D.'s `art/LICENSE.txt` and `audio/LICENSE.txt` require **three specific things** in the attribution. All three, verbatim:
 
-- **`CREDITS.md`** — in-repo, and surfaced in-game on a Credits screen: 0 A.D. (Wildfire Games), each itch.io pack author, any commissioned artist.
-- **`assets/LICENCES.md`** — per-asset provenance and licence. `tools/licence_audit.py` fails CI on any shipped asset not listed.
-- **Derived sprite sheets are themselves CC-BY-SA 3.0.** Rendered output ships under that licence.
+1. A link to `http://creativecommons.org/licenses/by-sa/3.0/`
+2. The original author named as **"Wildfire Games"**
+3. A link to `http://www.wildfiregames.com/`
+
+Plus:
+
+- **Derived sprite sheets are themselves CC-BY-SA 3.0.** Our rendered output ships under that licence. Our *Godot code* may keep its own licence — only the art is copyleft.
+- **`CREDITS.md`** — in-repo and surfaced in-game on a Credits screen (phase 1.4).
+- **`assets/LICENCES.md`** — per-asset provenance. `tools/licence_audit.py` fails CI on any shipped asset not listed.
 - Downloadable asset packs (§3.2) each carry their own `LICENCE` and `CREDITS` file inside the pack.
+- Note: some of 0 A.D.'s `textures/` derive from CGTextures under special permission granted to that project. Worth a check before leaning heavily on raw texture files rather than rendered output.
 
 ### 2.4 Placeholder art
 
@@ -797,7 +825,15 @@ assert_eq(v.tile(), Vector2i(10, 5), "villager reached target in 60 ticks")
 
 No scene required — which answers "what do I need to test?": for sim tests, **nothing but the script**.
 
-**2. Framework.** Godot ships no unit-test framework. Use **GUT** or **GdUnit4** as an addon (either is fine; pick one and stop thinking about it). A hand-rolled runner is also viable given how simple the assertions are — decide at 0.7.
+**2. Framework — GdUnit4** (MIT). It lists explicit 4.7.1 compatibility and ships a first-party GitHub Action, which makes it the lower-risk pick on a brand-new engine release.
+
+```
+addons\gdUnit4\runtest.cmd -a res://tests -c -rd res://reports
+```
+
+Exit 0 = pass, 100 = failures, 101 = warnings. Linux CI additionally needs `xvfb-run --auto-servernum` and `--audio-driver Dummy`.
+
+*(GUT is the alternative — also MIT, but take its 9.7.x line for 4.7; `main` tracks 4.6.)*
 
 **3. `state_hash()` regression.** Run the same `MatchConfig` + command log twice, compare hashes. Catches accidental non-determinism and any state the snapshot layer forgets to serialise.
 
@@ -1162,11 +1198,12 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 
 | # | Item | Owner |
 |---|---|---|
-| 1 | **Mobile-renderer regressions in Godot 4.7.x** — unverified. Check the 4.7 release notes and the Godot issue tracker filtered on `topic:rendering` + `platform:android` before relying on the Mobile renderer. Phase 0.1 on a physical device is the real answer | verify at 0.1 |
-| 2 | **0 A.D. asset practicalities** — repo location, mesh/animation formats, Blender import path, and whether `render_3d_to_iso.py` produces clean 8-direction sheets. **Highest-leverage unknown in the whole art plan**; gate A.3 on it | 0.9 |
-| 3 | **Audio coverage from 0 A.D.** vs gaps needing CC0 sourcing or commissioning | tracked in [ASSET_MISSING.md](ASSET_MISSING.md) |
+| 1 | **Does the render pipeline produce usable sprites?** Formats and tooling are now known (§1.3, §2.2), but nobody has done 0 A.D.→2D before. Prove it on one unit at 0.9 before scheduling A.3 | 0.9 |
+| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match | 0.9 / A.2 |
+| 3 | **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and won't suit. Decide what's reusable vs newly sourced | [ASSET_MISSING.md](ASSET_MISSING.md) |
 | 4 | **Icon volume** — tech/unit/resource icons are individually trivial but numerous; crop from sprites, generate, or commission | ASSET_MISSING.md |
 | 5 | **Second pack mirror** — website is primary and unconstrained; pick a fallback later | before first public build |
+| 6 | **Device reach on Compatibility** — confirm the target phone runs it cleanly at 0.1. Known Android driver issues cluster on Mali/MediaTek/Adreno under Vulkan, which is the reason for the §1 renderer choice | 0.1 |
 
 ---
 
@@ -1175,7 +1212,10 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Art production is the long pole | **High** | Placeholders (§2.4) keep it off the critical path; art track runs async; cheap wins first |
-| 3D→iso render pipeline doesn't produce usable sprites | **High** | Validate on one unit at 0.9 before committing to A.3. Fallbacks, both already 2D isometric and licence-compatible: **Unknown Horizons** for terrain/map art (thematically close to 0 A.D.), **Widelands** for units/buildings |
+| 3D→iso render pipeline doesn't produce usable sprites | **High** | Nobody has done 0 A.D.→2D before; validate on one unit at 0.9 before committing to A.3. Fallbacks, both already 2D isometric and licence-compatible: **Unknown Horizons** for terrain/map art, **Widelands** for units/buildings |
+| **Blender 5.x silently breaks the pipeline** — COLLADA import was removed in 5.0 and 0 A.D. ships `.dae` | **High** | Hard-pin **4.5 LTS** (§1.3), supported to Jul 2027. Do not let an auto-update move it. A community 5.x `.dae` importer exists but is unvetted |
+| Animation import is a manual step — the pyrogenesis importer handles meshes/textures but not animations | Medium | Our render script attaches `art/animation/*.dae` to the armature itself; budget for it at 0.9 |
+| 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actor→`vis.*` mapping (§13.2 item 2); some entities may need bespoke art |
 | Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` in CI from 0.2c |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
 | Pathfinding stalls at scale | Medium | Per-tick path budget from day one; flow fields in reserve |
