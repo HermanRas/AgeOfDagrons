@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────
+# Reference material — not part of the build
+# ─────────────────────────────────────────────────────────────
+insperation_pictures/
+
+# ─────────────────────────────────────────────────────────────
+# Third-party asset packs — DO NOT COMMIT
+# The itch.io UI packs allow personal + commercial use but
+# explicitly forbid redistribution of the original files.
+# Committing them to a public repo would be redistribution.
+# Each developer downloads them via the .url links below.
+# Using the art inside a built game (APK/.pck) is fine.
+# ─────────────────────────────────────────────────────────────
+UI_Sprites/*.zip
+UI_Sprites/UI_dragon-huds/
+UI_Sprites/Free_Medieval_Fantasy_UI_Pack/
+UI_Sprites/uı-fonts/
+UI_Sprites/ui-fonts/
+!UI_Sprites/*.url
+!UI_Sprites/README.md
+
+# Raw art source (0 A.D. checkout, Blender working files).
+# Lives outside the repo entirely — see PLAN.md §1.3
+art_source/
+art_work/
+
+# ─────────────────────────────────────────────────────────────
+# Godot
+# ─────────────────────────────────────────────────────────────
+.godot/
+game/.godot/
+game/android/build/
+game/.mono/
+*.translation
+
+# Export artifacts
+export/
+build/
+*.apk
+*.aab
+*.pck
+*.zip.md5
+*.exp
+*.lib
+
+# Godot editor per-user state
+export_presets.cfg
+*.import.bak
+
+# ─────────────────────────────────────────────────────────────
+# Built asset packs — hosted on the website, not in git
+# ─────────────────────────────────────────────────────────────
+packs/
+game/assets/atlases/
+
+# ─────────────────────────────────────────────────────────────
+# Python tooling
+# ─────────────────────────────────────────────────────────────
+tools_env/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ─────────────────────────────────────────────────────────────
+# Blender
+# ─────────────────────────────────────────────────────────────
+*.blend1
+*.blend2
+*.blend3
+
+# ─────────────────────────────────────────────────────────────
+# OS / cloud-sync noise
+# ─────────────────────────────────────────────────────────────
+desktop.ini
+Thumbs.db
+ehthumbs.db
+.DS_Store
+.tmp.drivedownload/
+.tmp.drive-*
+*.tmp
+
+# ─────────────────────────────────────────────────────────────
+# Editors
+# ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
