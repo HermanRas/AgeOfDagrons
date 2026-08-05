@@ -23,6 +23,7 @@ var _game_view: GameView
 var _dots: Node2D
 var _report: RichTextLabel
 var _unit_ids: Array[int] = []
+var _host_error: String = ""
 
 var _uptime := 0.0
 var _retarget_timer := 0.0
@@ -70,8 +71,15 @@ func _ready() -> void:
 	add_child(_report)
 
 	Net.snapshot_received.connect(_on_snapshot)
-	Net.host_solo()
-	_spawn_units()
+	var err := Net.host_solo()
+	if err != OK:
+		# host_solo() failing must be visible on the report, not a silent
+		# 0-units run -- this is exactly how the missing Android INTERNET
+		# permission showed up on first device test: no crash, just an
+		# empty report with "warming up..." forever.
+		_host_error = "host_solo() failed: %s" % error_string(err)
+	else:
+		_spawn_units()
 
 	_report.text = _build_report()
 
@@ -147,6 +155,9 @@ func _build_report() -> String:
 	var lines := PackedStringArray()
 	lines.append("[b]AOD -- phase 0.7 stress test[/b]")
 	lines.append("")
+	if not _host_error.is_empty():
+		lines.append("[color=#ff6b6b][b]%s[/b][/color]" % _host_error)
+		lines.append("")
 	lines.append("[b]units[/b]  %d  (budget: 50 MVP / 200 full scope, PLAN.md 3.1)" % _unit_ids.size())
 	lines.append("")
 	lines.append("[b]sim tick cost[/b]  (budget: < 5 ms per 100 ms tick)")
