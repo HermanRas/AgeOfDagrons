@@ -51,7 +51,6 @@ build/
 *.lib
 
 # Godot editor per-user state
-export_presets.cfg
 *.import.bak
 
 # ─────────────────────────────────────────────────────────────
