@@ -221,10 +221,30 @@ Convention: **5 stored directions, mirrored to 8.** Halves art cost.
 
 | Target | Priority | Notes |
 |---|---|---|
-| Android (mid-range, ~2021 hardware) | **Primary** | The design constraint |
+| Android (mid-range) | **Primary** | The design constraint — see §3.0 for the measured reference device |
 | Windows | Secondary | Dev/test, usual host |
 | Linux | Secondary | Dedicated-host target |
 | iOS | Later | Architecture compatible; not in MVP |
+
+### 3.0 Reference device (measured, phase 0.1)
+
+Verified by deploying `device_check.tscn` to hardware, not assumed:
+
+| | |
+|---|---|
+| Device | HONOR LNA-NX1 |
+| OS | Android 16 (SDK 36) |
+| SoC | MediaTek MT6858 |
+| GPU | **ARM Mali-G610 MC2**, OpenGL ES 3.2 |
+| ABI | `arm64-v8a` **only** — no 32-bit target needed |
+| Screen | 2600 × 1200, 520 dpi, 60 Hz |
+| Renderer confirmed active | `gl_compatibility` / `opengl3` |
+| Empty-scene FPS | 60 (capped by refresh rate) |
+
+Two consequences worth designing around:
+
+1. **MediaTek + Mali is exactly the hardware the Compatibility decision (§1) was made for.** Known Godot Vulkan crashes cluster on MediaTek and Mali parts, so this device would have been a poor Vulkan-Mobile target. The renderer choice is now empirically validated rather than argued.
+2. **The screen is 2600 × 1200 — a 2.17:1 aspect, far wider than 16:9.** With `stretch/aspect=expand` the design viewport resolves to **1404 × 648**. So UI is authored against a **648 px tall** canvas with variable width. Both HUD edges have generous horizontal room but vertical space is tight — relevant to [UI_Design.md](UI_Design.md) and to IDEA 9.2's note about placing the age progress bar below the age indicator on narrow screens.
 
 ### 3.1 Performance budget
 
@@ -236,9 +256,11 @@ Convention: **5 stored directions, mirrored to 8.** Halves art cost.
 | Live units (full scope) | 200 per player, 8 players |
 | Draw calls | < 200 |
 | Texture memory | < 256 MB |
-| **APK size** | **< 60 MB** — code + placeholders only |
+| **APK size** | **< 300 MB** — code + placeholders only |
 | Asset pack (art) | ~150–400 MB, downloaded |
 | Asset pack (audio) | ~50–100 MB, downloaded |
+
+Measured baseline: an **empty** project exports to **54 MB** (arm64-v8a), essentially all engine binary. The 300 MB ceiling leaves real headroom while art and audio still ship as downloadable packs (§3.2).
 
 Checked by `StressTest.tscn` (0.7) from early on, not at the end.
 
@@ -990,7 +1012,7 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 
 | # | Item | Tag |
 |---|---|---|
-| 0.1 | Godot 4.x project, Mobile renderer, landscape lock, folder skeleton, Android export template, **deploy hello-world to a physical device** | **[MVP]** |
+| 0.1 | ✅ **DONE** — Godot 4.7.1 project, Compatibility renderer, landscape lock, folder skeleton, Android export, **deployed and verified on a physical device**. Renderer, orientation, raw touch, touch→viewport coordinate mapping and 60 fps all confirmed on hardware (§3.0) | **[MVP]** |
 | 0.2a | Asset seam: `data/visuals.json` + `data/audio.json`, `atlas_for()` resolving to atlas or placeholder | **[MVP]** |
 | 0.2b | Procedural placeholder renderer (§2.4) | **[MVP]** |
 | 0.2c | `licence_audit.py` + `assets/LICENCES.md` + `CREDITS.md`; CI fails on undeclared assets | **[MVP]** |

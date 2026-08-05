@@ -18,14 +18,23 @@ extends Control
 
 const MAX_TRAIL := 24
 const FPS_SAMPLE_SECONDS := 3.0
+## Startup frames are wildly unrepresentative -- first-frame FPS reads as 1 and
+## a warm-up spike reads as 120 on a 60 Hz panel. Ignore them so min/max mean
+## something against the PLAN.md 3.1 budget.
+const FPS_WARMUP_SECONDS := 1.5
 
 var _info: RichTextLabel
+## Markers must draw in a child added LAST, not in this node's own _draw():
+## children paint over their parent, so the background ColorRect silently
+## covered every marker. Cost a device round-trip to notice.
+var _overlay: Control
 var _touches: Dictionary = {}          # touch index -> Vector2
 var _trail: Array[Vector2] = []
 var _touch_events := 0
 var _drag_events := 0
 var _mouse_events := 0                 # should stay 0 with emulation disabled
 
+var _uptime := 0.0
 var _fps_min := 9999.0
 var _fps_max := 0.0
 var _fps_accum := 0.0
@@ -52,9 +61,19 @@ func _ready() -> void:
 	_info.offset_top = 24
 	_info.offset_right = -24
 	_info.offset_bottom = -24
-	_info.add_theme_font_size_override("normal_font_size", 20)
-	_info.add_theme_font_size_override("bold_font_size", 22)
+	# Sized for a 648px-tall design viewport (PLAN.md 3.0). At 20px the report
+	# overflowed and silently clipped the touch section -- the one part that
+	# needed reading. Keep this small enough that every line fits.
+	_info.add_theme_font_size_override("normal_font_size", 15)
+	_info.add_theme_font_size_override("bold_font_size", 17)
 	add_child(_info)
+
+	# Added last => drawn on top of the background and the report.
+	_overlay = Control.new()
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.draw.connect(_draw_touch_markers)
+	add_child(_overlay)
 
 	# Populate immediately so the first frame already shows data rather than
 	# a blank panel; _process refreshes it from then on.
@@ -62,8 +81,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_uptime += delta
 	var fps := Engine.get_frames_per_second()
-	if fps > 0.0:
+	if fps > 0.0 and _uptime >= FPS_WARMUP_SECONDS:
 		_fps_min = minf(_fps_min, fps)
 		_fps_max = maxf(_fps_max, fps)
 		_fps_accum += fps
@@ -86,28 +106,31 @@ func _input(event: InputEvent) -> void:
 			_push_trail(t.position)
 		else:
 			_touches.erase(t.index)
-		queue_redraw()
+		_overlay.queue_redraw()
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		_drag_events += 1
 		_touches[d.index] = d.position
 		_push_trail(d.position)
-		queue_redraw()
+		_overlay.queue_redraw()
 	elif event is InputEventMouseButton:
 		# With emulate_mouse_from_touch disabled this should never fire from a
 		# finger. If it climbs on device, that setting is still on.
 		_mouse_events += 1
 
 
-func _draw() -> void:
-	for p in _trail:
-		draw_circle(p, 6.0, Color("#E5B84255"))
+func _draw_touch_markers() -> void:
+	# Trail persists after release so injected/quick taps remain visible.
+	for i in _trail.size():
+		var p: Vector2 = _trail[i]
+		var fade := float(i + 1) / float(_trail.size())
+		_overlay.draw_circle(p, 8.0, Color("#E5B842") * Color(1, 1, 1, 0.15 + 0.5 * fade))
 	for idx in _touches:
 		var p: Vector2 = _touches[idx]
-		draw_circle(p, 44.0, Color("#E5B84233"))
-		draw_arc(p, 44.0, 0.0, TAU, 48, Color("#E5B842"), 3.0)
-		draw_line(p - Vector2(60, 0), p + Vector2(60, 0), Color("#E5B842"), 2.0)
-		draw_line(p - Vector2(0, 60), p + Vector2(0, 60), Color("#E5B842"), 2.0)
+		_overlay.draw_circle(p, 44.0, Color("#E5B84233"))
+		_overlay.draw_arc(p, 44.0, 0.0, TAU, 48, Color("#E5B842"), 3.0)
+		_overlay.draw_line(p - Vector2(60, 0), p + Vector2(60, 0), Color("#E5B842"), 2.0)
+		_overlay.draw_line(p - Vector2(0, 60), p + Vector2(0, 60), Color("#E5B842"), 2.0)
 
 
 func _push_trail(p: Vector2) -> void:
@@ -145,10 +168,13 @@ func _build_report() -> String:
 	lines.append("")
 	lines.append("[b]performance[/b]  (budget: 60 fps, floor 30 -- PLAN.md 3.1)")
 	lines.append("  now          %d fps" % Engine.get_frames_per_second())
-	lines.append("  avg / min / max   %s / %s / %s" % [
-			("%.0f" % _fps_avg) if _fps_avg > 0.0 else "--",
-			("%.0f" % _fps_min) if _fps_min < 9999.0 else "--",
-			("%.0f" % _fps_max) if _fps_max > 0.0 else "--"])
+	if _uptime < FPS_WARMUP_SECONDS:
+		lines.append("  avg / min / max   warming up...")
+	else:
+		lines.append("  avg / min / max   %s / %s / %s" % [
+				("%.0f" % _fps_avg) if _fps_avg > 0.0 else "--",
+				("%.0f" % _fps_min) if _fps_min < 9999.0 else "--",
+				("%.0f" % _fps_max) if _fps_max > 0.0 else "--"])
 	lines.append("")
 	lines.append("[b]touch[/b]  (tap anywhere)")
 	lines.append("  active       %d" % _touches.size())
