@@ -94,6 +94,8 @@ Notes on the 0 A.D. checkout:
 
 Nothing in this table blocks phases 0.1 or 0.5 — the Blender/0 A.D. items only gate the art track.
 
+**Version policy: every version above is pinned.** Upgrading Godot or Blender is a deliberate task at a phase boundary with the test suite green before and after — never an "update available" click. Mid-project engine drift costs more debugging time than any newer release saves. If an upgrade is taken, record it here in the same change.
+
 ---
 
 ## 2. Art & assets
