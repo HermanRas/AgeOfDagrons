@@ -1,7 +1,12 @@
 # ─────────────────────────────────────────────────────────────
 # Reference material — not part of the build
 # ─────────────────────────────────────────────────────────────
-insperation_pictures/
+# Trailing /* (not just /) so git still descends far enough to honour the
+# .gdignore exception below -- a bare "insperation_pictures/" excludes the
+# directory itself, and git never looks inside an excluded directory to
+# check per-file negations (a well-known gitignore gotcha).
+insperation_pictures/*
+!insperation_pictures/.gdignore
 
 # ─────────────────────────────────────────────────────────────
 # Third-party asset packs — DO NOT COMMIT
