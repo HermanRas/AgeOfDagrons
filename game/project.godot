@@ -13,7 +13,8 @@ config_version=5
 config/name="AgeOfDragons"
 run/main_scene="res://scenes/boot/device_check.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
-config/icon="res://icon.svg"
+config/icon="res://assets/icons/icon_256x256.png"
+config/windows_native_icon="res://assets/icons/icon.ico"
 
 [display]
 
