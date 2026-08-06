@@ -1,0 +1,38 @@
+# Camera configuration for the art pipeline (PLAN.md 2.2, 9.1).
+#
+# Run isobake from this directory:
+#     cd tools && isobake build recipes/villager.toml
+#
+# Machine paths -- where Blender is, where the 0 A.D. checkout lives, where
+# output goes -- are NOT here. They differ per machine and per PLAN.md 2.6 must
+# never be committed. Put them in tools/isobake.local.toml (gitignored) or in
+# $ISOBAKE_BLENDER / $ISOBAKE_ART_SOURCE / $ISOBAKE_PYROGENESIS / $ISOBAKE_OUT.
+# See isobake.local.toml.example.
+
+[camera]
+# MUST match Iso.TILE_SIZE in game/src/view/iso.gd. That file is the single
+# source of truth; this is a copy, and `isobake calibrate` proves the rendered
+# result agrees with it.
+tile_px = [64, 32]
+
+# How much world one tile covers. Sets the scale of every asset in the game, so
+# changing it invalidates every baked atlas. 2 m also happens to make the
+# 0 A.D. conversion exact: their TERRAIN_TILE_SIZE is 4 world units, so the
+# factor is 2/4 = 0.5.
+metres_per_tile = 2.0
+
+azimuth_deg = 45.0
+
+# elevation_deg is deliberately absent. It derives as asin(32/64) = exactly 30
+# degrees. Setting it to the 35.264 that isometric tutorials use is an error,
+# not an override -- it would make a 64px tile 37px tall.
+
+[lighting]
+# Required for directions = 5: mirroring a sprite lit from one side yields a
+# sprite lit from the wrong side, so the key light has to sit in the camera's
+# vertical plane.
+preset = "symmetric_key"
+key_energy = 2.5
+fill_energy = 0.8
+rim_energy = 1.2
+ambient = 0.25

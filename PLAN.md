@@ -79,10 +79,11 @@ The Godot project stays in the Drive folder for now (`AOD_Mobile\game\`) but **s
 |---|---|---|
 | **Godot** | `4.7.1-stable_win64` (current stable, released 14 Jul 2026) | ✅ installed |
 | **Android export** | Godot's Android build template + JDK 17 + Android SDK (platform-tools for `adb`). The editor installs most of it — verify at 0.1. **`export_presets.cfg` is tracked in git** (it holds no secrets — no keystore path/password, those live elsewhere) so `permissions/internet=true` ships for everyone; it must stay `true` or `Net.host_solo()` fails silently on-device even for a loopback-only session (Android requires INTERNET for any socket, discovered building 0.7's `StressTest.tscn`) | needed for 0.1 |
-| **Python** | 3.11+ with `Pillow` — venv in `tools_env\` | needed for 0.3 / 0.9 |
-| **Blender** | **4.5 LTS — hard pin, do not use 5.x.** COLLADA (`.dae`) import was *removed* in Blender 5.0 and 0 A.D.'s meshes are `.dae`. 4.5 LTS is the last version with it (supported to Jul 2027) | needed for 0.9 |
-| **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0) — imports 0 A.D. actor XML, resolving mesh + props + textures. **Does not import animations**; those load separately from `art/animation/*.dae` onto the armature | needed for 0.9 |
-| **0 A.D. art** | `git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git` into `art_source\`. **Shallow clone matters** — full history is ~8.3 GB | needed for 0.9 |
+| **Python** | 3.11+ with `Pillow` + `numpy`. **No system install needed** — Blender bundles Python 3.11 and a venv made from it is fully isolated (`tools_env\venv`, created from `tools_env\blender-4.5.12-windows-x64\4.5\python\bin\python.exe`). Nothing leaks into Blender's own site-packages, and the venv cannot drift off the pinned Blender | ✅ done at 0.9 |
+| **Blender** | **4.5.12 LTS — hard pin, do not use 5.x.** COLLADA (`.dae`) import was *removed* in Blender 5.0 and 0 A.D.'s meshes are `.dae`. 4.5 LTS is the last version with it (supported to Jul 2027). Installed as a **portable extract** in `tools_env\`, deliberately not Steam/MS Store — an auto-update to 5.x would silently break the whole art track | ✅ done at 0.9 |
+| **`isobake`** | [`HermanRas/blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) (GPL-2.0-or-later) — the render/bake/verify pipeline, §2.2. `pip install -e` into the venv | ✅ built at 0.9 |
+| **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0), pinned at `b31b5c4`. Imports 0 A.D. actor XML, resolving mesh + props + textures. **Does not import animations** — isobake attaches those. Last updated Aug 2024, so it needs two Blender-4.5 compatibility shims, which isobake applies at load time rather than forking the checkout | ✅ done at 0.9 |
+| **0 A.D. art** | `git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git` into `art_source\`. **Shallow clone matters** — full history is ~8.3 GB. Also **needs `git-lfs`**: the art is LFS-backed, and without it the clone succeeds but the checkout fails. Scope the fetch with `git config lfs.fetchinclude "binaries/data/mods/public/art/**"` | ✅ done at 0.9 (~11 GB) |
 | **git** | 2.47.1 | ✅ installed |
 | **Test framework** | **Custom `TestCase`/`run_tests.tscn` harness** (built 0.1–0.7), kept instead of GdUnit4 — already covers headless tests, `state_hash()`, replays and the `sim/` boundary check with zero dependencies. GdUnit4 remains an option later if a real need (parallel execution, richer reporting) shows up | done at 0.7 |
 
@@ -132,9 +133,18 @@ Repo layout we consume (`binaries/data/mods/public/`):
 | `art/actors/{units,structures,fauna,flora,props}` | XML tying mesh + textures + animations + props together, grouped into variants |
 | `audio/{actor,ambient,attack,interface,music,resource,voice}` | `.ogg` + XML descriptors |
 
-Pipeline shape: **actor XML → Blender (via the pyrogenesis importer) → attach animation `.dae` → render 8 × 45° orthographic → `bake_sprites.py`.** The importer resolves meshes/textures/props but not animations, so attaching animations is our script's job.
+Pipeline shape: **actor XML → Blender (via the pyrogenesis importer) → attach animation `.dae` → render N × 45° orthographic → trim/pack → atlas.** The importer resolves meshes, textures and props but not animations, so attaching those is the tool's job.
 
-No prior art exists for 0 A.D.→2D sprite conversion. [`Maghwyn/blender_directional_spritesheets`](https://github.com/Maghwyn/blender_directional_spritesheets) (MIT) is the best reference for the rotation loop; expect to write our own ~150-line script rather than adopt one.
+**Built at 0.9 as [`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)** — its own GPL-2.0-or-later repo, working root `Downloads\AOD_game\blender_3d_to_2d_isobake\`, published so other 3D→2D projects can use it. It is deliberately **not** AOD-specific: 0 A.D. is one adapter, and glTF/FBX sources (the dragon, ASSET_MISSING §3) go through the same camera. Only the *recipes* — which actor is our villager — are AOD content and live in this repo.
+
+Two things the tool gets right that most such scripts do not, both cheap now and unfixable-in-place later:
+
+- **Camera elevation is derived from the tile size**, `asin(tile_h / tile_w)` = exactly **30°** for 64×32. The 35.264° that isometric tutorials use is the cube body-diagonal angle and would make a 64px tile 37px tall.
+- **One global `pixels_per_metre`** (22.627 here), never fit-to-frame. Framing each model to fill its canvas is the obvious implementation and it silently makes a villager and a town centre the same size on screen.
+
+0 A.D. specifics that had to be discovered (all now in the tool's README): their COLLADA declares metres but a citizen measures 3.85 — the conversion is tile-to-tile via their own `TERRAIN_TILE_SIZE = 4`; base-texture alpha means transparency for `basic_trans_*` foliage but a **faction-tint mask** for `player_*` units, and confusing the two makes a quarter of every unit see-through.
+
+No prior art existed for 0 A.D.→2D conversion. [`Maghwyn/blender_directional_spritesheets`](https://github.com/Maghwyn/blender_directional_spritesheets) (MIT) was the reference for the rotation loop.
 
 **The GUI stays the dragon theme** from the itch.io packs. It does not come from 0 A.D.
 
@@ -203,7 +213,12 @@ unit.dragon          building.dragon_nest     res.deer
 | `die` | death | **✓** |
 | `decay` | corpse, pre-removal | **✓** |
 
-Convention: **5 stored directions, mirrored to 8.** Halves art cost.
+Convention: **5 stored directions, mirrored to 8.** Halves art cost. Decided **per asset**, not globally, and it has two preconditions:
+
+- The key light must lie in the camera's vertical plane, or mirrored frames are lit from the wrong side. `isobake` rejects a mirrored recipe under a non-symmetric rig.
+- The subject must be laterally symmetric. A villager holding an axe is not — mirroring swaps which hand holds it. Verified on the turntable, not assumed.
+
+At 0.9 the villager bakes correctly at 5 only because animation-variant props are not yet imported and she therefore carries nothing (§14). Attaching the axe moves `work_chop` and the carry animations to 8.
 
 `EntityView.play_anim()` tries `walk_carry_<kind>` and falls back to `walk`, so carry variants are always optional.
 
@@ -328,12 +343,17 @@ AOD_Mobile/
 ├── UI_Sprites/                 # licensed UI packs (+ .gdignore)
 ├── insperation_pictures/       # reference (+ .gdignore)
 ├── tools/                      # OFFLINE pipeline — Python, never shipped
-│   ├── render_3d_to_iso.py     # Blender: 0 A.D. model -> 8-dir sprite sheet
-│   ├── bake_sprites.py         # frames -> trimmed, packed atlas + JSON
-│   ├── bake_terrain.py         # tileable texture -> iso tile set
-│   ├── verify_atlas.py         # contact sheet for eyeballing a bake
+│   ├── isobake.toml            # camera config; MUST match Iso.TILE_SIZE
+│   ├── recipes/                # AOD content: which 0 A.D. actor is our what
+│   │   ├── terrain_grass.toml
+│   │   ├── tree_oak.toml
+│   │   └── villager.toml
 │   ├── build_packs.py          # atlases -> .pck + manifest + checksums
 │   └── licence_audit.py        # every asset must declare a licence
+│
+│   # Rendering, baking and verification live in the separate isobake repo
+│   # (§2.2). Recipes stay here because "0 A.D.'s female citizen is our
+│   # villager" is a content decision, not a tool feature.
 └── game/                       # THE GODOT PROJECT
     ├── project.godot
     ├── data/
@@ -975,30 +995,49 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 
 ### 9.1 Atlas format
 
+Generated by **`isobake`** (§2.2) as `<id>.atlas.json` beside its PNG pages. It is a
+*generated* file: a rebake rewrites it wholesale, so `visuals.json` points at it and
+nothing is ever hand-merged into it.
+
 ```jsonc
-// generated by tools/bake_sprites.py — the only place filenames appear
 {
-  "vis.villager": {
-    "atlas": "res://assets/atlases/villager.png",
-    "directions": 5, "mirror_for_8": true,
-    "anims": {
-      "idle":       { "row": 0,  "frames": 15, "fps": 8  },
-      "walk":       { "row": 1,  "frames": 15, "fps": 15 },
-      "work_chop":  { "row": 2,  "frames": 15, "fps": 12 },
-      "work_mine":  { "row": 3,  "frames": 15, "fps": 12 },
-      "work_build": { "row": 4,  "frames": 15, "fps": 12 },
-      "die":        { "row": 5,  "frames": 15, "fps": 10 },
-      "decay":      { "row": 6,  "frames": 5,  "fps": 2  },
-      "walk_carry_wood": { "row": 7, "frames": 15, "fps": 15 },
-      "walk_carry_gold": { "row": 8, "frames": 15, "fps": 15 },
-      "walk_carry_food": { "row": 9, "frames": 15, "fps": 15 }
-    },
-    // anchors are PER FRAME — frames trim to varying sizes, so one anchor
-    // per animation causes visible jitter. Bottom-centre of content bbox.
-    "anchors": [[22,48],[22,48],[23,49]]   // one [x,y] per packed frame
-  }
+  "format": 1,
+  "id": "vis.villager",
+  "pages": ["vis.villager_0.png"],          // multi-page from the start
+  "page_sizes": [[1024, 1024]],
+  "directions": {
+    "stored": 5, "mirror_for_8": true,
+    "order": ["S", "SE", "E", "NE", "N"],
+    // every facing resolved to a stored frame + flip, so the view layer reads
+    // the convention instead of re-deriving it
+    "table": [ { "dir": "SW", "stored_index": 1, "flip_x": true }, … ]
+  },
+  "pixels_per_metre": 22.627431,
+  "anims": {
+    "idle": { "fps": 8, "loop": true, "frames": 12, "first": 0 },
+    "walk": { "fps": 15, "loop": true, "frames": 12, "first": 60 }
+  },
+  // index = anims[name].first + stored_direction_index * frames + frame
+  "frames": [ { "page": 0, "rect": [0, 0, 40, 52], "anchor": [20.0, 50.0] } ],
+  "generator": { "tool": "isobake", "blender": "4.5.12", "recipe_sha256": "…" }
 }
 ```
+
+Two deliberate departures from the row-based sketch this replaces:
+
+- **Per-frame rects, not rows.** A row layout pads every frame to the largest cell.
+  Trimmed frames vary a lot, and the villager's 240 frames pack into 20% of a
+  1024² page as rects.
+- **Multi-page.** Mobile GL ES 3.0 only guarantees 4096², and a full animation set
+  will not fit one page. Cheaper to carry the `page` index from the start than to
+  retrofit it.
+
+**Anchors are exact, not measured.** With a fixed orthographic camera and the subject
+rotating about the world Z axis through the origin, world (0,0,0) projects to one
+constant pixel; the per-frame anchor is that constant minus the frame's trim offset.
+The earlier plan here specified bottom-centre-of-content-bbox, which moves whenever a
+limb swings out — that is the cause of the jitter §14 used to list, not a separate
+problem to mitigate.
 
 ---
 
@@ -1032,7 +1071,7 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 | 0.6 | ✅ **DONE** — `Net` autoload: `host_solo()` (real ENet server bound to 127.0.0.1), `submit_command()`/`_recv_command` RPC up, `SnapshotSystem` + `_recv_snapshot` RPC down; `SimHost` owns the server-side `SimWorld`, driven by `SimClock`. View layer: `Iso`, `EntityView`/`EntityViewPool` (pooled, interpolated), `GameView.apply_snapshot()`. `host_open()`/`join()` (remote multiplayer) deferred -- out of MVP scope (§10). Verified headless: 22/22 tests, exit 0 | **[MVP]** |
 | 0.7 | ✅ **DONE** — `SimWorld.state_hash()` + regression tests, `Replay` (record/play, JSON round trip), `sim/` boundary check (as a headless test, not a separate Python grep — one CI command), `StressTest.tscn` (verified on the §3.0 reference device — HONOR LNA-NX1 — at 200 units: sim tick cost 0.39/0.23/6.28 ms avg/min/max, frame rate 60/26/61, 209 draw calls; the max/min outliers are the stress test's own 4-second retarget burst — 200 individual `submit_command()` calls in one frame — not a sim/net cost, since a real shared-destination move order is one `MoveCommand` with many `unit_ids`). GdUnit4 deliberately not adopted (see §1.3). Also fixed on real hardware: `export_presets.cfg` shipped with `permissions/internet=false`, which silently broke `host_solo()` (Android requires INTERNET even for loopback sockets) — `StressTest.tscn` now surfaces a host_solo() failure in its own report instead of quietly spawning 0 units. 29/29 tests, exit 0 | **[MVP]** |
 | 0.8 | ✅ **DONE** — `.gdignore` added to `UI_Sprites/` and `insperation_pictures/` per §4 (both sit at the repo root, outside `game/`, the actual Godot project root, so this has no functional effect on Godot's own scanning — added for consistency with the documented layout regardless). Non-synced working root created on this machine at `C:\Users\herman.ras\Downloads\AOD_game\{art_source,art_work,packs,tools_env}` (§1.3), ready for 0.9. `.gitignore` fixed to allow tracking a `.gdignore` marker inside an otherwise-fully-ignored directory (a bare `dir/` pattern excludes the directory itself, so git never descends far enough to honour a per-file negation — needs `dir/*` instead). Also documented (§1.3): `export_presets.cfg`'s `permissions/internet` requirement, found on real hardware at 0.7. (Superseded same day: `export_presets.cfg` turned out to hold no secrets, so it's now tracked in git rather than gitignored per-user state — see §1.3.) | **[MVP]** |
-| 0.9 | `render_3d_to_iso.py` + `bake_sprites.py` + `verify_atlas.py` + `build_packs.py` — proven end-to-end on one unit | **[MVP]** |
+| 0.9 | ✅ **DONE** — render pipeline built as **[`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)**, its own GPL-2.0-or-later repo (§2.2), and proven end to end on **three real assets**: a grass tile (64×32 exactly), an oak (5 directions), and an animated villager (240 frames — idle/walk/work_chop/walk_carry_wood × 5 directions). Toolchain is fully portable: Blender 4.5.12 extract + a venv made from Blender's own Python, nothing installed system-wide. `isobake calibrate` verifies the camera three independent ways (configured / analytically projected / rendered) and all three agree at 64.00 × 32.00, area 1024.00 px². 62 unit tests, no Blender required, so CI covers the packer. **Both High/Medium art risks retired** (§14): the pipeline produces usable sprites, and animation transfer needs no retarget rig — a gatherer clip drives 83 of an actor's 102 bones by name. Atlas format revised (§9.1) to per-frame rects + multi-page, and anchors now come from the projected world origin, eliminating jitter by construction. `build_packs.py` deferred to 0.3 where it belongs (it is a `.pck` concern, not a render one) | **[MVP]** |
 
 ### Phase 1 — Main menu *(IDEA phase 1)*
 
@@ -1232,8 +1271,8 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 
 | # | Item | Owner |
 |---|---|---|
-| 1 | **Does the render pipeline produce usable sprites?** Formats and tooling are now known (§1.3, §2.2), but nobody has done 0 A.D.→2D before. Prove it on one unit at 0.9 before scheduling A.3 | 0.9 |
-| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match | 0.9 / A.2 |
+| 1 | ~~**Does the render pipeline produce usable sprites?**~~ ✅ **ANSWERED at 0.9 — yes.** Proven on a grass tile, an oak and a 240-frame animated citizen. A.3 can be scheduled | ✅ 0.9 |
+| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`); the mapping lives in `tools/recipes/` | A.2 |
 | 3 | **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and won't suit. Decide what's reusable vs newly sourced | [ASSET_MISSING.md](ASSET_MISSING.md) |
 | 4 | **Icon volume** — tech/unit/resource icons are individually trivial but numerous; crop from sprites, generate, or commission | ASSET_MISSING.md |
 | 5 | **Second pack mirror** — website is primary and unconstrained; pick a fallback later | before first public build |
@@ -1246,9 +1285,10 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Art production is the long pole | **High** | Placeholders (§2.4) keep it off the critical path; art track runs async; cheap wins first |
-| 3D→iso render pipeline doesn't produce usable sprites | **High** | Nobody has done 0 A.D.→2D before; validate on one unit at 0.9 before committing to A.3. Fallbacks, both already 2D isometric and licence-compatible: **Unknown Horizons** for terrain/map art, **Widelands** for units/buildings |
+| ~~3D→iso render pipeline doesn't produce usable sprites~~ | ~~**High**~~ | ✅ **RETIRED at 0.9.** Proven on a grass tile, an oak and a 240-frame animated citizen. The Widelands / Unknown Horizons fallbacks are no longer needed |
 | **Blender 5.x silently breaks the pipeline** — COLLADA import was removed in 5.0 and 0 A.D. ships `.dae` | **High** | Hard-pin **4.5 LTS** (§1.3), supported to Jul 2027. Do not let an auto-update move it. A community 5.x `.dae` importer exists but is unvetted |
-| Animation import is a manual step — the pyrogenesis importer handles meshes/textures but not animations | Medium | Our render script attaches `art/animation/*.dae` to the armature itself; budget for it at 0.9 |
+| ~~Animation import is a manual step~~ | ~~Medium~~ | ✅ **RETIRED at 0.9.** `isobake` attaches the clips itself, and transfer is by bone name with no retarget rig — a gatherer clip drives 83 of an actor's 102 bones; the 19 it misses are prop attach points that follow their parents |
+| **Animation-variant props are not imported** — the villager chops without her axe | Medium | The Pyrogenesis importer takes `group[0]` of each group and never applies the selected variant's props. Needed before A.3; also forces `directions = 8` on any animation holding an asymmetric tool (§2.5) |
 | 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actor→`vis.*` mapping (§13.2 item 2); some entities may need bespoke art |
 | Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` in CI from 0.2c |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
@@ -1256,7 +1296,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | GDScript too slow at 200 units | Medium | Measure on device from 0.7; targeted GDExtension only if proven |
 | Mobile thermal throttling | Medium | 10 Hz sim, pooled views, draw-call budget, sustained-load testing |
 | Asset pack download fails / user offline | Medium | Game runs on placeholders; packs are `required: false` |
-| Per-frame anchor jitter | Medium | Atlas stores an anchor per frame; contact-sheet check in 0.9 |
+| ~~Per-frame anchor jitter~~ | ~~Medium~~ | ✅ **ELIMINATED at 0.9**, not mitigated. Anchors come from the projected world origin, which is a constant for a fixed camera and a subject rotating about world Z, so there is nothing left to jitter (§9.1) |
 | WSL/Docker fighting Android USB deploy | Low | §1.2 — native Windows for editor + deploy |
 | Scope creep | **High** | The `[MVP]` tag is a hard gate; §12 governs after |
 

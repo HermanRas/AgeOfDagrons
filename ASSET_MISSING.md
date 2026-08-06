@@ -35,7 +35,7 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 | Asset | Animations needed | Status | Notes |
 |---|---|---|---|
-| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟨 SOURCED | **~825 frames** (11 anims × 15 frames × 5 directions). Most expensive single asset in the project. Art track A.3 |
+| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (partial)** | 4 of 11 animations baked at 0.9 from `units/athenians/female_citizen.xml` — `idle`, `walk`, `work_chop`, `walk_carry_wood`, 240 frames. Recipe: `tools/recipes/villager.toml`. Remaining 7 are A.3. **Blocked on variant props** — she currently chops without an axe (PLAN.md §14), and attaching it moves the tool-holding animations to `directions = 8` |
 | `vis.deer` | `idle`, `walk`, `die`, `decay` | 🟨 SOURCED | Carcass state must read as gatherable. A.4 |
 
 ### 1.2 Buildings
@@ -49,14 +49,14 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 | Asset | Variants needed | Status | Notes |
 |---|---|---|---|
-| `vis.tree` | 3 size classes + stump/depleted | 🟨 SOURCED | A.4 |
+| `vis.tree` | 3 size classes + stump/depleted | 🟦 **BAKED (1 of 4)** | Oak baked at 0.9 from `flora/trees/oak.xml`, 5 directions, ~10 m tall. Recipe: `tools/recipes/tree_oak.toml`. The actor has 6 variants (2 meshes × 3 textures + small) — the size classes come from those. A.4 |
 | `vis.gold_mine` | 1 sprite (size is data-only, not visual) | 🟨 SOURCED | A.4 |
 
 ### 1.4 Terrain
 
 | Asset | Status | Notes |
 |---|---|---|
-| Grass / dirt / sand iso tiles | 🟨 SOURCED | From 0 A.D. tileable ground textures via `bake_terrain.py`. **Art track A.1 — do this first**, biggest visual payoff, validates the render pipeline |
+| Grass / dirt / sand iso tiles | 🟦 **BAKED (grass)** | `terrain.grass` baked at 0.9 from `grass/grass1.xml` at exactly 64×32 (measured area 1024.00 px², against 1024.00 expected). Recipe: `tools/recipes/terrain_grass.toml` — dirt and sand are the same recipe with a different `terrain =` line. A.1 |
 | Water shallow / deep | ⬜ TODO | Not needed for MVP (land domain only) but cheap alongside A.1 |
 | Tile transitions / blending | ⬜ TODO | Post-MVP polish; hard edges are acceptable initially |
 
@@ -204,7 +204,7 @@ These cannot come from any pack and must be commissioned or hand-drawn. Budget e
 
 Tracked in PLAN.md §13:
 
-1. **0 A.D. render pipeline** — can `render_3d_to_iso.py` produce clean 8-direction sheets? **Nobody has done 0 A.D.→2D sprite conversion before**, so this is unproven. Validate on one unit (phase 0.9) before committing to the villager. If it fails, **Widelands** (already 2D isometric, licence-compatible) is the fallback for units and buildings, **Unknown Horizons** for terrain.
-2. **Actor→entity mapping** — 0 A.D.'s roster is ancient warfare (hoplites, war elephants, Persian cavalry); ours is medieval fantasy. Needs a hand-picked mapping from their actor XML to our `vis.*` IDs, and some entities will have no good match.
+1. ~~**0 A.D. render pipeline**~~ — ✅ **ANSWERED at 0.9: yes.** Built as [`isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) and proven on a grass tile, an oak and a 240-frame animated citizen. The Widelands / Unknown Horizons fallbacks are not needed. One gap remains: props declared by an animation variant are not imported, so the villager chops without her axe.
+2. **Actor→entity mapping** — 0 A.D.'s roster is ancient warfare (hoplites, war elephants, Persian cavalry); ours is medieval fantasy. Needs a hand-picked mapping from their actor XML to our `vis.*` IDs, and some entities will have no good match. Three chosen at 0.9; the mapping now lives in `tools/recipes/*.toml`, one file per asset.
 3. **Voice audio** — 0 A.D.'s unit voices are civilisation-specific spoken language. Decide between `voice/global/` only, fresh sourcing, or no unit voices at all.
 4. **Icon volume** — tech and unit icons are individually trivial but numerous. Decide whether to crop from sprites, generate, or commission a set.

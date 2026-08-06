@@ -1,0 +1,57 @@
+# Villager, from 0 A.D.'s female citizen.
+#
+# This is the phase 0.9 proof: an animated, skinned character with the
+# animation attached from a separate .dae. Everything else in the pipeline was
+# already working on static assets.
+id      = "vis.villager"
+adapter = "zeroad"
+
+[source]
+actor = "units/athenians/female_citizen.xml"
+
+[render]
+# A 1.9 m villager projects to 1.9 * cos(30) * 22.627 = 37 px tall. 64 leaves
+# room for a raised tool and for the walk cycle's widest pose.
+canvas = [64, 64]
+supersample = 4
+# 5 stored + mirrored for the proof. Whether that survives contact with a
+# villager holding an axe in one hand is exactly what the turntable is for.
+directions = 5
+frame_origin_at = 0.12
+engine = "eevee"
+samples = 24
+
+# AOD animation ids on the left (PLAN.md 2.5), 0 A.D. clip names on the right.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.work_chop]
+clip = "gather_tree"
+frames = 12
+fps = 12
+loop = true
+
+# Named by file, not by clip name: 0 A.D. declares another `Walk` inside each
+# carry variant, and a name lookup can only return one of them.
+[anims.walk_carry_wood]
+file = "biped/gatherer/carry_wood_f.dae"
+frames = 12
+fps = 15
+loop = true
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/athenians/female_citizen.xml"

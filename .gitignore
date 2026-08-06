@@ -63,6 +63,11 @@ game/assets/atlases/
 # Python tooling
 # ─────────────────────────────────────────────────────────────
 tools_env/
+
+# Per-machine isobake paths (Blender, 0 A.D. checkout, output dir).
+# PLAN.md §2.6: raw-art paths are never committed. The committed camera config
+# is tools/isobake.toml; see tools/isobake.local.toml.example.
+tools/isobake.local.toml
 .venv/
 venv/
 __pycache__/

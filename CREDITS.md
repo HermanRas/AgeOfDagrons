@@ -28,7 +28,16 @@ works are released under CC-BY-SA 3.0, as the licence requires.
 > wildfiregames.com link — are required verbatim by `art/LICENSE.txt` and
 > `audio/LICENSE.txt` in the 0 A.D. repository. Do not abbreviate them.
 
-> *Status: planned. Nothing from 0 A.D. is in the project yet — see [ASSET_MISSING.md](ASSET_MISSING.md).*
+**Assets derived so far** (phase 0.9 — pipeline validation):
+
+| Our ID | 0 A.D. source |
+|---|---|
+| `terrain.grass` | `art/terrains/grass/grass1.xml` |
+| `vis.tree` | `art/actors/flora/trees/oak.xml` |
+| `vis.villager` | `art/actors/units/athenians/female_citizen.xml` + `art/animation/biped/{citizen,gatherer}/*.dae` |
+
+> *Status: derived sprites exist but are not yet shipped in the game — they live in
+> the non-synced art working root pending phase 0.2a. See [ASSET_MISSING.md](ASSET_MISSING.md).*
 
 ### Kibyra — UI packs
 **Used for:** UI chrome (panels, buttons, bars, frames, icons) and fonts.
@@ -61,10 +70,18 @@ These are build-time only and ship nothing into the game, but are credited as us
 
 | Tool | Source | Licence |
 |---|---|---|
+| **isobake** — this project's 3D→2D sprite pipeline, developed alongside AOD and released separately | https://github.com/HermanRas/blender_3d_to_2d_isobake | GPL-2.0-or-later |
 | **blender_pyrogenesis_importer** — Stanley Sweet | https://github.com/StanleySweet/blender_pyrogenesis_importer | GPL-2.0 |
 | **blender_directional_spritesheets** — Maghwyn | https://github.com/Maghwyn/blender_directional_spritesheets | MIT |
-| **GdUnit4** | https://github.com/godot-gdunit-labs/gdUnit4 | MIT |
 | **Blender** | https://www.blender.org | GPL |
+| **Pillow**, **NumPy** | https://python-pillow.org · https://numpy.org | MIT-CMU / BSD-3-Clause |
+
+`blender_directional_spritesheets` was read as a reference for the rotation loop; no code
+was taken. Credited per PLAN.md §13.1 anyway, since it materially informed the design.
+
+**GdUnit4** was removed from this list at 0.9 — it was never adopted (PLAN.md §1.3: the
+custom `TestCase` harness covers the need with no dependency), so crediting it would
+have been inaccurate.
 
 ---
 

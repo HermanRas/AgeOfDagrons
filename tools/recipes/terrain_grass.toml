@@ -1,0 +1,33 @@
+# Ground tile from 0 A.D.'s grass1 terrain.
+#
+# The tile is one grid cell of real ground viewed through the project camera, so
+# it lands on exactly tile_px (64x32) with no fitting or scaling -- that is the
+# property `isobake calibrate` verifies.
+id      = "terrain.grass"
+adapter = "terrain"
+
+[source]
+terrain = "grass/grass1.xml"
+# One texture repeat per tile. Lower this to make the ground texture read
+# finer-grained relative to the grid.
+texture_metres = 2.0
+
+[render]
+# Slightly larger than 64x32 so the diamond's antialiased edge is not clipped;
+# trimming crops back to the shape.
+canvas = [72, 40]
+supersample = 4
+# A ground tile has no facing. Raise to 5 or 8 to bake rotational variants for
+# breaking up visible tiling.
+directions = 1
+# Centred: the tile spans the origin rather than standing on it.
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"

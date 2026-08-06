@@ -1,0 +1,29 @@
+# Oak tree from 0 A.D. Static -- no armature, no animation -- so this proves the
+# actor/mesh/texture/prop import path on its own, before animation is involved.
+id      = "vis.tree"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/oak.xml"
+# Scale defaults to metres_per_tile / 4, the 0 A.D. tile-to-tile ratio, which
+# puts this oak at about 10 m. No override needed.
+
+[render]
+# A 10 m oak projects to 10 * cos(30) * 22.627 = 196 px tall, so the canvas has
+# to be large enough to hold it. Trees are the tallest thing in the MVP set.
+canvas = [224, 224]
+supersample = 2
+# Trees are roughly radially symmetric, but not exactly -- 5 stored directions
+# give free variety without the render cost of 8.
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/oak.xml"

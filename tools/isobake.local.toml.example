@@ -1,0 +1,22 @@
+# Copy to tools/isobake.local.toml and edit. Gitignored: these are your
+# machine's paths, not the project's (PLAN.md 2.6).
+
+[paths]
+# Blender 4.5 LTS. Use a portable extract, not an installed build -- an
+# auto-update to 5.x removes COLLADA import and silently breaks the art track.
+blender = "C:/Users/you/Downloads/AOD_game/tools_env/blender-4.5.12-windows-x64/blender.exe"
+
+# A 0 A.D. checkout, pointing at binaries/data/mods/public.
+#   git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git
+# Its art is git-lfs, so install git-lfs first or the checkout silently fails,
+# and scope the fetch before pulling:
+#   git config lfs.fetchinclude "binaries/data/mods/public/art/**"
+#   git lfs pull
+art_source = "C:/Users/you/Downloads/AOD_game/art_source/0ad/binaries/data/mods/public"
+
+# The directory containing the io_scene_pyrogenesis package.
+#   git clone https://github.com/StanleySweet/blender_pyrogenesis_importer
+pyrogenesis = "C:/Users/you/Downloads/AOD_game/tools_env/pyrogenesis_importer_src"
+
+# Render and bake output. Keep off any synced drive; it gets large.
+out = "C:/Users/you/Downloads/AOD_game/art_work/out"
