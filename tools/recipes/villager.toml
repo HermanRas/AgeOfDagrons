@@ -10,16 +10,20 @@ adapter = "zeroad"
 actor = "units/athenians/female_citizen.xml"
 
 [render]
-# A 1.9 m villager projects to 1.9 * cos(30) * 22.627 = 37 px tall. 64 leaves
-# room for a raised tool and for the walk cycle's widest pose.
-canvas = [64, 64]
+# 64px assumed a 1.9 m villager with no real motion (1.9 * cos(30) * 22.627 =
+# 37px) -- true only while every clip was frozen at rest pose (see PLAN.md
+# §14, the action-slot bug). Measured directly off unclipped renders, not
+# guessed: gather/build poses reach ~82px above the anchor, and a death
+# collapse spreads ~38px below it. 160 with frame_origin_at = 0.28 gives both
+# real margin (115px / 45px available) without being wasteful.
+canvas = [160, 160]
 supersample = 4
 # 8, not 5+mirrored: work_chop holds an axe in weapon_L and walk_carry_wood
 # carries wood in weapon_R (PLAN.md 2.5), and mirroring would swap which hand
 # holds it. `directions` is decided per recipe, not per animation, so idle and
 # walk render at 8 too even though they'd be mirror-safe alone.
 directions = 8
-frame_origin_at = 0.12
+frame_origin_at = 0.28
 engine = "eevee"
 samples = 24
 
@@ -49,6 +53,60 @@ file = "biped/gatherer/carry_wood_f.dae"
 frames = 12
 fps = 15
 loop = true
+
+# 0 A.D.'s "metal" is AOD's gold. `clip` names the variant (not an animation --
+# file already picks that), because carry_stone shares this exact walk file and
+# would otherwise win the props lookup: a rock shuttle instead of an ore one.
+[anims.walk_carry_gold]
+clip = "carry_metal"
+file = "biped/gatherer/carry_ore_f.dae"
+frames = 12
+fps = 15
+loop = true
+
+[anims.walk_carry_food]
+file = "biped/gatherer/carry_grain_f.dae"
+frames = 12
+fps = 15
+loop = true
+
+# gather_rock and gather_ore share one file (gathering gold or stone is the
+# same animation in 0 A.D.); the name only picks which prop set applies, and
+# both hold the same pick.
+[anims.work_mine]
+clip = "gather_ore"
+frames = 12
+fps = 12
+loop = true
+
+[anims.work_hunt]
+clip = "gather_meat"
+frames = 12
+fps = 12
+loop = true
+
+[anims.work_build]
+clip = "Build"
+frames = 12
+fps = 12
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+# Same clip as `die`, not a separate source animation -- 0 A.D. has no distinct
+# decay/corpse clip (PLAN.md 4.7 fades the corpse in-engine over 10s, it does
+# not animate one). frames = 2 rather than 1 because sample_positions() always
+# puts a single frame at position 0.0 (the clip's start); 2 is the cheapest way
+# to land frame index 1 on position 1.0, the actual collapsed rest pose.
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

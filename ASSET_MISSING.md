@@ -35,7 +35,7 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 | Asset | Animations needed | Status | Notes |
 |---|---|---|---|
-| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (partial)** | 4 of 11 animations baked from `units/athenians/female_citizen.xml` — `idle`, `walk`, `work_chop`, `walk_carry_wood`, 384 frames (8 directions). Recipe: `tools/recipes/villager.toml`. Remaining 7 are A.3. Variant props (axe, carried wood) now import and attach correctly (PLAN.md §14) |
+| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (all 11)** | All 11 animations baked from `units/athenians/female_citizen.xml`, 960 frames (8 directions), 160×160 canvas. Recipe: `tools/recipes/villager.toml`. Variant props (axe, pick, mallet, dagger, wood/ore/grain shuttles, berry basket) import and attach correctly (PLAN.md §14). **Known issue:** in `work_mine` her dress mesh stretches oddly — a dress vertex is weighted 100% to `hand_L` in the source mesh and gets dragged when the mining clip's hand pose differs sharply from the citizen's native poses. Cosmetic, isolated to that one clip; tracked for a later pass, not blocking MVP |
 | `vis.deer` | `idle`, `walk`, `die`, `decay` | 🟨 SOURCED | Carcass state must read as gatherable. A.4 |
 
 ### 1.2 Buildings
