@@ -29,8 +29,9 @@ actor = "structures/athenians/civil_centre.xml"
 [render]
 # Measured off an unclipped probe render, not projected from the bounding box:
 # the silhouette trims to 459 x 384, reaching 210 px above the anchor and 174
-# below it. The bbox arithmetic under-predicts the bottom by 50 px because the
-# terrace walls run further toward the viewer than a centred footprint would.
+# below it. A footprint sitting flat on z=0 would reach only 122 px below; the
+# extra 52 px is ~2.7 m of wall skirt modelled below ground for the terrain to
+# hide, which a baked sprite has no terrain to hide (see PLAN.md 13.2 item 7).
 canvas = [512, 448]
 supersample = 4
 # Buildings do not turn. SimBuilding has no `facing` (PLAN.md 6.2) and placement

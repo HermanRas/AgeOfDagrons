@@ -20,7 +20,8 @@ actor = "structures/hellenes/house.xml"
 # diamond's 80 px half-depth is real buried geometry -- 0 A.D. models a wall
 # skirt below z=0 for the terrain to hide, and we have no terrain to hide it.
 # Confirmed by rotating: the excess stayed below the anchor instead of moving
-# to the top, which an off-centre footprint would have done.
+# to the top, which an off-centre footprint would have done. The town centre
+# has the same defect, four times deeper (PLAN.md 13.2 item 7).
 canvas = [320, 256]
 supersample = 4
 # One direction -- see town_center.toml for why.

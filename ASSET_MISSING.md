@@ -35,7 +35,7 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 | Asset | Animations needed | Status | Notes |
 |---|---|---|---|
-| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (all 11)** | All 11 animations baked from `units/athenians/female_citizen.xml`, 960 frames (8 directions), 160×160 canvas. Recipe: `tools/recipes/villager.toml`. Variant props (axe, pick, mallet, dagger, wood/ore/grain shuttles, berry basket) import and attach correctly (PLAN.md §14). **Known issue:** in `work_mine` her dress mesh stretches oddly — a dress vertex is weighted 100% to `hand_L` in the source mesh and gets dragged when the mining clip's hand pose differs sharply from the citizen's native poses. Cosmetic, isolated to that one clip; tracked for a later pass, not blocking MVP |
+| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (all 11)** | All 11 animations baked from `units/athenians/female_citizen.xml`, 960 frames (8 directions), 160×160 canvas. Recipe: `tools/recipes/villager.toml`. Variant props (axe, pick, mallet, dagger, wood/ore/grain shuttles, berry basket) import and attach correctly (PLAN.md §14). **Known issue:** in `work_mine` her dress mesh stretches oddly — a dress vertex is weighted 100% to `hand_L` in the source mesh and gets dragged when the mining clip's hand pose differs sharply from the citizen's native poses. Cosmetic, isolated to that one clip; **accepted for MVP**, tracked as PLAN.md §13.2 item 7 alongside the buried building skirts — both are source-mesh defects for one post-MVP art pass |
 | `vis.deer` | `idle`, `walk`, `die`, `decay` | 🟨 SOURCED | Carcass state must read as gatherable. A.4 |
 
 ### 1.2 Buildings
@@ -58,7 +58,16 @@ Two things to carry into 0.4 and 5.2:
 - **Footprints come from the art, not from PLAN.md §9's sketch.** Measured at the pipeline's tile-to-tile scale, the civic centre is 15.5 × 15.0 m — a **7.75-tile** footprint, agreeing with 0 A.D.'s own 30×30-unit obstruction and with the `fndn_8x8` foundation its template pairs with. The house is 10 × 10 m, a **5-tile** footprint on a 4×4 foundation. `buildings.json`'s `footprint` should be `[8, 8]` and `[4, 4]`; the `[4, 4]` written for the town centre in PLAN.md §9 predates any measurement. Scaling the meshes down to fit a chosen footprint is not the alternative — it would break the one-global-`pixels_per_metre` rule (PLAN.md §2.2) and leave the villager taller than the doorway.
 - **No separate under-construction art.** Foundation covers both phases. 5.2 can show progress by drawing the completed sprite clipped from the bottom over the foundation, which is a view-layer effect and needs no extra bake.
 
-**Known issue (cosmetic, not blocking):** the house and the 3×3 rubble each carry ~0.7 m of geometry below `z = 0` — 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so ~14 px hangs below the ground line. Confirmed to be buried geometry rather than an off-centre footprint by rotating 180° and watching the excess stay below the anchor. A ground clip at `z = 0` in `isobake` would fix it for every building at once; not yet done.
+**Known issue — accepted for MVP, tracked as PLAN.md §13.2 item 7.** Three of the six carry geometry below `z = 0`: 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so it hangs below the ground line.
+
+| Asset | Below the anchor | Flat footprint would give | Buried |
+|---|---|---|---|
+| `vis.town_center` | 174 px | 122 px | **52 px ≈ 2.7 m** |
+| `vis.rubble_3x3` | 123 px | 88 px | 35 px ≈ 1.8 m |
+| `vis.house` | 94 px | 80 px | 14 px ≈ 0.7 m |
+| `vis.foundation_8x8`, `vis.foundation_4x4`, `vis.rubble_town_center` | at or under the flat figure | — | none |
+
+Confirmed as buried geometry rather than an off-centre footprint: rendered at both 0° and 180°, the excess stayed below the anchor both times instead of moving to the top. Cosmetic and not blocking — a ground clip at `z = 0` in `isobake` fixes the whole class at once, including every building added later.
 
 ### 1.3 Resource props
 
