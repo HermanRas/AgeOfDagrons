@@ -1,0 +1,34 @@
+# Building site for an 8x8-tile footprint -- the town centre's foundation.
+#
+# Named by footprint, not by building, because that is how 0 A.D. models it and
+# how it is actually shared: every 8x8 structure we add later points at this
+# same id. Covers both SimBuilding.Phase.FOUNDATION and UNDER_CONSTRUCTION for
+# now; 5.2 can draw the completed sprite clipped from the bottom on top of it to
+# show progress, which is a view-layer concern and needs no extra art.
+id      = "vis.foundation_8x8"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_8x8.xml"
+# 0 A.D.'s own pairing: template_structure_civic_civil_centre declares
+# <FoundationActor>structures/fndn_8x8.xml</FoundationActor>.
+
+[render]
+# The dirt decal spreads to 17 x 17 m, wider than the finished building, which
+# makes this the widest thing in the set. Measured off an unclipped probe:
+# 522 x 288, 157 px above the anchor and 131 below. Only 2.3 m of it is height,
+# so the canvas is wide and short -- the ground diamond is most of the subject.
+canvas = [576, 352]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_8x8.xml"

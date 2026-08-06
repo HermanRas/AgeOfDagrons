@@ -347,7 +347,13 @@ AOD_Mobile/
 │   ├── recipes/                # AOD content: which 0 A.D. actor is our what
 │   │   ├── terrain_grass.toml
 │   │   ├── tree_oak.toml
-│   │   └── villager.toml
+│   │   ├── villager.toml
+│   │   ├── town_center.toml    # buildings: one recipe per Phase visual,
+│   │   ├── foundation_8x8.toml # foundations and generic rubble keyed by
+│   │   ├── rubble_town_center.toml #  footprint size so they are shared
+│   │   ├── house.toml
+│   │   ├── foundation_4x4.toml
+│   │   └── rubble_3x3.toml
 │   ├── build_packs.py          # atlases -> .pck + manifest + checksums
 │   └── licence_audit.py        # every asset must declare a licence
 │
@@ -970,7 +976,12 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
   "building.town_center": {
     "name": "Town Center",
     "visual": "vis.town_center",
-    "hp": 2000, "footprint": [4, 4], "los": 8,
+    // footprint comes from the baked art, not from this sketch: the town
+    // centre measures 7.75 tiles at the pipeline's fixed scale, so [8, 8].
+    // See ASSET_MISSING.md 1.2.
+    "hp": 2000, "footprint": [8, 8], "los": 8,
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_town_center",
     "cost": { "wood": 275, "stone": 100 },
     "build_time_ticks": 1500,
     "provides_pop": 10, "garrison_cap": 15,
@@ -1247,7 +1258,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | # | Item | Depends on |
 |---|---|---|
 | A.1 | Terrain tile set from 0 A.D. ground textures via `bake_terrain.py` | 0.9 |
-| A.2 | Town centre + house, with construction/damage/rubble states | 0.9 |
+| A.2 | ✅ **DONE** — Town centre + house, each with foundation and rubble (`SimBuilding.Phase`). Six single-frame atlases at `directions = 1`; foundations and generic rubble keyed by footprint size so the rest of the roster (5.7) reuses them. No damaged tier — 0 A.D. has none, and health is the health dot (5.6). ASSET_MISSING.md 1.2 | 0.9 |
 | A.3 | Villager — 11 animations × 5 directions (~825 frames). Most expensive single asset | 0.9 |
 | A.4 | Resource props: tree (3 sizes + stump), gold mine, deer | 0.9 |
 | A.5 | UI chrome from the itch.io dragon packs | none |
@@ -1272,7 +1283,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | # | Item | Owner |
 |---|---|---|
 | 1 | ~~**Does the render pipeline produce usable sprites?**~~ ✅ **ANSWERED at 0.9 — yes.** Proven on a grass tile, an oak and a 240-frame animated citizen. A.3 can be scheduled | ✅ 0.9 |
-| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`); the mapping lives in `tools/recipes/` | A.2 |
+| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`), six more at A.2 (the Athenian civic centre and Hellenic house plus their foundations and rubble — same civ as the villager, so the settlement reads as one architectural style); the mapping lives in `tools/recipes/`. Still open for `vis.deer` and `vis.gold_mine` | A.4 |
 | 3 | **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and won't suit. Decide what's reusable vs newly sourced | [ASSET_MISSING.md](ASSET_MISSING.md) |
 | 4 | **Icon volume** — tech/unit/resource icons are individually trivial but numerous; crop from sprites, generate, or commission | ASSET_MISSING.md |
 | 5 | **Second pack mirror** — website is primary and unconstrained; pick a fallback later | before first public build |
@@ -1291,6 +1302,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | ~~Animation-variant props are not imported~~ | ~~Medium~~ | ✅ **RETIRED.** `isobake`'s zeroad adapter now reads a variant's `<props>` alongside its `<animations>` and constrains the prop mesh to the armature's `prop_<attachpoint>` bone, visible only while that clip plays. The villager now chops holding her axe and carries wood at her hip; `villager.toml` moved to `directions = 8` accordingly (§2.5) |
 | ~~Every animation silently rendered rest pose~~ | ~~**High**~~ | ✅ **RETIRED.** Blender ≥4.4's layered-action system needs `animation_data.action_slot` set explicitly; `isobake` was only ever setting `.action`, so no curve in any clip drove anything, and it looked fine because nothing was checked against a moving reference. Fixed in `render_impl.py`. This is why villager frame counts and canvas size both changed after 0.9 — the frozen renders never exercised real motion range |
 | **0 A.D. clips bake in absolute root-bone motion** — a gather clip's hip can drift over a metre from wherever the animator placed the character, well past what a fixed camera anchored on world (0,0,0) can frame | Medium | `render_impl.py` cancels the root bone's horizontal (X/Y) drift every frame, holding it at its rest-pose position; vertical motion (a fall, a crouch) is left alone since that is the real, wanted signal |
+| **0 A.D. building meshes carry a skirt below `z = 0`** for the terrain to hide, and a baked sprite has no terrain to hide it | Low | Measured at A.2: ~0.7 m on the house and the 3×3 rubble, i.e. ~14 px hanging below the ground line; the town centre, both foundations and the civic-centre ruin are clean. Confirmed as buried geometry rather than an off-centre footprint by rotating 180° and watching the excess stay below the anchor. One ground clip at `z = 0` in `isobake` would fix the whole class at once; not yet done, cosmetic |
 | **A source-mesh vertex-weight quirk distorts `work_mine`** — a dress vertex is weighted 100% to `hand_L`, and the mining clip's hand pose is far enough from the citizen's native poses that it drags a fold of fabric with it | Low | Isolated to one clip, cosmetic, does not block MVP. Fix is either re-weighting that vertex or clamping the offending vertex group at import time; not yet done |
 | 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actor→`vis.*` mapping (§13.2 item 2); some entities may need bespoke art |
 | Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` in CI from 0.2c |

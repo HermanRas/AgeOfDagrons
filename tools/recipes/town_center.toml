@@ -1,0 +1,58 @@
+# Town Centre, from 0 A.D.'s Athenian civic centre (their "Agora").
+#
+# Chosen to match the villager: she is `units/athenians/female_citizen`, so the
+# building she is trained at should be the same civ's, or the two sit side by
+# side in different architectural styles.
+#
+# A building has three visuals, not one -- foundation, complete, rubble
+# (SimBuilding.Phase, PLAN.md 6.2). They are three separate recipes rather than
+# three states of this one, because 0 A.D. models them as three separate actors
+# and because foundations and generic rubble are shared by *footprint size*: the
+# same fndn_8x8 serves every 8x8 building we ever add. `buildings.json` (0.4)
+# points at all three ids.
+#   foundation -> vis.foundation_8x8   (foundation_8x8.toml)
+#   complete   -> this
+#   rubble     -> vis.rubble_town_center (rubble_town_center.toml)
+id      = "vis.town_center"
+adapter = "zeroad"
+
+[source]
+actor = "structures/athenians/civil_centre.xml"
+# No scale override. The tile-to-tile default puts this at 15.5 x 15.0 x 9.5 m,
+# i.e. a 7.75-tile footprint, which agrees with 0 A.D.'s own obstruction for it
+# (30x30 world units / 4 = 7.5 tiles) and with the fndn_8x8 foundation their
+# template pairs it with. PLAN.md 9's sketch of footprint = [4, 4] predates any
+# measurement; the art says 8x8 and buildings.json should follow the art, since
+# scaling the mesh down instead would break the one-global-pixels_per_metre rule
+# (PLAN.md 2.2) and leave a villager taller than the doorway.
+
+[render]
+# Measured off an unclipped probe render, not projected from the bounding box:
+# the silhouette trims to 459 x 384, reaching 210 px above the anchor and 174
+# below it. The bbox arithmetic under-predicts the bottom by 50 px because the
+# terrace walls run further toward the viewer than a centred footprint would.
+canvas = [512, 448]
+supersample = 4
+# Buildings do not turn. SimBuilding has no `facing` (PLAN.md 6.2) and placement
+# snaps to the grid without rotation (5.1), so one direction is the whole asset.
+# directions = 1 also suppresses the base yaw that turns a character to face
+# screen-down, which is what we want here: the mesh stays world-axis-aligned, so
+# its square footprint projects to a diamond that lines up with the tile grid.
+directions = 1
+# Turned to present the far face to the camera. 0 A.D.'s civic centre reads
+# better from this side: as authored, the long colonnaded hall masks the domed
+# tholos that makes the building recognisable at a glance, which is the whole
+# job of a 2D building sprite. Free to choose here precisely because the
+# building never rotates in play.
+yaw_offset_deg = 180.0
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/athenians/civil_centre.xml"

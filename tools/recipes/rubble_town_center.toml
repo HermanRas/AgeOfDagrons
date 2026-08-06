@@ -1,0 +1,39 @@
+# Town centre rubble -- SimBuilding.Phase.DESTROYED (PLAN.md 5.5).
+#
+# Not shared by footprint the way foundations are: this is a bespoke Hellenic
+# civic-centre ruin (broken columns and roof tiles that read as *that* building),
+# which is 0 A.D.'s own choice -- the athen civil_centre template overrides the
+# generic rubble_stone_6x6 with rubble_hele_cc.
+id      = "vis.rubble_town_center"
+adapter = "zeroad"
+
+[source]
+actor = "structures/destruct_hele_cc.xml"
+# Reached from simulation/templates/structures/athen/civil_centre.xml:
+# <SpawnEntityOnDeath>decay|rubble/rubble_hele_cc</SpawnEntityOnDeath>, whose
+# VisualActor is this.
+
+[render]
+# The scorch decal reaches 22 x 22 m, wider than the intact building was.
+# Measured off an unclipped probe: 562 x 314, 142 px above the anchor and 172
+# below -- the only asset here with more below than above, because a flat ruin
+# is nearly all ground diamond and the decal's front corner is its lowest point.
+canvas = [640, 384]
+supersample = 4
+directions = 1
+frame_origin_at = 0.53
+engine = "eevee"
+samples = 32
+
+# The actor also declares particle/flame and particle/smoke props at flame1 and
+# flame2. Those are `<particles>`-only actors -- they import as empties with no
+# geometry, so they contribute nothing to the bake. That is the wanted outcome:
+# rubble persists on the map, and a ruin burning forever would read as a bug.
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/destruct_hele_cc.xml"

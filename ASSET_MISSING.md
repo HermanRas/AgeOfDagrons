@@ -40,10 +40,25 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 ### 1.2 Buildings
 
-| Asset | States needed | Status | Notes |
+Buildings do not turn — `SimBuilding` has no facing and placement snaps to the grid without rotation — so every one of these is a **single frame at `directions = 1`**, and the state set is `SimBuilding.Phase`, not a separate "damaged" tier. There is no damaged-state art here because 0 A.D. has none either: its structures go straight from intact to rubble, and health is shown by the health dot (PLAN.md 5.6).
+
+States are **separate visual IDs, not states inside one atlas**, because 0 A.D. models them as separate actors and because foundations and generic rubble are shared *by footprint size* — the same `vis.foundation_8x8` serves every 8×8 building added later. `buildings.json` (0.4) carries all three IDs per building.
+
+| Asset | Used for | Status | Notes |
 |---|---|---|---|
-| `vis.town_center` | foundation, under-construction, complete, damaged, rubble | 🟨 SOURCED | 4×4 footprint. A.2 |
-| `vis.house` | foundation, under-construction, complete, damaged, rubble | 🟨 SOURCED | A.2 |
+| `vis.town_center` | Phase.COMPLETE | 🟦 **BAKED** | `structures/athenians/civil_centre.xml`, 459×383 px, `yaw_offset_deg = 180` to show the domed tholos rather than the hall that masks it. Faction tint applies (`USE_PLAYERCOLOR`). Recipe: `tools/recipes/town_center.toml` |
+| `vis.foundation_8x8` | Phase.FOUNDATION + UNDER_CONSTRUCTION | 🟦 **BAKED** | `structures/fndn_8x8.xml`, 520×287 px — 0 A.D.'s own pairing for the civic centre. Shared by every 8×8 building. Recipe: `tools/recipes/foundation_8x8.toml` |
+| `vis.rubble_town_center` | Phase.DESTROYED | 🟦 **BAKED** | `structures/destruct_hele_cc.xml`, 562×313 px. Bespoke Hellenic ruin rather than generic rubble, following 0 A.D.'s own override. Recipe: `tools/recipes/rubble_town_center.toml` |
+| `vis.house` | Phase.COMPLETE | 🟦 **BAKED** | `structures/hellenes/house.xml`, 273×221 px, also turned 180°. The actor is five houses (A–E) in one variant group; the importer picks one deterministically from the recipe id, so `variant_seed` buys village variety cheaply later. Recipe: `tools/recipes/house.toml` |
+| `vis.foundation_4x4` | Phase.FOUNDATION + UNDER_CONSTRUCTION | 🟦 **BAKED** | `structures/fndn_4x4.xml`, 264×159 px. Shared by every 4×4 building. Recipe: `tools/recipes/foundation_4x4.toml` |
+| `vis.rubble_3x3` | Phase.DESTROYED | 🟦 **BAKED** | `structures/destruct_stone_3x3.xml`, 303×194 px. Generic, shared by every small building. Recipe: `tools/recipes/rubble_3x3.toml` |
+
+Two things to carry into 0.4 and 5.2:
+
+- **Footprints come from the art, not from PLAN.md §9's sketch.** Measured at the pipeline's tile-to-tile scale, the civic centre is 15.5 × 15.0 m — a **7.75-tile** footprint, agreeing with 0 A.D.'s own 30×30-unit obstruction and with the `fndn_8x8` foundation its template pairs with. The house is 10 × 10 m, a **5-tile** footprint on a 4×4 foundation. `buildings.json`'s `footprint` should be `[8, 8]` and `[4, 4]`; the `[4, 4]` written for the town centre in PLAN.md §9 predates any measurement. Scaling the meshes down to fit a chosen footprint is not the alternative — it would break the one-global-`pixels_per_metre` rule (PLAN.md §2.2) and leave the villager taller than the doorway.
+- **No separate under-construction art.** Foundation covers both phases. 5.2 can show progress by drawing the completed sprite clipped from the bottom over the foundation, which is a view-layer effect and needs no extra bake.
+
+**Known issue (cosmetic, not blocking):** the house and the 3×3 rubble each carry ~0.7 m of geometry below `z = 0` — 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so ~14 px hangs below the ground line. Confirmed to be buried geometry rather than an off-centre footprint by rotating 180° and watching the excess stay below the anchor. A ground clip at `z = 0` in `isobake` would fix it for every building at once; not yet done.
 
 ### 1.3 Resource props
 

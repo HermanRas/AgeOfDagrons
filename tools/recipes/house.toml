@@ -1,0 +1,41 @@
+# House, from 0 A.D.'s Hellenic house.
+#
+# States, as with the town centre (town_center.toml):
+#   foundation -> vis.foundation_4x4     (foundation_4x4.toml)
+#   complete   -> this
+#   rubble     -> vis.rubble_3x3         (rubble_3x3.toml)
+id      = "vis.house"
+adapter = "zeroad"
+
+[source]
+actor = "structures/hellenes/house.xml"
+# This actor is five houses (A-E) in one frequency-weighted variant group. The
+# importer picks one, seeded from the recipe id so a rebake picks the same one.
+# Set `variant_seed` and bake a second id -- vis.house_b -- when the village
+# starts looking too uniform; that is the cheapest visual variety in the set.
+
+[render]
+# Measured off an unclipped probe render: 274 x 222, reaching 128 px above the
+# anchor and 94 below. The 14 px of that bottom figure beyond the ground
+# diamond's 80 px half-depth is real buried geometry -- 0 A.D. models a wall
+# skirt below z=0 for the terrain to hide, and we have no terrain to hide it.
+# Confirmed by rotating: the excess stayed below the anchor instead of moving
+# to the top, which an off-centre footprint would have done.
+canvas = [320, 256]
+supersample = 4
+# One direction -- see town_center.toml for why.
+directions = 1
+# Turned to present the far face, same as the town centre, so the two read as
+# one settlement rather than two buildings facing opposite ways.
+yaw_offset_deg = 180.0
+frame_origin_at = 0.42
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/hellenes/house.xml"
