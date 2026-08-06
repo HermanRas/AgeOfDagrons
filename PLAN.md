@@ -24,7 +24,7 @@ Missing-asset tracking lives in [ASSET_MISSING.md](ASSET_MISSING.md).
 | Language | **GDScript** |
 | Renderer | **Compatibility** (`gl_compatibility`), 2D — *not* the Mobile renderer. Vulkan-Mobile driver crashes cluster on older Mali/MediaTek/Adreno parts, and the Mobile renderer supports **fewer** Android devices ([godot#111729](https://github.com/godotengine/godot/issues/111729)) for no 2D benefit |
 | Orientation | Landscape, locked |
-| Licence | **Open source. Art under CC-BY-SA 3.0** (§2.2) |
+| Licence | **Code MIT, art CC-BY-SA 3.0** (§2.3) — [LICENSE](LICENSE) · [LICENSE-ART.md](LICENSE-ART.md) |
 | Session model | **Always client–server, even solo** (§1.1) |
 | Simulation | Server-authoritative, fixed-tick, headless-capable |
 | Sim tick rate | **10 Hz** (100 ms), render interpolated to display rate |
@@ -160,7 +160,7 @@ Any additional source is added only on an explicit note from the project owner, 
 
 Plus:
 
-- **Derived sprite sheets are themselves CC-BY-SA 3.0.** Our rendered output ships under that licence. Our *Godot code* may keep its own licence — only the art is copyleft.
+- **Derived sprite sheets are themselves CC-BY-SA 3.0.** Our rendered output ships under that licence. Only the art is copyleft — **the Godot code is MIT** ([LICENSE](LICENSE)), decided at 0.9 when the repo was published. The two licences do not merge; [LICENSE-ART.md](LICENSE-ART.md) states which applies to what.
 - **`CREDITS.md`** — in-repo and surfaced in-game on a Credits screen (phase 1.4).
 - **`assets/LICENCES.md`** — per-asset provenance. `tools/licence_audit.py` fails CI on any shipped asset not listed.
 - Downloadable asset packs (§3.2) each carry their own `LICENCE` and `CREDITS` file inside the pack.
