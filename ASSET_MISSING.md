@@ -35,7 +35,7 @@ Needed for the MVP defined in PLAN.md §10. All currently running on placeholder
 
 | Asset | Animations needed | Status | Notes |
 |---|---|---|---|
-| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (partial)** | 4 of 11 animations baked at 0.9 from `units/athenians/female_citizen.xml` — `idle`, `walk`, `work_chop`, `walk_carry_wood`, 240 frames. Recipe: `tools/recipes/villager.toml`. Remaining 7 are A.3. **Blocked on variant props** — she currently chops without an axe (PLAN.md §14), and attaching it moves the tool-holding animations to `directions = 8` |
+| `vis.villager` | `idle`, `walk`, `walk_carry_wood`, `walk_carry_gold`, `walk_carry_food`, `work_chop`, `work_mine`, `work_hunt`, `work_build`, `die`, `decay` | 🟦 **BAKED (partial)** | 4 of 11 animations baked from `units/athenians/female_citizen.xml` — `idle`, `walk`, `work_chop`, `walk_carry_wood`, 384 frames (8 directions). Recipe: `tools/recipes/villager.toml`. Remaining 7 are A.3. Variant props (axe, carried wood) now import and attach correctly (PLAN.md §14) |
 | `vis.deer` | `idle`, `walk`, `die`, `decay` | 🟨 SOURCED | Carcass state must read as gatherable. A.4 |
 
 ### 1.2 Buildings

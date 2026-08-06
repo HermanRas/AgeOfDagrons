@@ -218,11 +218,11 @@ Convention: **5 stored directions, mirrored to 8.** Halves art cost. Decided **p
 - The key light must lie in the camera's vertical plane, or mirrored frames are lit from the wrong side. `isobake` rejects a mirrored recipe under a non-symmetric rig.
 - The subject must be laterally symmetric. A villager holding an axe is not — mirroring swaps which hand holds it. Verified on the turntable, not assumed.
 
-At 0.9 the villager bakes correctly at 5 only because animation-variant props are not yet imported and she therefore carries nothing (§14). Attaching the axe moves `work_chop` and the carry animations to 8.
+The villager holds an axe during `work_chop` and carries wood at her hip during `walk_carry_wood` (animation-variant props, wired up per §14), so `villager.toml` renders the whole recipe at `directions = 8` — mirroring is decided per recipe, not per animation, so `idle` and `walk` render at 8 too even though they would be mirror-safe alone.
 
 `EntityView.play_anim()` tries `walk_carry_<kind>` and falls back to `walk`, so carry variants are always optional.
 
-**MVP villager budget:** 11 animations × ~15 frames × 5 directions ≈ 825 frames.
+**MVP villager budget:** 11 animations × ~15 frames × 8 directions ≈ 1320 frames.
 
 ### 2.6 Practical handling
 
@@ -1288,7 +1288,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | ~~3D→iso render pipeline doesn't produce usable sprites~~ | ~~**High**~~ | ✅ **RETIRED at 0.9.** Proven on a grass tile, an oak and a 240-frame animated citizen. The Widelands / Unknown Horizons fallbacks are no longer needed |
 | **Blender 5.x silently breaks the pipeline** — COLLADA import was removed in 5.0 and 0 A.D. ships `.dae` | **High** | Hard-pin **4.5 LTS** (§1.3), supported to Jul 2027. Do not let an auto-update move it. A community 5.x `.dae` importer exists but is unvetted |
 | ~~Animation import is a manual step~~ | ~~Medium~~ | ✅ **RETIRED at 0.9.** `isobake` attaches the clips itself, and transfer is by bone name with no retarget rig — a gatherer clip drives 83 of an actor's 102 bones; the 19 it misses are prop attach points that follow their parents |
-| **Animation-variant props are not imported** — the villager chops without her axe | Medium | The Pyrogenesis importer takes `group[0]` of each group and never applies the selected variant's props. Needed before A.3; also forces `directions = 8` on any animation holding an asymmetric tool (§2.5) |
+| ~~Animation-variant props are not imported~~ | ~~Medium~~ | ✅ **RETIRED.** `isobake`'s zeroad adapter now reads a variant's `<props>` alongside its `<animations>` and constrains the prop mesh to the armature's `prop_<attachpoint>` bone, visible only while that clip plays. The villager now chops holding her axe and carries wood at her hip; `villager.toml` moved to `directions = 8` accordingly (§2.5) |
 | 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actor→`vis.*` mapping (§13.2 item 2); some entities may need bespoke art |
 | Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` in CI from 0.2c |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |

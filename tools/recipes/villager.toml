@@ -14,9 +14,11 @@ actor = "units/athenians/female_citizen.xml"
 # room for a raised tool and for the walk cycle's widest pose.
 canvas = [64, 64]
 supersample = 4
-# 5 stored + mirrored for the proof. Whether that survives contact with a
-# villager holding an axe in one hand is exactly what the turntable is for.
-directions = 5
+# 8, not 5+mirrored: work_chop holds an axe in weapon_L and walk_carry_wood
+# carries wood in weapon_R (PLAN.md 2.5), and mirroring would swap which hand
+# holds it. `directions` is decided per recipe, not per animation, so idle and
+# walk render at 8 too even though they'd be mirror-safe alone.
+directions = 8
 frame_origin_at = 0.12
 engine = "eevee"
 samples = 24
