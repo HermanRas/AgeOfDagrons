@@ -46,28 +46,32 @@ States are **separate visual IDs, not states inside one atlas**, because 0 A.D. 
 
 | Asset | Used for | Status | Notes |
 |---|---|---|---|
-| `vis.town_center` | Phase.COMPLETE | 🟦 **BAKED** | `structures/athenians/civil_centre.xml`, 459×383 px, `yaw_offset_deg = 180` to show the domed tholos rather than the hall that masks it. Faction tint applies (`USE_PLAYERCOLOR`). Recipe: `tools/recipes/town_center.toml` |
+| `vis.town_center` | Phase.COMPLETE | 🟦 **BAKED** | `structures/athenians/civil_centre.xml`, 459×329 px, `yaw_offset_deg = 180` to show the domed tholos rather than the hall that masks it. Faction tint applies (`USE_PLAYERCOLOR`). Recipe: `tools/recipes/town_center.toml` |
 | `vis.foundation_8x8` | Phase.FOUNDATION + UNDER_CONSTRUCTION | 🟦 **BAKED** | `structures/fndn_8x8.xml`, 520×287 px — 0 A.D.'s own pairing for the civic centre. Shared by every 8×8 building. Recipe: `tools/recipes/foundation_8x8.toml` |
 | `vis.rubble_town_center` | Phase.DESTROYED | 🟦 **BAKED** | `structures/destruct_hele_cc.xml`, 562×313 px. Bespoke Hellenic ruin rather than generic rubble, following 0 A.D.'s own override. Recipe: `tools/recipes/rubble_town_center.toml` |
-| `vis.house` | Phase.COMPLETE | 🟦 **BAKED** | `structures/hellenes/house.xml`, 273×221 px, also turned 180°. The actor is five houses (A–E) in one variant group; the importer picks one deterministically from the recipe id, so `variant_seed` buys village variety cheaply later. Recipe: `tools/recipes/house.toml` |
+| `vis.house` | Phase.COMPLETE | 🟦 **BAKED** | `structures/hellenes/house.xml`, 273×194 px, also turned 180°. The actor is five houses (A–E) in one variant group; the importer picks one deterministically from the recipe id, so `variant_seed` buys village variety cheaply later. Recipe: `tools/recipes/house.toml` |
 | `vis.foundation_4x4` | Phase.FOUNDATION + UNDER_CONSTRUCTION | 🟦 **BAKED** | `structures/fndn_4x4.xml`, 264×159 px. Shared by every 4×4 building. Recipe: `tools/recipes/foundation_4x4.toml` |
-| `vis.rubble_3x3` | Phase.DESTROYED | 🟦 **BAKED** | `structures/destruct_stone_3x3.xml`, 303×194 px. Generic, shared by every small building. Recipe: `tools/recipes/rubble_3x3.toml` |
+| `vis.rubble_3x3` | Phase.DESTROYED | 🟦 **BAKED** | `structures/destruct_stone_3x3.xml`, 300×146 px. Generic, shared by every small building. Recipe: `tools/recipes/rubble_3x3.toml` |
 
 Two things to carry into 0.4 and 5.2:
 
 - **Footprints come from the art, not from PLAN.md §9's sketch.** Measured at the pipeline's tile-to-tile scale, the civic centre is 15.5 × 15.0 m — a **7.75-tile** footprint, agreeing with 0 A.D.'s own 30×30-unit obstruction and with the `fndn_8x8` foundation its template pairs with. The house is 10 × 10 m, a **5-tile** footprint on a 4×4 foundation. `buildings.json`'s `footprint` should be `[8, 8]` and `[4, 4]`; the `[4, 4]` written for the town centre in PLAN.md §9 predates any measurement. Scaling the meshes down to fit a chosen footprint is not the alternative — it would break the one-global-`pixels_per_metre` rule (PLAN.md §2.2) and leave the villager taller than the doorway.
 - **No separate under-construction art.** Foundation covers both phases. 5.2 can show progress by drawing the completed sprite clipped from the bottom over the foundation, which is a view-layer effect and needs no extra bake.
 
-**Known issue — accepted for MVP, tracked as PLAN.md §13.2 item 7.** Three of the six carry geometry below `z = 0`: 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so it hangs below the ground line.
+**Buried skirt — ✅ FIXED**, was PLAN.md §13.2 item 7. Three of the six carried geometry below `z = 0`: 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so it hung below the ground line. `isobake` grew `render.ground_clip`, which bisects every mesh at world `z = 0` and discards what is underneath; the three recipes set it and were re-baked.
 
-| Asset | Below the anchor | Flat footprint would give | Buried |
-|---|---|---|---|
-| `vis.town_center` | 174 px | 122 px | **52 px ≈ 2.7 m** |
-| `vis.rubble_3x3` | 123 px | 88 px | 35 px ≈ 1.8 m |
-| `vis.house` | 94 px | 80 px | 14 px ≈ 0.7 m |
-| `vis.foundation_8x8`, `vis.foundation_4x4`, `vis.rubble_town_center` | at or under the flat figure | — | none |
+It has to be a 3D cut before the render, not a crop of the finished sprite: the ground plane is seen at 30°, so `z = 0` projects to a diamond spanning most of the frame's height — the near corner of an 8-tile footprint sits 90 px *below* the anchor while its far corner sits 90 *above*. Any horizontal cut that removed the skirt would take the front of the building with it.
 
-Confirmed as buried geometry rather than an off-centre footprint: rendered at both 0° and 180°, the excess stayed below the anchor both times instead of moving to the top. Cosmetic and not blocking — a ground clip at `z = 0` in `isobake` fixes the whole class at once, including every building added later.
+| Asset | Sprite before | Sprite after | Height before | Height after | Actually buried |
+|---|---|---|---|---|---|
+| `vis.town_center` | 459×383 px | 459×**329** px | 9.48 m | **6.70 m** | 2.78 m |
+| `vis.rubble_3x3` | 303×194 px | 300×**146** px | 4.83 m | **2.05 m** | 2.78 m |
+| `vis.house` | 273×221 px | 273×**194** px | 7.33 m | **4.80 m** | 2.53 m |
+| `vis.foundation_8x8`, `vis.foundation_4x4`, `vis.rubble_town_center` | — | unchanged | — | — | none |
+
+Widths are unchanged, which is the check that only buried geometry went: cutting anything visible would have narrowed the silhouette too.
+
+Note the burial was **deeper than the pixel estimate suggested** — 2.53 m under the house, not the 0.7 m its below-anchor excess implied. Both figures were right: a skirt directly beneath the building projects higher on screen than the footprint's near corner, so most of it hid behind the ground diamond and only the overhang showed. The height column above is now measured off the clipped geometry rather than inferred, so ⚠️ **`game/data/visuals.json` must stop subtracting the skirt by hand** — it currently carries `vis.house` at 6.6 m (should be 4.80) and `vis.rubble_3x3` at 3.0 m (should be 2.05). `vis.town_center`'s 6.8 m was already within 0.1 m of correct.
 
 ### 1.3 Resource props
 

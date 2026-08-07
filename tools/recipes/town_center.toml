@@ -30,10 +30,14 @@ actor = "structures/athenians/civil_centre.xml"
 # Measured off an unclipped probe render, not projected from the bounding box:
 # the silhouette trims to 459 x 384, reaching 210 px above the anchor and 174
 # below it. A footprint sitting flat on z=0 would reach only 122 px below; the
-# extra 52 px is ~2.7 m of wall skirt modelled below ground for the terrain to
-# hide, which a baked sprite has no terrain to hide (see PLAN.md 13.2 item 7).
+# extra 52 px was ~2.7 m of wall skirt modelled below ground for the terrain to
+# hide, which a baked sprite has no terrain to hide.
 canvas = [512, 448]
 supersample = 4
+# Discards that skirt. It has to happen in 3D, before the render: z=0 projects
+# to a diamond spanning most of the frame, so cropping the finished sprite at
+# any horizontal line would take the front of the building with it.
+ground_clip = true
 # Buildings do not turn. SimBuilding has no `facing` (PLAN.md 6.2) and placement
 # snaps to the grid without rotation (5.1), so one direction is the whole asset.
 # directions = 1 also suppresses the base yaw that turns a character to face

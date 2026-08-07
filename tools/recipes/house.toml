@@ -21,9 +21,11 @@ actor = "structures/hellenes/house.xml"
 # skirt below z=0 for the terrain to hide, and we have no terrain to hide it.
 # Confirmed by rotating: the excess stayed below the anchor instead of moving
 # to the top, which an off-centre footprint would have done. The town centre
-# has the same defect, four times deeper (PLAN.md 13.2 item 7).
+# had the same defect, four times deeper.
 canvas = [320, 256]
 supersample = 4
+# Discards that skirt -- see town_center.toml for why it cannot be a 2D crop.
+ground_clip = true
 # One direction -- see town_center.toml for why.
 directions = 1
 # Turned to present the far face, same as the town centre, so the two read as

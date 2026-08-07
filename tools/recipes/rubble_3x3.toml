@@ -18,6 +18,10 @@ actor = "structures/destruct_stone_3x3.xml"
 # normally hide.
 canvas = [352, 256]
 supersample = 4
+# Discards that skirt -- see town_center.toml for why it cannot be a 2D crop.
+# Worth watching on this one: rubble is a loose mound rather than walls, so the
+# cut edge is more likely to read as a flat slice than it does on a building.
+ground_clip = true
 directions = 1
 frame_origin_at = 0.58
 engine = "eevee"
