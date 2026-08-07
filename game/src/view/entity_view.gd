@@ -57,6 +57,23 @@ func visual() -> AtlasEntry:
 	return _visual
 
 
+## Supply the visual directly instead of resolving it through the seam.
+##
+## Exists because whether an ID resolves to a real atlas or a placeholder depends
+## on whether the art pack happens to be staged, and that must not decide how this
+## class behaves or what a test can check. Passing an entry in makes the frame
+## clock testable against a known animation instead of against whatever art is on
+## the machine.
+func set_visual(entry: AtlasEntry) -> void:
+	# visual_id FIRST: its setter clears _visual, so assigning in the other order
+	# would throw the entry away again.
+	visual_id = entry.id if entry != null else &""
+	_visual = entry
+	_anim_time = 0.0
+	_frame = 0
+	queue_redraw()
+
+
 func set_target_transform(pos: Vector2, _tick: int) -> void:
 	_from_pos = position
 	_to_pos = pos

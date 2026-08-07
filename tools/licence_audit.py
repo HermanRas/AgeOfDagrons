@@ -105,13 +105,35 @@ def load_recipes() -> tuple[list[dict], list[Problem]]:
     return out, problems
 
 
+#: Staged bake output. Excluded from the file scan because these files are already
+#: covered -- by ID -- by the recipe population, and demanding their PNG filenames
+#: too would mean 11 redundant rows that say nothing the recipe rows do not, and
+#: that go stale the moment an atlas gains a second page. The directory is
+#: gitignored build output (see tools/stage_atlases.py); the recipes are the
+#: durable record. `staged_atlas_ids()` keeps the coverage honest by checking
+#: nothing turns up in here that no recipe accounts for.
+STAGED_ATLASES = ASSETS / "atlases"
+
+
 def shipped_asset_files() -> list[Path]:
-    """Asset files inside game/assets/, relative to the repo root."""
+    """Asset files inside game/assets/, excluding staged bake output."""
     if not ASSETS.is_dir():
         return []
     return sorted(
         p for p in ASSETS.rglob("*")
-        if p.is_file() and p.suffix.lower() in ASSET_SUFFIXES
+        if p.is_file()
+        and p.suffix.lower() in ASSET_SUFFIXES
+        and STAGED_ATLASES not in p.parents
+    )
+
+
+def staged_atlas_ids() -> list[str]:
+    """IDs currently staged in game/assets/atlases/, from their JSON filenames."""
+    if not STAGED_ATLASES.is_dir():
+        return []
+    return sorted(
+        p.name.removesuffix(".atlas.json")
+        for p in STAGED_ATLASES.glob("*.atlas.json")
     )
 
 
@@ -177,7 +199,20 @@ def audit() -> list[Problem]:
                 _rel(LICENCES), f"shipped asset '{rel}' is not declared"
             ))
 
-    # 3. Declared-but-unlicensed. Being NAMED in LICENCES.md is not the same as
+    # 3. Anything staged that no recipe accounts for. The recipe table is what
+    #    declares the atlases, so an atlas sitting in game/assets/atlases/ with no
+    #    recipe behind it is an asset about to be packed with no provenance at all
+    #    -- the exact hole that excluding the directory from the file scan could
+    #    otherwise open.
+    known_ids = {r["id"] for r in recipes}
+    for staged in staged_atlas_ids():
+        if staged not in known_ids:
+            problems.append(Problem(
+                f"{_rel(STAGED_ATLASES)}/{staged}.atlas.json",
+                "is staged for packing but no recipe declares it -- unknown provenance",
+            ))
+
+    # 4. Declared-but-unlicensed. Being NAMED in LICENCES.md is not the same as
     #    having a licence, and treating it as such would make this tool report
     #    PASS while shipping an asset whose rights nobody has established --
     #    precisely the failure it exists to prevent. UNVERIFIED is the sentinel
@@ -191,7 +226,7 @@ def audit() -> list[Problem]:
                 f"{subject} is listed but its licence is UNVERIFIED",
             ))
 
-    # 4. The three verbatim elements, wherever 0 A.D. material is credited.
+    # 5. The three verbatim elements, wherever 0 A.D. material is credited.
     for target in (LICENCES, CREDITS):
         if not target.exists():
             problems.append(Problem(_rel(target), "does not exist"))

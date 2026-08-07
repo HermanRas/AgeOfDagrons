@@ -38,7 +38,7 @@
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [0.6, 0.6],
-      "height_m": 1.92,
+      "height_m": 1.75,
       "color": "#d8c08a",
       "facing_marker": true
     }

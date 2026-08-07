@@ -34,6 +34,18 @@ func test_the_shipped_data_files_load_without_warnings() -> void:
 			"data files are not clean -- %s" % "; ".join(reg.load_warnings))
 
 
+func test_every_id_declares_a_placeholder_so_the_pack_is_never_required() -> void:
+	# The APK must be playable with no art pack (PLAN.md 3.2). That holds only if
+	# every ID declares a placeholder, which is checked here rather than inferred
+	# from what happens to be staged.
+	for id in reg.visual_ids():
+		var spec: PlaceholderSpec = reg.placeholder_for(id)
+		assert_ne(spec.color, PlaceholderSpec.UNKNOWN_COLOR,
+				"%s declares a real placeholder, not the magenta unknown" % id)
+		assert_true(spec.footprint_m.x > 0.0 and spec.footprint_m.y > 0.0,
+				"%s has a non-degenerate placeholder footprint" % id)
+
+
 func test_every_declared_id_resolves_to_something_drawable() -> void:
 	for id in reg.visual_ids():
 		var entry: AtlasEntry = reg.atlas_for(id)
@@ -81,16 +93,26 @@ func test_placeholders_are_sized_from_measured_metres_not_left_at_defaults() -> 
 	# footprint left at the 1x1 default is a data bug. The town centre is the one
 	# that matters most: PLAN.md 9 sketched 4x4 tiles before anything was measured
 	# and the art came in at 7.75, so this pins the measured figure.
-	var tc_entry: AtlasEntry = reg.atlas_for(&"vis.town_center")
-	var tc := tc_entry.placeholder
+	# Read the DECLARED placeholder, not whatever atlas_for() resolved to. Once the
+	# art pack is staged those IDs resolve to real atlases and carry no placeholder
+	# at all -- and since game/assets/atlases/ is gitignored, whether that is true
+	# differs between a fresh clone and a machine that has baked. A test that
+	# changes its mind based on that is worse than no test.
+	var tc := reg.placeholder_for(&"vis.town_center") as PlaceholderSpec
 	assert_true(tc.footprint_m.x > 15.0,
 			"town centre footprint is the measured ~15.5 m, not the pre-measurement 4 tiles")
 	assert_true(tc.height_m > 1.0, "town centre has a real height")
 
-	var villager_entry: AtlasEntry = reg.atlas_for(&"vis.villager")
-	var villager := villager_entry.placeholder
-	assert_almost_eq(villager.height_m, 1.92, 0.01,
-			"villager placeholder is her intended height -- 0 A.D.'s 3.85 units x 0.5")
+	# 1.75 m is a deliberate INTENDED height, not the baked one. The atlas is 2.18 m
+	# because she inherits 0 A.D.'s proportions, which makes her taller than a stag
+	# (PLAN.md 13.2 item 9). The placeholder states what she should be, so the two
+	# disagreeing is the tell that the rebake has not happened yet.
+	var villager := reg.placeholder_for(&"vis.villager") as PlaceholderSpec
+	assert_almost_eq(villager.height_m, 1.75, 0.01,
+			"villager placeholder is her intended height, shorter than the 2.02 m deer")
+	var deer := reg.placeholder_for(&"vis.deer") as PlaceholderSpec
+	assert_true(villager.height_m < deer.height_m,
+			"a villager must be shorter than a stag -- the whole point of item 9")
 
 
 func test_declared_sound_ids_are_distinguishable_from_undeclared_ones() -> void:

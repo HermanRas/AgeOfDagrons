@@ -39,21 +39,62 @@ func test_an_unknown_visual_still_resolves_so_the_view_draws_something() -> void
 	assert_true(view.visual().is_placeholder)
 
 
-func test_a_placeholder_visual_never_advances_its_frame() -> void:
-	# Nothing in visuals.json has art mounted yet, so this is the live path today:
-	# a single inert frame, and a clock that must not run away.
-	view.visual_id = &"vis.villager"
+## A 4-frame looping walk at 10 fps and a 1-frame static, built here rather than
+## taken from the registry. The clock's behaviour must not depend on whether the
+## art pack happens to be staged on this machine -- game/assets/atlases/ is
+## gitignored, so a fresh clone resolves these IDs to placeholders and a machine
+## that has baked resolves them to real atlases.
+func _animated() -> AtlasEntry:
+	var frames: Array = []
+	for i in range(4):
+		frames.append({"page": 0, "rect": [i * 10, 0, 10, 20], "anchor": [5.0, 19.0]})
+	return AtlasEntry.from_atlas_dict(&"test.animated", {
+		"pages": ["p.png"],
+		"directions": {"table": [{"stored_index": 0, "flip_x": false}]},
+		"anims": {
+			"walk": {"fps": 10.0, "loop": true, "frames": 4, "first": 0},
+			"die": {"fps": 10.0, "loop": false, "frames": 4, "first": 0},
+		},
+		"frames": frames,
+	}, "res://tests/fixtures")
+
+
+func test_a_single_frame_visual_never_advances() -> void:
+	view.set_visual(AtlasEntry.from_placeholder(&"test.ph", PlaceholderSpec.unknown()))
 	view.play_anim(&"walk", 0)
 	for _i in range(30):
 		view.advance(0.1)
 	assert_eq(view.current_frame(), 0, "a one-frame visual stays on frame 0")
 
 
+func test_a_looping_animation_advances_at_its_own_fps_and_wraps() -> void:
+	view.set_visual(_animated())
+	view.play_anim(&"walk", 0)
+	assert_eq(view.current_frame(), 0, "starts at 0")
+
+	view.advance(0.1)                        # 10 fps -> one frame per 0.1 s
+	assert_eq(view.current_frame(), 1)
+	view.advance(0.2)
+	assert_eq(view.current_frame(), 3, "0.3 s in is frame 3 of 4")
+	view.advance(0.1)
+	assert_eq(view.current_frame(), 0, "a looping anim wraps rather than running off")
+
+
+func test_a_non_looping_animation_holds_its_last_frame() -> void:
+	# A death animation that wrapped would resurrect the corpse.
+	view.set_visual(_animated())
+	view.play_anim(&"die", 0)
+	for _i in range(20):
+		view.advance(0.1)
+	assert_eq(view.current_frame(), 3, "clamps to the final frame and stays there")
+
+
 func test_changing_animation_restarts_the_clock() -> void:
-	view.visual_id = &"vis.villager"
+	view.set_visual(_animated())
 	view.play_anim(&"walk", 0)
 	view.advance(0.5)
-	view.play_anim(&"idle", 0)
+	assert_ne(view.current_frame(), 0, "the clock was genuinely running")
+	view.play_anim(&"die", 0)
 	assert_eq(view.current_frame(), 0, "a new anim starts at its first frame")
 
 

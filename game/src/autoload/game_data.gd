@@ -110,6 +110,22 @@ func has_atlas(visual_id: StringName) -> bool:
 	return not atlas_for(visual_id).is_placeholder
 
 
+## The placeholder an ID DECLARES, whether or not an atlas is currently mounted.
+##
+## atlas_for() deliberately hides which branch you got, but two callers need the
+## declared fallback specifically: a debug toggle that draws placeholders over real
+## art, and the tests -- which must assert the declared sizes are sane without
+## depending on whether the art pack happens to be staged on this machine, since
+## game/assets/atlases/ is gitignored and a fresh clone has none of it.
+func placeholder_for(visual_id: StringName) -> PlaceholderSpec:
+	if not _loaded:
+		load_all()
+	var ph: Variant = _visuals.get(visual_id, {}).get("placeholder")
+	if ph is Dictionary:
+		return PlaceholderSpec.from_dict(ph)
+	return PlaceholderSpec.unknown()
+
+
 func visual_ids() -> Array[StringName]:
 	if not _loaded:
 		load_all()
