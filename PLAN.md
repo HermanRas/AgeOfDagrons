@@ -1293,9 +1293,9 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 
 | # | Item | Depends on |
 |---|---|---|
-| A.1 | Terrain tile set from 0 A.D. ground textures via `bake_terrain.py` | 0.9 |
+| A.1 | Terrain tile set from 0 A.D. ground textures. **Grass done** (`terrain.grass`, 64×32 exactly, recipe `terrain_grass.toml`); dirt and sand are the same recipe with a different `terrain =` line, and the debug map already paints a dirt border it has no tile for. Water/rock only matter once `SimMap` uses them | 0.9 |
 | A.2 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Town centre + house, each with foundation and rubble (`SimBuilding.Phase`). Six single-frame atlases at `directions = 1`; foundations and generic rubble keyed by footprint size so the rest of the roster (5.7) reuses them. No damaged tier Ã¢â‚¬â€ 0 A.D. has none, and health is the health dot (5.6). ASSET_MISSING.md 1.2 | 0.9 |
-| A.3 | Villager Ã¢â‚¬â€ 11 animations Ãƒâ€” 5 directions (~825 frames). Most expensive single asset | 0.9 |
+| A.3 | ✅ **DONE** — Villager, all 11 animations × **8** directions = 960 frames (8 not 5: she holds an axe in one hand, so mirroring would swap it). Recipe `villager.toml`. **Needs one rebake** for the height override in §13.2 item 9, and carries the `work_mine` dress artefact in item 7 | 0.9 |
 | A.4 | Resource props: tree (3 sizes + stump), gold mine, deer. **Gold mine Ã¢Å“â€¦ done** (`geology/metalmine_alpine.xml`, 5 directions, ~1.4 Ãƒâ€” 1.9 tiles); deer Ã¢Å“â€¦ done but **static** (item 8). Remaining: 2 more tree size classes + stump, and the deer carcass | 0.9 |
 | A.5 | UI chrome from the itch.io dragon packs | none |
 | A.6 | Team-colour outline shader | A.3 |
