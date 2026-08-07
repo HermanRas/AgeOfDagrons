@@ -53,17 +53,13 @@ func _ready() -> void:
 	add_child(label)
 
 
-## The sim knows def ids; visuals.json knows visual ids. GameDataRegistry is the
-## seam between them -- exactly the indirection PLAN.md 2.1 exists for.
+## The sim knows def ids; visuals.json knows visual ids. Goes through the same
+## GameDataRegistry.visual_for() the real GameView uses -- this preview originally
+## had its own copy of the mapping, which is precisely why it looked correct while
+## the actual game path was rendering everything magenta.
 func _visual_for(e: SimEntity) -> StringName:
-	if e is SimBuilding:
-		var bd: BuildingDef = GameDataRegistry.building(e.def_id)
-		return bd.visual_for_phase(int((e as SimBuilding).phase)) if bd != null else &""
-	if e is SimResourceNode:
-		var rd: ResourceDef = GameDataRegistry.resource_def(e.def_id)
-		return rd.visual if rd != null else &""
-	var ud: UnitDef = GameDataRegistry.unit(e.def_id)
-	return ud.visual if ud != null else &""
+	var phase := int((e as SimBuilding).phase) if e is SimBuilding else -1
+	return GameDataRegistry.visual_for(e.def_id, phase)
 
 
 func _draw_ground(on: Node2D) -> void:

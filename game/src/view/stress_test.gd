@@ -6,27 +6,47 @@
 ## the budgets in PLAN.md 3.1.
 ##
 ## Up to 0.2b this drew its own stand-in dots, because EntityView rendered
-## nothing. It no longer does: EntityView draws real procedural placeholders
-## through the asset seam, so the dots were removed rather than left to
-## double-render on top of them. The harness now measures the production render
-## path, which is what it should have been measuring all along -- but it also
-## means the 0.7 device figures recorded in PLAN.md were taken against 200 circles
-## and need re-measuring on the reference device. Expect the draw-call count in
-## particular to move: a placeholder capsule is a filled polygon plus an outline
-## plus a facing marker, not one circle.
+## nothing. It no longer does: EntityView draws through the asset seam, so the dots
+## were removed rather than left to double-render on top of them. The harness now
+## measures the production render path, which is what it should have been measuring
+## all along -- so the 0.7 device figures in PLAN.md still need re-measuring on the
+## reference device.
+##
+## Draw calls move a long way, and NOT in the direction predicted at 0.2b. Measured
+## on desktop at 200 units with the settlement:
+##
+##   procedural placeholders   681 draw calls   (budget < 200 -- over)
+##   real baked atlases         14 draw calls
+##
+## The placeholders are the expensive path, not the cheap one: each is a filled
+## polygon plus an outline plus a facing marker, and none of it batches. Real
+## sprites all sample one atlas page and collapse into a handful of calls. So the
+## budget risk lives with the **placeholder fallback** on a device with no art pack
+## mounted, which is the opposite of the earlier assumption and worth knowing before
+## anyone optimises the wrong path.
 extends Control
 
 const UNIT_COUNT := 200                    # PLAN.md 3.1 "Live units (MVP)"
-## No CameraRig or viewport clamping exists yet (that's a later phase, once
-## real gameplay scenes need it) -- kept small enough that the 1404x648
-## design viewport (PLAN.md 3.0) can show the whole spread without one.
-const MAP_HALF_EXTENT_TILES := 8
+## How far from the town centre the stress units spread, in tiles. No CameraRig or
+## viewport clamping exists yet (3.3), so this stays small enough that the 1404x648
+## design viewport (PLAN.md 3.0) shows the whole spread without one.
+##
+## Was previously used as a half-extent about tile (0, 0), which spawned most of
+## the 200 units on NEGATIVE tiles. That was harmless while no map existed; from
+## 2.1 it means three quarters of the stress load standing off the grid, on tiles
+## no pathfinder will accept at 4.2. Now measured from the town centre and clamped
+## into bounds.
+const SPREAD_TILES := 8
 const RETARGET_INTERVAL_SECONDS := 4.0
 const FPS_WARMUP_SECONDS := 1.5
 const FPS_SAMPLE_SECONDS := 3.0
 
+## Centre of the 1404x648 design viewport (PLAN.md 3.0).
+const DESIGN_CENTRE := Vector2(702.0, 324.0)
+
 var _game_view: GameView
 var _report: RichTextLabel
+var _start_tile: Vector2i = Vector2i.ZERO
 var _unit_ids: Array[int] = []
 var _host_error: String = ""
 
@@ -87,24 +107,46 @@ func _ready() -> void:
 
 func _spawn_units() -> void:
 	var world: SimWorld = Net.host().world
+	_centre_on_start(world)
 	for i in UNIT_COUNT:
-		var pos := Vector2i(
-				randi_range(-MAP_HALF_EXTENT_TILES, MAP_HALF_EXTENT_TILES),
-				randi_range(-MAP_HALF_EXTENT_TILES, MAP_HALF_EXTENT_TILES))
-		var unit := world.spawn_unit(&"unit.villager", 1, pos)
+		var unit := world.spawn_unit(&"unit.villager", 1, _random_tile_near_start(world))
 		_unit_ids.append(unit.id)
 	_retarget_all()
+
+
+## Put the starting settlement in the middle of the screen.
+##
+## MapGen (2.6) places the town centre near the middle of a 64x64 map, which
+## projects roughly 900 px below the origin -- far off the bottom of a 648-tall
+## viewport. Until the camera exists (3.3) the view has to be shoved manually, or
+## the harness renders an empty field while the settlement sits off-screen.
+func _centre_on_start(world: SimWorld) -> void:
+	for e in world.entities.values():
+		if e is SimBuilding:
+			_start_tile = (e as SimBuilding).origin_tile()
+			_game_view.position = DESIGN_CENTRE - Iso.sub_to_world(e.pos)
+			return
+	_start_tile = Vector2i(world.map.size.x / 2, world.map.size.y / 2)
+
+
+## A tile within SPREAD_TILES of the start, clamped into the map. Clamped rather
+## than rejected-and-retried so this always terminates.
+func _random_tile_near_start(world: SimWorld) -> Vector2i:
+	var t := _start_tile + Vector2i(
+			randi_range(-SPREAD_TILES, SPREAD_TILES),
+			randi_range(-SPREAD_TILES, SPREAD_TILES))
+	return Vector2i(
+			clampi(t.x, 0, maxi(0, world.map.size.x - 1)),
+			clampi(t.y, 0, maxi(0, world.map.size.y - 1)))
 
 
 ## One command per unit, each with its own target -- a single shared target
 ## for every unit_id would converge all of them onto the same tile instead of
 ## spreading out, which is a much weaker stress/visual case.
 func _retarget_all() -> void:
+	var world: SimWorld = Net.host().world
 	for id in _unit_ids:
-		var target := Vector2i(
-				randi_range(-MAP_HALF_EXTENT_TILES, MAP_HALF_EXTENT_TILES),
-				randi_range(-MAP_HALF_EXTENT_TILES, MAP_HALF_EXTENT_TILES))
-		Net.submit_command(MoveCommand.new(1, [id], target))
+		Net.submit_command(MoveCommand.new(1, [id], _random_tile_near_start(world)))
 
 
 func _on_snapshot(snap: Dictionary) -> void:

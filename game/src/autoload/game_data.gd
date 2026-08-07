@@ -126,6 +126,36 @@ func placeholder_for(visual_id: StringName) -> PlaceholderSpec:
 	return PlaceholderSpec.unknown()
 
 
+## The visual ID for an ENTITY DEFINITION id -- `unit.villager` -> `vis.villager`.
+##
+## Two separate namespaces, and conflating them is a silent failure rather than a
+## loud one: `atlas_for(&"unit.villager")` finds no entry and cheerfully returns the
+## magenta unknown, so the game renders in placeholder colours and nothing reports
+## an error. That is exactly what happened at 2.6 -- `GameView` was passing
+## `def_id` straight through and every entity on screen was magenta.
+##
+## `phase` is a SimBuilding.Phase for buildings, which have three visuals rather
+## than one (foundation / complete / rubble). Leave it at -1 for anything else, or
+## for a building whose completed look is wanted regardless of state.
+func visual_for(def_id: StringName, phase: int = -1) -> StringName:
+	if not _loaded:
+		load_all()
+
+	var b: BuildingDef = _buildings.get(def_id)
+	if b != null:
+		return b.visual_for_phase(phase) if phase >= 0 else b.visual
+
+	var u: UnitDef = _units.get(def_id)
+	if u != null:
+		return u.visual
+
+	var r: ResourceDef = _resources.get(def_id)
+	if r != null:
+		return r.visual
+
+	return &""
+
+
 func visual_ids() -> Array[StringName]:
 	if not _loaded:
 		load_all()

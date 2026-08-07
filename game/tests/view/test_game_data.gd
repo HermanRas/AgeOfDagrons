@@ -48,6 +48,42 @@ func test_the_mvp_roster_is_present() -> void:
 			[&"res.deer", &"res.gold_mine", &"res.tree"] as Array[StringName])
 
 
+func test_entity_def_ids_translate_to_visual_ids() -> void:
+	# Two separate namespaces -- unit.villager vs vis.villager -- and conflating
+	# them fails SILENTLY: atlas_for() finds no entry for a def id and returns the
+	# magenta unknown, so a whole match renders in placeholder colours with nothing
+	# reported. That shipped briefly at 2.6; this is the regression guard.
+	assert_eq(reg.visual_for(&"unit.villager"), &"vis.villager")
+	assert_eq(reg.visual_for(&"res.tree"), &"vis.tree")
+	assert_eq(reg.visual_for(&"res.gold_mine"), &"vis.gold_mine")
+	assert_eq(reg.visual_for(&"building.house"), &"vis.house")
+	assert_eq(reg.visual_for(&"nonsense.thing"), &"",
+			"an unknown def resolves to nothing, not to a wrong visual")
+
+
+func test_a_building_def_resolves_a_different_visual_per_phase() -> void:
+	# Foundation / complete / rubble are three atlases, so the phase has to reach
+	# the lookup or a destroyed building keeps drawing intact.
+	assert_eq(reg.visual_for(&"building.town_center", 0), &"vis.foundation_8x8")
+	assert_eq(reg.visual_for(&"building.town_center", 2), &"vis.town_center")
+	assert_eq(reg.visual_for(&"building.town_center", 3), &"vis.rubble_town_center")
+	assert_eq(reg.visual_for(&"building.town_center"), &"vis.town_center",
+			"no phase given means the completed look")
+
+
+func test_every_def_resolves_to_a_declared_visual() -> void:
+	# Closes the loop: the def -> visual hop must land on something visuals.json
+	# actually declares, for every entity in the game.
+	for id in reg.unit_ids() + reg.resource_ids():
+		var vis: StringName = reg.visual_for(id)
+		assert_true(reg.visual_ids().has(vis), "%s -> '%s' is declared" % [id, vis])
+	for id in reg.building_ids():
+		for phase in [0, 1, 2, 3]:
+			var vis: StringName = reg.visual_for(id, phase)
+			assert_true(reg.visual_ids().has(vis),
+					"%s phase %d -> '%s' is declared" % [id, phase, vis])
+
+
 func test_an_unknown_id_returns_null_rather_than_a_stand_in() -> void:
 	# The opposite convention to atlas_for(), on purpose: a missing sprite has a
 	# sensible placeholder, a missing unit definition does not.
