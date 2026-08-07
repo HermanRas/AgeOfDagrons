@@ -24,13 +24,25 @@ const DEBUG_START := Vector2(0.5, 0.5)
 ## top-left. Hand-placed rather than scattered: the MVP has to be walkable in a
 ## few seconds on a phone, and a villager should reach wood, gold and food without
 ## a hunt (PLAN.md 10).
+##
+## The wood and deer offsets are also chosen for the *screen*, not just the grid.
+## Iso sends (dx - dy) to screen x and (dx + dy) to screen y, so an offset along
+## the -x+y diagonal moves an object left with no vertical drift, and +x-y moves
+## it right the same way. Wood therefore sits ~6 tiles down-left of the town
+## centre and the deer ~6 up-right, which puts tree, town centre and stag on one
+## horizontal band in dev_preview/preview_world.tscn -- the only way to compare
+## their sizes by looking, which is what they are placed like this for. Six and
+## not eight because the preview frame is 1152 px wide, and eight put the deer
+## just past the right edge.
 const DEBUG_WOOD_CLUSTER := [
-	Vector2i(-6, -2), Vector2i(-7, -2), Vector2i(-8, -2), Vector2i(-6, -3),
-	Vector2i(-7, -3), Vector2i(-8, -3), Vector2i(-7, -4), Vector2i(-8, -4),
-	Vector2i(-6, -1), Vector2i(-7, -1), Vector2i(-9, -3), Vector2i(-9, -2),
+	Vector2i(-4, 9), Vector2i(-3, 9), Vector2i(-2, 9), Vector2i(-1, 9),
+	Vector2i(-4, 10), Vector2i(-3, 10), Vector2i(-2, 10), Vector2i(-1, 10),
+	Vector2i(-4, 11), Vector2i(-3, 11), Vector2i(-2, 11), Vector2i(-1, 11),
 ]
 const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
-const DEBUG_DEER := [Vector2i(3, 12), Vector2i(4, 12), Vector2i(5, 13), Vector2i(3, 13)]
+## A line rather than a block: a 2x2 of deer puts two of them on the same screen
+## column, one hidden behind the other. Stepping only dx staggers all four.
+const DEBUG_DEER := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
 
 
 ## Populate `w` with the fixed debug map. Call after SimWorld.setup(), which has

@@ -1,82 +1,78 @@
-## Dev check for 2.3/2.4a/2.6: build the real debug world through MapGen and draw
-## it. Terrain from SimMap, entities through the asset seam, and it screenshots
-## itself.
+## Dev check for 3.1/3.3: build the real debug world through MapGen, render it
+## through the real GameView, and look at it through the real CameraRig.
 ##
-## Not phase 3.1 -- there is no TileMapLayer, no camera and no Y-sort container
-## here, just enough drawing to answer "did MapGen make a sensible world?" by
-## looking instead of by reading a hash.
+## It draws nothing of its own. Up to 2.6 it had its own ground loop and its own
+## painter's-order sort, which meant it was checking a copy of the render path
+## rather than the render path -- the same mistake that let the actual game render
+## every entity magenta while this preview looked correct.
+##
+## Runs interactively (drag to pan) as well as screenshotting itself, so `--quit`
+## is what separates "take a picture" from "have a look around".
 extends Node2D
 
 const SHOT_PATH := "user://world_preview.png"
-## Middle of the 1404x648 design viewport (PLAN.md 3.0).
-const SCREEN_CENTRE := Vector2(702.0, 340.0)
+
+## Nudges the camera up so the settlement sits a little below the middle. The
+## art grows UPWARD from its ground anchor -- a 10 m tree, the town centre roof --
+## so a dead-centre camera wastes the bottom of the frame.
+const HEADROOM_PX := 40.0
 
 var _frames := 0
+var _shoot := true
 var _world: SimWorld
-
-## Offset that puts the town centre in the middle of the screen. A 64x64 map is
-## ~4096 px wide projected, so without this the viewport shows the map's top
-## corner and nothing else. This is the poor cousin of the camera at 3.3.
-var _origin := SCREEN_CENTRE
+var _view: GameView
+var _camera: CameraRig
 
 
 func _ready() -> void:
+	_shoot = not OS.get_cmdline_user_args().has("--interactive")
+
 	_world = SimWorld.new()
 	_world.setup(MatchConfig.debug_single_player())
 	MapGen.build_debug_map(_world)
 
-	for e in _world.entities.values():
-		if e is SimBuilding:
-			_origin = SCREEN_CENTRE - Iso.sub_to_world(e.pos)
-			break
+	_view = GameView.new()
+	add_child(_view)
+	_view.build_terrain(_world.map.size, _world.map.terrain)
+	_view.apply_snapshot(_full_snapshot())
 
-	var ground := Node2D.new()
-	ground.draw.connect(_draw_ground.bind(ground))
-	add_child(ground)
+	_camera = CameraRig.new()
+	add_child(_camera)
+	_camera.make_current()
+	_camera.setup(_world.map.size)
+	_camera.centre_on(_start_position() - Vector2(0.0, HEADROOM_PX))
 
-	# Painter's order: back to front by tile sum, which is what Iso.depth_sort_key
-	# gives and what 3.1 will get from a Y-sorted container instead.
-	var sorted := _world.entities.values()
-	sorted.sort_custom(func(a, b): return Iso.depth_sort_key(a.tile()) < Iso.depth_sort_key(b.tile()))
-
-	for e in sorted:
-		var view := EntityView.new()
-		view.visual_id = _visual_for(e)
-		view.position = _origin + Iso.sub_to_world(e.pos)
-		view.play_anim(&"idle", 0)
-		add_child(view)
-
+	# On its own CanvasLayer, or the camera pans the caption off the screen along
+	# with the ground.
+	var hud := CanvasLayer.new()
+	add_child(hud)
 	var label := Label.new()
 	label.text = "%d entities  |  map %dx%d  |  hash %d" % [
 		_world.entities.size(), _world.map.size.x, _world.map.size.y, _world.state_hash()]
 	label.position = Vector2(12, 12)
-	add_child(label)
+	hud.add_child(label)
 
 
-## The sim knows def ids; visuals.json knows visual ids. Goes through the same
-## GameDataRegistry.visual_for() the real GameView uses -- this preview originally
-## had its own copy of the mapping, which is precisely why it looked correct while
-## the actual game path was rendering everything magenta.
-func _visual_for(e: SimEntity) -> StringName:
-	var phase := int((e as SimBuilding).phase) if e is SimBuilding else -1
-	return GameDataRegistry.visual_for(e.def_id, phase)
+## Every entity as one "updated" batch, in the snapshot format the network path
+## produces (PLAN.md 7.2). Built from the entities' own to_snapshot() rather than
+## hand-rolled, so this cannot describe them differently from a real match.
+func _full_snapshot() -> Dictionary:
+	var updated: Array = []
+	for e in _world.entities.values():
+		updated.append((e as SimEntity).to_snapshot())
+	return {"tick": 0, "updated": updated, "removed": []}
 
 
-func _draw_ground(on: Node2D) -> void:
-	var grass := PlaceholderSpec.from_dict({
-		"shape": "diamond", "footprint_m": [2.0, 2.0], "color": "#4a6f30"})
-	var dirt := PlaceholderSpec.from_dict({
-		"shape": "diamond", "footprint_m": [2.0, 2.0], "color": "#6b5a3c"})
-
-	for ty in range(_world.map.size.y):
-		for tx in range(_world.map.size.x):
-			var t := Vector2i(tx, ty)
-			on.draw_set_transform(_origin + Iso.tile_to_world(t), 0.0, Vector2.ONE)
-			var kind := _world.map.terrain_at(t)
-			PlaceholderRenderer.draw_into(on, dirt if kind == SimMap.Terrain.DIRT else grass, 0)
+func _start_position() -> Vector2:
+	for e in _world.entities.values():
+		if e is SimBuilding:
+			return Iso.sub_to_world((e as SimBuilding).pos)
+	return Iso.tile_centre_to_world(_world.map.size / 2)
 
 
 func _process(_delta: float) -> void:
+	if not _shoot:
+		return
 	_frames += 1
 	if _frames < 6:
 		return

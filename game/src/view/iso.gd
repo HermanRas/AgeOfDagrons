@@ -31,8 +31,50 @@ const PIXELS_PER_METRE := 22.62741699796952
 const VERTICAL_PX_PER_METRE := 19.595917942265423  # PIXELS_PER_METRE * cos(30)
 
 
+## The tile's own coordinate projected -- which is its top CORNER, not its middle.
+## Equals sub_to_world() at exact tile multiples, and that is what makes it a
+## corner: the sim puts an entity standing on tile t at `t * SUBTILE + SUBTILE/2`,
+## so t itself is the boundary between t and its neighbours.
+##
+## For placing anything that sits ON a tile -- terrain art especially -- use
+## tile_centre_to_world(). Confusing the two costs half a tile, which is invisible
+## on uniform grass and obvious the moment two terrains meet.
 static func tile_to_world(t: Vector2i) -> Vector2:
 	return _project(Vector2(t))
+
+
+## Screen-space box the whole map projects into, for clamping the camera (3.3).
+##
+## Measured from tile CORNERS, not centres: the map covers fractional tile
+## coordinates [0, w] x [0, h], so its extreme points are the four corners of that
+## square projected -- top (0,0), right (w,0), bottom (w,h), left (0,h). Using tile
+## centres would shrink the box by half a tile on every side and let the camera
+## stop with a sliver of ground still off-screen.
+##
+## The map is a DIAMOND inside this box. Clamping a rectangular viewport to a
+## rectangular bound therefore still allows off-map void at the four corners --
+## unavoidable without letterboxing the diamond, and the reason the background
+## colour behind the world is a visible decision rather than an afterthought.
+static func map_bounds(size: Vector2i) -> Rect2:
+	var w := maxi(0, size.x)
+	var h := maxi(0, size.y)
+	var half := TILE_SIZE * 0.5
+	return Rect2(
+		Vector2(-float(h) * half.x, 0.0),
+		Vector2(float(w + h) * half.x, float(w + h) * half.y))
+
+
+## Middle of tile `t`, matching where the sim stands an entity on it (2.3:
+## `spawn_unit` and `spawn_resource_node` both offset by half a tile, and
+## SimBuilding.centre_of does the same for a footprint).
+static func tile_centre_to_world(t: Vector2i) -> Vector2:
+	return _project(Vector2(t) + Vector2(0.5, 0.5))
+
+
+## Projection of a point given in fractional tiles, the exact inverse of
+## world_to_tile_f(). The camera clamp works in tile space and has to come back.
+static func tile_to_world_f(t: Vector2) -> Vector2:
+	return _project(t)
 
 
 ## A ground-plane offset given in metres rather than tiles. Placeholder specs are
@@ -77,26 +119,54 @@ static func facing_to_screen_dir(facing: int) -> Vector2:
 
 
 static func world_to_tile(w: Vector2) -> Vector2i:
+	var t := world_to_tile_f(w)
+	return Vector2i(roundi(t.x), roundi(t.y))
+
+
+## Un-projected to FRACTIONAL tile coordinates -- the exact inverse of _project.
+##
+## Separate from world_to_tile() because rounding to a tile throws away what the
+## camera clamp needs: clamping fractional tile coordinates to the [0, w] x [0, h]
+## box is what confines a point to the map's DIAMOND in screen space, and it has
+## to be done before any rounding.
+static func world_to_tile_f(w: Vector2) -> Vector2:
 	var half := TILE_SIZE * 0.5
-	var tx := (w.x / half.x + w.y / half.y) * 0.5
-	var ty := (w.y / half.y - w.x / half.x) * 0.5
-	return Vector2i(roundi(tx), roundi(ty))
+	return Vector2(
+		(w.x / half.x + w.y / half.y) * 0.5,
+		(w.y / half.y - w.x / half.x) * 0.5)
 
 
-## Draw order key for Y-sorting (PLAN.md 7.3). Naive tile-sum.
+## Screen offset from a footprint's CENTRE -- where its sprite is anchored, and
+## where the sim keeps its `pos` -- to the middle of its FRONT tile, the one
+## nearest the camera.
 ##
-## **Known wrong for large footprints, and visibly so.** A building's key comes
-## from one tile, so an 8x8 town centre sorts as though it stood on its centre
-## tile -- which puts units standing on the four tiles nearest the camera *behind*
-## its roof instead of in front of it. Seen in dev_preview/preview_world.tscn at
-## 2.6: the starting villagers appear to stand on the town centre.
+## This is the 3.1 depth fix (PLAN.md 13.1). Sorting a footprint by its centre is
+## wrong and was visibly so: an 8x8 town centre sorted as though it stood on its
+## middle tile, so units on the four tiles nearest the camera drew *behind* its
+## roof -- the starting villagers appeared to stand on top of the town centre in
+## dev_preview/preview_world.tscn at 2.6. Sorting by the front tile instead means
+## a building sorts by the nearest ground it actually covers, which is the ground
+## a unit has to be in front of to occlude it.
 ##
-## The fix is to key a footprint off its FRONT corner (`origin + footprint - 1`)
-## rather than its centre, so it sorts by the nearest tile it actually covers. Left
-## for 3.1, which is where the real Y-sorted container replaces this function's
-## callers and where it can be verified against a scene rather than a screenshot.
-static func depth_sort_key(p: Vector2i) -> float:
-	return float(p.x + p.y)
+## Adding this to a view's position moves its SORT point without moving its art;
+## EntityView.draw_offset carries the equal and opposite shift so the sprite stays
+## put. A 1x1 footprint gets (0, 0) -- its front tile is itself -- so units and
+## resource nodes are unaffected.
+static func footprint_sort_offset(footprint: Vector2i) -> Vector2:
+	var f := Vector2(maxi(1, footprint.x), maxi(1, footprint.y))
+	return _project(f * 0.5 - Vector2(0.5, 0.5))
+
+
+## Draw order key for painter's-order callers (PLAN.md 7.3). Larger is nearer the
+## camera and therefore drawn later.
+##
+## Takes the screen point a view SORTS at, not a tile -- which is the whole fix.
+## A tile-sum key cannot express "this building covers eight tiles"; a sort point
+## can, because footprint_sort_offset() has already moved it to the front tile.
+## Godot's own Y-sort keys off exactly this quantity, so a container with
+## `y_sort_enabled` and a caller using this function agree by construction.
+static func depth_sort_key(sort_point: Vector2) -> float:
+	return sort_point.y
 
 
 static func _project(tile_frac: Vector2) -> Vector2:

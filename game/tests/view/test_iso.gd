@@ -23,7 +23,60 @@ func test_sub_to_world_is_between_neighbouring_tiles_mid_step() -> void:
 
 
 func test_depth_sort_key_increases_toward_bottom_of_map() -> void:
-	assert_true(Iso.depth_sort_key(Vector2i(5, 5)) > Iso.depth_sort_key(Vector2i(1, 1)))
+	assert_true(Iso.depth_sort_key(Iso.tile_centre_to_world(Vector2i(5, 5)))
+			> Iso.depth_sort_key(Iso.tile_centre_to_world(Vector2i(1, 1))))
+
+
+# ── tile centres vs tile corners (3.1) ─────────────────────────────────────
+
+func test_a_tiles_centre_is_where_the_sim_stands_an_entity_on_it() -> void:
+	# spawn_unit() places a unit at `tile * SUBTILE + SUBTILE/2`, so tile_to_world()
+	# -- which matches sub_to_world at exact multiples -- is the tile's CORNER.
+	# Drawing terrain there instead of at the centre is a half-tile error, which is
+	# invisible on uniform grass and obvious where two terrains meet.
+	var t := Vector2i(6, 2)
+	var stood_on := t * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE / 2, SimWorld.SUBTILE / 2)
+	assert_eq(Iso.tile_centre_to_world(t), Iso.sub_to_world(stood_on))
+	assert_ne(Iso.tile_centre_to_world(t), Iso.tile_to_world(t),
+			"centre and corner are different points")
+
+
+func test_a_tile_centre_is_half_a_tile_below_its_corner() -> void:
+	var t := Vector2i(3, 3)
+	var delta := Iso.tile_centre_to_world(t) - Iso.tile_to_world(t)
+	assert_almost_eq(delta.x, 0.0, 0.001, "the centre is straight down from the corner")
+	assert_almost_eq(delta.y, Iso.TILE_SIZE.y / 2.0, 0.001)
+
+
+# ── footprint depth sorting (3.1) ──────────────────────────────────────────
+
+func test_a_one_tile_footprint_needs_no_sort_offset() -> void:
+	# Units and resource nodes must be completely unaffected by the building fix.
+	assert_eq(Iso.footprint_sort_offset(Vector2i.ONE), Vector2.ZERO)
+	assert_eq(Iso.footprint_sort_offset(Vector2i.ZERO), Vector2.ZERO,
+			"a degenerate footprint is treated as 1x1 rather than pulled off-screen")
+
+
+func test_a_footprint_sorts_from_its_front_tile() -> void:
+	# The offset must land exactly on the centre of tile (origin + footprint - 1),
+	# because that is the ground a unit has to stand in front of to occlude the
+	# building. Checked against Iso's own projection of that tile rather than a
+	# recomputed formula, so the two cannot drift.
+	var origin := Vector2i(10, 10)
+	for footprint in [Vector2i(8, 8), Vector2i(4, 4), Vector2i(3, 5)]:
+		var centre_sub := SimBuilding.centre_of(origin, footprint)
+		var sorted_at := Iso.sub_to_world(centre_sub) + Iso.footprint_sort_offset(footprint)
+		var front_tile: Vector2i = origin + footprint - Vector2i.ONE
+		assert_almost_eq(sorted_at.x, Iso.tile_centre_to_world(front_tile).x, 0.01,
+				"%s sorts at its front tile" % footprint)
+		assert_almost_eq(sorted_at.y, Iso.tile_centre_to_world(front_tile).y, 0.01,
+				"%s sorts at its front tile" % footprint)
+
+
+func test_a_bigger_footprint_sorts_further_forward() -> void:
+	assert_true(Iso.footprint_sort_offset(Vector2i(8, 8)).y
+			> Iso.footprint_sort_offset(Vector2i(4, 4)).y,
+			"a town centre reaches further toward the camera than a house")
 
 
 # ── phase 0.2b: metre-space projection, used by the placeholder renderer ────

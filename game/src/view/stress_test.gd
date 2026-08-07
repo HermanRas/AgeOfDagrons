@@ -41,10 +41,8 @@ const RETARGET_INTERVAL_SECONDS := 4.0
 const FPS_WARMUP_SECONDS := 1.5
 const FPS_SAMPLE_SECONDS := 3.0
 
-## Centre of the 1404x648 design viewport (PLAN.md 3.0).
-const DESIGN_CENTRE := Vector2(702.0, 324.0)
-
 var _game_view: GameView
+var _camera: CameraRig
 var _report: RichTextLabel
 var _start_tile: Vector2i = Vector2i.ZERO
 var _unit_ids: Array[int] = []
@@ -68,15 +66,37 @@ var _step_avg_usec := 0
 
 
 func _ready() -> void:
+	# This scene's root is a full-rect Control, and a Control defaults to
+	# MOUSE_FILTER_STOP -- it would swallow every mouse button and motion event
+	# before _unhandled_input, so the camera would pan under a finger on the phone
+	# and do nothing at all under a mouse on the desktop. Touch is unaffected
+	# either way: emulate_mouse_from_touch is off, so touch never enters the GUI.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_game_view = GameView.new()
+	add_child(_game_view)
+
+	_camera = CameraRig.new()
+	add_child(_camera)
+	_camera.make_current()
+
+	# Backdrop and readout go on CanvasLayers, which the camera transform does not
+	# touch -- left in the world canvas they would pan away with the ground the
+	# moment 3.3's drag was used. Two layers, not one: the backdrop has to sit
+	# UNDER the world (negative layer) or it paints over everything, and the
+	# readout has to sit over it.
+	var backdrop := CanvasLayer.new()
+	backdrop.layer = -1
+	add_child(backdrop)
+
 	var bg := ColorRect.new()
 	bg.color = Color("#2B1D14")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
+	backdrop.add_child(bg)
 
-	_game_view = GameView.new()
-	_game_view.position = Vector2(702, 324)          # centre of the 1404x648 design viewport
-	add_child(_game_view)
+	var hud := CanvasLayer.new()
+	add_child(hud)
 
 	_report = RichTextLabel.new()
 	_report.bbcode_enabled = true
@@ -89,7 +109,7 @@ func _ready() -> void:
 	_report.offset_bottom = -24
 	_report.add_theme_font_size_override("normal_font_size", 15)
 	_report.add_theme_font_size_override("bold_font_size", 17)
-	add_child(_report)
+	hud.add_child(_report)
 
 	Net.snapshot_received.connect(_on_snapshot)
 	var err := Net.host_solo()
@@ -107,6 +127,10 @@ func _ready() -> void:
 
 func _spawn_units() -> void:
 	var world: SimWorld = Net.host().world
+	# Terrain before units: from 3.1 the harness measures the real render path,
+	# and that path includes the ground. Leaving it out would have flattered the
+	# draw-call figure the whole point of this scene is to report.
+	_game_view.build_terrain(world.map.size, world.map.terrain)
 	_centre_on_start(world)
 	for i in UNIT_COUNT:
 		var unit := world.spawn_unit(&"unit.villager", 1, _random_tile_near_start(world))
@@ -114,19 +138,22 @@ func _spawn_units() -> void:
 	_retarget_all()
 
 
-## Put the starting settlement in the middle of the screen.
+## Point the camera at the starting settlement.
 ##
 ## MapGen (2.6) places the town centre near the middle of a 64x64 map, which
 ## projects roughly 900 px below the origin -- far off the bottom of a 648-tall
-## viewport. Until the camera exists (3.3) the view has to be shoved manually, or
-## the harness renders an empty field while the settlement sits off-screen.
+## viewport, so without this the harness measures an empty field. Up to 3.1 this
+## shoved `_game_view.position` around by hand; 3.3's camera is what that hack
+## was standing in for.
 func _centre_on_start(world: SimWorld) -> void:
+	_camera.setup(world.map.size)
 	for e in world.entities.values():
 		if e is SimBuilding:
 			_start_tile = (e as SimBuilding).origin_tile()
-			_game_view.position = DESIGN_CENTRE - Iso.sub_to_world(e.pos)
+			_camera.centre_on(Iso.sub_to_world(e.pos))
 			return
 	_start_tile = Vector2i(world.map.size.x / 2, world.map.size.y / 2)
+	_camera.centre_on(Iso.tile_centre_to_world(_start_tile))
 
 
 ## A tile within SPREAD_TILES of the start, clamped into the map. Clamped rather

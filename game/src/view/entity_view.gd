@@ -34,6 +34,20 @@ var visual_id: StringName = &"":
 		_frame = 0
 		queue_redraw()
 
+## Shifts the ART without shifting the NODE, which is what lets a large footprint
+## sort correctly under a Y-sorted parent (3.1).
+##
+## Godot Y-sorts children by `position.y` and offers no per-node sort origin, so
+## a building's node is placed at its front tile -- the point it must sort by --
+## and this carries the equal and opposite offset so the sprite still lands on the
+## footprint centre. GameView sets the pair together; see Iso.footprint_sort_offset.
+var draw_offset: Vector2 = Vector2.ZERO:
+	set(value):
+		if draw_offset == value:
+			return
+		draw_offset = value
+		queue_redraw()
+
 var anim: StringName = &"idle"
 var facing: int = 0
 var health_pct: float = 1.0
@@ -78,6 +92,20 @@ func set_target_transform(pos: Vector2, _tick: int) -> void:
 	_from_pos = position
 	_to_pos = pos
 	_elapsed = 0.0
+
+
+## Place without interpolating, for an entity's FIRST position.
+##
+## set_target_transform() always glides from wherever the node currently is, which
+## for a just-acquired view is the origin, or worse, wherever the pooled node was
+## when its previous occupant died. Either way a newly spawned entity slid across
+## the map for 100 ms before settling. Interpolation is for entities that moved;
+## an entity that has only just appeared has nowhere to have moved from.
+func snap_to(pos: Vector2) -> void:
+	position = pos
+	_from_pos = pos
+	_to_pos = pos
+	_elapsed = INTERP_SECONDS
 
 
 func advance(delta: float) -> void:
@@ -144,6 +172,13 @@ func _advance_anim(delta: float) -> void:
 
 func _draw() -> void:
 	var vis := visual()
+
+	# draw_offset is a translation on the canvas transform rather than a term added
+	# to each rect, so it applies AFTER the mirror below and is itself never
+	# mirrored -- a flipped building would otherwise shift the wrong way.
+	if draw_offset != Vector2.ZERO:
+		draw_set_transform(draw_offset)
+
 	if vis.is_placeholder:
 		PlaceholderRenderer.draw_into(self, vis.placeholder, facing)
 		return
@@ -164,10 +199,10 @@ func _draw() -> void:
 	# local origin. Mirrored facings reflect about that same point, so a flipped
 	# sprite stays on its feet.
 	if bool(f["flip_x"]):
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
+		draw_set_transform(draw_offset, 0.0, Vector2(-1.0, 1.0))
 		draw_texture_rect_region(
 			tex, Rect2(anchor.x - rect.size.x, -anchor.y, rect.size.x, rect.size.y), src
 		)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_set_transform(draw_offset, 0.0, Vector2.ONE)
 	else:
 		draw_texture_rect_region(tex, Rect2(-anchor, Vector2(rect.size)), src)
