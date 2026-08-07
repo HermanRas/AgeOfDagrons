@@ -30,8 +30,8 @@ func after_each() -> void:
 
 func test_the_shipped_data_files_load_without_warnings() -> void:
 	assert_false(reg.visual_ids().is_empty(), "visuals.json declares at least one ID")
-	for w in reg.load_warnings:
-		fail("visuals.json / audio.json is not clean: %s" % w)
+	assert_true(reg.load_warnings.is_empty(),
+			"data files are not clean -- %s" % "; ".join(reg.load_warnings))
 
 
 func test_every_declared_id_resolves_to_something_drawable() -> void:

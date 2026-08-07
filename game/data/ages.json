@@ -1,0 +1,18 @@
+{
+  "_note": [
+    "PLAN.md 9. A LIST, not an ID-keyed object, because age ORDER is the meaning",
+    "of the data -- keyed by name, the file could be reordered and nothing would",
+    "notice. SimPlayer.age indexes from 1.",
+    "",
+    "MVP ships age 1 only and never advances (advancement is 9.2), so ages 2-4 are",
+    "listed with their numerals and nothing else. They are here to fix the",
+    "vocabulary and to give the age header (9.1) something to render."
+  ],
+
+  "ages": [
+    { "name": "Feudal Age", "numeral": "I", "cost": {}, "advance_time_ticks": 0 },
+    { "name": "Castle Age", "numeral": "II" },
+    { "name": "Imperial Age", "numeral": "III" },
+    { "name": "Dragon Age", "numeral": "IV" }
+  ]
+}

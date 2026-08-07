@@ -1,0 +1,36 @@
+{
+  "_note": [
+    "PLAN.md 9. All numbers are STARTING VALUES to be tuned by playtest --",
+    "balance is ours to design, not inherited from any reference game.",
+    "",
+    "MVP is one unit (PLAN.md 10). Military units are phase 11 and their art is",
+    "A.8, so nothing else is entered here yet.",
+    "",
+    "Units: speed is SUB-UNITS PER TICK (SimUnit.speed, PLAN.md 6.2) at",
+    "SimWorld.SUBTILE per tile and 10 ticks/second. gather_rate is per 100 ticks,",
+    "so 25 means a quarter of a unit per tick -- authored x100 to keep the sim on",
+    "integers, because a float leaking into it breaks determinism (PLAN.md 7.1)."
+  ],
+
+  "unit.villager": {
+    "name": "Villager",
+    "visual": "vis.villager",
+
+    "hp": 30,
+    "speed": 200,
+    "los": 4,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 50 },
+    "build_time_ticks": 250,
+
+    "attack": { "damage": 3, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": { "food": 10, "wood": 10, "gold": 10, "stone": 10 },
+    "gather_rate": { "food": 25, "wood": 25, "gold": 25, "stone": 25 },
+
+    "trainable_at": ["building.town_center"]
+  }
+}

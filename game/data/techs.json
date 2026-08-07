@@ -1,0 +1,10 @@
+{
+  "_note": [
+    "PLAN.md 9. Deliberately EMPTY, not absent.",
+    "",
+    "TechSystem is phase 9.3 and no tech is in MVP scope (PLAN.md 10). The file",
+    "exists so GameDataRegistry loads the complete set of data files from day one:",
+    "a missing file and an empty one are different states, and only one of them is",
+    "a bug. When 9.3 lands it is a data change plus a system, not a schema change."
+  ]
+}

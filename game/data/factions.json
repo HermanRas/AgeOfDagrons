@@ -1,0 +1,17 @@
+{
+  "_note": [
+    "PLAN.md 9. Deliberately near-empty.",
+    "",
+    "Faction unique units and bonuses are phase 9.5, and MVP is one player with no",
+    "faction choice (PLAN.md 10). One neutral entry exists so SimPlayer.faction has",
+    "something valid to hold and the Lobby has something to list, rather than the",
+    "field carrying an empty StringName that every later check has to special-case."
+  ],
+
+  "faction.neutral": {
+    "name": "Neutral",
+    "bonuses": [],
+    "unique_units": [],
+    "unique_techs": []
+  }
+}

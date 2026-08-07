@@ -15,8 +15,13 @@
     "so today every ID resolves to its placeholder.",
     "",
     "footprint_m and height_m are METRES, not pixels -- see placeholder_spec.gd",
-    "for why. The figures below are the measured dimensions from tools/recipes/,",
-    "so a placeholder occupies the space its real sprite will."
+    "for why. Every figure below is measured, via `isobake inspect` on the source",
+    "actor, halved (inspect reports raw 0 A.D. units and the pipeline's",
+    "tile-to-tile factor is 0.5). Heights subtract the buried skirt where there is",
+    "one, per ASSET_MISSING.md 1.2: the town centre loses 2.7 m, the 3x3 rubble",
+    "1.8, the house 0.7. Note the rubble and foundation footprints are LARGER than",
+    "the buildings they belong to -- 0 A.D. authors them that way, rubble spreads",
+    "and a foundation pad oversizes its building -- so they are not typos."
   ],
 
   "terrain.grass": {
@@ -53,8 +58,8 @@
     "atlas": "res://assets/atlases/vis.house.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [7.6, 7.6],
-      "height_m": 5.3,
+      "footprint_m": [10.0, 10.0],
+      "height_m": 6.6,
       "color": "#c4b394"
     }
   },
@@ -63,8 +68,8 @@
     "atlas": "res://assets/atlases/vis.foundation_8x8.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [16.0, 16.0],
-      "height_m": 0.4,
+      "footprint_m": [17.0, 17.0],
+      "height_m": 2.3,
       "color": "#8a7f6b"
     }
   },
@@ -73,8 +78,8 @@
     "atlas": "res://assets/atlases/vis.foundation_4x4.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [8.0, 8.0],
-      "height_m": 0.4,
+      "footprint_m": [9.0, 9.0],
+      "height_m": 2.3,
       "color": "#8a7f6b"
     }
   },
@@ -83,8 +88,8 @@
     "atlas": "res://assets/atlases/vis.rubble_town_center.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [15.5, 15.0],
-      "height_m": 1.6,
+      "footprint_m": [22.0, 22.0],
+      "height_m": 5.5,
       "color": "#6f6960"
     }
   },
@@ -93,8 +98,8 @@
     "atlas": "res://assets/atlases/vis.rubble_3x3.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [6.0, 6.0],
-      "height_m": 1.2,
+      "footprint_m": [11.0, 11.0],
+      "height_m": 3.0,
       "color": "#6f6960"
     }
   },

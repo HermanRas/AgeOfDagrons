@@ -1,0 +1,78 @@
+{
+  "_note": [
+    "PLAN.md 9. All numbers are STARTING VALUES to be tuned by playtest.",
+    "",
+    "MVP is two buildings (PLAN.md 10): a Town Centre to train from and a House",
+    "to raise the pop cap. Barracks and the dragon nest are later phases.",
+    "",
+    "Each building names THREE visuals, not one. A building is a foundation, a",
+    "completed structure, or rubble (SimBuilding.Phase), and 0 A.D. models those",
+    "as separate actors -- so they are separate atlases, shared by footprint size:",
+    "vis.foundation_8x8 will serve every 8x8 building added later. There is no",
+    "under-construction art; the foundation covers that phase too, and 5.2 shows",
+    "progress by clipping the completed sprite over it (ASSET_MISSING.md 1.2).",
+    "",
+    "FOOTPRINTS COME FROM THE MEASURED ART, not from PLAN.md 9's sketch, which",
+    "wrote [4, 4] for the town centre before anything had been measured. Measured",
+    "via `isobake inspect`, halved to project metres, divided by the 2 m tile:",
+    "",
+    "  town centre   15.53 x 15.00 m  = 7.77 tiles  -> [8, 8]",
+    "  house         10.00 x 10.00 m  = 5.00 tiles  -> [4, 4]   (see below)",
+    "",
+    "The town centre also agrees with 0 A.D.'s own 30x30-unit obstruction and with",
+    "the fndn_8x8 foundation their template pairs it with. Scaling the mesh down",
+    "to fit a smaller footprint is not the alternative -- it would break the",
+    "one-global-pixels_per_metre rule (PLAN.md 2.2) and leave a villager taller",
+    "than the doorway.",
+    "",
+    "The house is the one place art and gameplay deliberately DISAGREE: the mesh",
+    "is 5 tiles across but the footprint is [4, 4], matching the 4x4 foundation",
+    "0 A.D. pairs it with. So the roof overhangs its own tiles by half a tile a",
+    "side. That is the right trade -- a 5x5 house is oddly large next to an 8x8",
+    "town centre, odd-sized footprints centre badly on a grid, and overhanging",
+    "roofs are normal in isometric RTS art. Revisit if placement collisions ever",
+    "look wrong rather than merely generous."
+  ],
+
+  "building.town_center": {
+    "name": "Town Center",
+    "visual": "vis.town_center",
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_town_center",
+
+    "hp": 2000,
+    "footprint": [8, 8],
+    "los": 8,
+
+    "cost": { "wood": 275, "stone": 100 },
+    "build_time_ticks": 1500,
+
+    "provides_pop": 10,
+    "garrison_cap": 15,
+
+    "trains": ["unit.villager"],
+    "drop_off": ["food", "wood", "gold", "stone"],
+    "age_required": 1
+  },
+
+  "building.house": {
+    "name": "House",
+    "visual": "vis.house",
+    "visual_foundation": "vis.foundation_4x4",
+    "visual_rubble": "vis.rubble_3x3",
+
+    "hp": 550,
+    "footprint": [4, 4],
+    "los": 2,
+
+    "cost": { "wood": 30 },
+    "build_time_ticks": 250,
+
+    "provides_pop": 5,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 1
+  }
+}

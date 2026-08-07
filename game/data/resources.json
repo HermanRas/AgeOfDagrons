@@ -1,0 +1,43 @@
+{
+  "_note": [
+    "PLAN.md 9. All numbers are STARTING VALUES to be tuned by playtest.",
+    "",
+    "MVP is three nodes (PLAN.md 10): chop wood, mine gold, hunt a deer. Stone,",
+    "farms, fishing, berries and boar are 6.5.",
+    "",
+    "`amounts` is indexed by SimResourceNode.size_class (0 small, 1 medium,",
+    "2 large). Size is a DATA distinction only -- every size draws the same",
+    "sprite, because the size classes would need three bakes each and the visual",
+    "difference earns nothing at sprite scale (ASSET_MISSING.md 1.3). The tree",
+    "and gold mine actors do carry enough variants to make them distinct later if",
+    "that changes.",
+    "",
+    "The deer is single-size on purpose: a herd of differently-sized deer reads as",
+    "an art bug, not as variety. It also ships STATIC -- 0 A.D.'s quadruped clips",
+    "will not transfer (PLAN.md 13.2 item 8) -- which costs nothing here, since",
+    "6.1a only needs a huntable node and roaming is 6.1b. The carcass still has no",
+    "art and stays on its placeholder."
+  ],
+
+  "res.tree": {
+    "kind": "wood",
+    "visual": "vis.tree",
+    "amounts": [40, 100, 175],
+    "gather_slots": 1
+  },
+
+  "res.gold_mine": {
+    "kind": "gold",
+    "visual": "vis.gold_mine",
+    "amounts": [200, 500, 800],
+    "gather_slots": 4
+  },
+
+  "res.deer": {
+    "kind": "food",
+    "visual": "vis.deer",
+    "amounts": [140, 140, 140],
+    "gather_slots": 2,
+    "wildlife": { "roam_radius": 6, "flees": true }
+  }
+}
