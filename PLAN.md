@@ -309,22 +309,37 @@ pack_theme_*.pck  = optional community themes (later)
 ```
 
 **Sources, in priority order:**
-1. **Project website (primary)** — no size limit, 100 Mbps
+1. **Project website (primary)** — `https://aod.dragoon.co.za/`, no size limit, 100 Mbps.
+   Settled at 0.3. Layout, with the website source living in `web/` in this repo:
+   | URL | What |
+   |---|---|
+   | `https://aod.dragoon.co.za/index.html` | Landing page |
+   | `https://aod.dragoon.co.za/downloads/index.html` | Downloads page — human-facing |
+   | `https://aod.dragoon.co.za/downloads/packs.json` | **Pack manifest — the client reads this.** Stable, unversioned URL; the versions live *inside* it |
+   | `https://aod.dragoon.co.za/downloads/AoD_v0.0.4.apk` / `.exe` | Game builds — human-facing, not fetched by the client |
+   | `https://aod.dragoon.co.za/downloads/pack_art_v1.pck` | Art pack — fetched by `AssetPacks` |
 2. Additional mirror (to be chosen; GitHub Releases is one candidate)
 3. Any user-added source URL (enables custom themes later)
+
+> **Pack versions are independent of game versions**, which is why the pack is
+> `pack_art_v1.pck` and not `AoD_v0.0.4.pck`. Naming it after the build would force every
+> player to re-download the whole art pack on every code release, including releases that
+> changed no art at all — and the art will grow well past its current 6.7 MB once audio
+> (A.7) and the military roster (A.8) land. The APK and the `.pck` version on separate
+> clocks; the manifest is what ties a game build to the pack versions it accepts.
 
 The pack manifest carries a URL list per pack, so adding or reordering mirrors is a manifest edit with no client change.
 
 **Flow:** boot → check local pack versions against a manifest → download missing/outdated → verify checksum → `load_resource_pack()` → assets resolve through the seam (§2.1). If a pack is absent or fails verification, **the game runs on placeholders** rather than failing. That fallback is the whole reason placeholders stay in the build permanently.
 
 ```jsonc
-// packs.json — served from the project website, mirrored later
+// packs.json — https://aod.dragoon.co.za/downloads/packs.json
 {
   "manifest_version": 1,
   "packs": [
-    { "id": "art",   "version": "1.0.0", "size": 312000000,
+    { "id": "art", "version": "1.0.0", "size": 6710000,
       "sha256": "…", "required": false,
-      "urls": ["https://<website>/packs/pack_art_v1.pck"] }
+      "urls": ["https://aod.dragoon.co.za/downloads/pack_art_v1.pck"] }
   ]
 }
 ```
@@ -1306,8 +1321,8 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | 1 | ~~**Does the render pipeline produce usable sprites?**~~ ✅ **ANSWERED at 0.9 — yes.** Proven on a grass tile, an oak and a 240-frame animated citizen. A.3 can be scheduled | ✅ 0.9 |
 | 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy — needs a hand-picked actor→`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`), six more at A.2 (the Athenian civic centre and Hellenic house plus their foundations and rubble — same civ as the villager, so the settlement reads as one architectural style); the mapping lives in `tools/recipes/`. `vis.deer` (`fauna/deer.xml`) and `vis.gold_mine` (`geology/metalmine_alpine.xml`) picked at A.4, so **every MVP entity now has an actor**. Two findings from the gold mine worth carrying to the rest of the roster: (a) civ consistency is the right default for *architecture* but not for scenery — the civ-matching `metalmine_granite_greek` lost to alpine purely because its texture reads as moss rather than ore, and all the old-generation ore actors share one mesh and differ only in texture; (b) 0 A.D.'s newer, better-sculpted asset generations are often authored sunk into terrain and so are *blocked behind the z=0 ground clip* (item 7a), which makes that fix an art-quality unlock and not just a cosmetic tidy-up | ✅ A.4 |
 | 3 | **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and won't suit. Decide what's reusable vs newly sourced | [ASSET_MISSING.md](ASSET_MISSING.md) |
-| 4 | **Icon volume** — tech/unit/resource icons are individually trivial but numerous; crop from sprites, generate, or commission | ASSET_MISSING.md |
-| 5 | **Second pack mirror** — website is primary and unconstrained; pick a fallback later | before first public build |
+| 4 | ~~**Icon volume**~~ ✅ **ANSWERED — generate.** 15 icons delivered at 0.3 staging, AI-generated (Google Gemini) at 100×100 RGBA from a 5×5 source sheet: 5 resource (`res_food/wood/gold/stone/villagers`) and 10 action (`res_`/`act_` prefixes group them by the panel that uses them). Live in `game/assets/ui/icons/`; the sheet stays in `Icons/` as the source, with **10 empty slots** for the rest. Still to draw: unit/building portraits for the selection panel and control-group slots, and the trebuchet pack/unpack pair `icons.txt` lists but the sheet does not yet have. Note `act_enter`/`act_garrison` and `act_exit`/`act_leave` are two pairs covering one concept each — decide whether they are distinct actions (board transport vs garrison building) or two takes on one, and reclaim the spares if the latter | mostly closed |
+| 5 | **Second pack mirror** — primary is settled: `https://aod.dragoon.co.za/` (§3.2), unconstrained. A fallback is still unpicked; GitHub Releases is the obvious candidate since the repo is already there. Costs nothing to defer — `packs.json` carries a URL *list* per pack, so adding a mirror is a manifest edit with no client change | before first public build |
 | 6 | **Device reach on Compatibility** — confirm the target phone runs it cleanly at 0.1. Known Android driver issues cluster on Mali/MediaTek/Adreno under Vulkan, which is the reason for the §1 renderer choice | 0.1 |
 | 8 | **0 A.D.'s quadruped clips will not transfer onto their own mesh.** Found baking `vis.deer`, which therefore ships **static** for MVP (A.4). Bone names are not the problem — 36 of 37 transfer, 97%. The sizes are: `skeletal/deer_mesh.dae` imports through the Pyrogenesis importer at 0.82 × 4.36 × 3.70 units, while `quadraped/deer_walk_01.dae`'s own rigged figure imports through Blender's COLLADA importer at 418 × 383 × **116** units — roughly **31× apart**. Pose transforms are stored relative to rest, so every location curve is ~31× too large and the mesh tears into spikes; it reads as a broken rig rather than a units error. Both files declare `<unit meter="0.0254" name="inch"/>`, so the two import paths apply the *same* declaration differently. Bipeds are unaffected because their clips declare metres and their two rigs measure identically. **Two dead ends worth not repeating:** bone *length* is not a usable scale metric (the Pyrogenesis importer fabricates near-zero lengths — the actor's longest bone reads 0.050 on a 4-unit model), and comparing bone rest *positions* is swamped by where 0 A.D. parks a clip skeleton, whether measured from the armature origin or from the root bone. The one sound measurement found is the ratio of the two figures' **mesh bounding boxes**. Fix is either to make both import paths honour the declared unit identically, or to scale each action's location F-curves by that ratio — cheap once, and it unlocks every quadruped (deer, boar, sheep, and cavalry mounts later) | A.4 / post-MVP |
 | 9 | **The villager is 2.18 m tall — too tall for a woman, and the fix is a recipe override, not a pipeline bug.** Measured directly with `isobake inspect`, which reports raw 0 A.D. units: `units/athenians/female_citizen` is 1.934 × 0.871 × **4.356** units, and at the pipeline's tile-to-tile factor of 0.5 that is **2.178 m**. The deer is 4.040 units → **2.020 m**. So she stands 16 cm *taller than a stag*, which is the wrong way round and is exactly what was flagged by eye at A.4. Note §2.2's "a citizen measures 3.85" does not match this actor — 3.85 is some other citizen or excludes props, and 4.356 is the measured figure for the one we actually use. `villager.toml` declares no `scale` and no `height_m`, so she simply inherits 0 A.D.'s own proportions, and 0 A.D. authors humans large relative to its tile scale. **The fix is one line:** `height_m` on the recipe, which exists precisely as "the escape hatch for a model that was authored off-scale", plus a rebake of her 960 frames. It does not touch the global `pixels_per_metre` and so cannot disturb any other asset. Open question is only what height to pick — 1.7 m makes her clearly shorter than the stag; 1.75–1.8 keeps her readable at sprite size on a phone. **Correction:** an earlier version of this item claimed she was baked ~2× oversized (3.75 m) and blamed isobake's armature path. That was wrong. It came from back-solving height out of the trimmed sprite bounds, which does not work — a silhouette's topmost pixel sits at no predictable diamond offset, and the same arithmetic predicts 308 px above the anchor for the town centre against a measured 210. There is no armature bug; measure with `inspect`, never by inference from an atlas rect | A.3 rebake |
