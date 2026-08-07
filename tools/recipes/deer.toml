@@ -1,0 +1,42 @@
+# Deer, from 0 A.D.'s fauna deer -- our huntable food node (PLAN.md 6.1a).
+#
+# STATIC, deliberately, and not what this asset ultimately wants. The actor
+# declares idle/walk/run/death clips and they all transfer by bone name (36 of
+# 37 bones, 97%), but the animation files and the mesh file describe the same
+# skeleton at wildly different sizes, so the location curves are ~30x too large
+# and the mesh tears into spikes. Diagnosis and evidence: PLAN.md 13.2 item 8.
+#
+# A standing stag covers what MVP actually needs -- 6.1a is "deer as a huntable
+# food node", and roaming/fleeing is 6.1b, post-MVP -- so this is not a stopgap
+# for anything on the MVP path except the carcass (see ASSET_MISSING.md 1.1).
+id      = "vis.deer"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/deer.xml"
+# The importer takes the first variant of each group, so this is the male:
+# antlers on `prop_antler`, and the stag silhouette reads far better at sprite
+# size than a doe's. The antlers are base-actor props, attached permanently by
+# the importer, so they need none of the villager's per-clip prop machinery.
+
+[render]
+# Measured off an unclipped probe render: the standing stag trims to 61 x 74,
+# reaching 63 px above the anchor and 11 below. Small -- 2.02 m of deer against
+# the villager's ~1.9 -- so the canvas is mostly margin for the antlers.
+canvas = [128, 128]
+supersample = 4
+# 5 stored, mirrored to 8. The villager needs 8 only because she holds an axe
+# in one hand; a deer carries nothing and its antlers are symmetric, so there is
+# no handedness for a mirror to get wrong (PLAN.md 2.5).
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/deer.xml"
