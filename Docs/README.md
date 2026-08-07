@@ -61,8 +61,8 @@ show, and the stress test exercises the full real path (`host_solo()` → `SimHo
 
 ### 1.4 Run the test suite
 
-This is the important command. It is one line, it needs no framework, and it is the CI
-entry point:
+This is the important command. It is one line and needs no framework. **Nothing runs it
+for you** — there is no CI (§3.1), so this is a habit, not a safety net:
 
 ```bash
 godot --headless --path game res://tests/run_tests.tscn
@@ -339,9 +339,14 @@ things and no opinion at all about the rest.
    on a physical Android device**, not on desktop.
 5. Open a pull request describing what changed and which phase it belongs to.
 
-There is currently **no CI**. The test runner, the boundary check and the planned licence
-audit are all designed around a single command precisely so CI is trivial to add — but
-until it exists, running the suite before you push is on you.
+There is **no CI on this repo** — no `.github/`, nothing runs on push, and no merge is
+gated on anything. The test runner, the boundary check and the licence audit are all
+shaped around single commands with meaningful exit codes precisely so CI is trivial to
+add, but until someone adds it, running them before you push is entirely on you.
+
+Note the sister repo differs: [`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)
+*does* have `.github/workflows/ci.yml` running pytest. Do not assume the same is true
+here.
 
 ### 3.2 The rules that are actually enforced
 

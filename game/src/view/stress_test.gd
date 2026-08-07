@@ -1,6 +1,6 @@
 ## Phase 0.7 perf harness (PLAN.md 7.7 layer 5, 3.1) -- the one test layer
-## that needs a real scene and must be judged on a physical device, not the
-## desktop or headless CI. Spawns UNIT_COUNT villagers through the real
+## that needs a real scene and must be judged on a physical device, not on the
+## desktop and not headless. Spawns UNIT_COUNT villagers through the real
 ## host_solo() -> SimHost -> SnapshotSystem -> Net -> GameView path (the same
 ## one a real match uses) and reports sim tick cost and frame rate against
 ## the budgets in PLAN.md 3.1.

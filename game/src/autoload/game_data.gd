@@ -58,7 +58,7 @@ var _ages: Array[AgeDef] = []
 
 ## Non-fatal problems found while loading -- a malformed entry, an atlas whose
 ## pixels_per_metre disagrees with Iso. Surfaced for tests and the debug overlay
-## instead of push_error() alone, so CI can assert the data is clean.
+## instead of push_error() alone, so the test suite can assert the data is clean.
 var load_warnings: Array[String] = []
 
 
@@ -200,8 +200,8 @@ func faction_ids() -> Array[StringName]:
 ## comes back empty, which is what catches an ID renamed in one file and not in
 ## the ones referring to it. Called automatically by load_all().
 ##
-## Deliberately NOT fatal: a bad reference should fail CI, not stop a developer's
-## game from booting mid-edit.
+## Deliberately NOT fatal: a bad reference should fail the test suite, not stop a
+## developer's game from booting mid-edit.
 func validate() -> void:
 	for id in _units:
 		var u: UnitDef = _units[id]

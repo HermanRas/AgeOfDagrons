@@ -7,7 +7,7 @@
 ## would push a null check into every call site and the guarantee would rot.
 ##
 ## These run against the real data/visuals.json rather than a fixture, on purpose:
-## the shipped data being well-formed is itself worth failing CI over.
+## the shipped data being well-formed is itself worth failing the suite over.
 extends TestCase
 
 ## Loaded by path rather than by class name: game_data.gd deliberately has no

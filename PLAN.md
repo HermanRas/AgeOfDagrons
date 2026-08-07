@@ -57,7 +57,15 @@ Rules this imposes:
 **WSL2 + Docker** for:
 1. The Python asset pipeline (`tools/`) — pinned dependencies, reproducible.
 2. The headless dedicated server (Phase 12.1) — also verifies the `sim/` boundary held.
-3. CI — headless sim tests, boundary check, `licence_audit.py`.
+3. Running the checks — headless sim tests, boundary check, `licence_audit.py`.
+
+> **There is no CI on this repo.** No `.github/` exists and nothing runs automatically
+> on push. Every check described in this document — the headless suite, the `sim/`
+> boundary check, the licence audit — is a **local command a developer runs by hand**.
+> Where this document says a check "fails", read "fails when you run it", not "blocks a
+> merge". The checks are all deliberately shaped as single commands with meaningful exit
+> codes so that adding CI later is trivial, but that has not been done. Do not write
+> "enforced by CI" anywhere until it is true.
 
 Source lives on the Windows filesystem. Containers bind-mount it; never use Docker volumes for source.
 
@@ -162,7 +170,7 @@ Plus:
 
 - **Derived sprite sheets are themselves CC-BY-SA 3.0.** Our rendered output ships under that licence. Only the art is copyleft — **the Godot code is MIT** ([LICENSE](LICENSE)), decided at 0.9 when the repo was published. The two licences do not merge; [LICENSE-ART.md](LICENSE-ART.md) states which applies to what.
 - **`CREDITS.md`** — in-repo and surfaced in-game on a Credits screen (phase 1.4).
-- **`assets/LICENCES.md`** — per-asset provenance. `tools/licence_audit.py` fails CI on any shipped asset not listed.
+- **`assets/LICENCES.md`** — per-asset provenance. `tools/licence_audit.py` exits non-zero on any shipped asset not listed. Run by hand; there is no CI (§1.2).
 - Downloadable asset packs (§3.2) each carry their own `LICENCE` and `CREDITS` file inside the pack.
 - Note: some of 0 A.D.'s `textures/` derive from CGTextures under special permission granted to that project. Worth a check before leaning heavily on raw texture files rather than rendered output.
 
@@ -375,7 +383,7 @@ AOD_Mobile/
     │   ├── placeholders/       # ships in APK
     │   ├── ui/                 # ships in APK
     │   ├── fonts/              # ships in APK
-    │   └── LICENCES.md         # per-asset provenance, enforced by CI
+    │   └── LICENCES.md         # per-asset provenance, checked by licence_audit.py
     ├── src/
     │   ├── sim/                # NO Godot node types, NO rendering
     │   │   ├── sim_world.gd
@@ -396,7 +404,7 @@ AOD_Mobile/
     │   ├── game/
     │   └── ui/
     ├── tests/                  # headless — see §7.7
-    │   ├── run_tests.tscn      # CI entry point
+    │   ├── run_tests.tscn      # the one test command (§7.7)
     │   ├── run_tests.gd        # discovers/runs test_*.gd, sets exit code
     │   ├── sim/                # SimWorld, systems, commands
     │   ├── net/                # Net, SimHost
@@ -405,7 +413,7 @@ AOD_Mobile/
     └── addons/                 # GUT or GdUnit4
 ```
 
-**The `game/src/sim/` boundary is the most important rule in this codebase.** Nothing in `sim/` may `extends Node`, load a texture, read input, or reference `view/`. CI greps for violations (0.7).
+**The `game/src/sim/` boundary is the most important rule in this codebase.** Nothing in `sim/` may `extends Node`, load a texture, read input, or reference `view/`. `test_sim_boundary.gd` greps for violations as part of the test suite (0.7) — which is a manual command, not CI (§1.2).
 
 ---
 
@@ -858,7 +866,7 @@ GDScript everywhere. Profile on the target Android device. Move a hot loop to GD
 Four distinct layers, deliberately — most of the value is in the first one.
 
 **1. Headless sim tests (the important layer).**
-Because `src/sim/` is plain GDScript with no `Node`, no textures, and no input, it can be tested with no window and no rendering. This is the payoff of the §1.1 architecture and it's why the boundary rule is enforced by CI.
+Because `src/sim/` is plain GDScript with no `Node`, no textures, and no input, it can be tested with no window and no rendering. This is the payoff of the §1.1 architecture, and it is why the boundary rule can be checked by a test rather than by review — see the no-CI note in §1.2: running it is a manual step.
 
 ```
 godot --headless --path game/ res://tests/run_tests.tscn
@@ -871,7 +879,7 @@ silently breaks anything needing `get_tree()`/`get_multiplayer()` -- discovered
 building 0.6's `Net` autoload. A real scene, even headless, boots exactly like
 the shipped game does.
 
-Exit code 0 = pass, non-zero = fail, so CI needs nothing else. Test shape:
+Exit code 0 = pass, non-zero = fail — so this one command is the whole check, and is all CI would need if it existed (§1.2). Test shape:
 
 ```gdscript
 # spawn a world, queue commands, step N ticks, assert on state
@@ -891,7 +899,7 @@ No scene required — which answers "what do I need to test?": for sim tests, **
 addons\gdUnit4\runtest.cmd -a res://tests -c -rd res://reports
 ```
 
-Exit 0 = pass, 100 = failures, 101 = warnings. Linux CI additionally needs `xvfb-run --auto-servernum` and `--audio-driver Dummy`.
+Exit 0 = pass, 100 = failures, 101 = warnings. Running it headless on Linux would additionally need `xvfb-run --auto-servernum` and `--audio-driver Dummy`. (Not adopted — see 0.7 in §11.)
 
 *(GUT is the alternative — also MIT, but take its 9.7.x line for 4.7; `main` tracks 4.6.)*
 
@@ -1078,14 +1086,14 @@ problem to mitigate.
 | 0.1 | ✅ **DONE** — Godot 4.7.1 project, Compatibility renderer, landscape lock, folder skeleton, Android export, **deployed and verified on a physical device**. Renderer, orientation, raw touch, touch→viewport coordinate mapping and 60 fps all confirmed on hardware (§3.0) | **[MVP]** |
 | 0.2a | ✅ **DONE** — Asset seam: `data/visuals.json` (11 IDs) + `data/audio.json` (9 IDs, all streams null — the vocabulary is the point, §7.5), `GameDataRegistry` autoload with `atlas_for()`, `AtlasEntry`. `atlas_for()` is **total**: it returns a baked atlas, else the declared placeholder, else a magenta unknown — never null, which is what makes a phase buildable before its art exists and lets the game boot with no pack mounted (§3.2). Every ID declares *both* an atlas path and a placeholder, so art lights up with no code change when the pack mounts. Atlas parsing is proven against a verbatim shipped bake (`tests/fixtures/gold_mine.atlas.json`) rather than a hand-written idea of the format, and reading any atlas asserts its `pixels_per_metre` against `Iso` — the guard for the 0.2b villager finding (13.2 item 9). No `class_name` on the autoload: it would shadow the singleton, same as `net.gd`/`sim_clock.gd` | **[MVP]** |
 | 0.2b | ✅ **DONE** — Procedural placeholder renderer (§2.4): diamonds for terrain, capsules with a facing marker for units, extruded boxes for buildings, drawn at runtime with no image files. `EntityView` now actually renders — one `_draw()` handling both branches — and gained a frame clock driven by `advance()` (not `_process`, same single-driver reason as interpolation). Placeholder sizes are authored in **metres, not pixels** as §2.4 sketched, from the measured recipe figures, so a placeholder occupies the space its real sprite will and stays correct if `TILE_SIZE` changes. `Iso` gained the metre-space projection (`metres_to_world`, `height_to_world`, the 8-facing table) with its derived constants re-checked against `TILE_SIZE` in tests. `StressTest.tscn`'s stand-in dots deleted — it now measures the production render path, so its 0.7 device figures need re-measuring. Visual check: `dev_preview/preview_placeholders.tscn`. 64/64 tests, exit 0 | **[MVP]** |
-| 0.2c | `licence_audit.py` + `assets/LICENCES.md` + `CREDITS.md`; CI fails on undeclared assets | **[MVP]** |
+| 0.2c | `licence_audit.py` + `assets/LICENCES.md` + `CREDITS.md`; the audit exits non-zero on an undeclared asset. Run by hand — there is no CI (§1.2) | **[MVP]** |
 | 0.3 | `AssetPacks` autoload: manifest check, download, checksum verify, `load_resource_pack()`, `DownloadScreen` (§3.2) | **[MVP]** |
-| 0.4 | ✅ **DONE** — `GameDataRegistry`'s entity half over `units.json` / `buildings.json` / `resources.json` / `techs.json` / `ages.json` / `factions.json`, parsed into `UnitDef` / `BuildingDef` / `ResourceDef` / `TechDef` / `AgeDef` (`src/data/`, plain `RefCounted` so `sim/` may read them). The 6 MVP entities are entered: villager, town centre, house, tree, gold mine, deer. These accessors return **null** for an unknown ID — the opposite of `atlas_for()`, deliberately: a missing sprite has a sensible stand-in, a missing unit definition does not. `validate()` cross-checks every visual/unit/building/kind reference across the files and the suite fails on any warning, which is the only thing between a typo'd ID and a silent no-op at runtime (verified by breaking a reference and watching CI go red). **Footprints are the measured ones** — town centre `[8, 8]` from 15.53 × 15.00 m, settling §9's pre-measurement `[4, 4]` sketch. `techs.json` is empty and `factions.json` near-empty *on purpose*: a missing file and an empty one are different states and only one is a bug. 82/82 tests, exit 0 | **[MVP]** |
+| 0.4 | ✅ **DONE** — `GameDataRegistry`'s entity half over `units.json` / `buildings.json` / `resources.json` / `techs.json` / `ages.json` / `factions.json`, parsed into `UnitDef` / `BuildingDef` / `ResourceDef` / `TechDef` / `AgeDef` (`src/data/`, plain `RefCounted` so `sim/` may read them). The 6 MVP entities are entered: villager, town centre, house, tree, gold mine, deer. These accessors return **null** for an unknown ID — the opposite of `atlas_for()`, deliberately: a missing sprite has a sensible stand-in, a missing unit definition does not. `validate()` cross-checks every visual/unit/building/kind reference across the files and the suite fails on any warning, which is the only thing between a typo'd ID and a silent no-op at runtime (verified by breaking a reference and watching the suite go red). **Footprints are the measured ones** — town centre `[8, 8]` from 15.53 × 15.00 m, settling §9's pre-measurement `[4, 4]` sketch. `techs.json` is empty and `factions.json` near-empty *on purpose*: a missing file and an empty one are different states and only one is a bug. 82/82 tests, exit 0 | **[MVP]** |
 | 0.5 | ✅ **DONE** — Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`/`SimUnit`, `SimSystem` (`CommandSystem`/`TaskSystem`/`MovementSystem`), `Command` (`MoveCommand`/`StopCommand`), `SpatialHash`. Straight-line movement only -- no map/pathfinding until 2.1. Verified headless: 9/9 tests, exit 0 | **[MVP]** |
 | 0.6 | ✅ **DONE** — `Net` autoload: `host_solo()` (real ENet server bound to 127.0.0.1), `submit_command()`/`_recv_command` RPC up, `SnapshotSystem` + `_recv_snapshot` RPC down; `SimHost` owns the server-side `SimWorld`, driven by `SimClock`. View layer: `Iso`, `EntityView`/`EntityViewPool` (pooled, interpolated), `GameView.apply_snapshot()`. `host_open()`/`join()` (remote multiplayer) deferred -- out of MVP scope (§10). Verified headless: 22/22 tests, exit 0 | **[MVP]** |
-| 0.7 | ✅ **DONE** — `SimWorld.state_hash()` + regression tests, `Replay` (record/play, JSON round trip), `sim/` boundary check (as a headless test, not a separate Python grep — one CI command), `StressTest.tscn` (verified on the §3.0 reference device — HONOR LNA-NX1 — at 200 units: sim tick cost 0.39/0.23/6.28 ms avg/min/max, frame rate 60/26/61, 209 draw calls; the max/min outliers are the stress test's own 4-second retarget burst — 200 individual `submit_command()` calls in one frame — not a sim/net cost, since a real shared-destination move order is one `MoveCommand` with many `unit_ids`). GdUnit4 deliberately not adopted (see §1.3). Also fixed on real hardware: `export_presets.cfg` shipped with `permissions/internet=false`, which silently broke `host_solo()` (Android requires INTERNET even for loopback sockets) — `StressTest.tscn` now surfaces a host_solo() failure in its own report instead of quietly spawning 0 units. 29/29 tests, exit 0 | **[MVP]** |
+| 0.7 | ✅ **DONE** — `SimWorld.state_hash()` + regression tests, `Replay` (record/play, JSON round trip), `sim/` boundary check (as a headless test, not a separate Python grep — so it runs inside the one test command), `StressTest.tscn` (verified on the §3.0 reference device — HONOR LNA-NX1 — at 200 units: sim tick cost 0.39/0.23/6.28 ms avg/min/max, frame rate 60/26/61, 209 draw calls; the max/min outliers are the stress test's own 4-second retarget burst — 200 individual `submit_command()` calls in one frame — not a sim/net cost, since a real shared-destination move order is one `MoveCommand` with many `unit_ids`). GdUnit4 deliberately not adopted (see §1.3). Also fixed on real hardware: `export_presets.cfg` shipped with `permissions/internet=false`, which silently broke `host_solo()` (Android requires INTERNET even for loopback sockets) — `StressTest.tscn` now surfaces a host_solo() failure in its own report instead of quietly spawning 0 units. 29/29 tests, exit 0 | **[MVP]** |
 | 0.8 | ✅ **DONE** — `.gdignore` added to `UI_Sprites/` and `insperation_pictures/` per §4 (both sit at the repo root, outside `game/`, the actual Godot project root, so this has no functional effect on Godot's own scanning — added for consistency with the documented layout regardless). Non-synced working root created on this machine at `C:\Users\herman.ras\Downloads\AOD_game\{art_source,art_work,packs,tools_env}` (§1.3), ready for 0.9. `.gitignore` fixed to allow tracking a `.gdignore` marker inside an otherwise-fully-ignored directory (a bare `dir/` pattern excludes the directory itself, so git never descends far enough to honour a per-file negation — needs `dir/*` instead). Also documented (§1.3): `export_presets.cfg`'s `permissions/internet` requirement, found on real hardware at 0.7. (Superseded same day: `export_presets.cfg` turned out to hold no secrets, so it's now tracked in git rather than gitignored per-user state — see §1.3.) | **[MVP]** |
-| 0.9 | ✅ **DONE** — render pipeline built as **[`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)**, its own GPL-2.0-or-later repo (§2.2), and proven end to end on **three real assets**: a grass tile (64×32 exactly), an oak (5 directions), and an animated villager (240 frames — idle/walk/work_chop/walk_carry_wood × 5 directions). Toolchain is fully portable: Blender 4.5.12 extract + a venv made from Blender's own Python, nothing installed system-wide. `isobake calibrate` verifies the camera three independent ways (configured / analytically projected / rendered) and all three agree at 64.00 × 32.00, area 1024.00 px². 62 unit tests, no Blender required, so CI covers the packer. **Both High/Medium art risks retired** (§14): the pipeline produces usable sprites, and animation transfer needs no retarget rig — a gatherer clip drives 83 of an actor's 102 bones by name. Atlas format revised (§9.1) to per-frame rects + multi-page, and anchors now come from the projected world origin, eliminating jitter by construction. `build_packs.py` deferred to 0.3 where it belongs (it is a `.pck` concern, not a render one) | **[MVP]** |
+| 0.9 | ✅ **DONE** — render pipeline built as **[`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)**, its own GPL-2.0-or-later repo (§2.2), and proven end to end on **three real assets**: a grass tile (64×32 exactly), an oak (5 directions), and an animated villager (240 frames — idle/walk/work_chop/walk_carry_wood × 5 directions). Toolchain is fully portable: Blender 4.5.12 extract + a venv made from Blender's own Python, nothing installed system-wide. `isobake calibrate` verifies the camera three independent ways (configured / analytically projected / rendered) and all three agree at 64.00 × 32.00, area 1024.00 px². 62 unit tests, no Blender required, so the packer is testable on any machine. (isobake — a separate repo — is the one place a GitHub Actions workflow is actually committed, `.github/workflows/ci.yml`, running pytest on 3.11–3.13. **This** repo has none; see §1.2.) **Both High/Medium art risks retired** (§14): the pipeline produces usable sprites, and animation transfer needs no retarget rig — a gatherer clip drives 83 of an actor's 102 bones by name. Atlas format revised (§9.1) to per-frame rects + multi-page, and anchors now come from the projected world origin, eliminating jitter by construction. `build_packs.py` deferred to 0.3 where it belongs (it is a `.pck` concern, not a render one) | **[MVP]** |
 
 ### Phase 1 — Main menu *(IDEA phase 1)*
 
@@ -1312,7 +1320,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | **0 A.D. building meshes carry a skirt below `z = 0`** for the terrain to hide, and a baked sprite has no terrain to hide it | Low | Measured at A.2 on three of six: the town centre buries **2.7 m** (52 px below the ground line), the 3×3 rubble 1.8 m, the house 0.7 m; both foundations and the civic-centre ruin are clean. Confirmed as buried geometry rather than an off-centre footprint by rendering at 0° and 180° and watching the excess stay below the anchor both times. Cosmetic, **accepted for MVP** — tracked as §13.2 item 7, where one ground clip at `z = 0` in `isobake` fixes the whole class including every building added later |
 | **A source-mesh vertex-weight quirk distorts `work_mine`** — a dress vertex is weighted 100% to `hand_L`, and the mining clip's hand pose is far enough from the citizen's native poses that it drags a fold of fabric with it | Low | Isolated to one clip, cosmetic, **accepted for MVP** — tracked as §13.2 item 7 alongside the buried building skirts, since both are source-mesh defects fixed in one post-MVP art pass. Fix is either re-weighting that vertex or clamping the offending vertex group at import time |
 | 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actor→`vis.*` mapping (§13.2 item 2); some entities may need bespoke art |
-| Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` in CI from 0.2c |
+| Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` from 0.2c — but run manually, so the mitigation is only as good as the habit until CI exists (§1.2) |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
 | Pathfinding stalls at scale | Medium | Per-tick path budget from day one; flow fields in reserve |
 | GDScript too slow at 200 units | Medium | Measure on device from 0.7; targeted GDExtension only if proven |

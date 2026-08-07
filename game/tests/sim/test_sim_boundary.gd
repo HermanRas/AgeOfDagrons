@@ -4,7 +4,9 @@
 ##
 ## Implemented as a headless test rather than a separate Python script
 ## (tools/licence_audit.py's style) so the whole suite, this check included,
-## runs through the one command in PLAN.md 7.7 with no extra CI step.
+## runs through the one command in PLAN.md 7.7 with no second thing to remember.
+## That matters more than it would elsewhere: there is no CI (PLAN.md 1.2), so a
+## check living outside the suite is a check nobody runs.
 extends TestCase
 
 const _SIM_ROOT := "res://src/sim/"

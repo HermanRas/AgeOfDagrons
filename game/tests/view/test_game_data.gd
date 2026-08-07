@@ -7,7 +7,8 @@
 ##   2. The SHIPPED data is internally consistent. Every ID that one file
 ##      references in another actually exists. Nothing else in the codebase will
 ##      notice a renamed ID until a villager silently fails to spawn at runtime,
-##      so validate() coming back clean is a CI gate, not a nicety.
+##      so validate() coming back clean is a real gate, not a nicety -- albeit one
+##      someone has to run, since there is no CI (PLAN.md 1.2).
 extends TestCase
 
 const REGISTRY_SCRIPT := "res://src/autoload/game_data.gd"

@@ -1,4 +1,7 @@
-## Headless test runner. CI entry point.
+## Headless test runner. The single entry point for the whole suite.
+##
+## Run by hand -- this repo has no CI (PLAN.md 1.2). The exit code is meaningful
+## so that adding one later is trivial, but nothing runs this automatically today.
 ##
 ##     godot --headless --path game/ res://tests/run_tests.tscn
 ##
@@ -36,7 +39,7 @@ func _ready() -> void:
 
 	if files.is_empty():
 		# Discovering nothing is a FAILURE, never a pass. A runner that exits 0
-		# on an empty suite is worse than no runner: CI goes green while testing
+		# on an empty suite is worse than no runner: it reports PASS while testing
 		# nothing. This was observed for real -- renaming the TestCase base
 		# script invalidated .godot/global_script_class_cache.cfg and discovery
 		# silently collapsed to zero while still reporting PASS.

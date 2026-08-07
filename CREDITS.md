@@ -4,8 +4,10 @@ AOD ("Age of Dragon") is an open-source project. This file records every third-p
 contribution used in the game. It is surfaced in-game on the Credits screen
 (PLAN.md phase 1.4) and is a licence obligation, not a courtesy.
 
-Per-asset provenance is tracked in `game/assets/LICENCES.md` and enforced in CI by
-`tools/licence_audit.py`.
+Per-asset provenance is tracked in `game/assets/LICENCES.md` and checked by
+`tools/licence_audit.py`, which is run by hand — this repo has no CI (PLAN.md §1.2).
+Attribution is a licence obligation, so the audit passing is a thing someone has to
+remember to check before a release, not something a merge gate does for you.
 
 ---
 
