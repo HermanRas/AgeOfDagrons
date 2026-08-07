@@ -1,11 +1,11 @@
 ## The renderable stand-in for one sim entity (PLAN.md 6.3). Pooled by
 ## EntityViewPool rather than instanced per spawn.
 ##
-## Actual sprites/atlases don't exist until phase 0.2b/0.9 -- play_anim(),
-## set_health_dot(), set_selected() and set_team_color() just record state
-## for now so the interpolation and pooling contract is provable today, and
-## wiring in real visuals later is a matter of reading these fields rather
-## than changing this class's public API.
+## As of 0.2a/0.2b this actually draws. It resolves its visual ID through the
+## asset seam (GameDataRegistry.atlas_for) and renders whichever of the two
+## things it got back -- a baked atlas frame or a procedural placeholder -- with
+## no other part of the view layer caring which. Adding real art is therefore a
+## data change, not a code change.
 ##
 ## advance() holds the interpolation logic. It is NOT driven by this node's
 ## own _process() -- EntityViewPool.advance_all() calls it on every active
@@ -21,7 +21,18 @@ extends Node2D
 const INTERP_SECONDS := 0.1
 
 var entity_id: int = 0
-var visual_id: StringName = &""
+
+## Setting this drops the resolved visual, so a pooled node reused for a
+## different entity kind picks up the right art on its next draw.
+var visual_id: StringName = &"":
+	set(value):
+		if visual_id == value:
+			return
+		visual_id = value
+		_visual = null
+		_anim_time = 0.0
+		_frame = 0
+		queue_redraw()
 
 var anim: StringName = &"idle"
 var facing: int = 0
@@ -29,9 +40,21 @@ var health_pct: float = 1.0
 var selected: bool = false
 var team_color: Color = Color.WHITE
 
+var _visual: AtlasEntry = null
 var _from_pos: Vector2 = Vector2.ZERO
 var _to_pos: Vector2 = Vector2.ZERO
 var _elapsed: float = INTERP_SECONDS          # start "arrived" so the first update snaps
+var _anim_time: float = 0.0
+var _frame: int = 0
+
+
+## The resolved atlas-or-placeholder for this view. Resolved lazily on first use
+## rather than in EntityViewPool.acquire() so that pooling stays testable without
+## the autoload, and so a view that is never drawn never parses an atlas.
+func visual() -> AtlasEntry:
+	if _visual == null:
+		_visual = GameDataRegistry.atlas_for(visual_id)
+	return _visual
 
 
 func set_target_transform(pos: Vector2, _tick: int) -> void:
@@ -41,6 +64,8 @@ func set_target_transform(pos: Vector2, _tick: int) -> void:
 
 
 func advance(delta: float) -> void:
+	_advance_anim(delta)
+
 	if _elapsed >= INTERP_SECONDS:
 		return
 	_elapsed = minf(_elapsed + delta, INTERP_SECONDS)
@@ -48,8 +73,14 @@ func advance(delta: float) -> void:
 
 
 func play_anim(name: StringName, p_facing: int) -> void:
-	anim = name
-	facing = p_facing
+	if anim != name:
+		anim = name
+		_anim_time = 0.0
+		_frame = 0
+		queue_redraw()
+	if facing != p_facing:
+		facing = p_facing
+		queue_redraw()
 
 
 func set_health_dot(pct: float) -> void:
@@ -57,8 +88,69 @@ func set_health_dot(pct: float) -> void:
 
 
 func set_selected(on: bool) -> void:
+	if selected == on:
+		return
 	selected = on
+	queue_redraw()
 
 
 func set_team_color(c: Color) -> void:
+	if team_color == c:
+		return
 	team_color = c
+	queue_redraw()
+
+
+## Current frame within the playing animation. Exposed for tests -- the frame
+## clock is the one piece of 0.2b that has behaviour worth asserting headless.
+func current_frame() -> int:
+	return _frame
+
+
+func _advance_anim(delta: float) -> void:
+	var vis := visual()
+	var count := vis.frame_count(anim)
+	if count <= 1:
+		return
+
+	_anim_time += delta
+	var fps := vis.fps(anim)
+	if fps <= 0.0:
+		return
+
+	var raw := int(_anim_time * fps)
+	var next := raw % count if vis.loops(anim) else mini(raw, count - 1)
+	if next != _frame:
+		_frame = next
+		queue_redraw()
+
+
+func _draw() -> void:
+	var vis := visual()
+	if vis.is_placeholder:
+		PlaceholderRenderer.draw_into(self, vis.placeholder, facing)
+		return
+
+	var f := vis.frame_at(anim, facing, _frame)
+	if f.is_empty():
+		return
+	var tex := vis.texture(int(f["page"]))
+	if tex == null:
+		return
+
+	var rect: Rect2i = f["rect"]
+	var anchor: Vector2 = f["anchor"]
+	var src := Rect2(rect.position, rect.size)
+
+	# The frame is placed so its anchor -- the projected world origin, exact by
+	# construction rather than measured (PLAN.md 9.1) -- lands on this node's
+	# local origin. Mirrored facings reflect about that same point, so a flipped
+	# sprite stays on its feet.
+	if bool(f["flip_x"]):
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
+		draw_texture_rect_region(
+			tex, Rect2(anchor.x - rect.size.x, -anchor.y, rect.size.x, rect.size.y), src
+		)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		draw_texture_rect_region(tex, Rect2(-anchor, Vector2(rect.size)), src)

@@ -1,0 +1,132 @@
+{
+  "_note": [
+    "ASSET SEAM (PLAN.md 2.1). The only file mapping a visual ID to a path.",
+    "No filename appears in gameplay code -- everything goes through",
+    "GameDataRegistry.atlas_for().",
+    "",
+    "Every ID carries BOTH an atlas path and a placeholder. atlas_for() prefers",
+    "the atlas and silently falls back to the placeholder when it is absent, so",
+    "the game runs identically whether or not the art pack is mounted (PLAN.md",
+    "3.2). That is why placeholders ship in the APK permanently rather than",
+    "being deleted once art lands.",
+    "",
+    "Atlas paths point into res://assets/atlases/, which is where the downloaded",
+    "pack mounts via load_resource_pack() (0.3). Nothing is committed there yet,",
+    "so today every ID resolves to its placeholder.",
+    "",
+    "footprint_m and height_m are METRES, not pixels -- see placeholder_spec.gd",
+    "for why. The figures below are the measured dimensions from tools/recipes/,",
+    "so a placeholder occupies the space its real sprite will."
+  ],
+
+  "terrain.grass": {
+    "atlas": "res://assets/atlases/terrain.grass.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#5c8a3c"
+    }
+  },
+
+  "vis.villager": {
+    "atlas": "res://assets/atlases/vis.villager.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [0.6, 0.6],
+      "height_m": 1.92,
+      "color": "#d8c08a",
+      "facing_marker": true
+    }
+  },
+
+  "vis.town_center": {
+    "atlas": "res://assets/atlases/vis.town_center.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [15.5, 15.0],
+      "height_m": 6.8,
+      "color": "#b9a887"
+    }
+  },
+
+  "vis.house": {
+    "atlas": "res://assets/atlases/vis.house.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [7.6, 7.6],
+      "height_m": 5.3,
+      "color": "#c4b394"
+    }
+  },
+
+  "vis.foundation_8x8": {
+    "atlas": "res://assets/atlases/vis.foundation_8x8.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.0, 16.0],
+      "height_m": 0.4,
+      "color": "#8a7f6b"
+    }
+  },
+
+  "vis.foundation_4x4": {
+    "atlas": "res://assets/atlases/vis.foundation_4x4.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [8.0, 8.0],
+      "height_m": 0.4,
+      "color": "#8a7f6b"
+    }
+  },
+
+  "vis.rubble_town_center": {
+    "atlas": "res://assets/atlases/vis.rubble_town_center.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [15.5, 15.0],
+      "height_m": 1.6,
+      "color": "#6f6960"
+    }
+  },
+
+  "vis.rubble_3x3": {
+    "atlas": "res://assets/atlases/vis.rubble_3x3.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 6.0],
+      "height_m": 1.2,
+      "color": "#6f6960"
+    }
+  },
+
+  "vis.tree": {
+    "atlas": "res://assets/atlases/vis.tree.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.4, 2.4],
+      "height_m": 10.0,
+      "color": "#3f6b34"
+    }
+  },
+
+  "vis.gold_mine": {
+    "atlas": "res://assets/atlases/vis.gold_mine.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.8, 3.87],
+      "height_m": 1.21,
+      "color": "#c9a227"
+    }
+  },
+
+  "vis.deer": {
+    "atlas": "res://assets/atlases/vis.deer.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.6, 0.7],
+      "height_m": 2.02,
+      "color": "#9b6b43",
+      "facing_marker": true
+    }
+  }
+}

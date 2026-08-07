@@ -84,6 +84,16 @@ func _run_file(path: String) -> void:
 		_fail_hard(path, "failed to load script")
 		return
 
+	# Check compilability BEFORE calling new(). A script with a parse error still
+	# loads as a GDScript, but calling new() on it raises "Nonexistent function
+	# 'new'", and a raised error ABORTS this function -- so the file was dropped
+	# from the run entirely and the suite still reported PASS with a smaller
+	# count. Observed at 0.2b: one uncompilable file took 8 tests out of the run
+	# silently. can_instantiate() asks the same question without the aborting call.
+	if script is GDScript and not (script as GDScript).can_instantiate():
+		_fail_hard(path, "script does not compile -- see the parse error above")
+		return
+
 	var instance: Object = script.new()
 	if instance == null:
 		_fail_hard(path, "failed to instantiate")
@@ -104,6 +114,17 @@ func _run_file(path: String) -> void:
 
 		_assertions += instance._assertion_count()
 		var failures: Array = instance._failure_list()
+
+		# A test that asserted nothing is a FAILURE, not a pass -- same principle
+		# as the empty-suite check above. GDScript reports a runtime script error
+		# (a null from a broken before_each, a renamed method) by printing and
+		# continuing, so an exploded test records no failures and used to be
+		# counted green. Found at 0.2b, where a whole file's worth of tests
+		# reported PASS while every one of them was erroring on line 1 of its
+		# setup. Zero assertions is the one signal that catches all of it.
+		if failures.is_empty() and instance._assertion_count() == 0:
+			failures = ["no assertions ran -- check the output above for a script error"]
+
 		if failures.is_empty():
 			_passed += 1
 			print("    PASS  %s" % method)

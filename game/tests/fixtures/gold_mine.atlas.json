@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "id": "vis.gold_mine",
+  "pages": [
+    "vis.gold_mine_0.png"
+  ],
+  "page_sizes": [
+    [
+      256,
+      128
+    ]
+  ],
+  "directions": {
+    "stored": 5,
+    "mirror_for_8": true,
+    "order": [
+      "S",
+      "SE",
+      "E",
+      "NE",
+      "N"
+    ],
+    "table": [
+      {
+        "dir": "S",
+        "stored_index": 0,
+        "flip_x": false
+      },
+      {
+        "dir": "SW",
+        "stored_index": 1,
+        "flip_x": true
+      },
+      {
+        "dir": "W",
+        "stored_index": 2,
+        "flip_x": true
+      },
+      {
+        "dir": "NW",
+        "stored_index": 3,
+        "flip_x": true
+      },
+      {
+        "dir": "N",
+        "stored_index": 4,
+        "flip_x": false
+      },
+      {
+        "dir": "NE",
+        "stored_index": 3,
+        "flip_x": false
+      },
+      {
+        "dir": "E",
+        "stored_index": 2,
+        "flip_x": false
+      },
+      {
+        "dir": "SE",
+        "stored_index": 1,
+        "flip_x": false
+      }
+    ]
+  },
+  "pixels_per_metre": 22.627417,
+  "anims": {
+    "static": {
+      "fps": 1,
+      "loop": false,
+      "frames": 1,
+      "first": 0,
+      "clip": ""
+    }
+  },
+  "frames": [
+    {
+      "page": 0,
+      "rect": [
+        0,
+        0,
+        64,
+        60
+      ],
+      "anchor": [
+        32.0,
+        39.8
+      ]
+    },
+    {
+      "page": 0,
+      "rect": [
+        132,
+        0,
+        84,
+        50
+      ],
+      "anchor": [
+        42.0,
+        31.8
+      ]
+    },
+    {
+      "page": 0,
+      "rect": [
+        0,
+        62,
+        89,
+        39
+      ],
+      "anchor": [
+        43.0,
+        22.8
+      ]
+    },
+    {
+      "page": 0,
+      "rect": [
+        132,
+        52,
+        64,
+        50
+      ],
+      "anchor": [
+        36.0,
+        28.8
+      ]
+    },
+    {
+      "page": 0,
+      "rect": [
+        66,
+        0,
+        64,
+        53
+      ],
+      "anchor": [
+        32.0,
+        29.8
+      ]
+    }
+  ],
+  "generator": {
+    "tool": "isobake",
+    "version": "0.1.0",
+    "blender": "4.5.12 LTS",
+    "adapter": "zeroad",
+    "engine": "eevee",
+    "samples": 32,
+    "recipe_sha256": "b0156830ea37ea6a704a8ef5f0856667dfe73e0fa565c18a38864c25f188b648",
+    "padding": 2,
+    "max_page": 4096
+  },
+  "attribution": {
+    "source": "0 A.D. (Wildfire Games)",
+    "licence": "CC-BY-SA 3.0",
+    "licence_url": "http://creativecommons.org/licenses/by-sa/3.0/",
+    "author": "Wildfire Games",
+    "author_url": "http://www.wildfiregames.com/",
+    "actor": "art/actors/geology/metalmine_alpine.xml"
+  },
+  "inputs": {
+    "C:\\Users\\herman.ras\\Downloads\\AOD_game\\art_source\\0ad\\binaries\\data\\mods\\public\\art\\actors\\geology\\metalmine_alpine.xml": "a7939718f16c78ed983c23ab330185c3b6a4d9f90e5b8b75d22ca0144125cb08"
+  }
+}

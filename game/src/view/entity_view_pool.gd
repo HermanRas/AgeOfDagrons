@@ -45,9 +45,9 @@ func advance_all(delta: float) -> void:
 		view.advance(delta)
 
 
-## For callers that need to enumerate what's currently visible -- e.g.
-## StressTest.tscn drawing a placeholder marker per active view, since real
-## sprites don't exist until phase 0.2b/0.9.
+## For callers that need to enumerate what's currently visible. Views draw
+## themselves as of 0.2b, so this is no longer a rendering crutch -- it is for
+## debug overlays and for tests that assert on the active set.
 func active_views() -> Array[EntityView]:
 	var views: Array[EntityView] = []
 	for v in _active.values():

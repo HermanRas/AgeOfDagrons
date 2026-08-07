@@ -5,9 +5,15 @@
 ## one a real match uses) and reports sim tick cost and frame rate against
 ## the budgets in PLAN.md 3.1.
 ##
-## Placeholder dots stand in for sprites -- those don't exist until phase
-## 0.2b/0.9 -- drawn directly here rather than in GameView, which stays
-## production code with no test-only rendering in it.
+## Up to 0.2b this drew its own stand-in dots, because EntityView rendered
+## nothing. It no longer does: EntityView draws real procedural placeholders
+## through the asset seam, so the dots were removed rather than left to
+## double-render on top of them. The harness now measures the production render
+## path, which is what it should have been measuring all along -- but it also
+## means the 0.7 device figures recorded in PLAN.md were taken against 200 circles
+## and need re-measuring on the reference device. Expect the draw-call count in
+## particular to move: a placeholder capsule is a filled polygon plus an outline
+## plus a facing marker, not one circle.
 extends Control
 
 const UNIT_COUNT := 200                    # PLAN.md 3.1 "Live units (MVP)"
@@ -20,7 +26,6 @@ const FPS_WARMUP_SECONDS := 1.5
 const FPS_SAMPLE_SECONDS := 3.0
 
 var _game_view: GameView
-var _dots: Node2D
 var _report: RichTextLabel
 var _unit_ids: Array[int] = []
 var _host_error: String = ""
@@ -52,10 +57,6 @@ func _ready() -> void:
 	_game_view = GameView.new()
 	_game_view.position = Vector2(702, 324)          # centre of the 1404x648 design viewport
 	add_child(_game_view)
-
-	_dots = Node2D.new()
-	_dots.draw.connect(_draw_dots)
-	_game_view.add_child(_dots)
 
 	_report = RichTextLabel.new()
 	_report.bbcode_enabled = true
@@ -142,13 +143,7 @@ func _process(delta: float) -> void:
 		_step_accum_usec = 0
 		_step_samples = 0
 
-	_dots.queue_redraw()
 	_report.text = _build_report()
-
-
-func _draw_dots() -> void:
-	for view in _game_view.pool.active_views():
-		_dots.draw_circle(view.position, 6.0, Color("#D8C08A"))
 
 
 func _build_report() -> String:

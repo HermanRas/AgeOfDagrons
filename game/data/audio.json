@@ -1,0 +1,32 @@
+{
+  "_note": [
+    "ASSET SEAM for audio (PLAN.md 2.1). Same contract as visuals.json: the only",
+    "file mapping a sound ID to a path, and gameplay calls",
+    "AudioManager.play_sfx(&\"villager.chop\") from day one.",
+    "",
+    "Every ID here is deliberately declared with a null stream. AudioManager is a",
+    "no-op for MVP (PLAN.md 7.5), so nothing plays yet -- but the vocabulary is",
+    "fixed now, which is the whole point. An ID that exists with no stream is",
+    "silence; an ID that does not exist at all is a caller bug, and keeping those",
+    "two cases distinct is why the file is not just empty.",
+    "",
+    "Sourcing is still open: 0 A.D.'s audio is licence-clean but its voices are",
+    "civilisation-specific (greek, latin, napatan, persian) and will not suit",
+    "(PLAN.md 13.2 item 3). The MVP list is ASSET_MISSING.md 1.6."
+  ],
+
+  "sfx": {
+    "villager.chop": { "stream": null },
+    "villager.mine": { "stream": null },
+    "villager.build": { "stream": null },
+    "villager.die": { "stream": null },
+    "building.complete": { "stream": null },
+    "building.destroyed": { "stream": null },
+    "ui.click": { "stream": null },
+    "ui.error": { "stream": null }
+  },
+
+  "music": {
+    "menu.theme": { "stream": null }
+  }
+}
