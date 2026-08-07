@@ -14,7 +14,7 @@ const _UNIT_DEFS := {
 }
 
 var tick: int = 0
-var map: Variant = null              # becomes SimMap at phase 2.1
+var map: SimMap = null
 var players: Array[SimPlayer] = []
 var entities: Dictionary = {}          # int id -> SimEntity
 var spatial: SpatialHash = null
@@ -27,6 +27,7 @@ func setup(cfg: MatchConfig) -> void:
 	tick = 0
 	entities.clear()
 	players.clear()
+	map = SimMap.create(cfg.map_size)
 	spatial = SpatialHash.new()
 	_next_id = 1
 	_pending.clear()
@@ -114,7 +115,10 @@ func state_hash() -> int:
 	var ids := entities.keys()
 	ids.sort()
 
-	var parts: Array = [tick]
+	# The map is in the hash from 2.1 on. Without it, two clients that disagreed
+	# about where the walls are would still hash identically and the desync check
+	# would pass while the simulations diverged.
+	var parts: Array = [tick, map.state_hash() if map != null else 0]
 	for id in ids:
 		var e: SimEntity = entities[id]
 		parts.append([e.id, e.def_id, e.owner_id, e.pos.x, e.pos.y, e.hp, e.alive])

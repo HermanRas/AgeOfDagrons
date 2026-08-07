@@ -79,6 +79,7 @@ own provenance.
 | `ui/boot_splash.png` | Boot splash image | **AI-generated** by the project owner using **Google Gemini** (paid account) | Project asset — see the note below |
 | `ui/icons/res_food.png`, `ui/icons/res_wood.png`, `ui/icons/res_gold.png`, `ui/icons/res_stone.png`, `ui/icons/res_villagers.png` | Resource-bar icons, 100×100 RGBA (ASSET_MISSING.md §1.5, phase 7.1) | **AI-generated** by the project owner using **Google Gemini** (paid account) | Project asset — see the note below |
 | `ui/icons/act_move.png`, `ui/icons/act_stop.png`, `ui/icons/act_build.png`, `ui/icons/act_attack.png`, `ui/icons/act_guard.png`, `ui/icons/act_destroy.png`, `ui/icons/act_garrison.png`, `ui/icons/act_enter.png`, `ui/icons/act_leave.png`, `ui/icons/act_exit.png` | Action-panel icons, 100×100 RGBA (phase 4.4/8.x) | **AI-generated** by the project owner using **Google Gemini** (paid account) | Project asset — see the note below |
+| `ui/icons/hud_techtree.png`, `ui/icons/hud_score.png`, `ui/icons/hud_trade.png`, `ui/icons/hud_chat.png`, `ui/icons/hud_settings.png` | HUD buttons around the minimap panel, 100×100 RGBA (phase 8.x; `hud_settings` currently unused) | **AI-generated** by the project owner using **Google Gemini** (paid account) | Project asset — see the note below |
 
 > ### On the AI-generated assets
 >
@@ -114,7 +115,7 @@ is a licence constraint, and someone will otherwise "fix" it by committing them.
 | What | Where | Why it is not committed |
 |---|---|---|
 | Kibyra UI packs | `UI_Sprites/` | Free for personal and commercial use, but redistributing the original files is **not** permitted. Each developer downloads them — see [`UI_Sprites/README.md`](../../UI_Sprites/README.md) |
-| HUD icon source sheet | `Icons/Icons_sheet_500x500.png` | The 5×5 sheet the individual 100×100 icons were cut from, plus `Icons/icons.txt`. A working source, like the root `UI_Design*.jpg` references — the cut icons under `game/assets/ui/icons/` are what ships. Kept so the remaining 10 empty slots can be filled from the same sheet |
+| HUD icon source sheets | `Icons/Icons_sheet_500x500.png`, `Icons/MapIcons_500x100.png` | The sheets the individual 100×100 icons were cut from, plus `Icons/icons.txt` and `Icons/map_icons.txt` describing them. Working sources, like the root `UI_Design*.jpg` references — the cut icons under `game/assets/ui/icons/` are what ships. Kept so the 5×5 sheet's remaining empty slots can be filled from the same artwork |
 | 0 A.D. source art | `art_source/` (outside the repo) | ~11 GB shallow clone; a build input, never redistributed |
 | Baked atlases | `art_work/out/` (outside the repo) | Build output. Reproducible from the committed recipes plus `isobake` |
 
