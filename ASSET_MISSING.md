@@ -74,7 +74,7 @@ Confirmed as buried geometry rather than an off-centre footprint: rendered at bo
 | Asset | Variants needed | Status | Notes |
 |---|---|---|---|
 | `vis.tree` | 3 size classes + stump/depleted | 🟦 **BAKED (1 of 4)** | Oak baked at 0.9 from `flora/trees/oak.xml`, 5 directions, ~10 m tall. Recipe: `tools/recipes/tree_oak.toml`. The actor has 6 variants (2 meshes × 3 textures + small) — the size classes come from those. A.4 |
-| `vis.gold_mine` | 1 sprite (size is data-only, not visual) | 🟨 SOURCED | A.4 |
+| `vis.gold_mine` | 1 sprite (size is data-only, not visual) | 🟩 **BAKED** | Baked from `geology/metalmine_alpine.xml`, 5 directions, 2.80 × 3.87 × 1.21 m at the default tile-to-tile scale — a ~1.4 × 1.9 tile footprint, which agrees with 0 A.D.'s own 7×7-world-unit (1.75 tile) obstruction for the node. Recipe: `tools/recipes/gold_mine.toml`. Alpine, not the civ-matching `metalmine_granite_greek`, because that one's texture is olive-green and its veins vanish at sprite size; all the old-generation ore actors share the same lead mesh and differ only in texture, so this was purely which one reads as gold. The actor has 6 variants (3 formations + 3 boulders) — the three `size_class` visuals come from those if we ever want them non-data-only, but reaching past `formation-a` needs variant selection in `isobake`, which does not exist. A.4 |
 
 ### 1.4 Terrain
 

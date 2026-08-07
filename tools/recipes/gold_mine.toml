@@ -1,0 +1,87 @@
+# Gold mine, from one of 0 A.D.'s granite metal mines -- our gold resource node
+# (PLAN.md 6.2, resources.json `res.gold_mine`).
+#
+# 0 A.D. calls this resource "metal", not gold, but it is the same thing in the
+# same slot: their `template_gaia_ore` mines `metal.ore`, their minimap paints it
+# gold (r227 g159 b12), and their icon is `gaia/geology_metal.png`. Renaming it is
+# most of the mapping work here (PLAN.md 13.2 item 2).
+#
+# Two choices had to be made -- which generation of their ore art, and which
+# biome tint -- and both went against the obvious first pick, so both are recorded.
+#
+# GENERATION: the older `metalmine_*` set, not the newer `metal_<biome>_round|
+# square|small` set. The newer one is far better art -- 328 verts and a 2048px PNG
+# against this one's 68 verts and a 128px DDS -- and `metal_aegean_small` was baked
+# first because Aegean also matched the villager's civ. It was rejected because
+# every one of its 9 variant meshes is authored *sunk into the terrain*:
+# `stonemine_round_a_small_01.dae` spans z -3.515 to +4.032, so 47% of the rock is
+# below the ground plane, and the square variants reach 64%. 0 A.D. gets away with
+# that because terrain hides the buried half and `<Position><Anchor>pitch-roll
+# </Anchor>` lets the rock sink into slopes; a baked sprite has no terrain to hide
+# anything, so the anchor landed mid-pile with 54 of the frame's 94 px hanging
+# below it. These older granite meshes are authored *on* the ground instead --
+# z_min is -0.045, +0.003 and -0.004 across the three formations, and they are
+# centred on the origin horizontally (dx 0.000) -- so they anchor correctly with no
+# pipeline change. A wrong anchor is a functional defect; texture resolution is a
+# nicety on a sprite that trims to 89x60. Revisit the newer set once the z=0 ground
+# clip lands (PLAN.md 13.2 item 7a) -- it is the better art and that fix unblocks it.
+#
+# BIOME: alpine, not `metalmine_granite_greek`. Greek was the expected pick, by the
+# same civ-consistency argument that chose the buildings (town_center.toml) -- and
+# it is the actor 0 A.D.'s own `gaia/ore/greece_small.xml` uses. It was baked and
+# rejected on sight: `metal_granite_greek.dds` is a dark olive-green rock whose gold
+# veins blend into it, so at sprite size it reads as a mossy boulder, not as ore.
+# All the old-generation actors share this same lead mesh and differ *only* in
+# texture, so the choice was purely which one reads as gold -- and `metal_alpine_a`
+# is bright yellow veining on light grey granite, which does. Architecture carries
+# civ identity; a grey boulder does not, and "reads as gold at a glance" is the
+# whole job of this sprite.
+id      = "vis.gold_mine"
+adapter = "zeroad"
+
+[source]
+actor = "geology/metalmine_alpine.xml"
+# No scale override. The tile-to-tile default puts this at 2.80 x 3.87 x 1.21 m,
+# a footprint of roughly 1.4 x 1.9 tiles, which agrees with 0 A.D.'s own obstruction
+# for the node (7x7 world units / 4 = 1.75 tiles) and sits inside the 2x2 tile a
+# small-size-class node wants. Deliberately not scaled up to look more imposing:
+# 1.21 m is the authored proportion of a ground ore outcrop, it reads correctly
+# against a ~1.9 m villager, and an override would put this asset on a different
+# footing from every other one in the set for no measured reason.
+#
+# The importer takes the first variant of each group and all six here declare a
+# frequency, so `variant_seed` cannot reach past the first: this is `formation-a`,
+# `stonemine_granite_a.dae`. The actor carries 6 variants -- 3 formations plus 3
+# boulders -- which is where three distinct `size_class` visuals would come from if
+# we ever want them non-data-only (ASSET_MISSING.md 1.3). Reaching the boulders
+# needs variant selection in isobake, which does not exist yet; note that they use
+# `metal_granite_greek_hi.dds`, a 256px texture with much bolder veining than any
+# lead variant, so that is a second reason to add it.
+
+[render]
+# Measured off an unclipped probe render, not projected from the bounding box: the
+# tallest frame needs 40 px above the anchor and 23 below, and the widest trims to
+# 89 px across. With frame_origin_at 0.45 this canvas gives 52.8 above and 43.2
+# below, so nothing clips.
+canvas = [128, 96]
+supersample = 4
+# 5 stored, same reasoning as the oak (tree_oak.toml): the node never turns, but
+# several stored directions let the map vary which one each mine uses, so a cluster
+# does not look stamped. Cheap on a single-frame asset.
+directions = 5
+# Fraction from the BOTTOM, so lower values leave more headroom -- not from the top.
+# Getting that backwards silently shaved 7 px off the top of the rock rather than
+# failing, and a trimmed atlas gives you no obvious signal that it happened; the
+# only tell was the frame height dropping against the probe. Compare the probe's
+# `above` figure after changing this.
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/geology/metalmine_alpine.xml"
