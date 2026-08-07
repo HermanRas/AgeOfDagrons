@@ -7,11 +7,12 @@ extends RefCounted
 
 const SUBTILE := 256
 
-## Placeholder unit stats until GameDataRegistry (phase 0.4) loads units.json.
-## Every def_id spawned before then falls back to these defaults.
-const _UNIT_DEFS := {
-	&"unit.villager": {"hp": 30, "speed": 200, "vision_range": 4},
-}
+## Fallback unit stats for when no definition can be found. 0.4 replaced the
+## hardcoded table with GameDataRegistry lookups, so this is now only reached by a
+## typo'd def_id -- and it exists so that a bad id spawns something visible and
+## obviously wrong rather than crashing the host mid-match. `validate()` in the
+## registry is what is meant to catch the typo, on the ground, before this does.
+const _FALLBACK_UNIT := {"hp": 1, "speed": 100, "vision_range": 2, "domain": &"land"}
 
 var tick: int = 0
 var map: SimMap = null
@@ -59,27 +60,117 @@ func drain_pending_commands() -> Array[Command]:
 
 
 func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
-	var stats: Dictionary = _UNIT_DEFS.get(def_id, {})
 	var u := SimUnit.new()
 	u.id = _next_id
 	_next_id += 1
 	u.def_id = def_id
 	u.owner_id = owner
 	u.pos = pos * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
-	u.hp = int(stats.get("hp", 30))
-	u.max_hp = u.hp
-	u.vision_range = int(stats.get("vision_range", 4))
-	u.speed = int(stats.get("speed", 200))
 	u.task_target_tile = pos
+
+	var d: UnitDef = unit_def(def_id)
+	if d != null:
+		u.hp = d.hp
+		u.max_hp = d.hp
+		u.vision_range = d.los
+		u.speed = d.speed
+		u.domain = SimMap.from_domain_name(d.domain)
+	else:
+		u.hp = int(_FALLBACK_UNIT["hp"])
+		u.max_hp = u.hp
+		u.vision_range = int(_FALLBACK_UNIT["vision_range"])
+		u.speed = int(_FALLBACK_UNIT["speed"])
 
 	entities[u.id] = u
 	spatial.insert(u.id, u.tile())
 	return u
 
 
+## Place a building with its top-left tile at `origin`, claiming its footprint in
+## the grid. Returns null if the footprint will not fit, so callers cannot end up
+## with a building the map does not know about.
+##
+## `force` skips the placement check for 2.6's starting town centres, which are
+## put down before any legality rules apply to the player.
+func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
+		phase: SimBuilding.Phase = SimBuilding.Phase.COMPLETE,
+		force := false) -> SimBuilding:
+	var d: BuildingDef = building_def(def_id)
+	var footprint := d.footprint if d != null else Vector2i.ONE
+	var rect := SimMap.footprint_rect(origin, footprint)
+
+	if not force and not map.can_place_building(rect):
+		return null
+
+	var b := SimBuilding.new()
+	b.id = _next_id
+	_next_id += 1
+	b.def_id = def_id
+	b.owner_id = owner
+	b.footprint = footprint
+	b.pos = SimBuilding.centre_of(origin, footprint)
+	b.phase = phase
+
+	if d != null:
+		b.max_hp = d.hp
+		b.vision_range = d.los
+		b.provides_pop = d.provides_pop
+		b.garrison_cap = d.garrison_cap
+		b.build_total = d.build_time_ticks
+	else:
+		b.max_hp = 1
+
+	# A completed building starts at full health; one still being built starts at a
+	# sliver, so its health dot reads as damaged while it goes up (5.2/5.6).
+	b.hp = b.max_hp if phase == SimBuilding.Phase.COMPLETE else maxi(1, b.max_hp / 10)
+	if phase == SimBuilding.Phase.COMPLETE:
+		b.build_progress = b.build_total
+
+	entities[b.id] = b
+	spatial.insert(b.id, b.tile())
+	map.set_occupied(rect, b.id)
+	return b
+
+
+## Place a resource node on a single tile, claiming it. Returns null if the tile is
+## not free, so two trees can never occupy one tile.
+func spawn_resource_node(def_id: StringName, tile: Vector2i, size_class: int = 0) -> SimResourceNode:
+	var rect := Rect2i(tile, Vector2i.ONE)
+	if not map.can_place_building(rect):
+		return null
+
+	var d: ResourceDef = resource_def(def_id)
+	var n := SimResourceNode.new()
+	n.id = _next_id
+	_next_id += 1
+	n.def_id = def_id
+	n.owner_id = 0                    # gaia; nodes belong to nobody
+	n.pos = tile * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
+	n.size_class = size_class
+
+	if d != null:
+		n.kind = d.kind
+		n.amount = d.amount_for(size_class)
+		n.gather_slots = d.gather_slots
+		n.is_wildlife = d.is_wildlife
+	n.starting_amount = n.amount
+	n.hp = maxi(1, n.amount)
+	n.max_hp = n.hp
+
+	entities[n.id] = n
+	spatial.insert(n.id, n.tile())
+	map.set_occupied(rect, n.id)
+	return n
+
+
 func despawn(id: int) -> void:
 	if not entities.has(id):
 		return
+	# Free the grid before dropping the entity: occupancy is keyed by id, so once
+	# it is out of `entities` there is nothing left to look its footprint up from
+	# and the tiles would stay claimed forever by a building that no longer exists.
+	if map != null:
+		map.clear_occupant(id)
 	spatial.remove(id)
 	entities.erase(id)
 
@@ -104,6 +195,35 @@ func entities_in_rect(rect: Rect2i) -> Array[SimEntity]:
 		if e != null and e.alive:
 			found.append(e)
 	return found
+
+
+# â”€â”€ definition lookups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+#
+# The sim reads static data from the GameDataRegistry autoload. That is a Node,
+# which sits close to the src/sim/ boundary rule (PLAN.md 4), so the reasoning is
+# worth stating: the rule exists so the sim needs no window, no rendering and no
+# input, and a pure-data registry costs it none of those -- these calls touch no
+# tree, no texture and no signal, and the headless suite exercises them every run.
+#
+# What it does cost is the ability to run two worlds on different data sets in one
+# process. Nothing wants that today. If a replay ever has to be validated against
+# the data it was recorded with, this becomes a `defs` reference injected by
+# setup() rather than a global, and these three functions are the only call sites
+# that change.
+#
+# All three return null for an unknown id rather than inventing stats, matching
+# GameDataRegistry's own convention.
+
+func unit_def(def_id: StringName) -> UnitDef:
+	return GameDataRegistry.unit(def_id) if GameDataRegistry != null else null
+
+
+func building_def(def_id: StringName) -> BuildingDef:
+	return GameDataRegistry.building(def_id) if GameDataRegistry != null else null
+
+
+func resource_def(def_id: StringName) -> ResourceDef:
+	return GameDataRegistry.resource_def(def_id) if GameDataRegistry != null else null
 
 
 ## Desync/regression detection (PLAN.md 7.7 layer 3): the same MatchConfig +

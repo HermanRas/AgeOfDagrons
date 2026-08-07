@@ -13,6 +13,10 @@ var path: PackedVector2Array = PackedVector2Array()
 var path_index: int = 0
 var speed: int = 0                   # sub-units per tick
 var facing: int = 0                  # 0-7
+## Which surfaces this unit can cross -- a SimMap.Domain. Land for everything in
+## MVP (PLAN.md 2.2); carried per-unit rather than looked up from the def on every
+## passability query, which pathfinding does thousands of times per path.
+var domain: int = SimMap.Domain.LAND
 var carry_kind: StringName = &""
 var carry_amount: int = 0
 var gather_cooldown: int = 0

@@ -1,0 +1,265 @@
+## Phases 2.3, 2.4a and 2.6: placement into the grid, the fixed debug map, and
+## the starting conditions.
+##
+## The load-bearing assertion is determinism -- two worlds built from the same
+## MatchConfig must be byte-identical by `state_hash()`, because a client and the
+## host each build their own and a difference on tick 0 is a desync before a single
+## command is issued (PLAN.md 7.1).
+extends TestCase
+
+var w: SimWorld
+
+
+func before_each() -> void:
+	w = SimWorld.new()
+	w.setup(MatchConfig.debug_single_player())
+	MapGen.build_debug_map(w)
+
+
+func _of_type(t) -> Array:
+	var out: Array = []
+	for e in w.entities.values():
+		if is_instance_of(e, t):
+			out.append(e)
+	return out
+
+
+# ── determinism ────────────────────────────────────────────────────────────
+
+func test_two_worlds_from_the_same_config_are_identical() -> void:
+	var other := SimWorld.new()
+	other.setup(MatchConfig.debug_single_player())
+	MapGen.build_debug_map(other)
+	assert_eq(w.state_hash(), other.state_hash(),
+			"host and client must build byte-identical starting worlds")
+
+
+func test_building_the_same_map_twice_assigns_the_same_entity_ids() -> void:
+	# Ids are what commands reference, so if two clients numbered entities
+	# differently every order would target a different unit.
+	var other := SimWorld.new()
+	other.setup(MatchConfig.debug_single_player())
+	MapGen.build_debug_map(other)
+	var mine := w.entities.keys()
+	var theirs := other.entities.keys()
+	mine.sort()
+	theirs.sort()
+	assert_eq(mine, theirs)
+	for id in mine:
+		assert_eq((w.entities[id] as SimEntity).def_id,
+				(other.entities[id] as SimEntity).def_id, "entity %d is the same kind" % id)
+
+
+# ── starting conditions (2.6) ──────────────────────────────────────────────
+
+func test_the_player_starts_with_one_town_centre_and_five_villagers() -> void:
+	var buildings := _of_type(SimBuilding)
+	var units := _of_type(SimUnit)
+	assert_eq(buildings.size(), 1, "exactly one town centre")
+	assert_eq((buildings[0] as SimBuilding).def_id, &"building.town_center")
+	assert_eq(units.size(), MapGen.STARTING_VILLAGERS, "5 villagers (PLAN.md 2.6)")
+	for u in units:
+		assert_eq((u as SimUnit).def_id, &"unit.villager")
+
+
+func test_the_starting_town_centre_is_complete_and_at_full_health() -> void:
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	assert_eq(tc.phase, SimBuilding.Phase.COMPLETE, "you do not start on a foundation")
+	assert_eq(tc.hp, tc.max_hp)
+	assert_true(tc.max_hp > 1, "stats came from buildings.json, not the fallback")
+	assert_almost_eq(tc.build_fraction(), 1.0)
+
+
+func test_starting_units_take_their_stats_from_units_json() -> void:
+	# This is what replaced SimWorld's hardcoded _UNIT_DEFS table at 0.4.
+	var u: SimUnit = _of_type(SimUnit)[0]
+	var d: UnitDef = w.unit_def(&"unit.villager")
+	assert_not_null(d, "the registry resolves the villager")
+	assert_eq(u.max_hp, d.hp)
+	assert_eq(u.speed, d.speed)
+	assert_eq(u.vision_range, d.los)
+	assert_eq(u.domain, SimMap.Domain.LAND)
+
+
+func test_villagers_stand_on_distinct_passable_tiles_outside_the_town_centre() -> void:
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var rect := tc.footprint_rect()
+	var seen: Array[Vector2i] = []
+	for u in _of_type(SimUnit):
+		var t: Vector2i = (u as SimUnit).tile()
+		assert_false(seen.has(t), "no two villagers share tile %s" % t)
+		seen.append(t)
+		assert_false(rect.has_point(t), "%s is not inside the town centre" % t)
+		assert_true(w.map.is_terrain_passable(t), "%s is walkable ground" % t)
+
+
+# ── placement into the grid (2.3) ──────────────────────────────────────────
+
+func test_the_town_centre_claims_its_whole_measured_footprint() -> void:
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	assert_eq(tc.footprint, Vector2i(8, 8), "the [8, 8] from buildings.json")
+	var rect := tc.footprint_rect()
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			assert_eq(w.map.occupant(Vector2i(x, y)), tc.id,
+					"%s belongs to the town centre" % Vector2i(x, y))
+	assert_ne(w.map.occupant(rect.position + Vector2i(-1, -1)), tc.id,
+			"and nothing outside it does")
+
+
+func test_a_buildings_origin_tile_round_trips_through_its_centre_position() -> void:
+	# pos is the footprint centre so the view can draw every entity the same way;
+	# origin_tile() has to recover the grid's view of it exactly.
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var origin := tc.origin_tile()
+	assert_eq(SimBuilding.centre_of(origin, tc.footprint), tc.pos)
+	assert_eq(tc.footprint_rect(), Rect2i(origin, tc.footprint))
+
+
+func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
+	var nodes := _of_type(SimResourceNode)
+	assert_true(nodes.size() >= 15, "wood, gold and deer were all placed")
+	var kinds: Array[StringName] = []
+	for n in nodes:
+		var node: SimResourceNode = n
+		if not kinds.has(node.kind):
+			kinds.append(node.kind)
+		assert_eq(w.map.occupant(node.tile()), node.id, "node claims its tile")
+		assert_true(node.amount > 0, "and starts with something in it")
+	for kind in [&"wood", &"gold", &"food"] as Array[StringName]:
+		assert_true(kinds.has(kind), "the map has a %s source" % kind)
+
+
+func test_nodes_take_their_amounts_from_resources_json() -> void:
+	for n in _of_type(SimResourceNode):
+		var node: SimResourceNode = n
+		var d: ResourceDef = w.resource_def(node.def_id)
+		assert_not_null(d, "%s resolves" % node.def_id)
+		assert_eq(node.amount, d.amount_for(node.size_class))
+		assert_eq(node.starting_amount, node.amount)
+		assert_eq(node.gather_slots, d.gather_slots)
+
+
+func test_the_deer_is_flagged_as_wildlife_and_the_trees_are_not() -> void:
+	var wildlife := 0
+	for n in _of_type(SimResourceNode):
+		if (n as SimResourceNode).is_wildlife:
+			wildlife += 1
+			assert_eq((n as SimResourceNode).kind, &"food")
+	assert_eq(wildlife, MapGen.DEBUG_DEER.size(), "every deer, and only the deer")
+
+
+func test_nothing_overlaps_anything_else() -> void:
+	# The whole point of routing placement through the grid.
+	var claimed: Dictionary = {}
+	for e in w.entities.values():
+		if e is SimUnit:
+			continue                      # units are not written into occupancy
+		var rect: Rect2i = (e as SimBuilding).footprint_rect() if e is SimBuilding \
+				else Rect2i((e as SimEntity).tile(), Vector2i.ONE)
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var t := Vector2i(x, y)
+				assert_false(claimed.has(t), "%s claimed twice" % t)
+				claimed[t] = e.id
+
+
+# ── the debug map itself (2.4a) ────────────────────────────────────────────
+
+func test_the_map_is_the_configured_size_and_walkable_in_the_middle() -> void:
+	var cfg := MatchConfig.debug_single_player()
+	assert_eq(w.map.size, cfg.map_size)
+	assert_true(w.map.is_terrain_passable(Vector2i(cfg.map_size.x / 2, cfg.map_size.y / 2)))
+
+
+func test_the_map_edge_is_marked_so_it_is_visible_before_a_camera_clamp_exists() -> void:
+	assert_eq(w.map.terrain_at(Vector2i(0, 0)), SimMap.Terrain.DIRT)
+	assert_eq(w.map.terrain_at(Vector2i(w.map.size.x - 1, w.map.size.y - 1)),
+			SimMap.Terrain.DIRT)
+	assert_eq(w.map.terrain_at(Vector2i(w.map.size.x / 2, w.map.size.y / 2)),
+			SimMap.Terrain.GRASS, "the interior is grass")
+
+
+# ── grid bookkeeping ───────────────────────────────────────────────────────
+
+func test_despawning_frees_the_tiles_a_building_held() -> void:
+	# Occupancy is keyed by entity id, so if despawn() did not clear it first the
+	# tiles would stay claimed forever by a building that no longer exists -- and
+	# 5.5 would leave unbuildable holes in the map.
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var rect := tc.footprint_rect()
+	w.despawn(tc.id)
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			assert_eq(w.map.occupant(Vector2i(x, y)), 0, "%s freed" % Vector2i(x, y))
+	assert_true(w.map.can_place_building(rect), "and something else can be built there")
+
+
+func test_a_building_cannot_be_placed_on_top_of_the_town_centre() -> void:
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var blocked := w.spawn_building(&"building.house", 1, tc.origin_tile())
+	assert_null(blocked, "spawn_building refuses an occupied footprint")
+
+
+func test_a_building_can_be_placed_on_free_ground() -> void:
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var origin := tc.origin_tile() + Vector2i(0, 20)
+	var house := w.spawn_building(&"building.house", 1, origin)
+	assert_not_null(house)
+	assert_eq(house.footprint, Vector2i(4, 4), "the [4, 4] from buildings.json")
+	assert_eq(w.map.occupant(origin), house.id)
+
+
+func test_a_second_node_cannot_take_an_occupied_tile() -> void:
+	var origin := (_of_type(SimBuilding)[0] as SimBuilding).origin_tile()
+	var first := w.spawn_resource_node(&"res.tree", origin + Vector2i(0, 20))
+	assert_not_null(first)
+	assert_null(w.spawn_resource_node(&"res.tree", origin + Vector2i(0, 20)),
+			"two trees cannot share a tile")
+
+
+# ── entity behaviour introduced here ───────────────────────────────────────
+
+func test_gathering_takes_only_what_is_left() -> void:
+	# Crediting the request rather than the return value would make a
+	# nearly-empty tree yield infinite wood.
+	var n := SimResourceNode.new()
+	n.amount = 7
+	n.starting_amount = 7
+	assert_eq(n.gather(5), 5)
+	assert_eq(n.amount, 2)
+	assert_eq(n.gather(5), 2, "only 2 were left")
+	assert_eq(n.amount, 0)
+	assert_true(n.is_depleted())
+	assert_eq(n.gather(5), 0, "a depleted node yields nothing")
+
+
+func test_remaining_fraction_reports_depletion() -> void:
+	var n := SimResourceNode.new()
+	n.amount = 100
+	n.starting_amount = 100
+	assert_almost_eq(n.remaining_fraction(), 1.0)
+	n.gather(75)
+	assert_almost_eq(n.remaining_fraction(), 0.25)
+	assert_almost_eq(SimResourceNode.new().remaining_fraction(), 0.0, 0.0001,
+			"an unconfigured node does not divide by zero")
+
+
+func test_build_progress_moves_through_the_phases_and_reports_completion() -> void:
+	var b := SimBuilding.new()
+	b.build_total = 100
+	assert_eq(b.phase, SimBuilding.Phase.FOUNDATION)
+	assert_false(b.add_build_progress(40), "not done yet")
+	assert_eq(b.phase, SimBuilding.Phase.UNDER_CONSTRUCTION)
+	assert_almost_eq(b.build_fraction(), 0.4)
+	assert_true(b.add_build_progress(60), "returns true on the tick it completes")
+	assert_eq(b.phase, SimBuilding.Phase.COMPLETE)
+	assert_false(b.add_build_progress(10), "and does not complete twice")
+	assert_eq(b.build_progress, 100, "progress does not overshoot the total")
+
+
+func test_a_building_with_no_build_time_is_already_finished() -> void:
+	# 2.6's starting town centre has build_progress == build_total == whatever
+	# buildings.json says, but a def with no build time must not divide by zero.
+	var b := SimBuilding.new()
+	assert_almost_eq(b.build_fraction(), 1.0)

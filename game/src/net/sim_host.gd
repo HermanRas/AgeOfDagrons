@@ -19,6 +19,9 @@ var _on_tick: Callable = Callable()
 func start(cfg: MatchConfig, on_tick: Callable) -> void:
 	world = SimWorld.new()
 	world.setup(cfg)
+	# setup() allocates an empty grid; MapGen puts a world in it (2.3/2.4a/2.6).
+	# Split so a test can stand up a bare world without a town centre in the way.
+	MapGen.build_debug_map(world)
 	_on_tick = on_tick
 	SimClock.tick_advanced.connect(_handle_tick)
 	SimClock.start()

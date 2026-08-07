@@ -83,8 +83,18 @@ static func world_to_tile(w: Vector2) -> Vector2i:
 	return Vector2i(roundi(tx), roundi(ty))
 
 
-## Draw order key for Y-sorting (PLAN.md 7.3). Naive tile-sum for now; revisit
-## if profiling at 0.7 shows entity height needs to factor in too.
+## Draw order key for Y-sorting (PLAN.md 7.3). Naive tile-sum.
+##
+## **Known wrong for large footprints, and visibly so.** A building's key comes
+## from one tile, so an 8x8 town centre sorts as though it stood on its centre
+## tile -- which puts units standing on the four tiles nearest the camera *behind*
+## its roof instead of in front of it. Seen in dev_preview/preview_world.tscn at
+## 2.6: the starting villagers appear to stand on the town centre.
+##
+## The fix is to key a footprint off its FRONT corner (`origin + footprint - 1`)
+## rather than its centre, so it sorts by the nearest tile it actually covers. Left
+## for 3.1, which is where the real Y-sorted container replaces this function's
+## callers and where it can be verified against a scene rather than a screenshot.
 static func depth_sort_key(p: Vector2i) -> float:
 	return float(p.x + p.y)
 

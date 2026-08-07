@@ -3,6 +3,6 @@ The 4 icons that go on the right bottom corner
 Trade (activated after market is built) left, bottom
 Score (toggle player score on hud), right, top
 TechTree open TechTree menu, left, top
-Chat (toggle player on hud), left bottom
+Chat (toggle player on hud), right bottom
 
 Settings icon, (un-used).

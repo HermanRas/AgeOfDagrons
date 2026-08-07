@@ -40,9 +40,30 @@ func test_no_sim_script_extends_a_node_like_class() -> void:
 
 func test_no_sim_script_contains_a_forbidden_reference() -> void:
 	for path in _gd_files(_SIM_ROOT):
-		var text := FileAccess.get_file_as_string(path)
+		var text := _without_comment_lines(FileAccess.get_file_as_string(path))
 		for forbidden in _FORBIDDEN_SUBSTRINGS:
 			assert_false(text.contains(forbidden), "%s contains %s" % [path, forbidden])
+
+
+## Drop whole-line comments before grepping.
+##
+## The rule is about what sim/ *does*, not what its documentation mentions. Without
+## this, explaining why a field exists -- "the view draws this at
+## Iso.sub_to_world(pos)" -- fails the boundary check, which found sim_building.gd
+## at 2.3. The wrong fix is to reword the comment: that trains people to write
+## vaguer documentation to appease a grep.
+##
+## Only lines that are *entirely* a comment are stripped, not trailing comments on
+## code lines. Stripping those would need to know where strings end, and `#` inside
+## a string literal is legal GDScript -- so a trailing comment mentioning a
+## forbidden name still trips the check. That is a fair trade: it is rare, and the
+## failure is obvious when it happens.
+func _without_comment_lines(text: String) -> String:
+	var kept := PackedStringArray()
+	for line in text.split("\n"):
+		if not line.strip_edges().begins_with("#"):
+			kept.append(line)
+	return "\n".join(kept)
 
 
 func _gd_files(dir_path: String) -> Array[String]:
