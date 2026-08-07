@@ -10,12 +10,24 @@ adapter = "zeroad"
 actor = "units/athenians/female_citizen.xml"
 
 [render]
-# 64px assumed a 1.9 m villager with no real motion (1.9 * cos(30) * 22.627 =
-# 37px) -- true only while every clip was frozen at rest pose (see PLAN.md
-# §14, the action-slot bug). Measured directly off unclipped renders, not
-# guessed: gather/build poses reach ~82px above the anchor, and a death
-# collapse spreads ~38px below it. 160 with frame_origin_at = 0.28 gives both
-# real margin (115px / 45px available) without being wasteful.
+# A 1.9 m villager is 1.9 * cos(30) * 22.627 = 37px of body, and the raised
+# tools reach higher, so the canvas is set from measured sprite extents rather
+# than from body height.
+#
+# 160 was chosen against measurements taken while the object-transform bug was
+# live (isobake c540874): every clip's action reset the armature's x0.5 unit
+# conversion to 1.0, so the villager baked at double size and appeared to need
+# ~82px above the anchor and ~38px below. Re-measured off a correct bake, the
+# real worst cases are work_mine at 58px above, 13px below, and 32px to the
+# side.
+#
+# 160 with frame_origin_at = 0.28 (115px above, 45px below, 80px each side) is
+# therefore about 4x more canvas than needed. It is not wrong -- trimming and
+# packing drop the empty margin, so the atlas and its anchors are correct
+# either way -- only wasteful in render time and intermediate frame size.
+# canvas = [96, 96] with frame_origin_at = 0.25 (72px / 24px) still clears
+# every pose; fold that in at the next re-bake rather than re-rendering 960
+# frames for it alone.
 canvas = [160, 160]
 supersample = 4
 # 8, not 5+mirrored: work_chop holds an axe in weapon_L and walk_carry_wood
