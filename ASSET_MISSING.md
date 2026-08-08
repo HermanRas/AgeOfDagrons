@@ -120,13 +120,50 @@ Deferred: `AudioManager` is a no-op in MVP (PLAN.md §7.5). Listed so the vocabu
 
 ### 2.1 Military units
 
-Each needs `idle`, `walk`, `attack`, `die`, `decay` × 5 directions.
+Each needs `idle`, `walk`, `attack`, `die`, `decay`. 5 directions where the
+subject is laterally symmetric; 8 where a one-sided weapon/shield would flip
+hands under mirroring, same reasoning as the villager's axe (PLAN.md 2.5) —
+both units baked so far need 8.
+
+**New pipeline defects found and fixed/worked around baking this section,
+2026-08-08 — both worth knowing before baking the rest of the roster:**
+
+1. **A whole mesh family imports with a bone-less armature.** Several
+   Athenian actors use `skeletal/new/m_armor_tunic_short.dae`
+   (spearman/javelinist _a/_c/_e, cavalry_swordsman _a_r/_e_r, slinger _a/_e,
+   oxybeles, ballista) — `isobake inspect` reports `armature Biped (0 bones)`
+   for every one of them, despite the raw COLLADA import log showing every
+   joint imported correctly; something in the pinned Pyrogenesis importer's
+   armature-building step drops all bones for this one mesh file. Every clip
+   attach then silently fails and the bake aborts with "Available: []".
+   `skeletal/new/m_tunic_short.dae` and `m_dress.dae` are unaffected (102
+   bones, confirmed on archer/healer). **Not fixed in isobake** — picking a
+   variant of the same unit that uses the working mesh was cheaper than
+   debugging the importer's armature builder. `infantry_spearman_b.xml`
+   (`m_tunic_short.dae`) is otherwise identical to `_a` (same clips, same
+   spear+shield) and was used instead.
+2. **A shield renders twice, once at the character's feet.** The Athenian
+   hoplite shield (`aspis_athen_{a,b,c,d}.xml`) declares a nested
+   `attachpoint="root"` back-plate prop *before* its own `<mesh>` group in
+   file order. The pinned importer resolves a nested `root` attachpoint
+   against whatever mesh it last imported at that call depth; since none has
+   been imported yet, it falls through to the character's own root instead
+   of the shield's — the back-plate ends up glued to the character's feet
+   instead of riding on the shield arm. **Fixed in isobake** (not a recipe
+   workaround): `zeroad.py` gained `_drop_misrooted_nested_props`, a narrow,
+   name-based post-import step that deletes known-affected objects (currently
+   just `Aspis_Back`) rather than patching the importer's ~300-line,
+   group-order-dependent root-propagation logic in place — deliberately
+   scoped to this one case rather than a general fix, given the size and
+   regression risk of touching a pinned third-party dependency PLAN.md 1.3
+   says not to fork. Add to `_KNOWN_MISROOTED_PROP_OBJECTS` if another prop
+   actor turns up with the same ordering quirk.
 
 | Asset | Status | Notes |
 |---|---|---|
 | `vis.militia` | ⬜ TODO | A.8 |
-| `vis.archer` | ⬜ TODO | A.8 |
-| `vis.spearman` | ⬜ TODO | A.8 |
+| `vis.archer` | 🟦 **BAKED** | `units/athenians/infantry_archer_a.xml`, `skeletal/new/m_tunic_short.dae` (102 bones, unaffected by defect 1 above). 8 directions, 192×192 canvas, clean bake. Its shield (`pelte_cretan_bronze_01.xml`) does **not** hit defect 2 — mesh comes before nested props in file order, and the nested piece uses a named attach point (`back`), not `root`. Idle/Walk/attack_ranged/Death clips from `base_archer_relax.xml`/`attack_ranged_archer.xml`/`death_infantry.xml`. One harmless note: the armature has no `prop_loaded-projectile` attach point, so the nocked-arrow visual variant doesn't show (base arrow/quiver still attach fine). Recipe: `tools/recipes/archer.toml` |
+| `vis.spearman` | 🟦 **BAKED** | `units/athenians/infantry_spearman_b.xml` — the mesh-1 substitute for defect 1 above (`_a` blocked, `_b` is otherwise identical: same `base_hoplite.xml` clips, same spear+shield). 8 directions, 224×224 canvas, clean bake once defect 2's shield fix landed. Idle/Walk/Attack_melee/Death clips from `base_hoplite.xml`/`death_infantry.xml`. Recipe: `tools/recipes/spearman.toml` |
 | `vis.knight` | ⬜ TODO | Mounted — more frames | 
 | `vis.siege_ram` | ⬜ TODO | |
 | `vis.trebuchet` | ⬜ TODO | Packed + unpacked states |
