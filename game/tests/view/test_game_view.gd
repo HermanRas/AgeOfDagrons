@@ -97,7 +97,7 @@ func test_a_unit_in_front_of_a_building_sorts_after_it() -> void:
 
 
 func test_a_unit_that_ties_a_buildings_front_corner_still_sorts_after_it() -> void:
-	# Reproduced live (dev_preview/debug_render_check.gd) while wiring up 4.5's
+	# Reproduced live (a since-deleted dev_preview scene) while wiring up 4.5's
 	# build-assist tap: a villager sent to build a house walked to the tile
 	# immediately east of its footprint and rendered BEHIND it. An even
 	# footprint's front-corner sort point sits at a HALF-tile offset
@@ -105,10 +105,7 @@ func test_a_unit_that_ties_a_buildings_front_corner_still_sorts_after_it() -> vo
 	# (x + y) as several of the tiles PathService commonly substitutes a
 	# worker onto -- here, a 4x4 house centred at tile (22, 28) sorts at the
 	# same depth as tile (24, 28), a perfectly ordinary place to stand while
-	# building it. Without a tie-break, Y-sort falls back to child order,
-	# which in practice is entity id -- and a freshly placed building almost
-	# always outranks the villager sent to it, so the tie went to the
-	# building's favour every time.
+	# building it.
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "def_id": "building.house", "footprint": {"x": 4, "y": 4},
 			"phase": SimBuilding.Phase.UNDER_CONSTRUCTION,
@@ -121,7 +118,57 @@ func test_a_unit_that_ties_a_buildings_front_corner_still_sorts_after_it() -> vo
 	var building := view.pool.get_view(1)
 	var worker := view.pool.get_view(2)
 	assert_true(worker.position.y > building.position.y,
-			"the tie must resolve in the unit's favour, not whichever id is lower")
+			"touching the footprint's edge must resolve in the unit's favour")
+
+
+func test_a_unit_beside_the_middle_of_a_large_buildings_edge_sorts_after_it() -> void:
+	# The actual reported bug, one step past the tie above: the front-corner
+	# sort point is a single point, so it only compares fairly against a unit
+	# standing right at that corner. A unit beside the MIDDLE of a large
+	# building's east or south edge is several tiles short in projected depth
+	# by that same point -- not a tie, a real-looking gap -- so it sorted
+	# behind the whole building even though it was plainly standing beside
+	# it. Reproduced live sending all 5 starting villagers to gather next to
+	# the town centre and watching returners clip at drop-off (a
+	# since-deleted dev_preview scene). Session decision: a unit touching a
+	# building's footprint at all -- any edge, not just the front corner --
+	# always sorts after it.
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+			"phase": SimBuilding.Phase.COMPLETE,
+			"pos": {"x": 32 * SimWorld.SUBTILE, "y": 32 * SimWorld.SUBTILE}},
+		# Tile (36, 32): touches the middle of the east edge, nowhere near
+		# the front (south-east) corner at (35, 35).
+		{"id": 2, "def_id": "unit.villager",
+			"pos": {"x": 36 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2,
+					"y": 32 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2}},
+	], "removed": []})
+
+	var building := view.pool.get_view(1)
+	var worker := view.pool.get_view(2)
+	assert_true(worker.position.y > building.position.y,
+			"beside the edge, nowhere near the front corner, still sorts in front")
+
+
+func test_a_unit_only_diagonally_touching_a_buildings_back_corner_stays_behind() -> void:
+	# The edge-adjacency bonus must not swallow the ORIGINAL 3.1 case: a unit
+	# diagonally near the back corner (sharing a point, not a side) is
+	# genuinely behind the building, not beside an edge someone is working
+	# at, and must keep sorting behind it.
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+			"phase": SimBuilding.Phase.COMPLETE,
+			"pos": {"x": 10 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}},
+		# One tile up-left of the back corner (6, 6) -- a diagonal touch only.
+		{"id": 2, "def_id": "unit.villager",
+			"pos": {"x": 5 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2,
+					"y": 5 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2}},
+	], "removed": []})
+
+	var building := view.pool.get_view(1)
+	var worker := view.pool.get_view(2)
+	assert_true(worker.position.y < building.position.y,
+			"a diagonal corner touch is not an edge -- still genuinely behind")
 
 
 func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:

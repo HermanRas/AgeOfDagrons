@@ -10,11 +10,13 @@ extends Node2D
 ## it), GATHER/BUILD/MOVE are the three orders a tap can issue.
 enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE }
 
-## World-space nudge breaking an exact Y-sort tie between a building and a
-## unit standing on the tile that ties its front-corner sort point (see
-## apply_snapshot()) in the unit's favour. Far smaller than any real per-tile
-## sort gap (tens of pixels), so it cannot be seen, only settle a tie.
-const _BUILDING_TIE_EPSILON := 0.01
+## Forces a unit adjacent to a building to Y-sort after it (see
+## apply_snapshot()), regardless of how the footprint-corner math alone would
+## have compared them. Larger than any real building's own sort offset could
+## ever be (the biggest MVP footprint, the wonder's 14x29, projects to a few
+## hundred pixels at most), so it always wins rather than merely tilting the
+## odds.
+const _ADJACENT_TO_BUILDING_BONUS := 100000.0
 
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
@@ -52,8 +54,22 @@ func build_terrain(size: Vector2i, terrain_bytes: PackedByteArray) -> void:
 
 func apply_snapshot(snap: Dictionary) -> void:
 	_last_tick = int(snap.get("tick", _last_tick))
+	var updated: Array = snap.get("updated", [])
 
-	for entry in snap.get("updated", []):
+	# Gathered up front so a unit's adjacency check below (any tile order)
+	# never depends on whether its own entry happened to arrive before or
+	# after the building's in this snapshot. `footprint` is unique to
+	# SimBuilding.to_snapshot() -- units and resource nodes never carry it --
+	# so this needs no registry lookup to tell a building entry from any other.
+	var building_rects: Array[Rect2i] = []
+	for entry in updated:
+		if entry.has("footprint"):
+			var bp: Dictionary = entry.get("pos", {})
+			var centre_tile := Vector2i(int(bp.get("x", 0)), int(bp.get("y", 0))) / SimWorld.SUBTILE
+			var fp := _footprint_of(entry)
+			building_rects.append(Rect2i(centre_tile - fp / 2, fp))
+
+	for entry in updated:
 		var id := int(entry.get("id", 0))
 		var view := pool.get_view(id)
 		var is_new := view == null
@@ -74,20 +90,21 @@ func apply_snapshot(snap: Dictionary) -> void:
 		# The node goes where the entity SORTS, the art goes where the entity IS.
 		# For everything 1x1 those are the same point and the offset is zero.
 		var sort_offset := Iso.footprint_sort_offset(_footprint_of(entry))
-		# A building's front-corner sort point (3.1) ties EXACTLY with any unit
-		# standing on the tile immediately east or north of that corner -- same
-		# x+y, hence same projected depth -- which a worker sent to build or
-		# garrison a building does constantly. Godot's Y-sort breaks a tie by
-		# child/insertion order, which in practice means entity id, and a
-		# freshly placed building almost always has a HIGHER id than the
-		# villager sent to it -- so the tie silently went to the building every
-		# time, drawing the builder behind the wall it is working on. Nudging a
-		# building's sort point a hair EARLIER (never a unit's) settles every
-		# such tie in the unit's favour instead, imperceptibly next to any real
-		# per-tile sort gap (found and reproduced via
-		# dev_preview/debug_render_check.gd, PLAN.md 3.1 follow-up).
-		if GameDataRegistry.building(def_id) != null:
-			sort_offset.y -= _BUILDING_TIE_EPSILON
+		# A single sort point per building (3.1, the building's own front
+		# corner) only compares fairly against a unit standing right at that
+		# corner. A worker adjacent to the MIDDLE of a large building's east or
+		# south edge is, by that same point, several tiles short in projected
+		# depth -- not a tie, a genuine-looking gap -- so it sorted behind the
+		# whole building even though it is plainly standing beside it. Found
+		# live sending all 5 starting villagers to gather next to the town
+		# centre and watching returners clip at drop-off
+		# (dev_preview/debug_dropoff_check.gd). Session decision, simpler and
+		# more robust than trying to widen the footprint math to cover every
+		# edge position: a unit touching (Chebyshev-adjacent to) a building's
+		# footprint always draws in front of THAT building, full stop.
+		if not entry.has("footprint") and _touches_any(Vector2i(sub_pos / SimWorld.SUBTILE),
+				building_rects):
+			sort_offset.y += _ADJACENT_TO_BUILDING_BONUS
 		view.draw_offset = -sort_offset
 		var target := Iso.sub_to_world(sub_pos) + sort_offset
 		if is_new:
@@ -398,6 +415,28 @@ func _covers(f: Dictionary, tile: Vector2i) -> bool:
 func _footprint_of(entry: Dictionary) -> Vector2i:
 	var f: Dictionary = entry.get("footprint", {})
 	return Vector2i(int(f.get("x", 1)), int(f.get("y", 1)))
+
+
+## Whether `tile` is inside, or ORTHOGONALLY adjacent to (shares a side
+## with), any of `rects`. Deliberately excludes a purely diagonal touch at a
+## corner: that is what "genuinely behind the building" looks like in tile
+## terms (test_a_unit_in_front_of_a_building_sorts_after_it's back-corner
+## case), where sharing an edge is what "standing beside working on it"
+## looks like (test_a_unit_that_ties_a_buildings_front_corner..., the
+## dropoff-clip repro this whole bonus exists for) -- the same distinction
+## the session's own sketch drew as "left, right, or top of a unit", not any
+## touching tile.
+func _touches_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
+	for r in rects:
+		if r.has_point(tile):
+			return true
+		var in_x_span := tile.x >= r.position.x and tile.x < r.end.x
+		var in_y_span := tile.y >= r.position.y and tile.y < r.end.y
+		if in_x_span and (tile.y == r.position.y - 1 or tile.y == r.end.y):
+			return true          # touches the north or south edge
+		if in_y_span and (tile.x == r.position.x - 1 or tile.x == r.end.x):
+			return true          # touches the west or east edge
+	return false
 
 
 func _visual_id_of(entry: Dictionary) -> StringName:
