@@ -159,8 +159,9 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 | `vis.wall` + gate | ⬜ TODO | Needs segment/corner tiling set — a different shape of problem from the single-sprite buildings above (`wall_long`/`wall_medium`/`wall_short`/`wall_gate` in `structures/athenians/`), deliberately not attempted alongside them |
 | `vis.wonder` | 🟦 **BAKED** | `structures/hellenes/temple_epic.xml` — the Parthenon, and by far the largest asset in the project: 651×505 px, a 14×29 m footprint (nearly 4× the town centre's). If wonder victory is implemented. Rubble needs `rubble_stone_6x6` (shared with the castle) — though whether a wonder should have a rubble state at all is a game-design call, not an art one. Foundation shares nothing existing (`fndn_7x15_hele`, not baked). Recipe: `tools/recipes/wonder.toml` |
 
-**Bonus finding, out of scope for this pass (buildings only):** the same canvas-edge check run against the existing MVP set found `vis.tree` has real, previously invisible clipping — its canopy touches the left, right, *and* top edges of its 224×224 canvas, and has since the 0.9 bake. Not fixed here; flagged for whoever next touches trees.
 | Per-age visual variants | ⬜ TODO | Ages I–V change building appearance |
+
+**Bonus finding, out of scope for this pass (buildings only):** the same canvas-edge check run against the existing MVP set found `vis.tree` has real, previously invisible clipping — its canopy touches the left, right, *and* top edges of its 224×224 canvas, and has since the 0.9 bake. Not fixed here; flagged for whoever next touches trees.
 
 ### 2.3 Resources & wildlife — full set
 
