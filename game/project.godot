@@ -8,11 +8,10 @@
 
 config_version=5
 
-
 [application]
 
 config/name="AgeOfDragons"
-run/main_scene="res://scenes/game/Game.tscn"
+run/main_scene="res://scenes/menu/Boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/image="uid://dqh8ksaaacbfv"
 config/icon="res://assets/icons/icon_256x256.png"

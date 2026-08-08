@@ -56,7 +56,7 @@ caveat: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
 **Used for:** UI chrome (panels, buttons, bars, frames, icons) and fonts.
 **Source:** https://kibyra.itch.io/ui-fonts-dragon-huds-pack · https://kibyra.itch.io/free-medieval-fantasy-ui-pack
 **Licence:** Free to download; personal and commercial use permitted; redistribution of the original files **not** permitted.
-**Note:** Pack files are not redistributed by this project — see [`UI_Sprites/README.md`](UI_Sprites/README.md).
+**Note:** Pack files are not redistributed by this project — see [`UI_Sprites/README.md`](assets/UI_Sprites/README.md).
 
 ---
 

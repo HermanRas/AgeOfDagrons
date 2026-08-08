@@ -13,7 +13,8 @@
 ## snapshots back down (PLAN.md 1.1 rule 4). Nothing here calls into the sim to
 ## make something happen.
 ##
-## The main menu (1.1) eventually launches this; until then it is the main scene.
+## Launched from `MainMenu`'s PLAY button (1.1/1.2) via `change_scene_to_file()`;
+## no longer the boot scene itself now that `Boot.tscn`/`MainMenu.tscn` exist.
 extends Control
 
 var _view: GameView
@@ -23,6 +24,9 @@ var _panel: SelectionPanel
 var _box: SelectionBox
 var _hud: ResourceHUD
 var _groups_hud: ControlGroupsHud
+var _minimap: Minimap
+var _toast: NoticeToast
+var _pause_menu: PauseMenu
 var _status: Label
 var _error: String = ""
 
@@ -131,6 +135,34 @@ func _build_hud() -> void:
 	_groups_hud.group_assign_requested.connect(_on_group_assign_requested)
 	hud.add_child(_groups_hud)
 
+	_minimap = Minimap.new()
+	_minimap.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_minimap.position = Vector2(-Minimap.SIZE - 12.0, -Minimap.SIZE - 12.0)
+	_minimap.tapped.connect(_on_minimap_tapped)
+	_minimap.double_tapped.connect(_on_minimap_double_tapped)
+	hud.add_child(_minimap)
+
+	_toast = NoticeToast.new()
+	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast.position = Vector2(-160.0, 90.0)
+	hud.add_child(_toast)
+
+	var pause_btn := TextureButton.new()
+	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
+	if ResourceLoader.exists(pause_icon_path):
+		pause_btn.texture_normal = load(pause_icon_path)
+	pause_btn.ignore_texture_size = true
+	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	pause_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	pause_btn.custom_minimum_size = Vector2(48.0, 48.0)
+	pause_btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	pause_btn.position = Vector2(-24.0, 12.0)
+	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
+	hud.add_child(pause_btn)
+
+	_pause_menu = PauseMenu.new()
+	hud.add_child(_pause_menu)
+
 	# Past the control-group stack (12 + 64 px wide) rather than under it --
 	# these are dev/debug controls, not part of UI_Design.md's layout, so they
 	# just need to stay out of its way.
@@ -168,6 +200,7 @@ func _build_hud() -> void:
 func _start_match() -> void:
 	var world: SimWorld = Net.host().world
 	_view.build_terrain(world.map.size, world.map.terrain)
+	_minimap.build_terrain(world.map.size, world.map.terrain)
 	_camera.setup(world.map.size)
 
 	for e in world.entities.values():
@@ -181,6 +214,7 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_view.apply_snapshot(snap)
 	_refresh_panel()
 	_refresh_hud(snap)
+	_refresh_minimap()
 
 
 ## Pushes 7.1's two counter signals, plus 10.1's per-slot control-group signal,
@@ -290,6 +324,8 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 		_exit_placement()
 		return
 
+	_toast.show_message("Not enough resources" if not result["can_afford"] else "Can't build there")
+
 	# A flash, not a permanent red ghost: it stays long enough to read as "no",
 	# then clears so the next attempt starts from a blank slate.
 	get_tree().create_timer(0.3).timeout.connect(func() -> void:
@@ -314,14 +350,15 @@ func _preview_placement(screen_pos: Vector2) -> Dictionary:
 	var player := world.player_for(Net.local_player_id())
 	var origin := Iso.tile_at(local)
 	var rect := SimMap.footprint_rect(origin, bd.footprint)
-	var valid := player != null and player.can_afford(bd.cost) and world.map.can_place_building(rect)
+	var can_afford := player != null and player.can_afford(bd.cost)
+	var valid := can_afford and world.map.can_place_building(rect)
 
 	var centre := Vector2(origin) + Vector2(bd.footprint) * 0.5
 	_ghost.position = Iso.tile_to_world_f(centre)
 	_ghost.set_state(Vector2(bd.footprint) * Iso.METRES_PER_TILE, valid)
 	_ghost.visible = true
 
-	return {"origin": origin, "valid": valid}
+	return {"origin": origin, "valid": valid, "can_afford": can_afford}
 
 
 func _display_name(def_id: StringName) -> String:
@@ -339,6 +376,35 @@ func _on_cancel_requested(building_id: int, index: int) -> void:
 
 func _on_debug_destroy_requested(target_id: int) -> void:
 	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
+
+
+## Blips and the camera-viewport rectangle (PLAN.md 8.2a). Separate from
+## _refresh_hud() -- that one drains once per snapshot into EventBus signals
+## other widgets read; the minimap is driven directly since nothing else
+## needs "every entity's facts" broadcast for its sake.
+func _refresh_minimap() -> void:
+	_minimap.update_entities(_view.all_facts(), Net.local_player_id())
+
+	var half := _camera.visible_size() * 0.5
+	var top_left := Iso.world_to_tile_f(_camera.position - half)
+	var bottom_right := Iso.world_to_tile_f(_camera.position + half)
+	_minimap.update_camera_rect(Rect2(top_left, bottom_right - top_left))
+
+
+## Tap the minimap to move the camera there (PLAN.md 3.8). MVP has no 3.7
+## ("tap minimap to move SELECTED units there") to compete with a plain tap,
+## so this fires regardless of what is selected.
+func _on_minimap_tapped(tile: Vector2i) -> void:
+	_camera.centre_on(Iso.tile_centre_to_world(tile))
+
+
+## Double-tap the minimap to centre on the player's own Town Centre
+## (PLAN.md 3.4). Silently does nothing if they have none in view -- true
+## the instant a match starts and before the first snapshot has landed.
+func _on_minimap_double_tapped() -> void:
+	var centre = _view.owned_entity_position(Net.local_player_id(), &"building.town_center")
+	if centre != null:
+		_camera.centre_on(centre)
 
 
 ## Single tap (mobile) or a plain digit key (desktop): reselect the group and
@@ -367,6 +433,7 @@ func _on_group_assign_requested(slot: int) -> void:
 	if current.is_empty():
 		return
 	Net.submit_command(SetControlGroupCommand.new(Net.local_player_id(), slot, current))
+	_toast.show_message("Assigned to group %d" % (slot + 1))
 
 
 ## PC control-group hotkeys (PLAN.md 10 session note): plain 1-5 reselects,
@@ -376,6 +443,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if _error != "" or not (event is InputEventKey) or not event.is_pressed() or event.is_echo():
 		return
 	var key := event as InputEventKey
+
+	if key.keycode == KEY_ESCAPE:
+		if not _pause_menu.visible:
+			_pause_menu.open()
+		return
+
 	if key.keycode < KEY_1 or key.keycode > KEY_5:
 		return
 	var slot := int(key.keycode) - int(KEY_1)
@@ -426,7 +499,10 @@ func _refresh_panel() -> void:
 	else:
 		var facts := _view.facts_for(primary)
 		var is_mine := int(facts.get("owner_id", 0)) == Net.local_player_id()
-		_panel.show_entity(facts, _view.selection.size(), is_mine)
+		var all_def_ids: Array = []
+		for id in _view.selection.current():
+			all_def_ids.append(_view.facts_for(id).get("def_id", &""))
+		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids)
 
 	if _placing_def_id == &"":
 		_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground to move  |  drag to pan, edge-swipe to zoom"

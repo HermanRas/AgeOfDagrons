@@ -312,6 +312,39 @@ func test_control_group_centre_is_null_with_nothing_alive() -> void:
 	assert_null(view.control_group_centre([1]))
 
 
+## ── minimap support (PLAN.md 3.4, 8.2a) ─────────────────────────────────────
+
+func test_all_facts_returns_every_entity_keyed_by_id() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(6, 6), 2)])
+	var facts := view.all_facts()
+	assert_eq(facts.keys().size(), 2)
+	assert_eq(facts[1]["tile"], Vector2i(5, 5))
+
+
+func test_all_facts_is_a_copy() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	var facts := view.all_facts()
+	facts.clear()
+	assert_eq(view.all_facts().keys().size(), 1, "mutating the copy must not touch the view")
+
+
+func test_owned_entity_position_finds_the_players_town_centre() -> void:
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8))])
+	var pos = view.owned_entity_position(1, &"building.town_center")
+	assert_eq(pos, Iso.tile_centre_to_world(view.facts_for(3)["tile"]))
+
+
+func test_owned_entity_position_is_null_with_none_matching() -> void:
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 2, Vector2i(8, 8))])
+	assert_null(view.owned_entity_position(1, &"building.town_center"))
+
+
+func test_owned_entity_position_ignores_a_dead_match() -> void:
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8), false)])
+	assert_null(view.owned_entity_position(1, &"building.town_center"))
+
+
 func test_selecting_marks_the_view_and_deselecting_clears_it() -> void:
 	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
 			_entity(2, "unit.villager", Vector2i(6, 5))])

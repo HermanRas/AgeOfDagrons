@@ -59,7 +59,7 @@ func _draw() -> void:
 	var inset := Vector2(SIZE, SIZE) * ICON_INSET
 	var icon_rect := Rect2(inset, Vector2(SIZE, SIZE) - inset * 2.0)
 
-	var icon := _icon_frame_for(icon_def_id) if icon_def_id != &"" else {}
+	var icon := EntityPortrait.frame_for(icon_def_id) if icon_def_id != &"" else {}
 	if icon.is_empty():
 		draw_circle(centre, SIZE * 0.5 - inset.x, EMPTY_COLOR)
 	else:
@@ -79,22 +79,3 @@ func _draw() -> void:
 				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
 
 
-## The def's own S-facing static frame, cropped straight out of its battle
-## atlas -- `&"idle"` is requested rather than a portrait-specific anim
-## because `AtlasEntry.resolve_anim()` already falls back through
-## static -> idle -> first-available, so this resolves correctly for a
-## building (`static`) and a unit (`idle`) alike. `{}` for a placeholder
-## visual (nothing baked to crop) or an undeclared def_id.
-func _icon_frame_for(def_id: StringName) -> Dictionary:
-	var visual_id := GameDataRegistry.visual_for(def_id)
-	var vis := GameDataRegistry.atlas_for(visual_id)
-	if vis.is_placeholder:
-		return {}
-	var f := vis.frame_at(&"idle", 0, 0)          # facing 0 = S (AtlasEntry.FACINGS)
-	if f.is_empty():
-		return {}
-	var tex := vis.texture(int(f["page"]))
-	if tex == null:
-		return {}
-	var rect: Rect2i = f["rect"]
-	return {"texture": tex, "rect": Rect2(rect.position, rect.size)}

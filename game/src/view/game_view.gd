@@ -131,6 +131,29 @@ func facts_for(id: int) -> Dictionary:
 	return _facts.get(id, {})
 
 
+## Every entity's facts, keyed by id. A copy, for the same reason
+## `Selection.current()` hands one out -- the minimap (8.2a) redraws its
+## blips from this every snapshot and must not be able to mutate the view's
+## own bookkeeping while doing it.
+func all_facts() -> Dictionary:
+	return _facts.duplicate()
+
+
+## World position of `owner`'s first alive entity matching `def_id`, or null
+## if they have none (PLAN.md 3.4: double-tap-minimap centres on the
+## player's own Town Centre). Sorted by id, same determinism reason as
+## `SimWorld.nearest_drop_off()` -- two clients must pick the same one.
+func owned_entity_position(owner: int, def_id: StringName) -> Variant:
+	var ids := _facts.keys()
+	ids.sort()
+	for id in ids:
+		var f: Dictionary = _facts[id]
+		if int(f.get("owner_id", -1)) == owner and StringName(f.get("def_id", &"")) == def_id \
+				and bool(f.get("alive", true)):
+			return Iso.tile_centre_to_world(f["tile"])
+	return null
+
+
 ## Replace the selection and repaint the rings.
 func select(ids: Array[int]) -> void:
 	for id in selection.current():

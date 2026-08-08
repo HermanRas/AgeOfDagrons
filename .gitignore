@@ -29,6 +29,13 @@ assets/UI_Sprites/ui-fonts/
 # empty slots can be filled from the same artwork, but not needed in the repo.
 assets/Icons/
 
+# Loose Gemini working-source drops at the assets/ root (e.g. MainMenu.png,
+# Age_and_Upgrade_bar.png) -- same convention as assets/Icons/ above: the cut
+# asset actually used ships from game/assets/ui/, the raw source stays local.
+# Not recursive, so a real subfolder (UI_Sprites/, Icons/) is unaffected.
+assets/*.png
+assets/*.jpg
+
 # Raw art source (0 A.D. checkout, Blender working files).
 # Lives outside the repo entirely — see PLAN.md §1.3
 art_source/
@@ -70,6 +77,8 @@ game/assets/atlases/
 # from their own assets/UI_Sprites/ download; see the source path noted where
 # it is used.
 game/assets/ui/control_groups/
+game/assets/ui/menu/
+game/assets/ui/hud/
 
 # ─────────────────────────────────────────────────────────────
 # Python tooling
