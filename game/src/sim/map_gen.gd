@@ -61,6 +61,12 @@ static func build_debug_map(w: SimWorld) -> void:
 		_place_resources(w, origin)
 		_place_villagers(w, p.id, tc)
 
+	# The map is final; build the pathfinding grid now. A full sweep of a 64x64
+	# grid measures ~12 ms, which is invisible during setup and five times the
+	# per-tick budget if it lands on the player's first move order instead (4.2).
+	if w.paths != null:
+		w.paths.rebuild(w.map)
+
 
 static func _paint_terrain(map: SimMap) -> void:
 	map.fill_terrain(SimMap.Terrain.GRASS)

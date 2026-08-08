@@ -170,7 +170,41 @@ func _advance_anim(delta: float) -> void:
 		queue_redraw()
 
 
+## Selection ring (PLAN.md 4.3): a flat ellipse on the ground, drawn UNDER the
+## sprite so a villager stands inside her ring rather than on top of it.
+##
+## Sized from the visual's DECLARED footprint in metres rather than from the
+## sprite's pixel bounds. The declared figure is the measured ground the thing
+## occupies; the sprite is mostly air above it, so a bounds-sized ring round a 10 m
+## tree would be a circle six tiles wide.
+const RING_COLOR := Color(0.35, 1.0, 0.45, 0.9)
+const RING_WIDTH := 2.0
+const RING_SEGMENTS := 24
+## Nothing is allowed a ring tighter than this, or a villager's 0.6 m footprint
+## draws a ring too small to see it is there.
+const RING_MIN_METRES := 1.2
+
+
+func _draw_selection_ring() -> void:
+	var spec := GameDataRegistry.placeholder_for(visual_id)
+	var extent := Vector2(
+		maxf(spec.footprint_m.x, RING_MIN_METRES) * 0.5,
+		maxf(spec.footprint_m.y, RING_MIN_METRES) * 0.5)
+
+	var points := PackedVector2Array()
+	for i in range(RING_SEGMENTS + 1):
+		var a := TAU * float(i) / float(RING_SEGMENTS)
+		# Built in METRE space and projected, so the ring lies flat on the ground
+		# plane and comes out as the right isometric ellipse for free.
+		points.append(draw_offset + Iso.metres_to_world(
+				Vector2(cos(a) * extent.x, sin(a) * extent.y)))
+	draw_polyline(points, RING_COLOR, RING_WIDTH, true)
+
+
 func _draw() -> void:
+	if selected:
+		_draw_selection_ring()
+
 	var vis := visual()
 
 	# draw_offset is a translation on the canvas transform rather than a term added

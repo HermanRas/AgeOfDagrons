@@ -1,5 +1,9 @@
-## Order a set of units to walk to a tile. No pathfinding yet (that lands with
-## SimMap/PathService at phase 2.1) -- MovementSystem walks straight there.
+## Order a set of units to walk to a tile.
+##
+## One command carries MANY unit ids on purpose: a shared-destination order is a
+## single command over the wire however many units it moves (PLAN.md 7.2). It is
+## still one PATH per unit, since they start from different tiles -- those go into
+## PathService's queue and are solved against its per-tick budget (4.2).
 class_name MoveCommand
 extends Command
 
@@ -49,3 +53,5 @@ func validate(w: SimWorld) -> bool:
 func apply(w: SimWorld) -> void:
 	for id in unit_ids:
 		(w.get_entity(id) as SimUnit).set_task_move(target_tile)
+		if w.paths != null:
+			w.paths.request(id, target_tile)

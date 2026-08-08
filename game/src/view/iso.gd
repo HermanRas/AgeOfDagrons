@@ -118,9 +118,26 @@ static func facing_to_screen_dir(facing: int) -> Vector2:
 	return _project(dir).normalized()
 
 
+## Nearest tile COORDINATE to a point -- the inverse of tile_to_world(), which
+## projects the tile's corner. Rounds, so it round-trips a corner back to its own
+## index.
+##
+## This is not the same question as "which tile is this point inside", and using it
+## for that is off by one half the time. Use tile_at() to hit-test.
 static func world_to_tile(w: Vector2) -> Vector2i:
 	var t := world_to_tile_f(w)
 	return Vector2i(roundi(t.x), roundi(t.y))
+
+
+## Which tile CONTAINS a point (PLAN.md 4.3, picking).
+##
+## Floors rather than rounds: tile t covers fractional coordinates [t, t+1), so a
+## point anywhere inside it -- including its centre at t+0.5, where the sim stands
+## entities -- belongs to t. Rounding would send the near half of every tile to its
+## neighbour, which is a tap that selects the wrong thing half the time.
+static func tile_at(w: Vector2) -> Vector2i:
+	var t := world_to_tile_f(w)
+	return Vector2i(floori(t.x), floori(t.y))
 
 
 ## Un-projected to FRACTIONAL tile coordinates -- the exact inverse of _project.

@@ -42,3 +42,7 @@ func validate(w: SimWorld) -> bool:
 func apply(w: SimWorld) -> void:
 	for id in unit_ids:
 		(w.get_entity(id) as SimUnit).stop()
+		# Drop any search still queued for this unit, or it would be solved a few
+		# ticks later and hand a stopped unit a route to walk (4.2).
+		if w.paths != null:
+			w.paths.cancel(id)

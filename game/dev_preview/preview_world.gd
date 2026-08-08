@@ -22,6 +22,8 @@ var _shoot := true
 var _world: SimWorld
 var _view: GameView
 var _camera: CameraRig
+var _router: InputRouter
+var _panel: SelectionPanel
 
 
 func _ready() -> void:
@@ -42,10 +44,23 @@ func _ready() -> void:
 	_camera.setup(_world.map.size)
 	_camera.centre_on(_start_position() - Vector2(0.0, HEADROOM_PX))
 
+	# Tap to select (4.3). The router only recognises taps; the camera keeps its
+	# own pan/zoom handling, and the two do not fight because a tap is defined as
+	# a press that ended without any drag.
+	_router = InputRouter.new()
+	add_child(_router)
+	_router.tapped.connect(_on_tapped)
+
 	# On its own CanvasLayer, or the camera pans the caption off the screen along
 	# with the ground.
 	var hud := CanvasLayer.new()
 	add_child(hud)
+
+	_panel = SelectionPanel.new()
+	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_panel.position = Vector2(12, -96)
+	hud.add_child(_panel)
+
 	var label := Label.new()
 	label.text = "%d entities  |  map %dx%d  |  hash %d" % [
 		_world.entities.size(), _world.map.size.x, _world.map.size.y, _world.state_hash()]
@@ -61,6 +76,26 @@ func _full_snapshot() -> Dictionary:
 	for e in _world.entities.values():
 		updated.append((e as SimEntity).to_snapshot())
 	return {"tick": 0, "updated": updated, "removed": []}
+
+
+## Tap position is in SCREEN space; the world is under a camera, so it has to be
+## put back through the canvas transform before it means anything to the view.
+func _on_tapped(screen_pos: Vector2) -> void:
+	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
+	var id := _view.pick(local)
+
+	# Built explicitly rather than inline: a conditional expression loses the
+	# element type and `select()` takes an Array[int], so the ternary form fails at
+	# runtime rather than at parse time.
+	var picked: Array[int] = []
+	if id != 0:
+		picked.append(id)
+
+	_view.select(picked)
+	if id != 0:
+		_panel.show_entity(_view.facts_for(id), _view.selection.size())
+	else:
+		_panel.show_nothing()
 
 
 func _start_position() -> Vector2:

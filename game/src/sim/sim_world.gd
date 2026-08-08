@@ -19,6 +19,7 @@ var map: SimMap = null
 var players: Array[SimPlayer] = []
 var entities: Dictionary = {}          # int id -> SimEntity
 var spatial: SpatialHash = null
+var paths: PathService = null
 var _next_id: int = 1
 var _pending: Array[Command] = []
 var _systems: Array[SimSystem] = []
@@ -30,9 +31,13 @@ func setup(cfg: MatchConfig) -> void:
 	players.clear()
 	map = SimMap.create(cfg.map_size)
 	spatial = SpatialHash.new()
+	paths = PathService.new()
 	_next_id = 1
 	_pending.clear()
-	_systems = [CommandSystem.new(), TaskSystem.new(), MovementSystem.new()]
+	# Order is load-bearing: a command lands, its path is planned, the task is
+	# retired if it already finished, and only then does the unit move. Planning
+	# after movement would cost every order a tick of visible delay.
+	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(), MovementSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
@@ -129,6 +134,7 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 	entities[b.id] = b
 	spatial.insert(b.id, b.tile())
 	map.set_occupied(rect, b.id)
+	_occupancy_changed(rect)
 	return b
 
 
@@ -160,12 +166,16 @@ func spawn_resource_node(def_id: StringName, tile: Vector2i, size_class: int = 0
 	entities[n.id] = n
 	spatial.insert(n.id, n.tile())
 	map.set_occupied(rect, n.id)
+	_occupancy_changed(rect)
 	return n
 
 
 func despawn(id: int) -> void:
 	if not entities.has(id):
 		return
+	# Grab the footprint BEFORE the entity goes, or there is nothing left to work
+	# out which tiles the pathfinder needs to re-read.
+	var freed := _footprint_of(entities[id])
 	# Free the grid before dropping the entity: occupancy is keyed by id, so once
 	# it is out of `entities` there is nothing left to look its footprint up from
 	# and the tiles would stay claimed forever by a building that no longer exists.
@@ -173,6 +183,27 @@ func despawn(id: int) -> void:
 		map.clear_occupant(id)
 	spatial.remove(id)
 	entities.erase(id)
+	if paths != null:
+		paths.cancel(id)          # a queued search for a dead unit is wasted work
+	_occupancy_changed(freed)
+
+
+## The tiles an entity holds in the occupancy grid. Units hold none -- they are in
+## SpatialHash, not the grid (SimMap's static-footprint rule) -- so removing one
+## changes nothing the pathfinder cares about.
+func _footprint_of(e: SimEntity) -> Rect2i:
+	if e is SimUnit:
+		return Rect2i()
+	if e is SimBuilding:
+		return (e as SimBuilding).footprint_rect()
+	return Rect2i(e.tile(), Vector2i.ONE)
+
+
+## Tell the pathfinder which tiles went stale. Deferred rather than applied here,
+## so placing or destroying several things in one tick costs one update.
+func _occupancy_changed(rect: Rect2i) -> void:
+	if paths != null and rect.size.x > 0 and rect.size.y > 0:
+		paths.mark_dirty(rect)
 
 
 func get_entity(id: int) -> SimEntity:
@@ -243,7 +274,12 @@ func state_hash() -> int:
 		var e: SimEntity = entities[id]
 		parts.append([e.id, e.def_id, e.owner_id, e.pos.x, e.pos.y, e.hp, e.alive])
 		if e is SimUnit:
-			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing])
+			# Path PROGRESS, not the route itself: two clients that planned
+			# differently diverge in position within a few ticks anyway, but
+			# hashing where each unit is along its route catches it on the tick it
+			# happens rather than after it has been walked out (4.2).
+			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing,
+					e.path.size(), e.path_index, e.path_pending])
 
 	for p in players:
 		var stock_keys := p.stock.keys()

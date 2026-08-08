@@ -7,8 +7,16 @@ extends Node2D
 
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
+var selection: Selection = Selection.new()
 
 var _last_tick: int = -1
+
+## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
+## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
+## answer questions about an entity that the *view* nodes do not carry -- who owns
+## it, what it is called, how hurt it is -- and the view may not reach into the sim
+## to ask (PLAN.md 4).
+var _facts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -65,8 +73,79 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if max_hp > 0.0:
 			view.set_health_dot(float(entry.get("hp", 0)) / max_hp)
 
+		_facts[id] = {
+			"tile": Vector2i(sub_pos / SimWorld.SUBTILE),
+			"owner_id": int(entry.get("owner_id", 0)),
+			"def_id": StringName(entry.get("def_id", "")),
+			"hp": int(entry.get("hp", 0)),
+			"max_hp": int(max_hp),
+			"footprint": _footprint_of(entry),
+		}
+		view.set_selected(selection.contains(id))
+
 	for id in snap.get("removed", []):
 		pool.release(int(id))
+		_facts.erase(int(id))
+
+	# A selection holding a unit that has just died would build an order naming an
+	# entity the sim rejects, and the player would see nothing happen at all.
+	selection.retain_only(_facts.keys())
+
+
+## Facts about one entity, or {} if it is not currently in view.
+func facts_for(id: int) -> Dictionary:
+	return _facts.get(id, {})
+
+
+## Replace the selection and repaint the rings.
+func select(ids: Array[int]) -> void:
+	for id in selection.current():
+		var previous := pool.get_view(id)
+		if previous != null:
+			previous.set_selected(false)
+	for id in selection.set_selection(ids):
+		var view := pool.get_view(id)
+		if view != null:
+			view.set_selected(true)
+
+
+## The entity at a point in this node's LOCAL space, or 0 (PLAN.md 4.3).
+##
+## Local, not screen: the caller undoes the camera once, and picking does not have
+## to know a camera exists.
+##
+## Picks by tile rather than by sprite bounds. A tap is a fingertip, not a
+## pixel, and the tall art makes bounds misleading -- a 10 m tree's sprite covers
+## the six tiles behind it, so bounds-picking would select the tree when the player
+## clearly tapped the ground in front of it. The tile under the finger is what the
+## player is pointing at, and it is also what an order is expressed in.
+##
+## `owner` restricts the pick to one player's things; pass 0 to pick anything.
+## Units win ties, because a villager standing on a tree's tile is the thing worth
+## tapping and the tree is not going anywhere.
+func pick(local: Vector2, owner: int = 0) -> int:
+	var tile := Iso.tile_at(local)
+	var best := 0
+	var best_is_unit := false
+	for id in _facts:
+		var f: Dictionary = _facts[id]
+		if owner != 0 and int(f["owner_id"]) != owner:
+			continue
+		if not _covers(f, tile):
+			continue
+		var is_unit: bool = (f["footprint"] as Vector2i) == Vector2i.ONE
+		if best == 0 or (is_unit and not best_is_unit):
+			best = int(id)
+			best_is_unit = is_unit
+	return best
+
+
+func _covers(f: Dictionary, tile: Vector2i) -> bool:
+	var footprint: Vector2i = f["footprint"]
+	var centre: Vector2i = f["tile"]
+	# A footprint's `tile` is its centre; recover the rect it actually holds.
+	var origin := centre - footprint / 2
+	return Rect2i(origin, footprint).has_point(tile)
 
 
 ## Snapshots carry the entity's DEFINITION id (`unit.villager`); the asset seam is
