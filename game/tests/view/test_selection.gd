@@ -156,6 +156,77 @@ func test_a_unit_beats_a_resource_node_on_the_same_tile_when_picking() -> void:
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(7, 7))), 5)
 
 
+# ── two-finger box select (8.3) ────────────────────────────────────────────
+
+## A box in local space covering the given tiles, grown so the tile centres are
+## comfortably inside rather than exactly on the boundary.
+func _box_over(a: Vector2i, b: Vector2i) -> Rect2:
+	var pa := Iso.tile_centre_to_world(a)
+	var pb := Iso.tile_centre_to_world(b)
+	return Rect2(Vector2(minf(pa.x, pb.x), minf(pa.y, pb.y)), (pb - pa).abs()).grow(8.0)
+
+
+func test_a_box_selects_every_unit_inside_it() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5)),
+		_entity(2, "unit.villager", Vector2i(6, 6)),
+		_entity(3, "unit.villager", Vector2i(30, 30)),
+	])
+	var picked := view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(7, 7)), 1)
+	assert_eq(picked, [1, 2] as Array[int], "the far one is left out")
+
+
+func test_a_box_ignores_buildings_and_resources() -> void:
+	# Dragging a box across your settlement and catching the town centre, four
+	# trees and a deer is not what anyone means by a box select.
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5)),
+		_entity(2, "building.town_center", Vector2i(5, 6), 1, Vector2i(8, 8)),
+		_entity(3, "res.tree", Vector2i(6, 5), 0),
+	])
+	assert_eq(view.units_in_box(_box_over(Vector2i(3, 3), Vector2i(9, 9)), 1),
+			[1] as Array[int])
+
+
+func test_a_box_ignores_other_players_units() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5), 1),
+		_entity(2, "unit.villager", Vector2i(6, 6), 2),
+	])
+	assert_eq(view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(7, 7)), 1),
+			[1] as Array[int])
+
+
+func test_a_box_over_empty_ground_selects_nothing() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	assert_true(view.units_in_box(_box_over(Vector2i(40, 40), Vector2i(44, 44)), 1).is_empty())
+
+
+func test_a_box_result_is_ordered_so_it_is_the_same_on_every_machine() -> void:
+	# A box catching more than MAX_SELECTED has to keep the SAME units everywhere,
+	# not whichever the Dictionary happened to yield first -- the selection becomes
+	# a command, and two clients disagreeing about its contents is a desync.
+	var entries: Array = []
+	for i in range(12):
+		entries.append(_entity(20 - i, "unit.villager", Vector2i(5 + i, 5)))
+	_populate(entries)
+	var picked := view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(18, 6)), 1)
+	var sorted := picked.duplicate()
+	sorted.sort()
+	assert_eq(picked, sorted, "returned in id order")
+
+
+func test_a_box_selection_draws_rings_on_all_of_them() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5)),
+		_entity(2, "unit.villager", Vector2i(6, 6)),
+	])
+	view.select(view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(7, 7)), 1))
+	assert_true(view.pool.get_view(1).selected)
+	assert_true(view.pool.get_view(2).selected)
+	assert_eq(view.selection.size(), 2)
+
+
 # ── the ring ───────────────────────────────────────────────────────────────
 
 func test_selecting_marks_the_view_and_deselecting_clears_it() -> void:

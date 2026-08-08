@@ -66,6 +66,13 @@ var _touch_index := NO_TOUCH
 var _gesture := Gesture.PAN
 var _mouse_dragging := false
 
+## Every finger currently down, not just the one driving the camera.
+##
+## The camera moves for ONE finger only. A second finger means a two-finger
+## gesture belonging to someone else -- 8.3's box select -- and continuing to pan
+## under it would drag the map out from beneath the box the player is drawing.
+var _touches: Array[int] = []
+
 
 func _ready() -> void:
 	var vp := get_viewport()
@@ -217,7 +224,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_touch(event as InputEventScreenTouch)
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if drag.index == _touch_index:
+		if drag.index == _touch_index and _touches.size() == 1:
 			apply_drag(drag.relative)
 	elif event is InputEventMouseButton:
 		_on_mouse_button(event as InputEventMouseButton)
@@ -227,11 +234,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_touch(touch: InputEventScreenTouch) -> void:
 	if touch.pressed:
+		if not _touches.has(touch.index):
+			_touches.append(touch.index)
 		if _touch_index == NO_TOUCH:
 			_touch_index = touch.index
 			begin_gesture(touch.position.x)
-	elif touch.index == _touch_index:
-		_touch_index = NO_TOUCH
+	else:
+		_touches.erase(touch.index)
+		if touch.index == _touch_index:
+			_touch_index = NO_TOUCH
+		# Lifting back down to one finger does NOT resume panning with whatever
+		# finger is left: the remaining one has been sitting still holding a box
+		# open, and adopting it would snap the map by however far it has drifted.
+		if _touches.is_empty():
+			_touch_index = NO_TOUCH
 
 
 ## The mouse gets the same edge rule as a finger, so the gesture can be exercised

@@ -1,15 +1,18 @@
-## Turns raw touch/mouse events into game gestures (PLAN.md 4.3). Phase 4.3.
+## Turns raw touch/mouse events into game gestures (PLAN.md 4.3, 8.3).
 ##
-## Only TAP for now. Pan and zoom still live in `CameraRig`, which recognises them
-## from the same events; the two do not fight because they are looking for opposite
-## things -- the camera acts on drag motion, this acts on a press that ended
-## without any. Double-tap, two-finger box select and the rest join here as their
-## phases land, at which point the camera's own `_unhandled_input` is what gets
-## replaced, not its rules (`begin_gesture`/`apply_drag` are already public for it).
+## TAP and two-finger BOX SELECT. Pan and zoom still live in `CameraRig`, which
+## recognises them from the same events; they do not fight because each is looking
+## for something the others are not -- the camera acts on a one-finger drag, the
+## tap on a press that ended without any, and the box on a second finger arriving.
+## Double-tap and the rest join here as their phases land.
 ##
 ## A tap is a press and release that stayed within TAP_SLOP pixels and under
 ## TAP_TIME_MS. Both bounds are needed: distance alone would make a long press with
 ## a steady thumb a tap, and time alone would make a fast flick a tap.
+##
+## This is why `pointing/emulate_mouse_from_touch` is off (PLAN.md 881): box select
+## needs raw `InputEventScreenTouch`/`Drag` with real finger indices, and emulation
+## collapses them into one mouse.
 class_name InputRouter
 extends Node
 
@@ -18,7 +21,18 @@ extends Node
 const TAP_SLOP := 18.0
 const TAP_TIME_MS := 400
 
+## A box smaller than this is treated as a fumbled two-finger tap rather than a
+## selection, so brushing the screen with two fingers does not clear what you had
+## selected by "selecting" a three-pixel rectangle.
+const MIN_BOX := 24.0
+
 signal tapped(screen_pos: Vector2)
+## Live box, for drawing it while the fingers are still down.
+signal box_changed(screen_rect: Rect2)
+## Committed box, on release. Never emitted for a box under MIN_BOX.
+signal box_selected(screen_rect: Rect2)
+## The box was abandoned (too small, or cancelled) -- stop drawing it.
+signal box_cancelled()
 
 var _touch_index := CameraRig.NO_TOUCH
 var _down_pos := Vector2.ZERO
@@ -26,36 +40,109 @@ var _down_msec := 0
 var _moved := 0.0
 var _mouse_down := false
 
+## index -> current position, for every finger down. The box is the rectangle
+## spanned by two of them, so both positions have to be tracked live.
+var _touches: Dictionary = {}
+var _boxing := false
+
+## Desktop stand-in for the two-finger gesture: right-drag. There is no second
+## finger on a mouse, and a feature that can only be exercised by deploying to a
+## phone is one that gets tested once.
+var _right_drag_from := Vector2.ZERO
+var _right_dragging := false
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		if touch.pressed:
-			if _touch_index == CameraRig.NO_TOUCH:
-				_touch_index = touch.index
-				_begin(touch.position)
-		elif touch.index == _touch_index:
-			_touch_index = CameraRig.NO_TOUCH
-			_end(touch.position)
+		_on_touch(event as InputEventScreenTouch)
 
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if drag.index == _touch_index:
+		_touches[drag.index] = drag.position
+		if _boxing:
+			box_changed.emit(_box())
+		elif drag.index == _touch_index:
 			_moved += drag.relative.length()
 
 	elif event is InputEventMouseButton:
-		var button := event as InputEventMouseButton
-		if button.button_index != MOUSE_BUTTON_LEFT:
-			return
-		if button.pressed:
-			_mouse_down = true
-			_begin(button.position)
-		elif _mouse_down:
-			_mouse_down = false
-			_end(button.position)
+		_on_mouse_button(event as InputEventMouseButton)
 
-	elif event is InputEventMouseMotion and _mouse_down:
-		_moved += (event as InputEventMouseMotion).relative.length()
+	elif event is InputEventMouseMotion:
+		if _right_dragging:
+			box_changed.emit(_rect_between(
+					_right_drag_from, (event as InputEventMouseMotion).position))
+		elif _mouse_down:
+			_moved += (event as InputEventMouseMotion).relative.length()
+
+
+func _on_touch(touch: InputEventScreenTouch) -> void:
+	if touch.pressed:
+		_touches[touch.index] = touch.position
+		# The second finger turns whatever was happening into a box. A tap in
+		# progress is abandoned rather than also firing on release -- the player
+		# who put a second finger down did not mean to tap with the first.
+		if _touches.size() >= 2:
+			_boxing = true
+			_touch_index = CameraRig.NO_TOUCH
+			box_changed.emit(_box())
+		elif _touch_index == CameraRig.NO_TOUCH:
+			_touch_index = touch.index
+			_begin(touch.position)
+		return
+
+	# A lift. Commit the box on the FIRST finger up rather than waiting for both:
+	# the box stops meaning anything the moment one corner is gone, and waiting
+	# would let the remaining finger drag it somewhere the player did not choose.
+	if _boxing:
+		var rect := _box()
+		_touches.erase(touch.index)
+		if _touches.is_empty():
+			_boxing = false
+		_commit(rect)
+		return
+
+	_touches.erase(touch.index)
+	if touch.index == _touch_index:
+		_touch_index = CameraRig.NO_TOUCH
+		_end(touch.position)
+
+
+func _on_mouse_button(button: InputEventMouseButton) -> void:
+	match button.button_index:
+		MOUSE_BUTTON_LEFT:
+			if button.pressed:
+				_mouse_down = true
+				_begin(button.position)
+			elif _mouse_down:
+				_mouse_down = false
+				_end(button.position)
+		MOUSE_BUTTON_RIGHT:
+			if button.pressed:
+				_right_dragging = true
+				_right_drag_from = button.position
+				box_changed.emit(_rect_between(_right_drag_from, button.position))
+			elif _right_dragging:
+				_right_dragging = false
+				_commit(_rect_between(_right_drag_from, button.position))
+
+
+## The rectangle spanned by the two fingers currently down.
+func _box() -> Rect2:
+	var points := _touches.values()
+	if points.size() < 2:
+		return Rect2()
+	return _rect_between(points[0], points[1])
+
+
+func _rect_between(a: Vector2, b: Vector2) -> Rect2:
+	return Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)), (b - a).abs())
+
+
+func _commit(rect: Rect2) -> void:
+	if rect.size.x < MIN_BOX and rect.size.y < MIN_BOX:
+		box_cancelled.emit()
+		return
+	box_selected.emit(rect)
 
 
 func _begin(pos: Vector2) -> void:

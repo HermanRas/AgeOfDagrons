@@ -20,6 +20,7 @@ var _view: GameView
 var _camera: CameraRig
 var _router: InputRouter
 var _panel: SelectionPanel
+var _box: SelectionBox
 var _status: Label
 var _error: String = ""
 
@@ -56,6 +57,9 @@ func _build_world_layers() -> void:
 	_router = InputRouter.new()
 	add_child(_router)
 	_router.tapped.connect(_on_tapped)
+	_router.box_changed.connect(_on_box_changed)
+	_router.box_selected.connect(_on_box_selected)
+	_router.box_cancelled.connect(_on_box_cancelled)
 
 
 func _build_hud() -> void:
@@ -74,6 +78,9 @@ func _build_hud() -> void:
 	# the ground.
 	var hud := CanvasLayer.new()
 	add_child(hud)
+
+	_box = SelectionBox.new()
+	hud.add_child(_box)
 
 	_panel = SelectionPanel.new()
 	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -140,10 +147,37 @@ func _on_tapped(screen_pos: Vector2) -> void:
 	_refresh_panel()
 
 
+func _on_box_changed(screen_rect: Rect2) -> void:
+	_box.show_box(screen_rect)
+
+
+func _on_box_cancelled() -> void:
+	_box.hide_box()
+
+
+## Commit a box select (PLAN.md 8.3).
+##
+## The box arrives in SCREEN space and has to be converted whole, not corner by
+## corner in isolation: the canvas transform includes the camera's zoom, so the
+## rectangle changes size as well as position.
+func _on_box_selected(screen_rect: Rect2) -> void:
+	_box.hide_box()
+	if _error != "":
+		return
+
+	var to_local := _view.get_global_transform_with_canvas().affine_inverse()
+	var a: Vector2 = to_local * screen_rect.position
+	var b: Vector2 = to_local * screen_rect.end
+	var local := Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)), (b - a).abs())
+
+	_view.select(_view.units_in_box(local, Net.local_player_id()))
+	_refresh_panel()
+
+
 func _refresh_panel() -> void:
 	var primary := _view.selection.primary()
 	if primary == 0:
 		_panel.show_nothing()
 	else:
 		_panel.show_entity(_view.facts_for(primary), _view.selection.size())
-	_status.text = "tap a villager to select  |  tap the ground to move  |  drag to pan, edge-swipe to zoom"
+	_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground to move  |  drag to pan, edge-swipe to zoom"

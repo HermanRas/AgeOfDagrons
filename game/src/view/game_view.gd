@@ -145,6 +145,31 @@ func pick(local: Vector2, owner: int = 0) -> int:
 	return best
 
 
+## Every unit of `owner` standing inside a box, in LOCAL space (PLAN.md 8.3).
+##
+## **Units only, and only the owner's.** Dragging a box across your settlement and
+## catching the town centre, four trees and a deer in it is not what anyone means
+## by a box select; every RTS filters this way and the player expects it.
+##
+## Tested against each unit's ground point rather than its sprite, for the same
+## reason picking goes by tile: a sprite is mostly air above the tile it stands on,
+## so a box drawn over empty grass would catch whatever tall thing was leaning into
+## it from behind.
+func units_in_box(box: Rect2, owner: int) -> Array[int]:
+	var found: Array[int] = []
+	var ids := _facts.keys()
+	# Sorted so a box that catches more than MAX_SELECTED takes the same units on
+	# every machine, rather than whichever the Dictionary happened to yield first.
+	ids.sort()
+	for id in ids:
+		var f: Dictionary = _facts[id]
+		if not bool(f["is_unit"]) or int(f["owner_id"]) != owner:
+			continue
+		if box.has_point(Iso.tile_centre_to_world(f["tile"])):
+			found.append(int(id))
+	return found
+
+
 ## The selected entities that can actually be given a move order (PLAN.md 3.6).
 ##
 ## Filtered rather than passed whole: `MoveCommand.validate()` rejects the ENTIRE
