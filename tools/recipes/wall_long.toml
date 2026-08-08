@@ -1,0 +1,37 @@
+# Wall segment, from 0 A.D.'s Athenian stone curtain wall (long piece).
+# See wall_short.toml for why this is an ordinary single-sprite bake, not a
+# tiling problem.
+id      = "vis.wall_long"
+adapter = "zeroad"
+
+[source]
+actor = "structures/athenians/wall_long.xml"
+# simulation/templates/structures/athen/wall_long.xml: Square 37x6 world
+# units -> 18.5x3 m, on FoundationActor structures/fndn_9x3_wall.xml and
+# SpawnEntityOnDeath rubble/rubble_stone_wall_long. The gate (wall_gate.toml)
+# reuses this same foundation -- 0 A.D. pairs it with the long segment's.
+
+[render]
+# inspect measures 36.284 x 5.610 x 23.080 raw units -> 18.14 x 2.81 x 11.54 m
+# -- same height and depth as wall_short/medium, just longer again.
+# First two attempts at [608,384] and [800,384] both clipped -- the actual
+# mesh extends well past the plain footprint-box estimate (crenellations or
+# coping overhang, not accounted for by the (length+depth) formula). Cleared
+# only once wall_medium.toml's equivalent recipe was widened *and* heightened
+# together to [900,700]; scaled proportionally from that working data point.
+canvas = [1280, 704]
+supersample = 4
+directions = 1
+frame_origin_at = 0.15
+ground_clip = true
+yaw_offset_deg = 180.0
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/athenians/wall_long.xml"

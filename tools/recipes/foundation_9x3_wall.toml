@@ -1,0 +1,28 @@
+# Building site for the long wall segment, shared with the gate (0 A.D. pairs
+# wall_gate with this same foundation).
+id      = "vis.foundation_9x3_wall"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_9x3_wall.xml"
+# simulation/templates/structures/athen/wall_long.xml and wall_gate.xml both
+# declare this as their FoundationActor.
+
+[render]
+# inspect: 38 x 14 x 4.624 raw units. Slightly larger size_x than fndn_8x8.xml
+# (34 -> canvas [576,352]), extrapolated with the same per-unit slope used
+# for foundation_6x6.toml/foundation_7x7.toml earlier this session.
+canvas = [672, 416]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_9x3_wall.xml"

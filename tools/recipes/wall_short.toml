@@ -1,0 +1,40 @@
+# Wall segment, from 0 A.D.'s Athenian stone curtain wall (short piece).
+#
+# Not a fundamentally different problem from the single-sprite buildings --
+# 0 A.D.'s own WallPiece component (simulation/components/WallPiece.js) places
+# a fixed catalog of rigid straight segments end-to-end; there is no dynamic
+# mesh tiling to reproduce. wall_short/medium/long are simply three more
+# actors of this shape, and the corner piece reuses vis.tower's existing bake
+# (wall_tower.xml, already baked) rather than needing its own -- 0 A.D. has no
+# separate angled corner mesh, the square tower doubles as the corner by
+# placement convention. See ASSET_MISSING.md.
+id      = "vis.wall_short"
+adapter = "zeroad"
+
+[source]
+actor = "structures/athenians/wall_short.xml"
+# simulation/templates/structures/athen/wall_short.xml: Square 13x6 world
+# units -> 6.5x3 m, on FoundationActor structures/fndn_3x3_wall.xml and
+# SpawnEntityOnDeath rubble/rubble_stone_wall_short.
+
+[render]
+# inspect measures 12.417 x 5.610 x 23.080 raw units -> 6.21 x 2.81 x 11.54 m.
+# Tall and narrow like the wall tower (tower.toml, canvas [256,448] for a
+# similar height), not footprint-diamond-dominated like the low buildings, so
+# frame_origin_at sits near the top of a generous canvas.
+canvas = [288, 384]
+supersample = 4
+directions = 1
+frame_origin_at = 0.15
+ground_clip = true
+yaw_offset_deg = 180.0
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/athenians/wall_short.xml"

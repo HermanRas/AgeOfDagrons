@@ -1,0 +1,27 @@
+# Building site for the medium wall segment.
+id      = "vis.foundation_6x3_wall"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_6x3_wall.xml"
+# simulation/templates/structures/athen/wall_medium.xml declares this as its
+# FoundationActor.
+
+[render]
+# inspect: 26 x 14 x 4.624 raw units -- same size_x as fndn_6x6.xml
+# (canvas [448,288]) but narrower along depth, so reusing that canvas is safe
+# margin, not a tight fit.
+canvas = [448, 288]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_6x3_wall.xml"

@@ -1,0 +1,28 @@
+# Building site for the short wall segment -- a distinct actor from
+# fndn_3x3.xml/fndn_3x3_tower.xml (0 A.D. gives walls their own foundation
+# prop set), even though inspect measures the same footprint and height.
+id      = "vis.foundation_3x3_wall"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_3x3_wall.xml"
+# simulation/templates/structures/athen/wall_short.xml declares this as its
+# FoundationActor.
+
+[render]
+# inspect: 15.041 x 14.129 x 4.624 raw units -- identical measurements to
+# fndn_3x3.xml/fndn_3x3_tower.xml, so reusing their calibrated canvas.
+canvas = [320, 208]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_3x3_wall.xml"
