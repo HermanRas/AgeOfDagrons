@@ -24,6 +24,12 @@ var _next_id: int = 1
 var _pending: Array[Command] = []
 var _systems: Array[SimSystem] = []
 
+## Ids despawned THIS tick, for SnapshotSystem's `removed[]` (PLAN.md 7.2).
+## Cleared at the top of step() rather than drained by the first reader, so
+## every player's snapshot this tick sees the same list (SimHost calls
+## SnapshotSystem.build() once per player per tick).
+var removed_this_tick: Array[int] = []
+
 
 func setup(cfg: MatchConfig) -> void:
 	tick = 0
@@ -34,13 +40,17 @@ func setup(cfg: MatchConfig) -> void:
 	paths = PathService.new()
 	_next_id = 1
 	_pending.clear()
+	removed_this_tick.clear()
 	# Order is load-bearing: a command lands, its path is planned, MOVE is retired
 	# if it already finished, GATHER/RETURN/BUILD act if they have arrived -- and
 	# only then does everyone move, so an action that starts a new route this tick
 	# (a load handed off, a build finished) is walked the same tick rather than
-	# costing an extra one of visible delay.
+	# costing an extra one of visible delay. DeathSystem runs last: it reacts to
+	# hp reaching 0 (a debug command, later combat), and everything else this tick
+	# has already had its say about a unit or building that is now gone.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), MovementSystem.new()]
+			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), MovementSystem.new(),
+			DeathSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
@@ -51,6 +61,7 @@ func setup(cfg: MatchConfig) -> void:
 
 func step() -> void:
 	tick += 1
+	removed_this_tick.clear()
 	for s in _systems:
 		s.process_tick(self)
 
@@ -176,18 +187,28 @@ func spawn_resource_node(def_id: StringName, tile: Vector2i, size_class: int = 0
 func despawn(id: int) -> void:
 	if not entities.has(id):
 		return
-	# Grab the footprint BEFORE the entity goes, or there is nothing left to work
-	# out which tiles the pathfinder needs to re-read.
-	var freed := _footprint_of(entities[id])
 	# Free the grid before dropping the entity: occupancy is keyed by id, so once
 	# it is out of `entities` there is nothing left to look its footprint up from
 	# and the tiles would stay claimed forever by a building that no longer exists.
-	if map != null:
-		map.clear_occupant(id)
+	free_footprint(id)
 	spatial.remove(id)
 	entities.erase(id)
 	if paths != null:
 		paths.cancel(id)          # a queued search for a dead unit is wasted work
+	removed_this_tick.append(id)
+
+
+## Frees the tiles an entity holds in the occupancy grid without removing the
+## entity itself. A destroyed building (5.5) keeps existing as rubble -- still in
+## `entities`, still drawn -- but must stop blocking placement and pathing the
+## instant it falls, same as despawn() would free them for a building that is
+## gone entirely.
+func free_footprint(id: int) -> void:
+	if not entities.has(id):
+		return
+	var freed := _footprint_of(entities[id])
+	if map != null:
+		map.clear_occupant(id)
 	_occupancy_changed(freed)
 
 

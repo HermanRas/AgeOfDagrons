@@ -16,12 +16,12 @@ func after_each() -> void:
 
 
 func _entity(id: int, def_id: String, tile: Vector2i, owner := 1,
-		footprint := Vector2i.ONE) -> Dictionary:
+		footprint := Vector2i.ONE, alive := true) -> Dictionary:
 	var centre := tile * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE / 2, SimWorld.SUBTILE / 2)
 	if footprint != Vector2i.ONE:
 		centre = SimBuilding.centre_of(tile, footprint)
 	var d := {"id": id, "def_id": def_id, "owner_id": owner, "hp": 30, "max_hp": 30,
-			"pos": {"x": centre.x, "y": centre.y}}
+			"alive": alive, "pos": {"x": centre.x, "y": centre.y}}
 	if footprint != Vector2i.ONE:
 		d["footprint"] = {"x": footprint.x, "y": footprint.y}
 		d["phase"] = SimBuilding.Phase.COMPLETE
@@ -77,6 +77,20 @@ func test_a_dead_entity_drops_out_of_the_selection() -> void:
 	assert_eq(view.selection.current(), [1] as Array[int])
 
 
+## A corpse/rubble (4.7, 5.5) is `alive == false` but stays in the snapshot for a
+## while -- the "still here, just dead" case `removed[]` alone cannot cover.
+func test_a_corpse_drops_out_of_the_selection_the_tick_it_dies() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(6, 5))])
+	view.select([1, 2] as Array[int])
+
+	view.apply_snapshot({"tick": 2, "updated": [
+			_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(6, 5), 1, Vector2i.ONE, false)], "removed": []})
+	assert_eq(view.selection.current(), [1] as Array[int])
+	assert_false(view.pool.get_view(2).selected, "no ring on a corpse")
+
+
 # ── picking (4.3) ──────────────────────────────────────────────────────────
 
 func test_tapping_a_units_own_tile_selects_it() -> void:
@@ -122,6 +136,16 @@ func test_picking_can_be_limited_to_one_players_things() -> void:
 	_populate([_entity(4, "unit.villager", Vector2i(5, 5), 2)])
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(5, 5)), 1), 0, "not mine")
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(5, 5)), 2), 4, "theirs")
+
+
+func test_a_corpse_cannot_be_picked() -> void:
+	_populate([_entity(7, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(5, 5))), 0)
+
+
+func test_rubble_cannot_be_picked() -> void:
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8), false)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(10, 10))), 0)
 
 
 # ── what can be given a move order (3.6) ───────────────────────────────────
@@ -200,6 +224,13 @@ func test_a_box_ignores_other_players_units() -> void:
 func test_a_box_over_empty_ground_selects_nothing() -> void:
 	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
 	assert_true(view.units_in_box(_box_over(Vector2i(40, 40), Vector2i(44, 44)), 1).is_empty())
+
+
+func test_a_box_ignores_a_corpse() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false),
+			_entity(2, "unit.villager", Vector2i(6, 6))])
+	assert_eq(view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(7, 7)), 1),
+			[2] as Array[int])
 
 
 func test_a_box_result_is_ordered_so_it_is_the_same_on_every_machine() -> void:

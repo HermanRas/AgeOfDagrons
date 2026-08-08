@@ -33,6 +33,8 @@ static func from_dict(d: Dictionary) -> Command:
 			return TrainCommand.from_dict(d)
 		"cancel_production":
 			return CancelProductionCommand.from_dict(d)
+		"debug_destroy":
+			return DebugDestroyCommand.from_dict(d)
 		_:
 			push_error("Command.from_dict: unknown type %s" % d.get("type"))
 			return null

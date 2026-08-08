@@ -28,6 +28,15 @@ var gather_node_id: int = 0
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 
+## Ticks left as a corpse before DeathSystem despawns it (PLAN.md 4.7): 60 s of
+## corpse plus a 10 s fade, at SimClock's 10 ticks/sec. -1 means "not dead" --
+## DeathSystem reads that sentinel to tell a fresh death from one it has already
+## set up, since `alive` alone cannot: it goes false exactly once, but the tick
+## it does is the one tick DeathSystem must react to rather than just count down.
+const CORPSE_TOTAL_TICKS := 700
+const CORPSE_FADE_TICKS := 100
+var corpse_ticks_left: int = -1
+
 
 ## True between asking PathService for a route and being given one (PLAN.md 4.2 --
 ## searches are budgeted, so the answer can be a few ticks late). A unit waits
@@ -149,4 +158,7 @@ static func centre_of_tile(t: Vector2i) -> Vector2i:
 func to_snapshot() -> Dictionary:
 	var d := super()
 	d["task"] = int(task)
+	d["anim"] = anim
+	d["facing"] = facing
+	d["corpse_ticks_left"] = corpse_ticks_left
 	return d

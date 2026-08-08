@@ -54,6 +54,17 @@ var health_pct: float = 1.0
 var selected: bool = false
 var team_color: Color = Color.WHITE
 
+## True once the entity behind this view is a corpse or rubble (PLAN.md 4.7,
+## 5.5): no selection ring, no health dot, and slowly transparent via
+## `modulate` rather than by hiding outright, so a fading corpse is still
+## visible mid-fade instead of popping straight to gone.
+var dead: bool = false:
+	set(value):
+		if dead == value:
+			return
+		dead = value
+		queue_redraw()
+
 var _visual: AtlasEntry = null
 var _from_pos: Vector2 = Vector2.ZERO
 var _to_pos: Vector2 = Vector2.ZERO
@@ -129,7 +140,21 @@ func play_anim(name: StringName, p_facing: int) -> void:
 
 
 func set_health_dot(pct: float) -> void:
+	if health_pct == pct:
+		return
 	health_pct = pct
+	queue_redraw()
+
+
+func set_dead(value: bool) -> void:
+	dead = value
+
+
+## 1.0 is fully opaque; PLAN.md 4.7's 10 s corpse fade rides this down to 0
+## before DeathSystem despawns it. GameView only ever passes anything but 1.0
+## for a unit corpse -- rubble (5.5) has no fade timer and stays opaque.
+func set_corpse_fade(alpha: float) -> void:
+	modulate.a = alpha
 
 
 func set_selected(on: bool) -> void:
@@ -201,9 +226,27 @@ func _draw_selection_ring() -> void:
 	draw_polyline(points, RING_COLOR, RING_WIDTH, true)
 
 
+## Small dot above the sprite, coloured by HealthDot's thresholds (4.6). Hidden
+## at full health and on a corpse/rubble -- a dead thing is not "healthy", it is
+## not a combat participant any more, and 5.6's rubble has no damage tiers to
+## report once it has fallen.
+const HEALTH_DOT_RADIUS := 4.0
+const HEALTH_DOT_GAP := 4.0
+
+
+func _draw_health_dot() -> void:
+	if dead or health_pct >= 1.0:
+		return
+	var spec := GameDataRegistry.placeholder_for(visual_id)
+	var above := draw_offset + Iso.height_to_world(spec.height_m) \
+			- Vector2(0.0, HEALTH_DOT_RADIUS + HEALTH_DOT_GAP)
+	draw_circle(above, HEALTH_DOT_RADIUS, HealthDot.color_for(health_pct))
+
+
 func _draw() -> void:
 	if selected:
 		_draw_selection_ring()
+	_draw_health_dot()
 
 	var vis := visual()
 

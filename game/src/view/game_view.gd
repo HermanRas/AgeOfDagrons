@@ -73,6 +73,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if max_hp > 0.0:
 			view.set_health_dot(float(entry.get("hp", 0)) / max_hp)
 
+		var alive := bool(entry.get("alive", true))
+		view.set_dead(not alive)
+		# Only a unit's snapshot carries corpse_ticks_left (SimUnit.to_snapshot);
+		# rubble (5.5) has no fade timer and stays fully opaque forever.
+		if entry.has("corpse_ticks_left") and int(entry["corpse_ticks_left"]) >= 0:
+			view.set_corpse_fade(clampf(
+					float(entry["corpse_ticks_left"]) / float(SimUnit.CORPSE_FADE_TICKS), 0.0, 1.0))
+		else:
+			view.set_corpse_fade(1.0)
+		if entry.has("anim"):
+			view.play_anim(StringName(entry["anim"]), int(entry.get("facing", 0)))
+
 		var def_id := StringName(entry.get("def_id", ""))
 		_facts[id] = {
 			"id": id,
@@ -81,6 +93,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 			"def_id": def_id,
 			"hp": int(entry.get("hp", 0)),
 			"max_hp": int(max_hp),
+			"alive": alive,
 			"footprint": _footprint_of(entry),
 			# Asked of the registry rather than guessed from the snapshot's shape.
 			# Inferring "no phase field means a unit" would call a resource node a
@@ -95,15 +108,22 @@ func apply_snapshot(snap: Dictionary) -> void:
 			"queue_len": int(entry.get("queue_len", 0)),
 			"queue_fraction": float(entry.get("queue_fraction", 0.0)),
 		}
-		view.set_selected(selection.contains(id))
+		# A corpse or rubble is unselectable (4.7, 5.5) even if it was selected
+		# the tick it died -- `alive` wins over a selection built before this.
+		view.set_selected(alive and selection.contains(id))
 
 	for id in snap.get("removed", []):
 		pool.release(int(id))
 		_facts.erase(int(id))
 
-	# A selection holding a unit that has just died would build an order naming an
-	# entity the sim rejects, and the player would see nothing happen at all.
-	selection.retain_only(_facts.keys())
+	# A selection holding a unit that has just died -- or fully despawned --
+	# would build an order naming an entity the sim rejects, and the player
+	# would see nothing happen at all.
+	var selectable: Array[int] = []
+	for fid in _facts:
+		if bool(_facts[fid].get("alive", true)):
+			selectable.append(int(fid))
+	selection.retain_only(selectable)
 
 
 ## Facts about one entity, or {} if it is not currently in view.
@@ -143,6 +163,8 @@ func pick(local: Vector2, owner: int = 0) -> int:
 	var best_is_unit := false
 	for id in _facts:
 		var f: Dictionary = _facts[id]
+		if not bool(f.get("alive", true)):
+			continue          # a corpse or rubble is unselectable (4.7, 5.5)
 		if owner != 0 and int(f["owner_id"]) != owner:
 			continue
 		if not _covers(f, tile):
@@ -172,6 +194,8 @@ func units_in_box(box: Rect2, owner: int) -> Array[int]:
 	ids.sort()
 	for id in ids:
 		var f: Dictionary = _facts[id]
+		if not bool(f.get("alive", true)):
+			continue          # a corpse is unselectable (4.7)
 		if not bool(f["is_unit"]) or int(f["owner_id"]) != owner:
 			continue
 		if box.has_point(Iso.tile_centre_to_world(f["tile"])):
@@ -200,6 +224,8 @@ func villager_counts(owner: int) -> Vector2i:
 	var idle := 0
 	var total := 0
 	for f in _facts.values():
+		if not bool(f.get("alive", true)):
+			continue          # a corpse (4.7) is not a villager to count any more
 		if not bool(f.get("is_unit", false)) or int(f.get("owner_id", 0)) != owner:
 			continue
 		total += 1

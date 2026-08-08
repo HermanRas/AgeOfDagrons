@@ -5,19 +5,25 @@
 ## broadcasting it crosses the sim/net boundary, so whoever hosts the match
 ## (SimHost) calls build() once after each world.step().
 ##
-## Fog-of-war filtering (VisionSystem) doesn't exist yet, so every entity is
-## sent as "updated" every tick rather than a real spawned/updated/removed
-## delta against the last acknowledged tick -- correct but not bandwidth-
-## efficient. player_id is already part of the signature so the real
+## Fog-of-war filtering (VisionSystem) doesn't exist yet, so every entity still
+## in `entities` is sent as "updated" every tick rather than a real
+## spawned/updated delta against the last acknowledged tick -- correct but not
+## bandwidth-efficient. player_id is already part of the signature so the real
 ## per-player filter slots in here without changing call sites.
+##
+## `updated` deliberately includes dead entities still hanging around --
+## a unit's corpse (4.7) and a building's rubble (5.5) are `alive == false` but
+## must keep rendering until DeathSystem actually despawns them. `removed` is a
+## real list, unlike `updated`: it is SimWorld.removed_this_tick, so the view can
+## tell "still here, just dead" from "actually gone" and free the pooled view only
+## for the latter.
 class_name SnapshotSystem
 extends RefCounted
 
 static func build(w: SimWorld, _player_id: int) -> Dictionary:
 	var updated: Array[Dictionary] = []
 	for e in w.entities.values():
-		if e.alive:
-			updated.append(e.to_snapshot())
+		updated.append(e.to_snapshot())
 
 	var player_state: Dictionary = {}
 	for p in w.players:
@@ -32,6 +38,6 @@ static func build(w: SimWorld, _player_id: int) -> Dictionary:
 		"tick": w.tick,
 		"spawned": [],
 		"updated": updated,
-		"removed": [],
+		"removed": w.removed_this_tick.duplicate(),
 		"player_state": player_state,
 	}

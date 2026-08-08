@@ -14,7 +14,10 @@ func process_tick(w: SimWorld) -> void:
 		if not (e is SimBuilding):
 			continue
 		var b: SimBuilding = e
-		if b.queue.is_empty():
+		# Rubble (5.5) stays in `entities` indefinitely with whatever queue it had
+		# going -- without this a destroyed town centre would keep training
+		# villagers out of its own wreckage forever.
+		if not b.alive or b.queue.is_empty():
 			continue
 
 		var front: Dictionary = b.queue[0]

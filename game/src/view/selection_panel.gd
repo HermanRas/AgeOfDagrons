@@ -16,15 +16,11 @@
 class_name SelectionPanel
 extends PanelContainer
 
-const HURT_COLOR := Color(1.0, 0.7, 0.25)
-const CRITICAL_COLOR := Color(1.0, 0.35, 0.3)
-## Matches the health-dot thresholds at 4.6 so one entity is never described as
-## hurt in one place and healthy in another.
-const HURT_FRACTION := 0.5
-const CRITICAL_FRACTION := 0.25
-
 signal train_requested(building_id: int, unit_def_id: StringName)
 signal cancel_requested(building_id: int, index: int)
+## Debug-only (PLAN.md 5.5): instantly destroys whatever is selected, since MVP
+## has no combat to bring hp to 0 any other way.
+signal debug_destroy_requested(target_id: int)
 
 var _title: Label
 var _detail: Label
@@ -35,6 +31,8 @@ var _cancel_button: Button
 
 var _building_id: int = 0
 var _trainable: StringName = &""
+var _selected_id: int = 0
+var _destroy_button: Button
 
 
 func _ready() -> void:
@@ -64,12 +62,18 @@ func _ready() -> void:
 	_cancel_button.pressed.connect(_on_cancel_pressed)
 	_train_row.add_child(_cancel_button)
 
+	_destroy_button = Button.new()
+	_destroy_button.text = "Destroy (debug)"
+	_destroy_button.pressed.connect(_on_destroy_pressed)
+	box.add_child(_destroy_button)
+
 	show_nothing()
 
 
 func show_nothing() -> void:
 	visible = false
 	_train_row.visible = false
+	_destroy_button.visible = false
 
 
 ## Populate from one entity, plus how many are selected in total. `is_mine`
@@ -82,6 +86,7 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 		return
 
 	visible = true
+	_selected_id = int(facts.get("id", 0))
 	var def_id: StringName = facts.get("def_id", &"")
 	_title.text = _display_name(def_id)
 	if selected_count > 1:
@@ -94,14 +99,15 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 	else:
 		_detail.text = "%d / %d" % [hp, max_hp]
 		var fraction := float(hp) / float(max_hp)
-		if fraction <= CRITICAL_FRACTION:
-			_detail.add_theme_color_override("font_color", CRITICAL_COLOR)
-		elif fraction <= HURT_FRACTION:
-			_detail.add_theme_color_override("font_color", HURT_COLOR)
+		if fraction <= HealthDot.CRITICAL_FRACTION:
+			_detail.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+		elif fraction <= HealthDot.HURT_FRACTION:
+			_detail.add_theme_color_override("font_color", HealthDot.HURT_COLOR)
 		else:
 			_detail.remove_theme_color_override("font_color")
 
 	_update_training_row(facts, selected_count, is_mine)
+	_destroy_button.visible = is_mine and _selected_id != 0
 
 
 func _update_training_row(facts: Dictionary, selected_count: int, is_mine: bool) -> void:
@@ -137,6 +143,11 @@ func _on_train_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	if _building_id != 0:
 		cancel_requested.emit(_building_id, 0)          # always the front entry
+
+
+func _on_destroy_pressed() -> void:
+	if _selected_id != 0:
+		debug_destroy_requested.emit(_selected_id)
 
 
 ## The authored name from units.json / buildings.json, falling back to a tidied

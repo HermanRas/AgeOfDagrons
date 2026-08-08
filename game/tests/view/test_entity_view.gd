@@ -112,3 +112,21 @@ func test_interpolation_still_works_now_that_advance_also_drives_the_clock() -> 
 	view.set_target_transform(Vector2(100, 0), 1)
 	view.advance(EntityView.INTERP_SECONDS)
 	assert_almost_eq(view.position.x, 100.0, 0.01)
+
+
+# ── health dot and death (4.6, 4.7) ──────────────────────────────────────────
+
+func test_set_health_dot_stores_the_fraction() -> void:
+	view.set_health_dot(0.4)
+	assert_almost_eq(view.health_pct, 0.4, 0.001)
+
+
+func test_set_dead_marks_the_view_dead() -> void:
+	assert_false(view.dead)
+	view.set_dead(true)
+	assert_true(view.dead)
+
+
+func test_set_corpse_fade_drives_modulate_alpha() -> void:
+	view.set_corpse_fade(0.25)
+	assert_almost_eq(view.modulate.a, 0.25, 0.001)

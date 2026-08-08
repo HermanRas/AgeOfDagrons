@@ -100,8 +100,15 @@ func _build_hud() -> void:
 	_panel = SelectionPanel.new()
 	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_panel.position = Vector2(16, -104)
+	# Anchored at a bottom-left POINT, so by default the panel would grow
+	# downward off-screen as rows are added (found live at 4.6/5.5: the new
+	# Destroy button pushed a building's panel, with its extra Train row, past
+	# the bottom edge). Growing upward instead keeps its bottom edge fixed
+	# regardless of how many rows the selected entity's panel shows.
+	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_panel.train_requested.connect(_on_train_requested)
 	_panel.cancel_requested.connect(_on_cancel_requested)
+	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
 	hud.add_child(_panel)
 
 	_hud = ResourceHUD.new()
@@ -300,6 +307,10 @@ func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 
 func _on_cancel_requested(building_id: int, index: int) -> void:
 	Net.submit_command(CancelProductionCommand.new(Net.local_player_id(), building_id, index))
+
+
+func _on_debug_destroy_requested(target_id: int) -> void:
+	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
 
 
 func _on_box_changed(screen_rect: Rect2) -> void:
