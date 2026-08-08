@@ -75,6 +75,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 		var def_id := StringName(entry.get("def_id", ""))
 		_facts[id] = {
+			"id": id,
 			"tile": Vector2i(sub_pos / SimWorld.SUBTILE),
 			"owner_id": int(entry.get("owner_id", 0)),
 			"def_id": def_id,
@@ -89,6 +90,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# resource node entry, where it defaults to IDLE and is never read since
 			# villager_counts() already filters those out by is_unit.
 			"task": int(entry.get("task", SimUnit.Task.IDLE)),
+			# Present only on buildings (SimBuilding.to_snapshot); 0 elsewhere, which
+			# reads correctly as "nothing queued" rather than needing its own guard.
+			"queue_len": int(entry.get("queue_len", 0)),
+			"queue_fraction": float(entry.get("queue_fraction", 0.0)),
 		}
 		view.set_selected(selection.contains(id))
 

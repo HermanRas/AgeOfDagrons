@@ -40,7 +40,7 @@ func setup(cfg: MatchConfig) -> void:
 	# (a load handed off, a build finished) is walked the same tick rather than
 	# costing an extra one of visible delay.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(), MovementSystem.new()]
+			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), MovementSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
@@ -320,10 +320,13 @@ func state_hash() -> int:
 					e.task_target_id, e.gather_node_id, e.carry_kind, e.carry_amount,
 					e.gather_cooldown])
 		elif e is SimBuilding:
-			# BuildSystem (4.4) now advances this at runtime rather than only at
-			# spawn, so two clients whose villagers built at different rates would
-			# hash identically without it.
-			parts.append([e.phase, e.build_progress])
+			# BuildSystem (4.4) now advances build_progress at runtime rather than
+			# only at spawn, and ProductionSystem (5.4) advances queue -- two
+			# clients diverging in either would otherwise hash identically.
+			var q: Array = []
+			for entry in e.queue:
+				q.append([entry.get("def_id", &""), entry.get("progress", 0), entry.get("ready", false)])
+			parts.append([e.phase, e.build_progress, q])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

@@ -25,6 +25,12 @@ var _hud: ResourceHUD
 var _status: Label
 var _error: String = ""
 
+## Which building the next tap will try to place, or "" for ordinary tap
+## handling. Set by the build buttons, cleared by a successful placement or
+## the Cancel Build button.
+var _placing_def_id: StringName = &""
+var _ghost: PlacementGhost
+
 
 func _ready() -> void:
 	# A full-rect Control defaults to MOUSE_FILTER_STOP and would swallow every
@@ -51,6 +57,10 @@ func _ready() -> void:
 func _build_world_layers() -> void:
 	_view = GameView.new()
 	add_child(_view)
+
+	_ghost = PlacementGhost.new()
+	_ghost.visible = false
+	_view.add_child(_ghost)
 
 	_camera = CameraRig.new()
 	add_child(_camera)
@@ -87,6 +97,8 @@ func _build_hud() -> void:
 	_panel = SelectionPanel.new()
 	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_panel.position = Vector2(16, -104)
+	_panel.train_requested.connect(_on_train_requested)
+	_panel.cancel_requested.connect(_on_cancel_requested)
 	hud.add_child(_panel)
 
 	_hud = ResourceHUD.new()
@@ -94,8 +106,27 @@ func _build_hud() -> void:
 	_hud.position = Vector2(-320, 12)
 	hud.add_child(_hud)
 
+	var build_row := HBoxContainer.new()
+	build_row.position = Vector2(16, 40)
+	hud.add_child(build_row)
+
+	var house_btn := Button.new()
+	house_btn.text = "Build House"
+	house_btn.pressed.connect(_enter_placement.bind(&"building.house"))
+	build_row.add_child(house_btn)
+
+	var tc_btn := Button.new()
+	tc_btn.text = "Build Town Centre"
+	tc_btn.pressed.connect(_enter_placement.bind(&"building.town_center"))
+	build_row.add_child(tc_btn)
+
+	var cancel_build_btn := Button.new()
+	cancel_build_btn.text = "Cancel Build"
+	cancel_build_btn.pressed.connect(_exit_placement)
+	build_row.add_child(cancel_build_btn)
+
 	_status = Label.new()
-	_status.position = Vector2(16, 12)
+	_status.position = Vector2(16, 72)
 	hud.add_child(_status)
 
 
@@ -152,6 +183,10 @@ func _on_tapped(screen_pos: Vector2) -> void:
 		return
 	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
 
+	if _placing_def_id != &"":
+		_attempt_placement(local)
+		return
+
 	var mine := _view.pick(local, Net.local_player_id())
 	if mine != 0:
 		var picked: Array[int] = [mine]
@@ -166,6 +201,73 @@ func _on_tapped(screen_pos: Vector2) -> void:
 
 	_view.select([] as Array[int])
 	_refresh_panel()
+
+
+## Enters placement mode for `def_id` (PLAN.md 5.1). The next tap on the map
+## either places it or flashes red -- see `_attempt_placement()`.
+func _enter_placement(def_id: StringName) -> void:
+	_placing_def_id = def_id
+	_status.text = "tap the ground to place a %s  |  Cancel Build to stop" % \
+			_display_name(def_id)
+
+
+func _exit_placement() -> void:
+	_placing_def_id = &""
+	_ghost.visible = false
+	_refresh_panel()
+
+
+## Tap-to-place (PLAN.md 5.1): the tapped tile becomes the footprint's
+## TOP-LEFT corner -- snapped to the grid by construction, since there is no
+## fractional tile. **Known simplification**: there is no live ghost following
+## a drag; CameraRig already claims a one-finger drag for panning, and giving
+## placement its own continuous position feed would mean the two gestures
+## fighting over the same finger. So this previews and commits in one tap: a
+## valid tap places immediately and leaves build mode, an invalid one shows the
+## ghost red for a moment and stays in build mode so the player can try again.
+##
+## Reads `Net.host().world` directly -- the same documented solo-only exception
+## `_start_match()` already uses, not a new hole in the view/sim boundary.
+func _attempt_placement(local: Vector2) -> void:
+	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
+	if bd == null:
+		_exit_placement()
+		return
+
+	var world: SimWorld = Net.host().world
+	var player := world.player_for(Net.local_player_id())
+	var origin := Iso.tile_at(local)
+	var rect := SimMap.footprint_rect(origin, bd.footprint)
+	var valid := player != null and player.can_afford(bd.cost) and world.map.can_place_building(rect)
+
+	var centre := Vector2(origin) + Vector2(bd.footprint) * 0.5
+	_ghost.position = Iso.tile_to_world_f(centre)
+	_ghost.set_state(Vector2(bd.footprint) * Iso.METRES_PER_TILE, valid)
+	_ghost.visible = true
+
+	if valid:
+		Net.submit_command(PlaceBuildingCommand.new(Net.local_player_id(), _placing_def_id, origin))
+		_exit_placement()
+		return
+
+	# A flash, not a permanent red ghost: it stays long enough to read as "no",
+	# then clears so the next attempt starts from a blank slate.
+	get_tree().create_timer(0.3).timeout.connect(func() -> void:
+		if _placing_def_id != &"":
+			_ghost.visible = false)
+
+
+func _display_name(def_id: StringName) -> String:
+	var bd: BuildingDef = GameDataRegistry.building(def_id)
+	return bd.name if bd != null and not bd.name.is_empty() else String(def_id)
+
+
+func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
+	Net.submit_command(TrainCommand.new(Net.local_player_id(), building_id, unit_def_id))
+
+
+func _on_cancel_requested(building_id: int, index: int) -> void:
+	Net.submit_command(CancelProductionCommand.new(Net.local_player_id(), building_id, index))
 
 
 func _on_box_changed(screen_rect: Rect2) -> void:
@@ -200,5 +302,9 @@ func _refresh_panel() -> void:
 	if primary == 0:
 		_panel.show_nothing()
 	else:
-		_panel.show_entity(_view.facts_for(primary), _view.selection.size())
-	_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground to move  |  drag to pan, edge-swipe to zoom"
+		var facts := _view.facts_for(primary)
+		var is_mine := int(facts.get("owner_id", 0)) == Net.local_player_id()
+		_panel.show_entity(facts, _view.selection.size(), is_mine)
+
+	if _placing_def_id == &"":
+		_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground to move  |  drag to pan, edge-swipe to zoom"

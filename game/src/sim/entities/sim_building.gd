@@ -29,6 +29,15 @@ var build_total: int = 0
 var provides_pop: int = 0
 var garrison_cap: int = 0
 
+## Training queue (5.4). Each entry is {def_id, progress, total, ready, cost}.
+## `cost` is snapshotted at enqueue time rather than re-read from UnitDef later,
+## so a cancel always refunds exactly what was paid, even though nothing in MVP
+## (no techs, no age discounts) would currently make the two disagree. Only the
+## FRONT entry ever progresses -- one production line per building, same as
+## every RTS this is modelled on -- so entries behind it need no state of their
+## own until they reach the front.
+var queue: Array[Dictionary] = []
+
 
 ## The top-left tile of the footprint. Derived from `pos` rather than stored, so
 ## the two can never disagree.
@@ -80,4 +89,36 @@ func to_snapshot() -> Dictionary:
 	d["phase"] = int(phase)
 	d["footprint"] = {"x": footprint.x, "y": footprint.y}
 	d["build_fraction"] = build_fraction()
+	d["queue_len"] = queue.size()
+	d["queue_fraction"] = training_fraction()
 	return d
+
+
+## Adds a training order to the back of the queue.
+func enqueue_training(def_id: StringName, build_time_ticks: int, cost: Dictionary) -> void:
+	queue.append({
+		"def_id": def_id,
+		"progress": 0,
+		"total": maxi(1, build_time_ticks),
+		"ready": false,
+		"cost": cost,
+	})
+
+
+## Removes and returns the entry at `index`, or {} if out of range. The caller
+## (CancelProductionCommand) is what refunds its cost -- this only owns the
+## queue itself.
+func cancel_training(index: int) -> Dictionary:
+	if index < 0 or index >= queue.size():
+		return {}
+	return queue.pop_at(index)
+
+
+## The front entry's progress as 0..1, for a queue progress bar. 0 with nothing
+## queued, matching build_fraction()'s "nothing to show" convention rather than
+## a divide-by-zero.
+func training_fraction() -> float:
+	if queue.is_empty():
+		return 0.0
+	var front: Dictionary = queue[0]
+	return clampf(float(front.get("progress", 0)) / float(front.get("total", 1)), 0.0, 1.0)

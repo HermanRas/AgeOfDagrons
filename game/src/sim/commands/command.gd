@@ -27,6 +27,12 @@ static func from_dict(d: Dictionary) -> Command:
 			return GatherCommand.from_dict(d)
 		"build":
 			return BuildCommand.from_dict(d)
+		"place_building":
+			return PlaceBuildingCommand.from_dict(d)
+		"train":
+			return TrainCommand.from_dict(d)
+		"cancel_production":
+			return CancelProductionCommand.from_dict(d)
 		_:
 			push_error("Command.from_dict: unknown type %s" % d.get("type"))
 			return null
