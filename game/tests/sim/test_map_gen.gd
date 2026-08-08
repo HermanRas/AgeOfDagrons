@@ -250,12 +250,15 @@ func test_remaining_fraction_reports_depletion() -> void:
 func test_build_progress_moves_through_the_phases_and_reports_completion() -> void:
 	var b := SimBuilding.new()
 	b.build_total = 100
+	b.max_hp = 550
 	assert_eq(b.phase, SimBuilding.Phase.FOUNDATION)
 	assert_false(b.add_build_progress(40), "not done yet")
 	assert_eq(b.phase, SimBuilding.Phase.UNDER_CONSTRUCTION)
 	assert_almost_eq(b.build_fraction(), 0.4)
+	assert_eq(b.hp, 220, "hp rises with build progress, not stuck at the starting sliver")
 	assert_true(b.add_build_progress(60), "returns true on the tick it completes")
 	assert_eq(b.phase, SimBuilding.Phase.COMPLETE)
+	assert_eq(b.hp, 550, "full hp on completion, not left short by a rounding remainder")
 	assert_false(b.add_build_progress(10), "and does not complete twice")
 	assert_eq(b.build_progress, 100, "progress does not overshoot the total")
 

@@ -59,6 +59,16 @@ static func centre_of(origin: Vector2i, p_footprint: Vector2i) -> Vector2i:
 
 ## Advance construction. Returns true on the tick it completes, so 5.2 can fire
 ## `building.complete` audio and flip the visual without polling for the change.
+##
+## `hp` rises WITH build_fraction() rather than sitting at spawn_building()'s
+## starting sliver for the whole construction -- found live (a session
+## playtest) reporting a house stuck at 55/550 the entire time it was being
+## built, only jumping to full at completion. The health bar is the only
+## build-progress indicator SelectionPanel currently draws (5.6), so it has
+## to actually move for a foundation to read as "under way" rather than
+## "damaged and static". Forced to exactly max_hp on completion rather than
+## trusting the fraction's rounding, so a finished building is never left one
+## hp short of full by an integer-division remainder.
 func add_build_progress(amount: int) -> bool:
 	if phase == Phase.COMPLETE or phase == Phase.DESTROYED:
 		return false
@@ -67,7 +77,9 @@ func add_build_progress(amount: int) -> bool:
 		phase = Phase.UNDER_CONSTRUCTION
 	if build_total > 0 and build_progress >= build_total:
 		phase = Phase.COMPLETE
+		hp = max_hp
 		return true
+	hp = maxi(1, int(float(max_hp) * build_fraction()))
 	return false
 
 
