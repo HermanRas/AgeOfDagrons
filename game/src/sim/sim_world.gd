@@ -360,6 +360,9 @@ func state_hash() -> int:
 		var stock: Array = []
 		for k in stock_keys:
 			stock.append([k, p.stock[k]])
-		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock])
+		# SetControlGroupCommand (10.2) mutates SimPlayer state -- two clients
+		# applying it differently would otherwise hash identically right up until
+		# a reselect or reconnect (10.6) exposed the divergence.
+		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups])
 
 	return hash(parts)

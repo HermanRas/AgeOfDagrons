@@ -216,6 +216,63 @@ func movable_selection() -> Array[int]:
 	return movable
 
 
+## Currently alive members of a control group (PLAN.md 10.1/10.5) -- membership
+## itself is server-authoritative (`SimPlayer.control_groups`), but whether a
+## given member is still alive and in view is exactly what `_facts` already
+## answers for ordinary selection, so control groups reuse it rather than
+## asking the sim again.
+func control_group_alive_members(member_ids: Array) -> Array[int]:
+	var alive: Array[int] = []
+	for id in member_ids:
+		if bool(_facts.get(int(id), {}).get("alive", false)):
+			alive.append(int(id))
+	return alive
+
+
+## Icon def_id (most-represented among currently alive members, 10.4) and live
+## count for a control group. Icon is `&""` once every member has died --
+## `ControlGroupsHud` reads that as "draw an empty circle" rather than needing
+## a separate emptied signal.
+func control_group_summary(member_ids: Array) -> Dictionary:
+	var tally: Dictionary = {}          # StringName def_id -> int count
+	var alive_count := 0
+	for id in member_ids:
+		var f: Dictionary = _facts.get(int(id), {})
+		if f.is_empty() or not bool(f.get("alive", true)):
+			continue
+		alive_count += 1
+		var def_id: StringName = f.get("def_id", &"")
+		tally[def_id] = int(tally.get(def_id, 0)) + 1
+
+	var best_def: StringName = &""
+	var best_n := 0
+	var keys := tally.keys()
+	keys.sort()          # deterministic tie-break, same convention as nearest_drop_off
+	for def_id in keys:
+		if int(tally[def_id]) > best_n:
+			best_def = def_id
+			best_n = int(tally[def_id])
+
+	return {"icon": best_def, "count": alive_count}
+
+
+## World-space centre of a control group's currently alive members, or null if
+## none are left. "Centre on the area with most units" (10.5) is just their
+## average position for MVP's scale -- a group clustered in one spot centres
+## there, and real clustering is not worth building until a group can actually
+## be split across two fights at once.
+func control_group_centre(member_ids: Array) -> Variant:
+	var sum := Vector2.ZERO
+	var n := 0
+	for id in member_ids:
+		var f: Dictionary = _facts.get(int(id), {})
+		if f.is_empty() or not bool(f.get("alive", true)):
+			continue
+		sum += Iso.tile_centre_to_world(f["tile"])
+		n += 1
+	return sum / float(n) if n > 0 else null
+
+
 ## Idle vs. total units belonging to `owner`, for the population counter
 ## (PLAN.md 7.1). By unit-ness rather than by `unit.villager` specifically --
 ## MVP has exactly one unit type, so today the two questions have the same

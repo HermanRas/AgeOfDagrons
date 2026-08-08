@@ -260,6 +260,58 @@ func test_a_box_selection_draws_rings_on_all_of_them() -> void:
 
 # ── the ring ───────────────────────────────────────────────────────────────
 
+## ── control groups (PLAN.md 10.1/10.4/10.5) ─────────────────────────────────
+
+func test_control_group_alive_members_drops_the_dead_and_the_unseen() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(6, 5), 1, Vector2i.ONE, false)])
+	assert_eq(view.control_group_alive_members([1, 2, 999]), [1] as Array[int])
+
+
+func test_control_group_summary_picks_the_most_represented_alive_def() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5)),
+		_entity(2, "unit.villager", Vector2i(6, 5)),
+		_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+	])
+	var summary := view.control_group_summary([1, 2, 3])
+	assert_eq(summary["icon"], &"unit.villager")
+	assert_eq(summary["count"], 3)
+
+
+func test_control_group_summary_ignores_dead_members_for_both_icon_and_count() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false),
+		_entity(2, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+	])
+	var summary := view.control_group_summary([1, 2])
+	assert_eq(summary["icon"], &"building.town_center")
+	assert_eq(summary["count"], 1)
+
+
+func test_control_group_summary_is_empty_once_every_member_is_dead() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	var summary := view.control_group_summary([1])
+	assert_eq(summary["icon"], &"")
+	assert_eq(summary["count"], 0)
+
+
+func test_control_group_centre_averages_alive_members_positions() -> void:
+	_populate([
+		_entity(1, "unit.villager", Vector2i(4, 4)),
+		_entity(2, "unit.villager", Vector2i(6, 4)),
+	])
+	var centre = view.control_group_centre([1, 2])
+	var expected := (Iso.tile_centre_to_world(Vector2i(4, 4)) + Iso.tile_centre_to_world(Vector2i(6, 4))) * 0.5
+	assert_almost_eq(centre.x, expected.x, 0.01)
+	assert_almost_eq(centre.y, expected.y, 0.01)
+
+
+func test_control_group_centre_is_null_with_nothing_alive() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	assert_null(view.control_group_centre([1]))
+
+
 func test_selecting_marks_the_view_and_deselecting_clears_it() -> void:
 	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
 			_entity(2, "unit.villager", Vector2i(6, 5))])

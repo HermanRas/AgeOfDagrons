@@ -95,9 +95,9 @@ Note the burial was **deeper than the pixel estimate suggested** — 2.53 m unde
 | Panel frames, buttons, bars | 🟨 SOURCED | itch.io dragon packs already in `UI_Sprites/`. A.5 |
 | Fonts | 🟨 SOURCED | `uı-fonts` pack. Ships **inside the APK** |
 | Resource icons (stone, gold, wood, food, villager) | ⬜ TODO | 5 icons. Check dragon pack coverage first, else simple originals |
-| Unit/building portrait icons | ⬜ TODO | Needed for selection panel + control group slots. Can crop from unit sprites |
-| Control-group slot frames (empty + filled) | 🟨 SOURCED | Dragon pack circular frames |
-| Selection ring / health dot | ⬜ TODO | Trivial originals — draw in-engine |
+| Unit/building portrait icons | 🟦 **BAKED (control-group slots only)** | Control-group icons crop the S-facing static frame straight out of the unit's own baked atlas (`ControlGroupsHud._icon_texture_for()`) rather than needing separate portrait art. Selection-panel portraits are still TODO |
+| Control-group slot frames (empty + filled) | ✅ **DONE** | Kibyra dragon-pack ring, copied to `game/assets/ui/control_groups/group_slot_ring.png` (see `game/assets/LICENCES.md`). One ring art for both states; empty vs. filled is a placeholder-grey vs. real-icon fill, not two separate ring textures |
+| Selection ring / health dot | ✅ **DONE** | Drawn in-engine: `EntityView._draw_selection_ring()` (4.3) and `EntityView._draw_health_dot()` (4.6) |
 
 ### 1.6 Audio — MVP
 

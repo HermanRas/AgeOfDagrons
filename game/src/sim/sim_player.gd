@@ -4,6 +4,10 @@
 class_name SimPlayer
 extends RefCounted
 
+## PLAN.md 10.1: fixed at 5, not configurable -- the HUD is a fixed vertical
+## stack of 5 slots, not a scrollable list.
+const CONTROL_GROUP_COUNT := 5
+
 var id: int = 0
 var peer_id: int = 0                 # 1 = host's own local player
 var faction: StringName = &""
@@ -14,7 +18,7 @@ var pop_used: int = 0
 var pop_cap: int = 0
 var age: int = 1
 var researched: Dictionary = {}
-var control_groups: Array = [[], [], [], [], []]
+var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 var defeated: bool = false
 
 

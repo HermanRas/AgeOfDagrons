@@ -22,8 +22,16 @@ var _router: InputRouter
 var _panel: SelectionPanel
 var _box: SelectionBox
 var _hud: ResourceHUD
+var _groups_hud: ControlGroupsHud
 var _status: Label
 var _error: String = ""
+
+## Last snapshot's control groups for the local player (PLAN.md 10.6):
+## `Array[Array[int]]`, one entry per `SimPlayer.CONTROL_GROUP_COUNT` slot.
+## Cached here because both `_refresh_hud()` (icon/count) and a slot tap
+## (reselect) need "what does slot N currently hold" without re-reading the
+## snapshot dict each time.
+var _control_groups: Array = []
 
 ## Which building the next tap will try to place, or "" for ordinary tap
 ## handling. Set by the build buttons, cleared by a successful placement or
@@ -116,8 +124,18 @@ func _build_hud() -> void:
 	_hud.position = Vector2(-320, 12)
 	hud.add_child(_hud)
 
+	_groups_hud = ControlGroupsHud.new()
+	_groups_hud.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_groups_hud.position = Vector2(12, 12)
+	_groups_hud.group_selected.connect(_on_group_selected)
+	_groups_hud.group_assign_requested.connect(_on_group_assign_requested)
+	hud.add_child(_groups_hud)
+
+	# Past the control-group stack (12 + 64 px wide) rather than under it --
+	# these are dev/debug controls, not part of UI_Design.md's layout, so they
+	# just need to stay out of its way.
 	var build_row := HBoxContainer.new()
-	build_row.position = Vector2(16, 40)
+	build_row.position = Vector2(96, 16)
 	hud.add_child(build_row)
 
 	var house_btn := Button.new()
@@ -136,7 +154,7 @@ func _build_hud() -> void:
 	build_row.add_child(cancel_build_btn)
 
 	_status = Label.new()
-	_status.position = Vector2(16, 72)
+	_status.position = Vector2(96, 48)
 	hud.add_child(_status)
 
 
@@ -165,9 +183,10 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_refresh_hud(snap)
 
 
-## Pushes 7.1's two counter signals out through EventBus. GameScene is what
-## happens to receive the snapshot, but the HUD does not need to know that --
-## see EventBus's own header for why that indirection is worth keeping.
+## Pushes 7.1's two counter signals, plus 10.1's per-slot control-group signal,
+## out through EventBus. GameScene is what happens to receive the snapshot,
+## but the HUDs do not need to know that -- see EventBus's own header for why
+## that indirection is worth keeping.
 func _refresh_hud(snap: Dictionary) -> void:
 	var player_id := Net.local_player_id()
 	var player_state: Dictionary = snap.get("player_state", {})
@@ -176,6 +195,15 @@ func _refresh_hud(snap: Dictionary) -> void:
 
 	var counts := _view.villager_counts(player_id)
 	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
+
+	# SimPlayer.control_groups is the authoritative membership (10.6); icon and
+	# live count are derived here each tick from GameView's facts, the same
+	# division of labour as villager_counts() above.
+	_control_groups = mine.get("control_groups", [])
+	for slot in range(SimPlayer.CONTROL_GROUP_COUNT):
+		var members: Array = _control_groups[slot] if slot < _control_groups.size() else []
+		var summary := _view.control_group_summary(members)
+		EventBus.control_group_changed.emit(slot, summary["icon"], summary["count"])
 
 
 ## Tap handling, in priority order (PLAN.md 3.6, 4.3):
@@ -311,6 +339,50 @@ func _on_cancel_requested(building_id: int, index: int) -> void:
 
 func _on_debug_destroy_requested(target_id: int) -> void:
 	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
+
+
+## Single tap (mobile) or a plain digit key (desktop): reselect the group and
+## recentre the camera on wherever most of it currently is (PLAN.md 10.5).
+## Silently does nothing for an empty/all-dead group -- there is nothing to
+## select or centre on.
+func _on_group_selected(slot: int) -> void:
+	if slot < 0 or slot >= _control_groups.size():
+		return
+	var alive := _view.control_group_alive_members(_control_groups[slot])
+	if alive.is_empty():
+		return
+	_view.select(alive)
+	_refresh_panel()
+	var centre = _view.control_group_centre(_control_groups[slot])
+	if centre != null:
+		_camera.centre_on(centre)
+
+
+## Double tap (mobile) or Ctrl+digit (desktop): assign whatever is currently
+## selected to the slot (PLAN.md 10.2). A no-op with nothing selected --
+## `SetControlGroupCommand.validate()` rejects an empty assignment rather than
+## clearing the slot, see that command's own header.
+func _on_group_assign_requested(slot: int) -> void:
+	var current := _view.selection.current()
+	if current.is_empty():
+		return
+	Net.submit_command(SetControlGroupCommand.new(Net.local_player_id(), slot, current))
+
+
+## PC control-group hotkeys (PLAN.md 10 session note): plain 1-5 reselects,
+## Ctrl+1-5 assigns -- mobile's single/double-tap on the HUD icon are the same
+## two actions under different input, so both paths end at the same handlers.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if _error != "" or not (event is InputEventKey) or not event.is_pressed() or event.is_echo():
+		return
+	var key := event as InputEventKey
+	if key.keycode < KEY_1 or key.keycode > KEY_5:
+		return
+	var slot := int(key.keycode) - int(KEY_1)
+	if key.ctrl_pressed:
+		_on_group_assign_requested(slot)
+	else:
+		_on_group_selected(slot)
 
 
 func _on_box_changed(screen_rect: Rect2) -> void:

@@ -1249,12 +1249,12 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 
 | # | Item | Tag |
 |---|---|---|
-| 10.1 | 5 circular slots, empty state, `ControlGroups` UI wired to `EventBus` | **[MVP]** |
-| 10.2 | Two-finger box select Ã¢â€ â€™ double-tap a slot to assign (`SetControlGroupCommand`) | **[MVP]** |
-| 10.3 | Double-tap a unit Ã¢â€ â€™ select all of that type on screen; double-tap slot to assign | **[MVP]** |
-| 10.4 | Slot icon = most-represented unit type; reverts to empty circle when emptied | **[MVP]** |
-| 10.5 | Single tap selects the group; double tap centres camera on it | **[MVP]** |
-| 10.6 | Groups persist in `SimPlayer`, survive reconnect (Ã‚Â§7.1) | **[MVP]** |
+| 10.1 | ✅ **DONE** -- `ControlGroupsHud` (`src/view/control_groups_hud.gd`): 5 `ControlGroupSlot` buttons stacked top-left per `UI_Design.md`, each a Kibyra dragon-ring frame (`game/assets/ui/control_groups/group_slot_ring.png`, gitignored -- see `game/assets/LICENCES.md`) around an icon cropped straight from the entity's own baked battle sprite (no separate portrait art exists yet). Reads only `EventBus.control_group_changed(slot, icon, count)`, matching `ResourceHUD`'s read-only-from-EventBus convention | **[MVP]** |
+| 10.2 | ✅ **DONE, simplified** -- session decision: double-tapping a slot always assigns whatever is currently selected (`SetControlGroupCommand`), regardless of how that selection was made (tap, box, or an existing group). The box-select-specific pairing originally sketched here is subsumed by that one rule rather than built as a separate path | **[MVP]** |
+| 10.3 | ⬜ **DROPPED, superseded by 10.2's simplification** -- double-tap-a-unit-to-select-its-type was an alternate way INTO an assignment that 10.2's single "double-tap the slot assigns the current selection" rule already covers for any selection, box or otherwise. Not needed as a separate gesture; revisit only if playtesting shows a real gap | -- |
+| 10.4 | ✅ **DONE** -- `GameView.control_group_summary()` tallies def_id across a group's currently-alive members (deterministic tie-break: sorted def_id keys, same convention as `nearest_drop_off`) and returns `&""` once every member has died; `ControlGroupSlot` draws that as an empty circle. Verified live: killing a slot's sole member reverted it to empty the same tick | **[MVP]** |
+| 10.5 | ✅ **DONE, merged per session decision** -- single tap both reselects the group AND recentres the camera on it in one action (`GameView.control_group_centre()`, the average world position of currently-alive members -- "the area with most units" at MVP's one-army scale), rather than splitting select/recentre across single/double tap. Double tap is reserved entirely for 10.2's assign. `DoubleTapDetector` (`src/view/double_tap_detector.gd`) disambiguates the two off pure timestamps, deferring the single-tap action by its own window so a completed double-tap never also fires a reselect. PC hotkeys mirror it: plain 1-5 selects, Ctrl+1-5 assigns (`GameScene._unhandled_key_input`) | **[MVP]** |
+| 10.6 | ✅ **DONE** -- `SimPlayer.control_groups` (`Array[Array[int]]`, 5 slots) is mutated only by `SetControlGroupCommand.apply()`, validated like every other command (owned, alive, non-empty), folded into `state_hash()`, and rides `player_state` in every snapshot (`SnapshotSystem.build()`) -- the same channel stock/pop/age already use, so a rejoining client picks it back up for free rather than needing a separate resync path | **[MVP]** |
 
 ### Phase 11 Ã¢â‚¬â€ Win conditions *(IDEA phase 11)*
 

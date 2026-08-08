@@ -19,3 +19,12 @@ signal resources_changed(player_id: int, stock: Dictionary)
 ## it is a headcount over units, which lives on the view side (GameView.villager_
 ## counts()), not in the snapshot's player_state block.
 signal villagers_changed(player_id: int, idle: int, total: int)
+
+## PLAN.md 10.1: one slot's display state. `icon` is the def_id of whichever
+## unit/building type is most represented in the group's currently-alive
+## members (10.4), or `&""` once every member has died -- ControlGroupsHud
+## reads that as "draw an empty circle" rather than needing a separate
+## emptied signal. GameScene computes this from SimPlayer.control_groups
+## (server-authoritative, 10.6) crossed with GameView's live facts, the same
+## division of labour resources_changed/villagers_changed already use.
+signal control_group_changed(slot: int, icon: StringName, count: int)

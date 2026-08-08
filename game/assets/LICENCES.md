@@ -118,6 +118,7 @@ is a licence constraint, and someone will otherwise "fix" it by committing them.
 | HUD icon source sheets | `Icons/Icons_sheet_500x500.png`, `Icons/MapIcons_500x100.png` | The sheets the individual 100×100 icons were cut from, plus `Icons/icons.txt` and `Icons/map_icons.txt` describing them. Working sources, like the root `UI_Design*.jpg` references — the cut icons under `game/assets/ui/icons/` are what ships. Kept so the 5×5 sheet's remaining empty slots can be filled from the same artwork |
 | 0 A.D. source art | `art_source/` (outside the repo) | ~11 GB shallow clone; a build input, never redistributed |
 | Baked atlases | `art_work/out/` (outside the repo) | Build output. Reproducible from the committed recipes plus `isobake` |
+| Control-group slot ring (PLAN.md 10.1) | `game/assets/ui/control_groups/group_slot_ring.png` | Copied locally from `UI_Sprites/UI_dragon-huds/dragon-huds/rounded-bars/rounded-bar-transparent.png` (renamed on copy to avoid confusion with the actual rounded HP/mana/stamina bars in that same folder). Same Kibyra redistribution restriction as the row above; gitignored, each developer re-copies it from their own `UI_Sprites/` download |
 
 ---
 

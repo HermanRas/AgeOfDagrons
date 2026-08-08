@@ -59,6 +59,12 @@ build/
 packs/
 game/assets/atlases/
 
+# Kibyra UI pack art copied locally from UI_Sprites/ for use in the built game
+# (permitted) but not for redistribution of the originals via git (not
+# permitted -- see game/assets/LICENCES.md). Each developer re-copies from
+# their own UI_Sprites/ download; see the source path noted where it is used.
+game/assets/ui/control_groups/
+
 # ─────────────────────────────────────────────────────────────
 # Python tooling
 # ─────────────────────────────────────────────────────────────
@@ -99,3 +105,4 @@ ehthumbs.db
 .idea/
 *.swp
 *~
+.claude/settings.json
