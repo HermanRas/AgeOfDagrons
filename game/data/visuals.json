@@ -33,6 +33,24 @@
     }
   },
 
+  "terrain.dirt": {
+    "atlas": "res://assets/atlases/terrain.dirt.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#6b5a3c"
+    }
+  },
+
+  "terrain.sand": {
+    "atlas": "res://assets/atlases/terrain.sand.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#c2b280"
+    }
+  },
+
   "vis.villager": {
     "atlas": "res://assets/atlases/vis.villager.atlas.json",
     "placeholder": {
