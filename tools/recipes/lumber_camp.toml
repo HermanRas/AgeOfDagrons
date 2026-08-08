@@ -1,0 +1,30 @@
+# Lumber camp (ASSET_MISSING.md `vis.lumber_camp`), from 0 A.D.'s Hellenic
+# storehouse -- their only generic resource-drop-off building; 0 A.D. does not
+# distinguish a wood store from an ore store, so `vis.mining_camp` is the same
+# actor. Flagged rather than silently duplicated: if lumber and mining camps
+# need to read as different buildings, that is a source-picking decision for
+# the project owner, not one to make unasked. See ASSET_MISSING.md.
+id      = "vis.lumber_camp"
+adapter = "zeroad"
+
+[source]
+actor = "structures/hellenes/storehouse.xml"
+
+[render]
+# inspect measures 16.280 raw units tall -> 8.14 m; footprint (Square 15x16
+# world units -> 7.5x8 m, per simulation/templates/structures/athen/storehouse.xml).
+canvas = [320, 288]
+supersample = 4
+directions = 1
+frame_origin_at = 0.42
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/hellenes/storehouse.xml"

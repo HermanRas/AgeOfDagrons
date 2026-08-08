@@ -1,0 +1,31 @@
+# Wonder, from 0 A.D.'s Athenian Parthenon (`temple_epic`).
+#
+# simulation/templates/structures/athen/wonder.xml names this actor directly
+# and its own Footprint (28x58 world units -> 14x29 m) makes it by far the
+# largest asset in the project: nearly 4x the town centre's footprint.
+id      = "vis.wonder"
+adapter = "zeroad"
+
+[source]
+actor = "structures/hellenes/temple_epic.xml"
+
+[render]
+# inspect measures 35.358 raw units tall -> 17.68 m, and the 14x29 m footprint
+# is long rather than square, so the isometric diamond is wide: roughly
+# (14+29)*cos(45)*22.627 =~ 690 px before margin. Canvas is generous pending a
+# real measurement.
+canvas = [896, 576]
+supersample = 4
+directions = 1
+frame_origin_at = 0.35
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/hellenes/temple_epic.xml"

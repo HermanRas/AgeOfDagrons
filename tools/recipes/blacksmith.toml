@@ -1,0 +1,27 @@
+# Blacksmith, from 0 A.D.'s Hellenic forge (Athenians declare no override, per
+# simulation/templates/structures/athen/forge.xml -- Emporion-style naming
+# aside, the sim template calls this entity "forge"; ASSET_MISSING.md's
+# `vis.blacksmith` ID is kept for readability).
+id      = "vis.blacksmith"
+adapter = "zeroad"
+
+[source]
+actor = "structures/hellenes/blacksmith.xml"
+
+[render]
+# inspect measures 13.629 raw units tall -> 6.81 m.
+canvas = [320, 288]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/hellenes/blacksmith.xml"

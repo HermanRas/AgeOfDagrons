@@ -1,0 +1,27 @@
+# Defensive tower, from 0 A.D.'s Athenian wall tower.
+id      = "vis.tower"
+adapter = "zeroad"
+
+[source]
+actor = "structures/athenians/wall_tower.xml"
+
+[render]
+# inspect measures 29.618 raw units tall -> 14.81 m, tallest of this batch, on
+# a narrow 4x4 m footprint (Square 8x8 world units, per
+# simulation/templates/structures/athen/wall_tower.xml). Canvas is portrait
+# rather than the roughly-square shape the other buildings use.
+canvas = [256, 448]
+supersample = 4
+directions = 1
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/athenians/wall_tower.xml"

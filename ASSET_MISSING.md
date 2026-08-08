@@ -137,22 +137,22 @@ Each needs `idle`, `walk`, `attack`, `die`, `decay` × 5 directions.
 
 ### 2.2 Buildings — full roster
 
-All need foundation / construction / complete / damaged / rubble.
+All need foundation / construction / complete / damaged / rubble. **Complete state baked for 9 of 12** — mapped from `simulation/templates/structures/athen/*.xml`, which names the actor, footprint and rubble directly for every one of these, so none of it was guesswork. Foundation and rubble are the next pass; most reuse a size already baked or share one bake across several buildings, per §1.2's shared-by-footprint-size rule.
 
-| Asset | Status |
-|---|---|
-| `vis.barracks` | ⬜ TODO |
-| `vis.archery_range` | ⬜ TODO |
-| `vis.stable` | ⬜ TODO |
-| `vis.blacksmith` | ⬜ TODO |
-| `vis.market` | ⬜ TODO |
-| `vis.mill` | ⬜ TODO |
-| `vis.lumber_camp` | ⬜ TODO |
-| `vis.mining_camp` | ⬜ TODO |
-| `vis.tower` | ⬜ TODO |
-| `vis.castle` | ⬜ TODO |
-| `vis.wall` + gate | ⬜ TODO | Needs segment/corner tiling set |
-| `vis.wonder` | ⬜ TODO | If wonder victory is implemented |
+| Asset | Status | Notes |
+|---|---|---|
+| `vis.barracks` | 🟦 **BAKED** | `structures/athenians/barracks.xml`, 334×231 px. Rubble shares `rubble_stone_5x5` with range/stable/market; foundation needs `fndn_6x6` (not yet baked). Recipe: `tools/recipes/barracks.toml` |
+| `vis.archery_range` | 🟦 **BAKED** | `structures/hellenes/range.xml` (Athenians declare no override), 384×267 px. Rubble shares `rubble_stone_5x5`; foundation needs `fndn_7x7` (not yet baked, shared with stable). Recipe: `tools/recipes/archery_range.toml` |
+| `vis.stable` | 🟦 **BAKED** | `structures/hellenes/stable.xml`, 336×218 px. Ships a horse mesh with its own armature purely as static dressing — caught a real bug in `render.ground_clip`'s new safety check, which refused any skinned subject; fixed to key off whether a clip is actually played (isobake, this session), since a static recipe never assigns one and the rest pose is exactly as safe to cut as any frozen mesh. Rubble shares `rubble_stone_5x5`; foundation needs `fndn_7x7`. Recipe: `tools/recipes/stable.toml` |
+| `vis.blacksmith` | 🟦 **BAKED** | `structures/hellenes/blacksmith.xml` (the sim template calls this a "forge"; kept as `vis.blacksmith` for readability), 255×156 px. Rubble needs `rubble_stone_4x4` (not yet baked); foundation needs `fndn_5x5` (not yet baked). Recipe: `tools/recipes/blacksmith.toml` |
+| `vis.market` | 🟦 **BAKED** | `structures/hellenes/market.xml`, 342×210 px. Rubble shares `rubble_stone_5x5`; foundation shares `vis.foundation_8x8` (already baked). Recipe: `tools/recipes/market.toml` |
+| `vis.mill` | 🟦 **BAKED** | `structures/hellenes/farmstead.xml` — 0 A.D. has no separate mill, the farmstead is the nearest food-processing building in its roster, 247×139 px. Rubble needs `rubble_stone_4x2`; foundation needs `fndn_5x4` (neither baked yet). Recipe: `tools/recipes/mill.toml` |
+| `vis.lumber_camp` | 🟦 **BAKED** | `structures/hellenes/storehouse.xml`, 284×152 px. Rubble shares `vis.rubble_3x3` (already baked); foundation needs `fndn_3x3` (not yet baked). Recipe: `tools/recipes/lumber_camp.toml` |
+| `vis.mining_camp` | ⚠️ **NEEDS A DECISION** | 0 A.D. has exactly one generic resource storehouse, already used for `vis.lumber_camp` above — there is no second actor to distinguish a wood store from a stone/gold store. Not baked separately rather than silently duplicating: pick either (a) reuse `vis.lumber_camp`'s atlas for both IDs, or (b) source a visually distinct building (a different storehouse variant, or a non-0-A.D. asset) |
+| `vis.tower` | 🟦 **BAKED** | `structures/athenians/wall_tower.xml`, 124×240 px — the tallest, narrowest building baked so far (14.8 m on a 4 m footprint). Rubble needs `rubble_stone_wall_tower`; foundation needs `fndn_3x3_tower` (neither baked yet). Recipe: `tools/recipes/tower.toml` |
+| `vis.castle` | 🟦 **BAKED** | `structures/athenians/fortress.xml`, 383×322 px. Rubble needs `rubble_stone_6x6`; foundation shares `vis.foundation_8x8` (already baked). Recipe: `tools/recipes/castle.toml` |
+| `vis.wall` + gate | ⬜ TODO | Needs segment/corner tiling set — a different shape of problem from the single-sprite buildings above (`wall_long`/`wall_medium`/`wall_short`/`wall_gate` in `structures/athenians/`), deliberately not attempted alongside them |
+| `vis.wonder` | 🟦 **BAKED** | `structures/hellenes/temple_epic.xml` — the Parthenon, and by far the largest asset in the project: 651×506 px, a 14×29 m footprint (nearly 4× the town centre's). If wonder victory is implemented. Rubble needs `rubble_stone_6x6` (shared with the castle) — though whether a wonder should have a rubble state at all is a game-design call, not an art one. Foundation shares nothing existing (`fndn_7x15_hele`, not baked). Recipe: `tools/recipes/wonder.toml` |
 | Per-age visual variants | ⬜ TODO | Ages I–V change building appearance |
 
 ### 2.3 Resources & wildlife — full set

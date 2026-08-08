@@ -1,0 +1,31 @@
+# Barracks, from 0 A.D.'s Athenian military barracks.
+#
+# Mapping is not a guess: simulation/templates/structures/athen/barracks.xml
+# names the actor directly (structures/athenians/barracks.xml) and its own
+# Footprint (25x25 world units -> 12.5x12.5 m at this pipeline's tile-to-tile
+# scale) agrees with `isobake inspect`'s measured 26x26 raw units / 2 = 13 m.
+id      = "vis.barracks"
+adapter = "zeroad"
+
+[source]
+actor = "structures/athenians/barracks.xml"
+
+[render]
+# inspect measures 17.877 raw units tall -> 8.94 m -> 8.94*19.6 = 175 px above
+# the anchor before any buried skirt is accounted for. Canvas is generous
+# pending a real measurement; ground_clip removes whatever skirt exists first.
+canvas = [384, 320]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/athenians/barracks.xml"
