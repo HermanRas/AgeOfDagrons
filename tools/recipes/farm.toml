@@ -1,0 +1,55 @@
+# Farm -- BLOCKED, 2026-08-08. Not baked; this recipe records the dead end for
+# whoever next touches it, same treatment as deer.toml.
+#
+# structures/athen/field.xml uses structures/plot_field_medit.xml. Every field
+# variant in 0 A.D. (plot_field_temp/medit/desert/tropic/chin/3D_8x8/...)
+# scatters crop foliage the same way: one mesh with 64 plain scene-graph NODE
+# attachpoints (prop-patch, prop-patch_001, ... -- confirmed present in
+# structural/field_propped_b_8x8.dae, not missing), each meant to hold one
+# `props/flora/foliagebush.xml` instance. Baking it (even with ground_clip
+# off) renders only ONE visible foliage clump instead of 64 spread across the
+# field, plus one stray mesh far below the ground plane -- confirmed by eye on
+# an unclipped probe. This is not a 0 A.D. content defect (the attachpoints
+# genuinely exist) and not something isobake's own code is responsible for
+# either: `_attach_prop` in zeroad.py only ever runs for props declared inside
+# an *animation* variant, constrained by a `prop_<attachpoint>` *bone*: a base
+# actor's own props (this case) are the first-party Pyrogenesis Blender
+# importer's job, and this mesh has no armature at all for it to rename bones
+# on. Something in that importer's handling of many identically-sourced,
+# non-bone scatter points collapses to one instance. Fixing it means either
+# patching the Pyrogenesis importer add-on or reimplementing prop scattering
+# for non-armature NODE attachpoints in isobake itself -- both bigger than a
+# single asset bake. Every other field variant shares the same pattern, so
+# picking a different one does not sidestep it.
+id      = "vis.farm"
+adapter = "zeroad"
+
+[source]
+actor = "structures/plot_field_medit.xml"
+# simulation/templates/structures/athen/field.xml declares this actor.
+# Footprint: Square 28x28 world units -> 14x14 m, on FoundationActor
+# structures/plot_field_found.xml (a flat 17.5x17.5 m ground decal, no mesh)
+# and SpawnEntityOnDeath rubble/rubble_field, whose VisualActor is
+# structures/plot_field_fallow.xml (also a flat decal). Both foundation and
+# rubble bake fine on their own -- they carry no scattered props -- only the
+# complete state with its crop foliage is blocked.
+
+[render]
+# inspect measures 31.161 raw units tall -> 15.58 m, which is not real: it is
+# the one misplaced stray mesh (see the block comment above), not a
+# per-instance maxheight/minheight jitter range being read as geometry.
+canvas = [768, 768]
+supersample = 4
+directions = 1
+frame_origin_at = 0.5
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/plot_field_medit.xml"
