@@ -1,0 +1,27 @@
+# Sheep, from 0 A.D.'s fauna sheep1 -- herdable wildlife (ASSET_MISSING.md
+# 2.3). STATIC, same reasoning as deer.toml / boar.toml: a quadruped with its
+# own armature (23 bones) -- no clip attached, so the quadruped
+# animation-transfer bug (PLAN.md 13.2 item 8) never triggers.
+id      = "vis.sheep"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/sheep1.xml"
+
+[render]
+# `isobake inspect` measures 1.072 x 3.011 x 2.020 m raw -- essentially
+# identical to deer.xml's size, so deer.toml's canvas is a safe start.
+canvas = [128, 128]
+supersample = 4
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/sheep1.xml"

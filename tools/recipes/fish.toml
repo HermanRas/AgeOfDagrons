@@ -1,0 +1,34 @@
+# Fish, from 0 A.D.'s fauna tuna -- water resource (ASSET_MISSING.md 2.3).
+# Static mesh with an armature but no clip attached, same as boar/sheep/wolf.
+#
+# Two rejected picks first: `fauna/fish.xml` baked as an untextured,
+# wireframe-looking mesh floating well off its own ground anchor -- not a
+# usable sprite. `fauna/fish_single.xml` baked clean but at true scale
+# (0.277 m raw height, ~14 cm once scaled) it is imperceptible -- a handful
+# of pixels, unreadable as a resource node. `fauna/fish_generic.xml` is a
+# 10-object shoal-plus-circling-seagulls actor, not a single fish, so not
+# tried. Tuna is the readability pick, same principle as vis.gold_mine
+# choosing the alpine ore mesh over the civ-matching one: a real single fish,
+# large enough (2.814 m raw) to read as a fish at sprite size.
+id      = "vis.fish"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/tuna.xml"
+
+[render]
+# `isobake inspect` measures 1.162 x 2.814 x 1.116 m raw.
+canvas = [128, 96]
+supersample = 4
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/tuna.xml"

@@ -1,0 +1,32 @@
+# Boar, from 0 A.D.'s fauna boar -- aggressive wildlife (ASSET_MISSING.md
+# 2.3).
+#
+# STATIC, same reasoning as deer.toml: it's a quadruped with its own armature
+# (28 bones), and PLAN.md 13.2 item 8 already measured that 0 A.D.'s
+# quadruped animation clips do not transfer onto their own mesh (skeleton
+# ~31x size mismatch between the clip file and the mesh file). Not
+# re-diagnosed here -- this recipe just doesn't attach a clip, so the bug
+# never triggers.
+id      = "vis.boar"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/boar.xml"
+
+[render]
+# `isobake inspect` measures 1.175 x 3.639 x 1.986 m raw -- almost exactly
+# deer.xml's size (2.02 m), so deer.toml's canvas is a safe starting point.
+canvas = [128, 128]
+supersample = 4
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/boar.xml"

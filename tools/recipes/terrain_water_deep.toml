@@ -1,0 +1,26 @@
+# Ground tile from 0 A.D.'s water terrain -- "Water shallow / deep"
+# (ASSET_MISSING.md 1.4). See terrain_water_shallow.toml for the pick
+# rationale (darkest of the three water textures by 0 A.D.'s own minimap
+# colour, 13,34,129).
+id      = "terrain.water_deep"
+adapter = "terrain"
+
+[source]
+terrain = "water/water_3.xml"
+texture_metres = 2.0
+
+[render]
+canvas = [72, 40]
+supersample = 4
+directions = 1
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/terrains/water/water_3.xml"
