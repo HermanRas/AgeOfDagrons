@@ -176,7 +176,7 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 | `vis.sheep` | ⬜ TODO | Herdable |
 | `vis.fish` | ⬜ TODO | Water resource |
 | `vis.wolf` | ⬜ TODO | Hostile wildlife |
-| Tree species variants | ⬜ TODO | Pine/palm/oak for biome variety |
+| Tree species variants | 🟦 **BAKED (1 of N — snow pine)** | `vis.tree_snow_pine` baked 2026-08-08 from `flora/trees/snow_pine2.xml`, a single-`<variant>` actor (fully deterministic, unlike oak's 6-way random `<group>` — no isobake changes needed). 5 directions, 640×640 canvas (scaled up from `tree_oak.toml`'s 320×320 for the actor's ~2× raw height; scaled subject height comes out to 10.408 m, same ballpark as oak once the 0.5 scale factor applies), clean bake, no clip warning. Recipe: `tools/recipes/tree_snow_pine.toml`. Not wired into `game/data/visuals.json` yet — that edit is outside this agent's `./game` lane. Palm and additional species remain TODO |
 
 ### 2.4 Terrain — full set
 

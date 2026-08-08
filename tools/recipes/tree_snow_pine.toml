@@ -1,0 +1,31 @@
+# Snow pine from 0 A.D. -- a second tree species for biome variety
+# (ASSET_MISSING.md 2.3 "Tree species variants"). Unlike oak.xml, this actor
+# has exactly one <variant> in its one <group>: fully deterministic, no
+# isobake variant-selection feature needed.
+id      = "vis.tree_snow_pine"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/snow_pine2.xml"
+# Scale defaults to metres_per_tile / 4, same as tree_oak.toml. `isobake
+# inspect` measures this actor at 12.553 x 16.601 x 20.817 m -- about twice
+# oak's ~10 m -- so canvas is scaled up from tree_oak.toml's [320, 320]
+# accordingly.
+
+[render]
+canvas = [640, 640]
+supersample = 2
+# Conifers are less radially uniform than a rounded oak canopy but still
+# roughly symmetric; 5 stored directions matches tree_oak.toml.
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/snow_pine2.xml"
