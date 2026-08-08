@@ -1,0 +1,56 @@
+# Trebuchet (deployed), from 0 A.D.'s Hellenic lithobolos -- a torsion
+# stone-thrower, not a true counterweight trebuchet (0 A.D. has none); closest
+# analog (ASSET_MISSING.md 2.1).
+#
+# BLOCKED, 2026-08-08, same treatment as farm.toml/deer.toml: diagnosed, not a
+# quick fix. The engine has its own real mechanical rig ("Lithobolos_Armature",
+# 37 bones, wheels + throwing-arm) and its Idle/attack_ranged clips resolve
+# correctly from the actor XML -- but isobake picks `next(o for o in imported
+# if o.type == "ARMATURE")`, the FIRST armature object encountered, and for
+# this actor that is one of the five crew operators' armatures (nested props,
+# `units/hellenes/lithobolos_infantry_{a,b,c,d}.xml`), not the engine's own --
+# confirmed the crew import *before* Lithobolos_Armature appears in Blender's
+# object list, the opposite of what every other multi-armature actor baked
+# so far seemed to do. Some crew use the bone-less `m_armor_tunic_short.dae`
+# (0 bones); tried preferring "first armature with any bones" as a fix, but
+# that still failed -- one of the *other* crew members' armature datablocks
+# reports 202 bones (Blender appears to reuse/extend an existing armature
+# datablock across repeated similar imports rather than creating a fresh one
+# per crew member), more than the engine's genuine 37, so bone count is not a
+# reliable ranking here either. Reverted that attempt; isobake's `armature`
+# picking is back to plain first-found. A real fix needs a way to identify
+# "the top-level subject's own armature" structurally (e.g. by which mesh
+# imported it), not by count or order -- bigger than this pass's scope.
+id      = "vis.trebuchet"
+adapter = "zeroad"
+
+[source]
+actor = "units/hellenes/siege_lithobolos.xml"
+
+[render]
+canvas = [384, 384]
+supersample = 2
+directions = 5
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.attack]
+clip = "attack_ranged"
+frames = 12
+fps = 15
+loop = true
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/hellenes/siege_lithobolos.xml"
