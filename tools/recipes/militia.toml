@@ -1,0 +1,69 @@
+# Militia, from 0 A.D.'s Athenian slinger -- basic light skirmisher
+# (ASSET_MISSING.md 2.1).
+#
+# Not the research pick (`infantry_javelinist_a.xml`): every Athenian/Hellenic
+# javelinist and slinger except `infantry_slinger_b.xml` uses
+# `skeletal/new/m_armor_tunic_short.dae`, which imports with a bone-less
+# armature (see spearman.toml's note -- same defect, checked here first
+# rather than repeating the trial-and-error). `infantry_slinger_b.xml` uses
+# the working `m_tunic_short.dae` mesh and is the only Athenian/Hellenic
+# basic-ranged-skirmisher actor that does.
+id      = "vis.militia"
+adapter = "zeroad"
+
+[source]
+actor = "units/athenians/infantry_slinger_b.xml"
+
+[render]
+# `isobake inspect` measures 1.929 x 0.824 x 4.300 m raw -- similar scale to
+# archer.toml/monk.toml.
+canvas = [192, 192]
+supersample = 4
+# 8, not 5+mirrored: the sling is in weapon_R, one-sided (PLAN.md 2.5).
+directions = 8
+frame_origin_at = 0.25
+engine = "eevee"
+samples = 24
+
+# Clip names/files read directly from
+# art/variants/biped/base_slinger_ready.xml and death_infantry.xml. The sling
+# + slingrock props are declared inside base_slinger_ready.xml's own
+# <props>, not the top-level actor -- same "prop lives in the animation
+# variant file" pattern as the villager's gather tools.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_ranged"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/athenians/infantry_slinger_b.xml"
