@@ -1,0 +1,59 @@
+# Knight, from 0 A.D.'s Athenian cavalry swordsman -- mounted unit
+# (ASSET_MISSING.md 2.1).
+#
+# STATIC, deliberately, same treatment as vis.deer/vis.boar/vis.sheep/vis.wolf
+# -- but for a different reason than "the animation-transfer bug would tear
+# the mesh". The mount (`cavalry_swordsman_b_m.xml`) carries the rider as a
+# nested prop actor (`<prop actor="cavalry_swordsman_b_r.xml"
+# attachpoint="rider">`), and confirmed via `isobake inspect -v`: horse and
+# rider are two fully separate skeletons (the horse's own "Horse_Armature",
+# distinct from the rider's "Biped"). isobake's clip-resolution
+# (`_declared_animations`) walks only `<variant file=...>` references, never
+# `<prop actor=...>` ones, so it cannot see the rider's own animations at all
+# when `source.actor` points at the mount -- there is no existing mechanism
+# to "import actor A for geometry, resolve clips from nested actor B".
+# Animating the rider while pinning the horse static would need a real
+# isobake feature (clip-resolution against a specific nested prop actor), not
+# attempted this pass. A static combined bake still composes correctly --
+# geometry/prop attachment happens entirely during the base import, unrelated
+# to clip resolution -- so this gives one correctly-scaled, correctly-posed
+# "knight on horseback" sprite, just not animated.
+#
+# Substitute pick, not the research recommendation
+# (`cavalry_swordsman_a_r.xml`/`_a_m.xml`): the `_a` rider uses the bone-less
+# `m_armor_tunic_short.dae` (defect 1, spearman.toml's note) -- confirmed via
+# `isobake inspect`. `_b_r.xml`/`_b_m.xml` use the working `m_tunic_short.dae`
+# and are otherwise the same unit.
+id      = "vis.knight"
+adapter = "zeroad"
+
+[source]
+actor = "units/athenians/cavalry_swordsman_b_m.xml"
+# The mount's reins prop (`cav_rein_leather.xml`, attachpoint="root") is a
+# TOP-LEVEL prop of the mount actor, not nested inside another prop -- so it
+# does not hit the aspis-shield nested-root bug (defect 2): its own <mesh>
+# comes before its <props> in the same variant, so rootObject is already
+# correct by the time that recursion happens. Confirmed by reading the XML,
+# not by trial and error.
+
+[render]
+# `isobake inspect` measures the combined horse+rider actor at
+# 1.929 x 6.462 x 8.266 m raw -- by far the tallest static subject baked so
+# far bar the wonder building. Generous canvas, same approach as every other
+# new recipe this session.
+canvas = [384, 448]
+supersample = 2
+# 8, not 5+mirrored: the rider's sword is sheathed on one side (PLAN.md 2.5,
+# same reasoning as every other armed unit baked so far).
+directions = 8
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/athenians/cavalry_swordsman_b_m.xml"
