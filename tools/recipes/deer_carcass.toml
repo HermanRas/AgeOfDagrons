@@ -1,0 +1,68 @@
+# Deer carcass, requested by agent 1 in asset_request.md 2026-08-08 -- the
+# depleted-state visual for `res.deer` (PLAN.md 6.1a/6.2). `vis.deer` itself
+# ships static (see deer.toml) because of PLAN.md 13.2 item 8: 0 A.D.'s
+# quadruped clip .dae files import their own rigged figure through Blender's
+# stock COLLADA importer at a wildly different scale than the actor's own
+# mesh (through the pinned Pyrogenesis importer) -- both declare the same
+# `<unit>` but the two import paths honour it differently, so a transferred
+# pose's bone-location curves overshoot ~31x and the mesh tears.
+#
+# Fixed here, not worked around: isobake gained `anims.<name>.location_scale`
+# (recipe.py, zeroad.py) to multiply a clip's pose-bone *location* curves by a
+# measured correction factor after transfer -- exactly the fix item 8 named
+# but never implemented. Measured empirically against this specific clip
+# (0.0319, close to item 8's own 3.70/116 = 0.0319 ratio from the sibling walk
+# clip) by probing values from 0.022 to 0.045 and eyeballing the render; values
+# above ~0.032 start re-opening a gap at the neck seam. A small tear at the
+# neck/antler seam remains even at the best value found -- reads as a pose/
+# skinning-weight seam at this angle, not a location-curve scale error (it
+# does not track with the scale value), and is accepted as placeholder-quality
+# per the request's own "readability over anatomical accuracy" guidance
+# (same bar as vis.fish's tuna-over-true-fish-mesh substitution).
+#
+# This unblocks any future quadruped clip on this same source path (boar,
+# sheep, wolf, cavalry mounts) -- each would need its own measured
+# location_scale, this is not a global constant.
+id      = "vis.deer_carcass"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/deer.xml"
+# Same variant pick as vis.deer (first-of-group => male): antlers, and
+# deer_death_01.dae over the female's _02 clip for consistency with the
+# already-shipped standing sprite.
+
+[render]
+# Probed unclipped at 192x192 (see deer_carcass_probe.toml, since deleted);
+# a collapsed quadruped is wider and flatter than the standing 128x128 canvas
+# vis.deer uses, hence the bump.
+canvas = [192, 192]
+supersample = 4
+# 5 stored, mirrored to 8, same as vis.deer/vis.boar/vis.sheep/vis.wolf --
+# keeps this consistent with how the game consumes every other resource-node
+# visual, even though the collapsed pose is no longer bilaterally symmetric
+# (mirroring flips which side it fell on; accepted, still reads as "a dead
+# deer" either way).
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+[anims.carcass]
+clip = "death"
+# frames = 2, not 1: sample_positions() always puts a lone frame at position
+# 0.0 (the clip's start, near-standing); 2 is the cheapest way to also land
+# frame index 1 on position 1.0, the actual collapsed pose (same trick as
+# villager.toml's `decay`). Only frame 1 is the one that matters here.
+frames = 2
+fps = 1
+loop = false
+location_scale = 0.0319
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/deer.xml"

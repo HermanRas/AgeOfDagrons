@@ -1,0 +1,42 @@
+# Cliffs, from 0 A.D.'s Mediterranean furrowed-stone cliff face -- the
+# "Cliffs" backlog item (ASSET_MISSING.md 2.4). Civ-matching with
+# grass1/dirta/sand/medit_rocks/vis.stone_mine (all Mediterranean picks),
+# same reasoning as those: no readability problem to reject it for.
+#
+# geology/stone_mediterranean_greek_furrowed_cliff.xml, single mesh
+# (Cube_011), no armature, single variant -- deterministic, same shape of
+# recipe as stone_mine.toml.
+id      = "vis.cliff"
+adapter = "zeroad"
+
+[source]
+actor = "geology/stone_mediterranean_greek_furrowed_cliff.xml"
+# No scale override -- authored proportion of a rock formation, same
+# reasoning as stone_mine/gold_mine.
+
+[render]
+# inspect measures 11.484 x 25.569 x 27.816 m (much taller than wide/deep --
+# a vertical rock face/spire, not a squat outcrop like stone_mine). Canvas
+# interpolated from the two nearest tall/elongated precedents rather than a
+# geometric formula (isobake_canvas_sizing_by_interpolation): tower.toml's
+# vertical ratio (241 px / 14.8 m =~ 16.3 px/m) scaled to 27.816 m suggests
+# ~450 px tall before margin; wonder.toml's elongated-footprint guess
+# (896x576 for a 14x29 m base, 17.68 m tall) is the nearest footprint analog
+# but this cliff is taller for a smaller footprint. Generous pending a real
+# clip-check pass.
+canvas = [1536, 1280]
+supersample = 4
+# 5 stored, same reasoning as stone_mine/gold_mine/tree_oak -- placed
+# decoratively along map edges, several directions avoid a stamped look.
+directions = 5
+frame_origin_at = 0.4
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/geology/stone_mediterranean_greek_furrowed_cliff.xml"
