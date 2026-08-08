@@ -1,0 +1,28 @@
+# Arrow projectile, from 0 A.D.'s generic arrow prop -- ASSET_MISSING.md 2.1
+# ("Projectiles: arrow, bolt, stone; needed with CombatSystem"). A simple
+# static single-mesh prop, no armature -- none of the composite/nested-prop
+# defects found on the mounted/crewed units apply here.
+id      = "vis.projectile_arrow"
+adapter = "zeroad"
+
+[source]
+actor = "props/units/weapons/arrow_front.xml"
+
+[render]
+# `isobake inspect` measures 0.110 x 0.114 x 1.645 m raw.
+canvas = [96, 96]
+supersample = 4
+# Free-flying, not handed -- unlike every weapon prop baked so far, mirroring
+# is safe (PLAN.md 2.5).
+directions = 5
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/units/weapons/arrow_front.xml"

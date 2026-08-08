@@ -1,0 +1,26 @@
+# Stone projectile, from 0 A.D.'s siege-artillery stone prop (the same one
+# the lithobolos loads, `stone_projectile_large.xml`) -- ASSET_MISSING.md
+# 2.1. Static single-mesh prop, no armature.
+id      = "vis.projectile_stone"
+adapter = "zeroad"
+
+[source]
+actor = "props/units/siege_artillery/stone_projectile_large.xml"
+
+[render]
+# `isobake inspect` measures 0.531 x 0.540 x 0.544 m raw -- small and
+# roughly spherical.
+canvas = [64, 64]
+supersample = 4
+directions = 5
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/units/siege_artillery/stone_projectile_large.xml"
