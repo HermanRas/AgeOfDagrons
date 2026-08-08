@@ -94,7 +94,7 @@ Note the burial was **deeper than the pixel estimate suggested** — 2.53 m unde
 |---|---|---|
 | Panel frames, buttons, bars | ✅ **DONE** | Kibyra dragon-pack art integrated: main menu (`game/assets/ui/menu/`), selection/HUD panels (`game/assets/ui/hud/`) -- panel background, portrait frame, health bar, toast banner. All gitignored per-developer copies, see `game/assets/LICENCES.md`. Minimap frame still a plain drawn rectangle -- no dedicated minimap frame exists in the pack |
 | Fonts | 🟨 SOURCED | `uı-fonts` pack. Ships **inside the APK** |
-| Resource icons (stone, gold, wood, food, villager) | ⬜ TODO | 5 icons. Check dragon pack coverage first, else simple originals |
+| Resource icons (stone, gold, wood, food, villager) | ✅ **DONE** | Stale line, corrected 2026-08-08 — all 5 already exist at `game/assets/ui/icons/res_{stone,gold,wood,food,villagers}.png`, delivered as part of the AI-generated icon sheet (PLAN.md §13.2 item 4), just never reflected here |
 | Unit/building portrait icons | 🟦 **BAKED (control groups + selection panel)** | `EntityPortrait.frame_for()` (`src/view/entity_portrait.gd`) crops the S-facing static/idle frame straight out of the unit's own baked atlas -- shared by `ControlGroupSlot` (10.1/10.4) and `EntityPortraitView` (8.1a/8.1c), so no separate portrait art is needed |
 | Control-group slot frames (empty + filled) | ✅ **DONE** | Kibyra dragon-pack ring, copied to `game/assets/ui/control_groups/group_slot_ring.png` (see `game/assets/LICENCES.md`). One ring art for both states; empty vs. filled is a placeholder-grey vs. real-icon fill, not two separate ring textures |
 | Selection ring / health dot | ✅ **DONE** | Drawn in-engine: `EntityView._draw_selection_ring()` (4.3) and `EntityView._draw_health_dot()` (4.6) |
