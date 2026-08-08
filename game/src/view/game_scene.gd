@@ -72,6 +72,9 @@ func _build_world_layers() -> void:
 	_router.box_changed.connect(_on_box_changed)
 	_router.box_selected.connect(_on_box_selected)
 	_router.box_cancelled.connect(_on_box_cancelled)
+	_router.single_pressed.connect(_on_placement_pressed)
+	_router.single_drag_moved.connect(_on_placement_drag)
+	_router.single_released.connect(_on_placement_released)
 
 
 func _build_hud() -> void:
@@ -181,11 +184,15 @@ func _refresh_hud(snap: Dictionary) -> void:
 func _on_tapped(screen_pos: Vector2) -> void:
 	if _error != "":
 		return
-	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
-
+	# In build mode this tap is handled by `single_released` instead, once it
+	# fires right after this. `InputRouter` guarantees `tapped` is resolved and
+	# emitted BEFORE `single_released` for the same gesture (see its own
+	# header), so `_placing_def_id` here is still whatever it was for the tap
+	# that just happened -- never something a placement handler already
+	# changed it to for the gesture that is about to follow.
 	if _placing_def_id != &"":
-		_attempt_placement(local)
 		return
+	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
 
 	var mine := _view.pick(local, Net.local_player_id())
 	if mine != 0:
@@ -203,37 +210,71 @@ func _on_tapped(screen_pos: Vector2) -> void:
 	_refresh_panel()
 
 
-## Enters placement mode for `def_id` (PLAN.md 5.1). The next tap on the map
-## either places it or flashes red -- see `_attempt_placement()`.
+## Enters placement mode for `def_id` (PLAN.md 5.1) and locks the camera: the
+## same one finger that would otherwise pan now drags the ghost instead (see
+## `CameraRig.locked`'s own header for why that trade beats swapping pan to two
+## fingers). `_on_placement_pressed/_drag/_released` do the rest.
 func _enter_placement(def_id: StringName) -> void:
 	_placing_def_id = def_id
-	_status.text = "tap the ground to place a %s  |  Cancel Build to stop" % \
+	_camera.set_locked(true)
+	_status.text = "drag to place a %s, release to drop it  |  Cancel Build to stop" % \
 			_display_name(def_id)
 
 
 func _exit_placement() -> void:
 	_placing_def_id = &""
+	_camera.set_locked(false)
 	_ghost.visible = false
 	_refresh_panel()
 
 
-## Tap-to-place (PLAN.md 5.1): the tapped tile becomes the footprint's
-## TOP-LEFT corner -- snapped to the grid by construction, since there is no
-## fractional tile. **Known simplification**: there is no live ghost following
-## a drag; CameraRig already claims a one-finger drag for panning, and giving
-## placement its own continuous position feed would mean the two gestures
-## fighting over the same finger. So this previews and commits in one tap: a
-## valid tap places immediately and leaves build mode, an invalid one shows the
-## ghost red for a moment and stays in build mode so the player can try again.
-##
-## Reads `Net.host().world` directly -- the same documented solo-only exception
-## `_start_match()` already uses, not a new hole in the view/sim boundary.
-func _attempt_placement(local: Vector2) -> void:
-	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
-	if bd == null:
+func _on_placement_pressed(screen_pos: Vector2) -> void:
+	if _placing_def_id != &"":
+		_preview_placement(screen_pos)
+
+
+func _on_placement_drag(screen_pos: Vector2) -> void:
+	if _placing_def_id != &"":
+		_preview_placement(screen_pos)
+
+
+## The drag ends here, wherever it ends -- a stationary tap-and-release counts
+## the same as a long drag, since both arrive through `single_released`
+## (PLAN.md 5.1). Commits on a valid drop and leaves build mode; an invalid
+## drop flashes the ghost red for a moment and stays in build mode so another
+## attempt can start from the same finger-down.
+func _on_placement_released(screen_pos: Vector2) -> void:
+	if _placing_def_id == &"":
+		return
+	var result := _preview_placement(screen_pos)
+	if result.is_empty():
+		return
+	if result["valid"]:
+		Net.submit_command(PlaceBuildingCommand.new(
+				Net.local_player_id(), _placing_def_id, result["origin"]))
 		_exit_placement()
 		return
 
+	# A flash, not a permanent red ghost: it stays long enough to read as "no",
+	# then clears so the next attempt starts from a blank slate.
+	get_tree().create_timer(0.3).timeout.connect(func() -> void:
+		if _placing_def_id != &"":
+			_ghost.visible = false)
+
+
+## Moves the ghost to the tile under `screen_pos`, snapped to the grid, and
+## colours it by legality. Shared by the press/drag/release handlers so all
+## three agree on exactly the same tile for the same point.
+##
+## Reads `Net.host().world` directly -- the same documented solo-only exception
+## `_start_match()` already uses, not a new hole in the view/sim boundary.
+func _preview_placement(screen_pos: Vector2) -> Dictionary:
+	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
+	if bd == null:
+		_exit_placement()
+		return {}
+
+	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
 	var world: SimWorld = Net.host().world
 	var player := world.player_for(Net.local_player_id())
 	var origin := Iso.tile_at(local)
@@ -245,16 +286,7 @@ func _attempt_placement(local: Vector2) -> void:
 	_ghost.set_state(Vector2(bd.footprint) * Iso.METRES_PER_TILE, valid)
 	_ghost.visible = true
 
-	if valid:
-		Net.submit_command(PlaceBuildingCommand.new(Net.local_player_id(), _placing_def_id, origin))
-		_exit_placement()
-		return
-
-	# A flash, not a permanent red ghost: it stays long enough to read as "no",
-	# then clears so the next attempt starts from a blank slate.
-	get_tree().create_timer(0.3).timeout.connect(func() -> void:
-		if _placing_def_id != &"":
-			_ghost.visible = false)
+	return {"origin": origin, "valid": valid}
 
 
 func _display_name(def_id: StringName) -> String:
@@ -271,6 +303,13 @@ func _on_cancel_requested(building_id: int, index: int) -> void:
 
 
 func _on_box_changed(screen_rect: Rect2) -> void:
+	# A second finger landing mid-drag turns the gesture into a box (8.3) and
+	# abandons the single-finger tracking placement was riding -- no
+	# `single_released` will follow for it, so the ghost is left stuck showing
+	# wherever it last was unless cleared here. Build mode itself stays active;
+	# only the half-finished drag is abandoned.
+	if _placing_def_id != &"":
+		_ghost.visible = false
 	_box.show_box(screen_rect)
 
 

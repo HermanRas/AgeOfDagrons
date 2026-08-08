@@ -66,6 +66,14 @@ var _touch_index := NO_TOUCH
 var _gesture := Gesture.PAN
 var _mouse_dragging := false
 
+## While true, every touch/mouse event is ignored: no pan, no edge-swipe zoom
+## (PLAN.md 5.1). Building placement wants the same one finger CameraRig would
+## otherwise pan with, and swapping pan to two fingers instead was ruled out --
+## that is box-select's own trigger (8.3), and one-handed play needs pan
+## reachable with a single thumb. Locking the camera for the duration of
+## placement is the alternative that touches neither of those.
+var locked: bool = false
+
 ## Every finger currently down, not just the one driving the camera.
 ##
 ## The camera moves for ONE finger only. A second finger means a two-finger
@@ -219,7 +227,23 @@ static func _inside_box(centre: Vector2, bounds: Rect2, view: Vector2) -> Vector
 		middle.y if low.y > high.y else clampf(centre.y, low.y, high.y))
 
 
+## Enters or leaves the locked state, dropping whatever gesture was in
+## progress. Dropping it rather than letting it resume on unlock: a finger
+## that was mid-pan when placement started has been sitting there doing
+## nothing for the whole of it, and resuming would snap the map by however
+## far that finger drifted -- the same reasoning `_on_touch()` already applies
+## when a second finger lifts out of a box (PLAN.md 8.3).
+func set_locked(v: bool) -> void:
+	locked = v
+	if v:
+		_touch_index = NO_TOUCH
+		_touches.clear()
+		_mouse_dragging = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if locked:
+		return
 	if event is InputEventScreenTouch:
 		_on_touch(event as InputEventScreenTouch)
 	elif event is InputEventScreenDrag:

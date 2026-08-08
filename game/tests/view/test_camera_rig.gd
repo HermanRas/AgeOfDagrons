@@ -286,3 +286,69 @@ func test_without_a_map_the_camera_cannot_wander() -> void:
 	# drifting over a map that has not loaded.
 	rig.pan_by(Vector2(1000, 1000))
 	assert_eq(rig.position, Vector2.ZERO)
+
+
+# ── locking for building placement (PLAN.md 5.1) ───────────────────────────
+#
+# Exercised through synthetic InputEvents into _unhandled_input() rather than
+# through pan_by()/apply_drag() directly: `locked` guards the input plumbing
+# itself, not the pure math those two are, so there is nothing to see from the
+# pure functions alone.
+
+func _touch(index: int, pos: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var t := InputEventScreenTouch.new()
+	t.index = index
+	t.position = pos
+	t.pressed = pressed
+	return t
+
+
+func _drag(index: int, pos: Vector2, relative: Vector2) -> InputEventScreenDrag:
+	var d := InputEventScreenDrag.new()
+	d.index = index
+	d.position = pos
+	d.relative = relative
+	return d
+
+
+func test_a_locked_camera_ignores_touch_entirely() -> void:
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	var before := rig.position
+	rig.locked = true
+
+	rig._unhandled_input(_touch(0, Vector2(100, 100), true))
+	rig._unhandled_input(_drag(0, Vector2(150, 130), Vector2(50, 30)))
+
+	assert_eq(rig.position, before, "no pan while locked")
+
+
+func test_unlocking_resumes_ordinary_panning() -> void:
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	rig.locked = true
+	rig.set_locked(false)
+
+	# x = 400 rather than 100: EDGE_WIDTH is 100, and a touch AT the strip
+	# boundary would decide ZOOM instead of PAN -- this test wants an ordinary
+	# mid-screen pan, not a rerun of test_a_swipe_that_starts_on_the_edge_zooms.
+	rig._unhandled_input(_touch(0, Vector2(400, 100), true))
+	var before := rig.position
+	rig._unhandled_input(_drag(0, Vector2(450, 130), Vector2(50, 30)))
+
+	assert_true(rig.position.x < before.x, "unlocked pans exactly as it did before")
+
+
+func test_locking_drops_a_touch_in_progress_so_it_cannot_resume_on_unlock() -> void:
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+
+	rig._unhandled_input(_touch(0, Vector2(100, 100), true))    # gesture decided, mid-pan
+	rig.set_locked(true)
+	rig.set_locked(false)
+
+	var before := rig.position
+	rig._unhandled_input(_drag(0, Vector2(150, 130), Vector2(50, 30)))   # same finger index
+
+	assert_eq(rig.position, before,
+			"the touch from before the lock was dropped, not silently resumed")

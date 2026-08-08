@@ -34,6 +34,16 @@ signal box_selected(screen_rect: Rect2)
 ## The box was abandoned (too small, or cancelled) -- stop drawing it.
 signal box_cancelled()
 
+## The single-finger/mouse gesture, reported unconditionally rather than only
+## when it turns out to have been a tap -- PLAN.md 5.1's drag-to-place wants
+## the finger's position for as long as it is down, whether or not the drag
+## ever qualifies as a tap. `tapped` is unaffected and still fires only for a
+## press-and-release that stayed inside TAP_SLOP/TAP_TIME_MS; these three fire
+## alongside it for every single-finger gesture, tap or not.
+signal single_pressed(screen_pos: Vector2)
+signal single_drag_moved(screen_pos: Vector2)
+signal single_released(screen_pos: Vector2)
+
 var _touch_index := CameraRig.NO_TOUCH
 var _down_pos := Vector2.ZERO
 var _down_msec := 0
@@ -63,6 +73,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			box_changed.emit(_box())
 		elif drag.index == _touch_index:
 			_moved += drag.relative.length()
+			single_drag_moved.emit(drag.position)
 
 	elif event is InputEventMouseButton:
 		_on_mouse_button(event as InputEventMouseButton)
@@ -72,7 +83,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			box_changed.emit(_rect_between(
 					_right_drag_from, (event as InputEventMouseMotion).position))
 		elif _mouse_down:
-			_moved += (event as InputEventMouseMotion).relative.length()
+			var motion := event as InputEventMouseMotion
+			_moved += motion.relative.length()
+			single_drag_moved.emit(motion.position)
 
 
 func _on_touch(touch: InputEventScreenTouch) -> void:
@@ -149,14 +162,20 @@ func _begin(pos: Vector2) -> void:
 	_down_pos = pos
 	_down_msec = Time.get_ticks_msec()
 	_moved = 0.0
+	single_pressed.emit(pos)
 
 
 ## Accumulated travel is checked as well as start-to-end distance: a finger that
 ## wanders out and comes back has panned the map, and releasing it should not also
 ## count as a tap on wherever it happened to end up.
+##
+## `tapped` is resolved and emitted BEFORE `single_released`, not after, and the
+## order is load-bearing: a placement listener reacting to `single_released` may
+## exit build mode, and `_on_tapped` needs to see the build-mode state as it was
+## for THIS gesture, not as whatever the other handler just changed it to for the
+## next one.
 func _end(pos: Vector2) -> void:
-	if _moved > TAP_SLOP or pos.distance_to(_down_pos) > TAP_SLOP:
-		return
-	if Time.get_ticks_msec() - _down_msec > TAP_TIME_MS:
-		return
-	tapped.emit(pos)
+	if _moved <= TAP_SLOP and pos.distance_to(_down_pos) <= TAP_SLOP \
+			and Time.get_ticks_msec() - _down_msec <= TAP_TIME_MS:
+		tapped.emit(pos)
+	single_released.emit(pos)
