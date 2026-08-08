@@ -7,12 +7,19 @@ adapter = "zeroad"
 actor = "structures/hellenes/range.xml"
 
 [render]
-# inspect measures 18.914 raw units tall -> 9.46 m.
-canvas = [384, 320]
+# inspect measures 18.914 raw units tall -> 9.46 m -- already 185px at
+# height*cos(30)*ppm alone, which left only 176px of headroom at the original
+# 320/0.45 and clipped a chimney finial off the top (caught by `isobake bake`'s
+# too-small-canvas check, not by eye). Raising to 384 fixed the top but the
+# actor also has an open training-yard enclosure wider than estimated: its
+# perimeter walls were still touching both the left and right edges (568 and
+# 305 solid pixels respectively, not antialiasing noise) at 384 wide.
+canvas = [512, 384]
 supersample = 4
 directions = 1
-frame_origin_at = 0.45
+frame_origin_at = 0.4
 ground_clip = true
+yaw_offset_deg = 180.0
 engine = "eevee"
 samples = 32
 
