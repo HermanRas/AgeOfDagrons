@@ -34,10 +34,13 @@ func setup(cfg: MatchConfig) -> void:
 	paths = PathService.new()
 	_next_id = 1
 	_pending.clear()
-	# Order is load-bearing: a command lands, its path is planned, the task is
-	# retired if it already finished, and only then does the unit move. Planning
-	# after movement would cost every order a tick of visible delay.
-	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(), MovementSystem.new()]
+	# Order is load-bearing: a command lands, its path is planned, MOVE is retired
+	# if it already finished, GATHER/RETURN/BUILD act if they have arrived -- and
+	# only then does everyone move, so an action that starts a new route this tick
+	# (a load handed off, a build finished) is walked the same tick rather than
+	# costing an extra one of visible delay.
+	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
+			GatherSystem.new(), BuildSystem.new(), MovementSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
@@ -210,6 +213,40 @@ func get_entity(id: int) -> SimEntity:
 	return entities.get(id)
 
 
+func player_for(owner: int) -> SimPlayer:
+	for p in players:
+		if p.id == owner:
+			return p
+	return null
+
+
+## The nearest complete building of `owner`'s that accepts `kind`, for a loaded
+## villager heading home (6.4). Entity ids are walked in SORTED order and ties
+## broken by strict `<`, never "first found" over `entities`' own iteration order
+## -- two clients disagreeing about which of two equidistant town centres a
+## villager returns to is a desync (PLAN.md 7.1).
+func nearest_drop_off(owner: int, kind: StringName, from: Vector2i) -> SimBuilding:
+	var ids := entities.keys()
+	ids.sort()
+	var best: SimBuilding = null
+	var best_d := -1
+	for id in ids:
+		var e: SimEntity = entities[id]
+		if not (e is SimBuilding):
+			continue
+		var b: SimBuilding = e
+		if b.owner_id != owner or not b.alive or not b.is_complete():
+			continue
+		var d: BuildingDef = building_def(b.def_id)
+		if d == null or not d.accepts_drop_off(kind):
+			continue
+		var dist := (b.tile() - from).length_squared()
+		if best == null or dist < best_d:
+			best = b
+			best_d = dist
+	return best
+
+
 func entities_in_radius(tile: Vector2i, r: int) -> Array[SimEntity]:
 	var found: Array[SimEntity] = []
 	for id in spatial.query_radius(tile, r):
@@ -279,7 +316,19 @@ func state_hash() -> int:
 			# hashing where each unit is along its route catches it on the tick it
 			# happens rather than after it has been walked out (4.2).
 			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing,
-					e.path.size(), e.path_index, e.path_pending])
+					e.path.size(), e.path_index, e.path_pending,
+					e.task_target_id, e.gather_node_id, e.carry_kind, e.carry_amount,
+					e.gather_cooldown])
+		elif e is SimBuilding:
+			# BuildSystem (4.4) now advances this at runtime rather than only at
+			# spawn, so two clients whose villagers built at different rates would
+			# hash identically without it.
+			parts.append([e.phase, e.build_progress])
+		elif e is SimResourceNode:
+			# GatherSystem (6.4) depletes this at runtime; without it two clients
+			# whose villagers gathered at different rates would hash identically
+			# right up until the node ran out on one of them and not the other.
+			parts.append([e.amount])
 
 	for p in players:
 		var stock_keys := p.stock.keys()

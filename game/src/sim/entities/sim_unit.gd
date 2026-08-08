@@ -20,6 +20,11 @@ var domain: int = SimMap.Domain.LAND
 var carry_kind: StringName = &""
 var carry_amount: int = 0
 var gather_cooldown: int = 0
+## The resource node a GATHER/RETURN cycle is working. `task_target_id` points at
+## whichever entity is currently being WALKED TO -- the node while gathering, the
+## drop-off building while returning -- so this is the one field that survives the
+## switch between them (6.4).
+var gather_node_id: int = 0
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 
@@ -37,6 +42,48 @@ func set_task_move(t: Vector2i) -> void:
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
+
+
+## Walk toward a resource node and start working it on arrival (6.4). `tile` is
+## the node's own tile -- it is occupied ground, so PathService substitutes the
+## nearest tile that can actually be stood on, same as walking up to a tree (4.1).
+func set_task_gather(node_id: int, tile: Vector2i) -> void:
+	task = Task.GATHER
+	task_target_id = node_id
+	gather_node_id = node_id
+	task_target_tile = tile
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
+## Walk a load back to a drop-off building. Kept separate from set_task_gather
+## because `task_target_id` must point at the BUILDING while this is active --
+## `gather_node_id` is what remembers the node to go back to once the load lands.
+func set_task_return(building_id: int, tile: Vector2i) -> void:
+	task = Task.RETURN
+	task_target_id = building_id
+	task_target_tile = tile
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
+## Walk toward a building under construction and add progress to it on arrival.
+func set_task_build(building_id: int, tile: Vector2i) -> void:
+	task = Task.BUILD
+	task_target_id = building_id
+	task_target_tile = tile
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
+## MOVE, GATHER, RETURN and BUILD all walk somewhere before doing anything else --
+## this is PathService's and MovementSystem's test for "does this unit want a
+## route", so neither has to enumerate every task that happens to travel.
+func is_travel_task() -> bool:
+	return task == Task.MOVE or task == Task.GATHER or task == Task.RETURN or task == Task.BUILD
 
 
 ## Take a solved route. An EMPTY path means PathService found nowhere to go, which
@@ -59,6 +106,8 @@ func set_path(p: PackedVector2Array) -> void:
 func stop() -> void:
 	task = Task.IDLE
 	task_target_tile = tile()
+	task_target_id = 0
+	gather_node_id = 0
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = false

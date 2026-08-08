@@ -1,5 +1,7 @@
-## Per-unit task state machine. GATHER/BUILD/ATTACK transitions join this as their
-## systems land; for now it retires a finished move.
+## Retires a finished MOVE order. GATHER, RETURN and BUILD (4.4, 6.4) do not
+## retire here -- each owns its own arrival check in GatherSystem/BuildSystem,
+## since arriving there means "start working", not "go idle". ATTACK will join
+## this file when combat lands.
 ##
 ## Runs BEFORE MovementSystem, so a unit that arrived last tick is retired before
 ## it is asked to move again, rather than spending a tick in MOVE with nowhere left

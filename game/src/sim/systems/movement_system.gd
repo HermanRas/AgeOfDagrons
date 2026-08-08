@@ -5,6 +5,12 @@
 ## line survives only as the step between two ADJACENT tiles, where it is correct
 ## by construction.
 ##
+## Walking is orthogonal to WHY a unit is walking: GATHER and RETURN (6.4) and
+## BUILD (4.4) all cover ground on the way to doing something, so this drives any
+## unit with a route left to walk rather than switching on the task -- the systems
+## that act once a unit arrives (GatherSystem, BuildSystem) are the ones that care
+## which task it is.
+##
 ## Everything is integer sub-tile arithmetic (PLAN.md 1). `speed` is sub-units per
 ## tick, so a unit covers the same distance per tick on every machine -- the
 ## rounding below is the only place a float appears and it is rounded back
@@ -14,12 +20,12 @@ extends SimSystem
 
 func process_tick(w: SimWorld) -> void:
 	for entry in w.entities.values():
-		if not (entry is SimUnit) or entry.task != SimUnit.Task.MOVE:
+		if not (entry is SimUnit):
 			continue
 		var e: SimUnit = entry
 		# Ordered, but the search has not come back yet. Standing still for a tick
 		# or two beats setting off in a direction the route may not take.
-		if e.path_pending:
+		if e.path_pending or not e.has_waypoint():
 			continue
 		_advance(w, e)
 

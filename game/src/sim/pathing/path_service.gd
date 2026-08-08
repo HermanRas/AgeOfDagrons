@@ -121,8 +121,9 @@ func process(w: SimWorld, budget: int = MAX_SOLVES_PER_TICK) -> void:
 		solved += 1
 
 		var u := w.get_entity(id) as SimUnit
-		# Died, or was re-tasked to something that is not a move, while queued.
-		if u == null or not u.alive or u.task != SimUnit.Task.MOVE:
+		# Died, or was re-tasked to something that does not walk anywhere, while
+		# queued.
+		if u == null or not u.alive or not u.is_travel_task():
 			continue
 		u.set_path(find_path(w.map, u.tile(), to))
 

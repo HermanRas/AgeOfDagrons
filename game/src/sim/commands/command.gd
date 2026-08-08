@@ -23,6 +23,10 @@ static func from_dict(d: Dictionary) -> Command:
 			return MoveCommand.from_dict(d)
 		"stop":
 			return StopCommand.from_dict(d)
+		"gather":
+			return GatherCommand.from_dict(d)
+		"build":
+			return BuildCommand.from_dict(d)
 		_:
 			push_error("Command.from_dict: unknown type %s" % d.get("type"))
 			return null
