@@ -96,6 +96,34 @@ func test_a_unit_in_front_of_a_building_sorts_after_it() -> void:
 			"a unit behind it draws before it")
 
 
+func test_a_unit_that_ties_a_buildings_front_corner_still_sorts_after_it() -> void:
+	# Reproduced live (dev_preview/debug_render_check.gd) while wiring up 4.5's
+	# build-assist tap: a villager sent to build a house walked to the tile
+	# immediately east of its footprint and rendered BEHIND it. An even
+	# footprint's front-corner sort point sits at a HALF-tile offset
+	# (footprint_sort_offset), and that lands it on the same iso depth
+	# (x + y) as several of the tiles PathService commonly substitutes a
+	# worker onto -- here, a 4x4 house centred at tile (22, 28) sorts at the
+	# same depth as tile (24, 28), a perfectly ordinary place to stand while
+	# building it. Without a tie-break, Y-sort falls back to child order,
+	# which in practice is entity id -- and a freshly placed building almost
+	# always outranks the villager sent to it, so the tie went to the
+	# building's favour every time.
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "building.house", "footprint": {"x": 4, "y": 4},
+			"phase": SimBuilding.Phase.UNDER_CONSTRUCTION,
+			"pos": {"x": 22 * SimWorld.SUBTILE, "y": 28 * SimWorld.SUBTILE}},
+		{"id": 2, "def_id": "unit.villager",
+			"pos": {"x": 24 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2,
+					"y": 28 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2}},
+	], "removed": []})
+
+	var building := view.pool.get_view(1)
+	var worker := view.pool.get_view(2)
+	assert_true(worker.position.y > building.position.y,
+			"the tie must resolve in the unit's favour, not whichever id is lower")
+
+
 func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:
 	# Interpolation is for entities that moved. A view acquired from the pool
 	# starts wherever its previous occupant died, so interpolating its first

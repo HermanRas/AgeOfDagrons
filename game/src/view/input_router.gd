@@ -44,6 +44,14 @@ signal single_pressed(screen_pos: Vector2)
 signal single_drag_moved(screen_pos: Vector2)
 signal single_released(screen_pos: Vector2)
 
+## Mouse moved with nothing held down at all -- no touch equivalent, since a
+## finger cannot hover. PLAN.md 5.1's placement ghost wants this on desktop:
+## touch drags the ghost into position and releases to drop it, but a mouse
+## has no reason to hold a button down just to move the cursor, so build mode
+## would otherwise leave the ghost frozen wherever the initiating click landed
+## until the player thought to drag.
+signal mouse_hover_moved(screen_pos: Vector2)
+
 var _touch_index := CameraRig.NO_TOUCH
 var _down_pos := Vector2.ZERO
 var _down_msec := 0
@@ -79,13 +87,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_mouse_button(event as InputEventMouseButton)
 
 	elif event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
 		if _right_dragging:
-			box_changed.emit(_rect_between(
-					_right_drag_from, (event as InputEventMouseMotion).position))
+			box_changed.emit(_rect_between(_right_drag_from, motion.position))
 		elif _mouse_down:
-			var motion := event as InputEventMouseMotion
 			_moved += motion.relative.length()
 			single_drag_moved.emit(motion.position)
+		else:
+			mouse_hover_moved.emit(motion.position)
 
 
 func _on_touch(touch: InputEventScreenTouch) -> void:

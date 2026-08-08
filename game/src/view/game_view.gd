@@ -10,6 +10,12 @@ extends Node2D
 ## it), GATHER/BUILD/MOVE are the three orders a tap can issue.
 enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE }
 
+## World-space nudge breaking an exact Y-sort tie between a building and a
+## unit standing on the tile that ties its front-corner sort point (see
+## apply_snapshot()) in the unit's favour. Far smaller than any real per-tile
+## sort gap (tens of pixels), so it cannot be seen, only settle a tie.
+const _BUILDING_TIE_EPSILON := 0.01
+
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
 var selection: Selection = Selection.new()
@@ -63,10 +69,25 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 		var p: Dictionary = entry.get("pos", {})
 		var sub_pos := Vector2i(int(p.get("x", 0)), int(p.get("y", 0)))
+		var def_id := StringName(entry.get("def_id", ""))
 
 		# The node goes where the entity SORTS, the art goes where the entity IS.
 		# For everything 1x1 those are the same point and the offset is zero.
 		var sort_offset := Iso.footprint_sort_offset(_footprint_of(entry))
+		# A building's front-corner sort point (3.1) ties EXACTLY with any unit
+		# standing on the tile immediately east or north of that corner -- same
+		# x+y, hence same projected depth -- which a worker sent to build or
+		# garrison a building does constantly. Godot's Y-sort breaks a tie by
+		# child/insertion order, which in practice means entity id, and a
+		# freshly placed building almost always has a HIGHER id than the
+		# villager sent to it -- so the tie silently went to the building every
+		# time, drawing the builder behind the wall it is working on. Nudging a
+		# building's sort point a hair EARLIER (never a unit's) settles every
+		# such tie in the unit's favour instead, imperceptibly next to any real
+		# per-tile sort gap (found and reproduced via
+		# dev_preview/debug_render_check.gd, PLAN.md 3.1 follow-up).
+		if GameDataRegistry.building(def_id) != null:
+			sort_offset.y -= _BUILDING_TIE_EPSILON
 		view.draw_offset = -sort_offset
 		var target := Iso.sub_to_world(sub_pos) + sort_offset
 		if is_new:
@@ -90,7 +111,6 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if entry.has("anim"):
 			view.play_anim(StringName(entry["anim"]), int(entry.get("facing", 0)))
 
-		var def_id := StringName(entry.get("def_id", ""))
 		_facts[id] = {
 			"id": id,
 			"tile": Vector2i(sub_pos / SimWorld.SUBTILE),

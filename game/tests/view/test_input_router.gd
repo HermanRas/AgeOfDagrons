@@ -32,6 +32,67 @@ func _drag(index: int, pos: Vector2, relative: Vector2) -> InputEventScreenDrag:
 	return d
 
 
+func _mouse_button(index: int, pos: Vector2, pressed: bool) -> InputEventMouseButton:
+	var b := InputEventMouseButton.new()
+	b.button_index = index
+	b.position = pos
+	b.pressed = pressed
+	return b
+
+
+func _mouse_motion(pos: Vector2, relative: Vector2 = Vector2.ZERO) -> InputEventMouseMotion:
+	var m := InputEventMouseMotion.new()
+	m.position = pos
+	m.relative = relative
+	return m
+
+
+# ── mouse_hover_moved (5.1's desktop placement-ghost fix) ──────────────────
+
+func test_mouse_hover_moved_fires_for_plain_motion_with_nothing_held() -> void:
+	var seen: Array[Vector2] = []
+	router.mouse_hover_moved.connect(func(p: Vector2) -> void: seen.append(p))
+
+	router._unhandled_input(_mouse_motion(Vector2(10, 10)))
+	router._unhandled_input(_mouse_motion(Vector2(20, 15)))
+
+	assert_eq(seen, [Vector2(10, 10), Vector2(20, 15)])
+
+
+func test_mouse_hover_moved_does_not_fire_while_left_button_is_held() -> void:
+	var hover: Array[Vector2] = []
+	var dragged: Array[Vector2] = []
+	router.mouse_hover_moved.connect(func(p: Vector2) -> void: hover.append(p))
+	router.single_drag_moved.connect(func(p: Vector2) -> void: dragged.append(p))
+
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_LEFT, Vector2(0, 0), true))
+	router._unhandled_input(_mouse_motion(Vector2(30, 0)))
+
+	assert_true(hover.is_empty(), "a held-button drag is single_drag_moved's job, not hover's")
+	assert_eq(dragged, [Vector2(30, 0)])
+
+
+func test_mouse_hover_moved_does_not_fire_during_a_right_drag_box() -> void:
+	var hover: Array[Vector2] = []
+	router.mouse_hover_moved.connect(func(p: Vector2) -> void: hover.append(p))
+
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_RIGHT, Vector2(0, 0), true))
+	router._unhandled_input(_mouse_motion(Vector2(30, 0)))
+
+	assert_true(hover.is_empty(), "the desktop box-select stand-in owns motion while it is live")
+
+
+func test_mouse_hover_moved_resumes_once_the_button_is_released() -> void:
+	var hover: Array[Vector2] = []
+	router.mouse_hover_moved.connect(func(p: Vector2) -> void: hover.append(p))
+
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_LEFT, Vector2(0, 0), true))
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_LEFT, Vector2(0, 0), false))
+	router._unhandled_input(_mouse_motion(Vector2(5, 5)))
+
+	assert_eq(hover, [Vector2(5, 5)])
+
+
 # ── the three signals PLAN.md 5.1 added ────────────────────────────────────
 
 func test_single_pressed_fires_on_touch_down() -> void:

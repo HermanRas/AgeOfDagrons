@@ -91,6 +91,7 @@ func _build_world_layers() -> void:
 	_router.single_pressed.connect(_on_placement_pressed)
 	_router.single_drag_moved.connect(_on_placement_drag)
 	_router.single_released.connect(_on_placement_released)
+	_router.mouse_hover_moved.connect(_on_placement_hover)
 
 
 func _build_hud() -> void:
@@ -296,6 +297,10 @@ func _enter_placement(def_id: StringName) -> void:
 	_camera.set_locked(true)
 	_status.text = "drag to place a %s, release to drop it  |  Cancel Build to stop" % \
 			_display_name(def_id)
+	# Shows the ghost immediately under the cursor rather than leaving it
+	# invisible until the mouse so much as twitches (desktop only -- a touch
+	# has no position to preview before it first comes down).
+	_preview_placement(get_viewport().get_mouse_position())
 
 
 func _exit_placement() -> void:
@@ -311,6 +316,15 @@ func _on_placement_pressed(screen_pos: Vector2) -> void:
 
 
 func _on_placement_drag(screen_pos: Vector2) -> void:
+	if _placing_def_id != &"":
+		_preview_placement(screen_pos)
+
+
+## Desktop only: a touch drags the ghost into position and releases to drop
+## it (see `_on_placement_drag`), but a mouse has no reason to hold a button
+## down just to move the cursor -- without this the ghost would sit frozen
+## wherever the initiating click landed until the player thought to drag it.
+func _on_placement_hover(screen_pos: Vector2) -> void:
 	if _placing_def_id != &"":
 		_preview_placement(screen_pos)
 

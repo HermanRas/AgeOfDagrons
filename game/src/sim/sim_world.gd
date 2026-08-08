@@ -48,12 +48,15 @@ func setup(cfg: MatchConfig) -> void:
 	# costing an extra one of visible delay. SeparationSystem (4.2) runs right
 	# after MovementSystem, as a correction on top of this tick's step rather than
 	# a second movement -- TaskSystem reads arrival on the NEXT tick, by which
-	# point any push has already landed. DeathSystem runs last: it reacts to hp
-	# reaching 0 (a debug command, later combat), and everything else this tick
-	# has already had its say about a unit or building that is now gone.
+	# point any push has already landed. AnimationSystem runs after everything
+	# that can retire or advance a task this tick, so `anim` reflects where a
+	# unit actually ended up rather than where it started. DeathSystem runs
+	# last: it reacts to hp reaching 0 (a debug command, later combat), and
+	# everything else this tick has already had its say about a unit or
+	# building that is now gone.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
 			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), MovementSystem.new(),
-			SeparationSystem.new(), DeathSystem.new()]
+			SeparationSystem.new(), AnimationSystem.new(), DeathSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
