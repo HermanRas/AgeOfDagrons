@@ -69,6 +69,18 @@ func test_entities_in_radius_finds_nearby_and_excludes_far() -> void:
 	assert_false(found_ids.has(far.id))
 
 
+## PLAN.md 7.1: the HUD's idle/total villager count is a headcount over
+## snapshots, so `task` has to be IN the snapshot for the view to answer it
+## without reaching into SimWorld.
+func test_a_units_snapshot_carries_its_task() -> void:
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	assert_eq(v.to_snapshot()["task"], SimUnit.Task.IDLE)
+
+	w.queue_command(MoveCommand.new(1, [v.id], Vector2i(10, 5)))
+	w.step()
+	assert_eq(v.to_snapshot()["task"], SimUnit.Task.MOVE)
+
+
 func test_command_dict_roundtrip() -> void:
 	var original := MoveCommand.new(1, [7, 8], Vector2i(4, 9))
 	var rebuilt := Command.from_dict(original.to_dict())

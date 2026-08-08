@@ -141,3 +141,12 @@ func move_target_subpos() -> Vector2i:
 static func centre_of_tile(t: Vector2i) -> Vector2i:
 	const HALF := SimWorld.SUBTILE / 2
 	return t * SimWorld.SUBTILE + Vector2i(HALF, HALF)
+
+
+## `task` joins the base snapshot so the view can count idle villagers (7.1)
+## without reaching into SimWorld -- the same reason every other view-facing
+## fact travels in the snapshot rather than being asked of the sim directly.
+func to_snapshot() -> Dictionary:
+	var d := super()
+	d["task"] = int(task)
+	return d

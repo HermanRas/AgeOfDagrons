@@ -1218,7 +1218,7 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 
 | # | Item | Tag |
 |---|---|---|
-| 7.1 | 5 counters (stone, gold, wood, food, idle/total villagers) via `EventBus` | **[MVP]** |
+| 7.1 | ✅ **DONE** -- a new `EventBus` autoload (`resources_changed`, `villagers_changed`) decouples the HUD from whoever happens to receive a snapshot. `GameScene` emits both after every `apply_snapshot()`: `resources_changed` from the snapshot's existing `player_state.stock` (SnapshotSystem already carried it, unused until now), `villagers_changed` from a new `GameView.villager_counts()` headcount over units in view. That headcount needed `task` added to `SimUnit.to_snapshot()` -- it was not there, so the view had no way to tell an idle villager from a busy one without reaching into SimWorld. `ResourceHUD` is a deliberately plain text row, same stand-in spirit as `SelectionPanel` (4.3) -- real icons are ASSET_MISSING.md 1.5's TODO and this is thrown away once they land. Built in `_init()` rather than `_ready()` so a bare `.new()` is fully wired for testing, matching how `GameView.pool`/`terrain` are field initializers rather than `_ready()`-only setup | **[MVP]** |
 
 ### Phase 8 Ã¢â‚¬â€ Main game interface *(IDEA phase 8)*
 

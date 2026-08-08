@@ -85,6 +85,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# Inferring "no phase field means a unit" would call a resource node a
 			# unit, and 3.6 would then send move orders naming trees.
 			"is_unit": GameDataRegistry.unit(def_id) != null,
+			# Present only on units (SimUnit.to_snapshot); absent on a building or
+			# resource node entry, where it defaults to IDLE and is never read since
+			# villager_counts() already filters those out by is_unit.
+			"task": int(entry.get("task", SimUnit.Task.IDLE)),
 		}
 		view.set_selected(selection.contains(id))
 
@@ -181,6 +185,22 @@ func movable_selection() -> Array[int]:
 		if bool(_facts.get(id, {}).get("is_unit", false)):
 			movable.append(id)
 	return movable
+
+
+## Idle vs. total units belonging to `owner`, for the population counter
+## (PLAN.md 7.1). By unit-ness rather than by `unit.villager` specifically --
+## MVP has exactly one unit type, so today the two questions have the same
+## answer, and this does not have to change the day a second one lands.
+func villager_counts(owner: int) -> Vector2i:
+	var idle := 0
+	var total := 0
+	for f in _facts.values():
+		if not bool(f.get("is_unit", false)) or int(f.get("owner_id", 0)) != owner:
+			continue
+		total += 1
+		if int(f.get("task", -1)) == SimUnit.Task.IDLE:
+			idle += 1
+	return Vector2i(idle, total)
 
 
 func _covers(f: Dictionary, tile: Vector2i) -> bool:

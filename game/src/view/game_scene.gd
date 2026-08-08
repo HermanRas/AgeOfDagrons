@@ -21,6 +21,7 @@ var _camera: CameraRig
 var _router: InputRouter
 var _panel: SelectionPanel
 var _box: SelectionBox
+var _hud: ResourceHUD
 var _status: Label
 var _error: String = ""
 
@@ -43,6 +44,7 @@ func _ready() -> void:
 		_error = "host_solo() failed: %s" % error_string(err)
 		_status.text = _error
 		return
+	_hud.player_id = Net.local_player_id()
 	_start_match()
 
 
@@ -87,6 +89,11 @@ func _build_hud() -> void:
 	_panel.position = Vector2(16, -104)
 	hud.add_child(_panel)
 
+	_hud = ResourceHUD.new()
+	_hud.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_hud.position = Vector2(-320, 12)
+	hud.add_child(_hud)
+
 	_status = Label.new()
 	_status.position = Vector2(16, 12)
 	hud.add_child(_status)
@@ -114,6 +121,20 @@ func _start_match() -> void:
 func _on_snapshot(snap: Dictionary) -> void:
 	_view.apply_snapshot(snap)
 	_refresh_panel()
+	_refresh_hud(snap)
+
+
+## Pushes 7.1's two counter signals out through EventBus. GameScene is what
+## happens to receive the snapshot, but the HUD does not need to know that --
+## see EventBus's own header for why that indirection is worth keeping.
+func _refresh_hud(snap: Dictionary) -> void:
+	var player_id := Net.local_player_id()
+	var player_state: Dictionary = snap.get("player_state", {})
+	var mine: Dictionary = player_state.get(player_id, {})
+	EventBus.resources_changed.emit(player_id, mine.get("stock", {}))
+
+	var counts := _view.villager_counts(player_id)
+	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
 
 
 ## Tap handling, in priority order (PLAN.md 3.6, 4.3):

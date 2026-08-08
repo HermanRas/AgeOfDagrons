@@ -106,6 +106,32 @@ func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:
 			"in place on the first snapshot, with no advance() call")
 
 
+# ── villager headcount (7.1) ───────────────────────────────────────────────
+
+func test_villager_counts_splits_idle_from_busy_and_ignores_other_players() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 3, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
+				"pos": {"x": 0, "y": 0}},
+		# A building must not be counted as a villager just because it too is idle.
+		{"id": 4, "def_id": "building.town_center", "owner_id": 1,
+				"footprint": {"x": 8, "y": 8}, "phase": SimBuilding.Phase.COMPLETE,
+				"pos": {"x": 0, "y": 0}},
+		# Someone else's villager must not show up in player 1's count.
+		{"id": 5, "def_id": "unit.villager", "owner_id": 2, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+	], "removed": []})
+
+	assert_eq(view.villager_counts(1), Vector2i(1, 3), "1 idle of 3 villagers, gaia/enemy excluded")
+
+
+func test_villager_counts_is_zero_with_nothing_in_view() -> void:
+	assert_eq(view.villager_counts(1), Vector2i(0, 0))
+
+
 func test_process_advances_the_pool() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "pos": {"x": 0, "y": 0}},

@@ -23,6 +23,7 @@ config/windows_native_icon="res://assets/icons/icon.ico"
 GameDataRegistry="*res://src/autoload/game_data.gd"
 SimClock="*res://src/autoload/sim_clock.gd"
 Net="*res://src/autoload/net.gd"
+EventBus="*res://src/autoload/event_bus.gd"
 
 [display]
 
