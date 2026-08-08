@@ -1,3 +1,0 @@
-Move to a good location - Icon Sprite Sheet
-Resources = stone, gold, wood, food, villager
-Action = Build Action, Guard Action, attack action, destroy/delete action, move action, stop, unpack, repack, garrison/enter building, leave / exit building. 

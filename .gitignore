@@ -2,11 +2,11 @@
 # Reference material — not part of the build
 # ─────────────────────────────────────────────────────────────
 # Trailing /* (not just /) so git still descends far enough to honour the
-# .gdignore exception below -- a bare "insperation_pictures/" excludes the
+# .gdignore exception below -- a bare "assets/insperation_pictures/" excludes the
 # directory itself, and git never looks inside an excluded directory to
 # check per-file negations (a well-known gitignore gotcha).
-insperation_pictures/*
-!insperation_pictures/.gdignore
+assets/insperation_pictures/*
+!assets/insperation_pictures/.gdignore
 
 # ─────────────────────────────────────────────────────────────
 # Third-party asset packs — DO NOT COMMIT
@@ -16,13 +16,18 @@ insperation_pictures/*
 # Each developer downloads them via the .url links below.
 # Using the art inside a built game (APK/.pck) is fine.
 # ─────────────────────────────────────────────────────────────
-UI_Sprites/*.zip
-UI_Sprites/UI_dragon-huds/
-UI_Sprites/Free_Medieval_Fantasy_UI_Pack/
-UI_Sprites/uı-fonts/
-UI_Sprites/ui-fonts/
-!UI_Sprites/*.url
-!UI_Sprites/README.md
+assets/UI_Sprites/*.zip
+assets/UI_Sprites/UI_dragon-huds/
+assets/UI_Sprites/Free_Medieval_Fantasy_UI_Pack/
+assets/UI_Sprites/uı-fonts/
+assets/UI_Sprites/ui-fonts/
+!assets/UI_Sprites/*.url
+!assets/UI_Sprites/README.md
+
+# HUD icon source sheets (game/assets/LICENCES.md) -- the project owner's own
+# Gemini-generated working sheets, kept locally so the 5x5 sheet's remaining
+# empty slots can be filled from the same artwork, but not needed in the repo.
+assets/Icons/
 
 # Raw art source (0 A.D. checkout, Blender working files).
 # Lives outside the repo entirely — see PLAN.md §1.3
@@ -59,10 +64,11 @@ build/
 packs/
 game/assets/atlases/
 
-# Kibyra UI pack art copied locally from UI_Sprites/ for use in the built game
-# (permitted) but not for redistribution of the originals via git (not
-# permitted -- see game/assets/LICENCES.md). Each developer re-copies from
-# their own UI_Sprites/ download; see the source path noted where it is used.
+# Kibyra UI pack art copied locally from assets/UI_Sprites/ for use in the
+# built game (permitted) but not for redistribution of the originals via git
+# (not permitted -- see game/assets/LICENCES.md). Each developer re-copies
+# from their own assets/UI_Sprites/ download; see the source path noted where
+# it is used.
 game/assets/ui/control_groups/
 
 # ─────────────────────────────────────────────────────────────
