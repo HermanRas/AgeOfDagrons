@@ -73,13 +73,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if max_hp > 0.0:
 			view.set_health_dot(float(entry.get("hp", 0)) / max_hp)
 
+		var def_id := StringName(entry.get("def_id", ""))
 		_facts[id] = {
 			"tile": Vector2i(sub_pos / SimWorld.SUBTILE),
 			"owner_id": int(entry.get("owner_id", 0)),
-			"def_id": StringName(entry.get("def_id", "")),
+			"def_id": def_id,
 			"hp": int(entry.get("hp", 0)),
 			"max_hp": int(max_hp),
 			"footprint": _footprint_of(entry),
+			# Asked of the registry rather than guessed from the snapshot's shape.
+			# Inferring "no phase field means a unit" would call a resource node a
+			# unit, and 3.6 would then send move orders naming trees.
+			"is_unit": GameDataRegistry.unit(def_id) != null,
 		}
 		view.set_selected(selection.contains(id))
 
@@ -133,11 +138,24 @@ func pick(local: Vector2, owner: int = 0) -> int:
 			continue
 		if not _covers(f, tile):
 			continue
-		var is_unit: bool = (f["footprint"] as Vector2i) == Vector2i.ONE
+		var is_unit: bool = f["is_unit"]
 		if best == 0 or (is_unit and not best_is_unit):
 			best = int(id)
 			best_is_unit = is_unit
 	return best
+
+
+## The selected entities that can actually be given a move order (PLAN.md 3.6).
+##
+## Filtered rather than passed whole: `MoveCommand.validate()` rejects the ENTIRE
+## command if any id is not a unit, so a selection containing the town centre would
+## silently cancel the move for the villagers selected alongside it.
+func movable_selection() -> Array[int]:
+	var movable: Array[int] = []
+	for id in selection.current():
+		if bool(_facts.get(id, {}).get("is_unit", false)):
+			movable.append(id)
+	return movable
 
 
 func _covers(f: Dictionary, tile: Vector2i) -> bool:

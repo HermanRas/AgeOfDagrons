@@ -124,6 +124,38 @@ func test_picking_can_be_limited_to_one_players_things() -> void:
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(5, 5)), 2), 4, "theirs")
 
 
+# ── what can be given a move order (3.6) ───────────────────────────────────
+
+func test_only_units_can_be_ordered_to_move() -> void:
+	# MoveCommand.validate() rejects the WHOLE command if any id is not a unit, so
+	# selecting the town centre alongside villagers would silently cancel the move
+	# for the villagers too.
+	_populate([
+		_entity(1, "unit.villager", Vector2i(5, 5)),
+		_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+	])
+	view.select([1, 3] as Array[int])
+	assert_eq(view.movable_selection(), [1] as Array[int])
+
+
+func test_a_resource_node_is_not_mistaken_for_a_unit() -> void:
+	# Resource nodes are 1x1 and carry no `phase`, so anything inferring unit-ness
+	# from the snapshot's shape would call a tree a unit and send move orders
+	# naming it. The registry is asked instead.
+	_populate([_entity(4, "res.tree", Vector2i(7, 7), 0)])
+	assert_false(bool(view.facts_for(4)["is_unit"]), "a tree is not a unit")
+	view.select([4] as Array[int])
+	assert_true(view.movable_selection().is_empty())
+
+
+func test_a_unit_beats_a_resource_node_on_the_same_tile_when_picking() -> void:
+	_populate([
+		_entity(4, "res.tree", Vector2i(7, 7), 0),
+		_entity(5, "unit.villager", Vector2i(7, 7)),
+	])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(7, 7))), 5)
+
+
 # ── the ring ───────────────────────────────────────────────────────────────
 
 func test_selecting_marks_the_view_and_deselecting_clears_it() -> void:
