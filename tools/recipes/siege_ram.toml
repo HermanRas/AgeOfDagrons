@@ -1,0 +1,74 @@
+# Siege ram, from 0 A.D.'s Roman battering ram -- no Athenian/Hellenic ram
+# exists in 0 A.D.'s roster (ASSET_MISSING.md 2.1), so this breaks the civ
+# consistency kept everywhere else in the project (buildings, other units).
+# Flagged, not fixed -- accepting the Roman skin was cheaper than hand-
+# building a Greek-styled ram, and it can be revisited later without
+# touching gameplay.
+#
+# Mechanical (rigid, non-skeletal) rig -- "SixWheeler", 10 bones -- so none
+# of the biped/quadruped defects found on the infantry/cavalry units apply.
+# Its animations are declared inline in the actor's own top group, not via
+# separate variant files, which is simpler than every unit recipe so far.
+id      = "vis.siege_ram"
+adapter = "zeroad"
+
+[source]
+actor = "units/romans/siege_ram.xml"
+
+[render]
+# `isobake inspect` measures 7.024 x 14.736 x 8.607 m raw -- a genuinely large
+# siege engine, comparable to a small building.
+canvas = [384, 384]
+supersample = 2
+# The ram carries a shield on each side (shield_left/shield_right) --
+# symmetric left-right, so mirroring is safe here unlike every armed
+# infantry/cavalry unit baked so far.
+directions = 5
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+# Clip names/files read directly from the actor's own inline <animations> --
+# no separate variant file to check this time.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_melee"
+frames = 12
+fps = 15
+loop = true
+
+# No death clip exists -- 0 A.D. only plays a destruction-dust particle on
+# this actor's death, no distinct pose. Same non-issue as the building
+# roster having no damaged tier: rubble/removal covers it at the game-state
+# level, not with a posed death animation. `die`/`decay` reuse the frozen
+# Idle pose rather than mapping to nothing.
+[anims.die]
+clip = "Idle"
+frames = 2
+fps = 1
+loop = false
+
+[anims.decay]
+clip = "Idle"
+frames = 2
+fps = 1
+loop = false
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/romans/siege_ram.xml"
