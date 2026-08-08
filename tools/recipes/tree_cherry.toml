@@ -1,0 +1,28 @@
+# Flowering cherry from 0 A.D. -- trunk (tree_apple_trunk_b.dae) plus an
+# attached blossom-canopy prop (tree_apple_top_d.dae). Both are single
+# <variant>, fully deterministic -- no isobake changes needed. Gives a
+# blooming-tree look distinct from every other species baked so far.
+id      = "vis.tree_cherry"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/cherry_small.xml"
+# `isobake inspect` measures the assembled actor at 14.030 x 12.839 x 9.223 m
+# raw -- short and wide (a bushy blossom canopy) rather than tall, unlike
+# every other tree baked so far, so canvas emphasises width over height.
+
+[render]
+canvas = [384, 320]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/cherry_small.xml"

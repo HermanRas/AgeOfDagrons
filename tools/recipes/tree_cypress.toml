@@ -1,0 +1,28 @@
+# Cypress from 0 A.D. -- a third tree species (ASSET_MISSING.md 2.3
+# "Tree species variants"), a non-snowy columnar conifer distinct from both
+# tree_oak.toml (broadleaf) and tree_snow_pine.toml (snowy conifer).
+# Single <variant>, fully deterministic -- no isobake changes needed.
+id      = "vis.tree_cypress"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/cypress_test.xml"
+# `isobake inspect` measures this actor at 5.132 x 5.108 x 21.671 m raw.
+# Scale defaults to metres_per_tile / 4 (0.5), same as every other tree
+# recipe, putting the baked subject at ~10.8 m tall -- close to oak's ~10 m.
+
+[render]
+canvas = [384, 384]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/cypress_test.xml"

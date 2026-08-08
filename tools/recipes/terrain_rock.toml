@@ -1,0 +1,29 @@
+# Ground tile from 0 A.D.'s bare-rock terrain -- the "Rock / mountain
+# (impassable)" backlog item (ASSET_MISSING.md 2.4). Same recipe shape as
+# terrain_grass.toml/terrain_dirt.toml/terrain_sand.toml, just a different
+# `terrain =` line.
+id      = "terrain.rock"
+adapter = "terrain"
+
+[source]
+# Mediterranean, civ-matching with grass1/dirta/sand and vis.stone_mine
+# (both mediterranean picks) -- same reasoning as those: no readability
+# problem here to reject it for.
+terrain = "biome-mediterranean/medit_rocks.xml"
+texture_metres = 2.0
+
+[render]
+canvas = [72, 40]
+supersample = 4
+directions = 1
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/terrains/biome-mediterranean/medit_rocks.xml"

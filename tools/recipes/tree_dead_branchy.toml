@@ -1,0 +1,32 @@
+# A second dead-tree variant from 0 A.D. -- trunk (dead_a_1.dae) plus a
+# single attached dead-branch prop, distinct silhouette from tree_dead.toml's
+# dead_a_2. Trunk and prop are each single-<variant>, fully deterministic --
+# no isobake changes needed. Unlike vis.farm's blocked scatter-prop actor,
+# this attaches exactly one prop instance, not 64 -- a case isobake already
+# handles (same as the wall_gate/stable statics).
+id      = "vis.tree_dead_branchy"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/dead_a_1.xml"
+# `isobake inspect` measures the assembled actor at 16.008 x 18.274 x 26.205 m
+# raw (trunk + branch prop bounding box combined). Same buried-geometry
+# bottom-edge clip as tree_dead.toml -- ground_clip fixes it, not a bigger
+# canvas.
+
+[render]
+canvas = [448, 448]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/dead_a_1.xml"

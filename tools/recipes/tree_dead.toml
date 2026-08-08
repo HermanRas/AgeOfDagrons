@@ -1,0 +1,30 @@
+# Dead/bare tree from 0 A.D. -- gives biomes and cleared land a distinct
+# "dead tree" prop, not just a size/species variant. Single <variant>, fully
+# deterministic -- no isobake changes needed.
+id      = "vis.tree_dead"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/dead_a_2.xml"
+# `isobake inspect` measures this actor at 14.968 x 14.573 x 30.000 m raw.
+# The frame was clipping at the BOTTOM, not the canopy at the top -- the
+# trunk mesh extends below world z = 0 (same buried-geometry pattern as the
+# building skirts, ASSET_MISSING.md 1.2), so no amount of extra canvas fixes
+# it. `ground_clip` discards that below-ground geometry instead.
+
+[render]
+canvas = [448, 448]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/dead_a_2.xml"
