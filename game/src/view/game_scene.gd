@@ -42,6 +42,7 @@ var _control_groups: Array = []
 ## the Cancel Build button.
 var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
+var _flash: ActionFlash
 
 
 func _ready() -> void:
@@ -73,6 +74,9 @@ func _build_world_layers() -> void:
 	_ghost = PlacementGhost.new()
 	_ghost.visible = false
 	_view.add_child(_ghost)
+
+	_flash = ActionFlash.new()
+	_view.add_child(_flash)
 
 	_camera = CameraRig.new()
 	add_child(_camera)
@@ -240,16 +244,12 @@ func _refresh_hud(snap: Dictionary) -> void:
 		EventBus.control_group_changed.emit(slot, summary["icon"], summary["count"])
 
 
-## Tap handling, in priority order (PLAN.md 3.6, 4.3):
-##
-##   1. One of my own units -> select it.
-##   2. Something already selected -> move order to the tapped tile.
-##   3. Otherwise -> clear the selection.
-##
-## Own units win over a move order so that re-selecting never accidentally sends
-## the current selection walking onto the unit you were trying to pick. The cost
-## is that you cannot order a unit onto a tile another of your units is standing
-## on, which 4.5's context actions are where that gets a better answer.
+## Tap handling (PLAN.md 3.6, 4.3, 4.5): `GameView.tap_action()` decides what
+## the tap means -- reselect, gather, build-assist, move, or clear -- from pure
+## facts about what is under the finger and what is already selected; this
+## just carries out whichever it names and, for the three orders, drops an
+## `ActionFlash` on the target so the player sees which one fired without
+## reading the panel.
 func _on_tapped(screen_pos: Vector2) -> void:
 	if _error != "":
 		return
@@ -262,21 +262,29 @@ func _on_tapped(screen_pos: Vector2) -> void:
 	if _placing_def_id != &"":
 		return
 	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
-
-	var mine := _view.pick(local, Net.local_player_id())
-	if mine != 0:
-		var picked: Array[int] = [mine]
-		_view.select(picked)
-		_refresh_panel()
-		return
-
+	var tile := Iso.tile_at(local)
+	var picked := _view.pick(local, 0)
 	var movable := _view.movable_selection()
-	if not movable.is_empty():
-		Net.submit_command(MoveCommand.new(Net.local_player_id(), movable, Iso.tile_at(local)))
-		return
+	var owner := Net.local_player_id()
 
-	_view.select([] as Array[int])
-	_refresh_panel()
+	match _view.tap_action(picked, owner, not movable.is_empty()):
+		GameView.TapAction.SELECT:
+			_view.select([picked] as Array[int])
+			_refresh_panel()
+		GameView.TapAction.GATHER:
+			Net.submit_command(GatherCommand.new(owner, movable, picked))
+			_flash.play(ActionFlash.Kind.GATHER,
+					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
+		GameView.TapAction.BUILD:
+			Net.submit_command(BuildCommand.new(owner, movable, picked))
+			_flash.play(ActionFlash.Kind.BUILD,
+					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
+		GameView.TapAction.MOVE:
+			Net.submit_command(MoveCommand.new(owner, movable, tile))
+			_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
+		GameView.TapAction.NONE:
+			_view.select([] as Array[int])
+			_refresh_panel()
 
 
 ## Enters placement mode for `def_id` (PLAN.md 5.1) and locks the camera: the
@@ -505,4 +513,4 @@ func _refresh_panel() -> void:
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids)
 
 	if _placing_def_id == &"":
-		_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground to move  |  drag to pan, edge-swipe to zoom"
+		_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground/a tree/a foundation to move/gather/build  |  drag to pan, edge-swipe to zoom"

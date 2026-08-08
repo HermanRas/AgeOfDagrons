@@ -140,13 +140,15 @@ func test_nodes_take_their_amounts_from_resources_json() -> void:
 		assert_eq(node.gather_slots, d.gather_slots)
 
 
-func test_the_deer_is_flagged_as_wildlife_and_the_trees_are_not() -> void:
-	var wildlife := 0
+func test_the_debug_map_places_no_wildlife_now_that_food_is_berry_bushes() -> void:
+	# res.berry_bush replaced res.deer as the debug map's food node (session
+	# decision, MapGen.DEBUG_FOOD's own header) -- it is gathered like a tree,
+	# not hunted, so nothing the debug map places should carry the wildlife
+	# flag. res.deer's own wildlife flag is still exercised directly at the
+	# data level (test_game_data.gd), just not spawned here any more.
 	for n in _of_type(SimResourceNode):
-		if (n as SimResourceNode).is_wildlife:
-			wildlife += 1
-			assert_eq((n as SimResourceNode).kind, &"food")
-	assert_eq(wildlife, MapGen.DEBUG_DEER.size(), "every deer, and only the deer")
+		assert_false((n as SimResourceNode).is_wildlife,
+				"%s should not be wildlife on the debug map" % (n as SimResourceNode).def_id)
 
 
 func test_nothing_overlaps_anything_else() -> void:

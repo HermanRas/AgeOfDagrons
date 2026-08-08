@@ -40,12 +40,19 @@ func test_the_shipped_data_is_internally_consistent() -> void:
 
 
 func test_the_mvp_roster_is_present() -> void:
-	# PLAN.md 10: 1 unit, 2 buildings, 3 resource nodes.
+	# PLAN.md 10: 1 unit, 2 buildings, 3 ACTIVE resource nodes (wood/gold/food).
+	# res.deer stays defined but unused -- res.berry_bush replaced it as the MVP
+	# food node (session decision: no hunt/kill/carcass state machine needed,
+	# and vis.berry_bush is fully delivered where the deer carcass is not) -- so
+	# resource_ids() itself now lists 4, one more than the active roster.
 	assert_eq(reg.unit_ids(), [&"unit.villager"] as Array[StringName])
 	assert_eq(reg.building_ids(),
 			[&"building.house", &"building.town_center"] as Array[StringName])
+	# NOT alphabetical -- Array[StringName].sort() orders by StringName identity,
+	# not by string content, so this is whatever order these four happen to be
+	# interned in, not something to read meaning into.
 	assert_eq(reg.resource_ids(),
-			[&"res.deer", &"res.gold_mine", &"res.tree"] as Array[StringName])
+			[&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree"] as Array[StringName])
 
 
 func test_entity_def_ids_translate_to_visual_ids() -> void:

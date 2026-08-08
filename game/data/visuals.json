@@ -151,5 +151,15 @@
       "color": "#9b6b43",
       "facing_marker": true
     }
+  },
+
+  "vis.berry_bush": {
+    "atlas": "res://assets/atlases/vis.berry_bush.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [5.22, 5.0],
+      "height_m": 3.40,
+      "color": "#5a7a2e"
+    }
   }
 }

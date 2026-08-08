@@ -22,9 +22,14 @@ func process_tick(w: SimWorld) -> void:
 ## the nearest reachable one (PLAN.md 4.1) -- comparing against the ORDER would
 ## leave such a unit in MOVE forever, standing still beside the tree it was sent
 ## to. `set_path()` rewrites task_target_tile to the route's real end, so the
-## position check below is a belt-and-braces agreement between the two.
+## tile check below is a belt-and-braces agreement between the two.
+##
+## TILE, not exact sub-position: SeparationSystem (4.2) can nudge an arrived
+## unit off the tile's dead centre on the same tick it lands, and a unit that
+## never again matches that exact sub-pixel would sit in MOVE forever, looking
+## idle but never retiring.
 func _retire_if_arrived(e: SimUnit) -> void:
 	if e.path_pending or e.has_waypoint():
 		return
-	if e.pos == e.move_target_subpos():
+	if e.tile() == e.task_target_tile:
 		e.task = SimUnit.Task.IDLE

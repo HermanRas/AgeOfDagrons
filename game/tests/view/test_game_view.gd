@@ -142,3 +142,58 @@ func test_process_advances_the_pool() -> void:
 
 	view._process(EntityView.INTERP_SECONDS)
 	assert_almost_eq(v.position.x, 40.0, 0.01)
+
+
+# ── tap_action (4.5) ────────────────────────────────────────────────────────
+
+func _snap(entries: Array) -> void:
+	view.apply_snapshot({"tick": 1, "updated": entries, "removed": []})
+
+
+func test_tapping_empty_ground_with_nothing_selected_does_nothing() -> void:
+	assert_eq(view.tap_action(0, 1, false), GameView.TapAction.NONE)
+
+
+func test_tapping_empty_ground_with_a_movable_selection_moves() -> void:
+	assert_eq(view.tap_action(0, 1, true), GameView.TapAction.MOVE)
+
+
+func test_tapping_my_own_unit_always_selects_it() -> void:
+	_snap([{"id": 1, "def_id": "unit.villager", "owner_id": 1, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, false), GameView.TapAction.SELECT)
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.SELECT,
+			"never redirected into an order, even with others selected")
+
+
+func test_tapping_my_own_incomplete_building_with_builders_selected_sends_them() -> void:
+	_snap([{"id": 1, "def_id": "building.house", "owner_id": 1, "footprint": {"x": 2, "y": 2},
+			"phase": SimBuilding.Phase.UNDER_CONSTRUCTION, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.BUILD)
+
+
+func test_tapping_my_own_incomplete_building_with_nothing_selected_still_selects_it() -> void:
+	_snap([{"id": 1, "def_id": "building.house", "owner_id": 1, "footprint": {"x": 2, "y": 2},
+			"phase": SimBuilding.Phase.UNDER_CONSTRUCTION, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, false), GameView.TapAction.SELECT)
+
+
+func test_tapping_my_own_complete_building_always_selects_it() -> void:
+	_snap([{"id": 1, "def_id": "building.town_center", "owner_id": 1, "footprint": {"x": 8, "y": 8},
+			"phase": SimBuilding.Phase.COMPLETE, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.SELECT,
+			"a finished building's training row must stay reachable by tapping it")
+
+
+func test_tapping_a_resource_node_with_gatherers_selected_gathers() -> void:
+	_snap([{"id": 1, "def_id": "res.tree", "owner_id": 0, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.GATHER)
+
+
+func test_tapping_a_resource_node_with_nothing_selected_does_nothing() -> void:
+	_snap([{"id": 1, "def_id": "res.tree", "owner_id": 0, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, false), GameView.TapAction.NONE)
+
+
+func test_tapping_someone_elses_unit_with_a_movable_selection_moves_there_instead() -> void:
+	_snap([{"id": 1, "def_id": "unit.villager", "owner_id": 2, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.MOVE)

@@ -40,9 +40,20 @@ const DEBUG_WOOD_CLUSTER := [
 	Vector2i(-4, 11), Vector2i(-3, 11), Vector2i(-2, 11), Vector2i(-1, 11),
 ]
 const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
-## A line rather than a block: a 2x2 of deer puts two of them on the same screen
+## A line rather than a block: a 2x2 arrangement puts two on the same screen
 ## column, one hidden behind the other. Stepping only dx staggers all four.
-const DEBUG_DEER := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
+## Berry bushes, not deer -- session decision to use res.berry_bush as the MVP
+## food node (PLAN.md 10): it needs no hunt/kill/carcass state machine, and
+## vis.berry_bush is fully delivered where the deer carcass is not
+## (ASSET_MISSING.md 2.3, asset_request.md). res.deer stays defined and could
+## replace this again if wildlife hunting (6.1a/6.1b) comes back.
+const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
+
+## Starting stock (PLAN.md 9: numbers are starting values to be tuned by
+## playtest). Wood only, and only on the debug map -- enough to place a house
+## or two without gathering first, so build/production actions are testable
+## without playing out the whole gather loop first every time.
+const DEBUG_STARTING_WOOD := 200
 
 
 ## Populate `w` with the fixed debug map. Call after SimWorld.setup(), which has
@@ -60,6 +71,7 @@ static func build_debug_map(w: SimWorld) -> void:
 				SimBuilding.Phase.COMPLETE, true)
 		_place_resources(w, origin)
 		_place_villagers(w, p.id, tc)
+		p.add_resource(&"wood", DEBUG_STARTING_WOOD)
 
 	# The map is final; build the pathfinding grid now. A full sweep of a 64x64
 	# grid measures ~12 ms, which is invisible during setup and five times the
@@ -106,8 +118,8 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.tree", origin + offset, 1)
 	for offset in DEBUG_GOLD:
 		w.spawn_resource_node(&"res.gold_mine", origin + offset, 1)
-	for offset in DEBUG_DEER:
-		w.spawn_resource_node(&"res.deer", origin + offset, 0)
+	for offset in DEBUG_FOOD:
+		w.spawn_resource_node(&"res.berry_bush", origin + offset, 0)
 
 
 ## Villagers ring the town centre, placed one at a time so each claims a distinct

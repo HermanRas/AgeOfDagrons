@@ -5,6 +5,11 @@
 class_name GameView
 extends Node2D
 
+## What tapping something should lead to (PLAN.md 4.5): NONE clears the
+## selection, SELECT reselects (own unit, or own building with nothing to send
+## it), GATHER/BUILD/MOVE are the three orders a tap can issue.
+enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE }
+
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
 var selection: Selection = Selection.new()
@@ -107,6 +112,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# reads correctly as "nothing queued" rather than needing its own guard.
 			"queue_len": int(entry.get("queue_len", 0)),
 			"queue_fraction": float(entry.get("queue_fraction", 0.0)),
+			# Present only on buildings; SimBuilding.Phase.COMPLETE elsewhere, so a
+			# unit or resource node always reads as "not something to build" without
+			# its own guard (4.5's build-assist tap needs to tell a foundation from
+			# a finished building).
+			"phase": int(entry.get("phase", SimBuilding.Phase.COMPLETE)),
 		}
 		# A corpse or rubble is unselectable (4.7, 5.5) even if it was selected
 		# the tick it died -- `alive` wins over a selection built before this.
@@ -224,6 +234,41 @@ func units_in_box(box: Rect2, owner: int) -> Array[int]:
 		if box.has_point(Iso.tile_centre_to_world(f["tile"])):
 			found.append(int(id))
 	return found
+
+
+## What a tap on `id` (0 for empty ground) should do (PLAN.md 4.5), given who is
+## tapping and whether they have units that could be sent somewhere.
+## `GameScene` turns the answer into the actual command and flash; kept here
+## because it is pure fact lookup over `_facts`, the same division of labour as
+## `pick()` and `movable_selection()`.
+##
+## An own UNIT always wins over an order, so re-selecting can never accidentally
+## send the current selection walking onto the very unit being picked. An own
+## INCOMPLETE building is the one case that inverts that: with builders
+## selected, the tap sends them to help rather than reselecting the
+## foundation, since that is the whole reason to tap it while builders are
+## selected -- with nothing selected it still just selects, so the panel and
+## its training row stay reachable when there is nothing to send.
+func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
+	if id == 0:
+		return TapAction.MOVE if has_movable_selection else TapAction.NONE
+
+	var f := facts_for(id)
+	if f.is_empty():
+		return TapAction.MOVE if has_movable_selection else TapAction.NONE
+
+	if int(f["owner_id"]) == owner:
+		if bool(f["is_unit"]):
+			return TapAction.SELECT
+		if has_movable_selection and int(f["phase"]) != SimBuilding.Phase.COMPLETE:
+			return TapAction.BUILD
+		return TapAction.SELECT
+
+	if has_movable_selection and not bool(f["is_unit"]) \
+			and GameDataRegistry.resource_def(StringName(f["def_id"])) != null:
+		return TapAction.GATHER
+
+	return TapAction.MOVE if has_movable_selection else TapAction.NONE
 
 
 ## The selected entities that can actually be given a move order (PLAN.md 3.6).

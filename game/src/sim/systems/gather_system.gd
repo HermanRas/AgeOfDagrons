@@ -1,5 +1,8 @@
 ## The gather loop (PLAN.md 6.4): walk to a node, take from it on a cooldown,
 ## carry up to cap, walk a load home, deposit, repeat until the node is empty.
+## `gather_slots` (PLAN.md 6.3) caps how many units can be drawing from one
+## node at once -- an arrived unit past the cap holds its ground rather than
+## gathering, so ten villagers sent at one tree do not all extract at once.
 ##
 ## Runs after TaskSystem and before MovementSystem -- same slot TaskSystem itself
 ## occupies, and for the same reason. A unit that arrived last tick (no waypoint
@@ -47,6 +50,9 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 	if u.carry_amount > 0 and u.carry_kind != node.kind:
 		_start_return(w, u)
 		return
+
+	if not _holds_gather_slot(w, node, u):
+		return          # every slot is taken by a lower-id competitor; wait rather than give up
 
 	var def := w.unit_def(u.def_id)
 	var rate := int(def.gather_rate.get(node.kind, 0)) if def != null else 0
@@ -111,6 +117,30 @@ func _ticks_per_unit(rate: int) -> int:
 	if rate <= 0:
 		return 0
 	return (100 + rate - 1) / rate
+
+
+## Whether `u` is one of the (at most) `node.gather_slots` units currently
+## drawing from it (PLAN.md 6.3's cap on simultaneous gatherers). Recomputed
+## fresh every tick from live task state rather than reserved once and stored
+## in a new field -- ties broken by id, the same determinism convention as
+## `nearest_drop_off()` -- so a competitor stopping, dying, or being re-tasked
+## frees its spot for whoever ranks next, with nothing extra to keep in sync.
+##
+## RETURN counts alongside GATHER: a unit walking a load home still holds its
+## place at the node it is coming back to, so a slot cannot be sniped out from
+## under it mid-cycle by whichever other villager happens to arrive first.
+func _holds_gather_slot(w: SimWorld, node: SimResourceNode, u: SimUnit) -> bool:
+	var holders: Array[int] = []
+	for entry in w.entities.values():
+		if not (entry is SimUnit):
+			continue
+		var other: SimUnit = entry
+		if not other.alive or other.gather_node_id != node.id:
+			continue
+		if other.task == SimUnit.Task.GATHER or other.task == SimUnit.Task.RETURN:
+			holders.append(other.id)
+	holders.sort()
+	return holders.find(u.id) < node.gather_slots
 
 
 func _adjacent_to_tile(from: Vector2i, target: Vector2i) -> bool:

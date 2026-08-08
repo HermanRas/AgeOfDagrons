@@ -76,7 +76,7 @@ func test_the_mvp_entity_visuals_are_all_declared() -> void:
 	# PLAN.md 2.5's entity vocabulary, restricted to what the MVP in 10 needs.
 	# Catches an ID renamed in one file and not the other.
 	for id in [&"vis.villager", &"vis.town_center", &"vis.house", &"vis.tree",
-			&"vis.gold_mine", &"vis.deer", &"terrain.grass"] as Array[StringName]:
+			&"vis.gold_mine", &"vis.deer", &"vis.berry_bush", &"terrain.grass"] as Array[StringName]:
 		assert_true(reg.visual_ids().has(id), "%s is declared in visuals.json" % id)
 
 

@@ -72,6 +72,51 @@ func test_the_final_load_is_capped_by_what_remains_not_by_carry_capacity() -> vo
 	assert_eq(w.players[0].stock.get(&"wood", 0), 5, "5 units, not padded up to carry_cap's 10")
 
 
+# ── gather slots (6.3) ──────────────────────────────────────────────────────
+
+func test_a_node_only_lets_gather_slots_many_units_draw_from_it_at_once() -> void:
+	# res.tree has gather_slots = 1. `villager` (spawned first, so the lower id)
+	# wins the tree's one slot and keeps it for the whole run -- it never stops
+	# holding the node, so there is never a tick where the slot is up for grabs.
+	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	w.queue_command(GatherCommand.new(1, [villager.id, second.id], tree.id))
+
+	# Wait for the incumbent to retire, not just for the node to empty -- that
+	# fires a tick before the last load it is still carrying home gets deposited.
+	var ticks := _run_until(func(): return villager.is_idle(), 4000)
+	assert_true(ticks > 0, "the tree still empties out eventually")
+	assert_eq(second.carry_amount, 0, "the second villager never got a turn at a one-slot tree")
+	assert_true(second.is_idle(),
+			"nothing left in the tree for it to wait behind once the incumbent retired")
+	assert_eq(w.players[0].stock.get(&"wood", 0), 40, "but the whole tree still ended up in stock")
+
+
+func test_a_node_with_enough_slots_lets_multiple_units_gather_at_once() -> void:
+	var mine := w.spawn_resource_node(&"res.gold_mine", Vector2i(9, 11), 0)   # slots = 4
+	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	w.queue_command(GatherCommand.new(1, [villager.id, second.id], mine.id))
+
+	var ticks := _run_until(
+			func(): return villager.carry_amount > 0 and second.carry_amount > 0, 200)
+	assert_true(ticks > 0, "both drew from the mine at once -- four slots is room for two")
+
+
+func test_a_freed_slot_is_picked_up_by_the_unit_waiting_behind_it() -> void:
+	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	w.queue_command(GatherCommand.new(1, [villager.id, second.id], tree.id))
+
+	# Let the incumbent (lower id) claim the tree's one slot and the challenger
+	# arrive and start waiting behind it.
+	_run_until(func(): return villager.task == SimUnit.Task.GATHER and not villager.has_waypoint() \
+			and second.task == SimUnit.Task.GATHER and not second.has_waypoint(), 200)
+	assert_eq(second.carry_amount, 0, "still waiting, not gathering yet")
+
+	# Pull the incumbent off the tree entirely -- its slot is now free.
+	w.queue_command(StopCommand.new(1, [villager.id]))
+	var ticks := _run_until(func(): return second.carry_amount > 0, 200)
+	assert_true(ticks > 0, "the waiting villager picked the freed slot straight back up")
+
+
 # ── rejection ───────────────────────────────────────────────────────────────
 
 func test_gather_command_rejects_an_already_depleted_node() -> void:
@@ -97,6 +142,32 @@ func test_two_worlds_given_the_same_gather_order_stay_identical() -> void:
 
 	_order_gather()
 	other.queue_command(GatherCommand.new(1, [other_villager.id], other_tree.id))
+
+	for i in range(400):
+		w.step()
+		other.step()
+		assert_eq(w.state_hash(), other.state_hash(), "diverged on tick %d" % (i + 1))
+
+
+func test_two_worlds_with_units_competing_for_the_same_slot_stay_identical() -> void:
+	# The scenario the slot cap itself is riskiest for: three units chasing a
+	# one-slot tree, only one of them ever actually extracting.
+	var other := SimWorld.new()
+	other.setup(MatchConfig.debug_single_player())
+	other.spawn_building(&"building.town_center", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	var other_tree := other.spawn_resource_node(&"res.tree", Vector2i(9, 10), 0)
+	other.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))               # id 3, same as w
+	var other_ids: Array[int] = [3]
+	for pos in [Vector2i(20, 21), Vector2i(21, 20)]:
+		other_ids.append(other.spawn_unit(&"unit.villager", 1, pos).id)
+
+	var ids: Array[int] = [villager.id]
+	for pos in [Vector2i(20, 21), Vector2i(21, 20)]:
+		ids.append(w.spawn_unit(&"unit.villager", 1, pos).id)
+
+	w.queue_command(GatherCommand.new(1, ids, tree.id))
+	other.queue_command(GatherCommand.new(1, other_ids, other_tree.id))
 
 	for i in range(400):
 		w.step()
