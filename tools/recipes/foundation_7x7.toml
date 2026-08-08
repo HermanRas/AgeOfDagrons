@@ -1,0 +1,27 @@
+# Building site for a 7x7-tile footprint -- shared by the archery range and
+# the stable. See foundation_8x8.toml for why these are keyed by footprint size.
+id      = "vis.foundation_7x7"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_7x7.xml"
+# simulation/templates/structures/hele/range.xml and stable.xml both declare
+# this as their FoundationActor.
+
+[render]
+# inspect: 30 x 30 x 5.379 m. Canvas interpolated from the fndn_4x4/fndn_8x8
+# calibration pair (~15 px/m width, ~8.6 px/m height off size_x).
+canvas = [544, 336]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_7x7.xml"

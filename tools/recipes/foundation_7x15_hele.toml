@@ -1,0 +1,31 @@
+# Building site for the wonder -- 0 A.D.'s own bespoke foundation for the
+# Parthenon-scale temple, no other building shares it.
+id      = "vis.foundation_7x15_hele"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_7x15_hele.xml"
+# simulation/templates/structures/athen/wonder.xml declares this as its
+# FoundationActor.
+
+[render]
+# inspect: 30 x 63 x 17.789 m -- by far the largest and tallest foundation
+# (the completed wonder itself needed [448,480] for a much smaller measured
+# footprint diamond). Long axis is 63 m, so width dominates; height carries
+# real scaffold height on top of the usual ground-diamond span. Generous
+# canvas pending a real bake; isobake bake's canvas-edge check will flag it
+# if this guess is still too tight, same as caught the castle and wonder.
+canvas = [1152, 1280]
+supersample = 4
+directions = 1
+frame_origin_at = 0.4
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_7x15_hele.xml"

@@ -9,9 +9,11 @@ actor = "flora/trees/oak.xml"
 # puts this oak at about 10 m. No override needed.
 
 [render]
-# A 10 m oak projects to 10 * cos(30) * 22.627 = 196 px tall, so the canvas has
-# to be large enough to hold it. Trees are the tallest thing in the MVP set.
-canvas = [224, 224]
+# A 10 m oak projects to 10 * cos(30) * 22.627 = 196 px tall, but the canopy's
+# own width and the far-corner depth offset (same effect documented in
+# castle.toml) push content past that on all of left/right/top at 224x224 --
+# caught by isobake bake's canvas-edge check, not by eye. Widened with margin.
+canvas = [320, 320]
 supersample = 2
 # Trees are roughly radially symmetric, but not exactly -- 5 stored directions
 # give free variety without the render cost of 8.

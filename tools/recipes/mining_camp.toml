@@ -1,0 +1,37 @@
+# Mining camp (ASSET_MISSING.md `vis.mining_camp`). 0 A.D. has no distinct
+# stone/metal storehouse -- every civ's storehouse is one generic resource
+# dropsite -- so this deliberately picks a *different civ's* storehouse actor
+# from the one already spent on vis.lumber_camp (structures/hellenes/storehouse.xml),
+# so the two camps read as different buildings despite sharing a template.
+# Project owner's call (see lumber_camp.toml and ASSET_MISSING.md), 2026-08-08.
+id      = "vis.mining_camp"
+adapter = "zeroad"
+
+[source]
+actor = "structures/britons/storehouse.xml"
+# simulation/templates/structures/brit/storehouse.xml: Square 18x18 world
+# units -> 9x9 m footprint, on FoundationActor structures/fndn_4x4.xml
+# (already baked as vis.foundation_4x4) and SpawnEntityOnDeath rubble_stone_3x3
+# (already baked as vis.rubble_3x3, via template_structure_economic_storehouse) --
+# both shared with vis.lumber_camp, no new foundation/rubble bake needed.
+
+[render]
+# Slightly bigger footprint than the hellenes storehouse (9x9 m vs 7.5x8 m),
+# so widened from lumber_camp.toml's canvas with margin; isobake bake's
+# canvas-edge check will flag it if this guess is still too tight.
+canvas = [352, 320]
+supersample = 4
+directions = 1
+frame_origin_at = 0.42
+ground_clip = true
+yaw_offset_deg = 180.0
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/britons/storehouse.xml"

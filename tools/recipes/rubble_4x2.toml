@@ -1,0 +1,28 @@
+# Generic stone rubble for the mill's (farmstead's) footprint -- a
+# rectangular 4x2 mound, not shared with any other MVP-roster building yet.
+# See rubble_3x3.toml for why these are keyed by size.
+id      = "vis.rubble_4x2"
+adapter = "zeroad"
+
+[source]
+actor = "structures/destruct_stone_4x2.xml"
+
+[render]
+# inspect: 28 x 17 x 8.725 m -- rectangular, shorter than the calibration
+# pair's height (9.657 m), so scaled off the longer 28 m axis with no extra
+# height margin added.
+canvas = [464, 320]
+supersample = 4
+ground_clip = true
+directions = 1
+frame_origin_at = 0.55
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/destruct_stone_4x2.xml"

@@ -1,0 +1,28 @@
+# Building site for a 5x4-tile footprint -- the mill's foundation.
+# See foundation_8x8.toml for why these are keyed by footprint size.
+id      = "vis.foundation_5x4"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_5x4.xml"
+# simulation/templates/structures/hele/farmstead.xml declares this as its
+# FoundationActor.
+
+[render]
+# inspect: 22 x 18 x 5.794 m -- taller build-site scaffolding than the other
+# foundations (4.624 m baseline), so height gets an extra margin on top of the
+# usual size_x interpolation.
+canvas = [416, 304]
+supersample = 4
+directions = 1
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_5x4.xml"

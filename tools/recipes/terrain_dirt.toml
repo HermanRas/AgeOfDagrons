@@ -1,0 +1,24 @@
+# Ground tile from 0 A.D.'s dirta terrain. Same recipe shape as
+# terrain_grass.toml -- see that file for the geometry notes -- only the
+# `terrain` line differs.
+id      = "terrain.dirt"
+adapter = "terrain"
+
+[source]
+terrain = "dirt/dirta.xml"
+texture_metres = 2.0
+
+[render]
+canvas = [72, 40]
+supersample = 4
+directions = 1
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
