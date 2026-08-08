@@ -167,7 +167,7 @@ both units baked so far need 8.
 | `vis.knight` | ⬜ TODO | Mounted — more frames | 
 | `vis.siege_ram` | ⬜ TODO | |
 | `vis.trebuchet` | ⬜ TODO | Packed + unpacked states |
-| `vis.monk` | ⬜ TODO | Plus relic-carrying variant |
+| `vis.monk` | 🟦 **BAKED** | `units/athenians/healer.xml` — 0 A.D. has no monks; a robed staff-carrying healer is the closest analog, consistent with the Hellenic/Athenian civ picked for buildings and the other units. `skeletal/new/m_dress.dae` (102 bones, unaffected by defect 1 above), no shield (defect 2 moot). 8 directions, 192×192 canvas, clean bake. Idle/Walk/Heal/Death clips from `base_healer_male.xml`/`death_infantry.xml` — `Heal` stands in for `attack` since 0 A.D. gives this actor no combat animation and PLAN.md's vocabulary has no dedicated heal slot yet. **No relic-carrying variant exists to map to** — 0 A.D. has no relic prop for this actor, only a cosmetic hooded-priest head skin. Recipe: `tools/recipes/monk.toml` |
 | `vis.trade_cart` | ⬜ TODO | Loaded + empty variants |
 | Projectiles (arrow, bolt, stone) | ⬜ TODO | Small; needed with `CombatSystem` |
 | Attack/impact effects | ⬜ TODO | |
