@@ -48,6 +48,8 @@ var _selected_id: int = 0
 func _init() -> void:
 	custom_minimum_size = Vector2(320.0, 0.0)
 	_background = HudStyle.add_panel_background(self)
+	if _background != null:
+		_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)

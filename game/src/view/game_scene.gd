@@ -140,40 +140,45 @@ func _build_hud() -> void:
 	_groups_hud.group_assign_requested.connect(_on_group_assign_requested)
 	hud.add_child(_groups_hud)
 
+	# A fixed footprint a little larger than the rotated diamond's own bounding
+	# box (SIZE * sqrt(2)) so its tips have room to reach almost to the edges
+	# without the corner buttons around it being pushed out further still.
+	var minimap_area := Control.new()
+	minimap_area.custom_minimum_size = Vector2(Minimap.AREA_SIZE, Minimap.AREA_SIZE)
+	minimap_area.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	minimap_area.position = Vector2(-Minimap.AREA_SIZE - 12.0, -Minimap.AREA_SIZE - 12.0)
+	hud.add_child(minimap_area)
+
 	_minimap = Minimap.new()
-	_minimap.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_minimap.position = Vector2(-Minimap.SIZE - 12.0, -Minimap.SIZE - 12.0)
+	_minimap.position = Vector2(Minimap.AREA_SIZE - Minimap.SIZE, Minimap.AREA_SIZE - Minimap.SIZE) * 0.5
 	_minimap.tapped.connect(_on_minimap_tapped)
 	_minimap.double_tapped.connect(_on_minimap_double_tapped)
-	hud.add_child(_minimap)
+	minimap_area.add_child(_minimap)
 
 	# PLAN.md 8.2b / ASSET_MISSING.md 240: a circular frame with 4 corner
 	# buttons is sourced from the dragon pack but not integrated, and
 	# chat/trade/tech-tree don't exist yet to give these something to do --
 	# disabled placeholders so the corner reads as "coming soon" rather than
-	# empty, not real buttons.
-	var minimap_buttons := HBoxContainer.new()
-	minimap_buttons.add_theme_constant_override("separation", 4)
-	minimap_buttons.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	minimap_buttons.position = Vector2(-Minimap.SIZE - 12.0, -Minimap.SIZE - 52.0)
-	hud.add_child(minimap_buttons)
+	# empty, not real buttons. Added to minimap_area AFTER the minimap so they
+	# sit on top of the rotated diamond's tips and stay clickable rather than
+	# being covered by them; the two VSeparators are flex spacers, not visible
+	# lines, that push each pair of buttons out to the area's own corners.
+	var minimap_buttons := GridContainer.new()
+	minimap_buttons.columns = 3
+	minimap_buttons.set_anchors_preset(Control.PRESET_FULL_RECT)
+	minimap_area.add_child(minimap_buttons)
 
-	for icon_file in ["hud_chat.png", "hud_trade.png", "hud_techtree.png", "hud_settings.png"]:
-		var corner_btn := TextureButton.new()
-		var icon_path := "res://assets/ui/icons/%s" % icon_file
-		if ResourceLoader.exists(icon_path):
-			corner_btn.texture_normal = load(icon_path)
-		corner_btn.ignore_texture_size = true
-		corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-		corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
-		corner_btn.disabled = true
-		corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
-		minimap_buttons.add_child(corner_btn)
+	for pair in [["hud_chat.png", "hud_trade.png"], ["hud_techtree.png", "hud_settings.png"]]:
+		minimap_buttons.add_child(_corner_button(pair[0]))
+		var sep := VSeparator.new()
+		sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		minimap_buttons.add_child(sep)
+		minimap_buttons.add_child(_corner_button(pair[1]))
 
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_toast.position = Vector2(-160.0, 90.0)
+	_toast.position = Vector2(-160.0, 409.0)
 	hud.add_child(_toast)
 
 	# Phase 9.1 / ASSET_MISSING.md 234: no age progression exists in the sim
@@ -189,29 +194,29 @@ func _build_hud() -> void:
 	hud.add_child(age_header)
 
 	var age_margin := MarginContainer.new()
-	age_margin.add_theme_constant_override("margin_left", 12)
-	age_margin.add_theme_constant_override("margin_right", 12)
+	age_margin.add_theme_constant_override("margin_left", 35)
+	age_margin.add_theme_constant_override("margin_right", 35)
 	age_margin.add_theme_constant_override("margin_top", 6)
-	age_margin.add_theme_constant_override("margin_bottom", 6)
+	age_margin.add_theme_constant_override("margin_bottom", 12)
 	age_header.add_child(age_margin)
 
 	var age_box := VBoxContainer.new()
 	age_box.add_theme_constant_override("separation", 2)
 	age_margin.add_child(age_box)
 
+	# Title and pause button share a row -- the pause button used to be its
+	# own top-level TextureButton pinned to the top-right corner, but the
+	# ui_builder HUD mockup folded it into the age header instead so the two
+	# pieces of top-of-screen chrome read as one panel rather than two.
+	var age_top_row := HBoxContainer.new()
+	age_box.add_child(age_top_row)
+
 	var age_title := Label.new()
 	age_title.text = "AGE I"
+	age_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	age_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	age_title.add_theme_color_override("font_color", HudStyle.GOLD)
-	age_box.add_child(age_title)
-
-	var age_progress := ProgressBar.new()
-	age_progress.min_value = 0.0
-	age_progress.max_value = 100.0
-	age_progress.value = 0.0
-	age_progress.show_percentage = false
-	age_progress.custom_minimum_size = Vector2(0.0, 8.0)
-	age_box.add_child(age_progress)
+	age_top_row.add_child(age_title)
 
 	var pause_btn := TextureButton.new()
 	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
@@ -221,13 +226,35 @@ func _build_hud() -> void:
 	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	pause_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pause_btn.custom_minimum_size = Vector2(48.0, 48.0)
-	pause_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	pause_btn.position = Vector2(-60.0, 12.0)
 	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
-	hud.add_child(pause_btn)
+	age_top_row.add_child(pause_btn)
+
+	var age_progress := ProgressBar.new()
+	age_progress.min_value = 0.0
+	age_progress.max_value = 100.0
+	age_progress.value = 0.0
+	age_progress.show_percentage = false
+	age_progress.custom_minimum_size = Vector2(0.0, 8.0)
+	age_box.add_child(age_progress)
 
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
+
+
+## One disabled placeholder corner button (chat/trade/tech-tree/settings);
+## shared by the two rows `_build_hud()` assembles around the minimap.
+func _corner_button(icon_file: String) -> TextureButton:
+	var corner_btn := TextureButton.new()
+	var icon_path := "res://assets/ui/icons/%s" % icon_file
+	if ResourceLoader.exists(icon_path):
+		corner_btn.texture_normal = load(icon_path)
+	corner_btn.ignore_texture_size = true
+	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
+	corner_btn.disabled = true
+	corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
+	return corner_btn
 
 	# Past the control-group stack (12 + 64 px wide) rather than under it --
 	# these are dev/debug controls, not part of UI_Design.md's layout, so they
@@ -461,17 +488,12 @@ func _on_debug_destroy_requested(target_id: int) -> void:
 	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
 
 
-## Blips and the camera-viewport rectangle (PLAN.md 8.2a). Separate from
-## _refresh_hud() -- that one drains once per snapshot into EventBus signals
-## other widgets read; the minimap is driven directly since nothing else
-## needs "every entity's facts" broadcast for its sake.
+## Blips (PLAN.md 8.2a). Separate from _refresh_hud() -- that one drains once
+## per snapshot into EventBus signals other widgets read; the minimap is
+## driven directly since nothing else needs "every entity's facts" broadcast
+## for its sake.
 func _refresh_minimap() -> void:
 	_minimap.update_entities(_view.all_facts(), Net.local_player_id())
-
-	var half := _camera.visible_size() * 0.5
-	var top_left := Iso.world_to_tile_f(_camera.position - half)
-	var bottom_right := Iso.world_to_tile_f(_camera.position + half)
-	_minimap.update_camera_rect(Rect2(top_left, bottom_right - top_left))
 
 
 ## Tap the minimap to move the camera there (PLAN.md 3.8). MVP has no 3.7

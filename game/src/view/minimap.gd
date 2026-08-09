@@ -1,25 +1,30 @@
-## The minimap (PLAN.md 8.2a): baked terrain colours, entity blips, the
-## camera's current viewport rectangle, tap to move the camera there (3.8),
-## and double-tap to centre on the player's own Town Centre (3.4).
+## The minimap (PLAN.md 8.2a): baked terrain colours, entity blips, tap to move
+## the camera there (3.8), and double-tap to centre on the player's own Town
+## Centre (3.4). No camera-viewport rectangle -- dropped per UI_Design.md, the
+## diamond reads better without one.
 ##
 ## No dedicated minimap frame exists in the Kibyra pack (ASSET_MISSING.md
-## 1.5) -- UI_Design.jpg's ornate diamond frame is drawn here as a double gold
-## rectangle border (`HudStyle.GOLD`, the same accent every other HUD panel
-## uses) instead of left missing, the same "placeholder until the art exists"
-## convention as everywhere else art is not final.
+## 1.5) -- UI_Design.jpg's ornate diamond frame is approximated by drawing an
+## ordinary square (double gold rectangle border, `HudStyle.GOLD`) and rotating
+## the whole control 45 degrees in `_init()`, rather than a fallback "left
+## missing" rectangle.
 ##
 ## Terrain is baked into a small `Image` once per `build_terrain()` call --
 ## the same placeholder-colour trick `TerrainLayer._placeholder_texture()`
-## already uses per-tile, at minimap scale instead. Entities and the camera
-## rect are cheap to redraw fresh every snapshot since they move every tick.
+## already uses per-tile, at minimap scale instead. Entities are cheap to
+## redraw fresh every snapshot since they move every tick.
 class_name Minimap
 extends Control
 
-const SIZE := 220.0
+## The square itself, before the 45-degree rotation `_init()` applies to turn
+## it into UI_Design.jpg's diamond frame. `AREA_SIZE` is the footprint
+## GameScene reserves for it (the rotated bounding box plus a little room for
+## the diamond's tips), used to centre this square inside that footprint.
+const SIZE := 150.0
+const AREA_SIZE := 200.0
 const OWN_COLOR := Color(0.35, 1.0, 0.45)
 const OTHER_COLOR := Color(1.0, 0.35, 0.3)
 const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
-const CAMERA_RECT_COLOR := Color(1.0, 1.0, 1.0, 0.85)
 const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
 const _FRAME_OUTER_WIDTH := 4.0
 const _FRAME_INNER_WIDTH := 1.5
@@ -34,13 +39,18 @@ signal double_tapped()
 var _map_size: Vector2i = Vector2i.ZERO
 var _terrain_tex: ImageTexture = null
 var _blips: Array[Dictionary] = []          # [{tile: Vector2i, color: Color}]
-var _camera_rect_tiles: Rect2 = Rect2()
 var _double_tap := DoubleTapDetector.new()
 
 
 func _init() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Rotate around the square's own centre, not its top-left corner -- terrain,
+	# blips and the frame are all drawn in _draw() below in the SAME unrotated
+	# local space, so Godot's canvas transform carries every one of them into
+	# the diamond automatically; nothing here needs its own rotation math.
+	pivot_offset = Vector2(SIZE, SIZE) * 0.5
+	rotation = deg_to_rad(45.0)
 
 
 ## Safe to call again to rebuild; a size/terrain mismatch clears to blank
@@ -77,14 +87,6 @@ func update_entities(facts: Dictionary, local_owner: int) -> void:
 	queue_redraw()
 
 
-## `visible_tiles` is the camera's current view, in fractional tile
-## coordinates -- `CameraRig.position`/`visible_size()` converted through
-## `Iso.world_to_tile_f()` by the caller, which already owns the camera.
-func update_camera_rect(visible_tiles: Rect2) -> void:
-	_camera_rect_tiles = visible_tiles
-	queue_redraw()
-
-
 func _terrain_color(kind: int) -> Color:
 	var visual_id: StringName = TerrainLayer.TERRAIN_VISUALS.get(kind, &"")
 	if visual_id == &"":
@@ -115,11 +117,6 @@ func _draw() -> void:
 
 	for b in _blips:
 		draw_circle(_map_to_local(b["tile"]), 2.0, b["color"])
-
-	if _map_size.x > 0 and _map_size.y > 0 and _camera_rect_tiles.size != Vector2.ZERO:
-		var a := _map_to_local(_camera_rect_tiles.position)
-		var b := _map_to_local(_camera_rect_tiles.end)
-		draw_rect(Rect2(a, b - a), CAMERA_RECT_COLOR, false, 2.0)
 
 	# A double line rather than one stroke, echoing the gold-on-dark edge every
 	# other panel gets from `panel_background.png`'s own border art -- there is

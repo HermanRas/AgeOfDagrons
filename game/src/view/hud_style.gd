@@ -15,6 +15,12 @@ const DARK_BG := Color("#2B1D14")
 ## missing, the same "leave it out rather than fake it" convention every other
 ## optional asset load in this codebase follows.
 static func add_panel_background(target: Control) -> TextureRect:
+	# PanelContainer/Panel draw their own themed "panel" StyleBox regardless of
+	# what children are added -- left alone, its default rectangular fill shows
+	# through the art's transparent, rounded corners as a shadow-like halo (found
+	# live comparing the in-editor HUD builder against the running game).
+	target.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+
 	if not ResourceLoader.exists(PANEL_BG_PATH):
 		return null
 	var bg := TextureRect.new()

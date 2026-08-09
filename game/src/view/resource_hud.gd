@@ -41,12 +41,18 @@ const _DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
 ## `_ready()`-only setup.
 func _init() -> void:
 	custom_minimum_size = Vector2(120.0, 0.0)
-	HudStyle.add_panel_background(self)
+	var bg := HudStyle.add_panel_background(self)
+	# Tuned in the ui_builder HUD mockup against the dragon-frame art: the frame's
+	# gold border is thicker along the top and left than the plain 10px margin
+	# HudStyle's default fit assumed, and KEEP_ASPECT_COVERED (vs. the shared
+	# STRETCH_SCALE default) keeps the border's own proportions correct.
+	if bg != null:
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_left", 22)
 	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_top", 35)
 	margin.add_theme_constant_override("margin_bottom", 8)
 	add_child(margin)
 
