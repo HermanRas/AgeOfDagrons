@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://xh00lqd26tyj"]
 
 [ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="1_bg"]
 [ext_resource type="Texture2D" uid="uid://dolvc88tkrg4h" path="res://assets/ui/icons/res_stone.png" id="2_stone"]
@@ -7,120 +7,120 @@
 [ext_resource type="Texture2D" uid="uid://b48emgfsus774" path="res://assets/ui/icons/res_food.png" id="5_food"]
 [ext_resource type="Texture2D" uid="uid://c21hseaf4dbgk" path="res://assets/ui/icons/res_villagers.png" id="6_vill"]
 
-[node name="ResourceHud" type="PanelContainer"]
-custom_minimum_size = Vector2(120, 0)
-offset_right = 120.0
-offset_bottom = 132.0
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
 
-[node name="Background" type="TextureRect" parent="."]
+[node name="ResourceHud" type="PanelContainer" unique_id=1830321182]
+texture_filter = 1
+texture_repeat = 1
+custom_minimum_size = Vector2(120, 0)
+offset_right = 152.0
+offset_bottom = 196.0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_panel")
+
+[node name="Background" type="TextureRect" parent="." unique_id=89843752]
+texture_filter = 1
 layout_mode = 2
 mouse_filter = 2
 texture = ExtResource("1_bg")
 expand_mode = 1
 stretch_mode = 6
-texture_filter = 1
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="." unique_id=1418312988]
 layout_mode = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 8
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 35
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 8
 
-[node name="Column" type="VBoxContainer" parent="Margin"]
+[node name="Column" type="VBoxContainer" parent="Margin" unique_id=445800]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Stone" type="HBoxContainer" parent="Margin/Column"]
+[node name="Stone" type="HBoxContainer" parent="Margin/Column" unique_id=1023857555]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="Margin/Column/Stone"]
+[node name="Icon" type="TextureRect" parent="Margin/Column/Stone" unique_id=1833752274]
+texture_filter = 1
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("2_stone")
 expand_mode = 2
 stretch_mode = 4
-texture_filter = 1
 
-[node name="Count" type="Label" parent="Margin/Column/Stone"]
-unique_name_in_owner = true
+[node name="Count" type="Label" parent="Margin/Column/Stone" unique_id=1306286629]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 16
 text = "40"
 
-[node name="Gold" type="HBoxContainer" parent="Margin/Column"]
+[node name="Gold" type="HBoxContainer" parent="Margin/Column" unique_id=315552576]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="Margin/Column/Gold"]
+[node name="Icon" type="TextureRect" parent="Margin/Column/Gold" unique_id=417434792]
+texture_filter = 1
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("3_gold")
 expand_mode = 2
 stretch_mode = 4
-texture_filter = 1
 
-[node name="Count" type="Label" parent="Margin/Column/Gold"]
-unique_name_in_owner = true
+[node name="Count" type="Label" parent="Margin/Column/Gold" unique_id=271852658]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 16
 text = "25"
 
-[node name="Wood" type="HBoxContainer" parent="Margin/Column"]
+[node name="Wood" type="HBoxContainer" parent="Margin/Column" unique_id=1079388051]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="Margin/Column/Wood"]
+[node name="Icon" type="TextureRect" parent="Margin/Column/Wood" unique_id=588123954]
+texture_filter = 1
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("4_wood")
 expand_mode = 2
 stretch_mode = 4
-texture_filter = 1
 
-[node name="Count" type="Label" parent="Margin/Column/Wood"]
-unique_name_in_owner = true
+[node name="Count" type="Label" parent="Margin/Column/Wood" unique_id=441200943]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 16
 text = "60"
 
-[node name="Food" type="HBoxContainer" parent="Margin/Column"]
+[node name="Food" type="HBoxContainer" parent="Margin/Column" unique_id=243472482]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="Margin/Column/Food"]
+[node name="Icon" type="TextureRect" parent="Margin/Column/Food" unique_id=2023377174]
+texture_filter = 1
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("5_food")
 expand_mode = 2
 stretch_mode = 4
-texture_filter = 1
 
-[node name="Count" type="Label" parent="Margin/Column/Food"]
-unique_name_in_owner = true
+[node name="Count" type="Label" parent="Margin/Column/Food" unique_id=1873794125]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 16
 text = "35"
 
-[node name="Villagers" type="HBoxContainer" parent="Margin/Column"]
+[node name="Villagers" type="HBoxContainer" parent="Margin/Column" unique_id=609529149]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="Margin/Column/Villagers"]
+[node name="Icon" type="TextureRect" parent="Margin/Column/Villagers" unique_id=1451553391]
+texture_filter = 1
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("6_vill")
 expand_mode = 2
 stretch_mode = 4
-texture_filter = 1
 
-[node name="Count" type="Label" parent="Margin/Column/Villagers"]
-unique_name_in_owner = true
+[node name="Count" type="Label" parent="Margin/Column/Villagers" unique_id=881971044]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 16

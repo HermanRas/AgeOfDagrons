@@ -1,15 +1,17 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://cnnqr3iaq3wga"]
 
-[ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/ResourceHud.tscn" id="1_res"]
+[ext_resource type="PackedScene" uid="uid://xh00lqd26tyj" path="res://scenes/ui_builder/widgets/ResourceHud.tscn" id="1_res"]
 [ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/ControlGroupsHud.tscn" id="2_groups"]
-[ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/Minimap.tscn" id="3_minimap"]
+[ext_resource type="PackedScene" uid="uid://c37iolhvyfqog" path="res://scenes/ui_builder/widgets/Minimap.tscn" id="3_minimap"]
 [ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/NoticeToast.tscn" id="4_toast"]
 [ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="5_panelbg"]
 [ext_resource type="Texture2D" uid="uid://doau0aqlyw6u6" path="res://assets/ui/hud/portrait_frame.png" id="6_frame"]
 [ext_resource type="Texture2D" uid="uid://bayn678g7xfe5" path="res://assets/ui/hud/health_bar.png" id="7_healthbar"]
 [ext_resource type="Texture2D" uid="uid://cepn74bamo361" path="res://assets/ui/menu/pause_icon.png" id="8_pause"]
 
-[node name="HUD" type="Control"]
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
+
+[node name="HUD" type="Control" unique_id=440099496]
 custom_minimum_size = Vector2(1152, 648)
 layout_mode = 3
 anchors_preset = 15
@@ -18,7 +20,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1341333192]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -27,230 +29,227 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.168627, 0.113725, 0.078431, 1)
 
-[node name="ControlGroupsHud" parent="." instance=ExtResource("2_groups")]
+[node name="ControlGroupsHud" parent="." unique_id=1147338853 instance=ExtResource("2_groups")]
 layout_mode = 1
 offset_left = 12.0
 offset_top = 12.0
 offset_right = 76.0
 offset_bottom = 352.0
 
-[node name="ResourceHud" parent="." instance=ExtResource("1_res")]
+[node name="ResourceHud" parent="." unique_id=1830321182 instance=ExtResource("1_res")]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -152.0
-offset_top = 64.0
-offset_right = -32.0
-offset_bottom = 196.0
+offset_right = 0.0
 grow_horizontal = 0
 
-[node name="MinimapArea" parent="." instance=ExtResource("3_minimap")]
+[node name="MinimapArea" parent="." unique_id=1894382903 instance=ExtResource("3_minimap")]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -232.0
-offset_top = -272.0
+offset_left = -212.0
+offset_top = -212.0
 offset_right = -12.0
 offset_bottom = -12.0
 grow_horizontal = 0
 grow_vertical = 0
 
-[node name="AgeHeader" type="PanelContainer" parent="."]
+[node name="AgeHeader" type="PanelContainer" parent="." unique_id=1572680092]
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
+anchor_top = 0.5
 anchor_right = 0.5
+anchor_bottom = 0.5
 offset_left = -120.0
-offset_top = 8.0
+offset_top = -314.0
 offset_right = 120.0
-offset_bottom = 8.0
+offset_bottom = -269.0
 grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_panel")
 
-[node name="Background" type="TextureRect" parent="AgeHeader"]
+[node name="Background" type="TextureRect" parent="AgeHeader" unique_id=1097563939]
+texture_filter = 1
 layout_mode = 2
 mouse_filter = 2
 texture = ExtResource("5_panelbg")
 expand_mode = 1
-stretch_mode = 6
-texture_filter = 1
 
-[node name="Margin" type="MarginContainer" parent="AgeHeader"]
+[node name="Margin" type="MarginContainer" parent="AgeHeader" unique_id=1743304605]
 layout_mode = 2
-theme_override_constants/margin_left = 12
+theme_override_constants/margin_left = 35
 theme_override_constants/margin_top = 6
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 6
+theme_override_constants/margin_right = 35
+theme_override_constants/margin_bottom = 12
 
-[node name="Box" type="VBoxContainer" parent="AgeHeader/Margin"]
+[node name="Box" type="VBoxContainer" parent="AgeHeader/Margin" unique_id=1962695241]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Title" type="Label" parent="AgeHeader/Margin/Box"]
+[node name="HBoxContainer" type="HBoxContainer" parent="AgeHeader/Margin/Box" unique_id=1948538366]
 layout_mode = 2
+
+[node name="Title" type="Label" parent="AgeHeader/Margin/Box/HBoxContainer" unique_id=976708434]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
-horizontal_alignment = 1
 text = "AGE I"
+horizontal_alignment = 1
 
-[node name="Progress" type="ProgressBar" parent="AgeHeader/Margin/Box"]
-custom_minimum_size = Vector2(0, 8)
-layout_mode = 2
-max_value = 100.0
-value = 35.0
-show_percentage = false
-
-[node name="PauseButton" type="TextureButton" parent="."]
+[node name="PauseButton" type="TextureButton" parent="AgeHeader/Margin/Box/HBoxContainer" unique_id=1644561620]
+texture_filter = 1
 custom_minimum_size = Vector2(48, 48)
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -60.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = 60.0
-grow_horizontal = 0
+layout_mode = 2
 texture_normal = ExtResource("8_pause")
 ignore_texture_size = true
 stretch_mode = 5
-texture_filter = 1
 
-[node name="NoticeToast" parent="." instance=ExtResource("4_toast")]
+[node name="Progress" type="ProgressBar" parent="AgeHeader/Margin/Box" unique_id=1126334529]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+value = 35.0
+show_percentage = false
+
+[node name="NoticeToast" parent="." unique_id=2115710737 instance=ExtResource("4_toast")]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
+anchor_top = 0.5
 anchor_right = 0.5
+anchor_bottom = 0.5
 offset_left = -160.0
-offset_top = 90.0
+offset_top = 85.0
 offset_right = 160.0
-offset_bottom = 146.0
+offset_bottom = 141.0
 grow_horizontal = 2
+grow_vertical = 2
 
-[node name="SelectionPanel" type="PanelContainer" parent="."]
+[node name="SelectionPanel" type="PanelContainer" parent="." unique_id=328612402]
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
+anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -220.0
-offset_right = 336.0
-offset_bottom = -104.0
+offset_top = -178.0
+offset_right = -816.0
+offset_bottom = -13.0
+grow_horizontal = 2
 grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_panel")
 
-[node name="Background" type="TextureRect" parent="SelectionPanel"]
+[node name="Background" type="TextureRect" parent="SelectionPanel" unique_id=925297189]
+texture_filter = 1
 layout_mode = 2
 mouse_filter = 2
-texture = ExtResource("5_panelbg")
 expand_mode = 1
 stretch_mode = 6
-texture_filter = 1
 
-[node name="Margin" type="MarginContainer" parent="SelectionPanel"]
+[node name="Margin" type="MarginContainer" parent="SelectionPanel" unique_id=804179722]
 layout_mode = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 12
 
-[node name="Box" type="VBoxContainer" parent="SelectionPanel/Margin"]
+[node name="Box" type="VBoxContainer" parent="SelectionPanel/Margin" unique_id=1357201591]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="Title" type="Label" parent="SelectionPanel/Margin/Box"]
+[node name="Title" type="Label" parent="SelectionPanel/Margin/Box" unique_id=2097584564]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.898039, 0.72549, 0.258824, 1)
 theme_override_font_sizes/font_size = 18
 text = "Villager"
 
-[node name="SingleRow" type="HBoxContainer" parent="SelectionPanel/Margin/Box"]
-visible = true
+[node name="SingleRow" type="HBoxContainer" parent="SelectionPanel/Margin/Box" unique_id=1226451734]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Portrait" type="Control" parent="SelectionPanel/Margin/Box/SingleRow"]
+[node name="Portrait" type="Control" parent="SelectionPanel/Margin/Box/SingleRow" unique_id=1966899616]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="SelectionPanel/Margin/Box/SingleRow/Portrait"]
+[node name="Empty" type="ColorRect" parent="SelectionPanel/Margin/Box/SingleRow/Portrait" unique_id=1319772951]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="SelectionPanel/Margin/Box/SingleRow/Portrait"]
+[node name="Frame" type="TextureRect" parent="SelectionPanel/Margin/Box/SingleRow/Portrait" unique_id=1074924745]
+texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 texture = ExtResource("6_frame")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 1
 
-[node name="Stats" type="VBoxContainer" parent="SelectionPanel/Margin/Box/SingleRow"]
+[node name="Stats" type="VBoxContainer" parent="SelectionPanel/Margin/Box/SingleRow" unique_id=1515653493]
 layout_mode = 2
 
-[node name="HealthBar" type="Control" parent="SelectionPanel/Margin/Box/SingleRow/Stats"]
+[node name="HealthBar" type="Control" parent="SelectionPanel/Margin/Box/SingleRow/Stats" unique_id=233283284]
 custom_minimum_size = Vector2(176, 46)
 layout_mode = 2
 
-[node name="Empty" type="TextureRect" parent="SelectionPanel/Margin/Box/SingleRow/Stats/HealthBar"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="Empty" type="TextureRect" parent="SelectionPanel/Margin/Box/SingleRow/Stats/HealthBar" unique_id=1084123935]
 modulate = Color(0.35, 0.32, 0.3, 1)
-texture = ExtResource("7_healthbar")
 texture_filter = 1
-
-[node name="Fill" type="TextureProgressBar" parent="SelectionPanel/Margin/Box/SingleRow/Stats/HealthBar"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+texture = ExtResource("7_healthbar")
+
+[node name="Fill" type="TextureProgressBar" parent="SelectionPanel/Margin/Box/SingleRow/Stats/HealthBar" unique_id=1428659446]
 texture_filter = 1
-max_value = 100.0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 value = 50.0
-fill_mode = 0
 texture_progress = ExtResource("7_healthbar")
 
-[node name="Detail" type="Label" parent="SelectionPanel/Margin/Box/SingleRow/Stats"]
+[node name="Detail" type="Label" parent="SelectionPanel/Margin/Box/SingleRow/Stats" unique_id=1298325802]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "15 / 30"
 
-[node name="Grid" type="GridContainer" parent="SelectionPanel/Margin/Box"]
+[node name="Grid" type="GridContainer" parent="SelectionPanel/Margin/Box" unique_id=1855747794]
 visible = false
 layout_mode = 2
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 columns = 5
 
-[node name="TrainRow" type="HBoxContainer" parent="SelectionPanel/Margin/Box"]
+[node name="TrainRow" type="HBoxContainer" parent="SelectionPanel/Margin/Box" unique_id=46670843]
 visible = false
 layout_mode = 2
 
-[node name="TrainButton" type="Button" parent="SelectionPanel/Margin/Box/TrainRow"]
+[node name="TrainButton" type="Button" parent="SelectionPanel/Margin/Box/TrainRow" unique_id=1349080625]
 layout_mode = 2
 text = "Train Villager"
 
-[node name="QueueLabel" type="Label" parent="SelectionPanel/Margin/Box/TrainRow"]
+[node name="QueueLabel" type="Label" parent="SelectionPanel/Margin/Box/TrainRow" unique_id=1580100713]
 layout_mode = 2
 text = "2 queued (40%)"
 
-[node name="CancelButton" type="Button" parent="SelectionPanel/Margin/Box/TrainRow"]
+[node name="CancelButton" type="Button" parent="SelectionPanel/Margin/Box/TrainRow" unique_id=2003910344]
 layout_mode = 2
 text = "Cancel"
 
-[node name="DestroyButton" type="Button" parent="SelectionPanel/Margin/Box"]
-visible = true
+[node name="DestroyButton" type="Button" parent="SelectionPanel/Margin/Box" unique_id=1333574114]
 layout_mode = 2
 text = "Destroy (debug)"
