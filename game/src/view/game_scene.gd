@@ -116,7 +116,7 @@ func _build_hud() -> void:
 
 	_panel = SelectionPanel.new()
 	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_panel.position = Vector2(16, -104)
+	_panel.position = Vector2(16, -13)
 	# Anchored at a bottom-left POINT, so by default the panel would grow
 	# downward off-screen as rows are added (found live at 4.6/5.5: the new
 	# Destroy button pushed a building's panel, with its extra Train row, past
