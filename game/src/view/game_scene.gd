@@ -240,11 +240,13 @@ func _build_hud() -> void:
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
-	# Past the control-group stack (12 + 64 px wide) rather than under it --
-	# these are dev/debug controls, not part of UI_Design.md's layout, so they
-	# just need to stay out of its way.
+	# Past the control-group stack (12 + 64 px wide) rather than under it, and
+	# below the age header's own footprint (its pause button makes it ~76px
+	# tall now, found live once it visually collided with this row) -- these
+	# are dev/debug controls, not part of UI_Design.md's layout, so they just
+	# need to stay out of both's way.
 	var build_row := HBoxContainer.new()
-	build_row.position = Vector2(96, 16)
+	build_row.position = Vector2(96, 92)
 	hud.add_child(build_row)
 
 	var house_btn := Button.new()
@@ -263,7 +265,7 @@ func _build_hud() -> void:
 	build_row.add_child(cancel_build_btn)
 
 	_status = Label.new()
-	_status.position = Vector2(96, 48)
+	_status.position = Vector2(96, 124)
 	hud.add_child(_status)
 
 
