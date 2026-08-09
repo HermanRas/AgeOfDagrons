@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/ui_builder/HUD.tscn" id="1"]
+
+[node name="HUD" instance=ExtResource("1")]
+
+[node name="SelectionPanel" parent="."]
+visible = true
+
+[node name="Title" parent="SelectionPanel/Margin/Box"]
+text = "Town Centre"
+
+[node name="SingleRow" parent="SelectionPanel/Margin/Box"]
+visible = true
+
+[node name="Fill" parent="SelectionPanel/Margin/Box/SingleRow/Stats/HealthBar"]
+value = 100.0
+
+[node name="Detail" parent="SelectionPanel/Margin/Box/SingleRow/Stats"]
+text = "2000 / 2000"
+
+[node name="Grid" parent="SelectionPanel/Margin/Box"]
+visible = false
+
+[node name="TrainRow" parent="SelectionPanel/Margin/Box"]
+visible = true
+
+[node name="TrainButton" parent="SelectionPanel/Margin/Box/TrainRow"]
+text = "Train Villager"
+
+[node name="QueueLabel" parent="SelectionPanel/Margin/Box/TrainRow"]
+text = "2 queued (40%)"
+
+[node name="CancelButton" parent="SelectionPanel/Margin/Box/TrainRow"]
+visible = true
+
+[node name="DestroyButton" parent="SelectionPanel/Margin/Box"]
+visible = true
