@@ -134,15 +134,14 @@ grow_vertical = 2
 [node name="SelectionPanel" type="PanelContainer" parent="." unique_id=328612402]
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 1
-anchors_preset = 12
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
 offset_top = -178.0
-offset_right = -816.0
+offset_right = 336.0
 offset_bottom = -13.0
-grow_horizontal = 2
+grow_horizontal = 1
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxEmpty_panel")
 
