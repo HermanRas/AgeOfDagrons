@@ -99,6 +99,9 @@ Note the burial was **deeper than the pixel estimate suggested** — 2.53 m unde
 | Unit/building portrait icons | 🟦 **BAKED (control groups + selection panel)** | `EntityPortrait.frame_for()` (`src/view/entity_portrait.gd`) crops the S-facing static/idle frame straight out of the unit's own baked atlas -- shared by `ControlGroupSlot` (10.1/10.4) and `EntityPortraitView` (8.1a/8.1c), so no separate portrait art is needed |
 | Control-group slot frames (empty + filled) | ✅ **DONE** | Kibyra dragon-pack ring, copied to `game/assets/ui/control_groups/group_slot_ring.png` (see `game/assets/LICENCES.md`). One ring art for both states; empty vs. filled is a placeholder-grey vs. real-icon fill, not two separate ring textures |
 | Selection ring / health dot | ✅ **DONE** | Drawn in-engine: `EntityView._draw_selection_ring()` (4.3) and `EntityView._draw_health_dot()` (4.6) |
+| Action icons — move, stop, attack, build, destroy | ✅ **DONE** | `game/assets/ui/icons/act_{move,stop,attack,build,destroy}.png`, wired into the redesigned `SelectionPanel`'s action column via `SelectionActions.ICONS`. `act_{enter,exit,garrison,guard,leave}.png` also exist but have no action using them yet |
+| Action icons — harvest, repair, upgrade | 🟧 **STAND-IN** | No art of their own; `SelectionActions.ICONS` currently points each at the **nearest existing** icon so the slot still reads: harvest→`res_wood.png` (a resource, not a gather verb), repair→`act_guard.png` (protect, not mend), upgrade→`hud_techtree.png` (the tech-tree HUD button). Bake proper `act_harvest`/`act_repair`/`act_upgrade` and just repoint the three map entries |
+| Formation/stance icons (line, grid, vee, box) | ⬜ TODO | Nothing near enough to stand in, so the four formation slots fall back to their text label (`ActionSlot` draws the label when there is no icon and no portrait to crop). Placeholders anyway — no formation system exists in the sim |
 
 ### 1.6 Audio — MVP
 

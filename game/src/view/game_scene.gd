@@ -126,6 +126,8 @@ func _build_hud() -> void:
 	_panel.train_requested.connect(_on_train_requested)
 	_panel.cancel_requested.connect(_on_cancel_requested)
 	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
+	_panel.place_requested.connect(_enter_placement)
+	_panel.action_requested.connect(_on_action_requested)
 	hud.add_child(_panel)
 
 	_hud = ResourceHUD.new()
@@ -240,32 +242,16 @@ func _build_hud() -> void:
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
-	# Past the control-group stack (12 + 64 px wide) rather than under it, and
-	# below the age header's own footprint (its pause button makes it ~76px
-	# tall now, found live once it visually collided with this row) -- these
-	# are dev/debug controls, not part of UI_Design.md's layout, so they just
-	# need to stay out of both's way.
-	var build_row := HBoxContainer.new()
-	build_row.position = Vector2(96, 92)
-	hud.add_child(build_row)
-
-	var house_btn := Button.new()
-	house_btn.text = "Build House"
-	house_btn.pressed.connect(_enter_placement.bind(&"building.house"))
-	build_row.add_child(house_btn)
-
-	var tc_btn := Button.new()
-	tc_btn.text = "Build Town Centre"
-	tc_btn.pressed.connect(_enter_placement.bind(&"building.town_center"))
-	build_row.add_child(tc_btn)
-
-	var cancel_build_btn := Button.new()
-	cancel_build_btn.text = "Cancel Build"
-	cancel_build_btn.pressed.connect(_exit_placement)
-	build_row.add_child(cancel_build_btn)
-
+	# Placement is reached through the villager's own Build action now (its grid
+	# lists the buildings), so the old Build House / Build Town Centre / Cancel
+	# Build debug row is gone. This label stays: it is the only place a failed
+	# `host_solo()` and the current placement hint are visible.
+	#
+	# Past the control-group stack (12 + 64 px wide) and below the age header's
+	# own footprint -- dev/debug chrome, not part of UI_Design.md's layout, so it
+	# just needs to stay out of both's way.
 	_status = Label.new()
-	_status.position = Vector2(96, 124)
+	_status.position = Vector2(96, 92)
 	hud.add_child(_status)
 
 
@@ -385,7 +371,7 @@ func _on_tapped(screen_pos: Vector2) -> void:
 func _enter_placement(def_id: StringName) -> void:
 	_placing_def_id = def_id
 	_camera.set_locked(true)
-	_status.text = "drag to place a %s, release to drop it  |  Cancel Build to stop" % \
+	_status.text = "drag to place a %s, release to drop it  |  Esc to stop" % \
 			_display_name(def_id)
 	# Shows the ghost immediately under the cursor rather than leaving it
 	# invisible until the mouse so much as twitches (desktop only -- a touch
@@ -478,6 +464,28 @@ func _display_name(def_id: StringName) -> String:
 	return bd.name if bd != null and not bd.name.is_empty() else String(def_id)
 
 
+## The selection panel's plain verbs (UI_Design.md redesign). Only actions with
+## a real command reach here -- `ActionSlot` swallows the disabled placeholders
+## -- so this never has to re-check what MVP implements.
+##
+## Move and Harvest have no button-then-target flow of their own: tapping the
+## ground already moves and tapping a tree already gathers (`_on_tapped`), so
+## they answer with the hint that says so rather than adding a second, parallel
+## way to issue the same order. Stop is the one that acts immediately, having
+## no target to wait for.
+func _on_action_requested(action_id: StringName) -> void:
+	var movable := _view.movable_selection()
+	match action_id:
+		&"stop":
+			if not movable.is_empty():
+				Net.submit_command(StopCommand.new(Net.local_player_id(), movable))
+				_toast.show_message("Holding position")
+		&"move":
+			_toast.show_message("Tap where to move")
+		&"harvest":
+			_toast.show_message("Tap a tree or resource to gather")
+
+
 func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 	Net.submit_command(TrainCommand.new(Net.local_player_id(), building_id, unit_def_id))
 
@@ -552,7 +560,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 
 	if key.keycode == KEY_ESCAPE:
-		if not _pause_menu.visible:
+		# Escape backs out of build mode first -- the Cancel Build button that
+		# used to do this went away with the dev row, and leaving the pause menu
+		# as the only way out of a half-started placement would be worse than
+		# no way at all.
+		if _placing_def_id != &"":
+			_exit_placement()
+		elif not _pause_menu.visible:
 			_pause_menu.open()
 		return
 
