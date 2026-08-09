@@ -1,9 +1,7 @@
-## The resource counter row (PLAN.md 7.1): stone/gold/wood/food plus idle/total
-## villagers.
-##
-## Deliberately plain text, in the same spirit as SelectionPanel's stand-in
-## (4.3): the real icons are ASSET_MISSING.md 1.5's TODO, and whatever is drawn
-## here is thrown away the day they land, so it is not worth polishing now.
+## The resource counter column (PLAN.md 7.1): stone/gold/wood/food plus
+## idle/total villagers, styled per UI_Design.md 3 as a vertical stack of
+## icon+number badges sitting above the minimap, not the plain text row this
+## used to be.
 ##
 ## Reads ONLY from `EventBus` (PLAN.md 6.2), never from the sim and never by
 ## holding a `GameView` reference -- the same separation SelectionPanel keeps by
@@ -29,6 +27,12 @@ var _total: int = 0
 var _stock_labels: Dictionary = {}   # StringName kind -> Label
 var _villagers_label: Label
 
+const _ICON_DIR := "res://assets/ui/icons/"
+const _ICON_SIZE := Vector2(24.0, 24.0)
+
+## UI_Design.md 3's stacking order: Stone, Gold, Wood, Food, then villagers.
+const _DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
+
 
 ## Built in `_init()`, not `_ready()`: nothing here needs the node to be inside
 ## a tree, and a bare `.new()` fully wiring itself (labels built, EventBus
@@ -36,17 +40,23 @@ var _villagers_label: Label
 ## the same way GameView's pool/terrain are field initializers rather than
 ## `_ready()`-only setup.
 func _init() -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
-	add_child(row)
+	custom_minimum_size = Vector2(120.0, 0.0)
+	HudStyle.add_panel_background(self)
 
-	for kind in GameDefs.RESOURCE_KINDS:
-		var label := Label.new()
-		row.add_child(label)
-		_stock_labels[kind] = label
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	add_child(margin)
 
-	_villagers_label = Label.new()
-	row.add_child(_villagers_label)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 4)
+	margin.add_child(column)
+
+	for kind in _DISPLAY_ORDER:
+		_stock_labels[kind] = _add_badge(column, "res_%s.png" % kind)
+	_villagers_label = _add_badge(column, "res_villagers.png")
 
 	_refresh_labels()
 
@@ -84,11 +94,35 @@ func _on_villagers_changed(p_id: int, idle: int, total: int) -> void:
 
 func _refresh_labels() -> void:
 	for kind in _stock_labels:
-		(_stock_labels[kind] as Label).text = "%s %d" % [_tag(kind), stock_of(kind)]
-	_villagers_label.text = "V %d/%d" % [_idle, _total]
+		(_stock_labels[kind] as Label).text = str(stock_of(kind))
+	_villagers_label.text = "%d/%d" % [_idle, _total]
 
 
-## Stand-in for the icon: the resource's initial, capitalised, so the row reads
-## as a row of counters and not as a sentence -- "F 50" not "food 50".
-func _tag(kind: StringName) -> String:
-	return String(kind).left(1).to_upper()
+## One row: the resource's icon (or nothing, if it hasn't landed yet -- the
+## number alone still reads) followed by its count label.
+func _add_badge(column: VBoxContainer, icon_file: String) -> Label:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+
+	var icon_path := _ICON_DIR + icon_file
+	if ResourceLoader.exists(icon_path):
+		var icon := TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		# Without this, TextureRect's default EXPAND_KEEP_SIZE makes its real
+		# minimum size the texture's own pixels (the icon pack ships at
+		# 100x100) regardless of custom_minimum_size below -- exactly the
+		# HudStyle.add_panel_background() bug, just not caught here too. Five
+		# rows of that ballooned this panel to 532px tall and off the bottom
+		# of a 648px viewport (found live, screenshotted).
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.custom_minimum_size = _ICON_SIZE
+		row.add_child(icon)
+
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", HudStyle.GOLD)
+	row.add_child(label)
+	return label

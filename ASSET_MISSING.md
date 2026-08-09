@@ -93,9 +93,9 @@ Note the burial was **deeper than the pixel estimate suggested** — 2.53 m unde
 
 | Asset | Status | Notes |
 |---|---|---|
-| Panel frames, buttons, bars | ✅ **DONE** | Kibyra dragon-pack art integrated: main menu (`game/assets/ui/menu/`), selection/HUD panels (`game/assets/ui/hud/`) -- panel background, portrait frame, health bar, toast banner. All gitignored per-developer copies, see `game/assets/LICENCES.md`. Minimap frame still a plain drawn rectangle -- no dedicated minimap frame exists in the pack |
+| Panel frames, buttons, bars | ✅ **DONE** | Kibyra dragon-pack art integrated: main menu (`game/assets/ui/menu/`), selection/HUD panels (`game/assets/ui/hud/`) -- panel background, portrait frame, health bar, toast banner, now shared via `HudStyle` (`src/view/hud_style.gd`) across `SelectionPanel`/`ResourceHUD`/`Minimap`. All gitignored per-developer copies, see `game/assets/LICENCES.md`. Minimap frame is still a plain drawn double rectangle (`HudStyle.GOLD`) -- no dedicated minimap frame exists in the pack |
 | Fonts | 🟨 SOURCED | `uı-fonts` pack. Ships **inside the APK** |
-| Resource icons (stone, gold, wood, food, villager) | ✅ **DONE** | Stale line, corrected 2026-08-08 — all 5 already exist at `game/assets/ui/icons/res_{stone,gold,wood,food,villagers}.png`, delivered as part of the AI-generated icon sheet (PLAN.md §13.2 item 4), just never reflected here |
+| Resource icons (stone, gold, wood, food, villager) | ✅ **DONE** | Wired into `ResourceHUD` (2026-08-08) as a vertical icon+number stack per UI_Design.md 3, replacing the plain-text row. All 5 exist at `game/assets/ui/icons/res_{stone,gold,wood,food,villagers}.png`, delivered as part of the AI-generated icon sheet (PLAN.md §13.2 item 4) |
 | Unit/building portrait icons | 🟦 **BAKED (control groups + selection panel)** | `EntityPortrait.frame_for()` (`src/view/entity_portrait.gd`) crops the S-facing static/idle frame straight out of the unit's own baked atlas -- shared by `ControlGroupSlot` (10.1/10.4) and `EntityPortraitView` (8.1a/8.1c), so no separate portrait art is needed |
 | Control-group slot frames (empty + filled) | ✅ **DONE** | Kibyra dragon-pack ring, copied to `game/assets/ui/control_groups/group_slot_ring.png` (see `game/assets/LICENCES.md`). One ring art for both states; empty vs. filled is a placeholder-grey vs. real-icon fill, not two separate ring textures |
 | Selection ring / health dot | ✅ **DONE** | Drawn in-engine: `EntityView._draw_selection_ring()` (4.3) and `EntityView._draw_health_dot()` (4.6) |
@@ -231,13 +231,13 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 
 | Asset | Status | Notes |
 |---|---|---|
-| Age header banner + roman numerals I–V | ⬜ TODO | Phase 9.1 |
+| Age header banner + roman numerals I–V | ⬜ TODO | Phase 9.1. A static, unwired stub (fixed "AGE I" title + empty progress bar, `HudStyle` panel background) now sits top-center in `game_scene.gd` so the layout isn't missing the slot -- no age progression exists in the sim yet, so it's not driven by anything |
 | Tech tree screen chrome | ⬜ TODO | Reference: `insperation_pictures/techtree.png` |
 | Tech/upgrade icons | ⬜ TODO | **Large volume** — one per tech |
 | Market/trade screen chrome | ⬜ TODO | Reference: `insperation_pictures/Market.png` |
 | Chat/voice overlay | ⬜ TODO | Reference: `UI_Design_Chat_Voice.jpg` |
 | Victory / defeat screens | ⬜ TODO | |
-| Minimap frame (circular, 4 corner buttons) | 🟨 SOURCED | Dragon pack |
+| Minimap frame (circular, 4 corner buttons) | 🟨 SOURCED | Dragon pack. 4 disabled placeholder buttons (`hud_chat/hud_trade/hud_techtree/hud_settings`) now sit above the minimap in `game_scene.gd` -- inert since chat/trade/tech-tree don't exist yet, just holding the visual slot |
 | Faction emblems | ⬜ TODO | One per faction |
 
 ### 2.6 Audio — full set

@@ -1,12 +1,139 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cwffvn3psa2eh"]
 
-[ext_resource type="Script" path="res://src/view/main_menu.gd" id="1"]
+[ext_resource type="Script" uid="uid://ctpet3o30cfnm" path="res://src/view/main_menu.gd" id="1_e1dod"]
+[ext_resource type="Texture2D" uid="uid://b6i67m0owvwi6" path="res://assets/ui/main_menu_panel.png" id="2_bvc5d"]
+[ext_resource type="Texture2D" uid="uid://cfkr0lq0kayvp" path="res://assets/ui/menu/play_button.png" id="3_ekkse"]
+[ext_resource type="Texture2D" uid="uid://cluf8511fqlqr" path="res://assets/ui/menu/multiplayer_button.png" id="4_84lro"]
+[ext_resource type="Texture2D" uid="uid://dl5f3ep4l72oi" path="res://assets/ui/menu/settings_button.png" id="5_u1wty"]
+[ext_resource type="Texture2D" uid="uid://fafn7agjbscf" path="res://assets/ui/menu/credits_button.png" id="6_u2yxo"]
+[ext_resource type="Texture2D" uid="uid://yxi6ldbpb2xe" path="res://assets/ui/menu/quit_button.png" id="7_riglq"]
+[ext_resource type="Script" uid="uid://dks1gh3d2jbbq" path="res://src/view/notice_toast.gd" id="8_f3x3n"]
 
-[node name="MainMenu" type="Control"]
+[node name="MainMenu" type="Control" unique_id=773842893]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("1")
+script = ExtResource("1_e1dod")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1047064871]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.16862746, 0.11372549, 0.078431375, 1)
+
+[node name="PanelRoot" type="Control" parent="." unique_id=1880336257]
+anchors_preset = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -317.0
+offset_right = 320.0
+offset_bottom = 317.0
+
+[node name="Frame" type="TextureRect" parent="PanelRoot" unique_id=1279907388]
+texture_filter = 1
+custom_minimum_size = Vector2(640, 634)
+layout_mode = 0
+offset_right = 640.0
+offset_bottom = 634.0
+texture = ExtResource("2_bvc5d")
+stretch_mode = 4
+
+[node name="Title" type="Label" parent="PanelRoot" unique_id=1387849730]
+layout_mode = 0
+offset_top = 20.0
+offset_right = 640.0
+offset_bottom = 110.0
+theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.25882354, 1)
+theme_override_font_sizes/font_size = 34
+text = "AGE OF DRAGON"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="PanelRoot" unique_id=1222301280]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 190.0
+offset_right = 560.0
+offset_bottom = 190.0
+theme_override_constants/separation = 40
+
+[node name="ButtonsLeft" type="VBoxContainer" parent="PanelRoot/Buttons"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=945022230]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+texture_normal = ExtResource("3_ekkse")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="MultiplayerButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=490170093]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+texture_normal = ExtResource("4_84lro")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="SettingsButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=1765604188]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+texture_normal = ExtResource("5_u1wty")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="ButtonsRight" type="VBoxContainer" parent="PanelRoot/Buttons"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CreditsButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsRight" unique_id=963485278]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+texture_normal = ExtResource("6_u2yxo")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="HowToButton" type="Button" parent="PanelRoot/Buttons/ButtonsRight"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.25882354, 1)
+theme_override_font_sizes/font_size = 20
+text = "How To"
+
+[node name="QuitButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsRight" unique_id=768887615]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(220, 70)
+layout_mode = 2
+texture_normal = ExtResource("7_riglq")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Toast" type="Control" parent="." unique_id=1744723026]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+custom_minimum_size = Vector2(320, 56)
+anchors_preset = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_top = -120.0
+offset_right = -160.0
+offset_bottom = -120.0
+mouse_filter = 2
+script = ExtResource("8_f3x3n")

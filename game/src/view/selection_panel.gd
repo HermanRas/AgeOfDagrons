@@ -18,7 +18,6 @@ signal cancel_requested(building_id: int, index: int)
 ## has no combat to bring hp to 0 any other way.
 signal debug_destroy_requested(target_id: int)
 
-const _PANEL_BG_PATH := "res://assets/ui/hud/panel_background.png"
 const _GRID_COLUMNS := 5
 ## Beyond this many, the title's "(+N)" suffix already says how many more
 ## there are -- a portrait grid past 20 reads as clutter, not information
@@ -48,15 +47,7 @@ var _selected_id: int = 0
 ## already follow.
 func _init() -> void:
 	custom_minimum_size = Vector2(320.0, 0.0)
-
-	if ResourceLoader.exists(_PANEL_BG_PATH):
-		_background = TextureRect.new()
-		_background.texture = load(_PANEL_BG_PATH)
-		_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_background.stretch_mode = TextureRect.STRETCH_SCALE
-		_background.set_anchors_preset(Control.PRESET_FULL_RECT)
-		_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(_background)
+	_background = HudStyle.add_panel_background(self)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)
@@ -70,7 +61,7 @@ func _init() -> void:
 
 	_title = Label.new()
 	_title.add_theme_font_size_override("font_size", 18)
-	_title.add_theme_color_override("font_color", Color("#E5B842"))
+	_title.add_theme_color_override("font_color", HudStyle.GOLD)
 	box.add_child(_title)
 
 	_single_row = HBoxContainer.new()

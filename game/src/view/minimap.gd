@@ -3,9 +3,10 @@
 ## and double-tap to centre on the player's own Town Centre (3.4).
 ##
 ## No dedicated minimap frame exists in the Kibyra pack (ASSET_MISSING.md
-## 1.5) -- UI_Design.jpg's ornate diamond frame is drawn here as a plain gold
-## rectangle border instead of left missing, the same "placeholder until the
-## art exists" convention as everywhere else art is not final.
+## 1.5) -- UI_Design.jpg's ornate diamond frame is drawn here as a double gold
+## rectangle border (`HudStyle.GOLD`, the same accent every other HUD panel
+## uses) instead of left missing, the same "placeholder until the art exists"
+## convention as everywhere else art is not final.
 ##
 ## Terrain is baked into a small `Image` once per `build_terrain()` call --
 ## the same placeholder-colour trick `TerrainLayer._placeholder_texture()`
@@ -19,7 +20,10 @@ const OWN_COLOR := Color(0.35, 1.0, 0.45)
 const OTHER_COLOR := Color(1.0, 0.35, 0.3)
 const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
 const CAMERA_RECT_COLOR := Color(1.0, 1.0, 1.0, 0.85)
-const FRAME_COLOR := Color(0.85, 0.65, 0.2)
+const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
+const _FRAME_OUTER_WIDTH := 4.0
+const _FRAME_INNER_WIDTH := 1.5
+const _FRAME_INSET := 4.0
 
 ## Tap moves the camera there (3.8); double tap centres on the player's own
 ## Town Centre (3.4) instead -- `GameScene` resolves the latter since finding
@@ -107,7 +111,7 @@ func _draw() -> void:
 	if _terrain_tex != null:
 		draw_texture_rect(_terrain_tex, rect, false)
 	else:
-		draw_rect(rect, Color(0.1, 0.1, 0.1))
+		draw_rect(rect, HudStyle.DARK_BG)
 
 	for b in _blips:
 		draw_circle(_map_to_local(b["tile"]), 2.0, b["color"])
@@ -117,7 +121,13 @@ func _draw() -> void:
 		var b := _map_to_local(_camera_rect_tiles.end)
 		draw_rect(Rect2(a, b - a), CAMERA_RECT_COLOR, false, 2.0)
 
-	draw_rect(rect, FRAME_COLOR, false, 3.0)
+	# A double line rather than one stroke, echoing the gold-on-dark edge every
+	# other panel gets from `panel_background.png`'s own border art -- there is
+	# no equivalent texture for the minimap (see this file's header), so the
+	# nearest a plain `draw_rect` gets to that look is an outer band with a
+	# thinner inner line set apart from it.
+	draw_rect(rect, FRAME_COLOR, false, _FRAME_OUTER_WIDTH)
+	draw_rect(rect.grow(-_FRAME_INSET), FRAME_COLOR, false, _FRAME_INNER_WIDTH)
 
 
 ## A single tap is deferred by `DoubleTapDetector.DOUBLE_TAP_MS` before it

@@ -130,7 +130,7 @@ func _build_hud() -> void:
 
 	_hud = ResourceHUD.new()
 	_hud.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_hud.position = Vector2(-320, 12)
+	_hud.position = Vector2(-152, 64)
 	hud.add_child(_hud)
 
 	_groups_hud = ControlGroupsHud.new()
@@ -147,10 +147,71 @@ func _build_hud() -> void:
 	_minimap.double_tapped.connect(_on_minimap_double_tapped)
 	hud.add_child(_minimap)
 
+	# PLAN.md 8.2b / ASSET_MISSING.md 240: a circular frame with 4 corner
+	# buttons is sourced from the dragon pack but not integrated, and
+	# chat/trade/tech-tree don't exist yet to give these something to do --
+	# disabled placeholders so the corner reads as "coming soon" rather than
+	# empty, not real buttons.
+	var minimap_buttons := HBoxContainer.new()
+	minimap_buttons.add_theme_constant_override("separation", 4)
+	minimap_buttons.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	minimap_buttons.position = Vector2(-Minimap.SIZE - 12.0, -Minimap.SIZE - 52.0)
+	hud.add_child(minimap_buttons)
+
+	for icon_file in ["hud_chat.png", "hud_trade.png", "hud_techtree.png", "hud_settings.png"]:
+		var corner_btn := TextureButton.new()
+		var icon_path := "res://assets/ui/icons/%s" % icon_file
+		if ResourceLoader.exists(icon_path):
+			corner_btn.texture_normal = load(icon_path)
+		corner_btn.ignore_texture_size = true
+		corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+		corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
+		corner_btn.disabled = true
+		corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
+		minimap_buttons.add_child(corner_btn)
+
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_toast.position = Vector2(-160.0, 90.0)
 	hud.add_child(_toast)
+
+	# Phase 9.1 / ASSET_MISSING.md 234: no age progression exists in the sim
+	# yet, so this is static chrome only -- a fixed title and an empty
+	# progress bar, not wired to anything. It exists so top-center reads as
+	# finished rather than a hole in the layout; GameScene will drive real
+	# values here once ages do.
+	var age_header := PanelContainer.new()
+	age_header.custom_minimum_size = Vector2(240.0, 0.0)
+	HudStyle.add_panel_background(age_header)
+	age_header.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	age_header.position = Vector2(-120.0, 8.0)
+	hud.add_child(age_header)
+
+	var age_margin := MarginContainer.new()
+	age_margin.add_theme_constant_override("margin_left", 12)
+	age_margin.add_theme_constant_override("margin_right", 12)
+	age_margin.add_theme_constant_override("margin_top", 6)
+	age_margin.add_theme_constant_override("margin_bottom", 6)
+	age_header.add_child(age_margin)
+
+	var age_box := VBoxContainer.new()
+	age_box.add_theme_constant_override("separation", 2)
+	age_margin.add_child(age_box)
+
+	var age_title := Label.new()
+	age_title.text = "AGE I"
+	age_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	age_title.add_theme_color_override("font_color", HudStyle.GOLD)
+	age_box.add_child(age_title)
+
+	var age_progress := ProgressBar.new()
+	age_progress.min_value = 0.0
+	age_progress.max_value = 100.0
+	age_progress.value = 0.0
+	age_progress.show_percentage = false
+	age_progress.custom_minimum_size = Vector2(0.0, 8.0)
+	age_box.add_child(age_progress)
 
 	var pause_btn := TextureButton.new()
 	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
@@ -160,8 +221,8 @@ func _build_hud() -> void:
 	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	pause_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pause_btn.custom_minimum_size = Vector2(48.0, 48.0)
-	pause_btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	pause_btn.position = Vector2(-24.0, 12.0)
+	pause_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	pause_btn.position = Vector2(-60.0, 12.0)
 	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
 	hud.add_child(pause_btn)
 

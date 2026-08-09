@@ -1093,7 +1093,7 @@ problem to mitigate.
 > **One player, one small map, hosted on loopback, on a physical Android phone:**
 > starts with **1 Town Centre and 5 villagers** (IDEA 2.6), pans/zooms the camera,
 > selects villagers by tap and two-finger box, assigns them to **control groups**,
-> sends them to chop wood / mine gold / hunt a deer, watches resource counters rise,
+> sends them to chop wood / mine gold / gather food, watches resource counters rise,
 > builds a House and a second Town Centre, queues and trains villagers, and sees the
 > idle-villager count work. Units die, corpses fade, buildings can be destroyed by a
 > debug command. Art is placeholder; the art pack downloads and mounts if present.
@@ -1207,10 +1207,10 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 
 | # | Item | Tag |
 |---|---|---|
-| 6.1a | Deer as a huntable food node (carcass gatherable) | **[MVP]** |
+| 6.1a | done, superseded -- res.berry_bush stands in for the MVP food node (session decision, MapGen.DEBUG_FOOD's own header): it needs no hunt/kill/carcass state machine at all, gathers like a tree, and vis.berry_bush is fully delivered with a real atlas where the deer carcass gap (below) is not. res.deer/vis.deer stay defined but unused -- 6.1a's literal 'huntable' wording no longer describes what the debug map spawns, but the MVP's food-gathering requirement (10) is met. Revisit if wildlife hunting comes back | **[MVP]** |
 | 6.1b | Wildlife roaming + flee-and-relocate | |
 | 6.2 | done -- gold_mine's 3 size classes are pure data (resources.json amounts [200, 500, 800] indexed by size_class), same convention as trees; every size draws the same sprite by design (ASSET_MISSING.md 1.3), so there is nothing further to bake. gather_slots (4 for gold) is now enforced -- see 6.4's entry for how | **[MVP]** |
-| 6.3 | Trees + forest clustering, 3 size classes | **[MVP]** |
+| 6.3 | done -- 'forest clustering' descoped to a session decision: the debug map's fixed 12-tile hand-placed wood cluster (MapGen.DEBUG_WOOD_CLUSTER) already gives trees the clumped look this item wanted; a real clustering algorithm was judged not worth building for a single fixed debug map. 3 size classes are pure data (resources.json amounts [40, 100, 175]), same convention as gold -- every size draws the same sprite (ASSET_MISSING.md 1.3) | **[MVP]** |
 | 6.4 | done -- GatherSystem drives the loop: walk to the node (PathService substitutes an adjacent tile, since the node's own tile is occupied ground), gather 1 unit every ceil(100 / gather_rate) ticks -- kept as a whole-tick countdown rather than a float accumulator, since a float would round differently across machines and desync (7.1) -- up to carry_cap, then walk to SimWorld.nearest_drop_off() (the nearest complete building of the unit's own player that accepts the kind, ties broken by lowest entity id) and deposit into SimPlayer.stock, then either turn back for the same node or retire once it is empty. The final load is capped by what the node has left, not padded up to carry_cap. gather_slots (6.2) is now enforced: an arrived unit only extracts if it ranks among the lowest gather_slots ids currently holding that node (task GATHER or RETURN) -- recomputed fresh every tick from live task state rather than reserved into a new field, so a competitor stopping, dying, or being re-tasked frees its spot for whoever is waiting, with nothing to keep in sync and nothing added to state_hash (task/gather_node_id/alive were already hashed). RETURN counts alongside GATHER so a slot cannot be sniped mid-cycle while a unit is walking a load home. A unit past the cap holds its ground rather than giving up, except once the node is fully depleted, at which point it retires like everyone else | **[MVP]** |
 | 6.5 | Stone, farms, fishing, berry bushes, boar | |
 

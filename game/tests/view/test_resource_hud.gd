@@ -37,6 +37,18 @@ func test_a_villager_signal_for_a_different_player_is_ignored() -> void:
 	assert_eq(hud.villager_counts(), Vector2i(0, 0))
 
 
+## Found live: the icon pack ships its resource icons at 100x100 px, and a
+## TextureRect's default EXPAND_KEEP_SIZE makes that its real minimum size
+## regardless of custom_minimum_size unless expand_mode is set to ignore it
+## (HudStyle.add_panel_background() already documents and avoids this same
+## trap for the panel background texture; the per-icon TextureRects here did
+## not, and five of them stacked in a VBoxContainer ballooned the whole panel
+## to 532px tall, off the bottom of a 648px viewport).
+func test_the_panel_does_not_balloon_to_the_icon_packs_native_pixel_size() -> void:
+	assert_true(hud.get_minimum_size().y < 200.0,
+			"5 icon rows at a real ~24px each, not the icon pack's native 100px each")
+
+
 func test_two_huds_for_different_players_do_not_interfere() -> void:
 	var other := ResourceHUD.new()
 	other.player_id = 2
