@@ -18,7 +18,7 @@ const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
 @onready var _multiplayer_button: TextureButton = %MultiplayerButton
 @onready var _settings_button: TextureButton = %SettingsButton
 @onready var _credits_button: TextureButton = %CreditsButton
-@onready var _how_to_button: Button = %HowToButton
+@onready var _how_to_button: TextureButton = %HowToButton
 @onready var _quit_button: TextureButton = %QuitButton
 @onready var _toast: NoticeToast = %Toast
 
