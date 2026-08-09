@@ -240,22 +240,6 @@ func _build_hud() -> void:
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
-
-## One disabled placeholder corner button (chat/trade/tech-tree/settings);
-## shared by the two rows `_build_hud()` assembles around the minimap.
-func _corner_button(icon_file: String) -> TextureButton:
-	var corner_btn := TextureButton.new()
-	var icon_path := "res://assets/ui/icons/%s" % icon_file
-	if ResourceLoader.exists(icon_path):
-		corner_btn.texture_normal = load(icon_path)
-	corner_btn.ignore_texture_size = true
-	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
-	corner_btn.disabled = true
-	corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
-	return corner_btn
-
 	# Past the control-group stack (12 + 64 px wide) rather than under it --
 	# these are dev/debug controls, not part of UI_Design.md's layout, so they
 	# just need to stay out of its way.
@@ -281,6 +265,22 @@ func _corner_button(icon_file: String) -> TextureButton:
 	_status = Label.new()
 	_status.position = Vector2(96, 48)
 	hud.add_child(_status)
+
+
+## One disabled placeholder corner button (chat/trade/tech-tree/settings);
+## shared by the two rows `_build_hud()` assembles around the minimap.
+func _corner_button(icon_file: String) -> TextureButton:
+	var corner_btn := TextureButton.new()
+	var icon_path := "res://assets/ui/icons/%s" % icon_file
+	if ResourceLoader.exists(icon_path):
+		corner_btn.texture_normal = load(icon_path)
+	corner_btn.ignore_texture_size = true
+	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
+	corner_btn.disabled = true
+	corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
+	return corner_btn
 
 
 ## Terrain is read from the host's map.
