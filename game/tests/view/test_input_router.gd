@@ -134,7 +134,7 @@ func test_tapped_does_not_fire_for_a_drag_past_slop_but_single_released_still_do
 	# Array rather than incrementing an int.
 	var tapped_calls: Array[int] = []
 	var released_calls: Array[int] = []
-	router.tapped.connect(func(_p: Vector2) -> void: tapped_calls.append(1))
+	router.tapped.connect(func(_p: Vector2, _t: bool) -> void: tapped_calls.append(1))
 	router.single_released.connect(func(_p: Vector2) -> void: released_calls.append(1))
 
 	router._unhandled_input(_touch(0, Vector2(0, 0), true))
@@ -151,7 +151,7 @@ func test_tapped_does_not_fire_for_a_drag_past_slop_but_single_released_still_do
 ## was a placement tap or an ordinary one.
 func test_tapped_is_resolved_before_single_released_for_the_same_release() -> void:
 	var order: Array[String] = []
-	router.tapped.connect(func(_p: Vector2) -> void: order.append("tapped"))
+	router.tapped.connect(func(_p: Vector2, _t: bool) -> void: order.append("tapped"))
 	router.single_released.connect(func(_p: Vector2) -> void: order.append("released"))
 
 	router._unhandled_input(_touch(0, Vector2(10, 10), true))
@@ -164,12 +164,69 @@ func test_tapped_is_resolved_before_single_released_for_the_same_release() -> vo
 
 func test_a_clean_tap_still_emits_tapped() -> void:
 	var seen: Array[Vector2] = []
-	router.tapped.connect(func(p: Vector2) -> void: seen.append(p))
+	router.tapped.connect(func(p: Vector2, _t: bool) -> void: seen.append(p))
 
 	router._unhandled_input(_touch(0, Vector2(5, 5), true))
 	router._unhandled_input(_touch(0, Vector2(5, 5), false))
 
 	assert_eq(seen, [Vector2(5, 5)])
+
+
+## Touch and mouse need different answers for a tap on empty ground (deselect
+## vs. move), so the gesture has to say which device produced it.
+func test_a_tap_reports_whether_it_came_from_a_finger_or_a_mouse() -> void:
+	var sources: Array[bool] = []
+	router.tapped.connect(func(_p: Vector2, from_touch: bool) -> void: sources.append(from_touch))
+
+	router._unhandled_input(_touch(0, Vector2(5, 5), true))
+	router._unhandled_input(_touch(0, Vector2(5, 5), false))
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_LEFT, Vector2(5, 5), true))
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_LEFT, Vector2(5, 5), false))
+
+	assert_eq(sources, [true, false])
+
+
+# ── right-click cancel (desktop) ───────────────────────────────────────────
+
+func test_a_right_click_that_never_dragged_asks_to_cancel() -> void:
+	var cancels: Array[int] = []
+	router.context_cancel.connect(func() -> void: cancels.append(1))
+
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_RIGHT, Vector2(40, 40), true))
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_RIGHT, Vector2(40, 40), false))
+
+	assert_eq(cancels.size(), 1)
+
+
+func test_a_right_drag_is_still_a_box_select_not_a_cancel() -> void:
+	var cancels: Array[int] = []
+	var boxes: Array[Rect2] = []
+	router.context_cancel.connect(func() -> void: cancels.append(1))
+	router.box_selected.connect(func(r: Rect2) -> void: boxes.append(r))
+
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_RIGHT, Vector2(0, 0), true))
+	router._unhandled_input(_mouse_button(MOUSE_BUTTON_RIGHT, Vector2(200, 200), false))
+
+	assert_eq(boxes.size(), 1, "a dragged box still selects")
+	assert_true(cancels.is_empty(), "and must not also read as a cancel")
+
+
+## The reason context_cancel is its own signal rather than box_cancelled: a
+## mobile player brushing the screen with two fingers must not lose what they
+## had selected, which is what MIN_BOX has always protected.
+func test_two_fumbled_fingers_do_not_ask_to_cancel() -> void:
+	var cancels: Array[int] = []
+	var cancelled_boxes: Array[int] = []
+	router.context_cancel.connect(func() -> void: cancels.append(1))
+	router.box_cancelled.connect(func() -> void: cancelled_boxes.append(1))
+
+	router._unhandled_input(_touch(0, Vector2(10, 10), true))
+	router._unhandled_input(_touch(1, Vector2(14, 14), true))
+	router._unhandled_input(_touch(1, Vector2(14, 14), false))
+	router._unhandled_input(_touch(0, Vector2(10, 10), false))
+
+	assert_true(cancelled_boxes.size() > 0, "the too-small box is still abandoned")
+	assert_true(cancels.is_empty(), "but the selection must survive it")
 
 
 func test_a_second_finger_still_starts_a_box_not_a_placement_drag() -> void:

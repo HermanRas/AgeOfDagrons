@@ -26,13 +26,28 @@ const TAP_TIME_MS := 400
 ## selected by "selecting" a three-pixel rectangle.
 const MIN_BOX := 24.0
 
-signal tapped(screen_pos: Vector2)
+## `from_touch` separates a finger from a mouse, which the two devices need
+## different answers for: a tap on empty ground DESELECTS on touch and only
+## moves on a double tap (a small quick pan otherwise reads as a tap and sends
+## units wandering), while a mouse is precise enough to move on one click.
+## Carried on the signal rather than read from `DisplayServer` because what
+## matters is which device produced THIS gesture, not what the machine supports
+## -- a touchscreen laptop has both.
+signal tapped(screen_pos: Vector2, from_touch: bool)
 ## Live box, for drawing it while the fingers are still down.
 signal box_changed(screen_rect: Rect2)
 ## Committed box, on release. Never emitted for a box under MIN_BOX.
 signal box_selected(screen_rect: Rect2)
 ## The box was abandoned (too small, or cancelled) -- stop drawing it.
 signal box_cancelled()
+
+## Right-click released without having dragged a box (desktop only). "Back out
+## of whatever I am doing": cancel a placement, else clear the selection.
+##
+## Kept separate from `box_cancelled`, which fires for this AND for a fumbled
+## two-finger touch -- and a mobile player brushing the screen with two fingers
+## must not lose their selection, which is the whole reason MIN_BOX exists.
+signal context_cancel()
 
 ## The single-finger/mouse gesture, reported unconditionally rather than only
 ## when it turns out to have been a tap -- PLAN.md 5.1's drag-to-place wants
@@ -126,7 +141,7 @@ func _on_touch(touch: InputEventScreenTouch) -> void:
 	_touches.erase(touch.index)
 	if touch.index == _touch_index:
 		_touch_index = CameraRig.NO_TOUCH
-		_end(touch.position)
+		_end(touch.position, true)
 
 
 func _on_mouse_button(button: InputEventMouseButton) -> void:
@@ -137,7 +152,7 @@ func _on_mouse_button(button: InputEventMouseButton) -> void:
 				_begin(button.position)
 			elif _mouse_down:
 				_mouse_down = false
-				_end(button.position)
+				_end(button.position, false)
 		MOUSE_BUTTON_RIGHT:
 			if button.pressed:
 				_right_dragging = true
@@ -145,7 +160,15 @@ func _on_mouse_button(button: InputEventMouseButton) -> void:
 				box_changed.emit(_rect_between(_right_drag_from, button.position))
 			elif _right_dragging:
 				_right_dragging = false
-				_commit(_rect_between(_right_drag_from, button.position))
+				# Not routed through _commit(): a right-click that never became a
+				# box is a deliberate "cancel", whereas the same too-small rect
+				# arriving from two fumbled fingers must stay a silent no-op.
+				var rect := _rect_between(_right_drag_from, button.position)
+				if rect.size.x < MIN_BOX and rect.size.y < MIN_BOX:
+					box_cancelled.emit()
+					context_cancel.emit()
+				else:
+					box_selected.emit(rect)
 
 
 ## The rectangle spanned by the two fingers currently down.
@@ -183,8 +206,8 @@ func _begin(pos: Vector2) -> void:
 ## exit build mode, and `_on_tapped` needs to see the build-mode state as it was
 ## for THIS gesture, not as whatever the other handler just changed it to for the
 ## next one.
-func _end(pos: Vector2) -> void:
+func _end(pos: Vector2, from_touch: bool) -> void:
 	if _moved <= TAP_SLOP and pos.distance_to(_down_pos) <= TAP_SLOP \
 			and Time.get_ticks_msec() - _down_msec <= TAP_TIME_MS:
-		tapped.emit(pos)
+		tapped.emit(pos, from_touch)
 	single_released.emit(pos)

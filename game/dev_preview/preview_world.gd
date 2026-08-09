@@ -80,7 +80,9 @@ func _full_snapshot() -> Dictionary:
 
 ## Tap position is in SCREEN space; the world is under a camera, so it has to be
 ## put back through the canvas transform before it means anything to the view.
-func _on_tapped(screen_pos: Vector2) -> void:
+## `_from_touch` is unused here -- the preview only ever selects, and has no
+## move order for the touch/mouse split to matter to.
+func _on_tapped(screen_pos: Vector2, _from_touch: bool = false) -> void:
 	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
 	var id := _view.pick(local)
 

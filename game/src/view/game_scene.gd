@@ -44,6 +44,22 @@ var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
 var _flash: ActionFlash
 
+## Touch only: a tap on empty ground with units selected DESELECTS, and only a
+## double tap moves them there. Found on device -- a small, quick pan clears
+## `InputRouter`'s slop and time bounds, so it registered as a tap and sent the
+## selection wandering off whenever the player tried to scroll the map.
+##
+## A mouse keeps single-click-to-move: it does not wobble, and desktop players
+## get right-click to clear instead (`_on_context_cancel`).
+var _ground_tap := DoubleTapDetector.new()
+
+## Bumped by EVERY tap, so a deferred single-tap deselect can tell that some
+## LATER tap has happened and stand down. `DoubleTapDetector.is_still_pending()`
+## alone is not enough: it only knows about taps that went through it, and a tap
+## that selected a unit never does -- without this, tapping the ground and then
+## quickly picking a new unit would clear that new selection a moment later.
+var _tap_token: int = 0
+
 
 func _ready() -> void:
 	# A full-rect Control defaults to MOUSE_FILTER_STOP and would swallow every
@@ -88,6 +104,7 @@ func _build_world_layers() -> void:
 	_router.box_changed.connect(_on_box_changed)
 	_router.box_selected.connect(_on_box_selected)
 	_router.box_cancelled.connect(_on_box_cancelled)
+	_router.context_cancel.connect(_on_context_cancel)
 	_router.single_pressed.connect(_on_placement_pressed)
 	_router.single_drag_moved.connect(_on_placement_drag)
 	_router.single_released.connect(_on_placement_released)
@@ -327,9 +344,12 @@ func _refresh_hud(snap: Dictionary) -> void:
 ## just carries out whichever it names and, for the three orders, drops an
 ## `ActionFlash` on the target so the player sees which one fired without
 ## reading the panel.
-func _on_tapped(screen_pos: Vector2) -> void:
+func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 	if _error != "":
 		return
+	# Any tap at all invalidates a deferred deselect still waiting to fire; see
+	# `_tap_token`'s own header for why the detector cannot tell on its own.
+	_tap_token += 1
 	# In build mode this tap is handled by `single_released` instead, once it
 	# fires right after this. `InputRouter` guarantees `tapped` is resolved and
 	# emitted BEFORE `single_released` for the same gesture (see its own
@@ -357,11 +377,52 @@ func _on_tapped(screen_pos: Vector2) -> void:
 			_flash.play(ActionFlash.Kind.BUILD,
 					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
 		GameView.TapAction.MOVE:
+			if from_touch and not _commit_ground_tap(tile):
+				return                    # deselect instead, once the window closes
 			Net.submit_command(MoveCommand.new(owner, movable, tile))
 			_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
 		GameView.TapAction.NONE:
-			_view.select([] as Array[int])
-			_refresh_panel()
+			_clear_selection()
+
+
+## True when this ground tap is the SECOND of a double and the move should go
+## through now; false for a first tap, which instead schedules a deselect that
+## fires only if no second tap arrives inside `DoubleTapDetector.DOUBLE_TAP_MS`.
+##
+## Touch only -- see `_ground_tap`'s header for why a mouse skips all of this.
+func _commit_ground_tap(_tile: Vector2i) -> bool:
+	var now := Time.get_ticks_msec()
+	if _ground_tap.register_tap(now):
+		return true
+
+	# A widget outside a tree cannot schedule the wait; the same guard
+	# `ControlGroupsHud` and `Minimap` document for their own deferred singles.
+	if is_inside_tree():
+		var token := _tap_token
+		get_tree().create_timer(DoubleTapDetector.DOUBLE_TAP_MS / 1000.0).timeout.connect(
+				func() -> void:
+					if is_instance_valid(self) and token == _tap_token \
+							and _ground_tap.is_still_pending(now):
+						_clear_selection())
+	return false
+
+
+## Right-click on desktop (PLAN.md input feedback): back out of build mode if
+## it is running, otherwise drop the selection. One button for "not that", so
+## an abandoned placement never needs the pause menu to escape -- the same
+## order Escape resolves them in.
+func _on_context_cancel() -> void:
+	if _error != "":
+		return
+	if _placing_def_id != &"":
+		_exit_placement()
+		return
+	_clear_selection()
+
+
+func _clear_selection() -> void:
+	_view.select([] as Array[int])
+	_refresh_panel()
 
 
 ## Enters placement mode for `def_id` (PLAN.md 5.1) and locks the camera: the
@@ -626,4 +687,4 @@ func _refresh_panel() -> void:
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids)
 
 	if _placing_def_id == &"":
-		_status.text = "tap to select  |  two fingers apart to box-select  |  tap ground/a tree/a foundation to move/gather/build  |  drag to pan, edge-swipe to zoom"
+		_status.text = "tap to select  |  two fingers apart to box-select  |  tap a tree/foundation to gather/build  |  DOUBLE-tap ground to move, single tap clears  |  right-click clears/cancels  |  drag to pan, edge-swipe to zoom"
