@@ -32,6 +32,11 @@ static func build(w: SimWorld, _player_id: int) -> Dictionary:
 			"pop_used": p.pop_used,
 			"pop_cap": p.pop_cap,
 			"age": p.age,
+			# PLAN.md 1/A.6: the client needs this to tint anything, and it is the
+			# only per-player difference in v1. Not in state_hash() -- it is derived
+			# from join order and never mutates, so it cannot diverge the way stock
+			# or control groups can.
+			"colour": p.colour,
 			# PLAN.md 10.6: persisted sim state, not view state, so it rides the
 			# same snapshot every other per-player fact does rather than a
 			# separate channel.

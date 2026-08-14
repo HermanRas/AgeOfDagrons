@@ -97,7 +97,7 @@ func test_villagers_stand_on_distinct_passable_tiles_outside_the_town_centre() -
 
 func test_the_town_centre_claims_its_whole_measured_footprint() -> void:
 	var tc: SimBuilding = _of_type(SimBuilding)[0]
-	assert_eq(tc.footprint, Vector2i(8, 8), "the [8, 8] from buildings.json")
+	assert_eq(tc.footprint, Vector2i(10, 10), "the [10, 10] from buildings.json")
 	var rect := tc.footprint_rect()
 	for y in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):

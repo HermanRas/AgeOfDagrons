@@ -130,12 +130,16 @@ func test_gather_rate_is_per_hundred_ticks_and_survives_the_conversion() -> void
 
 # ── buildings ──────────────────────────────────────────────────────────────
 
-func test_footprints_are_the_measured_ones_not_the_pre_measurement_sketch() -> void:
-	# PLAN.md 9 wrote [4, 4] for the town centre before the art was measured; the
-	# civic centre is 15.53 x 15.00 m, i.e. 7.77 tiles. This pins the correction
-	# so it cannot quietly revert.
+func test_footprints_are_the_max_across_all_four_age_skins() -> void:
+	# Two corrections layered here, and this pins both so neither can quietly
+	# revert. PLAN.md 9 first wrote [4, 4] for the town centre before the art was
+	# measured; 0.4 corrected that to [8, 8] off the Athenian actor's 15.53 x
+	# 15.00 m. But a building re-skins in place as its owner advances an age
+	# (PLAN.md 13.2 item 10), so the footprint has to be the MAX across all four
+	# age skins -- and 0 A.D.'s civs disagree: the Roman age-4 civic centre is
+	# 37 x 37 world units against the Briton age-1 25 x 25. Hence [10, 10].
 	assert_eq((reg.building(&"building.town_center") as BuildingDef).footprint,
-			Vector2i(8, 8), "town centre is 8x8, from the measured art")
+			Vector2i(10, 10), "town centre is 10x10 -- the age-4 Roman skin, not the age-1 one")
 	assert_eq((reg.building(&"building.house") as BuildingDef).footprint,
 			Vector2i(4, 4), "house is 4x4, matching its 4x4 foundation")
 
@@ -223,8 +227,57 @@ func test_techs_are_empty_but_the_file_loads() -> void:
 			"techs.json loads cleanly rather than reporting as missing")
 
 
-func test_a_neutral_faction_exists_so_sim_player_has_something_valid_to_hold() -> void:
-	assert_true(reg.faction_ids().has(&"faction.neutral"))
+func test_the_player_colour_palette_covers_every_player_slot() -> void:
+	# PLAN.md 1: colour is the ONLY thing distinguishing players, and 3.1 budgets
+	# for 8 at full scope, so a short palette would make two players identical.
+	assert_eq(reg.colour_count(), 8, "one colour per player slot")
+
+
+func test_colour_order_is_the_contract_so_index_zero_stays_player_one() -> void:
+	# SimPlayer.colour is an index (sim_world.setup() assigns it from join order),
+	# so reordering colours.json silently repaints existing saves and replays.
+	assert_eq(reg.colour(0), Color.html("#0043D6"), "index 0 is blue")
+	assert_eq(reg.colour(7), Color.html("#FFFFFF"), "index 7 is white")
+
+
+func test_the_first_four_slots_are_the_most_separable_colours() -> void:
+	# Most matches are 1v1 or 2v2, so slots 1-4 have to be the safe set. Colour is
+	# the ONLY player identifier (PLAN.md 1), so two players who look alike is not
+	# a cosmetic problem. Asserted on relative luminance, which is what a
+	# colour-blind player falls back on when hue collapses.
+	var lum: Array[float] = []
+	for i in 4:
+		lum.append((reg.colour(i) as Color).get_luminance())
+	for i in 4:
+		for j in range(i + 1, 4):
+			assert_true(absf(lum[i] - lum[j]) > 0.02,
+					"slots %d and %d must not be near-identical in brightness" % [i, j])
+
+
+func test_green_and_yellow_are_far_enough_apart_in_lightness() -> void:
+	# The one pair red-green colour blindness genuinely collapses. They cannot be
+	# separated by hue, so they must be separated by brightness -- this is what the
+	# L* ladder in colours.json's note exists to guarantee, and what silently
+	# regresses if someone picks a "nicer" green.
+	var green: float = (reg.colour(4) as Color).get_luminance()
+	var yellow: float = (reg.colour(2) as Color).get_luminance()
+	assert_true(yellow - green > 0.3,
+			"yellow must be markedly brighter than green (got %.3f vs %.3f)" % [yellow, green])
+
+
+func test_an_out_of_range_colour_wraps_rather_than_stopping_the_render() -> void:
+	# Deliberately the opposite of unit()/building() returning null: a missing
+	# definition has no stand-in, a missing colour does.
+	assert_eq(reg.colour(8), reg.colour(0), "wraps at the palette size")
+	assert_eq(reg.colour(-1), reg.colour(7), "and wraps downward too")
+
+
+func test_the_default_faction_exists_so_sim_player_has_something_valid_to_hold() -> void:
+	# PLAN.md 2.7.1: one civilisation in v1, but `faction` is half the skin key and
+	# survives to 9.5, so SimPlayer's default has to name a real entry.
+	assert_true(reg.faction_ids().has(&"faction.default"))
+	assert_eq(SimPlayer.new().faction, &"faction.default",
+			"SimPlayer's default faction must be an ID this file actually declares")
 
 
 # ── parsing rules ──────────────────────────────────────────────────────────

@@ -29,6 +29,8 @@ Missing-asset tracking lives in [ASSET_MISSING.md](ASSET_MISSING.md).
 | Simulation | Server-authoritative, fixed-tick, headless-capable |
 | Sim tick rate | **10 Hz** (100 ms), render interpolated to display rate |
 | Map topology | **Square grid**, rendered isometric |
+| Civilisations | **One, shared by every player, for v1** — same buildings, same units, same upgrade paths; players are told apart by **colour only**. **Deferred, not abandoned:** more civs return after v1 as a re-skin-plus-rename layer over this same roster (§2.7, §2.7.1, 9.5) |
+| Age skins | The civ axis is replaced by the **age** axis: four 0 A.D. civs, oldest-to-newest, are the four ages of our one civilisation (§2.7, §9.2) |
 | Units of measure | Integer sub-tile units, **1 tile = 256 sub-units** |
 | Dev environment | **Native Windows** for editor + Android deploy; WSL/Docker for tooling (Ã‚Â§1.2) |
 | Asset delivery | **Downloadable packs**, not bundled in the APK (Ã‚Â§3.2) |
@@ -191,7 +193,7 @@ Every gameplay phase is therefore art-independent, and the seam is load-bearing 
 
 ### 2.5 Normalised vocabulary
 
-One villager, one gender.
+One villager, one gender. One civilisation, shared by every player (§1, §2.7).
 
 **Entity IDs**
 
@@ -201,6 +203,10 @@ unit.militia         building.house           res.gold_mine
 unit.archer          building.barracks        res.stone_mine
 unit.dragon          building.dragon_nest     res.deer
 ```
+
+That block illustrates the convention; it is not the roster. The **full v1 roster** — every
+unit, the building that trains it, and the age that unlocks it — is §9.2. There is exactly
+one set of these IDs and every player uses it (§2.7).
 
 **Animation IDs**
 
@@ -247,6 +253,99 @@ The villager holds an axe during `work_chop` and carries wood at her hip during 
   packager to build a `.pck` from, so the APK export preset must exclude
   `assets/atlases/` or they end up inside the APK as well as the pack.
 - `.gdignore` in any raw-art folder under the project.
+
+### 2.7 One civilisation, four age skins
+
+**Locked (§1): v1 ships a single civilisation.** Every player builds the same buildings,
+trains the same units and researches the same upgrades. **Colour is the only thing that
+distinguishes one player from another.** No faction pick, no faction bonus, no unique unit.
+
+**This is deferred, not abandoned.** The reason there is one civilisation is that there is
+one set of art. The roster is joined to that art through a map file rather than through
+hardcoded names, so more civs come back after v1 by that same seam: **a civ is a re-skin
+plus a rename over this identical roster** — the same `unit.*`/`building.*` definitions, the
+same costs and stats, a different actor and a different display name. That is why 9.5 is
+deferred rather than dropped, and why `factions.json` stays (§9). It has one consequence to
+honour now, before any of it is built: §2.7.1.
+
+What takes the civ axis' place is the **age** axis. [Age & Unit Planning.md](<Age & Unit Planning.md>)
+is the source of truth for the roster, and it maps our one civilisation onto **four 0 A.D.
+civs chosen to read oldest-to-newest**, so advancing an age visibly modernises the
+settlement:
+
+| Age | Name | Primary 0 A.D. civ | Also borrows from | Reads as |
+|---|---|---|---|---|
+| I | Age of Ash | Britons (`brit`) | Celts, Mauryas (scout cavalry) | timber, thatch, wicker |
+| II | Age of Embers | Gauls (`gaul`) | Celts, Germans (walls), Carthaginians (archer) | fortified timber |
+| III | Age of Flame | Persians (`pers` → `achaemenids`) + Iberians (`iber`) | Athenians, Han, Carthaginians, Romans (onager) | cut stone |
+| IV | Age of Dragons | Romans (`rome`) | Macedonians (university), Ptolemies (galleon), Han (trebuchet) | dressed stone and brick |
+
+This generalises the rule §13.2 item 2 already recorded for the MVP six: architecture stays
+civ-consistent **within an age** so a settlement reads as one style, while scenery is picked
+on how it looks rather than on which civ authored it.
+
+Three consequences worth stating before the work is scheduled:
+
+**1. Art volume moves, it does not vanish.** A building has up to four visuals, one per age,
+so §9.2's roster is roughly **70 building bakes** — no cheaper than four factions would have
+been for structures. The saving lands on **units**: one actor each (a handful have two or
+three), ~28 bakes against the ~88 a four-faction roster of the same size would need.
+
+**2. Age is a visual dimension the asset seam does not have.** `visuals.json` keys a
+building by phase (`visual` / `visual_foundation` / `visual_rubble`); it now also has to key
+by age. `SimPlayer.age` already rides `player_state` in every snapshot (10.6), so the view
+can resolve this with **no new sim state and no new command**. §13.2 item 10 settles the
+question that hung on it: **a standing building re-skins in place** as its owner advances,
+which is why its footprint is locked at placement to the maximum across all four skins (§9.2).
+
+**3. Player colour is currently baked into the atlas, and that is now blocking.** 0 A.D.'s
+`player_*` materials carry the player-colour tint as the base texture's alpha (§2.2), and
+`isobake`'s zeroad adapter **multiplies that tint in at bake time** (`DEFAULT_PLAYER_COLOUR`,
+overridable per recipe) — one atlas is one player's colour. That was harmless while colour
+was cosmetic. With colour as the *only* difference between players it is the single blocking
+pipeline gap: eight players cannot mean eight bakes of every unit. The fix is to bake
+untinted and emit the mask — which is already in hand, being the source alpha — so a Godot
+`canvas_item` shader tints at draw time. Tracked as A.6, promoted from polish to prerequisite.
+
+#### 2.7.1 Age and faction are one mechanism, so build one
+
+Age is a skin dimension: four visuals per building, above. Faction is a **second skin
+dimension on the same lookup**, and it arrives *later* — which is precisely when an age-only
+special case becomes expensive to widen, because by then every call site has been written
+against it. So resolve both through one key from the start:
+
+```
+skin = (faction, age)        # faction.default × age 1-4 for all of v1
+```
+
+Two things that makes non-negotiable from the moment 9.6 is written:
+
+1. **`atlas_for()` resolves a skin, not a bare visual ID.** `visuals.json` maps `vis.*` to art
+   today (§2.1); it becomes a map from `(skin, vis.*)` to art.
+
+   **The map is dense; the bakes are shared.** Every age names a skin explicitly — four
+   entries per building, always — and two ages that happen to look the same simply point at
+   the *same baked atlas*. So map entries are fixed at four per building while **bakes** are
+   only as many as there are visibly distinct skins. That is the lever on §9.2's ~70 figure:
+   a house that reads as timber in ages 1–2 and stone in 3–4 is two bakes serving four
+   entries. Being explicit rather than sparse also means the map file answers "what does this
+   look like in age 3?" by being *read*, with no inheritance chain to trace by hand.
+
+   A missing entry still falls back to `faction.default`, but as a **safety net, not the
+   mechanism** — it is what lets a future civ ship partially, six re-skinned buildings and
+   the rest borrowed, instead of needing all 70 before it can be released at all. Same
+   totality argument `atlas_for()` was built on at 0.2a.
+2. **Display names are data, not `units.json` literals.** `"name": "Villager"` is a
+   per-faction string — a civ renames the roster as much as it re-skins it — and it wants the
+   same fallback. It is also the one item here that has to work with localisation later, so it
+   should not be the second thing to move.
+
+**Nothing in the sim changes for either dimension.** Skins are a view concern; `SimPlayer`
+already carries `age`, and `faction` **stays** on it (`faction.default` throughout v1)
+precisely so the field never has to be reintroduced. Costs and stats staying shared is what
+keeps a re-skin civ free of balance work — the day a civ changes a *number*, `units.json`
+needs a per-faction override layer and per-civ balance comes with it. That is 9.5's expensive
+half, and it is not v1's problem.
 
 ---
 
@@ -608,7 +707,10 @@ func find_free_adjacent(rect: Rect2i, domain: int) -> Vector2i    # [MVP]
 class_name SimPlayer
 var id: int
 var peer_id: int                    # 1 = host's own local player
-var faction: StringName
+var faction: StringName             # `faction.default` throughout v1 -- half of the skin
+                                    # key (§2.7.1), kept so 9.5 needs no new field
+var colour: int                     # palette index -- the only thing that differs
+                                    # between players in v1 (§1)
 var is_ai: bool
 var team: int
 var stock: Dictionary               # {food, wood, gold, stone} -> int   [MVP]
@@ -972,7 +1074,7 @@ Match.tscn                   [MVP]
 
 DownloadScreen.tscn          [MVP]  asset pack fetch + progress
 CreditsScreen.tscn           [MVP]  attribution
-Lobby.tscn                          host/join, faction & map & win condition
+Lobby.tscn                          host/join, colour & map & win condition
 Settings.tscn
 MatchResult.tscn
 StressTest.tscn              [MVP]  perf harness
@@ -1038,7 +1140,25 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
 }
 ```
 
-`techs.json`, `ages.json`, `factions.json` follow the same shape, near-empty until their phases.
+`techs.json`, `ages.json` and `factions.json` follow the same shape, near-empty until their
+phases.
+
+**`factions.json` stays**, despite §1. One civilisation is a v1 *scope* decision, not a
+change of architecture — civs return as a re-skin layer (§2.7.1) — so the near-empty entry
+0.4 already put there is the seam holding its place, for exactly the reason 0.4 gave for
+keeping an empty `techs.json`: a missing file and an empty one are different states and only
+one of them is a bug. Its single entry is renamed `faction.default`, because its job is *the
+default skin key*, and calling it `faction.neutral` invites reading it as gaia or as a third
+player, which it is not.
+
+What v1 *adds* is a **player colour**, and that is not a faction property: it is per player
+slot, picked in the lobby (1.6), and eight players share one civilisation. It belongs in a
+flat palette of its own, not inside a faction entry. That is **`colours.json`**, added
+2026-08-14 once the eight colours were picked (§13.2 item 11): an index-ordered list read by
+`GameDataRegistry.colour(index)`, which **wraps** rather than returning null — the opposite
+call from `unit()`/`building()`, deliberately, because a missing definition has no sensible
+stand-in and a missing colour does. `SimPlayer` carries **both** `faction` and `colour`, and
+in v1 only `colour` varies.
 
 ### 9.1 Atlas format
 
@@ -1086,6 +1206,191 @@ The earlier plan here specified bottom-centre-of-content-bbox, which moves whene
 limb swings out Ã¢â‚¬â€ that is the cause of the jitter Ã‚Â§14 used to list, not a separate
 problem to mitigate.
 
+### 9.2 The v1 roster — ages, buildings, units
+
+Derived from [Age & Unit Planning.md](<Age & Unit Planning.md>), which stays the source of
+truth for content decisions; this section is the same information in the vocabulary the code
+uses (§2.5) and is what `units.json` / `buildings.json` / `resources.json` / `ages.json` get
+filled from. One roster, every player (§1).
+
+`Age` is the age that **unlocks** the entity; it stays available in every later age. `Age
+skins` lists the 0 A.D. actor per age (§2.7) — a single actor means it never re-skins.
+
+**Footprints are locked to the maximum across all four age skins.** Buildings and walls
+re-skin in place as their owner advances (§13.2 item 10), so a footprint cannot change with
+the skin: it claims the tiles its age-4 form needs from the moment it is placed. This is a
+real gameplay fact, not just a data convention — an age-1 settlement is spaced for age-4
+buildings — and it is measured at bake time (A.10), one max per building, not per age.
+
+0 A.D.'s civs do **not** agree on obstruction size, so this has teeth. Measured from
+`simulation/templates/structures/<civ>/` at 4 world units per tile:
+
+| Building | 1 `brit` | 2 `gaul` | 3 `achae` | 4 `rome` | Max | Declare |
+|---|---|---|---|---|---|---|
+| House | 10 × 10 | 11 × 11 | 13 × 14 | 14 × 14 | 3.5 tiles | `[4, 4]` — already correct |
+| Barracks | 20 × 20 | 20 × 20 | — | 22 × 22 | 5.5 tiles | `[6, 6]` |
+| **Town centre** | 25 × 25 | 25 × 25 | **38.5 × 22.5** | **37 × 37** | **9.6 × 9.25** | ⚠️ **`[10, 10]`** |
+
+✅ **The town centre was the one MVP footprint the age plan broke, and it is now `[10, 10]`**
+(decided 2026-08-14). Its shipped `[8, 8]` came from the Athenian actor (30 × 30 = 7.5 tiles,
+measured at 0.4), but the Roman age-4 civic centre is 37 × 37 and the Achaemenid one 38.5
+wide — so a town centre placed in age 1 must already have claimed 10 × 10 or it cannot
+re-skin. The max is taken **per axis**, since buildings do not rotate. Done in
+`buildings.json` with the measurements recorded in its own `_note`, plus the two tests that
+pinned 8 × 8. `visual_foundation` still points at `vis.foundation_8x8` and so now reads one
+tile small on each side — the same deliberate art/gameplay disagreement the house makes in
+the other direction — until `vis.foundation_10x10` is baked (ASSET_MISSING §1.2).
+
+**Composite entities are measured over their props, not their core building.** Several roster
+entries are a building *plus* an arrangement of gaia props: the lumber camp with 3×
+`wood_lumber`, the mining camp with 3× `stone_pile_granite`, the age-3/4 farm with its food
+piles, and the dragon nest, which is 22 bushes and 12 standing stones around a shrine with no
+core building at all. The footprint has to cover the whole arrangement, or villagers path
+straight through the props and other buildings are placeable on top of them. The project
+owner has placed and confirmed each arrangement in 0 A.D. itself, so the measurement exists —
+it just has to be taken over the group rather than the building. The dragon nest is the
+extreme case and is not player-placeable (13.2), so it needs a footprint for **occupancy
+only**, never for a placement ghost.
+
+**Walls and towers are exempt**, verified in-game by the project owner: every wall piece in
+0 A.D. shares one footprint and every wall tower shares another, across all civs. The
+wall/gate/tower set therefore re-skins with no spacing change and the max rule is a no-op
+for it. That also retires the fear in §9.2.1 item 3 that mixed-civ pieces would force the
+thickest tier onto every age — they are all the same thickness.
+
+**A naming trap:** the roster's age-3 `Pers/…` lines resolve to **`achaemenids/`**. 0 A.D.
+renamed the Persians and there is no `pers` directory in `art/actors/structures/` or
+`simulation/templates/structures/`. Every other civ in the roster keeps its obvious name.
+
+**Buildings**
+
+| Entity ID | Age | Function | Age skins |
+|---|---|---|---|
+| `building.town_center` | 1 | +10 pop, drop-off for all four resources, trains villager + militia. **Extra town centres unlock at age 3** | 1 `brit/civil_centre` · 2 `gaul/civil_centre` · 3 `iber/civil_centre` · 4 `rome/civil_centre` |
+| `building.house` | 1 | +5 pop | 1 `brit/house` · 2 `gaul/house` · 3 `pers/house` · 4 `rome/house` |
+| `building.farm` | 1 | Food drop-off. Fields attach from age 2 — **0 / 2 / 4 / 4** fields by age, +1 food per field per tick | 1 `brit/rotarymill` · 2 `gaul/rotarymill` · 3 `pers/storehouse` + 2× `gaia/treasure/food_persian_small` + 1× `food_persian_big` · 4 `rome/farmstead` + the same props |
+| `building.field` | 2 | Must be placed adjacent to a farm | 2 `gaul/field` · 3–4 `iber/field` |
+| `building.mining_camp` | 1 | Gold + stone drop-off | 1 `brit/corral` · 2 `gaul/corral` · 3 `iber/storehouse` · 4 `rome/storehouse`, each + 3× `gaia/treasure/stone_pile_granite` |
+| `building.lumber_camp` | 1 | Wood drop-off | 1 `brit/kennel` · 2 `celt/longhouse` · 3 `iber/corral` · 4 `rome/corral`, each + 3× `gaia/treasure/wood_lumber` |
+| `building.barracks` | 2 | Trains swordsman, spearman | 2 `gaul` · 3 `iber` · 4 `rome` |
+| `building.archery_range` | 2 | Trains archer; crossbowman from age 3 | 2 `gaul/range` · 3 `iber/range` · 4 `rome/range` |
+| `building.stable` | 2 | Trains scout cavalry; sword cavalry + cavalry archer from age 3 | 2 `gaul/stable` · 3 `pers/stable` · 4 `rome/stable` |
+| `building.blacksmith` | 2 | Upgrades | 2 `gaul/forge` · 3 `pers/forge` · 4 `rome/forge` |
+| `building.market` | 2 | Allied trading, buy/sell — unlocks 8.2b's trade button | 2 `gaul/market` · 3 `maur/market` · 4 `rome/market` |
+| `building.dock` | 2 | Trains fishing + transport ship; galley from 3, galleon from 4 | 2 `gaul/dock` · 3 `pers/dock` · 4 `rome/dock` |
+| `building.watch_tower` | 2 | Throws stones | 2 `gaul/sentry_tower` · 3 `pers/sentry_tower` · 4 `rome/defense_tower` |
+| `building.guard_tower` | 3 | Shoots arrows. **Is a wall tower**, so its civ tracks that age's newest wall tier and the footprints line up | 3 `pers/wall_tower` · 4 `rome/wall_tower` |
+| `building.castle` | 3 | **+40 pop.** Trains knight; elite swordsman + trebuchet from age 4; the dragon (13.1) | 3 `iber/fortress` · 4 `rome/fortress` |
+| `building.monastery` | 3 | Trains monk | 3 `pers/temple` · 4 `rome/temple` |
+| `building.university` | 3 | Upgrades | 3 `iber/temple` · 4 `mace/temple` |
+| `building.siege_workshop` | 3 | Trains ram, ballista, onager; trebuchet from age 4 | 3 `pers/arsenal` · 4 `rome/arsenal` |
+| `building.wall_wood` + `building.gate_wood` | 2 | Costs wood. Short / medium / long + gate | 2 `germ/*` · 3–4 `brit/*` — **all pieces of a tier from one civ** |
+| `building.wall_stone` + `building.gate_stone` | 3 | Costs stone | 3–4 `pers/*` (i.e. `achaemenids/`) |
+| `building.wall_reinforced` + `building.gate_reinforced` | 4 | | 4 `rome/*` |
+| `building.wonder` | 4 | Wonder victory condition (11.2) | 4 `hellenic_epic_temple` |
+| `building.dragon_nest` | — | **Not buildable** — a map POI (13.2) | `gaia/tree/bush_badlands` ×22 covering the centre grid, `gaia/ruins/standing_stone` ×12 in a ring, `structures/shrine_celtic` |
+
+**Units**
+
+| Entity ID | Age | Trained at | Actor(s) |
+|---|---|---|---|
+| `unit.villager` | 1 | Town Centre | 1 `brit/support_civilian` · 2–4 `gaul/support_civilian` |
+| `unit.militia` | 1 | Town Centre | 1 `brit/infantry_slinger_a` · 2–4 `gaul/infantry_slinger_a` |
+| `unit.scout_cavalry` | 1 | **Age 1: start-of-match spawn only, not trainable.** Stable from age 2 | `maur/cavalry_swordsman_a`, all ages |
+| `unit.swordsman` | 2 | Barracks | 2 `gaul/infantry_swordsman_gaul_a` · 3 `cart/infantry_swordsman_gaul_a` · 4 `rome/…` *(confirmed 2026-08-14; the roster file's `gaul` at age 4 was a typo)* |
+| `unit.spearman` | 2 | Barracks | 2 `gaul/infantry_spearman_a` · 3–4 `cart/infantry_spearman_ital_a` |
+| `unit.archer` | 2 | Archery Range | 2 `cart/infantry_archer_a` · 3–4 `pers/infantry_archer_b` |
+| `unit.fishing_ship` | 2 | Dock | `gaul/ship_fishing` |
+| `unit.transport_ship` | 2 | Dock | `gaul/ship_scout` |
+| `unit.sword_cavalry` | 3 | Stable | `gaul/cavalry_swordsman_a` |
+| `unit.cavalry_archer` | 3 | Stable | `pers/cavalry_archer_b` |
+| `unit.crossbowman` | 3 | Archery Range | `han/infantry_crossbowman_a` |
+| `unit.monk` | 3 | Monastery | `athen/support_healer_a` |
+| `unit.knight` | 3 | Castle | `germ/champion_cavalry` |
+| `unit.galley` | 3 | Dock | `athen/ship_arrow` |
+| `unit.battering_ram` | 3 | Siege Workshop | `cart/siege_ram` |
+| `unit.ballista` | 3 | Siege Workshop | `cart/siege_ballista_packed` + `_unpacked` |
+| `unit.onager` | 3 | Siege Workshop | `rome/siege_onager_packed` + `_unpacked` |
+| `unit.elite_swordsman` | 4 | Castle | `athen/champion_marine` |
+| `unit.galleon` | 4 | Dock | `ptol/ship_siege` |
+| `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `han/siege_mangonel_packed` + `_unpacked` |
+| `unit.dragon` | — | Castle | `fauna/dragon` — bespoke, A.9 |
+| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at 10% scale |
+
+`buildings.json`'s `trains` array is the authoritative direction and `units.json`'s
+`trainable_at` mirrors it, so `GameDataRegistry.validate()` must cross-check the two — it
+already cross-checks every other reference across the data files, and a roster this size is
+exactly where a one-sided edit goes unnoticed.
+
+**Start-of-match spawn** (2.6): 1 town centre, 5 villagers, **1 scout cavalry**, 0 militia.
+MVP spawns the first two; the scout joins when age 1 is real.
+
+**Resources** (`res.*`, gaia-owned)
+
+| Entity ID | Kind | Actors and amounts |
+|---|---|---|
+| `res.gold_mine` | gold | `gaia/ore/aegean_anatolian_small` 1000 · `_01` 5000 · `_02` 10000 |
+| `res.stone_mine` | stone | `gaia/rock/temperate_small` 1000 · `temperate_large_02` 7000 |
+| `res.tree` | wood | `gaia/tree/{elm,oak,teak,toona}` 500 each |
+| `res.berry_bush` | food | `gaia/fruit/berry_01` |
+| `res.sheep` | food 100 | `gaia/fauna_sheep` |
+| `res.deer` | food 100 | `gaia/fauna_deer` |
+| `res.bear` | food 300 | `gaia/fauna_bear` |
+| `res.cattle` | food 500 | `gaia/fauna_cattle_zebu` |
+| `res.wolf` | food 30, **attacks** | `gaia/fauna_wolf` — the only hostile gaia entity, so it needs `CombatSystem` (4.13), not just 6.1b roaming |
+
+#### 9.2.1 Discrepancies to settle
+
+Recorded rather than silently resolved — each one is a decision, not a typo to guess at.
+
+1. ✅ **Resource amounts — ANSWERED 2026-08-14: neither set is wrong.** `resources.json` has
+   gold `[200, 500, 800]` and tree `[40, 100, 175]` against the roster's 1000/5000/10000 and
+   500, and the answer is that **the amount encodes the visual size class** — a small ore
+   outcrop against a big one — with the absolute values freely tunable for balance. So what is
+   load-bearing is the *ordering and rough ratio between size classes*, not the numbers, and
+   the shipped figures stay until a balance pass without contradicting the roster. One real
+   difference remains: gold has three size classes and stone only two, against the code's
+   uniform three (6.2/6.3) — stone's third class needs a number or the array needs to be two
+   long.
+2. **Everything baked so far is the wrong age skin** — and it is not three assets, it is
+   roughly **36**. The villager, the town centre and the house are Athenian/Hellenic (§13.2
+   item 2), and so is the whole building roster, the wall/gate/tower set and all six military
+   units the art track has since baked (ASSET_MISSING §2.1/§2.2). Athenians are not one of the
+   four age civs. This is cheap per asset — `source.actor` is one line, and canvas sizes,
+   `yaw_offset_deg`, `ground_clip` and every prop finding carry over — so the existing set is
+   best read as **age-skin placeholder art plus ~36 proven recipe templates** for the age-1
+   Briton pass. The villager is the one real cost, since re-pointing her means re-baking 960
+   frames; that is also exactly when §13.2 item 9's deferred `height_m` fix becomes free.
+3. ✅ **Wall civ mix — ANSWERED 2026-08-14: copy-paste errors.** Every piece of a wall tier
+   comes from **one** civ: age-2 wood all `germ`, age-3 wood all `brit`, age-3 stone all
+   `pers`, age-4 reinforced all `rome`. Corrected in the roster file. **The guard tower is a
+   wall tower** from the same civ as that age's newest wall tier, which is what makes its
+   footprint line up with the run it sits in. Separately confirmed in-game: all wall pieces
+   share one footprint and all wall towers share another, across every civ, so the
+   max-footprint rule is a no-op for the whole wall set. One cosmetic loose end, not worth
+   blocking on: a player still holding age-2 `germ` walls in age 4 will see a `rome` guard
+   tower embedded in them, since there is one guard tower per age rather than one per tier.
+4. ✅ **`unit.swordsman`'s age-4 skin — ANSWERED 2026-08-14: `rome`.** The roster file's
+   `gaul` at age 4 (making it the only entity whose skin regressed, `gaul` → `cart` → `gaul`)
+   was a typo.
+5. **Three siege units are packed/unpacked actor pairs** (ballista, onager, trebuchet), which
+   is a unit state machine the sim does not have: a deploy/undeploy task with its own timings
+   that blocks movement in one state and attack in the other. Scope it **with** 4.13 rather
+   than after — §13.2 item 4 already noticed the missing icon pair for it.
+6. **The trebuchet trains at two buildings.** Nothing in `TrainCommand`/`ProductionSystem`
+   (5.4) forbids it — `trainable_at` is an array — but nothing tests it either, and it is the
+   only entity in the roster that exercises the plural.
+7. ✅ **Age names — ANSWERED 2026-08-14: a numeral *and* a name, and not AoE's ladder.** The
+   HUD shows the numeral (9.1 is already a roman numeral in a gold circle, which needs no words
+   and fits a 648 px canvas); the name appears where there is room for prose — the tech tree
+   (9.4), the advancement banner, the lobby. The names tie to the game's own differentiator and
+   land age 4 on the title: **I Age of Ash · II Age of Embers · III Age of Flame · IV Age of
+   Dragons.** Dark/Feudal/Castle/Imperial carry no legal risk, being generic historical terms,
+   but shipping the reference game's exact ladder in an open-source AoE-like invites the
+   comparison for nothing. In `ages.json`, which **also had its names misaligned by one** —
+   age I was labelled "Feudal Age", which is age 2 in the roster. The numerals were always
+   right; only the names were off.
+
 ---
 
 ## 10. MVP definition
@@ -1129,7 +1434,7 @@ problem to mitigate.
 | 1.3 | ✅ **DONE** -- `Boot.tscn`/`boot_screen.gd`: the Gemini-generated title card (`ui/boot_splash.png`, also `Splash_h.jpg`/`Splash_v.jpg` at the repo root), held 2 s or until tapped, then `change_scene_to_file(MainMenu.tscn)`. Separate from `project.godot``boot_splash/image`, which is the engine's own sub-second flicker frame before any scene runs at all | **[MVP]** |
 | 1.4 | ✅ **DONE** -- `Credits.tscn`/`credits_screen.gd`: a scrollable `RichTextLabel` mirroring CREDITS.md (0 A.D./Wildfire Games' required verbatim CC-BY-SA 3.0 attribution, Kibyra, Gemini-generated art, Godot, tooling), since CREDITS.md itself lives outside `res://` and cannot be loaded at runtime. Hardcoded rather than parsed -- CREDITS.md's own "Adding an entry" section already requires updating both in the same change | **[MVP]** |
 | 1.5 | Settings screen | |
-| 1.6 | Lobby: host/join, map & faction & win-condition pick | |
+| 1.6 | Lobby: host/join, map & **colour** & win-condition pick — colour, not faction, for v1 (§1). Adds `colours.json`. The faction picker slots in here when 9.5 lands | |
 
 ### Phase 2 Ã¢â‚¬â€ Map *(IDEA phase 2)*
 
@@ -1188,7 +1493,7 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 | 4.10 | Special abilities + cooldowns | |
 | 4.11 | Population cap from houses/town centres | |
 | 4.12 | Stances | |
-| 4.13 | Military units + `CombatSystem` | |
+| 4.13 | Military units (§9.2's roster) + `CombatSystem`. Includes the packed/unpacked siege state machine (§9.2.1 item 5) and the hostile wolf (`res.wolf`), both of which are combat, not economy | |
 | 4.14 | Formations | |
 
 ### Phase 5 Ã¢â‚¬â€ Buildings *(IDEA phase 5)*
@@ -1201,7 +1506,7 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 | 5.4 | ✅ **DONE** -- `TrainCommand` enqueues (pays up front, same convention as `PlaceBuildingCommand`), `CancelProductionCommand` refunds exactly what was paid, `ProductionSystem` advances only the FRONT of the queue and spawns via `SimMap.find_free_adjacent()` on completion. **A finished order is not popped until it actually spawns** -- a packed town centre backs the order up and retries every tick rather than losing the villager who was paid for; test_a_full_town_centre_backs_up_production_rather_than_losing_the_unit proves it against a map walled off except one distant tile. `SelectionPanel` grew a `Train Villager` button + queue-count label, gated on `is_mine` so a future enemy building shows health, not a button to spend on ITS queue; it emits `train_requested`/`cancel_requested` rather than calling `Net.submit_command()` itself, so commands still leave the view layer only through `GameScene`. Verified on device: selecting the starting Town Center shows the button, and pressing it with 0 food correctly enqueues nothing, matching `test_training_is_rejected_when_the_player_cannot_afford_it` | **[MVP]** |
 | 5.5 | ✅ **DONE** -- same `DeathSystem`: a building at hp 0 flips `SimBuilding.phase` to `DESTROYED` (`BuildingDef.visual_for_phase()` already pointed that at `visual_rubble`) and calls the new `SimWorld.free_footprint()` -- `despawn()`'s tile-freeing half, minus removing the entity -- so the ground is buildable again the instant it falls. Rubble has no fade timer: it stays in `entities` and renders opaque forever, matching A.2's "no damaged tier" art note. `ProductionSystem` now skips a dead building's queue so nothing trains out of the wreckage. Verified live on device: destroying the starting Town Centre via the debug button turns it to rubble, frees its tiles, and the tap panel no longer opens on it | **[MVP]** |
 | 5.6 | ✅ **DONE** -- rides 4.6's dot: `SimBuilding` already carried `hp`/`max_hp` (2.6/5.1), so this phase was wiring, not new state. Hidden once destroyed -- rubble has no damage tiers to report (A.2) | **[MVP]** |
-| 5.7 | Full building roster | |
+| 5.7 | Full building roster — §9.2's 23 buildings. Low code effort (data-driven), but ~70 bakes of art behind it because each carries up to four age skins (§2.7) | |
 
 ### Phase 6 Ã¢â‚¬â€ Resources & wildlife *(IDEA phase 6)*
 
@@ -1241,7 +1546,8 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 | 9.2 | Age advancement progress bar | |
 | 9.3 | `TechSystem`: research timers, stat modifiers, gating | |
 | 9.4 | Tech tree screen | |
-| 9.5 | Faction unique units/bonuses | |
+| 9.5 | **Additional civilisations — deferred past v1, not dropped** (§1). A civ is a re-skin plus a rename over the shared roster (§2.7.1), so the cheap tier is pure content: a `visuals.json` skin set and a name table, no sim change and no new field, shippable partially thanks to the default-skin fallback. **Unique units and per-civ bonuses are the expensive tier** — they need a per-faction override layer over `units.json` and bring per-civ balance with them. Ship the re-skin tier first; treat bonuses as a separate decision | |
+| 9.6 | Age re-skin: buildings and units resolve their visual through the owner's current age (§2.7, §13.2 item 10). Pure view work — `SimPlayer.age` already reaches the client in `player_state` (10.6) | |
 
 ### Phase 10 Ã¢â‚¬â€ Control groups *(IDEA phase 10)* Ã¢â‚¬â€ **all MVP**
 
@@ -1292,9 +1598,9 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 | 2.5 Fog of war | High | Medium | **Second** |
 | 12.2a AI opponent | Very high | Medium-high | **Third** |
 | 4.11 Population cap | Medium | Low | Quick win |
-| 5.7 More buildings | High breadth | Low each (data-driven) | Quick win |
+| 5.7 More buildings | High breadth | Low each **in code**; ~70 bakes in art (§9.2) | Quick win in data, art track paces it |
 | 11.1 Win condition | High | Low | Quick win |
-| 9.x Ages & tech | High but broad | High | Batch later |
+| 9.x Ages & tech | High but broad — the age axis now carries what factions would have (§2.7) | High: four age skins of every building | Batch later |
 | 12.1 Real multiplayer | High | Medium (socket only) | After AI |
 | 13.x Dragons | The differentiator | High (bespoke art) | Once the RTS is a game |
 
@@ -1306,17 +1612,25 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 
 Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 
+> **[ASSET_MISSING.md](ASSET_MISSING.md) is the status of record**, per asset, and it is well
+> ahead of the summaries below — the whole Athenian building roster, six military units and
+> most of the terrain and wildlife are baked. This table is the *ordering*; go there for what
+> exists. Everything baked so far is Athenian/Hellenic, which is **not** one of the four age
+> civs (§2.7), so it stands in as age-skin placeholder art and as proven recipe templates.
+
 | # | Item | Depends on |
 |---|---|---|
-| A.1 | Terrain tile set from 0 A.D. ground textures. **Grass done** (`terrain.grass`, 64×32 exactly, recipe `terrain_grass.toml`); dirt and sand are the same recipe with a different `terrain =` line, and the debug map already paints a dirt border it has no tile for. Water/rock only matter once `SimMap` uses them | 0.9 |
+| A.1 | ✅ **DONE** — terrain tile set from 0 A.D. ground textures, all 64×32 exact with no fitting: grass, dirt, sand, shallow + deep water, rock, forest floor, plus a `vis.cliff` prop. Recipes `tools/recipes/terrain_*.toml`. Remaining are not tiles: transition/blend edges, shoreline, and the fog-of-war overlay (2.5) | 0.9 |
 | A.2 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Town centre + house, each with foundation and rubble (`SimBuilding.Phase`). Six single-frame atlases at `directions = 1`; foundations and generic rubble keyed by footprint size so the rest of the roster (5.7) reuses them. No damaged tier Ã¢â‚¬â€ 0 A.D. has none, and health is the health dot (5.6). ASSET_MISSING.md 1.2 | 0.9 |
 | A.3 | ✅ **DONE** — Villager, all 11 animations × **8** directions = 960 frames (8 not 5: she holds an axe in one hand, so mirroring would swap it). Recipe `villager.toml`. **Needs one rebake** for the height override in §13.2 item 9, and carries the `work_mine` dress artefact in item 7 | 0.9 |
-| A.4 | Resource props: tree (3 sizes + stump), gold mine, deer. **Gold mine Ã¢Å“â€¦ done** (`geology/metalmine_alpine.xml`, 5 directions, ~1.4 Ãƒâ€” 1.9 tiles); deer Ã¢Å“â€¦ done but **static** (item 8). Remaining: 2 more tree size classes + stump, and the deer carcass | 0.9 |
+| A.4 | **Largely done, see ASSET_MISSING §1.3/§2.3** — gold mine, stone mine, berry bush, deer, deer carcass, boar, sheep, wolf, fish and six extra tree species all baked. Still open: the tree *size classes* and every palm, both of which need variant selection in `isobake` (no deterministic actor exists); and `vis.farm`, blocked on a 64-instance prop scatter the Pyrogenesis importer collapses to one. Original scope: **Gold mine Ã¢Å“â€¦ done** (`geology/metalmine_alpine.xml`, 5 directions, ~1.4 Ãƒâ€” 1.9 tiles); deer Ã¢Å“â€¦ done but **static** (item 8). Remaining: 2 more tree size classes + stump, and the deer carcass | 0.9 |
 | A.5 | UI chrome from the itch.io dragon packs | none |
-| A.6 | Team-colour outline shader | A.3 |
+| A.6 | **Player colour — promoted from polish to prerequisite by §1.** Colour is the only thing distinguishing players, and `isobake` currently multiplies the tint in at bake time (§2.7 consequence 3), so today one atlas is one player's colour. Bake untinted, emit the source alpha as a mask page, tint in a Godot `canvas_item` shader. An outline is then a second, optional pass on the same mask. **The blend mode is a real decision, not a detail:** 0 A.D. multiplies, and under pure multiply white is a no-op (an untinted-looking player) while dark colours crush the texture detail beneath — which compresses §13.2 item 11's carefully spread lightness ladder back together. Mix toward the colour, or take its hue and keep the texture's luminance, so eight distinct colours stay eight distinct colours on screen | A.3 |
 | A.7 | Audio pass Ã¢â‚¬â€ 0 A.D. sfx/music into `audio.json` | 0.9 |
-| A.8 | Military unit art | A.3 |
+| A.8 | Military unit art — §9.2's ~28 unit bakes, **6 already done** (militia, archer, spearman, knight, siege ram, monk, all Athenian stand-ins) plus all three projectiles; `vis.trebuchet` and `vis.trade_cart` are blocked on isobake's armature picking and attack/impact VFX on it having no particle support at all (ASSET_MISSING §2.1). One actor per unit (a handful re-skin across ages), which is where the single-civilisation decision actually pays: ~28 against the ~88 four factions would have cost | A.3 |
 | A.9 | **Dragon + nest Ã¢â‚¬â€ bespoke** | A.3, A.8 |
+| A.10 | **Building roster, age by age** — §9.2's ~70 building bakes. Order by age, not by building: a complete age 1 settlement is playable and shippable, four half-skinned ages are not. Foundations and rubble stay keyed by footprint (A.2's convention) and so are shared across ages. **Measure all four skins of a building before declaring its footprint** — it is the max across ages, locked at placement (§13.2 item 10), so it cannot be read off the age-1 bake alone | A.2 |
+| A.11 | Walls and gates — ~16 pieces across three tiers, re-skinned in place like everything else. **Unblocked from the footprint side:** all wall pieces share one footprint and all towers another, across every civ (owner-verified in-game), so a tier can mix civs freely and the max-footprint rule costs nothing here. §9.2.1 item 3 is now only "which set looks right per age". The Athenian wall/gate/tower set is already baked (ASSET_MISSING §2.2) and is the proven template | A.10 |
 
 A.1 and A.2 come first: cheap, transform the look, and validate the render pipeline before the expensive villager work.
 
@@ -1339,9 +1653,11 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | 4 | ~~**Icon volume**~~ Ã¢Å“â€¦ **ANSWERED Ã¢â‚¬â€ generate.** 15 icons delivered at 0.3 staging, AI-generated (Google Gemini) at 100Ãƒâ€”100 RGBA from a 5Ãƒâ€”5 source sheet: 5 resource (`res_food/wood/gold/stone/villagers`) and 10 action (`res_`/`act_` prefixes group them by the panel that uses them). Live in `game/assets/ui/icons/`; the sheet stays in `Icons/` as the source, with **10 empty slots** for the rest. A further 5 HUD buttons landed the same way (`hud_techtree/score/trade/chat/settings`, from `MapIcons_500x100.png`) for the corners around the minimap panel Ã¢â‚¬â€ 20 icons total. Still to draw: unit/building portraits for the selection panel and control-group slots, and the trebuchet pack/unpack pair `icons.txt` lists but the sheet does not yet have. Their placement around the minimap panel is settled (`Icons/map_icons.txt`): **TechTree** top-left, **Score** top-right, **Trade** bottom-left (enabled once a market exists), **Chat** bottom-right. `hud_settings` is spare. Note `act_enter`/`act_garrison` and `act_exit`/`act_leave` are two pairs covering one concept each Ã¢â‚¬â€ decide whether they are distinct actions (board transport vs garrison building) or two takes on one, and reclaim the spares if the latter | mostly closed |
 | 5 | **Second pack mirror** Ã¢â‚¬â€ primary is settled: `https://aod.dragoon.co.za/` (Ã‚Â§3.2), unconstrained. A fallback is still unpicked; GitHub Releases is the obvious candidate since the repo is already there. Costs nothing to defer Ã¢â‚¬â€ `packs.json` carries a URL *list* per pack, so adding a mirror is a manifest edit with no client change | before first public build |
 | 6 | **Device reach on Compatibility** Ã¢â‚¬â€ confirm the target phone runs it cleanly at 0.1. Known Android driver issues cluster on Mali/MediaTek/Adreno under Vulkan, which is the reason for the Ã‚Â§1 renderer choice | 0.1 |
-| 8 | **0 A.D.'s quadruped clips will not transfer onto their own mesh.** Found baking `vis.deer`, which therefore ships **static** for MVP (A.4). Bone names are not the problem Ã¢â‚¬â€ 36 of 37 transfer, 97%. The sizes are: `skeletal/deer_mesh.dae` imports through the Pyrogenesis importer at 0.82 Ãƒâ€” 4.36 Ãƒâ€” 3.70 units, while `quadraped/deer_walk_01.dae`'s own rigged figure imports through Blender's COLLADA importer at 418 Ãƒâ€” 383 Ãƒâ€” **116** units Ã¢â‚¬â€ roughly **31Ãƒâ€” apart**. Pose transforms are stored relative to rest, so every location curve is ~31Ãƒâ€” too large and the mesh tears into spikes; it reads as a broken rig rather than a units error. Both files declare `<unit meter="0.0254" name="inch"/>`, so the two import paths apply the *same* declaration differently. Bipeds are unaffected because their clips declare metres and their two rigs measure identically. **Two dead ends worth not repeating:** bone *length* is not a usable scale metric (the Pyrogenesis importer fabricates near-zero lengths Ã¢â‚¬â€ the actor's longest bone reads 0.050 on a 4-unit model), and comparing bone rest *positions* is swamped by where 0 A.D. parks a clip skeleton, whether measured from the armature origin or from the root bone. The one sound measurement found is the ratio of the two figures' **mesh bounding boxes**. Fix is either to make both import paths honour the declared unit identically, or to scale each action's location F-curves by that ratio Ã¢â‚¬â€ cheap once, and it unlocks every quadruped (deer, boar, sheep, and cavalry mounts later) | A.4 / post-MVP |
-| 9 | **The villager is 2.18 m tall Ã¢â‚¬â€ too tall for a woman, and the fix is a recipe override, not a pipeline bug.** Measured directly with `isobake inspect`, which reports raw 0 A.D. units: `units/athenians/female_citizen` is 1.934 Ãƒâ€” 0.871 Ãƒâ€” **4.356** units, and at the pipeline's tile-to-tile factor of 0.5 that is **2.178 m**. The deer is 4.040 units Ã¢â€ â€™ **2.020 m**. So she stands 16 cm *taller than a stag*, which is the wrong way round and is exactly what was flagged by eye at A.4. Note Ã‚Â§2.2's "a citizen measures 3.85" does not match this actor Ã¢â‚¬â€ 3.85 is some other citizen or excludes props, and 4.356 is the measured figure for the one we actually use. `villager.toml` declares no `scale` and no `height_m`, so she simply inherits 0 A.D.'s own proportions, and 0 A.D. authors humans large relative to its tile scale. **The fix is one line:** `height_m` on the recipe, which exists precisely as "the escape hatch for a model that was authored off-scale", plus a rebake of her 960 frames. It does not touch the global `pixels_per_metre` and so cannot disturb any other asset. Open question is only what height to pick Ã¢â‚¬â€ 1.7 m makes her clearly shorter than the stag; 1.75Ã¢â‚¬â€œ1.8 keeps her readable at sprite size on a phone. **Correction:** an earlier version of this item claimed she was baked ~2Ãƒâ€” oversized (3.75 m) and blamed isobake's armature path. That was wrong. It came from back-solving height out of the trimmed sprite bounds, which does not work Ã¢â‚¬â€ a silhouette's topmost pixel sits at no predictable diamond offset, and the same arithmetic predicts 308 px above the anchor for the town centre against a measured 210. **That retraction was itself wrong, and is hereby withdrawn: there *was* an armature bug, and the original ~2x claim was right.** Fixed in `isobake` c540874. A 0 A.D. animation `.dae` is a whole rigged figure, so its imported action keys the armature *object's* `location`, `rotation_quaternion` and `scale` alongside the pose; assigning it reset the pipeline's x0.5 unit conversion to 1.0 and the villager baked at double size. Confirmed by dumping the armature's world scale under the pose (0.5 before the clip was assigned, 1.0 after) and by the re-bake: `idle` sprites went 88 px to 44 px tall, the atlas page 4.98 MB to 1.81 MB, and she now stands comparable to the 50x60 px deer instead of dwarfing the town centre. It stayed hidden because it was uniform -- `idle` runs first and resets the scale, nothing puts it back -- and it only ever manifested once the clips actually played, i.e. after the action-slot fix; before that the armature sat at rest pose and the curves never applied. So the lesson is the opposite of the one recorded here: **`inspect` was the wrong instrument and gave a false all-clear**, because it neither applies scale normalisation nor attaches a clip -- it can only ever report the raw rest pose. What it does measure correctly is the 4.356 raw units / 2.178 m above, so this item's real point stands: she is still 2.178 m and still taller than a stag, and that remains a recipe `height_m` decision | A.3 rebake |
+| 8 | ✅ **FIXED, not merely diagnosed** — `isobake` gained `anims.<name>.location_scale`, which multiplies a transferred clip's pose-bone location curves by a measured correction factor: exactly the fix this item proposed ("scale each action's location F-curves by that ratio — cheap once") and never implemented. Proven by `vis.deer_carcass`, measured at `0.0319` for that clip, close to the 3.70/116 ratio predicted below. It is **per clip, not a global constant**, and it unblocks every quadruped on the same import path — boar, sheep, wolf, and cavalry mounts later. A small tear remains at the deer's neck/antler seam that does not track with the scale value, so it reads as a skinning-weight seam rather than a curve error, and is accepted at placeholder quality. Original diagnosis: Found baking `vis.deer`, which therefore ships **static** for MVP (A.4). Bone names are not the problem Ã¢â‚¬â€ 36 of 37 transfer, 97%. The sizes are: `skeletal/deer_mesh.dae` imports through the Pyrogenesis importer at 0.82 Ãƒâ€” 4.36 Ãƒâ€” 3.70 units, while `quadraped/deer_walk_01.dae`'s own rigged figure imports through Blender's COLLADA importer at 418 Ãƒâ€” 383 Ãƒâ€” **116** units Ã¢â‚¬â€ roughly **31Ãƒâ€” apart**. Pose transforms are stored relative to rest, so every location curve is ~31Ãƒâ€” too large and the mesh tears into spikes; it reads as a broken rig rather than a units error. Both files declare `<unit meter="0.0254" name="inch"/>`, so the two import paths apply the *same* declaration differently. Bipeds are unaffected because their clips declare metres and their two rigs measure identically. **Two dead ends worth not repeating:** bone *length* is not a usable scale metric (the Pyrogenesis importer fabricates near-zero lengths Ã¢â‚¬â€ the actor's longest bone reads 0.050 on a 4-unit model), and comparing bone rest *positions* is swamped by where 0 A.D. parks a clip skeleton, whether measured from the armature origin or from the root bone. The one sound measurement found is the ratio of the two figures' **mesh bounding boxes**. Fix is either to make both import paths honour the declared unit identically, or to scale each action's location F-curves by that ratio Ã¢â‚¬â€ cheap once, and it unlocks every quadruped (deer, boar, sheep, and cavalry mounts later) | A.4 / post-MVP |
+| 9 | ⏸️ **DEFERRED by the project owner, 2026-08-08.** A `height_m = 1.93` rebake was tried and reverted: the existing 2.178 m bake is confirmed good on device — frames correct, no clipping — and a working pre-MVP asset is not worth disturbing. Revisit as polish once the game otherwise works. One coupling worth knowing: §9.2.1 item 2 has to re-point her at a Briton actor eventually, which forces a rebake of her 960 frames anyway, and that is the moment the height fix becomes free. Original analysis: **The villager is 2.18 m tall Ã¢â‚¬â€ too tall for a woman, and the fix is a recipe override, not a pipeline bug.** Measured directly with `isobake inspect`, which reports raw 0 A.D. units: `units/athenians/female_citizen` is 1.934 Ãƒâ€” 0.871 Ãƒâ€” **4.356** units, and at the pipeline's tile-to-tile factor of 0.5 that is **2.178 m**. The deer is 4.040 units Ã¢â€ â€™ **2.020 m**. So she stands 16 cm *taller than a stag*, which is the wrong way round and is exactly what was flagged by eye at A.4. Note Ã‚Â§2.2's "a citizen measures 3.85" does not match this actor Ã¢â‚¬â€ 3.85 is some other citizen or excludes props, and 4.356 is the measured figure for the one we actually use. `villager.toml` declares no `scale` and no `height_m`, so she simply inherits 0 A.D.'s own proportions, and 0 A.D. authors humans large relative to its tile scale. **The fix is one line:** `height_m` on the recipe, which exists precisely as "the escape hatch for a model that was authored off-scale", plus a rebake of her 960 frames. It does not touch the global `pixels_per_metre` and so cannot disturb any other asset. Open question is only what height to pick Ã¢â‚¬â€ 1.7 m makes her clearly shorter than the stag; 1.75Ã¢â‚¬â€œ1.8 keeps her readable at sprite size on a phone. **Correction:** an earlier version of this item claimed she was baked ~2Ãƒâ€” oversized (3.75 m) and blamed isobake's armature path. That was wrong. It came from back-solving height out of the trimmed sprite bounds, which does not work Ã¢â‚¬â€ a silhouette's topmost pixel sits at no predictable diamond offset, and the same arithmetic predicts 308 px above the anchor for the town centre against a measured 210. **That retraction was itself wrong, and is hereby withdrawn: there *was* an armature bug, and the original ~2x claim was right.** Fixed in `isobake` c540874. A 0 A.D. animation `.dae` is a whole rigged figure, so its imported action keys the armature *object's* `location`, `rotation_quaternion` and `scale` alongside the pose; assigning it reset the pipeline's x0.5 unit conversion to 1.0 and the villager baked at double size. Confirmed by dumping the armature's world scale under the pose (0.5 before the clip was assigned, 1.0 after) and by the re-bake: `idle` sprites went 88 px to 44 px tall, the atlas page 4.98 MB to 1.81 MB, and she now stands comparable to the 50x60 px deer instead of dwarfing the town centre. It stayed hidden because it was uniform -- `idle` runs first and resets the scale, nothing puts it back -- and it only ever manifested once the clips actually played, i.e. after the action-slot fix; before that the armature sat at rest pose and the curves never applied. So the lesson is the opposite of the one recorded here: **`inspect` was the wrong instrument and gave a false all-clear**, because it neither applies scale normalisation nor attaches a clip -- it can only ever report the raw rest pose. What it does measure correctly is the 4.356 raw units / 2.178 m above, so this item's real point stands: she is still 2.178 m and still taller than a stag, and that remains a recipe `height_m` decision | A.3 rebake |
 | 7 | **Source-mesh defects carried into the bakes.** Two; (a) is now **FIXED**, (b) remains **accepted as-is for MVP** by explicit decision Ã¢â‚¬â€ they are recorded here so they are chosen rather than forgotten. (a) **Buried geometry, and it is not only buildings.** The town centre hangs 2.7 m of below-ground wall under its ground line, the 3Ãƒâ€”3 rubble 1.8 m, the house 0.7 m ([ASSET_MISSING.md](ASSET_MISSING.md) Ã‚Â§1.2). **DONE** — `isobake` gained `render.ground_clip`, which bisects every mesh at world `z = 0` and discards what is below; the three building recipes set it and were re-baked (town centre 383 to 329 px and 9.48 to 6.70 m, rubble 194 to 146 px, house 221 to 194 px, widths unchanged). Worth knowing it had to be a 3D cut, not a crop of the finished frame: `z = 0` projects to a diamond spanning most of the frame's height, so any horizontal cut deep enough to lose the skirt also loses the front of the building. Also, the burial ran **deeper than the pixel estimates** here suggested (2.53 m under the house, not 0.7) because a skirt directly under a building hides behind its own ground diamond and only the overhang shows. Per the note below this unblocks the better ore sculpts, so that upgrade is now purely an art choice. **A.4 found this is a whole-asset-set problem, not a building one, and that it now costs us art quality rather than just polish.** 0 A.D.'s newer ore sculpts are authored half-sunk into terrain Ã¢â‚¬â€ `gaia/stonemine_round_a_small_01.dae` spans z Ã¢Ë†â€™3.515 to +4.032, so **47%** of the rock is below the ground plane, and the square variants reach **64%**; on a baked sprite the anchor lands mid-pile with 54 of 94 px hanging below it. That set (`metal_<biome>_round|square|small`, 328 verts and a 2048 px texture) is strictly better art than the 68-vert, 128 px old generation we shipped `vis.gold_mine` from, and the *only* thing keeping us on the worse art is this clip. So the fix upgrades the mine, unblocks the better stone-mine and boulder sets, and squares the buildings Ã¢â‚¬â€ treat it as the first item of the post-MVP art pass, not the last. Their engine gets away with it via terrain occlusion plus `<Position><Anchor>pitch-roll</Anchor>`, which is why the source looks fine in-game. (b) **Villager `work_mine` dress distortion:** a dress vertex weighted 100% to `hand_L` in the source mesh drags a fold of fabric when the mining clip's hand pose diverges from the citizen's native poses. Fix is re-weighting that vertex or clamping the vertex group at import. Both are single-pass jobs on the art track and neither blocks a gameplay phase Ã¢â‚¬â€ schedule them together after MVP | post-MVP art pass |
+| 10 | ✅ **ANSWERED — (a): buildings and walls re-skin in place as their owner advances.** Decided by the project owner, together with the footprint rule below. The rejected options are kept because they are the reason the footprint rule exists. **(a)** Every building of that player switches skin the tick the age advances — one seam change (`visual_for_phase(phase)` becomes `visual_for(phase, age)`), no new sim state, since `SimPlayer.age` already rides `player_state` (10.6). **(b)** A building keeps the skin it was built in — needs a `built_in_age` field on `SimBuilding` and puts it in `state_hash()`, and gives a mixed-era town, which may be the more interesting picture. **(c)** An explicit paid upgrade per building (5.3), most player agency and most UI. **(a) recommended**: cheapest, and it makes advancing an age visibly worth it, which is the entire point of the age axis replacing the civ axis. Foundations and rubble stay keyed by footprint, which is what makes (a) safe to ship. **The footprint is locked at placement to the MAXIMUM across all four age skins** — an age-1 building claims the tiles its age-4 form will need, so it is deliberately bigger than it looks and the early art sits inside that with slack. The alternative is a re-skin that can *fail*: a neighbour in the way, or a wall one tile thick where the age-4 piece is two, and there is no acceptable outcome for a standing building that no longer fits — refusing the re-skin gives a mixed-era town by accident instead of by design, and moving or destroying it is worse. Implement the lookup as skin resolution over a `(faction, age)` key rather than an age special case (§2.7.1): the faction dimension returns at 9.5 and it is the same lookup | 9.6 / A.10 |
+| 11 | ✅ **ANSWERED 2026-08-14 — palette in `game/data/colours.json`**, read by `GameDataRegistry.colour(index)` and indexed by `SimPlayer.colour`. Eight hues cannot all be told apart by hue alone: red-green colour blindness (~8% of men) collapses red, orange, green and yellow onto one axis, so **those four are separated by lightness instead** — each colour sits on a rung of a CIE L\* ladder, family members ~16 L\* apart. `#0043D6` blue (L\* 36) · `#D50032` red (45) · `#FFEB00` yellow (92) · `#00E5FF` cyan (84) · `#00A344` green (59) · `#B44DFF` violet (54) · `#FFAB00` orange (76) · `#FFFFFF` white (100). Pairs that sit *close* in L\* (violet 54 / green 59, blue 36 / red 45) are always in **opposite** families, so they separate on the blue-yellow axis every colour blindness preserves; no pair is close on both. **Slot order is part of the design**: most matches are 1v1 or 2v2, so slots 1–4 are the four most separable (blue, red, yellow, cyan — every pair either cross-axis or ≥ 39 L\* apart), and green sits at slot 5 so it never meets yellow before a 5-player game. Order is the contract (index 0 = player 1) and is pinned by tests, since reordering repaints every existing save and replay. **What this still depends on is A.6's blend mode** — see the note there; a pure multiply compresses the whole ladder and makes white a no-op | A.6 / 1.6 |
 
 ---
 
@@ -1356,12 +1672,15 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | ~~Animation-variant props are not imported~~ | ~~Medium~~ | Ã¢Å“â€¦ **RETIRED.** `isobake`'s zeroad adapter now reads a variant's `<props>` alongside its `<animations>` and constrains the prop mesh to the armature's `prop_<attachpoint>` bone, visible only while that clip plays. The villager now chops holding her axe and carries wood at her hip; `villager.toml` moved to `directions = 8` accordingly (Ã‚Â§2.5) |
 | ~~Every animation silently rendered rest pose~~ | ~~**High**~~ | Ã¢Å“â€¦ **RETIRED.** Blender Ã¢â€°Â¥4.4's layered-action system needs `animation_data.action_slot` set explicitly; `isobake` was only ever setting `.action`, so no curve in any clip drove anything, and it looked fine because nothing was checked against a moving reference. Fixed in `render_impl.py`. This is why villager frame counts and canvas size both changed after 0.9 Ã¢â‚¬â€ the frozen renders never exercised real motion range |
 | **0 A.D. clips bake in absolute root-bone motion** Ã¢â‚¬â€ a gather clip's hip can drift over a metre from wherever the animator placed the character, well past what a fixed camera anchored on world (0,0,0) can frame | Medium | `render_impl.py` cancels the root bone's horizontal (X/Y) drift every frame, holding it at its rest-pose position; vertical motion (a fall, a crouch) is left alone since that is the real, wanted signal |
-| **Quadruped animations do not transfer onto their own mesh** Ã¢â‚¬â€ the clip files and the mesh file describe one skeleton ~31Ãƒâ€” apart, so location curves overshoot and the mesh tears | Medium | Measured at A.4 (Ã‚Â§13.2 item 8). `vis.deer` ships **static** for MVP, which costs nothing on the MVP path Ã¢â‚¬â€ 6.1a only needs a huntable food node, and roaming is 6.1b Ã¢â‚¬â€ but leaves the gatherable carcass without art. Bipeds are unaffected and independently verified: the villager's two rigs measure identically |
+| ~~**Quadruped animations do not transfer onto their own mesh**~~ ✅ **RETIRED** — fixed in `isobake` via a per-clip `location_scale` correction (§13.2 item 8); the deer still ships static for MVP because nothing needs it moving, not because it cannot. Original: Ã¢â‚¬â€ the clip files and the mesh file describe one skeleton ~31Ãƒâ€” apart, so location curves overshoot and the mesh tears | Medium | Measured at A.4 (Ã‚Â§13.2 item 8). `vis.deer` ships **static** for MVP, which costs nothing on the MVP path Ã¢â‚¬â€ 6.1a only needs a huntable food node, and roaming is 6.1b Ã¢â‚¬â€ but leaves the gatherable carcass without art. Bipeds are unaffected and independently verified: the villager's two rigs measure identically |
 | **0 A.D. building meshes carry a skirt below `z = 0`** for the terrain to hide, and a baked sprite has no terrain to hide it | Low | Measured at A.2 on three of six: the town centre buries **2.7 m** (52 px below the ground line), the 3Ãƒâ€”3 rubble 1.8 m, the house 0.7 m; both foundations and the civic-centre ruin are clean. Confirmed as buried geometry rather than an off-centre footprint by rendering at 0Ã‚Â° and 180Ã‚Â° and watching the excess stay below the anchor both times. Cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7, where one ground clip at `z = 0` in `isobake` fixes the whole class including every building added later |
 | **A source-mesh vertex-weight quirk distorts `work_mine`** Ã¢â‚¬â€ a dress vertex is weighted 100% to `hand_L`, and the mining clip's hand pose is far enough from the citizen's native poses that it drags a fold of fabric with it | Low | Isolated to one clip, cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7 alongside the buried building skirts, since both are source-mesh defects fixed in one post-MVP art pass. Fix is either re-weighting that vertex or clamping the offending vertex group at import time |
-| 0 A.D. actors don't map cleanly to a medieval-fantasy roster | Medium | Hand-pick the actorÃ¢â€ â€™`vis.*` mapping (Ã‚Â§13.2 item 2); some entities may need bespoke art |
+| ~~0 A.D. actors don't map cleanly to a medieval-fantasy roster~~ | ~~Medium~~ | ✅ **LARGELY RETIRED.** [Age & Unit Planning.md](<Age & Unit Planning.md>) now names an actor for all 23 buildings, 22 units and 9 resource nodes in §9.2; only the dragon needs bespoke art (A.9), and even its nest is composed from existing gaia props. What is left is verification rather than selection — some picks will look wrong once baked, as the gold mine already did. Original mitigation: hand-pick the actorÃ¢â€ â€™`vis.*` mapping (Ã‚Â§13.2 item 2); some entities may need bespoke art |
 | Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` from 0.2c Ã¢â‚¬â€ but run manually, so the mitigation is only as good as the habit until CI exists (Ã‚Â§1.2) |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
+| **Player colour is baked into the atlas** — `isobake` multiplies 0 A.D.'s player-colour mask in at bake time, so one atlas is one colour. With colour the only difference between players (§1), 8 players would mean 8 bakes of every unit | **High** | A.6, promoted from polish to prerequisite: bake untinted, emit the mask, tint in a shader (§2.7). Cheap because the mask is already in hand — it is the source texture's alpha — but it invalidates every unit bake made before it lands, so it must come **before** A.8's ~28 military bakes, not after |
+| **The age axis multiplies building art by four** — §2.7 replaces one civ choice with four age skins, so 5.7's "low effort, data-driven" roster carries ~70 bakes | Medium | A.10 orders the bakes **by age**, so a complete age 1 is always shippable and the roster degrades gracefully rather than leaving four half-skinned ages. Foundations and rubble stay shared by footprint |
+| **The age skin lookup gets written as an age special case**, and widening it to factions at 9.5 then touches every call site | Medium | §2.7.1: one `(faction, age)` skin key from the start, `faction.default` the only faction value in v1, missing entries falling back to it. Costs nothing now — the field and the JSON entry both already exist — and it is the difference between a re-skin civ being content work and being a refactor |
 | Pathfinding stalls at scale | Medium | Per-tick path budget from day one; flow fields in reserve |
 | GDScript too slow at 200 units | Medium | Measure on device from 0.7; targeted GDExtension only if proven |
 | Mobile thermal throttling | Medium | 10 Hz sim, pooled views, draw-call budget, sustained-load testing |

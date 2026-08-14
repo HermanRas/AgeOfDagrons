@@ -62,6 +62,11 @@ func setup(cfg: MatchConfig) -> void:
 		var p := SimPlayer.new()
 		p.id = pid
 		p.peer_id = pid
+		# PLAN.md 1: colour is the only thing that distinguishes players in v1, so
+		# it is assigned here from the join order rather than left 0 for everyone.
+		# Derived from the index, not chosen, until the lobby picks it at 1.6 --
+		# every client builds its own world (2.4a) and must land on the same answer.
+		p.colour = players.size()
 		players.append(p)
 
 

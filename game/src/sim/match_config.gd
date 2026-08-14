@@ -1,5 +1,7 @@
 ## What SimWorld.setup() needs to stand up a match: which players exist and how
-## big the map is. Faction and win-condition fields join this at the lobby (1.6);
+## big the map is. Player-colour and win-condition fields join this at the lobby
+## (1.6) -- colour, not faction: v1 is one shared civilisation (PLAN.md 1), and a
+## faction picker only arrives with 9.5;
 ## the actual terrain layout is 2.4a's job, not this class's -- `map_size` only
 ## says how much grid to allocate.
 class_name MatchConfig

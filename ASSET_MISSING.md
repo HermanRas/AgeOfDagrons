@@ -1,8 +1,26 @@
 # AOD — Missing Asset Tracker
 
-Every asset the game needs and does not yet have. Companion to [PLAN.md](PLAN.md) §2 (art strategy) and §12A (art track).
+Every asset the game needs and does not yet have. Companion to [PLAN.md](PLAN.md) §2 (art strategy), §9.2 (the roster) and §12A (art track), with [Age & Unit Planning.md](<Age & Unit Planning.md>) as the source of truth for which 0 A.D. actor is which of our entities.
 
 **Rule:** nothing is "blocked" on an asset. Every entry below has a working procedural placeholder (PLAN.md §2.4), so gameplay proceeds and assets swap in behind the stable ID.
+
+## ⚠️ Roster decision, 2026-08-14 — read before baking anything else
+
+**One civilisation, four age skins** (PLAN.md §1, §2.7). v1 has no factions; players are told apart by colour alone. What replaces the faction axis is the **age** axis — four 0 A.D. civs chosen to read oldest-to-newest are the four ages of our single civilisation:
+
+| Age | Name | Primary 0 A.D. civ | Actor directories |
+|---|---|---|---|
+| 1 | Dark Age | Britons | `britons/`, `celts/`, `mauryas/` |
+| 2 | Feudal Age | Gauls | `gauls/`, `celts/`, `germans/`, `carthaginians/` |
+| 3 | Castle Age | Achaemenid Persians + Iberians | `achaemenids/`, `iberians/`, `han/`, `athenians/` |
+| 4 | Imperial Age | Romans | `romans/`, `macedonians/`, `ptolemies/`, `han/` |
+
+Four consequences, each expanded where it lands:
+
+1. **Everything baked so far is Athenian/Hellenic, which is not any of the four ages.** ~30 building bakes and 6 unit bakes point at `athenians/` or `hellenes/` actors. That work is **not** wasted — `source.actor` is one line, and every canvas size, `yaw_offset_deg`, `ground_clip` setting and prop finding carries straight over — but treat the existing set as **age-skin stand-ins and a proven template for the age-1 Briton pass**, not as final art.
+2. **"Per-age visual variants" is no longer blocked.** The 2026-08-08 answer was to the wrong question — see the corrected row in §2.2.
+3. **Player colour is baked into every atlas**, and colour is now the *only* thing distinguishing players. **§5 is new and is the highest-priority pipeline item in this document.**
+4. **`Pers/` in the roster file means `achaemenids/` here.** 0 A.D. renamed the Persians: there is no `pers` directory in either `art/actors/structures/` or `simulation/templates/structures/`. Every age-3 `Pers/...` line resolves to `achaemenids/...`. Verified 2026-08-14 by listing both trees.
 
 ## Status legend
 
@@ -58,6 +76,22 @@ Two things to carry into 0.4 and 5.2:
 
 - **Footprints come from the art, not from PLAN.md §9's sketch.** Measured at the pipeline's tile-to-tile scale, the civic centre is 15.5 × 15.0 m — a **7.75-tile** footprint, agreeing with 0 A.D.'s own 30×30-unit obstruction and with the `fndn_8x8` foundation its template pairs with. The house is 10 × 10 m, a **5-tile** footprint on a 4×4 foundation. `buildings.json`'s `footprint` should be `[8, 8]` and `[4, 4]`; the `[4, 4]` written for the town centre in PLAN.md §9 predates any measurement. Scaling the meshes down to fit a chosen footprint is not the alternative — it would break the one-global-`pixels_per_metre` rule (PLAN.md §2.2) and leave the villager taller than the doorway.
 - **No separate under-construction art.** Foundation covers both phases. 5.2 can show progress by drawing the completed sprite clipped from the bottom over the foundation, which is a view-layer effect and needs no extra bake.
+
+**Footprints are locked to the maximum across all four age skins** (PLAN.md §13.2 item 10). A building re-skins in place as its owner advances, so its footprint cannot change with the skin — and 0 A.D.'s civs do **not** agree on obstruction size. Measured 2026-08-14 straight out of `simulation/templates/structures/<civ>/`, at 4 world units per tile:
+
+| Building | Age 1 `brit` | Age 2 `gaul` | Age 3 `achae` | Age 4 `rome` | Max | Declare |
+|---|---|---|---|---|---|---|
+| House | 10.0 × 10.0 | 11.0 × 11.0 *(inherited)* | 13.0 × 14.0 | 14.0 × 14.0 *(inherited)* | 3.5 tiles | `[4, 4]` ✅ already correct |
+| Barracks | 20.0 × 20.0 | 20.0 × 20.0 | — | 22.0 × 22.0 | 5.5 tiles | `[6, 6]` ✅ matches `vis.foundation_6x6` |
+| **Town centre** | 25.0 × 25.0 | 25.0 × 25.0 | **38.5 × 22.5** | **37.0 × 37.0** | **9.6 × 9.25 tiles** | ⚠️ **`[10, 10]`, not the shipped `[8, 8]`** |
+
+✅ **The town centre is now `[10, 10]`, decided 2026-08-14** (project owner: fix it once now rather than break every placed town centre the day age 4 lands). Its old `[8, 8]` came from the Athenian actor's 30 × 30 obstruction (7.5 tiles) — but the Roman age-4 civic centre is 37 × 37 and the Achaemenid one 38.5 wide, so a town centre placed in age 1 has to claim 10 × 10 from the start or it can never re-skin. The Achaemenid entry is not square, so the max is taken **per axis** — buildings do not rotate. Done in `buildings.json` plus the two tests that pinned the old figure.
+
+⬜ **`vis.foundation_10x10` is now needed** — the only new asset this decision creates. `vis.foundation_8x8` is still wired up and so reads one tile small on each side, which is the same deliberate art/gameplay disagreement the house makes in the opposite direction and is fine until this is baked. 0 A.D. ships `structures/fndn_10x10.xml`; the recipe is `foundation_8x8.toml` with the actor and canvas changed. Pointing `visual_foundation` at it *before* it exists would only render the loud magenta placeholder, which is worse than a foundation that reads slightly small.
+
+**Composite entities are measured over their props, not their core building.** The lumber camp (3× `wood_lumber`), mining camp (3× `stone_pile_granite`), age-3/4 farm (food piles) and the dragon nest (22 bushes + 12 standing stones + a shrine, with no core building at all) each need a footprint covering the **whole arrangement** — otherwise villagers path through the props and buildings are placeable on top of them. The project owner has placed and confirmed every arrangement in 0 A.D. itself, so the measurement exists; it just has to be taken over the group. The dragon nest is the extreme case and is never player-placeable, so it needs a footprint for occupancy only, not for a placement ghost.
+
+**Walls and towers are exempt, verified by the project owner in-game 2026-08-14:** every wall piece in 0 A.D. shares one footprint and every wall tower shares another, across all civs. So the wall/gate/tower set re-skins with no spacing change at all and the max-footprint rule is a no-op for it. This also retires the worry in PLAN.md §9.2.1 item 3 that mixed-civ wall pieces would force the thickest tier onto every age — they are all the same thickness. What remains there is purely which civ's wall *looks* right per age.
 
 **Buried skirt — ✅ FIXED**, was PLAN.md §13.2 item 7. Three of the six carried geometry below `z = 0`: 0 A.D. models a wall skirt for the terrain to hide, and a baked sprite has no terrain to hide it, so it hung below the ground line. `isobake` grew `render.ground_clip`, which bisects every mesh at world `z = 0` and discards what is underneath; the three recipes set it and were re-baked.
 
@@ -202,7 +236,7 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 | Wall corner | 🟦 **BAKED (reused)** | No new bake needed — 0 A.D. has no distinct angled/L-shaped corner mesh; the square `wall_tower.xml` (already baked as `vis.tower`) doubles as the corner by placement convention |
 | `vis.wonder` | 🟦 **BAKED** | `structures/hellenes/temple_epic.xml` — the Parthenon, and by far the largest asset in the project: 651×505 px, a 14×29 m footprint (nearly 4× the town centre's). If wonder victory is implemented. Rubble shares `vis.rubble_6x6` (with the castle, baked 2026-08-08) — though whether a wonder should have a rubble state at all is a game-design call, not an art one. Foundation: `vis.foundation_7x15_hele` (baked 2026-08-08, its own bespoke size — no other building shares it). Recipe: `tools/recipes/wonder.toml` |
 
-| Per-age visual variants | ⚠️ **BLOCKED (source has none)** | **Checked 2026-08-08:** the Athenian `barracks.xml` and `civil_centre.xml` actors (representative of the roster — town centre is the classic per-age-upgrade building in AoE-style games) each declare exactly one structural `<variant>` group, plus only `ungarrisoned`/`garrisoned` and `alive`/destruction groups — no age-tiered mesh or texture variant exists anywhere in 0 A.D.'s Athenian building actors to bake. This isn't an isobake gap like the attack-effects item above; there is simply nothing in the source art to select between. Would need bespoke non-0-A.D. art (reskins/remodels) to implement, which is out of this pipeline's scope of "bake what 0 A.D. already has." Not attempted this pass |
+| Per-age visual variants | ✅ **UNBLOCKED 2026-08-14 — the earlier answer was to the wrong question** | The 2026-08-08 check looked for age-tiered `<variant>` groups **inside one civ's actor** (`athen/barracks.xml`, `athen/civil_centre.xml`) and correctly found none. But that is not where the age skins come from: **each age is a different civ's actor** (PLAN.md §2.7). `britons/house.xml`, `gauls/house.xml`, `achaemenids/house.xml` and `romans/house.xml` all exist and are all already in the checkout. So this is ordinary recipe work — up to four `source.actor` lines per building — with no isobake feature needed and nothing bespoke. Scope: ~70 building bakes (PLAN.md A.10), ordered **by age** so a complete age 1 is always shippable rather than four half-skinned ages. Footprint must be the max across the four skins, measured before the first of them is declared — see §1.2 |
 
 **Bonus finding from the previous pass, fixed this session:** the same canvas-edge check run against the existing MVP set found `vis.tree` clipping its canopy on the left, right and top edges of its 224×224 canvas since the 0.9 bake. Rebaked 2026-08-08 at 320×320 with no clip warning — see §1.3.
 
@@ -241,7 +275,7 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 | Chat/voice overlay | ⬜ TODO | Reference: `UI_Design_Chat_Voice.jpg` |
 | Victory / defeat screens | ⬜ TODO | |
 | Minimap frame (circular, 4 corner buttons) | 🟨 SOURCED | Dragon pack. 4 disabled placeholder buttons (`hud_chat/hud_trade/hud_techtree/hud_settings`) now sit above the minimap in `game_scene.gd` -- inert since chat/trade/tech-tree don't exist yet, just holding the visual slot |
-| Faction emblems | ⬜ TODO | One per faction |
+| Faction emblems | ⬜ **DEFERRED with 9.5** | v1 has one civilisation, so there is nothing to emblem. Returns if and when civs do (PLAN.md 9.5). What v1 needs instead is a **player-colour swatch** per lobby slot, which is UI, not art |
 
 ### 2.6 Audio — full set
 
@@ -281,9 +315,36 @@ These cannot come from any pack and must be commissioned or hand-drawn. Budget e
 
 ## 4. Open sourcing questions
 
-Tracked in PLAN.md §13:
+Tracked in PLAN.md §13. Reviewed 2026-08-14.
 
-1. ~~**0 A.D. render pipeline**~~ — ✅ **ANSWERED at 0.9: yes.** Built as [`isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) and proven on a grass tile, an oak and a 240-frame animated citizen. The Widelands / Unknown Horizons fallbacks are not needed. One gap remains: props declared by an animation variant are not imported, so the villager chops without her axe.
-2. **Actor→entity mapping** — 0 A.D.'s roster is ancient warfare (hoplites, war elephants, Persian cavalry); ours is medieval fantasy. Needs a hand-picked mapping from their actor XML to our `vis.*` IDs, and some entities will have no good match. Three chosen at 0.9; the mapping now lives in `tools/recipes/*.toml`, one file per asset.
-3. **Voice audio** — 0 A.D.'s unit voices are civilisation-specific spoken language. Decide between `voice/global/` only, fresh sourcing, or no unit voices at all.
-4. **Icon volume** — tech and unit icons are individually trivial but numerous. Decide whether to crop from sprites, generate, or commission a set.
+1. ~~**0 A.D. render pipeline**~~ — ✅ **ANSWERED at 0.9: yes.** Built as [`isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) and proven on a grass tile, an oak and an animated citizen. The Widelands / Unknown Horizons fallbacks are not needed. *(The "villager chops without her axe" gap recorded here is also closed — animation-variant props import and attach, see §1.1.)*
+2. ~~**Actor→entity mapping**~~ — ✅ **ANSWERED 2026-08-14.** [Age & Unit Planning.md](<Age & Unit Planning.md>) names an actor for all 23 buildings, 22 units and 9 resource nodes in PLAN.md §9.2, per age. Only the dragon and its nest have no source (§3), and even the nest is composed from existing gaia props. What is left is **verification, not selection** — some picks will look wrong once baked, as the gold mine already did.
+3. **Voice audio** — still open. 0 A.D.'s unit voices are civilisation-specific spoken language (`greek`/`latin`/`napatan`/`persian`). Decide between `voice/global/` only, fresh sourcing, or no unit voices at all. *Note the age plan makes this slightly worse, not better:* the four ages span Celtic, Persian and Latin civs, so no single voice set is even internally consistent — which argues for one neutral set across all ages rather than per-age voices.
+4. **Icon volume** — mostly closed. 20 icons delivered (PLAN.md §13.2 item 4); unit/building portraits are solved by cropping the entity's own baked sprite (`EntityPortrait.frame_for()`). Still open: three action icons standing in on the nearest neighbour (§1.5), the four formation icons, and one icon per tech once techs exist.
+5. **How many age skins does a building actually need?** — mechanism settled 2026-08-14, count still open. **The map file is dense and the bakes are shared:** every age names a skin explicitly (four entries per building, always), and two ages that look the same point at the *same baked atlas*. So map entries are fixed while bakes are only as many as there are visibly distinct skins (PLAN.md §2.7.1). That makes "~70" an upper bound, not a requirement — a house that reads as timber in ages 1–2 and stone in 3–4 is two bakes serving four entries. **What is still open is the per-building call**, and it is worth one deliberate pass over the roster before A.10 starts rather than discovering it bake by bake.
+6. ~~**Does the age progression read oldest-to-newest?**~~ — ✅ **ANSWERED 2026-08-14.** The project owner placed every building, plus the props for the composite ones, in 0 A.D. itself and confirmed the progression visually. No test bake needed; the civ-per-age assignment is settled.
+
+---
+
+## 5. Player colour — baked in, and it must not be
+
+**New 2026-08-14, and the highest-priority pipeline item in this document.** Colour is now the only thing that distinguishes one player from another (PLAN.md §1), and `isobake` currently bakes it **into the sprite**.
+
+0 A.D.'s `player_*` materials use the base texture's **alpha as a tint mask** — opaque texels keep the texture, transparent ones take the owning player's colour (PLAN.md §2.2). `isobake`'s zeroad adapter reproduces that faithfully at bake time: `DEFAULT_PLAYER_COLOUR = (0.32, 0.42, 0.72)` pushed through a MULTIPLY node in `_wire_player_colour`, overridable per recipe via `source.player_colour`. Its own comment states the consequence plainly: *"Baked in, so one atlas is one player's colour."*
+
+That was harmless while colour was cosmetic. It is not harmless now: **eight players cannot mean eight bakes of every unit.**
+
+| | |
+|---|---|
+| **Affected** | Every `USE_PLAYERCOLOR` actor — all units, most buildings. `vis.town_center`'s note already records "Faction tint applies"; `vis.sheep`'s records that even the sheep picks it up |
+| **Fix** | Bake **untinted** and emit the mask as its own atlas page (or a channel of one), then tint at draw time in a Godot `canvas_item` shader |
+| **Blend mode** | ⚠️ **A real decision, not a detail.** 0 A.D. multiplies, and under pure multiply **white is a no-op** (that player looks untinted) while dark colours crush the texture detail beneath — which compresses the deliberately spread lightness ladder in the palette below back together, and two colours that were designed to be distinguishable arrive as the same muddy patch. Mix *toward* the colour, or take only its hue and keep the texture's own luminance |
+| **Cost** | Low. The mask needs no new source data — it *is* the base texture's alpha, already read and currently thrown into the MULTIPLY node |
+| **Sequencing** | It invalidates every `player_*` bake made before it lands, so it comes **before** A.8's ~28 military bakes and A.10's ~70 building bakes, not after |
+| **Tracked** | PLAN.md A.6, promoted from "team-colour outline shader" polish to prerequisite |
+| **Palette** | ✅ Settled 2026-08-14, in `game/data/colours.json` with the full derivation in its `_note`. Eight hues cannot all be separated by hue — red-green colour blindness collapses red/orange/green/yellow onto one axis — so those four are separated by **lightness**, on a CIE L\* ladder with family members ~16 L\* apart: `#0043D6` blue (36) · `#D50032` red (45) · `#FFEB00` yellow (92) · `#00E5FF` cyan (84) · `#00A344` green (59) · `#B44DFF` violet (54) · `#FFAB00` orange (76) · `#FFFFFF` white (100). Slots 1–4 are the four most separable, because most matches are 1v1 or 2v2. Index order is the contract (0 = player 1) and is test-pinned |
+
+Two smaller things fall out of the same change:
+
+- **`vis.sheep` should not be tinted at all.** Its actor's alpha role is `playercolor`, so gaia wildlife would wear a player's colour. Once the tint is a runtime shader this needs no rebake — just don't apply it to gaia-owned entities.
+- **The outline shader becomes free.** A team-colour outline is a second pass over the same mask, so A.6 delivers both for one piece of work.

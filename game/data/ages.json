@@ -4,15 +4,30 @@
     "of the data -- keyed by name, the file could be reordered and nothing would",
     "notice. SimPlayer.age indexes from 1.",
     "",
-    "MVP ships age 1 only and never advances (advancement is 9.2), so ages 2-4 are",
-    "listed with their numerals and nothing else. They are here to fix the",
-    "vocabulary and to give the age header (9.1) something to render."
+    "MVP ships age 1 only and never advances (advancement is 9.2), so ages 2-4",
+    "carry their numeral and name and nothing else. They are here to fix the",
+    "vocabulary and to give the age header (9.1) something to render.",
+    "",
+    "NAMING, decided 2026-08-14 (PLAN.md 9.2.1 item 7): BOTH a numeral and a name.",
+    "The numeral is what the HUD shows -- 9.1 is a roman numeral in a gold circle,",
+    "which needs no words and fits a 648 px tall canvas. The name is for the places",
+    "with room for prose: the tech tree (9.4), the advancement banner, the lobby.",
+    "",
+    "The names are deliberately NOT Age of Empires II's Dark/Feudal/Castle/Imperial",
+    "ladder. Those are generic historical terms and carry no legal risk, but this is",
+    "an open-source AoE-like and shipping the reference game's exact ladder invites",
+    "the comparison for nothing. The fire ladder ties the ages to the game's own",
+    "differentiator instead, and lands age 4 on the title.",
+    "",
+    "An earlier version of this file was misaligned by one -- age I was called the",
+    "'Feudal Age', which is age 2 in the roster (Age & Unit Planning.md). Fixed",
+    "here; the numerals were always right."
   ],
 
   "ages": [
-    { "name": "Feudal Age", "numeral": "I", "cost": {}, "advance_time_ticks": 0 },
-    { "name": "Castle Age", "numeral": "II" },
-    { "name": "Imperial Age", "numeral": "III" },
-    { "name": "Dragon Age", "numeral": "IV" }
+    { "name": "Age of Ash",     "numeral": "I",   "cost": {}, "advance_time_ticks": 0 },
+    { "name": "Age of Embers",  "numeral": "II" },
+    { "name": "Age of Flame",   "numeral": "III" },
+    { "name": "Age of Dragons", "numeral": "IV" }
   ]
 }

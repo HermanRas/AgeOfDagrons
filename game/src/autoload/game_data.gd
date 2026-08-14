@@ -40,6 +40,7 @@ const RESOURCES_PATH := "res://data/resources.json"
 const TECHS_PATH := "res://data/techs.json"
 const AGES_PATH := "res://data/ages.json"
 const FACTIONS_PATH := "res://data/factions.json"
+const COLOURS_PATH := "res://data/colours.json"
 
 ## Keys starting with this are documentation inside the JSON, not entries.
 const _COMMENT_PREFIX := "_"
@@ -53,8 +54,15 @@ var _units: Dictionary = {}                       # StringName -> UnitDef
 var _buildings: Dictionary = {}                   # StringName -> BuildingDef
 var _resources: Dictionary = {}                   # StringName -> ResourceDef
 var _techs: Dictionary = {}                       # StringName -> TechDef
-var _factions: Dictionary = {}                    # StringName -> Dictionary (raw, 9.5)
+var _factions: Dictionary = {}                    # StringName -> Dictionary (raw, 9.5).
+                                                  # One entry, `faction.default`: v1 is one
+                                                  # civilisation (PLAN.md 1) and this is the
+                                                  # default skin key (2.7.1), not a roster.
 var _ages: Array[AgeDef] = []
+## Player-colour palette, index-ordered (PLAN.md 1). SimPlayer.colour indexes this.
+## Kept as a plain Array[Color] rather than a *Def -- there is nothing to parse but
+## a hex string, and order is the whole contract.
+var _colours: Array[Color] = []
 
 ## Non-fatal problems found while loading -- a malformed entry, an atlas whose
 ## pixels_per_metre disagrees with Iso. Surfaced for tests and the debug overlay
@@ -83,6 +91,7 @@ func load_all(force := false) -> void:
 	_techs = _read_defs(TECHS_PATH, TechDef.from_dict)
 	_factions = _read_json(FACTIONS_PATH)
 	_read_ages()
+	_read_colours()
 
 	_loaded = true
 	validate()
@@ -242,6 +251,24 @@ func faction_ids() -> Array[StringName]:
 	return _sorted_keys(_factions)
 
 
+## Player colour by SimPlayer.colour index (PLAN.md 1). WRAPS rather than failing:
+## colour is cosmetic and an out-of-range index must not be the thing that stops a
+## match rendering -- the opposite call from unit()/building(), which return null
+## because a missing definition has no sensible stand-in. Empty palette -> WHITE.
+func colour(index: int) -> Color:
+	if not _loaded:
+		load_all()
+	if _colours.is_empty():
+		return Color.WHITE
+	return _colours[posmod(index, _colours.size())]
+
+
+func colour_count() -> int:
+	if not _loaded:
+		load_all()
+	return _colours.size()
+
+
 ## Cross-file consistency. Appends to load_warnings; the test suite asserts it
 ## comes back empty, which is what catches an ID renamed in one file and not in
 ## the ones referring to it. Called automatically by load_all().
@@ -341,6 +368,28 @@ func _read_ages() -> void:
 			_ages.append(AgeDef.from_dict(i + 1, entry))
 		else:
 			load_warnings.append("ages.json entry %d is not an object" % i)
+
+
+func _read_colours() -> void:
+	_colours.clear()
+	var raw := _read_json(COLOURS_PATH)
+	var list: Variant = raw.get(&"colours", [])
+	if not list is Array:
+		load_warnings.append("colours.json has no 'colours' list")
+		return
+	for i in range((list as Array).size()):
+		var entry: Variant = list[i]
+		if not entry is Dictionary:
+			load_warnings.append("colours.json entry %d is not an object" % i)
+			continue
+		var hex := str((entry as Dictionary).get("hex", ""))
+		# Godot's html_is_valid() rejects the malformed rather than silently
+		# returning black, which would be a live player colour nobody chose.
+		if not Color.html_is_valid(hex):
+			load_warnings.append("colours.json entry %d has an invalid hex '%s'" % [i, hex])
+			continue
+		_colours.append(Color.html(hex))
+
 
 func _resolve(visual_id: StringName) -> AtlasEntry:
 	var decl: Dictionary = _visuals.get(visual_id, {})
