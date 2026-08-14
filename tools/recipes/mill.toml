@@ -5,7 +5,7 @@ id      = "vis.mill"
 adapter = "zeroad"
 
 [source]
-actor = "structures/hellenes/farmstead.xml"
+actor = "structures/britons/farmstead.xml"
 
 [render]
 # inspect measures 12.654 raw units tall -> 6.33 m; footprint (Square 18x13
@@ -26,4 +26,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/hellenes/farmstead.xml"
+actor = "art/actors/structures/britons/farmstead.xml"

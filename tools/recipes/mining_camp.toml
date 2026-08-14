@@ -8,7 +8,7 @@ id      = "vis.mining_camp"
 adapter = "zeroad"
 
 [source]
-actor = "structures/britons/storehouse.xml"
+actor = "structures/britons/plot_corral.xml"
 # simulation/templates/structures/brit/storehouse.xml: Square 18x18 world
 # units -> 9x9 m footprint, on FoundationActor structures/fndn_4x4.xml
 # (already baked as vis.foundation_4x4) and SpawnEntityOnDeath rubble_stone_3x3
@@ -34,4 +34,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/britons/storehouse.xml"
+actor = "art/actors/structures/britons/plot_corral.xml"

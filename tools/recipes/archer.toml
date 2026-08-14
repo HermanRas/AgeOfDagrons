@@ -14,7 +14,7 @@ id      = "vis.archer"
 adapter = "zeroad"
 
 [source]
-actor = "units/athenians/infantry_archer_a.xml"
+actor = "units/gauls/infantry_javelinist_a.xml"
 
 [render]
 # `isobake inspect` measures 2.303 x 2.947 x 4.449 m raw -- smaller than the
@@ -73,4 +73,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/athenians/infantry_archer_a.xml"
+actor = "art/actors/units/gauls/infantry_javelinist_a.xml"

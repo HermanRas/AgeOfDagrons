@@ -17,7 +17,7 @@ id      = "vis.town_center"
 adapter = "zeroad"
 
 [source]
-actor = "structures/athenians/civil_centre.xml"
+actor = "structures/britons/civic_centre.xml"
 # No scale override. The tile-to-tile default puts this at 15.5 x 15.0 x 9.5 m,
 # i.e. a 7.75-tile footprint, which agrees with 0 A.D.'s own obstruction for it
 # (30x30 world units / 4 = 7.5 tiles) and with the fndn_8x8 foundation their
@@ -60,4 +60,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/athenians/civil_centre.xml"
+actor = "art/actors/structures/britons/civic_centre.xml"

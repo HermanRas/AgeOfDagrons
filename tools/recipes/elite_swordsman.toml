@@ -1,0 +1,55 @@
+# Elite swordsman -- the `_e` tier of the same Gaulish swordsman, trained at the
+# Castle from age 4 (PLAN.md 9.2). Tier, not a different unit: 0 A.D.'s _a/_b/_e
+# suffixes are armour/veterancy steps on one mesh family, which is exactly the
+# relationship our basic-vs-elite pair wants.
+id      = "vis.elite_swordsman"
+adapter = "zeroad"
+
+[source]
+actor = "units/gauls/infantry_swordsman_e.xml"
+
+[render]
+canvas = [224, 224]
+supersample = 2
+directions = 8
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_melee"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/gauls/infantry_swordsman_e.xml"

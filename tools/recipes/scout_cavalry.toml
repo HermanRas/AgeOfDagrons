@@ -1,0 +1,65 @@
+# Scout cavalry -- a Briton mounted javelinist, the Celtic light/skirmishing
+# horse (PLAN.md 9.2). Age 1 spawns one and cannot train it; the Stable trains it
+# from age 2.
+#
+# Mounted units became bakeable at all on 2026-08-14: see knight.toml for why
+# (subject-armature picking, then nested-prop clip resolution). Same structure --
+# `_m` is the mount and carries its `_r` rider as a nested prop actor, and both
+# skeletons are driven from their own actors.
+#
+# Canvas is deliberately generous. This is a first bake and the clip-check
+# reports a canvas that is too small rather than silently cropping, so the cost
+# of guessing high is a fuller atlas page, and the cost of guessing low is a
+# wasted overnight slot.
+id      = "vis.scout_cavalry"
+adapter = "zeroad"
+
+[source]
+actor = "units/britons/cavalry_javelinist_a_m.xml"
+
+[render]
+canvas = [384, 448]
+supersample = 2
+# 8, not 5 mirrored: javelin and shield are one-sided (PLAN.md 2.5).
+directions = 8
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_ranged"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "death"
+frames = 10
+fps = 12
+loop = false
+
+[anims.decay]
+clip = "death"
+frames = 2
+fps = 1
+loop = false
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/britons/cavalry_javelinist_a_m.xml"

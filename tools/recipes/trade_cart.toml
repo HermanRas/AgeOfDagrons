@@ -15,6 +15,13 @@ adapter = "zeroad"
 
 [source]
 actor = "units/athenians/trader.xml"
+# UNBLOCKED 2026-08-14, same fix as trebuchet_deployed.toml: `_subject_armature`
+# now identifies the cart's own "TwoWheeler" rig rather than one of the four
+# nested-prop skeletons (draft horse, driver) that import alongside it, by asking
+# which armature nothing else anchors with a COPY_LOCATION/COPY_ROTATION
+# constraint. All four props then get their own clips via `_prop_actor_animations`
+# -- without that the cart rolled with a frozen driver, which is exactly how this
+# was first spotted as still wrong.
 
 [render]
 canvas = [320, 320]

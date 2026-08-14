@@ -1,0 +1,30 @@
+# Fishing ship, Dock from age 2 (PLAN.md 9.2). Celtic ships DO exist, which was
+# not obvious: they live under art/actors/STRUCTURES/celts/ rather than units/,
+# because 0 A.D. models ships as structures.
+#
+# First ship baked, so nothing calibrates the canvas. Guessing high deliberately
+# -- the clip-check reports a canvas that is too small rather than cropping
+# silently, so a generous guess costs atlas space and a mean guess costs the bake.
+id      = "vis.fishing_ship"
+adapter = "zeroad"
+
+[source]
+actor = "structures/celts/fishing_boat.xml"
+
+[render]
+canvas = [512, 512]
+supersample = 2
+# 8: a hull is not laterally symmetric once it has a sail and rigging on one side,
+# and a mirrored boat would sail backwards. Verify on the turntable.
+directions = 8
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/celts/fishing_boat.xml"

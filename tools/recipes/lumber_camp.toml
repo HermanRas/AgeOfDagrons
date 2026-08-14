@@ -8,12 +8,16 @@ id      = "vis.lumber_camp"
 adapter = "zeroad"
 
 [source]
-actor = "structures/hellenes/storehouse.xml"
+actor = "structures/britons/storehouse.xml"
 
 [render]
 # inspect measures 16.280 raw units tall -> 8.14 m; footprint (Square 15x16
 # world units -> 7.5x8 m, per simulation/templates/structures/athen/storehouse.xml).
-canvas = [320, 288]
+# Raised from [320, 288] on 2026-08-14: this recipe was re-pointed from the
+# hellenes storehouse to the BRITON one (age 1, PLAN.md 2.7) and the new mesh
+# touches the frame edge -- the batch's canvas check caught it, "1 frame(s) touch
+# the render edge and lost content".
+canvas = [448, 384]
 supersample = 4
 directions = 1
 frame_origin_at = 0.42
@@ -28,4 +32,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/hellenes/storehouse.xml"
+actor = "art/actors/structures/britons/storehouse.xml"

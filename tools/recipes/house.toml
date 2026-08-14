@@ -8,7 +8,7 @@ id      = "vis.house"
 adapter = "zeroad"
 
 [source]
-actor = "structures/hellenes/house.xml"
+actor = "structures/britons/house.xml"
 # This actor is five houses (A-E) in one frequency-weighted variant group. The
 # importer picks one, seeded from the recipe id so a rebake picks the same one.
 # Set `variant_seed` and bake a second id -- vis.house_b -- when the village
@@ -41,4 +41,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/hellenes/house.xml"
+actor = "art/actors/structures/britons/house.xml"

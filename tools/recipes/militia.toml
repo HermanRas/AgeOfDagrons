@@ -12,7 +12,7 @@ id      = "vis.militia"
 adapter = "zeroad"
 
 [source]
-actor = "units/athenians/infantry_slinger_b.xml"
+actor = "units/britons/infantry_slinger_a.xml"
 
 [render]
 # `isobake inspect` measures 1.929 x 0.824 x 4.300 m raw -- similar scale to
@@ -66,4 +66,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/athenians/infantry_slinger_b.xml"
+actor = "art/actors/units/britons/infantry_slinger_a.xml"

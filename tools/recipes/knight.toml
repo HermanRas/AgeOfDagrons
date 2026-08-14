@@ -1,23 +1,31 @@
 # Knight, from 0 A.D.'s Athenian cavalry swordsman -- mounted unit
 # (ASSET_MISSING.md 2.1).
 #
-# STATIC, deliberately, same treatment as vis.deer/vis.boar/vis.sheep/vis.wolf
-# -- but for a different reason than "the animation-transfer bug would tear
-# the mesh". The mount (`cavalry_swordsman_b_m.xml`) carries the rider as a
-# nested prop actor (`<prop actor="cavalry_swordsman_b_r.xml"
-# attachpoint="rider">`), and confirmed via `isobake inspect -v`: horse and
-# rider are two fully separate skeletons (the horse's own "Horse_Armature",
-# distinct from the rider's "Biped"). isobake's clip-resolution
-# (`_declared_animations`) walks only `<variant file=...>` references, never
-# `<prop actor=...>` ones, so it cannot see the rider's own animations at all
-# when `source.actor` points at the mount -- there is no existing mechanism
-# to "import actor A for geometry, resolve clips from nested actor B".
-# Animating the rider while pinning the horse static would need a real
-# isobake feature (clip-resolution against a specific nested prop actor), not
-# attempted this pass. A static combined bake still composes correctly --
-# geometry/prop attachment happens entirely during the base import, unrelated
-# to clip resolution -- so this gives one correctly-scaled, correctly-posed
-# "knight on horseback" sprite, just not animated.
+# ANIMATED as of 2026-08-14. It was static before that, and the reason is worth
+# keeping because the diagnosis recorded here was WRONG in an instructive way.
+#
+# The mount (`cavalry_swordsman_b_m.xml`) carries the rider as a nested prop
+# actor (`<prop actor="cavalry_swordsman_b_r.xml" attachpoint="rider">`), and
+# horse and rider are two fully separate skeletons ("Horse_Armature" and the
+# rider's "Biped"). isobake resolved clips only through `<variant file=...>`
+# references, never `<prop actor=...>`, so the rider never received an action.
+# Two consequences followed, and only one of them was understood at the time:
+#
+#   1. The rider could not be animated. Known, and recorded as the blocker.
+#   2. The rider rendered in REST POSE -- which for a biped is standing upright
+#      -- so it appeared to stand on the horse's back rather than sit in it.
+#      That was written down as a separate cosmetic defect, blamed on the
+#      `rider` attachpoint sitting high/forward, and accepted as-is. It was not
+#      an attachpoint problem at all. It was symptom 1 wearing a disguise.
+#
+# `_prop_actor_animations` + `Clip.extras` (isobake, 2026-08-14) give every
+# nested-prop skeleton its own clip. The rider now sits correctly, legs bent
+# around the barrel, because a cavalry rider's own Walk clip IS the seated
+# riding pose. One fix, both symptoms, and no attachpoint was touched.
+#
+# Lesson for the next composite unit: a nested figure that looks wrongly
+# POSITIONED is more likely missing its clip than mis-attached. Rest pose reads
+# as a placement bug.
 #
 # Substitute pick, not the research recommendation
 # (`cavalry_swordsman_a_r.xml`/`_a_m.xml`): the `_a` rider uses the bone-less
@@ -35,6 +43,46 @@ actor = "units/athenians/cavalry_swordsman_b_m.xml"
 # comes before its <props> in the same variant, so rootObject is already
 # correct by the time that recursion happens. Confirmed by reading the XML,
 # not by trial and error.
+
+[anims]
+# Clip names come from the MOUNT's actor, which declares Idle/Run/Walk/
+# attack_capture/attack_melee/attack_slaughter/death/gather_meat/promotion. The
+# rider's own actor declares the same names, which is how the pairing works at
+# all: `_drive_riders` looks its clips up by the same name and keeps whichever
+# action actually drives the Biped.
+#
+# `Run` is left unused -- our vocabulary (PLAN.md 2.5) has one `walk` per unit
+# and the sim has no gallop state to switch into.
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_melee"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "death"
+frames = 10
+fps = 12
+loop = false
+
+[anims.decay]
+clip = "death"
+frames = 2
+fps = 1
+loop = false
 
 [render]
 # `isobake inspect` measures the combined horse+rider actor at

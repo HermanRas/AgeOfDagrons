@@ -2,25 +2,22 @@
 # stone-thrower, not a true counterweight trebuchet (0 A.D. has none); closest
 # analog (ASSET_MISSING.md 2.1).
 #
-# BLOCKED, 2026-08-08, same treatment as farm.toml/deer.toml: diagnosed, not a
-# quick fix. The engine has its own real mechanical rig ("Lithobolos_Armature",
-# 37 bones, wheels + throwing-arm) and its Idle/attack_ranged clips resolve
-# correctly from the actor XML -- but isobake picks `next(o for o in imported
-# if o.type == "ARMATURE")`, the FIRST armature object encountered, and for
-# this actor that is one of the five crew operators' armatures (nested props,
-# `units/hellenes/lithobolos_infantry_{a,b,c,d}.xml`), not the engine's own --
-# confirmed the crew import *before* Lithobolos_Armature appears in Blender's
-# object list, the opposite of what every other multi-armature actor baked
-# so far seemed to do. Some crew use the bone-less `m_armor_tunic_short.dae`
-# (0 bones); tried preferring "first armature with any bones" as a fix, but
-# that still failed -- one of the *other* crew members' armature datablocks
-# reports 202 bones (Blender appears to reuse/extend an existing armature
-# datablock across repeated similar imports rather than creating a fresh one
-# per crew member), more than the engine's genuine 37, so bone count is not a
-# reliable ranking here either. Reverted that attempt; isobake's `armature`
-# picking is back to plain first-found. A real fix needs a way to identify
-# "the top-level subject's own armature" structurally (e.g. by which mesh
-# imported it), not by count or order -- bigger than this pass's scope.
+# UNBLOCKED 2026-08-14. Was blocked because isobake picked the first armature it
+# found, and for this actor that is one of the five crew operators (nested props,
+# `units/hellenes/lithobolos_infantry_{a,b,c,d}.xml`) rather than the engine's own
+# "Lithobolos_Armature". Two fixes had been tried and reverted: import order (the
+# crew import first) and bone count (Blender reuses one armature datablock across
+# similar crew imports, so a crew rig reports 202 bones against the engine's
+# genuine 37).
+#
+# The finding that unlocked it: nested props are attached with CONSTRAINTS, not
+# parenting -- both the Pyrogenesis importer and `_attach_prop` pin a prop's root
+# with COPY_LOCATION/COPY_ROTATION -- so every prop armature is a parentless root
+# too, and neither order, depth nor bone count can separate them. What does is the
+# DIRECTION of those constraints: the subject is the one thing nothing anchors, so
+# it is the constraint target and never the constrained. See `_subject_armature`.
+#
+# 11 armatures import here and 10 are correctly identified as anchored props.
 id      = "vis.trebuchet"
 adapter = "zeroad"
 
