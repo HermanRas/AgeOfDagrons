@@ -2,6 +2,15 @@
 
 there is only 1 civilization, using the diffrint civ's found in 0 A.D, we will take the Civs that visualy look older to news and map them to tha ages we need for our game.
 
+> **Decided 2026-08-14 — read the `### Units` sections as unit TYPES, not as actor paths.**
+> Buildings carry the age progression, using the civ named on each line. **Units do not**: every
+> unit is sourced from a Celtic actor (`britons/`, `gauls/`, `celts/`) in all four ages, so a
+> player can recognise a unit type instantly and its silhouette never changes underneath them.
+> The civ prefixes on the unit lines below therefore record *which kind of unit is wanted* — the
+> Celtic actor that fills each slot is in PLAN.md §9.2, with paths verified against the checkout.
+> Where the Celts have no equivalent, the closest Celtic match is used; siege engines are the one
+> exception, since the Celts have none at all.
+
 ## Age1 - Dark Age:
 
 ### Building

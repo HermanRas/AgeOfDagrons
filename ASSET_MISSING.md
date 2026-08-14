@@ -163,6 +163,18 @@ subject is laterally symmetric; 8 where a one-sided weapon/shield would flip
 hands under mirroring, same reasoning as the villager's axe (PLAN.md 2.5) —
 both units baked so far need 8.
 
+> ⚠️ **Units are CELTIC in all four ages** (decided 2026-08-14, PLAN.md §2.7). Buildings carry
+> the age progression; units do not, because a player has to recognise a spearman instantly at
+> 44 px and its silhouette must never change underneath them. **Every actor below is Athenian
+> and needs re-pointing at its Celtic equivalent** — a `source.actor` line each, with the canvas
+> size, `yaw_offset_deg`, `ground_clip` and every prop finding carrying over unchanged. The
+> mapping is PLAN.md §9.2, paths verified against the checkout. Three gaps it records: the Celts
+> have **no bows** (archer, crossbowman and cavalry archer become javelin tiers), **no siege at
+> all** (ram/ballista/onager/trebuchet stay cross-civ), and **one warship hull** (galley and
+> galleon cannot differ). Two bonuses: `celts/female_citizen` is a real Celtic villager, better
+> than the Athenian substitute; and `celts/healer` covers the monk, so that substitution goes
+> away too.
+
 **New pipeline defects found and fixed/worked around baking this section,
 2026-08-08 — both worth knowing before baking the rest of the roster:**
 
@@ -244,7 +256,7 @@ Two pipeline gaps this batch found and closed, both worth knowing before baking 
 
 | Asset | Status | Notes |
 |---|---|---|
-| `vis.stone_mine` | 🟦 **BAKED** | `geology/stonemine_medit_quarry.xml`, declared directly by `simulation/templates/gaia/rock/mediterranean_large.xml`. 5 directions, 9.74×9.32×6.74 m, clean bake with no clip warning and no buried geometry (`ground_clip` cut 0 meshes). Mediterranean, civ-matching — unlike `vis.gold_mine`'s alpine pick, there was no readability problem here to reject it for ("quarried rock" is unambiguous at sprite size). Recipe: `tools/recipes/stone_mine.toml` |
+| `vis.stone_mine` | 🟦 **BAKED (1 of 3 size classes)** | **Third size class settled 2026-08-14:** stone carries three amounts `[1000, 4000, 7000]` like gold, and unlike gold the third gets its **own look for free** — the same actor baked at `yaw_offset_deg = 180` reads as a different outcrop, so three sizes cost one extra bake rather than two. Source: `geology/stonemine_medit_quarry.xml`, declared directly by `simulation/templates/gaia/rock/mediterranean_large.xml`. 5 directions, 9.74×9.32×6.74 m, clean bake with no clip warning and no buried geometry (`ground_clip` cut 0 meshes). Mediterranean, civ-matching — unlike `vis.gold_mine`'s alpine pick, there was no readability problem here to reject it for ("quarried rock" is unambiguous at sprite size). Recipe: `tools/recipes/stone_mine.toml` |
 | `vis.berry_bush` | 🟦 **BAKED (full only)** | `props/flora/berry_bush.xml`, the gaia fruit template's own VisualActor (no building-style wrapper). 5 directions, 5.22×5.0×3.40 m. Recipe: `tools/recipes/berry_bush.toml`. **No depleted state exists to bake** — `template_gaia_fruit.xml` uses `Regrowth` with `KillBeforeGather=false`, so 0 A.D. never shows a picked/empty bush, and the actor has no such variant (only random mesh/texture variety). "Depleted" stays TODO with nothing to map to |
 | `vis.farm` | ⚠️ **BLOCKED** | **Found and diagnosed 2026-08-08, not a quick fix.** `structures/athen/field.xml` → `structures/plot_field_medit.xml`, a mesh with 64 plain (non-bone) scatter attachpoints each meant to hold a `foliagebush` prop — confirmed genuinely present in the mesh, not a 0 A.D. content bug. Baking it renders only **one** visible foliage clump instead of 64 spread across the field, plus a stray mesh far below ground. Not isobake's own code either: `_attach_prop` only runs for animation-variant props via a bone constraint, and this mesh has no armature at all — attaching base-actor props to non-bone scatter nodes is the first-party Pyrogenesis Blender importer's job, and something there collapses many instances into one. Every other field variant (temp/desert/tropic/chin/3D_8x8/...) scatters the same way, so no substitute actor sidesteps it. Fixing it means patching the Pyrogenesis importer or teaching isobake to scatter props onto non-armature nodes itself — bigger than one asset bake. Foundation (`structures/plot_field_found.xml`) and rubble (`structures/plot_field_fallow.xml`) are both flat decals with no scattered props and would bake fine on their own; only the complete state is blocked. Recipe `tools/recipes/farm.toml` documents the dead end, same treatment as `deer.toml` |
 | `vis.boar` | 🟦 **BAKED (static only)** | `fauna/boar.xml`, 5 directions, 128×128 canvas, clean bake. **Static, same reasoning as `vis.deer`:** a quadruped with its own armature (28 bones) — no clip attached, so PLAN.md 13.2 item 8's animation-transfer bug (clip file and mesh file describe the same skeleton ~31× apart) never triggers. Recipe: `tools/recipes/boar.toml` |
@@ -321,7 +333,15 @@ Tracked in PLAN.md §13. Reviewed 2026-08-14.
 2. ~~**Actor→entity mapping**~~ — ✅ **ANSWERED 2026-08-14.** [Age & Unit Planning.md](<Age & Unit Planning.md>) names an actor for all 23 buildings, 22 units and 9 resource nodes in PLAN.md §9.2, per age. Only the dragon and its nest have no source (§3), and even the nest is composed from existing gaia props. What is left is **verification, not selection** — some picks will look wrong once baked, as the gold mine already did.
 3. **Voice audio** — still open. 0 A.D.'s unit voices are civilisation-specific spoken language (`greek`/`latin`/`napatan`/`persian`). Decide between `voice/global/` only, fresh sourcing, or no unit voices at all. *Note the age plan makes this slightly worse, not better:* the four ages span Celtic, Persian and Latin civs, so no single voice set is even internally consistent — which argues for one neutral set across all ages rather than per-age voices.
 4. **Icon volume** — mostly closed. 20 icons delivered (PLAN.md §13.2 item 4); unit/building portraits are solved by cropping the entity's own baked sprite (`EntityPortrait.frame_for()`). Still open: three action icons standing in on the nearest neighbour (§1.5), the four formation icons, and one icon per tech once techs exist.
-5. **How many age skins does a building actually need?** — mechanism settled 2026-08-14, count still open. **The map file is dense and the bakes are shared:** every age names a skin explicitly (four entries per building, always), and two ages that look the same point at the *same baked atlas*. So map entries are fixed while bakes are only as many as there are visibly distinct skins (PLAN.md §2.7.1). That makes "~70" an upper bound, not a requirement — a house that reads as timber in ages 1–2 and stone in 3–4 is two bakes serving four entries. **What is still open is the per-building call**, and it is worth one deliberate pass over the roster before A.10 starts rather than discovering it bake by bake.
+5. ✅ **How many age skins does a building need? — ANSWERED 2026-08-14.** The count is right;
+   the framing was wrong. Counted properly the roster is **~67** and it already only asks for a
+   skin where the civ actually changes: 5 buildings × 4 skins (age-1 unlocks) + 7 × 3 (age-2) +
+   field 2 + 5 × 2 (age-3) + 12 wall pieces + wonder + nest. **The number that matters is 5** —
+   age 1 unlocks only the town centre, house, farm, mining camp and lumber camp, and that is a
+   complete playable settlement and the first shippable batch. Age 2 adds eight. Free savings
+   taken: composite buildings' props are the same gaia assets in all four ages, so bake once and
+   reuse. Deliberately **not** taken: collapsing ages 1–2, which are both Celtic and will look
+   similar — ~12 bakes is not worth the first age transition any player ever sees.
 6. ~~**Does the age progression read oldest-to-newest?**~~ — ✅ **ANSWERED 2026-08-14.** The project owner placed every building, plus the props for the composite ones, in 0 A.D. itself and confirmed the progression visually. No test bake needed; the civ-per-age assignment is settled.
 
 ---
@@ -338,11 +358,28 @@ That was harmless while colour was cosmetic. It is not harmless now: **eight pla
 |---|---|
 | **Affected** | Every `USE_PLAYERCOLOR` actor — all units, most buildings. `vis.town_center`'s note already records "Faction tint applies"; `vis.sheep`'s records that even the sheep picks it up |
 | **Fix** | Bake **untinted** and emit the mask as its own atlas page (or a channel of one), then tint at draw time in a Godot `canvas_item` shader |
-| **Blend mode** | ⚠️ **A real decision, not a detail.** 0 A.D. multiplies, and under pure multiply **white is a no-op** (that player looks untinted) while dark colours crush the texture detail beneath — which compresses the deliberately spread lightness ladder in the palette below back together, and two colours that were designed to be distinguishable arrive as the same muddy patch. Mix *toward* the colour, or take only its hue and keep the texture's own luminance |
+| **Blend mode** | ✅ **DECIDED 2026-08-14.** Neither obvious option works: pure **multiply** (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the palette's lightness ladder; **luminance-preserving hue transfer** looks good and destroys the ladder outright, since every colour then inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the *base* level with the texture contributing only its **local deviation** — shading survives and so does the ladder. Shader below |
 | **Cost** | Low. The mask needs no new source data — it *is* the base texture's alpha, already read and currently thrown into the MULTIPLY node |
 | **Sequencing** | It invalidates every `player_*` bake made before it lands, so it comes **before** A.8's ~28 military bakes and A.10's ~70 building bakes, not after |
 | **Tracked** | PLAN.md A.6, promoted from "team-colour outline shader" polish to prerequisite |
 | **Palette** | ✅ Settled 2026-08-14, in `game/data/colours.json` with the full derivation in its `_note`. Eight hues cannot all be separated by hue — red-green colour blindness collapses red/orange/green/yellow onto one axis — so those four are separated by **lightness**, on a CIE L\* ladder with family members ~16 L\* apart: `#0043D6` blue (36) · `#D50032` red (45) · `#FFEB00` yellow (92) · `#00E5FF` cyan (84) · `#00A344` green (59) · `#B44DFF` violet (54) · `#FFAB00` orange (76) · `#FFFFFF` white (100). Slots 1–4 are the four most separable, because most matches are 1v1 or 2v2. Index order is the contract (0 = player 1) and is test-pinned |
+
+The decided shader, so whoever builds A.6 does not re-derive it:
+
+```glsl
+// mask_tex: the baked player-colour mask. pc: the player's colour from colours.json.
+float m     = texture(mask_tex, UV).r;
+float lum   = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722));
+float shade = lum - 0.5;                        // texture's local shading, signed
+float up    = 1.0 - max(max(pc.r, pc.g), pc.b); // headroom, so light colours don't clip flat
+vec3  lit   = pc + shade * (shade > 0.0 ? up * 2.0 : 1.0) * 0.8;
+col.rgb     = mix(col.rgb, clamp(lit, 0.0, 1.0), m);
+```
+
+**The mask needs its own greyscale page.** The sprite's alpha is already the silhouette cutout,
+and the tint mask is a different question about the same texel, so one cannot carry both.
+A grayscale PNG page with the same frame rects costs roughly +12% atlas bytes. Do **not** try to
+smuggle the mask into intermediate alpha values — bilinear filtering smears them.
 
 Two smaller things fall out of the same change:
 
