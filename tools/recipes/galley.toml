@@ -24,13 +24,17 @@ adapter = "zeroad"
 actor = "structures/athenians/trireme.xml"
 
 [render]
-# Raised from [640, 512] on 2026-08-15: the first bake reported 2 frames (S and N)
-# touching the render edge. A hull is long, so the bow-on and stern-on views are
-# the tight ones -- not the broadside you would picture when guessing.
+# Sized in three steps, all on clip reports rather than by eye:
+#   [640, 512] -- Celtic warship, 2 frames (S and N) touching the edge
+#   [896, 640] -- Celtic warship, clean; then re-pointed to the trireme, which
+#                 clipped 1 frame (static/N) at 9.458 m subject height
+#   [896, 832] -- current
 #
-# That figure was measured on the Celtic warship. A trireme is a bigger ship;
-# re-check the clip report on the first bake and expect to raise it again.
-canvas = [896, 640]
+# Only the N frame clipped, and only vertically, so the width is already right
+# and this raises height alone. A hull is long, so the bow-on and stern-on views
+# are the tight ones -- not the broadside you would picture when guessing, which
+# is exactly why this is measured and not estimated.
+canvas = [896, 832]
 supersample = 2
 directions = 8
 frame_origin_at = 0.2

@@ -1,6 +1,18 @@
-# Scout cavalry -- a Briton mounted javelinist, the Celtic light/skirmishing
-# horse (PLAN.md 9.2). Age 1 spawns one and cannot train it; the Stable trains it
-# from age 2.
+# Scout cavalry -- the MAURYAN mounted swordsman (`maur/cavalry_swordsman_a`,
+# PLAN.md 9.2). Age 1 spawns one and cannot train it; the Stable trains it from
+# age 2.
+#
+# The header used to describe "a Briton mounted javelinist, the Celtic
+# light/skirmishing horse", left over from the units-are-Celtic error (PLAN.md
+# 2.7). The `source.actor` line was put back to the owner's Mauryan pick but the
+# prose and the CLIP NAMES were not, and that is what broke the bake: a
+# javelinist throws (`attack_ranged`), a swordsman strikes (`attack_melee`), and
+# this actor declares no `attack_ranged` at all. Fixed 2026-08-15 after the bake
+# failed ~10 minutes in.
+#
+# Cheap to have caught earlier, and now it is: `tools/check_clips.py` resolves
+# every recipe's clip names against its actor's XML in about a second. Run it
+# before a batch.
 #
 # Mounted units became bakeable at all on 2026-08-14: see knight.toml for why
 # (subject-armature picking, then nested-prop clip resolution). Same structure --
@@ -20,7 +32,7 @@ actor = "units/mauryas/cavalry_swordsman_a_m.xml"
 [render]
 canvas = [384, 448]
 supersample = 2
-# 8, not 5 mirrored: javelin and shield are one-sided (PLAN.md 2.5).
+# 8, not 5 mirrored: sword and shield are one-sided (PLAN.md 2.5).
 directions = 8
 frame_origin_at = 0.2
 engine = "eevee"
@@ -39,7 +51,10 @@ fps = 15
 loop = true
 
 [anims.attack]
-clip = "attack_ranged"
+# attack_melee, not attack_ranged: this is a swordsman. The actor declares
+# Idle/Walk/Run/attack_melee/attack_capture/attack_slaughter/death/gather_meat/
+# promotion -- and no ranged attack of any kind.
+clip = "attack_melee"
 frames = 12
 fps = 15
 loop = true

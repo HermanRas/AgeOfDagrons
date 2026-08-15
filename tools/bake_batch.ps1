@@ -201,15 +201,35 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         $text = ""
         if (Test-Path $slot.Log) { $text = (Get-Content $slot.Log -Raw) }
 
-        # A re-pointed recipe can succeed while quietly losing an animation the new
-        # actor does not declare, so a missing NAMED clip is a warning.
+        # Two different problems, kept apart on purpose -- they were one status
+        # until 2026-08-15 and it made the summary useless.
         #
-        # But not the unnamed one. Every static recipe has no [anims] block, which
-        # the adapter reports as `declares no animation named ''`; treating that as
-        # a problem flagged 8 of 10 "failures" in the first overnight run when only
-        # 2 were real. A warning that cries wolf trains you to skim the list.
-        $warn = "canvas is too small|exceeds|rest pose|declares no animation named '[^']"
-        $flagged = ($text -match $warn)
+        # CLIPPED means the canvas lost content: real, always actionable, raise
+        # the canvas and rebake.
+        $clipped = ($text -match "canvas is too small|exceeds")
+
+        # WARN means something worth a look that is often fine. A re-pointed
+        # recipe can succeed while quietly losing an animation the new actor does
+        # not declare, so a missing NAMED clip belongs here.
+        #
+        # `rest pose` is the noisiest member and cannot simply be dropped, because
+        # it covers two opposite cases:
+        #   - EXPECTED. A weapon prop that only declares attack clips is in rest
+        #     pose for every other clip, which is correct -- an archer's bow is not
+        #     drawn while walking. vis.archer warns on Idle/Walk/Death for exactly
+        #     this reason and is perfectly fine.
+        #   - A REAL DEFECT. A nested FIGURE in rest pose is broken: that is the
+        #     bug that made the knight's rider stand upright on his horse instead
+        #     of sitting (knight.toml).
+        # Both emit the same note, so the distinction is "is the prop a weapon or a
+        # person", which the note does not say. Left as WARN rather than guessed at.
+        #
+        # Not warned on: the unnamed clip. Every static recipe has no [anims]
+        # block, which the adapter reports as `declares no animation named ''`;
+        # treating that as a problem flagged 8 of 10 "failures" in the first
+        # overnight run when only 2 were real. A warning that cries wolf trains you
+        # to skim the list -- and then a real one goes past unread.
+        $warned = ($text -match "rest pose|declares no animation named '[^']")
 
         $frames = ""
         $m = [regex]::Match($text, "bake \S+: (\d+) frames -> (\d+) page")
@@ -220,8 +240,9 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
 
         $ok = ($code -eq 0)
         $status = "FAIL"; $colour = "Red"
-        if ($ok -and $flagged) { $status = "CLIPPED"; $colour = "Yellow" }
-        elseif ($ok)           { $status = "ok";      $colour = "Green" }
+        if     ($ok -and $clipped) { $status = "CLIPPED"; $colour = "Yellow" }
+        elseif ($ok -and $warned)  { $status = "WARN";    $colour = "DarkYellow" }
+        elseif ($ok)               { $status = "ok";      $colour = "Green" }
 
         $elapsed = (Get-Date) - $slot.Started
         Write-Host ("[{0,3}/{1}] {2,-24} {3,-8} {4,-10} {5,-6} {6,5:n1}m" -f `

@@ -13,16 +13,24 @@ actor = "structures/fndn_6x3_wall.xml"
 # margin, not a tight fit.
 canvas = [448, 288]
 supersample = 4
-# 4 directions, not 1 (2026-08-15, project owner). A wall is not a building:
-# buildings sit at one fixed orientation, walls RUN -- they enclose a base, so
-# every piece has to be placeable along either diagonal and facing either way.
-# One sprite cannot do that. 4 evenly-spaced yaws is the whole wall vocabulary.
+# 8 directions, not 1 (2026-08-15, project owner: "walls go around your base").
+# A wall is not a building: buildings sit at one fixed orientation, walls RUN, so
+# every piece must be placeable along either diagonal and facing either way.
 #
-# Costs 4x the frames but NOT a bigger canvas: in a 2:1 isometric projection the
-# two diagonals project to mirror-image bounding boxes of identical size, so the
-# canvas measured for the current orientation still holds at 90/180/270. Read
-# the clip report on the first bake anyway rather than trusting that.
-directions = 4
+# The owner asked for 4 and isobake rejects it -- "directions must be 1, 5 or 8".
+# That is not an arbitrary limit. Directions are SCREEN compass points at 45
+# degree steps (S SW W NW N NE E SE), so a bare count of 4 does not say WHICH
+# four: starting at S gives S/W/N/E, starting at SE gives the diagonals. And the
+# atlas contract promises every one of the 8 facings resolves to a stored frame
+# plus a flip, which 4 stored frames cannot satisfy without a format change.
+#
+# 8 is the value that cannot be wrong. 5 (stored + mirrored to 8) would halve
+# this and is probably valid -- a straight wall segment looks symmetric about the
+# vertical screen axis -- but "probably symmetric" is the kind of guess that has
+# already cost this project twice today, so it stays at 8 until someone looks at
+# a turntable and says otherwise. Real 4-direction support is the proper fix and
+# is an isobake + atlas-format change, not a recipe value.
+directions = 8
 frame_origin_at = 0.45
 engine = "eevee"
 samples = 32
