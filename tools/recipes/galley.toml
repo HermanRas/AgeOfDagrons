@@ -11,7 +11,10 @@ adapter = "zeroad"
 actor = "structures/celts/warship.xml"
 
 [render]
-canvas = [640, 512]
+# Raised from [640, 512] on 2026-08-15: the first bake reported 2 frames (S and N)
+# touching the render edge. A hull is long, so the bow-on and stern-on views are
+# the tight ones -- not the broadside you would picture when guessing.
+canvas = [896, 640]
 supersample = 2
 directions = 8
 frame_origin_at = 0.2

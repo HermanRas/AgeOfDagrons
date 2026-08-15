@@ -27,16 +27,21 @@
 # POSITIONED is more likely missing its clip than mis-attached. Rest pose reads
 # as a placement bug.
 #
-# Substitute pick, not the research recommendation
-# (`cavalry_swordsman_a_r.xml`/`_a_m.xml`): the `_a` rider uses the bone-less
-# `m_armor_tunic_short.dae` (defect 1, spearman.toml's note) -- confirmed via
-# `isobake inspect`. `_b_r.xml`/`_b_m.xml` use the working `m_tunic_short.dae`
-# and are otherwise the same unit.
+# Re-pointed 2026-08-15 from athenians/cavalry_swordsman_b_m to the GAULISH `_e`
+# elite tier. Units are Celtic in every age (PLAN.md 2.7) and the knight is the
+# castle-tier cavalry, so the elite tier of the Gaulish swordsman is the match --
+# the project owner's own pick was `germ/champion/cavalry`, i.e. a champion
+# cavalryman, which under the Celtic rule is this. The Athenian actor had simply
+# been missed when the other units were re-pointed.
+#
+# The `_a`-vs-`_b` note that used to be here concerned Athenian variants and no
+# longer applies. If this hits the bone-less `m_armor_tunic_short.dae` defect
+# (spearman.toml's note), try the `_a_m` or `_b_m` Gaulish tiers instead.
 id      = "vis.knight"
 adapter = "zeroad"
 
 [source]
-actor = "units/athenians/cavalry_swordsman_b_m.xml"
+actor = "units/gauls/cavalry_swordsman_e_m.xml"
 # The mount's reins prop (`cav_rein_leather.xml`, attachpoint="root") is a
 # TOP-LEVEL prop of the mount actor, not nested inside another prop -- so it
 # does not hit the aspis-shield nested-root bug (defect 2): its own <mesh>
@@ -104,4 +109,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/athenians/cavalry_swordsman_b_m.xml"
+actor = "art/actors/units/gauls/cavalry_swordsman_e_m.xml"

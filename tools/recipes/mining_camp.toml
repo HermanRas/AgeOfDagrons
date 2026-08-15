@@ -15,6 +15,14 @@ actor = "structures/britons/plot_corral.xml"
 # (already baked as vis.rubble_3x3, via template_structure_economic_storehouse) --
 # both shared with vis.lumber_camp, no new foundation/rubble bake needed.
 
+# INCOMPLETE: the project owner's pick is the corral PLUS 3x
+# gaia/treasure/stone_pile_granite (-> props/special/eyecandy/stone_pile.xml).
+# Those props are not baked -- isobake cannot yet place loose props around a
+# static building, since `_attach_prop` constrains to an ARMATURE BONE, which is
+# the animation-variant mechanism and does not apply to a building with no rig.
+# Needs a `[[source.extras]]` feature (actor + offset + count). Same feature the
+# lumber camp, the age-3/4 farm and the dragon nest all need.
+
 [render]
 # Slightly bigger footprint than the hellenes storehouse (9x9 m vs 7.5x8 m),
 # so widened from lumber_camp.toml's canvas with margin; isobake bake's

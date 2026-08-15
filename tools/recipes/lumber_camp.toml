@@ -1,22 +1,28 @@
 # Lumber camp (ASSET_MISSING.md `vis.lumber_camp`), from 0 A.D.'s Hellenic
 # storehouse -- their only generic resource-drop-off building; 0 A.D. does not
-# distinguish a wood store from an ore store, so `vis.mining_camp` is the same
-# actor. Flagged rather than silently duplicated: if lumber and mining camps
-# need to read as different buildings, that is a source-picking decision for
-# the project owner, not one to make unasked. See ASSET_MISSING.md.
+# distinguish a wood store from an ore store. RESOLVED 2026-08-15: the project
+# owner's own pick settles it -- the lumber camp is the Briton KENNEL and the
+# mining camp the Briton CORRAL (Age & Unit Planning.md), so they are different
+# buildings and neither is a storehouse. An earlier pass had this on
+# britons/storehouse, which was simply wrong.
 id      = "vis.lumber_camp"
 adapter = "zeroad"
 
 [source]
-actor = "structures/britons/storehouse.xml"
+actor = "structures/britons/kennel.xml"
 
 [render]
-# inspect measures 16.280 raw units tall -> 8.14 m; footprint (Square 15x16
-# world units -> 7.5x8 m, per simulation/templates/structures/athen/storehouse.xml).
-# Raised from [320, 288] on 2026-08-14: this recipe was re-pointed from the
-# hellenes storehouse to the BRITON one (age 1, PLAN.md 2.7) and the new mesh
-# touches the frame edge -- the batch's canvas check caught it, "1 frame(s) touch
-# the render edge and lost content".
+# Canvas raised from [320, 288] on 2026-08-14 after the batch's canvas check
+# reported "1 frame(s) touch the render edge and lost content". The measurements
+# that used to be quoted here were the Athenian storehouse's and no longer apply;
+# re-measure against the kennel if this needs tuning again.
+#
+# INCOMPLETE: the project owner's pick is the kennel PLUS 3x
+# gaia/treasure/wood_lumber (-> props/special/eyecandy/wood_pile.xml). Those props
+# are not baked, because isobake cannot yet place loose props around a static
+# building -- `_attach_prop` constrains to an ARMATURE BONE, which is the
+# animation-variant mechanism and does not apply here. Needs a `[[source.extras]]`
+# feature (actor + offset + count); the dragon nest needs the same one.
 canvas = [448, 384]
 supersample = 4
 directions = 1
@@ -32,4 +38,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/britons/storehouse.xml"
+actor = "art/actors/structures/britons/kennel.xml"

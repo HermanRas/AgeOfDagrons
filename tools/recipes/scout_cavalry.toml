@@ -15,7 +15,7 @@ id      = "vis.scout_cavalry"
 adapter = "zeroad"
 
 [source]
-actor = "units/britons/cavalry_javelinist_a_m.xml"
+actor = "units/mauryas/cavalry_swordsman_a_m.xml"
 
 [render]
 canvas = [384, 448]
@@ -62,4 +62,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/britons/cavalry_javelinist_a_m.xml"
+actor = "art/actors/units/mauryas/cavalry_swordsman_a_m.xml"

@@ -1,16 +1,23 @@
-# Mill (ASSET_MISSING.md `vis.mill`), from 0 A.D.'s Athenian farmstead -- the
-# nearest match to a food-processing building in their roster; 0 A.D. has no
-# separate "mill", the farmstead is where grain is turned into food.
+# Mill (ASSET_MISSING.md `vis.mill`) -- the age-1 Briton rotary mill.
+#
+# Corrected 2026-08-15. This was on britons/farmstead, which was wrong: the
+# project owner's pick is "Brit/Rotarymill" (Age & Unit Planning.md), and the
+# rotary mill is NOT the farmstead. Only two actors in the whole checkout
+# reference the rotary_mill props -- structures/britons/special.xml and
+# structures/celts/special.xml -- so the Briton "special" building is the one
+# carrying the mill, and britons/farmstead carries none of them.
+#
+# Worth knowing when reading the roster: "Brit/Rotarymill" names a BUILDING by
+# what it visibly has on it, not by 0 A.D.'s filename for it.
 id      = "vis.mill"
 adapter = "zeroad"
 
 [source]
-actor = "structures/britons/farmstead.xml"
+actor = "structures/britons/special.xml"
 
 [render]
-# inspect measures 12.654 raw units tall -> 6.33 m; footprint (Square 18x13
-# world units -> 9x6.5 m, per simulation/templates/structures/athen/farmstead.xml)
-# is the smallest in this batch, similar scale to the house.
+# The measurements quoted here were the Athenian farmstead's and no longer apply
+# after the re-point to the Briton rotary mill; re-measure if this needs tuning.
 canvas = [320, 256]
 supersample = 4
 directions = 1
@@ -26,4 +33,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/britons/farmstead.xml"
+actor = "art/actors/structures/britons/special.xml"

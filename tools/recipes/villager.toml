@@ -1,4 +1,9 @@
-# Villager, from 0 A.D.'s female citizen.
+# Villager -- the BRITON female citizen, matching the project owner's pick
+# ("Brit/support_civilian", Age & Unit Planning.md). Corrected 2026-08-15 from
+# celts/female_citizen, which was Celtic but not Briton, and before that from
+# athenians/female_citizen, which was neither.
+#
+# PLAN.md 2.5: one villager, one gender.
 #
 # This is the phase 0.9 proof: an animated, skinned character with the
 # animation attached from a separate .dae. Everything else in the pipeline was
@@ -7,7 +12,7 @@ id      = "vis.villager"
 adapter = "zeroad"
 
 [source]
-actor = "units/celts/female_citizen.xml"
+actor = "units/britons/citizen_female.xml"
 
 [render]
 # A 1.9 m villager is 1.9 * cos(30) * 22.627 = 37px of body, and the raised
@@ -126,4 +131,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/celts/female_citizen.xml"
+actor = "art/actors/units/britons/citizen_female.xml"
