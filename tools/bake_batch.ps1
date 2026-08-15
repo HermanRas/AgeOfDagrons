@@ -51,9 +51,13 @@ param(
     [string[]] $Except,
     [switch]   $SkipVerify,
     [switch]   $WhatIf,
-    # 4 measured comfortable on this machine. The ceiling is RAM: every slot holds
-    # a full Blender scene.
-    [int]      $Parallel = 4
+    # 2, set by the project owner 2026-08-15 after watching a 4-wide run: 4 is
+    # technically fine -- it completed 81 recipes -- but it saturates the machine
+    # and makes it unpleasant to use while a batch is going. The ceiling is RAM
+    # (every slot holds a full Blender scene); the LIMIT is that this is somebody's
+    # workstation, not a render farm. Raise it explicitly with -Parallel if the
+    # machine is free.
+    [int]      $Parallel = 2
 )
 
 $ErrorActionPreference = "Continue"
