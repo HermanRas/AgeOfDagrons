@@ -1,0 +1,35 @@
+# Lumber camp -- AGE 3 (Age of Flame) (PLAN.md 2.7, 9.2).
+#
+# Generated 2026-08-15. Buildings carry the age; units do not.
+#
+# Actor resolved through its entity template, never guessed from a filename.
+#
+# COMPOSITE PROPS ARE NOT BAKED IN. The roster gives the lumber camp 3x
+# `wood_lumber` and the mining camp 3x `stone_pile_granite`. Those are composed
+# IN-GAME rather than at bake time (project owner, 2026-08-15): baking them
+# would freeze one arrangement into every age skin and multiply the prop art by
+# the number of skins, where separate prop atlases composite freely and cost one
+# small bake each. It also means isobake needs no `[source.extras]` feature.
+id      = "vis.lumber_camp_age3"
+adapter = "zeroad"
+
+[source]
+actor = "structures/iberians/corral.xml"
+
+[render]
+canvas = [576, 448]
+supersample = 4
+directions = 1
+frame_origin_at = 0.42
+ground_clip = true
+engine = "eevee"
+samples = 32
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/iberians/corral.xml"

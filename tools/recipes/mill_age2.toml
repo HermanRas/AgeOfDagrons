@@ -1,0 +1,51 @@
+# Mill -- AGE 2 (Age of Embers) (PLAN.md 2.7, 9.2).
+#
+# Generated 2026-08-15. Buildings carry the age; units do not.
+#
+# The Celtic rotary mill. `gaul/farmstead` is NOT this building -- the roster says Rotarymill, and only britons/special and celts/special carry the rotary_mill props at all. Same rig as age 1, measured identical.
+#
+# Actor resolved through its entity template, never guessed from a filename.
+#
+# COMPOSITE PROPS ARE NOT BAKED IN. The roster gives the lumber camp 3x
+# `wood_lumber` and the mining camp 3x `stone_pile_granite`. Those are composed
+# IN-GAME rather than at bake time (project owner, 2026-08-15): baking them
+# would freeze one arrangement into every age skin and multiply the prop art by
+# the number of skins, where separate prop atlases composite freely and cost one
+# small bake each. It also means isobake needs no `[source.extras]` feature.
+id      = "vis.mill_age2"
+adapter = "zeroad"
+
+[source]
+actor = "structures/celts/special.xml"
+# Drive the grinder, not the donkeys: a donkey clip's rigged figure imports at
+# ~31x the mesh scale and the animal tears itself apart (13.2 item 8). Its rest
+# pose is the correct pose for a harnessed animal anyway.
+drive_riders = false
+
+[anims.idle]
+# Same grinder fix as the age-1 mill -- see mill.toml for the full reasoning.
+# Rotation only: the clip raises the grindstone and swings the beam, while its
+# location curves carry the clip-vs-mesh scale mismatch of PLAN.md 13.2 item 8.
+file = "mechanical/celt_rotary_mill_grinder.dae"
+frames = 1
+fps = 1
+loop = false
+location_scale = 0.0
+
+[render]
+canvas = [320, 256]
+supersample = 4
+directions = 1
+frame_origin_at = 0.42
+ground_clip = true
+engine = "eevee"
+samples = 32
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/celts/special.xml"

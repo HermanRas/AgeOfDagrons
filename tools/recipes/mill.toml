@@ -14,6 +14,62 @@ adapter = "zeroad"
 
 [source]
 actor = "structures/britons/special.xml"
+# Drive the GRINDER, not the donkeys -- the same split the Han mangonel needed,
+# and arrived at the same way: driving the nested figures made things worse, not
+# better. With `drive_riders = true` the two donkeys receive their own clips and
+# tear themselves apart, floating above the roof in pieces. That is PLAN.md 13.2
+# item 8, the quadruped bug: a donkey clip's rigged figure imports at ~31x the
+# mesh's scale, so its bone-location curves overshoot and the mesh explodes.
+#
+# The fix for that is a measured per-clip `location_scale`, which `_drive_riders`
+# does not apply to nested props -- only the subject's own clips get it. Adding
+# that is real work for no gain here: a donkey harnessed to a mill beam is
+# standing still in every frame that matters, and its REST pose is the correct
+# pose.
+#
+# So: grinder animated, donkeys static. Exactly what the project owner accepted
+# for the trebuchet's crew, and for the same reason.
+drive_riders = false
+
+[anims.idle]
+# THE DONKEY FIX, 2026-08-15. Everything below about "misplaced" props was
+# wrong, and the real cause is embarrassingly plain: the mill was baked STATIC,
+# so its grinder sat in REST POSE.
+#
+# In 0 A.D. the rotary mill's grinder plays a continuous `idle` clip, and that
+# clip is what raises the grindstone upright, swings the beam and walks the
+# donkeys around their circle. At rest the stone lies low, the beam is unswung
+# and the donkeys stand wherever the rig was authored -- which is exactly the
+# three complaints the project owner raised from the scenario-editor
+# comparison: stone too small and low ("like it will go under the donkey"), the
+# assembly off-centre from the doorway, and the donkey facing the wrong way for
+# the direction of travel.
+#
+# `file` rather than `clip`: the clip belongs to the grinder PROP actor
+# (props/structures/celts/rotary_mill_grinder.xml), not to the mill actor, so
+# `_declared_animations` on structures/britons/special.xml finds nothing to look
+# up by name. Naming the .dae directly is the supported way past that.
+#
+# Baking it as a one-frame "animation" keeps vis.mill a single-sprite building
+# like every other structure -- this is a pose fix, not an animated building.
+# Raise `frames` if the mill should visibly turn later; the sim has no concept
+# of a working mill today.
+file = "mechanical/celt_rotary_mill_grinder.dae"
+frames = 1
+fps = 1
+loop = false
+# ROTATION ONLY. The grinder clip carries the same clip-vs-mesh scale mismatch
+# that PLAN.md 13.2 item 8 documents for quadrupeds -- the clip's rigged figure
+# imports at a different scale than the actor's mesh, so its bone-LOCATION
+# curves overshoot. Here that flings the two donkey attach bones far out from
+# the pivot, and the donkeys ride them onto the roof and out past the wall.
+#
+# 0.0 rather than a measured ratio, deliberately. The rotation curves are the
+# entire point of this clip -- they raise the grindstone and swing the beam --
+# and the bones' REST positions are already the correct radius, which the
+# earlier static bake showed. So there is nothing the location curves need to
+# contribute, and zeroing them is exact rather than a value probed by eye.
+location_scale = 0.0
 
 [render]
 # Re-measured 2026-08-15 on a 1024x768 probe with the decal fix in: the whole
