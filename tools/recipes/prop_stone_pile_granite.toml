@@ -1,0 +1,44 @@
+# Granite stone pile -- the gaia prop the MINING CAMP carries 3x (PLAN.md 9.2).
+#
+# Baked as its own atlas rather than composed into the camp's sprite; see
+# prop_wood_lumber.toml for the full reasoning. Short version: composing in-game
+# keeps one arrangement from being frozen into four age skins, and needs no
+# `[source.extras]` feature in isobake at all.
+#
+# Resolved through its template -- the roster's name and the actor's name have
+# nothing in common:
+#
+#   simulation/templates/gaia/treasure/stone_pile_granite.xml
+#     -> <VisualActor><Actor>props/special/eyecandy/stone_pile.xml</Actor>
+#
+# Worth knowing: "granite" is in the TEMPLATE name only. The actor is a generic
+# `stone_pile` textured with `structural/foundation.dds`, and 0 A.D. has a
+# separate family of `blocks_*_pile` actors (limestone, redstone, sandstone) if
+# a different rock ever reads better next to our mining camp.
+id      = "vis.prop_stone_pile_granite"
+adapter = "zeroad"
+
+[source]
+actor = "props/special/eyecandy/stone_pile.xml"
+
+[render]
+# Unmeasured, sized alongside prop_wood_lumber. The clip-check reports a canvas
+# that is too small rather than cropping silently, so read the first bake.
+canvas = [128, 128]
+supersample = 4
+# 5 stored, mirrored to 8 -- a rubble pile is close enough to symmetric that the
+# mirror reads as a different pile rather than a wrong one, which is a bonus
+# when three of them sit around one building.
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/special/eyecandy/stone_pile.xml"

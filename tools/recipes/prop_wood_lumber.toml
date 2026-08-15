@@ -1,0 +1,46 @@
+# Wood lumber pile -- the gaia prop the LUMBER CAMP carries 3x (PLAN.md 9.2).
+#
+# Baked as its own atlas rather than composed into the camp's sprite, decided
+# with the project owner 2026-08-15. Two reasons, and the second is the real one:
+#
+#   1. Baking it in would freeze one arrangement of three piles into every age
+#      skin of the camp -- four bakes carrying the same three props, and no way
+#      to move them without re-rendering a building.
+#   2. It would need a `[source.extras]` feature in isobake to compose props onto
+#      a building at bake time. Composing in-game needs no pipeline work at all,
+#      and the game already draws multiple sprites per tile.
+#
+# Resolved through its template, which is the only way to find it -- the roster
+# says `gaia/treasure/wood_lumber` and the actor is named nothing like that:
+#
+#   simulation/templates/gaia/treasure/wood_lumber.xml
+#     -> <VisualActor><Actor>props/special/eyecandy/wood_pile.xml</Actor>
+id      = "vis.prop_wood_lumber"
+adapter = "zeroad"
+
+[source]
+actor = "props/special/eyecandy/wood_pile.xml"
+
+[render]
+# Small scenery prop, unmeasured. Sized against vis.berry_bush and the treasure
+# props rather than guessed blind; the clip-check reports a canvas that is too
+# small rather than cropping silently, so a generous first guess costs atlas
+# space and a mean one costs the bake.
+canvas = [128, 128]
+supersample = 4
+# 5 stored, mirrored to 8. A log pile is close enough to symmetric that a
+# mirrored copy reads as a different pile rather than a wrong one -- and three
+# of these sit around one building, so variety is a bonus rather than a defect.
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/special/eyecandy/wood_pile.xml"

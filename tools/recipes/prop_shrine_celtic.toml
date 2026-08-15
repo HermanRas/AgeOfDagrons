@@ -1,0 +1,59 @@
+# Celtic shrine -- the centrepiece of the DRAGON NEST (PLAN.md 9.2, 13.2).
+#
+# One of three props baked separately so the nest can be composed IN-GAME, the
+# same way the lumber and mining camps compose their piles (project owner,
+# 2026-08-15). The nest is 22 bushes, 12 standing stones and a shrine; baking
+# that as one sprite would be a single enormous atlas with a frozen layout, and
+# the nest is a map feature that wants to sit differently on different ground.
+#
+# Resolved through its template -- `structures/shrine_celtic` is a TEMPLATE path
+# and there is no actor by that name:
+#
+#   simulation/templates/structures/shrine_celtic.xml
+#     -> <VisualActor><Actor>structures/celts/small_stone_monument.xml</Actor>
+#
+# ✅ VERIFIED AGAINST THE BAKE. Before rendering it I flagged a suspected
+# mismatch here -- the owner's scenario-editor shot shows a stonehenge trilithon
+# and this actor is named the SMALL monument (`structural/celt_hc.dae`), so I
+# expected to need its bigger sibling `structures/celts/stone_monument.xml`.
+# Wrong: `celt_hc.dae` IS the trilithon, and the bake matches the reference
+# exactly. "hc" reads as henge-circle, and the file name says nothing about size.
+#
+# Kept as a note rather than deleted, because the instinct was the bad one: I
+# doubted a correct template resolution on the strength of a filename, which is
+# the same reasoning that put a Germanic dress on the Briton villager.
+id      = "vis.prop_shrine_celtic"
+adapter = "zeroad"
+
+[source]
+actor = "structures/celts/small_stone_monument.xml"
+
+[render]
+# Unmeasured. Generous, since the clip-check reports a canvas that is too small
+# rather than cropping silently.
+canvas = [256, 256]
+supersample = 4
+# 1 direction: a shrine is placed, not steered.
+directions = 1
+frame_origin_at = 0.35
+ground_clip = true
+engine = "eevee"
+samples = 32
+# YAW 45, not the usual 180 (project owner, 2026-08-15: "not open to the
+# player"). A henge is a RING, so unlike a building it has no back -- what it has
+# is an aperture, and at 180 the stones closed up into a wall and hid the carved
+# centre stone. Chosen by baking all 8 rotations in one pass at directions = 8
+# and reading them off, which costs one bake instead of one bake per guess: the
+# frame for direction index i sits at total yaw = yaw_offset + 45*i, so the view
+# you like becomes the yaw_offset you want. 45 gives a three-quarter view with
+# the ring open toward the viewer and the carved stone unobstructed; 135 is the
+# mirror of it if the light should fall the other way.
+yaw_offset_deg = 45.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/celts/small_stone_monument.xml"

@@ -1,0 +1,51 @@
+# Dragon -- the game's namesake (PLAN.md 13.1, 13.2, A.9).
+#
+# ⚠️ THE PLAN SAYS THIS NEEDS BESPOKE ART. IT DOES NOT. `fauna/dragon.xml` ships
+# with 0 A.D. -- a complete, textured dragon (`skeletal/dragon.dae` +
+# `animal_dragon.dds`), confirmed in the checkout and visible in the project
+# owner's scenario editor. A.9 has been scheduled as "bespoke" since 0.9 on the
+# assumption the art would have to be made or bought; it does not.
+#
+# One real limitation, and it is worth being precise about: the actor has
+# **no armature and declares no animations**. `isobake inspect` reports 1 object,
+# 1 mesh, no armature, no actions. So the dragon can ship as a STATIC sprite
+# immediately, and cannot be animated without someone rigging the mesh. That is
+# a different and much smaller job than modelling a dragon from nothing, but it
+# is not free.
+#
+# Measured: 18.380 x 16.212 x 7.523 raw units -> 9.19 x 8.11 x 3.76 m. Big --
+# roughly a 9 m wingspan and taller than the age-1 town centre is wide. It
+# renders 147 px tall, over three times the villager.
+id      = "vis.dragon"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/dragon.xml"
+
+[render]
+# From the measured 3.76 m height and 9.19 m span: ~208 px wide and ~147 px tall
+# of content before the isometric diamond is accounted for. 320 square leaves
+# room on every side.
+canvas = [320, 320]
+supersample = 4
+# 8, not 5 mirrored. A dragon is not laterally symmetric in pose -- the reference
+# shows it standing with the head turned and the wings held asymmetrically -- and
+# unlike a rubble pile, a mirrored dragon would be noticed.
+directions = 8
+frame_origin_at = 0.25
+# No ground_clip: this is a creature standing on the terrain, not a building
+# authored partly buried, and the clip is for the latter.
+engine = "eevee"
+samples = 24
+
+# STATIC, because the source has no armature to drive. `unit.dragon_baby` is the
+# same actor at 10% scale (9.2) and needs no second bake -- the view can scale a
+# sprite.
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/dragon.xml"

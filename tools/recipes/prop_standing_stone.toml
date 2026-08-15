@@ -1,0 +1,46 @@
+# Carved standing stone -- the DRAGON NEST scatters 12 of these in a ring
+# (PLAN.md 9.2, 13.2). In the scenario-editor reference they read as carved
+# dragon eggs, which is a happy accident of the Celtic spiral carving and is
+# exactly right for a nest.
+#
+# Baked as its own atlas so the nest composes in-game; see
+# prop_shrine_celtic.toml for the reasoning.
+#
+# The roster says `gaia/ruins/standing_stone`, which does not exist. The actor is
+# `props/special/eyecandy/standing_stones.xml` -- note the PLURAL, and note it is
+# eyecandy rather than gaia. Found by searching the actor tree, since there is no
+# template for it: unlike the shrine, a scattered decorative stone is not an
+# entity in 0 A.D., just a prop.
+id      = "vis.prop_standing_stone"
+adapter = "zeroad"
+
+[source]
+actor = "props/special/eyecandy/standing_stones.xml"
+# FIVE MESH VARIANTS (standingstone_a..e) in one group. isobake takes the first
+# variant of a group and seeds the RNG from the recipe id so a rebake is
+# reproducible -- so this bakes ONE of the five, deterministically.
+#
+# Twelve identical stones in a ring would read as copy-paste, and the fix is
+# cheap: add sibling recipes with `variant_seed` set to different values, which
+# picks a different mesh from the same actor for the cost of one small bake
+# each. Left as one for now -- the nest is not built yet (13.2), and the
+# right number of variants is a decision for whoever places them.
+
+[render]
+canvas = [128, 128]
+supersample = 4
+# 5 stored, mirrored to 8. A standing stone is roughly symmetric and mirroring
+# gives free variety across a ring of twelve rather than a visible error.
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/special/eyecandy/standing_stones.xml"

@@ -1,0 +1,43 @@
+# Bush -- the DRAGON NEST covers its centre grid with 22 of these (PLAN.md 9.2,
+# 13.2). Third of the three nest props, baked separately so the nest composes
+# in-game; see prop_shrine_celtic.toml.
+#
+# ⚠️ SUBSTITUTE, and the only roster entry today that has no real answer.
+# `gaia/tree/bush_badlands` does not exist -- not under that name, not anywhere
+# in the actor tree, and there is no template for it either. 0 A.D.'s bushes are
+# `flora/trees/*_bush_*`: acacia, lavender x2, poppy, temperate, temperate
+# winter, tropic.
+#
+# `temperate_bush_biome` is the pick, on two grounds: it matches the leafy green
+# shrubs in the project owner's scenario-editor reference, and temperate is the
+# biome the rest of our flora already uses (tree_oak, tree_cherry, the temperate
+# field). Lavender and poppy are flowering and read as decoration rather than
+# undergrowth; acacia and tropic belong to other biomes.
+#
+# Recorded as a substitution rather than a resolution, so nobody later assumes
+# this was verified against the roster the way the other props were.
+id      = "vis.prop_nest_bush"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/temperate_bush_biome.xml"
+
+[render]
+canvas = [160, 160]
+supersample = 4
+# 5 stored, mirrored to 8. Twenty-two of these sit together, so the mirrored
+# copies are doing useful work -- they break up what would otherwise be an
+# obviously repeated silhouette.
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/temperate_bush_biome.xml"
