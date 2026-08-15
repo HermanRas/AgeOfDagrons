@@ -1,19 +1,35 @@
-# Siege ram, from 0 A.D.'s Roman battering ram -- no Athenian/Hellenic ram
-# exists in 0 A.D.'s roster (ASSET_MISSING.md 2.1), so this breaks the civ
-# consistency kept everywhere else in the project (buildings, other units).
-# Flagged, not fixed -- accepting the Roman skin was cheaper than hand-
-# building a Greek-styled ram, and it can be revisited later without
-# touching gameplay.
+# Battering ram, Siege Workshop from age 3 (PLAN.md 9.2).
 #
-# Mechanical (rigid, non-skeletal) rig -- "SixWheeler", 10 bones -- so none
-# of the biped/quadruped defects found on the infantry/cavalry units apply.
-# Its animations are declared inline in the actor's own top group, not via
-# separate variant files, which is simpler than every unit recipe so far.
+# Re-pointed 2026-08-15 to the IBERIAN ram, which is the project owner's pick
+# resolved properly:
+#
+#   units/cart/siege_ram  ->  simulation/templates/units/cart/siege_ram.xml
+#     -> <VisualActor><Actor>structures/iberians/siege_ram.xml</Actor>
+#
+# Note the roster line says `cart` and the actor is `iberians` -- 0 A.D.'s
+# Carthaginian ram template borrows the Iberian art. That mismatch between the
+# civ in the template path and the civ in the actor path is exactly why these
+# have to be resolved rather than guessed, and it is why the previous Roman
+# pick looked defensible.
+#
+# The whole justification this file used to carry -- "no Athenian/Hellenic ram
+# exists, so this breaks the civ consistency kept everywhere else, flagged not
+# fixed" -- was answering a question nobody asked. Civ consistency is a rule for
+# ARCHITECTURE only (PLAN.md 13.2 item 2); units are deliberately mixed-civ and
+# always were. There was never anything to apologise for, and the roster had the
+# answer the whole time.
+#
+# Mechanical (rigid, non-skeletal) rig, so none of the biped/quadruped defects
+# found on the infantry/cavalry units apply. Animations are declared inline in
+# the actor's own top group rather than via separate variant files.
+#
+# NOT YET RE-BAKED -- canvas and clip names below were measured against the
+# Roman ram and both need re-checking against the Iberian one on the first bake.
 id      = "vis.siege_ram"
 adapter = "zeroad"
 
 [source]
-actor = "units/romans/siege_ram.xml"
+actor = "structures/iberians/siege_ram.xml"
 
 [render]
 # `isobake inspect` measures 7.024 x 14.736 x 8.607 m raw -- a genuinely large
@@ -71,4 +87,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/romans/siege_ram.xml"
+actor = "art/actors/structures/iberians/siege_ram.xml"

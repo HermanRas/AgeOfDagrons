@@ -1,6 +1,26 @@
-# Trebuchet (deployed), from 0 A.D.'s Hellenic lithobolos -- a torsion
-# stone-thrower, not a true counterweight trebuchet (0 A.D. has none); closest
-# analog (ASSET_MISSING.md 2.1).
+# Trebuchet (DEPLOYED state), Siege Workshop and Castle from age 4 (PLAN.md 9.2).
+#
+# Re-pointed 2026-08-15 to the HAN MANGONEL, the project owner's pick resolved
+# through its template. The roster names the pair, and they are two different
+# actors, not one actor in two poses:
+#
+#   units/han/siege_mangonel_unpacked -> units/han/siege_mangonel.xml         <- THIS FILE
+#   units/han/siege_mangonel_packed   -> units/han/siege_mangonel_pivot_packed.xml
+#
+# This recipe is the *deployed* (unpacked) half, so it takes `siege_mangonel`.
+# The packed half still has no recipe -- see PLAN.md 9.2.1 item 5, which scopes
+# the packed/unpacked state machine with 4.13.
+#
+# The previous pick, `hellenes/siege_lithobolos`, was chosen as a "closest
+# analog" on the reasoning that 0 A.D. has no true counterweight trebuchet. That
+# reasoning was sound and irrelevant: the roster had already named the actor, and
+# nobody looked. A mangonel is not a counterweight trebuchet either -- but it is
+# the one the project owner picked, and it comes with a real packed counterpart,
+# which the lithobolos does not.
+#
+# NOT YET RE-BAKED. Canvas and clip names below were measured on the lithobolos;
+# both need re-checking on the first bake, and the clip names especially, since
+# the Han actor need not declare `attack_ranged` under that name.
 #
 # UNBLOCKED 2026-08-14. Was blocked because isobake picked the first armature it
 # found, and for this actor that is one of the five crew operators (nested props,
@@ -22,7 +42,7 @@ id      = "vis.trebuchet"
 adapter = "zeroad"
 
 [source]
-actor = "units/hellenes/siege_lithobolos.xml"
+actor = "units/han/siege_mangonel.xml"
 
 [render]
 canvas = [384, 384]
@@ -50,4 +70,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/hellenes/siege_lithobolos.xml"
+actor = "art/actors/units/han/siege_mangonel.xml"

@@ -19,6 +19,12 @@
 .PARAMETER Only
   Substring filter(s) on recipe name. Accepts a list or a comma-separated string.
 
+.PARAMETER Except
+  Substring filter(s) to EXCLUDE, same format as -Only, applied after it. This is
+  the filter a full re-bake actually needs: the useful run is nearly always
+  "everything except the handful that are known broken or waiting on a decision",
+  and expressing that through -Only means listing eighty names.
+
 .PARAMETER Parallel
   How many recipes to build at once. Each is its own Blender process.
 
@@ -42,6 +48,7 @@
 [CmdletBinding()]
 param(
     [string[]] $Only,
+    [string[]] $Except,
     [switch]   $SkipVerify,
     [switch]   $WhatIf,
     # 4 measured comfortable on this machine. The ceiling is RAM: every slot holds
@@ -82,6 +89,16 @@ if ($Only) {
         $name = $_
         ($patterns | ForEach-Object { $name -like "*$_*" }) -contains $true
     }
+}
+
+if ($Except) {
+    $skip = @($Except) -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    $before = @($all).Count
+    $all = $all | Where-Object {
+        $name = $_
+        -not (($skip | ForEach-Object { $name -like "*$_*" }) -contains $true)
+    }
+    Write-Host ("  -Except dropped {0} recipe(s)" -f ($before - @($all).Count)) -ForegroundColor DarkGray
 }
 
 $ordered = @()

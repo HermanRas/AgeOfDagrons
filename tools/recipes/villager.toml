@@ -1,18 +1,46 @@
-# Villager -- the BRITON female citizen, matching the project owner's pick
-# ("Brit/support_civilian", Age & Unit Planning.md). Corrected 2026-08-15 from
-# celts/female_citizen, which was Celtic but not Briton, and before that from
-# athenians/female_citizen, which was neither.
+# Villager -- `units/celts/female_citizen`, which IS the Briton female citizen.
+#
+# This actor has now been changed three times and the middle change was wrong in
+# an instructive way, so the history is worth keeping:
+#
+#   athenians/female_citizen -> celts/female_citizen -> britons/citizen_female
+#                                                    -> celts/female_citizen
+#
+# The third move was made earlier on 2026-08-15, reasoning that the roster says
+# "Brit/support_civilian", so a Briton actor must be more correct than a Celtic
+# one, and `units/britons/citizen_female.xml` exists. It does exist. It is not
+# what 0 A.D. uses for a Briton citizen:
+#
+#   simulation/templates/units/brit/support_female_citizen.xml
+#     -> <VisualActor><Actor>units/celts/female_citizen.xml</Actor>
+#
+# Britons and Gauls SHARE one female citizen actor and it lives under celts/.
+# Worse, the substitute was not neutral: `britons/citizen_female.xml` carries the
+# same mesh and the same head prop but dresses her in `skeletal/germ/
+# dress_female_*` textures -- a Germanic dress on a Briton villager. So the
+# reasoning "the roster says Brit, therefore prefer the file with britons in its
+# path" produced a worse result than leaving it alone would have. That is the
+# whole argument for resolving templates instead of pattern-matching directory
+# names, and it is worth more than the fix.
 #
 # PLAN.md 2.5: one villager, one gender.
 #
 # This is the phase 0.9 proof: an animated, skinned character with the
 # animation attached from a separate .dae. Everything else in the pipeline was
 # already working on static assets.
+#
+# NEEDS A 960-FRAME RE-BAKE, and is deliberately held out of the 2026-08-15
+# batch so it can be spent once rather than twice. Two other pending changes want
+# the same re-bake: the canvas can drop from [160,160] to about [96,96] (see the
+# note below), and PLAN.md 13.2 item 9's `height_m` override is the fix that
+# becomes free the moment her frames are re-rendered anyway. `height_m` stays
+# UNSET here -- the project owner deferred it explicitly on 2026-08-08, and this
+# file does not get to reverse that quietly.
 id      = "vis.villager"
 adapter = "zeroad"
 
 [source]
-actor = "units/britons/citizen_female.xml"
+actor = "units/celts/female_citizen.xml"
 
 [render]
 # A 1.9 m villager is 1.9 * cos(30) * 22.627 = 37px of body, and the raised
@@ -131,4 +159,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/britons/citizen_female.xml"
+actor = "art/actors/units/celts/female_citizen.xml"
