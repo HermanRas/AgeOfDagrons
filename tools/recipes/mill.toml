@@ -14,22 +14,31 @@ adapter = "zeroad"
 
 [source]
 actor = "structures/britons/special.xml"
-# Drive the GRINDER, not the donkeys -- the same split the Han mangonel needed,
-# and arrived at the same way: driving the nested figures made things worse, not
-# better. With `drive_riders = true` the two donkeys receive their own clips and
-# tear themselves apart, floating above the roof in pieces. That is PLAN.md 13.2
-# item 8, the quadruped bug: a donkey clip's rigged figure imports at ~31x the
-# mesh's scale, so its bone-location curves overshoot and the mesh explodes.
+# NO DONKEYS. Project owner's decision, 2026-08-15, after their attach points
+# were measured and found to be unfixable from a recipe.
 #
-# The fix for that is a measured per-clip `location_scale`, which `_drive_riders`
-# does not apply to nested props -- only the subject's own clips get it. Adding
-# that is real work for no gain here: a donkey harnessed to a mill beam is
-# standing still in every frame that matters, and its REST pose is the correct
-# pose.
+# The rotary mill harnesses two donkeys to its grinder, and 0 A.D. draws them
+# right at the beam under the roof. Ours stood well outside the building. That
+# is not the recipe and not the asset: the source rig
+# (art/meshes/props/celt_rotary_mill_grinder.dae) places prop_donkey001/002 at
+# y = -4 and +4, exactly symmetric, and the pinned Pyrogenesis importer builds
+# those bones at y = -12.44 and +9.32 -- asymmetric and 2-3x too far. Both
+# rotary mills share the rig and measure identically.
 #
-# So: grinder animated, donkeys static. Exactly what the project owner accepted
-# for the trebuchet's crew, and for the same reason.
-drive_riders = false
+# No recipe value corrects that. `location_scale = 0` leaves the bones at rest,
+# which is already too far out, and any larger value only pushes them further.
+# The real fix is correcting prop-bone heads from the source .dae at import,
+# which is an isobake feature nobody needs today.
+#
+# So the mill ships with its grindstone and no animals. It reads as a working
+# mill -- the stone is the thing that says "mill" -- and an animal standing
+# outside its own building reads as a bug. Restore by deleting this line and
+# setting `drive_riders = false` (their own clips tear them apart: PLAN.md 13.2
+# item 8, a donkey clip imports at ~31x its mesh scale).
+#
+# `Horse` is the donkey's ARMATURE, and it goes too -- leaving it behind would
+# keep an empty rig in the scene for `_subject_armature` to consider.
+drop_objects = ["donkey", "Horse"]
 
 [anims.idle]
 # THE DONKEY FIX, 2026-08-15. Everything below about "misplaced" props was

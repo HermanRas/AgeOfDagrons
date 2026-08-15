@@ -17,10 +17,12 @@ adapter = "zeroad"
 
 [source]
 actor = "structures/celts/special.xml"
-# Drive the grinder, not the donkeys: a donkey clip's rigged figure imports at
-# ~31x the mesh scale and the animal tears itself apart (13.2 item 8). Its rest
-# pose is the correct pose for a harnessed animal anyway.
-drive_riders = false
+# NO DONKEYS, same as the age-1 mill and for the same measured reason -- the two
+# rotary mills share one grinder rig, so they share its defect. The importer
+# builds prop_donkey001/002 at y = -12.44 / +9.32 where the source .dae says a
+# symmetric +/-4, which puts both animals outside the building and cannot be
+# corrected from a recipe. See mill.toml for the full working.
+drop_objects = ["donkey", "Horse"]
 
 [anims.idle]
 # Same grinder fix as the age-1 mill -- see mill.toml for the full reasoning.
