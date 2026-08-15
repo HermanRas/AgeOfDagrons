@@ -1,0 +1,37 @@
+# Dock -- AGE 2 (Age of Embers), the Gaulish/German skin (PLAN.md 2.7, 9.2).
+#
+# Generated 2026-08-15 with the rest of the age-2 building pass. Buildings carry
+# the age; units do not.
+#
+# Actor resolved through its entity template, never guessed from a filename:
+#   simulation/templates/structures/gaul/dock.xml -> <VisualActor><Actor>
+#
+# First dock in the project -- no calibrated equivalent, so the canvas is a deliberate over-estimate. A dock is long and low and sits on a shoreline; expect to re-measure off the clip report.
+#
+# Render settings inherited from `nothing.toml` (no equivalent exists; see above). Canvas by interpolation:
+# a same-role building at the same footprint frames within the same box, and the
+# clip-check reports a canvas that is too small rather than cropping silently --
+# so read the first bake's report rather than trusting this.
+id      = "vis.dock_age2"
+adapter = "zeroad"
+
+[source]
+actor = "structures/celts/dock.xml"
+
+[render]
+canvas = [640, 512]
+supersample = 4
+directions = 1
+frame_origin_at = 0.4
+ground_clip = true
+engine = "eevee"
+samples = 32
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/celts/dock.xml"

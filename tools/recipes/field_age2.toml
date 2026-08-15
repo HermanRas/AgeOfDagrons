@@ -1,0 +1,36 @@
+# Field -- AGE 2 (Age of Embers), the Gaulish/German skin (PLAN.md 2.7, 9.2).
+#
+# Generated 2026-08-15 with the rest of the age-2 building pass. Buildings carry
+# the age; units do not.
+#
+# Actor resolved through its entity template, never guessed from a filename:
+#   simulation/templates/structures/gaul/field.xml -> <VisualActor><Actor>
+#
+# The TEMPERATE field, not the Mediterranean one age 1 uses -- 0 A.D. keys fields to biome rather than to civ, and both gaul and germ resolve here.
+#
+# Render settings inherited from `farm.toml`. Canvas by interpolation:
+# a same-role building at the same footprint frames within the same box, and the
+# clip-check reports a canvas that is too small rather than cropping silently --
+# so read the first bake's report rather than trusting this.
+id      = "vis.field_age2"
+adapter = "zeroad"
+
+[source]
+actor = "structures/plot_field_temp.xml"
+
+[render]
+canvas = [768, 768]
+supersample = 4
+directions = 1
+frame_origin_at = 0.5
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/plot_field_temp.xml"

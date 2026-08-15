@@ -29,7 +29,12 @@ actor = "structures/ptolemies/quinquereme.xml"
 # Read the clip report on the first bake. A canvas that is too small is reported
 # rather than silently cropped, so guessing high costs atlas space and guessing
 # low costs the bake.
-canvas = [1024, 768]
+#
+# First bake clipped 2 frames (static/S and static/N) at [1024, 768], subject
+# height 10.123 m -- the bow-on and stern-on views, exactly as predicted above.
+# Raised height only; width was clean. The galley needed 832 at 9.458 m, so a
+# 10.123 m hull wants proportionally more.
+canvas = [1024, 1024]
 supersample = 2
 # 8, not 5+mirrored: a hull is not laterally symmetric once it carries a sail and
 # rigging, and a mirrored ship sails backwards. Same reasoning as every other

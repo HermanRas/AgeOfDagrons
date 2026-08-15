@@ -1,0 +1,35 @@
+# Archery range -- AGE 3 (Age of Flame), the Persian (achae) + Iberian skin (PLAN.md 2.7, 9.2).
+#
+# Generated 2026-08-15 in the age-3 building pass. Buildings carry the age;
+# units do not.
+#
+# Actor resolved through its entity template, never guessed from a filename:
+#   simulation/templates/structures/iber/range.xml -> <VisualActor><Actor>
+#
+# Render settings inherited from the calibrated `archery_range.toml`. Canvas by
+# interpolation: a same-role building at the same footprint frames within the
+# same box, and the clip-check reports a canvas that is too small rather than
+# cropping silently -- so read the first bake's report rather than trusting this.
+id      = "vis.archery_range_age3"
+adapter = "zeroad"
+
+[source]
+actor = "structures/iberians/range.xml"
+
+[render]
+canvas = [512, 384]
+supersample = 4
+directions = 1
+frame_origin_at = 0.4
+ground_clip = true
+engine = "eevee"
+samples = 32
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/iberians/range.xml"

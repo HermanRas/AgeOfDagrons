@@ -45,24 +45,52 @@ adapter = "zeroad"
 actor = "units/han/siege_mangonel.xml"
 
 [render]
-canvas = [384, 384]
+# Raised from [384, 384] on 2026-08-15: that was the Hellenic lithobolos'
+# figure and the Han mangonel is a bigger engine with four crew standing around
+# it -- it lost static/S at 4.715 m subject height.
+canvas = [512, 512]
 supersample = 2
 directions = 5
 frame_origin_at = 0.2
 engine = "eevee"
 samples = 24
 
-[anims.idle]
-clip = "Idle"
-frames = 12
-fps = 8
-loop = true
+# FULLY STATIC. Disabling `attack` alone was not enough -- the second attempt
+# failed at the same place, because ANY clip sends `_drive_riders` through the
+# four crew props' own actors, and it is a crew clip Blender rejects, not the
+# engine's. So there is no subset of animations that avoids the bad import; the
+# choice is static or nothing, and static wins.
+#
+# [anims.idle]
+# clip = "Idle"
+# frames = 12
+# fps = 8
+# loop = true
 
-[anims.attack]
-clip = "attack_ranged"
-frames = 12
-fps = 15
-loop = true
+# ATTACK IS DISABLED, and this is a source-asset limit rather than a recipe bug.
+#
+# The Han mangonel carries four crew props (`mangonel_operator_{a,b,c,d}`), and
+# the bake dies inside `_drive_riders` importing a crew member's own clip:
+#
+#   RuntimeError: Error: Parsing errors in Document (see Blender Console)
+#     ... attach_animation -> bpy.ops.wm.collada_import
+#
+# Not an XML problem -- every file in the chain was validated with
+# XmlDocument.Load and all parse cleanly, including the 2.5 MB
+# `mangonel_operator_attack_{a,b}.dae`. Blender's COLLADA importer rejects the
+# CONTENT of those clips, which puts this in the same family as the other
+# pinned-importer defects already recorded (the bone-less `m_armor_tunic_*`
+# armatures, the nested-prop root bug).
+#
+# Shipping idle-only rather than nothing: a deployed siege engine that stands
+# still is a usable placeholder, and 4.13 has no attack animation to drive yet
+# anyway. Re-enable by restoring this block once the crew clips import.
+#
+# [anims.attack]
+# clip = "attack_ranged"
+# frames = 12
+# fps = 15
+# loop = true
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
