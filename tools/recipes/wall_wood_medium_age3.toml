@@ -1,0 +1,41 @@
+# Wall (medium) -- Briton timber, the wood wall tier (PLAN.md 9.2, 9.2.1 item 3).
+#
+# WALLS ARE KEYED BY MATERIAL, NOT BY AGE. Wood, stone and reinforced are three
+# parallel buildings costing three different resources, and all of them stay
+# buildable to the end of the game -- an age unlocks a tier, it never retires a
+# cheaper one. So `_age3` here means "the look this tier has from age 3",
+# not "the age-3 wall".
+#
+# The age-3 RE-SKIN of the age-2 timber wall -- same building, same cost, newer look. This is the only wall tier that re-skins; stone and reinforced each have one appearance.
+#
+# Actor resolved through its entity template:
+#   simulation/templates/structures/brit/wall_medium.xml -> <VisualActor><Actor>
+#
+# Every piece of a tier comes from ONE civ (9.2.1 item 3, settled after the
+# roster's mixed-civ wall lines turned out to be copy-paste errors).
+id      = "vis.wall_wood_medium_age3"
+adapter = "zeroad"
+
+[source]
+actor = "structures/britons/wall_medium.xml"
+
+[render]
+canvas = [900, 700]
+supersample = 4
+# 8 directions: a wall RUNS, so every piece must sit along either diagonal
+# facing either way. isobake takes 1, 5 or 8 -- not the 4 a wall strictly needs,
+# because a bare count of 4 cannot say WHICH four screen compass points.
+directions = 8
+frame_origin_at = 0.15
+ground_clip = true
+engine = "eevee"
+samples = 32
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/britons/wall_medium.xml"
