@@ -1,7 +1,23 @@
-# Wolf, from 0 A.D.'s fauna wolf -- hostile wildlife (ASSET_MISSING.md 2.3).
-# STATIC, same reasoning as deer.toml / boar.toml: a quadruped with its own
-# armature (32 bones) -- no clip attached, so the quadruped
-# animation-transfer bug (PLAN.md 13.2 item 8) never triggers.
+# Wolf -- the roster's only hostile gaia entity (ASSET_MISSING.md 2.3), so it is
+# the one animal that needs an ATTACK clip and not just idle/walk/die.
+#
+# Actor verified 2026-08-15: gaia/fauna_wolf.xml -> fauna/wolf.xml, already
+# correct.
+#
+# STILL STATIC, but no longer because it has to be. PLAN.md 13.2 item 8's
+# quadruped animation-transfer bug is FIXED (per-clip `location_scale`), so the
+# reason recorded here -- "no clip attached, so the bug never triggers" -- is a
+# workaround for a problem that no longer exists. Scheduled as A.4a.
+#
+# wolf.xml declares the richest clip set of any animal in the roster: Idle
+# (wolf_idle_01/02/03), Walk (wolf_walk), Run (wolf_run), attack_melee
+# (wolf_attack_01/02), death (wolf_death_01/02). Our vocabulary (2.5) wants
+# idle / walk / attack / die / decay, so every slot is covered with real source
+# animation and nothing has to be substituted.
+#
+# To animate: each clip needs its OWN measured `location_scale` -- see
+# sheep.toml and deer_carcass.toml for the procedure. The wolf actor measures
+# 4.582 raw units tall (2.291 m), which is the numerator of the estimate.
 id      = "vis.wolf"
 adapter = "zeroad"
 

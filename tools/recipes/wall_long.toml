@@ -21,7 +21,16 @@ actor = "structures/athenians/wall_long.xml"
 # together to [900,700]; scaled proportionally from that working data point.
 canvas = [1280, 704]
 supersample = 4
-directions = 1
+# 4 directions, not 1 (2026-08-15, project owner). A wall is not a building:
+# buildings sit at one fixed orientation, walls RUN -- they enclose a base, so
+# every piece has to be placeable along either diagonal and facing either way.
+# One sprite cannot do that. 4 evenly-spaced yaws is the whole wall vocabulary.
+#
+# Costs 4x the frames but NOT a bigger canvas: in a 2:1 isometric projection the
+# two diagonals project to mirror-image bounding boxes of identical size, so the
+# canvas measured for the current orientation still holds at 90/180/270. Read
+# the clip report on the first bake anyway rather than trusting that.
+directions = 4
 frame_origin_at = 0.15
 ground_clip = true
 yaw_offset_deg = 180.0

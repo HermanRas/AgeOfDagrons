@@ -2,14 +2,22 @@
 
 there is only 1 civilization, using the diffrint civ's found in 0 A.D, we will take the Civs that visualy look older to news and map them to tha ages we need for our game.
 
-> **Decided 2026-08-14 — read the `### Units` sections as unit TYPES, not as actor paths.**
-> Buildings carry the age progression, using the civ named on each line. **Units do not**: every
-> unit is sourced from a Celtic actor (`britons/`, `gauls/`, `celts/`) in all four ages, so a
-> player can recognise a unit type instantly and its silhouette never changes underneath them.
-> The civ prefixes on the unit lines below therefore record *which kind of unit is wanted* — the
-> Celtic actor that fills each slot is in PLAN.md §9.2, with paths verified against the checkout.
-> Where the Celts have no equivalent, the closest Celtic match is used; siege engines are the one
-> exception, since the Celts have none at all.
+> **Corrected 2026-08-15 — every line below is an ENTITY TEMPLATE PATH, and it is authoritative.**
+> Read `units/germ/champion_cavalry` as naming the file
+> `simulation/templates/units/germ/champion_cavalry.xml`, not as a hint about what kind of unit
+> is wanted. The actor to bake is one hop inside that file, in its `<VisualActor><Actor>` tag.
+> That resolution step is the whole method — apply it to every line rather than matching
+> filenames by eye.
+>
+> **This retracts a wrong decision made 2026-08-14** that read these lines as unit *types* and
+> re-sourced every unit from a Celtic actor. It came from misreading an answer about *voices* as
+> an answer about *models*. Units keep the hand-picked, deliberately mixed-civ actors named here;
+> only **buildings** carry the age progression. See PLAN.md §2.7.
+>
+> The resolution step also explains why four picks were reported as "actors that do not exist":
+> 0 A.D. ships no `champion_*` or `ship_*` actor files at all, because champions and ships are
+> defined at template level. The templates exist; the actors they point at exist. Nothing here
+> was wrong.
 
 ## Age1 - Dark Age:
 

@@ -16,8 +16,35 @@ adapter = "zeroad"
 actor = "structures/britons/special.xml"
 
 [render]
-# The measurements quoted here were the Athenian farmstead's and no longer apply
-# after the re-point to the Briton rotary mill; re-measure if this needs tuning.
+# Re-measured 2026-08-15 on a 1024x768 probe with the decal fix in: the whole
+# assembly occupies 248.5 x 148.5 in recipe space, spanning origin-relative
+# x -134..+114 and y -92..+56. So [320, 256] at frame_origin_at 0.42 (160 each
+# side, 107 above, 149 below) clears it with room to spare and is if anything
+# generous below. Do NOT tighten it yet -- the grinder/donkey placement is still
+# wrong (see the note below), and fixing it will move the bounds.
+#
+# THE DONKEY. The rotary mill's grinder prop carries two donkeys as nested props
+# on its own armature (rotary_mill_grinder.xml -> prop_donkey001/002), and it
+# attaches to the mill at attachpoint="root". Three findings, 2026-08-15:
+#
+#   1. It renders. One donkey and the grindstone are in frame at this canvas
+#      now that ground decals are stripped -- the pre-decal-fix bake had them
+#      missing, so this read as a framing problem when it was not one.
+#   2. It rotates correctly. Probed at yaw 0 and yaw 180: the donkey moves with
+#      the building, so `yaw_offset_deg` is applied to root-attached props and
+#      is NOT the bug. Worth recording because it was the obvious suspect --
+#      `isobake inspect` reports "Mill has no parent prop point named prop_root.
+#      Root object name: Undefined", which looks like a smoking gun and is not.
+#   3. It is in the WRONG PLACE, and its twin is missing. Checked against the
+#      0 A.D. scenario editor: the donkeys should be harnessed to the grinder
+#      beam UNDER the open bay of the roof, with the grindstone at the centre.
+#      Ours stand outside the wall, unharnessed, and only one of the two appears.
+#
+# The lead is isobake's own warning on this bake: "every one of the 3 imported
+# armatures is anchored to another object; falling back to the first". Three
+# armatures = the grinder + one per donkey, and the fallback picks one, so the
+# other donkey never gets driven. That is an isobake fix (multi-armature prop
+# assemblies), not a recipe fix -- PLAN.md A.10.
 canvas = [320, 256]
 supersample = 4
 directions = 1

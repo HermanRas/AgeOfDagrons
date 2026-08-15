@@ -1,19 +1,35 @@
-# Galley -- the Celtic warship, Dock from age 3 (PLAN.md 9.2).
+# Galley -- the Athenian trireme, Dock from age 3 (PLAN.md 9.2).
 #
-# This is also the GALLEON's only candidate: the Celts ship exactly one warship
-# hull, so age 4's heavy warship cannot differ from age 3's without going outside
-# the Celtic set (9.2.1 item 9). Baking this one first so the decision is made
-# looking at the sprite rather than at the file listing.
+# Re-pointed 2026-08-15 to the owner's actual pick, `athen/ship/arrow`. It had
+# been guessed as the Celtic warship under the mistaken "units are Celtic in
+# every age" reading (see knight.toml).
+#
+# `athen/ship/arrow` was reported missing because of the slash: the path is
+# `athen/ship_arrow`, an entity TEMPLATE, and the actor is inside it --
+#
+#   simulation/templates/units/athen/ship_arrow.xml
+#     -> <VisualActor><Actor>structures/athenians/trireme.xml</Actor>
+#
+# and yes, a ship's actor really does live under structures/ (see
+# fishing_ship.toml).
+#
+# This also RETIRES the "one hull" problem in PLAN.md 9.2.1 item 9: the galleon
+# is `ptol/ship_siege` -> structures/ptolemies/quinquereme.xml, a genuinely
+# different and heavier hull, so age 3 and age 4 warships no longer have to
+# share a sprite.
 id      = "vis.galley"
 adapter = "zeroad"
 
 [source]
-actor = "structures/celts/warship.xml"
+actor = "structures/athenians/trireme.xml"
 
 [render]
 # Raised from [640, 512] on 2026-08-15: the first bake reported 2 frames (S and N)
 # touching the render edge. A hull is long, so the bow-on and stern-on views are
 # the tight ones -- not the broadside you would picture when guessing.
+#
+# That figure was measured on the Celtic warship. A trireme is a bigger ship;
+# re-check the clip report on the first bake and expect to raise it again.
 canvas = [896, 640]
 supersample = 2
 directions = 8
@@ -27,4 +43,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/celts/warship.xml"
+actor = "art/actors/structures/athenians/trireme.xml"

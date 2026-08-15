@@ -2,6 +2,15 @@
 # not obvious: they live under art/actors/STRUCTURES/celts/ rather than units/,
 # because 0 A.D. models ships as structures.
 #
+# VERIFIED CORRECT 2026-08-15 against the owner's pick, which resolves to the
+# same actor this already used:
+#
+#   units/gaul/ship_fishing  ->  simulation/templates/units/gaul/ship_fishing.xml
+#     -> <VisualActor><Actor>structures/celts/fishing_boat.xml</Actor>
+#
+# Its sibling transport_ship.toml was NOT so lucky (rowboat, should have been
+# skiff), so this one matching was luck rather than method. No change needed.
+#
 # First ship baked, so nothing calibrates the canvas. Guessing high deliberately
 # -- the clip-check reports a canvas that is too small rather than cropping
 # silently, so a generous guess costs atlas space and a mean guess costs the bake.

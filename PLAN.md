@@ -284,9 +284,9 @@ This generalises the rule §13.2 item 2 already recorded for the MVP six: archit
 civ-consistent **within an age** so a settlement reads as one style, while scenery is picked
 on how it looks rather than on which civ authored it.
 
-**Buildings carry the age. Units do not.** Decided 2026-08-14: **every unit comes from a
-Celtic actor** (`britons/`, `gauls/`, `celts/`) in all four ages, with the closest Celtic match
-where no equivalent exists. Only the *settlement* modernises.
+**Buildings carry the age. Units do not.** A unit uses **one actor in all four ages** — the
+one the project owner hand-picked for it in [Age & Unit Planning.md](<Age & Unit Planning.md>).
+Only the *settlement* modernises.
 
 This is a readability decision, not a saving. A player has to recognise a spearman instantly,
 at 44 px, mid-fight — so a unit's silhouette and palette must be the one thing that never
@@ -296,10 +296,31 @@ different unit types. Buildings are stationary, identified at leisure, and are w
 watches accumulate — so they are where the progression belongs. It also drops unit art from
 ~28 bakes to ~22, but that is the side effect, not the reason.
 
-Three places 0 A.D.'s Celts cannot answer, recorded in §9.2.1 rather than fudged: **they have
-no bows at all** (so three would-be archer units become javelin throwers), **no siege engines
-at all** (historically accurate, and the one category that must stay cross-civ), and **one
-warship hull** (so galley and galleon cannot differ).
+⚠️ **The unit roster is deliberately mixed-civ, and a wrong decision on 2026-08-14 briefly
+made it Celtic. Retracted 2026-08-15.** The text here used to read "every unit comes from a
+Celtic actor (`britons/`, `gauls/`, `celts/`) in all four ages, with the closest Celtic match
+where no equivalent exists", and five recipes were re-pointed to match it. That is now undone.
+The picks are Carthaginian archers, a Han crossbowman, a Mauryan scout, an Achaemenid horse
+archer, an Athenian healer and marine, a German champion — chosen per unit for how each one
+*reads*, not for civ consistency. §13.2 item 2 already recorded the rule this follows: civ
+consistency is the right default for **architecture** and the wrong one for everything else.
+
+**How the error happened is worth more than the correction.** The question asked was about
+**voices** — which of 0 A.D.'s voice sets to use. The answer, "use celtic across the board,
+closest match from the celtic roster", was read as an answer about **models**. The follow-up
+question that should have caught it instead offered two options *both* phrased in terms of
+models, so confirming either one confirmed the misreading. A clarifying question can only
+catch a misunderstanding if at least one of its options contradicts it.
+
+**The Celts-cannot-answer problems were artefacts of that error and are gone with it.** No
+unit becomes a javelin thrower for want of a Celtic bow; siege engines were never required to
+be Celtic; and galley and galleon are different hulls (Athenian trireme, Ptolemaic
+quinquereme). §9.2.1 items 4, 8 and 9 are retired accordingly.
+
+**One thing does survive, and it is not about units.** There is no Celtic voice set in 0 A.D.
+at all — it ships `global`, `greek`, `latin`, `napatan`, `persian`, and `global` is four dog-bark
+files, so it is not a neutral fallback either. That is the question that was actually being
+asked, and it is still open: §13.2 item 3, A.7. Nothing baked depends on it.
 
 Three consequences worth stating before the work is scheduled:
 
@@ -1309,35 +1330,57 @@ renamed the Persians and there is no `pers` directory in `art/actors/structures/
 
 **Units**
 
-**One Celtic actor per unit, all four ages** (§2.7). Paths verified against the checkout
-2026-08-14. Cavalry point at the `_m` mount, which carries its `_r` rider as a nested prop.
+**One hand-picked actor per unit, all four ages** (§2.7), deliberately mixed-civ. Cavalry point
+at the `_m` mount, which carries its `_r` rider as a nested prop.
 
-| Entity ID | Age | Trained at | Celtic actor |
-|---|---|---|---|
-| `unit.villager` | 1 | Town Centre | `celts/female_citizen` — a real Celtic villager exists, so this also replaces the Athenian currently baked |
-| `unit.militia` | 1 | Town Centre | `britons/infantry_slinger_a` |
-| `unit.scout_cavalry` | 1 | **Age 1: start-of-match spawn only, not trainable.** Stable from age 2 | `britons/cavalry_javelinist_a_m` — light skirmishing horse |
-| `unit.swordsman` | 2 | Barracks | `gauls/infantry_swordsman_a` — Britons ship only a `_c` tier |
-| `unit.spearman` | 2 | Barracks | `gauls/infantry_spearman_a` |
-| `unit.archer` | 2 | Archery Range | ⚠️ `gauls/infantry_javelinist_a` — **no Celtic bow exists** (§9.2.1 item 8) |
-| `unit.fishing_ship` | 2 | Dock | `structures/celts/fishing_boat` |
-| `unit.transport_ship` | 2 | Dock | `structures/celts/rowboat` |
-| `unit.sword_cavalry` | 3 | Stable | `gauls/cavalry_swordsman_a_m` |
-| `unit.cavalry_archer` | 3 | Stable | ⚠️ `gauls/cavalry_javelinist_e_m` — mounted javelin, not bow |
-| `unit.crossbowman` | 3 | Archery Range | ⚠️ `gauls/infantry_javelinist_e` — elite tier of the same ranged ladder |
-| `unit.monk` | 3 | Monastery | `celts/healer` — a Celtic healer exists |
-| `unit.knight` | 3 | Castle | `gauls/cavalry_swordsman_e_m` — the `_e` elite tier is the champion |
-| `unit.galley` | 3 | Dock | `structures/celts/warship` |
-| `unit.battering_ram` | 3 | Siege Workshop | ⚠️ **no Celtic siege** — stays `cart/siege_ram` (§9.2.1 item 9) |
-| `unit.ballista` | 3 | Siege Workshop | ⚠️ `cart/siege_ballista_packed` + `_unpacked` |
-| `unit.onager` | 3 | Siege Workshop | ⚠️ `rome/siege_onager_packed` + `_unpacked` |
-| `unit.elite_swordsman` | 4 | Castle | `gauls/infantry_swordsman_e` |
-| `unit.galleon` | 4 | Dock | ⚠️ `structures/celts/warship` — the only Celtic hull, so it cannot differ from the galley |
-| `unit.trebuchet` | 4 | Siege Workshop **and** Castle | ⚠️ `han/siege_mangonel_packed` + `_unpacked` |
-| `unit.dragon` | — | Castle | `fauna/dragon` — bespoke, A.9 |
-| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at 10% scale |
+> **⚠️ Read the roster's unit lines as ENTITY TEMPLATES, then resolve one hop to the actor.**
+> This is the single most useful thing in this section and it cost a day to learn.
+> [Age & Unit Planning.md](<Age & Unit Planning.md>) names paths like `units/germ/champion_cavalry`.
+> That is `simulation/templates/units/germ/champion_cavalry.xml`, and the actor to bake is
+> inside it:
+>
+> ```
+> simulation/templates/units/germ/champion_cavalry.xml
+>   -> <VisualActor><Actor>units/germans/cavalry_swordsman_c_m.xml</Actor></VisualActor>
+> ```
+>
+> **Four picks were reported as "actors that do not exist" purely because this step was
+> skipped** — `art/actors/` was searched for `champion_*` and `ship_*` files, correctly found
+> none, and the conclusion drawn was that 0 A.D. has no champion actors. It has no champion
+> *actor files*; champions and ships are template-level entities. Every one of the four resolves
+> cleanly, and the project owner confirmed all four by finding them in the Atlas scenario editor,
+> which lists **entities**, not actors.
+>
+> The `Actor` column below is the resolved actor — what `source.actor` in a recipe must say.
+> The `Roster pick` column is the template it came from, so the two can be checked against each
+> other. Resolved and verified against the checkout 2026-08-15.
 
-**Celtic units with no roster slot, worth knowing about.** The checkout also carries
+| Entity ID | Age | Trained at | Roster pick (template) | Actor (what to bake) |
+|---|---|---|---|---|
+| `unit.villager` | 1 | Town Centre | `brit/support_female_citizen` | ⚠️ `units/celts/female_citizen` — **baked as `britons/citizen_female`**; same mesh and head, different dress texture, so cosmetic only (§9.2.1 item 10) |
+| `unit.militia` | 1 | Town Centre | `brit/infantry_slinger_a` | `units/britons/infantry_slinger_a` ✅ baked |
+| `unit.scout_cavalry` | 1 | **Age 1: start-of-match spawn only, not trainable.** Stable from age 2 | `maur/cavalry_swordsman_a` | `units/mauryas/cavalry_swordsman_a_m` ✅ |
+| `unit.swordsman` | 2 | Barracks | `cart/infantry_swordsman_gaul_a` | `units/gauls/infantry_swordsman_a` ✅ |
+| `unit.spearman` | 2 | Barracks | `gaul/infantry_spearman_a` | `units/gauls/infantry_spearman_a` ✅ |
+| `unit.archer` | 2 | Archery Range | `cart/infantry_archer_a` | `units/carthaginians/infantry_archer_a` ✅ |
+| `unit.fishing_ship` | 2 | Dock | `gaul/ship_fishing` | `structures/celts/fishing_boat` ✅ — matched by luck, not method |
+| `unit.transport_ship` | 2 | Dock | `gaul/ship_scout` | ⚠️ `structures/celts/skiff` — **was `celts/rowboat`**, corrected 2026-08-15 |
+| `unit.sword_cavalry` | 3 | Stable | `gaul/cavalry_swordsman_a` | `units/gauls/cavalry_swordsman_a_m` ✅ |
+| `unit.cavalry_archer` | 3 | Stable | `pers/cavalry_archer_b` | `units/achaemenids/cavalry_archer_b_m` ✅ (the `pers`→`achaemenids` rename) |
+| `unit.crossbowman` | 3 | Archery Range | `han/infantry_crossbowman_a` | `units/han/infantry_crossbowman_a` ✅ |
+| `unit.monk` | 3 | Monastery | `athen/support_healer_a` | `units/athenians/healer` ✅ |
+| `unit.knight` | 3 | Castle | `germ/champion_cavalry` | ⚠️ `units/germans/cavalry_swordsman_c_m` — **corrected 2026-08-15** |
+| `unit.galley` | 3 | Dock | `athen/ship_arrow` | ⚠️ `structures/athenians/trireme` — **corrected 2026-08-15** |
+| `unit.battering_ram` | 3 | Siege Workshop | `cart/siege_ram` | ⚠️ `structures/iberians/siege_ram` — **baked as `romans/siege_ram`** (§9.2.1 item 10) |
+| `unit.ballista` | 3 | Siege Workshop | `cart/siege_ballista_packed` + `_unpacked` | `units/carthaginians/siege_rock_packed` + `_unpacked` |
+| `unit.onager` | 3 | Siege Workshop | `rome/siege_onager_packed` + `_unpacked` | `units/romans/siege_onager_packed` + `_unpacked` |
+| `unit.elite_swordsman` | 4 | Castle | `athen/champion_marine` | ⚠️ `units/athenians/infantry_swordsman_c` — **corrected 2026-08-15**. Note `_c`, not `_e`: 0 A.D. dresses its Athenian champion in the citizen-tier mesh and makes it a champion through stats. So this is a visibly *different soldier* from `unit.swordsman`, not a shinier tier of it — better for a Castle unit |
+| `unit.galleon` | 4 | Dock | `ptol/ship_siege` | ⚠️ `structures/ptolemies/quinquereme` — **not yet recipe'd** (§9.2.1 item 10) |
+| `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `han/siege_mangonel_packed` + `_unpacked` | ⚠️ `units/han/siege_mangonel_pivot_packed` — **baked as `hellenes/siege_lithobolos`** (§9.2.1 item 10) |
+| `unit.dragon` | — | Castle | — | `fauna/dragon` — bespoke, A.9 |
+| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | — | `fauna/dragon` at 10% scale |
+
+**Units with no roster slot, worth knowing about.** The Celtic checkout carries
 `war_dog_mastiff_{a,b,e}` and `wolfhound`, `chariot_javelinist_c_*`, `infantry_carnyx_c` (a
 war-horn bearer), and five named heroes — Boudicca, Caratacos, Cunobelin, Brennus,
 Vercingetorix, each as both infantry and cavalry. The war dog and the chariot are distinctly
@@ -1360,11 +1403,24 @@ MVP spawns the first two; the scout joins when age 1 is real.
 | `res.stone_mine` | stone | `gaia/rock/temperate_small` 1000 · `temperate_large_02` 7000 |
 | `res.tree` | wood | `gaia/tree/{elm,oak,teak,toona}` 500 each |
 | `res.berry_bush` | food | `gaia/fruit/berry_01` |
-| `res.sheep` | food 100 | `gaia/fauna_sheep` |
-| `res.deer` | food 100 | `gaia/fauna_deer` |
-| `res.bear` | food 300 | `gaia/fauna_bear` |
-| `res.cattle` | food 500 | `gaia/fauna_cattle_zebu` |
-| `res.wolf` | food 30, **attacks** | `gaia/fauna_wolf` — the only hostile gaia entity, so it needs `CombatSystem` (4.13), not just 6.1b roaming |
+| `res.sheep` | food 100 | `gaia/fauna_sheep` → ⚠️ **`fauna/sheep3`**, not `sheep1` — see below |
+| `res.deer` | food 100 | `gaia/fauna_deer` → `fauna/deer` ✅ |
+| `res.bear` | food 300 | `gaia/fauna_bear_brown` → `fauna/bear_brown` — **no recipe exists**, unbaked |
+| `res.cattle` | food 500 | `gaia/fauna_cattle_zebu` → **`fauna/zebu_wild`**, not `fauna/cow`. Recipe added 2026-08-15 (`cattle.toml`), unbaked |
+| `res.wolf` | food 30, **attacks** | `gaia/fauna_wolf` → `fauna/wolf` ✅ — the only hostile gaia entity, so it needs `CombatSystem` (4.13), not just 6.1b roaming |
+
+✅ **The sheep's player-colour bug was the wrong actor, and re-pointing it is the whole fix**
+(2026-08-15). ASSET_MISSING §2.3 and §4 both recorded that `vis.sheep` picks up the player tint
+— "even the sheep picks it up" — and treated it as something A.6's shader would need a gaia
+exception for. It does not: `gaia/fauna_sheep` resolves to **`fauna/sheep3`**, whose only
+material is `animal_sheep_no_player_color_a.dds`. 0 A.D.'s authors made a de-player-coloured
+sheep for exactly this reason and we were baking `sheep1` instead. Same mesh, same
+measurements, so the canvas and every other setting carry over and it costs one re-bake.
+
+**Resolving gaia templates the same way as units found three errors in six animals** — the
+sheep above, the cattle (`cow` is the wrong actor; `zebu_wild` is right, and `_wild` matters
+because 0 A.D. ships wild *and* trainable variants of every herd animal), and the bear having
+no recipe at all. The template-resolution rule in the units table is not a units rule.
 
 #### 9.2.1 Discrepancies to settle
 
@@ -1400,10 +1456,13 @@ Recorded rather than silently resolved — each one is a decision, not a typo to
    max-footprint rule is a no-op for the whole wall set. One cosmetic loose end, not worth
    blocking on: a player still holding age-2 `germ` walls in age 4 will see a `rome` guard
    tower embedded in them, since there is one guard tower per age rather than one per tier.
-4. ✅ **`unit.swordsman`'s age-4 skin — ANSWERED, then SUPERSEDED the same day.** The roster
-   file's `gaul` at age 4 was confirmed a typo for `rome` — and then §2.7's units-are-Celtic
-   decision made the whole question moot: units do not re-skin per age at all, so the swordsman
-   is `gauls/infantry_swordsman_a` in every age.
+4. ✅ **`unit.swordsman`'s age-4 skin — ANSWERED, then SUPERSEDED, and the supersession was
+   itself wrong.** Settled 2026-08-15. The roster file's `gaul` at age 4 was confirmed a typo
+   for `rome`; then §2.7's units-are-Celtic decision made it moot; then that decision was
+   retracted (§2.7). What survives all three rounds is the same answer: **units do not re-skin
+   per age**, so the swordsman is `units/gauls/infantry_swordsman_a` in every age. The age-3 and
+   age-4 swordsman lines in the roster (`cart/infantry_swordsman_gaul_a`, `rome/…`) record what
+   a per-age unit skin *would* have been and are deliberately not used.
 5. **Three siege units are packed/unpacked actor pairs** (ballista, onager, trebuchet), which
    is a unit state machine the sim does not have: a deploy/undeploy task with its own timings
    that blocks movement in one state and attack in the other. Scope it **with** 4.13 rather
@@ -1421,22 +1480,43 @@ Recorded rather than silently resolved — each one is a decision, not a typo to
    comparison for nothing. In `ages.json`, which **also had its names misaligned by one** —
    age I was labelled "Feudal Age", which is age 2 in the roster. The numerals were always
    right; only the names were off.
-8. ⚠️ **The Celts have no bows, so three units become javelin throwers** — `unit.archer`,
-   `unit.crossbowman` and `unit.cavalry_archer` all resolve to `infantry_javelinist` /
-   `cavalry_javelinist` tiers. Historically right (Celtic warfare was sling and javelin), and it
-   gives a coherent ranged ladder — slinger, javelin, elite javelin — but two visible
-   consequences deserve a deliberate look: the **Archery Range trains no archers**, which reads
-   oddly if the building keeps that name; and the three ranged units then differ only by tier, so
-   they will look more alike than a slinger/archer/crossbowman trio would. Options: rename the
-   building (Skirmisher Range, or just Range — which is what 0 A.D. calls the actor anyway), or
-   make these three the one exception to the Celtic rule.
-9. ⚠️ **The Celts have no siege engines at all**, so the ram, ballista, onager and trebuchet
-   have no Celtic source and stay cross-civ (`cart`, `rome`, `han`). This is the one category
-   where "closest Celtic match" has no answer — a chariot is not a battering ram, and forcing one
-   would look worse than the mismatch does. They are at least a single identifiable class, all
-   mechanical rather than human, so they read as siege equipment rather than as another culture's
-   soldiers. The **galleon** has the same problem from the other direction: Celts ship exactly
-   one warship hull, so it cannot differ from the galley without an outside actor.
+8. ✅ **RETIRED 2026-08-15 — "the Celts have no bows" was never our problem.** This item said
+   `unit.archer`, `unit.crossbowman` and `unit.cavalry_archer` all had to become javelin
+   throwers, that the **Archery Range would train no archers**, and that the three ranged units
+   would look alike because they differed only by tier. All of that followed from the
+   units-are-Celtic error (§2.7) and none of it survives it. The actual picks are
+   `carthaginians/infantry_archer_a`, `han/infantry_crossbowman_a` and
+   `achaemenids/cavalry_archer_b_m` — a real bow, a real crossbow and a real horse archer, from
+   three different civs, which is also the most visually distinct trio available. No building
+   needs renaming.
+9. ✅ **RETIRED 2026-08-15 — "the Celts have no siege engines" was likewise moot.** Siege was
+   never required to be Celtic; the ram, ballista, onager and trebuchet are `cart`/`rome`/`han`
+   by the owner's own picks, not as a reluctant compromise. The **galleon** half of this item is
+   also gone: it is `ptol/ship_siege` → `structures/ptolemies/quinquereme`, a genuinely heavier
+   hull than the galley's Athenian trireme, so age 3 and age 4 warships do not have to share a
+   sprite. That is one of the few places where correcting the error made the roster *better*
+   rather than merely different.
+10. ⚠️ **Four more recipes disagree with the roster, found by the same template-resolution pass
+   and NOT yet changed — these need a decision, not a guess.** The five the project owner named
+   have been corrected. These four turned up while verifying them, and each is a judgement call
+   rather than an obvious fix:
+   - **`unit.villager`** — roster resolves to `units/celts/female_citizen`; baked as
+     `units/britons/citizen_female`. Same mesh, same head prop, different dress texture, so this
+     is cosmetic. It costs a **960-frame re-bake**, which is why it is a decision: §13.2 item 9's
+     deferred `height_m` fix wants that same re-bake, so the two should be spent together or not
+     at all.
+   - **`unit.battering_ram`** — roster resolves to `structures/iberians/siege_ram`; baked as
+     `units/romans/siege_ram`. A different ram, not a variant.
+   - **`unit.trebuchet`** — roster resolves to `units/han/siege_mangonel_pivot_packed`; baked as
+     `units/hellenes/siege_lithobolos`. Also still blocked on isobake's armature picking and on
+     having no particle support for impact VFX (ASSET_MISSING §2.1).
+   - **`unit.galleon`** — `structures/ptolemies/quinquereme`, no recipe at all yet.
+
+   The general lesson is worth more than the four fixes: **`fishing_ship` was already correct and
+   `transport_ship` was not**, and both were picked the same way — by reading an actor name and
+   judging that it suited the unit ("the smallest hull suits a troop ferry"). One guess landed and
+   one did not, and nothing distinguished them until the templates were resolved. Confidence in a
+   guess carried no information here.
 
 ---
 
@@ -1660,10 +1740,18 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 
 > **[ASSET_MISSING.md](ASSET_MISSING.md) is the status of record**, per asset, and it is well
-> ahead of the summaries below — the whole Athenian building roster, six military units and
+> ahead of the summaries below — the whole Athenian building roster, the military units and
 > most of the terrain and wildlife are baked. This table is the *ordering*; go there for what
-> exists. Everything baked so far is Athenian/Hellenic, which is **not** one of the four age
-> civs (§2.7), so it stands in as age-skin placeholder art and as proven recipe templates.
+> exists.
+>
+> **Two different "wrong art" states are in play and they should not be confused.** The bulk of
+> the baked set is Athenian/Hellenic, which is **not** one of the four age civs (§2.7) — that art
+> is *deliberate placeholder*, standing in until its age skin is baked, and each recipe is a
+> proven template for the real one. Age-1 Briton buildings and the hand-picked units are the real
+> thing. Separately, **a re-bake is owed across the board** for two reasons that landed on
+> 2026-08-15 and should be spent in one batch: ground decals are now stripped (A.10), and five
+> unit actors were corrected (A.8). Neither is a placeholder question — those bakes are wrong,
+> not provisional.
 
 | # | Item | Depends on |
 |---|---|---|
@@ -1671,15 +1759,33 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.2 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Town centre + house, each with foundation and rubble (`SimBuilding.Phase`). Six single-frame atlases at `directions = 1`; foundations and generic rubble keyed by footprint size so the rest of the roster (5.7) reuses them. No damaged tier Ã¢â‚¬â€ 0 A.D. has none, and health is the health dot (5.6). ASSET_MISSING.md 1.2 | 0.9 |
 | A.3 | ✅ **DONE** — Villager, all 11 animations × **8** directions = 960 frames (8 not 5: she holds an axe in one hand, so mirroring would swap it). Recipe `villager.toml`. **Needs one rebake** for the height override in §13.2 item 9, and carries the `work_mine` dress artefact in item 7 | 0.9 |
 | A.4 | **Largely done, see ASSET_MISSING §1.3/§2.3** — gold mine, stone mine, berry bush, deer, deer carcass, boar, sheep, wolf, fish and six extra tree species all baked. Still open: the tree *size classes* and every palm, both of which need variant selection in `isobake` (no deterministic actor exists); and `vis.farm`, blocked on a 64-instance prop scatter the Pyrogenesis importer collapses to one. Original scope: **Gold mine Ã¢Å“â€¦ done** (`geology/metalmine_alpine.xml`, 5 directions, ~1.4 Ãƒâ€” 1.9 tiles); deer Ã¢Å“â€¦ done but **static** (item 8). Remaining: 2 more tree size classes + stump, and the deer carcass | 0.9 |
+| A.4a | **Animate the wildlife — wolf, sheep, cattle** (project owner, 2026-08-15). Every animal in the roster ships **static**, and the recipes all justify that with the same sentence: "no clip attached, so the quadruped animation-transfer bug (§13.2 item 8) never triggers." **That bug is fixed** — per-clip `location_scale`, proven on `vis.deer_carcass` — so the justification outlived the problem and every one of them is now simply un-animated. The source clips are all there and were inventoried 2026-08-15: **wolf** has the richest set in the roster (Idle ×3, Walk, Run, attack_melee ×2, death ×2) and is the only animal needing an attack, being the one hostile gaia entity; **sheep** has Idle ×2, Walk, Run, Death; **cattle** has Idle ×4, Walk, Run, Death ×2 and a **Feeding** clip, which is the one idle in the set that reads as an animal doing something. Deer and boar come free on the same path. **The cost is the per-clip measurement, not the bake:** `location_scale` is not a global constant (the deer death clip measured 0.0319) — estimate it as actor-mesh height / clip-figure height in raw units, then probe around it and look at the render, exactly as `deer_carcass.toml` documents | A.4 | | A.4b | **Two gaia food nodes have no art at all** — `res.cattle` and `res.bear` are in §9.2's roster and neither was ever baked, so they are missing rather than placeholder. `cattle.toml` written 2026-08-15 (`fauna/zebu_wild`, unbaked); the bear (`fauna/bear_brown`) still has no recipe | A.4 |
+| A.4b | **Two gaia food nodes have no art at all** — `res.cattle` and `res.bear` are both in §9.2 and neither was ever baked, so they are missing rather than placeholder. Found 2026-08-15 while resolving the gaia templates, which also caught two wrong actors: cattle is **`fauna/zebu_wild`**, not the obvious `fauna/cow` (0 A.D. ships wild and trainable variants of every herd animal, and ours is a resource node), and the sheep was on `sheep1` instead of `sheep3`. `cattle.toml` written 2026-08-15, unbaked; the bear (`fauna/bear_brown`) still has no recipe | A.4 |
 | A.5 | UI chrome from the itch.io dragon packs | none |
 | A.6 | **Player colour — promoted from polish to prerequisite by §1.** Colour is the only thing distinguishing players, and `isobake` currently multiplies the tint in at bake time (§2.7 consequence 3), so today one atlas is one player's colour. Bake untinted, emit the source alpha as a mask page, tint in a Godot `canvas_item` shader. An outline is then a second, optional pass on the same mask. ✅ **Blend mode decided 2026-08-14** (delegated to me): neither of the two obvious options works. **Multiply** (0 A.D.'s) makes white a no-op and crushes dark colours, compressing §13.2 item 11's lightness ladder; **luminance-preserving hue transfer** looks good and destroys the ladder outright, because every colour then inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the *base* level with the texture contributing only its **local deviation** — shading detail survives, and so does the ladder: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, with `k ≈ 0.8` scaled by remaining headroom on the highlight side so a light colour does not clip flat. **The mask needs its own greyscale page** — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel; ~+12% atlas bytes. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | A.3 |
-| A.7 | Audio pass Ã¢â‚¬â€ 0 A.D. sfx/music into `audio.json` | 0.9 |
-| A.8 | Military unit art — §9.2's **~22 Celtic bakes, one actor per unit and no per-age variants** (§2.7). All six already done are Athenian and need re-pointing at their Celtic equivalent, which is a `source.actor` line each; the villager gains a real Celtic actor (`celts/female_citizen`) rather than a substitute. Original scope was ~28 unit bakes, **6 already done** (militia, archer, spearman, knight, siege ram, monk, all Athenian stand-ins) plus all three projectiles; `vis.trebuchet` and `vis.trade_cart` are blocked on isobake's armature picking and attack/impact VFX on it having no particle support at all (ASSET_MISSING §2.1). One actor per unit (a handful re-skin across ages), which is where the single-civilisation decision actually pays: ~28 against the ~88 four factions would have cost | A.3 |
+| A.7 | Audio pass — 0 A.D. sfx/music into `audio.json`. **Unblocked 2026-08-15:** §13.2 item 3 is answered, so the scope is now concrete — take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else**. One voice set, every unit, every age. Nothing baked depends on this, so it stays low priority; it is only listed as unblocked so it is not still treated as an open question | 0.9 |
+| A.8 | Military unit art — §9.2's **~22 bakes, one hand-picked actor per unit and no per-age variants** (§2.7). ⚠️ **Rewritten 2026-08-15.** This row used to read "~22 **Celtic** bakes… re-pointing at their Celtic equivalent", which was the units-are-Celtic error (§2.7); five recipes were re-pointed under it and have now been re-pointed back. **The actors are mixed-civ by design and come from the owner's roster, resolved through their entity templates** — see the boxed rule in §9.2, which is the thing to read before touching any of these. **A full re-bake of the unit set is now owed** on two counts, and they should be spent together: the five corrected actors, and the ground-decal strip (see A.10). Four further recipes still disagree with the roster and need a decision first — villager, ram, trebuchet, galleon (§9.2.1 item 10). `vis.trebuchet` and `vis.trade_cart` remain blocked on isobake's armature picking and on it having no particle support for attack/impact VFX (ASSET_MISSING §2.1). ~22 bakes against the ~88 four factions would have cost is where the single-civilisation decision actually pays | A.3, A.6 |
 | A.9 | **Dragon + nest Ã¢â‚¬â€ bespoke** | A.3, A.8 |
-| A.10 | **Building roster, age by age** — §9.2's ~70 building bakes. Order by age, not by building: a complete age 1 settlement is playable and shippable, four half-skinned ages are not. Foundations and rubble stay keyed by footprint (A.2's convention) and so are shared across ages. **Measure all four skins of a building before declaring its footprint** — it is the max across ages, locked at placement (§13.2 item 10), so it cannot be read off the age-1 bake alone. **The first batch is five buildings**, not seventy: age 1 unlocks only the town centre, house, farm, mining camp and lumber camp, and that is a complete playable settlement. Age 2 adds eight more. Two free savings: the **props** on the composite buildings (`wood_lumber`, `stone_pile_granite`, the food piles) are the same gaia assets in all four ages, so bake them once and reuse across every skin; and the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2, which are both Celtic and so will look similar — it would save ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of trading the faction axis for the age axis | A.2, A.6 |
-| A.11 | Walls and gates — ~16 pieces across three tiers, re-skinned in place like everything else. **Unblocked from the footprint side:** all wall pieces share one footprint and all towers another, across every civ (owner-verified in-game), so a tier can mix civs freely and the max-footprint rule costs nothing here. §9.2.1 item 3 is now only "which set looks right per age". The Athenian wall/gate/tower set is already baked (ASSET_MISSING §2.2) and is the proven template | A.10 |
+| A.10 | **Building roster, age by age** — §9.2's ~70 building bakes. Order by age, not by building: a complete age 1 settlement is playable and shippable, four half-skinned ages are not. Foundations and rubble stay keyed by footprint (A.2's convention) and so are shared across ages. **Measure all four skins of a building before declaring its footprint** — it is the max across ages, locked at placement (§13.2 item 10), so it cannot be read off the age-1 bake alone. **The first batch is five buildings**, not seventy: age 1 unlocks only the town centre, house, farm, mining camp and lumber camp, and that is a complete playable settlement. Age 2 adds eight more. Two free savings: the **props** on the composite buildings (`wood_lumber`, `stone_pile_granite`, the food piles) are the same gaia assets in all four ages, so bake them once and reuse across every skin; and the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2, which are both Celtic and so will look similar — it would save ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of trading the faction axis for the age axis. ✅ **Ground decals fixed 2026-08-15 (isobake ec72184), and this was nearly a roster-wide corruption.** 0 A.D. blends gravel and mud planes under its buildings using `<decal>` actors that carry no mesh; the Pyrogenesis importer brings them in as objects literally named `Decal`. Baked, a decal is not a blend — it is an **opaque rug**, and the Briton town centre carried a 7.5-tile gravel apron. **413 structure actors reference decals**, so this would have shipped on most of the building roster before anyone traced a "why does my building have a mat" complaint back to it. Stripping them took the town centre from 69.1% to 51.9% fill at the same page size. ⚠️ **Two age-1 building picks were also wrong** and are corrected in the recipes: the **lumber camp** is the Briton *kennel* (it had been storehouse), and the **mill** is `britons/special` — the only Briton actor carrying the `rotary_mill` props, since the roster's "Brit/Rotarymill" names a building by what is visibly on it rather than by 0 A.D.'s filename. `britons/farmstead` carries none of them. ⚠️ **The rotary mill's donkeys are misplaced, and it is not a framing problem** (investigated 2026-08-15 against the Atlas scenario editor). The grinder prop carries two donkeys as nested props on its own armature and attaches at `attachpoint="root"`. Three findings: it **renders** (one donkey and the grindstone are in frame at the shipped canvas once decals are stripped — the pre-fix bake had them missing, which is what made this look like a canvas problem); it **rotates correctly** (probed at yaw 0 and 180, so `yaw_offset_deg` is not the bug, despite `isobake inspect` reporting "no parent prop point named prop_root", which looks like a smoking gun and is not); but it sits **outside the wall instead of harnessed under the open bay**, and the second donkey never appears. The lead is isobake's own warning on the bake — *"every one of the 3 imported armatures is anchored to another object; falling back to the first"* — three armatures being the grinder plus one per donkey. Multi-armature prop assemblies are an isobake fix, not a recipe fix. ⚠️ **Composite props still unbaked** — 3× `wood_lumber` (lumber camp) and 3× `stone_pile_granite` (mining camp) need a `[source.extras]` feature in isobake to compose props onto a building; the dragon nest (A.9) needs the same one, so it is one feature serving three entries | A.2, A.6 |
+| A.11 | Walls and gates — ~16 pieces across three tiers, re-skinned in place like everything else. **Unblocked from the footprint side:** all wall pieces share one footprint and all towers another, across every civ (owner-verified in-game), so a tier can mix civs freely and the max-footprint rule costs nothing here. §9.2.1 item 3 is now only "which set looks right per age". The Athenian wall/gate/tower set is already baked (ASSET_MISSING §2.2) and is the proven template. ⚠️ **Every wall piece needs 4 directions, not 1** (project owner, 2026-08-15) — **a wall is not a building.** Buildings sit at one fixed orientation, which is why `directions = 1` is right for them and was copied to the walls without thinking. Walls *run*: they enclose a base, so every piece has to be placeable along either diagonal and facing either way, and one sprite cannot do that. Applied to `wall_{short,medium,long}` and `wall_gate`, **and to `rubble_wall_*` and `foundation_*_wall`** — a destroyed or under-construction segment has to line up with the run it sits in, so those three families move together or the seams show. Costs 4× the frames but **not a bigger canvas**: in a 2:1 isometric projection the two diagonals project to mirror-image bounding boxes of identical size, so the measured canvases carry over (read the clip report on the first bake rather than trusting that). `tower.toml` stays at 1 — a wall tower is near-square and doubles as the corner by placement convention | A.10 |
 
 A.1 and A.2 come first: cheap, transform the look, and validate the render pipeline before the expensive villager work.
+
+✅ **The art track now has a batch runner, and it is what makes "re-bake everything" an
+affordable sentence.** `tools/bake_batch.ps1` builds many recipes unattended and reports at the
+end: one log per recipe, one failure never stops the batch, `isobake verify` runs per success so
+there is a contact sheet and turntable to actually look at, and recipes run in **priority order**
+rather than alphabetically — so a run that does not finish still leaves the most useful subset
+done. **`-Parallel 4` added 2026-08-15** (jobs, one Blender process per slot, verified on three
+concurrent recipes), which takes the 85-recipe batch from ~73 minutes to ~20. The ceiling is RAM,
+since every slot holds a full Blender scene.
+
+⚠️ **One piece of shared state to respect:** baking rewrites source `.dae` files in the 0 A.D.
+checkout in place — the Pyrogenesis importer's doing — and `isobake` restores them via
+`preserve_sources()`, including on failure but **not if the process is killed**. So an
+interrupted batch leaves the checkout suspect and it should be checked before the next run.
+Two parallel recipes loading the *same* `.dae` could also race; in practice concurrent recipes
+are different actors, which makes this worth knowing rather than worth fearing.
 
 ---
 
@@ -1696,7 +1802,7 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 |---|---|---|
 | 1 | ~~**Does the render pipeline produce usable sprites?**~~ Ã¢Å“â€¦ **ANSWERED at 0.9 Ã¢â‚¬â€ yes.** Proven on a grass tile, an oak and a 240-frame animated citizen. A.3 can be scheduled | Ã¢Å“â€¦ 0.9 |
 | 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy Ã¢â‚¬â€ needs a hand-picked actorÃ¢â€ â€™`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`), six more at A.2 (the Athenian civic centre and Hellenic house plus their foundations and rubble Ã¢â‚¬â€ same civ as the villager, so the settlement reads as one architectural style); the mapping lives in `tools/recipes/`. `vis.deer` (`fauna/deer.xml`) and `vis.gold_mine` (`geology/metalmine_alpine.xml`) picked at A.4, so **every MVP entity now has an actor**. Two findings from the gold mine worth carrying to the rest of the roster: (a) civ consistency is the right default for *architecture* but not for scenery Ã¢â‚¬â€ the civ-matching `metalmine_granite_greek` lost to alpine purely because its texture reads as moss rather than ore, and all the old-generation ore actors share one mesh and differ only in texture; (b) 0 A.D.'s newer, better-sculpted asset generations are often authored sunk into terrain and so are *blocked behind the z=0 ground clip* (item 7a), which makes that fix an art-quality unlock and not just a cosmetic tidy-up | Ã¢Å“â€¦ A.4 |
-| 3 | ✅ **RECOMMENDATION RECORDED 2026-08-14 (not yet ratified): no spoken language at all.** Take the non-speech trees whole — `audio/{actor,attack,resource,interface,ambient,music}` — and skip `audio/voice/{greek,latin,napatan,persian}` entirely. The age plan makes per-civ voices actively wrong rather than merely awkward: the four ages span Celtic, Persian and Latin, so no voice set is internally consistent, and a unit answering in Greek in age 3 and Latin in age 4 is worse than one that never speaks. Where acknowledgement feedback is wanted, use a non-verbal cue (a horn, a grunt, a tool sound) — which also removes unit voices from the localisation surface permanently, the most expensive asset class to re-record per language. Original item: **Audio fit** Ã¢â‚¬â€ 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and won't suit. Decide what's reusable vs newly sourced | [ASSET_MISSING.md](ASSET_MISSING.md) |
+| 3 | ✅ **ANSWERED 2026-08-15 by the project owner — LATIN, one voice set for every unit in every age.** 0 A.D. ships `global`, `greek`, `latin`, `napatan`, `persian` and **no Celtic, Gaulish or Briton set exists** — which is the question that was actually being asked when the units-are-Celtic error happened (§2.7), and it never had a Celtic answer. `global` is not a neutral fallback either: it is four dog-bark files. Latin is the strongest of the three real options — Iron Age Europe, literally correct for the age-4 Roman skin — and it carries a **deliberate lorem ipsum throwback**: placeholder Latin is the oldest joke in typesetting, and a game whose units answer in it is in on the joke. That turns "it is not a real language to the player" from a compromise into the point, which it could never be for Greek or Persian. **One consequence to accept knowingly:** unit voices are the most expensive asset class to re-record per language, so this puts them on the localisation surface permanently — the superseded recommendation avoided that by having no speech at all. Take the non-speech trees whole as it proposed (`audio/{actor,attack,resource,interface,ambient,music}`) and add `audio/voice/latin`. **Superseded recommendation (2026-08-14, never ratified): no spoken language at all** — the four ages span Celtic, Persian and Latin, so no voice set is internally consistent, and a unit answering in Greek in age 3 and Latin in age 4 is worse than one that never speaks; use a non-verbal cue instead. The premise was right and the conclusion did not follow: **one set used in all four ages is internally consistent by construction, because it never changes.** Per-age voices were the problem, not voices. Original item: **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and will not suit. Decide what is reusable vs newly sourced | ✅ A.7 |
 | 4 | ~~**Icon volume**~~ Ã¢Å“â€¦ **ANSWERED Ã¢â‚¬â€ generate.** 15 icons delivered at 0.3 staging, AI-generated (Google Gemini) at 100Ãƒâ€”100 RGBA from a 5Ãƒâ€”5 source sheet: 5 resource (`res_food/wood/gold/stone/villagers`) and 10 action (`res_`/`act_` prefixes group them by the panel that uses them). Live in `game/assets/ui/icons/`; the sheet stays in `Icons/` as the source, with **10 empty slots** for the rest. A further 5 HUD buttons landed the same way (`hud_techtree/score/trade/chat/settings`, from `MapIcons_500x100.png`) for the corners around the minimap panel Ã¢â‚¬â€ 20 icons total. Still to draw: unit/building portraits for the selection panel and control-group slots, and the trebuchet pack/unpack pair `icons.txt` lists but the sheet does not yet have. Their placement around the minimap panel is settled (`Icons/map_icons.txt`): **TechTree** top-left, **Score** top-right, **Trade** bottom-left (enabled once a market exists), **Chat** bottom-right. `hud_settings` is spare. Note `act_enter`/`act_garrison` and `act_exit`/`act_leave` are two pairs covering one concept each Ã¢â‚¬â€ decide whether they are distinct actions (board transport vs garrison building) or two takes on one, and reclaim the spares if the latter | mostly closed |
 | 5 | **Second pack mirror** Ã¢â‚¬â€ primary is settled: `https://aod.dragoon.co.za/` (Ã‚Â§3.2), unconstrained. A fallback is still unpicked; GitHub Releases is the obvious candidate since the repo is already there. Costs nothing to defer Ã¢â‚¬â€ `packs.json` carries a URL *list* per pack, so adding a mirror is a manifest edit with no client change | before first public build |
 | 6 | **Device reach on Compatibility** Ã¢â‚¬â€ confirm the target phone runs it cleanly at 0.1. Known Android driver issues cluster on Mali/MediaTek/Adreno under Vulkan, which is the reason for the Ã‚Â§1 renderer choice | 0.1 |
@@ -1719,11 +1825,13 @@ A.1 and A.2 come first: cheap, transform the look, and validate the render pipel
 | ~~Animation-variant props are not imported~~ | ~~Medium~~ | Ã¢Å“â€¦ **RETIRED.** `isobake`'s zeroad adapter now reads a variant's `<props>` alongside its `<animations>` and constrains the prop mesh to the armature's `prop_<attachpoint>` bone, visible only while that clip plays. The villager now chops holding her axe and carries wood at her hip; `villager.toml` moved to `directions = 8` accordingly (Ã‚Â§2.5) |
 | ~~Every animation silently rendered rest pose~~ | ~~**High**~~ | Ã¢Å“â€¦ **RETIRED.** Blender Ã¢â€°Â¥4.4's layered-action system needs `animation_data.action_slot` set explicitly; `isobake` was only ever setting `.action`, so no curve in any clip drove anything, and it looked fine because nothing was checked against a moving reference. Fixed in `render_impl.py`. This is why villager frame counts and canvas size both changed after 0.9 Ã¢â‚¬â€ the frozen renders never exercised real motion range |
 | **0 A.D. clips bake in absolute root-bone motion** Ã¢â‚¬â€ a gather clip's hip can drift over a metre from wherever the animator placed the character, well past what a fixed camera anchored on world (0,0,0) can frame | Medium | `render_impl.py` cancels the root bone's horizontal (X/Y) drift every frame, holding it at its rest-pose position; vertical motion (a fall, a crouch) is left alone since that is the real, wanted signal |
-| ~~**Quadruped animations do not transfer onto their own mesh**~~ ✅ **RETIRED** — fixed in `isobake` via a per-clip `location_scale` correction (§13.2 item 8); the deer still ships static for MVP because nothing needs it moving, not because it cannot. Original: Ã¢â‚¬â€ the clip files and the mesh file describe one skeleton ~31Ãƒâ€” apart, so location curves overshoot and the mesh tears | Medium | Measured at A.4 (Ã‚Â§13.2 item 8). `vis.deer` ships **static** for MVP, which costs nothing on the MVP path Ã¢â‚¬â€ 6.1a only needs a huntable food node, and roaming is 6.1b Ã¢â‚¬â€ but leaves the gatherable carcass without art. Bipeds are unaffected and independently verified: the villager's two rigs measure identically |
+| ~~**Quadruped animations do not transfer onto their own mesh**~~ ✅ **RETIRED** — fixed in `isobake` via a per-clip `location_scale` correction (§13.2 item 8); the deer still ships static for MVP because nothing needs it moving, not because it cannot. Original: Ã¢â‚¬â€ the clip files and the mesh file describe one skeleton ~31Ãƒâ€” apart, so location curves overshoot and the mesh tears **Follow-up 2026-08-15: the workaround outlived the fix.** Every animal recipe still justified shipping static with "no clip attached, so the bug never triggers" — true, but the bug was fixed months of work ago and the sentence kept the animals frozen anyway. Wolf, sheep and cattle are now scheduled as **A.4a**, with their source clips inventoried; deer and boar come free on the same path. Worth generalising: **a workaround written as a justification does not announce itself when the problem goes away.** | Medium | Measured at A.4 (Ã‚Â§13.2 item 8). `vis.deer` ships **static** for MVP, which costs nothing on the MVP path Ã¢â‚¬â€ 6.1a only needs a huntable food node, and roaming is 6.1b Ã¢â‚¬â€ but leaves the gatherable carcass without art. Bipeds are unaffected and independently verified: the villager's two rigs measure identically |
 | **0 A.D. building meshes carry a skirt below `z = 0`** for the terrain to hide, and a baked sprite has no terrain to hide it | Low | Measured at A.2 on three of six: the town centre buries **2.7 m** (52 px below the ground line), the 3Ãƒâ€”3 rubble 1.8 m, the house 0.7 m; both foundations and the civic-centre ruin are clean. Confirmed as buried geometry rather than an off-centre footprint by rendering at 0Ã‚Â° and 180Ã‚Â° and watching the excess stay below the anchor both times. Cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7, where one ground clip at `z = 0` in `isobake` fixes the whole class including every building added later |
 | **A source-mesh vertex-weight quirk distorts `work_mine`** Ã¢â‚¬â€ a dress vertex is weighted 100% to `hand_L`, and the mining clip's hand pose is far enough from the citizen's native poses that it drags a fold of fabric with it | Low | Isolated to one clip, cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7 alongside the buried building skirts, since both are source-mesh defects fixed in one post-MVP art pass. Fix is either re-weighting that vertex or clamping the offending vertex group at import time |
 | ~~0 A.D. actors don't map cleanly to a medieval-fantasy roster~~ | ~~Medium~~ | ✅ **LARGELY RETIRED.** [Age & Unit Planning.md](<Age & Unit Planning.md>) now names an actor for all 23 buildings, 22 units and 9 resource nodes in §9.2; only the dragon needs bespoke art (A.9), and even its nest is composed from existing gaia props. What is left is verification rather than selection — some picks will look wrong once baked, as the gold mine already did. Original mitigation: hand-pick the actorÃ¢â€ â€™`vis.*` mapping (Ã‚Â§13.2 item 2); some entities may need bespoke art |
-| Accidentally shipping an unlicensed asset | Medium | `licence_audit.py` + `LICENCES.md` from 0.2c Ã¢â‚¬â€ but run manually, so the mitigation is only as good as the habit until CI exists (Ã‚Â§1.2) |
+| **The roster names entity templates and the recipes want actors, so a recipe can silently bake the wrong thing** | **Medium** | Not hypothetical: one pass on 2026-08-15 found **nine** recipes disagreeing with the roster — 5 units the project owner caught, 4 more found while fixing those (§9.2.1 item 10), plus the sheep and the cattle. Every one was a plausible-looking actor picked by NAME rather than resolved. Mitigation is the boxed rule in §9.2: resolve `simulation/templates/...` to its `<VisualActor><Actor>` and paste **that**, for units, buildings and gaia alike. The failure mode is quiet — a wrong-but-real actor bakes cleanly and looks fine — so it needs a rule rather than care. **The strongest evidence it has to be mechanical:** `fishing_ship` and `transport_ship` were guessed the same way, one landed and one did not, and nothing distinguished them beforehand |
+| **A 0 A.D. actor can carry art that is invisible in their engine and opaque in ours** | Medium | Ground `<decal>` actors are the proven case — mesh-less blend planes that bake as opaque rugs, on **413 structure actors** (fixed 2026-08-15, A.10). The class is "art whose correctness depends on the engine compositing it", so the next instances to expect are anything leaning on terrain occlusion, alpha sorting or particles. Two are already known: buildings authored sunk below `z = 0` (fixed by `ground_clip`, §13.2 item 7) and impact VFX with no particle support at all (ASSET_MISSING §2.1). The mitigation is the same every time — bake it, **look at the contact sheet**, and never conclude it is fine because it looked fine in Atlas |
+| **Accidentally shipping an unlicensed asset** — ⚠ **this risk has MATERIALISED, measured 2026-08-15** | **High** (was Medium) | `licence_audit.py` + `LICENCES.md` from 0.2c — but run manually, and the habit did not hold: a run on 2026-08-15 reports **FAIL with 89 problems** across 86 recipes and 44 shipped asset files. Roughly 60 are baked `vis.*` IDs never declared (walls, trees, wolf, wonder, trebuchet and more) and ~14 are shipped UI PNGs (the menu button set, HUD panels, control-group ring) with no provenance at all. **Most of it is one command:** `licence_audit.py --write` regenerates the recipe table from the recipes themselves, idempotent and hash-verified, which clears the recipe-side entries; the UI assets need provenance decided by hand, since they came from the itch.io dragon packs and from Gemini. This is exactly the drift 0.2c predicted — the note there already says "the mitigation is only as good as the habit until CI exists (§1.2)" — so the lesson is not that the tool failed but that **a manual gate with no CI degrades silently and needs a scheduled run**, e.g. once per art batch |
 | CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
 | **Player colour is baked into the atlas** — `isobake` multiplies 0 A.D.'s player-colour mask in at bake time, so one atlas is one colour. With colour the only difference between players (§1), 8 players would mean 8 bakes of every unit | **High** | A.6, promoted from polish to prerequisite: bake untinted, emit the mask, tint in a shader (§2.7). Cheap because the mask is already in hand — it is the source texture's alpha — but it invalidates every unit bake made before it lands, so it must come **before** A.8's ~28 military bakes, not after |
 | **The age axis multiplies building art by four** — §2.7 replaces one civ choice with four age skins, so 5.7's "low effort, data-driven" roster carries ~70 bakes | Medium | A.10 orders the bakes **by age**, so a complete age 1 is always shippable and the roster degrades gracefully rather than leaving four half-skinned ages. Foundations and rubble stay shared by footprint |

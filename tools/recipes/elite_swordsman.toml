@@ -1,12 +1,27 @@
-# Elite swordsman -- the `_e` tier of the same Gaulish swordsman, trained at the
-# Castle from age 4 (PLAN.md 9.2). Tier, not a different unit: 0 A.D.'s _a/_b/_e
-# suffixes are armour/veterancy steps on one mesh family, which is exactly the
-# relationship our basic-vs-elite pair wants.
+# Elite swordsman, Castle from age 4 (PLAN.md 9.2).
+#
+# Re-pointed 2026-08-15 to the owner's actual pick, `athen/champion_marine` --
+# the Athenian Marine. It had been guessed as the Gaulish `_e` tier under the
+# mistaken "units are Celtic in every age" reading (see knight.toml for how that
+# error happened); units keep their hand-picked mixed-civ actors.
+#
+# `athen/champion_marine` is an entity TEMPLATE, not an actor -- 0 A.D. ships no
+# champion_* actor files at all, which is why this was reported missing. The
+# actor is inside it:
+#
+#   simulation/templates/units/athen/champion_marine.xml
+#     -> <VisualActor><Actor>units/athenians/infantry_swordsman_c.xml</Actor>
+#
+# Note the tier is `_c` (citizen), not `_e`: 0 A.D. dresses its Athenian
+# champion in the citizen-tier swordsman mesh and makes it a champion through
+# stats alone. So this no longer reads as "the elite tier of the basic
+# swordsman" -- vis.swordsman is `gauls/infantry_swordsman_a` and this is a
+# visibly different soldier, which is arguably better for a Castle unit.
 id      = "vis.elite_swordsman"
 adapter = "zeroad"
 
 [source]
-actor = "units/gauls/infantry_swordsman_e.xml"
+actor = "units/athenians/infantry_swordsman_c.xml"
 
 [render]
 canvas = [224, 224]
@@ -52,4 +67,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/gauls/infantry_swordsman_e.xml"
+actor = "art/actors/units/athenians/infantry_swordsman_c.xml"

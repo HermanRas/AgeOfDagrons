@@ -1,12 +1,40 @@
-# Sheep, from 0 A.D.'s fauna sheep1 -- herdable wildlife (ASSET_MISSING.md
-# 2.3). STATIC, same reasoning as deer.toml / boar.toml: a quadruped with its
-# own armature (23 bones) -- no clip attached, so the quadruped
-# animation-transfer bug (PLAN.md 13.2 item 8) never triggers.
+# Sheep, gaia food (ASSET_MISSING.md 2.3).
+#
+# Re-pointed 2026-08-15 from `fauna/sheep1.xml` to `fauna/sheep3.xml`, and this
+# FIXES A REAL BUG for free. ASSET_MISSING 2.3 and 4.x both record that
+# vis.sheep picks up the player-colour tint -- "even the sheep picks it up" --
+# and worried about gaia wildlife wearing a faction colour. The cause was simply
+# the wrong actor. 0 A.D.'s own gaia sheep is not sheep1:
+#
+#   simulation/templates/gaia/fauna_sheep.xml
+#     -> <VisualActor><Actor>fauna/sheep3.xml</Actor>
+#
+# and sheep3's only material is `animal_sheep_no_player_color_a.dds` -- the
+# authors made a de-player-coloured sheep for exactly this reason. Confirmed
+# with `isobake inspect`: sheep1 reports a `playercolor` alpha role, sheep3
+# reports one material and none. So the A.6 shader does not need a gaia
+# exception for sheep after all.
+#
+# Same mesh and same measurements (1.072 x 3.011 x 2.020 m), so the canvas and
+# every other setting carry over untouched.
+#
+# STILL STATIC, but no longer because it has to be. PLAN.md 13.2 item 8's
+# quadruped animation-transfer bug is FIXED (per-clip `location_scale`), so this
+# is now scheduled work rather than a blocker -- see A.4a. sheep3 declares, via
+# its own actor: Idle (sheep_idle_01, sheep_idle_02), Walk (sheep_walk), Run
+# (sheep_run), Death (sheep_death). Our vocabulary (2.5) wants idle / walk /
+# die / decay off those four.
+#
+# To animate: each clip needs its OWN measured `location_scale` (it is not a
+# global constant -- deer_carcass.toml's death clip measured 0.0319). Estimate
+# it as (actor mesh height in raw units) / (clip figure height in raw units) --
+# here the actor is 4.040 raw units -- then probe around that value and look at
+# the render, exactly as deer_carcass.toml documents.
 id      = "vis.sheep"
 adapter = "zeroad"
 
 [source]
-actor = "fauna/sheep1.xml"
+actor = "fauna/sheep3.xml"
 
 [render]
 # `isobake inspect` measures 1.072 x 3.011 x 2.020 m raw -- essentially
@@ -24,4 +52,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/fauna/sheep1.xml"
+actor = "art/actors/fauna/sheep3.xml"

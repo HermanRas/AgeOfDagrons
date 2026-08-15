@@ -1,0 +1,55 @@
+# Cattle -- `res.cattle`, gaia food 500, the largest food node in the roster
+# (PLAN.md 9.2). NEW 2026-08-15: this is the first recipe for it; the roster has
+# always listed `gaia/fauna_cattle_zebu` but nothing was ever baked, so the
+# entity had no art at all rather than placeholder art.
+#
+# The actor is NOT `fauna/cow.xml`, which is the obvious guess and the wrong one.
+# Resolved through the template, the way every roster line should be:
+#
+#   simulation/templates/gaia/fauna_cattle_zebu.xml
+#     -> <VisualActor><Actor>fauna/zebu_wild.xml</Actor>
+#
+# `_wild` matters: 0 A.D. ships wild and trainable/domesticated variants of every
+# herd animal (fauna_cattle_zebu vs fauna_cattle_zebu_trainable), and ours is a
+# gaia resource node standing on the map, not a corral animal.
+id      = "vis.cattle"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/zebu_wild.xml"
+# zebu_wild pulls its clips from a shared variant file rather than declaring
+# them inline (`quadraped/base_bovidae_wild.xml`), which is the path isobake has
+# always resolved -- so the clips are reachable when this is animated.
+
+[render]
+# Not yet measured with `isobake inspect` on zebu_wild itself. The sibling
+# fauna/cow.xml measures 1.732 x 5.643 x 3.375 m on the same bovid skeleton --
+# noticeably bigger than the deer/sheep/wolf trio that share the 128x128 canvas,
+# so this starts one size up. Read the clip report on the first bake; a canvas
+# that is too small is reported rather than silently cropped.
+canvas = [192, 160]
+supersample = 4
+# 5 stored, mirrored to 8 -- same as every other gaia animal (deer, boar, sheep,
+# wolf). A grazing bovid is bilaterally symmetric and carries nothing on one
+# side, so mirroring is safe here in a way it is not for an armed unit.
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+
+# STATIC for now, consistent with the rest of the wildlife. The quadruped
+# animation-transfer blocker (PLAN.md 13.2 item 8) is fixed, so animating this
+# is scheduled work (A.4a) rather than something the pipeline prevents.
+# base_bovidae_wild.xml declares Idle (x4), Walk, Run, Feeding, Attack_melee and
+# Death (x2) -- Feeding is worth knowing about, since a grazing cow is the one
+# idle animation in the set that reads as an animal doing something.
+#
+# Each clip needs its own measured `location_scale`; see sheep.toml.
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/zebu_wild.xml"

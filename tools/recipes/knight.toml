@@ -27,21 +27,34 @@
 # POSITIONED is more likely missing its clip than mis-attached. Rest pose reads
 # as a placement bug.
 #
-# Re-pointed 2026-08-15 from athenians/cavalry_swordsman_b_m to the GAULISH `_e`
-# elite tier. Units are Celtic in every age (PLAN.md 2.7) and the knight is the
-# castle-tier cavalry, so the elite tier of the Gaulish swordsman is the match --
-# the project owner's own pick was `germ/champion/cavalry`, i.e. a champion
-# cavalryman, which under the Celtic rule is this. The Athenian actor had simply
-# been missed when the other units were re-pointed.
+# Re-pointed 2026-08-15 to the project owner's actual pick, `units/germ/
+# champion_cavalry` -- the GERMAN Cimbrian Noble Cavalry. Two wrong guesses
+# preceded it and the reason both failed is worth keeping:
 #
-# The `_a`-vs-`_b` note that used to be here concerned Athenian variants and no
-# longer applies. If this hits the bone-less `m_armor_tunic_short.dae` defect
-# (spearman.toml's note), try the `_a_m` or `_b_m` Gaulish tiers instead.
+#   1. athenians/cavalry_swordsman_b_m -- an Athenian stand-in, never a pick.
+#   2. gauls/cavalry_swordsman_e_m -- picked because "units are Celtic in every
+#      age" (PLAN.md 2.7), which was a misreading of the owner's answer about
+#      VOICES. Units keep their hand-picked mixed-civ actors; only buildings
+#      carry the age.
+#
+# And the reason `germ/champion/cavalry` was reported as "does not exist" is a
+# category error, not a missing file: 0 A.D. ships no `champion_*` ACTOR files
+# because champions are defined at TEMPLATE level. The owner's roster names
+# entity templates, and the actor is one hop away, inside the template:
+#
+#   simulation/templates/units/germ/champion_cavalry.xml
+#     -> <VisualActor><Actor>units/germans/cavalry_swordsman_c_m.xml</Actor>
+#
+# That resolution step is the general rule for every roster line, not a
+# one-off -- see PLAN.md 9.2.
+#
+# If this hits the bone-less `m_armor_tunic_short.dae` defect (spearman.toml's
+# note), the German `_a_m`/`_b_m` tiers are the fallbacks.
 id      = "vis.knight"
 adapter = "zeroad"
 
 [source]
-actor = "units/gauls/cavalry_swordsman_e_m.xml"
+actor = "units/germans/cavalry_swordsman_c_m.xml"
 # The mount's reins prop (`cav_rein_leather.xml`, attachpoint="root") is a
 # TOP-LEVEL prop of the mount actor, not nested inside another prop -- so it
 # does not hit the aspis-shield nested-root bug (defect 2): its own <mesh>
@@ -109,4 +122,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/gauls/cavalry_swordsman_e_m.xml"
+actor = "art/actors/units/germans/cavalry_swordsman_c_m.xml"
