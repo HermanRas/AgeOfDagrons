@@ -74,6 +74,11 @@ func validate(w: SimWorld) -> bool:
 	# ordering one; this is what keeps a modified client from placing it.
 	if bd.age_required > p.age:
 		return false
+	# The adjacency rule (a field must abut its mill, four to a mill) is checked
+	# through the same SimWorld call PlacementGhost colours the drag by, so the
+	# ghost can never show green for a placement this then refuses.
+	if not w.adjacency_allows(def_id, player_id, origin):
+		return false
 	return w.map.can_place_building(SimMap.footprint_rect(origin, bd.footprint))
 
 

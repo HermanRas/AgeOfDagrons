@@ -37,6 +37,29 @@ var trains: Array[StringName] = []
 var drop_off: Array[StringName] = []
 var age_required: int = 1
 
+## Building ids this one's footprint must TOUCH to be placed at all, or empty for
+## the usual "anywhere legal" (PLAN.md 5.1). A field must abut its mill: the
+## roster line is `Farm[Mill] ... can add up to 4 field`, and a farm on the far
+## side of the map from anything that could receive its crop is not a farm.
+## Satisfied by ANY one of the listed ids, and only by a COMPLETE building of the
+## placing player's own.
+var requires_adjacent: Array[StringName] = []
+
+## How many of THIS building may abut one host from `requires_adjacent`, or 0 for
+## no limit. Four fields to a mill, per the roster.
+var max_per_host: int = 0
+
+## What a villager can harvest from this building, for the buildings that are
+## really resource nodes wearing a footprint -- a field. `&""` for the
+## overwhelming majority, which are not gatherable at all.
+var gather_kind: StringName = &""
+## Total yield before the building is spent and removed. A field is not
+## inexhaustible: it costs wood, and a farm that fed a town forever would make
+## every other food source pointless.
+var gather_amount: int = 0
+## How many villagers can work it at once, mirroring ResourceDef.gather_slots.
+var gather_slots: int = 1
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	var b := BuildingDef.new()
@@ -59,11 +82,25 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.trains = GameDefs.name_list(d.get("trains", []))
 	b.drop_off = GameDefs.name_list(d.get("drop_off", []))
 	b.age_required = int(d.get("age_required", 1))
+
+	b.requires_adjacent = GameDefs.name_list(d.get("requires_adjacent", []))
+	b.max_per_host = int(d.get("max_per_host", 0))
+
+	var g: Dictionary = d.get("gather", {})
+	b.gather_kind = StringName(g.get("kind", ""))
+	b.gather_amount = int(g.get("amount", 0))
+	b.gather_slots = int(g.get("slots", 1))
 	return b
 
 
 func accepts_drop_off(kind: StringName) -> bool:
 	return drop_off.has(kind)
+
+
+## Whether a villager can harvest this building at all -- true for a field and
+## nothing else today.
+func is_gatherable() -> bool:
+	return gather_kind != &"" and gather_amount > 0
 
 
 ## The visual for a given SimBuilding.Phase, by its integer value. Taken as an

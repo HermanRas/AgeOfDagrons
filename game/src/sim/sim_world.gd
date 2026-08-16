@@ -163,6 +163,11 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 		b.provides_pop = d.provides_pop
 		b.garrison_cap = d.garrison_cap
 		b.build_total = d.build_time_ticks
+		# A field carries a crop; every other building carries nothing and these
+		# stay at their zero defaults.
+		b.gather_kind = d.gather_kind
+		b.gather_amount = d.gather_amount
+		b.gather_slots = d.gather_slots
 	else:
 		b.max_hp = 1
 
@@ -177,6 +182,78 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 	map.set_occupied(rect, b.id)
 	_occupancy_changed(rect)
 	return b
+
+
+## Whether `def_id` may be placed at `origin` by `player_id` given what else is
+## already standing -- the adjacency half of placement legality, on top of the
+## grid's own "does the footprint fit".
+##
+## Lives on SimWorld rather than inside PlaceBuildingCommand because BOTH sides
+## need the same answer from the same code: the command validates it (the server
+## is the only trust boundary) and PlacementGhost colours the drag by it, so a
+## player is never shown a green ghost for a placement the host will refuse. Two
+## implementations of this rule would disagree the first time either changed.
+##
+## True for everything that declares no `requires_adjacent`, which is every
+## building but the field.
+func adjacency_allows(def_id: StringName, player_id: int, origin: Vector2i) -> bool:
+	var d: BuildingDef = building_def(def_id)
+	if d == null or d.requires_adjacent.is_empty():
+		return true
+
+	var rect := SimMap.footprint_rect(origin, d.footprint)
+	var host := _adjacent_host(d, player_id, rect)
+	if host == null:
+		return false
+	if d.max_per_host <= 0:
+		return true
+	return _count_abutting(d.id, player_id, host) < d.max_per_host
+
+
+## A COMPLETE building of `player`'s, of one of the kinds `d` must abut, whose
+## own footprint touches `rect`. Ids are walked in sorted order and the first hit
+## wins, so two mills equally close cannot make two clients pick different hosts
+## and disagree about the four-field cap.
+##
+## Complete, not merely present: a field abutting a mill FOUNDATION would be a
+## farm serving a building that does not exist yet, and the foundation may still
+## be cancelled or destroyed under it.
+func _adjacent_host(d: BuildingDef, player: int, rect: Rect2i) -> SimBuilding:
+	var ids := entities.keys()
+	ids.sort()
+	for id in ids:
+		var e: SimEntity = entities[id]
+		if not (e is SimBuilding):
+			continue
+		var b: SimBuilding = e
+		if b.owner_id != player or not b.alive or not b.is_complete():
+			continue
+		if not d.requires_adjacent.has(b.def_id):
+			continue
+		if b.footprint_rect().grow(1).intersects(rect):
+			return b
+	return null
+
+
+## How many `def_id` buildings of `player`'s already touch `host`.
+func _count_abutting(def_id: StringName, player: int, host: SimBuilding) -> int:
+	var around := host.footprint_rect().grow(1)
+	var n := 0
+	for id in entities:
+		var e: SimEntity = entities[id]
+		if not (e is SimBuilding):
+			continue
+		var b: SimBuilding = e
+		if b.def_id != def_id or b.owner_id != player or not b.alive:
+			continue
+		# Foundations count. A player who has queued four fields around a mill
+		# has used it up, or the cap would be beatable by placing all four before
+		# any of them finished.
+		if b.phase == SimBuilding.Phase.DESTROYED:
+			continue
+		if b.footprint_rect().intersects(around):
+			n += 1
+	return n
 
 
 ## Despawn every piece of rubble the new footprint covers -- ANY overlap, not
@@ -391,7 +468,8 @@ func state_hash() -> int:
 			# happens rather than after it has been walked out (4.2).
 			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing,
 					e.path.size(), e.path_index, e.path_pending,
-					e.task_target_id, e.gather_node_id, e.carry_kind, e.carry_amount,
+					e.task_target_id, e.gather_node_id, e.gather_node_tile.x,
+					e.gather_node_tile.y, e.carry_kind, e.carry_amount,
 					# Both cooldowns. Two clients whose attackers were a single tick
 					# out of step would land their blows on different ticks and then
 					# disagree about who died first -- `hp` reports that only once it
@@ -407,7 +485,11 @@ func state_hash() -> int:
 			# The rubble timer is in here because it ENDS IN A DESPAWN: two clients
 			# a tick apart on it would clear the same wreckage on different ticks
 			# and disagree about `removed[]`.
-			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left])
+			# `gather_amount` is a field's crop, depleted at runtime exactly as a
+			# tree's is -- two clients whose villagers farmed at different rates
+			# would otherwise hash identically until one field ran out first.
+			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left,
+					e.gather_amount])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

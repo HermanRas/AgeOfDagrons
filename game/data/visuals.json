@@ -215,7 +215,7 @@
     "props": [
       { "visual": "vis.prop_stone_pile_granite", "offset_m": [-3.5, 3.5] },
       { "visual": "vis.prop_stone_pile_granite", "offset_m": [3.5, 3.5] },
-      { "visual": "vis.prop_stone_pile_granite", "offset_m": [3.5, -3.5] }
+      { "visual": "vis.prop_stone_pile_granite", "offset_m": [0.5, -0.5] }
     ],
     "placeholder": {
       "shape": "box",

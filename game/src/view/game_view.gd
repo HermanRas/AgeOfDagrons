@@ -391,6 +391,14 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 			return TapAction.SELECT
 		if has_movable_selection and int(f["phase"]) != SimBuilding.Phase.COMPLETE:
 			return TapAction.BUILD
+		# A FIELD is our own building and is still a thing to harvest (6.5). With
+		# workers in hand, tapping it sends them to farm it -- which is the whole
+		# point of having built it, and what the project owner expected and did
+		# not get (2026-08-16: "clicking them with a villager selected selects the
+		# field instead of gathering on it"). With nothing selected it reselects,
+		# so its panel and health stay reachable.
+		if has_movable_selection and _is_gatherable_building(f):
+			return TapAction.GATHER
 		return TapAction.SELECT
 
 	if has_movable_selection and not bool(f["is_unit"]) \
@@ -406,6 +414,17 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 		return TapAction.ATTACK if has_movable_selection else TapAction.SELECT
 
 	return TapAction.MOVE if has_movable_selection else TapAction.NONE
+
+
+## Whether these facts describe a COMPLETE building that yields something -- a
+## field, and nothing else today. Asked of the registry rather than inferred from
+## the snapshot, the same division `_facts`'s own `is_unit` already draws: the
+## wire carries what a thing IS, and the seam answers what it can do.
+func _is_gatherable_building(f: Dictionary) -> bool:
+	if int(f.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		return false
+	var bd: BuildingDef = GameDataRegistry.building(StringName(f.get("def_id", &"")))
+	return bd != null and bd.is_gatherable()
 
 
 ## The selected entities that can actually be given a move order (PLAN.md 3.6).

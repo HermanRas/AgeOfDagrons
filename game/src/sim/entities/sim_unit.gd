@@ -25,6 +25,11 @@ var gather_cooldown: int = 0
 ## drop-off building while returning -- so this is the one field that survives the
 ## switch between them (6.4).
 var gather_node_id: int = 0
+## Where that node STOOD. Kept because a spent one is despawned, and by the time
+## a villager walks its last load home there is no entity left to ask where to
+## look for the next tree (GatherSystem's re-scan, project owner 2026-08-16).
+## `task_target_tile` cannot serve: during RETURN it is the drop-off building.
+var gather_node_tile: Vector2i = Vector2i.ZERO
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 
@@ -60,6 +65,7 @@ func set_task_gather(node_id: int, tile: Vector2i) -> void:
 	task = Task.GATHER
 	task_target_id = node_id
 	gather_node_id = node_id
+	gather_node_tile = tile
 	task_target_tile = tile
 	path = PackedVector2Array()
 	path_index = 0
@@ -153,6 +159,7 @@ func stop() -> void:
 	task_target_tile = tile()
 	task_target_id = 0
 	gather_node_id = 0
+	gather_node_tile = Vector2i.ZERO
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = false

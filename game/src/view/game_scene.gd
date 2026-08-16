@@ -524,7 +524,15 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 		_exit_placement()
 		return
 
-	_toast.show_message("Not enough resources" if not result["can_afford"] else "Can't build there")
+	# Three different refusals, three different messages. "Can't build there" for
+	# a field the player has dragged away from its mill is technically true and
+	# tells them nothing about the rule they just broke.
+	if not result["can_afford"]:
+		_toast.show_message("Not enough resources")
+	elif not result.get("placeable", true):
+		_toast.show_message(_adjacency_hint(_placing_def_id))
+	else:
+		_toast.show_message("Can't build there")
 
 	# A flash, not a permanent red ghost: it stays long enough to read as "no",
 	# then clears so the next attempt starts from a blank slate.
@@ -551,14 +559,36 @@ func _preview_placement(screen_pos: Vector2) -> Dictionary:
 	var origin := Iso.tile_at(local)
 	var rect := SimMap.footprint_rect(origin, bd.footprint)
 	var can_afford := player != null and player.can_afford(bd.cost)
-	var valid := can_afford and world.map.can_place_building(rect)
+	# Same adjacency call PlaceBuildingCommand.validate() makes, so the ghost
+	# turns red exactly where the host would refuse -- a field dragged away from
+	# its mill reads as illegal while it is being dragged, rather than being
+	# accepted by the UI and silently dropped by the server.
+	var placeable := world.adjacency_allows(_placing_def_id, Net.local_player_id(), origin)
+	var valid := can_afford and placeable and world.map.can_place_building(rect)
 
 	var centre := Vector2(origin) + Vector2(bd.footprint) * 0.5
 	_ghost.position = Iso.tile_to_world_f(centre)
 	_ghost.set_state(Vector2(bd.footprint) * Iso.METRES_PER_TILE, valid)
 	_ghost.visible = true
 
-	return {"origin": origin, "valid": valid, "can_afford": can_afford}
+	return {"origin": origin, "valid": valid, "can_afford": can_afford,
+			"placeable": placeable}
+
+
+## Why an adjacency-gated placement was refused, in the player's words. Built
+## from the def rather than hardcoded for the field, so the day a second building
+## needs a host it says the right thing without being edited.
+func _adjacency_hint(def_id: StringName) -> String:
+	var bd: BuildingDef = GameDataRegistry.building(def_id)
+	if bd == null or bd.requires_adjacent.is_empty():
+		return "Can't build there"
+	var hosts: Array[String] = []
+	for host_id in bd.requires_adjacent:
+		hosts.append(_display_name(host_id))
+	var where := " or ".join(hosts)
+	if bd.max_per_host > 0:
+		return "%s must touch a %s (max %d)" % [_display_name(def_id), where, bd.max_per_host]
+	return "%s must touch a %s" % [_display_name(def_id), where]
 
 
 func _display_name(def_id: StringName) -> String:

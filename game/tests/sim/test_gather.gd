@@ -153,6 +153,76 @@ func test_the_view_is_told_the_node_went_rather_than_left_to_notice() -> void:
 	assert_true(w.removed_this_tick.has(tree.id))
 
 
+# ── re-scanning for the next node (project owner, 2026-08-16) ───────────────
+
+func test_a_villager_moves_to_the_next_tree_instead_of_going_idle() -> void:
+	# Watched live: a villager finished its tree and stopped dead beside a wood
+	# full of untouched ones. It now looks around where the last one stood.
+	var neighbour := w.spawn_resource_node(&"res.tree", Vector2i(8, 10), 0)
+	assert_not_null(neighbour, "there is a second tree one tile over")
+	_order_gather()
+
+	var ticks := _run_until(func(): return villager.gather_node_id == neighbour.id, 4000)
+	assert_true(ticks > 0, "it carried on with the tree next door")
+	assert_true(tree.is_depleted() or w.get_entity(tree.id) == null,
+			"having actually finished the first one")
+
+
+func test_the_search_is_tight_rather_than_map_wide() -> void:
+	# RESCAN_RADIUS is 1 on purpose: a worker should carry on with the wood it is
+	# already standing in, not set off across the map on an order the player
+	# never gave and cannot see coming.
+	var far := w.spawn_resource_node(&"res.tree", Vector2i(30, 30), 0)
+	assert_not_null(far)
+	_order_gather()
+
+	var ticks := _run_until(func(): return villager.is_idle(), 4000)
+	assert_true(ticks > 0, "it retired rather than walking twenty tiles")
+	assert_eq(far.amount, far.starting_amount, "the distant tree was never touched")
+
+
+func test_a_villager_shut_out_of_a_full_node_takes_the_one_beside_it() -> void:
+	# The second trigger. res.tree has one slot, so the challenger used to stand
+	# in a queue behind the incumbent while an identical tree sat untouched one
+	# tile away.
+	var neighbour := w.spawn_resource_node(&"res.tree", Vector2i(8, 10), 0)
+	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	w.queue_command(GatherCommand.new(1, [villager.id, second.id], tree.id))
+
+	var ticks := _run_until(func(): return second.gather_node_id == neighbour.id, 600)
+	assert_true(ticks > 0, "the shut-out villager went next door")
+	assert_eq(villager.gather_node_id, tree.id, "and the incumbent kept its own tree")
+
+
+func test_it_will_not_swap_one_full_node_for_another() -> void:
+	# Both trees are one-slot and both are taken, so there is nothing to gain by
+	# moving -- and a villager that hopped between them would look like it was
+	# malfunctioning rather than waiting.
+	var neighbour := w.spawn_resource_node(&"res.tree", Vector2i(8, 10), 0)
+	var b := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	var c := w.spawn_unit(&"unit.villager", 1, Vector2i(21, 20))
+	w.queue_command(GatherCommand.new(1, [villager.id], tree.id))
+	w.queue_command(GatherCommand.new(1, [b.id], neighbour.id))
+	_run_until(func(): return villager.carry_amount > 0 and b.carry_amount > 0, 400)
+
+	w.queue_command(GatherCommand.new(1, [c.id], tree.id))
+	for i in range(60):
+		w.step()
+	assert_true(c.gather_node_id == tree.id or c.gather_node_id == neighbour.id,
+			"it holds station at one of them rather than ping-ponging")
+	assert_eq(c.carry_amount, 0, "and gathers from neither, both being full")
+
+
+func test_a_villager_only_re_scans_for_the_kind_it_was_working() -> void:
+	# A gold mine beside a spent tree is not "another tree". Swapping kinds
+	# mid-order would quietly change what the player asked for.
+	var mine := w.spawn_resource_node(&"res.gold_mine", Vector2i(8, 10), 0)
+	_order_gather()
+	var ticks := _run_until(func(): return villager.is_idle(), 4000)
+	assert_true(ticks > 0)
+	assert_eq(mine.amount, mine.starting_amount, "the gold was left alone")
+
+
 # ── rejection ───────────────────────────────────────────────────────────────
 
 func test_gather_command_rejects_an_already_depleted_node() -> void:

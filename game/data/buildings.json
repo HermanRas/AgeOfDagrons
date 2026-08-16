@@ -374,7 +374,12 @@
 
     "trains": [],
     "drop_off": [],
-    "age_required": 2
+    "age_required": 2,
+
+    "requires_adjacent": ["building.mill"],
+    "max_per_host": 4,
+
+    "gather": { "kind": "food", "amount": 300, "slots": 1 }
   },
 
   "building.watch_tower": {

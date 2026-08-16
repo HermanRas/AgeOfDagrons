@@ -41,6 +41,34 @@ const RUBBLE_TOTAL_TICKS := 600
 const RUBBLE_FADE_TICKS := 100
 var rubble_ticks_left: int = -1
 
+## A FIELD IS A RESOURCE NODE WEARING A FOOTPRINT. It is placed, costed and
+## built like a building and then harvested like a berry bush, so it needs the
+## three things GatherSystem asks of anything gatherable: what kind, how much is
+## left, and how many can work it. Named to match `SimResourceNode`'s own fields
+## on purpose -- GatherSystem branches on the type once, in one place, and
+## everything downstream reads the same words for the same idea.
+##
+## Zero for everything that is not a field, which is every other building.
+var gather_kind: StringName = &""
+var gather_amount: int = 0
+var gather_slots: int = 0
+
+
+## Take up to `requested` units, returning what was actually there. Same
+## contract as SimResourceNode.gather(): credit the RETURN VALUE, never the
+## request, or a nearly-spent field feeds a town forever.
+func gather(requested: int) -> int:
+	var taken := clampi(requested, 0, gather_amount)
+	gather_amount -= taken
+	return taken
+
+
+## True once there is nothing left to harvest. Only ever true for a field --
+## a building that was never gatherable has `gather_kind` empty and is not
+## something GatherSystem looks at.
+func is_spent() -> bool:
+	return gather_kind != &"" and gather_amount <= 0
+
 var provides_pop: int = 0
 var garrison_cap: int = 0
 
