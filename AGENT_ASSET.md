@@ -176,17 +176,25 @@ with WinError 5. Delete contents, not the directory.
 
 ## 5. State as of 2026-08-16
 
-- **163 base recipes**, **160 generated colour recipes** (20 units × 8), **286
-  bakes** in `art_work/out`.
-- **Running:** batch `20260816-122118` — 90 recipes, 3-wide, started 12:21, ETA
-  ~19:10. The colour backlog: 6 colours × 15 units.
-- **When it finishes:** `restore_art_sources.sh --apply`, then
-  `stage_atlases.py`, then note both in `asset_request.md`. The game side is
-  watching for `stale_colour_atlases()` 60 → 0 and `missing_colour_atlases()`
-  30 → 0, and those only move **after staging**.
-- Red and yellow are correct for all 19 units; the other six are stale or missing
-  until this batch lands and is staged. The game agent develops against red and
-  yellow only.
+- **163 base recipes**, **160 generated colour recipes** (20 units × 8).
+- **Nothing is running.** The colour backlog is finished: batch
+  `20260816-122118`, 90/90, 0 failures, 5.1 h at 3-wide.
+- **Staging is complete and current: `323/323, RESULT: OK`** — the first fully
+  complete staging this project has had. All eight colours are correct for all
+  20 colourable units; the game agent is no longer restricted to red and yellow.
+- `vis.ballista` is base-only by design (no siege engine in 0 A.D. carries player
+  colour); every other unit has its eight.
+- Verified beyond the batch summary, because a summary full of "ok" is exactly
+  what the coloured-faces batch produced: 0 pixels move >64 between each unit's
+  last `die` frame and first `decay` frame across 13 units × 8 colours, and the
+  newly-tinted units all separate cleanly (closest pair ΔRGB 40–67).
+
+> **Verification lesson worth keeping:** the first pass at that decay check
+> reported false mismatches because the threshold was 2, which is *below* EEVEE's
+> sampling noise (~44 in a channel at 24 samples). The tell was that `decay0` and
+> `decay1` — the same sampled position — differed by the same amount. When
+> comparing rendered frames, establish the noise floor from two frames that must
+> be identical before choosing a threshold.
 
 ### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `ea396c4`)
 
