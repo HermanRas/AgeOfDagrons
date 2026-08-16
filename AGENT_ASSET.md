@@ -192,6 +192,18 @@ and it is the only reliable way to tell an attach point in use from one left
 empty. Look up both spellings or you will silently miss exactly the points whose
 props went missing.
 
+**"Unanchored mesh at the world origin" does NOT mean debris.** It is a tempting
+signature for a failed nested prop, and it is also where the Briton rotary mill
+keeps its `Mill` mesh and the trireme its `Hele_Trireme` hull — unrigged
+buildings and ships that carry a rigged prop, so they *do* have a subject
+armature and any "is there a rig?" guard waves them through. A rule that deleted
+on that signature alone would one day have deleted a hull. **Delete only what
+you can positively identify as replaced** (isobake matches an orphan to a
+rescued object by base name, since Blender suffixes the re-import `.003`), and
+report the rest rather than acting on it. The near-miss was found by probing the
+roster at `directions = 1`, which is the cheap way to check a pipeline change
+against actors you did not have in mind when you wrote it.
+
 **`-Parallel`**: 2 while the owner is using the machine, 3 when idle, 4 saturates
 it. The ceiling is RAM — a full Blender scene per slot.
 
@@ -229,9 +241,15 @@ with WinError 5. Delete contents, not the directory.
 - **`vis.ballista` animates** as of 2026-08-16 — `idle`/`attack`/`die`/`decay`,
   140 frames. It was static only because `inspect` lied about its armature; see
   §4. `vis.onager` stays static, correctly: its actor declares no animations.
-- **Ten atlases now carry build identity** (`vis.ballista`, `vis.onager` and its
-  eight colours: commit `9ac13a00d7db`, build 32). The other 315 predate the
-  stamp. Each unit's own set is internally uniform, which is what the game side's
+- **Build identity is live.** Staged population, counted off disk:
+
+  ```
+  8aa37b04f718  build 33   10 atlases   vis.ballista, vis.onager + its 8 colours
+  531a4bce4f14  build 28    2 atlases   vis.prop_food_small, vis.prop_food_big
+  (no keys)               313 atlases   everything else -- predates the stamp
+  ```
+
+  Each unit's own set is internally uniform, which is what the game side's
   staleness rule keys on, so it should still read 0 stale.
 - Verified beyond the batch summary, because a summary full of "ok" is exactly
   what the coloured-faces batch produced: 0 pixels move >64 between each unit's
@@ -245,7 +263,7 @@ with WinError 5. Delete contents, not the directory.
 > comparing rendered frames, establish the noise floor from two frames that must
 > be identical before choosing a threshold.
 
-### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `9ac13a0`, build 32)
+### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `8aa37b0`, build 33)
 
 0. **`inspect` reported the wrong armature**, and **nested props of nested props
    were never anchored** — both landed 2026-08-16 and both are covered in §4.

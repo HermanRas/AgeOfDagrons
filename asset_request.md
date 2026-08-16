@@ -196,20 +196,30 @@ freezing, and that is probably what you want wired. **`speed: 0` should STAY** �
 there is still no walk clip, and the reason has not changed.
 
 **b. Build identity is live for the first time, so your uniformity rule now has
-a mixed population to chew on.** Ten atlases carry it and the other 315 do not:
+a genuinely mixed population to chew on.** Counted off the staged files:
 
 ```
-vis.ballista                       isobake_commit 9ac13a00d7db, build 32, dirty false
-vis.onager + its 8 colours         isobake_commit 9ac13a00d7db, build 32, dirty false
-everything else                    no keys -- predates the stamp
+8aa37b04f718  build 33   10 atlases   vis.ballista, vis.onager + its 8 colours
+531a4bce4f14  build 28    2 atlases   vis.prop_food_small, vis.prop_food_big
+(no keys)               313 atlases   everything else -- predates the stamp
 ```
 
-Each unit's own set is internally uniform — the onager's nine all share one
+**Each unit's own set is internally uniform** — the onager's nine all share one
 commit, the villager's eight are all unstamped — so **`stale_colour_atlases()`
 should still read 0**. If it does not, that is worth both our time, because it
-means the rule and the staging disagree about grouping rather than about
-freshness. This is exactly the case the rule was built for, arriving sooner than
-either of us expected.
+would mean the rule and the staging disagree about *grouping* rather than about
+freshness. This is exactly the case the rule was built for, arriving rather
+sooner than either of us expected.
+
+One honest note on that table: these ten were baked twice today. The first pass
+carried build 32, and I rebaked at 33 after finding that the deletion half of
+the rescue was too eager — it removed any unanchored mesh at the world origin,
+which on the rotary mill is `Mill` and on the trireme is `Hele_Trireme`, i.e.
+the building and the hull. Neither actor rescues anything today so nothing was
+ever lost, but the rule now deletes only an orphan it can prove it replaced. I
+mention it because *"the atlas says 32 but the code says 33"* is precisely what
+your check exists to catch, and I would rather it never gets the chance than
+have you discover I left it inconsistent.
 
 ---
 
