@@ -6,6 +6,83 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### The ORE section of the roster — 8 bakes — requested 2026-08-16
+
+**What's needed:** every gaia resource node `Age & Unit Planning.md` §ORE names,
+at the SIZE CLASSES it names them at. Requested by the project owner directly.
+Comparing the roster line by line against `attribution.actor` on what is staged,
+three of the four kinds are short — and in two cases what we have is off-roster
+rather than merely incomplete:
+
+| roster line | amount | staged today | verdict |
+|---|---|---|---|
+| `gaia/ore/aegean_anatolian_small` | 1000 | — | **missing** |
+| `gaia/ore/aegean_anatolian_01` | 5000 | `vis.gold_mine` = `geology/metalmine_alpine` | **wrong actor** |
+| `gaia/ore/aegean_anatolian_02` | 10000 | — | **missing** |
+| `gaia/rock/temperate_small` | 1000 | `vis.stone_mine` = `geology/stonemine_medit_quarry` | **wrong actor** |
+| `gaia/rock/temperate_large_02` | 7000 | — | **missing** |
+| `gaia/tree/oak` | 500 | `vis.tree` = `flora/trees/oak` | ✅ |
+| `gaia/tree/elm` | 500 | — | **missing** |
+| `gaia/tree/teak` | 500 | — | **missing** |
+| `gaia/tree/toona` | 500 | — | **missing** |
+| `gaia/gruit/berry_01` | — | `vis.berry_bush` = `props/flora/berry_bush` | ✅ close enough? see below |
+| sheep / deer / wolf / bear / cattle_zebu | — | all five staged | ✅ |
+
+So: **8 bakes.** Three gold, two stone, three trees. The two "wrong actor" rows
+are rebakes of an existing id rather than new ones.
+
+**Why the size classes matter, and why they are not cosmetic.** `SimResourceNode`
+already carries `size_class` 0/1/2 and `resources.json` already gives every kind
+three amounts — but every size resolves to the same sprite, so a 200-gold seam
+and an 800-gold seam are pixel-identical on the map. The player cannot tell a
+rich node from a poor one by looking, which makes the size classes data nobody
+can act on. The roster asks for distinct actors per size precisely to fix that,
+and this is the one gap where the DATA is ahead of the art rather than behind it.
+
+**Ids, and how they map.** Base ids stay put so nothing that references them
+breaks; the extra sizes take suffixes:
+
+| id | actor | note |
+|---|---|---|
+| `vis.gold_mine_small` | `gaia/ore/aegean_anatolian_small` | new |
+| `vis.gold_mine` | `gaia/ore/aegean_anatolian_01` | **rebake**, replaces metalmine_alpine |
+| `vis.gold_mine_large` | `gaia/ore/aegean_anatolian_02` | new |
+| `vis.stone_mine` | `gaia/rock/temperate_small` | **rebake**, replaces the quarry |
+| `vis.stone_mine_large` | `gaia/rock/temperate_large_02` | new |
+| `vis.tree_elm` | `gaia/tree/elm` | new |
+| `vis.tree_teak` | `gaia/tree/teak` | new |
+| `vis.tree_toona` | `gaia/tree/toona` | new |
+
+Rename any of these if the recipe naming wants otherwise — the seam is one line
+in `visuals.json` per id and the mapping is mine to write.
+
+**Static, no animation**, same as every gaia node we already ship. Direction
+count is your call; `vis.gold_mine` is 5 mirrored to 8 today and matching that
+seems right for a rock.
+
+**Two things I am NOT asking for, so you do not bake them:**
+
+- The six extra tree species already staged (`cherry`, `cypress`,
+  `cypress_tall`, `dead`, `dead_branchy`, `snow_pine`) are not on the roster and
+  I am not wiring them. Leave them.
+- `vis.berry_bush` comes from `props/flora/berry_bush` where the roster says
+  `gaia/gruit/berry_01`. It reads correctly in game and I would leave it —
+  flagging only so you can tell me if those are genuinely different bushes and
+  the roster meant the other one.
+
+**Where it plugs in once baked:** `game/data/visuals.json` gains the eight
+entries, and `game/data/resources.json` grows a per-size visual so
+`SimResourceNode.size_class` picks between them — that field exists and is
+already set at spawn, so this is a lookup change on my side, not new state.
+
+**One gap this uncovered that is mine, not yours: there is no stone resource
+node at all.** `resources.json` declares `res.tree`, `res.gold_mine`, `res.deer`
+and `res.berry_bush` — no `res.stone`. Buildings cost stone and the HUD counts
+it, but nothing on any map yields any, so the only stone a player will ever have
+is what `MapGen` hands them at the start. `vis.stone_mine` has been staged and
+unreferenced this whole time, the same way the camp props were. PLAN.md 6.5 is
+where that belongs and I will do it alongside wiring these.
+
 ### Staleness detection has inverted — **agent 1: what signal? · agent 2: ANSWERED — option 1, with the rule changed; no backfill**
 
 Your warning about the margin was right, and it has already happened.

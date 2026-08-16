@@ -145,6 +145,10 @@ func _add_badge(column: VBoxContainer, icon_file: String) -> Label:
 		# of a 648px viewport (found live, screenshotted).
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.custom_minimum_size = _ICON_SIZE
+		# A counter is read, never pressed, and `mouse_filter` does not inherit
+		# from the panel -- see NoticeToast._init for what a display TextureRect
+		# left on Control's STOP default did to the build grid.
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(icon)
 
 	var label := Label.new()

@@ -91,6 +91,7 @@ func _advance_script() -> void:
 			_select_a_villager()
 			_open_build_menu()
 		1:
+			_report_panel_hitboxes()
 			_shoot("match_age1")
 		2:
 			# The real button: a timed research, so the ring starts filling. Held
@@ -408,6 +409,29 @@ func _stand_up_the_dropsites() -> void:
 func _clear_selection() -> void:
 	_game._view.select([] as Array[int])
 	_game._refresh_panel()
+
+
+## Where the build grid's slots actually ARE, and whether a tap at each one
+## reaches the button or falls through to the map.
+##
+## Reported live on the real HUD because the project owner found three of the
+## five build buttons doing nothing (2026-08-16) -- the villager walked to the
+## ground under the icon instead, which is what happens when NO Control consumes
+## the press and `InputRouter` picks it up as a world tap. A rect is what tells a
+## button that is not there from a button that is there and deaf.
+func _report_panel_hitboxes() -> void:
+	var panel: SelectionPanel = _game._panel
+	print("panel rect  ", panel.get_global_rect())
+	print("details grid ", panel._details_grid.get_global_rect())
+	for slot in panel._detail_slots:
+		if not slot.visible or slot.action == null:
+			continue
+		var r := slot.get_global_rect()
+		var hit := panel.get_viewport().gui_get_focus_owner()   # keep the API warm
+		print("  %-22s rect %s  disabled %s  filter %d  in-panel %s" % [
+				slot.action.id, r, slot.disabled, slot.mouse_filter,
+				panel.get_global_rect().encloses(r)])
+		hit = hit          # unused; the rects above are the evidence
 
 
 func _report_enemies() -> void:

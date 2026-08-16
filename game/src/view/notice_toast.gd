@@ -20,6 +20,22 @@ var _label: Label
 var _show_token: int = 0
 
 
+## MOUSE_FILTER_IGNORE ON EVERY NODE HERE, NOT JUST THE ROOT.
+##
+## A toast is pure notification -- it has nothing to click and must never take a
+## press. Setting it on the root alone is not enough and cost real play time:
+## `mouse_filter` is per-node and does not inherit, so the banner `TextureRect`
+## kept the Control default of STOP and swallowed every press inside the toast's
+## rect. Because the toast lives at `modulate.a = 0` rather than `visible =
+## false` between messages, it was an INVISIBLE 320x56 hole in the HUD, sitting
+## over the middle of the build grid: the project owner reported (2026-08-16)
+## that House and Town Center placed fine and Lumber Camp, Mill and Mining Camp
+## did nothing but walk the villager to the ground under the icon -- which is
+## exactly what happens when no Control consumes the press and `InputRouter`
+## picks it up as a world tap. The two that worked were the only two slots left
+## of the toast's left edge.
+##
+## Anything added here later needs the same treatment.
 func _init() -> void:
 	custom_minimum_size = Vector2(320.0, 56.0)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -31,6 +47,7 @@ func _init() -> void:
 		banner.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		banner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		banner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(banner)
 
 	_label = Label.new()
@@ -38,6 +55,7 @@ func _init() -> void:
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_label.add_theme_color_override("font_color", Color("#F5DDA0"))
+	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)
 
 

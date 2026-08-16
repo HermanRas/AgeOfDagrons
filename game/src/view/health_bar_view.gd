@@ -28,11 +28,19 @@ func _init() -> void:
 	var tex: Texture2D = load(_BAR_PATH)
 	custom_minimum_size = tex.get_size()
 
+	# Nothing in this widget is clickable, and `mouse_filter` does not inherit --
+	# a display TextureRect keeps Control's STOP default and eats presses over
+	# itself. Harmless where this bar sits today, but it is the same defect that
+	# made NoticeToast an invisible hole in the middle of the build grid; see
+	# that file's `_init` for what it cost.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	var empty := TextureRect.new()
 	empty.texture = tex
 	empty.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	empty.modulate = _EMPTY_TINT
 	empty.set_anchors_preset(Control.PRESET_FULL_RECT)
+	empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(empty)
 
 	_fill = TextureProgressBar.new()
@@ -43,4 +51,5 @@ func _init() -> void:
 	_fill.max_value = 100.0
 	_fill.value = fraction * 100.0
 	_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_fill)
