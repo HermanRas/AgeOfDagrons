@@ -175,6 +175,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# reads correctly as "nothing queued" rather than needing its own guard.
 			"queue_len": int(entry.get("queue_len", 0)),
 			"queue_fraction": float(entry.get("queue_fraction", 0.0)),
+			# The queued def ids, so each queue slot can crop that unit's own
+			# portrait. Converted to StringName here rather than left as the
+			# wire's Strings, because everything downstream compares against
+			# StringName literals and a String never matches one.
+			"queue": _names(entry.get("queue", [])),
 			# Present only on buildings; SimBuilding.Phase.COMPLETE elsewhere, so a
 			# unit or resource node always reads as "not something to build" without
 			# its own guard (4.5's build-assist tap needs to tell a foundation from
@@ -489,6 +494,17 @@ func _touches_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
 		if in_y_span and (tile.x == r.position.x - 1 or tile.x == r.end.x):
 			return true          # touches the west or east edge
 	return false
+
+
+## A wire list of def ids as StringNames. JSON has no StringName, so anything
+## arriving over the network is a String -- and `&"unit.villager" == "unit.villager"`
+## is false, so a missed conversion here is a lookup that silently finds nothing.
+func _names(raw: Variant) -> Array[StringName]:
+	var out: Array[StringName] = []
+	if raw is Array:
+		for v in raw:
+			out.append(StringName(v))
+	return out
 
 
 func _visual_id_of(entry: Dictionary) -> StringName:

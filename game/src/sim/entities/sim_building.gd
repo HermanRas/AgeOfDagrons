@@ -103,6 +103,16 @@ func to_snapshot() -> Dictionary:
 	d["build_fraction"] = build_fraction()
 	d["queue_len"] = queue.size()
 	d["queue_fraction"] = training_fraction()
+	# WHAT is queued, not just how much. The panel crops each queue slot's
+	# portrait from the unit's own baked sprite, and without this it had a count
+	# and no def ids -- so every entry drew as the word "Queued" rather than as
+	# the thing being trained. Def ids only: `progress`, `total` and `cost` are
+	# the sim's own bookkeeping, and `queue_fraction` above is the only part of
+	# it the view has any use for.
+	var queued: Array[String] = []
+	for entry in queue:
+		queued.append(String(entry["def_id"]))
+	d["queue"] = queued
 	return d
 
 

@@ -117,3 +117,46 @@ func test_two_worlds_given_the_same_training_order_stay_identical() -> void:
 		w.step()
 		other.step()
 		assert_eq(w.state_hash(), other.state_hash(), "diverged on tick %d" % (i + 1))
+
+
+func test_the_snapshot_names_what_is_queued_not_only_how_much() -> void:
+	# The panel crops each queue slot's portrait from the unit's own sprite, and
+	# it can only do that if the def id reaches the client. `queue_len` alone
+	# shipped for a while, and every queue slot in the running game drew the word
+	# "Queued" instead of a villager.
+	_train()
+	_train()
+	var snap := SnapshotSystem.build(w, 1)
+	var entry := {}
+	for e in snap["updated"]:
+		if int(e.get("id", 0)) == tc.id:
+			entry = e
+	assert_false(entry.is_empty(), "the town centre is in the snapshot")
+	assert_eq(int(entry["queue_len"]), 2)
+	assert_eq(entry["queue"], ["unit.villager", "unit.villager"],
+			"and it says WHAT is queued")
+
+
+func test_the_queue_snapshot_carries_no_sim_bookkeeping() -> void:
+	# def ids only. `progress`, `total` and `cost` are the sim's own, and
+	# `queue_fraction` is the only part of them the view has any use for --
+	# shipping the rest would put sim state on the wire for nothing to read.
+	_train()
+	var snap := SnapshotSystem.build(w, 1)
+	for e in snap["updated"]:
+		if int(e.get("id", 0)) != tc.id:
+			continue
+		for queued in e["queue"]:
+			assert_true(queued is String, "a bare def id, not the queue entry dictionary")
+
+
+func test_a_cancelled_entry_leaves_the_snapshot_queue() -> void:
+	_train()
+	_train()
+	w.queue_command(CancelProductionCommand.new(1, tc.id, 0))
+	w.step()
+	var snap := SnapshotSystem.build(w, 1)
+	for e in snap["updated"]:
+		if int(e.get("id", 0)) == tc.id:
+			assert_eq((e["queue"] as Array).size(), 1)
+			assert_eq(int(e["queue_len"]), 1, "the count and the list agree")

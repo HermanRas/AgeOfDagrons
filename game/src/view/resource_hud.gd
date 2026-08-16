@@ -49,11 +49,18 @@ func _init() -> void:
 	if bg != null:
 		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
+	# The bottom margin is 28, not the 8 it started at. The frame art's bottom
+	# border is nearly as deep as its top one, and 8 px put the last row -- the
+	# villager count -- underneath it, clipped (found live, screenshotted: the
+	# pop counter was sliced by the border). The top margin was already 35 for
+	# exactly this reason on the other side; the bottom simply never got the same
+	# treatment because the panel used to end in a resource row that happened to
+	# sit higher.
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 22)
 	margin.add_theme_constant_override("margin_right", 10)
 	margin.add_theme_constant_override("margin_top", 35)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_bottom", 28)
 	add_child(margin)
 
 	var column := VBoxContainer.new()

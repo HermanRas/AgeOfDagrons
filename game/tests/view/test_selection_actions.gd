@@ -13,9 +13,19 @@ func _militia_facts(id: int = 2) -> Dictionary:
 			"alive": true, "task": 0, "queue_len": 0, "queue_fraction": 0.0}
 
 
+## `queue` carries the def ids of what is being trained, and it is part of the
+## fixture rather than an optional extra: the version of this that omitted it
+## matched the shape GameView ACTUALLY produced at the time, which had a count
+## and no ids -- so the queue tests passed while every queue slot in the running
+## game drew the word "Queued" instead of the unit. A fixture that agrees with a
+## bug is worse than no fixture.
 func _town_center_facts(id: int = 5, queue_len: int = 0) -> Dictionary:
+	var queue: Array[StringName] = []
+	for i in range(queue_len):
+		queue.append(&"unit.villager")
 	return {"id": id, "def_id": &"building.town_center", "owner_id": 1, "hp": 2000,
-			"max_hp": 2000, "alive": true, "queue_len": queue_len, "queue_fraction": 0.4}
+			"max_hp": 2000, "alive": true, "queue_len": queue_len, "queue_fraction": 0.4,
+			"queue": queue}
 
 
 func _building_facts(def_id: StringName, id: int = 6) -> Dictionary:
@@ -148,6 +158,15 @@ func test_a_building_with_nothing_expanded_shows_its_production_queue() -> void:
 	assert_eq(details.size(), 2)
 	assert_eq(details[0].id, &"cancel:0")
 	assert_eq(details[0].badge, "40%", "the front entry shows how far along it is")
+
+
+func test_each_queue_slot_names_the_unit_so_it_can_draw_its_portrait() -> void:
+	# ActionSlot crops the portrait from `payload`, so an empty payload is a slot
+	# that falls all the way back to its label -- which is what "Queued" was.
+	var details := SelectionActions.details_for(&"", _town_center_facts(5, 2))
+	for d in details:
+		assert_eq(d.payload, &"unit.villager", "the slot knows WHAT is queued")
+		assert_eq(d.label, "Villager", "and labels it by name, not 'Queued'")
 
 
 func test_an_empty_queue_shows_no_details() -> void:

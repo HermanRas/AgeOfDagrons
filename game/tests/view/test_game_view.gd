@@ -350,3 +350,29 @@ func test_age_of_reports_one_for_a_player_not_in_the_snapshot() -> void:
 	view.apply_snapshot(_skinned_snapshot(3, 4, 1))
 	assert_eq(view.age_of(3), 4)
 	assert_eq(view.age_of(0), 1, "gaia reads as age 1, not as age 0")
+
+func test_the_queued_def_ids_arrive_as_stringnames_not_strings() -> void:
+	# JSON has no StringName, so anything off the wire is a String -- and
+	# `&"unit.villager" == "unit.villager"` is FALSE in GDScript, so a missed
+	# conversion here is a portrait lookup that silently finds nothing.
+	view.apply_snapshot({
+		"tick": 1,
+		"updated": [{"id": 3, "def_id": "building.town_center", "owner_id": 1,
+				"hp": 10, "max_hp": 10, "pos": {"x": 0, "y": 0},
+				"footprint": {"x": 4, "y": 4}, "phase": SimBuilding.Phase.COMPLETE,
+				"queue_len": 2, "queue_fraction": 0.5,
+				"queue": ["unit.villager", "unit.militia"]}],
+		"removed": [],
+	})
+	var queue: Array = view.facts_for(3)["queue"]
+	assert_eq(queue.size(), 2)
+	assert_eq(queue[0], &"unit.villager")
+	assert_true(queue[0] is StringName, "compares equal to the StringName literals downstream")
+
+
+func test_an_entry_with_no_queue_reads_as_an_empty_one() -> void:
+	# Units and resource nodes never carry a queue, and neither does a building
+	# from an older host. Absent must mean empty rather than break the lookup.
+	view.apply_snapshot({"tick": 1, "updated": [{"id": 4, "def_id": "unit.villager",
+			"pos": {"x": 0, "y": 0}}], "removed": []})
+	assert_eq(view.facts_for(4)["queue"], [] as Array[StringName])

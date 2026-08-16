@@ -80,6 +80,17 @@ func _advance_script() -> void:
 			_page_build_menu()
 		10:
 			_shoot("match_age4_page2")
+		11:
+			# The town centre's own panel: its train row, and its queue once
+			# something is in it. The queue slots crop the unit's portrait, which
+			# needs the def ids to have survived the snapshot.
+			_select_a_town_centre()
+		12:
+			_train_from_selection()
+		13:
+			_train_from_selection()
+		14:
+			_shoot("match_queue")
 		_:
 			get_tree().quit()
 			return
@@ -121,6 +132,30 @@ func _page_build_menu() -> void:
 			panel._on_detail_pressed(slot.action)
 			return
 	push_warning("preview_match: build menu does not page at this age")
+
+
+func _select_a_town_centre() -> void:
+	var view: GameView = _game._view
+	var ids: Array = view.all_facts().keys()
+	ids.sort()
+	for id in ids:
+		if StringName(view.facts_for(int(id)).get("def_id", &"")) == &"building.town_center":
+			view.select([int(id)] as Array[int])
+			_game._refresh_panel()
+			return
+	push_warning("preview_match: no town centre to select")
+
+
+## Presses the first train button on the panel, the way a player would, rather
+## than submitting a TrainCommand directly -- the queue slots are what is being
+## checked and they only fill if the whole round trip works.
+func _train_from_selection() -> void:
+	var panel: SelectionPanel = _game._panel
+	for slot in panel._action_slots:
+		if slot.visible and slot.action != null and String(slot.action.id).begins_with("train:"):
+			panel._on_action_pressed(slot.action)
+			return
+	push_warning("preview_match: nothing to train on the selected building")
 
 
 ## Through the badge's own signal path, not by poking SimPlayer -- the point is

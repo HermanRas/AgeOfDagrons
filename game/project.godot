@@ -28,12 +28,6 @@ EventBus="*res://src/autoload/event_bus.gd"
 
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-; 4 = Sensor Landscape: flips between the two landscape orientations as the
-; phone turns, instead of locking to one. THIS is what Android's manifest is
-; generated from -- export_presets.cfg also carries a `screen/orientation=4`,
-; but that key is Godot 3's and is ignored on 4.x, so with this line missing the
-; setting silently defaulted to fixed Landscape and the screen never rotated on
-; device (verified with `aapt dump xmltree`: android:screenOrientation was 0x0).
 window/handheld/orientation=4
 
 [input_devices]

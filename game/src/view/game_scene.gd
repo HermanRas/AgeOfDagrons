@@ -25,7 +25,6 @@ var _box: SelectionBox
 var _hud: ResourceHUD
 var _groups_hud: ControlGroupsHud
 var _age_badge: AgeBadge
-var _age_title: Label
 var _minimap: Minimap
 var _toast: NoticeToast
 var _pause_menu: PauseMenu
@@ -232,21 +231,22 @@ func _build_hud() -> void:
 	var age_top_row := HBoxContainer.new()
 	age_box.add_child(age_top_row)
 
-	# The numeral goes in the gold circle and the NAME in the title beside it,
-	# which is the split ages.json describes: the numeral is what fits a 648 px
-	# canvas, the name is for the places with room for prose. Both were "AGE I"
-	# hardcoded until now, with a note saying GameScene would drive them once
-	# ages did -- which is what _refresh_hud() now does.
+	# The NUMERAL only. ages.json is explicit that the numeral is what the HUD
+	# shows -- it needs no words and fits a 648 px canvas -- and that the NAME
+	# belongs to the places with room for prose: the tech tree (9.4), the
+	# advancement banner, the lobby. This header briefly showed the name too;
+	# it read as a caption on a screen that has no room to spare, so it is gone
+	# rather than shortened.
 	_age_badge = AgeBadge.new()
 	_age_badge.advance_requested.connect(_on_age_advance_requested)
 	age_top_row.add_child(_age_badge)
 
-	_age_title = Label.new()
-	_age_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_age_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_age_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_age_title.add_theme_color_override("font_color", HudStyle.GOLD)
-	age_top_row.add_child(_age_title)
+	# Holds the row open between the badge and the pause button, so the two sit
+	# at opposite ends of the panel rather than bunching against the left edge.
+	var age_spacer := Control.new()
+	age_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	age_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	age_top_row.add_child(age_spacer)
 
 	var pause_btn := TextureButton.new()
 	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
@@ -339,10 +339,7 @@ func _refresh_hud(snap: Dictionary) -> void:
 	var counts := _view.villager_counts(player_id)
 	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
 
-	var age := _view.age_of(player_id)
-	_age_badge.age = age
-	var age_def: AgeDef = GameDataRegistry.age(age)
-	_age_title.text = age_def.name.to_upper() if age_def != null else "AGE %d" % age
+	_age_badge.age = _view.age_of(player_id)
 
 	# A control group only ever holds the local player's units, so the whole
 	# stack shares one skin. Set before the per-slot signals below so a slot
