@@ -14,6 +14,23 @@
 ##
 ## Tap anywhere: a marker is drawn at the touch point. If markers land where
 ## your finger is, the touch -> screen coordinate path is sound.
+##
+## ORIENTATION IS SET BY `display/window/handheld/orientation=4` IN
+## project.godot, and that is the only key that does it. 4 is Sensor Landscape:
+## the screen flips between the two landscape orientations as the phone turns
+## instead of locking to one. `export_presets.cfg` also carries a
+## `screen/orientation=4`, but that key is Godot 3's and is ignored on 4.x -- so
+## with the project.godot line missing, the setting silently defaults to fixed
+## Landscape and the screen never rotates on device. Verified with
+## `aapt dump xmltree` on the built APK: android:screenOrientation was 0x0.
+##
+## This note lives HERE, in the script that checks orientation on hardware,
+## because project.godot cannot keep it. Godot rewrites that file without
+## comments every time it saves project settings -- which includes `--import`
+## AND simply running the game -- so the explanation was deleted twice on
+## 2026-08-16 before it was moved somewhere durable. If orientation ever
+## misbehaves on device, check that key still exists rather than looking for a
+## comment beside it.
 extends Control
 
 const MAX_TRAIL := 24
