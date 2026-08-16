@@ -514,14 +514,66 @@ func villager_counts(owner: int) -> Vector2i:
 	var idle := 0
 	var total := 0
 	for f in _facts.values():
-		if not bool(f.get("alive", true)):
+		if not _is_own_living_unit(f, owner):
 			continue          # a corpse (4.7) is not a villager to count any more
-		if not bool(f.get("is_unit", false)) or int(f.get("owner_id", 0)) != owner:
-			continue
 		total += 1
 		if int(f.get("task", -1)) == SimUnit.Task.IDLE:
 			idle += 1
 	return Vector2i(idle, total)
+
+
+## Whether `f` is one of `owner`'s living units -- the population counter's
+## definition of a "villager", factored out because `idle_unit_ids()` below MUST
+## agree with it. The idle badge's number and the resource HUD's idle number are
+## both on screen at once, and two counters labelled idle disagreeing would read
+## as a bug in whichever the player trusted less.
+##
+## Deliberately unit-ness rather than `unit.villager` specifically, which is the
+## rule `villager_counts()` has always used. It is now visible in a second place
+## and worth restating: an idle SOLDIER counts too and the badge will walk to
+## one. Narrowing this to villagers is a one-line change here, and it is one
+## decision rather than two, which is the point of the seam.
+func _is_own_living_unit(f: Dictionary, owner: int) -> bool:
+	if not bool(f.get("alive", true)):
+		return false
+	return bool(f.get("is_unit", false)) and int(f.get("owner_id", 0)) == owner
+
+
+## `owner`'s idle units, in ascending id order -- the other half of 7.1's
+## headcount, made actionable by `IdleVillagerBadge`.
+##
+## Sorted by id, the same determinism `owned_entity_position()` and
+## `SimWorld.nearest_drop_off()` keep: the walk through them has to visit the
+## same units in the same order every tap, and `_facts` is a Dictionary whose
+## key order is insertion order -- i.e. whatever order entities happened to
+## first appear in a snapshot.
+func idle_unit_ids(owner: int) -> Array[int]:
+	var ids: Array[int] = []
+	for id in _facts:
+		var f: Dictionary = _facts[id]
+		if _is_own_living_unit(f, owner) and int(f.get("task", -1)) == SimUnit.Task.IDLE:
+			ids.append(int(id))
+	ids.sort()
+	return ids
+
+
+## The idle unit after `after_id`, wrapping round to the first, or 0 when
+## `owner` has no idle units at all (PLAN.md 7.1 -- tap the badge to walk them).
+##
+## Takes the previous id rather than an index into the list, because the list
+## itself changes under the player between taps: a villager they visited five
+## seconds ago may have been given a job, and an index would then point at a
+## different unit than the one it was recorded for. An id is stable, and asking
+## for "the next one after it" still lands in the right PLACE in the order even
+## once that unit has dropped out of the list entirely.
+func next_idle_unit(owner: int, after_id: int) -> int:
+	var ids := idle_unit_ids(owner)
+	if ids.is_empty():
+		return 0
+	for id in ids:
+		if id > after_id:
+			return id
+	return ids[0]
 
 
 func _covers(f: Dictionary, tile: Vector2i) -> bool:

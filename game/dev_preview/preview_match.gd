@@ -185,6 +185,22 @@ func _advance_script() -> void:
 		23:
 			_report_occlusion()
 			_shoot("match_occluded")
+		24:
+			# The idle walk (7.1). Last, because it wants a spread-out map: by now
+			# the villagers have fought, built and walked to opposite corners, so a
+			# tap that does NOT move the camera is visible as a tap that did
+			# nothing. Halt them first and wait for the count to come back up --
+			# run straight after the occlusion step there was exactly ONE idle
+			# unit, and a walk of one visits the same villager twice and proves
+			# nothing about the cycling.
+			_stop_everyone()
+			_wait_until(_several_are_idle)
+		25:
+			# Pressed through the badge's own signal, like _press_advance --
+			# setting the selection directly would pass with the button unwired.
+			_walk_the_idle_badge()
+		26:
+			_shoot("match_idle")
 		_:
 			get_tree().quit()
 			return
@@ -505,6 +521,43 @@ func _report_occlusion() -> void:
 		print("  unit %-18s tile %s  owner %d  occluded %s" % [
 				f.get("def_id", &"?"), f.get("tile", Vector2i.ZERO),
 				int(f.get("owner_id", 0)), v.occluded])
+
+
+## Halt every villager, so there is a spread-out set of idle units for the badge
+## to walk. The same StopCommand the panel's Stop button issues.
+func _stop_everyone() -> void:
+	_select_all_villagers()
+	Net.submit_command(StopCommand.new(Net.local_player_id(),
+			(_game._view as GameView).movable_selection()))
+	_clear_selection()
+
+
+func _several_are_idle() -> bool:
+	return (_game._view as GameView).idle_unit_ids(Net.local_player_id()).size() >= 3
+
+
+## Tap the idle badge once per idle unit and print where each tap landed.
+##
+## The count of DISTINCT units is what matters and what the printout is for: a
+## walk that visits the same villager five times looks identical in a screenshot
+## to one that visits five, and both look identical to a badge whose count is
+## right and whose button does nothing.
+func _walk_the_idle_badge() -> void:
+	var view: GameView = _game._view
+	var badge: IdleVillagerBadge = _game._idle_badge
+	var idle := view.idle_unit_ids(Net.local_player_id())
+	print("idle badge reads %d; view has %d idle: %s" % [badge.count, idle.size(), idle])
+
+	var visited: Array[int] = []
+	# One more tap than there are idle units, so the wrap is exercised too.
+	for i in range(idle.size() + 1):
+		badge._on_pressed()
+		var landed: int = _game._view.selection.primary()
+		if not visited.has(landed):
+			visited.append(landed)
+		print("  tap %d -> unit %d at %s, camera %s" % [i + 1, landed,
+				view.facts_for(landed).get("tile", Vector2i.ZERO), _game._camera.position])
+	print("  visited %d distinct of %d idle" % [visited.size(), idle.size()])
 
 
 func _report_enemies() -> void:

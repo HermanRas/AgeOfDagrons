@@ -25,6 +25,7 @@ var _box: SelectionBox
 var _hud: ResourceHUD
 var _groups_hud: ControlGroupsHud
 var _age_badge: AgeBadge
+var _idle_badge: IdleVillagerBadge
 var _minimap: Minimap
 var _toast: NoticeToast
 var _pause_menu: PauseMenu
@@ -37,6 +38,13 @@ var _error: String = ""
 ## (reselect) need "what does slot N currently hold" without re-reading the
 ## snapshot dict each time.
 var _control_groups: Array = []
+
+## The last idle unit the idle badge walked to, or 0 before the first tap. Kept
+## here rather than in the badge because it is a fact about the WALK, not about
+## the widget: the badge reports a count and asks for the next one, and this is
+## where it got to. See `GameView.next_idle_unit()` for why it is an id and not
+## an index into the list.
+var _idle_cycle_id: int = 0
 
 ## Which building the next tap will try to place, or "" for ordinary tap
 ## handling. Set by the build buttons, cleared by a successful placement or
@@ -82,6 +90,7 @@ func _ready() -> void:
 		_error_label.visible = true
 		return
 	_hud.player_id = Net.local_player_id()
+	_idle_badge.player_id = Net.local_player_id()
 	_start_match()
 
 
@@ -213,16 +222,16 @@ func _build_hud() -> void:
 	_toast.position = Vector2(-160.0, 409.0)
 	hud.add_child(_toast)
 
-	# Phase 9.1's age indicator. Compacted to the mockup's 166x86 at the top
+	# Phase 9.1's age indicator. Compacted to the mockup's 180x86 at the top
 	# centre -- it was 240 wide when it carried a title and a straight progress
 	# bar, and both are gone: the numeral says the age, and the advance progress
-	# is now the ring around the badge itself rather than a separate bar.
+	# is now the ring around the badge itself rather than a separate bar. It
+	# widened by 14 again when the idle badge joined the pause button beside it.
 	var age_header := PanelContainer.new()
-	age_header.custom_minimum_size = Vector2(100.0, 0.0)
 	HudStyle.add_panel_background(age_header)
 	age_header.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	age_header.offset_left = -83.0
-	age_header.offset_right = 83.0
+	age_header.offset_right = 97.0
 	age_header.offset_top = 0.0
 	age_header.offset_bottom = 86.0
 	age_header.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -244,6 +253,10 @@ func _build_hud() -> void:
 	# ui_builder HUD mockup folded it into the age header instead so the two
 	# pieces of top-of-screen chrome read as one panel rather than two.
 	var age_top_row := HBoxContainer.new()
+	# The mockup spaces the badge off the column with a 5 px spacer between two
+	# default 4 px separations; one constant here is the same gap with two fewer
+	# nodes.
+	age_top_row.add_theme_constant_override("separation", 13)
 	age_box.add_child(age_top_row)
 
 	# The NUMERAL only. ages.json is explicit that the numeral is what the HUD
@@ -256,16 +269,33 @@ func _build_hud() -> void:
 	_age_badge.advance_requested.connect(_on_age_advance_requested)
 	age_top_row.add_child(_age_badge)
 
+	# Pause above, idle count below, in one narrow column beside the age badge --
+	# the mockup's `VillagersIdle` VBox. The pause button halved (48 -> 22) to
+	# make room: the header's content row is only as tall as the age badge, and
+	# two stacked 48s would have grown the panel rather than fitting inside it.
+	var badge_column := VBoxContainer.new()
+	badge_column.custom_minimum_size = Vector2(IdleVillagerBadge.SIZE, 0.0)
+	age_top_row.add_child(badge_column)
+
 	var pause_btn := TextureButton.new()
 	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
 	if ResourceLoader.exists(pause_icon_path):
 		pause_btn.texture_normal = load(pause_icon_path)
 	pause_btn.ignore_texture_size = true
-	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	# KEEP_CENTERED, not KEEP_ASPECT_CENTERED: the icon is 64x64 pixel art and
+	# fitting it to a 22 px cell is a 0.34x non-integer downscale, which mushes it
+	# whatever the filter does. Drawn at its own size, centred on the cell, it
+	# overhangs the column and stays crisp -- the mockup's value, and what the
+	# project owner asked for by name.
+	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_CENTERED
 	pause_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pause_btn.custom_minimum_size = Vector2(48.0, 48.0)
+	pause_btn.custom_minimum_size = Vector2(IdleVillagerBadge.SIZE, IdleVillagerBadge.SIZE)
 	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
-	age_top_row.add_child(pause_btn)
+	badge_column.add_child(pause_btn)
+
+	_idle_badge = IdleVillagerBadge.new()
+	_idle_badge.cycle_requested.connect(_on_idle_cycle_requested)
+	badge_column.add_child(_idle_badge)
 
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
@@ -687,6 +717,35 @@ func _on_group_selected(slot: int) -> void:
 	var centre = _view.control_group_centre(_control_groups[slot])
 	if centre != null:
 		_camera.centre_on(centre)
+
+
+## Tap the idle badge: select the next idle unit and bring the camera to it
+## (PLAN.md 7.1). Five taps with five idle villagers visit all five, one per tap,
+## then wrap round to the first.
+##
+## Selecting a unit does not give it a job, so the walk is stable: the same five
+## are still idle after the fifth tap. What DOES change the list is the player
+## then ordering one somewhere, which is the whole point of the badge -- and
+## because the walk remembers an id rather than a position, the unit dropping
+## out of the list leaves the next tap continuing from where it was rather than
+## jumping back to the top.
+##
+## Silently does nothing with none left. The badge greys out at zero and never
+## emits, and this stays defensive anyway: the count arrives with the snapshot,
+## so between one landing and the tap being handled the last idle unit may
+## already have been given a job by something else.
+func _on_idle_cycle_requested() -> void:
+	if _error != "":
+		return
+	var next := _view.next_idle_unit(Net.local_player_id(), _idle_cycle_id)
+	if next == 0:
+		return
+	_idle_cycle_id = next
+	_view.select([next] as Array[int])
+	_refresh_panel()
+	var facts := _view.facts_for(next)
+	if facts.has("tile"):
+		_camera.centre_on(Iso.tile_centre_to_world(facts["tile"]))
 
 
 ## Double tap (mobile) or Ctrl+digit (desktop): assign whatever is currently

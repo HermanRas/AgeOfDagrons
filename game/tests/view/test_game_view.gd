@@ -207,6 +207,65 @@ func test_villager_counts_is_zero_with_nothing_in_view() -> void:
 	assert_eq(view.villager_counts(1), Vector2i(0, 0))
 
 
+# ── walking the idle ones (7.1, the badge's half) ──────────────────────────
+
+## Four of player 1's units, of which 4 and 9 are idle, plus a busy one, a dead
+## one and someone else's idle villager. Ids are deliberately out of insertion
+## order: `_facts` is a Dictionary keyed in the order entities first appeared in
+## a snapshot, so a walk that did not sort would visit them in join order.
+func _idle_fixture() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 9, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 6, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 4, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"alive": false, "pos": {"x": 0, "y": 0}},
+		{"id": 7, "def_id": "unit.villager", "owner_id": 2, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+	], "removed": []})
+
+
+func test_idle_unit_ids_are_sorted_and_only_the_owners_living_idle_ones() -> void:
+	_idle_fixture()
+	assert_eq(view.idle_unit_ids(1), [4, 9] as Array[int],
+			"ascending, no busy one, no corpse, nobody else's")
+
+
+func test_the_idle_walk_visits_each_in_turn_and_then_wraps() -> void:
+	_idle_fixture()
+	assert_eq(view.next_idle_unit(1, 0), 4, "the first tap starts at the lowest id")
+	assert_eq(view.next_idle_unit(1, 4), 9)
+	assert_eq(view.next_idle_unit(1, 9), 4, "and round again rather than stopping")
+
+
+func test_the_walk_carries_on_from_where_it_was_when_that_unit_gets_a_job() -> void:
+	# The point of remembering an ID rather than an index: the player taps to id
+	# 4, orders it to gather, and taps again. 4 has left the list -- the next tap
+	# must still go to 9 rather than back to the top.
+	_idle_fixture()
+	view.apply_snapshot({"tick": 2, "updated": [
+		{"id": 4, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
+				"pos": {"x": 0, "y": 0}},
+	], "removed": []})
+	assert_eq(view.idle_unit_ids(1), [9] as Array[int])
+	assert_eq(view.next_idle_unit(1, 4), 9)
+
+
+func test_the_walk_asks_for_nothing_when_nobody_is_idle() -> void:
+	assert_eq(view.next_idle_unit(1, 0), 0, "0 is 'no unit', which GameScene treats as a no-op")
+
+
+func test_the_badges_count_and_the_walks_list_cannot_disagree() -> void:
+	# Both go through _is_own_living_unit(), which is the whole reason it exists:
+	# the idle badge and the resource HUD's idle/total row are on screen at the
+	# same time, and two counters labelled idle disagreeing reads as a bug.
+	_idle_fixture()
+	assert_eq(view.idle_unit_ids(1).size(), view.villager_counts(1).x)
+
+
 func test_process_advances_the_pool() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "pos": {"x": 0, "y": 0}},
