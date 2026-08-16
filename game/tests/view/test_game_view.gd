@@ -376,3 +376,28 @@ func test_an_entry_with_no_queue_reads_as_an_empty_one() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [{"id": 4, "def_id": "unit.villager",
 			"pos": {"x": 0, "y": 0}}], "removed": []})
 	assert_eq(view.facts_for(4)["queue"], [] as Array[StringName])
+
+func test_age_progress_is_the_one_place_the_ticks_become_a_fraction() -> void:
+	view.apply_snapshot({
+		"tick": 1, "updated": [], "removed": [],
+		"player_state": {1: {"age": 1, "colour": 0,
+				"advancing_to": 2, "advance_ticks": 25, "advance_total_ticks": 100}},
+	})
+	assert_almost_eq(view.age_progress_of(1), 0.25, 0.001)
+	assert_true(view.is_advancing(1))
+	assert_eq(view.age_of(1), 1, "still the old age until the research lands")
+
+
+func test_a_player_who_is_not_advancing_reports_no_progress() -> void:
+	view.apply_snapshot({
+		"tick": 1, "updated": [], "removed": [],
+		"player_state": {1: {"age": 3, "colour": 0,
+				"advancing_to": 0, "advance_ticks": 0, "advance_total_ticks": 0}},
+	})
+	assert_almost_eq(view.age_progress_of(1), 0.0, 0.001)
+	assert_false(view.is_advancing(1))
+
+
+func test_progress_for_an_unknown_player_is_zero_rather_than_a_divide_by_zero() -> void:
+	assert_almost_eq(view.age_progress_of(99), 0.0, 0.001)
+	assert_false(view.is_advancing(99))

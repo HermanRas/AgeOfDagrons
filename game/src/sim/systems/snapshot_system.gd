@@ -37,6 +37,13 @@ static func build(w: SimWorld, _player_id: int) -> Dictionary:
 			# from join order and never mutates, so it cannot diverge the way stock
 			# or control groups can.
 			"colour": p.colour,
+			# Age advancement in flight (9.2), as INT TICKS rather than a
+			# fraction -- the sim carries no floats, and the ring the HUD draws
+			# from these is a view concern. 0/0/0 when nothing is being
+			# researched, which the badge reads as "no ring".
+			"advancing_to": p.advancing_to,
+			"advance_ticks": p.advance_ticks,
+			"advance_total_ticks": p.advance_total_ticks,
 			# PLAN.md 10.6: persisted sim state, not view state, so it rides the
 			# same snapshot every other per-player fact does rather than a
 			# separate channel.

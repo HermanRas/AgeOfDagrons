@@ -26,6 +26,19 @@ var stock: Dictionary = {}           # StringName kind -> int amount
 var pop_used: int = 0
 var pop_cap: int = 0
 var age: int = 1
+
+## Age advancement in progress (PLAN.md 9.2), all three fields or none.
+##
+## `advancing_to` is 0 when idle, otherwise the age being researched -- which is
+## always `age + 1`, but stored rather than derived so a snapshot says what is
+## being advanced to without the reader having to know the rule.
+##
+## Progress is INT TICKS, not a float fraction. The sim carries no floats
+## (PLAN.md 7.1); the view divides these two to draw the ring.
+var advancing_to: int = 0
+var advance_ticks: int = 0
+var advance_total_ticks: int = 0
+
 var researched: Dictionary = {}
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 var defeated: bool = false
@@ -53,3 +66,36 @@ func refund(cost: Dictionary) -> void:
 
 func add_resource(kind: StringName, amount: int) -> void:
 	stock[kind] = int(stock.get(kind, 0)) + amount
+
+
+func is_advancing() -> bool:
+	return advancing_to > 0
+
+
+## Begin advancing. The caller has already checked it is allowed
+## (AdvanceAgeCommand.validate); this only records the state.
+func begin_advance(to_age: int, total_ticks: int) -> void:
+	advancing_to = to_age
+	advance_ticks = 0
+	# At least one tick, so a zero-time age still shows one frame of progress
+	# rather than dividing by zero in the view.
+	advance_total_ticks = maxi(1, total_ticks)
+
+
+## One tick of progress. Returns true on the tick the age actually changes, so
+## AgeSystem can announce it without re-deriving completion.
+func tick_advance() -> bool:
+	if not is_advancing():
+		return false
+	advance_ticks += 1
+	if advance_ticks < advance_total_ticks:
+		return false
+	age = advancing_to
+	cancel_advance()
+	return true
+
+
+func cancel_advance() -> void:
+	advancing_to = 0
+	advance_ticks = 0
+	advance_total_ticks = 0

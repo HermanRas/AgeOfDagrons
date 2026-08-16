@@ -28,7 +28,8 @@ var _last_tick: int = -1
 ## colours.json's note is explicit that the tint must key off who owns a thing
 ## rather than off whether its art carries a playercolor mask -- 0 A.D.'s sheep
 ## declares one and is still nobody's sheep.
-const _NEUTRAL_SKIN := {"age": 0, "colour": -1}
+const _NEUTRAL_SKIN := {"age": 0, "colour": -1,
+		"advancing_to": 0, "advance_ticks": 0, "advance_total_ticks": 0}
 
 ## owner_id -> {age, colour}, refreshed from every snapshot's `player_state`
 ## (SnapshotSystem carries both). This is the whole of PLAN.md 2.7.1's skin key
@@ -223,6 +224,27 @@ func age_of(owner_id: int) -> int:
 	return maxi(1, int(skin_for(owner_id).get("age", 1)))
 
 
+## How far through an age advance a player is, 0.0 to 1.0, or 0.0 when they are
+## not advancing. The ONE place the sim's int ticks become a float -- the ring is
+## drawn from this and nothing else reads it, which is what keeps the fraction on
+## the view side of the boundary (PLAN.md 7.1).
+func age_progress_of(owner_id: int) -> float:
+	var skin := skin_for(owner_id)
+	if int(skin.get("advancing_to", 0)) <= 0:
+		return 0.0
+	var total := int(skin.get("advance_total_ticks", 0))
+	if total <= 0:
+		return 0.0
+	return clampf(float(skin.get("advance_ticks", 0)) / float(total), 0.0, 1.0)
+
+
+## True while an advance is in flight, which is NOT the same as progress > 0 --
+## the first tick of a 100-tick research is progress 0.01, but the tick it starts
+## it is exactly 0.0 and the badge still has to stop offering another advance.
+func is_advancing(owner_id: int) -> bool:
+	return int(skin_for(owner_id).get("advancing_to", 0)) > 0
+
+
 func _read_player_skins(snap: Dictionary) -> void:
 	var state: Dictionary = snap.get("player_state", {})
 	if state.is_empty():
@@ -232,6 +254,12 @@ func _read_player_skins(snap: Dictionary) -> void:
 		_player_skins[int(pid)] = {
 			"age": int(ps.get("age", 1)),
 			"colour": int(ps.get("colour", 0)),
+			# Advancement rides here too rather than in its own map: it is
+			# per-player state arriving in the same block, and keeping one
+			# dictionary means there is one place a player's row can go stale.
+			"advancing_to": int(ps.get("advancing_to", 0)),
+			"advance_ticks": int(ps.get("advance_ticks", 0)),
+			"advance_total_ticks": int(ps.get("advance_total_ticks", 0)),
 		}
 
 

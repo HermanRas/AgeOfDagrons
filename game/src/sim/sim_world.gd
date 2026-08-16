@@ -54,9 +54,13 @@ func setup(cfg: MatchConfig) -> void:
 	# last: it reacts to hp reaching 0 (a debug command, later combat), and
 	# everything else this tick has already had its say about a unit or
 	# building that is now gone.
+	# AgeSystem sits beside ProductionSystem: both turn queued time into a thing
+	# arriving, and both must run after CommandSystem has let this tick's orders
+	# land so an advance started this tick is already counting.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), MovementSystem.new(),
-			SeparationSystem.new(), AnimationSystem.new(), DeathSystem.new()]
+			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), AgeSystem.new(),
+			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
+			DeathSystem.new()]
 
 	for pid in cfg.player_ids:
 		var p := SimPlayer.new()
@@ -374,6 +378,14 @@ func state_hash() -> int:
 		# SetControlGroupCommand (10.2) mutates SimPlayer state -- two clients
 		# applying it differently would otherwise hash identically right up until
 		# a reselect or reconnect (10.6) exposed the divergence.
-		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups])
+		#
+		# The advancement fields are here for the same reason and NOT because the
+		# age itself is: `age` only changes on the one tick the research lands, so
+		# two worlds that started an advance at different ticks would agree on
+		# every hash until it completed, and then disagree with nothing to say
+		# when they parted. The in-flight counter is what makes that visible
+		# immediately. `colour` stays out -- it is fixed at join and never mutates.
+		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
+				p.advancing_to, p.advance_ticks, p.advance_total_ticks])
 
 	return hash(parts)

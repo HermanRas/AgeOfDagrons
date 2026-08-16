@@ -160,3 +160,122 @@ func test_every_unit_becomes_trainable_by_age_four() -> void:
 			assert_true(TrainCommand.new(1, b.id, unit_id).validate(w),
 					"an age-4 player with full stock can train %s at %s"
 					% [unit_id, building_id])
+
+
+# -- timed advancement (9.2) -------------------------------------------------
+
+func _advance_ticks_for(to_age: int) -> int:
+	return GameDataRegistry.age(to_age).advance_time_ticks
+
+
+func test_advancing_takes_time_rather_than_landing_at_once() -> void:
+	# The whole difference from DebugSetAgeCommand, and what the ring reports.
+	var total := _advance_ticks_for(2)
+	assert_true(total > 0, "ages.json gives age 2 a research time")
+
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	assert_eq(_player().age, 1, "still age 1 the tick the research starts")
+	assert_true(_player().is_advancing())
+	assert_eq(_player().advancing_to, 2)
+	# AgeSystem runs AFTER CommandSystem within a tick, so an advance ordered
+	# this tick is already one tick along by the end of it -- deliberate, and the
+	# same reason ProductionSystem sits where it does: an order should not cost a
+	# visible tick of nothing happening.
+	assert_eq(_player().advance_ticks, 1, "counting from the tick it was ordered")
+
+	for i in range(total - 2):
+		w.step()
+	assert_eq(_player().age, 1, "and right up to the last tick")
+	assert_eq(_player().advance_ticks, total - 1)
+
+	w.step()
+	assert_eq(_player().age, 2, "then it lands")
+	assert_false(_player().is_advancing(), "and the research clears itself")
+	assert_eq(_player().advance_ticks, 0, "with its counter reset, not left at the total")
+
+
+func test_progress_climbs_one_tick_at_a_time() -> void:
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	var first := _player().advance_ticks
+	w.step()
+	assert_eq(_player().advance_ticks, first + 1)
+	assert_eq(_player().advance_total_ticks, _advance_ticks_for(2),
+			"the total comes from the age being advanced INTO")
+
+
+func test_a_second_advance_is_refused_while_one_is_running() -> void:
+	# Otherwise a double tap would restart the research, and the ring would jump
+	# back to empty for no reason the player could see.
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	var started := _player().advance_ticks
+
+	assert_false(AdvanceAgeCommand.new(1).validate(w))
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	assert_eq(_player().advance_ticks, started + 1, "the first research kept counting")
+
+
+func test_advancing_is_refused_at_the_last_age() -> void:
+	w.queue_command(DebugSetAgeCommand.new(1, GameDataRegistry.age_count()))
+	w.step()
+	assert_false(AdvanceAgeCommand.new(1).validate(w), "there is no age 5 to reach")
+
+
+func test_it_advances_only_the_caller() -> void:
+	w.queue_command(AdvanceAgeCommand.new(1))
+	for i in range(_advance_ticks_for(2) + 1):
+		w.step()
+	assert_eq(_player(1).age, 2)
+	assert_eq(_player(2).age, 1)
+	assert_false(_player(2).is_advancing())
+
+
+func test_the_progress_rides_the_snapshot_as_ints() -> void:
+	# The sim carries no floats; the ring's fraction is computed in the view.
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	w.step()
+	var ps: Dictionary = SnapshotSystem.build(w, 1)["player_state"][1]
+	assert_eq(int(ps["advancing_to"]), 2)
+	assert_true(ps["advance_ticks"] is int)
+	assert_true(ps["advance_total_ticks"] is int)
+	assert_eq(int(ps["advance_total_ticks"]), _advance_ticks_for(2))
+
+
+func test_an_advance_in_flight_is_part_of_the_state_hash() -> void:
+	# `age` alone is not enough: two worlds that started an advance at different
+	# ticks would agree on every hash until it completed, then diverge with
+	# nothing to say when they parted.
+	var other := SimWorld.new()
+	var cfg := MatchConfig.new()
+	cfg.player_ids = [1, 2]
+	cfg.map_size = Vector2i(48, 48)
+	other.setup(cfg)
+	other.map.fill_terrain(SimMap.Terrain.GRASS)
+	assert_eq(w.state_hash(), other.state_hash(), "identical worlds start equal")
+
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	other.step()
+	assert_ne(w.state_hash(), other.state_hash(),
+			"one of them is researching and the hash says so")
+
+
+func test_the_wire_format_round_trips() -> void:
+	var decoded := Command.from_dict(AdvanceAgeCommand.new(1, 9).to_dict())
+	assert_not_null(decoded, "advance_age is registered in Command.from_dict")
+	assert_true(decoded is AdvanceAgeCommand)
+	assert_eq(decoded.player_id, 1)
+
+
+func test_a_free_advance_is_still_gated_on_cost_being_affordable() -> void:
+	# `cost` is empty today, so this pins the MECHANISM rather than a number:
+	# whatever ages.json eventually charges, validate() refuses it unpaid and
+	# apply() takes it.
+	var before: Dictionary = _player().stock.duplicate()
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	assert_eq(_player().stock, before, "advancing is free for now, and visibly so")

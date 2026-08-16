@@ -75,3 +75,49 @@ func test_the_badge_never_asks_for_an_age_the_command_would_refuse() -> void:
 			continue
 		assert_true(DebugSetAgeCommand.new(1, next).validate(w),
 				"the badge offers age %d and the sim accepts it" % next)
+
+
+# -- the advance ring --------------------------------------------------------
+
+func test_progress_is_clamped_to_a_fraction() -> void:
+	badge.progress = 2.5
+	assert_almost_eq(badge.progress, 1.0, 0.001)
+	badge.progress = -1.0
+	assert_almost_eq(badge.progress, 0.0, 0.001)
+
+
+func test_a_badge_mid_research_refuses_to_start_another() -> void:
+	# A double tap would otherwise restart the research and snap the ring back to
+	# empty for no reason the player could see. AdvanceAgeCommand refuses it too;
+	# this is the half that never asks.
+	var asked: Array[int] = []
+	badge.advance_requested.connect(func(next: int) -> void: asked.append(next))
+	badge.age = 1
+	badge.advancing = true
+	badge._on_pressed()
+	assert_true(asked.is_empty())
+
+	badge.advancing = false
+	badge._on_pressed()
+	assert_eq(asked, [2] as Array[int])
+
+
+func test_the_hint_reads_differently_in_each_of_the_three_states() -> void:
+	badge.age = 1
+	badge.advancing = false
+	assert_eq(badge._hint.text, "ADVANCE", "there is something to do")
+
+	badge.advancing = true
+	assert_eq(badge._hint.text, "...", "it is under way and the ring is the feedback")
+
+	badge.advancing = false
+	badge.age = GameDataRegistry.age_count()
+	assert_eq(badge._hint.text, "MAX", "there is nothing left to reach")
+
+
+func test_advancing_and_progress_are_independent() -> void:
+	# The tick a research STARTS is progress 0.0, and the badge must already have
+	# stopped offering another -- so "advancing" cannot be inferred from progress.
+	badge.advancing = true
+	assert_almost_eq(badge.progress, 0.0, 0.001)
+	assert_eq(badge._hint.text, "...")

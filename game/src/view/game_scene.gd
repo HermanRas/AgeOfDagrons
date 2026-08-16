@@ -133,14 +133,20 @@ func _build_hud() -> void:
 	_box = SelectionBox.new()
 	hud.add_child(_box)
 
+	# ANCHORS AND OFFSETS BELOW ARE THE ui_builder MOCKUP'S, ported by hand.
+	# `HUD.tscn` is where the project owner lays this out; setting offsets here
+	# rather than `position` is what makes the two comparable, since `position`
+	# on an anchored Control writes offset_left/offset_top only and leaves the
+	# other two wherever they were.
 	_panel = SelectionPanel.new()
 	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_panel.position = Vector2(16, -13)
-	# Anchored at a bottom-left POINT, so by default the panel would grow
-	# downward off-screen as rows are added (found live at 4.6/5.5: the new
-	# Destroy button pushed a building's panel, with its extra Train row, past
-	# the bottom edge). Growing upward instead keeps its bottom edge fixed
-	# regardless of how many rows the selected entity's panel shows.
+	_panel.offset_left = 0.0
+	_panel.offset_bottom = 0.0
+	# Anchored to the bottom EDGE, so by default the panel would grow downward
+	# off-screen as rows are added (found live at 4.6/5.5: the new Destroy button
+	# pushed a building's panel, with its extra Train row, past the bottom edge).
+	# Growing upward instead keeps its bottom edge fixed regardless of how many
+	# rows the selected entity's panel shows.
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_panel.train_requested.connect(_on_train_requested)
 	_panel.cancel_requested.connect(_on_cancel_requested)
@@ -149,9 +155,14 @@ func _build_hud() -> void:
 	_panel.action_requested.connect(_on_action_requested)
 	hud.add_child(_panel)
 
+	# Flush into the top-right corner, per the mockup -- it used to sit 64 px down,
+	# which left a gap the dragon frame was never drawn to fill.
 	_hud = ResourceHUD.new()
 	_hud.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_hud.position = Vector2(-152, 64)
+	_hud.offset_left = -ResourceHUD.PANEL_SIZE.x
+	_hud.offset_top = 0.0
+	_hud.offset_right = 0.0
+	_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	hud.add_child(_hud)
 
 	_groups_hud = ControlGroupsHud.new()
@@ -202,22 +213,25 @@ func _build_hud() -> void:
 	_toast.position = Vector2(-160.0, 409.0)
 	hud.add_child(_toast)
 
-	# Phase 9.1 / ASSET_MISSING.md 234: no age progression exists in the sim
-	# yet, so this is static chrome only -- a fixed title and an empty
-	# progress bar, not wired to anything. It exists so top-center reads as
-	# finished rather than a hole in the layout; GameScene will drive real
-	# values here once ages do.
+	# Phase 9.1's age indicator. Compacted to the mockup's 166x86 at the top
+	# centre -- it was 240 wide when it carried a title and a straight progress
+	# bar, and both are gone: the numeral says the age, and the advance progress
+	# is now the ring around the badge itself rather than a separate bar.
 	var age_header := PanelContainer.new()
-	age_header.custom_minimum_size = Vector2(240.0, 0.0)
+	age_header.custom_minimum_size = Vector2(100.0, 0.0)
 	HudStyle.add_panel_background(age_header)
 	age_header.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	age_header.position = Vector2(-120.0, 8.0)
+	age_header.offset_left = -83.0
+	age_header.offset_right = 83.0
+	age_header.offset_top = 0.0
+	age_header.offset_bottom = 86.0
+	age_header.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	hud.add_child(age_header)
 
 	var age_margin := MarginContainer.new()
 	age_margin.add_theme_constant_override("margin_left", 35)
 	age_margin.add_theme_constant_override("margin_right", 35)
-	age_margin.add_theme_constant_override("margin_top", 6)
+	age_margin.add_theme_constant_override("margin_top", 20)
 	age_margin.add_theme_constant_override("margin_bottom", 12)
 	age_header.add_child(age_margin)
 
@@ -242,13 +256,6 @@ func _build_hud() -> void:
 	_age_badge.advance_requested.connect(_on_age_advance_requested)
 	age_top_row.add_child(_age_badge)
 
-	# Holds the row open between the badge and the pause button, so the two sit
-	# at opposite ends of the panel rather than bunching against the left edge.
-	var age_spacer := Control.new()
-	age_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	age_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	age_top_row.add_child(age_spacer)
-
 	var pause_btn := TextureButton.new()
 	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
 	if ResourceLoader.exists(pause_icon_path):
@@ -259,14 +266,6 @@ func _build_hud() -> void:
 	pause_btn.custom_minimum_size = Vector2(48.0, 48.0)
 	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
 	age_top_row.add_child(pause_btn)
-
-	var age_progress := ProgressBar.new()
-	age_progress.min_value = 0.0
-	age_progress.max_value = 100.0
-	age_progress.value = 0.0
-	age_progress.show_percentage = false
-	age_progress.custom_minimum_size = Vector2(0.0, 8.0)
-	age_box.add_child(age_progress)
 
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
@@ -354,6 +353,8 @@ func _refresh_hud(snap: Dictionary) -> void:
 	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
 
 	_age_badge.age = _view.age_of(player_id)
+	_age_badge.advancing = _view.is_advancing(player_id)
+	_age_badge.progress = _view.age_progress_of(player_id)
 
 	# A control group only ever holds the local player's units, so the whole
 	# stack shares one skin. Set before the per-slot signals below so a slot
@@ -590,12 +591,17 @@ func _on_debug_destroy_requested(target_id: int) -> void:
 	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
 
 
-## Debug-only until 9.2 (see AgeBadge). Goes through the ordinary command path
-## rather than reaching into the world, so the badge updates from the next
-## snapshot's `player_state` like everything else -- there is no local
-## short-circuit to go stale, and the buildings re-skin on the same tick.
-func _on_age_advance_requested(next_age: int) -> void:
-	Net.submit_command(DebugSetAgeCommand.new(Net.local_player_id(), next_age))
+## Starts the research; `AgeSystem` finishes it some seconds later. The badge's
+## `next_age` is ignored -- AdvanceAgeCommand always advances to `age + 1` and
+## has no field to be told otherwise, so a client cannot ask to skip one. The
+## argument stays in the signal because the badge computing it is what proves
+## there IS a next age before it emits.
+##
+## Goes through the ordinary command path rather than reaching into the world, so
+## the ring fills from the next snapshot's `player_state` like everything else --
+## there is no local clock to drift from the sim's.
+func _on_age_advance_requested(_next_age: int) -> void:
+	Net.submit_command(AdvanceAgeCommand.new(Net.local_player_id()))
 
 
 ## Blips (PLAN.md 8.2a). Separate from _refresh_hud() -- that one drains once

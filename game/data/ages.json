@@ -24,10 +24,28 @@
     "here; the numerals were always right."
   ],
 
+  "_note_advance": [
+    "advance_time_ticks is how long ADVANCING INTO this age takes, so age 1's is",
+    "0 -- every match starts there and nobody advances into it. The sim counts",
+    "these ticks (AgeSystem) and the HUD draws them as the ring around the age",
+    "badge, so this one number is the whole speed of the age ladder.",
+    "",
+    "100 TICKS IS A TEST VALUE, not a balance one. At SimClock's 10 Hz that is 10",
+    "seconds, or 10% of the ring per second -- fast enough to watch all three",
+    "advances in one sitting. A real pace is more like 1200 (120 s); the project",
+    "owner set the test figure deliberately and it is one number per age to",
+    "change back.",
+    "",
+    "`cost` is declared and EMPTY. Advancing is free for now; the field is here",
+    "because PLAN.md 9.2 charges for it, and AdvanceAgeCommand already refuses a",
+    "cost the player cannot afford -- so filling these in is a data change with",
+    "no code behind it."
+  ],
+
   "ages": [
     { "name": "Age of Ash",     "numeral": "I",   "cost": {}, "advance_time_ticks": 0 },
-    { "name": "Age of Embers",  "numeral": "II" },
-    { "name": "Age of Flame",   "numeral": "III" },
-    { "name": "Age of Dragons", "numeral": "IV" }
+    { "name": "Age of Embers",  "numeral": "II",  "cost": {}, "advance_time_ticks": 100 },
+    { "name": "Age of Flame",   "numeral": "III", "cost": {}, "advance_time_ticks": 100 },
+    { "name": "Age of Dragons", "numeral": "IV",  "cost": {}, "advance_time_ticks": 100 }
   ]
 }

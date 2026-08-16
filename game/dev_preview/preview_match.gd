@@ -31,6 +31,9 @@ const STEP_FRAMES := 12
 var _game: Node = null
 var _frames := 0
 var _step := 0
+## Set by _wait_for_progress(); the script stalls until the advance ring reaches
+## it. -1.0 means "not waiting on anything".
+var _await_progress := -1.0
 var _interactive := false
 
 
@@ -44,6 +47,18 @@ func _process(_delta: float) -> void:
 	if _interactive:
 		return
 	_frames += 1
+
+	# A progress wait outranks the frame gate: it is waiting on sim time, which
+	# the frame counter knows nothing about.
+	if _await_progress >= 0.0:
+		var view: GameView = _game._view
+		if view.age_progress_of(Net.local_player_id()) < _await_progress:
+			return
+		_await_progress = -1.0
+		# Re-base the frame gate, or every step after a wait fires immediately
+		# because the counter has run far past its threshold.
+		_frames = SETTLE_FRAMES + _step * STEP_FRAMES
+
 	if _frames < SETTLE_FRAMES + _step * STEP_FRAMES:
 		return
 	_advance_script()
@@ -62,39 +77,63 @@ func _advance_script() -> void:
 		1:
 			_shoot("match_age1")
 		2:
-			_advance_age()
+			# The real button: a timed research, so the ring starts filling. Held
+			# for half of `advance_time_ticks` before the shot, or the photograph
+			# is of a ring 2% round and says nothing.
+			_press_advance()
+			_wait_for_progress(0.5)
 		3:
-			_shoot("match_age2")
+			_shoot("match_advancing")
 		4:
-			_advance_age()
+			# The rest of the ladder uses the INSTANT debug jump. Sitting through
+			# three more real researches would add 30 s to every preview run for
+			# nothing -- the ring is already photographed, and what these shots
+			# are for is the building skins.
+			_jump_age(2)
 		5:
-			_shoot("match_age3")
+			_shoot("match_age2")
 		6:
-			_advance_age()
+			_jump_age(3)
 		7:
+			_shoot("match_age3")
+		8:
+			_jump_age(4)
 			_select_a_villager()
 			_open_build_menu()
-		8:
-			_shoot("match_age4")
 		9:
-			_page_build_menu()
+			_shoot("match_age4")
 		10:
-			_shoot("match_age4_page2")
+			_page_build_menu()
 		11:
+			_shoot("match_age4_page2")
+		12:
 			# The town centre's own panel: its train row, and its queue once
 			# something is in it. The queue slots crop the unit's portrait, which
 			# needs the def ids to have survived the snapshot.
 			_select_a_town_centre()
-		12:
-			_train_from_selection()
 		13:
 			_train_from_selection()
 		14:
+			_train_from_selection()
+		15:
 			_shoot("match_queue")
 		_:
 			get_tree().quit()
 			return
 	_step += 1
+
+
+## Hold the script until the local player's advance ring is at least this far
+## round, then carry on.
+##
+## Waits on the SIM's own reported progress rather than on a frame count. The
+## first version of this converted seconds to frames via
+## `Engine.get_frames_per_second()` and hung the preview -- frames and sim ticks
+## are different clocks (SimClock runs at a fixed 10 Hz whatever the frame rate
+## does), so any frame count is a guess about a quantity the sim will happily
+## tell you. This asks it.
+func _wait_for_progress(fraction: float) -> void:
+	_await_progress = fraction
 
 
 func _select_a_villager() -> void:
@@ -159,10 +198,17 @@ func _train_from_selection() -> void:
 
 
 ## Through the badge's own signal path, not by poking SimPlayer -- the point is
-## to check the button works, and a preview that set the age directly would pass
-## with the button unwired.
-func _advance_age() -> void:
+## to check the BUTTON works, and a preview that set the age directly would pass
+## with it unwired. Starts a timed research; the age lands seconds later.
+func _press_advance() -> void:
 	_game._age_badge._on_pressed()
+
+
+## The instant debug jump, for getting to an age quickly. Deliberately NOT the
+## button: it skips the research entirely, so a preview that used it everywhere
+## would never exercise the thing the button does.
+func _jump_age(to_age: int) -> void:
+	Net.submit_command(DebugSetAgeCommand.new(Net.local_player_id(), to_age))
 
 
 func _shoot(name: String) -> void:
