@@ -49,6 +49,31 @@ const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
 ## replace this again if wildlife hunting (6.1a/6.1b) comes back.
 const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
 
+## What a SECOND player gets on the debug map (MatchConfig.debug_skirmish): two
+## soldiers and nothing else -- no town centre, no villagers, no stock. Offsets
+## are from the FIRST player's town-centre origin, same frame as the resource
+## clusters above, because "where the enemy is" is only meaningful relative to
+## where you start.
+##
+## An archer and a knight, chosen as the two ends of the military roster: one
+## ranged and one melee, one on foot and one mounted, so whatever combat is
+## eventually pointed at them has both cases standing in front of it. Both are
+## above age 1 -- archer 2, knight 3 -- and that is fine here: `age_required`
+## gates the TRAIN menu, not what may exist on a map (PLAN.md 2.7.1).
+##
+## PLACED FOR THE SCREEN, like the resource clusters. Iso sends (dx - dy) to
+## screen x and (dx + dy) to screen y, and the camera opens centred on the town
+## centre's own middle -- which is `origin + (5, 5)`, half its 10x10 footprint.
+## Relative to that middle these two sit at (7, -5) and (9, -5), i.e. 384 px and
+## 448 px to the right and a little below, on a 1152 px frame whose right half is
+## 576 px wide. Comfortably on screen at the default zoom, two tiles clear of the
+## town centre's edge, and below the berry-bush row rather than tangled in it.
+## Stepping only dx between the two staggers them, exactly as DEBUG_FOOD does.
+const DEBUG_ENEMY_SQUAD := [
+	[&"unit.archer", Vector2i(12, 0)],
+	[&"unit.knight", Vector2i(14, 0)],
+]
+
 ## Starting stock (PLAN.md 9: numbers are starting values to be tuned by
 ## playtest), and only on the DEBUG map -- this is a sandbox figure, not a
 ## balance one, and the day there is a real map generator or a lobby it does not
@@ -79,18 +104,29 @@ const DEBUG_STARTING_STOCK := {
 static func build_debug_map(w: SimWorld) -> void:
 	_paint_terrain(w.map)
 
-	# Order matters and is fixed: town centres first so their footprints are
-	# claimed before anything else can take those tiles, then nodes, then
-	# villagers into whatever is left. Placing nodes first would let a tree land
-	# where a town centre has to go and silently shrink a player's start.
-	for p in w.players:
-		var origin := _start_origin(w, p.id)
-		var tc := w.spawn_building(&"building.town_center", p.id, origin,
-				SimBuilding.Phase.COMPLETE, true)
-		_place_resources(w, origin)
-		_place_villagers(w, p.id, tc)
-		for kind in DEBUG_STARTING_STOCK:
-			p.add_resource(kind, int(DEBUG_STARTING_STOCK[kind]))
+	# THE FIRST PLAYER GETS THE ONLY BASE. This map has one start position
+	# (DEBUG_START) and `_start_origin` takes no player into account, so a second
+	# town centre would be forced down on top of the first -- 2.4b is where real
+	# per-player starts live. Everyone after the first therefore gets the skirmish
+	# squad instead: something on the map that is not yours, which is all a debug
+	# opponent has to be until there is an AI to run one.
+	#
+	# Within the base, order matters and is fixed: the town centre first so its
+	# footprint is claimed before anything else can take those tiles, then nodes,
+	# then villagers into whatever is left. Placing nodes first would let a tree
+	# land where the town centre has to go and silently shrink the start.
+	var origin := _start_origin(w, 0)
+	for i in range(w.players.size()):
+		var p := w.players[i]
+		if i == 0:
+			var tc := w.spawn_building(&"building.town_center", p.id, origin,
+					SimBuilding.Phase.COMPLETE, true)
+			_place_resources(w, origin)
+			_place_villagers(w, p.id, tc)
+			for kind in DEBUG_STARTING_STOCK:
+				p.add_resource(kind, int(DEBUG_STARTING_STOCK[kind]))
+		else:
+			_place_enemy_squad(w, p.id, origin)
 
 	# The map is final; build the pathfinding grid now. A full sweep of a 64x64
 	# grid measures ~12 ms, which is invisible during setup and five times the
@@ -139,6 +175,24 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.gold_mine", origin + offset, 1)
 	for offset in DEBUG_FOOD:
 		w.spawn_resource_node(&"res.berry_bush", origin + offset, 0)
+
+
+## The hostile squad (DEBUG_ENEMY_SQUAD), placed relative to the FIRST player's
+## town-centre origin. Unlike the villagers these take fixed tiles rather than
+## the next free one: they are placed for where they appear on screen, and a
+## squad that shuffled to a neighbouring tile because something was in the way
+## would quietly stop being where the comment says it is. Units are not written
+## into occupancy anyway, so there is nothing to collide with -- only ground to
+## be standable, which is checked so a squad offset that ever reached water or
+## the map edge fails visibly here rather than by walking through a cliff later.
+static func _place_enemy_squad(w: SimWorld, player_id: int, origin: Vector2i) -> void:
+	for entry in DEBUG_ENEMY_SQUAD:
+		var def_id: StringName = entry[0]
+		var tile: Vector2i = origin + (entry[1] as Vector2i)
+		if not w.map.is_passable(tile, SimMap.Domain.LAND):
+			push_warning("MapGen: no room for %s at %s" % [def_id, tile])
+			continue
+		w.spawn_unit(def_id, player_id, tile)
 
 
 ## Villagers ring the town centre, placed one at a time so each claims a distinct

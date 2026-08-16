@@ -7,8 +7,8 @@ extends Node2D
 
 ## What tapping something should lead to (PLAN.md 4.5): NONE clears the
 ## selection, SELECT reselects (own unit, or own building with nothing to send
-## it), GATHER/BUILD/MOVE are the three orders a tap can issue.
-enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE }
+## it), GATHER/BUILD/MOVE/ATTACK are the four orders a tap can issue.
+enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK }
 
 ## Forces a unit adjacent to a building to Y-sort after it (see
 ## apply_snapshot()), regardless of how the footprint-corner math alone would
@@ -389,6 +389,14 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 	if has_movable_selection and not bool(f["is_unit"]) \
 			and GameDataRegistry.resource_def(StringName(f["def_id"])) != null:
 		return TapAction.GATHER
+
+	# Somebody else's, and not gaia's: tapping it attacks it (4.13). Checked
+	# AFTER the resource branch, so a tree stays a thing to chop rather than a
+	# thing to shoot -- gaia owns both, and only the resource def tells them
+	# apart. With nothing selected it still just reselects, so an enemy's panel
+	# and health stay readable without an army in hand.
+	if int(f["owner_id"]) != 0:
+		return TapAction.ATTACK if has_movable_selection else TapAction.SELECT
 
 	return TapAction.MOVE if has_movable_selection else TapAction.NONE
 

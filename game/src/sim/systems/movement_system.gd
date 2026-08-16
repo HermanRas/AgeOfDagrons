@@ -53,15 +53,8 @@ func _advance(w: SimWorld, e: SimUnit) -> void:
 			var step := Vector2(delta).normalized() * float(budget)
 			e.pos += Vector2i(roundi(step.x), roundi(step.y))
 			budget = 0
-		e.facing = _facing_from_delta(delta)
+		e.facing = SimUnit.facing_toward(delta)
 
 	var new_tile := e.tile()
 	if new_tile != old_tile:
 		w.spatial.move(e.id, new_tile)
-
-
-## 8-way facing from a movement delta. 0 = east, increasing clockwise.
-func _facing_from_delta(delta: Vector2i) -> int:
-	var angle := atan2(-float(delta.y), float(delta.x))
-	var octant := int(round(angle / (PI / 4.0))) % 8
-	return octant + 8 if octant < 0 else octant

@@ -38,9 +38,10 @@ var is_wildlife: bool = false
 ## requested on the last gather of a nearly-empty node. The caller must credit the
 ## **return value**, not the request, or a nearly-empty tree yields infinite wood.
 ##
-## Removal on depletion is the gather system's call (6.4), not this method's: the
-## view wants a moment to fade a stump out, and deciding that here would remove the
-## node from under a villager mid-animation.
+## Removal on depletion is the gather system's call (6.4), not this method's:
+## despawning here would drop the node out from under the villager that is
+## mid-swing at it, in the middle of another system's loop over `entities`.
+## GatherSystem sweeps for empty nodes at the end of its own tick instead.
 func gather(requested: int) -> int:
 	var taken := clampi(requested, 0, amount)
 	amount -= taken

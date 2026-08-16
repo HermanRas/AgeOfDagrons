@@ -27,6 +27,8 @@ static func from_dict(d: Dictionary) -> Command:
 			return GatherCommand.from_dict(d)
 		"build":
 			return BuildCommand.from_dict(d)
+		"attack":
+			return AttackCommand.from_dict(d)
 		"place_building":
 			return PlaceBuildingCommand.from_dict(d)
 		"train":

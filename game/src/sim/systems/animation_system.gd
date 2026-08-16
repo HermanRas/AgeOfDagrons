@@ -66,5 +66,12 @@ func _anim_for(w: SimWorld, u: SimUnit) -> StringName:
 			return _GATHER_ANIM.get(node.kind, &"work_chop")
 	elif u.task == SimUnit.Task.BUILD:
 		return &"work_build"
+	elif u.task == SimUnit.Task.ATTACK:
+		# Arrived and swinging (4.13). Sent for ANY attacker, including the
+		# villager, whose atlas has no `attack` clip -- `AtlasEntry.resolve_anim()`
+		# falls back rather than drawing nothing, so she reads as standing her
+		# ground instead of vanishing. Deciding here whether the art exists would
+		# put a question about atlases inside the sim, which may not ask one.
+		return &"attack"
 
 	return &"idle"

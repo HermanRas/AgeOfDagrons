@@ -58,7 +58,18 @@ func validate(w: SimWorld) -> bool:
 	return w.player_for(player_id) != null
 
 
+## CANCELS ANY RESEARCH IN FLIGHT, and that is not tidiness -- it is the whole
+## correctness of the jump. `SimPlayer.tick_advance()` finishes by assigning
+## `age = advancing_to` outright, so a research toward age 2 that is still
+## running when someone jumps to age 4 lands seconds later and puts them BACK to
+## age 2, complete with every building re-skinning down a ladder it already
+## climbed. Caught by dev_preview/preview_match.gd on 2026-08-16: the age-4 shots
+## are correct, and the shot taken a few seconds afterwards reads II.
+##
+## No refund, because 9.2's research charges nothing yet; when it does, this
+## becomes the same cancel path a player-facing abort would use.
 func apply(w: SimWorld) -> void:
 	var p := w.player_for(player_id)
 	if p != null:
+		p.cancel_advance()
 		p.age = age

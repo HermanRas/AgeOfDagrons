@@ -10,12 +10,16 @@
 class_name ActionFlash
 extends Node2D
 
-enum Kind { MOVE, GATHER, BUILD }
+enum Kind { MOVE, GATHER, BUILD, ATTACK }
 
 const _COLOR := {
 	Kind.MOVE: Color(0.35, 1.0, 0.45, 0.85),
 	Kind.GATHER: Color(0.95, 0.75, 0.25, 0.85),
 	Kind.BUILD: Color(0.55, 0.75, 1.0, 0.85),
+	# Red, and the only one of the four that is: the other three are things you
+	# do to your own side of the map, and this is the one that is done TO
+	# somebody. It has to be unmistakable at a glance on a phone.
+	Kind.ATTACK: Color(1.0, 0.25, 0.2, 0.9),
 }
 
 ## Quick enough to read as a flash rather than a lingering marker -- long enough

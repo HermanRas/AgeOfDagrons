@@ -78,8 +78,11 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 	# stop and destroy hold for any owned entity; attack is listed for the
 	# same reason it is on a single unit, and is equally not implemented.
 	if selected_count > 1:
+		# Attack is enabled without checking every member: AttackCommand accepts a
+		# mixed selection and tasks whoever in it can actually fight, so a group
+		# with one trade cart in it is not a group that may not be sent to war.
 		return _capped([
-			_act(&"move"), _act(&"stop"), _act(&"attack", false), _act(&"destroy"),
+			_act(&"move"), _act(&"stop"), _act(&"attack"), _act(&"destroy"),
 		])
 
 	if GameDataRegistry.building(def_id) != null:
@@ -151,8 +154,14 @@ static func _building_actions(def_id: StringName, age: int = 1) -> Array[HudActi
 ## a "is a worker" flag until one exists; a soldier def with no `gather_rate`
 ## correctly gets neither.
 static func _unit_actions(def_id: StringName) -> Array[HudAction]:
-	var out: Array[HudAction] = [_act(&"move"), _act(&"stop"), _act(&"attack", false)]
 	var ud: UnitDef = GameDataRegistry.unit(def_id)
+	# Enabled by whether this unit HAS an attack, which is damage and nothing
+	# else (4.13). That deliberately includes the villager -- she carries damage 3
+	# to defend herself, and a peasant that may not be told to fight back would be
+	# a stranger rule than one that may. A trade cart, at damage 0, gets the
+	# disabled placeholder it always had.
+	var out: Array[HudAction] = [_act(&"move"), _act(&"stop"),
+			_act(&"attack", ud != null and ud.attack_damage > 0)]
 	if ud == null:
 		return out
 

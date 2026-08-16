@@ -410,6 +410,10 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 			Net.submit_command(BuildCommand.new(owner, movable, picked))
 			_flash.play(ActionFlash.Kind.BUILD,
 					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
+		GameView.TapAction.ATTACK:
+			Net.submit_command(AttackCommand.new(owner, movable, picked))
+			_flash.play(ActionFlash.Kind.ATTACK,
+					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
 		GameView.TapAction.MOVE:
 			if from_touch and not _commit_ground_tap(tile):
 				return                    # deselect instead, once the window closes
@@ -510,8 +514,13 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 	if result.is_empty():
 		return
 	if result["valid"]:
+		# The current selection goes with the order: whoever was selected when the
+		# build menu was opened is who walks over and raises it. Sent as part of the
+		# placement because the foundation has no id until the host spawns it -- see
+		# PlaceBuildingCommand's own header.
 		Net.submit_command(PlaceBuildingCommand.new(
-				Net.local_player_id(), _placing_def_id, result["origin"]))
+				Net.local_player_id(), _placing_def_id, result["origin"],
+				_view.movable_selection()))
 		_exit_placement()
 		return
 
@@ -577,6 +586,11 @@ func _on_action_requested(action_id: StringName) -> void:
 			_toast.show_message("Tap where to move")
 		&"harvest":
 			_toast.show_message("Tap a tree or resource to gather")
+		&"attack":
+			# Same hint-not-mode treatment as Move and Harvest: tapping an enemy
+			# already attacks it, so a second targeting mode would be a parallel
+			# way to issue an order the map already accepts.
+			_toast.show_message("Tap an enemy to attack")
 
 
 func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:

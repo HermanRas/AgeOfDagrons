@@ -269,9 +269,30 @@ func test_tapping_a_resource_node_with_nothing_selected_does_nothing() -> void:
 	assert_eq(view.tap_action(1, 1, false), GameView.TapAction.NONE)
 
 
-func test_tapping_someone_elses_unit_with_a_movable_selection_moves_there_instead() -> void:
+func test_tapping_someone_elses_unit_with_a_movable_selection_attacks_it() -> void:
+	# Was MOVE until 4.13, when there was nothing else it could mean. Tapping an
+	# enemy is now the whole attack UI -- there is no targeting mode to enter.
 	_snap([{"id": 1, "def_id": "unit.villager", "owner_id": 2, "pos": {"x": 0, "y": 0}}])
-	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.MOVE)
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.ATTACK)
+
+
+func test_tapping_someone_elses_building_with_an_army_attacks_it_too() -> void:
+	_snap([{"id": 1, "def_id": "building.house", "owner_id": 2, "pos": {"x": 0, "y": 0},
+			"phase": SimBuilding.Phase.COMPLETE, "footprint": {"x": 4, "y": 4}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.ATTACK)
+
+
+func test_tapping_an_enemy_with_nothing_selected_just_looks_at_it() -> void:
+	# An enemy's portrait and health stay readable without an army in hand.
+	_snap([{"id": 1, "def_id": "unit.villager", "owner_id": 2, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, false), GameView.TapAction.SELECT)
+
+
+func test_a_tree_is_still_chopped_rather_than_shot() -> void:
+	# Gaia owns both trees and (later) hostile wildlife, so the attack branch has
+	# to sit behind the resource check or every gather order becomes an attack.
+	_snap([{"id": 1, "def_id": "res.tree", "owner_id": 0, "pos": {"x": 0, "y": 0}}])
+	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.GATHER)
 
 
 # -- the skin key: age and player colour (PLAN.md 2.7.1) ---------------------

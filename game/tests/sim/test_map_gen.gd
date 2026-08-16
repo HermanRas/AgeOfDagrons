@@ -93,6 +93,121 @@ func test_villagers_stand_on_distinct_passable_tiles_outside_the_town_centre() -
 		assert_true(w.map.is_terrain_passable(t), "%s is walkable ground" % t)
 
 
+# ── the debug skirmish: a second player (MatchConfig.debug_skirmish) ───────
+
+func _skirmish() -> SimWorld:
+	var s := SimWorld.new()
+	s.setup(MatchConfig.debug_skirmish())
+	MapGen.build_debug_map(s)
+	return s
+
+
+func test_the_skirmish_is_yellow_against_red() -> void:
+	# Not the join-order blue/red: those are the only two colour bakes known to be
+	# current, and a debug match that renders 60 stale atlases teaches nothing
+	# (GameDataRegistry.stale_colour_atlases()).
+	var s := _skirmish()
+	assert_eq(s.players.size(), 2)
+	assert_eq(s.players[0].colour, GameDataRegistry.colour_index(&"colour.yellow"))
+	assert_eq(s.players[1].colour, GameDataRegistry.colour_index(&"colour.red"))
+
+
+func test_a_config_that_names_no_colour_still_falls_back_to_join_order() -> void:
+	# The pre-lobby default, and what every client agrees on without being told.
+	var cfg := MatchConfig.new()
+	cfg.player_ids = [7, 9]
+	var s := SimWorld.new()
+	s.setup(cfg)
+	assert_eq(s.players[0].colour, 0)
+	assert_eq(s.players[1].colour, 1, "the SECOND player, not player id 9")
+
+
+func test_the_enemy_gets_the_squad_and_nothing_else() -> void:
+	# No base for player 2 on purpose -- this map has one start position, and a
+	# forced second town centre would land on top of the first.
+	var s := _skirmish()
+	var theirs: Array = []
+	for e in s.entities.values():
+		if e.owner_id == 2:
+			theirs.append(e)
+	assert_eq(theirs.size(), MapGen.DEBUG_ENEMY_SQUAD.size(), "two soldiers")
+	# Compared as Strings: sorting StringNames orders them by IDENTITY, which is
+	# not their text and is not even stable between runs.
+	var def_ids: Array[String] = []
+	for e in theirs:
+		assert_true(e is SimUnit, "the enemy owns no buildings")
+		def_ids.append(String((e as SimUnit).def_id))
+	def_ids.sort()
+	assert_eq(def_ids, ["unit.archer", "unit.knight"] as Array[String])
+
+
+func test_the_enemy_squad_takes_its_stats_from_units_json() -> void:
+	# A def_id typo would spawn the SimWorld fallback -- 1 hp, no vision -- and
+	# still render, since atlas_for() never returns null.
+	var s := _skirmish()
+	for e in s.entities.values():
+		if e.owner_id != 2:
+			continue
+		var u: SimUnit = e
+		var d: UnitDef = s.unit_def(u.def_id)
+		assert_not_null(d, "%s resolves" % u.def_id)
+		assert_eq(u.max_hp, d.hp)
+		assert_true(d.attack_damage > 0, "%s is a soldier" % u.def_id)
+
+
+func test_the_enemy_squad_stands_to_the_right_of_the_town_centre() -> void:
+	# The whole point of where they are: the camera opens on the town centre, and
+	# these have to be in shot. Iso sends (dx - dy) to screen x and (dx + dy) to
+	# screen y, so "to the right, on roughly the same band" is that first
+	# difference being positive and the second one small. Asserted in tile terms
+	# rather than through Iso, which the sim layer may not name (PLAN.md 4).
+	var s := _skirmish()
+	var tc: SimBuilding = null
+	for e in s.entities.values():
+		if e is SimBuilding:
+			tc = e
+	assert_not_null(tc)
+	for e in s.entities.values():
+		if e.owner_id != 2:
+			continue
+		var rel: Vector2i = (e as SimUnit).tile() - tc.tile()
+		assert_true(rel.x - rel.y >= 12,
+				"%s is to the right of the town centre, clear of its 10x10 footprint" % e.def_id)
+		assert_true(absi(rel.x + rel.y) <= 4,
+				"%s is on the town centre's own horizontal band" % e.def_id)
+		assert_true(s.map.is_terrain_passable((e as SimUnit).tile()),
+				"%s stands on walkable ground" % e.def_id)
+
+
+func test_the_skirmish_leaves_the_first_players_start_exactly_as_it_was() -> void:
+	# Adding an opponent must not quietly change our own opening -- one town
+	# centre, five villagers, the same resource clusters.
+	var s := _skirmish()
+	var mine: Array = []
+	for e in s.entities.values():
+		if e.owner_id == 1:
+			mine.append(e)
+	var units := 0
+	var buildings := 0
+	for e in mine:
+		if e is SimUnit:
+			units += 1
+		elif e is SimBuilding:
+			buildings += 1
+	assert_eq(buildings, 1)
+	assert_eq(units, MapGen.STARTING_VILLAGERS)
+	for kind in MapGen.DEBUG_STARTING_STOCK:
+		assert_eq(int(s.players[0].stock.get(kind, 0)), int(w.players[0].stock.get(kind, 0)),
+				"the same starting %s" % kind)
+	assert_true(s.players[1].stock.is_empty(), "and the enemy is given nothing to spend")
+
+
+func test_two_skirmish_worlds_are_identical() -> void:
+	# Same requirement as the single-player map: the host and the client each
+	# build their own, and a difference on tick 0 is a desync before a command.
+	assert_eq(_skirmish().state_hash(), _skirmish().state_hash())
+
+
 # ── placement into the grid (2.3) ──────────────────────────────────────────
 
 func test_the_town_centre_claims_its_whole_measured_footprint() -> void:

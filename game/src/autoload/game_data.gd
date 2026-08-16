@@ -154,6 +154,24 @@ func colour_slug(index: int) -> StringName:
 	return _colour_slugs[posmod(index, _colour_slugs.size())]
 
 
+## The palette INDEX of a colour named by id (`colour.yellow`) or by slug
+## (`yellow`) -- the inverse of colour_slug(), and -1 for a name the palette does
+## not have.
+##
+## Exists so code that means a particular colour can say which one. Index order
+## is the load-bearing contract (colours.json's own note) and callers must keep
+## storing the index, but a `2` written into a config file is a fact about
+## colours.json that nothing checks and nobody reading it can verify. Does NOT
+## wrap like colour()/colour_slug(): those answer for a player who already has an
+## index and must render somehow, whereas an unknown NAME here is a typo, and
+## quietly returning some other colour for it is how the wrong player ends up
+## yellow.
+func colour_index(id: StringName) -> int:
+	if not _loaded:
+		load_all()
+	return _colour_slugs.find(StringName(String(id).trim_prefix("colour.")))
+
+
 ## Which (visual, colour) pairs DECLARE a per-player bake but have no file staged
 ## for it. Diagnostic only -- resolution silently falls back to the untinted bake,
 ## which renders a player in nobody's colour, and since colour is the only thing

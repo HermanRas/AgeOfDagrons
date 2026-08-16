@@ -44,8 +44,10 @@ func setup(cfg: MatchConfig) -> void:
 	# Order is load-bearing: a command lands, its path is planned, MOVE is retired
 	# if it already finished, GATHER/RETURN/BUILD act if they have arrived -- and
 	# only then does everyone move, so an action that starts a new route this tick
-	# (a load handed off, a build finished) is walked the same tick rather than
-	# costing an extra one of visible delay. SeparationSystem (4.2) runs right
+	# (a load handed off, a build finished, a chase re-planned) is walked the same
+	# tick rather than costing an extra one of visible delay. CombatSystem (4.13)
+	# sits with Gather and Build for exactly that reason, and before DeathSystem so
+	# a kill becomes a corpse on the tick it lands. SeparationSystem (4.2) runs right
 	# after MovementSystem, as a correction on top of this tick's step rather than
 	# a second movement -- TaskSystem reads arrival on the NEXT tick, by which
 	# point any push has already landed. AnimationSystem runs after everything
@@ -58,19 +60,22 @@ func setup(cfg: MatchConfig) -> void:
 	# arriving, and both must run after CommandSystem has let this tick's orders
 	# land so an advance started this tick is already counting.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(), ProductionSystem.new(), AgeSystem.new(),
+			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
+			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new()]
 
-	for pid in cfg.player_ids:
+	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()
-		p.id = pid
-		p.peer_id = pid
+		p.id = cfg.player_ids[i]
+		p.peer_id = p.id
 		# PLAN.md 1: colour is the only thing that distinguishes players in v1, so
-		# it is assigned here from the join order rather than left 0 for everyone.
-		# Derived from the index, not chosen, until the lobby picks it at 1.6 --
-		# every client builds its own world (2.4a) and must land on the same answer.
-		p.colour = players.size()
+		# it is never left 0 for everyone. The config may name it (a debug factory
+		# today, the lobby's picker at 1.6); when it does not, it falls back to the
+		# JOIN ORDER, which is derived rather than chosen and so is the same answer
+		# on every client -- and every client builds its own world (2.4a).
+		var chosen: int = cfg.colours[i] if i < cfg.colours.size() else -1
+		p.colour = chosen if chosen >= 0 else i
 		players.append(p)
 
 
@@ -354,7 +359,11 @@ func state_hash() -> int:
 			parts.append([e.task, e.task_target_tile.x, e.task_target_tile.y, e.facing,
 					e.path.size(), e.path_index, e.path_pending,
 					e.task_target_id, e.gather_node_id, e.carry_kind, e.carry_amount,
-					e.gather_cooldown])
+					# Both cooldowns. Two clients whose attackers were a single tick
+					# out of step would land their blows on different ticks and then
+					# disagree about who died first -- `hp` reports that only once it
+					# has already happened, and by then neither can say when they parted.
+					e.gather_cooldown, e.attack_cooldown])
 		elif e is SimBuilding:
 			# BuildSystem (4.4) now advances build_progress at runtime rather than
 			# only at spawn, and ProductionSystem (5.4) advances queue -- two

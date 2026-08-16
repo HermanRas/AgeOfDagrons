@@ -66,6 +66,69 @@ func test_a_placed_foundation_can_then_be_raised_by_build_command() -> void:
 	assert_true(house.is_complete(), "placement and the existing build loop compose")
 
 
+# ── the builders ride the placement (5.1) ──────────────────────────────────
+
+func test_the_villager_who_ordered_it_walks_over_and_raises_it_unprompted() -> void:
+	# Reported live 2026-08-16: placing a building left the selected villager
+	# standing there, and the player had to reselect it and tap the foundation.
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(26, 26))
+	w.queue_command(PlaceBuildingCommand.new(1, &"building.house", Vector2i(20, 20),
+			[villager.id]))
+	w.step()
+
+	var house := _house()
+	assert_not_null(house)
+	assert_eq(villager.task, SimUnit.Task.BUILD,
+			"tasked on the same tick the foundation appeared, with no gap to look idle in")
+	assert_eq(villager.task_target_id, house.id)
+
+	for i in range(500):
+		w.step()
+		if house.is_complete():
+			break
+	assert_true(house.is_complete(), "and it finished without a second order")
+
+
+func test_a_placement_with_nobody_to_build_it_is_still_a_placement() -> void:
+	# How every other caller places one -- a test, and whatever queues a build
+	# order later. It leaves a foundation standing, which is legal.
+	_place(&"building.house", Vector2i(20, 20))
+	assert_eq(_house().phase, SimBuilding.Phase.FOUNDATION)
+
+
+func test_a_builder_lost_on_the_way_does_not_cancel_the_building() -> void:
+	# Filtered in apply() rather than checked in validate() on purpose: the player
+	# asked for a house and can pay for it, and refusing that because one villager
+	# died between the tap and the tick would be a strange thing to explain.
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(26, 26))
+	villager.alive = false
+	w.queue_command(PlaceBuildingCommand.new(1, &"building.house", Vector2i(20, 20),
+			[villager.id]))
+	w.step()
+	assert_not_null(_house(), "the building still goes down")
+
+
+func test_the_placement_cannot_conscript_someone_elses_villager() -> void:
+	var theirs := w.spawn_unit(&"unit.villager", 2, Vector2i(26, 26))
+	w.queue_command(PlaceBuildingCommand.new(1, &"building.house", Vector2i(20, 20),
+			[theirs.id]))
+	w.step()
+	assert_not_null(_house())
+	assert_true(theirs.is_idle(), "player 2's villager took no orders from player 1")
+
+
+func test_the_builder_list_survives_the_wire() -> void:
+	# Every command reaches the host as a dictionary (Net.submit_command), so a
+	# field that is not serialised is a field that works only in tests.
+	var back := Command.from_dict(
+			PlaceBuildingCommand.new(1, &"building.house", Vector2i(20, 20),
+					[4, 7]).to_dict()) as PlaceBuildingCommand
+	assert_not_null(back)
+	assert_eq(back.builder_ids, [4, 7] as Array[int])
+	assert_eq(back.origin, Vector2i(20, 20))
+	assert_eq(back.def_id, &"building.house")
+
+
 # ── determinism (7.1) ──────────────────────────────────────────────────────
 
 func test_two_worlds_given_the_same_placement_stay_identical() -> void:

@@ -117,6 +117,42 @@ func test_a_freed_slot_is_picked_up_by_the_unit_waiting_behind_it() -> void:
 	assert_true(ticks > 0, "the waiting villager picked the freed slot straight back up")
 
 
+# ── an emptied node goes away (6.4) ─────────────────────────────────────────
+
+func test_an_emptied_node_is_despawned_and_gives_its_tile_back() -> void:
+	# Reported live 2026-08-16: chopped-out trees, mined-out rocks and picked
+	# berry bushes all stayed on the map. A node claims occupancy, so leaving one
+	# standing is not just a stale sprite -- it is an unwalkable, unbuildable hole
+	# in the ground that looks exactly like a tree.
+	var tile := tree.tile()
+	var ticks := 0
+	_order_gather()
+	ticks = _run_until(func(): return villager.is_idle(), 4000)
+	assert_true(ticks > 0, "the tree ran out")
+	assert_null(w.get_entity(tree.id), "and is gone, not standing empty")
+	assert_eq(w.map.occupant(tile), 0, "its tile is unclaimed")
+	assert_true(w.map.is_passable(tile, SimMap.Domain.LAND), "walkable, not an invisible wall")
+	assert_true(w.map.can_place_building(Rect2i(tile, Vector2i.ONE)), "and buildable")
+	assert_eq(w.players[0].stock.get(&"wood", 0), 40,
+			"the last load still landed -- the node went, the wood did not")
+
+
+func test_a_node_emptied_with_nobody_working_it_still_goes() -> void:
+	# The sweep is over NODES, not over the villagers tasked to them: a node
+	# emptied by a worker that was then re-tasked away has nobody left to notice.
+	tree.amount = 0
+	w.step()
+	assert_null(w.get_entity(tree.id))
+
+
+func test_the_view_is_told_the_node_went_rather_than_left_to_notice() -> void:
+	# `removed[]` is how a pooled EntityView is freed (7.2). Without this the
+	# sprite would stay on screen with nothing behind it.
+	tree.amount = 0
+	w.step()
+	assert_true(w.removed_this_tick.has(tree.id))
+
+
 # ── rejection ───────────────────────────────────────────────────────────────
 
 func test_gather_command_rejects_an_already_depleted_node() -> void:

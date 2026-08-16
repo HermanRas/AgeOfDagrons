@@ -40,7 +40,12 @@ func host_solo() -> Error:
 
 	_host = SimHost.new()
 	add_child(_host)
-	_host.start(MatchConfig.debug_single_player(), _broadcast_snapshot)
+	# Two players, though only one of them has a peer: `_peer_players` maps peer 1
+	# to player 1 and nothing to player 2, so the skirmish opponent cannot be given
+	# an order by anybody -- not by us (every command validates ownership) and not
+	# by a second client, because there isn't one. They are scenery until there is
+	# an AI or a second peer to drive them.
+	_host.start(MatchConfig.debug_skirmish(), _broadcast_snapshot)
 
 	session_started.emit(true)
 	return OK

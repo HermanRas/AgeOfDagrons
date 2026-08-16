@@ -1,5 +1,16 @@
 ## The gather loop (PLAN.md 6.4): walk to a node, take from it on a cooldown,
-## carry up to cap, walk a load home, deposit, repeat until the node is empty.
+## carry up to cap, walk a load home, deposit, repeat until the node is empty --
+## at which point the node itself goes, which is also this system's job
+## (PLAN.md's system table gives it "depletion", and SimResourceNode.gather()
+## defers removal here rather than deciding it under a working villager).
+##
+## A DEPLETED NODE IS DESPAWNED OUTRIGHT, not left standing as a husk. Its tile is
+## claimed occupancy (2.3), so a chopped-out forest that stayed in `entities`
+## would leave a dozen unwalkable, unbuildable holes in the ground looking exactly
+## like trees -- which is what it did until 2026-08-16. `remaining_fraction()`
+## survives for the depletion VISUAL a stump would need; there is no stump art yet
+## (PLAN.md A.4), and fading a full-size tree to nothing is not an improvement on
+## removing it.
 ## `gather_slots` (PLAN.md 6.3) caps how many units can be drawing from one
 ## node at once -- an arrived unit past the cap holds its ground rather than
 ## gathering, so ten villagers sent at one tree do not all extract at once.
@@ -19,7 +30,12 @@ class_name GatherSystem
 extends SimSystem
 
 func process_tick(w: SimWorld) -> void:
+	var emptied: Array[int] = []
 	for entry in w.entities.values():
+		if entry is SimResourceNode:
+			if (entry as SimResourceNode).is_depleted():
+				emptied.append(entry.id)
+			continue
 		if not (entry is SimUnit):
 			continue
 		var u: SimUnit = entry
@@ -27,6 +43,14 @@ func process_tick(w: SimWorld) -> void:
 			_process_gather(w, u)
 		elif u.task == SimUnit.Task.RETURN:
 			_process_return(w, u)
+
+	# AFTER the unit loop, and out of a list rather than inside it: despawn()
+	# mutates `entities`, which cannot be done while iterating it, and a villager
+	# that filled its last load this tick has already been turned for home above.
+	# Its final delivery still lands -- _process_return() deposits before it looks
+	# for the node to go back to, and finds it gone only then.
+	for id in emptied:
+		w.despawn(id)
 
 
 func _process_gather(w: SimWorld, u: SimUnit) -> void:

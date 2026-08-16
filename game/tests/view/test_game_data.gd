@@ -361,6 +361,27 @@ func test_green_and_yellow_are_far_enough_apart_in_lightness() -> void:
 			"yellow must be markedly brighter than green (got %.3f vs %.3f)" % [yellow, green])
 
 
+func test_a_colour_can_be_found_by_name_so_config_need_not_hardcode_an_index() -> void:
+	# MatchConfig.debug_skirmish() means "yellow against red"; what it has to
+	# store is an index. Without this the two facts are only connected by a
+	# comment, and the pairing goes wrong silently the day the palette grows.
+	assert_eq(reg.colour_index(&"colour.yellow"), 2)
+	assert_eq(reg.colour_index(&"colour.red"), 1)
+	assert_eq(reg.colour_index(&"yellow"), 2, "the bare slug works too")
+	for i in reg.colour_count():
+		assert_eq(reg.colour_index(reg.colour_slug(i)), i,
+				"colour_index round-trips slot %d" % i)
+
+
+func test_an_unknown_colour_name_reports_itself_rather_than_wrapping() -> void:
+	# colour()/colour_slug() wrap because a player already HAS an index and must
+	# render somehow. A name is a different question: an unrecognised one is a
+	# typo, and answering it with some other colour is how the wrong player ends
+	# up yellow.
+	assert_eq(reg.colour_index(&"colour.chartreuse"), -1)
+	assert_eq(reg.colour_index(&""), -1)
+
+
 func test_an_out_of_range_colour_wraps_rather_than_stopping_the_render() -> void:
 	# Deliberately the opposite of unit()/building() returning null: a missing
 	# definition has no stand-in, a missing colour does.

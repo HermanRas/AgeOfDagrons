@@ -84,11 +84,9 @@ func test_a_group_offers_only_what_every_member_can_do() -> void:
 
 
 func test_unimplemented_actions_are_present_but_disabled() -> void:
-	# MVP has no combat, repair or research; they lay out greyed rather than
-	# being omitted, so the panel does not reflow as each lands.
-	var unit := SelectionActions.for_selection(_villager_facts())
-	assert_false(_by_id(unit, &"attack").enabled, "no attack command exists yet")
-
+	# Repair and research still have no command; they lay out greyed rather than
+	# being omitted, so the panel does not reflow as each lands. Attack used to be
+	# on this list and came off it at 4.13.
 	var building := SelectionActions.for_selection(_town_center_facts())
 	assert_false(_by_id(building, &"repair").enabled, "no repair command exists yet")
 	assert_false(_by_id(building, &"upgrade").enabled, "no research command exists yet")
@@ -99,6 +97,32 @@ func test_implemented_actions_are_enabled() -> void:
 	assert_true(_by_id(actions, &"move").enabled)
 	assert_true(_by_id(actions, &"stop").enabled, "StopCommand is real")
 	assert_true(_by_id(actions, &"destroy").enabled, "DebugDestroyCommand is real")
+
+
+# ── attack (4.13) ───────────────────────────────────────────────────────────
+
+func test_attack_is_enabled_for_anything_that_carries_damage() -> void:
+	# Including the villager: damage 3 to defend herself (units.json), and a
+	# peasant who may not be told to fight back would be a stranger rule than one
+	# who may. What gates the button is damage, not being military -- the
+	# "military" distinction decides FORMATIONS, and only that.
+	assert_true(_by_id(SelectionActions.for_selection(_villager_facts()), &"attack").enabled)
+	assert_true(_by_id(SelectionActions.for_selection(_militia_facts()), &"attack").enabled)
+
+
+func test_attack_stays_disabled_for_a_unit_with_no_attack_at_all() -> void:
+	var cart := _villager_facts().duplicate()
+	cart["def_id"] = &"unit.trade_cart"
+	assert_eq(GameDataRegistry.unit(&"unit.trade_cart").attack_damage, 0, "the premise")
+	assert_false(_by_id(SelectionActions.for_selection(cart), &"attack").enabled)
+
+
+func test_a_mixed_group_may_still_be_told_to_attack() -> void:
+	# AttackCommand accepts a mixed selection and tasks whoever can fight, so one
+	# trade cart in a group must not disarm the whole group.
+	var group := SelectionActions.for_selection(_villager_facts(), 3, true,
+			[&"unit.villager", &"unit.trade_cart", &"unit.militia"])
+	assert_true(_by_id(group, &"attack").enabled)
 
 
 func test_the_action_column_never_exceeds_its_grid() -> void:

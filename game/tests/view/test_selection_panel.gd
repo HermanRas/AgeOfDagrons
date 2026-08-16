@@ -115,10 +115,20 @@ func test_something_not_mine_shows_health_but_no_actions() -> void:
 
 
 func test_a_disabled_action_slot_is_shown_but_not_pressable() -> void:
+	# Repair, since attack became a real command at 4.13. The rule under test is
+	# the layout one and has not changed: an unimplemented verb takes its slot
+	# greyed, so the panel does not reflow the day it lands.
+	panel.show_entity(_town_center_facts(5))
+	var repair := _slot_with_action(panel._action_slots, &"repair")
+	assert_not_null(repair, "repair lays out even though no command exists")
+	assert_true(repair.disabled)
+
+
+func test_an_attack_slot_is_pressable_now_that_the_command_exists() -> void:
 	panel.show_entity(_villager_facts(1))
 	var attack := _slot_with_action(panel._action_slots, &"attack")
-	assert_not_null(attack, "attack lays out even though no command exists")
-	assert_true(attack.disabled)
+	assert_not_null(attack)
+	assert_false(attack.disabled)
 
 
 func test_the_detail_grid_and_divider_hide_when_there_is_nothing_to_show() -> void:

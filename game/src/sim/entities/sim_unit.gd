@@ -88,11 +88,47 @@ func set_task_build(building_id: int, tile: Vector2i) -> void:
 	path_pending = true
 
 
-## MOVE, GATHER, RETURN and BUILD all walk somewhere before doing anything else --
-## this is PathService's and MovementSystem's test for "does this unit want a
-## route", so neither has to enumerate every task that happens to travel.
+## Walk toward an enemy and hit it on arrival (PLAN.md 4.13). `tile` is where the
+## target is NOW -- a moving one is re-planned toward by CombatSystem once this
+## route runs out, rather than re-pathed every tick, which is what keeps a chase
+## inside PathService's per-tick budget (4.2).
+func set_task_attack(target_id: int, tile: Vector2i) -> void:
+	task = Task.ATTACK
+	task_target_id = target_id
+	task_target_tile = tile
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
+## Drop the route but KEEP the task -- what an attacker does the moment its
+## target comes into reach, so it stands and fights instead of walking the rest
+## of a path it no longer needs. Distinct from stop(), which retires the order
+## entirely; a unit that halted is still attacking.
+func halt() -> void:
+	task_target_tile = tile()
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = false
+
+
+## MOVE, GATHER, RETURN, BUILD and ATTACK all walk somewhere before doing
+## anything else -- this is PathService's and MovementSystem's test for "does this
+## unit want a route", so neither has to enumerate every task that happens to
+## travel.
 func is_travel_task() -> bool:
-	return task == Task.MOVE or task == Task.GATHER or task == Task.RETURN or task == Task.BUILD
+	return task == Task.MOVE or task == Task.GATHER or task == Task.RETURN \
+			or task == Task.BUILD or task == Task.ATTACK
+
+
+## The 8-way facing a delta points along. Shared by MovementSystem (which faces a
+## unit the way it walks) and CombatSystem (which faces it at what it is hitting)
+## -- one function because a unit that walked east and then turned to strike must
+## not disagree with itself about which way east is.
+static func facing_toward(delta: Vector2i) -> int:
+	var angle := atan2(-float(delta.y), float(delta.x))
+	var octant := int(round(angle / (PI / 4.0))) % 8
+	return octant + 8 if octant < 0 else octant
 
 
 ## Take a solved route. An EMPTY path means PathService found nowhere to go, which

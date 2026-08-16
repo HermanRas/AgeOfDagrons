@@ -49,6 +49,27 @@ func test_it_moves_only_the_caller() -> void:
 	assert_eq(_player(2).age, 1, "player 2 stayed where they were")
 
 
+func test_a_debug_jump_cancels_a_research_that_would_otherwise_demote_you() -> void:
+	# Found by dev_preview/preview_match.gd on 2026-08-16: the preview starts a
+	# real advance to age 2, then jumps to 3 and 4 -- and seconds later the
+	# research landed, `tick_advance()` assigned `age = advancing_to`, and an
+	# age-4 player was put back to age 2 with every building re-skinning down the
+	# ladder behind them.
+	_rich()
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	assert_true(_player().is_advancing(), "a research is genuinely in flight")
+
+	w.queue_command(DebugSetAgeCommand.new(1, 4))
+	w.step()
+	assert_eq(_player().age, 4)
+	assert_false(_player().is_advancing(), "the jump cancelled it rather than leaving it running")
+
+	for i in range(_advance_ticks_for(2) + 10):
+		w.step()
+	assert_eq(_player().age, 4, "and nothing landed later to drag the age back down")
+
+
 func test_an_age_outside_the_ladder_is_refused_rather_than_clamped() -> void:
 	# Clamping would make "advance past the last age" silently succeed, and the
 	# badge decides whether there IS a next age from the same age_count() -- so a
