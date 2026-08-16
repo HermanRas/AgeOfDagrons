@@ -286,6 +286,47 @@ with WinError 5. Delete contents, not the directory.
 
 ### Known open items
 
+- **`vis.onager` renders with its throwing arm reared back, nose in the air**
+  (project owner, 2026-08-16, against 0 A.D.'s own render). **Not a rotation
+  problem** — I probed `yaw_offset_deg` 0/90/180/270 and none of them is it. The
+  arm is simply in its BIND pose, because the onager is two actors and only the
+  inner one animates:
+
+  | actor | animations |
+  |---|---|
+  | `units/romans/siege_onager_pivot` — the base, and what the recipe names | **none** |
+  | `units/romans/siege_onager` — the arm, mounted at `weapon` | `Idle`, `attack_ranged` |
+
+  The recipe declares no `[anims]`, so no clip is ever applied and the arm sits
+  as modelled. 0 A.D. never shows that pose because it always plays `Idle`.
+
+  **Adding `[anims.idle]` alone will NOT fix it.** For this actor every armature
+  is anchored (the crew hang off empties, not bones), so `subject_armature` falls
+  through to its all-anchored branch and its "most bones" tie-break picks a
+  **202-bone crew Biped** over the 8-bone `onager` arm rig. The clip would be
+  aimed at a soldier. The fix is two parts: make that fallback prefer the rig
+  belonging to the subject actor's own prop rather than the biggest bone count,
+  then declare `idle` (+ `attack`) on the recipe.
+
+- **`vis.field` bakes 64 wheat clumps stacked on one spot** (project owner,
+  2026-08-16). PLAN.md A.4 calls this "a 64-instance prop scatter that
+  Pyrogenesis collapses to one", which is the symptom, not the mechanism. The
+  props are all present and all correctly constrained — 131 objects, 66 meshes.
+  What is wrong is the attach points:
+
+  ```
+  prop_patch       EMPTY  0.00 0.00 0.00   parent Plane
+  prop_patch_001   EMPTY  0.00 0.00 0.00   parent Plane    <- all 65 at the origin
+  cross_angledfromtop      MESH  COPY_LOCATION->prop_patch_001
+  cross_angledfromtop.001  MESH  COPY_LOCATION->prop_patch_002
+  ```
+
+  The importer creates every prop point but loses its transform from
+  `field_propped_b_8x8.dae`, so all 64 clumps sit on top of each other in the
+  middle of the plot. Fix: read the prop-point transforms out of the COLLADA and
+  place the empties. **That would deliver the farm too** — same actor family, and
+  it is why `vis.farm` has never worked.
+
 - **Canvas sizes are now under-provisioned wherever crew got their heads back.**
   `_rescue_orphaned_props` makes a sprite BIGGER, and a canvas calibrated against
   a headless bake can no longer hold it: `vis.onager` clipped on S/SE/E at its

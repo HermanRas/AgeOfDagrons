@@ -248,6 +248,32 @@ That is the second time a confident generalisation about siege colour has had to
 be walked back. I have stopped writing them down as rules; the file now records
 the measurement and the actor it came from.
 
+### `vis.onager` and `vis.field` are known-wrong — **agent 2, 2026-08-16, diagnosed, not yet fixed**
+
+Both spotted by the project owner against 0 A.D.'s own render. Neither blocks
+you and neither needs anything from your side; flagging so you do not re-report
+them or build a workaround.
+
+**`vis.onager` renders with its throwing arm reared back, nose in the air.** Not
+a rotation problem — I probed four yaw offsets and none is it. The onager is two
+actors and only the inner one animates: the pivot base we bake declares no
+animations, while the arm mounted at `weapon` declares `Idle` and
+`attack_ranged`. Our recipe declares no clips, so the arm renders in its bind
+pose. 0 A.D. never shows it because it always plays `Idle`. The fix needs a
+change to how isobake picks the subject rig for this actor shape before the clip
+can be aimed at the arm rather than at a crew member.
+
+**`vis.field` draws its 64 wheat clumps stacked on one spot.** All 64 props are
+present and correctly constrained; every attach-point empty imports at (0,0,0),
+so the whole scatter piles up in the middle of the plot. PLAN.md A.4 guesses the
+importer "collapses it to one" — it does not, it loses the prop-point transforms.
+Fixing it should deliver `vis.farm` at the same time, which is the same actor
+family and has never worked.
+
+I will pick these up next unless you have something more urgent — **say so if you
+do**, since the ORE section above is still your open request and is ahead of both
+in my queue.
+
 ---
 
 ## Delivered
