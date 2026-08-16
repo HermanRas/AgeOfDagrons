@@ -38,30 +38,28 @@ actor = "units/athenians/infantry_swordsman_c.xml"
 # animate at all: it holds the rest pose while the real body dies, and the unit
 # renders as a soldier standing bolt upright on top of his own corpse.
 #
-# NOT FIXED, and deliberately left alone -- every available option is broken in
-# a different way, so the known breakage stays until the real one is done.
-# Measured 2026-08-16:
+# TWO BODIES, fixed 2026-08-16 -- see swordsman.toml for the shared cause (a
+# mesh declared in two groups, which 0 A.D. resolves by replacement and the
+# pinned importer resolves by importing both).
 #
-#   drop_objects = ["m_armor_tunic_short"]  the corpse disappears and the unit
-#                                           stands upright through its own death
-#   drop_objects = ["m_tunic_short"]        the body falls correctly but the
-#                                           helmet and shield stay in mid-air
-#   (nothing)                               today's behaviour: an upright,
-#                                           fully-equipped soldier standing on
-#                                           his own falling corpse
+# This one needed an adapter fix first, and the recipe alone could not have done
+# it. Dropping either mesh only moved the defect:
 #
-# The cause of the middle case is the real problem: the props are constrained to
-# `Biped`, the armature of the mesh that does NOT animate, while the body that
-# does animate hangs off `Biped.002`. Dropping either mesh leaves props bound to
-# the wrong rig. The fix is to rebind prop constraints onto the animating
-# armature, which is importer/adapter work, not a recipe value.
+#   drop_objects = ["m_armor_tunic_short"]  the corpse vanished and the unit
+#                                           stood upright through its own death
+#   drop_objects = ["m_tunic_short"]        the body fell but the helmet and
+#                                           shield hung in mid-air
 #
-# Substituting an actor does not help either: spartans/infantry_swordsman_c is
-# single-mesh but `isobake inspect` reports `Biped (0 bones)` -- the bone-less
-# import defect -- so it would abort the bake, and macedonians/..._c_thracian
-# has the same two-group mesh declaration.
+# because the real problem was upstream of both: `_subject_armature` ranked the
+# three imported rigs by BONE COUNT and picked `Biped.002` at 202 bones -- a
+# figure inflated by Blender's datablock reuse, not a real skeleton -- over the
+# `Biped` at 102 that every prop is actually anchored to. So the equipped body
+# was demoted to a "nested-prop armature in rest pose" and only the bare
+# duplicate animated. isobake now ranks by how many props anchor TO a rig, which
+# is the same rule the anchored/free split already uses, read the other way.
 #
-# swordsman.toml IS fixed; only this one needs the deeper change.
+# With the subject correct, dropping the duplicate is straightforward.
+drop_objects = ["m_armor_tunic_short"]
 
 [render]
 canvas = [224, 224]
