@@ -163,6 +163,13 @@ func _advance_script() -> void:
 			# in a single frame -- the picture cannot tell you which one you got.
 			_report_enemies()
 			_shoot("match_combat")
+		20:
+			# The three dropsites and their props. Age 4 by now, so the mill has
+			# its food crates as well as the camps having their timber and stone.
+			_stand_up_the_dropsites()
+			_clear_selection()
+		21:
+			_shoot("match_props")
 		_:
 			get_tree().quit()
 			return
@@ -361,6 +368,46 @@ func _an_enemy_is_dead() -> bool:
 		if not bool(f.get("alive", true)):
 			return true
 	return false
+
+
+## Stand the three dropsites up on clear ground, COMPLETE, so their props can be
+## looked at. Spawned straight into the host's world rather than placed through a
+## command: what this step checks is RENDERING -- that a lumber camp draws its
+## timber and an age-4 mill its crates -- and steps 16-17 already prove the
+## placement path. Paying 30 s of build time per building to photograph a sprite
+## would be waiting, not testing.
+##
+## Absolute tiles rather than offsets from the town centre, and the camera moves
+## to them: the debug map's south-west quarter is the only sizeable patch clear
+## of the town centre, the wood cluster, the gold and the berries all at once, and
+## an offset that dodges every one of those is a number nobody can check by
+## reading it. Stepping +6,-4 between the three sends them 320 px apart along the
+## screen's horizontal (iso maps dx - dy to screen x), so all three sit side by
+## side in one frame.
+const DROPSITE_SITES := [
+	[&"building.lumber_camp", Vector2i(10, 46)],
+	[&"building.mining_camp", Vector2i(16, 42)],
+	[&"building.mill", Vector2i(22, 40)],
+]
+
+
+func _stand_up_the_dropsites() -> void:
+	var world: SimWorld = Net.host().world
+	for spec in DROPSITE_SITES:
+		var def_id: StringName = spec[0]
+		if world.spawn_building(def_id, Net.local_player_id(), spec[1] as Vector2i,
+				SimBuilding.Phase.COMPLETE) == null:
+			push_warning("preview_match: no room for %s at %s" % [def_id, spec[1]])
+	# Centre on the middle of the three. The camera opened on the town centre and
+	# these are deliberately nowhere near it.
+	var mid: BuildingDef = GameDataRegistry.building(DROPSITE_SITES[1][0])
+	_game._camera.centre_on(Iso.tile_centre_to_world(
+			(DROPSITE_SITES[1][1] as Vector2i) + mid.footprint / 2))
+
+
+func _clear_selection() -> void:
+	_game._view.select([] as Array[int])
+	_game._refresh_panel()
 
 
 func _report_enemies() -> void:

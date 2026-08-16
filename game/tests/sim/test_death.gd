@@ -73,7 +73,8 @@ func test_debug_destroy_turns_a_building_to_rubble() -> void:
 	_destroy(house.id)
 	assert_false(house.alive)
 	assert_eq(house.phase, SimBuilding.Phase.DESTROYED)
-	assert_not_null(w.get_entity(house.id), "rubble stays in the world, unlike a unit corpse")
+	assert_not_null(w.get_entity(house.id),
+			"rubble stays in the world for a while, like a unit corpse")
 
 
 func test_rubble_frees_its_tiles_for_a_new_building() -> void:
@@ -83,6 +84,111 @@ func test_rubble_frees_its_tiles_for_a_new_building() -> void:
 	var rebuilt := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
 			SimBuilding.Phase.FOUNDATION, false)
 	assert_not_null(rebuilt, "the ground the rubble stands on is buildable again")
+
+
+# ── rubble does not last (project owner, 2026-08-16) ─────────────────────────
+
+func test_rubble_clears_itself_after_a_minute() -> void:
+	# It used to stay forever, which silted a razed settlement up with debris
+	# nothing could remove, sitting on ground that was already rebuilt.
+	var house := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	_destroy(house.id)
+	assert_eq(house.rubble_ticks_left, SimBuilding.RUBBLE_TOTAL_TICKS,
+			"the timer starts on the tick it falls")
+
+	for i in range(SimBuilding.RUBBLE_TOTAL_TICKS - 1):
+		w.step()
+	assert_not_null(w.get_entity(house.id), "still there a tick short of the minute")
+	w.step()
+	assert_null(w.get_entity(house.id), "and gone on the tick the minute is up")
+
+
+func test_the_view_is_told_the_rubble_went() -> void:
+	var house := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	_destroy(house.id)
+	for i in range(SimBuilding.RUBBLE_TOTAL_TICKS):
+		w.step()
+	assert_true(w.removed_this_tick.has(house.id),
+			"removed[] is how the pooled EntityView is freed (7.2)")
+
+
+func test_the_rubble_timer_rides_the_snapshot_so_the_view_can_fade_it() -> void:
+	var house := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	_destroy(house.id)
+	var snap := SnapshotSystem.build(w, 1)
+	for entry in snap["updated"]:
+		if int((entry as Dictionary)["id"]) == house.id:
+			assert_eq(int((entry as Dictionary)["rubble_ticks_left"]),
+					SimBuilding.RUBBLE_TOTAL_TICKS)
+			return
+	assert_true(false, "the rubble is missing from the snapshot entirely")
+
+
+func test_a_living_building_carries_the_not_destroyed_sentinel() -> void:
+	# -1, not 0: 0 would be indistinguishable from "the minute just ran out" and
+	# the view would draw a healthy building at zero alpha.
+	var house := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	w.step()
+	assert_eq(house.rubble_ticks_left, -1)
+
+
+# ── building over rubble clears it early ─────────────────────────────────────
+
+func test_building_over_rubble_clears_it_immediately() -> void:
+	var house := w.spawn_building(&"building.house", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	var ruin := house.id
+	_destroy(ruin)
+	assert_not_null(w.get_entity(ruin), "still standing as rubble")
+
+	w.spawn_building(&"building.house", 1, Vector2i(10, 10), SimBuilding.Phase.FOUNDATION)
+	assert_null(w.get_entity(ruin), "the new foundation took the wreckage with it")
+
+
+func test_a_partial_overlap_takes_the_whole_ruin() -> void:
+	# ANY overlap, not an exact match: half-cleared wreckage sticking out from
+	# under a new building would look worse than leaving all of it.
+	var tc := w.spawn_building(&"building.town_center", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	var ruin := tc.id
+	_destroy(ruin)
+
+	# A 4x4 house on one corner of the fallen 10x10 town centre.
+	w.spawn_building(&"building.house", 1, Vector2i(9, 9), SimBuilding.Phase.FOUNDATION)
+	assert_null(w.get_entity(ruin))
+
+
+func test_rubble_somewhere_else_is_left_alone() -> void:
+	var far := w.spawn_building(&"building.house", 1, Vector2i(30, 30),
+			SimBuilding.Phase.COMPLETE, true)
+	_destroy(far.id)
+	w.spawn_building(&"building.house", 1, Vector2i(10, 10), SimBuilding.Phase.FOUNDATION)
+	assert_not_null(w.get_entity(far.id), "only what is built OVER is cleared")
+
+
+func test_two_worlds_clearing_rubble_stay_identical() -> void:
+	# Clearing reaches `removed[]`, so two clients doing it in a different order
+	# would disagree about the wire format for no reason.
+	var other := SimWorld.new()
+	other.setup(MatchConfig.debug_single_player())
+	for world: SimWorld in [w, other]:
+		var a: SimBuilding = world.spawn_building(&"building.house", 1, Vector2i(10, 10),
+				SimBuilding.Phase.COMPLETE, true)
+		var b: SimBuilding = world.spawn_building(&"building.house", 1, Vector2i(14, 10),
+				SimBuilding.Phase.COMPLETE, true)
+		world.queue_command(DebugDestroyCommand.new(1, a.id))
+		world.queue_command(DebugDestroyCommand.new(1, b.id))
+	for i in range(3):
+		w.step()
+		other.step()
+	for world: SimWorld in [w, other]:
+		world.spawn_building(&"building.town_center", 1, Vector2i(9, 9),
+				SimBuilding.Phase.FOUNDATION, true)
+	assert_eq(w.state_hash(), other.state_hash())
 
 
 func test_rubble_is_unselectable_via_nearest_drop_off() -> void:

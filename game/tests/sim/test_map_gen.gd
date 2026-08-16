@@ -103,9 +103,9 @@ func _skirmish() -> SimWorld:
 
 
 func test_the_skirmish_is_yellow_against_red() -> void:
-	# Not the join-order blue/red: those are the only two colour bakes known to be
-	# current, and a debug match that renders 60 stale atlases teaches nothing
-	# (GameDataRegistry.stale_colour_atlases()).
+	# Not the join-order blue/red. It began as a workaround -- for a day those
+	# were the only two current colour bakes -- and survives it as a choice: they
+	# sit furthest apart on colours.json's lightness ladder after blue.
 	var s := _skirmish()
 	assert_eq(s.players.size(), 2)
 	assert_eq(s.players[0].colour, GameDataRegistry.colour_index(&"colour.yellow"))

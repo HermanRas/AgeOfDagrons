@@ -145,11 +145,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 		var alive := bool(entry.get("alive", true))
 		view.set_dead(not alive)
-		# Only a unit's snapshot carries corpse_ticks_left (SimUnit.to_snapshot);
-		# rubble (5.5) has no fade timer and stays fully opaque forever.
+		# Two kinds of remains count down to nothing: a unit's corpse over its
+		# last 10 s (4.7) and a building's rubble over the last 10 s of the minute
+		# it stands for (5.5, amended 2026-08-16). Each carries its own key, so
+		# the wire format says WHICH it is rather than making a corpse of a
+		# building, and both ride the same alpha ramp here.
 		if entry.has("corpse_ticks_left") and int(entry["corpse_ticks_left"]) >= 0:
 			view.set_corpse_fade(clampf(
 					float(entry["corpse_ticks_left"]) / float(SimUnit.CORPSE_FADE_TICKS), 0.0, 1.0))
+		elif entry.has("rubble_ticks_left") and int(entry["rubble_ticks_left"]) >= 0:
+			view.set_corpse_fade(clampf(
+					float(entry["rubble_ticks_left"]) / float(SimBuilding.RUBBLE_FADE_TICKS),
+					0.0, 1.0))
 		else:
 			view.set_corpse_fade(1.0)
 		if entry.has("anim"):

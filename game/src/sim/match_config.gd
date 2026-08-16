@@ -48,11 +48,13 @@ static func debug_single_player() -> MatchConfig:
 ## takes no player into account and 2.4b is where real start positions live --
 ## and a forced overlapping town centre is a worse lie than an army with no home.
 ##
-## YELLOW against RED, not the join-order blue/red, because those two are the
-## only player-colour bakes known to be current: the other six are stale rather
-## than absent, and render perfectly happily in the wrong shape
-## (GameDataRegistry.stale_colour_atlases()). A debug match should be looking at
-## art that is right.
+## YELLOW against RED because the project owner picked them, and they are the two
+## the palette separates furthest by lightness after blue (colours.json's L*
+## ladder). It was originally a workaround -- for a day, red and yellow were the
+## only two colour bakes that were current, the other six being stale rather than
+## absent and rendering perfectly happily in the wrong shape. All eight are
+## correct as of the 2026-08-16 rebake, so this is now a choice rather than a
+## constraint, and any pair would work.
 static func debug_skirmish() -> MatchConfig:
 	var c := MatchConfig.new()
 	c.player_ids = [1, 2]

@@ -26,6 +26,21 @@ var footprint: Vector2i = Vector2i.ONE
 var build_progress: int = 0
 var build_total: int = 0
 
+## Ticks left as rubble before DeathSystem clears it away (project owner,
+## 2026-08-16), at SimClock's 10 ticks/sec: a minute of wreckage, the last 10 s
+## of it fading. -1 means "not destroyed" -- the same sentinel SimUnit's corpse
+## uses, and for the same reason: `alive` goes false exactly once, but the tick
+## it does is the one tick DeathSystem must react to rather than just count down.
+##
+## Rubble used to stay forever. That was PLAN.md 5.5 as written, and it was wrong
+## in play: a razed settlement left permanent wreckage over ground that was
+## already buildable again, so the map accumulated debris nothing could remove.
+## A new building placed over it clears it early -- SimWorld.spawn_building() --
+## and this timer is what gets rid of the rest.
+const RUBBLE_TOTAL_TICKS := 600
+const RUBBLE_FADE_TICKS := 100
+var rubble_ticks_left: int = -1
+
 var provides_pop: int = 0
 var garrison_cap: int = 0
 
@@ -99,6 +114,10 @@ func build_fraction() -> float:
 func to_snapshot() -> Dictionary:
 	var d := super()
 	d["phase"] = int(phase)
+	# Named for what it is rather than sharing SimUnit's `corpse_ticks_left`:
+	# GameView keys the fade off whichever of the two an entry carries, so the
+	# wire format stays honest about which kind of remains is counting down.
+	d["rubble_ticks_left"] = rubble_ticks_left
 	d["footprint"] = {"x": footprint.x, "y": footprint.y}
 	d["build_fraction"] = build_fraction()
 	d["queue_len"] = queue.size()

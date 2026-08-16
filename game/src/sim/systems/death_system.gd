@@ -14,7 +14,7 @@ func process_tick(w: SimWorld) -> void:
 		if e is SimUnit:
 			_process_unit(e as SimUnit, to_despawn)
 		elif e is SimBuilding:
-			_process_building(w, e as SimBuilding)
+			_process_building(w, e as SimBuilding, to_despawn)
 
 	for id in to_despawn:
 		w.despawn(id)
@@ -45,13 +45,38 @@ func _process_unit(u: SimUnit, to_despawn: Array[int]) -> void:
 		to_despawn.append(u.id)
 
 
-## A destroyed building becomes rubble rather than despawning outright (5.5) --
-## unlike a unit's corpse it has no fade timer, since 0 A.D.'s rubble art has no
-## decay animation to play (A.2's building-art note) and PLAN.md never asks it to
-## disappear. `free_footprint()` frees its tiles the same tick it falls, so a new
-## building can go up on the ground it held without waiting for anything.
-func _process_building(w: SimWorld, b: SimBuilding) -> void:
-	if b.alive or b.phase == SimBuilding.Phase.DESTROYED:
+## A destroyed building becomes rubble, then clears itself away a minute later
+## (5.5, amended by the project owner 2026-08-16). `free_footprint()` frees its
+## tiles the same tick it falls, so a new building can go up on the ground it
+## held without waiting for the wreckage to go.
+##
+## RUBBLE USED TO BE PERMANENT, which is what PLAN.md 5.5 said and what the art
+## note justified: 0 A.D.'s rubble has no decay animation to play. But permanence
+## is not what "no decay clip" implies -- it only means the fade has to be an
+## alpha ramp rather than an animation, which is exactly what a corpse's last ten
+## seconds already are (4.7). Left forever, a razed settlement silted the map up
+## with debris that nothing could remove and that sat on ground already rebuilt.
+##
+## Structured exactly like _process_unit's corpse, one sentinel and one counter,
+## because they are the same problem: something dies, is still drawn for a while,
+## and then is not.
+func _process_building(w: SimWorld, b: SimBuilding, to_despawn: Array[int]) -> void:
+	if b.alive:
 		return
-	b.phase = SimBuilding.Phase.DESTROYED
-	w.free_footprint(b.id)
+
+	if b.phase != SimBuilding.Phase.DESTROYED:
+		b.phase = SimBuilding.Phase.DESTROYED
+		b.rubble_ticks_left = SimBuilding.RUBBLE_TOTAL_TICKS
+		w.free_footprint(b.id)
+		return
+
+	# A building already DESTROYED when this system first sees it -- one spawned
+	# straight into the phase, or loaded from a save -- gets its timer started
+	# here rather than sitting at the -1 sentinel forever.
+	if b.rubble_ticks_left < 0:
+		b.rubble_ticks_left = SimBuilding.RUBBLE_TOTAL_TICKS
+		return
+
+	b.rubble_ticks_left -= 1
+	if b.rubble_ticks_left <= 0:
+		to_despawn.append(b.id)

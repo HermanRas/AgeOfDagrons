@@ -179,32 +179,42 @@ func colour_index(id: StringName) -> int:
 ## rather than notice in a match. Returns [] when the art pack is not mounted at
 ## all, because then EVERY colour is missing and the list would say nothing.
 ##
-## How far behind its unit's newest bake a colour atlas may be before it is
-## called stale. See stale_colour_atlases() for why an hour.
-const COLOUR_STALENESS_SECONDS := 3600
-
-
-## Which per-player bakes are PRESENT but older than the newest bake of the same
-## visual -- the failure missing_colour_atlases() cannot see, because the file is
-## there and parses and draws.
+## Which per-player bakes are PRESENT but do not belong with their siblings --
+## the failure missing_colour_atlases() cannot see, because the file is there and
+## parses and draws.
 ##
 ## Asked for by the art agent (asset_request.md, 2026-08-16) after three pipeline
 ## defects were fixed mid-roster: `decay` sampled from t=0 so every corpse sprang
 ## upright for a frame, two units baked as overlapping bodies, and player colour
 ## never reached actors with an opaque root. Only red and yellow were rebaked, so
-## 60 of the 152 colour atlases render wrongly while looking perfectly healthy.
+## 60 of the 152 colour atlases rendered wrongly while looking perfectly healthy.
 ##
-## MODIFICATION TIME is the signal, for want of a better one: the fixes were in
-## isobake's source, not in the recipes, so nothing inside the atlas JSON changed
-## -- `generator.version` and `recipe_sha256` are identical across the boundary.
-## The threshold is an hour because the measured separation is not close: within
-## one colour batch the eight files land inside 25 minutes of each other (galley's
-## eight span two), while across the fix boundary they are 12-15 hours apart. An
-## order of magnitude of headroom either side.
+## UNIFORMITY OF BUILD IDENTITY IS THE SIGNAL: a unit's eight colours are one
+## batch's output and must all name the same isobake build, so any that disagree
+## with the majority are the odd ones out. The atlas carries
+## `generator.isobake_build` (a monotonic commit count) and `isobake_commit`;
+## EQUALITY is what is compared, not order, which stays correct even if a rebase
+## ever makes two commits share a count.
+##
+## THIS REPLACED A MODIFICATION-TIME RULE, and the way that rule failed is the
+## reason this one is written against identity instead. It flagged an atlas more
+## than an hour older than its newest sibling, which worked only while the wrong
+## files were also the old files. The moment the roster completed, the two
+## known-GOOD colours -- red and yellow, rebaked in the morning, siblings landing
+## that afternoon -- became the oldest of their set and the check named exactly
+## them: 34 false positives, every one of them a file to trust.
+##
+## AN ABSENT IDENTITY IS A VALUE, NOT A GAP. The 323 atlases staged before
+## isobake `531a4bc` carry no such key, and nothing unstamped can postdate the
+## stamp, so "absent" compares equal to "absent" and a wholly-unstamped set is
+## uniform and silent. A NULL identity is different and is always reported: it
+## means the bake asked git and got no answer, so provenance broke rather than
+## the art being old (the art agent made all three keys always-present for this,
+## isobake `99a33cc`).
 ##
 ## DIAGNOSTIC ONLY. Nothing branches on this -- a stale atlas still resolves and
 ## still draws, and refusing to render it would be a worse outcome than rendering
-## it wrongly. Each entry: {"visual", "colour", "slug", "behind_seconds"}.
+## it wrongly. Each entry: {"visual", "colour", "slug", "identity", "expected"}.
 func stale_colour_atlases() -> Array[Dictionary]:
 	if not _loaded:
 		load_all()
@@ -218,32 +228,79 @@ func stale_colour_atlases() -> Array[Dictionary]:
 		if base.is_empty():
 			continue
 
-		# Newest across the base bake AND every colour, so a unit whose base was
-		# never rebaked does not make its own colours look current.
-		var newest: int = 0
-		var times: Array[int] = []
-		times.resize(_colour_slugs.size())
-		if FileAccess.file_exists(base):
-			newest = FileAccess.get_modified_time(base)
+		# Identity per staged colour, and how many share each one. The base bake
+		# is deliberately NOT counted: it is one file against eight and a unit
+		# whose base alone was rebaked would otherwise outvote nothing but still
+		# muddy the tally.
+		var ids: Array[String] = []
+		var tally: Dictionary = {}
+		ids.resize(_colour_slugs.size())
 		for i in range(_colour_slugs.size()):
 			var path := _tinted_path(base, _colour_slugs[i])
-			times[i] = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else 0
-			newest = maxi(newest, times[i])
-		if newest == 0:
-			continue          # nothing staged for this visual at all
+			if not FileAccess.file_exists(path):
+				ids[i] = ""          # absent; missing_colour_atlases() reports it
+				continue
+			ids[i] = _build_identity(path)
+			tally[ids[i]] = int(tally.get(ids[i], 0)) + 1
+
+		if tally.is_empty():
+			continue                 # nothing staged for this visual at all
+
+		# The majority identity is what the set is SUPPOSED to be. Ties are broken
+		# by string order rather than by whichever the Dictionary yielded first --
+		# a diagnostic that names different files on two runs of the same data is
+		# not one anybody can act on.
+		var keys := tally.keys()
+		keys.sort()
+		var expected: String = keys[0]
+		for k in keys:
+			if int(tally[k]) > int(tally[expected]):
+				expected = k
 
 		for i in range(_colour_slugs.size()):
-			if times[i] == 0:
-				continue      # absent, which missing_colour_atlases() reports instead
-			var behind := newest - times[i]
-			if behind > COLOUR_STALENESS_SECONDS:
-				out.append({
-					"visual": visual_id,
-					"colour": i,
-					"slug": _colour_slugs[i],
-					"behind_seconds": behind,
-				})
+			if ids[i] == "":
+				continue
+			# A broken-provenance bake is reported even in a set that agrees on
+			# it: null does not mean old, it means the pipeline could not say,
+			# and that should never happen quietly.
+			if ids[i] == expected and ids[i] != _IDENTITY_UNKNOWN:
+				continue
+			out.append({
+				"visual": visual_id,
+				"colour": i,
+				"slug": _colour_slugs[i],
+				"identity": ids[i],
+				"expected": expected,
+			})
 	return out
+
+
+## What an atlas says about the code that built it, as a comparable string.
+##
+## Three states, matching what isobake emits (`99a33cc`): the keys ABSENT means
+## it predates build stamping, which is a real and orderable fact about the file
+## rather than a gap; NULL means the bake asked git and got nothing, which is a
+## broken pipeline and never compares equal to anything, including itself; and a
+## real value identifies the commit.
+const _IDENTITY_ABSENT := "unstamped"
+const _IDENTITY_UNKNOWN := "unknown"
+
+
+func _build_identity(path: String) -> String:
+	var raw := _read_json(path)
+	var gen: Variant = raw.get("generator")
+	if not gen is Dictionary:
+		return _IDENTITY_ABSENT
+	var g: Dictionary = gen
+	if not g.has("isobake_commit") and not g.has("isobake_build"):
+		return _IDENTITY_ABSENT
+	var commit: Variant = g.get("isobake_commit")
+	var build: Variant = g.get("isobake_build")
+	if commit == null and build == null:
+		return _IDENTITY_UNKNOWN
+	# Commit first -- it identifies the code exactly, where the build count is
+	# only monotonic on linear history (the art agent's own caveat).
+	return str(commit) if commit != null else "build:%d" % int(build)
 
 
 ## Each entry: {"visual": StringName, "colour": int, "slug": StringName}.
@@ -262,6 +319,67 @@ func missing_colour_atlases() -> Array[Dictionary]:
 			if not FileAccess.file_exists(_tinted_path(base, _colour_slugs[i])):
 				out.append({"visual": visual_id, "colour": i, "slug": _colour_slugs[i]})
 	return out
+
+
+## The decorative props that stand AROUND a visual -- the plank stacks at a
+## lumber camp, the cut stone at a mining camp, the produce crates at a mill.
+## Each entry is `{"visual": StringName, "offset_m": Vector2}`, in the declared
+## order, and `[]` for the overwhelming majority of ids that have none.
+##
+## PROPS ARE SEPARATE ATLASES COMPOSED AT DRAW TIME, not baked into the building
+## (project owner, 2026-08-15). Baking them in would freeze one arrangement into
+## all four age skins and would need a compose step in isobake that drawing them
+## here makes unnecessary. The cost is this function and the draw loop in
+## EntityView; the gain is that the same plank stack serves every age of every
+## building that wants one.
+##
+## `offset_m` is a GROUND-PLANE offset in metres from the building's own origin,
+## the same units placeholders are authored in, so it stays meaningful if
+## `Iso.TILE_SIZE` ever changes. It must keep the prop inside the footprint the
+## building already reserves -- `buildings.json` sizes a footprint as the max
+## across all four age skins, so ages 1 and 2 are holding ground their art does
+## not fill, and that slack is where these go. Props block nothing and are pure
+## view; they are decoration standing on open ground.
+##
+## `age` gates an entry that declares an `ages` list -- the mill only gains its
+## food crates at age 3, when the Persian storehouse and Roman farmstead replace
+## the Briton rotary mill. An entry with no `ages` shows in every age. 0 or less
+## means "no age known" and is read as age 1, so a caller with no skin yet gets
+## the age-1 dressing rather than all of it at once.
+func props_for(visual_id: StringName, age: int = 0) -> Array[Dictionary]:
+	if not _loaded:
+		load_all()
+
+	var out: Array[Dictionary] = []
+	var declared: Variant = _visuals.get(visual_id, {}).get("props")
+	if not declared is Array:
+		return out
+
+	var want := maxi(1, age)
+	for entry in declared as Array:
+		if not entry is Dictionary:
+			continue
+		var d: Dictionary = entry
+		var ages: Variant = d.get("ages")
+		if ages is Array and not _lists_age(ages as Array, want):
+			continue
+		var off: Variant = d.get("offset_m", [0.0, 0.0])
+		var v := Vector2.ZERO
+		if off is Array and (off as Array).size() >= 2:
+			v = Vector2(float(off[0]), float(off[1]))
+		out.append({"visual": StringName(d.get("visual", "")), "offset_m": v})
+	return out
+
+
+## Whether an `ages` list names this age. Compared as INTEGERS one at a time
+## rather than with `Array.has()`: JSON has no integer type, so `[3, 4]` parses
+## as floats, and `has()` does not match an int against a float. The mill's food
+## crates were declared for ages 3 and 4 and appeared in none.
+func _lists_age(ages: Array, age: int) -> bool:
+	for a in ages:
+		if int(a) == age:
+			return true
+	return false
 
 
 ## The placeholder an ID DECLARES, whether or not an atlas is currently mounted.
@@ -445,6 +563,15 @@ func validate() -> void:
 		for kind in b.drop_off:
 			if not GameDefs.RESOURCE_KINDS.has(kind):
 				load_warnings.append("building '%s' drops off unknown kind '%s'" % [id, kind])
+
+	# A prop naming a visual that does not exist would draw the magenta unknown
+	# beside an otherwise perfect building -- loud, but only once someone looks.
+	# Checked across EVERY age, not just the current one, so a mill's age-3 crates
+	# are validated on a machine that never leaves age 1.
+	for visual_id in _visuals:
+		for age in range(1, maxi(1, _ages.size()) + 1):
+			for p in props_for(visual_id, age):
+				_require_visual(p["visual"], "visual '%s' prop" % visual_id)
 
 	for id in _resources:
 		var r: ResourceDef = _resources[id]

@@ -220,8 +220,36 @@ func test_stale_colour_bakes_are_enumerable_too() -> void:
 		var e: Dictionary = entry
 		assert_true(e.has("visual") and e.has("colour") and e.has("slug"))
 		assert_eq(reg.colour_slug(int(e["colour"])), e["slug"])
-		assert_true(int(e["behind_seconds"]) > GameDataRegistry.COLOUR_STALENESS_SECONDS,
-				"only reported past the threshold, so one batch's own spread is not noise")
+		# Every report names what the file says and what its siblings say, so it
+		# can be acted on without re-deriving the comparison by hand.
+		assert_true(e.has("identity") and e.has("expected"))
+		assert_true(String(e["identity"]) != String(e["expected"])
+						or String(e["identity"]) == "unknown",
+				"only reported for disagreeing with its set, or for broken provenance")
+
+
+func test_a_uniformly_unstamped_set_is_not_stale() -> void:
+	# The rule that replaced the modification-time one, and the reason it had to.
+	# The old rule flagged anything more than an hour older than its newest
+	# sibling, which held only while the wrong files were also the old files. Once
+	# the roster completed it named red and yellow -- the two known-GOOD colours,
+	# rebaked first -- for 14 units: 34 reports, every one a file to trust.
+	#
+	# Under uniformity, a set that agrees is silent however old it is, so the 323
+	# atlases staged before isobake began stamping a build id report nothing.
+	# Nothing unstamped can postdate the stamp, so "absent" is a comparable value
+	# rather than a gap.
+	#
+	# The unconditional assertion is load-bearing to the HARNESS, not to the
+	# claim: with the art currently staged this list is empty, and a test whose
+	# every assertion is inside a loop over an empty list runs none at all and is
+	# reported as a failure rather than a pass.
+	var stale: Array = reg.stale_colour_atlases()
+	assert_not_null(stale)
+	for e in stale:
+		assert_ne(String((e as Dictionary)["identity"]), "unstamped",
+				"%s is unstamped and so are its siblings; that is uniform, not stale"
+						% (e as Dictionary)["visual"])
 
 
 func test_stale_and_missing_are_disjoint() -> void:
@@ -230,6 +258,9 @@ func test_stale_and_missing_are_disjoint() -> void:
 	var absent: Array = []
 	for e in reg.missing_colour_atlases():
 		absent.append("%s|%d" % [(e as Dictionary)["visual"], int((e as Dictionary)["colour"])])
+	# Both lists are empty with the art as currently staged, so without this the
+	# test would run no assertions at all and be reported as a failure.
+	assert_not_null(absent)
 	for e in reg.stale_colour_atlases():
 		var key := "%s|%d" % [(e as Dictionary)["visual"], int((e as Dictionary)["colour"])]
 		assert_false(absent.has(key), "%s is reported as stale OR missing, never both" % key)

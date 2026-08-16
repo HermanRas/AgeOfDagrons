@@ -141,6 +141,13 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 	if not force and not map.can_place_building(rect):
 		return null
 
+	# Anything already built here is rubble, and rubble goes when it is built over
+	# (project owner, 2026-08-16). It cannot BLOCK the placement -- a destroyed
+	# building freed its tiles the tick it fell (5.5) -- so without this the new
+	# building simply goes up on top of the wreckage and the debris shows through
+	# around its edges for the rest of the minute.
+	_clear_rubble_under(rect)
+
 	var b := SimBuilding.new()
 	b.id = _next_id
 	_next_id += 1
@@ -170,6 +177,32 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 	map.set_occupied(rect, b.id)
 	_occupancy_changed(rect)
 	return b
+
+
+## Despawn every piece of rubble the new footprint covers -- ANY overlap, not
+## just an exact match, since a small house going up on one corner of a fallen
+## town centre still has to take the whole ruin with it. Half-cleared wreckage
+## sticking out from under a new building would look worse than leaving all of
+## it.
+##
+## Ids are collected before despawning: despawn() mutates `entities`, which
+## cannot be done while iterating it. Sorted, because despawn order reaches
+## `removed_this_tick` and two clients disagreeing about it is a difference in
+## the wire format for no reason.
+func _clear_rubble_under(rect: Rect2i) -> void:
+	var doomed: Array[int] = []
+	for id in entities:
+		var e: SimEntity = entities[id]
+		if not (e is SimBuilding):
+			continue
+		var b: SimBuilding = e
+		if b.phase != SimBuilding.Phase.DESTROYED:
+			continue
+		if b.footprint_rect().intersects(rect):
+			doomed.append(b.id)
+	doomed.sort()
+	for id in doomed:
+		despawn(id)
 
 
 ## Place a resource node on a single tile, claiming it. Returns null if the tile is
@@ -371,7 +404,10 @@ func state_hash() -> int:
 			var q: Array = []
 			for entry in e.queue:
 				q.append([entry.get("def_id", &""), entry.get("progress", 0), entry.get("ready", false)])
-			parts.append([e.phase, e.build_progress, q])
+			# The rubble timer is in here because it ENDS IN A DESPAWN: two clients
+			# a tick apart on it would clear the same wreckage on different ticks
+			# and disagree about `removed[]`.
+			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

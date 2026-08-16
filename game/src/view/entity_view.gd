@@ -30,6 +30,7 @@ var visual_id: StringName = &"":
 			return
 		visual_id = value
 		_visual = null
+		_props_resolved = false
 		_anim_time = 0.0
 		_frame = 0
 		queue_redraw()
@@ -47,6 +48,8 @@ var skin_age: int = 0:
 			return
 		skin_age = value
 		_visual = null
+		# And the props with it: the mill has none until age 3.
+		_props_resolved = false
 		queue_redraw()
 
 ## The owner's palette index (SimPlayer.colour), which picks the per-player
@@ -98,6 +101,12 @@ var dead: bool = false:
 		queue_redraw()
 
 var _visual: AtlasEntry = null
+## Decorative props standing around this entity (GameDataRegistry.props_for),
+## resolved to atlases and screen offsets. `_props_resolved` rather than a null
+## check, because the empty list is the answer for almost everything and must not
+## be re-resolved every frame.
+var _props: Array[Dictionary] = []
+var _props_resolved: bool = false
 var _from_pos: Vector2 = Vector2.ZERO
 var _to_pos: Vector2 = Vector2.ZERO
 var _elapsed: float = INTERP_SECONDS          # start "arrived" so the first update snaps
@@ -133,6 +142,10 @@ func set_visual(entry: AtlasEntry) -> void:
 	# would throw the entry away again.
 	visual_id = entry.id if entry != null else &""
 	_visual = entry
+	# Injected art means a test standing outside the seam; it has no props and
+	# must not go looking for any through the autoload.
+	_props = []
+	_props_resolved = true
 	_anim_time = 0.0
 	_frame = 0
 	queue_redraw()
@@ -296,10 +309,37 @@ func _draw() -> void:
 		draw_set_transform(draw_offset)
 
 	if vis.is_placeholder:
+		# No props on a placeholder. A placeholder means the art is not mounted,
+		# and dressing an untextured box with three perfectly-rendered plank
+		# stacks would say the building is finished when it is not.
 		PlaceholderRenderer.draw_into(self, vis.placeholder, facing)
 		return
 
-	var f := vis.frame_at(anim, facing, _frame)
+	# Props behind the building first, then the building, then the props in front
+	# of it -- one painter's pass, sorted by projected depth exactly as the world
+	# layer sorts entities against each other. Without the split, a stone pile
+	# meant to sit at the near corner would be painted under the wall it is
+	# standing in front of.
+	var props := _props_here()
+	for p in props:
+		var at: Vector2 = p["at"]
+		if at.y < 0.0:
+			_draw_frame(p["visual"], &"idle", at)
+	_draw_frame(vis, anim, Vector2.ZERO)
+	for p in props:
+		var at: Vector2 = p["at"]
+		if at.y >= 0.0:
+			_draw_frame(p["visual"], &"idle", at)
+
+
+## One atlas frame, anchored so its own origin lands at `at` in this node's local
+## space. Shared by the entity's own sprite and by every prop standing around it,
+## so a prop cannot drift out of agreement with the thing it decorates about
+## where the ground is.
+func _draw_frame(vis: AtlasEntry, anim_name: StringName, at: Vector2) -> void:
+	if vis == null or vis.is_placeholder:
+		return
+	var f := vis.frame_at(anim_name, facing, _frame if anim_name == anim else 0)
 	if f.is_empty():
 		return
 	var tex := vis.texture(int(f["page"]))
@@ -311,14 +351,39 @@ func _draw() -> void:
 	var src := Rect2(rect.position, rect.size)
 
 	# The frame is placed so its anchor -- the projected world origin, exact by
-	# construction rather than measured (PLAN.md 9.1) -- lands on this node's
-	# local origin. Mirrored facings reflect about that same point, so a flipped
-	# sprite stays on its feet.
+	# construction rather than measured (PLAN.md 9.1) -- lands on `at`. Mirrored
+	# facings reflect about that same point, so a flipped sprite stays on its
+	# feet; `at.x` is negated under the mirror for the same reason draw_offset is
+	# kept out of it.
 	if bool(f["flip_x"]):
 		draw_set_transform(draw_offset, 0.0, Vector2(-1.0, 1.0))
 		draw_texture_rect_region(
-			tex, Rect2(anchor.x - rect.size.x, -anchor.y, rect.size.x, rect.size.y), src
+			tex, Rect2(anchor.x - rect.size.x - at.x, at.y - anchor.y,
+					rect.size.x, rect.size.y), src
 		)
 		draw_set_transform(draw_offset, 0.0, Vector2.ONE)
 	else:
-		draw_texture_rect_region(tex, Rect2(-anchor, Vector2(rect.size)), src)
+		draw_texture_rect_region(tex, Rect2(at - anchor, Vector2(rect.size)), src)
+
+
+## This visual's props, resolved once and cached: `[{visual, at}]` with `at` the
+## prop's screen offset from the entity's own origin. Empty for everything that
+## declares none, which is all but three buildings.
+##
+## Resolved lazily and dropped whenever the skin changes, the same lifecycle
+## `_visual` has -- the mill only gains its food crates at age 3, so the list is
+## a function of the age and cannot be resolved once at spawn.
+func _props_here() -> Array[Dictionary]:
+	if _props_resolved:
+		return _props
+	_props_resolved = true
+	_props = []
+	for p in GameDataRegistry.props_for(visual_id, skin_age):
+		var entry := GameDataRegistry.atlas_for(StringName(p["visual"]))
+		if entry == null or entry.is_placeholder:
+			continue          # a prop whose art is absent is simply not drawn
+		_props.append({
+			"visual": entry,
+			"at": Iso.metres_to_world(p["offset_m"] as Vector2),
+		})
+	return _props

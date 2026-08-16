@@ -170,6 +170,11 @@
       "3": "res://assets/atlases/vis.mill_age3.atlas.json",
       "4": "res://assets/atlases/vis.mill_age4.atlas.json"
     },
+    "props": [
+      { "visual": "vis.prop_food_big", "offset_m": [3.0, 3.0], "ages": [3, 4] },
+      { "visual": "vis.prop_food_small", "offset_m": [-3.2, 2.4], "ages": [3, 4] },
+      { "visual": "vis.prop_food_small", "offset_m": [3.2, -2.4], "ages": [3, 4] }
+    ],
     "placeholder": {
       "shape": "box",
       "footprint_m": [8.12, 7.78],
@@ -186,6 +191,11 @@
       "3": "res://assets/atlases/vis.lumber_camp_age3.atlas.json",
       "4": "res://assets/atlases/vis.lumber_camp_age4.atlas.json"
     },
+    "props": [
+      { "visual": "vis.prop_wood_lumber", "offset_m": [-3.5, 3.5] },
+      { "visual": "vis.prop_wood_lumber", "offset_m": [3.5, 3.5] },
+      { "visual": "vis.prop_wood_lumber", "offset_m": [3.5, -3.5] }
+    ],
     "placeholder": {
       "shape": "box",
       "footprint_m": [7.18, 8.9],
@@ -202,6 +212,11 @@
       "3": "res://assets/atlases/vis.mining_camp_age3.atlas.json",
       "4": "res://assets/atlases/vis.mining_camp_age4.atlas.json"
     },
+    "props": [
+      { "visual": "vis.prop_stone_pile_granite", "offset_m": [-3.5, 3.5] },
+      { "visual": "vis.prop_stone_pile_granite", "offset_m": [3.5, 3.5] },
+      { "visual": "vis.prop_stone_pile_granite", "offset_m": [3.5, -3.5] }
+    ],
     "placeholder": {
       "shape": "box",
       "footprint_m": [6.74, 9.42],
@@ -873,6 +888,46 @@
       "height_m": 2.69,
       "color": "#7a2c2c",
       "facing_marker": true
+    }
+  },
+
+  "vis.prop_wood_lumber": {
+    "atlas": "res://assets/atlases/vis.prop_wood_lumber.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [1.41, 1.41],
+      "height_m": 0.88,
+      "color": "#7a5c34"
+    }
+  },
+
+  "vis.prop_stone_pile_granite": {
+    "atlas": "res://assets/atlases/vis.prop_stone_pile_granite.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [1.78, 1.78],
+      "height_m": 0.62,
+      "color": "#9c9c98"
+    }
+  },
+
+  "vis.prop_food_small": {
+    "atlas": "res://assets/atlases/vis.prop_food_small.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.25, 2.25],
+      "height_m": 0.68,
+      "color": "#8a5a2b"
+    }
+  },
+
+  "vis.prop_food_big": {
+    "atlas": "res://assets/atlases/vis.prop_food_big.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [4.22, 4.22],
+      "height_m": 0.76,
+      "color": "#8a5a2b"
     }
   }
 }
