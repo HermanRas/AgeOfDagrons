@@ -6,6 +6,90 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### Camp props — **agent 2: wood and stone already exist; FOOD was the real gap, now baked**
+
+You reported the food and wood props missing for the lumber and mining camps.
+Wood and stone were already there; food genuinely was not, but it belongs to a
+different building. Checked on disk:
+
+| prop | for | state |
+|---|---|---|
+| `vis.prop_wood_lumber` | lumber camp ×3 | baked **and staged** since 2026-08-15 |
+| `vis.prop_stone_pile_granite` | mining camp ×3 | baked **and staged** since 2026-08-15 |
+| `vis.prop_food_small` | age-3/4 farm ×2 | **baked 2026-08-16, staged** |
+| `vis.prop_food_big` | age-3/4 farm ×1 | **baked 2026-08-16, staged** |
+
+**There is no food prop for the lumber or mining camp, and there should not be.**
+The roster gives the camps wood and stone respectively; food props belong to the
+mill, and only from age 3, where the Persian storehouse and Roman farmstead
+replace the Briton rotary mill:
+
+```
+Pers/StoreHouse + x2 gaia/tresure/food_persian_small, 1x gaia/tresure/food_persian_big
+```
+
+If the game side wants a food pile at a *camp*, that is a design change rather
+than a missing asset — say so and I will bake one, but the roster does not ask
+for it.
+
+Worth knowing how these work, since it explains why they are separate ids:
+**camp props are their own atlases, composed by the game at draw time, not baked
+into the building.** The project owner decided that 2026-08-15 — baking them in
+would freeze one arrangement into all four age skins and would need a compose
+feature in isobake that in-game drawing makes unnecessary. So `vis.mill_age3`
+does *not* contain its food props; you place them.
+
+Staging is now **325/325, RESULT: OK**.
+
+### `vis.ballista` — **agent 2: the crew are headless, and I know why**
+
+The project owner spotted this against 0 A.D.'s own render. Our bake DOES include
+the three operator crew — bodies, tunics, legs — but every one of them is
+missing its head, helmet and tool. They are not absent; they are at the world
+origin, buried inside the engine. From `isobake inspect`:
+
+```
+m_armor_tunic_short / .001 / .002     COPY_LOCATION -> prop_operator_01/02/03   anchored
+head_beard_small / .001 / .002        free      <- no constraint, lands at (0,0,0)
+Cart_Helmet_A_HD.004, Hele_Thracian_B free
+Siege_Lever-Wood_L.001 / .006         free
+```
+
+The crew are props of the engine, and their heads are props **of the crew** —
+two levels of nesting. The pinned importer resolves the first level and drops
+anchoring on the second. Same defect class as the mis-rooted shields isobake
+already works around by name (`_drop_misrooted_nested_props`), one level deeper.
+
+**This also changes the colour answer.** I said the ballista cannot take player
+colour. That is true of the *deployed* actor as bought — its Carthaginian crew
+textures measure a 0% mask — but the owner points out the **packed** variant is
+a different proposition:
+
+```
+units/cart/siege_ballista_packed -> units/carthaginians/siege_rock_packed.xml
+  material: player_trans_norm_spec          <- the hull itself tints
+  props: engineer_a/b/c  + horse_l, horse_r (units/hellenes/trader_h.xml)
+```
+
+Horses and a player-coloured hull. So a packed ballista would tint, and the crew
+may too once their heads and anchoring are fixed. **Queued as the next piece of
+work.** Until then `vis.ballista` stays static, colourless and headless-crewed —
+usable, but do not treat it as final.
+
+### Heads-up: dead `ASSET_MISSING.md` citations in `game/`
+
+`ASSET_MISSING.md` was removed 2026-08-16 (see the note at the top of this file).
+I repaired every navigational link, but **22 provenance citations remain in
+`game/` source and data comments** — `game/data/visuals.json`,
+`game/data/buildings.json`, `game/src/view/*.gd`, `game/tests/view/*.gd` and
+others, in the form "see ASSET_MISSING.md §1.2".
+
+I have not touched them: `game/` is yours, and ~150 such citations exist across
+the repo, so churning them all would be a large diff over carefully-written
+comments to fix a cosmetic dead reference. Read them as history. The file is in
+git at `c0ba4a3` if one ever needs resolving. Clean them up or leave them as you
+prefer — flagging only so they do not surprise you.
+
 ### Build identity in the atlas — **agent 2: DONE, isobake `531a4bc`**
 
 You asked for something better than mtime; here it is. Every atlas baked from

@@ -1,0 +1,47 @@
+# Small food treasure -- the gaia prop the AGE-3/4 FARM carries 2x
+# (Age & Unit Planning.md: "Pers/StoreHouse + x2 gaia/tresure/food_persian_small,
+# 1x gaia/tresure/food_persian_big").
+#
+# NOT a lumber- or mining-camp prop. Those two are already covered by
+# prop_wood_lumber and prop_stone_pile_granite; this one belongs to the mill,
+# and only from age 3, where the Persian storehouse and Roman farmstead replace
+# the Briton rotary mill.
+#
+# Baked as its own atlas rather than composed into the building, for the reasons
+# set out in prop_wood_lumber.toml -- composing in-game costs no pipeline work
+# and leaves the arrangement free to change without re-rendering a building.
+#
+# Resolved through its template, since the actor is named nothing like the
+# roster line:
+#
+#   simulation/templates/gaia/treasure/food_persian_small.xml
+#     -> props/special/eyecandy/treasure_achaemenid_food_small.xml
+id      = "vis.prop_food_small"
+adapter = "zeroad"
+
+[source]
+actor = "props/special/eyecandy/treasure_achaemenid_food_small.xml"
+
+[render]
+# Same class of small scenery prop as the wood pile, so the same calibrated
+# canvas carries over; the clip-check reports a canvas that is too small rather
+# than cropping silently, so a generous guess costs atlas space and a mean one
+# costs the bake.
+canvas = [128, 128]
+supersample = 4
+# 5 stored, mirrored to 8 -- same reasoning as the wood pile: near enough
+# symmetric that a mirrored copy reads as a different sack rather than a wrong
+# one, and two sit beside one building, so the variety helps.
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/special/eyecandy/treasure_achaemenid_food_small.xml"

@@ -1,0 +1,30 @@
+# Large food treasure -- the gaia prop the AGE-3/4 FARM carries 1x, beside two
+# of prop_food_small. See prop_food_small.toml for the full reasoning; this is
+# its larger sibling and the two are always placed together.
+#
+#   simulation/templates/gaia/treasure/food_persian_big.xml
+#     -> props/special/eyecandy/treasure_achaemenid_food_big.xml
+id      = "vis.prop_food_big"
+adapter = "zeroad"
+
+[source]
+actor = "props/special/eyecandy/treasure_achaemenid_food_big.xml"
+
+[render]
+# The "big" of the pair, so it gets the next canvas up rather than the small
+# one's 128. Cheaper to over-provision here than to lose a bake to a clip.
+canvas = [192, 192]
+supersample = 4
+directions = 5
+frame_origin_at = 0.2
+ground_clip = true
+engine = "eevee"
+samples = 24
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/props/special/eyecandy/treasure_achaemenid_food_big.xml"
