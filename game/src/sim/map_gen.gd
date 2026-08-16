@@ -50,10 +50,28 @@ const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
 const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
 
 ## Starting stock (PLAN.md 9: numbers are starting values to be tuned by
-## playtest). Wood only, and only on the debug map -- enough to place a house
-## or two without gathering first, so build/production actions are testable
-## without playing out the whole gather loop first every time.
-const DEBUG_STARTING_WOOD := 200
+## playtest), and only on the DEBUG map -- this is a sandbox figure, not a
+## balance one, and the day there is a real map generator or a lobby it does not
+## follow them there.
+##
+## Was 200 wood. That was right when the roster was a house and a town centre:
+## enough to place one or two without gathering first, and no more, so the gather
+## loop still had to work. The roster is now 19 buildings and 21 units across
+## four ages, and the thing that needs exercising is no longer "can a villager
+## chop wood" -- it is whether every building places, every unit trains, and the
+## age skins actually swap. Gathering 650 stone for a castle by hand before you
+## can look at the castle is not testing, it is waiting.
+##
+## Generous in all four kinds, then, and deliberately not infinite: costs should
+## still visibly come out of the counters, because a resource HUD that never
+## moves cannot be checked either. This affords the whole roster several times
+## over -- the wonder alone is 1000/1000/1000.
+const DEBUG_STARTING_STOCK := {
+	&"food": 5000,
+	&"wood": 5000,
+	&"gold": 5000,
+	&"stone": 5000,
+}
 
 
 ## Populate `w` with the fixed debug map. Call after SimWorld.setup(), which has
@@ -71,7 +89,8 @@ static func build_debug_map(w: SimWorld) -> void:
 				SimBuilding.Phase.COMPLETE, true)
 		_place_resources(w, origin)
 		_place_villagers(w, p.id, tc)
-		p.add_resource(&"wood", DEBUG_STARTING_WOOD)
+		for kind in DEBUG_STARTING_STOCK:
+			p.add_resource(kind, int(DEBUG_STARTING_STOCK[kind]))
 
 	# The map is final; build the pathfinding grid now. A full sweep of a 64x64
 	# grid measures ~12 ms, which is invisible during setup and five times the

@@ -46,6 +46,12 @@ func validate(w: SimWorld) -> bool:
 	var p := w.player_for(player_id)
 	if p == null or not p.can_afford(bd.cost):
 		return false
+	# The age gate is enforced HERE as well as in the build menu, because the menu
+	# is a client and the server is the only trust boundary (PLAN.md 5.1 step 4).
+	# SelectionActions omitting a wonder in age 1 keeps an honest player from
+	# ordering one; this is what keeps a modified client from placing it.
+	if bd.age_required > p.age:
+		return false
 	return w.map.can_place_building(SimMap.footprint_rect(origin, bd.footprint))
 
 

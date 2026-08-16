@@ -35,6 +35,8 @@ static func from_dict(d: Dictionary) -> Command:
 			return CancelProductionCommand.from_dict(d)
 		"debug_destroy":
 			return DebugDestroyCommand.from_dict(d)
+		"debug_set_age":
+			return DebugSetAgeCommand.from_dict(d)
 		"set_control_group":
 			return SetControlGroupCommand.from_dict(d)
 		_:

@@ -48,7 +48,13 @@ func validate(w: SimWorld) -> bool:
 		return false
 
 	var p := w.player_for(player_id)
-	return p != null and p.can_afford(ud.cost)
+	if p == null or not p.can_afford(ud.cost):
+		return false
+	# Same reasoning as PlaceBuildingCommand: `bd.trains` is the building's roster
+	# across ALL ages and the per-unit gate is what narrows it, so without this an
+	# age-2 archery range would happily queue a crossbowman for any client that
+	# asked. The menu already hides it; this is what makes hiding it sufficient.
+	return ud.age_required <= p.age
 
 
 func apply(w: SimWorld) -> void:
