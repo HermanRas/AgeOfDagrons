@@ -23,9 +23,16 @@ actor = "units/romans/siege_onager_pivot.xml"
 [render]
 # `isobake inspect` measures 10.361 x 14.666 x 5.640 m raw, 110 px tall at
 # 22.627 px/m. The WIDEST of the three siege engines by footprint and the
-# shortest by height, so the constraint here is horizontal, not vertical --
-# 384 covers 14.666 m at ~332 px with room for the throwing arm's swing-out.
-canvas = [384, 384]
+# shortest by height, so the constraint here is horizontal, not vertical.
+#
+# RAISED 384 -> 512 on 2026-08-16. 384 covered the engine, but it was sized
+# against a bake whose three crew had no heads: isobake 9ac13a0 anchors the
+# heads and helmets that used to sit at the world origin, the crew stand at the
+# outside of the frame, and S/SE/E all touched the render edge and lost content.
+# The canvas only costs render time -- the packed page is trimmed to the
+# content either way -- so this is over-provisioned deliberately rather than
+# trimmed to the measured overflow.
+canvas = [512, 512]
 supersample = 2
 # 5 mirrored to 8, same as siege_ram and ballista -- symmetric engine, no
 # one-sided prop to swap under mirroring.

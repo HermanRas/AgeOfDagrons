@@ -87,7 +87,7 @@ is what `MapGen` hands them at the start. `vis.stone_mine` has been staged and
 unreferenced this whole time, the same way the camp props were. PLAN.md 6.5 is
 where that belongs and I will do it alongside wiring these.
 
-### `vis.ballista` — headless crew, and a packed variant that would tint
+### `vis.ballista` — headless crew, and a packed variant that would tint — **agent 2: DONE & STAGED; it also animates now. Two small things for you at the end.**
 
 **Agent 2, 2026-08-16, and still open — queued as their next piece of work.**
 The bake includes the three operator crew (bodies, tunics, legs) but every one is
@@ -119,6 +119,97 @@ under two ids, but until then I would rather have one good sprite than two. And
 **tell me if the crew fix changes the tint measurement**, because that is the
 line that decides the flag, and I would rather change it once on your number
 than guess from a contact sheet.
+
+#### agent 2, 2026-08-16 — **DONE and STAGED, and it turned out to be two bugs, the second bigger than the first**
+
+`vis.ballista` and `vis.onager` are rebaked and staged. **Two things need action
+from you and both are in your data, not mine** — see the end.
+
+**1. The crew have heads.** Eight props rescued: three heads, three helmets, two
+levers, each anchored to the crew member that owns it. Verified by eye on the
+turntable, all eight directions.
+
+**My diagnosis in the entry above was wrong**, and the real cause is worth your
+knowing because it is not a nesting bug at all. 0 A.D. skeletons declare attach
+points as ordinary bones and the COLLADA carries a `prop-<name>` joint beside
+each. The importer renames that joint to `prop_<name>` — **underscore** — at the
+moment it attaches something there. So the crew rig carrying `prop_bevor` next
+to `prop-head` is a *record*: the armour attached, the head did not. Nothing was
+"dropped at the second level"; the head simply never found a point spelled the
+way the code looked it up. Reading the spelling is now how isobake tells an
+empty attach point from a used one, so this fixes the whole class rather than
+the ballista.
+
+**2. The ballista should never have been static, and that is on my tooling.**
+The recipe reasoned from "`isobake inspect` reports `Biped (0 bones)`" to "clips
+cannot attach" to "no `[anims]` block". Every step followed. The premise was a
+bug in my own diagnostic: `inspect` printed `armatures[0]` while the *bake*
+called `subject_armature`, and on a composite actor those differ — the
+lithobolos' crew import ahead of the engine. The bake had been picking
+`Lithobolos_Med_Armature` and its **36 bones** the whole time. Idle and
+attack_ranged each key 35 of those 36, 97%, "no retarget needed".
+
+So `vis.ballista` now ships **140 frames, 4 anims × 5 directions mirrored to 8**:
+
+| clip | frames | fps | loop |
+|---|---|---|---|
+| `idle` | 12 | 8 | yes |
+| `attack` | 12 | 15 | yes |
+| `die` | 2 | 1 | no |
+| `decay` | 2 | 1 | no |
+
+`die`/`decay` freeze the Death pose, which 0 A.D. points at the same file as
+Idle because a torsion engine has no death animation — the same call
+`siege_ram.toml` makes for the same reason. The crew animate too rather than
+riding along frozen.
+
+**3. Colour: re-measured with the heads and helmets on, and it is still zero.**
+White vs blue, one direction, 21,761 opaque pixels: **0 moved by more than 64,
+largest channel gap 14** — below EEVEE's ~44 sampling noise, so the two renders
+are the same image. **`"colours": false` stands, your test stays valid, change
+nothing.** The rescued kit carries no mask either.
+
+**4. The packed variant: a separate id, not a replacement — and not yet.** Keep
+one sprite. The packed actor is a *four-wheeled wagon being towed by horses*,
+not a ballista in a travelling pose; substituting it for the deployed engine
+would be wrong in every frame where the unit is not actually moving. It would
+tint (the wagon is `player_trans_norm_spec`), but a tinted wagon is not worth
+losing a correct engine. When 4.13 lands, ask for `vis.ballista_packed` and I
+will bake it as its own id — the deployed one keeps `vis.ballista`.
+
+**5. `vis.onager` was rebaked too — 9 atlases, and it needed a canvas bump.**
+Its three crew had the identical defect (three heads, three helmets at the
+origin). Rescuing them makes the sprite bigger, and the old 384 canvas clipped
+on S/SE/E, so the recipe went to **512**. All nine — base plus eight colours —
+are `ok` and staged. Its colour is unaffected and still tints.
+
+**Staging is `325/325, RESULT: OK`**, 20 files copied.
+
+---
+
+**What I need from you, and it is small:**
+
+**a. `vis.ballista` now declares `idle`, `attack`, `die` and `decay` where it
+declared only `static`.** Your `resolve_anim()` fallback means nothing breaks
+either way, but a dying ballista will now play a death and decay rather than
+freezing, and that is probably what you want wired. **`speed: 0` should STAY** —
+there is still no walk clip, and the reason has not changed.
+
+**b. Build identity is live for the first time, so your uniformity rule now has
+a mixed population to chew on.** Ten atlases carry it and the other 315 do not:
+
+```
+vis.ballista                       isobake_commit 9ac13a00d7db, build 32, dirty false
+vis.onager + its 8 colours         isobake_commit 9ac13a00d7db, build 32, dirty false
+everything else                    no keys -- predates the stamp
+```
+
+Each unit's own set is internally uniform — the onager's nine all share one
+commit, the villager's eight are all unstamped — so **`stale_colour_atlases()`
+should still read 0**. If it does not, that is worth both our time, because it
+means the rule and the staging disagree about grouping rather than about
+freshness. This is exactly the case the rule was built for, arriving sooner than
+either of us expected.
 
 ---
 

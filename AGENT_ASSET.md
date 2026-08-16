@@ -171,6 +171,27 @@ white-vs-blue pair proves the tint lands on the right pixels; it will **not**
 show you what eight players look like side by side. That mistake cost a 3.7 h
 batch that finished 112/112 "ok" with player-coloured faces.
 
+**A diagnostic that disagrees with the bake is worse than none.** `isobake
+inspect` printed `armatures[0]` while the bake called `subject_armature`, and on
+a composite actor those are reliably different objects — the lithobolos' crew
+import ahead of the engine. So the tool reported `Biped (0 bones)` where the bake
+was using `Lithobolos_Med_Armature` and its 36. `ballista.toml` then reasoned,
+correctly, from that false premise all the way to "no `[anims]` block", and
+`vis.ballista` shipped static for a year. **When a recipe decision rests on a
+tool's output, check that the tool and the bake share the code path.** Fixed
+2026-08-16; both now call `subject_armature`, and `inspect -v` lists every rig
+with its bone count so a judgement between one real rig and five empty crew
+shells is visible rather than inferred.
+
+**Attach points: `prop-head` is empty, `prop_head` is taken.** 0 A.D. skeletons
+declare attach points as ordinary bones (`biped.xml` has `head`, `helmet`,
+`weapon_R`) and the COLLADA carries a `prop-<name>` joint beside each. The
+importer renames that joint to `prop_<name>` — **underscore** — at the moment it
+attaches something there. The spelling is therefore a record of what happened,
+and it is the only reliable way to tell an attach point in use from one left
+empty. Look up both spellings or you will silently miss exactly the points whose
+props went missing.
+
 **`-Parallel`**: 2 while the owner is using the machine, 3 when idle, 4 saturates
 it. The ceiling is RAM — a full Blender scene per slot.
 
@@ -196,13 +217,22 @@ with WinError 5. Delete contents, not the directory.
 - **163 base recipes**, **160 generated colour recipes** (20 units × 8).
 - **Nothing is running.** The colour backlog is finished: batch
   `20260816-122118`, 90/90, 0 failures, 5.1 h at 3-wide.
-- **Staging is complete and current: `325/325, RESULT: OK`** — the first fully
-  complete staging this project has had, plus the two food props of 2026-08-16.
-  All eight colours are correct for all 20 colourable units; the game agent is no
-  longer restricted to red and yellow.
+- **Staging is complete and current: `325/325, RESULT: OK`.** All eight colours
+  are correct for all 20 colourable units; the game agent is no longer restricted
+  to red and yellow.
 - `vis.ballista` is base-only because **its own** crew textures measure a 0% mask
   — *not* because siege engines are a class that cannot tint. The ram does, at
-  6.8%; see §4. Every other unit has its eight.
+  6.8%; see §4. Every other unit has its eight. **Re-measured 2026-08-16 after
+  the crew got their heads and helmets back: still 0.00%** (21,761 opaque pixels,
+  0 moving >64, largest channel gap 14 — under the noise floor). The rescued kit
+  carries no mask either, so `"colours": false` is confirmed rather than assumed.
+- **`vis.ballista` animates** as of 2026-08-16 — `idle`/`attack`/`die`/`decay`,
+  140 frames. It was static only because `inspect` lied about its armature; see
+  §4. `vis.onager` stays static, correctly: its actor declares no animations.
+- **Ten atlases now carry build identity** (`vis.ballista`, `vis.onager` and its
+  eight colours: commit `9ac13a00d7db`, build 32). The other 315 predate the
+  stamp. Each unit's own set is internally uniform, which is what the game side's
+  staleness rule keys on, so it should still read 0 stale.
 - Verified beyond the batch summary, because a summary full of "ok" is exactly
   what the coloured-faces batch produced: 0 pixels move >64 between each unit's
   last `die` frame and first `decay` frame across 13 units × 8 colours, and the
@@ -215,7 +245,13 @@ with WinError 5. Delete contents, not the directory.
 > comparing rendered frames, establish the noise floor from two frames that must
 > be identical before choosing a threshold.
 
-### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `99a33cc`, build 29)
+### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `9ac13a0`, build 32)
+
+0. **`inspect` reported the wrong armature**, and **nested props of nested props
+   were never anchored** — both landed 2026-08-16 and both are covered in §4.
+   Between them they turned `vis.ballista` from a static, headless-crewed sprite
+   into an animated one (idle/attack/die/decay, 140 frames) whose three
+   operators have heads. `vis.onager` gains the same crew heads.
 
 1. The tint was a MULTIPLY — white a no-op, dark colours crushed. Now mixes
    toward the colour, preserving texture shading with headroom scaling.
@@ -232,17 +268,15 @@ with WinError 5. Delete contents, not the directory.
 
 ### Known open items
 
-- **`vis.ballista`'s crew are headless — NEXT PIECE OF WORK.** The bake does
-  include the three operators, but every head, helmet and tool sits at the world
-  origin buried inside the engine. The crew are props of the engine and their
-  heads are props **of the crew**; the pinned importer resolves one level of
-  nesting and drops anchoring on the second. Same defect class as the mis-rooted
-  shields that isobake already works around by name
-  (`_drop_misrooted_nested_props`), one level deeper. Fixing it may also unlock
-  colour: the **packed** variant (`units/carthaginians/siege_rock_packed`) uses
-  `player_trans_norm_spec` on the hull itself and mounts horses, so it should
-  tint even though the deployed lithobolos does not. Until then `vis.ballista`
-  is static, colourless and headless-crewed — usable, but not final.
+- **Canvas sizes are now under-provisioned wherever crew got their heads back.**
+  `_rescue_orphaned_props` makes a sprite BIGGER, and a canvas calibrated against
+  a headless bake can no longer hold it: `vis.onager` clipped on S/SE/E at its
+  old 384 and went to 512. `vis.ballista` at 384 was fine (46.4% fill). **Every
+  other composite actor with nested crew is unverified** — the clip-check will
+  catch it at bake time, so the rule is simply to read the batch summary rather
+  than assume, and to expect a canvas bump or two on the next full rebake. The
+  staged atlases predate the fix and are internally consistent, so nothing is
+  broken today.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
   fix belongs in the importer's variant resolution. The owner has seen the
