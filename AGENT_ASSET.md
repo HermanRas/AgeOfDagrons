@@ -141,12 +141,20 @@ linear** in the generator; a Blender socket is linear, and the palette's CIE L\*
 spacing is a colour-blindness requirement, so wrong lightness defeats its
 purpose. `colours.json` order is load-bearing — index 0 is player 1.
 
-**Not every actor can take player colour.** It is decided per material, by
-whether the importer built its `player_trans` chain. Measure before baking eight
-of anything: probe white vs blue at `directions = 1` and count moved pixels.
-Established: **no siege engine** in 0 A.D. carries colour (it lives on separate
-crew actors); `structures/celts/skiff` is opaque and only its sail tints;
-`vis.ballista` measured 0.0% and correctly has no colour variants.
+**Not every actor can take player colour, and you cannot tell by reading.** It
+is decided per material, by whether the importer built its `player_trans` chain,
+and the root material predicts it in neither direction: the onager's root is
+opaque and it tints anyway (crew props), while the ballista's props are
+`player_trans` and it does not (no mask in their textures). **Always measure** —
+probe white vs blue at `directions = 1` and count moved pixels. Delivered
+figures: `siege_ram` 6.8%, `onager` 7.1%, `transport_ship` 10.1% (its sail only;
+the skiff hull is opaque), `ballista` 0.0% and so correctly has no colour
+variants.
+
+> An earlier version of this file asserted "no siege engine in 0 A.D. carries
+> player colour". That was **wrong** — generalised from a scan covering only the
+> lithobolos/ballista family, and disproved by the ram, which the owner spotted
+> in a contact sheet. A measurement on three actors is not a rule about a class.
 
 **Probe before committing to a long batch — but probe what you will judge.** A
 `directions = 1`, clips-stripped recipe bakes in ~12 s against ~15 min. A
@@ -213,16 +221,22 @@ with WinError 5. Delete contents, not the directory.
 
 ### Known open items
 
-- **A build serial (or isobake commit) in the atlas `generator` block.** Offered
-  by me, accepted by the game side, not yet done, and cheap. They currently
-  detect stale colour bakes by mtime with a one-hour threshold, and a 3-wide
-  batch narrows the real margin to ~40 min. A serial orders without a clock. No
-  backfill needed — absent means "fall back to mtime".
-- **`vis.siege_ram`** was baked before it was understood that siege engines carry
-  no player colour. Its eight colours are probably identical — measure it.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
-  fix belongs in the importer's variant resolution.
+  fix belongs in the importer's variant resolution. The owner has seen the
+  current output in-game and is content to leave it — do not re-open unprompted.
+
+### Done since
+
+- **Build identity in the atlas `generator` block** — `isobake_commit`,
+  `isobake_build` (a `git rev-list --count`, so it orders without a clock) and
+  `isobake_dirty`. Landed as isobake `531a4bc`. Note the **323 already-staged
+  atlases predate it** and carry no such keys, which the game side reads as
+  "fall back to mtime". The field only earns its keep from the next fix onward;
+  it is not worth a 5 h rebake to backfill, and the current set is uniformly
+  correct anyway so there is nothing for staleness detection to find today.
+- **`vis.siege_ram` colour** — I had it wrong, see the measurement note in §4.
+  It tints at 6.8% and is fine.
 - **The bone-less mesh defect**: `m_armor_tunic_short.dae` and both siege engines
   import with a 0-bone armature, so no clip attaches. Root cause never found;
   worked around by picking another actor or baking static.

@@ -13,6 +13,13 @@
 # line says `cart` and the art is Carthaginian here, but the lithobolos is Greek
 # in origin and shared widely. Resolved rather than guessed, as always.
 #
+# NO PLAYER COLOUR, measured not assumed: 0.0% of the sprite moves between a
+# white and a blue bake, so eight colour variants would be eight identical
+# atlases and none are generated. That is a property of the LITHOBOLOS ART SET
+# and not of siege engines -- vis.siege_ram tints at 6.8% (its actor is
+# player_trans_norm_spec outright) and vis.onager at 7.1% (via crew props).
+# This file previously claimed the general rule and was wrong.
+#
 # STATIC, AND THAT IS NOT A SHORTCUT. `isobake inspect` reports
 # `Biped (0 bones)` -- the bone-less armature import defect documented at length
 # in spearman.toml. Clip attach scores against an empty bone set and returns 0,

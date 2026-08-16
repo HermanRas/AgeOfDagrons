@@ -68,12 +68,23 @@ UNITS = [
     # roots are opaque and they tint at all only because player colour is now
     # decided per material -- the same fix that unblocked the cavalry.
     #
-    # `ballista` is deliberately NOT here. Every siege ENGINE actor in 0 A.D.
-    # uses no_trans_parallax_spec over siege_artillery_01.png; the player colour
-    # on artillery lives on the separate crew actors (*_operator_*,
-    # *_infantry_*), and siege_lithobolos_med mounts none that carry a mask.
-    # Measured: 0.0% of the sprite moves between white and blue, against the
-    # onager's 8.5%. Eight bakes of it would be eight identical atlases.
+    # `ballista` is deliberately NOT here: measured 0.0% of the sprite moving
+    # between white and blue, so eight bakes would be eight identical atlases.
+    #
+    # The cause is the LITHOBOLOS ART SET, not siege engines as a class -- an
+    # earlier note here claimed the latter and was wrong, generalised from a
+    # scan that only covered lithobolos/ballista/oxybeles/scorpio/polybolos.
+    # For the record, measured on the delivered atlases:
+    #
+    #   siege_ram  6.8% tinted   its actor IS player_trans_norm_spec
+    #   onager     7.1% tinted   via crew props that carry a mask
+    #   ballista   0.0%          no_trans_parallax_spec, and the props it
+    #                            mounts carry no mask either
+    #
+    # So always MEASURE before deciding a unit cannot take colour. Reading the
+    # root material is not enough in either direction: the onager's root is
+    # opaque and it tints anyway, and the ballista's props are player_trans and
+    # it does not.
     "onager",
 ]
 

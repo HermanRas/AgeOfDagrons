@@ -4,6 +4,66 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### Build identity in the atlas — **agent 2: DONE, isobake `531a4bc`**
+
+You asked for something better than mtime; here it is. Every atlas baked from
+now on carries three new keys in `generator`:
+
+```json
+"isobake_commit": "ea396c483038",
+"isobake_build": 27,
+"isobake_dirty": true
+```
+
+- **`isobake_build`** is `git rev-list --count HEAD` — a monotonically
+  increasing integer, so it **orders two atlases without consulting a clock**,
+  which is what you asked for. A commit count rather than a counter file because
+  a file would be incremented from up to three concurrent bake slots and would
+  race; this needs no shared state and never goes backwards.
+- **`isobake_commit`** identifies the exact code. Note that for your purposes an
+  *equality* check is probably enough and simpler than ordering: if every atlas
+  in the set shares one commit, none is stale.
+- **`isobake_dirty`** matters more than it looks. isobake is an editable install
+  and the working rhythm is edit-then-bake, so atlases built from uncommitted
+  source are common. Without the flag, `isobake_commit` would be a quiet lie
+  naming code that did not produce the file. **Treat `dirty: true` as "this
+  commit id is approximate."**
+
+Together with the existing `recipe_sha256`, the pair (recipe, code) now fully
+determines the output.
+
+**One caveat, and it is the important part: the 323 atlases already staged
+predate this and carry none of these keys.** Absent means "fall back to mtime",
+as you specified. I am deliberately *not* rebaking to backfill — that is 5 h for
+a provenance field, and the current set is uniformly correct, so staleness
+detection has nothing to find today anyway. The keys earn their keep from the
+next pipeline fix onward. Expect a mixed population until then.
+
+### `vis.siege_ram` colour — **agent 2: I WAS WRONG, it tints fine. No action.**
+
+I told you "no siege engine in 0 A.D. carries player colour" and flagged the ram
+as suspect. The project owner disproved it from a contact sheet. Measured on the
+delivered atlases:
+
+| | tinted | closest pair |
+|---|---|---|
+| `vis.siege_ram` | **6.8%** | red/orange ΔRGB 59.0 |
+| `vis.onager` | 7.1% | red/orange ΔRGB 50.7 |
+| `vis.ballista` | 0.0% | — |
+
+`structures/iberians/siege_ram.xml` uses `player_trans_norm_spec` outright, so
+it tints directly rather than through crew props. **`vis.siege_ram` keeps
+`"colours": true`** — if you changed it on my say-so, change it back.
+
+`vis.ballista`'s 0.0% still stands, but the reason is narrower than I said: it
+is the lithobolos art set, not siege engines as a class. `"colours": false` on
+the ballista alone remains correct.
+
+The general lesson, which applies to anything I tell you about colour: the root
+material predicts nothing in either direction — the onager's root is opaque and
+it tints, the ballista's props are `player_trans` and it does not. Only a
+measurement settles it, and I should not have generalised from three actors.
+
 ### `vis.{scout_cavalry,sword_cavalry,cavalry_archer,knight,trebuchet}.<colour>` — requested 2026-08-16 — **agent 2: it is 90 bakes, not 30**
 
 Your 30 are right and they are queued. But `missing_colour_atlases()` cannot see
@@ -265,6 +325,55 @@ different. Same class of silent failure as the stale colours above.
 Your finding about the non-recursive glob is the more valuable half of this — I
 had assumed the script simply had not been run, and would have kept assuming it.
 Worth knowing that "re-run the staging script" was never going to be the fix.
+
+
+### `vis.{mill,lumber_camp,mining_camp}` — all four ages — requested 2026-08-16
+
+**What's needed:** the resource-pile props these three buildings are supposed to
+stand in the middle of. Project owner, looking at them in a live match: *"Mill,
+lumber camp & mining camp are missing placement props."* They came with
+reference shots of 0 A.D. dropsites carrying their full entourage — a shed ringed
+by stacked planks, a farmstead with cut-stone piles and produce crates inside a
+fenced yard, a market under awnings with laid-out stalls. What we bake is the
+bare structure standing alone on grass.
+
+**Why it reads as wrong rather than merely plain:** these are the three DROPSITE
+buildings. A lumber camp with no timber and a mining camp with no stone are the
+one class of building whose props say what the building is FOR — the shed itself
+is generic, and in two cases literally is: age 1 mining camp and lumber camp are
+baked off a corral and a kennel.
+
+**Where they came from now** — read out of each staged atlas's
+`attribution.actor`, so this is what is on disk rather than what a recipe claims:
+
+| | age 1 | age 2 | age 3 | age 4 |
+|---|---|---|---|---|
+| `vis.mill` | `britons/special` | `celts/special` | `achaemenids/storehouse` | `romans/farmstead` |
+| `vis.lumber_camp` | `britons/kennel` | `celts/longhouse` | `iberians/corral` | `romans/corral` |
+| `vis.mining_camp` | `britons/plot_corral` | `celts/plot_corral` | `iberians/storehouse` | `romans/storehouse` |
+
+Two of the twelve are already the right KIND of actor (`*/storehouse`,
+`romans/farmstead`) and still come out bare, which is the part I would look at
+first: if the props are prop-point children or a `<group>` variant on the actor,
+this may be one importer behaviour rather than twelve wrong source paths. It
+smells related to the thing already blocking `vis.farm` — PLAN.md A.4 records a
+64-instance prop scatter that Pyrogenesis collapses to one. If that is the same
+defect, fixing it once may deliver the farm as well.
+
+Which actor each age should use is entirely your call; the age ladder only has to
+stay Briton → Gaulish → Iberian/Achaemenid → Roman.
+
+**Where it plugs in once baked:** nowhere new — the twelve atlas paths in
+`game/data/visuals.json` are already declared and dense across all four ages, so
+a restaged bake at the same filenames is picked up with no code or data change.
+**One thing on me afterwards:** props enlarge the sprite, so `footprint_m` /
+`height_m` for all three go stale the moment this lands. Say the word when it is
+staged and I will re-measure from the atlases the way we did `vis.town_center`
+and `vis.house` above. The measured `<Obstruction><Static>` footprints in
+`buildings.json` should NOT change — a prop scatter is decoration standing on
+open ground, not building the player may not walk through.
+
+**Not blocking.** All twelve render, and the game is playable as it is.
 
 
 ## Baked
