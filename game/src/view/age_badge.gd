@@ -22,6 +22,18 @@
 ##
 ## Built in `_init()`, not `_ready()`, so a bare `.new()` is fully wired for a
 ## headless test -- the convention `ResourceHUD` and `ControlGroupsHud` follow.
+##
+## MIRRORED IN THE MOCKUP at `scenes/ui_builder/HUD.tscn`, under
+## AgeHeader/Margin/Box/HBoxContainer/AgeBadge, so the header can be laid out in
+## the editor. That copy is PRIMITIVES -- a rounded StyleBoxFlat for the ring and
+## two Labels -- rather than an instance of this script, because the ui_builder
+## scenes are drawn from primitives to stay editable without running the game
+## (ControlGroupsHud.tscn mocks its slot rings the same way). The constants below
+## are the shared contract between the two: SIZE, RING_WIDTH, FILL_COLOR and
+## RING_COLOR all appear in that StyleBoxFlat, and the label font sizes in its
+## Numeral/Hint nodes. Adjust the mockup, then bring the numbers back here --
+## nothing checks that they agree, because a mockup that could not be edited
+## freely would not be much of a mockup.
 class_name AgeBadge
 extends Button
 

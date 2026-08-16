@@ -24,9 +24,19 @@ func _villager_facts(id: int, hp: int = 30, max_hp: int = 30) -> Dictionary:
 			"alive": true, "task": 0, "queue_len": 0, "queue_fraction": 0.0}
 
 
+## Carries `queue` as well as `queue_len`, matching what GameView really builds.
+## This file's copy of the fixture kept the old count-only shape after the one in
+## test_selection_actions.gd was fixed -- so the queue slots here silently fell
+## back to the "Queued" label with no portrait, exactly the bug both fixtures
+## exist to catch. Two fixtures for one wire shape is the hazard; if a third
+## appears, they should become one shared helper.
 func _town_center_facts(id: int, queue_len: int = 0) -> Dictionary:
+	var queue: Array[StringName] = []
+	for i in range(queue_len):
+		queue.append(&"unit.villager")
 	return {"id": id, "def_id": &"building.town_center", "owner_id": 1, "hp": 2000,
-			"max_hp": 2000, "alive": true, "queue_len": queue_len, "queue_fraction": 0.4}
+			"max_hp": 2000, "alive": true, "queue_len": queue_len, "queue_fraction": 0.4,
+			"queue": queue}
 
 
 ## Slots are reused and hidden past the end rather than freed, so "how many are
@@ -348,3 +358,67 @@ func test_an_enemy_selection_shows_their_colour_not_ours() -> void:
 func test_the_colour_defaults_to_untinted_for_a_caller_that_passes_none() -> void:
 	panel.show_entity(_villager_facts(1))
 	assert_eq(panel._portrait.skin_colour, -1)
+
+# -- the name strip over a portrait -------------------------------------------
+
+func _caption_of(slots: Array[ActionSlot], id: StringName) -> String:
+	var slot := _slot_with_action(slots, id)
+	if slot == null or not slot._caption.visible:
+		return ""
+	return slot._caption.text
+
+
+func test_a_portrait_slot_is_captioned_with_its_name() -> void:
+	# A build grid is a dozen brown isometric buildings; the sprite says what
+	# KIND of thing it is and the caption says which one.
+	_open_build(4)
+	assert_eq(_caption_of(panel._detail_slots, &"place:building.house"), "House")
+	assert_eq(_caption_of(panel._detail_slots, &"place:building.town_center"), "Town Center")
+
+	# The wonder is an age-4 building, so it is on page 2 -- captions have to
+	# survive a page turn, since the slots are reused in place rather than rebuilt.
+	_press_detail(SelectionActions.PAGE_NEXT)
+	assert_eq(_caption_of(panel._detail_slots, &"place:building.wonder"), "Wonder")
+
+
+func test_a_train_slot_is_captioned_too() -> void:
+	panel.show_entity(_town_center_facts(5), 1, true, [], 1)
+	assert_eq(_caption_of(panel._action_slots, &"train:unit.villager"), "Villager")
+
+
+func test_a_verb_icon_is_not_captioned() -> void:
+	# An icon file means a verb whose icon is already a picture OF the word.
+	# Printing "Move" across it adds nothing and costs a fifth of the tile.
+	panel.show_entity(_villager_facts(1))
+	var move := _slot_with_action(panel._action_slots, &"move")
+	assert_not_null(move)
+	assert_false(move._caption.visible)
+	assert_false(move._caption_bg.visible)
+
+
+func test_the_caption_makes_room_for_a_badge() -> void:
+	# A queue slot carries the unit's name AND its "84%" along the same bottom
+	# edge; without this they print over each other.
+	panel.show_entity(_town_center_facts(5, 2), 1, true, [], 1)
+	var front := panel._detail_slots[0]
+	assert_eq(front.action.id, &"cancel:0")
+	assert_false(front.action.badge.is_empty(), "the front queue entry shows progress")
+	assert_true(front._caption.offset_right < -ActionSlot.CAPTION_INSET,
+			"the strip stops short of the badge")
+
+	var second := panel._detail_slots[1]
+	assert_true(second.action.badge.is_empty())
+	assert_eq(second._caption.offset_right, -ActionSlot.CAPTION_INSET,
+			"and uses the full width when there is no badge")
+
+
+func test_an_emptied_slot_leaves_no_caption_behind() -> void:
+	# Slots are reused in place rather than freed, so a strip left visible from a
+	# previous occupant would draw a black bar over the next one's art.
+	_open_build(4)
+	assert_true(panel._detail_slots[0]._caption.visible)
+	panel.show_nothing()
+	panel.show_entity(_villager_facts(1))
+	for slot in panel._action_slots:
+		if slot.visible and slot.action != null and not slot.action.icon.is_empty():
+			assert_false(slot._caption.visible, "%s carries no stale caption" % slot.action.id)

@@ -18,6 +18,18 @@ const SIZE := 72.0
 const EMPTY_COLOR := Color(0.25, 0.22, 0.18, 0.6)
 const DISABLED_ALPHA := 0.4
 
+## The name strip over a cropped portrait. Inset to clear the frame art's gold
+## border, though by less than the icon is (10): the strip is opaque, so it hides
+## the border it overlaps rather than clashing with it, and those few pixels are
+## the difference between "Town Center" fitting and reading "Town Cen...".
+const CAPTION_HEIGHT := 14.0
+const CAPTION_INSET := 6.0
+const CAPTION_BG := Color(0.0, 0.0, 0.0, 0.62)
+const CAPTION_TEXT := Color(0.96, 0.90, 0.75)
+## Room left at the right end when a badge ("84%") shares the bottom edge, so
+## the two do not print over each other.
+const CAPTION_BADGE_GAP := 26.0
+
 const _ICON_DIR := "res://assets/ui/icons/"
 const _FRAME_PATH := "res://assets/ui/hud/panel_background.png"
 
@@ -43,6 +55,8 @@ var portrait_colour: int = -1
 
 var _icon_rect: TextureRect
 var _label: Label
+var _caption_bg: ColorRect
+var _caption: Label
 var _badge: Label
 
 
@@ -105,6 +119,49 @@ func _init() -> void:
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)
 
+	# A caption strip across the bottom of the ART, for the slots that show a
+	# cropped portrait -- a build or train grid is 12 near-identical brown
+	# buildings otherwise, and telling a barracks from a stable at 72 px is not
+	# something the sprite alone does.
+	#
+	# An overlay rather than a row beneath the icon, deliberately: the grid is
+	# fixed 72x72 cells and giving each one a text row would either shrink every
+	# portrait or grow the panel. This costs the bottom ~22 px of the image,
+	# which for an isometric building is its foundation and the least
+	# identifying part of it.
+	#
+	# Added BEFORE the badge so a queue slot's "84%" stays on top of the strip
+	# rather than under it.
+	_caption_bg = ColorRect.new()
+	_caption_bg.color = CAPTION_BG
+	_caption_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_caption_bg.offset_left = CAPTION_INSET
+	_caption_bg.offset_right = -CAPTION_INSET
+	_caption_bg.offset_top = -(CAPTION_INSET + CAPTION_HEIGHT)
+	_caption_bg.offset_bottom = -CAPTION_INSET
+	_caption_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_caption_bg.visible = false
+	add_child(_caption_bg)
+
+	_caption = Label.new()
+	_caption.add_theme_font_size_override("font_size", 8)
+	_caption.add_theme_color_override("font_color", CAPTION_TEXT)
+	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# A long name is trimmed with an ellipsis rather than wrapped or overflowing:
+	# the strip is one line tall by construction, and "Siege Worksho..." still
+	# identifies the slot where a second wrapped line would be clipped anyway.
+	_caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_caption.clip_text = true
+	_caption.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_caption.offset_left = CAPTION_INSET
+	_caption.offset_right = -CAPTION_INSET
+	_caption.offset_top = -(CAPTION_INSET + CAPTION_HEIGHT)
+	_caption.offset_bottom = -CAPTION_INSET
+	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_caption.visible = false
+	add_child(_caption)
+
 	_badge = Label.new()
 	_badge.add_theme_font_size_override("font_size", 11)
 	_badge.add_theme_color_override("font_color", Color.WHITE)
@@ -141,6 +198,11 @@ func set_action(p_action: HudAction) -> void:
 		_icon_rect.texture = load(icon_path)
 		_icon_rect.visible = true
 		_label.text = ""
+		# NOT captioned. An icon file means a verb -- Move, Stop, Destroy -- whose
+		# icon is already a picture OF the word, so printing "Move" across it adds
+		# nothing and costs a fifth of the tile. The caption exists for portraits,
+		# where the picture is of a thing and the thing needs naming.
+		_set_caption("")
 		return
 
 	# No icon file: crop the entity's own baked sprite, the same standing-in-for
@@ -157,11 +219,37 @@ func set_action(p_action: HudAction) -> void:
 		_icon_rect.texture = atlas
 		_icon_rect.visible = true
 		_label.text = ""
+		# The name over the picture. A build grid is a dozen brown isometric
+		# buildings and a train row several similar soldiers; the sprite says
+		# which KIND of thing it is and the caption says which one.
+		_set_caption(p_action.label)
 		return
 
-	# Nothing drawable -- the label carries the whole slot.
+	# Nothing drawable -- the centred label carries the whole slot, and a caption
+	# strip as well would print the same word twice.
 	_icon_rect.visible = false
 	_label.text = p_action.label
+	_set_caption("")
+
+
+## Show or hide the name strip. Empty text hides both halves, so a slot with no
+## portrait never draws a black bar over nothing.
+##
+## Shortens itself when the slot also carries a badge -- a queue slot shows both
+## the unit's name and its "84%" along the same bottom edge, and they would
+## otherwise print over each other.
+func _set_caption(text: String) -> void:
+	var shown := not text.is_empty()
+	_caption.text = text
+	_caption.visible = shown
+	_caption_bg.visible = shown
+	if not shown:
+		return
+	var right := -CAPTION_INSET
+	if not _badge.text.is_empty():
+		right -= CAPTION_BADGE_GAP
+	_caption.offset_right = right
+	_caption_bg.offset_right = right
 
 
 func _on_pressed() -> void:
