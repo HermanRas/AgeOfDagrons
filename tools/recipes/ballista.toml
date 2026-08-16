@@ -20,17 +20,27 @@
 # player_trans_norm_spec outright) and vis.onager at 7.1% (via crew props).
 # This file previously claimed the general rule and was wrong.
 #
-# STATIC, AND THAT IS NOT A SHORTCUT. `isobake inspect` reports
-# `Biped (0 bones)` -- the bone-less armature import defect documented at length
-# in spearman.toml. Clip attach scores against an empty bone set and returns 0,
-# so declaring idle/walk/attack/die/decay here would not silently degrade, it
-# would ABORT the bake with "Available: []". The game agent's reply settles what
-# to do about it: `AtlasEntry.resolve_anim()` already falls back static -> idle
-# -> first-declared, which is how the ships render, and their instruction was
-# explicitly "do not add an animation you have to fake to satisfy a name".
+# THIS RECIPE WAS STATIC FOR A YEAR ON A FALSE READING, 2026-08-16.
+# It used to say `isobake inspect` reports `Biped (0 bones)`, therefore clips
+# cannot attach, therefore no [anims] block. Every step followed, and the
+# premise was wrong: `inspect` was printing `armatures[0]` while the BAKE called
+# `subject_armature`, and on a composite actor those differ. The lithobolos'
+# crew import ahead of the engine, so the tool named a 0-bone crew shell while
+# the bake was picking `Lithobolos_Med_Armature` and its 36 bones all along.
 #
-# So: no [anims] block. If the bone-less import is ever fixed upstream, this
-# actor declares its clips inline like the ram and they can be added then.
+# Measured after the fix (isobake 564feda): the idle clip keys 35 of 36 bones,
+# 97%, "transfers by bone name -- no retarget needed". Only `prop_ammo` is not
+# driven, which is an attach point rather than a moving part. attack_ranged is
+# identical at 97%. So the engine animates, and always could have.
+#
+# THE CREW HAVE HEADS AGAIN, 2026-08-16. The three operators are props of the
+# engine and their heads, helmets and levers are props OF THE CREW. The importer
+# imported that second level as geometry and never anchored it, so eight objects
+# sat at the world origin buried inside the machine and three crew rendered
+# headless -- spotted by the project owner against 0 A.D.'s own render.
+# isobake 9ac13a0 anchors them: 8 rescued here, and the `loaded-projectile`,
+# whose attach point this skeleton simply does not define, is dropped instead of
+# forced. Nothing in this recipe is needed for that; it is automatic.
 id      = "vis.ballista"
 adapter = "zeroad"
 
@@ -41,6 +51,7 @@ actor = "units/carthaginians/siege_lithobolos_med.xml"
 # `isobake inspect` measures 8.563 x 13.893 x 7.817 m raw, 153 px tall at
 # 22.627 px/m -- slightly shorter than the ram (7.024 x 14.736 x 8.607) but
 # wider, so the ram's calibrated 384 canvas carries over with margin to spare.
+# The rescued heads and levers add a little height; the clip-check is the judge.
 canvas = [384, 384]
 supersample = 2
 # 5 mirrored to 8, matching siege_ram. A torsion engine is symmetric
@@ -50,6 +61,39 @@ directions = 5
 frame_origin_at = 0.2
 engine = "eevee"
 samples = 24
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.attack]
+clip = "attack_ranged"
+frames = 12
+fps = 15
+loop = true
+
+# 0 A.D. gives this actor a "Death" animation and points it at the SAME file as
+# Idle (`lithobolos_med_idle_01.dae`) -- there is no distinct death pose for a
+# torsion engine, only a destruction particle the sprite pipeline cannot use.
+# So die/decay freeze that pose rather than map to nothing, exactly as
+# siege_ram.toml does for the same reason.
+[anims.die]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+# Pinned to the clip's final pose. Without this, decay's first frame samples at
+# t=0 and the corpse stands up for a frame. See isobake AnimSpec.start and
+# tools/fix_decay_start.py, which keeps this true across recipes.
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
