@@ -39,8 +39,23 @@ const _DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
 ## connected) is what lets a test exercise it without adding it to a SceneTree,
 ## the same way GameView's pool/terrain are field initializers rather than
 ## `_ready()`-only setup.
+## The box the ui_builder mockup authors this panel at
+## (`scenes/ui_builder/widgets/ResourceHud.tscn`), and it has to be FIXED rather
+## than left to size itself to its rows.
+##
+## The background is drawn KEEP_ASPECT_COVERED, so the art's own proportions are
+## preserved and the box crops it. Where the crop falls therefore depends on the
+## box's aspect: the art is 160x192 (0.833), the mockup's box is 152x196 (0.776)
+## and scales it to fill the HEIGHT, but a box left to auto-size came out
+## 152x~179 (0.849) and filled the WIDTH instead. Different crop, so the frame's
+## gold border landed somewhere else relative to the rows -- which is why the
+## running HUD and the mockup did not match, and why the last row read as
+## clipped. Nothing about the margins was wrong; the box was.
+const PANEL_SIZE := Vector2(152.0, 196.0)
+
+
 func _init() -> void:
-	custom_minimum_size = Vector2(120.0, 0.0)
+	custom_minimum_size = PANEL_SIZE
 	var bg := HudStyle.add_panel_background(self)
 	# Tuned in the ui_builder HUD mockup against the dragon-frame art: the frame's
 	# gold border is thicker along the top and left than the plain 10px margin
@@ -49,18 +64,16 @@ func _init() -> void:
 	if bg != null:
 		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 
-	# The bottom margin is 28, not the 8 it started at. The frame art's bottom
-	# border is nearly as deep as its top one, and 8 px put the last row -- the
-	# villager count -- underneath it, clipped (found live, screenshotted: the
-	# pop counter was sliced by the border). The top margin was already 35 for
-	# exactly this reason on the other side; the bottom simply never got the same
-	# treatment because the panel used to end in a resource row that happened to
-	# sit higher.
+	# All four match the mockup exactly. An earlier pass raised the bottom margin
+	# to 28 to stop the villager row reading as clipped -- that treated the
+	# symptom, and by diverging from the mockup it made the two drift further
+	# apart. PANEL_SIZE above is the actual fix; these are back to the authored
+	# values and should stay in step with the .tscn.
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 22)
 	margin.add_theme_constant_override("margin_right", 10)
 	margin.add_theme_constant_override("margin_top", 35)
-	margin.add_theme_constant_override("margin_bottom", 28)
+	margin.add_theme_constant_override("margin_bottom", 8)
 	add_child(margin)
 
 	var column := VBoxContainer.new()

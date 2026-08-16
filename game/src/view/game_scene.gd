@@ -28,7 +28,7 @@ var _age_badge: AgeBadge
 var _minimap: Minimap
 var _toast: NoticeToast
 var _pause_menu: PauseMenu
-var _status: Label
+var _error_label: Label
 var _error: String = ""
 
 ## Last snapshot's control groups for the local player (PLAN.md 10.6):
@@ -78,7 +78,8 @@ func _ready() -> void:
 		# INTERNET permission presented at 0.7 -- no crash, just a game that never
 		# started and never said why.
 		_error = "host_solo() failed: %s" % error_string(err)
-		_status.text = _error
+		_error_label.text = _error
+		_error_label.visible = true
 		return
 	_hud.player_id = Net.local_player_id()
 	_start_match()
@@ -270,17 +271,30 @@ func _build_hud() -> void:
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
-	# Placement is reached through the villager's own Build action now (its grid
-	# lists the buildings), so the old Build House / Build Town Centre / Cancel
-	# Build debug row is gone. This label stays: it is the only place a failed
-	# `host_solo()` and the current placement hint are visible.
+	# ERRORS ONLY. This used to carry the controls hint and the placement hint as
+	# well, as one long line across the top -- which grew to whatever its text
+	# needed and ran straight under the resource counters, obscuring the top row.
+	# That was most of why the running HUD did not match the ui_builder mockup
+	# even after the panel itself did: the panel was right, and something was
+	# being drawn over it. The hints are gone for good; a How to Play section is
+	# taking that job, and a permanent wall of text over the game was never the
+	# right home for it.
 	#
-	# Past the control-group stack (12 + 64 px wide) and below the age header's
-	# own footprint -- dev/debug chrome, not part of UI_Design.md's layout, so it
-	# just needs to stay out of both's way.
-	_status = Label.new()
-	_status.position = Vector2(96, 92)
-	hud.add_child(_status)
+	# What is NOT gone is the boot error. It reads empty and invisible in an
+	# ordinary match and only ever appears if `host_solo()` fails, which is
+	# exactly how the missing Android INTERNET permission presented at 0.7 -- no
+	# crash, just a game that never started and never said why. The toast is not
+	# a substitute: it fades after 2.5 s, and this is something the player needs
+	# to still be on screen when they come to report it.
+	_error_label = Label.new()
+	_error_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_error_label.offset_left = 96.0
+	_error_label.offset_top = 92.0
+	_error_label.offset_right = -(ResourceHUD.PANEL_SIZE.x + 24.0)
+	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_error_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_error_label.visible = false
+	hud.add_child(_error_label)
 
 
 ## One disabled placeholder corner button (chat/trade/tech-tree/settings);
@@ -451,8 +465,6 @@ func _clear_selection() -> void:
 func _enter_placement(def_id: StringName) -> void:
 	_placing_def_id = def_id
 	_camera.set_locked(true)
-	_status.text = "drag to place a %s, release to drop it  |  Esc to stop" % \
-			_display_name(def_id)
 	# Shows the ghost immediately under the cursor rather than leaving it
 	# invisible until the mouse so much as twitches (desktop only -- a touch
 	# has no position to preview before it first comes down).
@@ -718,6 +730,3 @@ func _refresh_panel() -> void:
 		var owner_id := int(facts.get("owner_id", 0))
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids,
 				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)))
-
-	if _placing_def_id == &"":
-		_status.text = "tap to select  |  two fingers apart to box-select  |  tap a tree/foundation to gather/build  |  DOUBLE-tap ground to move, single tap clears  |  right-click clears/cancels  |  drag to pan, edge-swipe to zoom"
