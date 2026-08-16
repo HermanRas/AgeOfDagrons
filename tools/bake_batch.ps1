@@ -57,13 +57,20 @@ param(
     # (every slot holds a full Blender scene); the LIMIT is that this is somebody's
     # workstation, not a render farm. Raise it explicitly with -Parallel if the
     # machine is free.
-    [int]      $Parallel = 2
+    [int]      $Parallel = 2,
+
+    # Where to read recipes from, relative to tools/ (or absolute). Defaults to
+    # recipes/. The player-colour variants live in recipes/player/ so that this
+    # script's non-recursive glob does not pull 112 generated files into every
+    # ordinary batch; point at them with -RecipeDir recipes/player.
+    [string]   $RecipeDir
 )
 
 $ErrorActionPreference = "Continue"
 
 $ToolsDir  = $PSScriptRoot
-$RecipeDir = Join-Path $ToolsDir "recipes"
+if (-not $RecipeDir)                 { $RecipeDir = Join-Path $ToolsDir "recipes" }
+elseif (-not [IO.Path]::IsPathRooted($RecipeDir)) { $RecipeDir = Join-Path $ToolsDir $RecipeDir }
 $Isobake   = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\isobake.exe"
 
 if (-not (Test-Path $Isobake))   { throw "isobake not found at $Isobake" }
@@ -106,7 +113,16 @@ if ($Except) {
 }
 
 $ordered = @()
-foreach ($name in $Priority)          { if ($all -contains $name)     { $ordered += $name } }
+foreach ($name in $Priority) {
+    if ($all -contains $name) { $ordered += $name }
+    # Player-colour variants are "<recipe>__<colour>", so an exact match alone
+    # would leave all 112 of them to the alphabetical fallback and bake the
+    # roster's least important unit first. Sorted, so an interrupted run has
+    # finished whole units rather than a scatter.
+    foreach ($variant in ($all | Sort-Object)) {
+        if ($variant -like "$name`__*" -and $ordered -notcontains $variant) { $ordered += $variant }
+    }
+}
 foreach ($name in ($all | Sort-Object)) { if ($ordered -notcontains $name) { $ordered += $name } }
 
 if ($ordered.Count -eq 0) { throw "no recipes matched" }

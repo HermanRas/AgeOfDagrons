@@ -79,6 +79,10 @@ clip = "Death"
 frames = 2
 fps = 1
 loop = false
+# Pinned to the clip's final pose 2026-08-16. Without this, decay's first
+# frame is Death at t=0 -- the unit still standing -- so the corpse stood up
+# for one frame before falling over again. See isobake AnimSpec.start.
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
