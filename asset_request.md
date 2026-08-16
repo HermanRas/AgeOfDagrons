@@ -1,6 +1,8 @@
 # Asset requests for agent 2
 
-Requests logged here by the game-side agent as MVP work surfaces a real gap. Each entry names the stable visual id the game already expects, so it can be wired in the moment it's baked — see `ASSET_MISSING.md` for the full tracker and status legend this mirrors.
+Requests logged here by the game-side agent as MVP work surfaces a real gap. Each entry names the stable visual id the game already expects, so it can be wired in the moment it's baked. The asset agent answers in place, under the same heading.
+
+**This file is now the only asset queue.** `ASSET_MISSING.md` — a standing inventory of every asset the end state might ever want — was removed 2026-08-16. It had drifted out of step with PLAN.md §13, the tracker it claimed to mirror (still calling the voice question open after §13.2 had answered it), and keeping a speculative catalogue alongside a request queue was paying twice for one job. Request per need instead. Older files cite `ASSET_MISSING §n` in comments; read those as history, and the file is in git if one ever needs resolving.
 
 ## Open requests
 
@@ -374,6 +376,27 @@ and `vis.house` above. The measured `<Obstruction><Static>` footprints in
 open ground, not building the player may not walk through.
 
 **Not blocking.** All twelve render, and the game is playable as it is.
+
+#### project owner, 2026-08-16 — bake the props INTO the sprite, and do not grow the footprint
+
+Two directions, and the second one is the useful observation:
+
+1. **Props go in the sprite**, not into the game as separate entities. There is no
+   decoration layer and none is wanted — a dropsite is one atlas.
+2. **The footprint must not grow to accommodate them.** If a prop scatter needs
+   more canvas, hold the sprite to the size of the LARGEST age skin and fit the
+   props inside that envelope. The owner's read, which matches what is on disk:
+   *"age 1 & age 2 [buildings] are smaller than the 3 & 4 ages footprint, so there
+   might be space next to them anyway."* The four skins of one building already
+   share a single game footprint — `buildings.json` takes the **max across all
+   four ages**, because a building re-skins in place and its footprint may not
+   shrink under the player. So ages 1 and 2 are already reserving ground their
+   art does not fill, and that slack is where the planks and stone piles belong,
+   at no cost to anything.
+
+Which means the re-measure I offered above should mostly come out unchanged, and
+if `footprint_m` for a mill grows past its age-4 skin, that is the signal the
+props went outside the envelope rather than into it.
 
 
 ## Baked

@@ -647,6 +647,6 @@ Because of §6.1, a total conversion is a content job with no code in it:
 | [IDEA.md](../IDEA.md) | What we're building — phases 1–13, gameplay design |
 | [PLAN.md](../PLAN.md) | How — architecture, API reference, phase plan, risks. 1300 lines, the authoritative source |
 | [UI_Design.md](../UI_Design.md) | HUD layout spec and palette |
-| [ASSET_MISSING.md](../ASSET_MISSING.md) | Every asset still needed, MVP and end state |
+| [asset_request.md](../asset_request.md) | Art the game side needs, requested per need and answered in place |
 | [CREDITS.md](../CREDITS.md) | Third-party attribution |
 | [LICENSE](../LICENSE) · [LICENSE-ART.md](../LICENSE-ART.md) | The two licences |

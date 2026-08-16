@@ -40,7 +40,7 @@ baked. Not duplicated here.
 > (phase 0.2a), but they are **not committed** — they live in the non-synced art working
 > root and reach players via the downloadable art pack (phase 0.3). Until that lands the
 > game runs on procedural placeholders, which contain no 0 A.D. material at all. See
-> [ASSET_MISSING.md](ASSET_MISSING.md).*
+> [game/assets/LICENCES.md](game/assets/LICENCES.md) for what is staged today.*
 
 ### App icon and boot splash — AI-generated
 
@@ -73,7 +73,8 @@ caveat: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
 Sourced from **0 A.D.** — see the entry under *Art* above; the same three-part attribution
 applies to `audio/` as to `art/`.
 
-*None integrated yet — see [ASSET_MISSING.md](ASSET_MISSING.md) §1.6 and §2.6.*
+*None integrated yet — audio is PLAN.md A.7, unblocked since §13.2 answered the voice
+question (one Latin set for every unit in every age).*
 
 ---
 

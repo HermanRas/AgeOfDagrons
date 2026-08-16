@@ -21,7 +21,16 @@ I own the **art pipeline**: 0 A.D. source art in, baked sprite atlases out.
 | `art_work/out/` — bake output | `game/data/*.json` — flag problems, do not edit |
 | `art_source/0ad` — the 0 A.D. checkout | game scenes, sim, tests |
 | the isobake source (its own repo, §2) | `AGENT_GAME_CODER.md` |
-| `ASSET_MISSING.md` | |
+| `asset_request.md` (my replies) | |
+
+> **There is no standing missing-asset tracker.** `ASSET_MISSING.md` was removed
+> 2026-08-16: it had drifted out of step with PLAN.md §13 that it claimed to
+> mirror, and maintaining a speculative inventory of everything the end state
+> might want, alongside a request queue, was paying twice for one job. **Art is
+> requested per need in `asset_request.md`** by the game side. About 50 older
+> files still cite `ASSET_MISSING §n` in comments — those are historical
+> citations, deliberately left rather than churned; the file is in git if one
+> ever needs resolving.
 
 `game/assets/atlases/` is the seam: **I write it, only ever via
 `tools/stage_atlases.py`.** It is gitignored build output, so it differs between

@@ -204,7 +204,7 @@ AgeOfDagrons/
 ├── IDEA.md               what we're building, phases 1–13
 ├── PLAN.md               how we're building it — architecture, API, risks
 ├── UI_Design.md          HUD layout spec and palette
-├── ASSET_MISSING.md      every asset still needed
+├── asset_request.md      art the game side needs, requested per need
 └── CREDITS.md            third-party attribution (a licence obligation, not a courtesy)
 ```
 
