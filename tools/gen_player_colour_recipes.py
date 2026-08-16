@@ -64,6 +64,17 @@ UNITS = [
     "cavalry_archer",
     "knight",
     "trebuchet_deployed",
+    # Static siege engines, added 2026-08-16 on the game agent's request. Their
+    # roots are opaque and they tint at all only because player colour is now
+    # decided per material -- the same fix that unblocked the cavalry.
+    #
+    # `ballista` is deliberately NOT here. Every siege ENGINE actor in 0 A.D.
+    # uses no_trans_parallax_spec over siege_artillery_01.png; the player colour
+    # on artillery lives on the separate crew actors (*_operator_*,
+    # *_infantry_*), and siege_lithobolos_med mounts none that carry a mask.
+    # Measured: 0.0% of the sprite moves between white and blue, against the
+    # onager's 8.5%. Eight bakes of it would be eight identical atlases.
+    "onager",
 ]
 
 
