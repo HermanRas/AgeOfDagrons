@@ -81,6 +81,11 @@ var draw_offset: Vector2 = Vector2.ZERO:
 		if draw_offset == value:
 			return
 		draw_offset = value
+		# The rim is a real child node, so it takes the shift as a POSITION where
+		# the sprite takes it as a canvas transform. Without this an outlined unit
+		# that also carries a sort offset would have its rim adrift from it.
+		if _outline != null:
+			_outline.position = draw_offset
 		queue_redraw()
 
 var anim: StringName = &"idle"
@@ -100,6 +105,30 @@ var dead: bool = false:
 		dead = value
 		queue_redraw()
 
+## Set by GameView when a building is standing in front of this entity
+## (Occlusion.hides). Draws a player-coloured rim over the building so the player
+## can see somebody is back there, instead of the unit being shoved in front of
+## the roof -- which is what used to happen and what it looked like.
+##
+## The rim is a CHILD node, created the first time it is needed: most entities
+## are never occluded, and buildings never are.
+var occluded: bool = false:
+	set(value):
+		if occluded == value:
+			return
+		occluded = value
+		if occluded and _outline == null:
+			_outline = OutlineView.new()
+			add_child(_outline)
+		if _outline != null:
+			_outline.visible = occluded
+		queue_redraw()
+
+## The colour the rim is drawn in -- the owner's, since telling WHOSE unit is
+## behind the building is most of the value.
+var outline_colour: Color = Color.WHITE
+
+var _outline: OutlineView = null
 var _visual: AtlasEntry = null
 ## Decorative props standing around this entity (GameDataRegistry.props_for),
 ## resolved to atlases and screen offsets. `_props_resolved` rather than a null
@@ -325,7 +354,7 @@ func _draw() -> void:
 		var at: Vector2 = p["at"]
 		if at.y < 0.0:
 			_draw_frame(p["visual"], &"idle", at)
-	_draw_frame(vis, anim, Vector2.ZERO)
+	_draw_frame(vis, anim, Vector2.ZERO, true)
 	for p in props:
 		var at: Vector2 = p["at"]
 		if at.y >= 0.0:
@@ -336,7 +365,8 @@ func _draw() -> void:
 ## space. Shared by the entity's own sprite and by every prop standing around it,
 ## so a prop cannot drift out of agreement with the thing it decorates about
 ## where the ground is.
-func _draw_frame(vis: AtlasEntry, anim_name: StringName, at: Vector2) -> void:
+func _draw_frame(vis: AtlasEntry, anim_name: StringName, at: Vector2,
+		is_self: bool = false) -> void:
 	if vis == null or vis.is_placeholder:
 		return
 	var f := vis.frame_at(anim_name, facing, _frame if anim_name == anim else 0)
@@ -349,6 +379,14 @@ func _draw_frame(vis: AtlasEntry, anim_name: StringName, at: Vector2) -> void:
 	var rect: Rect2i = f["rect"]
 	var anchor: Vector2 = f["anchor"]
 	var src := Rect2(rect.position, rect.size)
+
+	# Hand the rim the same frame this is about to draw, so the two can never
+	# disagree about which animation, facing or position the unit is in. Only for
+	# the entity's OWN sprite -- a prop standing beside a building is scenery and
+	# has nobody behind it to announce.
+	if is_self and _outline != null and _outline.visible:
+		_outline.set_frame(tex, src, Rect2(at - anchor, Vector2(rect.size)),
+				bool(f["flip_x"]), outline_colour)
 
 	# The frame is placed so its anchor -- the projected world origin, exact by
 	# construction rather than measured (PLAN.md 9.1) -- lands on `at`. Mirrored

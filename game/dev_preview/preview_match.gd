@@ -41,6 +41,9 @@ var _step := 0
 ## "not waiting on anything".
 var _await_check: Callable = Callable()
 var _await_since := 0
+## Where the occlusion step sent the villagers, so the wait can tell "arrived
+## behind the building" from "happened to already be behind something".
+var _occlusion_target := Vector2i.ZERO
 var _interactive := false
 
 
@@ -171,6 +174,17 @@ func _advance_script() -> void:
 			_clear_selection()
 		21:
 			_shoot("match_props")
+		22:
+			# Occlusion (3.1). Walk the villagers to the far side of the town
+			# centre -- the side the camera cannot see past -- and photograph what
+			# the player is left with. They used to be drawn standing ON the roof;
+			# they should now be hidden, with a player-coloured rim over the
+			# building saying they are back there.
+			_send_villagers_behind_the_town_centre()
+			_wait_until(_someone_is_behind_the_town_centre)
+		23:
+			_report_occlusion()
+			_shoot("match_occluded")
 		_:
 			get_tree().quit()
 			return
@@ -432,6 +446,65 @@ func _report_panel_hitboxes() -> void:
 				slot.action.id, r, slot.disabled, slot.mouse_filter,
 				panel.get_global_rect().encloses(r)])
 		hit = hit          # unused; the rects above are the evidence
+
+
+## Order every villager to the north-west of the town centre -- up-screen of it,
+## where the building stands between them and the camera -- and put the camera
+## back on the town centre so the shot frames the thing being tested.
+func _send_villagers_behind_the_town_centre() -> void:
+	var tc := _town_centre_facts()
+	if tc.is_empty():
+		return
+	var centre: Vector2i = tc["tile"]
+	var footprint: Vector2i = tc.get("footprint", Vector2i.ONE)
+	# Two tiles clear of the north-west corner: behind the sprite, and not so far
+	# back that Occlusion.BEHIND_TILES stops calling it hidden.
+	var behind := centre - footprint / 2 - Vector2i(2, 2)
+
+	_occlusion_target = behind
+	_select_all_villagers()
+	var view: GameView = _game._view
+	Net.submit_command(MoveCommand.new(Net.local_player_id(),
+			view.movable_selection(), behind))
+	_game._camera.centre_on(Iso.sub_to_world(tc["tile"] as Vector2i * SimWorld.SUBTILE))
+
+
+## True once a villager has ARRIVED at the spot behind the building and been
+## marked hidden.
+##
+## Both halves matter. "Anybody is occluded" fired instantly the first time,
+## because the villagers were still standing where the battle left them and two
+## of those happened to be behind the town centre's north flank -- a true answer
+## to the wrong question, and the shot went off before the order had been walked.
+func _someone_is_behind_the_town_centre() -> bool:
+	var view: GameView = _game._view
+	for id in view.all_facts().keys():
+		var f: Dictionary = view.facts_for(int(id))
+		var v := view.pool.get_view(int(id))
+		if v == null or not v.occluded:
+			continue
+		if (f.get("tile", Vector2i.ZERO) as Vector2i - _occlusion_target).length() <= 3.0:
+			return true
+	return false
+
+
+## Which units the view thinks are hidden, and where everyone actually is. The
+## picture cannot answer either question on its own: a villager that never set
+## off looks the same as one that arrived somewhere unhelpful.
+func _report_occlusion() -> void:
+	var view: GameView = _game._view
+	var ids: Array = view.all_facts().keys()
+	ids.sort()
+	for id in ids:
+		var f: Dictionary = view.facts_for(int(id))
+		if not bool(f.get("is_unit", false)):
+			continue
+		var v := view.pool.get_view(int(id))
+		if v == null:
+			continue
+		print("  unit %-18s tile %s  owner %d  occluded %s" % [
+				f.get("def_id", &"?"), f.get("tile", Vector2i.ZERO),
+				int(f.get("owner_id", 0)), v.occluded])
 
 
 func _report_enemies() -> void:

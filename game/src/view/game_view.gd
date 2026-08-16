@@ -119,18 +119,22 @@ func apply_snapshot(snap: Dictionary) -> void:
 		var sort_offset := Iso.footprint_sort_offset(_footprint_of(entry))
 		# A single sort point per building (3.1, the building's own front
 		# corner) only compares fairly against a unit standing right at that
-		# corner. A worker adjacent to the MIDDLE of a large building's east or
-		# south edge is, by that same point, several tiles short in projected
-		# depth -- not a tie, a genuine-looking gap -- so it sorted behind the
-		# whole building even though it is plainly standing beside it. Found
-		# live sending all 5 starting villagers to gather next to the town
-		# centre and watching returners clip at drop-off
-		# (dev_preview/debug_dropoff_check.gd). Session decision, simpler and
-		# more robust than trying to widen the footprint math to cover every
-		# edge position: a unit touching (Chebyshev-adjacent to) a building's
-		# footprint always draws in front of THAT building, full stop.
-		if not entry.has("footprint") and _touches_any(Vector2i(sub_pos / SimWorld.SUBTILE),
-				building_rects):
+		# corner. A worker beside the MIDDLE of a large building's long south
+		# edge is, by that same point, several tiles short in projected depth --
+		# not a tie, a genuine-looking gap -- so it sorts behind the whole
+		# building despite plainly standing in front of it. Found live sending
+		# the five starting villagers to gather by the town centre and watching
+		# returners clip at drop-off.
+		#
+		# The first cure was a blanket one: ANY unit touching a footprint drew in
+		# front of it. That fixed drop-off and produced something worse --
+		# villagers on the far side standing on the roof, reported with a
+		# screenshot 2026-08-16. The lift is now DIRECTIONAL: only a unit past
+		# the building's east or south extent, the two directions that project
+		# down-screen, is pulled in front. Everything behind sorts naturally, is
+		# genuinely hidden, and gets an outline instead (see _refresh_occlusion).
+		var tile := Vector2i(sub_pos / SimWorld.SUBTILE)
+		if not entry.has("footprint") and _in_front_of_any(tile, building_rects):
 			sort_offset.y += _ADJACENT_TO_BUILDING_BONUS
 		view.draw_offset = -sort_offset
 		var target := Iso.sub_to_world(sub_pos) + sort_offset
@@ -210,6 +214,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if bool(_facts[fid].get("alive", true)):
 			selectable.append(int(fid))
 	selection.retain_only(selectable)
+
+	# Last, over the finished facts: who is standing behind what depends on where
+	# everything ENDED UP this snapshot, and doing it inside the entity loop would
+	# test half the units against a stale set of buildings.
+	_refresh_occlusion(building_rects)
 
 
 ## Facts about one entity, or {} if it is not currently in view.
@@ -536,17 +545,18 @@ func _footprint_of(entry: Dictionary) -> Vector2i:
 	return Vector2i(int(f.get("x", 1)), int(f.get("y", 1)))
 
 
-## Whether `tile` is inside, or ORTHOGONALLY adjacent to (shares a side
-## with), any of `rects`. Deliberately excludes a purely diagonal touch at a
-## corner: that is what "genuinely behind the building" looks like in tile
-## terms (test_a_unit_in_front_of_a_building_sorts_after_it's back-corner
-## case), where sharing an edge is what "standing beside working on it"
-## looks like (test_a_unit_that_ties_a_buildings_front_corner..., the
-## dropoff-clip repro this whole bonus exists for) -- the same distinction
-## the session's own sketch drew as "left, right, or top of a unit", not any
-## touching tile.
-func _touches_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
+## Whether `tile` is touching a building AND on its camera-facing side, which is
+## what earns the sort lift. Touching alone used to be enough and put villagers
+## on the roof; `Occlusion.is_in_front` is the direction half of the test.
+##
+## Orthogonal adjacency only -- a purely diagonal corner touch does not count.
+## Sharing an EDGE is what "standing beside it, working on it" looks like, and
+## the drop-off clipping this bonus exists for is always an edge case in the
+## literal sense.
+func _in_front_of_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
 	for r in rects:
+		if not Occlusion.is_in_front(tile, r):
+			continue
 		if r.has_point(tile):
 			return true
 		var in_x_span := tile.x >= r.position.x and tile.x < r.end.x
@@ -556,6 +566,54 @@ func _touches_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
 		if in_y_span and (tile.x == r.position.x - 1 or tile.x == r.end.x):
 			return true          # touches the west or east edge
 	return false
+
+
+## Mark every unit a building is standing in front of, so `EntityView` can draw
+## its rim over that building (PLAN.md 3.1). Runs once per snapshot over the
+## facts already gathered, rather than per frame: occlusion changes when things
+## MOVE, and things move on snapshots.
+##
+## O(units x buildings), which on this map is a few hundred integer comparisons
+## ten times a second. A spatial query would be faster and less obvious; if the
+## entity count ever makes this matter, `SimWorld.spatial` is the tool.
+##
+## Corpses and rubble are skipped: a dead thing behind a building is not
+## information the player needs, and outlining the fallen would make a cleared
+## battlefield look occupied.
+func _refresh_occlusion(building_rects: Array[Rect2i]) -> void:
+	if building_rects.is_empty():
+		for id in _facts:
+			var v := pool.get_view(int(id))
+			if v != null:
+				v.occluded = false
+		return
+
+	for id in _facts:
+		var f: Dictionary = _facts[id]
+		var view := pool.get_view(int(id))
+		if view == null:
+			continue
+		if not bool(f.get("is_unit", false)) or not bool(f.get("alive", true)):
+			view.occluded = false
+			continue
+
+		var tile: Vector2i = f["tile"]
+		var hidden := false
+		for r in building_rects:
+			if Occlusion.hides(r, tile):
+				hidden = true
+				break
+		view.occluded = hidden
+		if hidden:
+			view.outline_colour = _outline_colour_for(int(f.get("owner_id", 0)))
+
+
+## The rim colour for an owner: their player colour, so the outline says WHOSE
+## unit is back there and not merely that one is. Gaia gets white -- it owns no
+## units today, and a wildlife outline in nobody's colour is the honest answer.
+func _outline_colour_for(owner_id: int) -> Color:
+	var colour := int(skin_for(owner_id).get("colour", -1))
+	return GameDataRegistry.colour(colour) if colour >= 0 else Color.WHITE
 
 
 ## A wire list of def ids as StringNames. JSON has no StringName, so anything
