@@ -46,3 +46,32 @@ func test_presses_on_different_slots_never_pair_into_a_double_tap() -> void:
 	hud._on_slot_pressed(1)
 
 	assert_true(assigned.is_empty(), "two different slots pressed back to back is not a double-tap on either")
+
+
+# -- the stack's skin --------------------------------------------------------
+
+func test_set_skin_reaches_every_slot() -> void:
+	# One value for the whole stack, not one per slot: SimPlayer.control_groups
+	# is per-player, so a control group always holds the LOCAL player's units.
+	hud.set_skin(3, 5)
+	for slot in range(SimPlayer.CONTROL_GROUP_COUNT):
+		var widget: ControlGroupSlot = hud.get_child(slot)
+		assert_eq(widget.skin_age, 3)
+		assert_eq(widget.skin_colour, 5)
+
+
+func test_the_skin_survives_a_membership_change() -> void:
+	# Membership changes several times a second as units die; the colour never
+	# changes. Re-emitting one must not quietly reset the other.
+	hud.set_skin(2, 4)
+	EventBus.control_group_changed.emit(0, &"unit.militia", 7)
+	var widget: ControlGroupSlot = hud.get_child(0)
+	assert_eq(widget.skin_colour, 4)
+	assert_eq(widget.icon_def_id, &"unit.militia")
+	assert_eq(widget.count, 7)
+
+
+func test_slots_start_untinted_so_an_unwired_caller_draws_what_it_used_to() -> void:
+	var widget: ControlGroupSlot = hud.get_child(0)
+	assert_eq(widget.skin_colour, -1)
+	assert_eq(widget.skin_age, 0)

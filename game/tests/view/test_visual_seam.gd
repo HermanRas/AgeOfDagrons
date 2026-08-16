@@ -98,9 +98,15 @@ func test_placeholders_are_sized_from_measured_metres_not_left_at_defaults() -> 
 	# at all -- and since game/assets/atlases/ is gitignored, whether that is true
 	# differs between a fresh clone and a machine that has baked. A test that
 	# changes its mind based on that is worse than no test.
+	# Re-measured 2026-08-16 against the staged four-age bakes: the figure is now
+	# the MAX across the age skins (17.97 m, the Roman age-4 civic centre), not
+	# the 15.5 m the Athenian actor gave at 0.4. Still a `>` rather than an equals
+	# because what this guards is "measured at all", not any one bake's number --
+	# re-pointing an age skin legitimately moves it, and pinning it exactly would
+	# make that a test failure rather than the data change it is.
 	var tc := reg.placeholder_for(&"vis.town_center") as PlaceholderSpec
 	assert_true(tc.footprint_m.x > 15.0,
-			"town centre footprint is the measured ~15.5 m, not the pre-measurement 4 tiles")
+			"town centre footprint is measured metres, not the pre-measurement 4 tiles")
 	assert_true(tc.height_m > 1.0, "town centre has a real height")
 
 	# 1.75 m is a deliberate INTENDED height, not the baked one. The atlas is 2.18 m

@@ -68,11 +68,22 @@ var _selected_id: int = 0
 ## so a stale Build grid never outlives the villager that opened it.
 var _active_action: StringName = &""
 
+## Which page of the detail grid is open. Reset alongside `_active_action`, and
+## again whenever a different action is expanded: opening Build should always
+## start at page 1, never at whatever page was left open last time.
+var _detail_page: int = 0
+
 ## Last shown inputs, kept so re-expanding an action can rebuild the detail
 ## grid without GameScene having to re-send a snapshot it may not have yet.
 var _facts: Dictionary = {}
 var _selected_count: int = 1
 var _all_def_ids: Array = []
+## The selection owner's age, which gates the train and build rows. Kept with the
+## other inputs so re-expanding an action rebuilds against the same age it was
+## opened at rather than defaulting back to 1.
+var _age: int = 1
+## The selection owner's palette index, tinting every cropped portrait here.
+var _colour: int = -1
 
 
 func _init() -> void:
@@ -161,6 +172,7 @@ func show_nothing() -> void:
 	_selected_id = 0
 	_building_id = 0
 	_active_action = &""
+	_detail_page = 0
 	_fill(_action_slots, [])
 	_fill(_detail_slots, [])
 	_divider.visible = false
@@ -175,8 +187,17 @@ func show_nothing() -> void:
 ## order -- empty for a single selection, where the one portrait above already
 ## says what is selected. Optional so a caller that only has the primary's
 ## facts still compiles.
+##
+## `age` is the SELECTION OWNER's age (GameView.age_of). It gates which units a
+## building offers to train and which buildings a villager offers to place, and
+## defaults to 1 so a caller with no age still gets the age-1 menu.
+##
+## `colour` is that same owner's palette index (GameView.skin_for), and it tints
+## every cropped portrait on the panel. The owner's, deliberately, not the local
+## player's: a selected enemy unit is exactly the case where the player cannot
+## see whose it is any other way. -1 leaves portraits untinted.
 func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = true,
-		all_def_ids: Array = []) -> void:
+		all_def_ids: Array = [], age: int = 1, colour: int = -1) -> void:
 	if facts.is_empty():
 		show_nothing()
 		return
@@ -187,11 +208,14 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 	var next_id := int(facts.get("id", 0))
 	if next_id != _selected_id or selected_count != _selected_count:
 		_active_action = &""
+		_detail_page = 0
 
 	visible = true
 	_facts = facts
 	_selected_count = selected_count
 	_all_def_ids = all_def_ids
+	_age = age
+	_colour = colour
 	_selected_id = next_id
 	_building_id = next_id
 
@@ -201,10 +225,11 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 		_title.text += "  (+%d)" % (selected_count - 1)
 
 	_portrait.def_id = def_id
+	_portrait.set_skin(age, colour)
 	_refresh_health(facts)
 
 	_fill(_action_slots,
-			SelectionActions.for_selection(facts, selected_count, is_mine, all_def_ids))
+			SelectionActions.for_selection(facts, selected_count, is_mine, all_def_ids, age))
 	_refresh_details()
 
 
@@ -231,12 +256,28 @@ func _refresh_health(facts: Dictionary) -> void:
 ## The right grid, for whatever is currently expanded. Hidden entirely (divider
 ## and all) when there is nothing to show, so a plain villager's panel is just
 ## its action column rather than a column of empty frames.
+##
+## `details_for()` hands back the WHOLE list and `page_of()` slices it, so the
+## grid never silently drops what will not fit -- the age-4 build list is 19
+## buildings in 12 slots. Visibility is decided on the full list rather than on
+## the page, since only an empty list means "nothing to show".
 func _refresh_details() -> void:
 	var details := SelectionActions.details_for(
-			_active_action, _facts, _selected_count, _all_def_ids)
-	_fill(_detail_slots, details)
+			_active_action, _facts, _selected_count, _all_def_ids, _age)
+	_fill(_detail_slots, SelectionActions.page_of(details, _detail_page))
 	_details_grid.visible = not details.is_empty()
 	_divider.visible = not details.is_empty()
+
+
+## How many pages the currently open detail list spans. For tests and for
+## anything that wants to show a page indicator later.
+func detail_page_count() -> int:
+	return SelectionActions.page_count(SelectionActions.details_for(
+			_active_action, _facts, _selected_count, _all_def_ids, _age).size())
+
+
+func current_detail_page() -> int:
+	return _detail_page
 
 
 ## Slots are reused in place and hidden past the end rather than freed: a
@@ -245,6 +286,11 @@ func _refresh_details() -> void:
 ## waiting for a frame, the trap the old grid's free() comment recorded.
 func _fill(slots: Array[ActionSlot], entries: Array[HudAction]) -> void:
 	for i in range(slots.size()):
+		# Skin BEFORE the action: set_action() is what crops the portrait, so a
+		# slot skinned afterwards would show the previous owner's colour until
+		# something else forced a refresh.
+		slots[i].portrait_age = _age
+		slots[i].portrait_colour = _colour
 		slots[i].set_action(entries[i] if i < entries.size() else null)
 
 
@@ -253,6 +299,9 @@ func _on_action_pressed(action: HudAction) -> void:
 	# the right grid lists. Tapping the open one again closes it.
 	if action.expands:
 		_active_action = &"" if _active_action == action.id else action.id
+		# Always back to page 1: reopening Build and landing on page 2 because
+		# that is where it was left would hide the buildings most used.
+		_detail_page = 0
 		_refresh_details()
 		return
 
@@ -270,6 +319,22 @@ func _on_action_pressed(action: HudAction) -> void:
 
 
 func _on_detail_pressed(action: HudAction) -> void:
+	# The arrows turn the page and issue nothing. Checked first so neither can be
+	# mistaken for a slot with a payload, and clamped in page_of() rather than
+	# here -- one place decides what a page number means.
+	if action.id == SelectionActions.PAGE_NEXT:
+		# Clamped as it is stored, not only as it is read: ">" is never drawn on
+		# the last page, so this cannot run off the end through the UI, but a
+		# page number that only LOOKS valid because page_of() clamps it would
+		# make "<" appear to do nothing on the first press back.
+		_detail_page = mini(_detail_page + 1, maxi(0, detail_page_count() - 1))
+		_refresh_details()
+		return
+	if action.id == SelectionActions.PAGE_PREV:
+		_detail_page = maxi(0, _detail_page - 1)
+		_refresh_details()
+		return
+
 	var id := String(action.id)
 	if id.begins_with("place:"):
 		place_requested.emit(StringName(id.trim_prefix("place:")))

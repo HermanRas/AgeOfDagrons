@@ -3,13 +3,49 @@
     "PLAN.md 9. All numbers are STARTING VALUES to be tuned by playtest --",
     "balance is ours to design, not inherited from any reference game.",
     "",
-    "MVP is one unit (PLAN.md 10). Military units are phase 11 and their art is",
-    "A.8, so nothing else is entered here yet.",
-    "",
     "Units: speed is SUB-UNITS PER TICK (SimUnit.speed, PLAN.md 6.2) at",
     "SimWorld.SUBTILE per tile and 10 ticks/second. gather_rate is per 100 ticks,",
     "so 25 means a quarter of a unit per tick -- authored x100 to keep the sim on",
-    "integers, because a float leaking into it breaks determinism (PLAN.md 7.1)."
+    "integers, because a float leaking into it breaks determinism (PLAN.md 7.1).",
+    "",
+    "----------------------------------------------------------------------",
+    "THE FULL ROSTER, added once all 19 unit bakes landed. Every speed below is",
+    "the villager's 200 scaled by the unit's relative pace, so the whole roster",
+    "moves consistently the moment that one number is retuned.",
+    "",
+    "UNITS DO NOT CARRY THE AGE (PLAN.md 2.7): one actor in all four ages, and",
+    "no age-suffixed visual. What a unit DOES carry is `age_required`, the age",
+    "its trainer must have reached before it appears in that building's train",
+    "menu. That lives here rather than as four `trains` lists per building --",
+    "an archery range trains archers from age 2 and crossbowmen from age 3, and",
+    "expressing that on the unit means adding a unit touches one file.",
+    "",
+    "TWO UNITS HAVE speed 0, AND IT IS NOT A PLACEHOLDER. The trebuchet bakes",
+    "with idle and attack only -- it is a deployed siege engine with no walk",
+    "clip, so giving it a speed would slide a static sprite across the map. The",
+    "dragon has no armature in the source at all and cannot move until someone",
+    "rigs it. Both are recorded here so the absence reads as a decision rather",
+    "than an omission.",
+    "",
+    "SHIPS ARE STATIC and carry domain `water`, so pathing already refuses to",
+    "walk them onto land. They have a speed because they are meant to move; what",
+    "they lack is a walk ANIMATION, so they will slide rather than row.",
+    "",
+    "ONLY THE VILLAGER GATHERS. The fishing ship has no gather_rate on purpose:",
+    "there is no fishing in the sim, and a non-empty gather_rate is what",
+    "SelectionActions reads as 'this is a worker' and would offer it a build",
+    "menu and a harvest verb it cannot act on.",
+    "",
+    "BALLISTA AND ONAGER ARRIVED 2026-08-16 and complete the siege workshop.",
+    "Both bake STATIC, 5 directions -- their source armatures report 0 bones, so",
+    "no clip attaches -- which is why they carry speed 0 alongside the trebuchet",
+    "and for the same reason: a sprite that cannot animate must not slide across",
+    "the map. They declare only a `static` anim, which AtlasEntry.resolve_anim()",
+    "already maps for the ships.",
+    "",
+    "The ballista alone has no per-colour bake, and it generalises: in 0 A.D. no",
+    "siege engine carries player colour -- the tint lives on the separate crew",
+    "actors, and the lithobolos mounts none that do. See visuals.json."
   ],
 
   "unit.villager": {
@@ -31,6 +67,490 @@
     "carry_cap": { "food": 10, "wood": 10, "gold": 10, "stone": 10 },
     "gather_rate": { "food": 25, "wood": 25, "gold": 25, "stone": 25 },
 
-    "trainable_at": ["building.town_center"]
+    "trainable_at": ["building.town_center"],
+    "age_required": 1
+  },
+
+  "unit.militia": {
+    "name": "Militia",
+    "visual": "vis.militia",
+
+    "hp": 40,
+    "speed": 225,
+    "los": 4,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 60, "gold": 20 },
+    "build_time_ticks": 220,
+
+    "attack": { "damage": 4, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 1 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.town_center"],
+    "age_required": 1
+  },
+
+  "unit.spearman": {
+    "name": "Spearman",
+    "visual": "vis.spearman",
+
+    "hp": 45,
+    "speed": 250,
+    "los": 4,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 35, "wood": 25 },
+    "build_time_ticks": 220,
+
+    "attack": { "damage": 5, "type": "melee", "range": 0, "cooldown_ticks": 30 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.barracks"],
+    "age_required": 2
+  },
+
+  "unit.swordsman": {
+    "name": "Swordsman",
+    "visual": "vis.swordsman",
+
+    "hp": 60,
+    "speed": 225,
+    "los": 4,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 60, "gold": 20 },
+    "build_time_ticks": 220,
+
+    "attack": { "damage": 6, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+    "armor": { "melee": 1, "pierce": 1 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.barracks"],
+    "age_required": 2
+  },
+
+  "unit.elite_swordsman": {
+    "name": "Elite Swordsman",
+    "visual": "vis.elite_swordsman",
+
+    "hp": 80,
+    "speed": 225,
+    "los": 5,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 70, "gold": 40 },
+    "build_time_ticks": 240,
+
+    "attack": { "damage": 11, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+    "armor": { "melee": 4, "pierce": 4 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.castle"],
+    "age_required": 4
+  },
+
+  "unit.archer": {
+    "name": "Archer",
+    "visual": "vis.archer",
+
+    "hp": 30,
+    "speed": 240,
+    "los": 6,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "wood": 25, "gold": 45 },
+    "build_time_ticks": 350,
+
+    "attack": { "damage": 4, "type": "pierce", "range": 4, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.archery_range"],
+    "age_required": 2
+  },
+
+  "unit.crossbowman": {
+    "name": "Crossbowman",
+    "visual": "vis.crossbowman",
+
+    "hp": 35,
+    "speed": 240,
+    "los": 7,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "wood": 25, "gold": 45 },
+    "build_time_ticks": 270,
+
+    "attack": { "damage": 5, "type": "pierce", "range": 5, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.archery_range"],
+    "age_required": 3
+  },
+
+  "unit.monk": {
+    "name": "Monk",
+    "visual": "vis.monk",
+
+    "hp": 30,
+    "speed": 175,
+    "los": 9,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "gold": 100 },
+    "build_time_ticks": 510,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.monastery"],
+    "age_required": 3
+  },
+
+  "unit.scout_cavalry": {
+    "name": "Scout Cavalry",
+    "visual": "vis.scout_cavalry",
+
+    "hp": 60,
+    "speed": 390,
+    "los": 10,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 80 },
+    "build_time_ticks": 300,
+
+    "attack": { "damage": 5, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 2 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.stable"],
+    "age_required": 2
+  },
+
+  "unit.sword_cavalry": {
+    "name": "Sword Cavalry",
+    "visual": "vis.sword_cavalry",
+
+    "hp": 80,
+    "speed": 340,
+    "los": 6,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 60, "gold": 20 },
+    "build_time_ticks": 200,
+
+    "attack": { "damage": 8, "type": "melee", "range": 0, "cooldown_ticks": 18 },
+    "armor": { "melee": 0, "pierce": 2 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.stable"],
+    "age_required": 3
+  },
+
+  "unit.cavalry_archer": {
+    "name": "Cavalry Archer",
+    "visual": "vis.cavalry_archer",
+
+    "hp": 50,
+    "speed": 350,
+    "los": 6,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "wood": 40, "gold": 60 },
+    "build_time_ticks": 340,
+
+    "attack": { "damage": 6, "type": "pierce", "range": 4, "cooldown_ticks": 20 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.stable"],
+    "age_required": 3
+  },
+
+  "unit.knight": {
+    "name": "Knight",
+    "visual": "vis.knight",
+
+    "hp": 100,
+    "speed": 340,
+    "los": 5,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "food": 60, "gold": 75 },
+    "build_time_ticks": 300,
+
+    "attack": { "damage": 10, "type": "melee", "range": 0, "cooldown_ticks": 18 },
+    "armor": { "melee": 2, "pierce": 2 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.castle"],
+    "age_required": 3
+  },
+
+  "unit.siege_ram": {
+    "name": "Battering Ram",
+    "visual": "vis.siege_ram",
+
+    "hp": 200,
+    "speed": 125,
+    "los": 3,
+    "domain": "land",
+    "pop_cost": 3,
+
+    "cost": { "wood": 160, "gold": 75 },
+    "build_time_ticks": 360,
+
+    "attack": { "damage": 20, "type": "melee", "range": 0, "cooldown_ticks": 50 },
+    "armor": { "melee": 0, "pierce": 180 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.siege_workshop"],
+    "age_required": 3
+  },
+
+  "unit.ballista": {
+    "name": "Ballista",
+    "visual": "vis.ballista",
+
+    "hp": 110,
+    "speed": 0,
+    "los": 10,
+    "domain": "land",
+    "pop_cost": 3,
+
+    "cost": { "wood": 180, "gold": 80 },
+    "build_time_ticks": 400,
+
+    "attack": { "damage": 25, "type": "pierce", "range": 9, "cooldown_ticks": 60 },
+    "armor": { "melee": 2, "pierce": 6 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.siege_workshop"],
+    "age_required": 3
+  },
+
+  "unit.onager": {
+    "name": "Onager",
+    "visual": "vis.onager",
+
+    "hp": 130,
+    "speed": 0,
+    "los": 11,
+    "domain": "land",
+    "pop_cost": 3,
+
+    "cost": { "wood": 200, "gold": 120 },
+    "build_time_ticks": 460,
+
+    "attack": { "damage": 35, "type": "pierce", "range": 10, "cooldown_ticks": 80 },
+    "armor": { "melee": 2, "pierce": 7 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.siege_workshop"],
+    "age_required": 3
+  },
+
+  "unit.trebuchet": {
+    "name": "Trebuchet",
+    "visual": "vis.trebuchet",
+
+    "hp": 65,
+    "speed": 0,
+    "los": 12,
+    "domain": "land",
+    "pop_cost": 3,
+
+    "cost": { "wood": 200, "gold": 160 },
+    "build_time_ticks": 500,
+
+    "attack": { "damage": 40, "type": "pierce", "range": 12, "cooldown_ticks": 100 },
+    "armor": { "melee": 2, "pierce": 8 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.siege_workshop", "building.castle"],
+    "age_required": 4
+  },
+
+  "unit.trade_cart": {
+    "name": "Trade Cart",
+    "visual": "vis.trade_cart",
+
+    "hp": 70,
+    "speed": 250,
+    "los": 4,
+    "domain": "land",
+    "pop_cost": 1,
+
+    "cost": { "wood": 100 },
+    "build_time_ticks": 510,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.market"],
+    "age_required": 2
+  },
+
+  "unit.fishing_ship": {
+    "name": "Fishing Ship",
+    "visual": "vis.fishing_ship",
+
+    "hp": 60,
+    "speed": 250,
+    "los": 5,
+    "domain": "water",
+    "pop_cost": 1,
+
+    "cost": { "wood": 75 },
+    "build_time_ticks": 400,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 4 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.dock"],
+    "age_required": 2
+  },
+
+  "unit.transport_ship": {
+    "name": "Transport Ship",
+    "visual": "vis.transport_ship",
+
+    "hp": 100,
+    "speed": 300,
+    "los": 5,
+    "domain": "water",
+    "pop_cost": 2,
+
+    "cost": { "wood": 125 },
+    "build_time_ticks": 460,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 4 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.dock"],
+    "age_required": 2
+  },
+
+  "unit.galley": {
+    "name": "Galley",
+    "visual": "vis.galley",
+
+    "hp": 130,
+    "speed": 350,
+    "los": 7,
+    "domain": "water",
+    "pop_cost": 2,
+
+    "cost": { "wood": 90, "gold": 30 },
+    "build_time_ticks": 360,
+
+    "attack": { "damage": 6, "type": "pierce", "range": 5, "cooldown_ticks": 30 },
+    "armor": { "melee": 0, "pierce": 6 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.dock"],
+    "age_required": 3
+  },
+
+  "unit.galleon": {
+    "name": "Galleon",
+    "visual": "vis.galleon",
+
+    "hp": 220,
+    "speed": 300,
+    "los": 8,
+    "domain": "water",
+    "pop_cost": 3,
+
+    "cost": { "wood": 200, "gold": 70 },
+    "build_time_ticks": 360,
+
+    "attack": { "damage": 12, "type": "pierce", "range": 7, "cooldown_ticks": 30 },
+    "armor": { "melee": 0, "pierce": 8 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.dock"],
+    "age_required": 4
+  },
+
+  "unit.dragon": {
+    "name": "Dragon",
+    "visual": "vis.dragon",
+
+    "hp": 600,
+    "speed": 0,
+    "los": 12,
+    "domain": "air",
+    "pop_cost": 10,
+
+    "cost": { "food": 500, "gold": 800 },
+    "build_time_ticks": 2000,
+
+    "attack": { "damage": 30, "type": "pierce", "range": 3, "cooldown_ticks": 30 },
+    "armor": { "melee": 8, "pierce": 8 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": ["building.castle"],
+    "age_required": 4
   }
 }

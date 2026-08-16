@@ -39,6 +39,13 @@ var gather_rate: Dictionary = {}
 
 var trainable_at: Array[StringName] = []
 
+## The age its trainer must have reached before this unit appears in that
+## building's train menu (PLAN.md 2.7). NOT an age skin -- a unit uses one actor
+## in all four ages; this is purely a gate. It lives on the unit rather than as
+## four per-age `trains` lists on each building, so an archery range's "archers
+## from 2, crossbowmen from 3" is one number in one place.
+var age_required: int = 1
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var u := UnitDef.new()
@@ -68,6 +75,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.carry_cap = GameDefs.int_map(d.get("carry_cap", {}))
 	u.gather_rate = GameDefs.int_map(d.get("gather_rate", {}))
 	u.trainable_at = GameDefs.name_list(d.get("trainable_at", []))
+	u.age_required = int(d.get("age_required", 1))
 	return u
 
 

@@ -38,6 +38,16 @@ func _exit_tree() -> void:
 	EventBus.control_group_changed.disconnect(_on_control_group_changed)
 
 
+## The local player's skin, applied to every slot's cropped icon. A property
+## rather than two more arguments on `control_group_changed`, because it is a
+## property of the STACK and not of a slot: control groups only ever hold the
+## local player's units, so all five share one colour and one age. GameScene
+## sets it from the same snapshot that feeds the signal.
+func set_skin(age: int, colour: int) -> void:
+	for slot_widget in _slots:
+		slot_widget.set_skin(age, colour)
+
+
 func slot_state(slot: int) -> Dictionary:
 	if slot < 0 or slot >= _slots.size():
 		return {}

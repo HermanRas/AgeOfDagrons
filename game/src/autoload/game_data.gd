@@ -45,6 +45,11 @@ const COLOURS_PATH := "res://data/colours.json"
 ## Keys starting with this are documentation inside the JSON, not entries.
 const _COMMENT_PREFIX := "_"
 
+## What every atlas JSON path ends in. The seam is the ONE place allowed to know
+## this -- it is what lets a per-colour bake be derived from the base path instead
+## of declared eight times per unit (see _atlas_path_for_skin).
+const _ATLAS_SUFFIX := ".atlas.json"
+
 var _visuals: Dictionary = {}                     # StringName -> Dictionary (raw)
 var _audio: Dictionary = {}                       # StringName -> Dictionary (raw)
 var _resolved: Dictionary = {}                    # StringName -> AtlasEntry
@@ -63,6 +68,11 @@ var _ages: Array[AgeDef] = []
 ## Kept as a plain Array[Color] rather than a *Def -- there is nothing to parse but
 ## a hex string, and order is the whole contract.
 var _colours: Array[Color] = []
+## The same palette as lowercase words (`colour.blue` -> `blue`), index-aligned
+## with `_colours`. This is the half of the palette the ART is keyed by: isobake
+## suffixes a tinted bake `vis.<id>.<colour>` (PLAN.md 1, the atlas contract), so
+## resolving a player's atlas needs the word, not the Color.
+var _colour_slugs: Array[StringName] = []
 
 ## Non-fatal problems found while loading -- a malformed entry, an atlas whose
 ## pixels_per_metre disagrees with Iso. Surfaced for tests and the debug overlay
@@ -99,24 +109,141 @@ func load_all(force := false) -> void:
 
 ## Resolve a visual ID to a real atlas or a placeholder. Never null.
 ##
-## Results are cached, so the atlas JSON is parsed once per ID rather than per
-## spawn -- EntityViewPool.acquire() calls this on every entity that comes into
-## view.
-func atlas_for(visual_id: StringName) -> AtlasEntry:
+## `age` and `colour` together are the SKIN (PLAN.md 2.7.1). Both are optional and
+## both mean "no preference" at their defaults, so the one-argument call every
+## pre-0.10 caller already makes keeps working and gets the base bake:
+##
+##     atlas_for(&"vis.town_center")            # base art
+##     atlas_for(&"vis.town_center", 3)         # the age-3 skin
+##     atlas_for(&"vis.villager", 0, 1)         # player 2's colour (red)
+##
+## `age` is 1-4 (SimPlayer.age); 0 or less takes the entry's base atlas.
+## `colour` is an index into colours.json (SimPlayer.colour); negative is untinted.
+##
+## Results are cached per (id, age, colour), so the atlas JSON is parsed once per
+## skin rather than per spawn -- EntityViewPool.acquire() calls this on every
+## entity that comes into view.
+func atlas_for(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEntry:
 	if not _loaded:
 		load_all()
-	if _resolved.has(visual_id):
-		return _resolved[visual_id]
 
-	var entry := _resolve(visual_id)
-	_resolved[visual_id] = entry
+	var key := _skin_key(visual_id, age, colour)
+	if _resolved.has(key):
+		return _resolved[key]
+
+	var entry := _resolve(visual_id, age, colour)
+	_resolved[key] = entry
 	return entry
 
 
 ## True when this ID has real baked art mounted. For the debug overlay and for
 ## tests -- gameplay code has no business branching on it.
-func has_atlas(visual_id: StringName) -> bool:
-	return not atlas_for(visual_id).is_placeholder
+func has_atlas(visual_id: StringName, age: int = 0, colour: int = -1) -> bool:
+	return not atlas_for(visual_id, age, colour).is_placeholder
+
+
+## The lowercase colour word isobake suffixes a tinted bake with -- `colour.blue`
+## in colours.json is `vis.villager.blue` on disk. Wraps like colour(), for the
+## same reason: an out-of-range index must not be what stops a match rendering.
+## Empty palette -> &"".
+func colour_slug(index: int) -> StringName:
+	if not _loaded:
+		load_all()
+	if _colour_slugs.is_empty():
+		return &""
+	return _colour_slugs[posmod(index, _colour_slugs.size())]
+
+
+## Which (visual, colour) pairs DECLARE a per-player bake but have no file staged
+## for it. Diagnostic only -- resolution silently falls back to the untinted bake,
+## which renders a player in nobody's colour, and since colour is the only thing
+## telling players apart (PLAN.md 1) that is a gap worth being able to enumerate
+## rather than notice in a match. Returns [] when the art pack is not mounted at
+## all, because then EVERY colour is missing and the list would say nothing.
+##
+## How far behind its unit's newest bake a colour atlas may be before it is
+## called stale. See stale_colour_atlases() for why an hour.
+const COLOUR_STALENESS_SECONDS := 3600
+
+
+## Which per-player bakes are PRESENT but older than the newest bake of the same
+## visual -- the failure missing_colour_atlases() cannot see, because the file is
+## there and parses and draws.
+##
+## Asked for by the art agent (asset_request.md, 2026-08-16) after three pipeline
+## defects were fixed mid-roster: `decay` sampled from t=0 so every corpse sprang
+## upright for a frame, two units baked as overlapping bodies, and player colour
+## never reached actors with an opaque root. Only red and yellow were rebaked, so
+## 60 of the 152 colour atlases render wrongly while looking perfectly healthy.
+##
+## MODIFICATION TIME is the signal, for want of a better one: the fixes were in
+## isobake's source, not in the recipes, so nothing inside the atlas JSON changed
+## -- `generator.version` and `recipe_sha256` are identical across the boundary.
+## The threshold is an hour because the measured separation is not close: within
+## one colour batch the eight files land inside 25 minutes of each other (galley's
+## eight span two), while across the fix boundary they are 12-15 hours apart. An
+## order of magnitude of headroom either side.
+##
+## DIAGNOSTIC ONLY. Nothing branches on this -- a stale atlas still resolves and
+## still draws, and refusing to render it would be a worse outcome than rendering
+## it wrongly. Each entry: {"visual", "colour", "slug", "behind_seconds"}.
+func stale_colour_atlases() -> Array[Dictionary]:
+	if not _loaded:
+		load_all()
+
+	var out: Array[Dictionary] = []
+	for visual_id in _visuals:
+		var decl: Dictionary = _visuals[visual_id]
+		if not bool(decl.get("colours", false)):
+			continue
+		var base := str(decl.get("atlas", ""))
+		if base.is_empty():
+			continue
+
+		# Newest across the base bake AND every colour, so a unit whose base was
+		# never rebaked does not make its own colours look current.
+		var newest: int = 0
+		var times: Array[int] = []
+		times.resize(_colour_slugs.size())
+		if FileAccess.file_exists(base):
+			newest = FileAccess.get_modified_time(base)
+		for i in range(_colour_slugs.size()):
+			var path := _tinted_path(base, _colour_slugs[i])
+			times[i] = FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else 0
+			newest = maxi(newest, times[i])
+		if newest == 0:
+			continue          # nothing staged for this visual at all
+
+		for i in range(_colour_slugs.size()):
+			if times[i] == 0:
+				continue      # absent, which missing_colour_atlases() reports instead
+			var behind := newest - times[i]
+			if behind > COLOUR_STALENESS_SECONDS:
+				out.append({
+					"visual": visual_id,
+					"colour": i,
+					"slug": _colour_slugs[i],
+					"behind_seconds": behind,
+				})
+	return out
+
+
+## Each entry: {"visual": StringName, "colour": int, "slug": StringName}.
+func missing_colour_atlases() -> Array[Dictionary]:
+	if not _loaded:
+		load_all()
+	var out: Array[Dictionary] = []
+	for visual_id in _visuals:
+		var decl: Dictionary = _visuals[visual_id]
+		if not bool(decl.get("colours", false)):
+			continue
+		var base := str(decl.get("atlas", ""))
+		if base.is_empty() or not FileAccess.file_exists(base):
+			continue          # pack not mounted; nothing to report
+		for i in range(_colour_slugs.size()):
+			if not FileAccess.file_exists(_tinted_path(base, _colour_slugs[i])):
+				out.append({"visual": visual_id, "colour": i, "slug": _colour_slugs[i]})
+	return out
 
 
 ## The placeholder an ID DECLARES, whether or not an atlas is currently mounted.
@@ -317,6 +444,41 @@ func validate() -> void:
 		if (_units[id] as UnitDef).trainable_at.is_empty():
 			load_warnings.append("unit '%s' is trainable at no building" % id)
 
+	_validate_skins()
+
+
+## The `ages` map is DENSE by contract (PLAN.md 2.7.1): every age names a skin
+## explicitly, and two ages that look the same point at the same file. A sparse
+## map would still resolve -- a missing age falls through to the base atlas -- so
+## nothing would go visibly wrong, which is exactly why it is worth failing the
+## suite over rather than discovering in age 3 that a building never modernised.
+func _validate_skins() -> void:
+	var last_age := _ages.size()
+	for visual_id in _visuals:
+		var decl: Variant = _visuals[visual_id]
+		if not decl is Dictionary:
+			load_warnings.append("visuals.json entry '%s' is not an object" % visual_id)
+			continue
+
+		var ages: Variant = (decl as Dictionary).get("ages")
+		if ages == null:
+			continue
+		if not ages is Dictionary:
+			load_warnings.append("visual '%s' has an 'ages' that is not an object" % visual_id)
+			continue
+
+		var m: Dictionary = ages
+		for age in range(1, last_age + 1):
+			if not m.has(str(age)):
+				load_warnings.append(
+						"visual '%s' names no age-%d skin -- the map is dense by contract"
+						% [visual_id, age])
+		for key in m:
+			var n := int(str(key))
+			if n < 1 or n > last_age:
+				load_warnings.append("visual '%s' names an age '%s' outside 1-%d"
+						% [visual_id, key, last_age])
+
 
 func _require_visual(visual_id: StringName, who: String) -> void:
 	if visual_id.is_empty():
@@ -372,6 +534,7 @@ func _read_ages() -> void:
 
 func _read_colours() -> void:
 	_colours.clear()
+	_colour_slugs.clear()
 	var raw := _read_json(COLOURS_PATH)
 	var list: Variant = raw.get(&"colours", [])
 	if not list is Array:
@@ -388,16 +551,71 @@ func _read_colours() -> void:
 		if not Color.html_is_valid(hex):
 			load_warnings.append("colours.json entry %d has an invalid hex '%s'" % [i, hex])
 			continue
+		# Appended together so the two arrays cannot drift out of alignment -- a
+		# slug at a different index than its Color would tint a player one colour
+		# and give them another one's sprites.
 		_colours.append(Color.html(hex))
+		_colour_slugs.append(
+				StringName(str((entry as Dictionary).get("id", "")).trim_prefix("colour.")))
 
 
-func _resolve(visual_id: StringName) -> AtlasEntry:
+## Cache key for one resolved skin. The bare visual_id for the no-skin case, so
+## the overwhelmingly common lookup allocates nothing and the cache stays a plain
+## StringName dictionary.
+func _skin_key(visual_id: StringName, age: int, colour: int) -> StringName:
+	if age <= 0 and colour < 0:
+		return visual_id
+	return StringName("%s|%d|%d" % [visual_id, age, colour])
+
+
+## The atlas path for one skin, resolved in two independent steps so the two axes
+## COMPOSE rather than needing an entry per combination (PLAN.md 2.7.1):
+##
+##   1. AGE picks the base bake, from the entry's dense `ages` map. Dense on
+##      purpose -- every age names a skin explicitly and two ages that look the
+##      same point at the same file, so the map answers "what does this look like
+##      in age 3?" by being read, with no inheritance chain to trace.
+##   2. COLOUR is a SUFFIX TRANSFORM on whatever step 1 chose, gated by the
+##      entry's `colours` flag. isobake names a tinted bake `vis.<id>.<colour>`
+##      (the atlas contract), so eight players are one boolean here rather than
+##      eight declared paths per unit -- and the day buildings get tinted bakes
+##      too, `vis.town_center_age3.blue` falls out of the same two steps with no
+##      change to this function.
+##
+## A tint whose file is not staged falls back to the untinted bake rather than to
+## the magenta unknown: an untinted unit is still playable, and
+## missing_colour_atlases() is what makes the gap findable.
+func _atlas_path_for_skin(decl: Dictionary, age: int, colour: int) -> String:
+	var path := str(decl.get("atlas", ""))
+
+	var ages: Variant = decl.get("ages")
+	if age >= 1 and ages is Dictionary:
+		var per_age := str((ages as Dictionary).get(str(age), ""))
+		if not per_age.is_empty():
+			path = per_age
+
+	if colour >= 0 and bool(decl.get("colours", false)) and not path.is_empty():
+		var tinted := _tinted_path(path, colour_slug(colour))
+		if FileAccess.file_exists(tinted):
+			return tinted
+
+	return path
+
+
+## `.../vis.villager.atlas.json` + `blue` -> `.../vis.villager.blue.atlas.json`.
+func _tinted_path(path: String, slug: StringName) -> String:
+	if slug.is_empty() or not path.ends_with(_ATLAS_SUFFIX):
+		return path
+	return path.substr(0, path.length() - _ATLAS_SUFFIX.length()) + ".%s%s" % [slug, _ATLAS_SUFFIX]
+
+
+func _resolve(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEntry:
 	var decl: Dictionary = _visuals.get(visual_id, {})
 	if decl.is_empty():
 		load_warnings.append("no visuals.json entry for '%s'" % visual_id)
 		return AtlasEntry.from_placeholder(visual_id, PlaceholderSpec.unknown())
 
-	var atlas := _load_atlas(visual_id, str(decl.get("atlas", "")))
+	var atlas := _load_atlas(visual_id, _atlas_path_for_skin(decl, age, colour))
 	if atlas != null:
 		return atlas
 

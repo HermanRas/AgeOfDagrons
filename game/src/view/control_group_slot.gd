@@ -26,7 +26,26 @@ var slot: int = 0
 var icon_def_id: StringName = &""
 var count: int = 0
 
+## The owning player's skin for the cropped icon. A control group always holds
+## the LOCAL player's units (SimPlayer.control_groups is per-player), so unlike
+## the selection panel this is one value for the whole stack, set once by
+## ControlGroupsHud rather than per slot.
+var skin_age: int = 0
+var skin_colour: int = -1
+
 var _ring: Texture2D = null
+
+
+## Repoint the icon's skin. Separate from set_state() because the two change on
+## completely different clocks: membership changes several times a second as
+## units die, the player's colour never changes and their age three times a
+## match.
+func set_skin(age: int, colour: int) -> void:
+	if skin_age == age and skin_colour == colour:
+		return
+	skin_age = age
+	skin_colour = colour
+	queue_redraw()
 
 
 func _init(p_slot: int = 0) -> void:
@@ -59,7 +78,8 @@ func _draw() -> void:
 	var inset := Vector2(SIZE, SIZE) * ICON_INSET
 	var icon_rect := Rect2(inset, Vector2(SIZE, SIZE) - inset * 2.0)
 
-	var icon := EntityPortrait.frame_for(icon_def_id) if icon_def_id != &"" else {}
+	var icon := EntityPortrait.frame_for(icon_def_id, skin_age, skin_colour) \
+			if icon_def_id != &"" else {}
 	if icon.is_empty():
 		draw_circle(centre, SIZE * 0.5 - inset.x, EMPTY_COLOR)
 	else:

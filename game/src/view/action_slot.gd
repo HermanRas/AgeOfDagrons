@@ -27,6 +27,20 @@ signal action_pressed(action: HudAction)
 
 var action: HudAction = null
 
+## Skin for the portrait fallback below, when a slot has no icon file and crops
+## the entity's own sprite instead. Whoever's building is selected is whoever
+## would own what it trains, so this is the SELECTION OWNER's skin -- a captured
+## enemy barracks offering units in their colour would be a lie about what
+## pressing the button produces.
+##
+## Plain fields rather than setters: `set_action()` re-runs on every refresh and
+## rebuilds the crop from scratch, so there is nothing to invalidate. The panel
+## assigns these immediately before it, and the pair is documented as an
+## ordering requirement there rather than enforced here, because enforcing it
+## would mean a setter that re-crops without an action to crop.
+var portrait_age: int = 0
+var portrait_colour: int = -1
+
 var _icon_rect: TextureRect
 var _label: Label
 var _badge: Label
@@ -134,7 +148,8 @@ func set_action(p_action: HudAction) -> void:
 	# in an AtlasTexture rather than an `EntityPortraitView` so this slot keeps
 	# ONE frame (its own) instead of stacking the portrait ring on top of it.
 	var def_id: StringName = p_action.payload if p_action.payload is StringName else &""
-	var crop := EntityPortrait.frame_for(def_id) if def_id != &"" else {}
+	var crop := EntityPortrait.frame_for(def_id, portrait_age, portrait_colour) \
+			if def_id != &"" else {}
 	if not crop.is_empty():
 		var atlas := AtlasTexture.new()
 		atlas.atlas = crop["texture"]

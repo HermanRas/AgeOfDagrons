@@ -272,3 +272,81 @@ func test_tapping_a_resource_node_with_nothing_selected_does_nothing() -> void:
 func test_tapping_someone_elses_unit_with_a_movable_selection_moves_there_instead() -> void:
 	_snap([{"id": 1, "def_id": "unit.villager", "owner_id": 2, "pos": {"x": 0, "y": 0}}])
 	assert_eq(view.tap_action(1, 1, true), GameView.TapAction.MOVE)
+
+
+# -- the skin key: age and player colour (PLAN.md 2.7.1) ---------------------
+
+func _skinned_snapshot(owner: int, age: int, colour: int, def_id := "unit.villager") -> Dictionary:
+	return {
+		"tick": 1,
+		"updated": [{"id": 42, "def_id": def_id, "owner_id": owner, "hp": 10, "max_hp": 10,
+				"pos": {"x": SimWorld.SUBTILE, "y": SimWorld.SUBTILE}}],
+		"removed": [],
+		"player_state": {owner: {"age": age, "colour": colour, "stock": {},
+				"pop_used": 0, "pop_cap": 10, "control_groups": [[], [], [], [], []]}},
+	}
+
+
+func test_an_entity_takes_its_owners_age_and_colour() -> void:
+	view.apply_snapshot(_skinned_snapshot(1, 3, 5))
+	var v := view.pool.get_view(42)
+	assert_eq(v.skin_age, 3)
+	assert_eq(v.skin_colour, 5, "colour is a palette INDEX, not a Color")
+
+
+func test_a_gaia_entity_is_unaged_and_untinted() -> void:
+	# colours.json is explicit that the tint keys off WHO OWNS a thing, never off
+	# whether its art carries a playercolor mask -- 0 A.D.'s sheep declares one
+	# and is still nobody's sheep. Owner 0 must not silently read as player 1.
+	view.apply_snapshot({
+		"tick": 1,
+		"updated": [{"id": 7, "def_id": "res.tree", "owner_id": 0, "hp": 1, "max_hp": 1,
+				"pos": {"x": 0, "y": 0}}],
+		"removed": [],
+		"player_state": {1: {"age": 4, "colour": 2}},
+	})
+	var v := view.pool.get_view(7)
+	assert_eq(v.skin_age, 0, "gaia has no age skin")
+	assert_eq(v.skin_colour, -1, "and no player tint")
+
+
+func test_a_standing_building_re_skins_when_its_owner_advances() -> void:
+	# PLAN.md 2.7 item 2: a building re-skins IN PLACE as its owner advances,
+	# which is why its footprint is locked to the max across all four skins. The
+	# only signal is the age changing in player_state, so the view has to read it
+	# every snapshot rather than only when an entity spawns.
+	view.apply_snapshot(_skinned_snapshot(1, 1, 0, "building.town_center"))
+	assert_eq(view.pool.get_view(42).skin_age, 1)
+
+	view.apply_snapshot(_skinned_snapshot(1, 2, 0, "building.town_center"))
+	assert_eq(view.pool.get_view(42).skin_age, 2,
+			"the node stays, the art behind it changes")
+
+
+func test_a_snapshot_without_player_state_keeps_the_last_known_skin() -> void:
+	# Plenty of tests (and the early ticks of a join) send entity updates with no
+	# player_state. Clearing the skins there would strobe every unit back to
+	# player 1's colour for a frame.
+	view.apply_snapshot(_skinned_snapshot(1, 3, 6))
+	view.apply_snapshot({"tick": 2, "updated": [{"id": 42, "def_id": "unit.villager",
+			"owner_id": 1, "hp": 10, "max_hp": 10, "pos": {"x": 0, "y": 0}}], "removed": []})
+	assert_eq(view.pool.get_view(42).skin_colour, 6)
+
+
+func test_the_skin_is_read_before_the_entities_that_use_it() -> void:
+	# An entity spawning this tick resolves its atlas the first time it draws. If
+	# player_state were read after the entity loop, that first resolve would use
+	# a stale skin -- one frame of the wrong player's colour, which is the whole
+	# of what tells players apart.
+	view.apply_snapshot(_skinned_snapshot(2, 4, 7))
+	var v := view.pool.get_view(42)
+	assert_eq(v.skin_colour, 7,
+			"a brand-new entity already carries its owner's colour, not a default")
+
+
+func test_age_of_reports_one_for_a_player_not_in_the_snapshot() -> void:
+	# The menus gate on this, and an age of 0 would offer nothing at all.
+	assert_eq(view.age_of(99), 1)
+	view.apply_snapshot(_skinned_snapshot(3, 4, 1))
+	assert_eq(view.age_of(3), 4)
+	assert_eq(view.age_of(0), 1, "gaia reads as age 1, not as age 0")

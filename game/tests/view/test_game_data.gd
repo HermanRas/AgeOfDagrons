@@ -39,20 +39,116 @@ func test_the_shipped_data_is_internally_consistent() -> void:
 			"data/*.json is not consistent -- %s" % "; ".join(reg.load_warnings))
 
 
-func test_the_mvp_roster_is_present() -> void:
-	# PLAN.md 10: 1 unit, 2 buildings, 3 ACTIVE resource nodes (wood/gold/food).
-	# res.deer stays defined but unused -- res.berry_bush replaced it as the MVP
-	# food node (session decision: no hunt/kill/carcass state machine needed,
-	# and vis.berry_bush is fully delivered where the deer carcass is not) -- so
-	# resource_ids() itself now lists 4, one more than the active roster.
-	assert_eq(reg.unit_ids(), [&"unit.villager"] as Array[StringName])
-	assert_eq(reg.building_ids(),
-			[&"building.house", &"building.town_center"] as Array[StringName])
-	# NOT alphabetical -- Array[StringName].sort() orders by StringName identity,
-	# not by string content, so this is whatever order these four happen to be
-	# interned in, not something to read meaning into.
-	assert_eq(reg.resource_ids(),
-			[&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree"] as Array[StringName])
+func test_the_full_roster_is_present() -> void:
+	# Was `test_the_mvp_roster_is_present`, and it asserted the roster was EXACTLY
+	# PLAN.md 10's one unit and two buildings. That is no longer a property worth
+	# holding: all 19 unit bakes and the age-skinned buildings landed, and the
+	# data files now carry the whole of Age & Unit Planning.md.
+	#
+	# Membership rather than equality, and CONTENT-sorted before comparing:
+	# unit_ids() sorts an Array[StringName], which orders by StringName IDENTITY
+	# and not by string, so its raw order is whatever the engine interned these in
+	# -- arbitrary, and not something to pin. (SelectionActions re-sorts for the
+	# build menu for exactly this reason.)
+	var expected_units := [
+		&"unit.villager", &"unit.militia", &"unit.spearman", &"unit.swordsman",
+		&"unit.elite_swordsman", &"unit.archer", &"unit.crossbowman", &"unit.monk",
+		&"unit.scout_cavalry", &"unit.sword_cavalry", &"unit.cavalry_archer",
+		&"unit.knight", &"unit.siege_ram", &"unit.ballista", &"unit.onager",
+		&"unit.trebuchet", &"unit.trade_cart",
+		&"unit.fishing_ship", &"unit.transport_ship", &"unit.galley",
+		&"unit.galleon", &"unit.dragon",
+	]
+	assert_eq(_by_content(reg.unit_ids()), _by_content(expected_units),
+			"every baked unit has a definition, and nothing extra")
+
+	var expected_buildings := [
+		&"building.town_center", &"building.house", &"building.mill",
+		&"building.lumber_camp", &"building.mining_camp", &"building.barracks",
+		&"building.market", &"building.blacksmith", &"building.stable",
+		&"building.archery_range", &"building.dock", &"building.field",
+		&"building.watch_tower", &"building.guard_tower", &"building.castle",
+		&"building.monastery", &"building.university", &"building.siege_workshop",
+		&"building.wonder",
+	]
+	assert_eq(_by_content(reg.building_ids()), _by_content(expected_buildings),
+			"every age-skinned building has a definition, and nothing extra")
+
+	# Unchanged: 3 ACTIVE resource nodes (wood/gold/food). res.deer stays defined
+	# but unused -- res.berry_bush replaced it as the MVP food node.
+	assert_eq(_by_content(reg.resource_ids()),
+			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree"]))
+
+
+## Sorted by STRING content, so a comparison does not depend on StringName
+## interning order the way `sort()` on an Array[StringName] does.
+func _by_content(ids: Array) -> Array[String]:
+	var out: Array[String] = []
+	for id in ids:
+		out.append(String(id))
+	out.sort()
+	return out
+
+
+func test_the_siege_workshop_is_complete() -> void:
+	# Was `test_ballista_and_onager_are_absent_because_they_are_not_baked`, which
+	# guarded the roster against defs with no art behind them. Both were baked on
+	# 2026-08-16, so the guard inverts: the siege workshop now trains all four,
+	# and this is what notices if one is dropped again.
+	for unit_id in [&"unit.siege_ram", &"unit.ballista", &"unit.onager", &"unit.trebuchet"]:
+		assert_not_null(reg.unit(unit_id), "%s is defined" % unit_id)
+	assert_eq(reg.building(&"building.siege_workshop").trains,
+			[&"unit.siege_ram", &"unit.ballista", &"unit.onager", &"unit.trebuchet"]
+					as Array[StringName])
+
+
+func test_the_engines_that_cannot_animate_carry_no_speed() -> void:
+	# Ballista, onager and trebuchet all bake static -- their source armatures
+	# report 0 bones, so no clip attaches. A speed would slide a motionless
+	# sprite across the map, so `speed: 0` is a decision and this pins it as one
+	# rather than leaving it to read as an unfilled field.
+	for unit_id in [&"unit.ballista", &"unit.onager", &"unit.trebuchet"]:
+		assert_eq(reg.unit(unit_id).speed, 0,
+				"%s has no walk animation, so it must not move" % unit_id)
+	assert_true(reg.unit(&"unit.siege_ram").speed > 0,
+			"the ram DOES animate, so it is not swept up in the same rule")
+
+
+func test_every_unit_is_reachable_from_the_building_that_trains_it() -> void:
+	# `trainable_at` and `trains` are two halves of one fact written in two files,
+	# and validate() only checks that each names something that EXISTS. This
+	# checks they AGREE: a unit whose trainable_at names a building that does not
+	# list it can never be built, and nothing else would report it.
+	for unit_id in reg.unit_ids():
+		var ud: UnitDef = reg.unit(unit_id)
+		for building_id in ud.trainable_at:
+			var bd: BuildingDef = reg.building(building_id)
+			assert_true(bd != null and bd.trains.has(unit_id),
+					"%s says it trains at %s, and %s lists it"
+					% [unit_id, building_id, building_id])
+
+	for building_id in reg.building_ids():
+		var bd2: BuildingDef = reg.building(building_id)
+		for unit_id2 in bd2.trains:
+			var ud2: UnitDef = reg.unit(unit_id2)
+			assert_true(ud2 != null and ud2.trainable_at.has(building_id),
+					"%s trains %s, and %s agrees" % [building_id, unit_id2, unit_id2])
+
+
+func test_no_unit_unlocks_before_the_building_that_trains_it() -> void:
+	# An archer requiring age 2 from an archery range that requires age 2 is fine;
+	# an archer requiring age 2 from a castle that requires age 3 is a unit that
+	# can never be trained at the age it claims. Only catchable by comparing the
+	# two gates, which live in different files.
+	for unit_id in reg.unit_ids():
+		var ud: UnitDef = reg.unit(unit_id)
+		for building_id in ud.trainable_at:
+			var bd: BuildingDef = reg.building(building_id)
+			if bd == null:
+				continue
+			assert_true(ud.age_required >= bd.age_required,
+					"%s unlocks in age %d but %s does not exist until age %d"
+					% [unit_id, ud.age_required, building_id, bd.age_required])
 
 
 func test_entity_def_ids_translate_to_visual_ids() -> void:

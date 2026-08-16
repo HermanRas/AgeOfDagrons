@@ -214,3 +214,137 @@ func test_cancelling_a_queue_entry_names_the_building_and_index() -> void:
 
 	panel._on_detail_pressed(panel._detail_slots[0].action)
 	assert_eq(cancelled, [[5, 0]])
+
+
+# -- paging the build grid ---------------------------------------------------
+
+func _press_detail(id: StringName) -> bool:
+	var slot := _slot_with_action(panel._detail_slots, id)
+	if slot == null:
+		return false
+	panel._on_detail_pressed(slot.action)
+	return true
+
+
+func _open_build(age: int) -> void:
+	panel.show_entity(_villager_facts(1), 1, true, [], age)
+	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
+
+
+func test_the_build_grid_opens_on_page_one() -> void:
+	_open_build(4)
+	assert_eq(panel.current_detail_page(), 0)
+	assert_eq(panel.detail_page_count(), 2, "19 buildings do not fit 12 slots")
+	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV),
+			"there is nothing before page 1")
+	assert_not_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT))
+
+
+func test_the_forward_arrow_turns_the_page_and_issues_nothing() -> void:
+	# The arrows must not reach place_requested -- tapping > is navigation, and
+	# placing a building because the player turned the page would be a disaster
+	# in a build menu.
+	var placed: Array = []
+	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
+
+	_open_build(4)
+	assert_true(_press_detail(SelectionActions.PAGE_NEXT))
+	assert_eq(panel.current_detail_page(), 1)
+	assert_true(placed.is_empty(), "> is navigation, not an order")
+
+
+func test_the_back_arrow_returns_to_page_one() -> void:
+	_open_build(4)
+	_press_detail(SelectionActions.PAGE_NEXT)
+	assert_not_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV),
+			"page 2 leads with <")
+	assert_true(_press_detail(SelectionActions.PAGE_PREV))
+	assert_eq(panel.current_detail_page(), 0)
+
+
+func test_a_building_on_page_two_can_actually_be_placed() -> void:
+	# The whole point: before paging, the buildings past slot 12 were unreachable.
+	var placed: Array = []
+	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
+
+	_open_build(4)
+	_press_detail(SelectionActions.PAGE_NEXT)
+	var wonder := _slot_with_action(panel._detail_slots, &"place:building.wonder")
+	assert_not_null(wonder, "the wonder is on page 2 and is on screen")
+	panel._on_detail_pressed(wonder.action)
+	assert_eq(placed, [&"building.wonder"])
+
+
+func test_placing_from_page_two_stays_on_page_two() -> void:
+	# Placement leaves build mode open on purpose (coming back for a second house
+	# should not need Build tapped again); the page has to survive with it, or
+	# every placement would bounce the player back to page 1.
+	_open_build(4)
+	_press_detail(SelectionActions.PAGE_NEXT)
+	_press_detail(&"place:building.wonder")
+	assert_eq(panel.current_detail_page(), 1)
+
+
+func test_reopening_build_starts_at_page_one_again() -> void:
+	_open_build(4)
+	_press_detail(SelectionActions.PAGE_NEXT)
+	assert_eq(panel.current_detail_page(), 1)
+
+	# Close, then reopen.
+	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
+	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
+	assert_eq(panel.current_detail_page(), 0,
+			"reopening on page 2 would hide the buildings most used")
+
+
+func test_selecting_something_else_resets_the_page() -> void:
+	_open_build(4)
+	_press_detail(SelectionActions.PAGE_NEXT)
+	panel.show_entity(_villager_facts(2), 1, true, [], 4)
+	assert_eq(panel.current_detail_page(), 0)
+
+
+func test_an_age_one_villager_sees_no_arrows() -> void:
+	_open_build(1)
+	assert_eq(panel.detail_page_count(), 1)
+	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT))
+	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV))
+
+
+func test_no_page_ever_shows_more_slots_than_the_grid_has() -> void:
+	for age in [1, 2, 3, 4]:
+		_open_build(age)
+		for page in range(panel.detail_page_count()):
+			assert_true(_visible(panel._detail_slots) <= SelectionActions.MAX_DETAILS,
+					"age %d page %d fits" % [age, page])
+			_press_detail(SelectionActions.PAGE_NEXT)
+
+# -- portraits carry the selection owner's colour ----------------------------
+
+func test_the_panel_portrait_takes_the_owners_skin() -> void:
+	panel.show_entity(_villager_facts(1), 1, true, [], 3, 5)
+	assert_eq(panel._portrait.skin_age, 3)
+	assert_eq(panel._portrait.skin_colour, 5)
+
+
+func test_every_slot_is_skinned_before_its_action_is_set() -> void:
+	# set_action() is what crops the portrait, so a slot skinned afterwards would
+	# show the previous owner's colour until something forced a refresh.
+	panel.show_entity(_town_center_facts(5), 1, true, [], 2, 6)
+	var train := _slot_with_action(panel._action_slots, &"train:unit.villager")
+	assert_not_null(train)
+	assert_eq(train.portrait_colour, 6)
+	assert_eq(train.portrait_age, 2)
+
+
+func test_an_enemy_selection_shows_their_colour_not_ours() -> void:
+	# The case the whole change exists for: with is_mine false there are no
+	# actions at all, so the portrait is the ONLY thing that can say whose it is.
+	panel.show_entity(_villager_facts(1), 1, false, [], 1, 4)
+	assert_eq(panel._portrait.skin_colour, 4)
+	assert_eq(_visible(panel._action_slots), 0, "still no orders for something not ours")
+
+
+func test_the_colour_defaults_to_untinted_for_a_caller_that_passes_none() -> void:
+	panel.show_entity(_villager_facts(1))
+	assert_eq(panel._portrait.skin_colour, -1)

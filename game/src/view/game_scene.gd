@@ -328,6 +328,12 @@ func _refresh_hud(snap: Dictionary) -> void:
 	var counts := _view.villager_counts(player_id)
 	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
 
+	# A control group only ever holds the local player's units, so the whole
+	# stack shares one skin. Set before the per-slot signals below so a slot
+	# filling this tick crops in the right colour on its first draw.
+	_groups_hud.set_skin(_view.age_of(player_id),
+			int(_view.skin_for(player_id).get("colour", -1)))
+
 	# SimPlayer.control_groups is the authoritative membership (10.6); icon and
 	# live count are derived here each tick from GameView's facts, the same
 	# division of labour as villager_counts() above.
@@ -684,7 +690,13 @@ func _refresh_panel() -> void:
 		var all_def_ids: Array = []
 		for id in _view.selection.current():
 			all_def_ids.append(_view.facts_for(id).get("def_id", &""))
-		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids)
+		# The skin gating the menus and tinting the portraits is the SELECTION
+		# OWNER's, not the local player's: a selected enemy building shows what
+		# THEY can train in THEIR colour, and reading our own would misreport
+		# both the moment the two differ.
+		var owner_id := int(facts.get("owner_id", 0))
+		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids,
+				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)))
 
 	if _placing_def_id == &"":
 		_status.text = "tap to select  |  two fingers apart to box-select  |  tap a tree/foundation to gather/build  |  DOUBLE-tap ground to move, single tap clears  |  right-click clears/cancels  |  drag to pan, edge-swipe to zoom"

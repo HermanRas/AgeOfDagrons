@@ -53,7 +53,76 @@
     "side. That is the right trade -- a 5x5 house is oddly large next to an 8x8",
     "town centre, odd-sized footprints centre badly on a grid, and overhanging",
     "roofs are normal in isometric RTS art. Revisit if placement collisions ever",
-    "look wrong rather than merely generous."
+    "look wrong rather than merely generous.",
+    "",
+    "----------------------------------------------------------------------",
+    "THE FULL ROSTER, added once the age bakes landed. Age & Unit Planning.md",
+    "is authoritative for which 0 A.D. structure each of these is in each age;",
+    "visuals.json holds the age->atlas map and this file holds only the stable",
+    "id, so nothing here changes when a skin is re-pointed.",
+    "",
+    "FOOTPRINTS ARE STILL THE MAX ACROSS AGE SKINS, PER AXIS -- the rule the",
+    "town centre already followed. Measured the same way: each age's source",
+    "template resolved through its parent chain to <Obstruction><Static>, in",
+    "0 A.D. units at 4 per tile, rounded UP, then maxed. Written out so the",
+    "number can be re-derived rather than trusted:",
+    "",
+    "                    age1     age2     age3     age4     max",
+    "  town centre       7x7      7x7      8x8      10x10    [10, 10]",
+    "  house             3x3      3x3      4x4      4x4      [4, 4]",
+    "  mill              4x4      4x4      4x4      5x4      [5, 4]",
+    "  lumber camp       2x2      3x4      4x5      4x5      [4, 5]",
+    "  mining camp       3x5      3x5      4x4      4x4      [4, 5]",
+    "  barracks          --       5x5      5x5      6x6      [6, 6]",
+    "  market            --       7x6      8x8      8x7      [8, 8]",
+    "  blacksmith        --       5x5      5x5      5x5      [5, 5]",
+    "  stable            --       5x5      5x4      5x5      [5, 5]",
+    "  archery range     --       7x6      6x5      7x6      [7, 6]",
+    "  dock              --       3x6      6x4      5x6      [6, 6]",
+    "  field             --       6x6      6x6      6x6      [6, 6]",
+    "  watch tower       --       3x2      3x2      2x2      [3, 2]",
+    "  guard tower       --       --       2x2      3x3      [3, 3]",
+    "  castle            --       --       7x7      7x7      [7, 7]",
+    "  monastery         --       --       5x5      5x8      [5, 8]",
+    "  university        --       --       5x5      5x8      [5, 8]",
+    "  siege workshop    --       --       8x8      8x8      [8, 8]",
+    "  wonder            --       --       --       7x15     [7, 15]",
+    "",
+    "FOUNDATIONS AND RUBBLE ARE SHARED BY SIZE, and only nine foundation and",
+    "seven rubble sizes are baked, so several buildings point at the nearest one",
+    "rather than an exact match -- the same deliberate art/gameplay disagreement",
+    "the house already makes. The town centre keeps vis.foundation_8x8 against a",
+    "[10, 10] footprint (vis.foundation_10x10 is still queued in ASSET_MISSING",
+    "1.2); the archery range's [7, 6] takes the 7x7 pad; monastery, university",
+    "and market take 8x8. Pointing at an unbaked id would only render the loud",
+    "magenta placeholder, which is worse than a foundation that reads a little",
+    "off. The house's rubble moves from vis.rubble_3x3 to vis.rubble_4x4 here --",
+    "it was on the 3x3 only because 4x4 had not been baked at 0.4.",
+    "",
+    "WALLS AND GATES ARE DELIBERATELY ABSENT. All 24 wall pieces are baked and",
+    "declared in visuals.json, so the art is wired and testable, but a wall is",
+    "not an ordinary building: it needs drag-placement, automatic short/medium/",
+    "long segment choice, one of 8 orientations, and gate pass-through, none of",
+    "which the sim has. Declaring them as ordinary buildings would put twelve",
+    "entries in the villager's build menu that each place one fixed-orientation",
+    "3x2 block, which is worse than not offering them at all. They come back",
+    "with the wall system, not before.",
+    "",
+    "TRAINS IS THE BUILDING'S WHOLE LIST, NOT ITS LIST FOR ONE AGE. An archery",
+    "range trains archers from age 2 and crossbowmen from age 3, and that gate",
+    "belongs to the UNIT (units.json `age_required`), not to a per-age copy of",
+    "the building's roster -- otherwise every building would need four `trains`",
+    "lists and adding a unit would mean editing all four.",
+    "",
+    "THERE IS NO `category` FIELD, AND THAT IS A DECISION. 19 buildings do not fit",
+    "the 4x3 detail grid, and an uncapped list would drop seven of them silently.",
+    "This file briefly carried a category to split the build menu in two; the",
+    "project owner chose PAGING instead (2026-08-16), so the grid pages with < and",
+    "> and every building stays in one list. That is the better answer here: a",
+    "split has to be maintained as a judgement per building and still caps out if",
+    "one side grows, where paging is arithmetic and holds for any roster size.",
+    "The ordering that replaces it is (age unlocked, then name), so the buildings",
+    "a player has had longest keep their position -- see SelectionActions."
   ],
 
   "building.town_center": {
@@ -72,7 +141,7 @@
     "provides_pop": 10,
     "garrison_cap": 15,
 
-    "trains": ["unit.villager"],
+    "trains": ["unit.villager", "unit.militia"],
     "drop_off": ["food", "wood", "gold", "stone"],
     "age_required": 1
   },
@@ -81,7 +150,7 @@
     "name": "House",
     "visual": "vis.house",
     "visual_foundation": "vis.foundation_4x4",
-    "visual_rubble": "vis.rubble_3x3",
+    "visual_rubble": "vis.rubble_4x4",
 
     "hp": 550,
     "footprint": [4, 4],
@@ -96,5 +165,362 @@
     "trains": [],
     "drop_off": [],
     "age_required": 1
+  },
+
+  "building.mill": {
+    "name": "Mill",
+    "visual": "vis.mill",
+    "visual_foundation": "vis.foundation_5x4",
+    "visual_rubble": "vis.rubble_4x4",
+
+    "hp": 550,
+    "footprint": [5, 4],
+    "los": 4,
+
+    "cost": { "wood": 100 },
+    "build_time_ticks": 350,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": ["food"],
+    "age_required": 1
+  },
+
+  "building.lumber_camp": {
+    "name": "Lumber Camp",
+    "visual": "vis.lumber_camp",
+    "visual_foundation": "vis.foundation_5x5",
+    "visual_rubble": "vis.rubble_4x4",
+
+    "hp": 450,
+    "footprint": [4, 5],
+    "los": 4,
+
+    "cost": { "wood": 100 },
+    "build_time_ticks": 350,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": ["wood"],
+    "age_required": 1
+  },
+
+  "building.mining_camp": {
+    "name": "Mining Camp",
+    "visual": "vis.mining_camp",
+    "visual_foundation": "vis.foundation_5x5",
+    "visual_rubble": "vis.rubble_4x4",
+
+    "hp": 450,
+    "footprint": [4, 5],
+    "los": 4,
+
+    "cost": { "wood": 100 },
+    "build_time_ticks": 350,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": ["gold", "stone"],
+    "age_required": 1
+  },
+
+  "building.barracks": {
+    "name": "Barracks",
+    "visual": "vis.barracks",
+    "visual_foundation": "vis.foundation_6x6",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 1200,
+    "footprint": [6, 6],
+    "los": 6,
+
+    "cost": { "wood": 175 },
+    "build_time_ticks": 500,
+
+    "provides_pop": 0,
+    "garrison_cap": 10,
+
+    "trains": ["unit.swordsman", "unit.spearman"],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.market": {
+    "name": "Market",
+    "visual": "vis.market",
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 1500,
+    "footprint": [8, 8],
+    "los": 6,
+
+    "cost": { "wood": 175 },
+    "build_time_ticks": 600,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": ["unit.trade_cart"],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.blacksmith": {
+    "name": "Blacksmith",
+    "visual": "vis.blacksmith",
+    "visual_foundation": "vis.foundation_5x5",
+    "visual_rubble": "vis.rubble_5x5",
+
+    "hp": 1200,
+    "footprint": [5, 5],
+    "los": 6,
+
+    "cost": { "wood": 150 },
+    "build_time_ticks": 400,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.stable": {
+    "name": "Stable",
+    "visual": "vis.stable",
+    "visual_foundation": "vis.foundation_5x5",
+    "visual_rubble": "vis.rubble_5x5",
+
+    "hp": 1200,
+    "footprint": [5, 5],
+    "los": 6,
+
+    "cost": { "wood": 175 },
+    "build_time_ticks": 500,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": ["unit.scout_cavalry", "unit.sword_cavalry", "unit.cavalry_archer"],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.archery_range": {
+    "name": "Archery Range",
+    "visual": "vis.archery_range",
+    "visual_foundation": "vis.foundation_7x7",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 1200,
+    "footprint": [7, 6],
+    "los": 6,
+
+    "cost": { "wood": 175 },
+    "build_time_ticks": 500,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": ["unit.archer", "unit.crossbowman"],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.dock": {
+    "name": "Dock",
+    "visual": "vis.dock",
+    "visual_foundation": "vis.foundation_6x6",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 1800,
+    "footprint": [6, 6],
+    "los": 8,
+
+    "cost": { "wood": 150 },
+    "build_time_ticks": 350,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": ["unit.fishing_ship", "unit.transport_ship", "unit.galley", "unit.galleon"],
+    "drop_off": ["food"],
+    "age_required": 2
+  },
+
+  "building.field": {
+    "name": "Field",
+    "visual": "vis.field",
+    "visual_foundation": "vis.foundation_6x6",
+    "visual_rubble": "vis.rubble_4x4",
+
+    "hp": 100,
+    "footprint": [6, 6],
+    "los": 2,
+
+    "cost": { "wood": 60 },
+    "build_time_ticks": 200,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.watch_tower": {
+    "name": "Watch Tower",
+    "visual": "vis.watch_tower",
+    "visual_foundation": "vis.foundation_3x3_tower",
+    "visual_rubble": "vis.rubble_wall_tower",
+
+    "hp": 850,
+    "footprint": [3, 2],
+    "los": 10,
+
+    "cost": { "wood": 50, "stone": 125 },
+    "build_time_ticks": 800,
+
+    "provides_pop": 0,
+    "garrison_cap": 5,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2
+  },
+
+  "building.guard_tower": {
+    "name": "Guard Tower",
+    "visual": "vis.guard_tower",
+    "visual_foundation": "vis.foundation_3x3_tower",
+    "visual_rubble": "vis.rubble_wall_tower",
+
+    "hp": 1500,
+    "footprint": [3, 3],
+    "los": 12,
+
+    "cost": { "wood": 50, "stone": 200 },
+    "build_time_ticks": 800,
+
+    "provides_pop": 0,
+    "garrison_cap": 5,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3
+  },
+
+  "building.castle": {
+    "name": "Castle",
+    "visual": "vis.castle",
+    "visual_foundation": "vis.foundation_7x7",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 4800,
+    "footprint": [7, 7],
+    "los": 12,
+
+    "cost": { "stone": 650 },
+    "build_time_ticks": 2000,
+
+    "provides_pop": 40,
+    "garrison_cap": 20,
+
+    "trains": ["unit.knight", "unit.elite_swordsman", "unit.trebuchet", "unit.dragon"],
+    "drop_off": [],
+    "age_required": 3
+  },
+
+  "building.monastery": {
+    "name": "Monastery",
+    "visual": "vis.monastery",
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 2070,
+    "footprint": [5, 8],
+    "los": 8,
+
+    "cost": { "wood": 175 },
+    "build_time_ticks": 400,
+
+    "provides_pop": 0,
+    "garrison_cap": 10,
+
+    "trains": ["unit.monk"],
+    "drop_off": [],
+    "age_required": 3
+  },
+
+  "building.university": {
+    "name": "University",
+    "visual": "vis.university",
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 2100,
+    "footprint": [5, 8],
+    "los": 6,
+
+    "cost": { "wood": 200 },
+    "build_time_ticks": 600,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3
+  },
+
+  "building.siege_workshop": {
+    "name": "Siege Workshop",
+    "visual": "vis.siege_workshop",
+    "visual_foundation": "vis.foundation_8x8",
+    "visual_rubble": "vis.rubble_6x6",
+
+    "hp": 1500,
+    "footprint": [8, 8],
+    "los": 6,
+
+    "cost": { "wood": 200 },
+    "build_time_ticks": 400,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": ["unit.siege_ram", "unit.ballista", "unit.onager", "unit.trebuchet"],
+    "drop_off": [],
+    "age_required": 3
+  },
+
+  "building.wonder": {
+    "name": "Wonder",
+    "visual": "vis.wonder",
+    "visual_foundation": "vis.foundation_7x15_hele",
+    "visual_rubble": "vis.rubble_town_center",
+
+    "hp": 4800,
+    "footprint": [7, 15],
+    "los": 8,
+
+    "cost": { "wood": 1000, "stone": 1000, "gold": 1000 },
+    "build_time_ticks": 3500,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 4
   }
 }

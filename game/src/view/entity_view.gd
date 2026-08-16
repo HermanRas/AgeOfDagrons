@@ -34,6 +34,38 @@ var visual_id: StringName = &"":
 		_frame = 0
 		queue_redraw()
 
+## The owner's age, which picks a BUILDING's skin (PLAN.md 2.7.1). 0 means "no
+## age", which is what gaia-owned scenery and every unit want -- units use one
+## actor in all four ages, so this is simply ignored for them.
+##
+## Clears the resolved visual like `visual_id` does, because a player advancing
+## an age re-skins their standing buildings in place: the node stays, the art
+## behind it changes.
+var skin_age: int = 0:
+	set(value):
+		if skin_age == value:
+			return
+		skin_age = value
+		_visual = null
+		queue_redraw()
+
+## The owner's palette index (SimPlayer.colour), which picks the per-player
+## BAKE -- not a tint applied here. Player colour is in the pixels (PLAN.md 1):
+## each unit ships as eight atlases and this chooses between them, which is why
+## there is no shader and no `modulate` on the sprite.
+##
+## -1 is untinted, and that is the right answer for anything gaia owns. Some
+## 0 A.D. wildlife actors declare a playercolor mask anyway (colours.json's
+## note), so this keys off WHO OWNS the entity, never off whether the art has
+## a mask.
+var skin_colour: int = -1:
+	set(value):
+		if skin_colour == value:
+			return
+		skin_colour = value
+		_visual = null
+		queue_redraw()
+
 ## Shifts the ART without shifting the NODE, which is what lets a large footprint
 ## sort correctly under a Y-sorted parent (3.1).
 ##
@@ -78,8 +110,15 @@ var _frame: int = 0
 ## the autoload, and so a view that is never drawn never parses an atlas.
 func visual() -> AtlasEntry:
 	if _visual == null:
-		_visual = GameDataRegistry.atlas_for(visual_id)
+		_visual = GameDataRegistry.atlas_for(visual_id, skin_age, skin_colour)
 	return _visual
+
+
+## Both skin axes at once, so a caller that knows the owner sets them in one
+## call and cannot leave the view half-re-skinned between two assignments.
+func set_skin(age: int, colour: int) -> void:
+	skin_age = age
+	skin_colour = colour
 
 
 ## Supply the visual directly instead of resolving it through the seam.

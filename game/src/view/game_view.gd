@@ -24,6 +24,19 @@ var selection: Selection = Selection.new()
 
 var _last_tick: int = -1
 
+## What GAIA gets: no age skin and no player tint. Owner 0 is nobody, and
+## colours.json's note is explicit that the tint must key off who owns a thing
+## rather than off whether its art carries a playercolor mask -- 0 A.D.'s sheep
+## declares one and is still nobody's sheep.
+const _NEUTRAL_SKIN := {"age": 0, "colour": -1}
+
+## owner_id -> {age, colour}, refreshed from every snapshot's `player_state`
+## (SnapshotSystem carries both). This is the whole of PLAN.md 2.7.1's skin key
+## on the client: age re-skins a standing building in place as its owner
+## advances, and colour picks which of a unit's eight baked atlases to draw.
+## Neither is sim state the view may reach for -- both arrive on the wire.
+var _player_skins: Dictionary = {}
+
 ## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
 ## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
 ## answer questions about an entity that the *view* nodes do not carry -- who owns
@@ -56,6 +69,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 	_last_tick = int(snap.get("tick", _last_tick))
 	var updated: Array = snap.get("updated", [])
 
+	# BEFORE the entity loop, not after: an entity spawning this tick resolves its
+	# atlas the first time it draws, and resolving it against a stale (or absent)
+	# skin would render one frame of the wrong player's colour -- which, colour
+	# being the only thing telling players apart, reads as the wrong player's unit.
+	_read_player_skins(snap)
+
 	# Gathered up front so a unit's adjacency check below (any tile order)
 	# never depends on whether its own entry happened to arrive before or
 	# after the building's in this snapshot. `footprint` is unique to
@@ -86,6 +105,13 @@ func apply_snapshot(snap: Dictionary) -> void:
 		var p: Dictionary = entry.get("pos", {})
 		var sub_pos := Vector2i(int(p.get("x", 0)), int(p.get("y", 0)))
 		var def_id := StringName(entry.get("def_id", ""))
+
+		# Set every snapshot rather than only on spawn: a player advancing an age
+		# re-skins their standing buildings in place (PLAN.md 2.7 item 2), and the
+		# only signal of that is this value changing. The setters no-op when it
+		# has not, so this costs a comparison per entity per tick.
+		var skin: Dictionary = _player_skins.get(int(entry.get("owner_id", 0)), _NEUTRAL_SKIN)
+		view.set_skin(int(skin["age"]), int(skin["colour"]))
 
 		# The node goes where the entity SORTS, the art goes where the entity IS.
 		# For everything 1x1 those are the same point and the offset is zero.
@@ -176,6 +202,32 @@ func apply_snapshot(snap: Dictionary) -> void:
 ## Facts about one entity, or {} if it is not currently in view.
 func facts_for(id: int) -> Dictionary:
 	return _facts.get(id, {})
+
+
+## The skin a player's entities draw with, as {age, colour}. Gaia and any player
+## not in the last snapshot get the neutral skin -- unaged and untinted -- rather
+## than player 1's, which is what an `int` default of 0 would silently have meant.
+func skin_for(owner_id: int) -> Dictionary:
+	return _player_skins.get(owner_id, _NEUTRAL_SKIN)
+
+
+## The local player's age, for the HUD and for gating the action menus (9.1,
+## UI_Design.md). 1 when they are not in the snapshot yet, since age 1 is where
+## every match starts and an unaged menu offers nothing at all.
+func age_of(owner_id: int) -> int:
+	return maxi(1, int(skin_for(owner_id).get("age", 1)))
+
+
+func _read_player_skins(snap: Dictionary) -> void:
+	var state: Dictionary = snap.get("player_state", {})
+	if state.is_empty():
+		return          # not every snapshot in a test carries one; keep the last
+	for pid in state:
+		var ps: Dictionary = state[pid]
+		_player_skins[int(pid)] = {
+			"age": int(ps.get("age", 1)),
+			"colour": int(ps.get("colour", 0)),
+		}
 
 
 ## Every entity's facts, keyed by id. A copy, for the same reason

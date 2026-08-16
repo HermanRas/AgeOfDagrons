@@ -28,7 +28,9 @@ const MAX_DETAILS := 12
 ##   harvest -> res_wood.png    (a resource, not a gather verb)
 ##   repair  -> act_guard.png   (protect, not mend)
 ##   upgrade -> hud_techtree.png (the tech-tree HUD button)
-## Formations have no near-enough icon at all and fall back to their label.
+## Formations and the two page arrows have no near-enough icon at all and fall
+## back to their label, which for the arrows is the whole point -- "<" and ">"
+## read as navigation at 72 px in a way no icon in the pack does.
 const ICONS := {
 	&"move": "act_move.png",
 	&"stop": "act_stop.png",
@@ -41,6 +43,13 @@ const ICONS := {
 	&"garrison": "act_garrison.png",
 }
 
+## The two page-navigation slots. They are real HudActions in the grid rather
+## than chrome around it, because the grid IS the 12 slots -- an arrow drawn
+## outside it would need layout the panel does not have, and one drawn over a
+## slot would cover a building.
+const PAGE_PREV := &"page:prev"
+const PAGE_NEXT := &"page:next"
+
 ## Formation/stance choices a military unit's Move action expands into
 ## (UI_Design.md). No formation exists in the sim, so all four are disabled.
 const FORMATIONS: Array[StringName] = [&"line", &"grid", &"vee", &"box"]
@@ -52,8 +61,13 @@ const FORMATIONS: Array[StringName] = [&"line", &"grid", &"vee", &"box"]
 ## is every selected entity's def_id (empty for a single selection). An empty
 ## return means "nothing this selection can be told to do" -- true for anything
 ## not owned by the local player, which still shows its portrait and health.
+## `age` is the SELECTION OWNER's age (SimPlayer.age, arriving via
+## GameView.age_of), and it gates the train and build rows: a building lists only
+## the units its owner has reached the age for, and a villager only the buildings
+## they may place. Defaults to 1 so a caller that has no age yet still gets the
+## age-1 menu rather than an empty one.
 static func for_selection(facts: Dictionary, selected_count: int = 1,
-		is_mine: bool = true, all_def_ids: Array = []) -> Array[HudAction]:
+		is_mine: bool = true, all_def_ids: Array = [], age: int = 1) -> Array[HudAction]:
 	if facts.is_empty() or not is_mine:
 		return []
 
@@ -69,7 +83,7 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 		])
 
 	if GameDataRegistry.building(def_id) != null:
-		return _capped(_building_actions(def_id))
+		return _capped(_building_actions(def_id, age))
 	return _capped(_unit_actions(def_id))
 
 
@@ -80,12 +94,15 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 ## shows the selection's own default detail -- a building's production queue,
 ## or a group's roster.
 static func details_for(action_id: StringName, facts: Dictionary,
-		selected_count: int = 1, all_def_ids: Array = []) -> Array[HudAction]:
+		selected_count: int = 1, all_def_ids: Array = [], age: int = 1) -> Array[HudAction]:
 	if facts.is_empty():
 		return []
 
+	# NOT capped: the build list is the one detail list that can outgrow the grid,
+	# and it is the caller's `page_of()` that slices it. Capping here would throw
+	# away the buildings page 2 exists to show.
 	if action_id == &"build":
-		return _capped_details(_buildable_details())
+		return _buildable_details(age)
 	if action_id == &"move":
 		return _capped_details(_formation_details())
 
@@ -101,7 +118,14 @@ static func details_for(action_id: StringName, facts: Dictionary,
 ## A building trains units (5.4, real), and would repair/upgrade/be destroyed.
 ## Destroy is debug-only until combat exists (PLAN.md 5.5) but is a real
 ## command today, so it is enabled.
-static func _building_actions(def_id: StringName) -> Array[HudAction]:
+## `bd.trains` is the building's WHOLE roster across every age; each unit carries
+## its own `age_required` (units.json). Units above the owner's age are OMITTED
+## rather than shown disabled, unlike the unimplemented verbs below -- a disabled
+## Attack tells the player the button exists and does not work yet, but a
+## disabled Crossbowman in age 2 would be a promise about a future age, and the
+## tech tree (9.4) is where that belongs. It also keeps the row inside its 8
+## slots: a castle trains four things and an age-4 dock four more.
+static func _building_actions(def_id: StringName, age: int = 1) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var bd: BuildingDef = GameDataRegistry.building(def_id)
 	if bd == null:
@@ -109,6 +133,8 @@ static func _building_actions(def_id: StringName) -> Array[HudAction]:
 
 	for unit_def_id in bd.trains:
 		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
+		if ud != null and ud.age_required > age:
+			continue
 		var a := HudAction.new(&"train:%s" % unit_def_id,
 				ud.name if ud != null and not ud.name.is_empty() else String(unit_def_id))
 		a.payload = unit_def_id          # ActionSlot crops the unit's own portrait
@@ -132,7 +158,7 @@ static func _unit_actions(def_id: StringName) -> Array[HudAction]:
 
 	if not ud.gather_rate.is_empty():
 		var build := _act(&"build")
-		build.expands = true             # offers the buildings to place
+		build.expands = true             # offers the buildings to place, paged
 		out.append(build)
 		out.append(_act(&"harvest"))
 	elif ud.attack_damage > 0:
@@ -145,18 +171,43 @@ static func _unit_actions(def_id: StringName) -> Array[HudAction]:
 	return out
 
 
-## Every building in the data set, as placement choices. There is no
-## per-builder restriction in `BuildingDef` yet (nor an age gate wired to a
-## real age), so a villager is offered all of them -- `PlaceBuildingCommand`
-## still refuses one it cannot afford.
-static func _buildable_details() -> Array[HudAction]:
-	var out: Array[HudAction] = []
+## Every building a villager may place, gated by the owner's age
+## (`BuildingDef.age_required`). There is still no per-builder restriction --
+## every worker is offered the same list -- and `PlaceBuildingCommand` still
+## refuses one they cannot afford.
+##
+## Returned WHOLE, however long. 19 buildings do not fit MAX_DETAILS, and the
+## answer is `page_of()`, not a cap: a capped list drops buildings silently,
+## which is how the town centre came to fall off the end of an ungated version
+## of this while the wonder stayed on it.
+##
+## RE-SORTED, not taken in `building_ids()` order. That function sorts an
+## Array[StringName], which orders by StringName IDENTITY rather than by string
+## content (test_game_data pins exactly that), so its order is whatever the
+## engine happened to intern these in -- arbitrary, and not necessarily the same
+## between runs. A menu whose buttons move is worse than one in a dull order, so
+## this sorts by (age unlocked, then display name): the buildings a player has
+## had longest stay put at the front and stay on page 1, and each age's additions
+## arrive together at the back.
+static func _buildable_details(age: int = 1) -> Array[HudAction]:
+	var matching: Array[BuildingDef] = []
 	for id in GameDataRegistry.building_ids():
 		var bd: BuildingDef = GameDataRegistry.building(id)
-		var a := HudAction.new(&"place:%s" % id,
-				bd.name if bd != null and not bd.name.is_empty() else String(id))
-		a.payload = id
-		out.append(a)
+		if bd == null or bd.age_required > age:
+			continue
+		matching.append(bd)
+
+	matching.sort_custom(func(a: BuildingDef, b: BuildingDef) -> bool:
+		if a.age_required != b.age_required:
+			return a.age_required < b.age_required
+		return a.name < b.name)
+
+	var out: Array[HudAction] = []
+	for bd in matching:
+		var action := HudAction.new(&"place:%s" % bd.id,
+				bd.name if not bd.name.is_empty() else String(bd.id))
+		action.payload = bd.id
+		out.append(action)
 	return out
 
 
@@ -215,6 +266,76 @@ static func _roster_details(all_def_ids: Array) -> Array[HudAction]:
 		more.badge = ""
 		out.append(more)
 	return out
+
+
+# ── paging the detail grid ──────────────────────────────────────────────────
+#
+# The grid is 12 slots and the age-4 build list is 19 buildings, so it pages.
+# The project owner specified the shape (2026-08-16): the LAST slot of a page
+# that has more after it is ">", and the FIRST slot of any page after the first
+# is "<". A middle page therefore carries both.
+#
+# The arrows live INSIDE the 12 slots, which is what makes the arithmetic below
+# non-obvious: a page's capacity depends on which arrows it needs, and whether it
+# needs ">" depends on whether the remaining items fit -- which depends on the
+# capacity. _page_offsets() resolves that by walking the list once rather than
+# trying to close the loop with a formula.
+#
+# Kept here rather than in SelectionPanel for the same reason everything else in
+# this file is: it is pure arithmetic over a list, so it is assertable headless
+# without building a panel. The panel owns only WHICH page is open.
+
+
+## Where each page starts. One entry per page; a single-page list returns [0].
+static func _page_offsets(total: int) -> PackedInt32Array:
+	var offsets := PackedInt32Array([0])
+	if total <= MAX_DETAILS:
+		return offsets
+
+	# Page 0 has no "<" but does have ">", so it holds MAX_DETAILS - 1.
+	var consumed := MAX_DETAILS - 1
+	while consumed < total:
+		offsets.append(consumed)
+		# Every later page spends a slot on "<". It spends another on ">" only if
+		# what is left will not fit without one.
+		var room := MAX_DETAILS - 1
+		if total - consumed > room:
+			room -= 1
+		consumed += room
+	return offsets
+
+
+static func page_count(total: int) -> int:
+	return _page_offsets(total).size()
+
+
+## One page of `details`, with its navigation slots in place. `page` is clamped,
+## so a caller holding a stale page number after the list shrank -- a villager
+## on page 2 of the age-4 list whose owner somehow drops to age 1 -- lands on the
+## last real page instead of on an empty grid.
+static func page_of(details: Array[HudAction], page: int) -> Array[HudAction]:
+	var offsets := _page_offsets(details.size())
+	var index := clampi(page, 0, offsets.size() - 1)
+
+	var out: Array[HudAction] = []
+	if index > 0:
+		out.append(_nav(PAGE_PREV, "<"))
+
+	var start := offsets[index]
+	var end := offsets[index + 1] if index + 1 < offsets.size() else details.size()
+	for i in range(start, end):
+		out.append(details[i])
+
+	if index + 1 < offsets.size():
+		out.append(_nav(PAGE_NEXT, ">"))
+	return out
+
+
+## An arrow. Enabled -- unlike the disabled placeholders elsewhere in this file,
+## this one does something -- but carrying no payload, so a listener that
+## dispatches on `place:`/`cancel:` prefixes ignores it without a special case.
+static func _nav(id: StringName, label: String) -> HudAction:
+	return HudAction.new(id, label, "", true)
 
 
 static func _act(id: StringName, enabled: bool = true) -> HudAction:

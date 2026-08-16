@@ -17,7 +17,32 @@ var def_id: StringName = &"":
 		def_id = value
 		queue_redraw()
 
+## The skin of whoever OWNS what is portrayed -- not of the local player. A
+## selected enemy unit shows its own colour here, which is the whole reason the
+## portrait carries one (PLAN.md 1). Defaults to unaged/untinted so a caller that
+## has not been updated draws exactly what it drew before.
+var skin_age: int = 0:
+	set(value):
+		if skin_age == value:
+			return
+		skin_age = value
+		queue_redraw()
+
+var skin_colour: int = -1:
+	set(value):
+		if skin_colour == value:
+			return
+		skin_colour = value
+		queue_redraw()
+
 var _frame: Texture2D = null
+
+
+## Both axes at once, so a caller cannot leave the portrait half-re-skinned --
+## the same pairing EntityView.set_skin() makes for the world sprite.
+func set_skin(age: int, colour: int) -> void:
+	skin_age = age
+	skin_colour = colour
 
 
 func _init() -> void:
@@ -30,7 +55,7 @@ func _draw() -> void:
 	var inset := SIZE * 0.14
 	var icon_rect := Rect2(Vector2(inset, inset), Vector2(SIZE, SIZE) - Vector2(inset, inset) * 2.0)
 
-	var icon := EntityPortrait.frame_for(def_id) if def_id != &"" else {}
+	var icon := EntityPortrait.frame_for(def_id, skin_age, skin_colour) if def_id != &"" else {}
 	if icon.is_empty():
 		draw_circle(Vector2(SIZE, SIZE) * 0.5, SIZE * 0.5 - inset, EMPTY_COLOR)
 	else:
