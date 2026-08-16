@@ -196,11 +196,13 @@ with WinError 5. Delete contents, not the directory.
 - **163 base recipes**, **160 generated colour recipes** (20 units × 8).
 - **Nothing is running.** The colour backlog is finished: batch
   `20260816-122118`, 90/90, 0 failures, 5.1 h at 3-wide.
-- **Staging is complete and current: `323/323, RESULT: OK`** — the first fully
-  complete staging this project has had. All eight colours are correct for all
-  20 colourable units; the game agent is no longer restricted to red and yellow.
-- `vis.ballista` is base-only by design (no siege engine in 0 A.D. carries player
-  colour); every other unit has its eight.
+- **Staging is complete and current: `325/325, RESULT: OK`** — the first fully
+  complete staging this project has had, plus the two food props of 2026-08-16.
+  All eight colours are correct for all 20 colourable units; the game agent is no
+  longer restricted to red and yellow.
+- `vis.ballista` is base-only because **its own** crew textures measure a 0% mask
+  — *not* because siege engines are a class that cannot tint. The ram does, at
+  6.8%; see §4. Every other unit has its eight.
 - Verified beyond the batch summary, because a summary full of "ok" is exactly
   what the coloured-faces batch produced: 0 pixels move >64 between each unit's
   last `die` frame and first `decay` frame across 13 units × 8 colours, and the
@@ -213,7 +215,7 @@ with WinError 5. Delete contents, not the directory.
 > comparing rendered frames, establish the noise floor from two frames that must
 > be identical before choosing a threshold.
 
-### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `ea396c4`)
+### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `99a33cc`, build 29)
 
 1. The tint was a MULTIPLY — white a no-op, dark colours crushed. Now mixes
    toward the colour, preserving texture shading with headroom scaling.
@@ -230,6 +232,17 @@ with WinError 5. Delete contents, not the directory.
 
 ### Known open items
 
+- **`vis.ballista`'s crew are headless — NEXT PIECE OF WORK.** The bake does
+  include the three operators, but every head, helmet and tool sits at the world
+  origin buried inside the engine. The crew are props of the engine and their
+  heads are props **of the crew**; the pinned importer resolves one level of
+  nesting and drops anchoring on the second. Same defect class as the mis-rooted
+  shields that isobake already works around by name
+  (`_drop_misrooted_nested_props`), one level deeper. Fixing it may also unlock
+  colour: the **packed** variant (`units/carthaginians/siege_rock_packed`) uses
+  `player_trans_norm_spec` on the hull itself and mounts horses, so it should
+  tint even though the deployed lithobolos does not. Until then `vis.ballista`
+  is static, colourless and headless-crewed — usable, but not final.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
   fix belongs in the importer's variant resolution. The owner has seen the
@@ -239,11 +252,32 @@ with WinError 5. Delete contents, not the directory.
 
 - **Build identity in the atlas `generator` block** — `isobake_commit`,
   `isobake_build` (a `git rev-list --count`, so it orders without a clock) and
-  `isobake_dirty`. Landed as isobake `531a4bc`. Note the **323 already-staged
-  atlases predate it** and carry no such keys, which the game side reads as
-  "fall back to mtime". The field only earns its keep from the next fix onward;
-  it is not worth a 5 h rebake to backfill, and the current set is uniformly
-  correct anyway so there is nothing for staleness detection to find today.
+  `isobake_dirty`. Landed as isobake `531a4bc`, amended by `99a33cc` so that all
+  three keys are **always present and null when git could not answer**. That
+  gives three states, and the middle one is the point:
+
+  ```
+  keys absent    built before 531a4bc      <- the 323 staged before it
+  keys null      current code, git failed  <- provenance broke; should never happen
+  real values    a known commit            <- the 2 food props, build 28
+  ```
+
+  Without it, a bake where git was missing from the Blender subprocess's `PATH`
+  would have been indistinguishable from genuinely older art, and the consumer
+  reads "no keys" as "old". `99a33cc` also stopped `isobake_dirty` reporting a
+  tree **clean** when `git status` itself had failed.
+
+  **Do not backfill the 323**, and I refused it on 2026-08-16 when the game side
+  offered to take it: the pass is cheap (JSON rewrite, seconds) but there is no
+  true value to write. Today's build would assert code that did not run, and
+  would erase the only honest signal on disk — the two food props really are
+  build 28. Absence already *is* the sentinel.
+
+  **Tell the consumer to compare by uniformity, not ordering:** "these eight do
+  not all carry the same identity" works today with a wholly unstamped set,
+  where "older than the newest sibling" does not. Prefer commit *equality* to
+  `isobake_build` ordering where possible — the count is monotonic only while
+  history stays linear.
 - **`vis.siege_ram` colour** — I had it wrong, see the measurement note in §4.
   It tints at 6.8% and is fine.
 - **The bone-less mesh defect**: `m_armor_tunic_short.dae` and both siege engines
