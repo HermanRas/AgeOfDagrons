@@ -181,6 +181,60 @@ func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:
 			"in place on the first snapshot, with no advance() call")
 
 
+# ── interchangeable looks (visuals.json `variants`) ────────────────────────
+
+func _field_snapshot(id: int, tile: Vector2i) -> Dictionary:
+	return _snapshot_of(id, "building.field", tile,
+			{"footprint": {"x": 6, "y": 6}, "phase": SimBuilding.Phase.COMPLETE})
+
+
+func test_a_field_draws_one_of_the_four_plots() -> void:
+	view.apply_snapshot(_field_snapshot(1, Vector2i(10, 10)))
+	var chosen := String(view.pool.get_view(1).visual_id)
+	assert_true(chosen.begins_with("vis.field_"),
+			"%s is one of the plots, not the abstract vis.field" % chosen)
+
+
+func test_the_same_plot_keeps_its_crop_across_snapshots() -> void:
+	# Derived from the TILE, not rolled at spawn. A `randi()` would re-roll every
+	# time a pooled view was recycled, so a field would change crop by walking the
+	# camera away and back -- and two clients would disagree about a whole map.
+	view.apply_snapshot(_field_snapshot(1, Vector2i(10, 10)))
+	var first := view.pool.get_view(1).visual_id
+	for tick in range(2, 6):
+		view.apply_snapshot(_field_snapshot(1, Vector2i(10, 10)))
+		assert_eq(view.pool.get_view(1).visual_id, first, "still the same crop on tick %d" % tick)
+
+
+func test_neighbouring_plots_do_not_all_draw_the_same_crop() -> void:
+	# Four fields round one mill is the arrangement this exists for. A seed that
+	# gave them all the same plot would look exactly like variants not working.
+	var seen: Array[String] = []
+	var id := 1
+	for tile in [Vector2i(10, 10), Vector2i(17, 10), Vector2i(10, 17), Vector2i(17, 17)]:
+		view.apply_snapshot(_field_snapshot(id, tile))
+		var vis := String(view.pool.get_view(id).visual_id)
+		if not seen.has(vis):
+			seen.append(vis)
+		id += 1
+	assert_true(seen.size() >= 2, "four adjacent plots drew %d different crops" % seen.size())
+
+
+func test_a_foundation_is_not_given_a_crop() -> void:
+	# The variant applies to whatever visual_for() returned, and a field being
+	# ploughed is vis.foundation_6x6 -- which declares no variants, so it comes
+	# back untouched. Worth pinning: the alternative is a foundation drawn as a
+	# finished crop.
+	view.apply_snapshot(_snapshot_of(1, "building.field", Vector2i(10, 10),
+			{"footprint": {"x": 6, "y": 6}, "phase": SimBuilding.Phase.FOUNDATION}))
+	assert_eq(view.pool.get_view(1).visual_id, &"vis.foundation_6x6")
+
+
+func test_anything_without_variants_is_unaffected() -> void:
+	view.apply_snapshot(_snapshot_of(1, "unit.villager", Vector2i(4, 4)))
+	assert_eq(view.pool.get_view(1).visual_id, &"vis.villager")
+
+
 # ── idle villagers (7.1, the age header's badge) ───────────────────────────
 
 func test_the_idle_count_is_villagers_only_and_only_the_owners() -> void:

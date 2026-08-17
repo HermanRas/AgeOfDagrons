@@ -201,6 +201,16 @@ func _advance_script() -> void:
 			_walk_the_idle_badge()
 		26:
 			_shoot("match_idle")
+		27:
+			# A mill with its four fields, to look at the four crops. Spawned
+			# straight into the world rather than placed through commands: what is
+			# being checked is that four plots on four tiles draw four DIFFERENT
+			# pictures (visuals.json `variants`), and steps 16-17 already prove the
+			# placement path.
+			_stand_up_a_farm()
+		28:
+			_report_field_crops()
+			_shoot("match_fields")
 		_:
 			get_tree().quit()
 			return
@@ -415,10 +425,14 @@ func _an_enemy_is_dead() -> bool:
 ## reading it. Stepping +6,-4 between the three sends them 320 px apart along the
 ## screen's horizontal (iso maps dx - dy to screen x), so all three sit side by
 ## side in one frame.
+## Moved two tiles down on 2026-08-17: the resource clusters were pushed six tiles
+## clear of the town centre to free up building space, and the forest landed on
+## (17..20, 40..42) -- straight through the mining camp's old spot, which reported
+## itself as "no room for building.mining_camp". The +6,-4 stepping is unchanged.
 const DROPSITE_SITES := [
-	[&"building.lumber_camp", Vector2i(10, 46)],
-	[&"building.mining_camp", Vector2i(16, 42)],
-	[&"building.mill", Vector2i(22, 40)],
+	[&"building.lumber_camp", Vector2i(8, 52)],
+	[&"building.mining_camp", Vector2i(14, 48)],
+	[&"building.mill", Vector2i(20, 44)],
 ]
 
 
@@ -521,6 +535,55 @@ func _report_occlusion() -> void:
 		print("  unit %-18s tile %s  owner %d  occluded %s" % [
 				f.get("def_id", &"?"), f.get("tile", Vector2i.ZERO),
 				int(f.get("owner_id", 0)), v.occluded])
+
+
+## A mill and the four fields one mill will carry, on clear ground in the map's
+## south-east quarter, with the camera moved to them.
+##
+## The four spots are the arrangement `test_fields.gd` uses -- two plots down each
+## side of the mill, none overlapping -- because that is the layout the max_per_host
+## rule was written against. Field origins are top-left tiles; the mill is 5x4 and
+## each field 6x6.
+const FARM_MILL := Vector2i(40, 44)
+
+
+func _stand_up_a_farm() -> void:
+	var world: SimWorld = Net.host().world
+	var mill := world.spawn_building(&"building.mill", Net.local_player_id(), FARM_MILL,
+			SimBuilding.Phase.COMPLETE)
+	if mill == null:
+		push_warning("preview_match: no room for the mill at %s" % FARM_MILL)
+		return
+
+	for offset in [Vector2i(-6, -6), Vector2i(-6, 0), Vector2i(5, -6), Vector2i(5, 0)]:
+		if world.spawn_building(&"building.field", Net.local_player_id(),
+				FARM_MILL + offset, SimBuilding.Phase.COMPLETE) == null:
+			push_warning("preview_match: no room for a field at %s" % (FARM_MILL + offset))
+
+	_game._camera.centre_on(Iso.tile_centre_to_world(FARM_MILL))
+
+
+## Which crop each plot drew. The picture shows four fields; only this says whether
+## they are four DIFFERENT ones, and a screenshot of four identical plots looks
+## exactly like variants that are not wired.
+func _report_field_crops() -> void:
+	var view: GameView = _game._view
+	var ids: Array = view.all_facts().keys()
+	ids.sort()
+	var seen: Array[String] = []
+	var plots := 0
+	for id in ids:
+		var f: Dictionary = view.facts_for(int(id))
+		if StringName(f.get("def_id", &"")) != &"building.field":
+			continue
+		var v := view.pool.get_view(int(id))
+		if v == null:
+			continue
+		plots += 1
+		print("  field at %s draws %s" % [f.get("tile", Vector2i.ZERO), v.visual_id])
+		if not seen.has(String(v.visual_id)):
+			seen.append(String(v.visual_id))
+	print("  %d distinct crop(s) across %d plots" % [seen.size(), plots])
 
 
 ## Halt every villager, so there is a spread-out set of idle units for the badge

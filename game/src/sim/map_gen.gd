@@ -25,31 +25,43 @@ const DEBUG_START := Vector2(0.5, 0.5)
 ## few seconds on a phone, and a villager should reach wood, gold, stone and food
 ## without a hunt (PLAN.md 10).
 ##
-## Every cluster below is also placed for WHERE IT LANDS ON SCREEN, so the whole
-## economy is in the opening frame and nothing hides behind anything: wood and
-## stone left, gold and berries right, livestock above. Iso sends (dx - dy) to
-## screen x and (dx + dy) to screen y, which is what makes those directions
-## separable at all -- see each constant's own note.
+## SIX TILES CLEAR of the town centre's 10x10 footprint, every cluster, and that
+## clearance outranks how they compose on screen (project owner, 2026-08-17: "with
+## all the tests we are cramping the building space"). Everything used to sit two
+## or three tiles off the walls, which left nowhere to put a mill and four fields
+## without demolishing the economy first -- and a field alone is 6x6.
 ##
-## Nothing is placed DOWN-screen, and that is the rule this list learned the hard
-## way: at the default zoom the bottom half of the frame is the selection panel
-## and the minimap, so a cluster put "below the town centre, where the map is
-## empty" is a cluster nobody can see (2026-08-17, stone).
+## GOLD IS THE EXCEPTION and stays where it was, by the owner's call: it is what
+## several tests and the preview reach for, and moving it would be a diff across
+## all of them for no gain.
 ##
-## The wood and deer offsets are also chosen for the *screen*, not just the grid.
-## Iso sends (dx - dy) to screen x and (dx + dy) to screen y, so an offset along
-## the -x+y diagonal moves an object left with no vertical drift, and +x-y moves
-## it right the same way. Wood therefore sits ~6 tiles down-left of the town
-## centre and the deer ~6 up-right, which puts tree, town centre and stag on one
-## horizontal band in dev_preview/preview_world.tscn -- the only way to compare
-## their sizes by looking, which is what they are placed like this for. Six and
-## not eight because the preview frame is 1152 px wide, and eight put the deer
-## just past the right edge.
+## Direction still matters, because Iso sends (dx - dy) to screen x and (dx + dy)
+## to screen y. Two rules survive from the earlier pass:
+##
+##   NOTHING GOES DOWN-SCREEN. At the default zoom the bottom half of the frame is
+##   the selection panel and the minimap, so a cluster put "below the town centre,
+##   where the map is empty" is a cluster nobody can see (found by screenshot).
+##
+##   The opening frame no longer holds ALL of it, and that is the trade. At 32 px
+##   per tile of (dx - dy) the town centre alone spans 640 px of a 1152 px frame,
+##   so six tiles of clearance in four directions does not fit and cannot be made
+##   to. Wood and stone are a short pan or a zoom out; gold, berries and the
+##   livestock are still in shot.
+##
+## Down-left, seven tiles clear of the town centre's left wall and four below its
+## bottom one. It used to start one tile off the corner -- twelve trees packed
+## against the wall, which is the single biggest thing that was eating the build
+## space. A 4x3 block rather than a line: a forest reads as a forest, and unlike
+## the rocks these sprites are narrow enough to stand next to each other.
 const DEBUG_WOOD_CLUSTER := [
-	Vector2i(-4, 9), Vector2i(-3, 9), Vector2i(-2, 9), Vector2i(-1, 9),
-	Vector2i(-4, 10), Vector2i(-3, 10), Vector2i(-2, 10), Vector2i(-1, 10),
-	Vector2i(-4, 11), Vector2i(-3, 11), Vector2i(-2, 11), Vector2i(-1, 11),
+	Vector2i(-10, 13), Vector2i(-9, 13), Vector2i(-8, 13), Vector2i(-7, 13),
+	Vector2i(-10, 14), Vector2i(-9, 14), Vector2i(-8, 14), Vector2i(-7, 14),
+	Vector2i(-10, 15), Vector2i(-9, 15), Vector2i(-8, 15), Vector2i(-7, 15),
 ]
+## THE ONE CLUSTER THAT DID NOT MOVE, by the owner's call: several tests and
+## dev_preview reach for gold where it is, and two tiles off the town centre's
+## right wall is close enough to walk to in the first seconds of a match, which is
+## what the debug map is for.
 const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
 ## A line rather than a block: a 2x2 arrangement puts two on the same screen
 ## column, one hidden behind the other. Stepping only dx staggers all four.
@@ -58,7 +70,22 @@ const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
 ## vis.berry_bush is fully delivered where the deer carcass is not
 ## (ASSET_MISSING.md 2.3, asset_request.md). res.deer stays defined and could
 ## replace this again if wildlife hunting (6.1a/6.1b) comes back.
-const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
+## Moved from three tiles above the town centre to eight tiles RIGHT of it, and
+## the change of direction is the interesting part. Up was where they belonged on
+## screen, but up-screen in iso is up-RIGHT: pushing them away from the wall
+## without also stepping left walks them under the resource panel, and stepping
+## left to compensate walks them off the top. Right of the town centre and below
+## the house plot there is room for all four with nothing over them.
+##
+## Stepping dy rather than dx now, which staggers them the same way -- each step
+## is 32 px left and 16 px down -- so no two share a screen column.
+##
+## They land in the strip between the selection panel and the minimap, which is
+## the only pocket left for something eight tiles right of the town centre: the
+## right side beyond the walls is under the resource panel and the bottom is HUD,
+## so this is a genuinely narrow target and the row was three tiles lower on the
+## first attempt, half of it under the bottom edge.
+const DEBUG_FOOD := [Vector2i(17, 7), Vector2i(17, 8), Vector2i(17, 9), Vector2i(17, 10)]
 
 ## Stone (PLAN.md 6.5), added 2026-08-17 to close a gap that was not an art gap:
 ## `vis.stone_mine` had been baked and staged all along, and nothing referenced
@@ -66,19 +93,19 @@ const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2
 ## any. The only stone a player could ever have was DEBUG_STARTING_STOCK's
 ## handout -- generous enough that nobody noticed the economy had a hole in it.
 ##
-## UP-LEFT, above the forest. The first attempt put these BELOW the town centre,
-## on the reasoning that nothing else is down there -- which is true of the map
-## and false of the screen: at the default zoom the bottom half is HUD, and all
-## three landed behind the selection panel (screenshotted). Iso sends (dx - dy)
-## to screen x and (dx + dy) to screen y, and DOWN is where the panel is, so
-## anything placed for the opening frame goes up, left or right.
+## LEFT, seven to nine tiles clear of the town centre's left wall and above the
+## forest. The first attempt put these BELOW the town centre, on the reasoning
+## that nothing else is down there -- true of the map and false of the screen: at
+## the default zoom the bottom half is HUD, and all three landed behind the
+## selection panel (screenshotted). Iso sends (dx - dy) to screen x and (dx + dy)
+## to screen y, and DOWN is where the panel is.
 ##
 ## They overlap each other on purpose. The quarry sprite is 6.94 m across --
 ## nearly 3.5 tiles, 222 px -- so three nodes spaced far enough apart not to
 ## touch would be spread across half the map. Overlapped they read as one rock
 ## outcrop, which is what a quarry looks like and what 0 A.D. does with the same
 ## art; the gold cluster already overlaps the same way at a smaller scale.
-const DEBUG_STONE := [Vector2i(-6, 4), Vector2i(-5, 6), Vector2i(-4, 8)]
+const DEBUG_STONE := [Vector2i(-8, 4), Vector2i(-7, 6), Vector2i(-6, 8)]
 
 ## Livestock, added alongside the stone and for the same reason: `vis.sheep` and
 ## `vis.cattle` were staged and referenced by nothing. Both are gathered where
@@ -87,20 +114,23 @@ const DEBUG_STONE := [Vector2i(-6, 4), Vector2i(-5, 6), Vector2i(-4, 8)]
 ## both, and the wolf and bear it names alongside them are deliberately absent:
 ## both fight back, which is PLAN.md 4.13's business.
 ##
-## ABOVE the town centre and to the right, stepping dx alone to stagger them --
-## the same idiom DEBUG_FOOD uses, and for the same reason. What took two attempts
-## is WHERE the row starts. Beginning at dx = -3 put the first sheep at screen
-## (608, 52), underneath the age header, which is 180x86 at the top centre and
-## hides whatever is behind it; folding that one back to dx = 1 then dropped it
-## among the five starting villagers instead. Starting the whole row at dx = 1
-## clears the header on the left and the villagers below. Both found by
-## screenshot -- the grid says nothing about either.
-const DEBUG_SHEEP := [Vector2i(1, -4), Vector2i(3, -4), Vector2i(5, -4)]
-## One cow, further up and right, clear of the flock and of the resource panel.
-## Kept apart from the sheep on purpose: the two are a size comparison as much as
-## two food nodes -- a zebu is 2.55 m to a sheep's 1.09 -- and they only read as
-## one if neither is inside the other's sprite.
-const DEBUG_CATTLE := [Vector2i(4, -6)]
+## ABOVE the town centre, seven tiles clear of its top wall, stepping dx to
+## stagger them. The pasture is what the up-screen pocket is for now that the
+## berries have gone right: animals are small sprites, so they fit where a 5 m
+## bush or a 7 m rock would be clipped by the top edge.
+##
+## Where the row STARTS took three attempts, all found by screenshot and none
+## visible in the grid. Beginning at dx = -3 put the first sheep under the age
+## header (180x86, top centre, and it hides whatever is behind it). Folding that
+## one back dropped it among the five starting villagers instead. Pushing the whole
+## flock further out for clearance then walked it under the resource panel, because
+## up-screen in iso is up-RIGHT.
+const DEBUG_SHEEP := [Vector2i(2, -7), Vector2i(4, -7), Vector2i(6, -7)]
+## One cow, at the left end of the same band. Kept a step apart from the sheep on
+## purpose: the two are a size comparison as much as two food nodes -- a zebu is
+## 2.55 m to a sheep's 1.09 -- and they only read as one if neither is inside the
+## other's sprite.
+const DEBUG_CATTLE := [Vector2i(0, -7)]
 
 ## What a SECOND player gets on the debug map (MatchConfig.debug_skirmish): two
 ## soldiers and nothing else -- no town centre, no villagers, no stock. Offsets

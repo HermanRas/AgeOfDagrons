@@ -146,8 +146,133 @@ func test_a_villager_farms_a_field_and_banks_the_food() -> void:
 			break
 	assert_true(int(w.player_for(1).stock.get(&"food", 0)) > before,
 			"a load of food reached the stockpile")
-	assert_true(field.gather_amount < GameDataRegistry.building(&"building.field").gather_amount,
-			"and it came out of the crop")
+	assert_eq(field.gather_amount, BuildingDef.INFINITE_CROP,
+			"and it did NOT come out of a crop -- a field never depletes")
+
+
+# ── a field never runs out (project owner, 2026-08-17) ──────────────────────
+
+func test_a_field_is_inexhaustible() -> void:
+	# It used to carry 300 food and be removed when harvested out. Farm it for a
+	# thousand ticks and it is still standing with the same crop it started with.
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 12))
+	w.queue_command(GatherCommand.new(1, [v.id], field.id))
+
+	for i in range(1000):
+		w.step()
+
+	assert_not_null(w.get_entity(field.id), "still there after a thousand ticks")
+	assert_false(field.is_spent())
+	assert_eq(field.gather_amount, BuildingDef.INFINITE_CROP)
+	assert_true(int(w.player_for(1).stock.get(&"food", 0)) > 5000,
+			"and it has been feeding the town the whole time")
+
+
+func test_an_infinite_crop_hands_back_whatever_is_asked_for() -> void:
+	var b := SimBuilding.new()
+	b.gather_kind = &"food"
+	b.gather_amount = BuildingDef.INFINITE_CROP
+	assert_eq(b.gather(4), 4)
+	assert_eq(b.gather(400), 400, "and does not run down")
+	assert_eq(b.gather_amount, BuildingDef.INFINITE_CROP)
+	assert_false(b.is_spent())
+
+
+# ── five to a plot, four plots to a mill ────────────────────────────────────
+
+func test_five_villagers_can_work_one_field() -> void:
+	# The owner's cap. Crossed with max_per_host = 4, one mill absorbs 20 farmers.
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	assert_eq(bd.gather_slots, 5)
+	assert_eq(bd.max_per_host, 4)
+
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var farmers: Array[int] = []
+	for i in range(6):
+		farmers.append(w.spawn_unit(&"unit.villager", 1, Vector2i(20, 12 + i)).id)
+	w.queue_command(GatherCommand.new(1, farmers, field.id))
+
+	# Long enough for all six to walk over and settle into GATHER or RETURN.
+	for i in range(400):
+		w.step()
+
+	var working := 0
+	for id in farmers:
+		var u: SimUnit = w.get_entity(id)
+		if u.task == SimUnit.Task.GATHER or u.task == SimUnit.Task.RETURN:
+			working += 1
+	assert_true(working >= 5, "at least the five slot-holders are on the job")
+
+
+# ── the age-scaled yield ────────────────────────────────────────────────────
+
+func test_the_yield_comes_from_the_field_and_rises_with_the_age() -> void:
+	# The owner's numbers, per villager per tick: none at age 1, then 1, 2.5, 4.
+	# Authored per 100 ticks so it shares a unit with UnitDef.gather_rate.
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	assert_eq(bd.gather_yield_for_age(1), 0, "there are no fields in age 1")
+	assert_eq(bd.gather_yield_for_age(2), 100)
+	assert_eq(bd.gather_yield_for_age(3), 250)
+	assert_eq(bd.gather_yield_for_age(4), 400)
+	assert_eq(bd.gather_yield_for_age(9), 400, "a fifth age would inherit the fourth")
+
+
+func test_a_field_out_yields_a_berry_bush_by_the_declared_ratio() -> void:
+	# The comparison worth having in front of anyone balancing this: the villager's
+	# own food rate is 25 per 100 ticks, so an age-2 plot is 4x a bush per farmer
+	# and an age-4 plot is 16x.
+	var villager: UnitDef = GameDataRegistry.unit(&"unit.villager")
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	assert_eq(int(villager.gather_rate.get(&"food", 0)), 25)
+	assert_eq(bd.gather_yield_for_age(2), 4 * 25)
+	assert_eq(bd.gather_yield_for_age(4), 16 * 25)
+
+
+func test_a_higher_age_actually_banks_food_faster() -> void:
+	# Through the whole loop rather than off the def: two identical worlds, one at
+	# age 2 and one at age 4, farming for the same number of ticks.
+	var banked: Array[int] = []
+	for age in [2, 4]:
+		var world := SimWorld.new()
+		var cfg := MatchConfig.new()
+		cfg.player_ids = [1]
+		cfg.map_size = Vector2i(48, 48)
+		world.setup(cfg)
+		world.map.fill_terrain(SimMap.Terrain.GRASS)
+		world.player_for(1).age = age
+		var m: SimBuilding = world.spawn_building(&"building.mill", 1, Vector2i(10, 10),
+				SimBuilding.Phase.COMPLETE, true)
+		var f: SimBuilding = world.spawn_building(&"building.field", 1,
+				m.origin_tile() - Vector2i(6, 0), SimBuilding.Phase.COMPLETE, true)
+		# Outside the mill's own footprint, like every other fixture here: a unit
+		# standing inside a claimed 5x4 has nowhere to path from.
+		var v: SimUnit = world.spawn_unit(&"unit.villager", 1, Vector2i(20, 12))
+		world.queue_command(GatherCommand.new(1, [v.id], f.id))
+		for i in range(900):
+			world.step()
+		banked.append(int(world.player_for(1).stock.get(&"food", 0)))
+
+	assert_true(banked[1] > banked[0],
+			"age 4 banked %d against age 2's %d" % [banked[1], banked[0]])
+
+
+func test_the_take_schedule_is_exact_above_one_unit_a_tick() -> void:
+	# The old "one unit every ceil(100/rate) ticks" floors at a one-tick interval,
+	# so 250 and 400 and 10000 all collapsed to 1 a tick. As a fraction in lowest
+	# terms 250 is 5 units every 2 ticks -- exactly 2.5 -- with no float anywhere.
+	assert_eq(GatherSystem.take_schedule(25), Vector2i(1, 4), "unchanged: the villager")
+	assert_eq(GatherSystem.take_schedule(100), Vector2i(1, 1))
+	assert_eq(GatherSystem.take_schedule(250), Vector2i(5, 2))
+	assert_eq(GatherSystem.take_schedule(400), Vector2i(4, 1))
+	assert_eq(GatherSystem.take_schedule(0), Vector2i.ZERO, "nothing yields nothing")
+	# Strictly more accurate where the two forms differ: 40 per 100 ticks is 0.4 a
+	# tick, which the interval form rounded to one every 3 ticks, i.e. 0.33.
+	assert_eq(GatherSystem.take_schedule(40), Vector2i(2, 5))
 
 
 func test_the_villager_stands_at_the_edge_of_a_field_not_its_centre() -> void:
@@ -171,7 +296,11 @@ func test_the_villager_stands_at_the_edge_of_a_field_not_its_centre() -> void:
 			"and did it from outside the crop")
 
 
-func test_a_spent_field_is_removed_and_gives_its_ground_back() -> void:
+## Unreachable for a FIELD now that its crop is infinite -- the crop is set to a
+## finite 2 by hand here. Kept because the machinery is still live and still the
+## right behaviour for whatever wants a one-harvest crop next: a spent gatherable
+## is despawned rather than left as rubble, and its ground comes straight back.
+func test_a_spent_gatherable_is_removed_and_gives_its_ground_back() -> void:
 	var mill := _mill()
 	var field := w.spawn_building(&"building.field", 1, _beside(mill),
 			SimBuilding.Phase.COMPLETE, true)

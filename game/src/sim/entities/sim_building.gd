@@ -57,17 +57,26 @@ var gather_slots: int = 0
 ## Take up to `requested` units, returning what was actually there. Same
 ## contract as SimResourceNode.gather(): credit the RETURN VALUE, never the
 ## request, or a nearly-spent field feeds a town forever.
+##
+## An INFINITE crop hands back the whole request and stays where it is, which is
+## what a field does as of 2026-08-17. The finite path is still live and still
+## tested: nothing else in the roster uses it today, and it is what a berry patch
+## or a one-harvest crop would want tomorrow.
 func gather(requested: int) -> int:
+	if gather_amount == BuildingDef.INFINITE_CROP:
+		return maxi(0, requested)
 	var taken := clampi(requested, 0, gather_amount)
 	gather_amount -= taken
 	return taken
 
 
-## True once there is nothing left to harvest. Only ever true for a field --
-## a building that was never gatherable has `gather_kind` empty and is not
-## something GatherSystem looks at.
+## True once there is nothing left to harvest -- which an infinite crop never is.
+## Only ever true for a field: a building that was never gatherable has
+## `gather_kind` empty and is not something GatherSystem looks at.
 func is_spent() -> bool:
-	return gather_kind != &"" and gather_amount <= 0
+	if gather_kind == &"" or gather_amount == BuildingDef.INFINITE_CROP:
+		return false
+	return gather_amount <= 0
 
 var provides_pop: int = 0
 var garrison_cap: int = 0

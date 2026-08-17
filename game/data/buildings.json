@@ -122,7 +122,35 @@
     "split has to be maintained as a judgement per building and still caps out if",
     "one side grows, where paging is arithmetic and holds for any roster size.",
     "The ordering that replaces it is (age unlocked, then name), so the buildings",
-    "a player has had longest keep their position -- see SelectionActions."
+    "a player has had longest keep their position -- see SelectionActions.",
+    "",
+    "THE FIELD, in full (project owner, 2026-08-17). It is the one building that is",
+    "also a resource node, and all four of its numbers are rules rather than stats:",
+    "",
+    "  amount -1     it NEVER DEPLETES. This was 300 and the field was removed when",
+    "                harvested out; the owner reversed that -- the balancing lever",
+    "                is the yield, and a plot that had to be rebuilt every few",
+    "                minutes made a mill's four fields into upkeep, not an economy.",
+    "                -1 is BuildingDef.INFINITE_CROP; the finite path still works",
+    "                and is still tested, for whatever wants it next.",
+    "  slots 5       five villagers to a plot, and four plots to a mill",
+    "                (max_per_host), so one mill absorbs twenty farmers at most.",
+    "  age_required 2  there are no fields in age 1 at all.",
+    "  yield_per_age  food per 100 ticks PER VILLAGER, by age: 0, 100, 250, 400.",
+    "                That reads as 0 / 1 / 2.5 / 4 a tick, the owner's numbers, and",
+    "                the +1.5 a step is theirs too. STILL TO BE BALANCED, and worth",
+    "                one comparison before it is: a villager on berries gathers 25",
+    "                per 100 ticks, so an age-2 plot is 4x a berry bush per farmer",
+    "                and an age-4 plot is 16x. Fields are meant to be the late",
+    "                economy, but that is a big number and it is deliberate rather",
+    "                than measured.",
+    "",
+    "The yield is the FIELD's and not the farmer's, which is why it lives here and",
+    "not in units.json: advancing an age must not be multiplied by which unit",
+    "happens to be standing in the crop. Keyed on age as a STAND-IN for the real",
+    "trigger -- the owner's rule is 'as research is completed at the mill' , which is",
+    "a mill tech (techs.json exists, nothing researches yet, PLAN.md 9.3). When that",
+    "lands the numbers stay here and the lookup changes."
   ],
 
   "building.town_center": {
@@ -379,7 +407,12 @@
     "requires_adjacent": ["building.mill"],
     "max_per_host": 4,
 
-    "gather": { "kind": "food", "amount": 300, "slots": 1 }
+    "gather": {
+      "kind": "food",
+      "amount": -1,
+      "slots": 5,
+      "yield_per_age": [0, 100, 250, 400]
+    }
   },
 
   "building.watch_tower": {

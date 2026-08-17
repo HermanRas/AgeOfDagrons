@@ -49,16 +49,47 @@ var requires_adjacent: Array[StringName] = []
 ## no limit. Four fields to a mill, per the roster.
 var max_per_host: int = 0
 
+## `amount: -1` in the JSON: this building's crop never runs out. A FIELD IS
+## INEXHAUSTIBLE (project owner, 2026-08-17), which reverses the call recorded
+## here before -- the balancing lever is the per-age YIELD below, not a total, and
+## a field that had to be rebuilt every few minutes made a mill's four plots into
+## upkeep rather than an economy.
+##
+## A sentinel rather than a separate `infinite` flag because `gather_amount` is
+## also the RUNTIME crop on SimBuilding, rides the snapshot, and is in
+## `state_hash()`. One field with three states (positive, spent at 0, infinite at
+## -1) keeps all of that in one place; a parallel bool would have to be threaded
+## through every one of them and could contradict the number beside it.
+const INFINITE_CROP := -1
+
 ## What a villager can harvest from this building, for the buildings that are
 ## really resource nodes wearing a footprint -- a field. `&""` for the
 ## overwhelming majority, which are not gatherable at all.
 var gather_kind: StringName = &""
-## Total yield before the building is spent and removed. A field is not
-## inexhaustible: it costs wood, and a farm that fed a town forever would make
-## every other food source pointless.
+## Total yield before the building is spent and removed, or INFINITE_CROP.
 var gather_amount: int = 0
 ## How many villagers can work it at once, mirroring ResourceDef.gather_slots.
+## Five for a field, per the owner: it is 36 tiles of ground and the cap is what
+## decides how much of a town's labour one plot can absorb.
 var gather_slots: int = 1
+
+## FIELDS ONLY: food per 100 ticks per villager, indexed by age 1-4 (so entry 0 is
+## age 1). Empty for everything else, which falls back to the gatherer's own
+## `UnitDef.gather_rate` the way a tree does.
+##
+## The yield is the FIELD's, not the villager's, and that is the whole reason this
+## exists: a farm's output is a property of the farm and of how far the owner has
+## researched, where a tree gives up wood at whatever rate the axe swings. Per 100
+## ticks to match `UnitDef.gather_rate`'s unit exactly, so GatherSystem can put
+## both through the same schedule and there is one unit of "gather rate" in the
+## project rather than two.
+##
+## Keyed on AGE as an approximation of the real trigger. The owner's rule is "as
+## research is completed at the mill the field yield increases": that is a mill
+## TECH (techs.json exists, nothing researches yet), and age is what stands in for
+## it until 9.3. When techs land this becomes a lookup on what the player has
+## researched and the numbers move here rather than into new code.
+var gather_yield_per_age: Array[int] = []
 
 
 static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
@@ -90,6 +121,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.gather_kind = StringName(g.get("kind", ""))
 	b.gather_amount = int(g.get("amount", 0))
 	b.gather_slots = int(g.get("slots", 1))
+	b.gather_yield_per_age = GameDefs.int_list(g.get("yield_per_age", []))
 	return b
 
 
@@ -98,9 +130,24 @@ func accepts_drop_off(kind: StringName) -> bool:
 
 
 ## Whether a villager can harvest this building at all -- true for a field and
-## nothing else today.
+## nothing else today. `!= 0` rather than `> 0`, so INFINITE_CROP counts: a spent
+## crop is exactly 0 and nothing else.
 func is_gatherable() -> bool:
-	return gather_kind != &"" and gather_amount > 0
+	return gather_kind != &"" and gather_amount != 0
+
+
+## Food per 100 ticks per villager working this building at `age`, or 0 if it
+## yields nothing there. Clamped rather than out-of-range: an age past the end of
+## the list gets the last entry, which is what a fifth age should inherit, and age
+## 1 with no list at all gets 0.
+##
+## 0 is a real answer and not a fallback -- age 1 declares 0 because a field cannot
+## be built until age 2, and a villager sent to farm at a yield of 0 stops rather
+## than standing in a crop forever.
+func gather_yield_for_age(age: int) -> int:
+	if gather_yield_per_age.is_empty():
+		return 0
+	return gather_yield_per_age[clampi(age - 1, 0, gather_yield_per_age.size() - 1)]
 
 
 ## The visual for a given SimBuilding.Phase, by its integer value. Taken as an

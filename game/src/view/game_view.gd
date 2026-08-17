@@ -676,7 +676,33 @@ func _names(raw: Variant) -> Array[StringName]:
 func _visual_id_of(entry: Dictionary) -> StringName:
 	var def_id := StringName(entry.get("def_id", ""))
 	# `phase` is present only for buildings (SimBuilding.to_snapshot).
-	return GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)))
+	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)))
+	# Interchangeable looks (visuals.json `variants`) -- four field plots today.
+	# Unconditional and free for everything else: an id with no variants returns
+	# itself, so this needs no list of which visuals have them.
+	return GameDataRegistry.variant_of(vis, _variant_seed(entry))
+
+
+## Which of an entity's interchangeable looks it gets, as a seed for
+## `GameDataRegistry.variant_of()`. Derived from the TILE it stands on, so:
+##
+##   - it is stable for the entity's whole life, since a building never moves --
+##     a `randi()` at spawn would re-roll every time a pooled view was recycled,
+##     and a field would change crop by walking the camera away and back;
+##   - every client agrees without the choice being sent, because the tile is a
+##     fact they all have already. Nothing new rides the snapshot and nothing new
+##     enters `state_hash()`;
+##   - two neighbouring plots differ, which is the whole point.
+##
+## The mix is written out in integers rather than calling `hash()`: `hash()` is an
+## engine implementation detail, and this has to give the same answer on a phone
+## and on a desktop in the same match. The two constants are the usual large odd
+## primes from spatial hashing; nothing about them is special beyond being coprime
+## with small variant counts.
+func _variant_seed(entry: Dictionary) -> int:
+	var p: Dictionary = entry.get("pos", {})
+	var tile := Vector2i(int(p.get("x", 0)), int(p.get("y", 0))) / SimWorld.SUBTILE
+	return absi(tile.x * 73856093 ^ tile.y * 19349663)
 
 
 func _process(delta: float) -> void:

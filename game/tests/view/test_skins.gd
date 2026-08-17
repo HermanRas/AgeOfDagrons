@@ -126,9 +126,25 @@ func test_every_building_with_a_baked_age_variant_declares_the_age_map() -> void
 	# The failure this catches is a building wired to its age-1 bake and left
 	# there: it renders correctly, never reports anything, and simply never
 	# modernises as its owner advances -- which is the whole of PLAN.md 2.7.
+	#
+	# THE FIELD IS EXEMPT, and named rather than inferred so a second exemption has
+	# to be a deliberate edit. Its four bakes are still FILED as vis.field_age2/3/4
+	# and vis.farm, but the project owner's reading of them (2026-08-17) is that
+	# they are four crops rather than four ages -- a plot does not re-sow itself
+	# when Rome arrives. It carries `variants` instead, and the two are mutually
+	# exclusive by _validate_variants().
+	const NOT_AGE_SKINNED := [&"building.field"]
+
 	var aged := _entries_with("ages")
+	var varied := _entries_with("variants")
 	for building_id in reg.building_ids():
 		var bd: BuildingDef = reg.building(building_id)
+		if NOT_AGE_SKINNED.has(building_id):
+			assert_true(varied.has(String(bd.visual)),
+					"%s's visual %s offers interchangeable variants" % [building_id, bd.visual])
+			assert_false(aged.has(String(bd.visual)),
+					"%s's visual %s is not age-skinned as well" % [building_id, bd.visual])
+			continue
 		assert_true(aged.has(String(bd.visual)),
 				"%s's visual %s carries an age map" % [building_id, bd.visual])
 

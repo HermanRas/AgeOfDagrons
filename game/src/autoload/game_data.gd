@@ -136,6 +136,41 @@ func atlas_for(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEn
 	return entry
 
 
+## One of `visual_id`'s interchangeable looks, chosen by `seed`, or `visual_id`
+## itself when it declares no `variants` (visuals.json).
+##
+## THE THIRD AXIS, and the only one that is not a skin. `age` and `colour` change
+## what a standing entity looks like; a variant is decided once, when the thing
+## comes into existence, and never changes again. The project owner's four field
+## plots are the first: four crops, not four ages.
+##
+## Takes a SEED rather than an index, and callers pass something derived from the
+## entity -- `GameView` uses its tile. Two consequences, both wanted: the same plot
+## always draws the same crop (so it does not shuffle as it leaves and re-enters
+## the view, which a per-spawn `randi()` would do every time a pooled view was
+## recycled), and every client picks the same one without the choice ever being
+## sent, because it is a pure function of a fact they all already have.
+##
+## `posmod`, not `%`: a negative seed with `%` would index backwards off the front
+## of the list. The seed's own mixing is the caller's business.
+func variant_of(visual_id: StringName, seed: int) -> StringName:
+	if not _loaded:
+		load_all()
+	var list: Variant = _visuals.get(visual_id, {}).get("variants")
+	if not list is Array or (list as Array).is_empty():
+		return visual_id
+	return StringName((list as Array)[posmod(seed, (list as Array).size())])
+
+
+## How many looks `visual_id` has. 1 for everything that declares no variants,
+## so a caller can ask without special-casing.
+func variant_count(visual_id: StringName) -> int:
+	if not _loaded:
+		load_all()
+	var list: Variant = _visuals.get(visual_id, {}).get("variants")
+	return (list as Array).size() if list is Array and not (list as Array).is_empty() else 1
+
+
 ## True when this ID has real baked art mounted. For the debug overlay and for
 ## tests -- gameplay code has no business branching on it.
 func has_atlas(visual_id: StringName, age: int = 0, colour: int = -1) -> bool:
@@ -605,6 +640,8 @@ func _validate_skins() -> void:
 			load_warnings.append("visuals.json entry '%s' is not an object" % visual_id)
 			continue
 
+		_validate_variants(visual_id, decl as Dictionary)
+
 		var ages: Variant = (decl as Dictionary).get("ages")
 		if ages == null:
 			continue
@@ -623,6 +660,35 @@ func _validate_skins() -> void:
 			if n < 1 or n > last_age:
 				load_warnings.append("visual '%s' names an age '%s' outside 1-%d"
 						% [visual_id, key, last_age])
+
+
+## `variants` (visuals.json) is a list of other visual IDS that are interchangeable
+## looks for the same thing -- four field plots, not four ages.
+##
+## Three things are worth failing over. A variant naming an UNDECLARED id would
+## resolve to the magenta unknown, which is loud but arrives at draw time rather
+## than at load. A variant naming ITSELF-plus-nothing is a list that says nothing.
+## And carrying both `ages` and `variants` is a contradiction: an age skin changes
+## under a standing building, a variant is chosen once when it is built, and a
+## thing cannot be both without a rule for which wins.
+func _validate_variants(visual_id: StringName, decl: Dictionary) -> void:
+	var variants: Variant = decl.get("variants")
+	if variants == null:
+		return
+	if not variants is Array:
+		load_warnings.append("visual '%s' has a 'variants' that is not a list" % visual_id)
+		return
+
+	var list: Array = variants
+	if list.size() < 2:
+		load_warnings.append("visual '%s' declares %d variant(s) -- a list of one is not a choice"
+				% [visual_id, list.size()])
+	if decl.has("ages"):
+		load_warnings.append(("visual '%s' declares both 'ages' and 'variants' -- a skin and"
+				+ " a variant are different axes and cannot both apply") % visual_id)
+	for v in list:
+		if not _visuals.has(StringName(v)):
+			load_warnings.append("visual '%s' names undeclared variant '%s'" % [visual_id, v])
 
 
 func _require_visual(visual_id: StringName, who: String) -> void:

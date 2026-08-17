@@ -94,21 +94,25 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 		return
 
 	var def := w.unit_def(u.def_id)
-	var rate := int(def.gather_rate.get(kind, 0)) if def != null else 0
-	var per_unit := _ticks_per_unit(rate)
-	if per_unit <= 0:
-		u.stop()          # this unit cannot gather this kind at all
+	var sched := take_schedule(harvest_rate(w, node, u, kind))
+	if sched.y <= 0:
+		u.stop()          # nothing here yields to this unit at all
 		return
 
 	if u.gather_cooldown > 0:
 		u.gather_cooldown -= 1
 		return
 
-	u.carry_kind = kind
-	u.carry_amount += harvest_take(node, 1)
-	u.gather_cooldown = per_unit - 1
-
 	var cap := int(def.carry_cap.get(kind, 0)) if def != null else 0
+	u.carry_kind = kind
+	# Never past the carry cap. With one unit per take this always landed exactly
+	# on it; a field at age 4 takes four at a time, and a villager walking home
+	# with 13 of a 10 cap would be carrying a load it has no room for. The short
+	# last take costs a full interval, which is the honest reading -- you cannot
+	# fill a basket beyond its size however fast the crop comes in.
+	u.carry_amount += harvest_take(node, mini(sched.x, maxi(0, cap - u.carry_amount)))
+	u.gather_cooldown = sched.y - 1
+
 	if u.carry_amount >= cap or not is_harvestable(node, u.owner_id):
 		_start_return(w, u)
 
@@ -268,12 +272,62 @@ static func harvest_rect(e: SimEntity) -> Rect2i:
 	return Rect2i(e.tile(), Vector2i.ONE)
 
 
-## Whole ticks to gather one unit at `rate` per 100 ticks. Ceiling division kept
-## entirely in integers -- rate 25 gives (100 + 24) / 25 = 4.
-func _ticks_per_unit(rate: int) -> int:
+## What rate applies to `u` working `e`, per 100 ticks. TWO DIFFERENT SOURCES, and
+## which one is the point:
+##
+##   a resource node -- the UNIT's `gather_rate` for the kind. How fast wood comes
+##     out of a tree is a property of the axe, and every unit could differ.
+##   a FIELD -- the FIELD's own `gather_yield_per_age`. A farm's output belongs to
+##     the farm and to how far its owner has researched (project owner,
+##     2026-08-17: 1 food a tick per villager at age 2, 2.5 at age 3, 4 at age 4).
+##     The villager's own food rate is deliberately NOT consulted, or advancing an
+##     age would be multiplied by whoever happened to be standing in the crop.
+##
+## Read off the DEF rather than copied onto SimBuilding at spawn, unlike
+## `gather_amount` beside it: the yield is immutable per building type, so a copy
+## would be a second place for the same number to live, and this already reaches
+## for `w.unit_def()` in the same breath. The crop is copied because it is the half
+## that changes.
+static func harvest_rate(w: SimWorld, e: SimEntity, u: SimUnit, kind: StringName) -> int:
+	if e is SimBuilding:
+		var bd: BuildingDef = w.building_def((e as SimBuilding).def_id)
+		if bd == null:
+			return 0
+		var owner := w.player_for(e.owner_id)
+		return bd.gather_yield_for_age(owner.age if owner != null else 1)
+
+	var def := w.unit_def(u.def_id)
+	return int(def.gather_rate.get(kind, 0)) if def != null else 0
+
+
+## How `rate` per 100 ticks is actually paid out: (units per take, ticks between
+## takes), which is the fraction rate/100 in LOWEST TERMS.
+##
+## The old form was "one unit every ceil(100/rate) ticks", and it cannot express a
+## rate above 100: the interval floors at one tick, so 250 and 400 and 10000 all
+## collapse to one unit a tick. A field at age 3 yields 2.5 a tick, which is 5 units
+## every 2 ticks -- exactly representable as a fraction and not at all as an
+## interval. Reducing by the gcd is what makes the average exact in both directions
+## with no float and no accumulator to drift between clients.
+##
+## Every rate in the shipped data reduces to the same schedule the interval form
+## gave, so this changed no existing timing: the villager's 25 is 25/100 = 1/4, one
+## unit every four ticks. It is also strictly more accurate where they differ -- an
+## authored 40 is 2 units per 5 ticks here against ceil(100/40) = one per 3 before,
+## which was 0.33 a tick for a number that says 0.4.
+static func take_schedule(rate: int) -> Vector2i:
 	if rate <= 0:
-		return 0
-	return (100 + rate - 1) / rate
+		return Vector2i.ZERO
+	var g := _gcd(rate, 100)
+	return Vector2i(rate / g, 100 / g)
+
+
+static func _gcd(a: int, b: int) -> int:
+	while b != 0:
+		var t := b
+		b = a % b
+		a = t
+	return maxi(1, absi(a))
 
 
 ## Whether `u` is one of the (at most) `node.gather_slots` units currently

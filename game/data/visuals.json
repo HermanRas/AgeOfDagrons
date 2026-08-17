@@ -102,7 +102,41 @@
     "",
     "A building that re-skins across ages gets ONE placeholder, sized to the MAX",
     "of its skins per axis, for the same reason its footprint is (buildings.json):",
-    "it re-skins in place and cannot change size underneath the player."
+    "it re-skins in place and cannot change size underneath the player.",
+    "",
+    "VARIANTS (2026-08-17), a THIRD optional axis and the only one that is not a",
+    "skin:",
+    "",
+    "  \"variants\": [\"vis.field_1\", \"vis.field_2\", ...]",
+    "",
+    "A list of other visual IDS, not paths, that are interchangeable looks for the",
+    "same thing. GameDataRegistry.variant_of(id, seed) picks one; every entry named",
+    "in the list is an ordinary declaration in its own right, so nothing downstream",
+    "-- atlas_for, the staleness scan, the portraits -- learns a new concept.",
+    "",
+    "Why IDS and not a list of paths on one entry: a path list would need a fourth",
+    "argument threaded through atlas_for, its cache key, and EntityView, to express",
+    "something the id namespace already expresses for free.",
+    "",
+    "The distinction from `ages` is the point. An age skin is the SAME building",
+    "looking different because the player advanced -- it changes under a standing",
+    "building, and which bake serves which age is a judgement. A variant is a",
+    "different-but-equal look chosen once, when the thing is built, and never",
+    "revisited. Fields are the first of these: the project owner's four plots are",
+    "four crops, not four ages, and a plot does not re-sow itself when Rome",
+    "arrives. `ages` and `variants` on one entry would therefore be a contradiction",
+    "and _validate_skins() rejects it.",
+    "",
+    "The four field FILES are still named vis.field_age2/3/4 and vis.farm, because",
+    "that is what the art side baked before we knew they were variants. The ids do",
+    "not follow them and must not be renamed to match: the whole purpose of this",
+    "file is that ids outlive filenames. Renaming the staged files would also be",
+    "undone by the next run of the art agent's staging script, which is theirs.",
+    "",
+    "vis.field's own placeholder was re-derived at the same time. It read 3.88 m",
+    "against art that projects 534 px, i.e. 16.7 -- stale in exactly the way the",
+    "vis.villager lesson above describes, and it had been wrong since the plots were",
+    "last re-pointed."
   ],
 
   "terrain.grass": {
@@ -337,16 +371,51 @@
 
   "vis.field": {
     "atlas": "res://assets/atlases/vis.field_age2.atlas.json",
-    "ages": {
-      "1": "res://assets/atlases/vis.field_age2.atlas.json",
-      "2": "res://assets/atlases/vis.field_age2.atlas.json",
-      "3": "res://assets/atlases/vis.field_age3.atlas.json",
-      "4": "res://assets/atlases/vis.field_age4.atlas.json"
-    },
+    "variants": ["vis.field_1", "vis.field_2", "vis.field_3", "vis.field_4"],
     "placeholder": {
       "shape": "box",
-      "footprint_m": [3.88, 3.88],
-      "height_m": 1.59,
+      "footprint_m": [16.69, 16.69],
+      "height_m": 1.30,
+      "color": "#8a9a4c"
+    }
+  },
+
+  "vis.field_1": {
+    "atlas": "res://assets/atlases/vis.field_age2.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.62, 16.62],
+      "height_m": 1.38,
+      "color": "#8a9a4c"
+    }
+  },
+
+  "vis.field_2": {
+    "atlas": "res://assets/atlases/vis.field_age3.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.69, 16.69],
+      "height_m": 1.30,
+      "color": "#8a9a4c"
+    }
+  },
+
+  "vis.field_3": {
+    "atlas": "res://assets/atlases/vis.field_age4.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.69, 16.69],
+      "height_m": 1.20,
+      "color": "#8a9a4c"
+    }
+  },
+
+  "vis.field_4": {
+    "atlas": "res://assets/atlases/vis.farm.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.69, 16.69],
+      "height_m": 1.20,
       "color": "#8a9a4c"
     }
   },
