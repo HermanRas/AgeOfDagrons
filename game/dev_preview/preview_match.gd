@@ -343,16 +343,57 @@ func _place_a_house() -> void:
 		push_warning("preview_match: no town centre to build beside")
 		return
 	# `tile` is a footprint's CENTRE; the ghost and the command both want its
-	# top-left. Off the town centre's right-hand corner, which is clear of the
-	# resource clusters, a few tiles' walk from the villagers ringing it, and --
-	# the reason for this offset rather than a nearer one -- lands on screen where
-	# neither the selection panel nor the minimap covers it.
+	# top-left. Off the town centre's right-hand corner: a few tiles' walk from the
+	# villagers ringing it, and on screen where neither the selection panel nor the
+	# minimap covers it.
 	var footprint: Vector2i = tc.get("footprint", Vector2i.ONE)
-	var origin: Vector2i = (tc["tile"] as Vector2i) - footprint / 2 \
-			+ Vector2i(footprint.x + 3, 6)
+	var tc_origin: Vector2i = (tc["tile"] as Vector2i) - footprint / 2
+	# Two tiles off the right wall and level with the middle of it: clear of the
+	# gold, and clear of the skirmish squad's own tiles, which units do not block
+	# but which would put two enemy soldiers inside the shot's house.
+	var origin := _free_house_spot(tc_origin + Vector2i(footprint.x + 1, 4))
+	if origin.x < 0:
+		push_warning("preview_match: nowhere to put a house near the town centre")
+		return
 	_game._enter_placement(&"building.house")
 	_game._on_placement_released(
 			view.get_global_transform_with_canvas() * Iso.tile_to_world(origin))
+
+
+## `preferred` if a house fits there, otherwise the nearest spot outward that one
+## does. Vector2i(-1, -1) if there is nowhere at all.
+##
+## THE PREVIEW USED TO TAKE A FIXED TILE, and the project owner found what that
+## costs: the gold cluster moved onto that tile, the placement was refused, and an
+## interactive run sat in build mode waiting for a human to finish the step. A
+## hand-picked tile is a promise about the whole map, and this file cannot keep one
+## -- the map is content and changes for its own reasons.
+##
+## Searched in the same widening-ring order MapGen uses for villagers, so the
+## answer is deterministic and the fallback lands as near the preferred spot as it
+## can. The warning is deliberate: drifting off the chosen tile means the shot is
+## framed differently, and that should be visible in the log rather than a surprise
+## in the picture.
+func _free_house_spot(preferred: Vector2i) -> Vector2i:
+	var world: SimWorld = Net.host().world
+	var bd: BuildingDef = GameDataRegistry.building(&"building.house")
+	var size := bd.footprint if bd != null else Vector2i.ONE
+
+	if world.map.can_place_building(SimMap.footprint_rect(preferred, size)):
+		return preferred
+
+	for ring in range(1, 12):
+		for dy in range(-ring, ring + 1):
+			for dx in range(-ring, ring + 1):
+				if maxi(absi(dx), absi(dy)) != ring:
+					continue          # only the new ring; inner ones were searched
+				var candidate := preferred + Vector2i(dx, dy)
+				if not world.map.can_place_building(SimMap.footprint_rect(candidate, size)):
+					continue
+				push_warning("preview_match: %s is taken, building at %s instead"
+						% [preferred, candidate])
+				return candidate
+	return Vector2i(-1, -1)
 
 
 ## True once some house has real construction progress on it -- phase leaves
