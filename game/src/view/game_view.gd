@@ -78,9 +78,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 	# Gathered up front so a unit's adjacency check below (any tile order)
 	# never depends on whether its own entry happened to arrive before or
-	# after the building's in this snapshot. `footprint` is unique to
-	# SimBuilding.to_snapshot() -- units and resource nodes never carry it --
-	# so this needs no registry lookup to tell a building entry from any other.
+	# after the building's in this snapshot.
+	#
+	# `phase` is what tells a BUILDING from anything else, not `footprint`. It used
+	# to be footprint, which was true for exactly as long as buildings were the only
+	# multi-tile thing -- resource nodes carry one too since 2026-08-17, and the
+	# sort lift must stay buildings-only or a unit gets lifted in front of a rock.
 	var building_rects: Array[Rect2i] = []
 	# Occluders are a SUPERSET of those: buildings plus resource nodes, each with
 	# how wide its art is (`Occlusion.column_pad_for`). The sort lift above must
@@ -90,20 +93,25 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# the project owner's report of 2026-08-17.
 	var occluders: Array[Dictionary] = []
 	for entry in updated:
+		if not entry.has("footprint"):
+			continue                  # a unit; it occludes nothing and lifts nothing
 		var bp: Dictionary = entry.get("pos", {})
 		var centre_tile := Vector2i(int(bp.get("x", 0)), int(bp.get("y", 0))) / SimWorld.SUBTILE
-		if entry.has("footprint"):
-			var fp := _footprint_of(entry)
-			var rect := Rect2i(centre_tile - fp / 2, fp)
+		var fp := _footprint_of(entry)
+		var rect := Rect2i(centre_tile - fp / 2, fp)
+		if entry.has("phase"):
 			building_rects.append(rect)
-			occluders.append({"rect": rect, "pad": 1})
-		elif GameDataRegistry.resource_def(StringName(entry.get("def_id", ""))) != null:
-			# Measured off the node's own art, which is why this asks for the
-			# visual it will actually draw -- the three gold seams are 95, 180 and
-			# 244 px, and a small one must not claim the large one's band.
+			occluders.append({"rect": rect, "pad": 1, "reach": Occlusion.BEHIND_TILES})
+		else:
+			# Both numbers come off the node's own art. The band needs only whatever
+			# OVERHANGS the footprint -- 1 for a fitted 4x4 seam, 3 for an oak, whose
+			# canopy is 232 px above a trunk that really does stand on one tile --
+			# and the reach is how far up-screen the sprite gets, which for the flat
+			# gold seam is one tile and for a tree is the full five.
 			var ph := GameDataRegistry.placeholder_for(_visual_id_of(entry))
-			occluders.append({"rect": Rect2i(centre_tile, Vector2i.ONE),
-					"pad": Occlusion.column_pad_for(ph.footprint_m)})
+			occluders.append({"rect": rect,
+					"pad": Occlusion.column_pad_for(ph.footprint_m, fp),
+					"reach": Occlusion.reach_for(ph.height_m)})
 
 	for entry in updated:
 		var id := int(entry.get("id", 0))
@@ -662,7 +670,7 @@ func _refresh_occlusion(occluders: Array[Dictionary]) -> void:
 		var tile: Vector2i = f["tile"]
 		var hidden := false
 		for o in occluders:
-			if Occlusion.hides(o["rect"], tile, int(o["pad"])):
+			if Occlusion.hides(o["rect"], tile, int(o["pad"]), int(o["reach"])):
 				hidden = true
 				break
 		view.occluded = hidden

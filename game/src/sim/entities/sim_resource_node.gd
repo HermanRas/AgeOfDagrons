@@ -25,6 +25,15 @@ var starting_amount: int = 0
 var size_class: int = 0
 var gather_slots: int = 1
 
+## Tiles claimed, from `ResourceDef.footprint_for_size`. ONE for a tree, a bush and
+## every animal; 4x4 for the big gold seam and the quarry (project owner,
+## 2026-08-17: "for trees it makes sense, for stone and gold it does not").
+##
+## `pos` is the footprint's CENTRE, exactly as SimBuilding's is, so `tile()` returns
+## the middle tile and `origin_tile()` recovers the corner. For everything 1x1 the
+## two are the same tile and nothing about a forest changed.
+var footprint: Vector2i = Vector2i.ONE
+
 ## Wildlife (the deer) must be killed before it yields food, and the corpse is
 ## what gets gathered.
 ##
@@ -72,4 +81,18 @@ func to_snapshot() -> Dictionary:
 	# side -- `amount` runs down as the node is worked, so a nearly-spent large
 	# node and a fresh small one carry the same number.
 	d["size_class"] = size_class
+	# Same key and same {x, y} shape SimBuilding sends, so the view's depth sort,
+	# picking and occlusion all treat a 4x4 rock exactly as they treat a 4x4
+	# building -- none of them needed changing. What DID need changing is anything
+	# that used the presence of this key to mean "this is a building".
+	d["footprint"] = {"x": footprint.x, "y": footprint.y}
 	return d
+
+
+func origin_tile() -> Vector2i:
+	var half := Vector2i(footprint.x * SimWorld.SUBTILE, footprint.y * SimWorld.SUBTILE) / 2
+	return (pos - half) / SimWorld.SUBTILE
+
+
+func footprint_rect() -> Rect2i:
+	return SimMap.footprint_rect(origin_tile(), footprint)

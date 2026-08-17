@@ -21,14 +21,27 @@ func test_a_wide_occluder_hides_things_a_narrow_one_does_not() -> void:
 			"and inside a 244 px seam's band, which is what the gold wants")
 
 
-func test_the_column_pad_comes_from_the_arts_measured_metres() -> void:
-	# visuals.json's own projection: a footprint of (fx, fy) metres draws a diamond
-	# (fx + fy) * 16 px wide, and a tile of screen column is 32 px. The figures are
-	# the ones declared for the shipped bakes.
-	assert_eq(Occlusion.column_pad_for(Vector2(7.63, 7.63)), 4, "the large gold seam")
-	assert_eq(Occlusion.column_pad_for(Vector2(8.44, 8.44)), 5, "the big quarry")
-	assert_eq(Occlusion.column_pad_for(Vector2(7.25, 7.25)), 4, "an oak")
-	assert_eq(Occlusion.column_pad_for(Vector2(2.25, 2.25)), 2, "the small granite")
+func test_the_column_pad_is_only_the_arts_OVERHANG() -> void:
+	# visuals.json's own projection: (fx, fy) metres draws a diamond (fx + fy) * 16
+	# px wide, a tile of screen column is 32 px, and a claimed footprint of (Fx, Fy)
+	# tiles already spans (Fx + Fy) / 2 of them each side. Only the difference needs
+	# padding, because hides() is already testing against the claimed rect.
+	#
+	# A TREE is the case that needs it: 232 px of canopy over one tile of trunk.
+	assert_eq(Occlusion.column_pad_for(Vector2(7.25, 7.25)), 3, "an oak on its one tile")
+
+	# A FITTED MINE needs none. That is the point of giving it a footprint at all --
+	# these both collapse to the floor of 1, where before the footprint landed they
+	# were carrying 4 and 5.
+	assert_eq(Occlusion.column_pad_for(Vector2(7.63, 7.63), Vector2i(4, 4)), 1,
+			"the large gold seam, whose 4x4 covers its own art")
+	assert_eq(Occlusion.column_pad_for(Vector2(8.44, 8.44), Vector2i(4, 4)), 1,
+			"the big quarry")
+	assert_eq(Occlusion.column_pad_for(Vector2(2.25, 2.25)), 1, "the small granite")
+
+	# And a footprint DELIBERATELY smaller than its art still pads the remainder,
+	# which is what keeps the rule honest if a mine's footprint is ever tuned down.
+	assert_eq(Occlusion.column_pad_for(Vector2(7.63, 7.63), Vector2i(2, 2)), 2)
 
 
 func test_a_small_sprite_never_pads_below_the_default() -> void:
@@ -36,6 +49,28 @@ func test_a_small_sprite_never_pads_below_the_default() -> void:
 	# because a unit's own sprite is wider than its tile whatever it stands behind.
 	assert_eq(Occlusion.column_pad_for(Vector2(1.5, 0.65)), 1)
 	assert_eq(Occlusion.column_pad_for(Vector2.ZERO), 1)
+	assert_eq(Occlusion.column_pad_for(Vector2.ZERO, Vector2i(8, 8)), 1,
+			"and a huge footprint under tiny art does not go negative")
+
+
+func test_the_reach_is_measured_from_the_arts_height() -> void:
+	# A flat gold seam cannot hide something four tiles behind it, and saying it
+	# could was a false positive on screen: an enemy knight rimmed while standing in
+	# the clear, with 102 px of quarry patch nowhere near him.
+	assert_eq(Occlusion.reach_for(0.24), 1, "the flat square seam: the tile behind it, no more")
+	assert_eq(Occlusion.reach_for(1.76), 2, "the big quarry")
+	assert_eq(Occlusion.reach_for(8.03), Occlusion.BEHIND_TILES,
+			"an oak reaches further than the owner's 5, and is capped at it")
+	assert_eq(Occlusion.reach_for(0.0), 1, "and nothing goes to zero")
+
+
+func test_a_short_occluder_hides_less_than_a_tall_one() -> void:
+	var rect := Rect2i(Vector2i(20, 20), Vector2i(4, 4))
+	var far_behind := Vector2i(17, 19)          # 3 tiles up-left of the near corner
+
+	assert_true(Occlusion.hides(rect, far_behind, 1, 5), "a tall thing covers it")
+	assert_false(Occlusion.hides(rect, far_behind, 1, 1),
+			"a flat one does not, however wide its band")
 
 
 func test_a_wide_band_still_will_not_outline_something_in_front() -> void:

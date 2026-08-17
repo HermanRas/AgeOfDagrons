@@ -269,6 +269,8 @@ static func harvest_slots(e: SimEntity) -> int:
 static func harvest_rect(e: SimEntity) -> Rect2i:
 	if e is SimBuilding:
 		return (e as SimBuilding).footprint_rect()
+	if e is SimResourceNode:
+		return (e as SimResourceNode).footprint_rect()
 	return Rect2i(e.tile(), Vector2i.ONE)
 
 
@@ -292,16 +294,44 @@ static func harvest_rect(e: SimEntity) -> Rect2i:
 ## pushes overlapping units apart, and the alternative is reserving spots, which is
 ## state to keep in sync for a cosmetic gain.
 static func harvest_spot(e: SimEntity, seed: int) -> Vector2i:
-	if not (e is SimBuilding):
-		return e.tile()
-
-	var b: SimBuilding = e
-	var rect := b.footprint_rect()
-	var slots := maxi(1, b.gather_slots)
+	var rect := harvest_rect(e)
+	var slots := maxi(1, harvest_slots(e))
 	var i := posmod(seed, slots)
-	return rect.position + Vector2i(
-		clampi((2 * i + 1) * rect.size.x / (2 * slots), 0, rect.size.x - 1),
-		rect.size.y / 3 if i % 2 == 0 else (2 * rect.size.y) / 3)
+
+	# A FIELD is walked over, so its spots are ON it. A rock is solid, so a spot
+	# inside it is a tile nobody can reach: those go round the OUTSIDE, spread along
+	# the ring one tile out. Both cases are one gatherer per spot; only the side of
+	# the edge differs, and that follows from whether the thing can be stood on.
+	if e is SimBuilding:
+		return rect.position + Vector2i(
+			clampi((2 * i + 1) * rect.size.x / (2 * slots), 0, rect.size.x - 1),
+			rect.size.y / 3 if i % 2 == 0 else (2 * rect.size.y) / 3)
+
+	if rect.size == Vector2i.ONE:
+		return rect.position          # a tree: one tile, one place to stand
+	return _ring_tile(rect.grow(1), i, slots)
+
+
+## The i-th of `n` tiles spread evenly clockwise round `ring`'s perimeter, starting
+## at its top-left corner. Integer arithmetic only, so every client walks the same
+## ring in the same order -- two clients sending one villager to different sides of
+## a rock is a desync (PLAN.md 7.1).
+static func _ring_tile(ring: Rect2i, i: int, n: int) -> Vector2i:
+	var w := maxi(1, ring.size.x - 1)
+	var h := maxi(1, ring.size.y - 1)
+	var perimeter := 2 * (w + h)
+	var step := posmod(i * perimeter / maxi(1, n), perimeter)
+
+	if step < w:
+		return ring.position + Vector2i(step, 0)                       # top edge
+	step -= w
+	if step < h:
+		return ring.position + Vector2i(w, step)                       # right edge
+	step -= h
+	if step < w:
+		return ring.position + Vector2i(w - step, h)                   # bottom edge
+	step -= w
+	return ring.position + Vector2i(0, h - step)                       # left edge
 
 
 ## What rate applies to `u` working `e`, per 100 ticks. TWO DIFFERENT SOURCES, and

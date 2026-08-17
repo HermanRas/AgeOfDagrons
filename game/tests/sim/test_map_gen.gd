@@ -298,6 +298,89 @@ func test_a_villager_can_actually_work_every_node_kind_on_the_map() -> void:
 				"and can carry %s home" % kind)
 
 
+# ── a mine is not one tile (project owner, 2026-08-17) ─────────────────────
+
+func test_a_mined_node_claims_the_ground_its_art_covers() -> void:
+	# "For trees it makes sense, for stone and gold it does not." A one-tile
+	# footprint under a 244 px seam let units walk through solid rock and buildings
+	# go up where a mine plainly is.
+	var seam := w.spawn_resource_node(&"res.gold_mine", Vector2i(40, 40), 2)
+	assert_not_null(seam)
+	assert_eq(seam.footprint, Vector2i(4, 4), "the large seam's 4x4 from resources.json")
+
+	var rect := seam.footprint_rect()
+	assert_eq(rect.size, Vector2i(4, 4))
+	assert_eq(rect.position, Vector2i(40, 40), "the tile passed in is the TOP-LEFT")
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var t := Vector2i(x, y)
+			assert_eq(w.map.occupant(t), seam.id, "%s belongs to the seam" % t)
+			assert_false(w.map.is_passable(t), "%s cannot be walked through" % t)
+			assert_false(w.map.is_buildable(t), "%s cannot be built on" % t)
+
+
+func test_a_tree_is_still_one_tile() -> void:
+	# Deliberate: an oak is 232 px of canopy over a trunk that does stand on one
+	# tile, and a twelve-tree forest of 4x4s would be an impassable wall.
+	var tree := w.spawn_resource_node(&"res.tree", Vector2i(40, 40), 2)
+	assert_eq(tree.footprint, Vector2i.ONE)
+	assert_eq(tree.footprint_rect(), Rect2i(Vector2i(40, 40), Vector2i.ONE))
+	assert_eq(tree.tile(), Vector2i(40, 40), "and its tile is still where it was put")
+
+
+func test_the_size_class_picks_the_footprint_as_well_as_the_sprite() -> void:
+	var small := w.spawn_resource_node(&"res.gold_mine", Vector2i(30, 40), 0)
+	var medium := w.spawn_resource_node(&"res.gold_mine", Vector2i(36, 40), 1)
+	var large := w.spawn_resource_node(&"res.gold_mine", Vector2i(42, 40), 2)
+	assert_eq(small.footprint, Vector2i.ONE, "95 px of pebbles is one tile")
+	assert_eq(medium.footprint, Vector2i(3, 3), "180 px")
+	assert_eq(large.footprint, Vector2i(4, 4), "244 px")
+
+
+func test_a_building_cannot_be_placed_where_a_seam_is() -> void:
+	# The second half of what the owner asked for, and it needs no new rule: the
+	# footprint is claimed, so the placement check that already existed refuses it.
+	var seam := w.spawn_resource_node(&"res.gold_mine", Vector2i(40, 40), 2)
+	for corner in [Vector2i(40, 40), Vector2i(43, 43), Vector2i(41, 41)]:
+		assert_null(w.spawn_building(&"building.house", 1, corner),
+				"a house overlapping the seam at %s is refused" % corner)
+	assert_not_null(w.spawn_building(&"building.house", 1, Vector2i(45, 45)),
+			"and clear ground beside it still builds")
+	assert_not_null(seam)
+
+
+func test_a_spent_seam_gives_back_every_tile_it_held() -> void:
+	var seam := w.spawn_resource_node(&"res.gold_mine", Vector2i(40, 40), 2)
+	var rect := seam.footprint_rect()
+	w.despawn(seam.id)
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			assert_true(w.map.is_buildable(Vector2i(x, y)), "%s came back" % Vector2i(x, y))
+
+
+func test_a_seam_refuses_to_spawn_where_it_would_not_fit() -> void:
+	var first := w.spawn_resource_node(&"res.gold_mine", Vector2i(40, 40), 2)
+	assert_not_null(first)
+	assert_null(w.spawn_resource_node(&"res.gold_mine", Vector2i(42, 42), 2),
+			"overlapping the first by two tiles is refused, not silently shifted")
+
+
+func test_villagers_gather_a_big_seam_from_around_its_edge() -> void:
+	# A field is walked over so its spots are ON it; a rock is solid, so its four
+	# spots go round the OUTSIDE. A spot inside the rect would be a tile nobody
+	# could ever reach.
+	var seam := w.spawn_resource_node(&"res.gold_mine", Vector2i(40, 40), 2)
+	var rect := seam.footprint_rect()
+	var spots: Array[Vector2i] = []
+	for slot in range(seam.gather_slots):
+		var s := GatherSystem.harvest_spot(seam, slot)
+		assert_false(rect.has_point(s), "%s is outside the rock, not inside it" % s)
+		assert_eq(Occlusion.gap_to(s, rect), 1, "%s is right against it" % s)
+		assert_false(spots.has(s), "%s is its own spot" % s)
+		spots.append(s)
+	assert_eq(spots.size(), 4, "one per gather slot")
+
+
 func test_nodes_take_their_amounts_from_resources_json() -> void:
 	for n in _of_type(SimResourceNode):
 		var node: SimResourceNode = n
@@ -331,8 +414,16 @@ func test_nothing_overlaps_anything_else() -> void:
 	for e in w.entities.values():
 		if e is SimUnit:
 			continue                      # units are not written into occupancy
-		var rect: Rect2i = (e as SimBuilding).footprint_rect() if e is SimBuilding \
-				else Rect2i((e as SimEntity).tile(), Vector2i.ONE)
+		# Resource nodes carry a real footprint since 2026-08-17 -- the big gold seam
+		# claims 4x4 -- so asking only about their centre tile would let two rocks
+		# overlap and this test pass anyway.
+		var rect: Rect2i
+		if e is SimBuilding:
+			rect = (e as SimBuilding).footprint_rect()
+		elif e is SimResourceNode:
+			rect = (e as SimResourceNode).footprint_rect()
+		else:
+			rect = Rect2i((e as SimEntity).tile(), Vector2i.ONE)
 		for y in range(rect.position.y, rect.end.y):
 			for x in range(rect.position.x, rect.end.x):
 				var t := Vector2i(x, y)

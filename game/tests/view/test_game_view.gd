@@ -189,6 +189,7 @@ func test_a_unit_behind_a_gold_seam_is_outlined() -> void:
 	# enemy's soldiers and three of ours doing exactly that.
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": 2,
+				"footprint": {"x": 4, "y": 4},
 				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
 		# Three tiles west: behind the seam, well inside the 244 px sprite, and
 		# outside the 3-tile band a building's footprint would have given it.
@@ -203,6 +204,7 @@ func test_a_unit_behind_a_gold_seam_is_outlined() -> void:
 func test_a_unit_behind_a_TREE_is_outlined() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "def_id": "res.tree", "owner_id": 0, "size_class": 1,
+				"footprint": {"x": 1, "y": 1},
 				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
 		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
 				"pos": {"x": 18 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
@@ -216,6 +218,7 @@ func test_a_unit_in_front_of_a_node_is_not_outlined() -> void:
 	# a new place.
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": 2,
+				"footprint": {"x": 4, "y": 4},
 				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
 		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
 				"pos": {"x": 22 * SimWorld.SUBTILE, "y": 22 * SimWorld.SUBTILE}},
@@ -226,9 +229,12 @@ func test_a_unit_in_front_of_a_node_is_not_outlined() -> void:
 func test_a_small_seam_claims_a_narrower_band_than_a_large_one() -> void:
 	# The pad is measured off the art the node will actually DRAW, so the three
 	# gold size classes do not all behave like the biggest.
-	for spec in [[0, false], [2, true]]:
+	# [size class, hidden?, footprint edge] -- the small seam claims one tile and
+	# the large one claims 4x4, which is why they behave differently.
+	for spec in [[0, false, 1], [2, true, 4]]:
 		view.apply_snapshot({"tick": 1, "updated": [
 			{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": spec[0],
+					"footprint": {"x": spec[2], "y": spec[2]},
 					"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
 			{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
 					"pos": {"x": 17 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
@@ -241,7 +247,8 @@ func test_a_units_own_sort_is_not_lifted_in_front_of_a_tree() -> void:
 	# Occluders grew to include nodes; the SORT LIFT deliberately did not. A unit
 	# lifted in front of a one-tile tree would draw on top of its canopy, which is
 	# the roof-standing bug the directional rule exists to prevent.
-	view.apply_snapshot(_snapshot_of(1, "res.tree", Vector2i(20, 20), {"size_class": 1}))
+	view.apply_snapshot(_snapshot_of(1, "res.tree", Vector2i(20, 20),
+			{"size_class": 1, "footprint": {"x": 1, "y": 1}}))
 	view.apply_snapshot(_snapshot_of(2, "unit.villager", Vector2i(21, 21)))
 	var tree := view.pool.get_view(1)
 	var unit := view.pool.get_view(2)

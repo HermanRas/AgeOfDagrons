@@ -293,20 +293,26 @@ func _clear_rubble_under(rect: Rect2i) -> void:
 		despawn(id)
 
 
-## Place a resource node on a single tile, claiming it. Returns null if the tile is
-## not free, so two trees can never occupy one tile.
-func spawn_resource_node(def_id: StringName, tile: Vector2i, size_class: int = 0) -> SimResourceNode:
-	var rect := Rect2i(tile, Vector2i.ONE)
+## Place a resource node with its top-left tile at `origin`, claiming its whole
+## footprint. Returns null if the ground is not free, so two trees can never occupy
+## one tile and a 4x4 seam cannot go up half on top of a house.
+##
+## `origin` is the TOP-LEFT tile, matching `spawn_building` -- and for everything
+## 1x1, which is every tree, bush and animal, that is the same tile it always was.
+func spawn_resource_node(def_id: StringName, origin: Vector2i, size_class: int = 0) -> SimResourceNode:
+	var d: ResourceDef = resource_def(def_id)
+	var footprint := d.footprint_for_size(size_class) if d != null else Vector2i.ONE
+	var rect := SimMap.footprint_rect(origin, footprint)
 	if not map.can_place_building(rect):
 		return null
 
-	var d: ResourceDef = resource_def(def_id)
 	var n := SimResourceNode.new()
 	n.id = _next_id
 	_next_id += 1
 	n.def_id = def_id
 	n.owner_id = 0                    # gaia; nodes belong to nobody
-	n.pos = tile * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
+	n.footprint = footprint
+	n.pos = SimBuilding.centre_of(origin, footprint)
 	n.size_class = size_class
 
 	if d != null:
@@ -361,6 +367,8 @@ func _footprint_of(e: SimEntity) -> Rect2i:
 		return Rect2i()
 	if e is SimBuilding:
 		return (e as SimBuilding).footprint_rect()
+	if e is SimResourceNode:
+		return (e as SimResourceNode).footprint_rect()
 	return Rect2i(e.tile(), Vector2i.ONE)
 
 

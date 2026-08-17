@@ -21,6 +21,22 @@ var visual: StringName = &""
 ## for three classes, so its medium and large share the quarry.
 var visuals: Array[StringName] = []
 
+## Tiles claimed per size class, small to large, or empty for one tile at every
+## size. Clamps when short, like `visuals` and `amounts`.
+##
+## A TREE IS ONE TILE AND A MINE IS NOT (project owner, 2026-08-17). A one-tile
+## footprint under a 244 px sprite is what let units walk through the middle of a
+## gold seam and buildings go up on ground the player can see is solid rock -- and
+## it is why the occlusion band had to be widened by hand to cover art the
+## footprint knew nothing about.
+##
+## Matched to the art through the projection visuals.json documents: a footprint of
+## (Fx, Fy) TILES draws a diamond (Fx + Fy) * 32 px wide, so a 244 px seam wants
+## Fx + Fy = 7.6, i.e. 4x4. Trees stay at one tile deliberately -- an oak's canopy
+## is 232 px of overhang above a trunk that really does stand on one tile, and
+## claiming 4x4 for each would make a twelve-tree forest an impassable wall.
+var footprints: Array[Vector2i] = []
+
 ## Starting amount per size class, small to large.
 var amounts: Array[int] = []
 ## How many villagers can work this node at once.
@@ -39,6 +55,8 @@ static func from_dict(p_id: StringName, d: Dictionary) -> ResourceDef:
 	r.visual = StringName(d.get("visual", ""))
 	r.amounts = GameDefs.int_list(d.get("amounts", []))
 	r.visuals = GameDefs.name_list(d.get("visuals", []))
+	for f in (d.get("footprints", []) as Array):
+		r.footprints.append(GameDefs.tile_size(f, Vector2i.ONE))
 	r.gather_slots = int(d.get("gather_slots", 1))
 
 	var w: Variant = d.get("wildlife")
@@ -70,3 +88,10 @@ func visual_for_size(size_class: int) -> StringName:
 	if visuals.is_empty() or size_class < 0:
 		return visual
 	return visuals[clampi(size_class, 0, visuals.size() - 1)]
+
+
+## Tiles a node of this size claims. One tile unless the kind says otherwise.
+func footprint_for_size(size_class: int) -> Vector2i:
+	if footprints.is_empty():
+		return Vector2i.ONE
+	return footprints[clampi(size_class, 0, footprints.size() - 1)]

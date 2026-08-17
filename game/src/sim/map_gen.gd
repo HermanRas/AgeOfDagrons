@@ -80,12 +80,18 @@ const DEBUG_WOOD_CLUSTER := [
 ## the wood already is. No test depends on where it sits -- they all spawn their
 ## own nodes -- so the earlier reason for keeping it close does not bind.
 ##
+## OFFSETS ARE TOP-LEFT CORNERS and the seams now CLAIM 2x2, 3x3 and 4x4 tiles
+## (resources.json `footprints`), so they have to be spaced or they refuse to
+## spawn on each other's ground. Stepping (+5, -5) keeps them clear of one another
+## and moves them right along the screen without drifting up or down, since iso
+## sends (x - y) to screen x and (x + y) to screen y.
+##
 ## ORDERED LARGEST-FURTHEST-BACK. `_place_resources` gives the i-th offset size
 ## class i, and the three ore actors are 95, 180 and 244 px wide -- so with the
 ## largest at the front it stood in front of the other two and the size classes
 ## could not be compared at all. Iso sorts by (dx + dy), so the smallest sum draws
-## behind: (16, 1) sums to 17 and takes the large seam.
-const DEBUG_GOLD := [Vector2i(17, 3), Vector2i(16, 2), Vector2i(16, 1)]
+## behind.
+const DEBUG_GOLD := [Vector2i(12, 8), Vector2i(15, 4), Vector2i(18, 0)]
 ## A line rather than a block: a 2x2 arrangement puts two on the same screen
 ## column, one hidden behind the other. Stepping only dx staggers all four.
 ## Berry bushes, not deer -- session decision to use res.berry_bush as the MVP
@@ -123,12 +129,12 @@ const DEBUG_FOOD := [Vector2i(17, 7), Vector2i(17, 8), Vector2i(17, 9), Vector2i
 ## selection panel (screenshotted). Iso sends (dx - dy) to screen x and (dx + dy)
 ## to screen y, and DOWN is where the panel is.
 ##
-## They overlap each other on purpose. The quarry sprite is 6.94 m across --
-## nearly 3.5 tiles, 222 px -- so three nodes spaced far enough apart not to
-## touch would be spread across half the map. Overlapped they read as one rock
-## outcrop, which is what a quarry looks like and what 0 A.D. does with the same
-## art; the gold cluster already overlaps the same way at a smaller scale.
-const DEBUG_STONE := [Vector2i(-8, 4), Vector2i(-7, 6), Vector2i(-6, 8)]
+## Offsets are TOP-LEFT corners, and the two big quarries claim 4x4 each while the
+## small granite claims one tile -- so, like the gold, they are spaced rather than
+## piled. They still read as one outcrop because their SPRITES overlap (270 px on a
+## 4x4 footprint) even when their footprints do not touch, which is the whole point
+## of giving them footprints: solid where the rock is, walkable where it only leans.
+const DEBUG_STONE := [Vector2i(-6, 8), Vector2i(-8, 3), Vector2i(-13, 6)]
 
 ## Livestock, added alongside the stone and for the same reason: `vis.sheep` and
 ## `vis.cattle` were staged and referenced by nothing. Both are gathered where

@@ -61,7 +61,13 @@ static func is_in_front(tile: Vector2i, rect: Rect2i) -> bool:
 ## report of 2026-08-17 -- units walking behind a rock simply vanished, with no
 ## outline, because nothing but buildings was ever considered an occluder and the
 ## band would have been far too narrow even if it had been.
-static func hides(rect: Rect2i, tile: Vector2i, column_pad: int = 1) -> bool:
+## `behind_tiles` is how far up-screen the thing's art actually reaches. 5 for a
+## building, by the owner's choice, and MEASURED for a resource node -- see
+## `reach_for()`. A flat 5 for nodes produced a false positive the moment they
+## became occluders: the big gold seam is 102 px tall and rimmed an enemy knight
+## standing four tiles behind it, in the clear, with nothing over him.
+static func hides(rect: Rect2i, tile: Vector2i, column_pad: int = 1,
+		behind_tiles: int = BEHIND_TILES) -> bool:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return false
 	if rect.has_point(tile) or is_in_front(tile, rect):
@@ -70,7 +76,7 @@ static func hides(rect: Rect2i, tile: Vector2i, column_pad: int = 1) -> bool:
 	var front := rect.end - Vector2i.ONE
 	if tile.x + tile.y >= front.x + front.y:
 		return false
-	if gap_to(tile, rect) > BEHIND_TILES:
+	if gap_to(tile, rect) > maxi(1, behind_tiles):
 		return false
 
 	# The band of (x - y) the footprint spans: widest at its west corner
@@ -82,19 +88,41 @@ static func hides(rect: Rect2i, tile: Vector2i, column_pad: int = 1) -> bool:
 	return column >= span_min and column <= span_max
 
 
-## How many tiles of screen column a sprite covers each side of its own tile, for
-## art whose footprint diamond measures `footprint_m` (visuals.json's placeholder,
-## which is derived from the baked atlas).
+## How far a sprite OVERHANGS the tiles it claims, in tiles of screen column, each
+## side. `footprint_m` is the art's own measured diamond (visuals.json's
+## placeholder, derived from the baked atlas) and `footprint_tiles` is what the
+## entity actually occupies.
 ##
 ## The projection is the one visuals.json documents: a footprint of (fx, fy) metres
-## draws a diamond (fx + fy) * 16 px wide, and one tile of screen column is 32 px.
-## So the half-width is (fx + fy) / 4 tiles -- 3.8 for the 244 px gold seam, 4.2 for
-## the big quarry, 3.6 for an oak, and 1 for anything small enough not to matter.
+## draws a diamond (fx + fy) * 16 px wide, one tile of screen column is 32 px, and a
+## claimed footprint of (Fx, Fy) tiles already spans (Fx + Fy) / 2 tiles of column
+## each side of its centre. What is left over is the overhang, and only the overhang
+## needs padding -- `hides()` is already testing against the claimed rect.
 ##
-## Rounded UP: half a tile of column short is a unit that is visibly under the
-## sprite and not outlined, which is the bug being fixed.
-static func column_pad_for(footprint_m: Vector2) -> int:
-	return maxi(1, int(ceil((footprint_m.x + footprint_m.y) / 4.0)))
+## So a 4x4 gold seam pads by 1 (its footprint covers its art, which is the point of
+## giving it one) and a one-tile oak pads by 3 (232 px of canopy over a trunk that
+## really does stand on a single tile). Rounded UP: half a tile short is a unit
+## visibly under the sprite and not outlined, which is the bug this exists for.
+static func column_pad_for(footprint_m: Vector2, footprint_tiles: Vector2i = Vector2i.ONE) -> int:
+	var art_half := (footprint_m.x + footprint_m.y) / 4.0
+	var claimed_half := float(maxi(1, footprint_tiles.x) + maxi(1, footprint_tiles.y)) / 2.0
+	return maxi(1, int(ceil(art_half - claimed_half)))
+
+
+## How far UP-SCREEN a sprite `height_m` metres tall reaches, in tiles -- i.e. how
+## far behind itself it can hide something.
+##
+## A metre of height projects `Iso.VERTICAL_PX_PER_METRE` px up the screen, and one
+## tile further back moves a unit half a tile height, 16 px, up. So the reach is
+## height * 19.596 / 16 tiles: 10 for an oak, 2 for the quarry, and under 1 for the
+## flat gold seam, which is 0.24 m of barely-raised quarry patch.
+##
+## Clamped to [1, BEHIND_TILES]. The floor keeps every occluder able to hide the
+## tile directly behind it; the ceiling is the project owner's 5, chosen for
+## buildings, and a tall tree covering nine tiles of ground would outline half a
+## forest for a gain nobody asked for.
+static func reach_for(height_m: float) -> int:
+	return clampi(int(round(height_m * Iso.VERTICAL_PX_PER_METRE / 16.0)), 1, BEHIND_TILES)
 
 
 ## Chebyshev distance in tiles from `tile` to the nearest part of `rect`: 0
