@@ -1637,7 +1637,7 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 | 4.8 | Garrison | |
 | 4.9 | Defensive garrison damage bonus | |
 | 4.10 | Special abilities + cooldowns | |
-| 4.11 | Population cap from houses/town centres | |
+| 4.11 | HALF DONE -- `PopulationSystem` (last in the system order, after `DeathSystem`) recounts `pop_used`/`pop_cap` from scratch every tick: `pop_used` sums `SimUnit.pop_cost` over living units, `pop_cap` sums `provides_pop` over COMPLETE buildings, and both are assigned per player so a lost house writes the cap back down. Recounted rather than adjusted on spawn/death, so no path a unit can leave the world by needs to remember to decrement anything and none of them can leak population. The field, the `player_state` channel and the `state_hash()` entry had existed since 0.6 with nothing writing them, so both sat at 0. `ResourceHUD`s bottom row now shows units-on-map over the limit (it showed idle/total villagers until the project owner corrected it, 2026-08-17; idle villagers are `IdleVillagerBadge`). NOT ENFORCED: `TrainCommand` has no population check, so this is a true report of a rule nothing applies yet -- that is what is left of 4.11 | |
 | 4.12 | Stances | |
 | 4.13 | Military units (§9.2's roster) + `CombatSystem`. Includes the packed/unpacked siege state machine (§9.2.1 item 5) and the hostile wolf (`res.wolf`), both of which are combat, not economy | |
 | 4.14 | Formations | |

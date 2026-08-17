@@ -179,7 +179,10 @@ debug age-advance.
   drag-placement, segment-length choice, 8 orientations and gate pass-through.
   As ordinary buildings they would put twelve fixed-orientation blocks in the
   build menu, which is worse than not offering them.
-- **`pop_used`/`pop_cap` are never computed.** Nothing enforces population.
+- **Population is reported but not enforced.** `PopulationSystem` computes
+  `pop_used`/`pop_cap` and the resource panel's bottom row shows them, but
+  `TrainCommand` has no population check — you can train past the cap. That is
+  the remaining half of PLAN.md 4.11.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.

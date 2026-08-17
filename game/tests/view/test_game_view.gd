@@ -181,15 +181,19 @@ func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:
 			"in place on the first snapshot, with no advance() call")
 
 
-# ── villager headcount (7.1) ───────────────────────────────────────────────
+# ── idle villagers (7.1, the age header's badge) ───────────────────────────
 
-func test_villager_counts_splits_idle_from_busy_and_ignores_other_players() -> void:
+func test_the_idle_count_is_villagers_only_and_only_the_owners() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 1, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
 				"pos": {"x": 0, "y": 0}},
 		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
 				"pos": {"x": 0, "y": 0}},
 		{"id": 3, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
+				"pos": {"x": 0, "y": 0}},
+		# An idle SOLDIER is a garrison, not a mistake, and the badge is a button
+		# that walks to whatever it counts -- this is the correction of 2026-08-17.
+		{"id": 6, "def_id": "unit.knight", "owner_id": 1, "task": SimUnit.Task.IDLE,
 				"pos": {"x": 0, "y": 0}},
 		# A building must not be counted as a villager just because it too is idle.
 		{"id": 4, "def_id": "building.town_center", "owner_id": 1,
@@ -200,19 +204,21 @@ func test_villager_counts_splits_idle_from_busy_and_ignores_other_players() -> v
 				"pos": {"x": 0, "y": 0}},
 	], "removed": []})
 
-	assert_eq(view.villager_counts(1), Vector2i(1, 3), "1 idle of 3 villagers, gaia/enemy excluded")
+	assert_eq(view.idle_villager_count(1), 1,
+			"one idle villager -- not the busy two, the idle knight, the town centre or player 2's")
 
 
-func test_villager_counts_is_zero_with_nothing_in_view() -> void:
-	assert_eq(view.villager_counts(1), Vector2i(0, 0))
+func test_the_idle_count_is_zero_with_nothing_in_view() -> void:
+	assert_eq(view.idle_villager_count(1), 0)
 
 
 # ── walking the idle ones (7.1, the badge's half) ──────────────────────────
 
-## Four of player 1's units, of which 4 and 9 are idle, plus a busy one, a dead
-## one and someone else's idle villager. Ids are deliberately out of insertion
-## order: `_facts` is a Dictionary keyed in the order entities first appeared in
-## a snapshot, so a walk that did not sort would visit them in join order.
+## Player 1's villagers, of which 4 and 9 are idle, plus a busy one, a corpse and
+## an idle knight -- and someone else's idle villager. Ids are deliberately out of
+## insertion order: `_facts` is a Dictionary keyed in the order entities first
+## appeared in a snapshot, so a walk that did not sort would visit them in join
+## order.
 func _idle_fixture() -> void:
 	view.apply_snapshot({"tick": 1, "updated": [
 		{"id": 9, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
@@ -223,25 +229,27 @@ func _idle_fixture() -> void:
 				"pos": {"x": 0, "y": 0}},
 		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
 				"alive": false, "pos": {"x": 0, "y": 0}},
+		{"id": 3, "def_id": "unit.knight", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
 		{"id": 7, "def_id": "unit.villager", "owner_id": 2, "task": SimUnit.Task.IDLE,
 				"pos": {"x": 0, "y": 0}},
 	], "removed": []})
 
 
-func test_idle_unit_ids_are_sorted_and_only_the_owners_living_idle_ones() -> void:
+func test_idle_villager_ids_are_sorted_and_only_the_owners_living_idle_ones() -> void:
 	_idle_fixture()
-	assert_eq(view.idle_unit_ids(1), [4, 9] as Array[int],
-			"ascending, no busy one, no corpse, nobody else's")
+	assert_eq(view.idle_villager_ids(1), [4, 9] as Array[int],
+			"ascending, no busy one, no corpse, no knight, nobody else's")
 
 
 func test_the_idle_walk_visits_each_in_turn_and_then_wraps() -> void:
 	_idle_fixture()
-	assert_eq(view.next_idle_unit(1, 0), 4, "the first tap starts at the lowest id")
-	assert_eq(view.next_idle_unit(1, 4), 9)
-	assert_eq(view.next_idle_unit(1, 9), 4, "and round again rather than stopping")
+	assert_eq(view.next_idle_villager(1, 0), 4, "the first tap starts at the lowest id")
+	assert_eq(view.next_idle_villager(1, 4), 9)
+	assert_eq(view.next_idle_villager(1, 9), 4, "and round again rather than stopping")
 
 
-func test_the_walk_carries_on_from_where_it_was_when_that_unit_gets_a_job() -> void:
+func test_the_walk_carries_on_from_where_it_was_when_that_villager_gets_a_job() -> void:
 	# The point of remembering an ID rather than an index: the player taps to id
 	# 4, orders it to gather, and taps again. 4 has left the list -- the next tap
 	# must still go to 9 rather than back to the top.
@@ -250,20 +258,31 @@ func test_the_walk_carries_on_from_where_it_was_when_that_unit_gets_a_job() -> v
 		{"id": 4, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
 				"pos": {"x": 0, "y": 0}},
 	], "removed": []})
-	assert_eq(view.idle_unit_ids(1), [9] as Array[int])
-	assert_eq(view.next_idle_unit(1, 4), 9)
+	assert_eq(view.idle_villager_ids(1), [9] as Array[int])
+	assert_eq(view.next_idle_villager(1, 4), 9)
 
 
 func test_the_walk_asks_for_nothing_when_nobody_is_idle() -> void:
-	assert_eq(view.next_idle_unit(1, 0), 0, "0 is 'no unit', which GameScene treats as a no-op")
+	assert_eq(view.next_idle_villager(1, 0), 0,
+			"0 is 'no villager', which GameScene treats as a no-op")
 
 
 func test_the_badges_count_and_the_walks_list_cannot_disagree() -> void:
-	# Both go through _is_own_living_unit(), which is the whole reason it exists:
-	# the idle badge and the resource HUD's idle/total row are on screen at the
-	# same time, and two counters labelled idle disagreeing reads as a bug.
+	# Both go through _is_own_living_villager(): the number in the ring and the
+	# units the taps visit are the same question asked twice, and a badge reading
+	# 5 that walks to 4 villagers is a bug the player would have to count to spot.
 	_idle_fixture()
-	assert_eq(view.idle_unit_ids(1).size(), view.villager_counts(1).x)
+	assert_eq(view.idle_villager_ids(1).size(), view.idle_villager_count(1))
+
+
+## The definition is a gather rate, not the id `unit.villager` -- so a unit that
+## does not exist in the roster at all is not silently counted as one.
+func test_an_unknown_def_is_not_taken_for_a_villager() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "unit.nonesuch", "owner_id": 1, "task": SimUnit.Task.IDLE,
+				"pos": {"x": 0, "y": 0}},
+	], "removed": []})
+	assert_eq(view.idle_villager_count(1), 0)
 
 
 func test_process_advances_the_pool() -> void:

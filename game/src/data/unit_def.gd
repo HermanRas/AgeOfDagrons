@@ -84,3 +84,17 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 ## 100 collapse to zero.
 func gather_per_tick(kind: StringName) -> float:
 	return float(gather_rate.get(kind, 0)) / 100.0
+
+
+## Whether this unit works for a living -- true for the villager and nothing else
+## in the v1 roster. The mirror of `BuildingDef.is_gatherable()`, and the same
+## reason for existing: it is what the idle badge counts, and asking the DATA
+## keeps `unit.villager` out of the view layer. A later fishing boat or trade
+## cart earns its place in that count by carrying a gather rate, which is also
+## the honest answer -- an idle economic unit is the mistake the badge is for,
+## whatever it happens to be called.
+func is_worker() -> bool:
+	for kind in gather_rate:
+		if int(gather_rate[kind]) > 0:
+			return true
+	return false

@@ -1,7 +1,10 @@
-## PLAN.md 7.1's idle count, made actionable. Driven off EventBus exactly as
-## `ResourceHUD` is (and tested the same way, by emitting the signal rather than
-## running a snapshot through GameScene) -- the two must always show the same
-## number, which is what the shared signal buys.
+## PLAN.md 7.1's idle VILLAGER count, made actionable. Driven off EventBus and
+## tested the way `ResourceHUD` is, by emitting the signal rather than running a
+## snapshot through GameScene.
+##
+## The two widgets briefly shared one signal, which is how the resource panel came
+## to be reporting idle-vs-total units instead of population (project owner,
+## 2026-08-17). Separate signals now, for separate questions.
 extends TestCase
 
 var badge: IdleVillagerBadge
@@ -16,22 +19,22 @@ func after_each() -> void:
 	badge.free()
 
 
-func test_it_reports_the_idle_half_of_the_headcount() -> void:
-	EventBus.villagers_changed.emit(1, 3, 8)
-	assert_eq(badge.count, 3, "the idle count, not the total")
+func test_it_reports_the_idle_villager_count() -> void:
+	EventBus.idle_villagers_changed.emit(1, 3)
+	assert_eq(badge.count, 3)
 
 
 func test_a_signal_for_a_different_player_is_ignored() -> void:
-	EventBus.villagers_changed.emit(2, 9, 9)
+	EventBus.idle_villagers_changed.emit(2, 9)
 	assert_eq(badge.count, 0, "player 2's idlers must not paint player 1's badge")
 
 
-func test_pressing_it_asks_for_the_next_idle_unit() -> void:
+func test_pressing_it_asks_for_the_next_idle_villager() -> void:
 	# An Array, not an int: a GDScript lambda captures locals BY VALUE, so a
 	# counter incremented inside one never reaches the assert.
 	var asked: Array[int] = []
 	badge.cycle_requested.connect(func() -> void: asked.append(1))
-	EventBus.villagers_changed.emit(1, 5, 5)
+	EventBus.idle_villagers_changed.emit(1, 5)
 
 	for i in range(5):
 		badge._on_pressed()
@@ -43,7 +46,7 @@ func test_pressing_it_with_nobody_idle_asks_for_nothing() -> void:
 	# half/enforcing half split AgeBadge keeps with DebugSetAgeCommand.
 	var asked: Array[int] = []
 	badge.cycle_requested.connect(func() -> void: asked.append(1))
-	EventBus.villagers_changed.emit(1, 0, 6)
+	EventBus.idle_villagers_changed.emit(1, 0)
 	badge._on_pressed()
 	assert_true(asked.is_empty())
 
@@ -51,7 +54,7 @@ func test_pressing_it_with_nobody_idle_asks_for_nothing() -> void:
 func test_it_stays_visible_with_nobody_idle() -> void:
 	# Greyed, not hidden -- a HUD element that disappears reads as a bug, the
 	# same call AgeBadge makes at the last age.
-	EventBus.villagers_changed.emit(1, 0, 6)
+	EventBus.idle_villagers_changed.emit(1, 0)
 	assert_true(badge.visible)
 
 

@@ -2,11 +2,21 @@
 ## it, and the word "Idle" beside it. Tapping walks the player through their idle
 ## units one at a time (PLAN.md 7.1's counter, made actionable).
 ##
-## The COUNT is the same number `ResourceHUD` already shows as the right-hand
-## half of its `idle/total` row -- both come from `EventBus.villagers_changed`,
-## so they cannot drift. What this adds is somewhere to press: an idle villager
-## is a mistake the player wants to fix, and a number that only reports it makes
-## them go and find the unit themselves.
+## VILLAGERS ONLY, and nothing else in the roster. An idle soldier is a garrison
+## rather than a mistake, and this badge is a button that walks to whatever it
+## counts -- so counting one would send the camera off to a knight standing guard.
+## `GameView._is_own_living_villager()` is the definition, and it asks the def for
+## a gather rate rather than naming `unit.villager`.
+##
+## This is NOT the resource panel's bottom row. That one is population: units on
+## the map against the limit their buildings provide (PLAN.md 4.11). The two were
+## briefly driven off one signal, which made that row report idle-vs-total units
+## and this badge count soldiers; they are separate signals now, for separate
+## questions (project owner, 2026-08-17).
+##
+## What the badge adds over a number is somewhere to press: an idle villager is a
+## mistake the player wants to fix, and a counter that only reports it leaves them
+## to go and find the villager themselves.
 ##
 ## Reads ONLY from `EventBus`, the separation `ResourceHUD` and `ControlGroupsHud`
 ## both keep, and emits `cycle_requested` rather than acting: choosing WHICH unit
@@ -64,11 +74,11 @@ func _init() -> void:
 		add_theme_stylebox_override(state, empty)
 
 	pressed.connect(_on_pressed)
-	EventBus.villagers_changed.connect(_on_villagers_changed)
+	EventBus.idle_villagers_changed.connect(_on_idle_villagers_changed)
 
 
 func _exit_tree() -> void:
-	EventBus.villagers_changed.disconnect(_on_villagers_changed)
+	EventBus.idle_villagers_changed.disconnect(_on_idle_villagers_changed)
 
 
 ## The caption sits OUTSIDE this control's own 22x22 box -- it is drawn past the
@@ -81,7 +91,7 @@ func _has_point(point: Vector2) -> bool:
 			.has_point(point)
 
 
-func _on_villagers_changed(p_id: int, idle: int, _total: int) -> void:
+func _on_idle_villagers_changed(p_id: int, idle: int) -> void:
 	if p_id != player_id or count == idle:
 		return
 	count = idle
@@ -106,10 +116,9 @@ func _draw() -> void:
 			RING_COLOR if count > 0 else IDLE_NONE_COLOR, RING_WIDTH, true)
 
 	var font := get_theme_default_font()
-	# Three digits do not fit a 22 px ring and a clipped "1" reading as part of
-	# the next number is worse than an approximation. Reachable: this counts
-	# UNITS, not villagers (GameView._is_own_living_unit), so a late-game army
-	# standing still can pass 99.
+	# Three digits do not fit a 22 px ring, and a clipped "1" reading as part of
+	# the next number is worse than an approximation. A hundred idle villagers is
+	# a long way from likely, and this costs one comparison to never be wrong.
 	var label := str(count) if count < 100 else "99+"
 	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, COUNT_FONT_SIZE)
 	# draw_string's y is the BASELINE, not the top of the box -- centring on the

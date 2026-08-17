@@ -39,11 +39,11 @@ var _error: String = ""
 ## snapshot dict each time.
 var _control_groups: Array = []
 
-## The last idle unit the idle badge walked to, or 0 before the first tap. Kept
+## The last idle villager the badge walked to, or 0 before the first tap. Kept
 ## here rather than in the badge because it is a fact about the WALK, not about
 ## the widget: the badge reports a count and asks for the next one, and this is
-## where it got to. See `GameView.next_idle_unit()` for why it is an id and not
-## an index into the list.
+## where it got to. See `GameView.next_idle_villager()` for why it is an id and
+## not an index into the list.
 var _idle_cycle_id: int = 0
 
 ## Which building the next tap will try to place, or "" for ordinary tap
@@ -379,8 +379,13 @@ func _refresh_hud(snap: Dictionary) -> void:
 	var mine: Dictionary = player_state.get(player_id, {})
 	EventBus.resources_changed.emit(player_id, mine.get("stock", {}))
 
-	var counts := _view.villager_counts(player_id)
-	EventBus.villagers_changed.emit(player_id, counts.x, counts.y)
+	# Two counters, two sources, deliberately. The idle count is a headcount over
+	# what is in view; population is state the SIM keeps (PopulationSystem writes
+	# it, and the cap is a rule a server has to be able to enforce), so it comes
+	# off `player_state` with the stock rather than being re-derived here.
+	EventBus.idle_villagers_changed.emit(player_id, _view.idle_villager_count(player_id))
+	EventBus.population_changed.emit(player_id,
+			int(mine.get("pop_used", 0)), int(mine.get("pop_cap", 0)))
 
 	_age_badge.age = _view.age_of(player_id)
 	_age_badge.advancing = _view.is_advancing(player_id)
@@ -394,7 +399,7 @@ func _refresh_hud(snap: Dictionary) -> void:
 
 	# SimPlayer.control_groups is the authoritative membership (10.6); icon and
 	# live count are derived here each tick from GameView's facts, the same
-	# division of labour as villager_counts() above.
+	# division of labour as the idle count above.
 	_control_groups = mine.get("control_groups", [])
 	for slot in range(SimPlayer.CONTROL_GROUP_COUNT):
 		var members: Array = _control_groups[slot] if slot < _control_groups.size() else []
@@ -719,7 +724,7 @@ func _on_group_selected(slot: int) -> void:
 		_camera.centre_on(centre)
 
 
-## Tap the idle badge: select the next idle unit and bring the camera to it
+## Tap the idle badge: select the next idle villager and bring the camera to it
 ## (PLAN.md 7.1). Five taps with five idle villagers visit all five, one per tap,
 ## then wrap round to the first.
 ##
@@ -732,12 +737,12 @@ func _on_group_selected(slot: int) -> void:
 ##
 ## Silently does nothing with none left. The badge greys out at zero and never
 ## emits, and this stays defensive anyway: the count arrives with the snapshot,
-## so between one landing and the tap being handled the last idle unit may
+## so between one landing and the tap being handled the last idle villager may
 ## already have been given a job by something else.
 func _on_idle_cycle_requested() -> void:
 	if _error != "":
 		return
-	var next := _view.next_idle_unit(Net.local_player_id(), _idle_cycle_id)
+	var next := _view.next_idle_villager(Net.local_player_id(), _idle_cycle_id)
 	if next == 0:
 		return
 	_idle_cycle_id = next

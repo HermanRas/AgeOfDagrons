@@ -1,7 +1,11 @@
-## The resource counter column (PLAN.md 7.1): stone/gold/wood/food plus
-## idle/total villagers, styled per UI_Design.md 3 as a vertical stack of
-## icon+number badges sitting above the minimap, not the plain text row this
-## used to be.
+## The resource counter column (PLAN.md 7.1): stone/gold/wood/food plus the
+## population row -- units on the map against the limit their buildings provide
+## (4.11) -- styled per UI_Design.md 3 as a vertical stack of icon+number badges
+## sitting above the minimap, not the plain text row this used to be.
+##
+## The bottom row showed IDLE/TOTAL villagers until 2026-08-17. That was wrong on
+## both halves: it is the population counter, and idle villagers belong to the age
+## header's badge, which is a button that walks to them (`IdleVillagerBadge`).
 ##
 ## Reads ONLY from `EventBus` (PLAN.md 6.2), never from the sim and never by
 ## holding a `GameView` reference -- the same separation SelectionPanel keeps by
@@ -21,11 +25,11 @@ var player_id: int = 0
 ## test (or a future tooltip) can read "what is this HUD currently showing"
 ## without parsing it back out of a formatted string.
 var _stock: Dictionary = {}
-var _idle: int = 0
-var _total: int = 0
+var _pop_used: int = 0
+var _pop_cap: int = 0
 
 var _stock_labels: Dictionary = {}   # StringName kind -> Label
-var _villagers_label: Label
+var _pop_label: Label
 
 const _ICON_DIR := "res://assets/ui/icons/"
 const _ICON_SIZE := Vector2(24.0, 24.0)
@@ -82,25 +86,26 @@ func _init() -> void:
 
 	for kind in _DISPLAY_ORDER:
 		_stock_labels[kind] = _add_badge(column, "res_%s.png" % kind)
-	_villagers_label = _add_badge(column, "res_villagers.png")
+	_pop_label = _add_badge(column, "res_villagers.png")
 
 	_refresh_labels()
 
 	EventBus.resources_changed.connect(_on_resources_changed)
-	EventBus.villagers_changed.connect(_on_villagers_changed)
+	EventBus.population_changed.connect(_on_population_changed)
 
 
 func _exit_tree() -> void:
 	EventBus.resources_changed.disconnect(_on_resources_changed)
-	EventBus.villagers_changed.disconnect(_on_villagers_changed)
+	EventBus.population_changed.disconnect(_on_population_changed)
 
 
 func stock_of(kind: StringName) -> int:
 	return int(_stock.get(kind, 0))
 
 
-func villager_counts() -> Vector2i:
-	return Vector2i(_idle, _total)
+## Units on the map, and the population limit their buildings provide.
+func population() -> Vector2i:
+	return Vector2i(_pop_used, _pop_cap)
 
 
 func _on_resources_changed(p_id: int, stock: Dictionary) -> void:
@@ -110,18 +115,21 @@ func _on_resources_changed(p_id: int, stock: Dictionary) -> void:
 	_refresh_labels()
 
 
-func _on_villagers_changed(p_id: int, idle: int, total: int) -> void:
+func _on_population_changed(p_id: int, used: int, cap: int) -> void:
 	if p_id != player_id:
 		return
-	_idle = idle
-	_total = total
+	_pop_used = used
+	_pop_cap = cap
 	_refresh_labels()
 
 
 func _refresh_labels() -> void:
 	for kind in _stock_labels:
 		(_stock_labels[kind] as Label).text = str(stock_of(kind))
-	_villagers_label.text = "%d/%d" % [_idle, _total]
+	# Units on the map over the population limit (PLAN.md 4.11), NOT idle over
+	# total -- which is what this row used to show, and was never what it was for
+	# (project owner, 2026-08-17). Idle villagers are the age header's badge.
+	_pop_label.text = "%d/%d" % [_pop_used, _pop_cap]
 
 
 ## One row: the resource's icon (or nothing, if it hasn't landed yet -- the

@@ -181,7 +181,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 			"is_unit": GameDataRegistry.unit(def_id) != null,
 			# Present only on units (SimUnit.to_snapshot); absent on a building or
 			# resource node entry, where it defaults to IDLE and is never read since
-			# villager_counts() already filters those out by is_unit.
+			# _is_own_living_villager() has already filtered those out by is_unit.
 			"task": int(entry.get("task", SimUnit.Task.IDLE)),
 			# Present only on buildings (SimBuilding.to_snapshot); 0 elsewhere, which
 			# reads correctly as "nothing queued" rather than needing its own guard.
@@ -506,68 +506,62 @@ func control_group_centre(member_ids: Array) -> Variant:
 	return sum / float(n) if n > 0 else null
 
 
-## Idle vs. total units belonging to `owner`, for the population counter
-## (PLAN.md 7.1). By unit-ness rather than by `unit.villager` specifically --
-## MVP has exactly one unit type, so today the two questions have the same
-## answer, and this does not have to change the day a second one lands.
-func villager_counts(owner: int) -> Vector2i:
-	var idle := 0
-	var total := 0
-	for f in _facts.values():
-		if not _is_own_living_unit(f, owner):
-			continue          # a corpse (4.7) is not a villager to count any more
-		total += 1
-		if int(f.get("task", -1)) == SimUnit.Task.IDLE:
-			idle += 1
-	return Vector2i(idle, total)
-
-
-## Whether `f` is one of `owner`'s living units -- the population counter's
-## definition of a "villager", factored out because `idle_unit_ids()` below MUST
-## agree with it. The idle badge's number and the resource HUD's idle number are
-## both on screen at once, and two counters labelled idle disagreeing would read
-## as a bug in whichever the player trusted less.
+## Whether `f` is one of `owner`'s living VILLAGERS -- what the idle badge counts
+## and walks (PLAN.md 7.1).
 ##
-## Deliberately unit-ness rather than `unit.villager` specifically, which is the
-## rule `villager_counts()` has always used. It is now visible in a second place
-## and worth restating: an idle SOLDIER counts too and the badge will walk to
-## one. Narrowing this to villagers is a one-line change here, and it is one
-## decision rather than two, which is the point of the seam.
-func _is_own_living_unit(f: Dictionary, owner: int) -> bool:
+## Villagers, not units. This counted any unit until the project owner corrected
+## it (2026-08-17): the age header's badge is idle villagers, and the resource
+## panel's bottom row is units-on-map against the population limit. Those are two
+## different questions with two different readers, and the old shared
+## `villager_counts()` answered neither of them properly -- it reported
+## idle-vs-total units to both.
+##
+## "Villager" is `UnitDef.is_worker()`, i.e. a unit with a gather rate, rather
+## than `def_id == &"unit.villager"`. Same reason `_is_gatherable_building()`
+## asks the def instead of naming the field: the asset seam is the only place
+## filenames live, and this is the same rule applied to ids.
+func _is_own_living_villager(f: Dictionary, owner: int) -> bool:
 	if not bool(f.get("alive", true)):
+		return false          # a corpse (4.7) is not a villager to count any more
+	if not bool(f.get("is_unit", false)) or int(f.get("owner_id", 0)) != owner:
 		return false
-	return bool(f.get("is_unit", false)) and int(f.get("owner_id", 0)) == owner
+	var ud: UnitDef = GameDataRegistry.unit(StringName(f.get("def_id", &"")))
+	return ud != null and ud.is_worker()
 
 
-## `owner`'s idle units, in ascending id order -- the other half of 7.1's
-## headcount, made actionable by `IdleVillagerBadge`.
+## How many of `owner`'s villagers are standing idle, for the badge's number.
+func idle_villager_count(owner: int) -> int:
+	return idle_villager_ids(owner).size()
+
+
+## `owner`'s idle villagers, in ascending id order.
 ##
 ## Sorted by id, the same determinism `owned_entity_position()` and
 ## `SimWorld.nearest_drop_off()` keep: the walk through them has to visit the
-## same units in the same order every tap, and `_facts` is a Dictionary whose
+## same villagers in the same order every tap, and `_facts` is a Dictionary whose
 ## key order is insertion order -- i.e. whatever order entities happened to
 ## first appear in a snapshot.
-func idle_unit_ids(owner: int) -> Array[int]:
+func idle_villager_ids(owner: int) -> Array[int]:
 	var ids: Array[int] = []
 	for id in _facts:
 		var f: Dictionary = _facts[id]
-		if _is_own_living_unit(f, owner) and int(f.get("task", -1)) == SimUnit.Task.IDLE:
+		if _is_own_living_villager(f, owner) and int(f.get("task", -1)) == SimUnit.Task.IDLE:
 			ids.append(int(id))
 	ids.sort()
 	return ids
 
 
-## The idle unit after `after_id`, wrapping round to the first, or 0 when
-## `owner` has no idle units at all (PLAN.md 7.1 -- tap the badge to walk them).
+## The idle villager after `after_id`, wrapping round to the first, or 0 when
+## `owner` has none at all (PLAN.md 7.1 -- tap the badge to walk them).
 ##
 ## Takes the previous id rather than an index into the list, because the list
 ## itself changes under the player between taps: a villager they visited five
 ## seconds ago may have been given a job, and an index would then point at a
 ## different unit than the one it was recorded for. An id is stable, and asking
 ## for "the next one after it" still lands in the right PLACE in the order even
-## once that unit has dropped out of the list entirely.
-func next_idle_unit(owner: int, after_id: int) -> int:
-	var ids := idle_unit_ids(owner)
+## once that villager has dropped out of the list entirely.
+func next_idle_villager(owner: int, after_id: int) -> int:
+	var ids := idle_villager_ids(owner)
 	if ids.is_empty():
 		return 0
 	for id in ids:

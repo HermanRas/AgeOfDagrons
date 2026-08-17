@@ -17,6 +17,11 @@ var facing: int = 0                  # 0-7
 ## MVP (PLAN.md 2.2); carried per-unit rather than looked up from the def on every
 ## passability query, which pathfinding does thousands of times per path.
 var domain: int = SimMap.Domain.LAND
+## What this unit costs against its owner's population cap (PLAN.md 4.11).
+## Copied off the def at spawn, exactly as `SimBuilding.provides_pop` is, so
+## PopulationSystem's per-tick recount is a scan over entities and never a
+## registry lookup -- and so a unit's cost cannot change under it mid-match.
+var pop_cost: int = 1
 var carry_kind: StringName = &""
 var carry_amount: int = 0
 var gather_cooldown: int = 0

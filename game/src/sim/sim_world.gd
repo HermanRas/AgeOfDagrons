@@ -59,11 +59,13 @@ func setup(cfg: MatchConfig) -> void:
 	# AgeSystem sits beside ProductionSystem: both turn queued time into a thing
 	# arriving, and both must run after CommandSystem has let this tick's orders
 	# land so an advance started this tick is already counting.
+	# PopulationSystem is after DeathSystem, and last of all: it recounts what
+	# EXISTS, so it must see the finished tick rather than the middle of one.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
 			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
-			DeathSystem.new()]
+			DeathSystem.new(), PopulationSystem.new()]
 
 	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()
@@ -113,6 +115,7 @@ func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
 		u.max_hp = d.hp
 		u.vision_range = d.los
 		u.speed = d.speed
+		u.pop_cost = d.pop_cost
 		u.domain = SimMap.from_domain_name(d.domain)
 	else:
 		u.hp = int(_FALLBACK_UNIT["hp"])

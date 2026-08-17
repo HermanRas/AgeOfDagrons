@@ -533,20 +533,23 @@ func _stop_everyone() -> void:
 
 
 func _several_are_idle() -> bool:
-	return (_game._view as GameView).idle_unit_ids(Net.local_player_id()).size() >= 3
+	return (_game._view as GameView).idle_villager_ids(Net.local_player_id()).size() >= 3
 
 
-## Tap the idle badge once per idle unit and print where each tap landed.
+## Tap the idle badge once per idle villager and print where each tap landed.
 ##
-## The count of DISTINCT units is what matters and what the printout is for: a
+## The count of DISTINCT villagers is what matters and what the printout is for: a
 ## walk that visits the same villager five times looks identical in a screenshot
 ## to one that visits five, and both look identical to a badge whose count is
-## right and whose button does nothing.
+## right and whose button does nothing. The line also prints the population the
+## resource panel is showing, which is the OTHER counter and must not agree with
+## this one by coincidence.
 func _walk_the_idle_badge() -> void:
 	var view: GameView = _game._view
 	var badge: IdleVillagerBadge = _game._idle_badge
-	var idle := view.idle_unit_ids(Net.local_player_id())
-	print("idle badge reads %d; view has %d idle: %s" % [badge.count, idle.size(), idle])
+	var idle := view.idle_villager_ids(Net.local_player_id())
+	print("idle badge reads %d; view has %d idle: %s; population %s" % [
+			badge.count, idle.size(), idle, _game._hud.population()])
 
 	var visited: Array[int] = []
 	# One more tap than there are idle units, so the wrap is exercised too.

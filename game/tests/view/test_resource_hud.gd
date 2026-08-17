@@ -1,6 +1,6 @@
 ## PLAN.md 7.1: the resource counters are driven entirely off EventBus, not off
 ## a GameView reference -- so this test drives it the same way, by emitting the
-## two signals directly rather than running a snapshot through GameScene.
+## signals directly rather than running a snapshot through GameScene.
 extends TestCase
 
 var hud: ResourceHUD
@@ -27,14 +27,25 @@ func test_a_signal_for_a_different_player_is_ignored() -> void:
 	assert_eq(hud.stock_of(&"wood"), 0, "player 2's stock must not paint player 1's HUD")
 
 
-func test_villagers_changed_updates_the_headcount() -> void:
-	EventBus.villagers_changed.emit(1, 2, 5)
-	assert_eq(hud.villager_counts(), Vector2i(2, 5))
+## Units on the map against the population limit (PLAN.md 4.11). This row read
+## IDLE/TOTAL villagers until 2026-08-17, which was neither of the two things the
+## HUD needs to say -- idle villagers are the age header's badge now.
+func test_population_changed_updates_the_bottom_row() -> void:
+	EventBus.population_changed.emit(1, 12, 20)
+	assert_eq(hud.population(), Vector2i(12, 20))
+	assert_eq(hud._pop_label.text, "12/20")
 
 
-func test_a_villager_signal_for_a_different_player_is_ignored() -> void:
-	EventBus.villagers_changed.emit(2, 9, 9)
-	assert_eq(hud.villager_counts(), Vector2i(0, 0))
+func test_a_population_signal_for_a_different_player_is_ignored() -> void:
+	EventBus.population_changed.emit(2, 9, 9)
+	assert_eq(hud.population(), Vector2i(0, 0))
+
+
+func test_the_idle_count_does_not_touch_this_panel() -> void:
+	# The two used to share `villagers_changed`, which is how the population row
+	# came to be showing idle villagers in the first place.
+	EventBus.idle_villagers_changed.emit(1, 7)
+	assert_eq(hud.population(), Vector2i(0, 0))
 
 
 ## Found live: the icon pack ships its resource icons at 100x100 px, and a

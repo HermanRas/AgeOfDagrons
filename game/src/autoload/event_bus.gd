@@ -14,11 +14,27 @@ extends Node
 ## no benefit at the one-signal-per-snapshot rate this fires at.
 signal resources_changed(player_id: int, stock: Dictionary)
 
-## The other half of 7.1: idle vs. total villagers. Separate from
-## `resources_changed` because it is not derived from `SimPlayer.stock` at all --
-## it is a headcount over units, which lives on the view side (GameView.villager_
-## counts()), not in the snapshot's player_state block.
-signal villagers_changed(player_id: int, idle: int, total: int)
+## How many VILLAGERS are standing about doing nothing (PLAN.md 7.1), for the age
+## header's idle badge. Villagers specifically -- an idle soldier is a garrison,
+## not a mistake, and the badge is a button that walks to whatever it counts.
+##
+## Derived on the view side (`GameView.idle_villager_ids()`) rather than read out
+## of the snapshot, because it is a headcount over entities and not per-player
+## state the sim keeps.
+##
+## These two were ONE signal, `villagers_changed(player_id, idle, total)`, which
+## fed both this and the resource panel's bottom row -- and made that row report
+## idle-vs-total units, which is not what it is for (project owner, 2026-08-17).
+## They count different things for different readers and are now separate.
+signal idle_villagers_changed(player_id: int, idle: int)
+
+## Units on the map against the population limit their buildings provide
+## (PLAN.md 4.11), for the resource panel's bottom row. ALL units, not just
+## villagers, and both numbers come straight from `player_state` -- unlike the
+## idle count above, population is state the SIM owns (`SimPlayer.pop_used`/
+## `pop_cap`, written by PopulationSystem) because the cap is a rule the server
+## has to be able to enforce.
+signal population_changed(player_id: int, used: int, cap: int)
 
 ## PLAN.md 10.1: one slot's display state. `icon` is the def_id of whichever
 ## unit/building type is most represented in the group's currently-alive
@@ -26,5 +42,5 @@ signal villagers_changed(player_id: int, idle: int, total: int)
 ## reads that as "draw an empty circle" rather than needing a separate
 ## emptied signal. GameScene computes this from SimPlayer.control_groups
 ## (server-authoritative, 10.6) crossed with GameView's live facts, the same
-## division of labour resources_changed/villagers_changed already use.
+## division of labour resources_changed/idle_villagers_changed already use.
 signal control_group_changed(slot: int, icon: StringName, count: int)
