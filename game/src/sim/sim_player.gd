@@ -8,6 +8,17 @@ extends RefCounted
 ## stack of 5 slots, not a scrollable list.
 const CONTROL_GROUP_COUNT := 5
 
+## What one tile of the fog of war is worth to this player (PLAN.md 2.5, and its
+## 0/1/2 is the encoding PLAN.md 6.2 already specified for `vision`).
+##
+## Three states rather than two, and EXPLORED is the one that earns its place:
+## terrain you have seen stays drawn because the ground does not move, while units
+## standing on it do not, so "never seen" and "seen but not now" have to be told
+## apart both by the renderer and by the snapshot filter. Named on SimPlayer rather
+## than on VisionSystem because this is the meaning of the DATA below, and the
+## renderer needs it as much as the system that writes it.
+enum Fog { UNSEEN, EXPLORED, VISIBLE }
+
 var id: int = 0
 var peer_id: int = 0                 # 1 = host's own local player
 ## PLAN.md 2.7.1: half of the skin key. v1 ships one civilisation, so this is
@@ -42,6 +53,17 @@ var advance_total_ticks: int = 0
 var researched: Dictionary = {}
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 var defeated: bool = false
+
+## Fog of war (PLAN.md 2.5): one `Fog` byte per tile, row-major over SimMap's grid
+## and indexed by `SimMap.index_of()`. `VisionSystem` is the only writer.
+##
+## EMPTY MEANS "NO FOG", and that is load-bearing rather than merely an initial
+## state. `SimWorld.setup()` leaves it empty and VisionSystem allocates it on its
+## first tick, so a world that has never been stepped -- most of the sim test suite,
+## and any tool that stands one up to inspect it -- has no fog rather than a grid
+## that reads as entirely unseen. The alternative hides the whole map from everyone
+## until something ticks, which is indistinguishable from a broken filter.
+var vision: PackedByteArray = PackedByteArray()
 
 
 func can_afford(cost: Dictionary) -> bool:

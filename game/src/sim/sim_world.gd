@@ -75,8 +75,10 @@ func setup(cfg: MatchConfig) -> void:
 	# AgeSystem sits beside ProductionSystem: both turn queued time into a thing
 	# arriving, and both must run after CommandSystem has let this tick's orders
 	# land so an advance started this tick is already counting.
-	# PopulationSystem is after DeathSystem: it recounts what EXISTS, so it must see
-	# the finished tick rather than the middle of one.
+	# PopulationSystem and VisionSystem are after DeathSystem: both recount what
+	# EXISTS, so both must see the finished tick rather than the middle of one. Vision
+	# specifically must not be lit by a scout that died this tick, in the very
+	# snapshot that reports the death.
 	# WinConditionSystem (11.1) is last of all, for the same reason and one more: a
 	# player whose last building fell THIS tick has lost as of this tick, and every
 	# system that could still have saved them has already had its say.
@@ -84,7 +86,8 @@ func setup(cfg: MatchConfig) -> void:
 			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
-			DeathSystem.new(), PopulationSystem.new(), WinConditionSystem.new()]
+			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
+			WinConditionSystem.new()]
 
 	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()
@@ -553,8 +556,13 @@ func state_hash() -> int:
 		# `defeated` (11.1) is in here because it is the one per-player fact that is
 		# IRREVERSIBLE: two clients that eliminated a player on different ticks would
 		# otherwise agree on every hash until one of them declared a winner.
+		# `vision` (2.5) is in here because it decides WHAT EACH CLIENT IS SENT: two
+		# hosts that disagreed about who can see what would disagree about the wire
+		# contents while every entity in the world still matched, and the fog is the
+		# one piece of per-player state that is never echoed back to be checked.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
-				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated])
+				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated,
+				p.vision])
 
 	# The outcome itself, which is the single most important thing in the hash to get
 	# right: two clients that disagree about who won have diverged about the only

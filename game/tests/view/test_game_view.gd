@@ -11,11 +11,14 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	# _ready() (which parents pool and terrain under view) only runs once a node
+	# _ready() (which parents pool, terrain and fog under view) only runs once a node
 	# enters a tree, which never happens for a bare .new() in a headless test --
-	# so both are separate orphans and must be freed on their own.
+	# so each is a separate orphan and must be freed on its own. Forgetting the fog
+	# one showed up immediately as "88 RIDs of type CanvasItem were leaked" at the end
+	# of the suite.
 	view.pool.free()
 	view.terrain.free()
+	view.fog.free()
 	view.free()
 
 
@@ -44,11 +47,18 @@ func test_apply_snapshot_removed_releases_the_view() -> void:
 
 # ── depth sorting for large footprints (3.1) ───────────────────────────────
 
-func _snapshot_of(id: int, def_id: String, tile: Vector2i, extra: Dictionary = {}) -> Dictionary:
+## One `updated` entry. Split out from `_snapshot_of` below so a test can put SEVERAL
+## entities in one snapshot, which since 2.5 is the only way to have several at once:
+## anything a snapshot does not mention is treated as no longer visible.
+func _entry(id: int, def_id: String, tile: Vector2i, extra: Dictionary = {}) -> Dictionary:
 	var entry := {"id": id, "def_id": def_id, "hp": 10, "max_hp": 10,
 			"pos": {"x": tile.x * SimWorld.SUBTILE, "y": tile.y * SimWorld.SUBTILE}}
 	entry.merge(extra)
-	return {"tick": 1, "updated": [entry], "removed": []}
+	return entry
+
+
+func _snapshot_of(id: int, def_id: String, tile: Vector2i, extra: Dictionary = {}) -> Dictionary:
+	return {"tick": 1, "updated": [_entry(id, def_id, tile, extra)], "removed": []}
 
 
 func test_a_building_sorts_by_its_front_tile_but_draws_on_its_centre() -> void:
@@ -247,9 +257,14 @@ func test_a_units_own_sort_is_not_lifted_in_front_of_a_tree() -> void:
 	# Occluders grew to include nodes; the SORT LIFT deliberately did not. A unit
 	# lifted in front of a one-tile tree would draw on top of its canopy, which is
 	# the roof-standing bug the directional rule exists to prevent.
-	view.apply_snapshot(_snapshot_of(1, "res.tree", Vector2i(20, 20),
-			{"size_class": 1, "footprint": {"x": 1, "y": 1}}))
-	view.apply_snapshot(_snapshot_of(2, "unit.villager", Vector2i(21, 21)))
+	# BOTH IN ONE SNAPSHOT, which is also what the server sends. Two sequential
+	# single-entity snapshots used to work because nothing ever dropped a view the
+	# snapshot stopped mentioning; since 2.5 that absence means "you cannot see it any
+	# more" (GameView.apply_snapshot), so the second call would forget the tree.
+	view.apply_snapshot({"tick": 1, "updated": [
+		_entry(1, "res.tree", Vector2i(20, 20), {"size_class": 1, "footprint": {"x": 1, "y": 1}}),
+		_entry(2, "unit.villager", Vector2i(21, 21)),
+	], "removed": []})
 	var tree := view.pool.get_view(1)
 	var unit := view.pool.get_view(2)
 	assert_true(unit.position.y > tree.position.y,
@@ -383,8 +398,14 @@ func test_the_walk_carries_on_from_where_it_was_when_that_villager_gets_a_job() 
 	# 4, orders it to gather, and taps again. 4 has left the list -- the next tap
 	# must still go to 9 rather than back to the top.
 	_idle_fixture()
+	# 9 IS RESENT UNCHANGED, because since 2.5 a snapshot that stops mentioning an
+	# entity is telling the client it can no longer see it -- so a second snapshot
+	# carrying only the villager that changed would forget the one this test is about.
+	# The host sends the whole visible cast every tick, which is what this now mirrors.
 	view.apply_snapshot({"tick": 2, "updated": [
 		{"id": 4, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.GATHER,
+				"pos": {"x": 0, "y": 0}},
+		{"id": 9, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.IDLE,
 				"pos": {"x": 0, "y": 0}},
 	], "removed": []})
 	assert_eq(view.idle_villager_ids(1), [9] as Array[int])

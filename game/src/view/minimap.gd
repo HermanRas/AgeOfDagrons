@@ -41,6 +41,18 @@ var _terrain_tex: ImageTexture = null
 var _blips: Array[Dictionary] = []          # [{tile: Vector2i, color: Color}]
 var _double_tap := DoubleTapDetector.new()
 
+## The fog, as its own texture over the terrain one (PLAN.md 2.5). A second image
+## rather than baking the fog into `_terrain_tex`, because the two change on
+## completely different clocks: terrain is built once per match and the fog moves
+## every tick, so combining them would mean re-colouring every tile of the map ten
+## times a second to move one villager.
+##
+## Blips are drawn BETWEEN the two (see `_draw`), so an enemy blip cannot show through
+## ground the player has not explored -- which would give away on the minimap exactly
+## what the snapshot filter withheld from the map.
+var _fog_tex: ImageTexture = null
+var _fog: PackedByteArray = PackedByteArray()
+
 
 func _init() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
@@ -69,6 +81,46 @@ func build_terrain(size: Vector2i, terrain: PackedByteArray) -> void:
 			img.set_pixel(x, y, _terrain_color(int(terrain[row + x])))
 	_terrain_tex = ImageTexture.create_from_image(img)
 	queue_redraw()
+
+
+## Paint the fog (PLAN.md 2.5), from the same row-major `SimPlayer.Fog` bytes the
+## snapshot carries and `FogOverlay` draws in the world. Empty clears it, which is
+## what a world with no fog sends.
+##
+## Rebuilt whole on each call rather than diffed like `FogOverlay.apply()` does: this
+## is a `set_pixel` into a 64x64 image, where the overlay's equivalent is a
+## `set_cell` that dirties a rendering quadrant. Skipped entirely when the bytes are
+## unchanged, which is the only cheap case worth catching.
+func set_fog(vision: PackedByteArray) -> void:
+	if vision == _fog:
+		return
+	_fog = vision.duplicate()
+
+	var count := _map_size.x * _map_size.y
+	if _map_size.x <= 0 or _map_size.y <= 0 or vision.size() < count:
+		_fog_tex = null
+		queue_redraw()
+		return
+
+	var img := Image.create(_map_size.x, _map_size.y, false, Image.FORMAT_RGBA8)
+	for y in range(_map_size.y):
+		var row := y * _map_size.x
+		for x in range(_map_size.x):
+			img.set_pixel(x, y, _fog_color(int(vision[row + x])))
+	_fog_tex = ImageTexture.create_from_image(img)
+	queue_redraw()
+
+
+## Deliberately the same two washes `FogOverlay` paints in the world, so the minimap
+## and the map agree about how dark "explored" is.
+func _fog_color(state: int) -> Color:
+	match state:
+		SimPlayer.Fog.UNSEEN:
+			return FogOverlay.UNSEEN_COLOR
+		SimPlayer.Fog.EXPLORED:
+			return FogOverlay.EXPLORED_COLOR
+		_:
+			return Color(0, 0, 0, 0)
 
 
 ## `facts` is `GameView.all_facts()`-shaped: id -> {tile, owner_id, alive, ...}.
@@ -117,6 +169,13 @@ func _draw() -> void:
 
 	for b in _blips:
 		draw_circle(_map_to_local(b["tile"]), 2.0, b["color"])
+
+	# OVER the blips (2.5). A remembered building is dimmed along with the ground it
+	# stands on, and nothing the player cannot see can shine through unexplored black
+	# -- which would hand back on the minimap exactly what the snapshot filter
+	# withheld from the map. Under the frame, so the gold border stays crisp.
+	if _fog_tex != null:
+		draw_texture_rect(_fog_tex, rect, false)
 
 	# A double line rather than one stroke, echoing the gold-on-dark edge every
 	# other panel gets from `panel_background.png`'s own border art -- there is

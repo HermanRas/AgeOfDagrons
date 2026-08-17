@@ -128,6 +128,18 @@ func occupant(t: Vector2i) -> int:
 	return occupancy[_index(t)]
 
 
+## Row-major index of `t`, or -1 out of bounds.
+##
+## Public because the fog of war (2.5) keeps its own parallel array per player
+## (`SimPlayer.vision`) rather than a fourth array here: vision is per PLAYER and
+## these three are per MAP, and eight copies of the grid do not belong on the
+## object that has exactly one of everything else. The indexing has to be shared
+## though, or two row-major strides would eventually disagree about which tile is
+## which -- which is a fog bug that looks like a rendering bug.
+func index_of(t: Vector2i) -> int:
+	return _index(t) if in_bounds(t) else -1
+
+
 ## Can `domain` stand on this tile right now: in bounds, crossable terrain for
 ## that domain, not blocked outright, and nothing BLOCKING already there.
 ##

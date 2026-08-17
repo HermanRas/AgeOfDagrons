@@ -106,5 +106,21 @@ func _recv_snapshot(d: Dictionary) -> void:
 	snapshot_received.emit(d)
 
 
-func _broadcast_snapshot(_player_id: int, snap: Dictionary) -> void:
-	rpc("_recv_snapshot", snap)
+## One player's snapshot to THAT player's peer, and to nobody else.
+##
+## This used to `rpc()` the lot to everybody, which was invisible for as long as
+## every player was sent an identical world -- and became a hole the moment fog of
+## war landed (PLAN.md 2.5). `SimHost` calls this once per player per tick, so the
+## LAST player's filtered snapshot arrived last and overwrote the local player's: in
+## the debug skirmish that is the opponent's view of the map, which is both wrong on
+## screen and precisely what the filter exists to withhold. `test_net_solo` caught it
+## within a minute of the filter existing, by which time the fog had already made the
+## local player's own villager disappear.
+##
+## Loops over `_peer_players` rather than reversing it into a lookup because a player
+## may have NO peer: the skirmish opponent has none today and an AI (12.2a) never
+## will, and their snapshot should go nowhere rather than to whoever is listening.
+func _broadcast_snapshot(player_id: int, snap: Dictionary) -> void:
+	for peer in _peer_players:
+		if int(_peer_players[peer]) == player_id:
+			rpc_id(int(peer), "_recv_snapshot", snap)

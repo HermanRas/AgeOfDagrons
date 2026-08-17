@@ -20,6 +20,7 @@ const _ADJACENT_TO_BUILDING_BONUS := 100000.0
 
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
+var fog: FogOverlay = FogOverlay.new()
 var selection: Selection = Selection.new()
 
 var _last_tick: int = -1
@@ -58,12 +59,21 @@ func _ready() -> void:
 	pool.y_sort_enabled = true
 	add_child(pool)
 
+	# LAST, so it draws over the ground AND over the entities standing on it (2.5).
+	# A remembered building in explored territory is dimmed by the same wash that
+	# dims the grass it stands on, which is the whole look; putting the fog under the
+	# pool would leave it bright and floating in the dark.
+	add_child(fog)
+
 
 ## Hand the view the map to draw. Terrain bytes, not a SimMap: the view layer
 ## never holds a reference into the simulation (PLAN.md 4), and this is also the
 ## shape a networked client gets its map in.
 func build_terrain(size: Vector2i, terrain_bytes: PackedByteArray) -> void:
 	terrain.build(size, terrain_bytes)
+	# Sized off the same grid, so the two can never disagree about where tile (0,0)
+	# is -- both align themselves against Iso rather than against each other.
+	fog.build(size)
 
 
 func apply_snapshot(snap: Dictionary) -> void:
@@ -113,8 +123,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 					"pad": Occlusion.column_pad_for(ph.footprint_m, fp),
 					"reach": Occlusion.reach_for(ph.height_m)})
 
+	# Ids mentioned by this snapshot, for the forget pass after the loop.
+	var seen: Dictionary = {}
+
 	for entry in updated:
 		var id := int(entry.get("id", 0))
+		seen[id] = true
 		var view := pool.get_view(id)
 		var is_new := view == null
 		if is_new:
@@ -221,10 +235,38 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# its own guard (4.5's build-assist tap needs to tell a foundation from
 			# a finished building).
 			"phase": int(entry.get("phase", SimBuilding.Phase.COMPLETE)),
+			# Fog of war (2.5): this is a static the player REMEMBERS rather than one
+			# they can currently see, so the server sent it stripped of everything
+			# live (SnapshotSystem._remembered). Carried into the facts so the panel
+			# can say so -- hp arrives as 0/0, which SelectionPanel already reads as
+			# "no health bar" without needing to know why.
+			"remembered": bool(entry.get("remembered", false)),
 		}
 		# A corpse or rubble is unselectable (4.7, 5.5) even if it was selected
 		# the tick it died -- `alive` wins over a selection built before this.
 		view.set_selected(alive and selection.contains(id))
+
+	# OUT OF SIGHT IS OUT OF MIND (2.5). Anything the view was holding that this
+	# snapshot did not mention is something the server has stopped telling us about --
+	# an enemy unit that walked back into the fog -- so its view is released and its
+	# facts are dropped. Dropping the FACTS is the half that matters: a stale entry
+	# left in `_facts` would still answer `pick()` and still draw a blip on the
+	# minimap, which would make the fog a purely cosmetic overlay with the position
+	# leaking out the side.
+	#
+	# ABSENCE IS THE SIGNAL because `updated` currently carries everything the player
+	# may see, every tick (SnapshotSystem's own header). The obvious alternative --
+	# the server naming what has become hidden -- is worse than it looks: a list of
+	# hidden ids tells the client how many entities exist and which ids are taken, so
+	# an enemy's unit COUNT could be read straight off the wire. That is the same class
+	# of leak the filter exists to close. When 7.2's real delta lands, "not mentioned"
+	# will start to mean "unchanged" and this needs a per-entity signal instead -- one
+	# that says "you have lost sight of X" only for entities the client already knew
+	# about, and never enumerates the rest.
+	for known in _facts.keys():
+		if not seen.has(known):
+			pool.release(int(known))
+			_facts.erase(known)
 
 	for id in snap.get("removed", []):
 		pool.release(int(id))
@@ -243,6 +285,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# everything ENDED UP this snapshot, and doing it inside the entity loop would
 	# test half the units against a stale set of occluders.
 	_refresh_occlusion(occluders)
+
+	# The fog itself (2.5), from the raw bytes the snapshot carries -- the viewer's own
+	# grid and nobody else's, which is SnapshotSystem's business to guarantee. Absent
+	# or empty means the world has no fog and the overlay clears, so a test snapshot
+	# and a pre-2.5 replay both draw an unfogged map rather than a black one.
+	fog.apply(snap.get("vision", PackedByteArray()))
 
 
 ## Facts about one entity, or {} if it is not currently in view.

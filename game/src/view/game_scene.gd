@@ -378,7 +378,15 @@ func _start_match() -> void:
 	_camera.centre_on(Iso.tile_centre_to_world(world.map.size / 2))
 
 
+## The local player's fog, as the last snapshot carried it (PLAN.md 2.5). Cached
+## here for the same reason `_control_groups` is: `_refresh_minimap()` needs it and
+## does not receive the snapshot, and the alternative is asking `GameView` for its
+## overlay's internals.
+var _last_vision: PackedByteArray = PackedByteArray()
+
+
 func _on_snapshot(snap: Dictionary) -> void:
+	_last_vision = snap.get("vision", PackedByteArray())
 	_view.apply_snapshot(snap)
 	_refresh_panel()
 	_refresh_hud(snap)
@@ -774,6 +782,7 @@ func _on_age_advance_requested(_next_age: int) -> void:
 ## for its sake.
 func _refresh_minimap() -> void:
 	_minimap.update_entities(_view.all_facts(), Net.local_player_id())
+	_minimap.set_fog(_last_vision)
 
 
 ## Tap the minimap to move the camera there (PLAN.md 3.8). MVP has no 3.7

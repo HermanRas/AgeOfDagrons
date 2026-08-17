@@ -10,8 +10,11 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	# Each of GameView's three layers is a separate orphan in a headless test, since
+	# _ready() never runs to parent them -- see test_game_view.after_each.
 	view.pool.free()
 	view.terrain.free()
+	view.fog.free()
 	view.free()
 
 
@@ -73,8 +76,72 @@ func test_a_dead_entity_drops_out_of_the_selection() -> void:
 			_entity(2, "unit.villager", Vector2i(6, 5))])
 	view.select([1, 2] as Array[int])
 
-	view.apply_snapshot({"tick": 2, "updated": [], "removed": [2]})
+	# 1 is resent, 2 is despawned. An empty `updated` would now drop BOTH -- since 2.5
+	# a snapshot that stops mentioning an entity means the player cannot see it any
+	# more -- and this test is about the one that died, not the one that survived.
+	view.apply_snapshot({"tick": 2,
+			"updated": [_entity(1, "unit.villager", Vector2i(5, 5))], "removed": [2]})
 	assert_eq(view.selection.current(), [1] as Array[int])
+
+
+# ── losing sight of things (PLAN.md 2.5) ───────────────────────────────────
+
+func test_an_entity_the_snapshot_stops_mentioning_is_forgotten() -> void:
+	# The client half of fog of war. The server stops sending an enemy unit the moment
+	# it walks back into the dark, and ABSENCE is the signal -- so the view has to let
+	# go of it rather than leaving it frozen where it was last seen.
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(20, 20), 2)])
+	assert_not_null(view.pool.get_view(2), "in plain sight")
+
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	assert_null(view.pool.get_view(2), "and gone when we lose sight of it")
+
+
+func test_a_forgotten_entity_stops_answering_questions_about_itself() -> void:
+	# DROPPING THE FACTS IS THE HALF THAT MATTERS. A stale entry would still answer
+	# pick() and still draw a minimap blip, which would make the fog a purely cosmetic
+	# overlay with the position leaking out the side.
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(20, 20), 2)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(20, 20)), 0), 2)
+
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(20, 20)), 0), 0, "nothing there now")
+	assert_true(view.facts_for(2).is_empty())
+	assert_false(view.all_facts().has(2), "and no blip for the minimap either")
+
+
+func test_losing_sight_of_a_selected_unit_drops_it_from_the_selection() -> void:
+	# Otherwise an order would name an entity the player can no longer see, which the
+	# sim would accept for their own unit and refuse for anybody else's -- either way
+	# the selection has to follow what is actually on screen.
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
+			_entity(2, "unit.villager", Vector2i(6, 5))])
+	view.select([1, 2] as Array[int])
+
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	assert_eq(view.selection.current(), [1] as Array[int])
+
+
+func test_a_remembered_building_is_marked_as_such_in_the_facts() -> void:
+	# What SnapshotSystem._remembered sends: a static in explored territory, stripped
+	# of everything live. hp arrives as 0/0, which SelectionPanel already reads as "no
+	# health bar" without having to know why.
+	var remembered := _entity(3, "building.house", Vector2i(20, 20), 2, Vector2i(4, 4))
+	remembered.erase("hp")
+	remembered.erase("max_hp")
+	remembered["remembered"] = true
+	_populate([remembered])
+
+	var facts := view.facts_for(3)
+	assert_true(bool(facts["remembered"]))
+	assert_eq(int(facts["max_hp"]), 0, "no health bar for a memory")
+
+
+func test_an_entity_in_plain_sight_is_not_marked_remembered() -> void:
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5))])
+	assert_false(bool(view.facts_for(1)["remembered"]))
 
 
 ## A corpse/rubble (4.7, 5.5) is `alive == false` but stays in the snapshot for a
