@@ -1,24 +1,26 @@
-# AOD Ã¢â‚¬â€ Implementation & Programming Plan
+# AOD — Implementation & Programming Plan
 
-Companion to [IDEA.md](IDEA.md) (what we're building) and [UI_Design.md](UI_Design.md) (how it looks).
-This document is **how we build it**: architecture, objects, functions, scenes, and phase order.
+Companion to [IDEA.md](IDEA.md) (what we're building) and [UI_Design.md](UI_Design.md) (how it
+looks). This document is **how we build it**: architecture, objects, scenes, and phase order.
 
-Missing art is requested per need in [asset_request.md](asset_request.md), by the
-game-side agent as MVP work surfaces a real gap. *(`ASSET_MISSING.md`, a
-standing tracker of every asset the end state would ever want, was removed
-2026-08-16: it had drifted out of step with §13 below — still calling the voice
-question open after §13.2 answered it — and maintaining a speculative inventory
-alongside a request queue was paying twice for one job. Older files cite it as
-`ASSET_MISSING §n`; read those as history. It is in git if ever needed.)*
+Missing art is requested per need in [asset_request.md](asset_request.md).
+
+> **Compacted 2026-08-17.** This file had grown to ~1900 lines, most of it the history of how
+> each finished item was built — narratives that also live in the code comments and in git. The
+> full pre-compaction text is commit **`b904b76`** (`git show b904b76:PLAN.md`); nothing was
+> dropped that was not either recorded elsewhere or already settled. What survives here is
+> **decisions, specifications and open questions**. Rule of thumb going forward: a DONE row
+> says what exists, where it lives, and the one thing about it that is not obvious — the
+> reasoning belongs in the file it describes.
 
 ---
 
 ## 0. How to read this document
 
-- Phases tagged **`[MVP]`** are implemented first. Nothing untagged is written until every `[MVP]` item is done, tested, and working on a physical Android device.
-- Untagged items are full-scope scaffolding Ã¢â‚¬â€ they exist so we don't design ourselves into a corner.
-- After MVP, phases are chosen by the impact/effort table in Ã‚Â§12.
-- Phase numbers Ã¢â€°Â¥1 mirror [IDEA.md](IDEA.md). Phase 0.x is engineering groundwork with no IDEA.md counterpart.
+- Phases tagged **`[MVP]`** were implemented first. **MVP is complete** (§10).
+- Untagged items are full-scope scaffolding — they exist so we don't design ourselves into a corner.
+- Phase numbers ≥1 mirror [IDEA.md](IDEA.md). Phase 0.x is engineering groundwork with no IDEA.md counterpart.
+- §12 governs what gets built next.
 
 ---
 
@@ -28,18 +30,18 @@ alongside a request queue was paying twice for one job. Older files cite it as
 |---|---|
 | Engine | **Godot 4.7.1-stable** (`Godot_v4.7.1-stable_win64`) |
 | Language | **GDScript** |
-| Renderer | **Compatibility** (`gl_compatibility`), 2D Ã¢â‚¬â€ *not* the Mobile renderer. Vulkan-Mobile driver crashes cluster on older Mali/MediaTek/Adreno parts, and the Mobile renderer supports **fewer** Android devices ([godot#111729](https://github.com/godotengine/godot/issues/111729)) for no 2D benefit |
+| Renderer | **Compatibility** (`gl_compatibility`), 2D — *not* Mobile. Vulkan-Mobile crashes cluster on older Mali/MediaTek/Adreno parts, and the Mobile renderer supports **fewer** Android devices ([godot#111729](https://github.com/godotengine/godot/issues/111729)) for no 2D benefit |
 | Orientation | Landscape, locked |
-| Licence | **Code MIT, art CC-BY-SA 3.0** (Ã‚Â§2.3) Ã¢â‚¬â€ [LICENSE](LICENSE) Ã‚Â· [LICENSE-ART.md](LICENSE-ART.md) |
-| Session model | **Always clientÃ¢â‚¬â€œserver, even solo** (Ã‚Â§1.1) |
+| Licence | **Code MIT, art CC-BY-SA 3.0** (§2.3) — [LICENSE](LICENSE) · [LICENSE-ART.md](LICENSE-ART.md) |
+| Session model | **Always client–server, even solo** (§1.1) |
 | Simulation | Server-authoritative, fixed-tick, headless-capable |
 | Sim tick rate | **10 Hz** (100 ms), render interpolated to display rate |
 | Map topology | **Square grid**, rendered isometric |
-| Civilisations | **One, shared by every player, for v1** — same buildings, same units, same upgrade paths; players are told apart by **colour only**. **Deferred, not abandoned:** more civs return after v1 as a re-skin-plus-rename layer over this same roster (§2.7, §2.7.1, 9.5) |
-| Age skins | The civ axis is replaced by the **age** axis: four 0 A.D. civs, oldest-to-newest, are the four ages of our one civilisation (§2.7, §9.2) |
+| Civilisations | **One, shared by every player, for v1** — same buildings, units and upgrades; players are told apart by **colour only**. Deferred, not abandoned: civs return after v1 as a re-skin-plus-rename layer over this same roster (§2.7.1, 9.5) |
+| Age skins | The civ axis is replaced by the **age** axis: four 0 A.D. civs, oldest-to-newest, are the four ages of our one civilisation (§2.7) |
 | Units of measure | Integer sub-tile units, **1 tile = 256 sub-units** |
-| Dev environment | **Native Windows** for editor + Android deploy; WSL/Docker for tooling (Ã‚Â§1.2) |
-| Asset delivery | **Downloadable packs**, not bundled in the APK (Ã‚Â§3.2) |
+| Dev environment | **Native Windows** for editor + Android deploy; WSL/Docker for tooling (§1.2) |
+| Asset delivery | **Downloadable packs**, not bundled in the APK (§3.2) |
 
 ### 1.1 Session model
 
@@ -58,60 +60,53 @@ Rules this imposes:
 4. **Solo play is not a special case.** If solo works, the networked path is already exercised.
 5. Bit-exact determinism is not required. The sim/view split is.
 
+> Rule 4 is load-bearing and was **only half true until 2.5**: solo exercises the path, but it
+> cannot exercise a *second peer*. `Net._broadcast_snapshot()` sent every player's snapshot to
+> everybody for months, harmlessly, because all players saw an identical world — and the moment
+> fog filtering existed it handed the client the opponent's view of the map. **Latent breakage
+> accumulates in the net layer silently.** See §12.1.
+
 ### 1.2 Development environment
 
-**Native Windows** for the Godot editor and Android deploys. Android USB `adb` from WSL2 requires `usbipd-win` passthrough and is unreliable; one-tap deploy to a physical device is a core habit (Ã‚Â§15).
+**Native Windows** for the Godot editor and Android deploys (`adb` from WSL2 needs `usbipd-win`
+passthrough and is unreliable). **WSL2 + Docker** for the Python asset pipeline (`tools/`), the
+headless server, and running the checks.
 
-**WSL2 + Docker** for:
-1. The Python asset pipeline (`tools/`) Ã¢â‚¬â€ pinned dependencies, reproducible.
-2. The headless dedicated server (Phase 12.1) Ã¢â‚¬â€ also verifies the `sim/` boundary held.
-3. Running the checks Ã¢â‚¬â€ headless sim tests, boundary check, `licence_audit.py`.
+> **There is no CI on this repo.** Nothing runs automatically on push. Every check here — the
+> headless suite, the `sim/` boundary check, the licence audit — is a **local command run by
+> hand**. Where this document says a check "fails", read "fails when you run it". They are all
+> shaped as single commands with meaningful exit codes so adding CI is trivial, but it has not
+> been done. Do not write "enforced by CI" anywhere until it is true.
 
-> **There is no CI on this repo.** No `.github/` exists and nothing runs automatically
-> on push. Every check described in this document Ã¢â‚¬â€ the headless suite, the `sim/`
-> boundary check, the licence audit Ã¢â‚¬â€ is a **local command a developer runs by hand**.
-> Where this document says a check "fails", read "fails when you run it", not "blocks a
-> merge". The checks are all deliberately shaped as single commands with meaningful exit
-> codes so that adding CI later is trivial, but that has not been done. Do not write
-> "enforced by CI" anywhere until it is true.
-
-Source lives on the Windows filesystem. Containers bind-mount it; never use Docker volumes for source.
+Source lives on the Windows filesystem; containers bind-mount it. Never use Docker volumes for
+source.
 
 ### 1.3 Machine setup
 
 **Working root for anything outside Google sync:** `C:\Users\herman.ras\Downloads\AOD_game\`
+holding `art_source\` (0 A.D. checkout), `art_work\`, `packs\`, `tools_env\`.
 
-```
-C:\Users\herman.ras\Downloads\AOD_game\
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ art_source\        # 0 A.D. art repo/checkout Ã¢â‚¬â€ large, never synced, never committed
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ art_work\          # Blender scenes, render output, intermediate frames
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ packs\             # built .pck files staged for website upload
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ tools_env\         # Python venv for tools/
-```
+The Godot project still sits in the Drive folder (`AOD_Mobile\game\`) and **should move to a
+local path** — a git repo inside Drive sync is what corrupted the last `.git`.
 
-The Godot project stays in the Drive folder for now (`AOD_Mobile\game\`) but **should move to a local path at clean init** Ã¢â‚¬â€ a git repo inside Drive sync is what corrupted the last `.git`, and GitHub is the correct backup for an open-source project.
+| Requirement | Version / notes |
+|---|---|
+| **Godot** | `4.7.1-stable_win64` ✅ |
+| **Android export** | Godot's build template + JDK 17 + Android SDK. **`export_presets.cfg` is tracked** (it holds no secrets) so `permissions/internet=true` ships for everyone — it must stay `true` or `Net.host_solo()` fails silently on-device even for loopback (Android requires INTERNET for any socket) |
+| **Python** | 3.11+ with `Pillow` + `numpy`, in a venv made from **Blender's own** Python (`tools_env\venv`) — nothing system-wide, and the venv cannot drift off the pinned Blender ✅ |
+| **Blender** | **4.5.12 LTS — hard pin, do not use 5.x.** COLLADA import was *removed* in 5.0 and 0 A.D.'s meshes are `.dae`. Installed as a portable extract, deliberately not Steam/MS Store, so no auto-update can break the art track ✅ |
+| **`isobake`** | [`HermanRas/blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) (GPL-2.0-or-later) — the render/bake/verify pipeline (§2.2). `pip install -e` into the venv ✅ |
+| **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0) pinned at `b31b5c4`. Imports actor XML (mesh + props + textures) but **not animations** — isobake attaches those, and applies two Blender-4.5 shims at load time rather than forking ✅ |
+| **0 A.D. art** | `git clone --depth 1` from gitea into `art_source\`. **Shallow matters** (full history ~8.3 GB) and **`git-lfs` is required** or the clone succeeds and the checkout fails. Scope with `git config lfs.fetchinclude "binaries/data/mods/public/art/**"` ✅ ~11 GB |
+| **Test framework** | Custom `TestCase`/`run_tests.tscn` harness, kept instead of GdUnit4 — already covers headless tests, `state_hash()`, replays and the boundary check with zero dependencies ✅ |
 
-| Requirement | Version / notes | Status |
-|---|---|---|
-| **Godot** | `4.7.1-stable_win64` (current stable, released 14 Jul 2026) | Ã¢Å“â€¦ installed |
-| **Android export** | Godot's Android build template + JDK 17 + Android SDK (platform-tools for `adb`). The editor installs most of it Ã¢â‚¬â€ verify at 0.1. **`export_presets.cfg` is tracked in git** (it holds no secrets Ã¢â‚¬â€ no keystore path/password, those live elsewhere) so `permissions/internet=true` ships for everyone; it must stay `true` or `Net.host_solo()` fails silently on-device even for a loopback-only session (Android requires INTERNET for any socket, discovered building 0.7's `StressTest.tscn`) | needed for 0.1 |
-| **Python** | 3.11+ with `Pillow` + `numpy`. **No system install needed** Ã¢â‚¬â€ Blender bundles Python 3.11 and a venv made from it is fully isolated (`tools_env\venv`, created from `tools_env\blender-4.5.12-windows-x64\4.5\python\bin\python.exe`). Nothing leaks into Blender's own site-packages, and the venv cannot drift off the pinned Blender | Ã¢Å“â€¦ done at 0.9 |
-| **Blender** | **4.5.12 LTS Ã¢â‚¬â€ hard pin, do not use 5.x.** COLLADA (`.dae`) import was *removed* in Blender 5.0 and 0 A.D.'s meshes are `.dae`. 4.5 LTS is the last version with it (supported to Jul 2027). Installed as a **portable extract** in `tools_env\`, deliberately not Steam/MS Store Ã¢â‚¬â€ an auto-update to 5.x would silently break the whole art track | Ã¢Å“â€¦ done at 0.9 |
-| **`isobake`** | [`HermanRas/blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake) (GPL-2.0-or-later) Ã¢â‚¬â€ the render/bake/verify pipeline, Ã‚Â§2.2. `pip install -e` into the venv | Ã¢Å“â€¦ built at 0.9 |
-| **Blender addon** | [`StanleySweet/blender_pyrogenesis_importer`](https://github.com/StanleySweet/blender_pyrogenesis_importer) (GPL-2.0), pinned at `b31b5c4`. Imports 0 A.D. actor XML, resolving mesh + props + textures. **Does not import animations** Ã¢â‚¬â€ isobake attaches those. Last updated Aug 2024, so it needs two Blender-4.5 compatibility shims, which isobake applies at load time rather than forking the checkout | Ã¢Å“â€¦ done at 0.9 |
-| **0 A.D. art** | `git clone --depth 1 https://gitea.wildfiregames.com/0ad/0ad.git` into `art_source\`. **Shallow clone matters** Ã¢â‚¬â€ full history is ~8.3 GB. Also **needs `git-lfs`**: the art is LFS-backed, and without it the clone succeeds but the checkout fails. Scope the fetch with `git config lfs.fetchinclude "binaries/data/mods/public/art/**"` | Ã¢Å“â€¦ done at 0.9 (~11 GB) |
-| **git** | 2.47.1 | Ã¢Å“â€¦ installed |
-| **Test framework** | **Custom `TestCase`/`run_tests.tscn` harness** (built 0.1Ã¢â‚¬â€œ0.7), kept instead of GdUnit4 Ã¢â‚¬â€ already covers headless tests, `state_hash()`, replays and the `sim/` boundary check with zero dependencies. GdUnit4 remains an option later if a real need (parallel execution, richer reporting) shows up | done at 0.7 |
+Notes on the checkout: art is **in the main repo** at `binaries/data/mods/public/art/`; **clone
+the repo, do not mine the installer** (releases ship compiled `.pmd`/`.psa`/`.dds` with no
+maintained Blender importer); GitHub `0ad/0ad` is archived — gitea is upstream.
 
-Notes on the 0 A.D. checkout:
-
-- Art lives **in the main repo** at `binaries/data/mods/public/art/` Ã¢â‚¬â€ there is no separate art repo to fetch.
-- **Clone the repo; do not mine the game installer.** Releases ship a built `public.zip` where `.dae`Ã¢â€ â€™`.pmd`/`.psa` and `.png`Ã¢â€ â€™`.dds`. Those compiled formats have no maintained Blender importer.
-- GitHub `0ad/0ad` is **archived** (Sept 2024) Ã¢â‚¬â€ browsable and useful for reference, but frozen. Gitea is upstream.
-
-Nothing in this table blocks phases 0.1 or 0.5 Ã¢â‚¬â€ the Blender/0 A.D. items only gate the art track.
-
-**Version policy: every version above is pinned.** Upgrading Godot or Blender is a deliberate task at a phase boundary with the test suite green before and after Ã¢â‚¬â€ never an "update available" click. Mid-project engine drift costs more debugging time than any newer release saves. If an upgrade is taken, record it here in the same change.
+**Version policy: every version above is pinned.** Upgrading Godot or Blender is a deliberate
+task at a phase boundary with the suite green before and after — never an "update available"
+click.
 
 ---
 
@@ -126,270 +121,157 @@ var vis := GameDataRegistry.atlas_for(&"vis.villager")
 AudioManager.play_sfx(&"villager.chop")
 ```
 
-`data/visuals.json` and `data/audio.json` are the only files mapping an ID to a path. Each ID resolves to a real atlas **or** a procedural placeholder (Ã‚Â§2.4), so gameplay never blocks on art.
+`data/visuals.json` and `data/audio.json` are the only files mapping an ID to a path. Each ID
+resolves to a real atlas **or** a procedural placeholder (§2.4), so gameplay never blocks on art.
+`atlas_for()` is **total** — atlas, else declared placeholder, else a loud magenta unknown, never
+null.
 
 ### 2.2 Sources
 
 | Domain | Source | Licence |
 |---|---|---|
-| Units, buildings, terrain, props | **0 A.D.** (`play0ad.com`) | CC-BY-SA 3.0 |
+| Units, buildings, terrain, props, dragon | **0 A.D.** (`play0ad.com`) | CC-BY-SA 3.0 |
 | Audio (starting point) | **0 A.D.** | CC-BY-SA 3.0 |
-| UI chrome, fonts | **itch.io packs** already in `UI_Sprites/` Ã¢â‚¬â€ `UI_dragon-huds`, `uÃ„Â±-fonts`, `Free_Medieval_Fantasy_UI_Pack` | Per-pack; record in `LICENCES.md` |
-| Dragon + nest | **0 A.D.** Ã¢â‚¬â€ `fauna/dragon.xml`, baked 2026-08-16 | CC-BY-SA 3.0 |
+| UI chrome, fonts | **itch.io packs** in `assets/UI_Sprites/` — `UI_dragon-huds`, `uı-fonts`, `Free_Medieval_Fantasy_UI_Pack` | Per-pack; record in `LICENCES.md` |
 
-0 A.D. is a 3D game; `tools/render_3d_to_iso.py` renders its models to 8-direction sprite sheets. Terrain comes from the same source Ã¢â‚¬â€ its ground textures are tileable, so the same Blender scene renders them to isometric tiles at the project camera angle. Single source keeps palette and style coherent and keeps attribution to one entry.
+0 A.D. is a 3D game. Pipeline shape: **actor XML → Blender (pyrogenesis importer) → attach
+animation `.dae` → render N × 45° orthographic → trim/pack → atlas.** Terrain comes from the same
+source, so palette and style stay coherent and attribution stays one entry. **The GUI stays the
+dragon theme** and does not come from 0 A.D.
 
-Repo layout we consume (`binaries/data/mods/public/`):
+Two things `isobake` gets right that are unfixable-in-place later:
 
-| Path | Contents |
-|---|---|
-| `art/meshes/{skeletal,structural,props,gaia,flora}` | `.dae` COLLADA meshes |
-| `art/animation/{biped/{citizen,infantry,gatherer,Ã¢â‚¬Â¦},quadraped,mechanical}` | `.dae` animations Ã¢â‚¬â€ note `biped/gatherer`, directly relevant to the villager |
-| `art/textures/skins/Ã¢â‚¬Â¦` | mostly `.png`, some `.dds` |
-| `art/actors/{units,structures,fauna,flora,props}` | XML tying mesh + textures + animations + props together, grouped into variants |
-| `audio/{actor,ambient,attack,interface,music,resource,voice}` | `.ogg` + XML descriptors |
+- **Camera elevation derived from tile size**, `asin(tile_h / tile_w)` = exactly **30°** for 64×32. The 35.264° isometric tutorials use is the cube body-diagonal angle and would make a 64px tile 37px tall.
+- **One global `pixels_per_metre`** (22.627), never fit-to-frame. Framing each model to fill its canvas silently makes a villager and a town centre the same size.
 
-Pipeline shape: **actor XML Ã¢â€ â€™ Blender (via the pyrogenesis importer) Ã¢â€ â€™ attach animation `.dae` Ã¢â€ â€™ render N Ãƒâ€” 45Ã‚Â° orthographic Ã¢â€ â€™ trim/pack Ã¢â€ â€™ atlas.** The importer resolves meshes, textures and props but not animations, so attaching those is the tool's job.
+0 A.D. specifics: their COLLADA declares metres but the conversion is tile-to-tile via their own
+`TERRAIN_TILE_SIZE = 4`; base-texture alpha means transparency for `basic_trans_*` foliage but a
+**faction-tint mask** for `player_*` units, and confusing the two makes a quarter of every unit
+see-through.
 
-**Built at 0.9 as [`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)** Ã¢â‚¬â€ its own GPL-2.0-or-later repo, working root `Downloads\AOD_game\blender_3d_to_2d_isobake\`, published so other 3DÃ¢â€ â€™2D projects can use it. It is deliberately **not** AOD-specific: 0 A.D. is one adapter, and glTF/FBX sources (the dragon, ASSET_MISSING Ã‚Â§3) go through the same camera. Only the *recipes* Ã¢â‚¬â€ which actor is our villager Ã¢â‚¬â€ are AOD content and live in this repo.
-
-Two things the tool gets right that most such scripts do not, both cheap now and unfixable-in-place later:
-
-- **Camera elevation is derived from the tile size**, `asin(tile_h / tile_w)` = exactly **30Ã‚Â°** for 64Ãƒâ€”32. The 35.264Ã‚Â° that isometric tutorials use is the cube body-diagonal angle and would make a 64px tile 37px tall.
-- **One global `pixels_per_metre`** (22.627 here), never fit-to-frame. Framing each model to fill its canvas is the obvious implementation and it silently makes a villager and a town centre the same size on screen.
-
-0 A.D. specifics that had to be discovered (all now in the tool's README): their COLLADA declares metres but a citizen measures 3.85 Ã¢â‚¬â€ the conversion is tile-to-tile via their own `TERRAIN_TILE_SIZE = 4`; base-texture alpha means transparency for `basic_trans_*` foliage but a **faction-tint mask** for `player_*` units, and confusing the two makes a quarter of every unit see-through.
-
-No prior art existed for 0 A.D.Ã¢â€ â€™2D conversion. [`Maghwyn/blender_directional_spritesheets`](https://github.com/Maghwyn/blender_directional_spritesheets) (MIT) was the reference for the rotation loop.
-
-**The GUI stays the dragon theme** from the itch.io packs. It does not come from 0 A.D.
-
-Any additional source is added only on an explicit note from the project owner, and must be recorded in `LICENCES.md` and `CREDITS.md` at the same time.
+Any additional source needs an explicit note from the project owner and must be recorded in
+`LICENCES.md` and `CREDITS.md` in the same change.
 
 ### 2.3 Attribution obligations
 
-0 A.D.'s `art/LICENSE.txt` and `audio/LICENSE.txt` require **three specific things** in the attribution. All three, verbatim:
+0 A.D.'s licences require **three specific things, verbatim**:
 
 1. A link to `http://creativecommons.org/licenses/by-sa/3.0/`
 2. The original author named as **"Wildfire Games"**
 3. A link to `http://www.wildfiregames.com/`
 
-Plus:
-
-- **Derived sprite sheets are themselves CC-BY-SA 3.0.** Our rendered output ships under that licence. Only the art is copyleft Ã¢â‚¬â€ **the Godot code is MIT** ([LICENSE](LICENSE)), decided at 0.9 when the repo was published. The two licences do not merge; [LICENSE-ART.md](LICENSE-ART.md) states which applies to what.
-- **`CREDITS.md`** Ã¢â‚¬â€ in-repo and surfaced in-game on a Credits screen (phase 1.4).
-- **`assets/LICENCES.md`** Ã¢â‚¬â€ per-asset provenance. `tools/licence_audit.py` exits non-zero on any shipped asset not listed. Run by hand; there is no CI (Ã‚Â§1.2).
-- Downloadable asset packs (Ã‚Â§3.2) each carry their own `LICENCE` and `CREDITS` file inside the pack.
-- Note: some of 0 A.D.'s `textures/` derive from CGTextures under special permission granted to that project. Worth a check before leaning heavily on raw texture files rather than rendered output.
+Plus: **derived sprite sheets are themselves CC-BY-SA 3.0** (only the art is copyleft — the
+Godot code is MIT); `CREDITS.md` in-repo and on a Credits screen (1.4); `assets/LICENCES.md` for
+per-asset provenance, checked by `tools/licence_audit.py` (exits non-zero; run by hand, §1.2);
+each downloadable pack carries its own `LICENCE`/`CREDITS`. Note some of 0 A.D.'s `textures/`
+derive from CGTextures under permission granted to *that* project — check before leaning on raw
+texture files rather than rendered output.
 
 ### 2.4 Placeholder art
 
-MVP ships on procedurally generated placeholders: isometric diamonds for terrain, capsules with a facing marker for units, sized rectangles for buildings Ã¢â‚¬â€ drawn at runtime from `visuals.json`, no image files.
-
-```jsonc
-{
-  "vis.villager": {
-    "placeholder": { "shape": "capsule", "size": [12, 24],
-                     "color": "#D8C08A", "facing_marker": true }
-  }
-}
-```
+Procedurally generated: isometric diamonds for terrain, capsules with a facing marker for units,
+sized boxes for buildings — drawn at runtime from `visuals.json`, no image files. Sizes are
+authored in **metres**, so a placeholder occupies the space its real sprite will.
 
 Every gameplay phase is therefore art-independent, and the seam is load-bearing from day one.
+Placeholders stay in the build permanently as the no-pack-mounted fallback (§3.2).
+
+> Measured at 2.6 and **backwards from the prediction**: 200 units cost **681** draw calls on
+> placeholders and **14** on real atlases. Placeholders are the expensive path (polygon + outline
+> + marker, none of it batching); real sprites all sample one page. The draw-call risk sits with
+> the fallback, not with real art.
 
 ### 2.5 Normalised vocabulary
 
-One villager, one gender. One civilisation, shared by every player (§1, §2.7).
-
-**Entity IDs**
-
-```
-unit.villager        building.town_center     res.tree
-unit.militia         building.house           res.gold_mine
-unit.archer          building.barracks        res.stone_mine
-unit.dragon          building.dragon_nest     res.deer
-```
-
-That block illustrates the convention; it is not the roster. The **full v1 roster** — every
-unit, the building that trains it, and the age that unlocks it — is §9.2. There is exactly
-one set of these IDs and every player uses it (§2.7).
-
-**Animation IDs**
+One villager, one gender. One civilisation, shared by every player. IDs read
+`unit.villager`, `building.town_center`, `res.tree`. The **full v1 roster** is §9.2.
 
 | Anim ID | Used when | MVP |
 |---|---|---|
-| `idle` | Task.IDLE | **Ã¢Å“â€œ** |
-| `walk` | moving, carrying nothing | **Ã¢Å“â€œ** |
-| `walk_carry_wood` | moving, `carry_kind == wood` | **Ã¢Å“â€œ** |
-| `walk_carry_gold` | moving, `carry_kind == gold` | **Ã¢Å“â€œ** |
-| `walk_carry_food` | moving, `carry_kind == food` | **Ã¢Å“â€œ** |
-| `walk_carry_stone` | moving, `carry_kind == stone` | |
-| `work_chop` | gathering wood | **Ã¢Å“â€œ** |
-| `work_mine` | gathering gold or stone | **Ã¢Å“â€œ** |
-| `work_hunt` | gathering from a carcass | **Ã¢Å“â€œ** |
-| `work_build` | building or repairing | **Ã¢Å“â€œ** |
+| `idle` | Task.IDLE | ✓ |
+| `walk` | moving, carrying nothing | ✓ |
+| `walk_carry_wood` / `_gold` / `_food` | moving, by `carry_kind` | ✓ |
+| `walk_carry_stone` | | |
+| `work_chop` | gathering wood | ✓ |
+| `work_mine` | gathering gold or stone | ✓ |
+| `work_hunt` | gathering from a carcass | ✓ |
+| `work_build` | building or repairing | ✓ |
 | `work_forage` / `work_farm` / `work_fish` / `work_herd` | later food sources | |
 | `attack` | combat | |
-| `die` | death | **Ã¢Å“â€œ** |
-| `decay` | corpse, pre-removal | **Ã¢Å“â€œ** |
+| `die` / `decay` | death, corpse pre-removal | ✓ |
 
-Convention: **5 stored directions, mirrored to 8.** Halves art cost. Decided **per asset**, not globally, and it has two preconditions:
+`EntityView.play_anim()` tries `walk_carry_<kind>` and falls back to `walk`, so carry variants
+are always optional.
 
-- The key light must lie in the camera's vertical plane, or mirrored frames are lit from the wrong side. `isobake` rejects a mirrored recipe under a non-symmetric rig.
-- The subject must be laterally symmetric. A villager holding an axe is not Ã¢â‚¬â€ mirroring swaps which hand holds it. Verified on the turntable, not assumed.
-
-The villager holds an axe during `work_chop` and carries wood at her hip during `walk_carry_wood` (animation-variant props, wired up per Ã‚Â§14), so `villager.toml` renders the whole recipe at `directions = 8` Ã¢â‚¬â€ mirroring is decided per recipe, not per animation, so `idle` and `walk` render at 8 too even though they would be mirror-safe alone.
-
-`EntityView.play_anim()` tries `walk_carry_<kind>` and falls back to `walk`, so carry variants are always optional.
-
-**MVP villager budget:** 11 animations Ãƒâ€” ~15 frames Ãƒâ€” 8 directions Ã¢â€°Ë† 1320 frames.
+**5 stored directions mirrored to 8** halves art cost, and is decided **per recipe, not
+globally**. Two preconditions: the key light must lie in the camera's vertical plane, and the
+subject must be laterally symmetric. The villager holds an axe in `work_chop`, so `villager.toml`
+renders all 8 — mirroring is per recipe, so `idle` and `walk` render at 8 too even though they
+would be mirror-safe alone. **MVP villager budget:** 11 anims × ~15 frames × 8 dirs ≈ 1320.
 
 ### 2.6 Practical handling
 
-- Raw source art lives on a **local, non-synced** path Ã¢â‚¬â€ never in this Drive-synced project folder. The bake manifest points at it via a config value, never a committed absolute path.
-- **Baked atlases are not committed** Ã¢â‚¬â€ settled at 0.3 staging, and `.gitignore` already
-  had it right. They are build output, fully reproducible from the committed recipes plus
-  `isobake`, and they reach players through the downloadable pack (Ã‚Â§3.2), so putting 6.7 MB
-  of PNG into a Drive-synced git repo would buy nothing. `tools/stage_atlases.py` copies
-  the atlas JSON and its declared pages Ã¢â‚¬â€ and *only* those, not the `frames/` intermediates
-  or `verify_*` sheets Ã¢â‚¬â€ from the art working root into `game/assets/atlases/`, which is
-  gitignored. Re-run it after any rebake. An earlier version of this line said atlases
-  *are* committed; that contradicted `.gitignore` and the pack architecture both.
-- Only placeholders ship inside the APK (Ã‚Â§3.2) Ã¢â‚¬â€ the staged atlases are there for the
-  packager to build a `.pck` from, so the APK export preset must exclude
-  `assets/atlases/` or they end up inside the APK as well as the pack.
+- Raw source art lives on a **local, non-synced** path, pointed at by config, never a committed absolute path.
+- **Baked atlases are not committed.** They are build output, reproducible from the committed recipes plus `isobake`, and they reach players through the pack (§3.2). `tools/stage_atlases.py` copies the atlas JSON and its declared pages — and only those, not `frames/` or `verify_*` sheets — into the gitignored `game/assets/atlases/`. Re-run after any rebake.
+- Only placeholders ship inside the APK, so the export preset must **exclude `assets/atlases/`** or they ship twice.
 - `.gdignore` in any raw-art folder under the project.
 
 ### 2.7 One civilisation, four age skins
 
-**Locked (§1): v1 ships a single civilisation.** Every player builds the same buildings,
-trains the same units and researches the same upgrades. **Colour is the only thing that
-distinguishes one player from another.** No faction pick, no faction bonus, no unique unit.
+**Locked (§1): v1 ships a single civilisation.** Colour is the only thing distinguishing players.
+This is **deferred, not abandoned** — the roster is joined to its art through a map file, so a
+civ is a **re-skin plus a rename** over the identical roster, which is why 9.5 is deferred rather
+than dropped and why `factions.json` stays.
 
-**This is deferred, not abandoned.** The reason there is one civilisation is that there is
-one set of art. The roster is joined to that art through a map file rather than through
-hardcoded names, so more civs come back after v1 by that same seam: **a civ is a re-skin
-plus a rename over this identical roster** — the same `unit.*`/`building.*` definitions, the
-same costs and stats, a different actor and a different display name. That is why 9.5 is
-deferred rather than dropped, and why `factions.json` stays (§9). It has one consequence to
-honour now, before any of it is built: §2.7.1.
-
-What takes the civ axis' place is the **age** axis. [Age & Unit Planning.md](<Age & Unit Planning.md>)
-is the source of truth for the roster, and it maps our one civilisation onto **four 0 A.D.
-civs chosen to read oldest-to-newest**, so advancing an age visibly modernises the
-settlement:
+What takes the civ axis' place is the **age** axis.
+[Age & Unit Planning.md](<Age & Unit Planning.md>) is the source of truth for roster content:
 
 | Age | Name | Primary 0 A.D. civ | Also borrows from | Reads as |
 |---|---|---|---|---|
-| I | Age of Ash | Britons (`brit`) | Celts, Mauryas (scout cavalry) | timber, thatch, wicker |
-| II | Age of Embers | Gauls (`gaul`) | Celts, Germans (walls), Carthaginians (archer) | fortified timber |
-| III | Age of Flame | Persians (`pers` → `achaemenids`) + Iberians (`iber`) | Athenians, Han, Carthaginians, Romans (onager) | cut stone |
-| IV | Age of Dragons | Romans (`rome`) | Macedonians (university), Ptolemies (galleon), Han (trebuchet) | dressed stone and brick |
+| I | Age of Ash | Britons (`brit`) | Celts, Mauryas | timber, thatch, wicker |
+| II | Age of Embers | Gauls (`gaul`) | Celts, Germans, Carthaginians | fortified timber |
+| III | Age of Flame | Persians (`pers` → `achaemenids`) + Iberians | Athenians, Han, Carthaginians, Romans | cut stone |
+| IV | Age of Dragons | Romans (`rome`) | Macedonians, Ptolemies, Han | dressed stone and brick |
 
-This generalises the rule §13.2 item 2 already recorded for the MVP six: architecture stays
-civ-consistent **within an age** so a settlement reads as one style, while scenery is picked
-on how it looks rather than on which civ authored it.
+**Buildings carry the age. Units do not.** A unit uses one hand-picked actor in all four ages;
+only the *settlement* modernises. This is a **readability** decision, not a saving: a player must
+recognise a spearman instantly at 44 px mid-fight, so a unit's silhouette must be the one thing
+that never changes. Re-skinning units per age would mean learning the roster four times, and an
+age-3 spearman fighting an age-2 one would look like two unit types. Buildings are stationary,
+identified at leisure, and are what the player watches accumulate. (It also drops unit art from
+~28 bakes to ~22, but that is the side effect.)
 
-**Buildings carry the age. Units do not.** A unit uses **one actor in all four ages** — the
-one the project owner hand-picked for it in [Age & Unit Planning.md](<Age & Unit Planning.md>).
-Only the *settlement* modernises.
+**The unit roster is deliberately mixed-civ**, chosen per unit for how each one *reads* —
+Carthaginian archers, a Han crossbowman, a Mauryan scout, an Achaemenid horse archer, an Athenian
+healer, a German champion. Civ consistency is the right default for **architecture** and the
+wrong one for everything else (§13.2 item 2). A 2026-08-14 decision briefly made every unit
+Celtic; retracted 2026-08-15. The lesson worth keeping: **a clarifying question can only catch a
+misunderstanding if at least one of its options contradicts it** — the question was about
+*voices*, the answer was read as being about *models*, and the follow-up offered two options both
+phrased in terms of models.
 
-This is a readability decision, not a saving. A player has to recognise a spearman instantly,
-at 44 px, mid-fight — so a unit's silhouette and palette must be the one thing that never
-changes underneath them. Re-skinning units per age would mean learning the roster four times,
-and worse, an age-3 spearman and an age-2 spearman fighting each other would look like two
-different unit types. Buildings are stationary, identified at leisure, and are what the player
-watches accumulate — so they are where the progression belongs. It also drops unit art from
-~28 bakes to ~22, but that is the side effect, not the reason.
+Three consequences:
 
-⚠️ **The unit roster is deliberately mixed-civ, and a wrong decision on 2026-08-14 briefly
-made it Celtic. Retracted 2026-08-15.** The text here used to read "every unit comes from a
-Celtic actor (`britons/`, `gauls/`, `celts/`) in all four ages, with the closest Celtic match
-where no equivalent exists", and five recipes were re-pointed to match it. That is now undone.
-The picks are Carthaginian archers, a Han crossbowman, a Mauryan scout, an Achaemenid horse
-archer, an Athenian healer and marine, a German champion — chosen per unit for how each one
-*reads*, not for civ consistency. §13.2 item 2 already recorded the rule this follows: civ
-consistency is the right default for **architecture** and the wrong one for everything else.
-
-**How the error happened is worth more than the correction.** The question asked was about
-**voices** — which of 0 A.D.'s voice sets to use. The answer, "use celtic across the board,
-closest match from the celtic roster", was read as an answer about **models**. The follow-up
-question that should have caught it instead offered two options *both* phrased in terms of
-models, so confirming either one confirmed the misreading. A clarifying question can only
-catch a misunderstanding if at least one of its options contradicts it.
-
-**The Celts-cannot-answer problems were artefacts of that error and are gone with it.** No
-unit becomes a javelin thrower for want of a Celtic bow; siege engines were never required to
-be Celtic; and galley and galleon are different hulls (Athenian trireme, Ptolemaic
-quinquereme). §9.2.1 items 4, 8 and 9 are retired accordingly.
-
-**One thing does survive, and it is not about units.** There is no Celtic voice set in 0 A.D.
-at all — it ships `global`, `greek`, `latin`, `napatan`, `persian`, and `global` is four dog-bark
-files, so it is not a neutral fallback either. That is the question that was actually being
-asked, and it is still open: §13.2 item 3, A.7. Nothing baked depends on it.
-
-Three consequences worth stating before the work is scheduled:
-
-**1. Art volume moves, it does not vanish.** A building has up to four visuals, one per age,
-so §9.2's roster is roughly **70 building bakes** — no cheaper than four factions would have
-been for structures. The saving lands on **units**: one actor each (a handful have two or
-three), ~28 bakes against the ~88 a four-faction roster of the same size would need.
-
-**2. Age is a visual dimension the asset seam does not have.** `visuals.json` keys a
-building by phase (`visual` / `visual_foundation` / `visual_rubble`); it now also has to key
-by age. `SimPlayer.age` already rides `player_state` in every snapshot (10.6), so the view
-can resolve this with **no new sim state and no new command**. §13.2 item 10 settles the
-question that hung on it: **a standing building re-skins in place** as its owner advances,
-which is why its footprint is locked at placement to the maximum across all four skins (§9.2).
-
-**3. Player colour is currently baked into the atlas, and that is now blocking.** 0 A.D.'s
-`player_*` materials carry the player-colour tint as the base texture's alpha (§2.2), and
-`isobake`'s zeroad adapter **multiplies that tint in at bake time** (`DEFAULT_PLAYER_COLOUR`,
-overridable per recipe) — one atlas is one player's colour. That was harmless while colour
-was cosmetic. With colour as the *only* difference between players it is the single blocking
-pipeline gap: eight players cannot mean eight bakes of every unit. The fix is to bake
-untinted and emit the mask — which is already in hand, being the source alpha — so a Godot
-`canvas_item` shader tints at draw time. Tracked as A.6, promoted from polish to prerequisite.
+1. **Art volume moves, it does not vanish.** A building has up to four visuals, so §9.2's roster is roughly **70 building bakes** — no cheaper than four factions. The saving lands on units.
+2. **Age is a visual dimension the seam did not have.** `visuals.json` keys a building by phase; it must also key by age. `SimPlayer.age` already rides `player_state`, so the view resolves this with **no new sim state and no new command**. A standing building **re-skins in place** as its owner advances (§13.2 item 10), which is why its footprint is locked at placement to the maximum across all four skins (§9.2).
+3. **Player colour is baked into the atlas, and that blocks.** `isobake`'s zeroad adapter multiplies 0 A.D.'s player-colour mask in at bake time — one atlas is one colour. With colour the *only* difference between players, eight players cannot mean eight bakes of every unit. Fix: bake untinted, emit the mask (it is the source alpha), tint in a `canvas_item` shader. Tracked as **A.6, prerequisite not polish**.
 
 #### 2.7.1 Age and faction are one mechanism, so build one
 
-Age is a skin dimension: four visuals per building, above. Faction is a **second skin
-dimension on the same lookup**, and it arrives *later* — which is precisely when an age-only
-special case becomes expensive to widen, because by then every call site has been written
-against it. So resolve both through one key from the start:
+Faction is a **second skin dimension on the same lookup**, arriving later — which is exactly when
+an age-only special case becomes expensive, because every call site has been written against it.
+Resolve both through one key from the start:
 
 ```
 skin = (faction, age)        # faction.default × age 1-4 for all of v1
 ```
 
-Two things that makes non-negotiable from the moment 9.6 is written:
+1. **`atlas_for()` resolves a skin, not a bare visual ID.** The map is **dense** — four entries per building, always — while **bakes are shared**: two ages that look the same point at the same atlas. That is the lever on the ~70 figure. A missing entry falls back to `faction.default` as a **safety net, not the mechanism**, which is what lets a future civ ship partially.
+2. **Display names are data, not `units.json` literals.** A civ renames the roster as much as it re-skins it, and this is the item that has to work with localisation later.
 
-1. **`atlas_for()` resolves a skin, not a bare visual ID.** `visuals.json` maps `vis.*` to art
-   today (§2.1); it becomes a map from `(skin, vis.*)` to art.
-
-   **The map is dense; the bakes are shared.** Every age names a skin explicitly — four
-   entries per building, always — and two ages that happen to look the same simply point at
-   the *same baked atlas*. So map entries are fixed at four per building while **bakes** are
-   only as many as there are visibly distinct skins. That is the lever on §9.2's ~70 figure:
-   a house that reads as timber in ages 1–2 and stone in 3–4 is two bakes serving four
-   entries. Being explicit rather than sparse also means the map file answers "what does this
-   look like in age 3?" by being *read*, with no inheritance chain to trace by hand.
-
-   A missing entry still falls back to `faction.default`, but as a **safety net, not the
-   mechanism** — it is what lets a future civ ship partially, six re-skinned buildings and
-   the rest borrowed, instead of needing all 70 before it can be released at all. Same
-   totality argument `atlas_for()` was built on at 0.2a.
-2. **Display names are data, not `units.json` literals.** `"name": "Villager"` is a
-   per-faction string — a civ renames the roster as much as it re-skins it — and it wants the
-   same fallback. It is also the one item here that has to work with localisation later, so it
-   should not be the second thing to move.
-
-**Nothing in the sim changes for either dimension.** Skins are a view concern; `SimPlayer`
-already carries `age`, and `faction` **stays** on it (`faction.default` throughout v1)
-precisely so the field never has to be reintroduced. Costs and stats staying shared is what
-keeps a re-skin civ free of balance work — the day a civ changes a *number*, `units.json`
-needs a per-faction override layer and per-civ balance comes with it. That is 9.5's expensive
-half, and it is not v1's problem.
+**Nothing in the sim changes for either dimension.** Costs and stats staying shared is what keeps
+a re-skin civ free of balance work; the day a civ changes a *number*, `units.json` needs a
+per-faction override layer and per-civ balance comes with it. That is 9.5's expensive half.
 
 ---
 
@@ -397,30 +279,18 @@ half, and it is not v1's problem.
 
 | Target | Priority | Notes |
 |---|---|---|
-| Android (mid-range) | **Primary** | The design constraint Ã¢â‚¬â€ see Ã‚Â§3.0 for the measured reference device |
+| Android (mid-range) | **Primary** | The design constraint — §3.0 |
 | Windows | Secondary | Dev/test, usual host |
 | Linux | Secondary | Dedicated-host target |
 | iOS | Later | Architecture compatible; not in MVP |
 
-### 3.0 Reference device (measured, phase 0.1)
+### 3.0 Reference device (measured, 0.1)
 
-Verified by deploying `device_check.tscn` to hardware, not assumed:
+HONOR LNA-NX1 · Android 16 (SDK 36) · MediaTek MT6858 · **ARM Mali-G610 MC2**, OpenGL ES 3.2 ·
+`arm64-v8a` **only** · 2600 × 1200, 520 dpi, 60 Hz · `gl_compatibility` confirmed active.
 
-| | |
-|---|---|
-| Device | HONOR LNA-NX1 |
-| OS | Android 16 (SDK 36) |
-| SoC | MediaTek MT6858 |
-| GPU | **ARM Mali-G610 MC2**, OpenGL ES 3.2 |
-| ABI | `arm64-v8a` **only** Ã¢â‚¬â€ no 32-bit target needed |
-| Screen | 2600 Ãƒâ€” 1200, 520 dpi, 60 Hz |
-| Renderer confirmed active | `gl_compatibility` / `opengl3` |
-| Empty-scene FPS | 60 (capped by refresh rate) |
-
-Two consequences worth designing around:
-
-1. **MediaTek + Mali is exactly the hardware the Compatibility decision (Ã‚Â§1) was made for.** Known Godot Vulkan crashes cluster on MediaTek and Mali parts, so this device would have been a poor Vulkan-Mobile target. The renderer choice is now empirically validated rather than argued.
-2. **The screen is 2600 Ãƒâ€” 1200 Ã¢â‚¬â€ a 2.17:1 aspect, far wider than 16:9.** With `stretch/aspect=expand` the design viewport resolves to **1404 Ãƒâ€” 648**. So UI is authored against a **648 px tall** canvas with variable width. Both HUD edges have generous horizontal room but vertical space is tight Ã¢â‚¬â€ relevant to [UI_Design.md](UI_Design.md) and to IDEA 9.2's note about placing the age progress bar below the age indicator on narrow screens.
+1. **MediaTek + Mali is exactly the hardware the Compatibility decision was made for** — known Godot Vulkan crashes cluster there. The renderer choice is empirically validated, not argued.
+2. **2600 × 1200 is 2.17:1**, so with `stretch/aspect=expand` the design viewport is **1404 × 648**. UI is authored against a **648 px tall** canvas with variable width: generous horizontal room, tight vertically.
 
 ### 3.1 Performance budget
 
@@ -428,82 +298,42 @@ Two consequences worth designing around:
 |---|---|
 | Frame time | 16.6 ms (60 fps); hard floor 33 ms (30 fps) |
 | Sim tick cost | < 5 ms per 100 ms tick |
-| Live units (MVP) | 50 |
-| Live units (full scope) | 200 per player, 8 players |
+| Live units | 50 (MVP) → 200 per player, 8 players (full scope) |
 | Draw calls | < 200 |
 | Texture memory | < 256 MB |
-| **APK size** | **< 300 MB** Ã¢â‚¬â€ code + placeholders only |
-| Asset pack (art) | ~150Ã¢â‚¬â€œ400 MB, downloaded |
-| Asset pack (audio) | ~50Ã¢â‚¬â€œ100 MB, downloaded |
+| **APK size** | **< 300 MB** — code + placeholders only (an empty project exports to 54 MB) |
+| Asset pack | art ~150–400 MB, audio ~50–100 MB, downloaded |
+| **Snapshot wire size** | **< 64 KB/tick.** Measured 2026-08-17 on the real debug map: **12,092 bytes, 4,104 of it fog** = 118 KB/s per player. Pinned by `test_snapshot_system.gd` |
 
-Measured baseline: an **empty** project exports to **54 MB** (arm64-v8a), essentially all engine binary. The 300 MB ceiling leaves real headroom while art and audio still ship as downloadable packs (Ã‚Â§3.2).
+Checked by `StressTest.tscn` from early on, and it must run **on the phone**.
 
-Checked by `StressTest.tscn` (0.7) from early on, not at the end.
+### 3.2 Asset delivery — downloadable packs
 
-### 3.2 Asset delivery Ã¢â‚¬â€ downloadable packs
-
-Art and audio are **not bundled in the APK**. They ship as Godot `.pck` files mounted at runtime via `ProjectSettings.load_resource_pack()`, which is the engine-native mechanism for exactly this.
+Art and audio ship as Godot `.pck` files mounted via `ProjectSettings.load_resource_pack()`.
 
 ```
-APK  (< 60 MB)   = code + data JSON + procedural placeholders + fonts
-pack_art_v1.pck  = atlases, terrain
+APK  (< 60 MB)    = code + data JSON + procedural placeholders + fonts
+pack_art_v1.pck   = atlases, terrain
 pack_audio_v1.pck = sfx, music
 pack_theme_*.pck  = optional community themes (later)
 ```
 
-**Sources, in priority order:**
-1. **Project website (primary)** Ã¢â‚¬â€ `https://aod.dragoon.co.za/`, no size limit, 100 Mbps.
-   Settled at 0.3. Layout, with the website source living in `web/` in this repo:
-   | URL | What |
-   |---|---|
-   | `https://aod.dragoon.co.za/index.html` | Landing page |
-   | `https://aod.dragoon.co.za/downloads/index.html` | Downloads page Ã¢â‚¬â€ human-facing |
-   | `https://aod.dragoon.co.za/downloads/packs.json` | **Pack manifest Ã¢â‚¬â€ the client reads this.** Stable, unversioned URL; the versions live *inside* it |
-   | `https://aod.dragoon.co.za/downloads/AoD_v0.0.4.apk` / `.exe` | Game builds Ã¢â‚¬â€ human-facing, not fetched by the client |
-   | `https://aod.dragoon.co.za/downloads/pack_art_v1.pck` | Art pack Ã¢â‚¬â€ fetched by `AssetPacks` |
-2. Additional mirror (to be chosen; GitHub Releases is one candidate)
-3. Any user-added source URL (enables custom themes later)
+Primary source is the project website `https://aod.dragoon.co.za/` (website source in `web/`):
 
-> **Pack versions are independent of game versions**, which is why the pack is
-> `pack_art_v1.pck` and not `AoD_v0.0.4.pck`. Naming it after the build would force every
-> player to re-download the whole art pack on every code release, including releases that
-> changed no art at all Ã¢â‚¬â€ and the art will grow well past its current 6.7 MB once audio
-> (A.7) and the military roster (A.8) land. The APK and the `.pck` version on separate
-> clocks; the manifest is what ties a game build to the pack versions it accepts.
+| URL | What |
+|---|---|
+| `/downloads/packs.json` | **Pack manifest — the client reads this.** Stable, unversioned URL; versions live *inside* it |
+| `/downloads/pack_art_v1.pck` | Art pack, fetched by `AssetPacks` |
+| `/downloads/AoD_v*.apk` / `.exe` | Game builds — human-facing, not fetched |
 
-The pack manifest carries a URL list per pack, so adding or reordering mirrors is a manifest edit with no client change.
+> **Pack versions are independent of game versions** — hence `pack_art_v1.pck`, not
+> `AoD_v0.0.4.pck`. Naming it after the build would force a full art re-download on every code
+> release. The manifest ties a game build to the pack versions it accepts, and carries a URL
+> *list* per pack so adding a mirror is a manifest edit with no client change.
 
-**Flow:** boot Ã¢â€ â€™ check local pack versions against a manifest Ã¢â€ â€™ download missing/outdated Ã¢â€ â€™ verify checksum Ã¢â€ â€™ `load_resource_pack()` Ã¢â€ â€™ assets resolve through the seam (Ã‚Â§2.1). If a pack is absent or fails verification, **the game runs on placeholders** rather than failing. That fallback is the whole reason placeholders stay in the build permanently.
-
-```jsonc
-// packs.json Ã¢â‚¬â€ https://aod.dragoon.co.za/downloads/packs.json
-{
-  "manifest_version": 1,
-  "packs": [
-    { "id": "art", "version": "1.0.0", "size": 6710000,
-      "sha256": "Ã¢â‚¬Â¦", "required": false,
-      "urls": ["https://aod.dragoon.co.za/downloads/pack_art_v1.pck"] }
-  ]
-}
-```
-
-```gdscript
-# src/autoload/asset_packs.gd                                  [MVP]
-class_name AssetPacks
-signal pack_progress(id: StringName, pct: float)
-signal pack_ready(id: StringName)
-signal pack_failed(id: StringName, reason: String)
-
-func check_manifest() -> Array[PackInfo]                       # [MVP]
-func is_installed(id: StringName) -> bool                      # [MVP]
-func download(id: StringName) -> void                          # [MVP]
-func mount(id: StringName) -> Error                            # [MVP] load_resource_pack
-func remove(id: StringName) -> void
-func add_source(url: String) -> void                           # custom themes, later
-func installed_version(id: StringName) -> String               # [MVP]
-```
-
-MVP implements check / download / verify / mount for one art pack. Theme sources and multi-pack layering come later.
+**Flow:** boot → check local versions against the manifest → download missing → verify checksum →
+`load_resource_pack()` → assets resolve through the seam. If a pack is absent or fails
+verification, **the game runs on placeholders** rather than failing.
 
 ---
 
@@ -511,98 +341,57 @@ MVP implements check / download / verify / mount for one art pack. Theme sources
 
 ```
 AOD_Mobile/
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ IDEA.md
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ PLAN.md
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ UI_Design.md
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ CREDITS.md                  # CC-BY-SA attribution, surfaced in-game
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ UI_Sprites/                 # licensed UI packs (+ .gdignore)
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ insperation_pictures/       # reference (+ .gdignore)
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ tools/                      # OFFLINE pipeline Ã¢â‚¬â€ Python, never shipped
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ isobake.toml            # camera config; MUST match Iso.TILE_SIZE
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ recipes/                # AOD content: which 0 A.D. actor is our what
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ terrain_grass.toml
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ tree_oak.toml
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ villager.toml
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ town_center.toml    # buildings: one recipe per Phase visual,
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ foundation_8x8.toml # foundations and generic rubble keyed by
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ rubble_town_center.toml #  footprint size so they are shared
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ house.toml
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ foundation_4x4.toml
-Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ rubble_3x3.toml
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ build_packs.py          # atlases -> .pck + manifest + checksums
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ licence_audit.py        # every asset must declare a licence
-Ã¢â€â€š
-Ã¢â€â€š   # Rendering, baking and verification live in the separate isobake repo
-Ã¢â€â€š   # (Ã‚Â§2.2). Recipes stay here because "0 A.D.'s female citizen is our
-Ã¢â€â€š   # villager" is a content decision, not a tool feature.
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ game/                       # THE GODOT PROJECT
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ project.godot
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ data/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ units.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ buildings.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ resources.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ techs.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ages.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ factions.json
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ visuals.json        # ASSET SEAM Ã¢â‚¬â€ id -> atlas or placeholder
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ audio.json          # ASSET SEAM Ã¢â‚¬â€ id -> sound
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ assets/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ placeholders/       # ships in APK
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ui/                 # ships in APK
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ fonts/              # ships in APK
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ LICENCES.md         # per-asset provenance, checked by licence_audit.py
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ src/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sim/                # NO Godot node types, NO rendering
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sim_world.gd
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sim_map.gd
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sim_player.gd
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ entities/
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ systems/
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ commands/
-    Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ pathing/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ net/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ view/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ui/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ai/
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ autoload/
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ scenes/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ boot/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ menu/
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ game/
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ ui/
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ tests/                  # headless Ã¢â‚¬â€ see Ã‚Â§7.7
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ run_tests.tscn      # the one test command (Ã‚Â§7.7)
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ run_tests.gd        # discovers/runs test_*.gd, sets exit code
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ sim/                # SimWorld, systems, commands
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ net/                # Net, SimHost
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ view/               # Iso, EntityViewPool, GameView
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ replays/            # recorded command logs used as regression fixtures
-    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ addons/                 # GUT or GdUnit4
+  IDEA.md  PLAN.md  UI_Design.md  CREDITS.md  status_update.md
+  assets/UI_Sprites/  assets/Icons/  assets/insperation_pictures/   (+ .gdignore)
+  web/                        # project website source
+  game_map_gen/               # map generator prototype (2.4b), standalone Godot project
+  tools/                      # OFFLINE pipeline - Python, never shipped
+    isobake.toml              # camera config; MUST match Iso.TILE_SIZE
+    recipes/                  # AOD content: which 0 A.D. actor is our what
+    build_packs.py            # atlases -> .pck + manifest + checksums
+    licence_audit.py          # every asset must declare a licence
+    stage_atlases.py
+  game/                       # THE GODOT PROJECT
+    project.godot
+    data/                     # units, buildings, resources, techs, ages, factions,
+                              # colours, visuals (SEAM), audio (SEAM)
+    assets/                   # placeholders, ui, fonts, LICENCES.md, atlases/ (gitignored)
+    src/
+      sim/                    # NO Godot node types, NO rendering
+        entities/ systems/ commands/ pathing/
+      data/  net/  view/  autoload/
+    scenes/                   # boot/ menu/ game/ ui/ ui_builder/
+    dev_preview/              # screenshot-driven checks against the REAL scenes
+    tests/                    # headless - see §7.7
+      run_tests.tscn/.gd      # the one test command
+      sim/ net/ view/ replays/
 ```
 
-**The `game/src/sim/` boundary is the most important rule in this codebase.** Nothing in `sim/` may `extends Node`, load a texture, read input, or reference `view/`. `test_sim_boundary.gd` greps for violations as part of the test suite (0.7) Ã¢â‚¬â€ which is a manual command, not CI (Ã‚Â§1.2).
+**The `game/src/sim/` boundary is the most important rule in this codebase.** Nothing in `sim/`
+may `extends Node`, load a texture, read input, or reference `view/`. `test_sim_boundary.gd`
+greps for violations inside the test suite.
+
+Rendering, baking and verification live in the separate `isobake` repo (§2.2). Recipes stay here
+because "0 A.D.'s female citizen is our villager" is a content decision, not a tool feature.
 
 ---
 
 ## 5. Architecture overview
 
 ```
-Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â
-Ã¢â€â€š  VIEW (client)   scenes, sprites, camera, HUD, gestures    Ã¢â€â€š
-Ã¢â€â€š  reads snapshots Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â            Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬ emits Commands         Ã¢â€â€š
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ
-                     Ã¢â€â€š            Ã¢â€â€š
-              snapshots (down)   commands (up)
-                     Ã¢â€â€š            Ã¢â€â€š
-Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â
-Ã¢â€â€š  NET             SceneMultiplayer / ENetMultiplayerPeer    Ã¢â€â€š
-Ã¢â€â€š  host binds 127.0.0.1 (solo) or 0.0.0.0 (multiplayer)      Ã¢â€â€š
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ
-                     Ã¢â€â€š            Ã¢â€â€š
-Ã¢â€Å’Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Â¼Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Â
-Ã¢â€â€š  SIM (server only, headless-capable, 10 Hz fixed tick)     Ã¢â€â€š
-Ã¢â€â€š  SimWorld -> systems -> entities. Plain GDScript classes.  Ã¢â€â€š
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€Ëœ
++-----------------------------------------------------------+
+|  VIEW (client)   scenes, sprites, camera, HUD, gestures   |
+|  reads snapshots                    emits Commands        |
++-----------------------------------------------------------+
+             snapshots (down)   |   commands (up)
++-----------------------------------------------------------+
+|  NET             SceneMultiplayer / ENetMultiplayerPeer   |
+|  host binds 127.0.0.1 (solo) or 0.0.0.0 (multiplayer)     |
++-----------------------------------------------------------+
++-----------------------------------------------------------+
+|  SIM (server only, headless-capable, 10 Hz fixed tick)    |
+|  SimWorld -> systems -> entities. Plain GDScript classes. |
++-----------------------------------------------------------+
 ```
 
 ### 5.1 One tick, end to end
@@ -612,1184 +401,744 @@ AOD_Mobile/
 2. InputRouter -> MoveCommand(unit_ids, target_tile).
 3. Net.submit_command(cmd)  -> rpc_id(1, "_recv_command", cmd.to_dict())
 4. [SERVER] validate ownership/legality, queue for tick N+1.
-5. [SERVER] SimClock fires tick N+1 -> SimWorld.step():
-      CommandSystem -> TaskSystem -> MovementSystem -> CombatSystem
-      -> ProductionSystem -> ResourceSystem -> VisionSystem
-      -> DeathSystem -> WinConditionSystem
-6. [SERVER] SnapshotSystem builds a per-player fog-filtered delta, broadcasts.
-7. [CLIENT] EntityViewPool applies the delta, interpolates over the next 100 ms.
+5. [SERVER] SimClock fires tick N+1 -> SimWorld.step(), systems in fixed order (§6.2)
+6. [SERVER] SnapshotSystem builds a per-player fog-filtered snapshot, sends it to THAT peer.
+7. [CLIENT] EntityViewPool applies it, interpolates over the next 100 ms.
 ```
 
-Step 6's fog filtering is a **security property**: the server must not send a client entities it cannot see.
+Step 6's fog filtering is a **security property**: the server must not send a client entities it
+cannot see. Step 6 sends **per peer**, not broadcast — see §1.1.
 
 ---
 
-## 6. Core objects Ã¢â‚¬â€ API reference
+## 6. Core objects
 
-`# [MVP]` marks what exists in the first build.
+**The code is authoritative.** This section is the map and the invariants, not a signature dump —
+an out-of-date API listing is worse than none. Read the file headers; they carry the reasoning.
 
-### 6.1 Autoloads
+### 6.1 Autoloads (`src/autoload/`)
 
-```gdscript
-# src/autoload/game_data.gd                                   [MVP]
-class_name GameDataRegistry
-func load_all() -> void
-func unit(id: StringName) -> UnitDef
-func building(id: StringName) -> BuildingDef
-func resource_def(id: StringName) -> ResourceDef
-func tech(id: StringName) -> TechDef
-func age(index: int) -> AgeDef
-func atlas_for(visual_id: StringName) -> AtlasEntry   # real atlas OR placeholder
+| Autoload | Job |
+|---|---|
+| `GameDataRegistry` (`game_data.gd`) | Loads `data/*.json` into typed `*Def` objects; `atlas_for()` (total, §2.1); `validate()` cross-checks every reference across files and the suite fails on any warning. Entity accessors return **null** for an unknown ID — the opposite of `atlas_for()`, deliberately: a missing sprite has a sensible stand-in, a missing unit definition does not. `colour(index)` **wraps** for the same reason |
+| `Net` (`net.gd`) | Transport + RPC boundary. `host_solo()`, `submit_command()`, `_recv_command` (up, reliable), `_recv_snapshot` (down, unreliable_ordered). `host_open()`/`join()` are §12.1 |
+| `SimClock` (`sim_clock.gd`) | 10 Hz pump; `advance()` holds the logic separately from `_process` so it runs headless |
+| `EventBus` (`event_bus.gd`) | Decouples HUD widgets from whoever receives the snapshot |
+| `AssetPacks` | §3.2 |
 
-# src/autoload/net.gd                                          [MVP]
-class_name Net
-signal session_started(is_host: bool)
-signal session_ended(reason: String)
-signal peer_joined(peer_id: int)
-signal peer_left(peer_id: int)
-signal snapshot_received(snap: Dictionary)
+Three autoloads (`net.gd`, `sim_clock.gd`, `event_bus.gd`) deliberately carry **no `class_name`** —
+it would shadow the singleton identifier.
 
-func host_solo() -> Error                                      # [MVP] 127.0.0.1
-func host_open(port: int, max_players: int) -> Error            # 0.0.0.0
-func join(address: String, port: int) -> Error
-func leave() -> void
-func is_server() -> bool                                       # [MVP]
-func local_player_id() -> int                                  # [MVP]
-func submit_command(cmd: Command) -> void                      # [MVP]
-@rpc("any_peer", "call_local", "reliable")   func _recv_command(d: Dictionary) -> void
-@rpc("authority", "call_local", "unreliable_ordered") func _recv_snapshot(d: Dictionary) -> void
+### 6.2 Simulation (`src/sim/`)
 
-# src/autoload/sim_clock.gd                                    [MVP]
-class_name SimClock
-const TICK_HZ := 10
-const TICK_MS := 100
-var tick: int
-signal tick_advanced(tick: int)
-func start() -> void
-func stop() -> void
-func _process(delta: float) -> void      # accumulates; may fire >1 tick to catch up
+`SimWorld` holds `tick`, `map`, `players`, `entities`, `spatial`, plus the match outcome
+(`mode`, `match_over`, `winner_id`). `SUBTILE = 256`. `state_hash()` folds in the map, every
+entity, and every per-player field that can diverge — including `vision` and the outcome.
 
-# src/autoload/event_bus.gd                                    [MVP]
-class_name EventBus
-signal selection_changed(entity_ids: Array[int])
-signal resources_changed(player_id: int, stock: Dictionary)
-signal entity_spawned(id: int, kind: StringName)
-signal entity_died(id: int)
-signal production_progress(building_id: int, pct: float)
-signal control_group_changed(slot: int, icon: StringName, count: int)
-signal age_advance_progress(player_id: int, pct: float)
-signal notice(severity: int, message: String)
+`SimMap` keeps **four** parallel packed arrays indexed row-major: `terrain`, `move_cost`,
+`occupancy`, `blocking`. Two rules with teeth:
 
-# src/autoload/asset_packs.gd    Ã¢â‚¬â€ see Ã‚Â§3.2                    [MVP]
-# src/autoload/scene_router.gd                                 [MVP]
-class_name SceneRouter
-func goto_main_menu() -> void
-func goto_match(config: MatchConfig) -> void
-func quit_to_menu() -> void
+- **Occupancy is for static footprints only** — buildings and resource nodes, never units (they live in `SpatialHash`). Otherwise every step rewrites the grid and a tile a unit merely crossed reads as unpathable.
+- **`occupancy` and `blocking` are different questions.** "May something be built here" is not "may a unit walk here" — a field claims its 36 tiles so nothing is built on the crop, and lets villagers walk over it.
 
-# src/autoload/audio_manager.gd
-class_name AudioManager
-func play_sfx(id: StringName, world_pos: Vector2 = Vector2.ZERO) -> void
-func play_music(id: StringName) -> void
-func set_bus_volume(bus: StringName, db: float) -> void
+`find_free_adjacent()` scans a **fixed** ring order and is asserted against an exact tile, because
+two clients spawning production must choose the same one.
 
-# src/autoload/settings.gd
-class_name Settings
-func get_value(key: String, default: Variant) -> Variant
-func set_value(key: String, value: Variant) -> void
-func save() -> void
-```
+Systems run in this fixed order by `SimWorld.step()`:
 
-### 6.2 Simulation
-
-```gdscript
-# src/sim/sim_world.gd                                         [MVP]
-class_name SimWorld
-const SUBTILE := 256
-
-var tick: int = 0
-var map: SimMap
-var players: Array[SimPlayer] = []
-var entities: Dictionary = {}          # int id -> SimEntity
-var spatial: SpatialHash
-var _next_id: int = 1
-var _pending: Array[Command] = []
-var _systems: Array[SimSystem] = []
-
-func setup(cfg: MatchConfig) -> void                            # [MVP]
-func step() -> void                                             # [MVP]
-func queue_command(cmd: Command) -> void                        # [MVP]
-func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit          # [MVP]
-func spawn_building(def_id: StringName, owner: int, origin: Vector2i) -> SimBuilding # [MVP]
-func spawn_resource(def_id: StringName, pos: Vector2i, amount: int) -> SimResourceNode # [MVP]
-func despawn(id: int) -> void                                   # [MVP]
-func get_entity(id: int) -> SimEntity                           # [MVP]
-func entities_in_radius(pos: Vector2i, r: int) -> Array[SimEntity]   # [MVP]
-func entities_in_rect(rect: Rect2i) -> Array[SimEntity]          # [MVP]
-func state_hash() -> int                                         # desync detection
-
-# src/sim/sim_map.gd                                            [MVP]
-class_name SimMap
-enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST }
-
-var size: Vector2i
-var terrain: PackedByteArray
-var occupancy: PackedInt32Array             # entity id per tile, 0 = free
-var move_cost: PackedByteArray              # 255 = impassable
-
-func in_bounds(t: Vector2i) -> bool                             # [MVP]
-func terrain_at(t: Vector2i) -> Terrain                         # [MVP]
-func is_passable(t: Vector2i, domain: int) -> bool               # [MVP]
-func occupant(t: Vector2i) -> int                               # [MVP]
-func set_occupied(rect: Rect2i, id: int) -> void                 # [MVP]
-func clear_occupied(rect: Rect2i) -> void                        # [MVP]
-func can_place_building(rect: Rect2i) -> bool                    # [MVP]
-func find_free_adjacent(rect: Rect2i, domain: int) -> Vector2i    # [MVP]
-
-# src/sim/sim_player.gd                                         [MVP]
-class_name SimPlayer
-var id: int
-var peer_id: int                    # 1 = host's own local player
-var faction: StringName             # `faction.default` throughout v1 -- half of the skin
-                                    # key (§2.7.1), kept so 9.5 needs no new field
-var colour: int                     # palette index -- the only thing that differs
-                                    # between players in v1 (§1)
-var is_ai: bool
-var team: int
-var stock: Dictionary               # {food, wood, gold, stone} -> int   [MVP]
-var pop_used: int
-var pop_cap: int
-var age: int = 1
-var researched: Dictionary
-var vision: PackedByteArray         # 0 unseen, 1 explored, 2 visible
-var control_groups: Array           # 5 x Array[int]                     [MVP]
-var defeated: bool
-
-func can_afford(cost: Dictionary) -> bool                        # [MVP]
-func pay(cost: Dictionary) -> bool                               # [MVP]
-func refund(cost: Dictionary) -> void                            # [MVP]
-func add_resource(kind: StringName, amount: int) -> void          # [MVP]
-```
-
-#### Entities
-
-```gdscript
-# src/sim/entities/sim_entity.gd                                [MVP]
-class_name SimEntity
-var id: int
-var def_id: StringName
-var owner_id: int
-var pos: Vector2i                   # sub-tile units
-var hp: int
-var max_hp: int
-var alive: bool = true
-var vision_range: int
-
-func tile() -> Vector2i                                          # [MVP]
-func take_damage(amount: int, attack_type: int) -> void           # [MVP]
-func on_tick(w: SimWorld) -> void                                 # [MVP] virtual
-func to_snapshot() -> Dictionary                                  # [MVP]
-
-# src/sim/entities/sim_unit.gd                                   [MVP]
-class_name SimUnit extends SimEntity
-enum Task { IDLE, MOVE, GATHER, RETURN, BUILD, ATTACK, GARRISON, STAND_GROUND, FLEE }
-
-var task: Task = Task.IDLE
-var task_target_id: int = 0
-var task_target_tile: Vector2i
-var path: PackedVector2Array
-var path_index: int
-var speed: int                       # sub-units per tick
-var facing: int                      # 0-7
-var carry_kind: StringName
-var carry_amount: int
-var gather_cooldown: int
-var attack_cooldown: int
-var anim: StringName                 # view hint
-
-func set_task_move(t: Vector2i) -> void                          # [MVP]
-func set_task_gather(node_id: int) -> void                       # [MVP]
-func set_task_build(site_id: int) -> void                        # [MVP]
-func set_task_attack(target_id: int) -> void
-func stop() -> void                                              # [MVP]
-func is_idle() -> bool                                           # [MVP]
-
-# src/sim/entities/sim_building.gd                               [MVP]
-class_name SimBuilding extends SimEntity
-enum Phase { FOUNDATION, UNDER_CONSTRUCTION, COMPLETE, DESTROYED }
-
-var phase: Phase = Phase.FOUNDATION
-var footprint: Vector2i
-var build_progress: int
-var build_total: int
-var queue: Array[ProductionOrder] = []
-var garrison: Array[int] = []
-var garrison_cap: int
-var provides_pop: int
-
-func origin_tile() -> Vector2i                                   # [MVP]
-func footprint_rect() -> Rect2i                                  # [MVP]
-func add_build_progress(amount: int) -> void                     # [MVP]
-func enqueue(def_id: StringName) -> bool                         # [MVP]
-func cancel_order(index: int) -> void                            # [MVP]
-func garrison_unit(id: int) -> bool
-func ungarrison_all() -> Array[int]
-
-# src/sim/entities/sim_resource_node.gd                          [MVP]
-class_name SimResourceNode extends SimEntity
-var kind: StringName                 # food | wood | gold | stone
-var amount: int                                                  # [MVP]
-var size_class: int                  # 0 small, 1 medium, 2 large
-var gather_slots: int
-
-func gather(amount: int) -> int                                  # [MVP]
-func is_depleted() -> bool                                       # [MVP]
-
-# src/sim/entities/sim_wildlife.gd
-class_name SimWildlife extends SimResourceNode
-var home_tile: Vector2i
-var roam_radius: int
-var flee_from_id: int
-var is_dead: bool                    # carcass = gatherable
-```
-
-#### Systems
-
-```gdscript
-# src/sim/systems/sim_system.gd                                 [MVP]
-class_name SimSystem
-func process_tick(w: SimWorld) -> void      # virtual
-```
-
-Run in this fixed order by `SimWorld.step()`:
-
-| System | Responsibility | MVP |
+| System | Responsibility | State |
 |---|---|---|
-| `CommandSystem` | Validate + apply queued commands; reject commands for entities the sender doesn't own | **[MVP]** |
-| `TaskSystem` | Per-unit task state machine | **[MVP]** |
-| `MovementSystem` | Path following, re-path on block, local avoidance | **[MVP]** |
-| `ProductionSystem` | Build queues, training timers, construction progress | **[MVP]** |
-| `ResourceSystem` | Gather ticks, carry caps, drop-off, depletion | **[MVP]** |
-| `DeathSystem` | HPÃ¢â€°Â¤0 Ã¢â€ â€™ corpse, free tiles, drop cargo, corpse timer | **[MVP]** |
-| `SnapshotSystem` | Per-player fog-filtered deltas; broadcast | **[MVP]** |
-| `CombatSystem` | Target acquisition, cooldowns, damage w/ armour classes | |
-| `VisionSystem` | Recompute per-player vision | |
-| `TechSystem` | Research timers, stat modifiers, age advancement | |
-| `PopulationSystem` | Recompute pop cap | |
-| `WinConditionSystem` | Evaluate active game mode's victory rule | |
-| `AISystem` | Drive AI players (emits Commands like any player) | |
+| `CommandSystem` | Validate + apply queued commands; reject anything the sender doesn't own | ✅ |
+| `PathSystem` | Solve queued path requests against a per-tick budget | ✅ |
+| `TaskSystem` | Per-unit task state machine | ✅ |
+| `GatherSystem` / `BuildSystem` / `CombatSystem` | Arrival-time work: gather, build, fight | ✅ |
+| `ProductionSystem` | Training queues; a finished order is not popped until it spawns | ✅ |
+| `AgeSystem` | Age advancement timers | ✅ |
+| `MovementSystem` | Path following, waypoint by waypoint | ✅ |
+| `SeparationSystem` | Steering push-apart for overlapping units | ✅ |
+| `AnimationSystem` | Sets the `anim` view hint | ✅ |
+| `DeathSystem` | hp≤0 → corpse/rubble, free tiles, drop cargo, timers | ✅ |
+| `PopulationSystem` | Recount `pop_used`/`pop_cap`; owns the cap rule | ✅ |
+| `VisionSystem` | Recompute per-player fog | ✅ |
+| `WinConditionSystem` | Evaluate the active mode's victory rule | ✅ |
+| `TechSystem` | Research timers, stat modifiers | 9.3 |
+| `AISystem` | Drive AI players (emits Commands like any player) | 12.2a |
 
-#### Commands
+`SnapshotSystem` is **not** in the list — it mutates nothing and crosses the sim/net boundary, so
+`SimHost` calls it after each `step()`.
 
-The only way state changes.
+**Everything after `DeathSystem` recounts rather than adjusts.** Population, vision and the win
+condition are all derived from what exists at the end of a tick. An incremental counter has to be
+decremented from every path an entity can leave the world by, and one missed path is a permanent
+drift with nothing on screen to explain it.
 
-```gdscript
-# src/sim/commands/command.gd                                   [MVP]
-class_name Command
-var player_id: int
-var issued_tick: int
-func to_dict() -> Dictionary                                     # [MVP]
-static func from_dict(d: Dictionary) -> Command                   # [MVP]
-func validate(w: SimWorld) -> bool                                # [MVP] virtual
-func apply(w: SimWorld) -> void                                   # [MVP] virtual
-```
+**Commands are the only way state changes.** Every one validates ownership server-side; a
+`validate()` that fails drops the command silently, so anything the UI offers must be gated the
+same way the command is. Built: move, stop, gather, build, place-building, train,
+cancel-production, attack, advance-age, set-control-group, debug-destroy, debug-set-age. Later:
+garrison, research, stance, special ability, trade, resign.
 
-| Command | Payload | MVP |
-|---|---|---|
-| `MoveCommand` | `unit_ids`, `target_tile` | **[MVP]** |
-| `GatherCommand` | `unit_ids`, `node_id` | **[MVP]** |
-| `BuildCommand` | `unit_ids`, `building_def`, `origin_tile` | **[MVP]** |
-| `TrainCommand` | `building_id`, `unit_def` | **[MVP]** |
-| `StopCommand` | `unit_ids` | **[MVP]** |
-| `CancelOrderCommand` | `building_id`, `index` | **[MVP]** |
-| `SetControlGroupCommand` | `slot`, `unit_ids` | **[MVP]** |
-| `AttackCommand` | `unit_ids`, `target_id` | |
-| `GarrisonCommand` | `unit_ids`, `building_id` | |
-| `ResearchCommand` | `building_id`, `tech_id` | |
-| `AdvanceAgeCommand` | `building_id` | |
-| `StanceCommand` | `unit_ids`, `stance` | |
-| `SpecialAbilityCommand` | `unit_ids`, `ability_id`, `target` | |
-| `TradeCommand` | `cart_id`, `market_id` | |
-| `ResignCommand` | Ã¢â‚¬â€ | |
+`PathService` wraps `AStarGrid2D` with a **per-tick budget** (`MAX_SOLVES_PER_TICK = 12`, measured:
+32 → 9.48 ms, 16 → 5.09 ms, 12 → 4.30 ms against the <5 ms tick). Grid updates are incremental by
+dirty rect; the one full 64×64 sweep (~12 ms) happens at map-gen time where it hides in load.
 
-#### Pathfinding
+### 6.3 View layer (`src/view/`)
 
-```gdscript
-# src/sim/pathing/path_service.gd                               [MVP]
-class_name PathService
-func rebuild(map: SimMap) -> void                                # [MVP]
-func set_tile_blocked(t: Vector2i, blocked: bool) -> void         # [MVP]
-func find_path(from: Vector2i, to: Vector2i, domain: int) -> PackedVector2Array  # [MVP]
-func nearest_reachable(from: Vector2i, to: Vector2i, domain: int) -> Vector2i     # [MVP]
-func request_async(from, to, domain, callback: Callable) -> int    # budgeted queue
+`GameView` owns three layers — `TerrainLayer`, the `EntityViewPool`, and `FogOverlay` — and turns
+a snapshot into pooled, interpolated `EntityView`s. **It is handed raw bytes, never a `SimMap` or
+a `SimPlayer`**: terrain bytes to draw ground, fog bytes to draw fog. That is the shape a
+networked client receives, and it keeps the tests free of a world.
 
-# src/sim/pathing/flow_field.gd     Ã¢â‚¬â€ scale-up only
-class_name FlowField
-func build(goal: Vector2i, map: SimMap, domain: int) -> void
-func direction_at(t: Vector2i) -> Vector2i
-```
+`Iso` is **the only place grid↔screen math lives**. Two distinctions that cost real debugging:
+`tile_to_world()` is a tile **corner** while the sim stands entities at tile **centres**
+(`tile_centre_to_world()`); and `world_to_tile()` **rounds** while `tile_at()` **floors** — the
+first un-projects a corner, the second answers "which tile is this point inside".
 
-`AStarGrid2D` wrapped by `PathService`, with a **per-tick pathfinding budget** Ã¢â‚¬â€ at most N requests solved per tick, rest queued. Prevents the stall where dozens of units re-path on one frame. Local unit-vs-unit avoidance is steering-based off the spatial hash; the sim has no physics engine.
+Picking is **by tile, not sprite bounds** — a 10 m tree's sprite covers six tiles behind it.
+Depth sorting moves a footprint's sort point to its **front tile** with `EntityView.draw_offset`
+carrying the equal and opposite shift, so the art stays on the centre while the sort is correct.
 
-### 6.3 View layer
-
-```gdscript
-# src/view/game_view.gd                                        [MVP]
-class_name GameView extends Node2D
-func apply_snapshot(snap: Dictionary) -> void                    # [MVP]
-func _process(delta) -> void                                     # [MVP] interpolate
-
-# src/view/entity_view_pool.gd                                  [MVP]
-class_name EntityViewPool
-func acquire(id: int, visual_id: StringName) -> EntityView        # [MVP] pooled
-func release(id: int) -> void                                    # [MVP]
-func get_view(id: int) -> EntityView                             # [MVP]
-
-# src/view/entity_view.gd                                       [MVP]
-class_name EntityView extends Node2D
-func set_target_transform(pos: Vector2, tick: int) -> void        # [MVP]
-func play_anim(name: StringName, facing: int) -> void             # [MVP]
-func set_health_dot(pct: float) -> void                          # [MVP]
-func set_selected(on: bool) -> void                              # [MVP]
-func set_team_color(c: Color) -> void                            # [MVP] outline shader
-
-# src/view/camera_rig.gd                                        [MVP]
-class_name CameraRig extends Camera2D
-func pan(delta: Vector2) -> void                                 # [MVP]
-func zoom_by(factor: float) -> void                              # [MVP]
-func center_on(world_pos: Vector2, animated: bool) -> void        # [MVP]
-func follow(entity_id: int) -> void
-func clamp_to_map(bounds: Rect2) -> void                         # [MVP]
-
-# src/view/input_router.gd                                      [MVP]
-class_name InputRouter extends Node
-# tap, double-tap, drag, two-finger box select, edge swipe zoom
-func _unhandled_input(e: InputEvent) -> void                     # [MVP]
-signal request_command(cmd: Command)                             # [MVP]
-
-# src/view/selection.gd Ã¢â‚¬â€ client-side only, never sent           [MVP]
-class_name Selection
-func set_selection(ids: Array[int]) -> void                      # [MVP]
-func add(ids: Array[int]) -> void                                # [MVP]
-func select_in_rect(rect: Rect2i) -> void                        # [MVP]
-func select_same_type_onscreen(id: int) -> void                  # [MVP]
-func current() -> Array[int]                                     # [MVP]
-
-# src/view/iso.gd Ã¢â‚¬â€ the ONLY place grid<->screen math lives      [MVP]
-class_name Iso
-static func tile_to_world(t: Vector2i) -> Vector2                 # [MVP]
-static func world_to_tile(w: Vector2) -> Vector2i                 # [MVP]
-static func sub_to_world(p: Vector2i) -> Vector2                   # [MVP]
-static func depth_sort_key(p: Vector2i) -> float                    # [MVP]
-
-# src/view/selection_overlay.gd                                  [MVP]
-# src/view/placement_ghost.gd                                    [MVP]
-# src/view/fog_overlay.gd
-```
-
-### 6.4 UI
-
-```gdscript
-# src/ui/hud.gd                                                 [MVP]
-class_name HUD extends CanvasLayer
-# children wire to EventBus signals Ã¢â‚¬â€ no polling
-
-# src/ui/selection_panel.gd   [MVP]  SingleUnitView / BuildingView / MultiSelectView
-# src/ui/action_panel.gd      [MVP]  context-sensitive actions
-# src/ui/resource_bar.gd      [MVP]  5 counters incl. idle/total villagers
-# src/ui/minimap.gd           [MVP]  circular, 4 corner buttons
-# src/ui/control_groups.gd    [MVP]  5 slots, icon = most-represented type
-# src/ui/download_screen.gd   [MVP]  asset pack progress (Ã‚Â§3.2)
-# src/ui/credits_screen.gd    [MVP]  CC-BY-SA attribution (Ã‚Â§2.3)
-# src/ui/age_header.gd
-# src/ui/tech_tree_screen.gd
-# src/ui/market_screen.gd
-# src/ui/chat_overlay.gd
-```
+UI widgets live in `src/view/` alongside it (there is no `src/ui/`): `SelectionPanel`,
+`ResourceHUD`, `Minimap`, `ControlGroupsHud`, `AgeBadge`, `IdleVillagerBadge`, `NoticeToast`,
+`PauseMenu`, `ResultScreen`, `PlacementGhost`, `SelectionBox`, `ActionFlash`. They read from
+`EventBus` or from facts handed in, **never** from the sim, and they are built in `_init()` rather
+than `_ready()` so a bare `.new()` is fully wired for a headless test.
 
 ---
 
 ## 7. Cross-cutting concerns
 
-### 7.1 Selection vs commands
-Selection is client-side UI state, never sent to the server. Only the resulting `Command` (with explicit `unit_ids`) crosses the wire Ã¢â‚¬â€ selection stays instant regardless of latency.
+**7.1 Selection vs commands.** Selection is client-side UI state, never sent — it stays instant
+regardless of latency, and a selection in the state hash would desync the moment one player
+tapped. Only the resulting `Command`, with explicit `unit_ids`, crosses the wire. Control groups
+are the exception: **persisted in `SimPlayer`** via `SetControlGroupCommand` so they survive
+reconnect.
 
-Control groups are the exception: they're **persisted in `SimPlayer`** via `SetControlGroupCommand` so they survive reconnect and are available to a rejoining client.
+**7.2 Snapshots.** Per-player, fog-filtered, `{tick, spawned[], updated[], removed[],
+player_state, vision, mode, match_over, winner_id}`. **Not yet a real delta** — everything a
+player may see is sent every tick, so the client currently treats *absence* from `updated` as "I
+can no longer see that". A true delta against the last acknowledged tick must add an explicit
+per-entity "you have lost sight of X" signal, and it must **not** be a list of hidden ids, which
+would let a client read enemy unit counts off the wire.
 
-### 7.2 Snapshots
-Per-player, fog-filtered, delta-encoded against the last acknowledged tick. Full snapshot on join or after loss. Format `{tick, spawned[], updated[], removed[], player_state}`.
+**7.3 Rendering.** `Sprite2D` in a Y-sorted container. If profiling at 200+ units shows Y-sort
+dominating, switch to explicit depth keys via `Iso.depth_sort_key()`. Measure before changing.
 
-### 7.3 Rendering
-`Sprite2D` in a Y-sorted container for MVP. If profiling at 200+ units shows Y-sort dominating, switch to explicit depth keys via `Iso.depth_sort_key()` and `RenderingServer` canvas items. Measure at 0.7 scale before changing anything.
+**7.4 Mobile input.** All gestures funnel through `InputRouter`. Mouse emulation **disabled** —
+multi-touch box select needs raw `InputEventScreenTouch`/`Drag`. Touch and mouse are handled
+separately, because handling one would work on the phone and not on the desktop the work is done
+on. Test on device.
 
-### 7.4 Mobile input
-All gestures funnel through `InputRouter`. Mouse emulation **disabled** Ã¢â‚¬â€ multi-touch box select needs raw `InputEventScreenTouch`/`Drag`. Test on device from 0.1.
+**7.5 Audio.** `AudioManager` exists with a no-op implementation and a stable ID vocabulary, so
+gameplay emits `play_sfx(&"villager.chop")` from day one and the pack lands later.
 
-### 7.5 Audio
-`AudioManager` exists from MVP with a no-op implementation and a stable ID vocabulary, so gameplay emits `play_sfx(&"villager.chop")` from day one and the audio pack lands later.
+**7.6 Optimisation policy.** GDScript everywhere. Profile on the target Android device. Move a hot
+loop to GDExtension only when profiling proves it dominates.
 
-### 7.6 Optimisation policy
-GDScript everywhere. Profile on the target Android device. Move a hot loop to GDExtension only when profiling proves it dominates.
+**7.7 Testing.** Five layers; most of the value is in the first.
 
-### 7.7 Testing
-
-Four distinct layers, deliberately Ã¢â‚¬â€ most of the value is in the first one.
-
-**1. Headless sim tests (the important layer).**
-Because `src/sim/` is plain GDScript with no `Node`, no textures, and no input, it can be tested with no window and no rendering. This is the payoff of the Ã‚Â§1.1 architecture, and it is why the boundary rule can be checked by a test rather than by review Ã¢â‚¬â€ see the no-CI note in Ã‚Â§1.2: running it is a manual step.
-
-```
-godot --headless --path game/ res://tests/run_tests.tscn
-```
-
-The runner (`run_tests.gd`) is a Node under that minimal scene, not a `--script`
-`SceneTree` override. A custom `--script` MainLoop skips the normal main-scene
-boot sequence that parents autoload singletons under the tree root, which
-silently breaks anything needing `get_tree()`/`get_multiplayer()` -- discovered
-building 0.6's `Net` autoload. A real scene, even headless, boots exactly like
-the shipped game does.
-
-Exit code 0 = pass, non-zero = fail Ã¢â‚¬â€ so this one command is the whole check, and is all CI would need if it existed (Ã‚Â§1.2). Test shape:
-
-```gdscript
-# spawn a world, queue commands, step N ticks, assert on state
-var w := SimWorld.new()
-w.setup(MatchConfig.debug_single_player())
-var v := w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
-w.queue_command(MoveCommand.new(1, [v.id], Vector2i(10, 5)))
-for i in 60: w.step()
-assert_eq(v.tile(), Vector2i(10, 5), "villager reached target in 60 ticks")
-```
-
-No scene required Ã¢â‚¬â€ which answers "what do I need to test?": for sim tests, **nothing but the script**.
-
-**2. Framework Ã¢â‚¬â€ GdUnit4** (MIT). It lists explicit 4.7.1 compatibility and ships a first-party GitHub Action, which makes it the lower-risk pick on a brand-new engine release.
-
-```
-addons\gdUnit4\runtest.cmd -a res://tests -c -rd res://reports
-```
-
-Exit 0 = pass, 100 = failures, 101 = warnings. Running it headless on Linux would additionally need `xvfb-run --auto-servernum` and `--audio-driver Dummy`. (Not adopted Ã¢â‚¬â€ see 0.7 in Ã‚Â§11.)
-
-*(GUT is the alternative Ã¢â‚¬â€ also MIT, but take its 9.7.x line for 4.7; `main` tracks 4.6.)*
-
-**3. `state_hash()` regression.** Run the same `MatchConfig` + command log twice, compare hashes. Catches accidental non-determinism and any state the snapshot layer forgets to serialise.
-
-**4. Replays.** `MatchConfig` + ordered command log = a few KB that reproduces any bug exactly. Also the manual-testing tool: record a session on the phone, replay it headless on the desktop to debug.
-
-**5. `StressTest.tscn`** Ã¢â‚¬â€ the only layer needing a real scene. Spawns N units, reports frame and tick timings against Ã‚Â§3.1. This one must run **on the phone**, not the desktop.
-
-**What is testable when:** nothing meaningful until 0.5 (`SimWorld` exists). Before that, tests have no subject Ã¢â‚¬â€ 0.1 is verified by a scene visibly running on a physical device, not by assertions.
+1. **Headless sim tests.** `src/sim/` is plain GDScript, so it tests with no window and no rendering — the payoff of §1.1. One command, meaningful exit code:
+   ```
+   godot --headless --path game/ res://tests/run_tests.tscn
+   ```
+   The runner is a **Node under a real scene**, not a `--script` MainLoop override: a custom MainLoop skips the boot sequence that parents autoloads under the tree root, silently breaking anything needing `get_tree()`.
+   Two runner rules that have each caught real breakage: **an empty suite is a FAILURE** (a renamed base script once collapsed discovery to zero while reporting PASS), and **a test that asserted nothing is a FAILURE** (GDScript reports a runtime error by printing and continuing, so an exploded test records no failures). A new `class_name` needs `--import` before the suite can see it.
+2. **`state_hash()` regression.** Same config + command log twice, compare hashes. Catches non-determinism and anything the snapshot layer forgets.
+3. **Replays.** `MatchConfig` + ordered command log = a few KB reproducing any bug exactly.
+4. **`dev_preview/`.** Scripts that drive the *real* scenes and screenshot each step — `preview_match.tscn` (16 shots through a whole session), `preview_victory.tscn` (fights the debug map to a result; `--defeat` for the other branch). A preview that rebuilt any of the game could show a working feature while the game's own was broken.
+5. **`StressTest.tscn`** — the only layer needing a real scene, and it must run **on the phone**.
 
 ---
 
 ## 8. Scene trees
 
 ```
-Boot.tscn                    [MVP]
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Boot (boot.gd)           # load data, check/mount asset packs, route to menu
-
-MainMenu.tscn                [MVP]
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ MainMenu (Control)
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Background (TextureRect)
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Title
-    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ VBox: PlayBtn, MultiplayerBtn, SettingsBtn, CreditsBtn, QuitBtn
-
-Match.tscn                   [MVP]
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Match (match.gd)
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ SimHost (sim_host.gd)         # server only; owns SimWorld
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ GameView (Node2D)
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ TerrainLayer (TileMapLayer)
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ StaticsLayer (Y-sorted)   # buildings, trees, mines
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ UnitsLayer (Y-sorted)     # units, wildlife
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ OverlayLayer              # selection rings, ghost, health dots
-    Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ FogLayer
-    Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ CameraRig (Camera2D)
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ InputRouter
-    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ HUD (CanvasLayer)
-        Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ControlGroups   (top-left)      [MVP]
-        Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ AgeHeader       (top-centre)
-        Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ResourceBar     (top-right)     [MVP]
-        Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ SelectionPanel  (bottom-left)   [MVP]
-        Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ActionSubPanel
-        Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ QueueSubPanel
-        Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ MinimapPanel    (bottom-right)  [MVP]
-
-DownloadScreen.tscn          [MVP]  asset pack fetch + progress
-CreditsScreen.tscn           [MVP]  attribution
-Lobby.tscn                          host/join, colour & map & win condition
-Settings.tscn
-MatchResult.tscn
-StressTest.tscn              [MVP]  perf harness
+Boot.tscn         [MVP]  title card, 2 s or tap -> MainMenu
+MainMenu.tscn     [MVP]  PLAY / MULTIPLAYER / SETTINGS / HOW TO / CREDITS / QUIT
+Game.tscn         [MVP]  the match - game_scene.gd
+  GameView (Node2D)      TerrainLayer, EntityViewPool (Y-sorted), FogOverlay,
+                         PlacementGhost, ActionFlash
+  CameraRig, InputRouter
+  CanvasLayer (backdrop, below the world)
+  CanvasLayer (HUD, above): ControlGroupsHud (top-left), age header + pause +
+                         IdleVillagerBadge (top-centre), ResourceHUD (top-right),
+                         SelectionPanel (bottom-left), Minimap + 4 corner buttons
+                         (bottom-right), SelectionBox, NoticeToast, PauseMenu,
+                         ResultScreen
+Credits.tscn      [MVP]
+StressTest.tscn   [MVP]  perf harness
+Skirmish.tscn            1.6 - skirmish settings, and the multiplayer lobby
+DownloadScreen.tscn      3.2
+Settings.tscn            1.5
 ```
+
+The HUD **must** sit on `CanvasLayer`s or the camera pans it away with the ground. A full-rect
+`Control` defaults to `MOUSE_FILTER_STOP` and will swallow every mouse event before the camera
+sees it — `mouse_filter = IGNORE` on anything that is not meant to be pressed, **per node**,
+since it does not inherit. An invisible display `TextureRect` left on the default once cost three
+build buttons (they placed the villager on the ground under the icon instead).
 
 ---
 
 ## 9. Data schemas
 
-Static data is JSON in `game/data/`, loaded once into typed `*Def` objects.
-
-**All numbers below are starting values, tuned by playtest.** Balance is ours to design and iterate.
+Static data is JSON in `game/data/`, loaded once into typed `*Def` objects (`src/data/`, plain
+`RefCounted` so `sim/` may read them). **All numbers are starting values, tuned by playtest.**
 
 ```jsonc
 // units.json
-{
-  "unit.villager": {
-    "name": "Villager",
-    "visual": "vis.villager",
-    "hp": 30, "speed": 200, "los": 4,
-    "domain": "land", "pop_cost": 1,
-    "cost": { "food": 50 },
-    "build_time_ticks": 250,             // 25 s at 10 Hz
-    "attack": { "damage": 3, "type": "melee", "range": 0, "cooldown_ticks": 20 },
-    "armor": { "melee": 0, "pierce": 0 },
-    "carry_cap": { "food": 10, "wood": 10, "gold": 10, "stone": 10 },
-    "gather_rate": { "food": 25, "wood": 25, "gold": 25, "stone": 25 },  // per 100 ticks
-    "trainable_at": ["building.town_center"]
-  }
+"unit.villager": {
+  "name": "Villager", "visual": "vis.villager",
+  "hp": 30, "speed": 200, "los": 4, "domain": "land", "pop_cost": 1,
+  "cost": { "food": 50 }, "build_time_ticks": 250,
+  "attack": { "damage": 3, "type": "melee", "range": 0, "cooldown_ticks": 20 },
+  "armor": { "melee": 0, "pierce": 0 },
+  "carry_cap":   { "food": 10, "wood": 10, "gold": 10, "stone": 10 },
+  "gather_rate": { "food": 25, "wood": 25, "gold": 25, "stone": 25 },  // per 100 ticks
+  "trainable_at": ["building.town_center"], "age_required": 1
 }
 
-// buildings.json
-{
-  "building.town_center": {
-    "name": "Town Center",
-    "visual": "vis.town_center",
-    // Footprint comes from the baked art, not from this sketch. SETTLED at 0.4:
-    // the civic centre measures 15.53 x 15.00 m = 7.77 tiles, so [8, 8], which
-    // also agrees with 0 A.D.'s own 30x30-unit obstruction and the fndn_8x8 it
-    // pairs with. The house is measured at 10 x 10 m -- 5 tiles -- but is given
-    // [4, 4] to match its 4x4 foundation, so its roof deliberately overhangs.
-    // See data/buildings.json and ASSET_MISSING.md 1.2.
-    "hp": 2000, "footprint": [8, 8], "los": 8,
-    "visual_foundation": "vis.foundation_8x8",
-    "visual_rubble": "vis.rubble_town_center",
-    "cost": { "wood": 275, "stone": 100 },
-    "build_time_ticks": 1500,
-    "provides_pop": 10, "garrison_cap": 15,
-    "trains": ["unit.villager"],
-    "drop_off": ["food", "wood", "gold", "stone"],
-    "age_required": 1
-  }
+// buildings.json - footprint comes from the MEASURED art, not from a sketch
+"building.town_center": {
+  "hp": 2000, "footprint": [10, 10], "los": 8,
+  "visual_foundation": "vis.foundation_8x8", "visual_rubble": "vis.rubble_town_center",
+  "cost": { "wood": 275, "stone": 100 }, "build_time_ticks": 1500,
+  "provides_pop": 10, "garrison_cap": 15,
+  "trains": ["unit.villager"], "drop_off": ["food", "wood", "gold", "stone"]
 }
 
-// resources.json
-{
-  "res.tree":      { "kind": "wood", "visual": "vis.tree",
-                     "amounts": [40, 100, 175], "gather_slots": 1 },
-  "res.gold_mine": { "kind": "gold", "visual": "vis.gold_mine",
-                     "amounts": [200, 500, 800], "gather_slots": 4 },
-  "res.deer":      { "kind": "food", "visual": "vis.deer", "amounts": [140,140,140],
-                     "wildlife": { "roam_radius": 6, "flees": true } }
+// a gatherable building - the field
+"building.field": {
+  "requires_adjacent": ["building.mill"], "max_per_host_by_age": [0, 2, 3, 4],
+  "blocks_movement": false,
+  "gather": { "kind": "food", "amount": -1, "slots": 5,
+              "yield_per_age": [0, 25, 28, 32] }   // food per 100 ticks per villager
 }
+
+// resources.json - `amounts` is indexed by size_class, and since 2026-08-17
+// `visuals` is too, so a rich seam and a poor one are different pictures
+"res.tree": { "kind": "wood", "amounts": [40, 100, 175], "gather_slots": 1 }
 ```
 
-`techs.json`, `ages.json` and `factions.json` follow the same shape, near-empty until their
-phases.
+**`factions.json` stays** despite §1: one civilisation is a v1 *scope* decision, and a missing
+file and an empty one are different states — only one is a bug. Its single entry is
+`faction.default`, named for its job as *the default skin key*.
 
-**`factions.json` stays**, despite §1. One civilisation is a v1 *scope* decision, not a
-change of architecture — civs return as a re-skin layer (§2.7.1) — so the near-empty entry
-0.4 already put there is the seam holding its place, for exactly the reason 0.4 gave for
-keeping an empty `techs.json`: a missing file and an empty one are different states and only
-one of them is a bug. Its single entry is renamed `faction.default`, because its job is *the
-default skin key*, and calling it `faction.neutral` invites reading it as gaia or as a third
-player, which it is not.
-
-What v1 *adds* is a **player colour**, and that is not a faction property: it is per player
-slot, picked in the lobby (1.6), and eight players share one civilisation. It belongs in a
-flat palette of its own, not inside a faction entry. That is **`colours.json`**, added
-2026-08-14 once the eight colours were picked (§13.2 item 11): an index-ordered list read by
-`GameDataRegistry.colour(index)`, which **wraps** rather than returning null — the opposite
-call from `unit()`/`building()`, deliberately, because a missing definition has no sensible
-stand-in and a missing colour does. `SimPlayer` carries **both** `faction` and `colour`, and
-in v1 only `colour` varies.
+**`colours.json`** is the v1 player palette, read by `GameDataRegistry.colour(index)` and indexed
+by `SimPlayer.colour`. Eight hues cannot all be told apart by hue: red-green colour blindness
+(~8% of men) collapses red, orange, green and yellow onto one axis, so **those four are separated
+by lightness** on a CIE L\* ladder. `#0043D6` blue (L\* 36) · `#D50032` red (45) · `#FFEB00`
+yellow (92) · `#00E5FF` cyan (84) · `#00A344` green (59) · `#B44DFF` violet (54) · `#FFAB00`
+orange (76) · `#FFFFFF` white (100). Pairs close in L\* are always in **opposite** families, so
+they separate on the blue-yellow axis every colour blindness preserves. **Slot order is part of
+the design** — slots 1–4 are the four most separable, and green sits at 5 so it never meets
+yellow before a 5-player game. Order is the contract and is pinned by tests, since reordering
+repaints every existing save and replay. Depends on A.6's blend mode: a pure multiply compresses
+the ladder and makes white a no-op.
 
 ### 9.1 Atlas format
 
-Generated by **`isobake`** (Ã‚Â§2.2) as `<id>.atlas.json` beside its PNG pages. It is a
-*generated* file: a rebake rewrites it wholesale, so `visuals.json` points at it and
-nothing is ever hand-merged into it.
+Generated by `isobake` as `<id>.atlas.json` beside its PNG pages. A **generated** file — a rebake
+rewrites it wholesale, so nothing is ever hand-merged into it.
 
 ```jsonc
-{
-  "format": 1,
-  "id": "vis.villager",
-  "pages": ["vis.villager_0.png"],          // multi-page from the start
-  "page_sizes": [[1024, 1024]],
-  "directions": {
-    "stored": 5, "mirror_for_8": true,
-    "order": ["S", "SE", "E", "NE", "N"],
-    // every facing resolved to a stored frame + flip, so the view layer reads
-    // the convention instead of re-deriving it
-    "table": [ { "dir": "SW", "stored_index": 1, "flip_x": true }, Ã¢â‚¬Â¦ ]
-  },
+{ "format": 1, "id": "vis.villager",
+  "pages": ["vis.villager_0.png"], "page_sizes": [[1024, 1024]],
+  "directions": { "stored": 5, "mirror_for_8": true, "order": ["S","SE","E","NE","N"],
+                  "table": [ { "dir": "SW", "stored_index": 1, "flip_x": true } ] },
   "pixels_per_metre": 22.627431,
-  "anims": {
-    "idle": { "fps": 8, "loop": true, "frames": 12, "first": 0 },
-    "walk": { "fps": 15, "loop": true, "frames": 12, "first": 60 }
-  },
+  "anims": { "idle": { "fps": 8, "loop": true, "frames": 12, "first": 0 } },
   // index = anims[name].first + stored_direction_index * frames + frame
-  "frames": [ { "page": 0, "rect": [0, 0, 40, 52], "anchor": [20.0, 50.0] } ],
-  "generator": { "tool": "isobake", "blender": "4.5.12", "recipe_sha256": "Ã¢â‚¬Â¦" }
-}
+  "frames": [ { "page": 0, "rect": [0,0,40,52], "anchor": [20.0, 50.0] } ],
+  "generator": { "tool": "isobake", "blender": "4.5.12", "recipe_sha256": "..." } }
 ```
 
-Two deliberate departures from the row-based sketch this replaces:
+Two deliberate departures from a row-based sheet: **per-frame rects** (a row layout pads every
+frame to the largest cell; the villager's 240 frames pack into 20% of a 1024² page as rects) and
+**multi-page** from the start (mobile GL ES 3.0 only guarantees 4096², and carrying a `page` index
+is cheaper than retrofitting one).
 
-- **Per-frame rects, not rows.** A row layout pads every frame to the largest cell.
-  Trimmed frames vary a lot, and the villager's 240 frames pack into 20% of a
-  1024Ã‚Â² page as rects.
-- **Multi-page.** Mobile GL ES 3.0 only guarantees 4096Ã‚Â², and a full animation set
-  will not fit one page. Cheaper to carry the `page` index from the start than to
-  retrofit it.
+**Anchors are exact, not measured.** With a fixed orthographic camera and the subject rotating
+about world Z through the origin, world (0,0,0) projects to one constant pixel; the per-frame
+anchor is that constant minus the frame's trim offset. Bottom-centre-of-content-bbox moves
+whenever a limb swings out, which was the cause of the anchor jitter that used to be on the risk
+register.
 
-**Anchors are exact, not measured.** With a fixed orthographic camera and the subject
-rotating about the world Z axis through the origin, world (0,0,0) projects to one
-constant pixel; the per-frame anchor is that constant minus the frame's trim offset.
-The earlier plan here specified bottom-centre-of-content-bbox, which moves whenever a
-limb swings out Ã¢â‚¬â€ that is the cause of the jitter Ã‚Â§14 used to list, not a separate
-problem to mitigate.
+Reading any atlas asserts its `pixels_per_metre` against `Iso`.
 
-### 9.2 The v1 roster — ages, buildings, units
+### 9.2 The v1 roster
 
-Derived from [Age & Unit Planning.md](<Age & Unit Planning.md>), which stays the source of
-truth for content decisions; this section is the same information in the vocabulary the code
-uses (§2.5) and is what `units.json` / `buildings.json` / `resources.json` / `ages.json` get
-filled from. One roster, every player (§1).
+Derived from [Age & Unit Planning.md](<Age & Unit Planning.md>), which stays the source of truth
+for content decisions. `Age` is the age that **unlocks** an entity; it stays available afterwards.
 
-`Age` is the age that **unlocks** the entity; it stays available in every later age. `Age
-skins` lists the 0 A.D. actor per age (§2.7) — a single actor means it never re-skins.
+**Footprints are locked to the maximum across all four age skins.** Buildings re-skin in place as
+their owner advances, so a footprint cannot change with the skin: it claims the tiles its age-4
+form needs from the moment it is placed. This is a real gameplay fact — an age-1 settlement is
+spaced for age-4 buildings — and 0 A.D.'s civs do not agree on obstruction size, so it has teeth:
 
-**Footprints are locked to the maximum across all four age skins.** Buildings and walls
-re-skin in place as their owner advances (§13.2 item 10), so a footprint cannot change with
-the skin: it claims the tiles its age-4 form needs from the moment it is placed. This is a
-real gameplay fact, not just a data convention — an age-1 settlement is spaced for age-4
-buildings — and it is measured at bake time (A.10), one max per building, not per age.
+| Building | 1 `brit` | 2 `gaul` | 3 `achae` | 4 `rome` | Declare |
+|---|---|---|---|---|---|
+| House | 10×10 | 11×11 | 13×14 | 14×14 | `[4, 4]` |
+| Barracks | 20×20 | 20×20 | — | 22×22 | `[6, 6]` |
+| **Town centre** | 25×25 | 25×25 | **38.5×22.5** | **37×37** | **`[10, 10]`** |
 
-0 A.D.'s civs do **not** agree on obstruction size, so this has teeth. Measured from
-`simulation/templates/structures/<civ>/` at 4 world units per tile:
+The town centre was the one MVP footprint the age plan broke — its shipped `[8, 8]` came from the
+Athenian actor, and the Roman age-4 civic centre is 37×37. Max is taken **per axis**, since
+buildings do not rotate. `visual_foundation` still points at `vis.foundation_8x8` and so reads one
+tile small until `vis.foundation_10x10` is baked.
 
-| Building | 1 `brit` | 2 `gaul` | 3 `achae` | 4 `rome` | Max | Declare |
-|---|---|---|---|---|---|---|
-| House | 10 × 10 | 11 × 11 | 13 × 14 | 14 × 14 | 3.5 tiles | `[4, 4]` — already correct |
-| Barracks | 20 × 20 | 20 × 20 | — | 22 × 22 | 5.5 tiles | `[6, 6]` |
-| **Town centre** | 25 × 25 | 25 × 25 | **38.5 × 22.5** | **37 × 37** | **9.6 × 9.25** | ⚠️ **`[10, 10]`** |
+**Composite entities are measured over their props**, not their core building — the lumber camp
+with 3× `wood_lumber`, the mining camp with its stone piles, the age-3/4 farm with its food piles,
+and the dragon nest, which is 22 bushes and 12 standing stones around a shrine with no core
+building at all. Otherwise villagers path through the props and buildings are placeable on top of
+them. **Walls and towers are exempt** — every wall piece in 0 A.D. shares one footprint and every
+wall tower another, across all civs, so the max rule is a no-op for that set.
 
-✅ **The town centre was the one MVP footprint the age plan broke, and it is now `[10, 10]`**
-(decided 2026-08-14). Its shipped `[8, 8]` came from the Athenian actor (30 × 30 = 7.5 tiles,
-measured at 0.4), but the Roman age-4 civic centre is 37 × 37 and the Achaemenid one 38.5
-wide — so a town centre placed in age 1 must already have claimed 10 × 10 or it cannot
-re-skin. The max is taken **per axis**, since buildings do not rotate. Done in
-`buildings.json` with the measurements recorded in its own `_note`, plus the two tests that
-pinned 8 × 8. `visual_foundation` still points at `vis.foundation_8x8` and so now reads one
-tile small on each side — the same deliberate art/gameplay disagreement the house makes in
-the other direction — until `vis.foundation_10x10` is baked (ASSET_MISSING §1.2).
-
-**Composite entities are measured over their props, not their core building.** Several roster
-entries are a building *plus* an arrangement of gaia props: the lumber camp with 3×
-`wood_lumber`, the mining camp with 3× `stone_pile_granite`, the age-3/4 farm with its food
-piles, and the dragon nest, which is 22 bushes and 12 standing stones around a shrine with no
-core building at all. The footprint has to cover the whole arrangement, or villagers path
-straight through the props and other buildings are placeable on top of them. The project
-owner has placed and confirmed each arrangement in 0 A.D. itself, so the measurement exists —
-it just has to be taken over the group rather than the building. The dragon nest is the
-extreme case and is not player-placeable (13.2), so it needs a footprint for **occupancy
-only**, never for a placement ghost.
-
-**Walls and towers are exempt**, verified in-game by the project owner: every wall piece in
-0 A.D. shares one footprint and every wall tower shares another, across all civs. The
-wall/gate/tower set therefore re-skins with no spacing change and the max rule is a no-op
-for it. That also retires the fear in §9.2.1 item 3 that mixed-civ pieces would force the
-thickest tier onto every age — they are all the same thickness.
-
-**A naming trap:** the roster's age-3 `Pers/…` lines resolve to **`achaemenids/`**. 0 A.D.
-renamed the Persians and there is no `pers` directory in `art/actors/structures/` or
-`simulation/templates/structures/`. Every other civ in the roster keeps its obvious name.
+⚠️ **A naming trap:** the roster's age-3 `Pers/…` lines resolve to **`achaemenids/`**. There is no
+`pers` directory. Every other civ keeps its obvious name.
 
 **Buildings**
 
 | Entity ID | Age | Function | Age skins |
 |---|---|---|---|
-| `building.town_center` | 1 | +10 pop, drop-off for all four resources, trains villager + militia. **Extra town centres unlock at age 3** | 1 `brit/civil_centre` · 2 `gaul/civil_centre` · 3 `iber/civil_centre` · 4 `rome/civil_centre` |
-| `building.house` | 1 | +5 pop | 1 `brit/house` · 2 `gaul/house` · 3 `pers/house` · 4 `rome/house` |
-| `building.farm` | 1 | Food drop-off. Fields attach from age 2 — **0 / 2 / 4 / 4** fields by age, +1 food per field per tick | 1 `brit/rotarymill` · 2 `gaul/rotarymill` · 3 `pers/storehouse` + 2× `gaia/treasure/food_persian_small` + 1× `food_persian_big` · 4 `rome/farmstead` + the same props |
-| `building.field` | 2 | Must be placed adjacent to a farm | 2 `gaul/field` · 3–4 `iber/field` |
-| `building.mining_camp` | 1 | Gold + stone drop-off | 1 `brit/corral` · 2 `gaul/corral` · 3 `iber/storehouse` · 4 `rome/storehouse`, each + 3× `gaia/treasure/stone_pile_granite` |
-| `building.lumber_camp` | 1 | Wood drop-off | 1 `brit/kennel` · 2 `celt/longhouse` · 3 `iber/corral` · 4 `rome/corral`, each + 3× `gaia/treasure/wood_lumber` |
-| `building.barracks` | 2 | Trains swordsman, spearman | 2 `gaul` · 3 `iber` · 4 `rome` |
-| `building.archery_range` | 2 | Trains archer; crossbowman from age 3 | 2 `gaul/range` · 3 `iber/range` · 4 `rome/range` |
-| `building.stable` | 2 | Trains scout cavalry; sword cavalry + cavalry archer from age 3 | 2 `gaul/stable` · 3 `pers/stable` · 4 `rome/stable` |
-| `building.blacksmith` | 2 | Upgrades | 2 `gaul/forge` · 3 `pers/forge` · 4 `rome/forge` |
-| `building.market` | 2 | Allied trading, buy/sell — unlocks 8.2b's trade button | 2 `gaul/market` · 3 `maur/market` · 4 `rome/market` |
-| `building.dock` | 2 | Trains fishing + transport ship; galley from 3, galleon from 4 | 2 `gaul/dock` · 3 `pers/dock` · 4 `rome/dock` |
-| `building.watch_tower` | 2 | Throws stones | 2 `gaul/sentry_tower` · 3 `pers/sentry_tower` · 4 `rome/defense_tower` |
-| `building.guard_tower` | 3 | Shoots arrows. **Is a wall tower**, so its civ tracks that age's newest wall tier and the footprints line up | 3 `pers/wall_tower` · 4 `rome/wall_tower` |
-| `building.castle` | 3 | **+40 pop.** Trains knight; elite swordsman + trebuchet from age 4; the dragon (13.1) | 3 `iber/fortress` · 4 `rome/fortress` |
-| `building.monastery` | 3 | Trains monk | 3 `pers/temple` · 4 `rome/temple` |
-| `building.university` | 3 | Upgrades | 3 `iber/temple` · 4 `mace/temple` |
-| `building.siege_workshop` | 3 | Trains ram, ballista, onager; trebuchet from age 4 | 3 `pers/arsenal` · 4 `rome/arsenal` |
-| `building.wall_wood` + `building.gate_wood` | 2 | Costs wood. Short / medium / long + gate | 2 `germ/*` · 3–4 `brit/*` — **all pieces of a tier from one civ** |
-| `building.wall_stone` + `building.gate_stone` | 3 | Costs stone | 3–4 `pers/*` (i.e. `achaemenids/`) |
-| `building.wall_reinforced` + `building.gate_reinforced` | 4 | | 4 `rome/*` |
-| `building.wonder` | 4 | Wonder victory condition (11.2) | 4 `hellenic_epic_temple` |
-| `building.dragon_nest` | — | **Not buildable** — a map POI (13.2) | `gaia/tree/bush_badlands` ×22 covering the centre grid, `gaia/ruins/standing_stone` ×12 in a ring, `structures/shrine_celtic` |
+| `building.town_center` | 1 | +10 pop, drop-off for all four, trains villager + militia. **Extra ones unlock at age 3** | `brit` · `gaul` · `iber` · `rome` `/civil_centre` |
+| `building.house` | 1 | +5 pop | `brit` · `gaul` · `pers` · `rome` `/house` |
+| `building.mill` | 1 | Food drop-off; fields attach from age 2 | `brit`/`gaul` `rotarymill` · `pers/storehouse` · `rome/farmstead`, age 3–4 + food piles |
+| `building.field` | 2 | Adjacent to a mill; **2/3/4 per mill by age**; inexhaustible | `gaul/field` · `iber/field` |
+| `building.mining_camp` | 1 | Gold + stone drop-off | `brit`/`gaul` `corral` · `iber`/`rome` `storehouse`, + 3× stone pile |
+| `building.lumber_camp` | 1 | Wood drop-off | `brit/kennel` · `celt/longhouse` · `iber`/`rome` `corral`, + 3× wood lumber |
+| `building.barracks` | 2 | Swordsman, spearman | `gaul` · `iber` · `rome` |
+| `building.archery_range` | 2 | Archer; crossbowman from 3 | `gaul` · `iber` · `rome` `/range` |
+| `building.stable` | 2 | Scout cavalry; sword cavalry + cavalry archer from 3 | `gaul` · `pers` · `rome` `/stable` |
+| `building.blacksmith` | 2 | Upgrades | `gaul` · `pers` · `rome` `/forge` |
+| `building.market` | 2 | Allied trading | `gaul` · `maur` · `rome` `/market` |
+| `building.dock` | 2 | Fishing + transport ship; galley from 3, galleon from 4 | `gaul` · `pers` · `rome` `/dock` |
+| `building.watch_tower` | 2 | Throws stones | `gaul`/`pers` `sentry_tower` · `rome/defense_tower` |
+| `building.guard_tower` | 3 | Shoots arrows. **Is a wall tower**, so it tracks that age's newest wall tier | `pers` · `rome` `/wall_tower` |
+| `building.castle` | 3 | **+40 pop.** Knight; elite swordsman + trebuchet from 4; the dragon | `iber/fortress` · `rome/fortress` |
+| `building.monastery` | 3 | Monk | `pers` · `rome` `/temple` |
+| `building.university` | 3 | Upgrades | `iber/temple` · `mace/temple` |
+| `building.siege_workshop` | 3 | Ram, ballista, onager; trebuchet from 4 | `pers/arsenal` · `rome/arsenal` |
+| `building.wall_wood` + `gate_wood` | 2 | Short/medium/long + gate | `germ/*` · `brit/*` — **all pieces of a tier from one civ** |
+| `building.wall_stone` + `gate_stone` | 3 | | `pers/*` |
+| `building.wall_reinforced` + `gate_reinforced` | 4 | | `rome/*` |
+| `building.wonder` | 4 | Wonder victory (11.2) | `hellenic_epic_temple` |
+| `building.dragon_nest` | — | **Not buildable** — a map POI (13.2). Footprint for occupancy only, never a placement ghost | 22× `bush_badlands`, 12× `standing_stone`, `shrine_celtic` |
 
-**Units**
+**Units** — one hand-picked actor for all four ages, deliberately mixed-civ. Cavalry point at the
+`_m` mount, which carries its `_r` rider as a nested prop.
 
-**One hand-picked actor per unit, all four ages** (§2.7), deliberately mixed-civ. Cavalry point
-at the `_m` mount, which carries its `_r` rider as a nested prop.
+> ⚠️ **READ THE ROSTER'S UNIT LINES AS ENTITY TEMPLATES, THEN RESOLVE ONE HOP TO THE ACTOR.**
+> `units/germ/champion_cavalry` means
+> `simulation/templates/units/germ/champion_cavalry.xml`, and the actor to bake is inside it:
+> `<VisualActor><Actor>units/germans/cavalry_swordsman_c_m.xml</Actor></VisualActor>`.
+> Four picks were reported as "actors that do not exist" purely because this step was skipped —
+> `art/actors/` has no `champion_*` or `ship_*` files because champions and ships are
+> template-level entities. **A recipe's `source.actor` must be the RESOLVED actor.**
 
-> **⚠️ Read the roster's unit lines as ENTITY TEMPLATES, then resolve one hop to the actor.**
-> This is the single most useful thing in this section and it cost a day to learn.
-> [Age & Unit Planning.md](<Age & Unit Planning.md>) names paths like `units/germ/champion_cavalry`.
-> That is `simulation/templates/units/germ/champion_cavalry.xml`, and the actor to bake is
-> inside it:
->
-> ```
-> simulation/templates/units/germ/champion_cavalry.xml
->   -> <VisualActor><Actor>units/germans/cavalry_swordsman_c_m.xml</Actor></VisualActor>
-> ```
->
-> **Four picks were reported as "actors that do not exist" purely because this step was
-> skipped** — `art/actors/` was searched for `champion_*` and `ship_*` files, correctly found
-> none, and the conclusion drawn was that 0 A.D. has no champion actors. It has no champion
-> *actor files*; champions and ships are template-level entities. Every one of the four resolves
-> cleanly, and the project owner confirmed all four by finding them in the Atlas scenario editor,
-> which lists **entities**, not actors.
->
-> The `Actor` column below is the resolved actor — what `source.actor` in a recipe must say.
-> The `Roster pick` column is the template it came from, so the two can be checked against each
-> other. Resolved and verified against the checkout 2026-08-15.
+| Entity ID | Age | Trained at | Actor to bake |
+|---|---|---|---|
+| `unit.villager` | 1 | Town Centre | `units/celts/female_citizen` — Britons and Gauls share one female citizen and it lives under `celts/`. Currently baked as `britons/citizen_female` (cosmetic: same mesh, different dress) |
+| `unit.militia` | 1 | Town Centre | `units/britons/infantry_slinger_a` ✅ |
+| `unit.scout_cavalry` | 1 | **Start-of-match spawn only**; Stable from 2 | `units/mauryas/cavalry_swordsman_a_m` ✅ |
+| `unit.swordsman` | 2 | Barracks | `units/gauls/infantry_swordsman_a` ✅ |
+| `unit.spearman` | 2 | Barracks | `units/gauls/infantry_spearman_a` ✅ |
+| `unit.archer` | 2 | Archery Range | `units/carthaginians/infantry_archer_a` ✅ |
+| `unit.fishing_ship` | 2 | Dock | `structures/celts/fishing_boat` ✅ |
+| `unit.transport_ship` | 2 | Dock | `structures/celts/skiff` |
+| `unit.sword_cavalry` | 3 | Stable | `units/gauls/cavalry_swordsman_a_m` ✅ |
+| `unit.cavalry_archer` | 3 | Stable | `units/achaemenids/cavalry_archer_b_m` ✅ |
+| `unit.crossbowman` | 3 | Archery Range | `units/han/infantry_crossbowman_a` ✅ |
+| `unit.monk` | 3 | Monastery | `units/athenians/healer` ✅ |
+| `unit.knight` | 3 | Castle | `units/germans/cavalry_swordsman_c_m` |
+| `unit.galley` | 3 | Dock | `structures/athenians/trireme` |
+| `unit.siege_ram` | 3 | Siege Workshop | `structures/iberians/siege_ram` — note the template says `cart` and the actor is `iberians`: **the civ in the template path need not match the civ in the actor path** |
+| `unit.ballista` | 3 | Siege Workshop | `units/carthaginians/siege_rock_packed` + `_unpacked` |
+| `unit.onager` | 3 | Siege Workshop | `units/romans/siege_onager_packed` + `_unpacked` ✅ |
+| `unit.elite_swordsman` | 4 | Castle | `units/athenians/infantry_swordsman_c` — `_c`, not `_e`: 0 A.D. dresses its Athenian champion in the citizen-tier mesh, so this is a visibly *different soldier* from `unit.swordsman`, which is better for a Castle unit |
+| `unit.galleon` | 4 | Dock | `structures/ptolemies/quinquereme` — recipe written, unbaked |
+| `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `units/han/siege_mangonel` + `siege_mangonel_pivot_packed`. The only entity exercising plural `trainable_at` |
+| `unit.dragon` | — | Castle | `fauna/dragon` ✅ |
+| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at 10% scale. **Also what `Mode.TROPHY` needs** (11.2) |
 
-| Entity ID | Age | Trained at | Roster pick (template) | Actor (what to bake) |
-|---|---|---|---|---|
-| `unit.villager` | 1 | Town Centre | `brit/support_female_citizen` | ⚠️ `units/celts/female_citizen` — **baked as `britons/citizen_female`**; same mesh and head, different dress texture, so cosmetic only (§9.2.1 item 10) |
-| `unit.militia` | 1 | Town Centre | `brit/infantry_slinger_a` | `units/britons/infantry_slinger_a` ✅ baked |
-| `unit.scout_cavalry` | 1 | **Age 1: start-of-match spawn only, not trainable.** Stable from age 2 | `maur/cavalry_swordsman_a` | `units/mauryas/cavalry_swordsman_a_m` ✅ |
-| `unit.swordsman` | 2 | Barracks | `cart/infantry_swordsman_gaul_a` | `units/gauls/infantry_swordsman_a` ✅ |
-| `unit.spearman` | 2 | Barracks | `gaul/infantry_spearman_a` | `units/gauls/infantry_spearman_a` ✅ |
-| `unit.archer` | 2 | Archery Range | `cart/infantry_archer_a` | `units/carthaginians/infantry_archer_a` ✅ |
-| `unit.fishing_ship` | 2 | Dock | `gaul/ship_fishing` | `structures/celts/fishing_boat` ✅ — matched by luck, not method |
-| `unit.transport_ship` | 2 | Dock | `gaul/ship_scout` | ⚠️ `structures/celts/skiff` — **was `celts/rowboat`**, corrected 2026-08-15 |
-| `unit.sword_cavalry` | 3 | Stable | `gaul/cavalry_swordsman_a` | `units/gauls/cavalry_swordsman_a_m` ✅ |
-| `unit.cavalry_archer` | 3 | Stable | `pers/cavalry_archer_b` | `units/achaemenids/cavalry_archer_b_m` ✅ (the `pers`→`achaemenids` rename) |
-| `unit.crossbowman` | 3 | Archery Range | `han/infantry_crossbowman_a` | `units/han/infantry_crossbowman_a` ✅ |
-| `unit.monk` | 3 | Monastery | `athen/support_healer_a` | `units/athenians/healer` ✅ |
-| `unit.knight` | 3 | Castle | `germ/champion_cavalry` | ⚠️ `units/germans/cavalry_swordsman_c_m` — **corrected 2026-08-15** |
-| `unit.galley` | 3 | Dock | `athen/ship_arrow` | ⚠️ `structures/athenians/trireme` — **corrected 2026-08-15** |
-| `unit.battering_ram` | 3 | Siege Workshop | `cart/siege_ram` | ⚠️ `structures/iberians/siege_ram` — **baked as `romans/siege_ram`** (§9.2.1 item 10) |
-| `unit.ballista` | 3 | Siege Workshop | `cart/siege_ballista_packed` + `_unpacked` | `units/carthaginians/siege_rock_packed` + `_unpacked` |
-| `unit.onager` | 3 | Siege Workshop | `rome/siege_onager_packed` + `_unpacked` | `units/romans/siege_onager_packed` + `_unpacked` |
-| `unit.elite_swordsman` | 4 | Castle | `athen/champion_marine` | ⚠️ `units/athenians/infantry_swordsman_c` — **corrected 2026-08-15**. Note `_c`, not `_e`: 0 A.D. dresses its Athenian champion in the citizen-tier mesh and makes it a champion through stats. So this is a visibly *different soldier* from `unit.swordsman`, not a shinier tier of it — better for a Castle unit |
-| `unit.galleon` | 4 | Dock | `ptol/ship_siege` | ⚠️ `structures/ptolemies/quinquereme` — **not yet recipe'd** (§9.2.1 item 10) |
-| `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `han/siege_mangonel_packed` + `_unpacked` | ⚠️ `units/han/siege_mangonel_pivot_packed` — **baked as `hellenes/siege_lithobolos`** (§9.2.1 item 10) |
-| `unit.dragon` | — | Castle | — | `fauna/dragon` — baked, A.9 |
-| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | — | `fauna/dragon` at 10% scale |
+**Resources** (`res.*`, gaia-owned): `res.gold_mine` · `res.stone` · `res.tree` ·
+`res.berry_bush` · `res.sheep` (→ `fauna/sheep3`, **not** `sheep1` — sheep3's only material is
+`animal_sheep_no_player_color_a.dds`, which is why it does not pick up the player tint) ·
+`res.deer` · `res.cattle` (→ `fauna/zebu_wild`, **not** `cow` — `_wild` matters, 0 A.D. ships wild
+*and* trainable variants of every herd animal) · `res.bear` (no recipe) · `res.wolf` (food 30 and
+**attacks** — the only hostile gaia entity, so it needs `CombatSystem`, 4.13).
 
-**Units with no roster slot, worth knowing about.** The Celtic checkout carries
-`war_dog_mastiff_{a,b,e}` and `wolfhound`, `chariot_javelinist_c_*`, `infantry_carnyx_c` (a
-war-horn bearer), and five named heroes — Boudicca, Caratacos, Cunobelin, Brennus,
-Vercingetorix, each as both infantry and cavalry. The war dog and the chariot are distinctly
-Celtic in a way nothing else in the roster is, and the heroes are exactly what a **regicide**
-win condition (11.2) needs. None are scheduled; they are recorded because they are free.
+> Resolving gaia templates the same way as units **found three errors in six animals**. The
+> template-resolution rule is not a units rule.
 
-`buildings.json`'s `trains` array is the authoritative direction and `units.json`'s
-`trainable_at` mirrors it, so `GameDataRegistry.validate()` must cross-check the two — it
-already cross-checks every other reference across the data files, and a roster this size is
-exactly where a one-sided edit goes unnoticed.
+`buildings.json`'s `trains` array is authoritative and `units.json`'s `trainable_at` mirrors it;
+`validate()` cross-checks the two. **Start-of-match spawn:** 1 town centre, 5 villagers, 1 scout
+cavalry, 0 militia.
 
-**Start-of-match spawn** (2.6): 1 town centre, 5 villagers, **1 scout cavalry**, 0 militia.
-MVP spawns the first two; the scout joins when age 1 is real.
+**Units with no roster slot, worth knowing about:** war dogs, chariots, a war-horn bearer, and
+five named Celtic heroes — which are exactly what a **regicide** mode (11.2) would need. Not
+scheduled; recorded because they are free.
 
-**Resources** (`res.*`, gaia-owned)
+#### 9.2.1 Settled content decisions
 
-| Entity ID | Kind | Actors and amounts |
-|---|---|---|
-| `res.gold_mine` | gold | `gaia/ore/aegean_anatolian_small` 1000 · `_01` 5000 · `_02` 10000 |
-| `res.stone_mine` | stone | `gaia/rock/temperate_small` 1000 · `temperate_large_02` 7000 |
-| `res.tree` | wood | `gaia/tree/{elm,oak,teak,toona}` 500 each |
-| `res.berry_bush` | food | `gaia/fruit/berry_01` |
-| `res.sheep` | food 100 | `gaia/fauna_sheep` → ⚠️ **`fauna/sheep3`**, not `sheep1` — see below |
-| `res.deer` | food 100 | `gaia/fauna_deer` → `fauna/deer` ✅ |
-| `res.bear` | food 300 | `gaia/fauna_bear_brown` → `fauna/bear_brown` — **no recipe exists**, unbaked |
-| `res.cattle` | food 500 | `gaia/fauna_cattle_zebu` → **`fauna/zebu_wild`**, not `fauna/cow`. Recipe added 2026-08-15 (`cattle.toml`), unbaked |
-| `res.wolf` | food 30, **attacks** | `gaia/fauna_wolf` → `fauna/wolf` ✅ — the only hostile gaia entity, so it needs `CombatSystem` (4.13), not just 6.1b roaming |
+- **Resource amounts encode the visual size class**, with absolute values freely tunable. What is load-bearing is the ordering and rough ratio between classes, not the numbers. Stone gets three classes like gold; its third gets its own sprite for free by baking the same actor at `yaw_offset_deg = 180`.
+- **Everything baked before the age plan is the wrong age skin** — ~36 assets, all Athenian/Hellenic. Cheap per asset (`source.actor` is one line; canvas sizes, `yaw_offset_deg`, `ground_clip` and prop findings all carry over), so read the existing set as **age-skin placeholder art plus ~36 proven recipe templates** for the age-1 Briton pass.
+- **Wall civ mixing was copy-paste error**: every piece of a tier comes from one civ. One cosmetic loose end — a player holding age-2 `germ` walls in age 4 sees a `rome` guard tower embedded in them, since there is one guard tower per age rather than per tier.
+- **Units do not re-skin per age**, so the roster's per-age unit lines are recorded and deliberately unused.
+- **Three siege units are packed/unpacked actor pairs** (ballista, onager, trebuchet) — a deploy/undeploy state machine with its own timings that blocks movement in one state and attack in the other. Scope it **with** 4.13.
+- **Age names:** numeral in the HUD, name where there is room for prose (tech tree, advancement banner, lobby). **I Age of Ash · II Age of Embers · III Age of Flame · IV Age of Dragons** — deliberately not AoE's Dark/Feudal/Castle/Imperial, which carries no legal risk but invites the comparison for nothing.
+- **Voices: LATIN, one set for every unit in every age.** 0 A.D. ships `global`, `greek`, `latin`, `napatan`, `persian` and **no Celtic set exists**; `global` is four dog-bark files, so it is not a neutral fallback. Latin is literally correct for the age-4 Roman skin and carries a deliberate lorem-ipsum throwback — placeholder Latin is the oldest joke in typesetting. One consequence accepted knowingly: voices are the most expensive asset class to re-record per language, so this puts them on the localisation surface permanently. *One* set used in all four ages is internally consistent by construction; per-age voices were the problem, not voices.
 
-✅ **The sheep's player-colour bug was the wrong actor, and re-pointing it is the whole fix**
-(2026-08-15). ASSET_MISSING §2.3 and §4 both recorded that `vis.sheep` picks up the player tint
-— "even the sheep picks it up" — and treated it as something A.6's shader would need a gaia
-exception for. It does not: `gaia/fauna_sheep` resolves to **`fauna/sheep3`**, whose only
-material is `animal_sheep_no_player_color_a.dds`. 0 A.D.'s authors made a de-player-coloured
-sheep for exactly this reason and we were baking `sheep1` instead. Same mesh, same
-measurements, so the canvas and every other setting carry over and it costs one re-bake.
-
-**Resolving gaia templates the same way as units found three errors in six animals** — the
-sheep above, the cattle (`cow` is the wrong actor; `zebu_wild` is right, and `_wild` matters
-because 0 A.D. ships wild *and* trainable variants of every herd animal), and the bear having
-no recipe at all. The template-resolution rule in the units table is not a units rule.
-
-#### 9.2.1 Discrepancies to settle
-
-Recorded rather than silently resolved — each one is a decision, not a typo to guess at.
-
-1. ✅ **Resource amounts — ANSWERED 2026-08-14: neither set is wrong.** `resources.json` has
-   gold `[200, 500, 800]` and tree `[40, 100, 175]` against the roster's 1000/5000/10000 and
-   500, and the answer is that **the amount encodes the visual size class** — a small ore
-   outcrop against a big one — with the absolute values freely tunable for balance. So what is
-   load-bearing is the *ordering and rough ratio between size classes*, not the numbers, and
-   the shipped figures stay until a balance pass without contradicting the roster. One real
-   difference remains: gold has three size classes and stone only two, against the code's
-   uniform three (6.2/6.3). ✅ **Settled 2026-08-14: stone gets three, `[1000, 4000, 7000]`** —
-   both numbers the roster names, with a middle inserted. And unlike gold, the third class gets
-   its **own sprite for free**: the same stone actor baked at `yaw_offset_deg = 180` reads as a
-   different outcrop, so `res.stone_mine`'s three sizes need one extra bake rather than three.
-   Nothing to change yet — stone lands at 6.5 and is not in `resources.json`.
-2. **Everything baked so far is the wrong age skin** — and it is not three assets, it is
-   roughly **36**. The villager, the town centre and the house are Athenian/Hellenic (§13.2
-   item 2), and so is the whole building roster, the wall/gate/tower set and all six military
-   units the art track has since baked (ASSET_MISSING §2.1/§2.2). Athenians are not one of the
-   four age civs. This is cheap per asset — `source.actor` is one line, and canvas sizes,
-   `yaw_offset_deg`, `ground_clip` and every prop finding carry over — so the existing set is
-   best read as **age-skin placeholder art plus ~36 proven recipe templates** for the age-1
-   Briton pass. The villager is the one real cost, since re-pointing her means re-baking 960
-   frames; that is also exactly when §13.2 item 9's deferred `height_m` fix becomes free.
-3. ✅ **Wall civ mix — ANSWERED 2026-08-14: copy-paste errors.** Every piece of a wall tier
-   comes from **one** civ: age-2 wood all `germ`, age-3 wood all `brit`, age-3 stone all
-   `pers`, age-4 reinforced all `rome`. Corrected in the roster file. **The guard tower is a
-   wall tower** from the same civ as that age's newest wall tier, which is what makes its
-   footprint line up with the run it sits in. Separately confirmed in-game: all wall pieces
-   share one footprint and all wall towers share another, across every civ, so the
-   max-footprint rule is a no-op for the whole wall set. One cosmetic loose end, not worth
-   blocking on: a player still holding age-2 `germ` walls in age 4 will see a `rome` guard
-   tower embedded in them, since there is one guard tower per age rather than one per tier.
-4. ✅ **`unit.swordsman`'s age-4 skin — ANSWERED, then SUPERSEDED, and the supersession was
-   itself wrong.** Settled 2026-08-15. The roster file's `gaul` at age 4 was confirmed a typo
-   for `rome`; then §2.7's units-are-Celtic decision made it moot; then that decision was
-   retracted (§2.7). What survives all three rounds is the same answer: **units do not re-skin
-   per age**, so the swordsman is `units/gauls/infantry_swordsman_a` in every age. The age-3 and
-   age-4 swordsman lines in the roster (`cart/infantry_swordsman_gaul_a`, `rome/…`) record what
-   a per-age unit skin *would* have been and are deliberately not used.
-5. **Three siege units are packed/unpacked actor pairs** (ballista, onager, trebuchet), which
-   is a unit state machine the sim does not have: a deploy/undeploy task with its own timings
-   that blocks movement in one state and attack in the other. Scope it **with** 4.13 rather
-   than after — §13.2 item 4 already noticed the missing icon pair for it.
-6. **The trebuchet trains at two buildings.** Nothing in `TrainCommand`/`ProductionSystem`
-   (5.4) forbids it — `trainable_at` is an array — but nothing tests it either, and it is the
-   only entity in the roster that exercises the plural.
-7. ✅ **Age names — ANSWERED 2026-08-14: a numeral *and* a name, and not AoE's ladder.** The
-   HUD shows the numeral (9.1 is already a roman numeral in a gold circle, which needs no words
-   and fits a 648 px canvas); the name appears where there is room for prose — the tech tree
-   (9.4), the advancement banner, the lobby. The names tie to the game's own differentiator and
-   land age 4 on the title: **I Age of Ash · II Age of Embers · III Age of Flame · IV Age of
-   Dragons.** Dark/Feudal/Castle/Imperial carry no legal risk, being generic historical terms,
-   but shipping the reference game's exact ladder in an open-source AoE-like invites the
-   comparison for nothing. In `ages.json`, which **also had its names misaligned by one** —
-   age I was labelled "Feudal Age", which is age 2 in the roster. The numerals were always
-   right; only the names were off.
-8. ✅ **RETIRED 2026-08-15 — "the Celts have no bows" was never our problem.** This item said
-   `unit.archer`, `unit.crossbowman` and `unit.cavalry_archer` all had to become javelin
-   throwers, that the **Archery Range would train no archers**, and that the three ranged units
-   would look alike because they differed only by tier. All of that followed from the
-   units-are-Celtic error (§2.7) and none of it survives it. The actual picks are
-   `carthaginians/infantry_archer_a`, `han/infantry_crossbowman_a` and
-   `achaemenids/cavalry_archer_b_m` — a real bow, a real crossbow and a real horse archer, from
-   three different civs, which is also the most visually distinct trio available. No building
-   needs renaming.
-9. ✅ **RETIRED 2026-08-15 — "the Celts have no siege engines" was likewise moot.** Siege was
-   never required to be Celtic; the ram, ballista, onager and trebuchet are `cart`/`rome`/`han`
-   by the owner's own picks, not as a reluctant compromise. The **galleon** half of this item is
-   also gone: it is `ptol/ship_siege` → `structures/ptolemies/quinquereme`, a genuinely heavier
-   hull than the galley's Athenian trireme, so age 3 and age 4 warships do not have to share a
-   sprite. That is one of the few places where correcting the error made the roster *better*
-   rather than merely different.
-10. ✅ **Four more recipes disagreed with the roster — all four now corrected (2026-08-15).**
-   Found by the same template-resolution pass that fixed the five the project owner named:
-   - **`unit.villager`** → `units/celts/female_citizen`. **This one had been "corrected" the
-     wrong way earlier the same day** and is the sharpest example in the whole pass. The
-     reasoning was: the roster says `Brit/support_civilian`, `units/britons/citizen_female.xml`
-     exists, so a Briton actor must beat a Celtic one. But `units/brit/support_female_citizen`
-     resolves to **`units/celts/female_citizen`** — Britons and Gauls share one female citizen
-     actor and it lives under `celts/`. The substitute was not even neutral: it dresses her in
-     `skeletal/germ/dress_female_*`, a **Germanic dress on a Briton villager**. Pattern-matching
-     a directory name against the roster's civ prefix produced a worse result than doing nothing.
-     Held out of the 2026-08-15 batch: it needs a **960-frame re-bake**, and two other pending
-     changes want the same one (the canvas can drop [160,160] → ~[96,96], and §13.2 item 9's
-     `height_m` becomes free) — so it gets spent once. `height_m` stays deferred as the owner
-     decided on 2026-08-08.
-   - **`unit.battering_ram`** → `structures/iberians/siege_ram` (was `units/romans/siege_ram`).
-     Note the roster line says `cart` and the actor is `iberians`: 0 A.D.'s Carthaginian ram
-     template borrows Iberian art. **The civ in the template path need not match the civ in the
-     actor path**, which is precisely why these cannot be eyeballed. The recipe's old comment
-     apologised at length for breaking civ consistency — a rule that only ever applied to
-     architecture (§13.2 item 2), answering a question nobody had asked.
-   - **`unit.trebuchet`** → `units/han/siege_mangonel` for the deployed state. The roster names a
-     **pair of different actors**, not one actor in two poses: `siege_mangonel_unpacked` →
-     `siege_mangonel`, `siege_mangonel_packed` → `siege_mangonel_pivot_packed`. The packed half
-     still has no recipe (§9.2.1 item 5 scopes that state machine with 4.13). The old
-     `hellenes/siege_lithobolos` pick was justified as the "closest analog" since 0 A.D. has no
-     counterweight trebuchet — sound reasoning, and irrelevant, because the roster had already
-     named the actor.
-   - **`unit.galleon`** → `structures/ptolemies/quinquereme`. Recipe written 2026-08-15, unbaked.
-
-   **The general lesson is worth more than the nine fixes.** `fishing_ship` was already correct
-   and `transport_ship` was not; both were picked the same way, by reading an actor name and
-   judging that it suited the unit ("the smallest hull suits a troop ferry"). One landed, one did
-   not, and nothing distinguished them until the templates were resolved — **confidence in the
-   guess carried no information**. The villager is the same lesson one step worse: there, careful
-   reasoning from a real clue actively made the asset wrong.
+> **The general lesson from nine wrong recipes:** `fishing_ship` was correct and
+> `transport_ship` was not, both picked the same way — by reading an actor name and judging it
+> suited the unit. **Confidence in the guess carried no information.** The villager is the same
+> lesson one step worse: careful reasoning from a real clue (a Briton directory name) actively
+> made the asset wrong. The mitigation has to be mechanical, not careful.
 
 ---
 
-## 10. MVP definition
+## 10. MVP definition — ✅ **ACHIEVED**
 
-> **One player, one small map, hosted on loopback, on a physical Android phone:**
-> starts with **1 Town Centre and 5 villagers** (IDEA 2.6), pans/zooms the camera,
-> selects villagers by tap and two-finger box, assigns them to **control groups**,
-> sends them to chop wood / mine gold / gather food, watches resource counters rise,
-> builds a House and a second Town Centre, queues and trains villagers, and sees the
-> idle-villager count work. Units die, corpses fade, buildings can be destroyed by a
-> debug command. Art is placeholder; the art pack downloads and mounts if present.
+> One player, one small map, hosted on loopback, on a physical Android phone: starts with 1 Town
+> Centre and 5 villagers, pans/zooms, selects by tap and two-finger box, assigns control groups,
+> gathers wood/gold/food, watches counters rise, builds and trains, sees the idle-villager count
+> work. Units die, corpses fade, buildings can be destroyed. Art is placeholder; the art pack
+> downloads and mounts if present.
 
-**Not in MVP:** combat between players, AI opponents, fog of war, ages, techs, upgrades, garrison, win conditions, dragons, remote multiplayer, sound, campaign, trade, market, chat.
+Everything on the original "not in MVP" list has since landed except AI opponents, remote
+multiplayer, sound, campaign, trade, market and chat: combat, fog of war, ages, population
+enforcement and win conditions are all in.
 
 ---
 
 ## 11. Phase plan
 
-### Phase 0 Ã¢â‚¬â€ Foundation
+Rows are the item and its state. `✅` = done, the file named is where it lives. Blank tag = not
+scheduled.
+
+### Phase 0 — Foundation *(all ✅, all `[MVP]`)*
+
+0.1 device-verified Godot project · 0.2a asset seam (`GameDataRegistry`, `atlas_for()` total,
+parsing pinned against a verbatim shipped bake) · 0.2b procedural placeholder renderer, sizes in
+metres · 0.2c `licence_audit.py` + `LICENCES.md` · 0.4 `GameDataRegistry` entity half + `validate()`
+· 0.5 sim skeleton · 0.6 `Net.host_solo()` + `SnapshotSystem` + `SimHost` + view layer · 0.7
+`state_hash()`, `Replay`, `sim/` boundary check, `StressTest.tscn` · 0.8 working roots and
+`.gdignore` · 0.9 the render pipeline, built as `isobake` and proven on a grass tile, an oak and a
+960-frame villager.
+**0.3 `AssetPacks` (manifest/download/verify/mount + DownloadScreen) is the one Phase 0 item still open.** `[MVP]`
+
+### Phase 1 — Main menu
 
 | # | Item | Tag |
 |---|---|---|
-| 0.1 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Godot 4.7.1 project, Compatibility renderer, landscape lock, folder skeleton, Android export, **deployed and verified on a physical device**. Renderer, orientation, raw touch, touchÃ¢â€ â€™viewport coordinate mapping and 60 fps all confirmed on hardware (Ã‚Â§3.0) | **[MVP]** |
-| 0.2a | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Asset seam: `data/visuals.json` (11 IDs) + `data/audio.json` (9 IDs, all streams null Ã¢â‚¬â€ the vocabulary is the point, Ã‚Â§7.5), `GameDataRegistry` autoload with `atlas_for()`, `AtlasEntry`. `atlas_for()` is **total**: it returns a baked atlas, else the declared placeholder, else a magenta unknown Ã¢â‚¬â€ never null, which is what makes a phase buildable before its art exists and lets the game boot with no pack mounted (Ã‚Â§3.2). Every ID declares *both* an atlas path and a placeholder, so art lights up with no code change when the pack mounts. Atlas parsing is proven against a verbatim shipped bake (`tests/fixtures/gold_mine.atlas.json`) rather than a hand-written idea of the format, and reading any atlas asserts its `pixels_per_metre` against `Iso` Ã¢â‚¬â€ the guard for the 0.2b villager finding (13.2 item 9). No `class_name` on the autoload: it would shadow the singleton, same as `net.gd`/`sim_clock.gd` | **[MVP]** |
-| 0.2b | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Procedural placeholder renderer (Ã‚Â§2.4): diamonds for terrain, capsules with a facing marker for units, extruded boxes for buildings, drawn at runtime with no image files. `EntityView` now actually renders Ã¢â‚¬â€ one `_draw()` handling both branches Ã¢â‚¬â€ and gained a frame clock driven by `advance()` (not `_process`, same single-driver reason as interpolation). Placeholder sizes are authored in **metres, not pixels** as Ã‚Â§2.4 sketched, from the measured recipe figures, so a placeholder occupies the space its real sprite will and stays correct if `TILE_SIZE` changes. `Iso` gained the metre-space projection (`metres_to_world`, `height_to_world`, the 8-facing table) with its derived constants re-checked against `TILE_SIZE` in tests. `StressTest.tscn`'s stand-in dots deleted Ã¢â‚¬â€ it now measures the production render path, so its 0.7 device figures need re-measuring. (Measured at 2.6, and the draw-call prediction was **backwards**: 200 units cost **681** draw calls on placeholders and **14** on real atlases. Placeholders are the expensive path -- polygon plus outline plus marker, none of it batching -- while real sprites all sample one page. The budget risk sits with the no-pack-mounted fallback, not with real art.) Visual check: `dev_preview/preview_placeholders.tscn`. 64/64 tests, exit 0 | **[MVP]** |
-| 0.2c | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `tools/licence_audit.py` + `game/assets/LICENCES.md`, with `CREDITS.md` brought up to date. The audit checks four things: every recipe carries a complete `[attribution]` block, every recipe's atlas ID and every file under `game/assets/` is declared in `LICENCES.md`, no declared row is still marked `UNVERIFIED`, and the three verbatim 0 A.D. elements appear wherever their material is credited. `--write` regenerates the recipe table from the recipes themselves (idempotent, hash-verified) so it cannot drift from what is actually baked. Exits non-zero; **run by hand, there is no CI (Ã‚Â§1.2)**. Verified against a planted undeclared asset, an attribution-less recipe and a malformed TOML Ã¢â‚¬â€ all three reported in one run, no traceback. **It found a real gap on its first run:** the app icons and boot splash ship in the APK with no provenance recorded anywhere; now recorded as AI-generated (Google Gemini, paid account) with the copyrightability caveat noted | **[MVP]** |
-| 0.3 | `AssetPacks` autoload: manifest check, download, checksum verify, `load_resource_pack()`, `DownloadScreen` (Ã‚Â§3.2) | **[MVP]** |
-| 0.4 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `GameDataRegistry`'s entity half over `units.json` / `buildings.json` / `resources.json` / `techs.json` / `ages.json` / `factions.json`, parsed into `UnitDef` / `BuildingDef` / `ResourceDef` / `TechDef` / `AgeDef` (`src/data/`, plain `RefCounted` so `sim/` may read them). The 6 MVP entities are entered: villager, town centre, house, tree, gold mine, deer. These accessors return **null** for an unknown ID Ã¢â‚¬â€ the opposite of `atlas_for()`, deliberately: a missing sprite has a sensible stand-in, a missing unit definition does not. `validate()` cross-checks every visual/unit/building/kind reference across the files and the suite fails on any warning, which is the only thing between a typo'd ID and a silent no-op at runtime (verified by breaking a reference and watching the suite go red). **Footprints are the measured ones** Ã¢â‚¬â€ town centre `[8, 8]` from 15.53 Ãƒâ€” 15.00 m, settling Ã‚Â§9's pre-measurement `[4, 4]` sketch. `techs.json` is empty and `factions.json` near-empty *on purpose*: a missing file and an empty one are different states and only one is a bug. 82/82 tests, exit 0 | **[MVP]** |
-| 0.5 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Sim skeleton: `SimWorld`, `SimClock`, `SimEntity`/`SimUnit`, `SimSystem` (`CommandSystem`/`TaskSystem`/`MovementSystem`), `Command` (`MoveCommand`/`StopCommand`), `SpatialHash`. Straight-line movement only -- no map/pathfinding until 2.1. Verified headless: 9/9 tests, exit 0 | **[MVP]** |
-| 0.6 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `Net` autoload: `host_solo()` (real ENet server bound to 127.0.0.1), `submit_command()`/`_recv_command` RPC up, `SnapshotSystem` + `_recv_snapshot` RPC down; `SimHost` owns the server-side `SimWorld`, driven by `SimClock`. View layer: `Iso`, `EntityView`/`EntityViewPool` (pooled, interpolated), `GameView.apply_snapshot()`. `host_open()`/`join()` (remote multiplayer) deferred -- out of MVP scope (Ã‚Â§10). Verified headless: 22/22 tests, exit 0 | **[MVP]** |
-| 0.7 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `SimWorld.state_hash()` + regression tests, `Replay` (record/play, JSON round trip), `sim/` boundary check (as a headless test, not a separate Python grep Ã¢â‚¬â€ so it runs inside the one test command), `StressTest.tscn` (verified on the Ã‚Â§3.0 reference device Ã¢â‚¬â€ HONOR LNA-NX1 Ã¢â‚¬â€ at 200 units: sim tick cost 0.39/0.23/6.28 ms avg/min/max, frame rate 60/26/61, 209 draw calls; the max/min outliers are the stress test's own 4-second retarget burst Ã¢â‚¬â€ 200 individual `submit_command()` calls in one frame Ã¢â‚¬â€ not a sim/net cost, since a real shared-destination move order is one `MoveCommand` with many `unit_ids`). GdUnit4 deliberately not adopted (see Ã‚Â§1.3). Also fixed on real hardware: `export_presets.cfg` shipped with `permissions/internet=false`, which silently broke `host_solo()` (Android requires INTERNET even for loopback sockets) Ã¢â‚¬â€ `StressTest.tscn` now surfaces a host_solo() failure in its own report instead of quietly spawning 0 units. 29/29 tests, exit 0 | **[MVP]** |
-| 0.8 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `.gdignore` added to `UI_Sprites/` and `insperation_pictures/` per Ã‚Â§4 (both sit at the repo root, outside `game/`, the actual Godot project root, so this has no functional effect on Godot's own scanning Ã¢â‚¬â€ added for consistency with the documented layout regardless). Non-synced working root created on this machine at `C:\Users\herman.ras\Downloads\AOD_game\{art_source,art_work,packs,tools_env}` (Ã‚Â§1.3), ready for 0.9. `.gitignore` fixed to allow tracking a `.gdignore` marker inside an otherwise-fully-ignored directory (a bare `dir/` pattern excludes the directory itself, so git never descends far enough to honour a per-file negation Ã¢â‚¬â€ needs `dir/*` instead). Also documented (Ã‚Â§1.3): `export_presets.cfg`'s `permissions/internet` requirement, found on real hardware at 0.7. (Superseded same day: `export_presets.cfg` turned out to hold no secrets, so it's now tracked in git rather than gitignored per-user state Ã¢â‚¬â€ see Ã‚Â§1.3.) | **[MVP]** |
-| 0.9 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ render pipeline built as **[`blender_3d_to_2d_isobake`](https://github.com/HermanRas/blender_3d_to_2d_isobake)**, its own GPL-2.0-or-later repo (Ã‚Â§2.2), and proven end to end on **three real assets**: a grass tile (64Ãƒâ€”32 exactly), an oak (5 directions), and an animated villager (240 frames Ã¢â‚¬â€ idle/walk/work_chop/walk_carry_wood Ãƒâ€” 5 directions). Toolchain is fully portable: Blender 4.5.12 extract + a venv made from Blender's own Python, nothing installed system-wide. `isobake calibrate` verifies the camera three independent ways (configured / analytically projected / rendered) and all three agree at 64.00 Ãƒâ€” 32.00, area 1024.00 pxÃ‚Â². 62 unit tests, no Blender required, so the packer is testable on any machine. (isobake Ã¢â‚¬â€ a separate repo Ã¢â‚¬â€ is the one place a GitHub Actions workflow is actually committed, `.github/workflows/ci.yml`, running pytest on 3.11Ã¢â‚¬â€œ3.13. **This** repo has none; see Ã‚Â§1.2.) **Both High/Medium art risks retired** (Ã‚Â§14): the pipeline produces usable sprites, and animation transfer needs no retarget rig Ã¢â‚¬â€ a gatherer clip drives 83 of an actor's 102 bones by name. Atlas format revised (Ã‚Â§9.1) to per-frame rects + multi-page, and anchors now come from the projected world origin, eliminating jitter by construction. `build_packs.py` deferred to 0.3 where it belongs (it is a `.pck` concern, not a render one) | **[MVP]** |
-
-### Phase 1 Ã¢â‚¬â€ Main menu *(IDEA phase 1)*
-
-| # | Item | Tag |
-|---|---|---|
-| 1.1 | ✅ **DONE** -- `MainMenu.tscn`/`main_menu.gd`: PLAY, MULTIPLAYER, SETTINGS, CREDITS, QUIT over the Gemini-generated `main_menu_panel.png` frame, buttons cropped from Kibyra's dragon-HUD button set (`game/assets/ui/menu/`). MULTIPLAYER/SETTINGS are real buttons that answer a tap with a `NoticeToast` ("not available in this build") rather than doing nothing, since their screens (1.5/1.6) are not `[MVP]`. Dragon-HUD fonts (`assets/UI_Sprites/.../uı-fonts`) not yet extracted/wired -- default Godot font for now, same "polish later" convention as everywhere else art is not final | **[MVP]** |
-| 1.2 | ✅ **DONE** -- PLAY calls `get_tree().change_scene_to_file(Game.tscn)`; `Game.tscn`'s own `_ready()` already called `host_solo()` (3.6), so the menu does not need to duplicate that call. `project.godot``run/main_scene` now boots `Boot.tscn`, not `Game.tscn` directly | **[MVP]** |
-| 1.3 | ✅ **DONE** -- `Boot.tscn`/`boot_screen.gd`: the Gemini-generated title card (`ui/boot_splash.png`, also `Splash_h.jpg`/`Splash_v.jpg` at the repo root), held 2 s or until tapped, then `change_scene_to_file(MainMenu.tscn)`. Separate from `project.godot``boot_splash/image`, which is the engine's own sub-second flicker frame before any scene runs at all | **[MVP]** |
-| 1.4 | ✅ **DONE** -- `Credits.tscn`/`credits_screen.gd`: a scrollable `RichTextLabel` mirroring CREDITS.md (0 A.D./Wildfire Games' required verbatim CC-BY-SA 3.0 attribution, Kibyra, Gemini-generated art, Godot, tooling), since CREDITS.md itself lives outside `res://` and cannot be loaded at runtime. Hardcoded rather than parsed -- CREDITS.md's own "Adding an entry" section already requires updating both in the same change | **[MVP]** |
+| 1.1 | ✅ `MainMenu.tscn`/`main_menu.gd`. Placeholder buttons answer with a `NoticeToast` rather than doing nothing | `[MVP]` |
+| 1.2 | ✅ PLAY → `Game.tscn`; `Boot.tscn` is the main scene | `[MVP]` |
+| 1.3 | ✅ `Boot.tscn`/`boot_screen.gd` — title card, 2 s or tap. Distinct from the engine's own sub-second `boot_splash/image` | `[MVP]` |
+| 1.4 | ✅ `Credits.tscn` — a `RichTextLabel` mirroring CREDITS.md, hardcoded because CREDITS.md lives outside `res://` | `[MVP]` |
 | 1.5 | Settings screen | |
-| 1.6 | **SPECIFIED 2026-08-17 as the SKIRMISH SETTINGS screen, and it IS the lobby -- one screen, two modes.** Owner's request was a skirmish screen (map source, colour, player count, AI, Start); the recommendation adopted is to build it as the multiplayer lobby from the start, because the two differ only in what fills a player slot. Each slot gets one dropdown: **Human (this device)** / **PlayTest AI** / **Open (waiting for a peer)**. All-local is a skirmish; one Open slot plus a listening host is a multiplayer match. That collapses 12.1's separate lobby into work being done anyway, and means the flow tested solo is the same flow tested on two devices rather than a second path that only ever runs on the day it matters. Contents: (a) MAP SOURCE -- Random (default) with a map-TYPE picker (Random/Island/River/Desert/Forest) and a **visible, editable SEED** plus Re-generate, or a saved map from the maps folder (2.4c); (b) a PREVIEW of the generated or loaded map with start positions marked and a **validation badge** from 2.4b's connectivity gate -- a map that fails validation disables Start rather than being launched; (c) per-slot colour, offering **all eight** rather than the two the owner asked for, since every colour bake has been current since the 2026-08-16 rebake (see `MatchConfig.debug_skirmish`) so restricting them costs work instead of saving it -- default Yellow against Red; (d) player count, read from the generator's own 2-8 clamp and shown DISABLED at 2 rather than hidden, so the limit is visible instead of invented; (e) the win condition (11.3) -- Last Man Standing with Trophy and King of the Hill greyed, since `MatchConfig.mode` exists and already rides the snapshot. Everything it collects is exactly `MatchConfig`, which needs only a `seed` and a `map_source` added. Original scope: Lobby: host/join, map & **colour** & win-condition pick — colour, not faction, for v1 (§1). Adds `colours.json`. The faction picker slots in here when 9.5 lands | |
+| 1.6 | **Skirmish settings screen — and it IS the lobby.** See §11.1 below | |
 
-### Phase 2 Ã¢â‚¬â€ Map *(IDEA phase 2)*
+#### 11.1 Skirmish settings (1.6) — specified 2026-08-17
+
+A skirmish screen and a multiplayer lobby differ only in **what fills a player slot**, so build
+one screen with one dropdown per slot: **Human (this device)** / **PlayTest AI** / **Open
+(waiting for a peer)**. All-local is a skirmish; one Open slot plus a listening host is a
+multiplayer match. This removes the separate lobby from §12.1's estimate, and means the flow
+tested solo is the flow that runs on two devices rather than a second path that first executes on
+the day it matters.
+
+| Part | Spec |
+|---|---|
+| Map source | **Random (default)** with a type picker (Random/Island/River/Desert/Forest) and a **visible, editable seed** plus Re-generate; or a saved map (2.4c). A visible seed is what makes "I liked that map" answerable without a file |
+| Preview | The generated or loaded map, start positions marked, and a **validation badge** from 2.4b's connectivity gate. **A map that fails validation disables Start** rather than being launched |
+| Colour | Per slot, offering **all eight** — every colour bake has been current since the 2026-08-16 rebake, so restricting to two costs work rather than saving it. Default Yellow against Red |
+| Players | Read from the generator's own 2–8 clamp, shown **disabled at 2** rather than hidden, so the limit is visible instead of invented |
+| Win condition | 11.3 — Last Man Standing, with Trophy and King of the Hill greyed |
+
+Everything it collects **is** `MatchConfig`, which needs only `seed` and `map_source` added.
+
+### Phase 2 — Map
 
 | # | Item | Tag |
 |---|---|---|
-| 2.1 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ `SimMap`: `size`, `terrain`/`move_cost`/`occupancy` as three parallel packed arrays indexed row-major, `in_bounds`/`terrain_at`/`cost_at`/`occupant`/`is_passable`/`can_place_building`/`find_free_adjacent`, plus `Domain` (land/water/air, land-only in play per 2.2) and a `TERRAIN_COST` table on a base-10 scale so slower ground stays integral. Created by `SimWorld.setup()` from `MatchConfig.map_size` (64Ãƒâ€”64 debug default) and **folded into `state_hash()`** Ã¢â‚¬â€ without that, clients disagreeing about the terrain would hash identically and the 0.7 desync check would pass while they diverged. Two decisions worth knowing: **occupancy is for static footprints only** (buildings, resource nodes) and never units, which stay in `SpatialHash` Ã¢â‚¬â€ otherwise every step would rewrite the grid and a tile a unit merely crossed would read as unpathable; and `find_free_adjacent()` scans a **fixed** ring order, asserted against an exact tile rather than "any free tile", because two clients spawning production must choose the same one. `is_terrain_passable()` exists alongside `is_passable()` because placement asks "could anything ever stand here" and pathing asks "can it now" Ã¢â‚¬â€ a building's own tiles are occupied by definition. 113/113 tests | **[MVP]** |
-| 2.2 | done -- land only in MVP holds in practice, not just in principle: SimMap.Domain (land/water/air) and its DOMAIN_TERRAIN table exist as general machinery, but MapGen._paint_terrain() (the actual debug map generator) only ever paints GRASS and DIRT -- no water or cliff terrain is placed anywhere, so WATER/AIR are unreachable in a real match, not merely unused. The one MVP unit (unit.villager, units.json) is explicitly domain: land, and every domain-aware call site in the sim (PathService._walkable, ProductionSystem, MapGen._next_free_tile, SeparationSystem's obstacle check) resolves to Domain.LAND for it. test_sim_map.gd exercises WATER/AIR directly, but only to prove the abstraction is correct in isolation -- not evidence either ships in a match. Reopens the day water or a cliff/impassable-terrain domain distinction is actually added to a map | **[MVP]** (land) |
-| 2.3 | âœ… **DONE** â€” `SimWorld.spawn_building()` / `spawn_resource_node()` write footprints into `SimMap.occupancy` and refuse a placement that will not fit, so a building the grid does not know about cannot exist. `despawn()` frees tiles *before* dropping the entity â€” occupancy is keyed by id, so the other order would leave tiles claimed forever by something that no longer exists and 5.5 would punch unbuildable holes in the map. New: `SimBuilding` (phase, footprint, `origin_tile()`/`footprint_rect()`, build progress) and `SimResourceNode` (kind, amount, size class, gather slots). A building's `pos` is its footprint **centre** so the view draws every entity identically; `origin_tile()` derives the grid's top-left rather than storing it, so the two cannot disagree | **[MVP]** |
-| 2.4a | âœ… **DONE** â€” `MapGen.build_debug_map()`: grass interior, dirt border so the map edge is visible before a camera clamp exists to prove itself against (3.3), one start position. Fully deterministic â€” no `randi()`, no `Time`, no unordered iteration â€” and asserted by building two worlds from one `MatchConfig` and comparing `state_hash()`, because host and client each build their own and a difference on tick 0 is a desync before any command is issued | **[MVP]** |
-| 2.4b | **PROTOTYPE EXISTS OUTSIDE THE GAME, reviewed 2026-08-17**: `game_map_gen/` holds `map_Gen_plan.md`, a standalone Godot project (`MapGenerator.gd`, `ShowMap.gd`) and sample PNGs. Four types (Island/River/Desert/Forest) from FastNoiseLite, 1 pixel = 1 tile, spawn rings, resource veins and a dragon. What has to change before the game can use it, in the order it matters: **(1) SIZE IS THE LOAD-BEARING DECISION AND IT IS CURRENTLY QUADRATICALLY WRONG.** The plan's rule (`players * 150`, code `players * 100`) grows the SIDE linearly with player count, so 8 players get 8x the side and 64x the AREA of 2. 300x300 is 90,000 tiles against the debug map's 4,096 -- and 2.4a's own note calls 64x64 "a generous settlement's worth of room" for ONE player. Concretely: the pathfinding rebuild measured ~12 ms at 64x64 scales to ~264 ms; worse, the fog grid (2.5) is one byte per tile per player, so the snapshot's vision payload goes from the 4,104 bytes measured today to ~90,000, taking one tick from 12 KB to ~100 KB and one player's stream to ~1 MB/s. Use AREA per player: `side = 64 * sqrt(players)` rounded up, i.e. 2P 96, 4P 128, 8P 184. **(2) THE PIXEL FORMAT IS AMBIGUOUS.** Town centre, villager and scout are all `ff0000`, so a loader cannot tell them apart except by blob-size analysis, and nothing says WHICH PLAYER owns a base. Recommended split: the PNG stays authoritative for TERRAIN and resource veins -- spatial, numerous, and the thing you want to see by looking -- while the handful of ENTITIES (2-8 town centres, five villagers each, scouts, the dragon: under 60 entries) move to a sidecar JSON as (role, player, tile). Unambiguous, order-independent, and the PNG can still draw them for the human preview with the loader ignoring those pixels. **(3) FOOTPRINTS MUST COME FROM `buildings.json`.** The plan reserves 5x5 for a town centre that is **10x10** in the data, and rings the starting units at radius 4 -- inside a 10x10 footprint -- so every villager would spawn inside its own town centre. Clear `footprint + 6` and ring units at radius 7+. **(4) `unit.scout` DOES NOT EXIST**; units.json has `unit.scout_cavalry`. **(5) CONNECTIVITY IS NOT GUARANTEED** -- only FOREST carves paths, so an island/river/desert map can wall a player in, and it is invisible until someone plays it. Flood-fill from every start after generation: every start must reach every other start and some minimum of wood/gold/stone, else regenerate. Hard gate, and the thing that makes the generator testable headlessly. **(6) THE RIVER DOES NOT DIVIDE THE MAP** -- both sample PNGs show three disjoint segments with 20-tile "bridge" gaps, so it reads as three lakes and the opposite-sides rule means nothing; draw a continuous river, punch 1-3 NARROW bridges (3-5 tiles), assign sides by the sign of the line equation, and let the direction actually vary (it is hardcoded to y = x). **(7) DETERMINISM**: `rng.randomize()` has to go -- the seed comes from `MatchConfig` so two peers generate byte-identical maps (7.1), which also makes "share a map by sharing a seed" free and generator tests reproducible. **(8) Bugs found reading it**: terrain is generated TWICE (the first pass is entirely overwritten, and it consumes rng draws so the passes disagree); `_place_resource_vein` can spin forever, since `placed` only increments when a pixel is actually written and a vein that walks off-map or re-treads its own tiles writes nothing -- cap the iterations; veins are drawn with no guard against covering a town centre or water; `_place_dragon`'s centre fallback skips its own water check; `ShowMap.save_current_map()` writes to `res://maps/`, which is read-only in an exported build. Original scope: Procedural generator, 2Ã¢â‚¬â€œ8 players, size scales with player count | |
-| 2.4c | **Save map** (owner's request, 2026-08-17): a Save Map button on the pause menu, so a player who likes a random map -- or one someone else made and shared -- can name it and keep it, and pick it again from 1.6's map source. Three things it must get right. **It saves the MAP, not the MATCH.** By the time the button is pressed the world is full of buildings and corpses; what gets written is the terrain and start layout the match was STARTED with, which means `GameScene` has to hold on to its map source rather than reading the live `SimMap`. Saving the current state is a save GAME -- 12.4, a different feature -- and the button must not blur the two. **It writes to `user://maps/`, never `res://`**, which is read-only in an exported build (the prototype's `ShowMap` gets this wrong today); the map picker lists bundled maps from `res://maps/` and saved ones from `user://maps/` together. **The PNG is authoritative, with a JSON sidecar** carrying {name, type, players, size, seed, format_version, created}: the seed alone is not enough to reproduce a map, because any change to the generator makes the same seed produce something different, so the pixels have to be the record and the seed is provenance. Name entry with collision handling | |
-| 2.5 | ✅ **DONE** -- `VisionSystem` (`src/sim/systems/vision_system.gd`) writes `SimPlayer.vision`, a `Fog` byte per tile (UNSEEN/EXPLORED/VISIBLE), recomputed from scratch every tick beside `PopulationSystem` and after `DeathSystem` so a scout killed this tick lights nothing. Vision is a EUCLIDEAN circle measured to the entity's FOOTPRINT, not its centre tile -- a 10x10 town centre at los 8 measured from the middle would see barely three tiles past its own walls. EXPLORED is sticky; VISIBLE decays to it each tick and is re-marked. **The filtering is the point** (5.1 step 6, a security property): `SnapshotSystem.build()` sends your own entities always, anything currently visible in full, an explored STATIC as `_remembered()` -- stripped of hp, queue, amount, build_fraction, anim, so a memory cannot report live state -- and anything else not at all. Mobile vs static is the line: a building does not move, so remembering it leaks nothing, where an enemy unit's position is exactly what would leak. Client-side, absence from `updated` means "no longer visible" (`GameView` releases the view AND drops the facts, or a stale entry would still answer `pick()` and still draw a minimap blip); an explicit hidden-list was rejected because it would let a client read enemy unit COUNTS off the wire. `FogOverlay` (`src/view/fog_overlay.gd`, PLAN's `FogLayer`) draws it as a TileMapLayer over the entity pool, diffing against the last grid so a tick costs tens of `set_cell`s rather than 4096; the minimap paints the same two washes over its blips. Known simplification: a static destroyed behind the fog stops being sent rather than leaving AoE's stale ghost, which would need a per-player last-seen copy of every static. **Found a real bug in the net layer:** `Net._broadcast_snapshot()` was `rpc()`-ing every player's snapshot to everybody, so the last player's arrived last and overwrote the local player's -- harmless while all players saw an identical world, and in the debug skirmish it handed the client the OPPONENT's filtered view the instant fog existed | |
-| 2.6 | âœ… **DONE** â€” 1 Town Centre (complete, full health, 8Ã—8 from the measured art) + 5 villagers ringed onto distinct passable tiles, plus a 12-tree wood, 3 gold, 4 deer. Stats come from `units.json`/`buildings.json`/`resources.json` via `GameDataRegistry`, which **replaced `SimWorld`'s hardcoded `_UNIT_DEFS` placeholder**. Verified by eye in `dev_preview/preview_world.tscn` â€” a real Athenian settlement with villagers, deer, gold and wood | **[MVP]** |
+| 2.1 | ✅ `SimMap` — four packed arrays, `Domain`, `TERRAIN_COST` on a base-10 scale so slower ground stays integral. Folded into `state_hash()`, without which clients disagreeing about terrain would hash identically | `[MVP]` |
+| 2.2 | ✅ Land only, in practice as well as principle: `MapGen` paints only GRASS and DIRT, so WATER/AIR are unreachable in a match. Reopens the day a map has water or cliffs | `[MVP]` (land) |
+| 2.3 | ✅ Footprints written into `occupancy`; `despawn()` frees tiles **before** dropping the entity, or occupancy keyed by id would leave tiles claimed forever. A building's `pos` is its footprint **centre** so the view draws every entity identically | `[MVP]` |
+| 2.4a | ✅ `MapGen.build_debug_map()` — one start position, fully deterministic, asserted by building two worlds from one config and comparing hashes | `[MVP]` |
+| 2.4b | **Procedural generator.** Prototype exists in `game_map_gen/`; see §11.2 | |
+| 2.4c | **Save map.** See §11.3 | |
+| 2.5 | ✅ Fog of war — `VisionSystem` + snapshot filtering + `FogOverlay`. See §11.4 | |
+| 2.6 | ✅ Starting conditions: town centre, 5 villagers on distinct passable tiles, plus wood/gold/stone/food/livestock clusters placed **for the screen** as much as for the grid (iso sends `dx-dy` to screen x, so "below the town centre where the map is empty" is behind the HUD) | `[MVP]` |
 | 2.7 | Real terrain tileset (art track A.1) | |
 
-### Phase 3 Ã¢â‚¬â€ Camera & world view *(IDEA phase 3)*
+#### 11.2 Map generator (2.4b) — reviewed 2026-08-17
+
+`game_map_gen/` holds `map_Gen_plan.md`, a standalone Godot project (`MapGenerator.gd`,
+`ShowMap.gd`) and sample PNGs: four types from FastNoiseLite, 1 pixel = 1 tile, spawn rings,
+resource veins, a dragon. **All improvements below are approved by the owner.** What must change
+before the game can use it, in the order it matters:
+
+1. **SIZE IS THE LOAD-BEARING DECISION AND IT IS QUADRATICALLY WRONG.** The rule (`players * 150`, code `* 100`) grows the **side** linearly, so 8 players get 8× the side and **64× the area** of 2. A 300×300 map is 90,000 tiles against the debug map's 4,096 — and 2.4a's own note calls 64×64 a generous settlement's room for *one* player. The pathfinding rebuild goes ~12 ms → ~264 ms, and worse, **fog is one byte per tile per player**, so the snapshot's vision payload goes 4,104 → ~90,000 bytes, taking one tick from 12 KB to ~100 KB and one player's stream to ~1 MB/s. Use **area** per player: `side = 64 * sqrt(players)` → 2P 96, 4P 128, 8P 184.
+2. **The pixel format is ambiguous.** Town centre, villager and scout are all `ff0000`, so a loader cannot tell them apart except by blob-size analysis, and nothing says *whose* base it is. Split it: the **PNG stays authoritative for terrain and resource veins** — spatial, numerous, the part you want to see by looking — and the handful of **entities** (2–8 town centres, five villagers each, scouts, the dragon: under 60 entries) move to a **sidecar JSON** as (role, player, tile). The PNG can still draw them for the human preview, with the loader ignoring those pixels.
+3. **Footprints must come from `buildings.json`.** The plan reserves 5×5 for a town centre that is **10×10** in the data, and rings units at radius 4 — *inside* it — so every villager spawns inside its own town centre. Clear `footprint + 6`; ring units at radius 7+.
+4. **`unit.scout` does not exist**; it is `unit.scout_cavalry`.
+5. **Connectivity is not guaranteed** — only Forest carves paths, so island/river/desert can wall a player in, invisibly, until someone plays it. Flood-fill from every start: each must reach every other start and a minimum of wood/gold/stone, else regenerate. **A hard gate**, and what makes the generator headlessly testable.
+6. **The river must divide the map — but keep the land bridges.** The bridges are the liked part and stay (owner, 2026-08-17). The defect is that both samples show **three disjoint segments with 20-tile gaps**, so it reads as three lakes and the opposite-sides rule means nothing. Draw a **continuous** river, punch **1–3 narrow bridges (3–5 tiles)**, assign sides by the sign of the line equation, and let the direction vary — it is hardcoded to `y = x`.
+7. **Determinism:** `rng.randomize()` has to go. The seed comes from `MatchConfig` so two peers generate byte-identical maps (§7.1) — which also makes "share a map by sharing a seed" free and generator tests reproducible.
+8. **Bugs found reading it:** terrain is generated **twice** (the first pass is entirely overwritten, and it consumes rng draws so the passes disagree); `_place_resource_vein` **can spin forever**, since `placed` only increments when a pixel is actually written and a vein that walks off-map writes none — cap the iterations; veins have no guard against covering a town centre or water; `_place_dragon`'s centre fallback skips its own water check; `ShowMap.save_current_map()` writes to `res://maps/`, read-only in an exported build.
+
+#### 11.3 Save map (2.4c)
+
+A Save Map button on the pause menu, so a player who likes a random map — or one someone else made
+and shared — can name it, keep it, and pick it again from 1.6. Three things it must get right:
+
+- **It saves the MAP, not the MATCH.** By the time the button is pressed the world is full of buildings and rubble. What gets written is the terrain and start layout the match was **started** with, so `GameScene` must hold on to its map source rather than reading the live `SimMap`. Saving current state is a save *game* (12.4) — the button must not blur the two.
+- **`user://maps/`, never `res://`**, which is read-only once exported. The picker lists bundled maps from `res://maps/` and saved ones from `user://maps/` together.
+- **The PNG is authoritative; the seed is provenance.** A sidecar JSON carries {name, type, players, size, seed, format_version, created}. The seed alone cannot reproduce a map, because any generator change makes the same seed produce something else.
+
+#### 11.4 Fog of war (2.5) — done 2026-08-17
+
+`VisionSystem` writes `SimPlayer.vision`, one `Fog` byte per tile (UNSEEN/EXPLORED/VISIBLE),
+recomputed from scratch every tick after `DeathSystem` so a scout killed this tick lights nothing.
+Vision is a **Euclidean circle measured to the footprint**, not the centre tile — a 10×10 town
+centre at los 8 measured from its middle would see barely three tiles past its own walls, putting
+a blind spot exactly where the player's base is. EXPLORED is sticky.
+
+**The filtering is the point** (§5.1 step 6, a security property). The line is **mobile vs
+static**: your own entities always go; anything currently visible goes in full; an explored
+**static** goes as `_remembered()`, stripped of hp, queue, amount, build_fraction and anim so a
+memory cannot report live state; an enemy **unit** out of vision does not go at all, because its
+position is exactly what would leak. Client-side, absence from `updated` means "no longer
+visible", and `GameView` drops the **facts** as well as the node — a stale fact would still answer
+`pick()` and still draw a minimap blip. An explicit hidden-list was rejected: it would let a client
+read enemy unit **counts** off the wire.
+
+`FogOverlay` draws it as a `TileMapLayer` **over** the entity pool, diffing against the last grid
+so a tick costs tens of `set_cell`s rather than 4096. The fog tiles are proven to tessellate with
+every boundary pixel claimed by exactly one diamond — that fill has been in `TerrainLayer` since
+3.1 and an off-by-one was invisible there because those tiles are opaque, but blending a 45% wash
+twice puts a darker diamond grid across every explored region.
+
+**Known simplification:** a static destroyed behind the fog stops being sent rather than leaving
+AoE's stale ghost, which would need a per-player last-seen copy of every static.
+
+### Phase 3 — Camera & world view
 
 | # | Item | Tag |
 |---|---|---|
-| 3.1 | ✅ **DONE** — Terrain drawn by a real `TileMapLayer` (`src/view/terrain_layer.gd`), built from `size` plus raw terrain bytes rather than a `SimMap`, so the view holds no reference into the sim and its tests run on a literal `PackedByteArray`. Tiles resolve through the asset seam, so undeclared terrain (`terrain.dirt`, art track A.1) paints as the loud magenta placeholder rather than leaving holes in the ground. **Depth sorting fixed**: `Iso.footprint_sort_offset()` moves a footprint's sort point to its FRONT tile and `EntityView.draw_offset` carries the equal and opposite shift so the art stays on the centre — villagers behind the town centre are now occluded by its roof. Entities are Y-sorted by the engine, which keys off exactly that quantity. Also found and fixed a **half-tile terrain offset**: `tile_to_world()` is a tile CORNER (it equals `sub_to_world` at exact tile multiples) while the sim stands every entity at the tile CENTRE, so `tile_centre_to_world()` was added and the two pinned together by a test against the sim's own spawn convention — invisible on uniform grass, obvious at any terrain boundary. `rendering_quadrant_size` was measured rather than guessed, and the answer is backwards from the obvious reasoning: 8 gives 32 draw calls where the engine default of 16 gives 165 and 32 gives 280, because a large isometric chunk is a diamond straddling a rectangular viewport and must draw every tile inside it. New entities `snap_to()` their first position instead of gliding in from wherever their pooled view last sat. `dev_preview/preview_world.tscn` rewired onto the production path — it no longer draws its own ground or does its own sorting, which is the duplication that let it look correct while the real game rendered everything magenta | **[MVP]** |
-| 3.2 | ✅ **DONE** — Edge swipe up/down on either side strip (both sides, per IDEA 3.2; 100 canvas units wide, ~10 mm on the reference device). Zoom range 0.6–2.0, multiplied not added per the `zoom_by(factor)` sketch above — a fixed step per pixel would crawl at 2× and leap at 0.6×. `ZOOM_PER_PIXEL` is derived so one full-height swipe of the 648-tall canvas crosses the range exactly once, and that is asserted rather than trusted to the arithmetic in its comment. The gesture is decided on touch-down and held until release, so a drag that wanders into the strip does not change meaning halfway through. Zooming out re-clamps the camera (a wider view can leave a legally parked camera looking past an edge), and the map itself sets the zoom-out floor once it is smaller than the screen. `begin_gesture()`/`apply_drag()` are public so 4.2's `InputRouter` can take over recognition without touching the rules | **[MVP]** |
-| 3.3 | ✅ **DONE** — `src/view/camera_rig.gd`, a `Camera2D` replacing the per-scene "shove the world to the middle of the screen" hack each scene carried. Drag to pan; touch and mouse handled separately because `emulate_mouse_from_touch` is off and touch is not emulated from mouse either, so handling one would work on the phone but not on the desktop the work is done on. **Clamping is two rules, not one**: the camera's centre stays on the map DIAMOND (clamped in tile space, where the diamond is an axis-aligned box), and then the viewport stays inside the projected box. Box-only clamping is what `Camera2D.limit_*` does, passed every unit test, and still allowed a screen that was ~85% void at the west corner — the box extends half a map beyond the diamond's tip. The same corner now frames ~80% ground, pinned by a test written as what the player sees rather than as coordinates. Done by hand rather than with the engine's limits so the rule is reachable from a headless test and survives 3.2 changing the visible size. `view_size` is tracked via `size_changed`, because a device rotation invalidates the clamp margin, the zoom floor and the edge strips at once. Also fixed: `StressTest`'s root `Control` defaulted to `MOUSE_FILTER_STOP` and would have swallowed every mouse event before the camera saw it, and the HUD had to move onto CanvasLayers (two — backdrop below the world, readout above) or it pans away with the ground | **[MVP]** |
-| 3.4 | ✅ **DONE** -- double-tap the minimap (`Minimap.double_tapped`) calls `GameView.owned_entity_position(local_player, building.town_center)` and centres the camera there; silently does nothing before the player has one in view | **[MVP]** |
+| 3.1 | ✅ `TerrainLayer` (a real `TileMapLayer`, built from raw bytes). `rendering_quadrant_size = 8` was **measured**, and the answer is backwards from the obvious reasoning: 8 gives 32 draw calls where the engine default 16 gives 165 and 32 gives 280, because a large isometric chunk is a diamond straddling a rectangular viewport. Also fixed a half-tile terrain offset — invisible on uniform grass, obvious at any boundary | `[MVP]` |
+| 3.2 | ✅ Edge-swipe zoom on either strip, 0.6–2.0, **multiplied not added** — a fixed step per pixel would crawl at 2× and leap at 0.6×. The gesture is decided on touch-down and held until release | `[MVP]` |
+| 3.3 | ✅ `CameraRig`. **Clamping is two rules**: the centre stays on the map DIAMOND (clamped in tile space, where it is an axis-aligned box) and then the viewport stays inside the projected box. Box-only clamping is what `Camera2D.limit_*` does, passed every unit test, and still left a screen ~85% void at the west corner | `[MVP]` |
+| 3.4 | ✅ Double-tap minimap → centre on own town centre | `[MVP]` |
 | 3.5 | Camera follow selected unit | |
-| 3.6 | ✅ **DONE** — and with it the first thing in the project that is a game rather than a harness: `scenes/game/Game.tscn` + `src/view/game_scene.gd`, now the main scene. Hosts through `Net.host_solo()` so the local player's orders take the same route a remote player's would — command RPC up, snapshots back down — rather than reaching into `SimWorld` to make something happen. Tap priority is: my own unit → select it; something already selected → move order to the tapped tile; otherwise → clear. Own units win over the move order so re-selecting never accidentally sends the current selection walking onto the unit you were trying to pick; the cost is that you cannot order a unit onto a tile another of your units occupies, which is 4.5's problem. The selection is **filtered to units** before becoming a `MoveCommand`, because `validate()` rejects the whole command if any id is not a unit — selecting the town centre alongside villagers would otherwise silently cancel the move for the villagers too. Unit-ness is asked of the registry rather than inferred from the snapshot's shape, or a 1x1 resource node with no `phase` field reads as a unit and orders get sent naming trees. Verified end to end by driving the real scene: tap villager at (27,27) → selected → tap (38,38) → she routes around the 8×8 town centre and arrives. Terrain is still read from `Net.host()` (the documented solo-only exception); a remote client will need the map sent to it | **[MVP]** |
+| 3.6 | ✅ `Game.tscn`/`game_scene.gd` — the first thing in the project that is a game rather than a harness. Hosts through `Net.host_solo()` so local orders take the same route a remote player's would | `[MVP]` |
 | 3.7 | Tap minimap to move selected units | |
-| 3.8 | ✅ **DONE** -- tap the minimap (`Minimap.tapped`) centres the camera on the tapped tile. MVP has no 3.7 ("tap minimap to move selected units") to compete with a plain tap, so this fires unconditionally rather than branching on the current selection | **[MVP]** |
+| 3.8 | ✅ Tap minimap → centre camera there | `[MVP]` |
 
-**Verified on hardware after 3.1/3.2/3.3** — the §3.0 reference device (HONOR LNA-NX1, 2600 × 1200, Mali-G610), driving real touch events through `adb shell input swipe` with the camera's live state on screen, so these are measurements rather than a reading of a screenshot:
+**Verified on the §3.0 device** driving real touch through `adb`: viewport **1404 × 648** exactly
+as predicted; pan magnitude and direction correct against the 1.852× canvas ratio; zoom hit both
+clamps; **zero cross-talk** (camera byte-identical across both edge swipes, zoom unchanged by a
+mid-screen drag); 200 units + settlement at **60/58/60 fps**, 24–65 draw calls, sim tick 0.31–1.54
+ms avg. One figure over budget: sim tick **max 7.63 ms** against <5 ms — it is the harness's own
+200 individual `submit_command()` calls in one frame, where a real shared-destination order is one
+`MoveCommand` with many `unit_ids`.
 
-| What | Result |
-|---|---|
-| Viewport | **1404 × 648** — exactly the figure §3.0 predicted for this device from `stretch/aspect=expand` |
-| Pan | A −400, −200 physical-pixel drag moved the camera **+213, +107** canvas units. The device is 1.852× the canvas, so −400 px is −216 canvas: correct direction, correct magnitude |
-| Zoom in | Left strip, swipe up → hit the **2.0** ceiling and clamped (`exp(378 × 0.0018566) = 2.017`) |
-| Zoom out | Right strip, swipe down → **0.987** against **0.991** predicted; the gap is drag-event quantisation, not a maths error |
-| Cross-talk | **None.** Camera position was byte-identical at 213,1131 across *both* edge swipes, and the mid-screen drag left zoom at 1.000. Zoom never pans; pan never zooms |
-| 200 units + settlement | **60/58/60 fps**, **24–65 draw calls**, sim tick **0.31–1.54 ms** avg |
-
-These supersede the 0.7 device figures recorded above, which predate terrain joining the render path.
-
-**One figure is still over budget**: sim tick **max 7.63 ms** against the < 5 ms target. It is the stress harness's own behaviour — 200 individual `submit_command()` calls in a single frame every 4 seconds — and a real shared-destination order is one `MoveCommand` carrying many `unit_ids`. To be confirmed against real orders at 4.3 rather than assumed away.
-
-### Phase 4 Ã¢â‚¬â€ Units *(IDEA phase 4)*
+### Phase 4 — Units
 
 | # | Item | Tag |
 |---|---|---|
-| 4.1 | ✅ **DONE** — `MovementSystem` walks the route `PathService` returns, waypoint by waypoint; the old straight line survives only as the step between two adjacent tiles, where it is correct by construction. A tick's movement budget carries across waypoints rather than being spent at the first corner. **Stop at nearest reachable tile**: an order onto a blocked tile (tapping a tree) is honoured as far as it can be, and `set_path()` rewrites `task_target_tile` to where the route actually ends — comparing against the ORDER instead would leave the unit in MOVE forever, standing still beside the tree it was sent to. An unreachable order retires to IDLE rather than walking forever. A unit whose search is still queued waits rather than setting off in the target's general direction, since guessing walks it into the wall the route was going to avoid. System order is load-bearing and commented: command, plan, retire, move | **[MVP]** |
-| 4.2 | done -- PathService on AStarGrid2D done; steering local avoidance now lands too: SeparationSystem (src/sim/systems/separation_system.gd) runs right after MovementSystem and pushes overlapping alive units apart by half the shortfall each, using only sub-tile units no other neighbour is already pulling. Determinism: alive units are visited sorted by id, each pair's spatial neighbours sorted by id, each pair resolved once from the lower id -- every client resolves the same overlaps in the same order. A push is capped (MAX_PUSH, comfortably under half a tile) so it can never carry a unit out of the tile MovementSystem just placed it in, and is dropped entirely if it would land on impassable ground. TaskSystem's MOVE arrival check was changed from exact sub-position equality to a tile compare for the same reason -- a push landing on the same tick a unit arrives must not strand it in MOVE forever. Requests are queued and solved against a per-tick budget rather than on the spot, since ordering 200 units is one command but 200 searches. MAX_SOLVES_PER_TICK = 12 is measured against the less than 5 ms tick budget on the 0.7 harness's worst case -- 200 units all re-planning in one frame: budget 32 gives 9.48 ms, 16 gives 5.09 ms, 12 gives 4.30 ms, inside with headroom. Diagonals do not cut corners past a blocked tile, so a villager cannot slip between two buildings that touch. Grid updates are incremental by dirty rect: a full 64x64 sweep is 4096 set_point_solid() calls at ~12 ms, which would recur on every building placed, so the full sweep now happens once at map-gen time where it hides in load | **[MVP]** |
-| 4.3 | ✅ **DONE** — `Selection` (client-side, never sent — a selection in the state hash would desync the moment one player tapped), `InputRouter` recognising taps, a selection ring, and a panel that populates from `units.json`. Picking is **by tile, not by sprite bounds**: a 10 m tree's sprite covers the six tiles behind it, so bounds-picking selects the tree when the player clearly tapped the ground in front of it. Units win ties over buildings. Buildings are tappable anywhere on their footprint, not just their centre tile. Found and fixed on the way: `Iso.world_to_tile()` ROUNDS — correct for un-projecting a tile corner, wrong for "which tile is this point inside", which sent the near half of every tile to its neighbour and missed half of all taps. `Iso.tile_at()` floors, and the two are now documented as different questions. The ring is built in metre space and projected, so it lies flat as the right isometric ellipse, and is sized from the DECLARED footprint rather than sprite bounds. A dead entity drops out of the selection, or an order would name an entity the sim rejects and the player would see nothing happen | **[MVP]** |
-| 4.4 | ✅ **DONE** -- `GatherCommand` and `BuildCommand` complete the command surface alongside `MoveCommand`/`StopCommand`. Both reuse the walk-there machinery MOVE already had: PathService substitutes the nearest walkable tile when the target itself is occupied ground (a resource node, a foundation), and MovementSystem now advances ANY unit with a route left to walk rather than only ones tasked MOVE, so GATHER/RETURN/BUILD travel for free off the existing pathing. `GatherSystem` and `BuildSystem` (6.4) are the new arrival-time systems that act once the walk is done -- TaskSystem still only ever retired MOVE. System order is `CommandSystem -> PathSystem -> TaskSystem -> GatherSystem -> BuildSystem -> MovementSystem`, so an action that starts a new route this tick (a load handed off, a build finished) is walked the same tick rather than costing a tick of visible delay | **[MVP]** |
-| 4.5 | done -- GameView.tap_action() decides what a tap means from pure facts (own unit -> select; own incomplete building with builders selected -> BuildCommand, else select; a live resource node with a movable selection -> GatherCommand; anything else with a movable selection -> MoveCommand; otherwise clear the selection), and GameScene carries it out. This closes a real gap found while implementing the flash: GatherCommand/BuildCommand (4.4) existed sim-side but nothing in the view layer had ever dispatched them -- every tap, even onto a tree or a foundation, only ever sent a MoveCommand. ActionFlash (src/view/action_flash.gd) drops a brief coloured diamond on the tap target for each of the three orders (green move, amber gather, blue build) so the player sees which one fired without reading the panel; it is purely cosmetic and decides nothing itself. Own units still always win over an order, so re-selecting can never send the current selection walking onto the unit being picked; an own COMPLETE building still always selects too, so its training row stays reachable even with units selected | **[MVP]** |
-| 4.6 | ✅ **DONE** -- `EntityView` draws the dot: a small circle above the sprite, hidden at full health, coloured via the shared `HealthDot.color_for()` helper (`src/view/health_dot.gd`) so the dot and `SelectionPanel`'s hp text always agree on the same orange/red thresholds. Positioned off the visual's declared `height_m` through `Iso.height_to_world()`, the same convention the selection ring uses for footprint. `hp`/`max_hp`/`alive` were already in `SimEntity`/`SnapshotSystem`; this phase only had to draw them | **[MVP]** |
-| 4.7 | ✅ **DONE** -- new `DeathSystem`, last in `SimWorld`'s system order, reacts once `alive` goes false: plays `die`, drops `carry_kind`/`carry_amount` (no pile to drop it into in MVP -- just lost), then counts `SimUnit.corpse_ticks_left` down from `CORPSE_TOTAL_TICKS` (700 ticks = 70 s), switching to `decay` for the final `CORPSE_FADE_TICKS` (100 ticks = 10 s) before `despawn()` removes it for good. `SnapshotSystem` now sends a corpse as `updated` for as long as it still exists and a REAL `removed[]` (`SimWorld.removed_this_tick`) instead of the always-empty stub it shipped with -- the first thing in MVP that actually despawns mid-match. `GameView` fades `modulate.a` over the last 10 s and treats `alive == false` as unselectable everywhere picking touches (`pick()`, `units_in_box()`, `villager_counts()`, `Selection.retain_only()`). MVP has no combat yet, so a debug-only `DebugDestroyCommand` (routes through the existing `SimEntity.take_damage()`, so it needs no changes the day real combat lands) is what brings hp to 0 -- wired to a "Destroy (debug)" button in `SelectionPanel`. Verified live on device: destroying a villager plays the fall, drops it from the villager count, and leaves an unselectable corpse | **[MVP]** |
+| 4.1 | ✅ `MovementSystem` walks the route waypoint by waypoint; a tick's budget carries across waypoints. **Stop at nearest reachable**: `set_path()` rewrites `task_target_tile` to where the route actually ends, or a unit sent to a tree stands beside it in MOVE forever | `[MVP]` |
+| 4.2 | ✅ `PathService` on `AStarGrid2D` with a per-tick budget, plus `SeparationSystem` — pushes overlapping units apart by half the shortfall each, visiting units and pairs **sorted by id** so every client resolves the same overlaps in the same order. A push is capped under half a tile and dropped if it would land on impassable ground. Diagonals do not cut corners past a blocked tile | `[MVP]` |
+| 4.3 | ✅ `Selection` (client-side; a selection in the state hash would desync the moment one player tapped), `InputRouter` taps, selection ring, panel from `units.json` | `[MVP]` |
+| 4.4 | ✅ `GatherCommand`/`BuildCommand` reuse the walk-there machinery; `MovementSystem` advances **any** unit with a route left rather than only ones tasked MOVE, so GATHER/RETURN/BUILD travel for free | `[MVP]` |
+| 4.5 | ✅ `GameView.tap_action()` decides what a tap means from pure facts; `ActionFlash` shows which order fired. This closed a real gap: gather and build existed sim-side and **nothing in the view had ever dispatched them** | `[MVP]` |
+| 4.6 | ✅ Health dot, positioned off the visual's declared `height_m`, sharing thresholds with the panel through `HealthDot.color_for()` | `[MVP]` |
+| 4.7 | ✅ `DeathSystem` — corpse for 70 s, `decay` for the last 10 s, then `despawn()`. `SnapshotSystem` gained a **real** `removed[]`, the first thing in MVP that despawns mid-match | `[MVP]` |
 | 4.8 | Garrison | |
 | 4.9 | Defensive garrison damage bonus | |
 | 4.10 | Special abilities + cooldowns | |
-| 4.11 | ✅ **DONE** -- `PopulationSystem` (after `DeathSystem`, second-last in the system order) recounts `pop_used`/`pop_cap` from scratch every tick: `pop_used` sums `SimUnit.pop_cost` over living units, `pop_cap` sums `provides_pop` over COMPLETE buildings, and both are assigned per player so a lost house writes the cap back down. Recounted rather than adjusted on spawn/death, so no path a unit can leave the world by needs to remember to decrement anything and none of them can leak population. The field, the `player_state` channel and the `state_hash()` entry had existed since 0.6 with nothing writing them, so both sat at 0. `ResourceHUD`s bottom row now shows units-on-map over the limit (it showed idle/total villagers until the project owner corrected it, 2026-08-17; idle villagers are `IdleVillagerBadge`). ENFORCED since 2026-08-17 by `PopulationSystem.has_room_for()`, called from `TrainCommand.validate()` (the server is the only trust boundary) and from `GameScene._on_train_requested()` for the toast, so the refusal the player reads and the refusal the host makes are one implementation -- the arrangement `SimWorld.adjacency_allows()` already keeps for the placement ghost. The gate DERIVES the population instead of reading `pop_used`/`pop_cap`, because `CommandSystem` runs first in the tick and this system runs last: the report is a tick stale when the gate is asked and is 0/0 on tick 1, which would refuse the first villager of every match. QUEUED UNITS RESERVE THEIR POPULATION (`queued_pop()`), without which the cap is trivially beatable -- a player one slot short could queue twenty villagers and get all twenty. What it deliberately does not do is stop an already-paid-for unit from spawning: losing houses with a full queue puts you over the cap until the losses catch up | |
+| 4.11 | ✅ Population cap, **enforced**. See §11.5 | |
 | 4.12 | Stances | |
-| 4.13 | Military units (§9.2's roster) + `CombatSystem`. Includes the packed/unpacked siege state machine (§9.2.1 item 5) and the hostile wolf (`res.wolf`), both of which are combat, not economy | |
+| 4.13 | ✅ **mostly** — `CombatSystem`: walk to the target, stand at reach, strike on cooldown, damage after matching armour with a `MIN_DAMAGE` floor (armour must blunt an attack but never make a defender invulnerable to a whole class, because nothing on screen would explain it). Reach is measured to a **footprint**, not a centre, or melee could never touch an 8×8 building. Deliberately **no auto-acquire and no retaliation** — a unit fights what it was ordered to fight, since guessing means every villager charging the first enemy that walks past (that is 4.12). **Left in 4.13:** the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing) | |
 | 4.14 | Formations | |
 
-### Phase 5 Ã¢â‚¬â€ Buildings *(IDEA phase 5)*
+#### 11.5 Population cap (4.11)
+
+`PopulationSystem` recounts `pop_used`/`pop_cap` from scratch every tick and, since 2026-08-17,
+**owns the rule**: `has_room_for()` is called by `TrainCommand.validate()` (the server is the only
+trust boundary) and by `GameScene` before it submits, so the toast the player reads and the
+refusal the host makes are one implementation.
+
+Two things that are not obvious. **The gate derives the population rather than reading
+`pop_used`/`pop_cap`**, because `CommandSystem` runs first in the tick and this system runs last:
+the report is a tick stale when the gate is asked, and 0/0 on tick 1, so a gate trusting it would
+refuse the first villager of every match. And **queued units reserve their population**, without
+which the cap is trivially beatable — a player one slot short could queue twenty villagers and get
+all twenty. What it deliberately does not do is stop an already-paid-for unit from spawning.
+
+### Phase 5 — Buildings
 
 | # | Item | Tag |
 |---|---|---|
-| 5.1 | ✅ **DONE** -- `PlaceBuildingCommand` pays the cost and claims a FOUNDATION-phase footprint, validated the same way every other command is: `can_afford()` plus `SimMap.can_place_building()`, checked once in `validate()` and trusted in `apply()` since nothing else can run between them for the same command (CommandSystem is sequential). Placement is a real drag: entering build mode calls `CameraRig.set_locked(true)`, so the one finger that would otherwise pan (3.3) now drags `PlacementGhost` instead -- snapped to grid, coloured live by legality -- and releasing commits it if valid. `InputRouter` grew three signals for this (`single_pressed`/`single_drag_moved`/`single_released`), reported unconditionally rather than only for gestures that qualify as a tap; `tapped` is resolved and emitted BEFORE `single_released` for the same release, on purpose, so a placement handler clearing build-mode state on release cannot make `_on_tapped` see a different state than the one this gesture actually had. Two-finger pan was ruled out as the alternative -- it collides with box-select's own trigger (8.3) and breaks one-handed play -- so the lock, not a gesture swap, is what frees the finger. An invalid drop flashes the ghost red for 0.3s and stays in build mode; Cancel Build or a valid placement unlocks the camera again. Verified on device: dragging clear across the screen while placing produces ZERO camera movement (locked), and Cancel Build immediately restores ordinary one-finger panning | **[MVP]** |
-| 5.2 | ✅ **DONE** -- `SimBuilding.Phase` (FOUNDATION/UNDER_CONSTRUCTION/COMPLETE/DESTROYED) and `add_build_progress()` landed at 4.4 alongside `BuildCommand`/`BuildSystem`; what 5.1 adds is a way to REACH a foundation without a debug command placing it directly. The view side was already wired before either: `GameDataRegistry.visual_for_phase()` and `test_visual_seam.gd`'s `test_building_phase_visuals_exist_for_every_phase_a_building_can_be_in` predate this session. Confirmed end to end on device this session: `Build House` -> tap -> foundation placed -> (blocked on affordability, per 5.1's note) | **[MVP]** |
+| 5.1 | ✅ `PlaceBuildingCommand` + drag placement: entering build mode **locks the camera**, so the one finger that would pan drags `PlacementGhost` instead. Two-finger pan was ruled out — it collides with box-select's trigger and breaks one-handed play | `[MVP]` |
+| 5.2 | ✅ Foundation → under construction → complete, reachable without a debug command | `[MVP]` |
 | 5.3 | Building upgrades | |
-| 5.4 | ✅ **DONE** -- `TrainCommand` enqueues (pays up front, same convention as `PlaceBuildingCommand`), `CancelProductionCommand` refunds exactly what was paid, `ProductionSystem` advances only the FRONT of the queue and spawns via `SimMap.find_free_adjacent()` on completion. **A finished order is not popped until it actually spawns** -- a packed town centre backs the order up and retries every tick rather than losing the villager who was paid for; test_a_full_town_centre_backs_up_production_rather_than_losing_the_unit proves it against a map walled off except one distant tile. `SelectionPanel` grew a `Train Villager` button + queue-count label, gated on `is_mine` so a future enemy building shows health, not a button to spend on ITS queue; it emits `train_requested`/`cancel_requested` rather than calling `Net.submit_command()` itself, so commands still leave the view layer only through `GameScene`. Verified on device: selecting the starting Town Center shows the button, and pressing it with 0 food correctly enqueues nothing, matching `test_training_is_rejected_when_the_player_cannot_afford_it` | **[MVP]** |
-| 5.5 | ✅ **DONE** -- same `DeathSystem`: a building at hp 0 flips `SimBuilding.phase` to `DESTROYED` (`BuildingDef.visual_for_phase()` already pointed that at `visual_rubble`) and calls the new `SimWorld.free_footprint()` -- `despawn()`'s tile-freeing half, minus removing the entity -- so the ground is buildable again the instant it falls. Rubble has no fade timer: it stays in `entities` and renders opaque forever, matching A.2's "no damaged tier" art note. `ProductionSystem` now skips a dead building's queue so nothing trains out of the wreckage. Verified live on device: destroying the starting Town Centre via the debug button turns it to rubble, frees its tiles, and the tap panel no longer opens on it | **[MVP]** |
-| 5.6 | ✅ **DONE** -- rides 4.6's dot: `SimBuilding` already carried `hp`/`max_hp` (2.6/5.1), so this phase was wiring, not new state. Hidden once destroyed -- rubble has no damage tiers to report (A.2) | **[MVP]** |
-| 5.7 | Full building roster — §9.2's 23 buildings. Low code effort (data-driven), but ~70 bakes of art behind it because each carries up to four age skins (§2.7) | |
+| 5.4 | ✅ `TrainCommand` (pays up front), `CancelProductionCommand` (refunds exactly what was paid), `ProductionSystem` advancing only the queue front | `[MVP]` |
+| 5.5 | ✅ Destruction → `DESTROYED` phase + `free_footprint()`, so the ground is buildable the instant it falls. Rubble stays opaque forever (no damaged art tier) | `[MVP]` |
+| 5.6 | ✅ Building health on the shared dot | `[MVP]` |
+| 5.7 | Full building roster — 23 buildings. Low code effort, ~70 bakes behind it | |
 
-### Phase 6 Ã¢â‚¬â€ Resources & wildlife *(IDEA phase 6)*
+### Phase 6 — Resources & wildlife
 
 | # | Item | Tag |
 |---|---|---|
-| 6.1a | done, superseded -- res.berry_bush stands in for the MVP food node (session decision, MapGen.DEBUG_FOOD's own header): it needs no hunt/kill/carcass state machine at all, gathers like a tree, and vis.berry_bush is fully delivered with a real atlas where the deer carcass gap (below) is not. res.deer/vis.deer stay defined but unused -- 6.1a's literal 'huntable' wording no longer describes what the debug map spawns, but the MVP's food-gathering requirement (10) is met. Revisit if wildlife hunting comes back | **[MVP]** |
+| 6.1a | ✅ superseded — `res.berry_bush` is the MVP food node: no hunt/kill/carcass machinery, gathers like a tree, and its art is fully delivered where the deer carcass is not | `[MVP]` |
 | 6.1b | Wildlife roaming + flee-and-relocate | |
-| 6.2 | done -- gold_mine's 3 size classes are pure data (resources.json amounts [200, 500, 800] indexed by size_class), same convention as trees; every size draws the same sprite by design (ASSET_MISSING.md 1.3), so there is nothing further to bake. gather_slots (4 for gold) is now enforced -- see 6.4's entry for how | **[MVP]** |
-| 6.3 | done -- 'forest clustering' descoped to a session decision: the debug map's fixed 12-tile hand-placed wood cluster (MapGen.DEBUG_WOOD_CLUSTER) already gives trees the clumped look this item wanted; a real clustering algorithm was judged not worth building for a single fixed debug map. 3 size classes are pure data (resources.json amounts [40, 100, 175]), same convention as gold -- every size draws the same sprite (ASSET_MISSING.md 1.3) | **[MVP]** |
-| 6.4 | done -- GatherSystem drives the loop: walk to the node (PathService substitutes an adjacent tile, since the node's own tile is occupied ground), gather 1 unit every ceil(100 / gather_rate) ticks -- kept as a whole-tick countdown rather than a float accumulator, since a float would round differently across machines and desync (7.1) -- up to carry_cap, then walk to SimWorld.nearest_drop_off() (the nearest complete building of the unit's own player that accepts the kind, ties broken by lowest entity id) and deposit into SimPlayer.stock, then either turn back for the same node or retire once it is empty. The final load is capped by what the node has left, not padded up to carry_cap. gather_slots (6.2) is now enforced: an arrived unit only extracts if it ranks among the lowest gather_slots ids currently holding that node (task GATHER or RETURN) -- recomputed fresh every tick from live task state rather than reserved into a new field, so a competitor stopping, dying, or being re-tasked frees its spot for whoever is waiting, with nothing to keep in sync and nothing added to state_hash (task/gather_node_id/alive were already hashed). RETURN counts alongside GATHER so a slot cannot be sniped mid-cycle while a unit is walking a load home. A unit past the cap holds its ground rather than giving up, except once the node is fully depleted, at which point it retires like everyone else | **[MVP]** |
-| 6.5 | Stone, farms, fishing, berry bushes, boar | |
+| 6.2/6.3 | ✅ Size classes are pure data. Since the 2026-08-17 ore/tree rebake the class picks the **sprite** as well as the amount, so a rich seam and a poor one are different pictures | `[MVP]` |
+| 6.4 | ✅ `GatherSystem`: walk, extract on a whole-tick countdown (a float accumulator would round differently across machines and desync), fill `carry_cap`, walk to `nearest_drop_off()`, deposit, return or retire. `gather_slots` is enforced by **recomputing** which ids rank lowest among holders every tick rather than reserving a field — so a competitor stopping, dying or being re-tasked frees its spot with nothing to keep in sync. A short last take costs a **proportional** wait, not a full interval (see §12 field balance) | `[MVP]` |
+| 6.5 | ✅ **mostly** — stone, berry bushes, livestock and farms/fields all land. `res.bear` and fishing remain | |
 
-### Phase 7 Ã¢â‚¬â€ Resource HUD *(IDEA phase 7)*
+### Phase 7 — Resource HUD
 
-| # | Item | Tag |
-|---|---|---|
-| 7.1 | ✅ **DONE** -- a new `EventBus` autoload (`resources_changed`, `villagers_changed`) decouples the HUD from whoever happens to receive a snapshot. `GameScene` emits both after every `apply_snapshot()`: `resources_changed` from the snapshot's existing `player_state.stock` (SnapshotSystem already carried it, unused until now), `villagers_changed` from a new `GameView.villager_counts()` headcount over units in view. That headcount needed `task` added to `SimUnit.to_snapshot()` -- it was not there, so the view had no way to tell an idle villager from a busy one without reaching into SimWorld. `ResourceHUD` is a deliberately plain text row, same stand-in spirit as `SelectionPanel` (4.3) -- real icons are ASSET_MISSING.md 1.5's TODO and this is thrown away once they land. Built in `_init()` rather than `_ready()` so a bare `.new()` is fully wired for testing, matching how `GameView.pool`/`terrain` are field initializers rather than `_ready()`-only setup | **[MVP]** |
+7.1 ✅ `EventBus` decouples the HUD from whoever receives the snapshot. **Two counters, two
+sources, deliberately**: population is sim state (`PopulationSystem` writes it, and the cap is a
+rule a server must enforce) and rides `player_state`; the idle-villager count is a headcount over
+what is in view and is derived client-side. They were one signal until the owner corrected it —
+the resource panel's bottom row is the *population*, and idle villagers are the age header's
+badge, which is a button that walks to them. `[MVP]`
 
-### Phase 8 Ã¢â‚¬â€ Main game interface *(IDEA phase 8)*
-
-| # | Item | Tag |
-|---|---|---|
-| 8.1a | ✅ **DONE** -- `SelectionPanel` restyled over `panel_background.png`, with an `EntityPortraitView` (crops the entity's own baked battle sprite -- ASSET_MISSING.md 1.5 -- through the Kibyra `avatar-frame.png` ring) and a `HealthBarView` (two layers of `line-bar-health.png`, a darkened "empty" copy under a value-clipped bright copy, since the pack has no separate empty/full pair) replacing the old plain labels. Signal contract (`train_requested`/`cancel_requested`/`debug_destroy_requested`) and `GameView.facts_for()` data flow unchanged from 4.3 | **[MVP]** |
-| 8.1b | ✅ **DONE** -- rides 8.1a's restyle: the existing train button/queue label/cancel button now sit inside the framed panel rather than a bare row. Per-slot queue ICONS (plural "slots") deferred -- MVP has one trainable unit, so a text count/percentage already says everything a row of mostly-identical icons would | **[MVP]** |
-| 8.1c | ✅ **DONE** -- `SelectionPanel._populate_grid()`: a `GridContainer` of `EntityPortraitView`s, one per currently selected entity's def_id (`GameScene._refresh_panel()` now passes the whole selection, not just the primary's facts), capped at 20 (UI_Design.md 4's own "15-20 units" figure) since the title's "(+N)" suffix already covers the rest. Per-portrait mini health overlays (UI_Design.md's stated design) deferred as polish | **[MVP]** |
-| 8.2a | ✅ **DONE** -- `Minimap` (`src/view/minimap.gd`): terrain baked once into a small `Image` from the same placeholder colours `TerrainLayer` uses per-tile, entity blips redrawn from `GameView.all_facts()` every snapshot (own colour / other colour / gaia colour), and the camera's current viewport rect projected in from `CameraRig.position`/`visible_size()`. No dedicated minimap frame exists in the Kibyra pack (ASSET_MISSING.md 1.5) -- drawn as a plain gold rectangle border instead of left missing. Not circular, per UI_Design.jpg's diamond mock -- a placeholder rectangle, upgradeable the day real frame art exists | **[MVP]** |
-| 8.2b | 4 corner buttons (menu, chat, minimize, trade Ã¢â‚¬â€ trade locked behind market) | |
-| 8.3 | ✅ **DONE** — two fingers down opens a box spanned by them; spreading them sizes it, lifting either one commits it. `InputRouter` grew the gesture, `SelectionBox` draws it in SCREEN space (drawing it in world space would slide it around under the fingers holding it whenever the camera moved), and `GameView.units_in_box()` resolves it. **Own units only** — a box that also caught the town centre, four trees and a deer is not what anyone means by box select. Tested against each unit's ground point rather than its sprite, for the same reason picking goes by tile: a box over empty grass would otherwise catch whatever tall thing was leaning into it from behind. Results are returned in id order, because a box catching more than `MAX_SELECTED` has to keep the same units on every machine — the selection becomes a command, and two clients disagreeing about its contents is a desync. A box under `MIN_BOX` is discarded as a fumbled two-finger tap rather than clearing the selection. **The interaction fix this needed**: `CameraRig` now pans only while exactly ONE finger is down, or the map dragged out from under the box being drawn; and it does not adopt the remaining finger when the other lifts, which would snap the view by however far that finger had drifted. Verified by driving the real scene — four villagers ringed, camera byte-identical at (0, 1024) before and after | **[MVP]** |
-| 8.4 | ✅ **DONE** -- `NoticeToast` (`src/view/notice_toast.gd`): a fading text line over the Kibyra `dialogue-box-transparent.png` banner, generic enough that both `MainMenu` (placeholder-button feedback) and `GameScene` (failed placement -- "not enough resources" vs. "can't build there" -- and a control-group assignment confirmation) drive it directly. No queue: the newest message replaces whatever was showing | **[MVP]** |
-| 8.5 | ✅ **DONE** -- `PauseMenu` (`src/view/pause_menu.gd`): a dimmed overlay stopping `SimClock` while open (a real pause, not a panel over a still-ticking match), opened by a HUD pause icon or the Esc key. Resign tears the session down through `Net.leave()` before returning to `MainMenu.tscn` -- MVP has no AI opponents or win conditions to concede to, so "Resign" and "return to the main menu" are the same action today, kept as one button rather than two that currently do the same thing. Verified live: resign correctly returns to the main menu and a fresh PLAY starts a clean match afterward | **[MVP]** |
-
-### Phase 9 Ã¢â‚¬â€ Ages & tech *(IDEA phase 9)*
+### Phase 8 — Main game interface
 
 | # | Item | Tag |
 |---|---|---|
-| 9.1 | Age header: roman numeral in gold circle | |
-| 9.2 | Age advancement progress bar | |
-| 9.3 | `TechSystem`: research timers, stat modifiers, gating | |
+| 8.1a | ✅ `SelectionPanel` over `panel_background.png`, with an `EntityPortraitView` cropping the entity's own baked sprite through a Kibyra avatar ring, and a two-layer `HealthBarView` (a darkened copy under a value-clipped bright one, since the pack has no empty/full pair) | `[MVP]` |
+| 8.1b | ✅ Train button + queue count + cancel, inside the framed panel. Per-slot queue **icons** deferred while there is one trainable unit — a row of near-identical icons says less than a count | `[MVP]` |
+| 8.1c | ✅ Multi-select grid of portraits, capped at 20 (UI_Design.md's own figure) since the title's "(+N)" covers the rest. Per-portrait mini health overlays deferred as polish | `[MVP]` |
+| 8.2a | ✅ `Minimap` — terrain baked once into an `Image`, blips redrawn per snapshot, fog painted **over** the blips (2.5) | `[MVP]` |
+| 8.2b | 4 corner buttons — disabled placeholders today; chat/trade/tech-tree do not exist to give them anything to do | |
+| 8.3 | ✅ Two-finger box select, drawn in **screen** space (world space would slide it under the fingers holding it whenever the camera moved). Own units only; tested against each unit's ground point, not its sprite; returned in **id order**, because a box catching more than `MAX_SELECTED` must keep the same units on every machine | `[MVP]` |
+| 8.4 | ✅ `NoticeToast` | `[MVP]` |
+| 8.5 | ✅ `PauseMenu` — stops `SimClock`, so a real pause rather than a panel over a ticking match | `[MVP]` |
+
+### Phase 9 — Ages & tech
+
+| # | Item | Tag |
+|---|---|---|
+| 9.1/9.2 | ✅ `AgeBadge` — the numeral in a gold circle, with advance progress as the **ring around the badge** rather than a separate bar. Progress rides the snapshot as **int ticks**; the view does the division, so the sim carries no floats | |
+| 9.3 | `TechSystem`: research timers, stat modifiers, gating. **The field yield's per-age ladder is standing in for a mill tech until this lands** | |
 | 9.4 | Tech tree screen | |
-| 9.5 | **Additional civilisations — deferred past v1, not dropped** (§1). A civ is a re-skin plus a rename over the shared roster (§2.7.1), so the cheap tier is pure content: a `visuals.json` skin set and a name table, no sim change and no new field, shippable partially thanks to the default-skin fallback. **Unique units and per-civ bonuses are the expensive tier** — they need a per-faction override layer over `units.json` and bring per-civ balance with them. Ship the re-skin tier first; treat bonuses as a separate decision | |
-| 9.6 | Age re-skin: buildings and units resolve their visual through the owner's current age (§2.7, §13.2 item 10). Pure view work — `SimPlayer.age` already reaches the client in `player_state` (10.6) | |
+| 9.5 | Additional civilisations — the **re-skin tier** is pure content (a `visuals.json` skin set plus a name table, no sim change, partially shippable). Unique units and per-civ bonuses are the expensive tier and want a separate decision | |
+| 9.6 | Age re-skin: visuals resolve through the owner's current age. Pure view work — `SimPlayer.age` already reaches the client | |
 
-### Phase 10 Ã¢â‚¬â€ Control groups *(IDEA phase 10)* Ã¢â‚¬â€ **all MVP**
+### Phase 10 — Control groups
 
-Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
-
-| # | Item | Tag |
-|---|---|---|
-| 10.1 | ✅ **DONE** -- `ControlGroupsHud` (`src/view/control_groups_hud.gd`): 5 `ControlGroupSlot` buttons stacked top-left per `UI_Design.md`, each a Kibyra dragon-ring frame (`game/assets/ui/control_groups/group_slot_ring.png`, gitignored -- see `game/assets/LICENCES.md`) around an icon cropped straight from the entity's own baked battle sprite (no separate portrait art exists yet). Reads only `EventBus.control_group_changed(slot, icon, count)`, matching `ResourceHUD`'s read-only-from-EventBus convention | **[MVP]** |
-| 10.2 | ✅ **DONE, simplified** -- session decision: double-tapping a slot always assigns whatever is currently selected (`SetControlGroupCommand`), regardless of how that selection was made (tap, box, or an existing group). The box-select-specific pairing originally sketched here is subsumed by that one rule rather than built as a separate path | **[MVP]** |
-| 10.3 | ⬜ **DROPPED, superseded by 10.2's simplification** -- double-tap-a-unit-to-select-its-type was an alternate way INTO an assignment that 10.2's single "double-tap the slot assigns the current selection" rule already covers for any selection, box or otherwise. Not needed as a separate gesture; revisit only if playtesting shows a real gap | -- |
-| 10.4 | ✅ **DONE** -- `GameView.control_group_summary()` tallies def_id across a group's currently-alive members (deterministic tie-break: sorted def_id keys, same convention as `nearest_drop_off`) and returns `&""` once every member has died; `ControlGroupSlot` draws that as an empty circle. Verified live: killing a slot's sole member reverted it to empty the same tick | **[MVP]** |
-| 10.5 | ✅ **DONE, merged per session decision** -- single tap both reselects the group AND recentres the camera on it in one action (`GameView.control_group_centre()`, the average world position of currently-alive members -- "the area with most units" at MVP's one-army scale), rather than splitting select/recentre across single/double tap. Double tap is reserved entirely for 10.2's assign. `DoubleTapDetector` (`src/view/double_tap_detector.gd`) disambiguates the two off pure timestamps, deferring the single-tap action by its own window so a completed double-tap never also fires a reselect. PC hotkeys mirror it: plain 1-5 selects, Ctrl+1-5 assigns (`GameScene._unhandled_key_input`) | **[MVP]** |
-| 10.6 | ✅ **DONE** -- `SimPlayer.control_groups` (`Array[Array[int]]`, 5 slots) is mutated only by `SetControlGroupCommand.apply()`, validated like every other command (owned, alive, non-empty), folded into `state_hash()`, and rides `player_state` in every snapshot (`SnapshotSystem.build()`) -- the same channel stock/pop/age already use, so a rejoining client picks it back up for free rather than needing a separate resync path | **[MVP]** |
-
-### Phase 11 Ã¢â‚¬â€ Win conditions *(IDEA phase 11)*
+Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 
 | # | Item | Tag |
 |---|---|---|
-| 11.1 | ✅ **DONE** -- `WinConditionSystem` (`src/sim/systems/win_condition_system.gd`), last in the system order so a loss lands on the tick it happens. Conquest is `MatchConfig.Mode.LAST_MAN_STANDING`: own no unit and no building and you are eliminated (`SimPlayer.defeated`, one-way), and the last player left sets `SimWorld.winner_id`/`match_over`. Alive-only, so a corpse (4.7) or rubble (5.5) does not postpone the result, but a FOUNDATION keeps you in -- it holds ground and can still be raised. Both fields plus `defeated` ride the snapshot and are folded into `state_hash()`, the outcome being the one thing two clients must never disagree about. A one-player world is never decided (a solo sandbox has nobody to outlast) and neither is a world with no units or buildings in it at all, which is what every sim test that skips MapGen runs on. Result screen is `ResultScreen` (`src/view/result_screen.gd`), `PauseMenu`'s sibling with no Resume: VICTORY/DEFEAT, a line saying which of the three outcomes it was, Main Menu and Quit, and it stops `SimClock`. `GameScene._refresh_result()` reads it off the snapshot -- three outcomes, two of them defeat -- and `_orders_refused()` gates input on it. Verified against the real `debug_skirmish` map: killing the two-soldier enemy squad wins the match | |
-| 11.2 | Additional modes (regicide, king of the hill, capture the flag, wonder). TWO DECLARED AS PLACEHOLDERS 2026-08-17 (project owner): `Mode.TROPHY` (every player starts with a baby dragon; lose it and you are out) and `Mode.KING_OF_THE_HILL` (hold a ringed zone with the most units to score; first to 1000 wins). Both are in the enum and neither decides anything -- `WinConditionSystem` documents exactly what each still needs. Trophy wants a `unit.dragon_baby` def, a MapGen that hands every player one (which the one-start debug map cannot do), and an `is_trophy` flag rather than a hardcoded id; KotH wants the zone's position as MAP data, a per-player score on `SimPlayer` (deliberately not added -- an unwritten field that reaches the HUD is exactly the hole 4.11's counter was), and the minimap ring. Inert is the safe direction to be unfinished in: "you lose when your trophy dies", evaluated on a map with no trophies, defeats everybody on tick 1 | |
-| 11.3 | Mode shown in lobby and match-start screen. `MatchConfig.mode` is the field it will set, and the snapshot already carries `mode` so the result screen can name the rule that decided it | |
+| 10.1 | ✅ `ControlGroupsHud` — 5 slots stacked top-left, each a dragon-ring frame around an icon cropped from the entity's own baked sprite (no portrait art exists yet). Reads **only** `EventBus.control_group_changed` | `[MVP]` |
+| 10.2 | ✅ **Simplified**: double-tapping a slot assigns whatever is currently selected, regardless of how that selection was made (tap, box, or an existing group) | `[MVP]` |
+| 10.3 | ⬜ **DROPPED** — double-tap-a-unit-to-select-its-type was an alternate way *into* an assignment that 10.2's one rule already covers. Revisit only if playtesting shows a gap | — |
+| 10.4 | ✅ A slot's icon is the most-represented def_id among **currently-alive** members (deterministic tie-break on sorted def_id keys), and `&""` once all are dead, which the slot draws as an empty circle | `[MVP]` |
+| 10.5 | ✅ **Merged**: a single tap both reselects the group **and** recentres the camera on it, rather than splitting the two across single/double tap. `DoubleTapDetector` disambiguates off pure timestamps, deferring the single-tap action by its own window so a completed double tap never also fires a reselect. PC mirrors it: 1–5 selects, Ctrl+1–5 assigns | `[MVP]` |
+| 10.6 | ✅ `SimPlayer.control_groups` is mutated only by `SetControlGroupCommand`, validated like any command, folded into `state_hash()`, and rides `player_state` — the same channel stock/pop/age use, so a rejoining client picks it back up for free | `[MVP]` |
 
-### Phase 12 Ã¢â‚¬â€ Multiplayer & AI *(IDEA phase 12)*
+### Phase 11 — Win conditions
 
 | # | Item | Tag |
 |---|---|---|
-| 12.1a | `host_open()` on 0.0.0.0 + `join()`. **Scoped and estimated 2026-08-17 -- see "12.1 Approach" below for the ordered steps, the measured numbers and the one item with real risk in it** | |
+| 11.1 | ✅ `WinConditionSystem`, last in the order so a loss lands on the tick it happens. `Mode.LAST_MAN_STANDING`: own no unit and no building and you are out (`defeated`, one-way); the last player left sets `winner_id`/`match_over`. **Alive-only**, so a corpse or rubble does not postpone the result — but a **foundation keeps you in**, since it holds ground and can still be raised. A one-player world is never decided, and neither is a world with no units or buildings at all (which is what every sim test skipping MapGen runs on) — without that guard an empty world reads as everyone eliminated on tick 1, and `match_over` latches. `ResultScreen` is `PauseMenu`'s sibling with **no Resume**, and stops `SimClock`. Verified against the real `debug_skirmish` map: killing the two-soldier enemy squad wins | |
+| 11.2 | **Trophy** and **King of the Hill** are declared in `MatchConfig.Mode` and **decide nothing**. Trophy wants a `unit.dragon_baby` def, a MapGen that gives every player one, and an `is_trophy` flag rather than a hardcoded id; KotH wants the zone as **map** data, a per-player score (deliberately not added — an unwritten field that reaches the HUD is exactly the hole 4.11's counter was), and the minimap ring. **Inert is the safe direction to be unfinished in:** "you lose when your trophy dies", on a map with no trophies, defeats everybody on tick 1. Also unbuilt: regicide (the Celtic heroes would serve), capture the flag, wonder | |
+| 11.3 | Mode shown in the skirmish screen and at match start. `MatchConfig.mode` is the field, and the snapshot already carries `mode` so the result screen can name the rule that decided it | |
+
+### Phase 12 — Multiplayer & AI
+
+| # | Item | Tag |
+|---|---|---|
+| 12.1a | `host_open()` on 0.0.0.0 + `join()`. See §12.1 | |
 | 12.1b | LAN discovery, reconnect, lag compensation, desync detection | |
-| 12.2a | `AISystem` state machine emitting normal `Command`s. **SCOPED 2026-08-17 as the "PlayTest AI"** (owner's name and owner's opening script): a deliberately dumb, predictable, rule-based opponent, explicitly NOT the AI that was parked -- difficulty levels and real decision flow are 12.2b, and they want a game whose balance has been played before anyone encodes what good play looks like. The opening the owner specified: two villagers to berries, one to stone, one to lumber, the last builds a house; then a mining camp by the stone and a lumber camp by the wood; the builder to gold; age up; two more villagers; the first villager builds a mill and a field; the berry pair moves to the field with its builder; the newest villager builds a tower near the town centre and then a barracks a few tiles out; the last builder chops wood; five swordsmen at the barracks. Recommendations adopted: **the script is DATA, not code** -- a declarative list of steps, so the opening can be retuned without touching the system and a test can assert "by tick N the AI owns a mill"; **every step carries a precondition, a timeout and a skip rule**, because on a generated map there may be no berry bush within reach and a script that stalls takes the whole test with it; **it logs which step it is on**, which is the difference between a debuggable failed match and a mystery; **it is deterministic** (no `randi()`, no unordered iteration) or it breaks replay and the desync check; **it emits ordinary Commands only**, which is what makes it a real test of the command path rather than a puppet with privileged access; and **it ends with an attack-move on the nearest enemy town centre**, without which a headless match never finishes -- finishing is what exercises 11.1 and the result screen, and is what turns this from "the AI plays" into an automated full-match regression test. Two numbers to watch: the script's 5 starting + 2 trained + 5 swordsmen is 12 population against a town centre's 10 plus one house's 5, so it fits with three to spare and a scout would eat one of those -- and since 2026-08-17 the cap is ENFORCED, so overrunning it now shows up as silent refusals; and the resource steps cannot assume WHERE anything is, since 2.4b puts veins nine tiles out in a random direction, so they resolve "nearest node of kind" rather than a fixed tile | |
-| 12.2b | AI difficulty levels | |
+| 12.2a | **PlayTest AI.** See §12.2 | |
+| 12.2b | AI difficulty levels and real decision flow — **the part deliberately parked** until the game's balance has been played | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path | |
-| 12.4 | Save/load and replays | |
+| 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
 
-#### 12.1 Approach — ordered steps for two-device play
+#### 12.1 Multiplayer approach — ordered steps for two-device play
 
-Scoped 2026-08-17. **What already exists and is unvalidated:** ENet transport, commands up
-with a peer→player map and server-side ownership validation, per-player fog-filtered
-snapshots down, deterministic `MapGen`, a result screen driven purely by snapshot data,
-and a proven Android build with the INTERNET permission. Rule 4 of §1.1 has been paid for
-since day one — every order already goes through the RPC path — but none of it has ever
-met a second peer. The `_broadcast_snapshot` bug found at 2.5 is what that costs: it sent
-every player's snapshot to everybody, sat there harmlessly for months because all players
-saw an identical world, and turned into "the client is handed the opponent's view of the
-map" the instant the fog filter existed. **Latent breakage accumulates in this layer
-silently, which is the real argument for doing it before more features are stacked on it.**
+**What exists and is unvalidated:** ENet transport, commands up with a peer→player map and
+server-side ownership validation, per-player fog-filtered snapshots down, deterministic `MapGen`,
+a result screen driven purely by snapshot data, and a proven Android build with the INTERNET
+permission. See §1.1 for why the unvalidated part is the argument for doing this before more
+features stack on it.
 
 | Step | Work | Est. | Risk |
 |---|---|---|---|
 | a | `Net.host_open()` on 0.0.0.0 + `join(ip)`, peer lifecycle, player-id assignment | 2–4 h | low |
-| b | **The client has no world** (see below) | 4–8 h | **high** |
-| c | 1.6's screen in its lobby mode: an Open slot, a listening host, a joined peer list | 6–10 h | low, volume |
+| b | **The client has no world** (below) | 4–8 h | **high** |
+| c | 1.6's screen in lobby mode: an Open slot, a listening host, a joined peer list | 6–10 h | low, volume |
 | d | Match-start handshake: host broadcasts the agreed `MatchConfig`, everyone builds, acks, then the clock starts | 2–3 h | medium |
 | e | Match end over the wire: resign must reach the host, a disconnect must not freeze the match | 2–3 h | low |
-| f | Wire size and packet reliability (see below) | 3–6 h | medium |
+| f | Wire size and packet reliability (below) | 3–6 h | medium |
 | g | Two-device bring-up on real WiFi — firewall, IP entry, thumb testing | 2–3 h | medium |
 
-**Order: a → b → d → g → c → e → f.** That front-loads the risk and puts a two-device
-match you can actually see at roughly the halfway point, before the polish.
+**Order: a → b → d → g → c → e → f.** Front-loads the risk and puts a two-device match you can
+see at roughly the halfway point, before the polish.
 
-**(b) is the item with real design in it.** `GameScene._start_match()` and
-`_preview_placement()` both read `Net.host().world`, documented as a solo-only exception.
-On a joining client `Net.host()` is null, so the scene dies on entry. Terrain is easy —
-2.4a's rule is that each client runs `MapGen` from the shared `MatchConfig`, so nothing
-needs sending. The real question is the **placement ghost**, which colours itself by asking
-the authoritative world about occupancy and adjacency: a client's locally-built world knows
-the map but not what anyone has built since. It has to be driven from snapshot facts and be
-advisory — the server already validates, so a wrong ghost costs a refusal, not a desync.
+**(b) is the item with real design in it.** `GameScene._start_match()` and `_preview_placement()`
+both read `Net.host().world`, documented as a solo-only exception; on a joining client
+`Net.host()` is null, so the scene dies on entry. Terrain is easy — 2.4a's rule is that each
+client runs `MapGen` from the shared `MatchConfig`, so nothing needs sending. The real question is
+the **placement ghost**, which colours itself by asking the authoritative world about occupancy
+and adjacency: a client's locally-built world knows the map but not what anyone has built since.
+It must be driven from snapshot facts and be **advisory** — the server already validates, so a
+wrong ghost costs a refusal, not a desync.
 
-**(f) is measured, not estimated.** One tick of the real debug map is **12,092 bytes, 4,104
-of it the fog grid** — 118 KB/s per player at 10 Hz, pinned by a budget test in
-`test_snapshot_system.gd`. Two problems: the fog is resent whole every tick when it changes
-by tens of tiles (send changed indices; roughly a third off for ~2 h), and 12 KB exceeds
-ENet's MTU so it fragments, while snapshots are `unreliable_ordered` — losing one fragment
-drops the whole packet, which on WiFi reads as stutter. Cheapest fix is `reliable_ordered`
-and letting ENet handle it; the real fix is §7.2's delta encoding, deliberately **out** of
-this batch (6–10 h on its own). Note 2.4b's size rule interacts directly with this: the fog
-payload is one byte per tile per player.
+**(f) is measured.** One tick is **12,092 bytes, 4,104 of it fog** (§3.1). Two problems: the fog
+is resent whole every tick when it changes by tens of tiles (send changed indices — about a third
+off, ~2 h), and 12 KB exceeds ENet's MTU so it fragments, while snapshots are
+`unreliable_ordered`, where losing one fragment drops the whole packet. Cheapest fix is
+`reliable_ordered`; the real fix is §7.2's delta encoding, deliberately **out** of this batch
+(6–10 h on its own). Note 2.4b's size rule interacts directly: fog is a byte per tile per player.
 
-**Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot
-processes on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable
-and screenshottable the way `dev_preview/preview_victory.tscn` drives the real game today.
-Only (g) needs hardware and a second pair of thumbs.
+**Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot processes
+on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable and
+screenshottable the way `dev_preview/preview_victory.tscn` drives the real game today. Only (g)
+needs hardware and a second pair of thumbs.
 
-**Deliberately not in this batch:** commands are queued for `tick + 1` with no input-delay
-buffer, so a remote player's orders land whenever they arrive — fine on LAN, visibly
-rubber-bandy the moment latency spikes. The standard fix is a fixed 2–3 tick input delay,
-about 2 h, but it changes how the game FEELS and wants a decision rather than a default.
-LAN discovery, reconnect and desync detection stay in 12.1b.
+**Deliberately not in this batch:** commands are queued for `tick + 1` with no input-delay buffer,
+so a remote player's orders land whenever they arrive — fine on LAN, visibly rubber-bandy when
+latency spikes. A fixed 2–3 tick input delay is the standard fix, about 2 h, but it changes how
+the game **feels** and wants a decision rather than a default.
 
-### Phase 13 Ã¢â‚¬â€ Dragons *(IDEA phase 13)*
+#### 12.2 PlayTest AI (12.2a)
 
-| # | Item | Tag |
-|---|---|---|
-| 13.1 | Dragon unit: air domain, castle-tier HP/damage, fire-breath AoE + cooldown | |
-| 13.2 | Dragon Nest POI: guardian dragon, claim-on-defeat, 360 s baby-dragon timer, destructible | |
+A deliberately dumb, predictable, rule-based opponent — explicitly **not** the AI that was parked.
+The owner's opening script: two villagers to berries, one to stone, one to lumber, the last builds
+a house; then a mining camp by the stone and a lumber camp by the wood; the builder to gold; age
+up; two more villagers; the first villager builds a mill and a field; the berry pair moves to the
+field with its builder; the newest villager builds a tower near the town centre and then a
+barracks a few tiles out; the last builder chops wood; five swordsmen at the barracks.
+
+Design rules:
+
+- **The script is DATA, not code** — a declarative list of steps, so the opening can be retuned without touching the system and a test can assert "by tick N the AI owns a mill".
+- **Every step carries a precondition, a timeout and a skip rule.** On a generated map there may be no berry bush within reach, and a script that stalls takes the whole test with it.
+- **It logs which step it is on** — the difference between a debuggable failed match and a mystery.
+- **It is deterministic** (no `randi()`, no unordered iteration) or it breaks replay and the desync check.
+- **It emits ordinary `Command`s only**, which is what makes it a real test of the command path rather than a puppet with privileged access.
+- **It ends with an attack-move on the nearest enemy town centre.** Without an ending a headless match never exercises 11.1 or the result screen — and that is what turns this from "the AI plays" into an automated full-match regression test.
+
+Two numbers to watch: 5 starting + 2 trained + 5 swordsmen is **12 population** against a town
+centre's 10 plus one house's 5, so it fits with three to spare and a scout eats one — and the cap
+is **enforced** now, so overrunning shows up as silent refusals. And the resource steps cannot
+assume *where* anything is, since 2.4b puts veins nine tiles out in a random direction: they
+resolve "nearest node of kind".
+
+### Phase 13 — Dragons
+
+13.1 Dragon unit: air domain, castle-tier stats, fire-breath AoE + cooldown.
+13.2 Dragon Nest POI: guardian dragon, claim-on-defeat, 360 s baby-dragon timer, destructible.
+*(The nest is composed entirely from existing gaia props; only the dragon needed bespoke art, and
+it is baked.)*
 
 ---
 
@@ -1797,17 +1146,36 @@ LAN discovery, reconnect and desync detection stay in 12.1b.
 
 | Candidate | Impact | Effort | Verdict |
 |---|---|---|---|
-| 4.13 Military units + combat | Very high | Medium | **First** |
+| 4.13 Military units + combat | Very high | Medium | ✅ **mostly done** — siege pack/unpack, hostile wolf, arrow projectiles remain |
 | 2.5 Fog of war | High | Medium | ✅ **DONE** 2026-08-17 |
-| 12.2a AI opponent | Very high | Medium-high | **Third** |
 | 4.11 Population cap | Medium | Low | ✅ **DONE** 2026-08-17 |
-| 5.7 More buildings | High breadth | Low each **in code**; ~70 bakes in art (§9.2) | Quick win in data, art track paces it |
-| 11.1 Win condition | High | Low | ✅ **DONE** 2026-08-17 (conquest only; 11.2's two placeholders declared) |
-| 9.x Ages & tech | High but broad — the age axis now carries what factions would have (§2.7) | High: four age skins of every building | Batch later |
-| 12.1 Real multiplayer | High | Medium (socket only) | After AI |
+| 11.1 Win condition | High | Low | ✅ **DONE** 2026-08-17 (conquest; 11.2's two modes declared inert) |
+| **Field yield balance** | Medium | Low | ✅ **DONE** 2026-08-17 — see below |
+| 2.4b Map generator + 1.6 skirmish screen | High | Medium | **Next** (owner is building the generator) |
+| 12.2a PlayTest AI | High | Low-medium | **Next** — cheap, and it buys an automated full-match test |
+| 12.1 Real multiplayer (LAN, 2 devices) | High | Medium | **After the map work** — §12.1 |
+| 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
+| 9.x Ages & tech | High — the age axis now carries what factions would have | High: four age skins of every building | Batch later |
+| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | The largest block of finished art the game cannot reach: 24 baked, declared, unbuildable pieces |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
 
-**First post-MVP batch:** ✅ 11.1 + ✅ 4.11 + 4.13 (combat lands; siege pack/unpack, the hostile wolf and arrow projectiles are what is left) + 2.5 + 12.2a Ã¢â‚¬â€ turns the economy demo into a winnable match.
+**Field yield, balanced against Age of Empires 2026-08-17.** It was 0/100/250/400 food per 100
+ticks per farmer by age — 4× a berry bush per farmer at age 2 rising to **16×** at age 4, and four
+age-4 plots came to 80 food a tick. What came across from AoE is the **ratio, not the numbers**:
+AoE2 keeps every food source within a third of every other per villager (berries 0.31/s, sheep
+0.33, farm 0.35, deer 0.41), so a farm is 1.13× a bush, and what separates food sources is total
+amount, walking distance and safety — never a multiplier on the worker. The absolutes cannot
+transfer, since this game's villager gathers 2.5 food/s against AoE2's 0.31. So **0/25/28/32**:
+parity at age 2, AoE2's own farm-over-berries edge at age 3, 1.28× at age 4. The ladder is nearly
+flat because **AoE's farm upgrades raise a farm's food AMOUNT and never its rate** — a farmer's
+throughput is 0.35/s from the first farm to the last, those upgrades exist to stop you rebuilding
+farms, and `amount: -1` (an inexhaustible field) had already spent that entire budget. Fields stay
+the backbone regardless, being the only renewable food on a map whose whole larder is ~1120 food.
+
+> The rebalance immediately found a real defect: a short last take was charged a **full**
+> interval, so an age-4 plot paying 8 units every 25 ticks into a 10-unit basket cost 25 + 25 = 50
+> ticks a load against age 2's 40 — **advancing two ages made farming 25% slower**. The old
+> numbers hid it because 400 per 100 ticks is 4 units a tick, where a wasted interval is one tick.
 
 ---
 
@@ -1815,66 +1183,70 @@ LAN discovery, reconnect and desync detection stay in 12.1b.
 
 Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 
-> **The bakes on disk are the status of record**, not this table, and they are well ahead of
-> the summaries below — the whole building roster across four ages, every unit in eight player
-> colours, and most of the terrain and wildlife are baked. This table is the *ordering*.
-> For what actually exists, list `art_work/out` or read `game/assets/atlases`; for what is
-> still wanted, see [asset_request.md](asset_request.md). *(This pointed at `ASSET_MISSING.md`
-> until 2026-08-16 — see the note at the top of this file.)*
->
-> **Two different "wrong art" states are in play and they should not be confused.** The bulk of
-> the baked set is Athenian/Hellenic, which is **not** one of the four age civs (§2.7) — that art
-> is *deliberate placeholder*, standing in until its age skin is baked, and each recipe is a
-> proven template for the real one. Age-1 Briton buildings and the hand-picked units are the real
-> thing. Separately, **a re-bake is owed across the board** for two reasons that landed on
-> 2026-08-15 and should be spent in one batch: ground decals are now stripped (A.10), and five
-> unit actors were corrected (A.8). Neither is a placeholder question — those bakes are wrong,
-> not provisional.
-
-| # | Item | Depends on |
+| # | Item | State |
 |---|---|---|
-| A.1 | ✅ **DONE** — terrain tile set from 0 A.D. ground textures, all 64×32 exact with no fitting: grass, dirt, sand, shallow + deep water, rock, forest floor, plus a `vis.cliff` prop. Recipes `tools/recipes/terrain_*.toml`. Remaining are not tiles: transition/blend edges, shoreline, and the fog-of-war overlay (2.5) | 0.9 |
-| A.2 | Ã¢Å“â€¦ **DONE** Ã¢â‚¬â€ Town centre + house, each with foundation and rubble (`SimBuilding.Phase`). Six single-frame atlases at `directions = 1`; foundations and generic rubble keyed by footprint size so the rest of the roster (5.7) reuses them. No damaged tier Ã¢â‚¬â€ 0 A.D. has none, and health is the health dot (5.6). ASSET_MISSING.md 1.2 | 0.9 |
-| A.3 | ✅ **DONE** — Villager, all 11 animations × **8** directions = 960 frames (8 not 5: she holds an axe in one hand, so mirroring would swap it). Recipe `villager.toml`. **Needs one rebake** for the height override in §13.2 item 9, and carries the `work_mine` dress artefact in item 7 | 0.9 |
-| A.4 | **Largely done, see ASSET_MISSING §1.3/§2.3** — gold mine, stone mine, berry bush, deer, deer carcass, boar, sheep, wolf, fish and six extra tree species all baked. Still open: the tree *size classes* and every palm, both of which need variant selection in `isobake` (no deterministic actor exists); and `vis.farm`, blocked on a 64-instance prop scatter the Pyrogenesis importer collapses to one. Original scope: **Gold mine Ã¢Å“â€¦ done** (`geology/metalmine_alpine.xml`, 5 directions, ~1.4 Ãƒâ€” 1.9 tiles); deer Ã¢Å“â€¦ done but **static** (item 8). Remaining: 2 more tree size classes + stump, and the deer carcass | 0.9 |
-| A.4a | **Animate the wildlife — wolf, sheep, cattle** (project owner, 2026-08-15). Every animal in the roster ships **static**, and the recipes all justify that with the same sentence: "no clip attached, so the quadruped animation-transfer bug (§13.2 item 8) never triggers." **That bug is fixed** — per-clip `location_scale`, proven on `vis.deer_carcass` — so the justification outlived the problem and every one of them is now simply un-animated. The source clips are all there and were inventoried 2026-08-15: **wolf** has the richest set in the roster (Idle ×3, Walk, Run, attack_melee ×2, death ×2) and is the only animal needing an attack, being the one hostile gaia entity; **sheep** has Idle ×2, Walk, Run, Death; **cattle** has Idle ×4, Walk, Run, Death ×2 and a **Feeding** clip, which is the one idle in the set that reads as an animal doing something. Deer and boar come free on the same path. **The cost is the per-clip measurement, not the bake:** `location_scale` is not a global constant (the deer death clip measured 0.0319) — estimate it as actor-mesh height / clip-figure height in raw units, then probe around it and look at the render, exactly as `deer_carcass.toml` documents | A.4 | | A.4b | **Two gaia food nodes have no art at all** — `res.cattle` and `res.bear` are in §9.2's roster and neither was ever baked, so they are missing rather than placeholder. `cattle.toml` written 2026-08-15 (`fauna/zebu_wild`, unbaked); the bear (`fauna/bear_brown`) still has no recipe | A.4 |
-| A.4b | **Two gaia food nodes have no art at all** — `res.cattle` and `res.bear` are both in §9.2 and neither was ever baked, so they are missing rather than placeholder. Found 2026-08-15 while resolving the gaia templates, which also caught two wrong actors: cattle is **`fauna/zebu_wild`**, not the obvious `fauna/cow` (0 A.D. ships wild and trainable variants of every herd animal, and ours is a resource node), and the sheep was on `sheep1` instead of `sheep3`. `cattle.toml` written 2026-08-15, unbaked; the bear (`fauna/bear_brown`) still has no recipe | A.4 |
-| A.5 | UI chrome from the itch.io dragon packs | none |
-| A.6 | **Player colour — promoted from polish to prerequisite by §1.** Colour is the only thing distinguishing players, and `isobake` currently multiplies the tint in at bake time (§2.7 consequence 3), so today one atlas is one player's colour. Bake untinted, emit the source alpha as a mask page, tint in a Godot `canvas_item` shader. An outline is then a second, optional pass on the same mask. ✅ **Blend mode decided 2026-08-14** (delegated to me): neither of the two obvious options works. **Multiply** (0 A.D.'s) makes white a no-op and crushes dark colours, compressing §13.2 item 11's lightness ladder; **luminance-preserving hue transfer** looks good and destroys the ladder outright, because every colour then inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the *base* level with the texture contributing only its **local deviation** — shading detail survives, and so does the ladder: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, with `k ≈ 0.8` scaled by remaining headroom on the highlight side so a light colour does not clip flat. **The mask needs its own greyscale page** — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel; ~+12% atlas bytes. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | A.3 |
-| A.7 | Audio pass — 0 A.D. sfx/music into `audio.json`. **Unblocked 2026-08-15:** §13.2 item 3 is answered, so the scope is now concrete — take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else**. One voice set, every unit, every age. Nothing baked depends on this, so it stays low priority; it is only listed as unblocked so it is not still treated as an open question | 0.9 |
-| A.8 | Military unit art — §9.2's **~22 bakes, one hand-picked actor per unit and no per-age variants** (§2.7). ⚠️ **Rewritten 2026-08-15.** This row used to read "~22 **Celtic** bakes… re-pointing at their Celtic equivalent", which was the units-are-Celtic error (§2.7); five recipes were re-pointed under it and have now been re-pointed back. **The actors are mixed-civ by design and come from the owner's roster, resolved through their entity templates** — see the boxed rule in §9.2, which is the thing to read before touching any of these. **A full re-bake of the unit set is now owed** on two counts, and they should be spent together: the five corrected actors, and the ground-decal strip (see A.10). Four further recipes still disagree with the roster and need a decision first — villager, ram, trebuchet, galleon (§9.2.1 item 10). `vis.trebuchet` and `vis.trade_cart` remain blocked on isobake's armature picking and on it having no particle support for attack/impact VFX (ASSET_MISSING §2.1). ~22 bakes against the ~88 four factions would have cost is where the single-civilisation decision actually pays | A.3, A.6 |
-| A.9 | **Dragon + nest Ã¢â‚¬â€ DONE 2026-08-16** — not bespoke after all: `fauna/dragon.xml` ships with 0 A.D., complete and textured, 9.2 m wingspan. The nest is composed in-game from `prop_nest_bush`, `prop_standing_stone` and `prop_shrine_celtic`. **Static** — the model has no armature, so it cannot move until someone rigs it | A.3, A.8 |
-| A.10 | **Building roster, age by age** — §9.2's ~70 building bakes. Order by age, not by building: a complete age 1 settlement is playable and shippable, four half-skinned ages are not. Foundations and rubble stay keyed by footprint (A.2's convention) and so are shared across ages. **Measure all four skins of a building before declaring its footprint** — it is the max across ages, locked at placement (§13.2 item 10), so it cannot be read off the age-1 bake alone. **The first batch is five buildings**, not seventy: age 1 unlocks only the town centre, house, farm, mining camp and lumber camp, and that is a complete playable settlement. Age 2 adds eight more. Two free savings: the **props** on the composite buildings (`wood_lumber`, `stone_pile_granite`, the food piles) are the same gaia assets in all four ages, so bake them once and reuse across every skin; and the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2, which are both Celtic and so will look similar — it would save ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of trading the faction axis for the age axis. ✅ **Ground decals fixed 2026-08-15 (isobake ec72184), and this was nearly a roster-wide corruption.** 0 A.D. blends gravel and mud planes under its buildings using `<decal>` actors that carry no mesh; the Pyrogenesis importer brings them in as objects literally named `Decal`. Baked, a decal is not a blend — it is an **opaque rug**, and the Briton town centre carried a 7.5-tile gravel apron. **413 structure actors reference decals**, so this would have shipped on most of the building roster before anyone traced a "why does my building have a mat" complaint back to it. Stripping them took the town centre from 69.1% to 51.9% fill at the same page size. ⚠️ **Two age-1 building picks were also wrong** and are corrected in the recipes: the **lumber camp** is the Briton *kennel* (it had been storehouse), and the **mill** is `britons/special` — the only Briton actor carrying the `rotary_mill` props, since the roster's "Brit/Rotarymill" names a building by what is visibly on it rather than by 0 A.D.'s filename. `britons/farmstead` carries none of them. ⚠️ **The rotary mill's grinder assembly is mis-anchored: wrong position, wrong rotation, wrong scale.** Settled 2026-08-15 by a matched-rotation side-by-side from the project owner (Atlas left, isobake right). In 0 A.D. the donkey is harnessed to the grinder beam **at the centre of the building, under the open bay**, with a tall grindstone beside it. In our bake the whole assembly sits **outside and forward of the wall**, rotated wrongly, and **too small** — the grindstone reads as a low lump the donkey would step over rather than a stone it drags. All three symptoms have one cause. **The cause is the Pyrogenesis importer's root-attachment bug, and it is already documented in this codebase** — `_KNOWN_MISROOTED_PROP_OBJECTS` in `zeroad.py` records it for the Athenian shield's `Aspis_Back`: the importer resolves a nested `attachpoint="root"` against whatever mesh it imported most recently at that call depth, and falls through when there is none. `structures/britons/special.xml` attaches `rotary_mill_grinder.xml` at `attachpoint="root"`, and the importer prints *"Mill has no parent prop point named `prop_root`. Root object name: Undefined"* — a failed attachment. A failed attachment loses position and rotation; and because `COPY_LOCATION`/`COPY_ROTATION` **do not copy scale** (which is why `_attach_prop` sets `obj.scale` explicitly before constraining), it loses scale too. **Leading hypothesis, not yet verified in Blender — the scale is not lost uniformly, it is lost one level down.** The owner's specific observation is the clue: the grindstone reads *too small next to the donkey*, and in Atlas it stands nearly donkey-height. So the two are scaled **inconsistently**, which points at the donkeys rather than the stone — they are props-of-a-prop (`rotary_mill_grinder.xml` → `prop_donkey001/002`), and `_normalise_scale` only scales objects with `parent is None`. A bone-parented nested prop is not a root, so it never receives the ×0.5, while its parent does. An oversized donkey standing on the grinder's circle would look **both too big and pushed outward past the wall** — which is exactly the reported picture, and would mean position and scale are one bug and not two. **This is a hypothesis with a good fit, not a finding:** confirming it needs a Blender introspection run dumping each imported object's world scale and constraint targets, which is the next step and has not been done. ⚠️ **`Aspis_Back`'s fix does not transfer:** there the mis-rooted object was deleted, because a shield's back face is never seen. The grinder and its donkeys are wanted, so this needs **re-anchoring, not dropping** — attach root-attached props to the subject root with the subject's scale, i.e. do what the importer failed to do. **Two false leads, each of which looked stronger than the real cause:** *"it is a canvas problem"* (no — content measures 248.5 × 148.5, well inside `[320, 256]`; the pre-fix bake hid the donkey because the **decal** changed the framing), and *"every one of the 3 imported armatures is anchored; falling back to the first"* (a real warning, but for a **static** recipe every consumer of `Subject.armature` is skipped, so it cannot be causing this — it should still be fixed on principle, since a static subject with animated props has *no* subject armature and should return `None`). ⚠️ **Process note worth more than the fix:** the correct diagnosis was reached, then **withdrawn as unsupported**, then restored by the owner's side-by-side. It was withdrawn because the only comparison available was against an Atlas screenshot at a *different rotation* — the doubt was right, but the response should have been to *get a matched-rotation comparison*, not to retract a correct finding. Withdrawing a true claim for want of evidence costs as much as asserting a false one. ⚠️ **Composite props still unbaked** — 3× `wood_lumber` (lumber camp) and 3× `stone_pile_granite` (mining camp) need a `[source.extras]` feature in isobake to compose props onto a building; the dragon nest (A.9) needs the same one, so it is one feature serving three entries | A.2, A.6 |
-| A.11 | Walls and gates — ~16 pieces across three tiers, re-skinned in place like everything else. **Unblocked from the footprint side:** all wall pieces share one footprint and all towers another, across every civ (owner-verified in-game), so a tier can mix civs freely and the max-footprint rule costs nothing here. §9.2.1 item 3 is now only "which set looks right per age". The Athenian wall/gate/tower set is already baked (ASSET_MISSING §2.2) and is the proven template. ⚠️ **Every wall piece needs multiple directions, not 1** (project owner, 2026-08-15) — **a wall is not a building.** Buildings sit at one fixed orientation, which is why `directions = 1` is right for them and was copied to the walls without thinking. Walls *run*: they enclose a base, so every piece has to be placeable along either diagonal and facing either way, and one sprite cannot do that. Applied to `wall_{short,medium,long}` and `wall_gate`, **and to `rubble_wall_*` and `foundation_*_wall`** — a destroyed or under-construction segment has to line up with the run it sits in, so those three families move together or the seams show. ⚠️ **Set to 8, not the 4 that was asked for, because isobake rejects 4** — *"directions must be 1, 5 or 8"*. That is not an arbitrary limit: directions are **screen** compass points at 45° steps (`S SW W NW N NE E SE`), so a bare count of 4 does not say *which* four — starting at S gives S/W/N/E, starting at SE gives the diagonals — and `atlas.py`'s contract promises **every one of the 8 facings** resolves to a stored frame plus a flip, which 4 stored frames cannot satisfy without a format change. **8 is the value that cannot be wrong.** `5` (stored + mirrored to 8) would halve it and is probably valid, since a straight wall segment looks symmetric about the vertical screen axis — but that is a guess of exactly the kind that has already cost this project twice today, so it waits for someone to look at a turntable. Real 4-direction support is the proper fix and is an **isobake + atlas-format change**, not a recipe value. **This was found the expensive way:** `directions = 4` was written into ten recipes and into this plan as settled fact without ever being checked against isobake, and all ten failed the batch instantly. ⚠️ **A second claim made at the same time was also wrong, and it survived only because the canvases were generous.** It read: *"costs 4× the frames but not a bigger canvas — the two diagonals project to mirror-image bounding boxes of identical size"*. That is true of a **line**, and false of a **wall**. Rotating 90° **transposes** the screen bounding box: at S a wall segment renders wide-and-short, at W narrow-and-tall (verified on `vis.rubble_wall_medium`'s S/W/N/E frames). So a canvas measured against one orientation is not automatically valid for the other, and a wall canvas must clear **width from the S view and height from the W view**. All ten happened to pass with no clip warning, which is luck rather than the reasoning holding — the sizes had been set generously for a single orientation. Worth knowing before sizing any new wall piece, where a tight canvas would clip on exactly the two facings nobody checked. `tower.toml` stays at 1 — a wall tower is near-square and doubles as the corner by placement convention | A.10 |
+| A.1 | Terrain tile set from 0 A.D. ground textures — grass, dirt, sand, shallow + deep water, rock, forest floor, plus `vis.cliff`. All 64×32 exact, no fitting | ✅ — remaining are not tiles: transition/blend edges and shoreline |
+| A.2 | Town centre + house, each with foundation and rubble. Foundations and generic rubble keyed by **footprint size** so the rest of the roster reuses them. No damaged tier — 0 A.D. has none, and health is the dot | ✅ |
+| A.3 | Villager: 11 animations × **8** directions = 960 frames (8 not 5 — she holds an axe in one hand, so mirroring would swap it) | ✅ — one rebake owed (§13.2 item 9) |
+| A.4 | Resource nodes: gold, stone, berry bush, deer + carcass, boar, sheep, wolf, fish, six extra tree species | Largely ✅. Open: tree **size-class variants** and palms (both need variant selection in isobake — no deterministic actor exists), and `vis.farm`, blocked on a 64-instance prop scatter the importer collapses to one |
+| A.4a | **Animate the wildlife** — wolf, sheep, cattle. Every animal ships static, and every recipe justified it with "no clip attached, so the quadruped transfer bug never triggers" — **that bug is fixed**, so the justification outlived the problem. Wolf has the richest set and is the only animal needing an attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something. Deer and boar come free on the same path | Cost is the **per-clip measurement**, not the bake: `location_scale` is not a global constant (the deer death clip measured 0.0319) |
+| A.4b | **Two gaia food nodes have no art at all** — `res.cattle` (`cattle.toml` written, unbaked) and `res.bear` (no recipe). Missing, not placeholder | |
+| A.5 | UI chrome from the itch.io dragon packs | Largely in use |
+| A.6 | **Player colour — prerequisite, not polish** (§2.7 consequence 3). Bake untinted, emit the source alpha as a mask page, tint in a `canvas_item` shader. **Blend mode decided:** neither obvious option works — *multiply* (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the lightness ladder; *luminance-preserving hue transfer* destroys the ladder outright, since every colour inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the **base** level with the texture contributing only its **local deviation**: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, `k ≈ 0.8` scaled by remaining headroom so a light colour does not clip flat. **The mask needs its own greyscale page** (~+12% atlas bytes) — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | **Must land before A.8** |
+| A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | Unblocked, low priority |
+| A.8 | Military unit art — ~22 bakes, one hand-picked actor per unit, no per-age variants. **A full re-bake is owed on two counts and they should be spent together:** the corrected actors (§9.2) and the ground-decal strip. `vis.trebuchet`/`vis.trade_cart` stay blocked on isobake's armature picking and its lack of particle support for impact VFX. ~22 against the ~88 four factions would have cost is where the single-civilisation decision actually pays | **After A.6** |
+| A.9 | **Dragon + nest** — not bespoke after all: `fauna/dragon.xml` ships with 0 A.D., complete and textured, 9.2 m wingspan; the nest composes from existing gaia props | ✅ — **static**, the model has no armature |
+| A.10 | **Building roster, age by age** — ~70 bakes. **The first batch is five buildings, not seventy**: age 1 unlocks only town centre, house, mill, mining camp and lumber camp, which is a complete playable settlement. Age 2 adds eight. Two free savings: composite props are the same gaia assets in all four ages, so bake once and reuse; the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2 (both Celtic, so similar) — it saves ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of the age axis. **Measure all four skins before declaring a footprint** — it is the max across ages and cannot be read off the age-1 bake | In progress |
+| A.11 | **Walls and gates** — ~16 pieces across three tiers. Unblocked from the footprint side (all pieces share one footprint, all towers another, across every civ) | See the two findings below |
 
-A.1 and A.2 come first: cheap, transform the look, and validate the render pipeline before the expensive villager work.
+**Two art findings that cost real time and would cost it again.**
 
-✅ **The art track now has a batch runner, and it is what makes "re-bake everything" an
-affordable sentence.** `tools/bake_batch.ps1` builds many recipes unattended and reports at the
-end: one log per recipe, one failure never stops the batch, `isobake verify` runs per success so
-there is a contact sheet and turntable to actually look at, and recipes run in **priority order**
-rather than alphabetically — so a run that does not finish still leaves the most useful subset
-done. **`-Parallel 4` added 2026-08-15** (jobs, one Blender process per slot, verified on three
-concurrent recipes), which takes the 85-recipe batch from ~73 minutes to ~20. The ceiling is RAM,
-since every slot holds a full Blender scene.
+**The rotary mill's grinder assembly is mis-anchored** — wrong position, wrong rotation, wrong
+scale, all from one cause. `structures/britons/special.xml` attaches `rotary_mill_grinder.xml` at
+`attachpoint="root"`, and the Pyrogenesis importer resolves a nested root attachment against
+whatever mesh it imported most recently, then falls through when there is none (already recorded
+in `zeroad.py`'s `_KNOWN_MISROOTED_PROP_OBJECTS` for the Athenian shield). A failed attachment
+loses position and rotation — and scale too, because `COPY_LOCATION`/`COPY_ROTATION` do not copy
+it. **Leading hypothesis, not yet verified:** the scale is lost *one level down*. The grindstone
+reads too small **next to the donkey**, which points at the donkeys — they are props-of-a-prop, and
+`_normalise_scale` only scales objects with `parent is None`, so a bone-parented nested prop never
+receives the ×0.5 while its parent does. An oversized donkey on the grinder's circle would look
+both too big and pushed past the wall, which is exactly the reported picture. Needs a Blender
+introspection run dumping world scale and constraint targets. **`Aspis_Back`'s fix does not
+transfer** — there the mis-rooted object was deleted, because a shield's back is never seen; the
+grinder is wanted, so it needs re-anchoring, not dropping.
 
-⚠️ **Two pieces of shared state to respect while a batch runs.**
+**Every wall piece needs 8 directions, not 1 — a wall is not a building.** Buildings sit at one
+fixed orientation; walls *run*, so every piece must place along either diagonal facing either way.
+Applies to `wall_{short,medium,long}`, `wall_gate`, **and** `rubble_wall_*` and
+`foundation_*_wall` — a destroyed or half-built segment has to line up with the run it sits in.
+**8, not the 4 that seems obvious, because isobake rejects 4:** directions are screen compass
+points at 45° steps, so a bare count of 4 does not say *which* four, and the atlas contract
+promises all 8 facings resolve to a stored frame plus a flip. `5` would probably work for a
+symmetric segment but waits for someone to look at a turntable. And a second claim made at the
+same time was wrong: *"4× the frames but not a bigger canvas, since the two diagonals project to
+mirror-image boxes"* is true of a **line** and false of a **wall** — rotating 90° **transposes**
+the screen bounding box (wide-and-short at S, narrow-and-tall at W), so a wall canvas must clear
+**width from the S view and height from the W view**. Ten recipes passed anyway, on generous
+sizing rather than on the reasoning holding.
 
-**The 0 A.D. checkout.** Baking rewrites source `.dae` files in place — the Pyrogenesis
-importer's doing — and `isobake` restores them via `preserve_sources()`, including on failure but
-**not if the process is killed**. So an interrupted batch leaves the checkout suspect and it
-should be checked before the next run. Two parallel recipes loading the *same* `.dae` could also
-race; in practice concurrent recipes are different actors, which makes this worth knowing rather
-than worth fearing.
+**Still unbaked:** the composite props — 3× `wood_lumber` (lumber camp), 3× `stone_pile_granite`
+(mining camp) — need a `[source.extras]` feature in isobake to compose props onto a building. The
+dragon nest needs the same one, so it is **one feature serving three entries**.
 
-**`isobake` itself, which is an *editable* install** (`__editable__.isobake-0.1.0.pth` in the
-venv). The batch launches a **fresh `isobake.exe` per recipe**, so editing the isobake source
-mid-run changes behaviour *partway through the batch* — the recipes that already ran used the old
-code and the rest use the new, with nothing in the logs marking where the change landed. An
-81-recipe run would produce a silently mixed set. **So: do not touch `isobake/` while a batch is
-in flight.** Finish the run, or kill it deliberately (and then check the checkout, above). This
-is the same hazard as the `.dae` rewriting, one level up — the tool is as much shared mutable
-state as the art is.
+**Batches run 2-wide** (`-Parallel 2`), not 4 — the ceiling is RAM, since every slot holds a full
+Blender scene, and 4 saturates the owner's workstation while they are using it.
+
+⚠️ **Two pieces of shared mutable state while a batch runs.**
+
+**The 0 A.D. checkout.** Baking rewrites source `.dae` files in place (the Pyrogenesis importer's
+doing) and `isobake` restores them via `preserve_sources()` — including on failure, but **not if
+the process is killed**. An interrupted batch leaves the checkout suspect; check it before the
+next run.
+
+**`isobake` itself, which is an *editable* install.** The batch launches a fresh `isobake.exe` per
+recipe, so editing isobake source mid-run changes behaviour **partway through the batch**, with
+nothing in the logs marking where. **Do not touch `isobake/` while a batch is in flight.**
 
 ---
 
@@ -1882,63 +1254,59 @@ state as the art is.
 
 ### 13.1 Standing policies (approved)
 
-- **Third-party open-source code and addons may be used freely** Ã¢â‚¬â€ Godot RTS templates, pathfinding/flow-field addons, fog-of-war addons. Requirement: **credit only what is actually used**, recorded in `CREDITS.md` + `assets/LICENCES.md`, and the licence must be compatible with an open-source CC-BY-SA art release.
-- **Reference engines may be studied for design** (`OpenRA`, `0 A.D.`, `Spring/Recoil`, `Widelands`) Ã¢â‚¬â€ netcode models, data formats, pathfinding approaches. Credit when code or assets are actually taken, not for reading.
+- **Third-party open-source code and addons may be used freely.** Requirement: credit only what is actually used, in `CREDITS.md` + `assets/LICENCES.md`, with a licence compatible with an open-source CC-BY-SA art release.
+- **Reference engines may be studied for design** (`OpenRA`, `0 A.D.`, `Spring/Recoil`, `Widelands`) — netcode models, data formats, pathfinding. Credit when code or assets are actually taken, not for reading.
 
 ### 13.2 Genuinely open
 
 | # | Item | Owner |
 |---|---|---|
-| 1 | ~~**Does the render pipeline produce usable sprites?**~~ Ã¢Å“â€¦ **ANSWERED at 0.9 Ã¢â‚¬â€ yes.** Proven on a grass tile, an oak and a 240-frame animated citizen. A.3 can be scheduled | Ã¢Å“â€¦ 0.9 |
-| 2 | **Which 0 A.D. actors map to our entities.** Their unit set is ancient-warfare, ours is medieval-fantasy Ã¢â‚¬â€ needs a hand-picked actorÃ¢â€ â€™`vis.*` mapping, and some entities may have no good match. Three picked at 0.9 (`grass/grass1`, `flora/trees/oak`, `units/athenians/female_citizen`), six more at A.2 (the Athenian civic centre and Hellenic house plus their foundations and rubble Ã¢â‚¬â€ same civ as the villager, so the settlement reads as one architectural style); the mapping lives in `tools/recipes/`. `vis.deer` (`fauna/deer.xml`) and `vis.gold_mine` (`geology/metalmine_alpine.xml`) picked at A.4, so **every MVP entity now has an actor**. Two findings from the gold mine worth carrying to the rest of the roster: (a) civ consistency is the right default for *architecture* but not for scenery Ã¢â‚¬â€ the civ-matching `metalmine_granite_greek` lost to alpine purely because its texture reads as moss rather than ore, and all the old-generation ore actors share one mesh and differ only in texture; (b) 0 A.D.'s newer, better-sculpted asset generations are often authored sunk into terrain and so are *blocked behind the z=0 ground clip* (item 7a), which makes that fix an art-quality unlock and not just a cosmetic tidy-up | Ã¢Å“â€¦ A.4 |
-| 3 | ✅ **ANSWERED 2026-08-15 by the project owner — LATIN, one voice set for every unit in every age.** 0 A.D. ships `global`, `greek`, `latin`, `napatan`, `persian` and **no Celtic, Gaulish or Briton set exists** — which is the question that was actually being asked when the units-are-Celtic error happened (§2.7), and it never had a Celtic answer. `global` is not a neutral fallback either: it is four dog-bark files. Latin is the strongest of the three real options — Iron Age Europe, literally correct for the age-4 Roman skin — and it carries a **deliberate lorem ipsum throwback**: placeholder Latin is the oldest joke in typesetting, and a game whose units answer in it is in on the joke. That turns "it is not a real language to the player" from a compromise into the point, which it could never be for Greek or Persian. **One consequence to accept knowingly:** unit voices are the most expensive asset class to re-record per language, so this puts them on the localisation surface permanently — the superseded recommendation avoided that by having no speech at all. Take the non-speech trees whole as it proposed (`audio/{actor,attack,resource,interface,ambient,music}`) and add `audio/voice/latin`. **Superseded recommendation (2026-08-14, never ratified): no spoken language at all** — the four ages span Celtic, Persian and Latin, so no voice set is internally consistent, and a unit answering in Greek in age 3 and Latin in age 4 is worse than one that never speaks; use a non-verbal cue instead. The premise was right and the conclusion did not follow: **one set used in all four ages is internally consistent by construction, because it never changes.** Per-age voices were the problem, not voices. Original item: **Audio fit** — 0 A.D. audio exists and is licence-clean, but its voices are civilisation-specific (`greek`, `latin`, `napatan`, `persian`) and will not suit. Decide what is reusable vs newly sourced | ✅ A.7 |
-| 4 | ~~**Icon volume**~~ Ã¢Å“â€¦ **ANSWERED Ã¢â‚¬â€ generate.** 15 icons delivered at 0.3 staging, AI-generated (Google Gemini) at 100Ãƒâ€”100 RGBA from a 5Ãƒâ€”5 source sheet: 5 resource (`res_food/wood/gold/stone/villagers`) and 10 action (`res_`/`act_` prefixes group them by the panel that uses them). Live in `game/assets/ui/icons/`; the sheet stays in `Icons/` as the source, with **10 empty slots** for the rest. A further 5 HUD buttons landed the same way (`hud_techtree/score/trade/chat/settings`, from `MapIcons_500x100.png`) for the corners around the minimap panel Ã¢â‚¬â€ 20 icons total. Still to draw: unit/building portraits for the selection panel and control-group slots, and the trebuchet pack/unpack pair `icons.txt` lists but the sheet does not yet have. Their placement around the minimap panel is settled (`Icons/map_icons.txt`): **TechTree** top-left, **Score** top-right, **Trade** bottom-left (enabled once a market exists), **Chat** bottom-right. `hud_settings` is spare. Note `act_enter`/`act_garrison` and `act_exit`/`act_leave` are two pairs covering one concept each Ã¢â‚¬â€ decide whether they are distinct actions (board transport vs garrison building) or two takes on one, and reclaim the spares if the latter | mostly closed |
-| 5 | **Second pack mirror** Ã¢â‚¬â€ primary is settled: `https://aod.dragoon.co.za/` (Ã‚Â§3.2), unconstrained. A fallback is still unpicked; GitHub Releases is the obvious candidate since the repo is already there. Costs nothing to defer Ã¢â‚¬â€ `packs.json` carries a URL *list* per pack, so adding a mirror is a manifest edit with no client change | before first public build |
-| 6 | **Device reach on Compatibility** Ã¢â‚¬â€ confirm the target phone runs it cleanly at 0.1. Known Android driver issues cluster on Mali/MediaTek/Adreno under Vulkan, which is the reason for the Ã‚Â§1 renderer choice | 0.1 |
-| 8 | ✅ **FIXED, not merely diagnosed** — `isobake` gained `anims.<name>.location_scale`, which multiplies a transferred clip's pose-bone location curves by a measured correction factor: exactly the fix this item proposed ("scale each action's location F-curves by that ratio — cheap once") and never implemented. Proven by `vis.deer_carcass`, measured at `0.0319` for that clip, close to the 3.70/116 ratio predicted below. It is **per clip, not a global constant**, and it unblocks every quadruped on the same import path — boar, sheep, wolf, and cavalry mounts later. A small tear remains at the deer's neck/antler seam that does not track with the scale value, so it reads as a skinning-weight seam rather than a curve error, and is accepted at placeholder quality. Original diagnosis: Found baking `vis.deer`, which therefore ships **static** for MVP (A.4). Bone names are not the problem Ã¢â‚¬â€ 36 of 37 transfer, 97%. The sizes are: `skeletal/deer_mesh.dae` imports through the Pyrogenesis importer at 0.82 Ãƒâ€” 4.36 Ãƒâ€” 3.70 units, while `quadraped/deer_walk_01.dae`'s own rigged figure imports through Blender's COLLADA importer at 418 Ãƒâ€” 383 Ãƒâ€” **116** units Ã¢â‚¬â€ roughly **31Ãƒâ€” apart**. Pose transforms are stored relative to rest, so every location curve is ~31Ãƒâ€” too large and the mesh tears into spikes; it reads as a broken rig rather than a units error. Both files declare `<unit meter="0.0254" name="inch"/>`, so the two import paths apply the *same* declaration differently. Bipeds are unaffected because their clips declare metres and their two rigs measure identically. **Two dead ends worth not repeating:** bone *length* is not a usable scale metric (the Pyrogenesis importer fabricates near-zero lengths Ã¢â‚¬â€ the actor's longest bone reads 0.050 on a 4-unit model), and comparing bone rest *positions* is swamped by where 0 A.D. parks a clip skeleton, whether measured from the armature origin or from the root bone. The one sound measurement found is the ratio of the two figures' **mesh bounding boxes**. Fix is either to make both import paths honour the declared unit identically, or to scale each action's location F-curves by that ratio Ã¢â‚¬â€ cheap once, and it unlocks every quadruped (deer, boar, sheep, and cavalry mounts later) | A.4 / post-MVP |
-| 9 | ⏸️ **DEFERRED by the project owner, 2026-08-08.** A `height_m = 1.93` rebake was tried and reverted: the existing 2.178 m bake is confirmed good on device — frames correct, no clipping — and a working pre-MVP asset is not worth disturbing. Revisit as polish once the game otherwise works. One coupling worth knowing: §9.2.1 item 2 has to re-point her at a Briton actor eventually, which forces a rebake of her 960 frames anyway, and that is the moment the height fix becomes free. Original analysis: **The villager is 2.18 m tall Ã¢â‚¬â€ too tall for a woman, and the fix is a recipe override, not a pipeline bug.** Measured directly with `isobake inspect`, which reports raw 0 A.D. units: `units/athenians/female_citizen` is 1.934 Ãƒâ€” 0.871 Ãƒâ€” **4.356** units, and at the pipeline's tile-to-tile factor of 0.5 that is **2.178 m**. The deer is 4.040 units Ã¢â€ â€™ **2.020 m**. So she stands 16 cm *taller than a stag*, which is the wrong way round and is exactly what was flagged by eye at A.4. Note Ã‚Â§2.2's "a citizen measures 3.85" does not match this actor Ã¢â‚¬â€ 3.85 is some other citizen or excludes props, and 4.356 is the measured figure for the one we actually use. `villager.toml` declares no `scale` and no `height_m`, so she simply inherits 0 A.D.'s own proportions, and 0 A.D. authors humans large relative to its tile scale. **The fix is one line:** `height_m` on the recipe, which exists precisely as "the escape hatch for a model that was authored off-scale", plus a rebake of her 960 frames. It does not touch the global `pixels_per_metre` and so cannot disturb any other asset. Open question is only what height to pick Ã¢â‚¬â€ 1.7 m makes her clearly shorter than the stag; 1.75Ã¢â‚¬â€œ1.8 keeps her readable at sprite size on a phone. **Correction:** an earlier version of this item claimed she was baked ~2Ãƒâ€” oversized (3.75 m) and blamed isobake's armature path. That was wrong. It came from back-solving height out of the trimmed sprite bounds, which does not work Ã¢â‚¬â€ a silhouette's topmost pixel sits at no predictable diamond offset, and the same arithmetic predicts 308 px above the anchor for the town centre against a measured 210. **That retraction was itself wrong, and is hereby withdrawn: there *was* an armature bug, and the original ~2x claim was right.** Fixed in `isobake` c540874. A 0 A.D. animation `.dae` is a whole rigged figure, so its imported action keys the armature *object's* `location`, `rotation_quaternion` and `scale` alongside the pose; assigning it reset the pipeline's x0.5 unit conversion to 1.0 and the villager baked at double size. Confirmed by dumping the armature's world scale under the pose (0.5 before the clip was assigned, 1.0 after) and by the re-bake: `idle` sprites went 88 px to 44 px tall, the atlas page 4.98 MB to 1.81 MB, and she now stands comparable to the 50x60 px deer instead of dwarfing the town centre. It stayed hidden because it was uniform -- `idle` runs first and resets the scale, nothing puts it back -- and it only ever manifested once the clips actually played, i.e. after the action-slot fix; before that the armature sat at rest pose and the curves never applied. So the lesson is the opposite of the one recorded here: **`inspect` was the wrong instrument and gave a false all-clear**, because it neither applies scale normalisation nor attaches a clip -- it can only ever report the raw rest pose. What it does measure correctly is the 4.356 raw units / 2.178 m above, so this item's real point stands: she is still 2.178 m and still taller than a stag, and that remains a recipe `height_m` decision | A.3 rebake |
-| 7 | **Source-mesh defects carried into the bakes.** Two; (a) is now **FIXED**, (b) remains **accepted as-is for MVP** by explicit decision Ã¢â‚¬â€ they are recorded here so they are chosen rather than forgotten. (a) **Buried geometry, and it is not only buildings.** The town centre hangs 2.7 m of below-ground wall under its ground line, the 3Ãƒâ€”3 rubble 1.8 m, the house 0.7 m (ASSET_MISSING.md (removed 2026-08-16, see the note at the top) Ã‚Â§1.2). **DONE** — `isobake` gained `render.ground_clip`, which bisects every mesh at world `z = 0` and discards what is below; the three building recipes set it and were re-baked (town centre 383 to 329 px and 9.48 to 6.70 m, rubble 194 to 146 px, house 221 to 194 px, widths unchanged). Worth knowing it had to be a 3D cut, not a crop of the finished frame: `z = 0` projects to a diamond spanning most of the frame's height, so any horizontal cut deep enough to lose the skirt also loses the front of the building. Also, the burial ran **deeper than the pixel estimates** here suggested (2.53 m under the house, not 0.7) because a skirt directly under a building hides behind its own ground diamond and only the overhang shows. Per the note below this unblocks the better ore sculpts, so that upgrade is now purely an art choice. **A.4 found this is a whole-asset-set problem, not a building one, and that it now costs us art quality rather than just polish.** 0 A.D.'s newer ore sculpts are authored half-sunk into terrain Ã¢â‚¬â€ `gaia/stonemine_round_a_small_01.dae` spans z Ã¢Ë†â€™3.515 to +4.032, so **47%** of the rock is below the ground plane, and the square variants reach **64%**; on a baked sprite the anchor lands mid-pile with 54 of 94 px hanging below it. That set (`metal_<biome>_round|square|small`, 328 verts and a 2048 px texture) is strictly better art than the 68-vert, 128 px old generation we shipped `vis.gold_mine` from, and the *only* thing keeping us on the worse art is this clip. So the fix upgrades the mine, unblocks the better stone-mine and boulder sets, and squares the buildings Ã¢â‚¬â€ treat it as the first item of the post-MVP art pass, not the last. **DONE 2026-08-17, and it was that first item.** All five ore recipes set `render.ground_clip`; the eight roster bakes landed in 1.5 min (three gold, two stone, three trees) and are wired. The size classes now pick the SPRITE as well as the amount (`resources.json` `visuals`), so a rich seam and a poor one are finally different pictures rather than the same one with a different number behind it -- which is the whole reason this clip mattered. `vis.gold_mine` grew about 3x on the re-point and `vis.stone_mine` shrank about 3x; both placeholders were re-derived from the new atlases. Their engine gets away with it via terrain occlusion plus `<Position><Anchor>pitch-roll</Anchor>`, which is why the source looks fine in-game. (b) **Villager `work_mine` dress distortion:** a dress vertex weighted 100% to `hand_L` in the source mesh drags a fold of fabric when the mining clip's hand pose diverges from the citizen's native poses. Fix is re-weighting that vertex or clamping the vertex group at import. Both are single-pass jobs on the art track and neither blocks a gameplay phase Ã¢â‚¬â€ schedule them together after MVP | post-MVP art pass |
-| 10 | ✅ **ANSWERED — (a): buildings and walls re-skin in place as their owner advances.** Decided by the project owner, together with the footprint rule below. The rejected options are kept because they are the reason the footprint rule exists. **(a)** Every building of that player switches skin the tick the age advances — one seam change (`visual_for_phase(phase)` becomes `visual_for(phase, age)`), no new sim state, since `SimPlayer.age` already rides `player_state` (10.6). **(b)** A building keeps the skin it was built in — needs a `built_in_age` field on `SimBuilding` and puts it in `state_hash()`, and gives a mixed-era town, which may be the more interesting picture. **(c)** An explicit paid upgrade per building (5.3), most player agency and most UI. **(a) recommended**: cheapest, and it makes advancing an age visibly worth it, which is the entire point of the age axis replacing the civ axis. Foundations and rubble stay keyed by footprint, which is what makes (a) safe to ship. **The footprint is locked at placement to the MAXIMUM across all four age skins** — an age-1 building claims the tiles its age-4 form will need, so it is deliberately bigger than it looks and the early art sits inside that with slack. The alternative is a re-skin that can *fail*: a neighbour in the way, or a wall one tile thick where the age-4 piece is two, and there is no acceptable outcome for a standing building that no longer fits — refusing the re-skin gives a mixed-era town by accident instead of by design, and moving or destroying it is worse. Implement the lookup as skin resolution over a `(faction, age)` key rather than an age special case (§2.7.1): the faction dimension returns at 9.5 and it is the same lookup | 9.6 / A.10 |
-| 11 | ✅ **ANSWERED 2026-08-14 — palette in `game/data/colours.json`**, read by `GameDataRegistry.colour(index)` and indexed by `SimPlayer.colour`. Eight hues cannot all be told apart by hue alone: red-green colour blindness (~8% of men) collapses red, orange, green and yellow onto one axis, so **those four are separated by lightness instead** — each colour sits on a rung of a CIE L\* ladder, family members ~16 L\* apart. `#0043D6` blue (L\* 36) · `#D50032` red (45) · `#FFEB00` yellow (92) · `#00E5FF` cyan (84) · `#00A344` green (59) · `#B44DFF` violet (54) · `#FFAB00` orange (76) · `#FFFFFF` white (100). Pairs that sit *close* in L\* (violet 54 / green 59, blue 36 / red 45) are always in **opposite** families, so they separate on the blue-yellow axis every colour blindness preserves; no pair is close on both. **Slot order is part of the design**: most matches are 1v1 or 2v2, so slots 1–4 are the four most separable (blue, red, yellow, cyan — every pair either cross-axis or ≥ 39 L\* apart), and green sits at slot 5 so it never meets yellow before a 5-player game. Order is the contract (index 0 = player 1) and is pinned by tests, since reordering repaints every existing save and replay. **What this still depends on is A.6's blend mode** — see the note there; a pure multiply compresses the whole ladder and makes white a no-op | A.6 / 1.6 |
+| 5 | **Second pack mirror.** Primary is settled (`aod.dragoon.co.za`); GitHub Releases is the obvious fallback. Costs nothing to defer — `packs.json` carries a URL *list*, so adding one is a manifest edit | before first public build |
+| 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
+| 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |
+| 4b | **`act_enter`/`act_garrison` and `act_exit`/`act_leave`** are two icon pairs covering one concept each — decide whether they are distinct actions (board transport vs garrison building) and reclaim the spares if not | with 4.8 |
+
+**Retired open items**, kept as one-liners because they were expensive to answer: the render
+pipeline produces usable sprites (0.9); actor→entity mapping is complete for all 23 buildings, 22
+units and 9 resource nodes; icon volume answered by generating them; Compatibility renderer
+confirmed on device; quadruped animation transfer **fixed** via a per-clip `location_scale`
+correction (the two rigs describe one skeleton ~31× apart, and bone *length* is not a usable
+metric — the importer fabricates near-zero lengths); buried geometry **fixed** via
+`render.ground_clip`, which had to be a 3D cut at `z = 0` rather than a crop, since `z = 0`
+projects to a diamond spanning most of the frame — and it unlocked 0 A.D.'s better ore sculpts,
+which are authored up to 64% below the ground plane; buildings re-skin **in place**; the colour
+palette is settled (§9).
 
 ---
 
 ## 14. Risk register
 
+Live risks only. Retired ones are in `b904b76`.
+
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Art production is the long pole | **High** | Placeholders (Ã‚Â§2.4) keep it off the critical path; art track runs async; cheap wins first |
-| ~~3DÃ¢â€ â€™iso render pipeline doesn't produce usable sprites~~ | ~~**High**~~ | Ã¢Å“â€¦ **RETIRED.** Proven on a grass tile, an oak and an 11-animation, 960-frame citizen. (The 0.9 claim of a "240-frame animated citizen" was wrong in a way nothing caught until now: every clip was silently rendering rest pose, see the action-slot risk below.) The Widelands / Unknown Horizons fallbacks are no longer needed |
-| **Blender 5.x silently breaks the pipeline** Ã¢â‚¬â€ COLLADA import was removed in 5.0 and 0 A.D. ships `.dae` | **High** | Hard-pin **4.5 LTS** (Ã‚Â§1.3), supported to Jul 2027. Do not let an auto-update move it. A community 5.x `.dae` importer exists but is unvetted |
-| ~~Animation import is a manual step~~ | ~~Medium~~ | Ã¢Å“â€¦ **RETIRED at 0.9.** `isobake` attaches the clips itself, and transfer is by bone name with no retarget rig Ã¢â‚¬â€ a gatherer clip drives 83 of an actor's 102 bones; the 19 it misses are prop attach points that follow their parents |
-| ~~Animation-variant props are not imported~~ | ~~Medium~~ | Ã¢Å“â€¦ **RETIRED.** `isobake`'s zeroad adapter now reads a variant's `<props>` alongside its `<animations>` and constrains the prop mesh to the armature's `prop_<attachpoint>` bone, visible only while that clip plays. The villager now chops holding her axe and carries wood at her hip; `villager.toml` moved to `directions = 8` accordingly (Ã‚Â§2.5) |
-| ~~Every animation silently rendered rest pose~~ | ~~**High**~~ | Ã¢Å“â€¦ **RETIRED.** Blender Ã¢â€°Â¥4.4's layered-action system needs `animation_data.action_slot` set explicitly; `isobake` was only ever setting `.action`, so no curve in any clip drove anything, and it looked fine because nothing was checked against a moving reference. Fixed in `render_impl.py`. This is why villager frame counts and canvas size both changed after 0.9 Ã¢â‚¬â€ the frozen renders never exercised real motion range |
-| **0 A.D. clips bake in absolute root-bone motion** Ã¢â‚¬â€ a gather clip's hip can drift over a metre from wherever the animator placed the character, well past what a fixed camera anchored on world (0,0,0) can frame | Medium | `render_impl.py` cancels the root bone's horizontal (X/Y) drift every frame, holding it at its rest-pose position; vertical motion (a fall, a crouch) is left alone since that is the real, wanted signal |
-| ~~**Quadruped animations do not transfer onto their own mesh**~~ ✅ **RETIRED** — fixed in `isobake` via a per-clip `location_scale` correction (§13.2 item 8); the deer still ships static for MVP because nothing needs it moving, not because it cannot. Original: Ã¢â‚¬â€ the clip files and the mesh file describe one skeleton ~31Ãƒâ€” apart, so location curves overshoot and the mesh tears **Follow-up 2026-08-15: the workaround outlived the fix.** Every animal recipe still justified shipping static with "no clip attached, so the bug never triggers" — true, but the bug was fixed months of work ago and the sentence kept the animals frozen anyway. Wolf, sheep and cattle are now scheduled as **A.4a**, with their source clips inventoried; deer and boar come free on the same path. Worth generalising: **a workaround written as a justification does not announce itself when the problem goes away.** | Medium | Measured at A.4 (Ã‚Â§13.2 item 8). `vis.deer` ships **static** for MVP, which costs nothing on the MVP path Ã¢â‚¬â€ 6.1a only needs a huntable food node, and roaming is 6.1b Ã¢â‚¬â€ but leaves the gatherable carcass without art. Bipeds are unaffected and independently verified: the villager's two rigs measure identically |
-| **0 A.D. building meshes carry a skirt below `z = 0`** for the terrain to hide, and a baked sprite has no terrain to hide it | Low | Measured at A.2 on three of six: the town centre buries **2.7 m** (52 px below the ground line), the 3Ãƒâ€”3 rubble 1.8 m, the house 0.7 m; both foundations and the civic-centre ruin are clean. Confirmed as buried geometry rather than an off-centre footprint by rendering at 0Ã‚Â° and 180Ã‚Â° and watching the excess stay below the anchor both times. Cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7, where one ground clip at `z = 0` in `isobake` fixes the whole class including every building added later |
-| **A source-mesh vertex-weight quirk distorts `work_mine`** Ã¢â‚¬â€ a dress vertex is weighted 100% to `hand_L`, and the mining clip's hand pose is far enough from the citizen's native poses that it drags a fold of fabric with it | Low | Isolated to one clip, cosmetic, **accepted for MVP** Ã¢â‚¬â€ tracked as Ã‚Â§13.2 item 7 alongside the buried building skirts, since both are source-mesh defects fixed in one post-MVP art pass. Fix is either re-weighting that vertex or clamping the offending vertex group at import time |
-| ~~0 A.D. actors don't map cleanly to a medieval-fantasy roster~~ | ~~Medium~~ | ✅ **LARGELY RETIRED.** [Age & Unit Planning.md](<Age & Unit Planning.md>) now names an actor for all 23 buildings, 22 units and 9 resource nodes in §9.2; only the dragon needs bespoke art (A.9), and even its nest is composed from existing gaia props. What is left is verification rather than selection — some picks will look wrong once baked, as the gold mine already did. Original mitigation: hand-pick the actorÃ¢â€ â€™`vis.*` mapping (Ã‚Â§13.2 item 2); some entities may need bespoke art |
-| **The roster names entity templates and the recipes want actors, so a recipe can silently bake the wrong thing** | **Medium** | Not hypothetical: one pass on 2026-08-15 found **nine** recipes disagreeing with the roster — 5 units the project owner caught, 4 more found while fixing those (§9.2.1 item 10), plus the sheep and the cattle. Every one was a plausible-looking actor picked by NAME rather than resolved. Mitigation is the boxed rule in §9.2: resolve `simulation/templates/...` to its `<VisualActor><Actor>` and paste **that**, for units, buildings and gaia alike. The failure mode is quiet — a wrong-but-real actor bakes cleanly and looks fine — so it needs a rule rather than care. **The strongest evidence it has to be mechanical:** `fishing_ship` and `transport_ship` were guessed the same way, one landed and one did not, and nothing distinguished them beforehand |
-| **A 0 A.D. actor can carry art that is invisible in their engine and opaque in ours** | Medium | Ground `<decal>` actors are the proven case — mesh-less blend planes that bake as opaque rugs, on **413 structure actors** (fixed 2026-08-15, A.10). The class is "art whose correctness depends on the engine compositing it", so the next instances to expect are anything leaning on terrain occlusion, alpha sorting or particles. Two are already known: buildings authored sunk below `z = 0` (fixed by `ground_clip`, §13.2 item 7) and impact VFX with no particle support at all (ASSET_MISSING §2.1). The mitigation is the same every time — bake it, **look at the contact sheet**, and never conclude it is fine because it looked fine in Atlas |
-| **Accidentally shipping an unlicensed asset** — ⚠ **this risk has MATERIALISED, measured 2026-08-15** | **High** (was Medium) | `licence_audit.py` + `LICENCES.md` from 0.2c — but run manually, and the habit did not hold: a run on 2026-08-15 reports **FAIL with 89 problems** across 86 recipes and 44 shipped asset files. Roughly 60 are baked `vis.*` IDs never declared (walls, trees, wolf, wonder, trebuchet and more) and ~14 are shipped UI PNGs (the menu button set, HUD panels, control-group ring) with no provenance at all. **Most of it is one command:** `licence_audit.py --write` regenerates the recipe table from the recipes themselves, idempotent and hash-verified, which clears the recipe-side entries; the UI assets need provenance decided by hand, since they came from the itch.io dragon packs and from Gemini. This is exactly the drift 0.2c predicted — the note there already says "the mitigation is only as good as the habit until CI exists (§1.2)" — so the lesson is not that the tool failed but that **a manual gate with no CI degrades silently and needs a scheduled run**, e.g. once per art batch |
-| CC-BY-SA attribution missed | Medium | `CREDITS.md` + in-game Credits screen from 1.4; per-pack licence files |
-| **Player colour is baked into the atlas** — `isobake` multiplies 0 A.D.'s player-colour mask in at bake time, so one atlas is one colour. With colour the only difference between players (§1), 8 players would mean 8 bakes of every unit | **High** | A.6, promoted from polish to prerequisite: bake untinted, emit the mask, tint in a shader (§2.7). Cheap because the mask is already in hand — it is the source texture's alpha — but it invalidates every unit bake made before it lands, so it must come **before** A.8's ~28 military bakes, not after |
-| **The age axis multiplies building art by four** — §2.7 replaces one civ choice with four age skins, so 5.7's "low effort, data-driven" roster carries ~70 bakes | Medium | A.10 orders the bakes **by age**, so a complete age 1 is always shippable and the roster degrades gracefully rather than leaving four half-skinned ages. Foundations and rubble stay shared by footprint |
-| **The age skin lookup gets written as an age special case**, and widening it to factions at 9.5 then touches every call site | Medium | §2.7.1: one `(faction, age)` skin key from the start, `faction.default` the only faction value in v1, missing entries falling back to it. Costs nothing now — the field and the JSON entry both already exist — and it is the difference between a re-skin civ being content work and being a refactor |
-| Pathfinding stalls at scale | Medium | Per-tick path budget from day one; flow fields in reserve |
-| GDScript too slow at 200 units | Medium | Measure on device from 0.7; targeted GDExtension only if proven |
+| Art production is the long pole | **High** | Placeholders keep it off the critical path; art track runs async; cheap wins first |
+| **Blender 5.x silently breaks the pipeline** — COLLADA import was removed in 5.0 | **High** | Hard-pin **4.5 LTS** (§1.3), supported to Jul 2027. Do not let an auto-update move it |
+| **Player colour is baked into the atlas** — one atlas is one colour, and colour is the only thing distinguishing players | **High** | A.6, prerequisite not polish: bake untinted, emit the mask, tint in a shader. Cheap (the mask is the source alpha) but it invalidates every unit bake made before it, so it must land **before** A.8's ~28 military bakes |
+| **Accidentally shipping an unlicensed asset** — ⚠ **has MATERIALISED**: a 2026-08-15 run reported **FAIL, 89 problems** across 86 recipes and 44 files | **High** | `licence_audit.py --write` regenerates the recipe table idempotently and clears most of it; the UI assets need provenance decided by hand. The lesson is not that the tool failed but that **a manual gate with no CI degrades silently** — schedule a run once per art batch |
+| Scope creep | **High** | §12 governs what gets built |
+| **The roster names entity templates and recipes want actors**, so a recipe can silently bake the wrong thing | **Medium** | Not hypothetical: one pass found **nine** wrong recipes plus the sheep and the cattle, every one a plausible-looking actor picked by NAME. Mitigation is the boxed rule in §9.2 — resolve the template to its `<VisualActor><Actor>` and paste **that**. The failure mode is quiet, so it needs a rule rather than care |
+| **A 0 A.D. actor can carry art that is invisible in their engine and opaque in ours** | Medium | Ground `<decal>` actors were the proven case, on **413 structure actors**. The class is "art whose correctness depends on the engine compositing it" — expect anything leaning on terrain occlusion, alpha sorting or particles. Mitigation is always the same: bake it, **look at the contact sheet**, and never conclude it is fine because it looked fine in Atlas |
+| **The age axis multiplies building art by four** | Medium | A.10 orders bakes **by age**, so a complete age 1 is always shippable rather than four half-skinned ages. Foundations and rubble stay shared by footprint |
+| **The age skin lookup gets written as an age special case**, so widening it to factions at 9.5 touches every call site | Medium | §2.7.1: one `(faction, age)` key from the start. Costs nothing now — the field and the JSON entry both exist |
+| **The snapshot is not a delta**, and the client currently reads absence as invisibility | Medium | §7.2. A real delta must add an explicit per-entity "lost sight of X" signal that does **not** enumerate hidden ids |
+| **Map size drives fog and wire cost linearly** | Medium | §11.2's `side = 64 * sqrt(players)`; fog delta encoding in §12.1 (f) |
+| Pathfinding stalls at scale | Medium | Per-tick budget from day one; flow fields in reserve |
+| GDScript too slow at 200 units | Medium | Measure on device; targeted GDExtension only if proven |
 | Mobile thermal throttling | Medium | 10 Hz sim, pooled views, draw-call budget, sustained-load testing |
 | Asset pack download fails / user offline | Medium | Game runs on placeholders; packs are `required: false` |
-| ~~Per-frame anchor jitter~~ | ~~Medium~~ | Ã¢Å“â€¦ **ELIMINATED at 0.9**, not mitigated. Anchors come from the projected world origin, which is a constant for a fixed camera and a subject rotating about world Z, so there is nothing left to jitter (Ã‚Â§9.1) |
-| WSL/Docker fighting Android USB deploy | Low | Ã‚Â§1.2 Ã¢â‚¬â€ native Windows for editor + deploy |
-| Scope creep | **High** | The `[MVP]` tag is a hard gate; Ã‚Â§12 governs after |
+| WSL/Docker fighting Android USB deploy | Low | §1.2 — native Windows for editor + deploy |
 
 ---
 
 ## 15. Immediate next actions
 
-1. **Create the Godot 4.x project at `game/` and deploy an empty landscape scene to a physical Android device** (0.1). Before any gameplay code, natively on Windows.
-2. **Build the asset seam + placeholder renderer** (0.2a/0.2b) Ã¢â‚¬â€ makes every gameplay phase independent of art.
-3. **Stand up `SimWorld` + `SimClock` headless** with a passing test that ticks an empty world (0.5).
-4. **Wire `host_solo()` and get one placeholder villager moving on a tap**, end to end through the loopback network (0.6). Once that works the architecture is proven and the rest is content.
-5. **Prove the 0 A.D. render pipeline on a single unit** (0.9) before scheduling A.3.
+1. **Move the map generator into the game** (2.4b) with §11.2's eight changes — size by area, terrain-PNG plus entity sidecar, footprints from `buildings.json`, a connectivity gate, a continuous river with narrow land bridges, and a seed from `MatchConfig`.
+2. **Build the skirmish settings screen** (1.6) as the lobby, per §11.1.
+3. **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically.
+4. **Then multiplayer** (§12.1) in the order given: a → b → d → g → c → e → f.
