@@ -105,13 +105,33 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 
 	var cap := int(def.carry_cap.get(kind, 0)) if def != null else 0
 	u.carry_kind = kind
-	# Never past the carry cap. With one unit per take this always landed exactly
-	# on it; a field at age 4 takes four at a time, and a villager walking home
-	# with 13 of a 10 cap would be carrying a load it has no room for. The short
-	# last take costs a full interval, which is the honest reading -- you cannot
-	# fill a basket beyond its size however fast the crop comes in.
-	u.carry_amount += harvest_take(node, mini(sched.x, maxi(0, cap - u.carry_amount)))
-	u.gather_cooldown = sched.y - 1
+	# Never past the carry cap. With one unit per take this always landed exactly on
+	# it; a field takes seven or eight at a time, and a villager walking home with 13
+	# of a 10 cap would be carrying a load it has no room for.
+	var took := harvest_take(node, mini(sched.x, maxi(0, cap - u.carry_amount)))
+	u.carry_amount += took
+	# A SHORT TAKE COSTS A SHORT WAIT, in proportion to what was actually taken.
+	#
+	# This used to charge a full interval whatever the take was, on the reasoning that
+	# "you cannot fill a basket beyond its size however fast the crop comes in". True
+	# of the basket, and wrong about the interval: the interval is the CROP's rate, so
+	# paying 25 ticks for the last 2 units of a 10-unit load is a farmer standing in
+	# the crop doing nothing for 19 of them.
+	#
+	# It also inverted the age ladder, which is how it was found (2026-08-17, when the
+	# field yields were rebalanced down to AoE-like numbers). Age 4 is 8 units every
+	# 25 ticks: 8 then a 2-unit remainder at a full 25 ticks each is 50 ticks a load,
+	# against age 2's ten single units at 4 ticks -- 40. Advancing two ages made
+	# farming 25% SLOWER. The old numbers hid it because 400 per 100 ticks is 4 units
+	# every 1 tick, where a wasted interval is one tick.
+	#
+	# Ceiling division, in integers, so nothing here can round differently on two
+	# machines (PLAN.md 7.1) -- and it rounds AGAINST the player, which is the safe
+	# direction for a rate that must never exceed what the data promises. A take of
+	# nothing keeps the full interval rather than falling to a zero-length wait that
+	# would re-ask every tick.
+	var ticks := sched.y if took <= 0 else (took * sched.y + sched.x - 1) / sched.x
+	u.gather_cooldown = maxi(0, ticks - 1)
 
 	if u.carry_amount >= cap or not is_harvestable(node, u.owner_id):
 		_start_return(w, u)
@@ -340,8 +360,9 @@ static func _ring_tile(ring: Rect2i, i: int, n: int) -> Vector2i:
 ##   a resource node -- the UNIT's `gather_rate` for the kind. How fast wood comes
 ##     out of a tree is a property of the axe, and every unit could differ.
 ##   a FIELD -- the FIELD's own `gather_yield_per_age`. A farm's output belongs to
-##     the farm and to how far its owner has researched (project owner,
-##     2026-08-17: 1 food a tick per villager at age 2, 2.5 at age 3, 4 at age 4).
+##     the farm and to how far its owner has researched. 25 / 28 / 32 per 100 ticks
+##     at ages 2/3/4, which is parity with hand-gathering and then a little better
+##     -- AoE's ratio, and buildings.json's own note is where the reasoning lives.
 ##     The villager's own food rate is deliberately NOT consulted, or advancing an
 ##     age would be multiplied by whoever happened to be standing in the crop.
 ##
@@ -365,18 +386,25 @@ static func harvest_rate(w: SimWorld, e: SimEntity, u: SimUnit, kind: StringName
 ## How `rate` per 100 ticks is actually paid out: (units per take, ticks between
 ## takes), which is the fraction rate/100 in LOWEST TERMS.
 ##
-## The old form was "one unit every ceil(100/rate) ticks", and it cannot express a
-## rate above 100: the interval floors at one tick, so 250 and 400 and 10000 all
-## collapse to one unit a tick. A field at age 3 yields 2.5 a tick, which is 5 units
-## every 2 ticks -- exactly representable as a fraction and not at all as an
-## interval. Reducing by the gcd is what makes the average exact in both directions
-## with no float and no accumulator to drift between clients.
+## The old form was "one unit every ceil(100/rate) ticks", which fails at BOTH ends
+## of the range, and the shipped data has since visited both.
 ##
-## Every rate in the shipped data reduces to the same schedule the interval form
-## gave, so this changed no existing timing: the villager's 25 is 25/100 = 1/4, one
-## unit every four ticks. It is also strictly more accurate where they differ -- an
-## authored 40 is 2 units per 5 ticks here against ceil(100/40) = one per 3 before,
-## which was 0.33 a tick for a number that says 0.4.
+## Above 100 it cannot express the rate at all: the interval floors at one tick, so
+## 250 and 400 and 10000 all collapse to one unit a tick. That was the case that
+## forced this change -- fields yielded 250 at age 3, i.e. 2.5 a tick, which is 5
+## units every 2 ticks: exactly representable as a fraction and not at all as an
+## interval.
+##
+## Below 100 it rounds badly whenever the rate does not divide 100. The field yields
+## are now 25 / 28 / 32 (buildings.json, balanced against AoE 2026-08-17), and 28
+## per 100 ticks is 7 units every 25 ticks here against ceil(100/28) = one per 4
+## before -- which paid out 0.25 a tick for a number that says 0.28, quietly making
+## an age-3 plot no better than an age-2 one. So nothing shipped now exceeds 100 and
+## the fraction form is still load-bearing, for the opposite reason.
+##
+## Reducing by the gcd is what makes the average exact in both directions with no
+## float and no accumulator to drift between clients. The villager's own 25 is
+## 25/100 = 1/4, one unit every four ticks, which is what it always was.
 static func take_schedule(rate: int) -> Vector2i:
 	if rate <= 0:
 		return Vector2i.ZERO

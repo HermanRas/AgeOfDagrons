@@ -203,14 +203,24 @@ func test_a_field_is_inexhaustible() -> void:
 	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 12))
 	w.queue_command(GatherCommand.new(1, [v.id], field.id))
 
+	# Measured as a GAIN over what the player started with. This asserted "> 5000"
+	# against a before_each that hands out exactly 5000 food, so it passed the moment
+	# a single unit arrived while claiming the field had fed the town for a thousand
+	# ticks. Noticed while rebalancing the yield: the number it was really testing was
+	# the starting stock, so it would have gone on passing at any yield above zero.
+	# 100 is a deliberately loose floor -- about ten loads, where the walk from the
+	# plot to the mill is a couple of tiles -- so retuning pathing or the carry cap
+	# does not break it, but a field that stopped yielding would.
+	var before := int(w.player_for(1).stock.get(&"food", 0))
 	for i in range(1000):
 		w.step()
+	var gained := int(w.player_for(1).stock.get(&"food", 0)) - before
 
 	assert_not_null(w.get_entity(field.id), "still there after a thousand ticks")
 	assert_false(field.is_spent())
 	assert_eq(field.gather_amount, BuildingDef.INFINITE_CROP)
-	assert_true(int(w.player_for(1).stock.get(&"food", 0)) > 5000,
-			"and it has been feeding the town the whole time")
+	assert_true(gained > 100,
+			"and it has been feeding the town the whole time (banked %d)" % gained)
 
 
 func test_an_infinite_crop_hands_back_whatever_is_asked_for() -> void:
@@ -254,25 +264,50 @@ func test_five_villagers_can_work_one_field() -> void:
 # ── the age-scaled yield ────────────────────────────────────────────────────
 
 func test_the_yield_comes_from_the_field_and_rises_with_the_age() -> void:
-	# The owner's numbers, per villager per tick: none at age 1, then 1, 2.5, 4.
 	# Authored per 100 ticks so it shares a unit with UnitDef.gather_rate.
+	# Rebalanced against AoE 2026-08-17 (was 0 / 100 / 250 / 400) -- buildings.json's
+	# own note carries the reasoning.
 	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
 	assert_eq(bd.gather_yield_for_age(1), 0, "there are no fields in age 1")
-	assert_eq(bd.gather_yield_for_age(2), 100)
-	assert_eq(bd.gather_yield_for_age(3), 250)
-	assert_eq(bd.gather_yield_for_age(4), 400)
-	assert_eq(bd.gather_yield_for_age(9), 400, "a fifth age would inherit the fourth")
+	assert_eq(bd.gather_yield_for_age(2), 25)
+	assert_eq(bd.gather_yield_for_age(3), 28)
+	assert_eq(bd.gather_yield_for_age(4), 32)
+	assert_eq(bd.gather_yield_for_age(9), 32, "a fifth age would inherit the fourth")
 
 
-func test_a_field_out_yields_a_berry_bush_by_the_declared_ratio() -> void:
-	# The comparison worth having in front of anyone balancing this: the villager's
-	# own food rate is 25 per 100 ticks, so an age-2 plot is 4x a bush per farmer
-	# and an age-4 plot is 16x.
+func test_a_field_is_about_as_fast_per_farmer_as_gathering_by_hand() -> void:
+	# THE COMPARISON THIS FILE EXISTS TO PIN, and the one the old numbers failed. A
+	# field used to be 4x a berry bush per farmer at age 2 and 16x at age 4, which no
+	# Age of Empires has ever done: AoE2 keeps every food source within a third of
+	# every other per villager (berries 0.31/s, sheep 0.33, farm 0.35, deer 0.41), so
+	# a farm is 1.13x a bush and what separates food sources is amount, distance and
+	# safety -- never a multiplier on the worker.
+	#
+	# Asserted as a RATIO against the villager's own rate rather than as three more
+	# literals, because the property being defended is the relationship: whoever
+	# retunes the villager should see this move with it, or fail here.
 	var villager: UnitDef = GameDataRegistry.unit(&"unit.villager")
 	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
-	assert_eq(int(villager.gather_rate.get(&"food", 0)), 25)
-	assert_eq(bd.gather_yield_for_age(2), 4 * 25)
-	assert_eq(bd.gather_yield_for_age(4), 16 * 25)
+	var by_hand := int(villager.gather_rate.get(&"food", 0))
+	assert_eq(by_hand, 25, "the rate a field is measured against")
+
+	assert_eq(bd.gather_yield_for_age(2), by_hand, "age 2 is parity with hand-gathering")
+	for age in [3, 4]:
+		var plot := bd.gather_yield_for_age(age)
+		assert_true(plot > by_hand, "age %d is worth researching (%d)" % [age, plot])
+		assert_true(plot <= by_hand * 2,
+				"age %d must not become a different economy (%d, cap %d)"
+				% [age, plot, by_hand * 2])
+
+
+func test_the_age_ladder_only_ever_climbs() -> void:
+	# A flat ladder is the point (see above), but a step that went DOWN would make
+	# advancing an age a downgrade for every farmer already in a crop -- and at these
+	# margins that is a one-character typo away rather than obvious on sight.
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	for age in [3, 4]:
+		assert_true(bd.gather_yield_for_age(age) > bd.gather_yield_for_age(age - 1),
+				"age %d beats age %d" % [age, age - 1])
 
 
 func test_a_higher_age_actually_banks_food_faster() -> void:
@@ -307,6 +342,9 @@ func test_the_take_schedule_is_exact_above_one_unit_a_tick() -> void:
 	# The old "one unit every ceil(100/rate) ticks" floors at a one-tick interval,
 	# so 250 and 400 and 10000 all collapsed to 1 a tick. As a fraction in lowest
 	# terms 250 is 5 units every 2 ticks -- exactly 2.5 -- with no float anywhere.
+	# Kept as function inputs after the field rebalance took them out of the shipped
+	# data: what is being tested is the arithmetic, and the day some rate goes over
+	# 100 again it must still hold.
 	assert_eq(GatherSystem.take_schedule(25), Vector2i(1, 4), "unchanged: the villager")
 	assert_eq(GatherSystem.take_schedule(100), Vector2i(1, 1))
 	assert_eq(GatherSystem.take_schedule(250), Vector2i(5, 2))
@@ -315,6 +353,50 @@ func test_the_take_schedule_is_exact_above_one_unit_a_tick() -> void:
 	# Strictly more accurate where the two forms differ: 40 per 100 ticks is 0.4 a
 	# tick, which the interval form rounded to one every 3 ticks, i.e. 0.33.
 	assert_eq(GatherSystem.take_schedule(40), Vector2i(2, 5))
+
+
+func test_the_shipped_field_yields_are_paid_out_exactly() -> void:
+	# The rebalance moved every field yield BELOW 100, which is the other end of the
+	# range the interval form got wrong: 28 per 100 ticks would have paid out as one
+	# unit every ceil(100/28) = 4 ticks, i.e. 0.25 a tick, making an age-3 plot no
+	# better than an age-2 one. The fraction form is what makes the small steps real.
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	for age in [2, 3, 4]:
+		var rate := bd.gather_yield_for_age(age)
+		var sched := GatherSystem.take_schedule(rate)
+		assert_eq(sched.x * 100, rate * sched.y,
+				"age %d: %d per 100 ticks is exactly %d every %d"
+				% [age, rate, sched.x, sched.y])
+	assert_eq(GatherSystem.take_schedule(28), Vector2i(7, 25))
+	assert_eq(GatherSystem.take_schedule(32), Vector2i(8, 25))
+
+
+func test_the_last_short_take_of_a_load_costs_a_short_wait() -> void:
+	# Found by test_a_higher_age_actually_banks_food_faster the moment the yields came
+	# down to AoE-like numbers. A villager carries 10; an age-4 plot pays 8 every 25
+	# ticks. Charging a full 25 ticks for the 2-unit remainder made a load cost 50
+	# ticks against age 2's 40 -- so advancing two ages made farming SLOWER, and the
+	# old 400-per-100-ticks yield hid it because a wasted interval there was one tick.
+	#
+	# Measured as ticks per LOAD, walking excluded, because that is where the tax was.
+	var villager: UnitDef = GameDataRegistry.unit(&"unit.villager")
+	var carry := int(villager.carry_cap.get(&"food", 0))
+	assert_eq(carry, 10, "the load this arithmetic is about")
+
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	var previous := 999999
+	for age in [2, 3, 4]:
+		var sched := GatherSystem.take_schedule(bd.gather_yield_for_age(age))
+		var ticks := 0
+		var carried := 0
+		while carried < carry:
+			var took := mini(sched.x, carry - carried)
+			carried += took
+			ticks += (took * sched.y + sched.x - 1) / sched.x
+		assert_true(ticks < previous,
+				"age %d fills a basket in %d ticks, age %d took %d"
+				% [age, ticks, age - 1, previous])
+		previous = ticks
 
 
 func test_the_villager_works_the_crop_from_a_spot_on_it() -> void:
