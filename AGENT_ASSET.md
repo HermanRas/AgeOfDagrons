@@ -41,6 +41,15 @@ Always `git add` explicit paths — never `-A` — and check what you staged. Fi
 can also collide: this very document was overwritten by the other agent's stub
 between my writing it and committing it. Re-read before you commit.
 
+> ⚠️ **`git checkout -- <file>` is a DELETE in this repo, and it has already
+> cost real work.** On 2026-08-17 I reverted `zeroad.py` to undo an edit of my
+> own; the file also held ~190 lines of a previous session's **uncommitted**
+> prop-point machinery, which no commit contained. It was unrecoverable —
+> `__pycache__` had already been rewritten, and there were no editor backups.
+> A ` M` status does not mean the modification is yours. **`git diff` the file
+> before reverting it**, and commit work in progress rather than leaving it in
+> the tree for someone else to find with a blunt instrument.
+
 **How the two agents talk:** [asset_request.md](asset_request.md). They append a
 request using the format at the bottom of that file; I answer inline under the
 same heading. Treat it as a conversation. Their requests take priority over
