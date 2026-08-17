@@ -31,7 +31,31 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 		return
 
 	if b.add_build_progress(BUILD_RATE):
-		u.stop()          # done -- COMPLETE is set inside add_build_progress()
+		# COMPLETE is set inside add_build_progress().
+		_finished(w, u, b)
+
+
+## What a builder does the tick its building completes.
+##
+## A FIELD PUTS ITS BUILDER STRAIGHT TO WORK (project owner, 2026-08-17). Standing
+## idle beside a finished crop is the wrong default: farming it is the only reason
+## the plot was paid for, the villager is already standing on it, and the player
+## would otherwise have to find and re-order every farmer by hand the moment each
+## plot came up.
+##
+## Anything else stops, as before -- a house or a barracks has no work to offer,
+## and inventing some would be a unit wandering off on an order nobody gave.
+## `is_harvestable()` is the same test GatherCommand validates against, so this
+## can never start a gather the system would then refuse.
+func _finished(w: SimWorld, u: SimUnit, b: SimBuilding) -> void:
+	if not GatherSystem.is_harvestable(b, u.owner_id):
+		u.stop()
+		return
+
+	var spot := GatherSystem.harvest_spot(b, u.id)
+	u.set_task_gather(b.id, spot)
+	if w.paths != null:
+		w.paths.request(u.id, spot)
 
 
 func _adjacent_to_rect(from: Vector2i, rect: Rect2i) -> bool:

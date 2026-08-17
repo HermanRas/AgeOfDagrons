@@ -88,20 +88,62 @@ func test_everything_that_is_not_a_field_still_places_anywhere() -> void:
 
 # ── four to a mill ──────────────────────────────────────────────────────────
 
-func test_a_mill_carries_four_fields_and_refuses_a_fifth() -> void:
-	# Two fields down each side of the mill, none of them overlapping. The
-	# assertion is about the CAP, so the fifth is tested through
-	# `adjacency_allows` rather than a full placement: that is the predicate the
-	# rule lives in, and it is deliberately separate from whether the ground
-	# happens to be free (`can_place_building` answers that). Around a 5x4 mill
-	# ringed by four 6x6 fields there is no free touching ground left, so a
-	# placement-based test would pass for the wrong reason.
-	var mill := _mill()
+## Two fields down each side of a mill, none of them overlapping.
+func _four_spots(mill: SimBuilding) -> Array[Vector2i]:
 	var origin := mill.origin_tile()
-	var spots: Array[Vector2i] = [
+	return [
 		origin - Vector2i(6, 6), origin - Vector2i(6, 0),
 		origin + Vector2i(5, -6), origin + Vector2i(5, 0),
-	]
+	] as Array[Vector2i]
+
+
+func test_the_field_cap_rises_with_the_age() -> void:
+	# WAS "a mill carries four and refuses a fifth", which was the roster's number
+	# applied at every age. The project owner asked whether age 2 should really
+	# allow all four (2026-08-17) -- it should not, and the cap is now 2/3/4.
+	var bd: BuildingDef = GameDataRegistry.building(&"building.field")
+	assert_eq(bd.max_per_host_for_age(1), 0, "there are no fields at all in age 1")
+	assert_eq(bd.max_per_host_for_age(2), 2)
+	assert_eq(bd.max_per_host_for_age(3), 3)
+	assert_eq(bd.max_per_host_for_age(4), 4, "the roster's four, once you get there")
+
+
+func test_a_mill_carries_two_fields_at_age_two_and_refuses_a_third() -> void:
+	# The assertion is about the CAP, so the third is tested through
+	# `adjacency_allows` rather than a full placement: that is the predicate the
+	# rule lives in, and it is deliberately separate from whether the ground
+	# happens to be free (`can_place_building` answers that).
+	var mill := _mill()
+	var spots := _four_spots(mill)
+	for i in range(2):
+		assert_true(w.adjacency_allows(&"building.field", 1, spots[i]),
+				"field %d is allowed at age 2" % (i + 1))
+		assert_not_null(w.spawn_building(&"building.field", 1, spots[i],
+				SimBuilding.Phase.COMPLETE), "field %d fits on the grid" % (i + 1))
+	assert_eq(_fields().size(), 2)
+	assert_false(w.adjacency_allows(&"building.field", 1, spots[2]),
+			"a third is refused at age 2, however much room is left")
+
+
+func test_advancing_an_age_unlocks_the_next_plot() -> void:
+	var mill := _mill()
+	var spots := _four_spots(mill)
+	for i in range(2):
+		w.spawn_building(&"building.field", 1, spots[i], SimBuilding.Phase.COMPLETE)
+
+	assert_false(w.adjacency_allows(&"building.field", 1, spots[2]), "capped at age 2")
+	w.player_for(1).age = 3
+	assert_true(w.adjacency_allows(&"building.field", 1, spots[2]), "and allowed at age 3")
+	w.spawn_building(&"building.field", 1, spots[2], SimBuilding.Phase.COMPLETE)
+	assert_false(w.adjacency_allows(&"building.field", 1, spots[3]), "then capped again")
+	w.player_for(1).age = 4
+	assert_true(w.adjacency_allows(&"building.field", 1, spots[3]))
+
+
+func test_a_mill_at_the_top_age_carries_four_and_refuses_a_fifth() -> void:
+	w.player_for(1).age = 4
+	var mill := _mill()
+	var spots := _four_spots(mill)
 	for i in range(spots.size()):
 		assert_true(w.adjacency_allows(&"building.field", 1, spots[i]),
 				"field %d is allowed" % (i + 1))
@@ -110,7 +152,7 @@ func test_a_mill_carries_four_fields_and_refuses_a_fifth() -> void:
 	assert_eq(_fields().size(), 4)
 	assert_eq(w._count_abutting(&"building.field", 1, mill), 4)
 
-	assert_false(w.adjacency_allows(&"building.field", 1, origin - Vector2i(6, 12)),
+	assert_false(w.adjacency_allows(&"building.field", 1, mill.origin_tile() - Vector2i(6, 12)),
 			"the mill is full at four, however much room is left around it")
 
 
@@ -275,10 +317,18 @@ func test_the_take_schedule_is_exact_above_one_unit_a_tick() -> void:
 	assert_eq(GatherSystem.take_schedule(40), Vector2i(2, 5))
 
 
-func test_the_villager_stands_at_the_edge_of_a_field_not_its_centre() -> void:
-	# A 6x6 footprint measured centre-to-centre would need the villager three
-	# tiles INSIDE the crop before it counted as arrived -- the same mistake
-	# CombatSystem.tile_gap exists to avoid, and it would deadlock the gather.
+func test_the_villager_works_the_crop_from_a_spot_on_it() -> void:
+	# WAS "stands at the edge of a field, not its centre", and asserted the
+	# opposite of this: that the villager finished up OUTSIDE the footprint. That
+	# was right while a field was a wall. It is walkable now (blocks_movement
+	# false), and standing on the crop is the point -- it is what lets five
+	# farmers spread over 36 tiles instead of queueing on one corner.
+	#
+	# The reasoning the old test was written for still holds and is still tested,
+	# just elsewhere: arrival is measured against the FOOTPRINT and not the
+	# centre, so a 6x6 field does not need a villager three tiles inside it before
+	# it counts as arrived. `_adjacent_to_rect` answers 0 distance for a tile
+	# inside the rect, which is why both readings work.
 	var mill := _mill()
 	var field := w.spawn_building(&"building.field", 1, _beside(mill),
 			SimBuilding.Phase.COMPLETE, true)
@@ -292,8 +342,146 @@ func test_the_villager_stands_at_the_edge_of_a_field_not_its_centre() -> void:
 			ticks = i
 			break
 	assert_true(ticks > 0, "it actually started farming")
-	assert_false(field.footprint_rect().has_point(v.tile()),
-			"and did it from outside the crop")
+	assert_true(field.footprint_rect().has_point(v.tile()),
+			"and did it standing on the crop, at %s" % v.tile())
+
+
+func test_a_field_is_walked_over_rather_than_walled_off() -> void:
+	# The two problems this fixes are really one, and both were on screen: a 6x6
+	# plot flush against a 5x4 mill left no free tile to drop food off at, and no
+	# way onto the plot to work it.
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var rect := field.footprint_rect()
+
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var t := Vector2i(x, y)
+			assert_eq(w.map.occupant(t), field.id, "%s is still claimed by the field" % t)
+			assert_true(w.map.is_passable(t), "%s can be walked on" % t)
+			assert_false(w.map.is_buildable(t), "%s cannot be built on" % t)
+
+	assert_null(w.spawn_building(&"building.house", 1, rect.position),
+			"and nothing can be dropped on top of the crop")
+
+
+func test_the_mill_beside_a_field_is_still_reachable() -> void:
+	# What the walkable crop is FOR. A villager standing on the field has to be able
+	# to path to the mill it abuts, or every load of food it gathers is stranded.
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var inside := field.footprint_rect().position + Vector2i(3, 3)
+	assert_true(w.map.is_passable(inside), "a farmer can stand in the middle of the crop")
+
+	var path := w.paths.find_path(w.map, inside, mill.origin_tile() - Vector2i(0, 1))
+	assert_true(path.size() > 0, "and walk from there to the mill's own doorstep")
+
+
+func test_a_field_still_blocks_nothing_once_it_is_gone() -> void:
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var rect := field.footprint_rect()
+	w.despawn(field.id)
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			assert_true(w.map.is_buildable(Vector2i(x, y)), "the ground came back")
+
+
+# ── the builder gets straight to work ───────────────────────────────────────
+
+func test_the_villager_that_raises_a_field_starts_farming_it() -> void:
+	# Standing idle beside a finished crop is the wrong default: farming it is the
+	# only reason the plot was paid for, and the alternative is the player hunting
+	# down every farmer by hand as each plot completes (project owner, 2026-08-17).
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.FOUNDATION, true)
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 12))
+	w.queue_command(BuildCommand.new(1, [v.id], field.id))
+
+	for i in range(2000):
+		w.step()
+		if field.is_complete():
+			break
+	assert_true(field.is_complete(), "the field went up")
+
+	# The switch happens on the tick it completes, so give it one more.
+	w.step()
+	assert_eq(v.task, SimUnit.Task.GATHER, "and its builder is farming it, not idle")
+	assert_eq(v.task_target_id, field.id)
+
+
+func test_the_villager_that_raises_a_HOUSE_does_not_invent_work() -> void:
+	# Only a gatherable building offers anything to do. A unit that wandered off
+	# after a house would be acting on an order nobody gave.
+	var house := w.spawn_building(&"building.house", 1, Vector2i(30, 30),
+			SimBuilding.Phase.FOUNDATION, true)
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(29, 29))
+	w.queue_command(BuildCommand.new(1, [v.id], house.id))
+
+	for i in range(2000):
+		w.step()
+		if house.is_complete():
+			break
+	assert_true(house.is_complete())
+	w.step()
+	assert_true(v.is_idle(), "it stopped, as it always did")
+
+
+# ── five spread over the crop, not five on one corner ───────────────────────
+
+func test_the_gather_spots_are_spread_across_the_plot() -> void:
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var rect := field.footprint_rect()
+
+	var spots: Array[Vector2i] = []
+	for seed in range(field.gather_slots):
+		var s := GatherSystem.harvest_spot(field, seed)
+		assert_true(rect.has_point(s), "%s is on the crop" % s)
+		assert_false(spots.has(s), "%s is its own spot" % s)
+		spots.append(s)
+	assert_eq(spots.size(), 5, "one per slot")
+
+	# No two in the same row, which is what stops them reading as a queue.
+	var rows: Array[int] = []
+	for s in spots:
+		if not rows.has(s.y):
+			rows.append(s.y)
+	assert_true(rows.size() >= 2, "the spots zigzag rather than lining up")
+
+
+func test_a_resource_node_has_exactly_one_spot() -> void:
+	# A tree is one tile. The spread is a field's problem and must not follow a
+	# villager into a forest.
+	var tree := w.spawn_resource_node(&"res.tree", Vector2i(30, 30))
+	for seed in range(8):
+		assert_eq(GatherSystem.harvest_spot(tree, seed), tree.tile())
+
+
+func test_five_farmers_do_not_all_walk_to_the_same_tile() -> void:
+	# End to end through the command, which is where the corner-queueing came from:
+	# one tile was computed for the whole order rather than one per unit.
+	var mill := _mill()
+	var field := w.spawn_building(&"building.field", 1, _beside(mill),
+			SimBuilding.Phase.COMPLETE, true)
+	var farmers: Array[int] = []
+	for i in range(5):
+		farmers.append(w.spawn_unit(&"unit.villager", 1, Vector2i(20, 10 + i)).id)
+	w.queue_command(GatherCommand.new(1, farmers, field.id))
+	w.step()
+
+	var targets: Array[Vector2i] = []
+	for id in farmers:
+		var t: Vector2i = (w.get_entity(id) as SimUnit).task_target_tile
+		if not targets.has(t):
+			targets.append(t)
+	assert_true(targets.size() >= 4,
+			"five farmers were sent to %d different tiles" % targets.size())
 
 
 ## Unreachable for a FIELD now that its crop is infinite -- the crop is set to a

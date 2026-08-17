@@ -127,6 +127,19 @@
     "THE FIELD, in full (project owner, 2026-08-17). It is the one building that is",
     "also a resource node, and all four of its numbers are rules rather than stats:",
     "",
+    "  blocks_movement false   the crop is NOT A WALL. It claims its 36 tiles so",
+    "                nothing is built over them, and villagers walk on and across",
+    "                it. Both of the reasons are really one: a 6x6 plot flush",
+    "                against a 5x4 mill left no free tile to stand on to drop food",
+    "                off, and no way onto the plot to spread the gatherers over it.",
+    "                0 A.D.'s own fields are walked over too.",
+    "  max_per_host_by_age [0, 2, 3, 4]   two plots to a mill at age 2, three at 3,",
+    "                four at 4. The owner asked whether age 2 should really allow",
+    "                all four; it should not -- four plots at the age-2 yield is",
+    "                most of a town's food from one building the moment the age",
+    "                lands. The roster's four is where a farm economy ENDS UP.",
+    "                `max_per_host` stays as the flat fallback for anything that",
+    "                declares no per-age list.",
     "  amount -1     it NEVER DEPLETES. This was 300 and the field was removed when",
     "                harvested out; the owner reversed that -- the balancing lever",
     "                is the yield, and a plot that had to be rebuilt every few",
@@ -406,6 +419,8 @@
 
     "requires_adjacent": ["building.mill"],
     "max_per_host": 4,
+    "max_per_host_by_age": [0, 2, 3, 4],
+    "blocks_movement": false,
 
     "gather": {
       "kind": "food",

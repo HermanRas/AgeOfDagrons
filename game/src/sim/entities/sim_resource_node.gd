@@ -6,8 +6,11 @@
 ## in a system, not here.
 ##
 ## `size_class` is 0 small / 1 medium / 2 large and selects the starting amount
-## from `ResourceDef.amounts`. It is a **data** distinction only: every size draws
-## the same sprite (ASSET_MISSING.md 1.3), so nothing here picks art by size.
+## from `ResourceDef.amounts` -- and, since 2026-08-17, the SPRITE too, from
+## `ResourceDef.visuals`. It was a data distinction only for months, and that was
+## the complaint behind the whole ore request: a 200-gold seam and an 800-gold seam
+## were pixel-identical, so the player could not tell a rich node from a poor one
+## and the size classes were data nobody could act on.
 ##
 ## Nodes occupy grid tiles like buildings do, so a villager cannot walk through a
 ## tree. Unlike buildings their footprint is always a single tile -- 6.3's forest
@@ -64,4 +67,9 @@ func to_snapshot() -> Dictionary:
 	d["kind"] = kind
 	d["amount"] = amount
 	d["remaining"] = remaining_fraction()
+	# Sent because the size classes now pick the SPRITE as well as the amount
+	# (2026-08-17: three gold actors, two stone). It cannot be derived on the far
+	# side -- `amount` runs down as the node is worked, so a nearly-spent large
+	# node and a fresh small one carry the same number.
+	d["size_class"] = size_class
 	return d

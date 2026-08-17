@@ -62,7 +62,14 @@ const DEBUG_WOOD_CLUSTER := [
 ## dev_preview reach for gold where it is, and two tiles off the town centre's
 ## right wall is close enough to walk to in the first seconds of a match, which is
 ## what the debug map is for.
-const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
+##
+## ORDERED LARGEST-FURTHEST-BACK. `_place_resources` gives the i-th offset size
+## class i, and the three ore actors are 95, 180 and 244 px wide -- so with the
+## largest at the front it stood in front of the other two and the size classes
+## could not be compared at all. Iso sorts by (dx + dy), so the entry with the
+## smallest sum draws behind: (11, 2) sums to 13 and takes the large seam, the two
+## at 14 take the medium and the small.
+const DEBUG_GOLD := [Vector2i(11, 3), Vector2i(12, 2), Vector2i(11, 2)]
 ## A line rather than a block: a 2x2 arrangement puts two on the same screen
 ## column, one hidden behind the other. Stepping only dx staggers all four.
 ## Berry bushes, not deer -- session decision to use res.berry_bush as the MVP
@@ -254,12 +261,20 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 	# than failing the whole match.
 	for offset in DEBUG_WOOD_CLUSTER:
 		w.spawn_resource_node(&"res.tree", origin + offset, 1)
-	for offset in DEBUG_GOLD:
-		w.spawn_resource_node(&"res.gold_mine", origin + offset, 1)
+	# ONE OF EACH SIZE CLASS for the two mined kinds -- the i-th node of the cluster
+	# gets size class i. Both lists are three long, which is also how many classes
+	# there are, and it is deliberate rather than incidental: since 2026-08-17 the
+	# size class picks the SPRITE as well as the amount (resources.json `visuals`),
+	# so a cluster spawned all-medium would put the same actor on the map three
+	# times and leave five of the eight new ore bakes unseen in a running game.
+	# A shorter or longer list still works -- spawn clamps both lookups -- it just
+	# stops covering every class.
+	for i in range(DEBUG_GOLD.size()):
+		w.spawn_resource_node(&"res.gold_mine", origin + DEBUG_GOLD[i], i)
 	for offset in DEBUG_FOOD:
 		w.spawn_resource_node(&"res.berry_bush", origin + offset, 0)
-	for offset in DEBUG_STONE:
-		w.spawn_resource_node(&"res.stone", origin + offset, 1)
+	for i in range(DEBUG_STONE.size()):
+		w.spawn_resource_node(&"res.stone", origin + DEBUG_STONE[i], i)
 	# Size class 0 for both: sheep and cattle declare one amount for all three
 	# (resources.json), so the class is not a choice -- passing it explicitly
 	# rather than relying on a default keeps that visible.

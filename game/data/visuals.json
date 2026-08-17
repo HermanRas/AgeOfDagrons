@@ -94,11 +94,31 @@
     "frame, where the whole animal is above the anchor. Taking both from S would",
     "have declared a 0.9 m sheep -- shorter than it is long.",
     "",
-    "vis.stone_mine reads BIG -- 6.94 m across, against the gold mine's 2.8 -- and",
-    "that is honest rather than wrong: it is baked from geology/stonemine_medit_",
-    "quarry, where the roster asks for gaia/rock/temperate_small (asset_request.md).",
-    "The rebake is queued and keeps this id, so it will replace the pixels and this",
-    "figure needs re-deriving when it lands. See the vis.villager lesson above.",
+    "THE ORE SET LANDED the same day, and it moved two of these a long way. The",
+    "roster's own actors replaced two off-roster stand-ins, and the size classes now",
+    "pick the SPRITE as well as the amount (resources.json `visuals`):",
+    "",
+    "  vis.gold_mine    64x60 px -> 180x119   was metalmine_alpine, a pale spire",
+    "  vis.stone_mine  222x191 px ->  72x62   was stonemine_medit_quarry",
+    "",
+    "So gold grew about 3x and stone shrank about 3x, and both anchors moved -- the",
+    "figures below are re-derived, and the ones they replaced (2.8 x 3.87 / 1.21 and",
+    "6.94 x 6.94 / 5.78) described art that is gone. The art side flagged the",
+    "re-measure rather than leaving it to be found, which is the vis.villager lesson",
+    "being applied from the other end of the fence.",
+    "",
+    "The gold LARGE reads 0.24 m tall, which looks like a mistake and is not: the",
+    "square Aegean seam is a flat quarry patch 244 px wide and barely raised. PLAN.md",
+    "13.2 item 7 has the background -- these newer sculpts are authored half-sunk",
+    "into terrain (47% of the round gold below the ground plane, 64% of the square),",
+    "which 0 A.D. hides behind terrain occlusion and an orthographic bake cannot.",
+    "They were unusable until isobake grew render.ground_clip; that item is closed.",
+    "",
+    "THE FOUR TREES were re-derived together, and the oak's old 2.4 x 2.4 / 10.0 is",
+    "the last figure in this file that came from the inspect-halved convention. It",
+    "had to move because the four species are now variants of each other: comparing",
+    "a 2.4 m oak against a 5.53 m elm would read as one of them being wrong when the",
+    "difference was only which method measured it.",
     "",
     "A building that re-skins across ages gets ONE placeholder, sized to the MAX",
     "of its skins per axis, for the same reason its footprint is (buildings.json):",
@@ -694,11 +714,52 @@
 
   "vis.tree": {
     "atlas": "res://assets/atlases/vis.tree.atlas.json",
+    "variants": ["vis.tree", "vis.tree_elm", "vis.tree_teak", "vis.tree_toona"],
     "placeholder": {
       "shape": "capsule",
-      "footprint_m": [2.4, 2.4],
-      "height_m": 10.0,
+      "footprint_m": [7.25, 7.25],
+      "height_m": 8.03,
       "color": "#3f6b34"
+    }
+  },
+
+  "vis.tree_elm": {
+    "atlas": "res://assets/atlases/vis.tree_elm.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [5.53, 5.53],
+      "height_m": 13.08,
+      "color": "#4a7038"
+    }
+  },
+
+  "vis.tree_teak": {
+    "atlas": "res://assets/atlases/vis.tree_teak.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [8.53, 8.53],
+      "height_m": 13.54,
+      "color": "#3a6630"
+    }
+  },
+
+  "vis.tree_toona": {
+    "atlas": "res://assets/atlases/vis.tree_toona.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [6.16, 6.16],
+      "height_m": 9.42,
+      "color": "#46753a"
+    }
+  },
+
+  "vis.gold_mine_small": {
+    "atlas": "res://assets/atlases/vis.gold_mine_small.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.97, 2.97],
+      "height_m": 0.97,
+      "color": "#c9a227"
     }
   },
 
@@ -706,9 +767,29 @@
     "atlas": "res://assets/atlases/vis.gold_mine.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [2.8, 3.87],
-      "height_m": 1.21,
+      "footprint_m": [5.63, 5.63],
+      "height_m": 1.55,
       "color": "#c9a227"
+    }
+  },
+
+  "vis.gold_mine_large": {
+    "atlas": "res://assets/atlases/vis.gold_mine_large.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [7.63, 7.63],
+      "height_m": 0.24,
+      "color": "#c9a227"
+    }
+  },
+
+  "vis.stone_mine_large": {
+    "atlas": "res://assets/atlases/vis.stone_mine_large.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [8.44, 8.44],
+      "height_m": 1.76,
+      "color": "#9c9c98"
     }
   },
 
@@ -737,8 +818,8 @@
     "atlas": "res://assets/atlases/vis.stone_mine.atlas.json",
     "placeholder": {
       "shape": "box",
-      "footprint_m": [6.94, 6.94],
-      "height_m": 5.78,
+      "footprint_m": [2.25, 2.25],
+      "height_m": 1.52,
       "color": "#9c9c98"
     }
   },

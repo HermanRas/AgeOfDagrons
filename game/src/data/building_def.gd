@@ -49,6 +49,27 @@ var requires_adjacent: Array[StringName] = []
 ## no limit. Four fields to a mill, per the roster.
 var max_per_host: int = 0
 
+## The same cap PER AGE, indexed 1-4 (so entry 0 is age 1), or empty to use the
+## flat `max_per_host` at every age.
+##
+## The project owner asked whether age 2 should really allow all four fields
+## (2026-08-17). It should not: four plots at the age-2 yield is most of a town's
+## food from one building the moment the age lands, and the roster's four is where
+## a farm ECONOMY ends up rather than where it starts. Two, three, four -- one more
+## per age, the same shape as the yield's +1.5.
+var max_per_host_by_age: Array[int] = []
+
+## Whether this building's footprint closes its tiles to movement. TRUE for
+## everything with walls; FALSE for a field, which claims the ground so nothing is
+## built over the crop and lets villagers walk on and across it.
+##
+## A field had to be walkable for two reasons that turned out to be one
+## (project owner, 2026-08-17): a 6x6 plot flush against a 5x4 mill leaves no free
+## tile to stand on to drop food off, and there is no way onto the plot to spread
+## the gatherers over it. Both are "the crop is a wall", and it should never have
+## been one -- 0 A.D.'s own fields are walked over.
+var blocks_movement: bool = true
+
 ## `amount: -1` in the JSON: this building's crop never runs out. A FIELD IS
 ## INEXHAUSTIBLE (project owner, 2026-08-17), which reverses the call recorded
 ## here before -- the balancing lever is the per-age YIELD below, not a total, and
@@ -116,6 +137,8 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 
 	b.requires_adjacent = GameDefs.name_list(d.get("requires_adjacent", []))
 	b.max_per_host = int(d.get("max_per_host", 0))
+	b.max_per_host_by_age = GameDefs.int_list(d.get("max_per_host_by_age", []))
+	b.blocks_movement = bool(d.get("blocks_movement", true))
 
 	var g: Dictionary = d.get("gather", {})
 	b.gather_kind = StringName(g.get("kind", ""))
@@ -134,6 +157,15 @@ func accepts_drop_off(kind: StringName) -> bool:
 ## crop is exactly 0 and nothing else.
 func is_gatherable() -> bool:
 	return gather_kind != &"" and gather_amount != 0
+
+
+## How many of this building may abut one host at `age`. Falls back to the flat
+## `max_per_host` when no per-age list is declared, and clamps at both ends for the
+## same reason `gather_yield_for_age()` does.
+func max_per_host_for_age(age: int) -> int:
+	if max_per_host_by_age.is_empty():
+		return max_per_host
+	return max_per_host_by_age[clampi(age - 1, 0, max_per_host_by_age.size() - 1)]
 
 
 ## Food per 100 ticks per villager working this building at `age`, or 0 if it

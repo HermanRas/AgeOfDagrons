@@ -61,11 +61,12 @@ func apply(w: SimWorld) -> void:
 	var node := w.get_entity(node_id)
 	if node == null:
 		return
-	# The footprint's own tile, not the entity's centre: a field is 6x6 and
-	# PathService would route a villager into the middle of the crop rather than
-	# up to its edge (GatherSystem.harvest_rect has the same reasoning).
-	var tile := GatherSystem.harvest_rect(node).position
+	# A spot PER UNIT, not one tile for the whole order: a tree has exactly one
+	# place to stand, and a 6x6 field has as many as it has slots, spread over the
+	# crop (GatherSystem.harvest_spot). Sending them all to the footprint's corner
+	# is what put five villagers on one tile.
 	for id in unit_ids:
+		var tile := GatherSystem.harvest_spot(node, id)
 		(w.get_entity(id) as SimUnit).set_task_gather(node_id, tile)
 		if w.paths != null:
 			w.paths.request(id, tile)

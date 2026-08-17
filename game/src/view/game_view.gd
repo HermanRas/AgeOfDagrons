@@ -675,8 +675,10 @@ func _names(raw: Variant) -> Array[StringName]:
 
 func _visual_id_of(entry: Dictionary) -> StringName:
 	var def_id := StringName(entry.get("def_id", ""))
-	# `phase` is present only for buildings (SimBuilding.to_snapshot).
-	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)))
+	# `phase` is present only for buildings and `size_class` only for resource
+	# nodes (their own to_snapshot); -1 in either case means "no preference".
+	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)),
+			int(entry.get("size_class", -1)))
 	# Interchangeable looks (visuals.json `variants`) -- four field plots today.
 	# Unconditional and free for everything else: an id with no variants returns
 	# itself, so this needs no list of which visuals have them.

@@ -444,7 +444,17 @@ func placeholder_for(visual_id: StringName) -> PlaceholderSpec:
 ## `phase` is a SimBuilding.Phase for buildings, which have three visuals rather
 ## than one (foundation / complete / rubble). Leave it at -1 for anything else, or
 ## for a building whose completed look is wanted regardless of state.
-func visual_for(def_id: StringName, phase: int = -1) -> StringName:
+##
+## `size_class` is the same idea for RESOURCE NODES, which have one visual per size
+## since 2026-08-17 (three gold actors, two stone). -1 means "no preference" and
+## gets the kind's plain visual -- what a portrait or a menu icon wants, and what
+## every caller that predates the size classes keeps getting.
+##
+## Two optional arguments for two entity kinds rather than one general "state"
+## argument: a phase and a size class are not the same question, and a single
+## parameter meaning different things per branch would be a trap for whoever passed
+## the wrong one.
+func visual_for(def_id: StringName, phase: int = -1, size_class: int = -1) -> StringName:
 	if not _loaded:
 		load_all()
 
@@ -458,7 +468,7 @@ func visual_for(def_id: StringName, phase: int = -1) -> StringName:
 
 	var r: ResourceDef = _resources.get(def_id)
 	if r != null:
-		return r.visual
+		return r.visual_for_size(size_class)
 
 	return &""
 
@@ -617,6 +627,14 @@ func validate() -> void:
 			load_warnings.append("resource '%s' declares no amounts" % id)
 		if r.gather_slots < 1:
 			load_warnings.append("resource '%s' has %d gather slots" % [id, r.gather_slots])
+		# Per-size art. More sprites than amounts would mean a size class that can
+		# be drawn and never spawned, which is a typo rather than a decision --
+		# FEWER is allowed and clamps (stone has two actors for three classes).
+		for i in range(r.visuals.size()):
+			_require_visual(r.visuals[i], "resource '%s' size %d" % [id, i])
+		if r.visuals.size() > r.amounts.size():
+			load_warnings.append("resource '%s' declares %d size visuals but only %d amounts"
+					% [id, r.visuals.size(), r.amounts.size()])
 
 	# Every unit must be trainable somewhere, or it can never enter a match. Not
 	# true in reverse -- a building that trains nothing is fine.

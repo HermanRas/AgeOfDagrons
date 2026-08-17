@@ -140,7 +140,7 @@ func _process_return(w: SimWorld, u: SimUnit) -> void:
 	var kind := u.carry_kind
 	var node := w.get_entity(u.gather_node_id)
 	if node != null and is_harvestable(node, u.owner_id):
-		u.set_task_gather(node.id, harvest_rect(node).position)
+		u.set_task_gather(node.id, harvest_spot(node, u.id))
 		if w.paths != null:
 			w.paths.request(u.id, u.task_target_tile)
 		return
@@ -194,7 +194,7 @@ func _retarget_near(w: SimWorld, u: SimUnit, kind: StringName, exclude_id: int) 
 
 	if best == null:
 		return false
-	u.set_task_gather(best.id, harvest_rect(best).position)
+	u.set_task_gather(best.id, harvest_spot(best, u.id))
 	if w.paths != null:
 		w.paths.request(u.id, u.task_target_tile)
 	return true
@@ -270,6 +270,38 @@ static func harvest_rect(e: SimEntity) -> Rect2i:
 	if e is SimBuilding:
 		return (e as SimBuilding).footprint_rect()
 	return Rect2i(e.tile(), Vector2i.ONE)
+
+
+## WHERE a particular worker goes to work `e`. A resource node has one answer, its
+## own tile. A field has as many as it has slots, spread over the crop.
+##
+## Every gatherer used to be sent to `harvest_rect().position` -- the footprint's
+## TOP-LEFT CORNER -- which for a one-tile tree is exactly right and for a 6x6
+## field put all five villagers on the same corner tile, shoulder to shoulder
+## outside the plot (project owner, 2026-08-17, screenshotted). They now stand ON
+## the crop, which is only possible because a field no longer blocks movement.
+##
+## The spots zigzag: x spreads evenly across the width, y alternates between a
+## third and two thirds of the height, so five spots on a 6x6 are five distinct
+## tiles with no two in the same row. Integer arithmetic throughout, and derived
+## from `seed` (the unit's id) rather than from a slot ordering that shuffles as
+## workers come and go -- a spot that moved every time a neighbour stopped would
+## have villagers trading places across the field for no visible reason.
+##
+## Two workers can still be handed the same spot, and that is fine: SeparationSystem
+## pushes overlapping units apart, and the alternative is reserving spots, which is
+## state to keep in sync for a cosmetic gain.
+static func harvest_spot(e: SimEntity, seed: int) -> Vector2i:
+	if not (e is SimBuilding):
+		return e.tile()
+
+	var b: SimBuilding = e
+	var rect := b.footprint_rect()
+	var slots := maxi(1, b.gather_slots)
+	var i := posmod(seed, slots)
+	return rect.position + Vector2i(
+		clampi((2 * i + 1) * rect.size.x / (2 * slots), 0, rect.size.x - 1),
+		rect.size.y / 3 if i % 2 == 0 else (2 * rect.size.y) / 3)
 
 
 ## What rate applies to `u` working `e`, per 100 ticks. TWO DIFFERENT SOURCES, and

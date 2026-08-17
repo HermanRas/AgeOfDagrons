@@ -182,7 +182,7 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 
 	entities[b.id] = b
 	spatial.insert(b.id, b.tile())
-	map.set_occupied(rect, b.id)
+	map.set_occupied(rect, b.id, d == null or d.blocks_movement)
 	_occupancy_changed(rect)
 	return b
 
@@ -208,9 +208,17 @@ func adjacency_allows(def_id: StringName, player_id: int, origin: Vector2i) -> b
 	var host := _adjacent_host(d, player_id, rect)
 	if host == null:
 		return false
-	if d.max_per_host <= 0:
-		return true
-	return _count_abutting(d.id, player_id, host) < d.max_per_host
+	# The cap is per AGE (2026-08-17): two fields to a mill at age 2, three at 3,
+	# four at 4. Read off the placing player, and a player who is not in this world
+	# is treated as age 1, which caps at 0 and refuses -- the same direction every
+	# other unknown is resolved in.
+	var player := player_for(player_id)
+	var cap := d.max_per_host_for_age(player.age if player != null else 1)
+	if cap <= 0 and d.max_per_host_by_age.is_empty():
+		return true          # no limit declared at all
+	if cap <= 0:
+		return false         # a limit that is zero at this age, e.g. fields in age 1
+	return _count_abutting(d.id, player_id, host) < cap
 
 
 ## A COMPLETE building of `player`'s, of one of the kinds `d` must abut, whose

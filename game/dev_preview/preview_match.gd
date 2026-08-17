@@ -209,6 +209,12 @@ func _advance_script() -> void:
 			# placement path.
 			_stand_up_a_farm()
 		28:
+			# And then send everyone to farm one plot, which is the other half of
+			# what there is to look at: five villagers spread ACROSS the crop rather
+			# than queued on its corner, standing on ground that used to be a wall.
+			_farm_the_first_field()
+			_wait_until(_somebody_is_farming)
+		29:
 			_report_field_crops()
 			_shoot("match_fields")
 		_:
@@ -563,6 +569,46 @@ func _stand_up_a_farm() -> void:
 	_game._camera.centre_on(Iso.tile_centre_to_world(FARM_MILL))
 
 
+## Send every villager to the nearest of the four plots. Through the ordinary
+## command, so the per-unit gather spots are the ones a player's tap would get.
+func _farm_the_first_field() -> void:
+	var view: GameView = _game._view
+	var field := _first_field_id()
+	if field == 0:
+		push_warning("preview_match: no field to farm")
+		return
+	_select_all_villagers()
+	Net.submit_command(GatherCommand.new(Net.local_player_id(),
+			view.movable_selection(), field))
+
+
+func _first_field_id() -> int:
+	var view: GameView = _game._view
+	var ids: Array = view.all_facts().keys()
+	ids.sort()
+	for id in ids:
+		if StringName(view.facts_for(int(id)).get("def_id", &"")) == &"building.field":
+			return int(id)
+	return 0
+
+
+## True once a villager is standing ON a field and carrying food off it. Both
+## halves matter: "somebody is carrying food" was true from the berry bushes long
+## before this step, and "somebody is on the crop" would be true of a villager that
+## merely walked across it.
+func _somebody_is_farming() -> bool:
+	var view: GameView = _game._view
+	var world: SimWorld = Net.host().world
+	for id in view.all_facts().keys():
+		var u := world.get_entity(int(id)) as SimUnit
+		if u == null or u.carry_amount <= 0 or u.carry_kind != &"food":
+			continue
+		var host := world.get_entity(u.gather_node_id) as SimBuilding
+		if host != null and host.def_id == &"building.field":
+			return true
+	return false
+
+
 ## Which crop each plot drew. The picture shows four fields; only this says whether
 ## they are four DIFFERENT ones, and a screenshot of four identical plots looks
 ## exactly like variants that are not wired.
@@ -584,6 +630,24 @@ func _report_field_crops() -> void:
 		if not seen.has(String(v.visual_id)):
 			seen.append(String(v.visual_id))
 	print("  %d distinct crop(s) across %d plots" % [seen.size(), plots])
+
+	# Where the farmers actually ended up, which the picture cannot tell you: five
+	# on one corner and five spread over the crop look similar at this zoom.
+	var world: SimWorld = Net.host().world
+	var on_crop := 0
+	var tiles: Array[Vector2i] = []
+	for id in ids:
+		var u := world.get_entity(int(id)) as SimUnit
+		if u == null or u.task != SimUnit.Task.GATHER:
+			continue
+		var host := world.get_entity(u.gather_node_id) as SimBuilding
+		if host == null or host.def_id != &"building.field":
+			continue
+		if host.footprint_rect().has_point(u.tile()):
+			on_crop += 1
+		if not tiles.has(u.tile()):
+			tiles.append(u.tile())
+	print("  %d farmer(s) standing on a crop, on %d distinct tiles" % [on_crop, tiles.size()])
 
 
 ## Halt every villager, so there is a spread-out set of idle units for the badge

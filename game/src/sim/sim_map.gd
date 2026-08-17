@@ -68,6 +68,17 @@ var terrain: PackedByteArray = PackedByteArray()
 var move_cost: PackedByteArray = PackedByteArray()
 var occupancy: PackedInt32Array = PackedInt32Array()
 
+## 1 where the tile's occupant also BLOCKS MOVEMENT, 0 where it merely holds the
+## ground. Parallel to `occupancy` and meaningless where that is 0.
+##
+## Two different questions were one array until 2026-08-17, and a field is what
+## separated them: "may something else be built here" and "may a unit walk here"
+## are not the same. A field claims its 36 tiles so nothing is built on top of the
+## crop, and lets villagers walk over it -- without which a 6x6 plot flush against
+## a 5x4 mill leaves no ground to stand on to drop food off, and no way onto the
+## plot to work it (project owner, 2026-08-17, with the screenshot to prove it).
+var blocking: PackedByteArray = PackedByteArray()
+
 
 ## A fresh map of uniform terrain. The real MVP map is built by 2.4a on top of
 ## this; a procedural generator is 2.4b.
@@ -78,6 +89,7 @@ static func create(p_size: Vector2i, fill: Terrain = Terrain.GRASS) -> SimMap:
 	m.terrain.resize(count)
 	m.move_cost.resize(count)
 	m.occupancy.resize(count)
+	m.blocking.resize(count)
 	m.fill_terrain(fill)
 	return m
 
@@ -117,8 +129,26 @@ func occupant(t: Vector2i) -> int:
 
 
 ## Can `domain` stand on this tile right now: in bounds, crossable terrain for
-## that domain, not blocked outright, and nothing static already there.
+## that domain, not blocked outright, and nothing BLOCKING already there.
+##
+## A non-blocking occupant -- a field -- is walked over, so this stays true while
+## `occupant()` reports its id. That is the whole distinction the `blocking` array
+## exists for; see `is_buildable()` for the other half.
 func is_passable(t: Vector2i, domain: int = Domain.LAND) -> bool:
+	if not is_terrain_passable(t, domain):
+		return false
+	var i := _index(t)
+	return occupancy[i] == 0 or blocking[i] == 0
+
+
+## Whether something could be BUILT here: passable ground with nothing standing on
+## it at all, blocking or not.
+##
+## Deliberately not `is_passable()`, which `can_place_building()` used to call. A
+## field is walkable and must still refuse to have a house dropped on top of it,
+## and the two questions parted company the moment anything was walkable and
+## claimed at once.
+func is_buildable(t: Vector2i, domain: int = Domain.LAND) -> bool:
 	return is_terrain_passable(t, domain) and occupancy[_index(t)] == 0
 
 
@@ -168,12 +198,16 @@ func set_move_cost(t: Vector2i, cost: int) -> void:
 ## Claim every tile of `rect` for entity `id`. Callers should check
 ## `can_place_building()` first; this does not validate, so that 2.4a can place
 ## the starting town centres without them having to be legal placements.
-func set_occupied(rect: Rect2i, id: int) -> void:
+## `blocks` false claims the ground without closing it to movement -- a field.
+## Ignored when `id` is 0, which is a release rather than a claim.
+func set_occupied(rect: Rect2i, id: int, blocks: bool = true) -> void:
 	for y in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):
 			var t := Vector2i(x, y)
 			if in_bounds(t):
-				occupancy[_index(t)] = id
+				var i := _index(t)
+				occupancy[i] = id
+				blocking[i] = 1 if (id != 0 and blocks) else 0
 
 
 func clear_occupied(rect: Rect2i) -> void:
@@ -189,6 +223,7 @@ func clear_occupant(id: int) -> void:
 	for i in range(occupancy.size()):
 		if occupancy[i] == id:
 			occupancy[i] = 0
+			blocking[i] = 0
 
 
 # ── placement ──────────────────────────────────────────────────────────────
@@ -196,12 +231,16 @@ func clear_occupant(id: int) -> void:
 ## Every tile in `rect` must be in bounds, buildable ground, and unoccupied.
 ## Buildings are land-only, which is why the domain is not a parameter -- a dock
 ## would need a different rule and can add one when it exists.
+##
+## `is_buildable`, not `is_passable`: a field is walkable and still occupied, and
+## calling the movement question here would let a second building be dropped on
+## top of a standing crop.
 func can_place_building(rect: Rect2i) -> bool:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return false
 	for y in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):
-			if not is_passable(Vector2i(x, y), Domain.LAND):
+			if not is_buildable(Vector2i(x, y), Domain.LAND):
 				return false
 	return true
 
