@@ -33,6 +33,16 @@ were taken off this same actor, only in a wrong pose. Worth one look, not a
 re-derivation. `speed: 0` still stands: there is no walk clip on this rig, only
 `Idle` and `attack_ranged`.
 
+**It also tints less than it used to, and that is a consequence of the fix, not a
+regression.** The reared arm was exposing a big player-coloured surface that the
+correct seated pose hides. Measured across the five stored directions: **4.7% of
+the sprite, ranging 1.7% from due N/S to 7.9% from the side** — where the old
+figure was 7.1%, sampled from one direction. It still separates cleanly (closest
+pair of the eight, orange vs yellow, is ΔRGB 49 over the mask) and `"colours":
+true` stands. But if a player has to tell whose onager that is at a glance, from
+head-on it is now about 100 px of tunic. Worth knowing when you decide what leans
+on baked-in colour and what leans on the selection ring or the control-group HUD.
+
 **Known cosmetic limit, deliberate.** The three crew do not collapse on death the
 way the ballista's and the ram's do. 0 A.D. gives this arm no `Death` animation at
 all, so `die`/`decay` freeze the idle pose, and because a clip's identity here has

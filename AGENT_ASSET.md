@@ -136,7 +136,32 @@ every `.dae` it loads, in place. isobake undoes this via `preserve_sources()`, b
 that restore is the one piece of state **shared between parallel slots**, and
 cavalry/infantry recipes all pull `horse_celtic.dae` and `m_tunic_short.dae`. A
 2-wide run left 50 of 88 touched meshes dirty. Wider is worse. Run
-`tools/restore_art_sources.sh --apply` after a batch, **never during one**.
+`tools/restore_art_sources.sh --apply` after a batch, **never during one**. It
+takes 30–45 minutes: it forks a `git show` per `.dae` across the WSL/Windows
+filesystem boundary, 5,525 times. An empty log is not a hung run.
+
+**THAT RACE ALSO CORRUPTS THE ART IT IS RACING ON, and a colour batch is its worst
+case.** Dirty sources left behind are the visible half. The other half is that a
+slot reading a mesh while another slot rewrites it **silently imports fewer
+objects**: on 2026-08-17 `onager__blue` and `onager__cyan` ran together, both
+loading the same `m_armor_tunic_short.dae`, and blue came out with **5 armatures
+and 21 objects against red's 7 and 26** — one of the three crew simply absent, 5%
+of the sprite. It reported `ok`, packed cleanly, tinted correctly and passed every
+check the pipeline had. Rebaked alone it matched the others exactly.
+
+Colour variants are the worst case because all eight load an **identical** mesh
+set, so every pair of slots collides on every file. It is not hypothetical for the
+staged art either — auditing all 20 colourable units found **`vis.archer` short by
+4.9–6.4% in three of its eight colours** and `vis.galley` spread 1.5%, both from
+the 3-wide batch of 2026-08-16.
+
+**The invariant that catches it, and nothing else does:** a unit's eight colours
+differ only in tint, so their **opaque pixel counts must be equal**. 18 of 20 units
+agree exactly; the two that do not are the two that lost geometry. The same signal
+is in the bake logs as `N object(s) imported` and `all N armatures are anchored`,
+which is worth comparing across a unit's colour logs before staging. Until there is
+a guard in the pipeline, **bake colour variants of one unit at `-Parallel 1`**, or
+verify counts afterwards.
 
 **git-lfs lives in WSL, not Windows.** `HEAD` stores 136-byte LFS pointers where
 real meshes belong. `git checkout -- <path>` from Windows would write the stub
@@ -165,9 +190,17 @@ and the root material predicts it in neither direction: the onager's root is
 opaque and it tints anyway (crew props), while the ballista's props are
 `player_trans` and it does not (no mask in their textures). **Always measure** —
 probe white vs blue at `directions = 1` and count moved pixels. Delivered
-figures: `siege_ram` 6.8%, `onager` 7.1%, `transport_ship` 10.1% (its sail only;
+figures: `siege_ram` 6.8%, `onager` 4.7%, `transport_ship` 10.1% (its sail only;
 the skiff hull is opaque), `ballista` 0.0% and so correctly has no colour
 variants.
+
+**A one-direction measurement is a sample, not the figure.** The onager was
+measured at 7.1% while its arm was stuck reared back, exposing a large
+`player_trans` surface that the correct seated pose hides; across the five stored
+directions it is really **4.7%, and it ranges from 1.7% due N to 7.9% from the
+east**. Both numbers were honest measurements of what was in front of them. Quote
+the range, and re-measure after anything that changes the POSE, not just after
+something that changes a material.
 
 > An earlier version of this file asserted "no siege engine in 0 A.D. carries
 > player colour". That was **wrong** — generalised from a scan covering only the
@@ -288,16 +321,25 @@ with WinError 5. Delete contents, not the directory.
   the first: the ballista's was a tool/bake disagreement about which armature the
   bake drives, the onager's was that its clip had nowhere correct to land (§4,
   "The subject armature of a subject with no rig").
-- **Build identity is live.** Staged population, counted off disk:
+- **Build identity is live.** Staged population, counted off disk 2026-08-17:
 
   ```
-  8aa37b04f718  build 33   10 atlases   vis.ballista, vis.onager + its 8 colours
-  531a4bce4f14  build 28    2 atlases   vis.prop_food_small, vis.prop_food_big
-  (no keys)               313 atlases   everything else -- predates the stamp
+  (no keys)               298 atlases   predates the stamp
+  780431d781f7  build 34   13 atlases   the fields, the farm, the ORE set   DIRTY
+  e257ae83d53f  build 36    9 atlases   vis.onager + its 8 colours
+  8aa37b04f718  build 33    2 atlases   vis.ballista                        DIRTY
+  531a4bce4f14  build 28    2 atlases   the two food props
   ```
 
   Each unit's own set is internally uniform, which is what the game side's
   staleness rule keys on, so it should still read 0 stale.
+
+  **Commit isobake BEFORE the bake you intend to stage.** 15 of the 26 stamped
+  atlases say `dirty=True`, which means the code that made them is not recoverable
+  from any commit — the stamp records that honestly and that is the whole point,
+  but it is a hole, not a badge. I stopped a colour batch mid-flight on 2026-08-17
+  to commit and rebake for exactly this reason; it cost 20 minutes and the nine
+  onager atlases now name a real commit. Do the same.
 - Verified beyond the batch summary, because a summary full of "ok" is exactly
   what the coloured-faces batch produced: 0 pixels move >64 between each unit's
   last `die` frame and first `decay` frame across 13 units × 8 colours, and the
@@ -351,6 +393,13 @@ Newest first; the numbering is historical, not a ranking.
   than assume, and to expect a canvas bump or two on the next full rebake. The
   staged atlases predate the fix and are internally consistent, so nothing is
   broken today.
+- **`vis.archer` is missing geometry in violet, orange and white** (found
+  2026-08-17 by the pixel-count audit in §4), 4.9–6.4% short each, and `vis.galley`
+  is spread 1.5% across all eight. Both are the parallel-slot import race, from the
+  3-wide colour batch of 2026-08-16. **The staged art is wrong today.** The fix is
+  mechanical — rebake those colours at `-Parallel 1` and re-audit — but it is the
+  project owner's machine time to spend, so it is here rather than done. Nothing
+  else in the 20 units is affected.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
   fix belongs in the importer's variant resolution. The owner has seen the
