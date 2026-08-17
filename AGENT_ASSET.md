@@ -101,6 +101,7 @@ powershell -File tools\bake_batch.ps1 -RecipeDir recipes\player -Parallel 3 `
 
 python tools\gen_player_colour_recipes.py     # regenerate colour variants
 python tools\fix_decay_start.py               # idempotent: pin decay to final pose
+python tools\check_colour_consistency.py [--pixels] [--staged]   # BEFORE staging, see §4
 python tools\stage_atlases.py [--dry-run]     # copy atlases into the game
 
 # AFTER EVERY BATCH — see §4
@@ -156,12 +157,21 @@ staged art either — auditing all 20 colourable units found **`vis.archer` shor
 the 3-wide batch of 2026-08-16.
 
 **The invariant that catches it, and nothing else does:** a unit's eight colours
-differ only in tint, so their **opaque pixel counts must be equal**. 18 of 20 units
-agree exactly; the two that do not are the two that lost geometry. The same signal
-is in the bake logs as `N object(s) imported` and `all N armatures are anchored`,
-which is worth comparing across a unit's colour logs before staging. Until there is
-a guard in the pipeline, **bake colour variants of one unit at `-Parallel 1`**, or
-verify counts afterwards.
+differ only in tint, so their **opaque pixel counts must be equal**. `python
+tools/check_colour_consistency.py [--pixels]` is that check — read the header of
+that file before trusting a run of it, because two of its inputs mislead:
+
+- **The base bake is not the reference.** It is usually older than the eight and
+  made by different isobake code, so `vis.swordsman`'s base importing 21 against
+  its colours' 20 is a version gap, not damage. The reference is the maximum over
+  the COLOURS, which is sound because the race only ever removes.
+- **An object count is not a pixel count.** It includes empties, 0-bone armature
+  shells and coincident duplicate meshes, so a bake can import two objects fewer
+  and render identically — `vis.fishing_ship` does exactly that. Objects are the
+  sensitive signal (WARN), pages are the verdict (SHORT).
+
+Until the race itself is fixed, **bake colour variants of one unit at
+`-Parallel 1`**, and run the check before staging.
 
 **git-lfs lives in WSL, not Windows.** `HEAD` stores 136-byte LFS pointers where
 real meshes belong. `git checkout -- <path>` from Windows would write the stub
@@ -393,13 +403,21 @@ Newest first; the numbering is historical, not a ranking.
   than assume, and to expect a canvas bump or two on the next full rebake. The
   staged atlases predate the fix and are internally consistent, so nothing is
   broken today.
-- **`vis.archer` is missing geometry in violet, orange and white** (found
-  2026-08-17 by the pixel-count audit in §4), 4.9–6.4% short each, and `vis.galley`
-  is spread 1.5% across all eight. Both are the parallel-slot import race, from the
-  3-wide colour batch of 2026-08-16. **The staged art is wrong today.** The fix is
-  mechanical — rebake those colours at `-Parallel 1` and re-audit — but it is the
-  project owner's machine time to spend, so it is here rather than done. Nothing
-  else in the 20 units is affected.
+- **Seven staged colour atlases are missing geometry**, from the parallel-slot race
+  in the 3-wide colour batch of 2026-08-16. `python tools/check_colour_consistency.py
+  --pixels` names them, and the project owner chose on 2026-08-17 to leave them
+  rather than spend the machine time; the repair is a rebake at `-Parallel 1` and a
+  re-run of that command.
+
+  ```
+  vis.archer   orange 5.62%  violet 6.39%  white 4.92%   short
+  vis.galley   cyan 0.79%  orange 0.82%  white 0.86%  yellow 1.49%
+  ```
+
+  `vis.fishing_ship` (blue, orange) is WARN not SHORT: two objects fewer, pages
+  identical — a 0-bone armature shell and a coincident duplicate mesh, invisible.
+  Leave it. The other 17 units are clean, and the nine onager atlases were baked
+  under this rule and verified against it.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
   fix belongs in the importer's variant resolution. The owner has seen the
