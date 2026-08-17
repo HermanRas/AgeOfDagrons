@@ -6,6 +6,48 @@
 ## the town centre's roof after that was cured too broadly.
 extends TestCase
 
+# ── a wide sprite on a one-tile footprint (project owner, 2026-08-17) ───────
+
+func test_a_wide_occluder_hides_things_a_narrow_one_does_not() -> void:
+	# The bug: a resource node holds ONE tile and can draw eight tiles wide, so the
+	# default 3-tile column band missed almost everything standing behind the big
+	# gold seam. Units simply vanished, with no outline.
+	var node := Rect2i(Vector2i(20, 20), Vector2i.ONE)
+	var behind := Vector2i(17, 20)          # 3 tiles west, so 3 out of column
+
+	assert_false(Occlusion.hides(node, behind),
+			"out of the default band, which is what a tree wants")
+	assert_true(Occlusion.hides(node, behind, 4),
+			"and inside a 244 px seam's band, which is what the gold wants")
+
+
+func test_the_column_pad_comes_from_the_arts_measured_metres() -> void:
+	# visuals.json's own projection: a footprint of (fx, fy) metres draws a diamond
+	# (fx + fy) * 16 px wide, and a tile of screen column is 32 px. The figures are
+	# the ones declared for the shipped bakes.
+	assert_eq(Occlusion.column_pad_for(Vector2(7.63, 7.63)), 4, "the large gold seam")
+	assert_eq(Occlusion.column_pad_for(Vector2(8.44, 8.44)), 5, "the big quarry")
+	assert_eq(Occlusion.column_pad_for(Vector2(7.25, 7.25)), 4, "an oak")
+	assert_eq(Occlusion.column_pad_for(Vector2(2.25, 2.25)), 2, "the small granite")
+
+
+func test_a_small_sprite_never_pads_below_the_default() -> void:
+	# A sheep must not claim a narrower band than a tree does; 1 is the floor,
+	# because a unit's own sprite is wider than its tile whatever it stands behind.
+	assert_eq(Occlusion.column_pad_for(Vector2(1.5, 0.65)), 1)
+	assert_eq(Occlusion.column_pad_for(Vector2.ZERO), 1)
+
+
+func test_a_wide_band_still_will_not_outline_something_in_front() -> void:
+	# Widening the column must not weaken the other two conditions -- the whole
+	# reason the rule is directional is the villagers-on-the-roof bug.
+	var node := Rect2i(Vector2i(20, 20), Vector2i.ONE)
+	assert_false(Occlusion.hides(node, Vector2i(21, 21), 6), "down-screen of it")
+	assert_false(Occlusion.hides(node, Vector2i(20, 20), 6), "standing on it")
+	assert_false(Occlusion.hides(node, Vector2i(14, 14), 6),
+			"and %d tiles back is past BEHIND_TILES however wide the band is"
+					% Occlusion.BEHIND_TILES)
+
 ## A 10x10 town centre at (10, 10), so tiles 10..19 in both axes. Its front tile
 ## -- the one it sorts by -- is (19, 19).
 const TC := Rect2i(10, 10, 10, 10)

@@ -181,6 +181,74 @@ func test_a_newly_seen_entity_snaps_instead_of_gliding_in() -> void:
 			"in place on the first snapshot, with no advance() call")
 
 
+# ── a resource node hides things too (project owner, 2026-08-17) ───────────
+
+func test_a_unit_behind_a_gold_seam_is_outlined() -> void:
+	# Only BUILDINGS were ever occluders, so a villager walking behind a rock
+	# vanished with no outline at all -- reported with a screenshot of two of the
+	# enemy's soldiers and three of ours doing exactly that.
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": 2,
+				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+		# Three tiles west: behind the seam, well inside the 244 px sprite, and
+		# outside the 3-tile band a building's footprint would have given it.
+		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
+				"pos": {"x": 17 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+	], "removed": []})
+
+	assert_true(view.pool.get_view(2).occluded,
+			"the villager behind the seam is hidden and gets a rim")
+
+
+func test_a_unit_behind_a_TREE_is_outlined() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "res.tree", "owner_id": 0, "size_class": 1,
+				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
+				"pos": {"x": 18 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+	], "removed": []})
+	assert_true(view.pool.get_view(2).occluded)
+
+
+func test_a_unit_in_front_of_a_node_is_not_outlined() -> void:
+	# The directional half of the rule still holds for nodes: down-screen of the
+	# rock is in front of it, and outlining that would be the roof-standing bug in
+	# a new place.
+	view.apply_snapshot({"tick": 1, "updated": [
+		{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": 2,
+				"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+		{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
+				"pos": {"x": 22 * SimWorld.SUBTILE, "y": 22 * SimWorld.SUBTILE}},
+	], "removed": []})
+	assert_false(view.pool.get_view(2).occluded)
+
+
+func test_a_small_seam_claims_a_narrower_band_than_a_large_one() -> void:
+	# The pad is measured off the art the node will actually DRAW, so the three
+	# gold size classes do not all behave like the biggest.
+	for spec in [[0, false], [2, true]]:
+		view.apply_snapshot({"tick": 1, "updated": [
+			{"id": 1, "def_id": "res.gold_mine", "owner_id": 0, "size_class": spec[0],
+					"pos": {"x": 20 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+			{"id": 2, "def_id": "unit.villager", "owner_id": 1, "task": SimUnit.Task.MOVE,
+					"pos": {"x": 17 * SimWorld.SUBTILE, "y": 20 * SimWorld.SUBTILE}},
+		], "removed": []})
+		assert_eq(view.pool.get_view(2).occluded, spec[1],
+				"size class %d hides a unit 3 tiles behind it: %s" % [spec[0], spec[1]])
+
+
+func test_a_units_own_sort_is_not_lifted_in_front_of_a_tree() -> void:
+	# Occluders grew to include nodes; the SORT LIFT deliberately did not. A unit
+	# lifted in front of a one-tile tree would draw on top of its canopy, which is
+	# the roof-standing bug the directional rule exists to prevent.
+	view.apply_snapshot(_snapshot_of(1, "res.tree", Vector2i(20, 20), {"size_class": 1}))
+	view.apply_snapshot(_snapshot_of(2, "unit.villager", Vector2i(21, 21)))
+	var tree := view.pool.get_view(1)
+	var unit := view.pool.get_view(2)
+	assert_true(unit.position.y > tree.position.y,
+			"the unit in front sorts after the tree on its own, with no lift")
+
+
 # ── interchangeable looks (visuals.json `variants`) ────────────────────────
 
 func _field_snapshot(id: int, tile: Vector2i) -> Dictionary:

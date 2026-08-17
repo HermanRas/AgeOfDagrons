@@ -58,18 +58,34 @@ const DEBUG_WOOD_CLUSTER := [
 	Vector2i(-10, 14), Vector2i(-9, 14), Vector2i(-8, 14), Vector2i(-7, 14),
 	Vector2i(-10, 15), Vector2i(-9, 15), Vector2i(-8, 15), Vector2i(-7, 15),
 ]
-## THE ONE CLUSTER THAT DID NOT MOVE, by the owner's call: several tests and
-## dev_preview reach for gold where it is, and two tiles off the town centre's
-## right wall is close enough to walk to in the first seconds of a match, which is
-## what the debug map is for.
+## Seven tiles clear of the town centre's right wall, like everything else. This
+## was the ONE cluster left close, at two tiles, and the project owner reported the
+## result as a bug: the gold was drawn overlapping the town centre.
+##
+## THE LESSON IS THAT CLEARANCE MUST BE MEASURED AGAINST THE WIDEST AGE SKIN, and
+## it is not obvious from the grid at all. A building's FOOTPRINT is fixed across
+## ages -- the town centre is 10x10 in every one -- but its ART is not:
+##
+##     age 1  Briton      315 px wide     half-width 158 px = 4.9 tiles of column
+##     age 4  Roman       575 px wide     half-width 288 px = 9.0 tiles
+##
+## Two tiles of clearance cleared the Briton hut and was 122 px inside the Roman
+## civic centre, which is exactly what the screenshot showed. Iso sends (x - y) to
+## screen x at 32 px a tile, so clearing a 288 px half-width plus the large seam's
+## own 122 px needs (x - y) of at least 13 -- these are 14 to 16.
+##
+## They are no longer in the opening frame at the default zoom, and at 1152 px wide
+## that cannot be helped: a 244 px sprite beside a 575 px building does not fit
+## between the two HUD edges however it is arranged. Gold is a short pan now, as
+## the wood already is. No test depends on where it sits -- they all spawn their
+## own nodes -- so the earlier reason for keeping it close does not bind.
 ##
 ## ORDERED LARGEST-FURTHEST-BACK. `_place_resources` gives the i-th offset size
 ## class i, and the three ore actors are 95, 180 and 244 px wide -- so with the
 ## largest at the front it stood in front of the other two and the size classes
-## could not be compared at all. Iso sorts by (dx + dy), so the entry with the
-## smallest sum draws behind: (11, 2) sums to 13 and takes the large seam, the two
-## at 14 take the medium and the small.
-const DEBUG_GOLD := [Vector2i(11, 3), Vector2i(12, 2), Vector2i(11, 2)]
+## could not be compared at all. Iso sorts by (dx + dy), so the smallest sum draws
+## behind: (16, 1) sums to 17 and takes the large seam.
+const DEBUG_GOLD := [Vector2i(17, 3), Vector2i(16, 2), Vector2i(16, 1)]
 ## A line rather than a block: a 2x2 arrangement puts two on the same screen
 ## column, one hidden behind the other. Stepping only dx staggers all four.
 ## Berry bushes, not deer -- session decision to use res.berry_bush as the MVP

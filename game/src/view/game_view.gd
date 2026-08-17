@@ -82,12 +82,28 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# SimBuilding.to_snapshot() -- units and resource nodes never carry it --
 	# so this needs no registry lookup to tell a building entry from any other.
 	var building_rects: Array[Rect2i] = []
+	# Occluders are a SUPERSET of those: buildings plus resource nodes, each with
+	# how wide its art is (`Occlusion.column_pad_for`). The sort lift above must
+	# stay buildings-only -- a one-tile tree sorts correctly on its own and lifting
+	# units in front of it would put them on top of the canopy -- but a tree or a
+	# 244 px gold seam hides whatever stands behind it just as a wall does, which is
+	# the project owner's report of 2026-08-17.
+	var occluders: Array[Dictionary] = []
 	for entry in updated:
+		var bp: Dictionary = entry.get("pos", {})
+		var centre_tile := Vector2i(int(bp.get("x", 0)), int(bp.get("y", 0))) / SimWorld.SUBTILE
 		if entry.has("footprint"):
-			var bp: Dictionary = entry.get("pos", {})
-			var centre_tile := Vector2i(int(bp.get("x", 0)), int(bp.get("y", 0))) / SimWorld.SUBTILE
 			var fp := _footprint_of(entry)
-			building_rects.append(Rect2i(centre_tile - fp / 2, fp))
+			var rect := Rect2i(centre_tile - fp / 2, fp)
+			building_rects.append(rect)
+			occluders.append({"rect": rect, "pad": 1})
+		elif GameDataRegistry.resource_def(StringName(entry.get("def_id", ""))) != null:
+			# Measured off the node's own art, which is why this asks for the
+			# visual it will actually draw -- the three gold seams are 95, 180 and
+			# 244 px, and a small one must not claim the large one's band.
+			var ph := GameDataRegistry.placeholder_for(_visual_id_of(entry))
+			occluders.append({"rect": Rect2i(centre_tile, Vector2i.ONE),
+					"pad": Occlusion.column_pad_for(ph.footprint_m)})
 
 	for entry in updated:
 		var id := int(entry.get("id", 0))
@@ -217,8 +233,8 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 	# Last, over the finished facts: who is standing behind what depends on where
 	# everything ENDED UP this snapshot, and doing it inside the entity loop would
-	# test half the units against a stale set of buildings.
-	_refresh_occlusion(building_rects)
+	# test half the units against a stale set of occluders.
+	_refresh_occlusion(occluders)
 
 
 ## Facts about one entity, or {} if it is not currently in view.
@@ -626,8 +642,8 @@ func _in_front_of_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
 ## Corpses and rubble are skipped: a dead thing behind a building is not
 ## information the player needs, and outlining the fallen would make a cleared
 ## battlefield look occupied.
-func _refresh_occlusion(building_rects: Array[Rect2i]) -> void:
-	if building_rects.is_empty():
+func _refresh_occlusion(occluders: Array[Dictionary]) -> void:
+	if occluders.is_empty():
 		for id in _facts:
 			var v := pool.get_view(int(id))
 			if v != null:
@@ -645,8 +661,8 @@ func _refresh_occlusion(building_rects: Array[Rect2i]) -> void:
 
 		var tile: Vector2i = f["tile"]
 		var hidden := false
-		for r in building_rects:
-			if Occlusion.hides(r, tile):
+		for o in occluders:
+			if Occlusion.hides(o["rect"], tile, int(o["pad"])):
 				hidden = true
 				break
 		view.occluded = hidden

@@ -52,8 +52,16 @@ static func is_in_front(tile: Vector2i, rect: Rect2i) -> bool:
 ##   3. IN ITS SCREEN COLUMN. Iso sends (x - y) to screen x, so the building
 ##      covers a band of that quantity; a unit outside the band is beside the
 ##      building on screen rather than behind it, however close it is in tiles.
-##      Widened by one tile, because a unit's sprite is wider than its tile.
-static func hides(rect: Rect2i, tile: Vector2i) -> bool:
+##
+## `column_pad` widens that band, in tiles, each side. It is 1 for a building,
+## whose footprint already spans most of what its art covers -- and much more for a
+## RESOURCE NODE, which holds one tile and can draw far wider than it: the large
+## gold seam is 244 px, nearly 8 tiles of column, so the default band of 3 missed
+## almost everything standing behind it. That was the project owner's second bug
+## report of 2026-08-17 -- units walking behind a rock simply vanished, with no
+## outline, because nothing but buildings was ever considered an occluder and the
+## band would have been far too narrow even if it had been.
+static func hides(rect: Rect2i, tile: Vector2i, column_pad: int = 1) -> bool:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return false
 	if rect.has_point(tile) or is_in_front(tile, rect):
@@ -67,10 +75,26 @@ static func hides(rect: Rect2i, tile: Vector2i) -> bool:
 
 	# The band of (x - y) the footprint spans: widest at its west corner
 	# (x0 - back y) and its east corner (front x - y0).
-	var span_min := rect.position.x - front.y - 1
-	var span_max := front.x - rect.position.y + 1
+	var pad := maxi(1, column_pad)
+	var span_min := rect.position.x - front.y - pad
+	var span_max := front.x - rect.position.y + pad
 	var column := tile.x - tile.y
 	return column >= span_min and column <= span_max
+
+
+## How many tiles of screen column a sprite covers each side of its own tile, for
+## art whose footprint diamond measures `footprint_m` (visuals.json's placeholder,
+## which is derived from the baked atlas).
+##
+## The projection is the one visuals.json documents: a footprint of (fx, fy) metres
+## draws a diamond (fx + fy) * 16 px wide, and one tile of screen column is 32 px.
+## So the half-width is (fx + fy) / 4 tiles -- 3.8 for the 244 px gold seam, 4.2 for
+## the big quarry, 3.6 for an oak, and 1 for anything small enough not to matter.
+##
+## Rounded UP: half a tile of column short is a unit that is visibly under the
+## sprite and not outlined, which is the bug being fixed.
+static func column_pad_for(footprint_m: Vector2) -> int:
+	return maxi(1, int(ceil((footprint_m.x + footprint_m.y) / 4.0)))
 
 
 ## Chebyshev distance in tiles from `tile` to the nearest part of `rect`: 0

@@ -217,6 +217,16 @@ func _advance_script() -> void:
 		29:
 			_report_field_crops()
 			_shoot("match_fields")
+		30:
+			# Behind the GOLD, not behind a building. Nothing but buildings was ever
+			# an occluder, so a unit walking behind a rock vanished with no outline
+			# (project owner, 2026-08-17). The seam is 244 px on a one-tile
+			# footprint, which is also why the screen-column band had to widen.
+			_send_villagers_behind_the_gold()
+			_wait_until(_someone_is_behind_the_gold)
+		31:
+			_report_occlusion()
+			_shoot("match_occluded_by_gold")
 		_:
 			get_tree().quit()
 			return
@@ -567,6 +577,52 @@ func _stand_up_a_farm() -> void:
 			push_warning("preview_match: no room for a field at %s" % (FARM_MILL + offset))
 
 	_game._camera.centre_on(Iso.tile_centre_to_world(FARM_MILL))
+
+
+## Walk the villagers up-screen of the largest gold seam -- behind it, where the
+## sprite stands between them and the camera -- and frame the seam.
+func _send_villagers_behind_the_gold() -> void:
+	var view: GameView = _game._view
+	var seam := _largest_gold_tile()
+	if seam == Vector2i.ZERO:
+		push_warning("preview_match: no gold to hide behind")
+		return
+
+	# Two tiles up and left: behind the sprite, and well inside BEHIND_TILES.
+	_occlusion_target = seam - Vector2i(2, 2)
+	_select_all_villagers()
+	Net.submit_command(MoveCommand.new(Net.local_player_id(),
+			view.movable_selection(), _occlusion_target))
+	_game._camera.centre_on(Iso.tile_centre_to_world(seam))
+
+
+## The tile of the biggest gold node on the map -- size class 2, the 244 px seam.
+func _largest_gold_tile() -> Vector2i:
+	var world: SimWorld = Net.host().world
+	var ids := world.entities.keys()
+	ids.sort()
+	var best := Vector2i.ZERO
+	var best_size := -1
+	for id in ids:
+		var n := world.get_entity(int(id)) as SimResourceNode
+		if n == null or n.kind != &"gold":
+			continue
+		if n.size_class > best_size:
+			best_size = n.size_class
+			best = n.tile()
+	return best
+
+
+func _someone_is_behind_the_gold() -> bool:
+	var view: GameView = _game._view
+	for id in view.all_facts().keys():
+		var f: Dictionary = view.facts_for(int(id))
+		var v := view.pool.get_view(int(id))
+		if v == null or not v.occluded:
+			continue
+		if (f.get("tile", Vector2i.ZERO) as Vector2i - _occlusion_target).length() <= 3.0:
+			return true
+	return false
 
 
 ## Send every villager to the nearest of the four plots. Through the ordinary
