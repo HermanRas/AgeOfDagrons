@@ -50,6 +50,13 @@ func validate(w: SimWorld) -> bool:
 	var p := w.player_for(player_id)
 	if p == null or not p.can_afford(ud.cost):
 		return false
+	# THE POPULATION CAP (4.11), which until 2026-08-17 was a number on the HUD that
+	# nothing enforced. Asked of `PopulationSystem` rather than read off
+	# `p.pop_used`/`p.pop_cap` here: those are last tick's report -- CommandSystem
+	# runs before PopulationSystem -- and they are 0/0 on the first tick of a match,
+	# which would refuse every unit in the game. See `has_room_for()`'s own header.
+	if not PopulationSystem.has_room_for(w, player_id, ud.pop_cost):
+		return false
 	# Same reasoning as PlaceBuildingCommand: `bd.trains` is the building's roster
 	# across ALL ages and the per-unit gate is what narrows it, so without this an
 	# age-2 archery range would happily queue a crossbowman for any client that

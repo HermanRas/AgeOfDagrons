@@ -23,9 +23,27 @@ func _player(id: int = 1) -> SimPlayer:
 	return w.player_for(id)
 
 
+## Everything a player needs to be refused for AGE REASONS ALONE: full stock, and
+## somewhere for the unit to live.
+##
+## The population half arrived with 4.11's enforcement, and without it every train
+## assertion below started failing for the right reason at the wrong time -- a
+## `TrainCommand` is now refused at a pop cap of 0, which an empty world always has,
+## so "an age-4 player can train a trebuchet" was failing on housing. A town centre
+## and a house is 15 pop (buildings.json), comfortably over the dragon's 10, which is
+## the most any single unit costs.
+##
+## Both are FORCED into place and may overlap the buildings a test spawns for itself.
+## That is harmless here: nothing in this file asks whether a placement is legal --
+## `PlaceBuildingCommand.validate()` is tested against tiles of its own -- and every
+## spawn in the file is forced for the same reason.
 func _rich(id: int = 1) -> void:
 	for kind in [&"food", &"wood", &"gold", &"stone"]:
 		_player(id).add_resource(kind, 10000)
+	w.spawn_building(&"building.town_center", id, Vector2i(36, 36),
+			SimBuilding.Phase.COMPLETE, true)
+	w.spawn_building(&"building.house", id, Vector2i(30, 36),
+			SimBuilding.Phase.COMPLETE, true)
 
 
 # ── advancing ───────────────────────────────────────────────────────────────

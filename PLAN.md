@@ -1637,7 +1637,7 @@ These supersede the 0.7 device figures recorded above, which predate terrain joi
 | 4.8 | Garrison | |
 | 4.9 | Defensive garrison damage bonus | |
 | 4.10 | Special abilities + cooldowns | |
-| 4.11 | HALF DONE -- `PopulationSystem` (last in the system order, after `DeathSystem`) recounts `pop_used`/`pop_cap` from scratch every tick: `pop_used` sums `SimUnit.pop_cost` over living units, `pop_cap` sums `provides_pop` over COMPLETE buildings, and both are assigned per player so a lost house writes the cap back down. Recounted rather than adjusted on spawn/death, so no path a unit can leave the world by needs to remember to decrement anything and none of them can leak population. The field, the `player_state` channel and the `state_hash()` entry had existed since 0.6 with nothing writing them, so both sat at 0. `ResourceHUD`s bottom row now shows units-on-map over the limit (it showed idle/total villagers until the project owner corrected it, 2026-08-17; idle villagers are `IdleVillagerBadge`). NOT ENFORCED: `TrainCommand` has no population check, so this is a true report of a rule nothing applies yet -- that is what is left of 4.11 | |
+| 4.11 | ✅ **DONE** -- `PopulationSystem` (after `DeathSystem`, second-last in the system order) recounts `pop_used`/`pop_cap` from scratch every tick: `pop_used` sums `SimUnit.pop_cost` over living units, `pop_cap` sums `provides_pop` over COMPLETE buildings, and both are assigned per player so a lost house writes the cap back down. Recounted rather than adjusted on spawn/death, so no path a unit can leave the world by needs to remember to decrement anything and none of them can leak population. The field, the `player_state` channel and the `state_hash()` entry had existed since 0.6 with nothing writing them, so both sat at 0. `ResourceHUD`s bottom row now shows units-on-map over the limit (it showed idle/total villagers until the project owner corrected it, 2026-08-17; idle villagers are `IdleVillagerBadge`). ENFORCED since 2026-08-17 by `PopulationSystem.has_room_for()`, called from `TrainCommand.validate()` (the server is the only trust boundary) and from `GameScene._on_train_requested()` for the toast, so the refusal the player reads and the refusal the host makes are one implementation -- the arrangement `SimWorld.adjacency_allows()` already keeps for the placement ghost. The gate DERIVES the population instead of reading `pop_used`/`pop_cap`, because `CommandSystem` runs first in the tick and this system runs last: the report is a tick stale when the gate is asked and is 0/0 on tick 1, which would refuse the first villager of every match. QUEUED UNITS RESERVE THEIR POPULATION (`queued_pop()`), without which the cap is trivially beatable -- a player one slot short could queue twenty villagers and get all twenty. What it deliberately does not do is stop an already-paid-for unit from spawning: losing houses with a full queue puts you over the cap until the losses catch up | |
 | 4.12 | Stances | |
 | 4.13 | Military units (§9.2's roster) + `CombatSystem`. Includes the packed/unpacked siege state machine (§9.2.1 item 5) and the hostile wolf (`res.wolf`), both of which are combat, not economy | |
 | 4.14 | Formations | |
@@ -1712,9 +1712,9 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 
 | # | Item | Tag |
 |---|---|---|
-| 11.1 | `WinConditionSystem` + conquest mode; result screen | |
-| 11.2 | Additional modes (regicide, king of the hill, capture the flag, wonder) | |
-| 11.3 | Mode shown in lobby and match-start screen | |
+| 11.1 | ✅ **DONE** -- `WinConditionSystem` (`src/sim/systems/win_condition_system.gd`), last in the system order so a loss lands on the tick it happens. Conquest is `MatchConfig.Mode.LAST_MAN_STANDING`: own no unit and no building and you are eliminated (`SimPlayer.defeated`, one-way), and the last player left sets `SimWorld.winner_id`/`match_over`. Alive-only, so a corpse (4.7) or rubble (5.5) does not postpone the result, but a FOUNDATION keeps you in -- it holds ground and can still be raised. Both fields plus `defeated` ride the snapshot and are folded into `state_hash()`, the outcome being the one thing two clients must never disagree about. A one-player world is never decided (a solo sandbox has nobody to outlast) and neither is a world with no units or buildings in it at all, which is what every sim test that skips MapGen runs on. Result screen is `ResultScreen` (`src/view/result_screen.gd`), `PauseMenu`'s sibling with no Resume: VICTORY/DEFEAT, a line saying which of the three outcomes it was, Main Menu and Quit, and it stops `SimClock`. `GameScene._refresh_result()` reads it off the snapshot -- three outcomes, two of them defeat -- and `_orders_refused()` gates input on it. Verified against the real `debug_skirmish` map: killing the two-soldier enemy squad wins the match | |
+| 11.2 | Additional modes (regicide, king of the hill, capture the flag, wonder). TWO DECLARED AS PLACEHOLDERS 2026-08-17 (project owner): `Mode.TROPHY` (every player starts with a baby dragon; lose it and you are out) and `Mode.KING_OF_THE_HILL` (hold a ringed zone with the most units to score; first to 1000 wins). Both are in the enum and neither decides anything -- `WinConditionSystem` documents exactly what each still needs. Trophy wants a `unit.dragon_baby` def, a MapGen that hands every player one (which the one-start debug map cannot do), and an `is_trophy` flag rather than a hardcoded id; KotH wants the zone's position as MAP data, a per-player score on `SimPlayer` (deliberately not added -- an unwritten field that reaches the HUD is exactly the hole 4.11's counter was), and the minimap ring. Inert is the safe direction to be unfinished in: "you lose when your trophy dies", evaluated on a map with no trophies, defeats everybody on tick 1 | |
+| 11.3 | Mode shown in lobby and match-start screen. `MatchConfig.mode` is the field it will set, and the snapshot already carries `mode` so the result screen can name the rule that decided it | |
 
 ### Phase 12 Ã¢â‚¬â€ Multiplayer & AI *(IDEA phase 12)*
 
@@ -1743,14 +1743,14 @@ Core mobile mechanic; needs testing under real thumb use, so it ships in MVP.
 | 4.13 Military units + combat | Very high | Medium | **First** |
 | 2.5 Fog of war | High | Medium | **Second** |
 | 12.2a AI opponent | Very high | Medium-high | **Third** |
-| 4.11 Population cap | Medium | Low | Quick win |
+| 4.11 Population cap | Medium | Low | ✅ **DONE** 2026-08-17 |
 | 5.7 More buildings | High breadth | Low each **in code**; ~70 bakes in art (§9.2) | Quick win in data, art track paces it |
-| 11.1 Win condition | High | Low | Quick win |
+| 11.1 Win condition | High | Low | ✅ **DONE** 2026-08-17 (conquest only; 11.2's two placeholders declared) |
 | 9.x Ages & tech | High but broad — the age axis now carries what factions would have (§2.7) | High: four age skins of every building | Batch later |
 | 12.1 Real multiplayer | High | Medium (socket only) | After AI |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
 
-**First post-MVP batch:** 11.1 + 4.11 + 4.13 + 2.5 + 12.2a Ã¢â‚¬â€ turns the economy demo into a winnable match.
+**First post-MVP batch:** ✅ 11.1 + ✅ 4.11 + 4.13 (combat lands; siege pack/unpack, the hostile wolf and arrow projectiles are what is left) + 2.5 + 12.2a Ã¢â‚¬â€ turns the economy demo into a winnable match.
 
 ---
 

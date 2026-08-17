@@ -48,6 +48,10 @@ static func build(w: SimWorld, _player_id: int) -> Dictionary:
 			# same snapshot every other per-player fact does rather than a
 			# separate channel.
 			"control_groups": p.control_groups,
+			# PLAN.md 11.1. Per-player rather than derivable from `winner_id` below:
+			# in a match of three or more, a player is knocked out while the match
+			# goes on, and this is the only thing that says so.
+			"defeated": p.defeated,
 		}
 
 	return {
@@ -56,4 +60,12 @@ static func build(w: SimWorld, _player_id: int) -> Dictionary:
 		"updated": updated,
 		"removed": w.removed_this_tick.duplicate(),
 		"player_state": player_state,
+		# The outcome (PLAN.md 11.1), which is about the MATCH and not about any one
+		# player, so it sits beside `tick` rather than in `player_state`.
+		# `match_over` without a `winner_id` is the draw; see SimWorld's own fields.
+		# `mode` rides along so the result screen can name the rule that decided it
+		# (11.3) without the client having to remember what the lobby picked.
+		"mode": int(w.mode),
+		"match_over": w.match_over,
+		"winner_id": w.winner_id,
 	}

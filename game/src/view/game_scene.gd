@@ -29,8 +29,17 @@ var _idle_badge: IdleVillagerBadge
 var _minimap: Minimap
 var _toast: NoticeToast
 var _pause_menu: PauseMenu
+var _result: ResultScreen
 var _error_label: Label
 var _error: String = ""
+
+## True once the local player's match has been decided (PLAN.md 11.1) -- won,
+## lost, or drawn. Kept beside `_error` and checked by the same guards, because it
+## means the same thing to input handling: orders from here on would be orders into
+## a match that has stopped. The `ResultScreen` overlay swallows GUI presses on its
+## own; this catches the touch path, which reaches `InputRouter` through
+## `_unhandled_input` and never asks a Control's `mouse_filter` anything.
+var _match_over := false
 
 ## Last snapshot's control groups for the local player (PLAN.md 10.6):
 ## `Array[Array[int]]`, one entry per `SimPlayer.CONTROL_GROUP_COUNT` slot.
@@ -300,6 +309,13 @@ func _build_hud() -> void:
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
+	# ADDED AFTER THE PAUSE MENU, so it draws over it. If the match is decided while
+	# the player happens to have the pause menu open, the result is the thing that
+	# outranks -- and its Resume would otherwise restart a clock the result screen
+	# has just stopped.
+	_result = ResultScreen.new()
+	hud.add_child(_result)
+
 	# ERRORS ONLY. This used to carry the controls hint and the placement hint as
 	# well, as one long line across the top -- which grew to whatever its text
 	# needed and ran straight under the resource counters, obscuring the top row.
@@ -367,6 +383,55 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_refresh_panel()
 	_refresh_hud(snap)
 	_refresh_minimap()
+	_refresh_result(snap)
+
+
+## The end of the match (PLAN.md 11.1), read off the snapshot rather than worked
+## out here -- `WinConditionSystem` decides it and the host sends it, so the screen
+## cannot disagree with the sim about whether the game is over.
+##
+## THREE OUTCOMES, TWO OF THEM DEFEAT. `match_over` with our own id is the win;
+## `match_over` with anybody else's (or 0, the mutual-destruction draw) is not.
+## `defeated` without `match_over` is the third case and the reason the flag rides
+## per player at all: in a match of three or more, being knocked out happens while
+## the fighting goes on, and the player is owed the screen then rather than whenever
+## the survivors finish.
+##
+## Runs LAST of the four refreshes on purpose: the HUD, panel and minimap should all
+## show the final tick's state behind the overlay, rather than being frozen one tick
+## short of the thing that ended it.
+func _refresh_result(snap: Dictionary) -> void:
+	if _result.is_shown():
+		return
+
+	var player_id := Net.local_player_id()
+	var mine: Dictionary = (snap.get("player_state", {}) as Dictionary).get(player_id, {})
+	var over := bool(snap.get("match_over", false))
+	var defeated := bool(mine.get("defeated", false))
+	if not over and not defeated:
+		return
+
+	# Short lines on purpose: the panel is 340 wide because a 240 px button and the
+	# frame's border say so, and a sentence long enough to wrap onto three lines
+	# would push the buttons down out of it.
+	_match_over = true
+	var winner := int(snap.get("winner_id", 0))
+	if not over:
+		_result.show_result(false, "You were eliminated")
+	elif winner == player_id:
+		_result.show_result(true, "All opponents eliminated")
+	elif winner == 0:
+		_result.show_result(false, "Nobody was left standing")
+	else:
+		_result.show_result(false, "Player %d won" % winner)
+
+
+## Whether the player's input should be ignored outright: the match never started
+## (`_error`) or it has finished (`_match_over`). One predicate for both because
+## every guard in this file wanted both the moment the second one existed, and two
+## separate checks is how one of them ends up missing from a handler.
+func _orders_refused() -> bool:
+	return _error != "" or _match_over
 
 
 ## Pushes 7.1's two counter signals, plus 10.1's per-slot control-group signal,
@@ -414,7 +479,7 @@ func _refresh_hud(snap: Dictionary) -> void:
 ## `ActionFlash` on the target so the player sees which one fired without
 ## reading the panel.
 func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
-	if _error != "":
+	if _orders_refused():
 		return
 	# Any tap at all invalidates a deferred deselect still waiting to fire; see
 	# `_tap_token`'s own header for why the detector cannot tell on its own.
@@ -485,7 +550,7 @@ func _commit_ground_tap(_tile: Vector2i) -> bool:
 ## an abandoned placement never needs the pause menu to escape -- the same
 ## order Escape resolves them in.
 func _on_context_cancel() -> void:
-	if _error != "":
+	if _orders_refused():
 		return
 	if _placing_def_id != &"":
 		_exit_placement()
@@ -658,7 +723,27 @@ func _on_action_requested(action_id: StringName) -> void:
 			_toast.show_message("Tap an enemy to attack")
 
 
+## The polite half of the population cap (PLAN.md 4.11). `TrainCommand.validate()`
+## is what actually refuses, and it does so silently -- a command that fails
+## validation is simply dropped, so without this the Train button would go dead at
+## the cap with no explanation, which is the failure mode a full town centre and a
+## broken button have in common.
+##
+## Asks `PopulationSystem` the same question the host will, through `Net.host()` --
+## the documented solo-only exception `_preview_placement()` already uses to colour
+## the placement ghost by the host's own adjacency rule, and for the same reason: a
+## second implementation of the rule on this side would disagree with the server the
+## first time either one changed. A remote client has no host to ask and will need
+## the refusal sent back to it, which is a job for the multiplayer phase.
 func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
+	var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
+	var world: SimWorld = Net.host().world if Net.host() != null else null
+	if ud != null and world != null \
+			and not PopulationSystem.has_room_for(world, Net.local_player_id(), ud.pop_cost):
+		# Names the fix, not just the rule: "Population limit reached" alone leaves a
+		# new player looking for a setting, and the answer is always another house.
+		_toast.show_message("Population limit reached -- build a house")
+		return
 	Net.submit_command(TrainCommand.new(Net.local_player_id(), building_id, unit_def_id))
 
 
@@ -740,7 +825,7 @@ func _on_group_selected(slot: int) -> void:
 ## so between one landing and the tap being handled the last idle villager may
 ## already have been given a job by something else.
 func _on_idle_cycle_requested() -> void:
-	if _error != "":
+	if _orders_refused():
 		return
 	var next := _view.next_idle_villager(Net.local_player_id(), _idle_cycle_id)
 	if next == 0:
@@ -769,7 +854,8 @@ func _on_group_assign_requested(slot: int) -> void:
 ## Ctrl+1-5 assigns -- mobile's single/double-tap on the HUD icon are the same
 ## two actions under different input, so both paths end at the same handlers.
 func _unhandled_key_input(event: InputEvent) -> void:
-	if _error != "" or not (event is InputEventKey) or not event.is_pressed() or event.is_echo():
+	if _orders_refused() or not (event is InputEventKey) or not event.is_pressed() \
+			or event.is_echo():
 		return
 	var key := event as InputEventKey
 
@@ -815,7 +901,7 @@ func _on_box_cancelled() -> void:
 ## rectangle changes size as well as position.
 func _on_box_selected(screen_rect: Rect2) -> void:
 	_box.hide_box()
-	if _error != "":
+	if _orders_refused():
 		return
 
 	var to_local := _view.get_global_transform_with_canvas().affine_inverse()

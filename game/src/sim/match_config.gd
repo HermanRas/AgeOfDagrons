@@ -8,6 +8,25 @@
 class_name MatchConfig
 extends RefCounted
 
+## How the match is won (PLAN.md 11.1/11.2). Chosen in the lobby once 1.6/11.3
+## exist; until then every match is the default.
+##
+## ONLY LAST_MAN_STANDING IS IMPLEMENTED. The other two are declared here so the
+## mode is a real axis rather than a boolean, and so the lobby has a list to show
+## -- `WinConditionSystem` documents exactly what each of them still needs, and
+## deliberately never ends a match in either. A mode that half-works would end
+## matches for reasons the player cannot see; one that does nothing leaves a
+## sandbox, which is what the debug map already is.
+##
+##   LAST_MAN_STANDING  own no units and no buildings and you are out; last
+##                      player left wins. The classic conquest rule.
+##   TROPHY             every player starts with a baby dragon; lose it and you
+##                      are out.
+##   KING_OF_THE_HILL   hold a zone on the map with more units than anybody else
+##                      to score; first to WinConditionSystem.KOTH_TARGET_SCORE
+##                      wins.
+enum Mode { LAST_MAN_STANDING, TROPHY, KING_OF_THE_HILL }
+
 ## Deliberately small. PLAN.md 10's MVP is "one small map on a phone", and an 8x8
 ## town centre plus 5 villagers on 64x64 tiles is already a generous settlement's
 ## worth of room. 2.4b scales size with player count.
@@ -15,6 +34,12 @@ const DEBUG_MAP_SIZE := Vector2i(64, 64)
 
 var player_ids: Array[int] = []
 var map_size: Vector2i = DEBUG_MAP_SIZE
+
+## PLAN.md 11.1. Part of the config for the same reason `colours` is: every
+## client builds its own world (2.4a), and two of them running different victory
+## rules would disagree about whether the match is over -- which `state_hash()`
+## now catches, because the outcome is folded into it.
+var mode: Mode = Mode.LAST_MAN_STANDING
 
 ## Palette index (colours.json) per entry in `player_ids`, position for position.
 ## EMPTY means "derive from join order", which is what every player got before
@@ -55,6 +80,14 @@ static func debug_single_player() -> MatchConfig:
 ## absent and rendering perfectly happily in the wrong shape. All eight are
 ## correct as of the 2026-08-16 rebake, so this is now a choice rather than a
 ## constraint, and any pair would work.
+##
+## THIS IS THE ONLY CONFIG 11.1 CAN ACTUALLY DECIDE, and that is what makes the
+## win condition demoable at all: two players, so Last Man Standing has somebody
+## to outlast. The opponent owns two soldiers and nothing else, so killing both of
+## them ENDS THE MATCH in victory -- the intended demo, and also the thing to
+## remember before wondering why a long sandbox session stopped. Nothing can
+## attack the local player back yet (no AI, 12.2a), so defeat is only reachable by
+## debug-destroying your own town centre and villagers.
 static func debug_skirmish() -> MatchConfig:
 	var c := MatchConfig.new()
 	c.player_ids = [1, 2]

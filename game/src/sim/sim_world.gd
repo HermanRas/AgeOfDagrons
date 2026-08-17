@@ -16,6 +16,19 @@ const _FALLBACK_UNIT := {"hp": 1, "speed": 100, "vision_range": 2, "domain": &"l
 
 var tick: int = 0
 var map: SimMap = null
+
+## How this match is won and how it ended (PLAN.md 11.1). `mode` comes from
+## MatchConfig and never changes; the other two are written ONLY by
+## WinConditionSystem, which stops evaluating once `match_over` is set.
+##
+## `winner_id` is 0 both before anybody has won and for the draw where the last
+## players fall on the same tick -- `match_over` is what tells those two apart, and
+## it is why this is two fields rather than one. A defeated player in a match still
+## being fought is neither: they read their own `SimPlayer.defeated`.
+var mode: MatchConfig.Mode = MatchConfig.Mode.LAST_MAN_STANDING
+var match_over: bool = false
+var winner_id: int = 0
+
 var players: Array[SimPlayer] = []
 var entities: Dictionary = {}          # int id -> SimEntity
 var spatial: SpatialHash = null
@@ -35,6 +48,9 @@ func setup(cfg: MatchConfig) -> void:
 	tick = 0
 	entities.clear()
 	players.clear()
+	mode = cfg.mode
+	match_over = false
+	winner_id = 0
 	map = SimMap.create(cfg.map_size)
 	spatial = SpatialHash.new()
 	paths = PathService.new()
@@ -59,13 +75,16 @@ func setup(cfg: MatchConfig) -> void:
 	# AgeSystem sits beside ProductionSystem: both turn queued time into a thing
 	# arriving, and both must run after CommandSystem has let this tick's orders
 	# land so an advance started this tick is already counting.
-	# PopulationSystem is after DeathSystem, and last of all: it recounts what
-	# EXISTS, so it must see the finished tick rather than the middle of one.
+	# PopulationSystem is after DeathSystem: it recounts what EXISTS, so it must see
+	# the finished tick rather than the middle of one.
+	# WinConditionSystem (11.1) is last of all, for the same reason and one more: a
+	# player whose last building fell THIS tick has lost as of this tick, and every
+	# system that could still have saved them has already had its say.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
 			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
-			DeathSystem.new(), PopulationSystem.new()]
+			DeathSystem.new(), PopulationSystem.new(), WinConditionSystem.new()]
 
 	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()
@@ -531,7 +550,16 @@ func state_hash() -> int:
 		# every hash until it completed, and then disagree with nothing to say
 		# when they parted. The in-flight counter is what makes that visible
 		# immediately. `colour` stays out -- it is fixed at join and never mutates.
+		# `defeated` (11.1) is in here because it is the one per-player fact that is
+		# IRREVERSIBLE: two clients that eliminated a player on different ticks would
+		# otherwise agree on every hash until one of them declared a winner.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
-				p.advancing_to, p.advance_ticks, p.advance_total_ticks])
+				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated])
+
+	# The outcome itself, which is the single most important thing in the hash to get
+	# right: two clients that disagree about who won have diverged about the only
+	# question the match was asked. `mode` stays out -- it comes from MatchConfig and
+	# never mutates, the same reason `colour` stays out above.
+	parts.append([match_over, winner_id])
 
 	return hash(parts)
