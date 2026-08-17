@@ -15,9 +15,38 @@
 # the obvious guess from the template name would have been wrong, which is the
 # whole reason the roster's lines get resolved instead of pattern-matched.
 #
-# STATIC for the same reason as the ballista: `isobake inspect` reports
-# `Biped (0 bones)`, so any declared clip would abort the bake rather than
-# degrade. See ballista.toml for the full working and the game agent's reply.
+# ANIMATED as of 2026-08-17, and it had to be: baked static, the throwing arm
+# rendered in its BIND pose -- reared back, nose in the air -- which the project
+# owner spotted against 0 A.D.'s own render. 0 A.D. never shows that pose because
+# it always plays `Idle`.
+#
+# This file used to say STATIC "for the same reason as the ballista", citing
+# `Biped (0 bones)` from `isobake inspect`. Both halves of that were wrong. The
+# ballista's reading was a tool/bake disagreement (see ballista.toml); this
+# actor's problem was different and outlived that fix, because the onager is TWO
+# actors and only the inner one animates:
+#
+#   siege_onager_pivot  the base, and what [source] names   no animations
+#   siege_onager        the arm, mounted at `weapon`         Idle, attack_ranged
+#
+# So the clip has to be aimed at the ARM's rig, and until isobake 2026-08-17 it
+# could not be. Every armature this actor imports is anchored -- the crew hang
+# off empties on the base plane, not off bones -- so `subject_armature` took its
+# all-anchored branch, where the arm at `weapon` and the three crew at
+# `engineer_a/b/c` are all one hop from the free base plane. Its tie-break was
+# bone count, and Blender's datablock reuse inflates a crew Biped to 202 bones
+# against the arm rig's 8, so the clip would have been aimed at a soldier. That
+# branch now ranks by props anchored TO each rig first, the same rule the free
+# branch already used; the arm owns the stone in its sling and a crew rig owns
+# nothing, so the arm wins. Verified: `inspect` reports `onager (8 bones)` and a
+# directions=1 probe pair shows the engine seated flat instead of reared.
+#
+# `file` IS REQUIRED ON EVERY CLIP HERE, unlike ballista.toml which names clips
+# only. Clip names resolve against the actor in [source] -- the pivot -- and the
+# pivot declares no animations at all, so a bare `clip = "Idle"` resolves to
+# nothing and the bake would abort. Naming the arm's own animation file bypasses
+# the lookup. Consequence to know about before editing: `file` also becomes the
+# clip's identity, so die/decay below share idle's, and see the note there.
 id      = "vis.onager.blue"
 adapter = "zeroad"
 
@@ -47,6 +76,56 @@ directions = 5
 frame_origin_at = 0.2
 engine = "eevee"
 samples = 24
+
+# 12 frames at 8 fps, matching ballista.idle. The arm's own idle keys exactly ONE
+# of its 8 bones (`onagermain`) -- `inspect` calls that 12% and "TOO LOW to
+# transfer by name", and here that warning is noise: the one bone it keys is the
+# one that seats the whole engine, which is the entire defect this fixes. The
+# frames are not wasted on a near-still engine either, because the three crew are
+# driven from their own operator actors' Idle and do move.
+[anims.idle]
+clip = "Idle"
+file = "mechanical/siege_onager_idle.dae"
+frames = 12
+fps = 8
+loop = true
+
+# Keys 7 of the arm rig's 8 bones, 88%, "transfers by bone name -- no retarget
+# needed"; the eighth is `prop_projectile`, an attach point rather than a moving
+# part. Same frames/fps as ballista.attack.
+[anims.attack]
+clip = "attack_ranged"
+file = "mechanical/siege_onager_attack.dae"
+frames = 12
+fps = 15
+loop = true
+
+# 0 A.D. gives the ARM no Death animation -- it declares Idle and attack_ranged
+# and nothing else -- so die/decay freeze the idle pose, the same choice
+# ballista.toml and siege_ram.toml make for engines that have no death clip.
+#
+# One difference from those two, deliberate and worth stating: their crew
+# COLLAPSE on death and these three will not. A clip's identity is its `file`
+# where one is given, so die/decay share idle's identity, and the crew are given
+# their own actors' clip once per identity. Reaching the crew's Death would mean
+# a die clip with an identity of its own, and there is no third animation file on
+# this rig to give it one. A frozen crew around a frozen engine reads as still;
+# it does not read as a bug.
+[anims.die]
+clip = "Death"
+file = "mechanical/siege_onager_idle.dae"
+frames = 2
+fps = 1
+loop = false
+
+[anims.decay]
+clip = "Death"
+file = "mechanical/siege_onager_idle.dae"
+frames = 2
+fps = 1
+loop = false
+# Pinned to the clip's final pose, as every decay is. See tools/fix_decay_start.py.
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

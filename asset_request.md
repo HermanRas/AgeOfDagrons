@@ -10,29 +10,37 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
-### `vis.onager` still renders nose-up — **agent 2, 2026-08-16, diagnosed, not fixed**
+### `vis.onager` still renders nose-up — **agent 2, 2026-08-16; FIXED 2026-08-17**
 
-Spotted by the project owner against 0 A.D.'s own render. It does not block me and
-needs nothing from my side; it is here so nobody re-reports it or builds a
-workaround. `vis.field`, which was diagnosed alongside it, is fixed, staged and
-wired — see Delivered.
+**Fixed and staged.** Both halves as diagnosed: isobake `e257ae8` stops the
+all-anchored `subject_armature` branch ranking by bone count, so the clip lands on
+the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe now declares
+`idle` / `attack` / `die` / `decay`. The engine sits flat on its base and the arm
+lies along the frame. The full working is in `tools/recipes/onager.toml` and the
+isobake commit message; nothing about it needs to live here.
 
-**The throwing arm is reared back, nose in the air.** Not a rotation problem —
-agent 2 probed four yaw offsets and none is it. The onager is two actors and only
-the inner one animates: the pivot base the recipe names declares no animations,
-while the arm mounted at `weapon` declares `Idle` and `attack_ranged`. The recipe
-declares no clips, so the arm renders in its bind pose; 0 A.D. never shows that
-pose because it always plays `Idle`.
+**One thing to check on your side, and it is small.** The atlas shape changed the
+way `vis.ballista`'s did when it stopped being static:
 
-**Adding `[anims.idle]` alone will NOT fix it.** Every armature on this actor is
-anchored, so isobake's `subject_armature` falls through to its all-anchored branch
-and its "most bones" tie-break picks a 202-bone crew Biped over the 8-bone arm rig
-— the clip would be aimed at a soldier. Two parts: make that fallback prefer the
-rig belonging to the subject actor's own prop, then declare `idle` (+ `attack`).
+| | before | after |
+|---|---|---|
+| anims | `static`, 1 frame | `idle` 12, `attack` 12, `die` 2, `decay` 2 |
+| frame0 | 118×107, anchor (55.0, 53.6) | 115×108, anchor (60.0, 57.6) |
 
-**agent 1, 2026-08-17:** nothing on my side waits for this. `vis.onager` renders,
-trains, fights and tints; `speed: 0` stays either way because there is still no
-walk clip. Take it whenever it suits.
+The sprite is the same size to within 3 px, so unlike the gold and stone re-points
+I do **not** think `footprint_m` / `height_m` want re-measuring — the old figures
+were taken off this same actor, only in a wrong pose. Worth one look, not a
+re-derivation. `speed: 0` still stands: there is no walk clip on this rig, only
+`Idle` and `attack_ranged`.
+
+**Known cosmetic limit, deliberate.** The three crew do not collapse on death the
+way the ballista's and the ram's do. 0 A.D. gives this arm no `Death` animation at
+all, so `die`/`decay` freeze the idle pose, and because a clip's identity here has
+to be its animation *file* (the pivot actor the recipe names declares no
+animations, so clip names cannot resolve), `die` cannot carry an identity separate
+from `idle`'s and so cannot hand the crew a death clip of their own. A still crew
+around a still engine reads as stopped, not as broken. Say so if you disagree and
+I will look at giving a recipe a way to name rider clips directly.
 
 ---
 

@@ -7,7 +7,7 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated 2026-08-16.
+Last updated 2026-08-17.
 
 ---
 
@@ -192,6 +192,42 @@ tool's output, check that the tool and the bake share the code path.** Fixed
 with its bone count so a judgement between one real rig and five empty crew
 shells is visible rather than inferred.
 
+**The subject armature of a subject with no rig is a JUDGEMENT, and a wrong one
+is silent.** A composite actor imports one armature per figure and `isobake`
+drives exactly one of them. Where the subject's own mesh is unrigged — a siege
+engine's base, a mill, a ship's hull — every armature present belongs to a prop,
+and the pick falls to a tie-break. Bone count is never that tie-break: Blender's
+datablock reuse inflates a crew Biped to **202 bones** against an engine rig's 8,
+so it reliably picks a soldier. It now ranks by how many props are anchored **to**
+each rig, in both branches (isobake `e257ae8`) — the subject is what the
+constrained point at, never the constrained.
+
+The failure mode is why this is in §4 rather than in a docstring: a clip aimed at
+the wrong rig does not error. That rig plays it, the real subject holds its **bind
+pose**, and the sprite looks like a modelling or rotation mistake. `vis.onager`
+shipped for a year with its throwing arm reared back and its nose in the air, and
+four `yaw_offset_deg` probes were spent on it before the cause was found. **When a
+composite actor renders in a pose the source engine never shows, suspect the
+armature pick before the rotation.**
+
+**A recipe's clip names resolve against the actor in `[source]`, and on a nested
+actor that is the wrong actor.** The onager is two actors: the pivot base the
+recipe names declares no animations at all, while the arm mounted at `weapon`
+declares `Idle` and `attack_ranged`. So `clip = "Idle"` resolves to nothing and the
+bake aborts. Name the animation file instead (`file = "mechanical/..."`), which
+bypasses the lookup. Know the consequence before reaching for it: **`file` also
+becomes the clip's identity**, so two anims naming one file share a single clip and
+a single set of rider actions — which is why the onager's crew cannot be given a
+death clip while its `die` reuses the idle file.
+
+**`inspect`'s `driven_pct` is meaningless on a rig with very few bones.** The
+onager arm's idle keys 1 of its 8 bones, which prints as 12% and "TOO LOW to
+transfer by name; needs a retarget step" — and it is perfect: the one bone it keys
+is the one that seats the whole engine. The threshold was calibrated on ~100-bone
+bipeds where a low overlap really does mean a failed retarget. On a small
+mechanical rig, read WHICH bones are driven, and settle it with a `directions = 1`
+probe pair rather than the percentage.
+
 **Attach points: `prop-head` is empty, `prop_head` is taken.** 0 A.D. skeletons
 declare attach points as ordinary bones (`biped.xml` has `head`, `helmet`,
 `weapon_R`) and the COLLADA carries a `prop-<name>` joint beside each. The
@@ -233,12 +269,11 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-16
+## 5. State as of 2026-08-17
 
-- **163 base recipes**, **160 generated colour recipes** (20 units × 8).
-- **Nothing is running.** The colour backlog is finished: batch
-  `20260816-122118`, 90/90, 0 failures, 5.1 h at 3-wide.
-- **Staging is complete and current: `325/325, RESULT: OK`.** All eight colours
+- **171 base recipes**, **160 generated colour recipes** (20 units × 8).
+- **Nothing is running.**
+- **Staging is complete and current: `331/331, RESULT: OK`.** All eight colours
   are correct for all 20 colourable units; the game agent is no longer restricted
   to red and yellow.
 - `vis.ballista` is base-only because **its own** crew textures measure a 0% mask
@@ -247,9 +282,12 @@ with WinError 5. Delete contents, not the directory.
   the crew got their heads and helmets back: still 0.00%** (21,761 opaque pixels,
   0 moving >64, largest channel gap 14 — under the noise floor). The rescued kit
   carries no mask either, so `"colours": false` is confirmed rather than assumed.
-- **`vis.ballista` animates** as of 2026-08-16 — `idle`/`attack`/`die`/`decay`,
-  140 frames. It was static only because `inspect` lied about its armature; see
-  §4. `vis.onager` stays static, correctly: its actor declares no animations.
+- **Both siege engines animate.** `vis.ballista` since 2026-08-16 and
+  `vis.onager` since 2026-08-17 — `idle`/`attack`/`die`/`decay`, 140 frames each.
+  Each was static for a different wrong reason and the second outlived the fix for
+  the first: the ballista's was a tool/bake disagreement about which armature the
+  bake drives, the onager's was that its clip had nowhere correct to land (§4,
+  "The subject armature of a subject with no rig").
 - **Build identity is live.** Staged population, counted off disk:
 
   ```
@@ -272,7 +310,16 @@ with WinError 5. Delete contents, not the directory.
 > comparing rendered frames, establish the noise floor from two frames that must
 > be identical before choosing a threshold.
 
-### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `8aa37b0`, build 33)
+### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `e257ae8`, build 36)
+
+Newest first; the numbering is historical, not a ranking.
+
+- **2026-08-17 — the all-anchored `subject_armature` tie-break ranked by bone
+  count**, so a subject whose own mesh is unrigged and which carries several rigged
+  props at the same depth — the onager, whose base plane holds an arm and three
+  crew — handed the recipe's clip to a crew member. Ranks by props owned now, in
+  both branches. §4 has the full lesson. This is what stood between `vis.onager`
+  and an animated bake.
 
 0. **`inspect` reported the wrong armature**, and **nested props of nested props
    were never anchored** — both landed 2026-08-16 and both are covered in §4.
@@ -294,47 +341,6 @@ with WinError 5. Delete contents, not the directory.
    to 202 bones by Blender datablock reuse. Now ranks by props anchored **to** it.
 
 ### Known open items
-
-- **`vis.onager` renders with its throwing arm reared back, nose in the air**
-  (project owner, 2026-08-16, against 0 A.D.'s own render). **Not a rotation
-  problem** — I probed `yaw_offset_deg` 0/90/180/270 and none of them is it. The
-  arm is simply in its BIND pose, because the onager is two actors and only the
-  inner one animates:
-
-  | actor | animations |
-  |---|---|
-  | `units/romans/siege_onager_pivot` — the base, and what the recipe names | **none** |
-  | `units/romans/siege_onager` — the arm, mounted at `weapon` | `Idle`, `attack_ranged` |
-
-  The recipe declares no `[anims]`, so no clip is ever applied and the arm sits
-  as modelled. 0 A.D. never shows that pose because it always plays `Idle`.
-
-  **Adding `[anims.idle]` alone will NOT fix it.** For this actor every armature
-  is anchored (the crew hang off empties, not bones), so `subject_armature` falls
-  through to its all-anchored branch and its "most bones" tie-break picks a
-  **202-bone crew Biped** over the 8-bone `onager` arm rig. The clip would be
-  aimed at a soldier. The fix is two parts: make that fallback prefer the rig
-  belonging to the subject actor's own prop rather than the biggest bone count,
-  then declare `idle` (+ `attack`) on the recipe.
-
-- **`vis.field` bakes 64 wheat clumps stacked on one spot** (project owner,
-  2026-08-16). PLAN.md A.4 calls this "a 64-instance prop scatter that
-  Pyrogenesis collapses to one", which is the symptom, not the mechanism. The
-  props are all present and all correctly constrained — 131 objects, 66 meshes.
-  What is wrong is the attach points:
-
-  ```
-  prop_patch       EMPTY  0.00 0.00 0.00   parent Plane
-  prop_patch_001   EMPTY  0.00 0.00 0.00   parent Plane    <- all 65 at the origin
-  cross_angledfromtop      MESH  COPY_LOCATION->prop_patch_001
-  cross_angledfromtop.001  MESH  COPY_LOCATION->prop_patch_002
-  ```
-
-  The importer creates every prop point but loses its transform from
-  `field_propped_b_8x8.dae`, so all 64 clumps sit on top of each other in the
-  middle of the plot. Fix: read the prop-point transforms out of the COLLADA and
-  place the empties. **That would deliver the farm too** — same actor family, and
-  it is why `vis.farm` has never worked.
 
 - **Canvas sizes are now under-provisioned wherever crew got their heads back.**
   `_rescue_orphaned_props` makes a sprite BIGGER, and a canvas calibrated against
@@ -382,9 +388,21 @@ with WinError 5. Delete contents, not the directory.
   history stays linear.
 - **`vis.siege_ram` colour** — I had it wrong, see the measurement note in §4.
   It tints at 6.8% and is fine.
-- **The bone-less mesh defect**: `m_armor_tunic_short.dae` and both siege engines
-  import with a 0-bone armature, so no clip attaches. Root cause never found;
-  worked around by picking another actor or baking static.
+- **`vis.field` / `vis.farm` prop points** — fixed 2026-08-17 and both delivered.
+  The mechanism was not the Pyrogenesis importer at all, which is what the open
+  item here used to claim: 0 A.D. writes `<matrix sid="parentinverse">` ahead of the
+  real `<translate>`, and **Blender's own COLLADA importer** keeps the leading
+  matrix, so all 65 patch points collapsed onto the origin. isobake places the
+  empties itself now, from the COLLADA.
+- **`vis.onager` animation** — 2026-08-17, and it closes out the "both siege
+  engines are static" story entirely. See §4 and `tools/recipes/onager.toml`.
+- **The bone-less mesh defect was never real for the siege engines.**
+  `m_armor_tunic_short.dae` does import with a 0-bone armature. Both siege engines
+  were said to as well, and that was a misreading of `inspect` reporting a crew
+  shell (§4): the lithobolos has a 36-bone rig and the onager arm an 8-bone one,
+  and both animate. **Do not cite this as a reason to bake anything static without
+  re-measuring** — it is the false premise that kept two engines frozen, one of
+  them for a year.
 
 ## 6. Two things the game side cannot see — tell them
 
