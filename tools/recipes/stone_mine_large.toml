@@ -1,0 +1,32 @@
+# Stone, LARGE size class -- 7000 (Age & Unit Planning.md §ORE).
+# See stone_mine.toml for the set change.
+#
+#   simulation/templates/gaia/rock/temperate_large_02.xml
+#     -> <VisualActor><Actor>geology/stonemine_temperate_quarry_01.xml</Actor>
+#
+# A worked quarry rather than loose boulders, which is the right read for the
+# rich class: the small one is something you clear in passing, this is a site.
+id      = "vis.stone_mine_large"
+adapter = "zeroad"
+
+[source]
+actor = "geology/stonemine_temperate_quarry_01.xml"
+
+[render]
+# 23.843 x 13.551 x 12.092 m raw, 237 px tall -- the largest node in the ORE
+# section by both width and height.
+canvas = [640, 640]
+supersample = 4
+directions = 5
+frame_origin_at = 0.45
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/geology/stonemine_temperate_quarry_01.xml"

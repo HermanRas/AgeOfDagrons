@@ -1,0 +1,33 @@
+# Gold ore, SMALL size class -- 1000 (Age & Unit Planning.md §ORE).
+# See gold_mine.toml for why this set replaced the alpine mine and why
+# `ground_clip` is mandatory for it.
+#
+# ROSTER TYPO, worth recording. The roster line reads
+# `gaia/ore/aegean_anatolian_small`; no such template exists. The real one is
+# `aegean_anatolian_small_01`:
+#
+#   simulation/templates/gaia/ore/aegean_anatolian_small_01.xml
+#     -> <VisualActor><Actor>geology/metal_aegean_small.xml</Actor>
+id      = "vis.gold_mine_small"
+adapter = "zeroad"
+
+[source]
+actor = "geology/metal_aegean_small.xml"
+
+[render]
+# 8.598 x 8.077 x 7.548 m raw, 148 px tall; 8.6 m of width is ~195 px.
+canvas = [256, 256]
+supersample = 4
+directions = 5
+frame_origin_at = 0.45
+ground_clip = true
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/geology/metal_aegean_small.xml"

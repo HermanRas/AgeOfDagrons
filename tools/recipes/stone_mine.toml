@@ -1,31 +1,31 @@
-# Stone mine, from 0 A.D.'s Mediterranean quarry rock formation -- our stone
-# resource node, same slot pattern as gold_mine.toml.
+# Stone, SMALL size class -- 1000 (Age & Unit Planning.md §ORE).
 #
-# simulation/templates/gaia/rock/mediterranean_large.xml (parent
-# template_gaia_rock_large, Circle radius 10.0 -> 5 m, Obstruction 13x13 world
-# units -> 6.5x6.5 m) declares this actor directly. Mediterranean, not alpine
-# like the gold mine's civ-inconsistent pick: gold needed alpine because the
-# Greek-texture ore variant read as a mossy boulder at sprite size (see
-# gold_mine.toml) -- stone has no such readability problem, "quarried rock" is
-# unambiguous, so the civ-matching choice stands here with no rejection story.
-# Single variant, no frequency choice to make.
+# RE-POINTED 2026-08-17 from `geology/stonemine_medit_quarry.xml`, which was an
+# off-roster pick made when legibility mattered more than matching the roster.
+# The roster asks for the temperate granite boulders:
+#
+#   simulation/templates/gaia/rock/temperate_small.xml
+#     -> <VisualActor><Actor>geology/stonemine_granite.xml</Actor>
+#
+# Note the id keeps its name. `vis.stone_mine` is referenced from the game side
+# already, so the base id stays put and only the LARGE class takes a suffix --
+# same convention as the gold set.
+#
+# Worth flagging to whoever wires this: there is still no `res.stone` resource
+# node in `resources.json`, so nothing on any map yields stone even though
+# buildings cost it. The art has been staged and unreferenced this whole time.
+# That is game-side work (PLAN.md 6.5), not a bake.
 id      = "vis.stone_mine"
 adapter = "zeroad"
 
 [source]
-actor = "geology/stonemine_medit_quarry.xml"
-# No scale override, same reasoning as gold_mine.toml -- this is the authored
-# proportion of a ground rock outcrop, not scaled up to look more imposing.
+actor = "geology/stonemine_granite.xml"
 
 [render]
-# inspect measures 19.488 x 18.634 x 13.486 raw units -> 9.74 x 9.32 x 6.74 m.
-# Canvas generous pending a real probe, same approach as every other new
-# recipe this session; isobake bake's canvas-edge check will flag it if this
-# guess is too tight.
-canvas = [384, 384]
+# 6.609 x 6.430 x 4.028 m raw, 79 px tall -- the smallest node in the set. The
+# previous quarry needed 384; granite boulders need a fraction of that.
+canvas = [256, 256]
 supersample = 4
-# 5 stored, same reasoning as gold_mine/tree_oak: the node never turns, but
-# several stored directions let a cluster of stone mines avoid looking stamped.
 directions = 5
 frame_origin_at = 0.45
 ground_clip = true
@@ -38,4 +38,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/geology/stonemine_medit_quarry.xml"
+actor = "art/actors/geology/stonemine_granite.xml"

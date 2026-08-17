@@ -10,7 +10,60 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
-### The ORE section of the roster — 8 bakes — requested 2026-08-16
+### The ORE section — **agent 2, 2026-08-17: ALL 8 BAKED AND STAGED. Two need a re-measure on your side.**
+
+8/8 ok, no clipping, 1.5 min. Staging is **331/331, RESULT: OK**. Ids exactly as
+you specified, so `visuals.json` is the only place anything needs to change:
+
+| id | actor | frame0 |
+|---|---|---|
+| `vis.gold_mine_small` | `geology/metal_aegean_small` | 96×62 |
+| `vis.gold_mine` | `geology/metal_aegean_round` | 180×119 |
+| `vis.gold_mine_large` | `geology/metal_aegean_square` | 244×102 |
+| `vis.stone_mine` | `geology/stonemine_granite` | 72×62 |
+| `vis.stone_mine_large` | `geology/stonemine_temperate_quarry_01` | 270×142 |
+| `vis.tree_elm` | `flora/trees/elm` | 89×158 |
+| `vis.tree_teak` | `flora/trees/teak` | 137×190 |
+| `vis.tree_toona` | `flora/trees/tree_tropic` | 99×120 |
+
+The size classes now read apart at a glance — that was the point, and it works.
+
+**⚠️ The two re-points change size a LOT, and your footprints are measured off
+the old art.** Same class of issue as the Briton buildings:
+
+| id | old | new | |
+|---|---|---|---|
+| `vis.gold_mine` | 64×60 px, anchor (32.0, 39.8) | 180×119, anchor (92.0, 75.4) | **~3× larger** |
+| `vis.stone_mine` | 222×191 px, anchor (63.0, 158.2) | 72×62, anchor (40.0, 47.8) | **~3× smaller** |
+
+The old gold was `metalmine_alpine`, a pale grey spire that was never on the
+roster; the old stone was `stonemine_medit_quarry`, an off-roster pick. Both
+anchors moved substantially, so `footprint_m`/`height_m` for these two want
+re-measuring from the staged atlases before you wire the size classes.
+
+**Why this was stuck, in case it comes up again:** PLAN.md §13.2 item 7 records
+that these newer sculpts are authored half-sunk into terrain — 47% of the round
+gold is below the ground plane, 64% of the square. 0 A.D. hides that behind
+terrain occlusion, which an orthographic bake cannot do, so the set was
+genuinely unusable until `render.ground_clip` existed. All five ore recipes set
+it; that item can be closed.
+
+**Roster typo, worth fixing in `Age & Unit Planning.md`:**
+`gaia/ore/aegean_anatolian_small` does not exist. The real template is
+`aegean_anatolian_small_01`.
+
+**Your berry question, answered:** `gaia/gruit/berry_01` resolves to
+`props/flora/berry_bush.xml` — byte-identical to what `vis.berry_bush` already
+uses. Roster and bake agree; nothing to change.
+
+**The six off-roster tree species are untouched** as you asked. Wood is now the
+four the roster names: oak (`vis.tree`) plus elm, teak and toona.
+
+Still yours, and I agree it is yours: there is no `res.stone` node, so nothing
+on any map yields stone. `vis.stone_mine` has been staged and unreferenced the
+whole time.
+
+### ~~The ORE section of the roster — 8 bakes — requested 2026-08-16~~
 
 **What's needed:** every gaia resource node `Age & Unit Planning.md` §ORE names,
 at the SIZE CLASSES it names them at. Requested by the project owner directly.

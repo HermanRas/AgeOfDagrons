@@ -1,0 +1,31 @@
+# Toona -- 500 wood (Age & Unit Planning.md §ORE, wood section).
+# See tree_elm.toml for the set and why these three were added.
+#
+# The actor is named nothing like the roster line, which is the usual reason to
+# resolve rather than guess:
+#
+#   simulation/templates/gaia/tree/toona.xml
+#     -> <VisualActor><Actor>flora/trees/tree_tropic.xml</Actor>
+id      = "vis.tree_toona"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/tree_tropic.xml"
+
+[render]
+# 17.659 x 18.267 x 22.438 m raw, 440 px tall -- the smallest of the three new
+# trees, so it gets a smaller canvas than elm and teak rather than their 768.
+canvas = [576, 576]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/tree_tropic.xml"

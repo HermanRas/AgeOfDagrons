@@ -1,0 +1,38 @@
+# Elm -- 500 wood (Age & Unit Planning.md §ORE, wood section).
+#
+# One of the four species the roster names. `vis.tree` (oak) was the only one
+# baked; elm, teak and toona are added 2026-08-17 to complete the set.
+#
+#   simulation/templates/gaia/tree/elm.xml
+#     -> <VisualActor><Actor>flora/trees/elm.xml</Actor>
+#
+# NOT to be confused with the six extra species already staged (cherry, cypress,
+# cypress_tall, dead, dead_branchy, snow_pine). Those are off-roster, the game
+# side has said it is not wiring them, and they stay as they are.
+#
+# No `ground_clip`: trees are authored sitting on the ground plane, unlike the
+# ore sculpts. Matching tree_oak.toml, which does not set it either.
+id      = "vis.tree_elm"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/elm.xml"
+
+[render]
+# 16.935 x 20.718 x 32.371 m raw, 634 px tall -- trees are the tallest things in
+# the gaia set by a wide margin, so height sets the canvas here where width sets
+# it for the ore. Oak's 320 would clip this badly.
+canvas = [768, 768]
+supersample = 2
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/elm.xml"
