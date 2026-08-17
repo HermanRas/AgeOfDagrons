@@ -233,7 +233,10 @@ func test_a_buildings_origin_tile_round_trips_through_its_centre_position() -> v
 
 func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
 	var nodes := _of_type(SimResourceNode)
-	assert_true(nodes.size() >= 15, "wood, gold and deer were all placed")
+	var expected := MapGen.DEBUG_WOOD_CLUSTER.size() + MapGen.DEBUG_GOLD.size() \
+			+ MapGen.DEBUG_FOOD.size() + MapGen.DEBUG_STONE.size() \
+			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size()
+	assert_eq(nodes.size(), expected, "every declared cluster found room")
 	var kinds: Array[StringName] = []
 	for n in nodes:
 		var node: SimResourceNode = n
@@ -241,8 +244,58 @@ func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
 			kinds.append(node.kind)
 		assert_eq(w.map.occupant(node.tile()), node.id, "node claims its tile")
 		assert_true(node.amount > 0, "and starts with something in it")
-	for kind in [&"wood", &"gold", &"food"] as Array[StringName]:
+	for kind in [&"wood", &"gold", &"food", &"stone"] as Array[StringName]:
 		assert_true(kinds.has(kind), "the map has a %s source" % kind)
+
+
+## The test that would have caught the missing stone, rather than the assertion
+## above that was updated to know about it.
+##
+## Stone was a node kind that did not exist for months: buildings cost it, the HUD
+## counted it, the villager had a gather rate for it and the town centre accepted
+## it as a drop-off -- and no map yielded a single unit. Nothing failed, because
+## DEBUG_STARTING_STOCK hands out 5000 of everything, so the hole was invisible in
+## exactly the situation the debug map exists to expose.
+func test_every_resource_a_building_costs_can_be_gathered_on_this_map() -> void:
+	var yielded: Array[StringName] = []
+	for n in _of_type(SimResourceNode):
+		var kind: StringName = (n as SimResourceNode).kind
+		if not yielded.has(kind):
+			yielded.append(kind)
+
+	for def_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(def_id)
+		for kind in bd.cost:
+			assert_true(yielded.has(StringName(kind)),
+					"%s costs %s and the debug map yields none" % [def_id, kind])
+
+
+func test_livestock_is_gathered_where_it_stands_rather_than_hunted() -> void:
+	# Sheep and cattle are harvested like a berry bush -- that is the whole reason
+	# they could be wired without 4.13's hostile behaviour or a carcass state
+	# machine. A `wildlife` block on either would be a promise nothing keeps.
+	var seen := 0
+	for n in _of_type(SimResourceNode):
+		var node: SimResourceNode = n
+		if node.def_id != &"res.sheep" and node.def_id != &"res.cattle":
+			continue
+		seen += 1
+		assert_false(node.is_wildlife, "%s stands still and is gathered" % node.def_id)
+		assert_eq(node.kind, &"food")
+	assert_eq(seen, MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size())
+
+
+func test_a_villager_can_actually_work_every_node_kind_on_the_map() -> void:
+	# A node whose kind the villager has no gather rate for would be scenery: it
+	# would accept a GatherCommand, the villager would walk over, and nothing
+	# would ever come out of it.
+	var villager: UnitDef = GameDataRegistry.unit(&"unit.villager")
+	for n in _of_type(SimResourceNode):
+		var kind: StringName = (n as SimResourceNode).kind
+		assert_true(villager.gather_per_tick(kind) > 0.0,
+				"a villager can gather %s" % kind)
+		assert_true(int(villager.carry_cap.get(kind, 0)) > 0,
+				"and can carry %s home" % kind)
 
 
 func test_nodes_take_their_amounts_from_resources_json() -> void:
@@ -255,12 +308,18 @@ func test_nodes_take_their_amounts_from_resources_json() -> void:
 		assert_eq(node.gather_slots, d.gather_slots)
 
 
-func test_the_debug_map_places_no_wildlife_now_that_food_is_berry_bushes() -> void:
+func test_the_debug_map_places_no_wildlife_at_all() -> void:
 	# res.berry_bush replaced res.deer as the debug map's food node (session
 	# decision, MapGen.DEBUG_FOOD's own header) -- it is gathered like a tree,
 	# not hunted, so nothing the debug map places should carry the wildlife
 	# flag. res.deer's own wildlife flag is still exercised directly at the
 	# data level (test_game_data.gd), just not spawned here any more.
+	#
+	# Still true with livestock on the map (2026-08-17), and that is the point:
+	# sheep and cattle were wired precisely BECAUSE they need none of the hunt
+	# machinery. The day something here does carry the flag, it is because 4.13
+	# landed and the wolf arrived, and this assertion should be the thing that
+	# makes that a deliberate change.
 	for n in _of_type(SimResourceNode):
 		assert_false((n as SimResourceNode).is_wildlife,
 				"%s should not be wildlife on the debug map" % (n as SimResourceNode).def_id)

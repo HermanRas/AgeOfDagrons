@@ -22,8 +22,19 @@ const DEBUG_START := Vector2(0.5, 0.5)
 
 ## Resource layout for the debug map, in tiles relative to the town centre's
 ## top-left. Hand-placed rather than scattered: the MVP has to be walkable in a
-## few seconds on a phone, and a villager should reach wood, gold and food without
-## a hunt (PLAN.md 10).
+## few seconds on a phone, and a villager should reach wood, gold, stone and food
+## without a hunt (PLAN.md 10).
+##
+## Every cluster below is also placed for WHERE IT LANDS ON SCREEN, so the whole
+## economy is in the opening frame and nothing hides behind anything: wood and
+## stone left, gold and berries right, livestock above. Iso sends (dx - dy) to
+## screen x and (dx + dy) to screen y, which is what makes those directions
+## separable at all -- see each constant's own note.
+##
+## Nothing is placed DOWN-screen, and that is the rule this list learned the hard
+## way: at the default zoom the bottom half of the frame is the selection panel
+## and the minimap, so a cluster put "below the town centre, where the map is
+## empty" is a cluster nobody can see (2026-08-17, stone).
 ##
 ## The wood and deer offsets are also chosen for the *screen*, not just the grid.
 ## Iso sends (dx - dy) to screen x and (dx + dy) to screen y, so an offset along
@@ -48,6 +59,48 @@ const DEBUG_GOLD := [Vector2i(11, 2), Vector2i(12, 2), Vector2i(11, 3)]
 ## (ASSET_MISSING.md 2.3, asset_request.md). res.deer stays defined and could
 ## replace this again if wildlife hunting (6.1a/6.1b) comes back.
 const DEBUG_FOOD := [Vector2i(8, -3), Vector2i(9, -3), Vector2i(10, -3), Vector2i(11, -3)]
+
+## Stone (PLAN.md 6.5), added 2026-08-17 to close a gap that was not an art gap:
+## `vis.stone_mine` had been baked and staged all along, and nothing referenced
+## it, so every building cost stone, the HUD counted stone, and no map yielded
+## any. The only stone a player could ever have was DEBUG_STARTING_STOCK's
+## handout -- generous enough that nobody noticed the economy had a hole in it.
+##
+## UP-LEFT, above the forest. The first attempt put these BELOW the town centre,
+## on the reasoning that nothing else is down there -- which is true of the map
+## and false of the screen: at the default zoom the bottom half is HUD, and all
+## three landed behind the selection panel (screenshotted). Iso sends (dx - dy)
+## to screen x and (dx + dy) to screen y, and DOWN is where the panel is, so
+## anything placed for the opening frame goes up, left or right.
+##
+## They overlap each other on purpose. The quarry sprite is 6.94 m across --
+## nearly 3.5 tiles, 222 px -- so three nodes spaced far enough apart not to
+## touch would be spread across half the map. Overlapped they read as one rock
+## outcrop, which is what a quarry looks like and what 0 A.D. does with the same
+## art; the gold cluster already overlaps the same way at a smaller scale.
+const DEBUG_STONE := [Vector2i(-6, 4), Vector2i(-5, 6), Vector2i(-4, 8)]
+
+## Livestock, added alongside the stone and for the same reason: `vis.sheep` and
+## `vis.cattle` were staged and referenced by nothing. Both are gathered where
+## they stand, like a berry bush -- no hunt, no carcass -- so they needed no
+## machinery, only a `res.` entry. The roster (Age & Unit Planning.md ORE) names
+## both, and the wolf and bear it names alongside them are deliberately absent:
+## both fight back, which is PLAN.md 4.13's business.
+##
+## ABOVE the town centre and to the right, stepping dx alone to stagger them --
+## the same idiom DEBUG_FOOD uses, and for the same reason. What took two attempts
+## is WHERE the row starts. Beginning at dx = -3 put the first sheep at screen
+## (608, 52), underneath the age header, which is 180x86 at the top centre and
+## hides whatever is behind it; folding that one back to dx = 1 then dropped it
+## among the five starting villagers instead. Starting the whole row at dx = 1
+## clears the header on the left and the villagers below. Both found by
+## screenshot -- the grid says nothing about either.
+const DEBUG_SHEEP := [Vector2i(1, -4), Vector2i(3, -4), Vector2i(5, -4)]
+## One cow, further up and right, clear of the flock and of the resource panel.
+## Kept apart from the sheep on purpose: the two are a size comparison as much as
+## two food nodes -- a zebu is 2.55 m to a sheep's 1.09 -- and they only read as
+## one if neither is inside the other's sprite.
+const DEBUG_CATTLE := [Vector2i(4, -6)]
 
 ## What a SECOND player gets on the debug map (MatchConfig.debug_skirmish): two
 ## soldiers and nothing else -- no town centre, no villagers, no stock. Offsets
@@ -175,6 +228,15 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.gold_mine", origin + offset, 1)
 	for offset in DEBUG_FOOD:
 		w.spawn_resource_node(&"res.berry_bush", origin + offset, 0)
+	for offset in DEBUG_STONE:
+		w.spawn_resource_node(&"res.stone", origin + offset, 1)
+	# Size class 0 for both: sheep and cattle declare one amount for all three
+	# (resources.json), so the class is not a choice -- passing it explicitly
+	# rather than relying on a default keeps that visible.
+	for offset in DEBUG_SHEEP:
+		w.spawn_resource_node(&"res.sheep", origin + offset, 0)
+	for offset in DEBUG_CATTLE:
+		w.spawn_resource_node(&"res.cattle", origin + offset, 0)
 
 
 ## The hostile squad (DEBUG_ENEMY_SQUAD), placed relative to the FIRST player's

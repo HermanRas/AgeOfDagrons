@@ -74,10 +74,18 @@ func test_the_full_roster_is_present() -> void:
 	assert_eq(_by_content(reg.building_ids()), _by_content(expected_buildings),
 			"every age-skinned building has a definition, and nothing extra")
 
-	# Unchanged: 3 ACTIVE resource nodes (wood/gold/food). res.deer stays defined
-	# but unused -- res.berry_bush replaced it as the MVP food node.
+	# Six ACTIVE nodes, one defined-but-unused. res.stone, res.sheep and res.cattle
+	# landed 2026-08-17, wiring art that had been staged and referenced by nothing
+	# -- and in stone's case closing a real hole, since every building costs it and
+	# no map yielded any. res.deer stays defined but unspawned: res.berry_bush
+	# replaced it as the MVP food node, and hunting is 6.1a.
+	#
+	# The roster's wolf and bear are deliberately NOT here (they fight back, which
+	# is 4.13), nor is the fish (no water on any map yet). All three are baked, so
+	# their absence is a decision rather than a gap -- resources.json says so.
 	assert_eq(_by_content(reg.resource_ids()),
-			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree"]))
+			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree",
+					&"res.stone", &"res.sheep", &"res.cattle"]))
 
 
 ## Sorted by STRING content, so a comparison does not depend on StringName

@@ -86,6 +86,20 @@
     "against the villager, whose atlas this reads as 2.0 m against her measured",
     "2.18 -- close enough to trust, and the residual is the sprite's own padding.",
     "",
+    "stone_mine, sheep and cattle were derived that way on 2026-08-17, when they",
+    "were finally wired (all three had been staged and referenced by nothing).",
+    "For the two ANIMALS the frame matters: an S-facing beast is drawn head-on, so",
+    "its S rect.w gives its WIDTH and not its length. Their footprints come from",
+    "the E frame, which shows the animal side-on, and their heights from the S",
+    "frame, where the whole animal is above the anchor. Taking both from S would",
+    "have declared a 0.9 m sheep -- shorter than it is long.",
+    "",
+    "vis.stone_mine reads BIG -- 6.94 m across, against the gold mine's 2.8 -- and",
+    "that is honest rather than wrong: it is baked from geology/stonemine_medit_",
+    "quarry, where the roster asks for gaia/rock/temperate_small (asset_request.md).",
+    "The rebake is queued and keeps this id, so it will replace the pixels and this",
+    "figure needs re-deriving when it lands. See the vis.villager lesson above.",
+    "",
     "A building that re-skins across ages gets ONE placeholder, sized to the MAX",
     "of its skins per axis, for the same reason its footprint is (buildings.json):",
     "it re-skins in place and cannot change size underneath the player."
@@ -647,6 +661,38 @@
       "footprint_m": [5.22, 5.0],
       "height_m": 3.40,
       "color": "#5a7a2e"
+    }
+  },
+
+  "vis.stone_mine": {
+    "atlas": "res://assets/atlases/vis.stone_mine.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.94, 6.94],
+      "height_m": 5.78,
+      "color": "#9c9c98"
+    }
+  },
+
+  "vis.sheep": {
+    "atlas": "res://assets/atlases/vis.sheep.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.5, 0.65],
+      "height_m": 1.09,
+      "color": "#e3ddd0",
+      "facing_marker": true
+    }
+  },
+
+  "vis.cattle": {
+    "atlas": "res://assets/atlases/vis.cattle.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.8, 1.3],
+      "height_m": 2.55,
+      "color": "#6b5442",
+      "facing_marker": true
     }
   },
 
