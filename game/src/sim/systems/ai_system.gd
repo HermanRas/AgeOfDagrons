@@ -68,6 +68,15 @@ var _progress: Dictionary = {}
 ## What each player last did, for the log.
 var _log: Array[String] = []
 
+## Why the last `_issue` attempt returned false, for the log.
+##
+## `_issue` answers a bare yes/no, and "could not be issued" was the same word for six
+## different things: no villager free, nowhere to put it, cannot afford it, the age gate,
+## the population cap, or a trainer that is still a hole in the ground. A full match then
+## ends with a line that says a step failed and nothing about which of those to go and
+## fix. Set on every false return; read once when the step finally gives up.
+var _why: String = ""
+
 ## `entities.keys()` sorted, rebuilt once a tick.
 ##
 ## Every lookup here walks entity ids in sorted order -- `entities` is keyed in insertion
@@ -123,12 +132,14 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 	if not state["issued"]:
 		if w.tick % THINK_INTERVAL != 0:
 			return          # see THINK_INTERVAL: retrying this every tick was the hang
+		_why = ""
 		state["issued"] = _issue(w, p, step, state)
 		if state["issued"]:
 			state["since"] = w.tick
-			_note("p%d step %d: %s" % [p.id, index, _describe(step)])
+			_note(w, "p%d step %d: %s" % [p.id, index, _describe(step)])
 		elif w.tick - int(state["since"]) > int(step.get("timeout", 300)):
-			_skip(w, p, state, index, "could not be issued")
+			_skip(w, p, state, index, "could not be issued -- %s"
+					% (_why if _why != "" else "no reason given"))
 		return
 
 	if _is_done(w, p, step, state):
@@ -221,7 +232,7 @@ func _next(w: SimWorld, p: SimPlayer, state: Dictionary, index: int, why: String
 	state["step"] = index + 1
 	state["since"] = w.tick
 	state["issued"] = false
-	_note("p%d step %d %s" % [p.id, index, why])
+	_note(w, "p%d step %d %s" % [p.id, index, why])
 
 
 func _skip(w: SimWorld, p: SimPlayer, state: Dictionary, index: int, why: String) -> void:
@@ -231,8 +242,8 @@ func _skip(w: SimWorld, p: SimPlayer, state: Dictionary, index: int, why: String
 	_next(w, p, state, index, why)
 
 
-func _note(line: String) -> void:
-	_log.append(line)
+func _note(w: SimWorld, line: String) -> void:
+	_log.append("t%-6d %s" % [w.tick, line])
 	if _log.size() > 200:
 		_log.remove_at(0)
 
@@ -264,6 +275,7 @@ func _issue(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> b
 		"advance_age":
 			var cmd := AdvanceAgeCommand.new(p.id)
 			if not cmd.validate(w):
+				_why = "cannot advance from age %d yet (stock %s)" % [p.age, p.stock]
 				return false
 			w.queue_command(cmd)
 			return true
@@ -276,9 +288,11 @@ func _issue(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> b
 func _issue_gather(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
 	var units := _pick_units(w, p, step.get("units", 1))
 	if units.is_empty():
+		_why = "no villager could be freed for it"
 		return false
 	var node := _nearest_node(w, StringName(step.get("kind", &"food")), units[0])
 	if node == 0:
+		_why = "no %s node left on the map" % step.get("kind", &"food")
 		return false
 	w.queue_command(GatherCommand.new(p.id, units, node))
 	state["assigned"] = units
@@ -288,25 +302,46 @@ func _issue_gather(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionar
 func _issue_build(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
 	var units := _pick_units(w, p, step.get("units", 1))
 	if units.is_empty():
+		_why = "no villager could be freed for it"
 		return false
 	state["assigned"] = units
 	var def_id := StringName(step.get("def", &""))
 	var anchor := _anchor_tile(w, p, StringName(step.get("near", &"self")), units[0])
 	if anchor.x < 0:
+		_why = "nothing to anchor near=%s to" % step.get("near", &"self")
 		return false
 	var origin := _find_spot(w, p, def_id, anchor)
 	if origin.x < 0:
+		var bd: BuildingDef = GameDataRegistry.building(def_id)
+		_why = "no legal %s spot within %d tiles of %s" % [
+				"%dx%d" % [bd.footprint.x, bd.footprint.y] if bd != null else "?",
+				MAX_PLACEMENT_RADIUS, anchor]
 		return false
 	var cmd := PlaceBuildingCommand.new(p.id, def_id, origin, units)
 	if not cmd.validate(w):
-		return false          # cannot afford it yet, or the age gate; retry until timeout
+		# cannot afford it yet, or the age gate; retry until timeout
+		var bd2: BuildingDef = GameDataRegistry.building(def_id)
+		_why = "cannot place %s: %s" % [def_id,
+				"cost %s vs stock %s" % [bd2.cost, p.stock] if bd2 != null \
+				and not p.can_afford(bd2.cost) else "age gate or footprint"]
+		return false
 	w.queue_command(cmd)
 	return true
 
 
 func _issue_train(w: SimWorld, p: SimPlayer, step: Dictionary) -> bool:
-	var trainer := _own_building(w, p, StringName(step.get("at", &"")))
+	var at := StringName(step.get("at", &""))
+	var trainer := _own_building(w, p, at)
 	if trainer == 0:
+		_why = "no %s standing" % at
+		return false
+	# A FOUNDATION IS NOT A TRAINER. `_own_building` returns one in any phase, which is
+	# right for "did the build step work" and wrong here; `TrainCommand` refuses it
+	# either way, so this changes no behaviour. It is the difference between a step that
+	# failed and a step that failed BECAUSE NOBODY EVER FINISHED THE BUILDING.
+	var b := w.entities[trainer] as SimBuilding
+	if not b.is_complete():
+		_why = "%s is still a foundation (%d%% built)" % [at, int(b.build_fraction() * 100.0)]
 		return false
 	var unit_def := StringName(step.get("unit", &""))
 	var count := int(step.get("count", 1))
@@ -317,6 +352,17 @@ func _issue_train(w: SimWorld, p: SimPlayer, step: Dictionary) -> bool:
 			break          # out of resources or out of population; take what we got
 		w.queue_command(cmd)
 		queued += 1
+	if queued == 0:
+		var ud: UnitDef = w.unit_def(unit_def)
+		if ud == null:
+			_why = "no such unit %s" % unit_def
+		elif not p.can_afford(ud.cost):
+			_why = "cannot afford %s: cost %s vs stock %s" % [unit_def, ud.cost, p.stock]
+		elif not PopulationSystem.has_room_for(w, p.id, ud.pop_cost):
+			_why = "population capped at %d/%d" % [p.pop_used, p.pop_cap]
+		else:
+			_why = "%s refused %s (own age %d, unit needs %d)" % [at, unit_def, p.age,
+					ud.age_required]
 	return queued > 0
 
 
@@ -326,9 +372,11 @@ func _issue_train(w: SimWorld, p: SimPlayer, step: Dictionary) -> bool:
 func _issue_attack(w: SimWorld, p: SimPlayer) -> bool:
 	var army := _military(w, p)
 	if army.is_empty():
+		_why = "no military unit to attack with"
 		return false
 	var target := _nearest_enemy(w, p, army[0])
 	if target == 0:
+		_why = "no enemy entity found"
 		return false
 	w.queue_command(AttackCommand.new(p.id, army, target))
 	return true

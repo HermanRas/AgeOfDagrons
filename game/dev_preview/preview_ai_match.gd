@@ -19,6 +19,8 @@ extends Node
 const DEFAULT_TICKS := 20000
 ## How often to print a line of the timeline.
 const REPORT_EVERY := 1500
+## How often to check for foundations nobody is raising (see `_report_stuck_foundations`).
+const STUCK_EVERY := 300
 
 
 func _ready() -> void:
@@ -42,6 +44,11 @@ func _ready() -> void:
 		w.step()
 		if i % REPORT_EVERY == 0:
 			_report_line(w)
+		# Finer than the timeline: a foundation can be placed and destroyed well
+		# inside one 1,500-tick reporting gap, which is how the barracks slipped
+		# through the first run entirely.
+		if i % STUCK_EVERY == 0:
+			_report_stuck_foundations(w)
 		if w.match_over:
 			resolved_at = w.tick
 			break
@@ -64,6 +71,75 @@ func _ready() -> void:
 				% [p.id, p.defeated, p.age, p.stock])
 		_report_buildings(w, p)
 	_report_ai_log(w)
+	# WITHOUT THIS THE RUN NEVER ENDS. `_ready` returning just hands control back to a
+	# headless main loop with nothing to do, which Godot then spins at max FPS forever:
+	# the report is printed at ~40 s and the process was still burning a core minutes
+	# later. A scene whose whole purpose is to run once and report has to quit itself.
+	get_tree().quit()
+
+
+## Foundations taking no progress, and the three facts that tell WHY.
+##
+## The question the first 12.2a run could not answer: p1 placed a barracks, a
+## builder rode the placement command, and 1,310 ticks later it stood at 0% -- so
+## the train step had nothing to train at and the AI never fielded an army.
+##
+## Three candidates, and one line separates them:
+##
+##   builders 0        nobody was ever tasked to it -- the standing order is not
+##                     reaching it (it only ever picks the LOWEST-id unfinished
+##                     building, so one stuck site starves every newer one)
+##   route none        the ring scan found a legal spot nothing can walk to;
+##                     `can_place_building` asks whether the tiles are free, never
+##                     whether a villager can get there
+##   route ends gap>1  a route exists but stops short, and `BuildSystem` retires a
+##                     builder that arrives non-adjacent -- so it walks over, gives
+##                     up, goes idle, and is sent again forever
+func _report_stuck_foundations(w: SimWorld) -> void:
+	for id in w.entities.keys():
+		var e = w.entities[id]
+		if not (e is SimBuilding):
+			continue
+		var b := e as SimBuilding
+		if not b.alive or b.is_complete() or b.build_fraction() > 0.0:
+			continue
+
+		var builders := 0
+		for u in w.entities.values():
+			if u is SimUnit and u.alive and u.task == SimUnit.Task.BUILD \
+					and u.task_target_id == b.id:
+				builders += 1
+
+		# Probed from a real villager of the owner, not from an arbitrary tile: the
+		# question is whether the people who must build it can get to it.
+		var from := Vector2i(-1, -1)
+		for u in w.entities.values():
+			if u is SimUnit and u.alive and u.owner_id == b.owner_id \
+					and u.def_id == &"unit.villager":
+				from = (u as SimUnit).tile()
+				break
+
+		var route := "no villager to probe from"
+		if from.x >= 0 and w.paths != null:
+			var path := w.paths.find_path(w.map, from, b.tile())
+			if path.is_empty():
+				route = "NO ROUTE from %v" % from
+			else:
+				var ends := Vector2i(path[path.size() - 1])
+				route = "route from %v ends %v, gap %d" % [from, ends,
+						_gap_to(ends, b.footprint_rect())]
+
+		print("    STUCK  p%d %s at %v, %d builder(s), %s"
+				% [b.owner_id, String(b.def_id).trim_prefix("building."),
+				b.origin_tile(), builders, route])
+
+
+## Chebyshev gap in tiles from a tile to a rect: 1 means "standing against it",
+## which is what BuildSystem requires of a builder before it will add progress.
+static func _gap_to(from: Vector2i, rect: Rect2i) -> int:
+	var cx := clampi(from.x, rect.position.x, rect.end.x - 1)
+	var cy := clampi(from.y, rect.position.y, rect.end.y - 1)
+	return maxi(absi(from.x - cx), absi(from.y - cy))
 
 
 ## Every building with its PHASE, which is the thing a step count cannot tell you.
@@ -117,8 +193,8 @@ func _report_ai_log(w: SimWorld) -> void:
 	var ai := _ai(w)
 	var lines := ai.log_lines()
 	print("")
-	print("  AI log (last 24):")
-	for line in lines.slice(maxi(0, lines.size() - 24)):
+	print("  AI log (last 40):")
+	for line in lines.slice(maxi(0, lines.size() - 40)):
 		print("    ", line)
 
 
