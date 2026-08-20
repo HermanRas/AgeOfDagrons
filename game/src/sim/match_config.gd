@@ -41,6 +41,40 @@ var map_size: Vector2i = DEBUG_MAP_SIZE
 ## now catches, because the outcome is folded into it.
 var mode: Mode = Mode.LAST_MAN_STANDING
 
+## The map to play on (PLAN.md 2.4b), or null for the fixed debug map.
+##
+## Carried as DATA rather than as a seed plus a type, and that is deliberate. A seed
+## only reproduces a map through the exact generator that made it, so a config holding
+## one would silently mean a different map after any generator change -- and, worse,
+## host and client would each run `FastNoiseLite` on different CPUs. The map travels
+## as the map. `seed`/`map_type` below are kept alongside it as PROVENANCE, for the
+## skirmish screen to display and for Re-generate to work from.
+var map_data: MapData = null
+var seed: int = 0
+var map_type: MapGenerator.Type = MapGenerator.Type.RANDOM
+
+
+## A generated skirmish: two players, yellow against red, on a real procedural map.
+##
+## The config a `Skirmish.tscn` (1.6) will build once it exists, and what the tests and
+## `dev_preview` use to exercise a generated map today.
+static func debug_generated(p_seed: int = 1,
+		type: MapGenerator.Type = MapGenerator.Type.RANDOM, players: int = 2) -> MatchConfig:
+	var c := MatchConfig.new()
+	c.player_ids = []
+	c.colours = []
+	var palette := [&"colour.yellow", &"colour.red", &"colour.blue", &"colour.cyan",
+			&"colour.green", &"colour.violet", &"colour.orange", &"colour.white"]
+	for i in range(clampi(players, MapGenerator.MIN_PLAYERS, MapGenerator.MAX_PLAYERS)):
+		c.player_ids.append(i + 1)
+		c.colours.append(_colour(palette[i % palette.size()]))
+
+	c.seed = p_seed
+	c.map_type = type
+	c.map_data = MapGenerator.generate(p_seed, type, c.player_ids.size())
+	c.map_size = c.map_data.size
+	return c
+
 ## Palette index (colours.json) per entry in `player_ids`, position for position.
 ## EMPTY means "derive from join order", which is what every player got before
 ## anything wanted to name its own colour, and what the lobby (1.6) will replace

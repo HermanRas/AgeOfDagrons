@@ -43,43 +43,61 @@ extends SimSystem
 
 
 func process_tick(w: SimWorld) -> void:
-	# Assigned per PLAYER, not per owner id found among the entities: a player whose
-	# last house fell needs their cap written back down to 0, and one who owns
-	# nothing at all must still be visited or they keep whatever they had last tick.
+	var counts := census(w)
+	# Assigned per PLAYER, not per owner id found in the census: a player whose last
+	# house fell needs their cap written back down to 0, and one who owns nothing at
+	# all must still be visited or they keep whatever they had last tick.
 	for p in w.players:
-		p.pop_used = used_of(w, p.id)
-		p.pop_cap = cap_of(w, p.id)
+		var entry: Dictionary = counts.get(p.id, {})
+		p.pop_used = int(entry.get("used", 0))
+		p.pop_cap = int(entry.get("cap", 0))
+
+
+## `{owner_id: {used, cap}}` for everybody who owns anything, in ONE pass.
+##
+## One pass, and one implementation of what counts. This was a pair of per-player
+## scans -- more readable, and O(players x entities): on an 8-player generated map that
+## is sixteen walks of a thousand entities every tick, which turned up in the same
+## measurement that caught `VisionSystem`'s full-grid decay.
+##
+## `used` sums `pop_cost` rather than counting heads: two villagers at 1 apiece and a
+## siege ram at 3 is 5, and a headcount agrees with the sum right up until the first
+## unit that costs more than one -- which is every siege engine.
+##
+## `cap` counts COMPLETE buildings only: a house is worth its 5 pop when it is
+## standing, not when its foundation is pegged out, or a player could peg out ten
+## foundations they never intend to finish and train against them.
+##
+## A corpse (4.7) or rubble (5.5) counts for nothing. Both linger in `entities` for up
+## to a minute and must not hold a slot open for something already lost.
+static func census(w: SimWorld) -> Dictionary:
+	var out: Dictionary = {}
+	for e in w.entities.values():
+		if not e.alive:
+			continue
+		if e is SimUnit:
+			var u := e as SimUnit
+			var entry: Dictionary = out.get(u.owner_id, {"used": 0, "cap": 0})
+			entry["used"] = int(entry["used"]) + u.pop_cost
+			out[u.owner_id] = entry
+		elif e is SimBuilding:
+			var b := e as SimBuilding
+			if not b.is_complete():
+				continue
+			var bentry: Dictionary = out.get(b.owner_id, {"used": 0, "cap": 0})
+			bentry["cap"] = int(bentry["cap"]) + b.provides_pop
+			out[b.owner_id] = bentry
+	return out
 
 
 ## Population `player_id`'s standing units occupy.
-##
-## The sum of their `pop_cost`, never a headcount: two villagers at 1 apiece and a
-## siege ram at 3 is 5, and a headcount agrees with the sum right up until the
-## first unit that costs more than one -- which is every siege engine.
 static func used_of(w: SimWorld, player_id: int) -> int:
-	var used := 0
-	for e in w.entities.values():
-		# A corpse (4.7) counts for nothing: it is in `entities` for ten seconds
-		# after the death and must not hold a slot open for a unit already lost.
-		if e is SimUnit and e.alive and e.owner_id == player_id:
-			used += (e as SimUnit).pop_cost
-	return used
+	return int(((census(w).get(player_id, {})) as Dictionary).get("used", 0))
 
 
-## Population `player_id`'s buildings provide.
-##
-## COMPLETE only: a house is worth its 5 pop when it is standing, not when its
-## foundation is pegged out. Otherwise a player could peg out ten foundations they
-## never intend to finish and train against them.
+## Population `player_id`'s finished buildings provide.
 static func cap_of(w: SimWorld, player_id: int) -> int:
-	var cap := 0
-	for e in w.entities.values():
-		if not (e is SimBuilding):
-			continue
-		var b := e as SimBuilding
-		if b.owner_id == player_id and b.alive and b.is_complete():
-			cap += b.provides_pop
-	return cap
+	return int(((census(w).get(player_id, {})) as Dictionary).get("cap", 0))
 
 
 ## Population already PAID FOR but not yet standing: every entry in every one of
@@ -126,5 +144,7 @@ static func queued_pop(w: SimWorld, player_id: int) -> int:
 ## the NEXT order -- and the alternative is a paid-for unit that never arrives and
 ## never explains itself.
 static func has_room_for(w: SimWorld, player_id: int, pop_cost: int) -> bool:
-	return used_of(w, player_id) + queued_pop(w, player_id) + pop_cost \
-			<= cap_of(w, player_id)
+	# One census, not `used_of()` plus `cap_of()`, which would walk the world twice.
+	var entry: Dictionary = census(w).get(player_id, {})
+	return int(entry.get("used", 0)) + queued_pop(w, player_id) + pop_cost \
+			<= int(entry.get("cap", 0))

@@ -211,6 +211,78 @@ const DEBUG_STARTING_STOCK := {
 }
 
 
+## Starting stock for a GENERATED map (2.4b), as opposed to
+## `DEBUG_STARTING_STOCK`'s sandbox handout below.
+##
+## Roughly AoE2's opening (200/200/100/200), which means the first house and the first
+## drop-off camp are affordable and everything after them has to be gathered. That is
+## the whole point of a starting stock: enough that the first thirty seconds are
+## decisions rather than waiting, and not enough that the economy is optional.
+const STARTING_STOCK := {
+	&"food": 200,
+	&"wood": 200,
+	&"gold": 100,
+	&"stone": 200,
+}
+
+
+## Populate `w` with whatever map `cfg` asks for: a generated or loaded `MapData` if it
+## carries one, otherwise the fixed debug map.
+##
+## One call site for the choice, so nothing outside this file has to know there are two
+## kinds of map. Call after `SimWorld.setup()`, which has already created an empty grid
+## at the right size.
+static func build(w: SimWorld, cfg: MatchConfig) -> void:
+	if cfg != null and cfg.map_data != null:
+		build_from(w, cfg.map_data)
+	else:
+		build_debug_map(w)
+
+
+## Populate `w` from a `MapData` (2.4b): copy the terrain, then spawn everything the
+## map lists.
+##
+## `MapData.entities` carries a 1-based PLAYER INDEX rather than a `SimPlayer.id`,
+## because a map is written long before anybody knows what ids a match will hand out.
+## Resolving it here is the whole reason that indirection exists -- see `MapData`.
+static func build_from(w: SimWorld, data: MapData) -> void:
+	for y in range(w.map.size.y):
+		for x in range(w.map.size.x):
+			var t := Vector2i(x, y)
+			if data.in_bounds(t):
+				# set_terrain, not a raw array write: it resets that tile's move cost
+				# to the terrain default, so the two can never disagree (2.1).
+				w.map.set_terrain(t, data.terrain_at(t) as SimMap.Terrain)
+
+	for e in data.entities:
+		var def_id: StringName = e.get("def_id", &"")
+		var tile: Vector2i = e.get("tile", Vector2i.ZERO)
+		var index := int(e.get("player", 0))
+		var owner := 0
+		if index > 0:
+			if index > w.players.size():
+				continue          # a 4-player map in a 2-player match: skip the rest
+
+			owner = w.players[index - 1].id
+
+		if GameDataRegistry.unit(def_id) != null:
+			w.spawn_unit(def_id, owner, tile)
+		elif GameDataRegistry.building(def_id) != null:
+			# Forced: the map has already decided this is where the building goes, and
+			# `can_place_building()` would refuse a town centre whose own clearing the
+			# generator laid out for it.
+			w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true)
+		else:
+			w.spawn_resource_node(def_id, tile, int(e.get("size_class", 0)))
+
+	for p in w.players:
+		for kind in STARTING_STOCK:
+			p.add_resource(kind, int(STARTING_STOCK[kind]))
+
+	if w.paths != null:
+		w.paths.rebuild(w.map)
+
+
 ## Populate `w` with the fixed debug map. Call after SimWorld.setup(), which has
 ## already created an empty grid at the configured size.
 static func build_debug_map(w: SimWorld) -> void:

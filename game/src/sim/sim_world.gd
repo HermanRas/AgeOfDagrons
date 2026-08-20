@@ -51,7 +51,10 @@ func setup(cfg: MatchConfig) -> void:
 	mode = cfg.mode
 	match_over = false
 	winner_id = 0
-	map = SimMap.create(cfg.map_size)
+	# A carried map decides its own size; `cfg.map_size` is the debug-map default and
+	# the fallback. Taking the map's own size means a config cannot be half-applied --
+	# a 96x96 map into a 64x64 grid would silently crop a quarter of it off.
+	map = SimMap.create(cfg.map_data.size if cfg.map_data != null else cfg.map_size)
 	spatial = SpatialHash.new()
 	paths = PathService.new()
 	_next_id = 1

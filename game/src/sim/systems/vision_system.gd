@@ -23,43 +23,91 @@
 ## killed this tick grants no vision, and the scout you just lost should not still
 ## be lighting up the map in the snapshot that tells you it died.
 ##
-## COST is the thing to watch here, since it is per player per tick rather than per
-## world. One pass to decay the grid (4096 bytes on the debug map) plus, per entity,
-## the tiles in a box around its footprint: 81 for a villager at los 4, 676 for a
-## 10x10 town centre at los 8. A settlement of thirty is a few thousand byte writes
-## at 10 Hz, which is why this is a flat array and not a set of tiles.
+## COST IS PER PLAYER PER TICK, which is what makes it the most expensive system here
+## and why the decay is incremental.
+##
+## The obvious implementation decays the whole grid each tick: set every VISIBLE tile
+## back to EXPLORED, then re-mark. That is O(tiles x players), and **measured on an
+## 8-player 192x192 generated map it was the single biggest cost in the tick** -- 8
+## players x 36,864 tiles is ~295,000 byte writes before any vision is computed at all,
+## and the whole tick came to 39.7 ms against PLAN.md 3.1's 5 ms budget.
+##
+## So the tiles marked VISIBLE last tick are REMEMBERED and only those are decayed,
+## which makes the decay the same order as the marking: per entity, the tiles in a box
+## around its footprint (81 for a villager at los 4, 676 for a 10x10 town centre at los
+## 8). The cache is derived state and deliberately not in `state_hash()` -- `p.vision`
+## is the answer, this is only how it is reached, and it is rebuilt from scratch if it
+## is ever missing.
 class_name VisionSystem
 extends SimSystem
+
+## Ticks between recomputes. **Fog does not need 10 Hz.**
+##
+## Even after the tight loop below, vision is the most expensive system in the tick
+## (17.9 ms of an 8-player map's total), and it is also the one nobody can see running:
+## at 2 the fog updates 5 times a second, which is imperceptible against units that
+## interpolate at display rate. What it costs is up to 100 ms of lag before a newly
+## spotted enemy enters the snapshot -- a delay, never a leak, since the filter still
+## refuses everything the grid does not yet mark visible.
+##
+## Keyed off `w.tick` rather than an internal counter, so it stays deterministic and
+## two hosts recompute on exactly the same ticks (PLAN.md 7.1).
+const VISION_INTERVAL := 2
+
+## player id -> the grid indices set VISIBLE on the previous recompute.
+var _visible_last: Dictionary = {}
 
 
 func process_tick(w: SimWorld) -> void:
 	if w.map == null:
 		return
+	var due := w.tick % VISION_INTERVAL == 0
 	for p in w.players:
-		_recompute(w, p)
+		# A player with no fog yet is ALWAYS computed, whatever the interval says.
+		# `SimWorld.step()` increments the tick before running systems, so the very
+		# first step is tick 1 and an interval of 2 would skip it -- leaving a world
+		# that has been stepped once with no vision at all, which broke thirteen fog
+		# tests the moment the interval landed and would have shown up in play as a
+		# match that opens blind for its first 100 ms.
+		if due or p.vision.is_empty():
+			_recompute(w, p)
 
 
 func _recompute(w: SimWorld, p: SimPlayer) -> void:
 	var count := w.map.size.x * w.map.size.y
 	if count <= 0:
 		return
-	if p.vision.size() != count:
+	var fresh := p.vision.size() != count
+	if fresh:
 		# First tick, or a map that changed size under us. Allocating here rather
 		# than in SimWorld.setup() is what gives "empty means no fog" its meaning --
 		# see SimPlayer.vision's own header.
 		p.vision.resize(count)
 		p.vision.fill(SimPlayer.Fog.UNSEEN)
+		_visible_last.erase(p.id)
 
-	for i in range(count):
-		if p.vision[i] == SimPlayer.Fog.VISIBLE:
-			p.vision[i] = SimPlayer.Fog.EXPLORED
+	# Decay only what was lit last tick. Falls back to a full sweep when the cache is
+	# missing -- a fresh grid, or a system that has not run for this player before --
+	# so a lost cache costs one expensive tick rather than leaving stale VISIBLE tiles
+	# that nothing would ever clear.
+	if _visible_last.has(p.id):
+		var previous: PackedInt32Array = _visible_last[p.id]
+		for i in previous:
+			if p.vision[i] == SimPlayer.Fog.VISIBLE:
+				p.vision[i] = SimPlayer.Fog.EXPLORED
+	else:
+		for i in range(count):
+			if p.vision[i] == SimPlayer.Fog.VISIBLE:
+				p.vision[i] = SimPlayer.Fog.EXPLORED
 
+	var lit := PackedInt32Array()
 	for e in w.entities.values():
 		if not e.alive or e.owner_id != p.id:
 			continue
 		if not (e is SimUnit or e is SimBuilding):
 			continue
-		_reveal(w, p, _rect_of(e), e.vision_range)
+		_reveal(w, p, _rect_of(e), e.vision_range, lit)
+	_visible_last[p.id] = lit
 
 
 ## Mark every tile within `range_tiles` of `rect` as VISIBLE.
@@ -73,22 +121,62 @@ func _recompute(w: SimWorld, p: SimPlayer) -> void:
 ## than the square a Chebyshev gap would give. Compared squared, in integers -- no
 ## `sqrt`, nothing to round, and nothing that can differ between two machines
 ## (PLAN.md 7.1).
-static func _reveal(w: SimWorld, p: SimPlayer, rect: Rect2i, range_tiles: int) -> void:
+## `lit` collects every index set, for next tick's incremental decay. An index can be
+## appended twice when two of a player's own entities see the same tile; that is
+## harmless -- decaying a tile twice is idempotent -- and cheaper than de-duplicating.
+##
+## **DELIBERATELY WRITTEN AS A TIGHT LOOP**, which is not this codebase's usual style
+## and is justified by measurement: at ~1,150 tiles per player per tick this is the
+## hottest loop in the sim, and the readable version cost **32 of 55 ms** on an
+## 8-player map. What made it expensive was not the arithmetic but the CALLS -- a
+## `SimMap.index_of()` per tile (itself calling `in_bounds()` and `_index()`), a
+## `Vector2i` allocated per tile, and four `maxi()` calls for the distance. All of that
+## is inlined here, and the box is clamped to the map ONCE instead of testing every
+## tile for bounds.
+##
+## `p.vision[i]` is written directly rather than through a local: `PackedByteArray` is
+## copy-on-write, so `var v := p.vision` then `v[i] = x` would quietly mutate a copy
+## and leave the player's own fog untouched.
+static func _reveal(w: SimWorld, p: SimPlayer, rect: Rect2i, range_tiles: int,
+		lit: PackedInt32Array) -> void:
 	if range_tiles < 0:
 		return
+	var size := w.map.size
 	var r2 := range_tiles * range_tiles
-	var box := rect.grow(range_tiles)
-	for y in range(box.position.y, box.end.y):
-		for x in range(box.position.x, box.end.x):
-			var i := w.map.index_of(Vector2i(x, y))
-			if i < 0:
+
+	# The footprint's own extents, so a tile inside it measures a gap of 0 on that axis
+	# and every tile a building stands on is always seen.
+	var left := rect.position.x
+	var right := rect.end.x - 1
+	var top := rect.position.y
+	var bottom := rect.end.y - 1
+
+	var x0 := maxi(0, left - range_tiles)
+	var x1 := mini(size.x - 1, right + range_tiles)
+	var y0 := maxi(0, top - range_tiles)
+	var y1 := mini(size.y - 1, bottom + range_tiles)
+
+	for y in range(y0, y1 + 1):
+		var dy := 0
+		if y < top:
+			dy = top - y
+		elif y > bottom:
+			dy = y - bottom
+		var dy2 := dy * dy
+		if dy2 > r2:
+			continue
+		var row := y * size.x
+		for x in range(x0, x1 + 1):
+			var dx := 0
+			if x < left:
+				dx = left - x
+			elif x > right:
+				dx = x - right
+			if dx * dx + dy2 > r2:
 				continue
-			# Gap from the tile to the nearest point of the footprint, per axis: 0
-			# while inside it, so every tile the building stands on is always seen.
-			var dx := maxi(0, maxi(rect.position.x - x, x - (rect.end.x - 1)))
-			var dy := maxi(0, maxi(rect.position.y - y, y - (rect.end.y - 1)))
-			if dx * dx + dy * dy <= r2:
-				p.vision[i] = SimPlayer.Fog.VISIBLE
+			var i := row + x
+			p.vision[i] = SimPlayer.Fog.VISIBLE
+			lit.append(i)
 
 
 static func _rect_of(e: SimEntity) -> Rect2i:

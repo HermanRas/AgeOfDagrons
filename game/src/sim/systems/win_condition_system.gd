@@ -63,9 +63,14 @@ func _last_man_standing(w: SimWorld) -> void:
 	if not _world_is_populated(w):
 		return
 
+	# ONE pass for every player, not `_owns_anything()` per player. Per-player was
+	# O(players x entities), which on an 8-player generated map is eight walks of a
+	# thousand entities every tick -- part of the same measurement that caught
+	# VisionSystem's full-grid decay.
+	var owners := _owners_with_anything(w)
 	var standing: Array[int] = []
 	for p in w.players:
-		if _owns_anything(w, p.id):
+		if owners.has(p.id):
 			standing.append(p.id)
 		else:
 			# ONE WAY ONLY, never cleared. A player with no units and no buildings
@@ -123,12 +128,19 @@ static func _world_is_populated(w: SimWorld) -> bool:
 ## a mode that ever gives nodes a real owner (a claimed dragon nest, 13.2) cannot
 ## accidentally keep a wiped-out player alive on the strength of a berry bush.
 static func _owns_anything(w: SimWorld, player_id: int) -> bool:
+	return _owners_with_anything(w).has(player_id)
+
+
+## The set of owner ids with at least one living unit or building, in one pass. See
+## `_owns_anything()` above for what counts and why.
+static func _owners_with_anything(w: SimWorld) -> Dictionary:
+	var owners: Dictionary = {}
 	for e in w.entities.values():
-		if not (e is SimUnit or e is SimBuilding):
+		if not e.alive:
 			continue
-		if e.owner_id == player_id and e.alive:
-			return true
-	return false
+		if e is SimUnit or e is SimBuilding:
+			owners[e.owner_id] = true
+	return owners
 
 
 ## PLACEHOLDER (11.2). Every player would start with a baby dragon and lose the
