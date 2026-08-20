@@ -159,6 +159,37 @@ func set_path(p: PackedVector2Array) -> void:
 		task_target_tile = Vector2i(p[p.size() - 1])
 
 
+## Throw the route away and ask for a new one, KEEPING the task.
+##
+## For a unit that has been moved without asking it -- today only
+## `SimWorld._evict_from_footprint`, stepping it out from under a new building.
+## Its old route was planned from where it used to stand, and walking that route
+## from somewhere else lands it in the wrong place, where `GatherSystem` and
+## `BuildSystem` retire it for not being adjacent to what it was sent to. That
+## cost the AI a whole script step before this existed.
+##
+## Clearing `path` and raising `path_pending` is exactly what the `set_task_*`
+## calls do, so the unit simply stands still for the tick or two the new search
+## takes and then carries on with the job it already had.
+## Already standing where the route would have ended, so there is nothing to walk.
+##
+## The other half of `set_path()`: an empty route means "nowhere to go" there and
+## retires the task, which is right for an unreachable order and WRONG for a unit
+## that has simply arrived already. Keeping the task and dropping `path_pending` is
+## what lets GatherSystem, BuildSystem and CombatSystem -- all of which wait for the
+## walking to finish before they act -- get on with the job on the next tick.
+func arrive() -> void:
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = false
+
+
+func replan() -> void:
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
 func stop() -> void:
 	task = Task.IDLE
 	task_target_tile = tile()

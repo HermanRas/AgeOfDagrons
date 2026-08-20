@@ -215,9 +215,97 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 
 	entities[b.id] = b
 	spatial.insert(b.id, b.tile())
-	map.set_occupied(rect, b.id, d == null or d.blocks_movement)
+	var blocks := d == null or d.blocks_movement
+	map.set_occupied(rect, b.id, blocks)
+	if blocks:
+		_evict_from_footprint(rect)
 	_occupancy_changed(rect)
 	return b
+
+
+## Nothing may be left standing INSIDE ground that has just become solid.
+##
+## `can_place_building()` asks the MAP whether the footprint is free, and units are
+## not written into map occupancy -- they live in the spatial index -- so a building
+## could be dropped straight on top of them. The unit was then inside a blocked
+## region, and `AStarGrid2D` will no more plan a route OUT of a solid cell than into
+## one: every path it asked for came back empty, `set_path([])` retired the task, and
+## it stood there for the rest of the match unable to walk, gather or build.
+##
+## **This is what left the AI's barracks at 0% in the 12.2a run** (2026-08-20): the
+## villager sent to raise it was sealed inside its own foundation, and the diagnostic
+## read `barracks at (49,25), 0 builder(s), NO ROUTE from (49,27)` -- a tile squarely
+## within the 6x6. It is not an AI bug; a player who drops a house on their own
+## villagers entombs them exactly the same way.
+##
+## Evicted rather than refused, because refusing would mean a player cannot build
+## where their own villagers happen to be standing, which is most of their base.
+## Only for footprints that BLOCK movement: a field is walked over (4.14), and
+## shoving its farmers off the crop would be a bug in its own right.
+##
+## Ids are walked in sorted order and `find_free_adjacent` scans a fixed ring, so
+## two hosts evict the same units to the same tiles -- this runs inside a command's
+## apply() and a divergence here is a desync.
+func _evict_from_footprint(rect: Rect2i) -> void:
+	var ids := entities.keys()
+	ids.sort()
+	for id in ids:
+		var e = entities[id]
+		if not (e is SimUnit) or not e.alive:
+			continue
+		var u: SimUnit = e
+		if not rect.has_point(u.tile()):
+			continue
+		var to := _step_aside_tile(rect, u.tile(), u.domain)
+		if to.x < 0:
+			continue          # walled in on every side; nothing better to offer
+		u.pos = to * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
+		spatial.move(u.id, to)
+		# Its route started from where it used to stand, so it must be thrown away
+		# rather than walked from somewhere else -- see `SimUnit.replan()`. The TASK
+		# survives, so a villager stepped aside by somebody's new house carries on
+		# with the job it was already doing.
+		if paths != null and u.is_travel_task():
+			u.replan()
+			paths.request(u.id, u.task_target_tile)
+
+
+## Where a unit standing inside `rect` should step to: the nearest tile to WHERE IT
+## ALREADY IS that is outside the footprint and passable.
+##
+## Nearest to the UNIT, emphatically not `SimMap.find_free_adjacent` -- which answers
+## a different question (somewhere to put a freshly trained unit) by sweeping the
+## rect's top edge first. Used here it threw a villager standing at a house's
+## bottom-right corner clear across to the top-left one, and on a forest map that
+## tile was passable but walled in by trees: the villager could not path anywhere
+## ever again, and 196 empty route requests in 1,000 ticks were all the same one.
+## A tile beside where the unit was already standing is connected to the rest of the
+## map for the simplest possible reason -- it just walked there.
+##
+## Rings are swept in a fixed order and the whole ring is scanned before widening,
+## so two hosts choose the same tile; this runs inside a command's apply().
+func _step_aside_tile(rect: Rect2i, from: Vector2i, domain: int) -> Vector2i:
+	# Generous enough to clear any footprint in the game from its middle, bounded so
+	# a unit sealed in by terrain gives up rather than scanning the map.
+	for ring in range(1, 16):
+		var best := Vector2i(-1, -1)
+		var best_d := 1 << 30
+		for dy in range(-ring, ring + 1):
+			for dx in range(-ring, ring + 1):
+				if maxi(absi(dx), absi(dy)) != ring:
+					continue          # only the new ring; inner ones were scanned
+				var t := from + Vector2i(dx, dy)
+				if rect.has_point(t) or not map.is_passable(t, domain):
+					continue
+				# Squared euclidean picks the tile that LOOKS nearest within the
+				# ring, with the sweep order breaking exact ties the same way twice.
+				var d := (t - from).length_squared()
+				if d < best_d:
+					best_d = d
+					best = t
+		if best.x >= 0:
+			return best
+	return Vector2i(-1, -1)
 
 
 ## Whether `def_id` may be placed at `origin` by `player_id` given what else is

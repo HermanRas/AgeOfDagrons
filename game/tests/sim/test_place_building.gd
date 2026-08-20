@@ -96,6 +96,55 @@ func test_a_placement_with_nobody_to_build_it_is_still_a_placement() -> void:
 	assert_eq(_house().phase, SimBuilding.Phase.FOUNDATION)
 
 
+## ENTOMBMENT (found by the AI-vs-AI run, 2026-08-20). Units are not written into
+## map occupancy, so a footprint could be claimed straight over the top of them --
+## and a unit inside solid ground can never path OUT of it, so it stood there for
+## the rest of the match. In the 12.2a match this sealed the villager sent to build
+## the barracks inside the barracks, which is why it never rose above 0%.
+func test_a_building_placed_over_a_villager_steps_it_aside_rather_than_sealing_it_in() -> void:
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(11, 11))
+	var rect := SimMap.footprint_rect(Vector2i(10, 10), Vector2i(6, 6))
+	assert_true(rect.has_point(v.tile()), "the villager really is under the footprint")
+
+	w.spawn_building(&"building.barracks", 1, Vector2i(10, 10), SimBuilding.Phase.FOUNDATION)
+
+	assert_false(rect.has_point(v.tile()), "it was moved out from under the building")
+	assert_true(w.map.is_passable(v.tile(), SimMap.Domain.LAND),
+			"and onto ground it can actually stand on")
+
+
+func test_an_evicted_villager_can_still_be_walked_somewhere() -> void:
+	# The half that matters: being outside the footprint is only useful if a route
+	# can be planned from where it now stands.
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(11, 11))
+	w.spawn_building(&"building.barracks", 1, Vector2i(10, 10), SimBuilding.Phase.FOUNDATION)
+
+	w.queue_command(MoveCommand.new(1, [v.id], Vector2i(30, 30)))
+	var moved := false
+	var was := v.tile()
+	for i in range(120):
+		w.step()
+		if v.tile() != was:
+			moved = true
+			break
+	assert_true(moved, "it walked, rather than being stuck inside solid ground")
+
+
+func test_a_field_does_not_shove_its_farmers_off_the_crop() -> void:
+	# A field is walked over rather than walled off, so there is nothing to escape
+	# from and evicting would be a bug of its own.
+	var mill := w.spawn_building(&"building.mill", 1, Vector2i(20, 20))
+	assert_not_null(mill)
+	var origin := Vector2i(20, 26)
+	var farmer := w.spawn_unit(&"unit.villager", 1, origin + Vector2i(1, 1))
+	var stood := farmer.tile()
+
+	var field := w.spawn_building(&"building.field", 1, origin, SimBuilding.Phase.COMPLETE)
+	if field == null:
+		return          # no legal adjacency here; the eviction rule is not what is under test
+	assert_eq(farmer.tile(), stood, "the farmer stayed standing on its crop")
+
+
 func test_a_builder_lost_on_the_way_does_not_cancel_the_building() -> void:
 	# Filtered in apply() rather than checked in validate() on purpose: the player
 	# asked for a house and can pay for it, and refusing that because one villager

@@ -125,7 +125,23 @@ func process(w: SimWorld, budget: int = MAX_SOLVES_PER_TICK) -> void:
 		# queued.
 		if u == null or not u.alive or not u.is_travel_task():
 			continue
-		u.set_path(find_path(w.map, u.tile(), to))
+
+		# ALREADY THERE IS NOT NOWHERE TO GO, and `find_path` answers both with an
+		# empty route -- which `set_path()` turns into `stop()`. So a unit standing
+		# on the exact tile its new order would have walked it to was RETIRED
+		# instead of getting on with the job: the builder never built, the gatherer
+		# never gathered, and nothing said why.
+		#
+		# Rare until 2026-08-20, when `_evict_from_footprint` began stepping units
+		# out of new footprints to `find_free_adjacent` -- the same "nearest free
+		# tile just outside" that `_nearest_walkable` then chose as the goal. Every
+		# evicted builder was therefore retired on the spot, and the AI's opening
+		# lost its mining camp and lumber camp to it.
+		var route := find_path(w.map, u.tile(), to)
+		if route.is_empty() and goal_for(w.map, to) == u.tile():
+			u.arrive()
+		else:
+			u.set_path(route)
 
 
 ## A tile path from `from` to `to`, or as near to `to` as can be stood on.
@@ -138,7 +154,7 @@ func find_path(map: SimMap, from: Vector2i, to: Vector2i) -> PackedVector2Array:
 	if not map.in_bounds(from) or not map.in_bounds(to):
 		return PackedVector2Array()
 
-	var goal := to if _walkable(map, to) else _nearest_walkable(map, to)
+	var goal := goal_for(map, to)
 	if goal.x < 0 or goal == from:
 		return PackedVector2Array()
 
@@ -147,6 +163,18 @@ func find_path(map: SimMap, from: Vector2i, to: Vector2i) -> PackedVector2Array:
 	if path.size() > 0:
 		path.remove_at(0)
 	return path
+
+
+## The tile a route to `to` would actually END at: `to` itself when it can be stood
+## on, else the nearest tile that can (PLAN.md 4.1). (-1, -1) when there is none.
+##
+## Shared by `find_path` and by `process`, which needs to tell "there is no route"
+## apart from "you are standing on it" -- two answers that were the same empty array
+## and are not the same thing at all.
+func goal_for(map: SimMap, to: Vector2i) -> Vector2i:
+	if not map.in_bounds(to):
+		return Vector2i(-1, -1)
+	return to if _walkable(map, to) else _nearest_walkable(map, to)
 
 
 ## The closest tile to `t` that a unit could stand on, or (-1, -1).
