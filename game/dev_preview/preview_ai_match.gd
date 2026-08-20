@@ -44,6 +44,7 @@ func _ready() -> void:
 		w.step()
 		if i % REPORT_EVERY == 0:
 			_report_line(w)
+			_report_armies(w)
 		# Finer than the timeline: a foundation can be placed and destroyed well
 		# inside one 1,500-tick reporting gap, which is how the barracks slipped
 		# through the first run entirely.
@@ -76,6 +77,60 @@ func _ready() -> void:
 	# the report is printed at ~40 s and the process was still burning a core minutes
 	# later. A scene whose whole purpose is to run once and report has to quit itself.
 	get_tree().quit()
+
+
+## Both armies and what they are actually doing, plus what is left of each side.
+##
+## A STANDOFF LOOKS IDENTICAL TO A GRIND from the timeline: seed 6 sat at
+## "p1 13 units (6 mil) vs p2 7 units, 1 bldg" for 24,000 ticks without one number
+## moving, and the unit counts alone cannot say whether blows are landing slowly or
+## not at all. Task and target can: a soldier reading IDLE with no target has
+## nothing to walk to, and one reading ATTACK on the same target for thousands of
+## ticks is swinging at something it cannot reach.
+func _report_armies(w: SimWorld) -> void:
+	var ids := w.entities.keys()
+	ids.sort()
+	for p in w.players:
+		var army: Array[String] = []
+		var left: Array[String] = []
+		for id in ids:
+			var e = w.entities[id]
+			if not e.alive or e.owner_id != p.id:
+				continue
+			if e is SimUnit and e.def_id != &"unit.villager":
+				army.append("#%d %v task %d->%d" % [id, e.tile(), e.task, e.task_target_id])
+			elif e is SimBuilding:
+				left.append("%s %v" % [String(e.def_id).trim_prefix("building."), e.tile()])
+		if not army.is_empty():
+			print("    ARMY p%d: %s" % [p.id, ", ".join(army)])
+			_report_reach(w, p, ids)
+		print("    HOLDS p%d: %s" % [p.id, ", ".join(left) if not left.is_empty() else "nothing"])
+
+
+## Can this player's army actually GET to the enemy things it might be sent at?
+##
+## `AISystem._nearest_enemy` prefers a building over a unit unconditionally, so an
+## enemy building nothing can walk to is worth checking against the units standing
+## behind it.
+func _report_reach(w: SimWorld, p: SimPlayer, ids: Array) -> void:
+	var from := Vector2i(-1, -1)
+	for id in ids:
+		var u = w.entities[id]
+		if u is SimUnit and u.alive and u.owner_id == p.id and u.def_id != &"unit.villager":
+			from = (u as SimUnit).tile()
+			break
+	if from.x < 0 or w.paths == null:
+		return
+	for id in ids:
+		var e = w.entities[id]
+		if not e.alive or e.owner_id == 0 or e.owner_id == p.id:
+			continue
+		if not (e is SimUnit or e is SimBuilding):
+			continue
+		var route := w.paths.find_path(w.map, from, e.tile())
+		print("      reach p%d %s at %v: %s" % [p.id,
+				String(e.def_id).trim_prefix("building.").trim_prefix("unit."), e.tile(),
+				"NO ROUTE" if route.is_empty() else "%d steps" % route.size()])
 
 
 ## Foundations taking no progress, and the three facts that tell WHY.

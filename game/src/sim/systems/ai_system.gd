@@ -62,6 +62,24 @@ const THINK_INTERVAL := 5
 ## was 26 for no reason anybody could have named.
 const MAX_PLACEMENT_RADIUS := 14
 
+## How many candidate targets `_nearest_enemy` will path-test before settling for the
+## nearest. Each probe is a full path solve, so this is a budget, not a search: the
+## first candidate is reachable in almost every real case.
+const REACH_PROBES := 6
+
+## The same budget for placement, and smaller because it is spent on every think tick
+## while a build step is still pending, where the targeting one is spent only when an
+## army has gone idle.
+## PLACEMENT IS NOT REACHABILITY-TESTED, and it was tried. A build site can be legal,
+## reachable when chosen, and sealed off by the very footprint that goes on it: seed 6
+## put p2's mining camp in a pocket whose neck the camp then filled, leaving thirteen
+## free tiles beside it that nothing could get to. Testing the tile, and then testing
+## for a route to its surroundings that avoided the footprint, each failed to prevent
+## it while costing a path solve per candidate on every think tick. Parked deliberately
+## on 2026-08-20 rather than carrying unproven cost in the hot path -- the remaining
+## symptom is a 0% foundation that keeps its owner formally alive, and ranged units
+## will change the geometry of it anyway.
+
 ## player id -> {step: int, since: int, issued: bool, assigned: Array[int]}
 var _progress: Dictionary = {}
 
@@ -569,24 +587,59 @@ func _nearest_enemy(w: SimWorld, p: SimPlayer, from_unit: int) -> int:
 	var from = w.entities.get(from_unit)
 	if from == null:
 		return 0
-	var best_building := 0
-	var best_building_d := 1 << 40
-	var best_any := 0
-	var best_any_d := 1 << 40
+	var candidates: Array = []          # [distance, id, is_building]
 	for id in _sorted_ids(w):
 		var e = w.entities[id]
 		if not e.alive or e.owner_id == 0 or e.owner_id == p.id:
 			continue
 		if not (e is SimUnit or e is SimBuilding):
 			continue
-		var d: int = (e.tile() - from.tile()).length_squared()
-		if e is SimBuilding and d < best_building_d:
-			best_building_d = d
-			best_building = int(id)
-		if d < best_any_d:
-			best_any_d = d
-			best_any = int(id)
-	return best_building if best_building != 0 else best_any
+		candidates.append([int((e.tile() - from.tile()).length_squared()), int(id),
+				1 if e is SimBuilding else 0])
+	if candidates.is_empty():
+		return 0
+
+	# Buildings first, then nearest, then lowest id -- a TOTAL order, so the sort is
+	# the same on every host even though `sort_custom` is not stable.
+	candidates.sort_custom(func(a, b):
+		if a[2] != b[2]:
+			return a[2] > b[2]
+		if a[0] != b[0]:
+			return a[0] < b[0]
+		return a[1] < b[1])
+
+	# AND IT HAS TO BE SOMEWHERE THE ARMY CAN ACTUALLY GET TO.
+	#
+	# Preferring buildings unconditionally deadlocked a whole match (seed 6, found
+	# 2026-08-20). p2 was down to one mining camp that no route reached, with six of
+	# its villagers standing 11 steps from p1's army -- so the army was sent at the
+	# camp, `_close_in` got an empty path, `set_path([])` retired it, and the standing
+	# order sent it again five ticks later. Six soldiers idled beside a beaten
+	# opponent for 24,000 ticks and the match never ended.
+	#
+	# Probing costs a path solve per candidate, so it is capped: the first candidate
+	# is reachable in almost every real case, and a match where the nearest several
+	# are all cut off is one where the answer hardly matters. If nothing in the cap
+	# can be reached, the nearest is returned anyway -- an army that walks at the
+	# wrong thing is still better than one that refuses to walk at all.
+	var probes := mini(candidates.size(), REACH_PROBES)
+	for i in range(probes):
+		var target = w.entities[candidates[i][1]]
+		if _can_reach(w, from.tile(), target.tile()):
+			return int(candidates[i][1])
+	return int(candidates[0][1])
+
+
+## Whether a route exists from `from` to `to`, treating "already standing there" as
+## reachable -- `find_path` answers both of those with an empty array (see
+## `PathService.process`), and reading "I have arrived" as "I cannot get there"
+## would make an army refuse the thing it is standing on.
+func _can_reach(w: SimWorld, from: Vector2i, to: Vector2i) -> bool:
+	if w.paths == null:
+		return true          # a world with no pathing; nothing to filter on
+	if w.paths.goal_for(w.map, to) == from:
+		return true
+	return not w.paths.find_path(w.map, from, to).is_empty()
 
 
 ## Where a `near` clause points. `self` is the player's town centre; anything else is

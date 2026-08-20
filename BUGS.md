@@ -85,12 +85,30 @@ See the run log in that scene's output for the exact lines.
       affordability. **This is now the single biggest thing between the two AIs** —
       p1 won 8,282 to nothing largely because p2 never fielded a soldier.
 
-- [ ] **Placement can choose legal-but-unreachable ground.** p1's watch tower at
-      (46,13) reported `0 builder(s), NO ROUTE` for the entire match — the ring
-      scan asks `can_place_building()` (are the tiles free) and never asks whether
-      a villager can get there, so on a forest map it picks clearings walled in by
-      trees. Distinct from entombment, and the remaining reason a foundation can
-      sit at 0%.
+- [x] **An army would not attack anything but a building, even one it could not
+      reach.** `_nearest_enemy` ended `return best_building if best_building != 0
+      else best_any` — buildings preferred unconditionally. On seed 6 p2 was down
+      to one mining camp no route reached, with six of its villagers standing 11
+      steps away: p1's six soldiers were sent at the camp, `_close_in` got an
+      empty path, `set_path([])` retired them, and the standing order re-sent them
+      five ticks later. **Six soldiers idled beside a beaten opponent for 24,000
+      ticks.** Targets are now ranked buildings-first, then nearest, then lowest
+      id, and the first *reachable* one wins (capped at `REACH_PROBES` path
+      solves). Seed 6 now wipes out every p2 unit by t6001 instead of standing
+      still. Tick cost unaffected: 1.32 ms/tick with two AIs, `ai_system` 0.40 ms.
+
+- [ ] **PARKED: placement can choose ground that seals itself off.** p2's mining
+      camp was placed on ground its builder *could* reach, and the 3×5 footprint
+      then filled the neck of the pocket it stood in — thirteen free tiles left
+      beside it, all now cut off, because the only route in ran over the tiles the
+      camp was sitting on. The foundation stays at 0% forever, and since a
+      foundation keeps its owner in the game (11.1) the match cannot be won: seed 6
+      still ends UNRESOLVED with p2 at zero units and one phantom foundation.
+      Two fixes were tried and **neither worked** — testing that the origin tile is
+      reachable (it was), then testing for a route to a tile beside the footprint
+      that avoids the footprint. Both were reverted rather than left in the hot
+      path unproven. Parked by the project owner 2026-08-20: the AI is good enough,
+      and ranged units will change this geometry anyway.
 - [x] **A placed foundation can sit at 0% forever** — and it was neither suspect.
       **Units are entombed by their own foundations.** `can_place_building()` asks
       the MAP whether the footprint is free, and units are not written into map
@@ -116,10 +134,19 @@ See the run log in that scene's output for the exact lines.
         `_step_aside_tile`, nearest to where the unit already stood — which is
         connected to the map for the simplest reason, it just walked there.
 
-**Result: the AI-vs-AI match now reaches a conclusion.** Seed 3, forest:
-`MATCH OVER on tick 8282, winner player 1` (13.8 minutes of game time, 47.5 s of
-wall clock). p1 completed its barracks, trained its swordsmen at t2770, and razed
-p2 from 8 buildings to 0. The regression test works.
+**Result: the AI-vs-AI match reaches a conclusion.** Forest, 12,000 ticks:
+
+| seed | outcome |
+|---|---|
+| 3 | MATCH OVER t8282, winner p1 |
+| 4 | MATCH OVER t7776, winner **p2** |
+| 5 | MATCH OVER t8763, winner p1 |
+| 6 | UNRESOLVED — p2 reduced to 0 units and one unreachable foundation (parked, above) |
+
+Three in four resolve, and both sides win across the set, so the result is not an
+artefact of the script favouring player 1. Seed 6 is a known, understood
+limitation rather than a hang: the match is decided in every practical sense and
+only the win condition cannot fire.
 - [x] **Match wall-clock varies 4×** (41.3 s vs 161.0 s for the same seed). Not a
       regression: the test suite swung the same way on the same machine (34 s to
       110 s across four runs of identical code), so it is load on the workstation,
