@@ -118,6 +118,28 @@ static func facing_to_screen_dir(facing: int) -> Vector2:
 	return _project(dir).normalized()
 
 
+## The sprite facing (an `AtlasEntry.FACINGS` index) for a sim facing.
+##
+## **THE TWO CONVENTIONS RUN OPPOSITE WAYS AND NEITHER IS WRONG.**
+## `SimUnit.facing_toward` returns a maths octant in tile space -- 0 along +x,
+## counting anticlockwise with the y axis flipped -- because the sim has no camera
+## and no opinion about which way "south" is. `AtlasEntry.FACINGS` is a sprite
+## table that starts at S (toward the camera) and runs the other way round,
+## because that is the order isobake writes its directions in.
+##
+## Lined up tile-direction by tile-direction against `FACING_TILE_DIRS`, the two
+## differ by exactly `7 - facing` for all eight, and this is the one place that
+## knows it. Until 2026-08-20 the view passed the sim's number straight through,
+## which draws the MIRROR of the right sprite: only 45 degrees out walking south,
+## where it is easy to miss, but 135 degrees out walking north-east, which is what
+## the project owner reported.
+##
+## Converted here rather than in the sim because `facing` is part of
+## `state_hash()` -- changing its meaning would rewrite every recorded replay.
+static func sim_facing_to_sprite(facing: int) -> int:
+	return posmod(7 - facing, FACING_TILE_DIRS.size())
+
+
 ## Nearest tile COORDINATE to a point -- the inverse of tile_to_world(), which
 ## projects the tile's corner. Rounds, so it round-trips a corner back to its own
 ## index.

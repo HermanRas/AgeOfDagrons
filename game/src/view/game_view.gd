@@ -174,9 +174,26 @@ func apply_snapshot(snap: Dictionary) -> void:
 		var tile := Vector2i(sub_pos / SimWorld.SUBTILE)
 		if not entry.has("footprint") and _in_front_of_any(tile, building_rects):
 			sort_offset.y += _ADJACENT_TO_BUILDING_BONUS
-		view.draw_offset = -sort_offset
+		# A CHANGE OF SORT OFFSET IS A DISCONTINUITY, NOT A MOVEMENT, and gliding
+		# across one throws the sprite off the screen.
+		#
+		# `draw_offset` cancels `sort_offset` exactly -- but only the node's POSITION
+		# is interpolated, while `draw_offset` applies the instant it is set. So on
+		# the tick a villager steps into the band in front of a building, its target
+		# position jumps by `_ADJACENT_TO_BUILDING_BONUS` while its draw offset has
+		# already absorbed the whole 100,000 px. For one interpolation window the two
+		# do not cancel, and the villager is drawn a screen and a half up before
+		# sliding back down into place. That is the "villagers randomly teleport from
+		# the outer edges of the screen" the project owner reported on 2026-08-20.
+		#
+		# Snapping costs one tick of glide on the single step that crosses the
+		# boundary -- a tenth of a second over one tile -- against a sprite that
+		# otherwise leaves the screen entirely.
+		var offset := -sort_offset
+		var jumped := not is_new and view.draw_offset != offset
+		view.draw_offset = offset
 		var target := Iso.sub_to_world(sub_pos) + sort_offset
-		if is_new:
+		if is_new or jumped:
 			view.snap_to(target)
 		else:
 			view.set_target_transform(target, _last_tick)
@@ -202,7 +219,9 @@ func apply_snapshot(snap: Dictionary) -> void:
 		else:
 			view.set_corpse_fade(1.0)
 		if entry.has("anim"):
-			view.play_anim(StringName(entry["anim"]), int(entry.get("facing", 0)))
+			# Iso.sim_facing_to_sprite, never the raw number -- see its header.
+			view.play_anim(StringName(entry["anim"]),
+					Iso.sim_facing_to_sprite(int(entry.get("facing", 0))))
 
 		_facts[id] = {
 			"id": id,

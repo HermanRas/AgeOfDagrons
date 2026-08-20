@@ -84,6 +84,51 @@ func test_a_unit_sorts_where_it_stands() -> void:
 	assert_eq(v.position, Iso.sub_to_world(Vector2i(4, 6) * SimWorld.SUBTILE))
 
 
+## THE TELEPORT (project owner, 2026-08-20).
+##
+## A unit stepping into the band in front of a building gains
+## `_ADJACENT_TO_BUILDING_BONUS` on the position it SORTS at, and `draw_offset`
+## cancels it so the art does not move. But the position is interpolated and the
+## offset is not, so for one window the two did not cancel and the sprite was
+## drawn 100,000 px up-screen, sliding back in from the edge on the next frames.
+##
+## Asserted as the invariant rather than at one hand-picked tile: whenever the
+## offset changes, the unit must be DRAWN where it stands, on that very frame.
+func test_a_unit_is_drawn_where_it_stands_on_the_tick_its_sort_band_changes() -> void:
+	var building := {"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+			"phase": SimBuilding.Phase.COMPLETE,
+			"pos": {"x": 10 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}}
+
+	# The 8x8 centred on tile (10,10) claims tiles 6..13 on both axes, so the band
+	# in front of it on this row is x = 14 -- adjacency is orthogonal, which a
+	# diagonal approach never satisfies. Start clear of it to the east, so the view
+	# already exists and is not treated as new.
+	view.apply_snapshot({"tick": 1, "updated": [building,
+		{"id": 2, "def_id": "unit.villager",
+			"pos": {"x": 20 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}}],
+		"removed": []})
+
+	var v := view.pool.get_view(2)
+	var previous := v.draw_offset
+	var crossings := 0
+
+	# Walk it in along the row, a tile at a time, across the band.
+	for step in range(19, 11, -1):
+		var stood := Vector2i(step, 10) * SimWorld.SUBTILE
+		view.apply_snapshot({"tick": 21 - step, "updated": [building,
+			{"id": 2, "def_id": "unit.villager", "pos": {"x": stood.x, "y": stood.y}}],
+			"removed": []})
+		if v.draw_offset != previous:
+			crossings += 1
+			assert_almost_eq((v.position + v.draw_offset).y, Iso.sub_to_world(stood).y, 0.01,
+					"drawn where it stands on the tick the sort band changed (tile %d)" % step)
+			assert_almost_eq((v.position + v.draw_offset).x, Iso.sub_to_world(stood).x, 0.01,
+					"and on the x axis too (tile %d)" % step)
+		previous = v.draw_offset
+
+	assert_true(crossings > 0, "the walk crossed the sort band at least once")
+
+
 func test_a_unit_in_front_of_a_building_sorts_after_it() -> void:
 	# The assertion the whole fix exists for, stated the way the engine reads it:
 	# Y-sort draws larger position.y last, so "in front" must mean "greater y".

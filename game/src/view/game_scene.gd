@@ -216,6 +216,14 @@ func _build_hud() -> void:
 	var minimap_buttons := GridContainer.new()
 	minimap_buttons.columns = 3
 	minimap_buttons.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# AND IT MUST NOT EAT THE MINIMAP'S INPUT. This grid covers the WHOLE area,
+	# the flex spacers cover its middle, and it is added after the minimap, so
+	# Godot hit-tests it first and every tap on the diamond died here -- the
+	# camera never moved and the double-tap-to-centre never fired. The buttons
+	# are disabled placeholders with nothing to do, so nothing in this subtree
+	# wants the mouse; give it all back. **When these become real buttons they
+	# need `MOUSE_FILTER_STOP` again** -- individually, never on the grid.
+	minimap_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap_area.add_child(minimap_buttons)
 
 	for pair in [["hud_chat.png", "hud_trade.png"], ["hud_techtree.png", "hud_settings.png"]]:
@@ -223,6 +231,7 @@ func _build_hud() -> void:
 		var sep := VSeparator.new()
 		sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		minimap_buttons.add_child(sep)
 		minimap_buttons.add_child(_corner_button(pair[1]))
 
@@ -355,6 +364,10 @@ func _corner_button(icon_file: String) -> TextureButton:
 	corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
 	corner_btn.disabled = true
 	corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
+	# A disabled button still BLOCKS the mouse in Godot; these sit over the
+	# minimap's tips (see `_build_hud`), so blocking is exactly what they must
+	# not do. Restore STOP on whichever one gets a real action first.
+	corner_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return corner_btn
 
 
@@ -785,11 +798,28 @@ func _refresh_minimap() -> void:
 	_minimap.set_fog(_last_vision)
 
 
-## Tap the minimap to move the camera there (PLAN.md 3.8). MVP has no 3.7
-## ("tap minimap to move SELECTED units there") to compete with a plain tap,
-## so this fires regardless of what is selected.
+## Tap the minimap to move the camera there (PLAN.md 3.8) -- or, with units
+## selected, to ORDER THEM THERE (3.7, asked for by the project owner
+## 2026-08-20 once the tap reached this widget at all).
+##
+## The selection decides which of the two a tap means, exactly as it does for a
+## tap on the ground in `_on_tapped`: with something movable selected a tap is
+## an order, with nothing selected it is a camera move. That keeps one gesture
+## from needing a modifier, and matches what the same tap already does out on
+## the map.
+##
+## The camera deliberately does NOT follow the order. Sending troops across the
+## map is not a reason to stop watching what is in front of you, and a player
+## who wants to look can tap again with nothing selected.
 func _on_minimap_tapped(tile: Vector2i) -> void:
-	_camera.centre_on(Iso.tile_centre_to_world(tile))
+	var movable := _view.movable_selection()
+	if movable.is_empty():
+		_camera.centre_on(Iso.tile_centre_to_world(tile))
+		return
+	if _orders_refused():
+		return
+	Net.submit_command(MoveCommand.new(Net.local_player_id(), movable, tile))
+	_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
 
 
 ## Double-tap the minimap to centre on the player's own Town Centre
@@ -853,10 +883,11 @@ func _on_idle_cycle_requested() -> void:
 ## clearing the slot, see that command's own header.
 func _on_group_assign_requested(slot: int) -> void:
 	var current := _view.selection.current()
-	if current.is_empty():
-		return
+	# An EMPTY selection clears the group rather than being ignored -- see
+	# `SetControlGroupCommand.validate()` for why that changed.
 	Net.submit_command(SetControlGroupCommand.new(Net.local_player_id(), slot, current))
-	_toast.show_message("Assigned to group %d" % (slot + 1))
+	_toast.show_message(("Assigned to group %d" if not current.is_empty()
+			else "Cleared group %d") % (slot + 1))
 
 
 ## PC control-group hotkeys (PLAN.md 10 session note): plain 1-5 reselects,

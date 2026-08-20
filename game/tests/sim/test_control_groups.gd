@@ -28,12 +28,21 @@ func test_slot_must_be_in_range() -> void:
 	assert_false(negative.validate(w))
 
 
-func test_an_empty_assignment_is_rejected_rather_than_clearing_the_slot() -> void:
+## Reversed 2026-08-20 on the project owner's report that Ctrl+1 with nothing
+## selected read as the key not working. See `SetControlGroupCommand.validate()`.
+func test_an_empty_assignment_clears_the_slot() -> void:
 	w.queue_command(SetControlGroupCommand.new(1, 0, [a.id]))
 	w.step()
 	w.queue_command(SetControlGroupCommand.new(1, 0, []))
 	w.step()
-	assert_eq(w.player_for(1).control_groups[0], [a.id], "the empty command must not have applied")
+	assert_eq(w.player_for(1).control_groups[0], [], "the empty command must have cleared it")
+
+
+## The slot check still stands on its own -- clearing is about the MEMBERS being
+## empty, and must not be a way to write past the end of the group array.
+func test_an_empty_assignment_to_a_bad_slot_is_still_refused() -> void:
+	assert_false(SetControlGroupCommand.new(1, -1, []).validate(w))
+	assert_false(SetControlGroupCommand.new(1, SimPlayer.CONTROL_GROUP_COUNT, []).validate(w))
 
 
 func test_rejects_an_entity_owned_by_someone_else() -> void:

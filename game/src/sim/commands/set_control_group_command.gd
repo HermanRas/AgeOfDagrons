@@ -41,12 +41,22 @@ static func from_dict(d: Dictionary) -> SetControlGroupCommand:
 	return c
 
 
-## Rejects an empty assignment rather than clearing the slot -- a double-tap
-## with nothing selected is a no-op, not "empty this group" (PLAN.md 10.4
-## already covers emptying: a group reads as empty once every member it holds
-## has died, with no separate clear gesture needed).
+## AN EMPTY ASSIGNMENT CLEARS THE SLOT (project owner, 2026-08-20).
+##
+## This reverses the original rule, which refused an empty assignment on the
+## reasoning that a double-tap with nothing selected is a slip rather than an
+## intention, and that PLAN.md 10.4's "a group reads as empty once its members
+## are all dead" made a clear gesture unnecessary. In play it is not: `Ctrl+1`
+## with nothing selected is how every RTS empties a group, and having it
+## silently do nothing reads as the key not working.
+##
+## The cost is that the same gesture reaches here from mobile's double-tap on a
+## group slot, where an accidental empty double-tap now wipes the group instead
+## of doing nothing. If that bites, the fix is to gate it at the two callers --
+## the slot and `_unhandled_key_input` -- not to refuse it here, because by then
+## the player has asked for it twice.
 func validate(w: SimWorld) -> bool:
-	if slot < 0 or slot >= SimPlayer.CONTROL_GROUP_COUNT or entity_ids.is_empty():
+	if slot < 0 or slot >= SimPlayer.CONTROL_GROUP_COUNT:
 		return false
 	var p := w.player_for(player_id)
 	if p == null:

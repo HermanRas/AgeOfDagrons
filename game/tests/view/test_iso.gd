@@ -126,6 +126,29 @@ func test_the_eight_facings_point_the_way_their_names_say() -> void:
 				"%s points y" % AtlasEntry.FACINGS[facing])
 
 
+## THE SEAM THE FACING BUG LIVED IN (project owner, 2026-08-20).
+##
+## `SimUnit.facing_toward` and `AtlasEntry.FACINGS` were each pinned by their own
+## tests and both were right; what nothing checked was the view feeding one into
+## the other. It had been passing the sim's octant through unconverted, drawing
+## the mirror of the correct sprite. This walks every tile direction through both
+## conventions and asserts they land on the same facing.
+func test_a_sim_facing_converts_to_the_sprite_that_points_the_same_way() -> void:
+	for sprite in range(8):
+		var dir: Vector2 = Iso.FACING_TILE_DIRS[sprite]
+		var sim := SimUnit.facing_toward(Vector2i(dir))
+		assert_eq(Iso.sim_facing_to_sprite(sim), sprite,
+				"walking tile %v must draw the %s sprite, not %s"
+				% [dir, AtlasEntry.FACINGS[sprite],
+				AtlasEntry.FACINGS[Iso.sim_facing_to_sprite(sim)]])
+
+
+func test_the_sprite_conversion_wraps_rather_than_going_negative() -> void:
+	for facing in range(-8, 16):
+		var sprite := Iso.sim_facing_to_sprite(facing)
+		assert_true(sprite >= 0 and sprite < 8, "facing %d resolved in range" % facing)
+
+
 func test_diagonal_facings_are_unit_length_and_ordered_around_the_compass() -> void:
 	for facing in range(8):
 		assert_almost_eq(Iso.facing_to_screen_dir(facing).length(), 1.0, 0.001,
