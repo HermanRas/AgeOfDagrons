@@ -82,15 +82,19 @@ func setup(cfg: MatchConfig) -> void:
 	# EXISTS, so both must see the finished tick rather than the middle of one. Vision
 	# specifically must not be lit by a scout that died this tick, in the very
 	# snapshot that reports the death.
-	# WinConditionSystem (11.1) is last of all, for the same reason and one more: a
+	# WinConditionSystem (11.1) is after those, for the same reason and one more: a
 	# player whose last building fell THIS tick has lost as of this tick, and every
 	# system that could still have saved them has already had its say.
+	# AISystem (12.2a) is last of all, and that is what makes it fair: it looks at the
+	# finished tick and its orders are queued for the next one, exactly like a player
+	# reacting to what is on screen. Running it earlier would let it act on a
+	# half-finished tick that no human can see.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
 			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
-			WinConditionSystem.new()]
+			WinConditionSystem.new(), AISystem.new()]
 
 	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()

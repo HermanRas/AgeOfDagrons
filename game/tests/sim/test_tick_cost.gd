@@ -24,8 +24,13 @@ extends TestCase
 const SAMPLE_TICKS := 20
 
 
-func _world(players: int) -> SimWorld:
+func _world(players: int, ai: bool = false) -> SimWorld:
 	var cfg := MatchConfig.debug_generated(3, MapGenerator.Type.FOREST, players)
+	if ai:
+		var flags: Array[bool] = []
+		for i in range(players):
+			flags.append(true)
+		cfg.ai_players = flags
 	var w := SimWorld.new()
 	w.setup(cfg)
 	MapGen.build(w, cfg)
@@ -94,3 +99,22 @@ func test_the_biggest_generated_map_holds_the_budget_too() -> void:
 		if row["ms"] >= 0.05:
 			print("            %-24s %.2f ms" % [row["name"], row["ms"]])
 	assert_true(ms < 45.0, "8P tick cost %.2f ms -- a large regression" % ms)
+
+
+func test_an_ai_match_costs_what_a_human_match_costs_plus_the_ai() -> void:
+	# AISystem runs inside the tick, so an expensive AI is an expensive SIMULATION -- and
+	# unlike the rest of the sim it does a lot of SEARCHING: nearest node, nearest enemy,
+	# who is idle. Every one of those walks the entity list, and it does it per player
+	# per tick. Measured here rather than assumed, because the first AI-vs-AI run took
+	# ~30 ms a tick and that number came from somewhere.
+	var w := _world(2, true)
+	var started := Time.get_ticks_usec()
+	for i in range(SAMPLE_TICKS):
+		w.step()
+	var ms := float(Time.get_ticks_usec() - started) / float(SAMPLE_TICKS) / 1000.0
+
+	print("        2P 96x96 with 2 AIs, %d entities: %.2f ms/tick" % [w.entities.size(), ms])
+	for row in _per_system_ms(w):
+		if row["ms"] >= 0.05:
+			print("            %-24s %.2f ms" % [row["name"], row["ms"]])
+	assert_true(ms < 20.0, "2P AI tick cost %.2f ms -- a large regression" % ms)

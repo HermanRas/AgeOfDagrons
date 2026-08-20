@@ -1155,9 +1155,30 @@ so a remote player's orders land whenever they arrive — fine on LAN, visibly r
 latency spikes. A fixed 2–3 tick input delay is the standard fix, about 2 h, but it changes how
 the game **feels** and wants a decision rather than a default.
 
-#### 12.2 PlayTest AI (12.2a)
+#### 12.2 PlayTest AI (12.2a) — ✅ built 2026-08-17
 
-A deliberately dumb, predictable, rule-based opponent — explicitly **not** the AI that was parked.
+`AISystem` (`src/sim/systems/ai_system.gd`) drives every `SimPlayer.is_ai` player through
+`AIPlaytest.SCRIPT` (`src/sim/ai_playtest.gd`). Last in the tick order, which is what makes
+it fair: it reads the finished tick and its orders are queued for the next one, exactly like
+a player reacting to what is on screen.
+
+**The script turned out to be half of it.** A script is an opening — a sequence of one-off
+decisions — and three things a player does *continuously* had to be added as standing
+orders, each one found by running two AIs against each other and watching:
+
+1. **Nobody stands around.** A berry bush holds 80 food and takes two gatherers, so a pair strips one in ~16 s and then **retires to idle**. By tick 600 all six villagers were idle and the AI had banked 80 food in a minute.
+2. **Unfinished buildings get finished.** A build step reports done as soon as the foundation *exists*, so the script has already moved on — and a builder that dies or is pulled onto another job leaves a foundation nobody returns to. One run ended with an AI owning a foundation house, a foundation watch tower and no barracks, because `TrainCommand` quite rightly refuses a building that is a hole in the ground.
+3. **Soldiers keep attacking.** The script's attack step fires **once**, with whatever army exists at that moment — which was the starting scout, because the train step completes when the queue fills and the five swordsmen were still in it. They stood in the barracks for 5,000 ticks. Any idle soldier now goes at the nearest enemy, which also gives the AI the retargeting `CombatSystem` deliberately does not do (4.12).
+
+**And one deadlock, which only a full run could show.** With standing order 1 in place,
+*nobody is ever idle* — so every later build and train step starved for labour, timed out and
+was skipped. Both AIs finished their scripts having never trained a soldier and the match ran
+20,000 ticks to no conclusion. A step may now **pull a villager off gathering**, which is what
+a person does; a villager already *building* is never taken, since that is the one job that
+does not survive being interrupted.
+
+The original spec follows, and it holds: a deliberately dumb, predictable, rule-based
+opponent — explicitly **not** the AI that was parked.
 The owner's opening script: two villagers to berries, one to stone, one to lumber, the last builds
 a house; then a mining camp by the stone and a lumber camp by the wood; the builder to gold; age
 up; two more villagers; the first villager builds a mill and a field; the berry pair moves to the
