@@ -186,6 +186,42 @@
     }
   },
 
+  "terrain.water_shallow": {
+    "atlas": "res://assets/atlases/terrain.water_shallow.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#3f7fa6"
+    }
+  },
+
+  "terrain.water_deep": {
+    "atlas": "res://assets/atlases/terrain.water_deep.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#1d4c66"
+    }
+  },
+
+  "terrain.rock": {
+    "atlas": "res://assets/atlases/terrain.rock.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#6e6a63"
+    }
+  },
+
+  "terrain.forest": {
+    "atlas": "res://assets/atlases/terrain.forest_floor.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#2f4a25"
+    }
+  },
+
   "vis.villager": {
     "atlas": "res://assets/atlases/vis.villager.atlas.json",
     "colours": true,
