@@ -46,6 +46,9 @@ func process_tick(w: SimWorld) -> void:
 		if not (entry is SimUnit):
 			continue
 		var u: SimUnit = entry
+		# A corpse neither chops nor carries -- see BuildSystem's own note.
+		if not u.alive:
+			continue
 		if u.task == SimUnit.Task.GATHER:
 			_process_gather(w, u)
 		elif u.task == SimUnit.Task.RETURN:

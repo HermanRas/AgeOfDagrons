@@ -11,7 +11,7 @@ extends SimSystem
 
 func process_tick(w: SimWorld) -> void:
 	for e in w.entities.values():
-		if e is SimUnit and e.task == SimUnit.Task.MOVE:
+		if e is SimUnit and e.alive and e.task == SimUnit.Task.MOVE:
 			_retire_if_arrived(e)
 
 

@@ -14,7 +14,10 @@ const BUILD_RATE := 1
 
 func process_tick(w: SimWorld) -> void:
 	for entry in w.entities.values():
-		if entry is SimUnit and entry.task == SimUnit.Task.BUILD:
+		# `alive` for the same reason CombatSystem asks it: a unit destroyed by a
+		# command this tick is already dead when this runs, and DeathSystem does not
+		# clear its task until the end of the tick. Nobody builds from the grave.
+		if entry is SimUnit and entry.alive and entry.task == SimUnit.Task.BUILD:
 			_process(w, entry)
 
 

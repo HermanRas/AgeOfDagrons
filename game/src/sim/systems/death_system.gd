@@ -35,6 +35,17 @@ func _process_unit(u: SimUnit, to_despawn: Array[int]) -> void:
 		# to drop it into, so the load is simply lost rather than teleporting home.
 		u.carry_amount = 0
 		u.carry_kind = &""
+		# AND IT STOPS WALKING (project owner, 2026-08-20). Death has to cancel the
+		# ORDER, not merely mark the unit: `MovementSystem` drives anything with a
+		# waypoint left to walk, and a corpse still had one -- so a villager killed
+		# in mid-stride carried on to wherever it had been sent and only came to rest
+		# on arriving. The same leftover task would have had it gathering and
+		# building from the grave.
+		#
+		# Nothing needs to cancel its queued path search: `PathService.process()`
+		# already drops a request whose unit has died rather than writing a route
+		# onto it.
+		u.stop()
 		u.corpse_ticks_left = SimUnit.CORPSE_TOTAL_TICKS
 		return
 

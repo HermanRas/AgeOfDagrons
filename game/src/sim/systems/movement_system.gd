@@ -23,6 +23,13 @@ func process_tick(w: SimWorld) -> void:
 		if not (entry is SimUnit):
 			continue
 		var e: SimUnit = entry
+		# A CORPSE DOES NOT WALK. `DeathSystem` clears the route of anything that
+		# dies, but it runs three slots after this one and `CombatSystem` three
+		# before -- so without this guard a unit killed this tick still takes one
+		# more step, and it is the step that starts the whole slide. Every other
+		# system that acts on units states the same invariant.
+		if not e.alive:
+			continue
 		# Ordered, but the search has not come back yet. Standing still for a tick
 		# or two beats setting off in a direction the route may not take.
 		if e.path_pending or not e.has_waypoint():

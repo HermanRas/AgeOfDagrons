@@ -34,6 +34,30 @@ func test_a_dead_unit_drops_its_cargo() -> void:
 	assert_eq(v.carry_kind, &"")
 
 
+## Killed in mid-stride, a villager used to WALK ON to wherever it had been sent
+## and only stop on arriving (project owner, 2026-08-20). `MovementSystem` drives
+## anything with a waypoint left, and death cleared the unit but not its orders.
+func test_a_unit_killed_in_mid_stride_stops_where_it_fell() -> void:
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	w.queue_command(MoveCommand.new(1, [v.id], Vector2i(25, 5)))
+
+	# Far enough to be genuinely under way, nowhere near arriving.
+	for i in range(12):
+		w.step()
+	var setting_off := v.tile()
+	assert_true(setting_off.x > 5, "it was actually walking when it died")
+	assert_true(setting_off.x < 25, "and nowhere near the far end yet")
+
+	_destroy(v.id)
+	var fell := v.pos
+	assert_false(v.alive)
+
+	for i in range(60):
+		w.step()
+	assert_eq(v.pos, fell, "the corpse stayed where it fell rather than walking on")
+	assert_false(v.has_waypoint(), "and its route was cancelled, not merely ignored")
+
+
 func test_a_dead_unit_plays_the_die_anim_then_decays_before_despawning() -> void:
 	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
 	_destroy(v.id)
