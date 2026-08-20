@@ -36,6 +36,12 @@ extends SimSystem
 ## and nothing says why.
 const MIN_DAMAGE := 1
 
+## How far a unit looks for its next target when the one it was fighting dies,
+## as a Chebyshev radius in tiles -- 2 is the 5x5 box the project owner asked
+## for on 2026-08-20. Deliberately small: this is "finish what is in front of
+## you", not an aggro range that pulls a unit across the map.
+const REACQUIRE_RADIUS := 2
+
 
 func process_tick(w: SimWorld) -> void:
 	for entry in w.entities.values():
@@ -50,16 +56,17 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	if u.attack_cooldown > 0:
 		u.attack_cooldown -= 1
 
-	var target := w.get_entity(u.task_target_id)
-	if target == null or not target.alive:
-		# The order is over, not transferred to whatever is standing nearby --
-		# picking a new target is 4.12's job, not this one's.
-		u.stop()
-		return
-
 	var def := w.unit_def(u.def_id)
 	if def == null or def.attack_damage <= 0:
 		u.stop()
+		return
+
+	var target := w.get_entity(u.task_target_id)
+	if target == null or not target.alive:
+		# Killed by somebody else while this one was still walking over. Look
+		# around before standing down -- see `_reacquire`.
+		if not _reacquire(w, u):
+			u.stop()
 		return
 
 	if not _within_reach(u, target, def.attack_range):
@@ -83,8 +90,72 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# swinging at something already dead is a tick of the attack animation
 	# playing over a corpse, and AnimationSystem runs later in this same tick --
 	# so the difference is visible, not merely tidy.
-	if not target.alive:
+	if not target.alive and not _reacquire(w, u):
 		u.stop()
+
+
+## The next thing to hit, within `REACQUIRE_RADIUS` of where the unit is standing
+## (project owner, 2026-08-20). True if one was found and the unit is now on it.
+##
+## **This is not the auto-acquire the header rules out, and the difference is what
+## makes it safe.** A unit only reaches here because it was ORDERED to attack and
+## that order just ended with its target dead. An idle villager still never picks
+## a fight, and being shot at still does not make anybody turn around -- that is
+## still stances (4.12). What this removes is only the bit where an army kills one
+## unit of a group and then stands among the rest doing nothing.
+##
+## Units before buildings, as asked: a building cannot run away and will still be
+## there afterwards, whereas whatever just killed your target is next to you now.
+## Ties break by distance and then by lowest id, and the winner is a strict
+## minimum over that triple -- so the choice does not depend on the order
+## `entities_in_rect` happens to return, which is not sorted and must not be
+## trusted to be. Two hosts pick the same next target or the match desyncs.
+##
+## The path request at the end is NOT optional, however close the new target is.
+## `set_task_attack` raises `path_pending`, and `_close_in` reads that as "already
+## on the way" and returns -- so a re-acquire that skipped the request left the
+## unit standing beside its new target forever, planning a route nobody had asked
+## for. It cost a test to find and it would have looked exactly like the AI's
+## villagers freezing. If the target turns out to be within reach anyway, the next
+## tick cancels this and halts, the same self-correction an ordinary attack gets.
+func _reacquire(w: SimWorld, u: SimUnit) -> bool:
+	if w.paths == null:
+		return false
+	var here := u.tile()
+	var span := REACQUIRE_RADIUS * 2 + 1
+	var rect := Rect2i(here - Vector2i(REACQUIRE_RADIUS, REACQUIRE_RADIUS),
+			Vector2i(span, span))
+
+	var best_id := 0
+	var best_is_building := 0
+	var best_gap := 0
+	for e in w.entities_in_rect(rect):
+		# Gaia is not a belligerent (`AttackCommand` refuses it), so a re-acquire
+		# must not walk a swordsman into a tree the moment a fight ends.
+		if not e.alive or e.owner_id == 0 or e.owner_id == u.owner_id:
+			continue
+		if not (e is SimUnit or e is SimBuilding):
+			continue
+		var is_building := 1 if e is SimBuilding else 0
+		var gap := tile_gap(here, _rect_of(e))
+		if best_id != 0:
+			if is_building > best_is_building:
+				continue
+			if is_building == best_is_building:
+				if gap > best_gap:
+					continue
+				if gap == best_gap and int(e.id) > best_id:
+					continue
+		best_id = int(e.id)
+		best_is_building = is_building
+		best_gap = gap
+
+	if best_id == 0:
+		return false
+	var next_tile: Vector2i = w.get_entity(best_id).tile()
+	u.set_task_attack(best_id, next_tile)
+	w.paths.request(u.id, next_tile)
+	return true
 
 
 ## Walk toward the target, re-planning only when the current route RUNS OUT.

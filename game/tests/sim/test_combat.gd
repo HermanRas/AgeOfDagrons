@@ -42,6 +42,83 @@ func test_a_knight_walks_to_an_enemy_and_kills_it() -> void:
 	assert_true(knight.is_idle(), "and retires once there is nothing left to hit")
 
 
+# ── re-acquiring after a kill (project owner, 2026-08-20) ───────────────────
+
+func test_a_killer_takes_the_next_enemy_standing_beside_the_corpse() -> void:
+	var knight := w.spawn_unit(&"unit.knight", 1, Vector2i(10, 10))
+	var first := w.spawn_unit(&"unit.villager", 2, Vector2i(11, 10))
+	var second := w.spawn_unit(&"unit.villager", 2, Vector2i(12, 10))
+
+	w.queue_command(AttackCommand.new(1, [knight.id], first.id))
+	assert_true(_run_until(func(): return not first.alive, 600) > 0, "the first one died")
+
+	assert_true(_run_until(func(): return second.hp < second.max_hp, 600) > 0,
+			"and it moved on to the one beside it rather than standing over the corpse")
+
+
+func test_it_prefers_a_unit_over_a_building_within_reach() -> void:
+	var knight := w.spawn_unit(&"unit.knight", 1, Vector2i(10, 10))
+	var first := w.spawn_unit(&"unit.villager", 2, Vector2i(11, 10))
+	# The house is CLOSER than the other villager (its 3x3 reaches to gap 1, where
+	# the villager is at gap 2), so distance alone would pick it.
+	var house := w.spawn_building(&"building.house", 2, Vector2i(9, 11))
+	var other := w.spawn_unit(&"unit.villager", 2, Vector2i(12, 10))
+
+	w.queue_command(AttackCommand.new(1, [knight.id], first.id))
+	assert_true(_run_until(func(): return not first.alive, 600) > 0, "the first one died")
+
+	assert_eq(knight.task_target_id, other.id,
+			"units come before buildings even when the building is nearer")
+	assert_eq(house.hp, house.max_hp, "and the house was left alone")
+
+
+func test_it_stands_down_when_nothing_is_left_within_the_box() -> void:
+	var knight := w.spawn_unit(&"unit.knight", 1, Vector2i(10, 10))
+	var victim := w.spawn_unit(&"unit.villager", 2, Vector2i(11, 10))
+	# Well outside the 5x5: a re-acquire must not reach across the map.
+	var far := w.spawn_unit(&"unit.villager", 2, Vector2i(30, 30))
+
+	w.queue_command(AttackCommand.new(1, [knight.id], victim.id))
+	assert_true(_run_until(func(): return not victim.alive, 600) > 0, "the victim died")
+
+	assert_true(knight.is_idle(), "it retired rather than setting off across the map")
+	assert_eq(far.hp, far.max_hp)
+
+
+func test_a_re_acquire_never_turns_on_gaia() -> void:
+	var knight := w.spawn_unit(&"unit.knight", 1, Vector2i(10, 10))
+	var victim := w.spawn_unit(&"unit.villager", 2, Vector2i(11, 10))
+	var tree := w.spawn_resource_node(&"res.tree", Vector2i(11, 11))
+
+	w.queue_command(AttackCommand.new(1, [knight.id], victim.id))
+	assert_true(_run_until(func(): return not victim.alive, 600) > 0, "the victim died")
+
+	assert_true(knight.is_idle(), "a tree is not an enemy")
+	assert_true(tree.alive)
+
+
+func test_two_worlds_re_acquiring_stay_identical() -> void:
+	# The choice must not depend on `entities_in_rect`'s order, which is not sorted.
+	var other := SimWorld.new()
+	var cfg := MatchConfig.new()
+	cfg.player_ids = [1, 2]
+	cfg.map_size = Vector2i(48, 48)
+	other.setup(cfg)
+	other.map.fill_terrain(SimMap.Terrain.GRASS)
+
+	for world: SimWorld in [w, other]:
+		var knight: SimUnit = world.spawn_unit(&"unit.knight", 1, Vector2i(10, 10))
+		var first: SimUnit = world.spawn_unit(&"unit.villager", 2, Vector2i(11, 10))
+		world.spawn_unit(&"unit.villager", 2, Vector2i(12, 10))
+		world.spawn_unit(&"unit.villager", 2, Vector2i(10, 12))
+		world.queue_command(AttackCommand.new(1, [knight.id], first.id))
+
+	for i in range(400):
+		w.step()
+		other.step()
+	assert_eq(w.state_hash(), other.state_hash())
+
+
 func test_an_archer_kills_from_range_without_closing_to_touch() -> void:
 	# The whole point of `attack_range`: 4 tiles for the archer (units.json), so
 	# it must stop short rather than walking up to the target like a knight.
