@@ -836,9 +836,9 @@ metres · 0.2c `licence_audit.py` + `LICENCES.md` · 0.4 `GameDataRegistry` enti
 | 1.3 | ✅ `Boot.tscn`/`boot_screen.gd` — title card, 2 s or tap. Distinct from the engine's own sub-second `boot_splash/image` | `[MVP]` |
 | 1.4 | ✅ `Credits.tscn` — a `RichTextLabel` mirroring CREDITS.md, hardcoded because CREDITS.md lives outside `res://` | `[MVP]` |
 | 1.5 | Settings screen | |
-| 1.6 | **Skirmish settings screen — and it IS the lobby.** See §11.1 below | |
+| 1.6 | ✅ **DONE 2026-08-17** — `SkirmishScreen` (`src/view/skirmish_screen.gd`) + `scenes/menu/Skirmish.tscn`; PLAY now routes through it. See §11.1 | |
 
-#### 11.1 Skirmish settings (1.6) — specified 2026-08-17
+#### 11.1 Skirmish settings (1.6) — ✅ built 2026-08-17
 
 A skirmish screen and a multiplayer lobby differ only in **what fills a player slot**, so build
 one screen with one dropdown per slot: **Human (this device)** / **PlayTest AI** / **Open
@@ -855,7 +855,27 @@ the day it matters.
 | Players | Read from the generator's own 2–8 clamp, shown **disabled at 2** rather than hidden, so the limit is visible instead of invented |
 | Win condition | 11.3 — Last Man Standing, with Trophy and King of the Hill greyed |
 
-Everything it collects **is** `MatchConfig`, which needs only `seed` and `map_source` added.
+Everything it collects **is** a `MatchConfig` — `build_config()` returns one, so the
+screen has no vocabulary of its own to translate out of and a test can assert what it
+would start without a scene tree. `MatchConfig` gained `seed`, `map_type`, `map_data` and
+`ai_players`; that last one finally writes `SimPlayer.is_ai`, a field that had existed
+since 0.6 with nothing setting it.
+
+**How the config survives the scene change:** `Net.pending_match`. The screen assembles
+it and hands over to `Game.tscn`, whose own `_ready()` starts the session — by which
+point the screen is gone, so the config has to wait somewhere that outlives both.
+`host_solo()` **consumes** it (clears it after reading), so a match started any other way
+afterwards still gets the debug map rather than whatever a screen left behind. That is
+what keeps every dev preview working unchanged.
+
+**Still open on this screen:** saved maps in the map-source picker, which waits on 2.4c's
+file format; the OPEN slot role, which needs 12.1's listening host; and the art — it is
+built from stock `OptionButton`/`SpinBox` controls, the `ResourceHUD`-at-7.1 stage where
+the job is the wiring. Verified live end to end by `dev_preview/preview_skirmish.tscn`,
+which photographs the screen, starts a match from what it built, and **compares the
+running world's terrain against the preview tile by tile** — a settings screen that
+previews one map and plays another is the worst failure available here and is invisible
+from either picture alone.
 
 ### Phase 2 — Map
 
@@ -1178,7 +1198,7 @@ it is baked.)*
 | 11.1 Win condition | High | Low | ✅ **DONE** 2026-08-17 (conquest; 11.2's two modes declared inert) |
 | **Field yield balance** | Medium | Low | ✅ **DONE** 2026-08-17 — see below |
 | 2.4b Map generator | High | Medium | ✅ **DONE** 2026-08-17 |
-| 1.6 Skirmish screen | High | Medium | **Next** — the generator it previews now exists |
+| 1.6 Skirmish screen | High | Medium | ✅ **DONE** 2026-08-17 |
 | 12.2a PlayTest AI | High | Low-medium | **Next** — cheap, and it buys an automated full-match test |
 | 12.1 Real multiplayer (LAN, 2 devices) | High | Medium | **After the map work** — §12.1 |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
@@ -1335,6 +1355,6 @@ Live risks only. Retired ones are in `b904b76`.
 ## 15. Immediate next actions
 
 1. ✅ **Map generator in the game** (2.4b, §11.2). Still open from it: the **PNG + sidecar save format**, which 2.4c needs. It also found that `terrain.water_shallow`, `terrain.water_deep`, `terrain.rock` and the forest floor were **baked and staged but never declared in `visuals.json`** — the debug map only ever paints grass and dirt, so nothing had asked for them, and a generated map's water would have drawn as the magenta unknown. Four data entries, now wired: exactly the gap the asset seam's totality rule is meant to surface rather than hide.
-2. **Build the skirmish settings screen** (1.6) as the lobby, per §11.1. Everything it needs now exists: `MatchConfig.debug_generated()` is the config it assembles, `MapData` is what it previews, and `MapValidator.problems()` is what disables Start.
-3. **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically.
+2. ✅ **Skirmish settings screen** (1.6, §11.1), with PLAY routed through it. Open from it: saved maps (waits on 2.4c), the OPEN slot (waits on 12.1), and the skin.
+3. **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically. **The screen already offers it and `SimPlayer.is_ai` is already set**, so what is missing is only `AISystem` itself: player 2 is currently marked as a bot and does nothing.
 4. **Then multiplayer** (§12.1) in the order given: a → b → d → g → c → e → f.

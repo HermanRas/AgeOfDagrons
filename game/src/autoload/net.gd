@@ -20,6 +20,19 @@ signal snapshot_received(snap: Dictionary)
 
 const _SOLO_PORT := 27015
 
+## The config the next `host_solo()` should use, or null for the debug skirmish.
+##
+## Lives here because a `MatchConfig` has to survive a SCENE CHANGE: the skirmish
+## screen (1.6) assembles it and then hands over to `Game.tscn`, whose own `_ready()`
+## is what starts the session -- by which point the screen that chose it is gone. An
+## autoload already outliving both is the natural place to leave it, and `Net` is the
+## one that owns the session.
+##
+## CONSUMED, not merely read: `host_solo()` clears it, so a match started any other way
+## afterwards (the main menu's own PLAY, a dev preview) gets the debug map rather than
+## whatever a screen left behind ten minutes ago.
+var pending_match: MatchConfig = null
+
 var _peer: MultiplayerPeer = null
 var _host: SimHost = null
 var _local_player_id: int = 0
@@ -40,12 +53,14 @@ func host_solo() -> Error:
 
 	_host = SimHost.new()
 	add_child(_host)
-	# Two players, though only one of them has a peer: `_peer_players` maps peer 1
-	# to player 1 and nothing to player 2, so the skirmish opponent cannot be given
-	# an order by anybody -- not by us (every command validates ownership) and not
-	# by a second client, because there isn't one. They are scenery until there is
-	# an AI or a second peer to drive them.
-	_host.start(MatchConfig.debug_skirmish(), _broadcast_snapshot)
+	# Whatever the skirmish screen chose, else the debug skirmish. Either way only
+	# player 1 has a peer: `_peer_players` maps peer 1 to player 1 and nothing to
+	# anybody else, so no other player can be given an order -- not by us (every
+	# command validates ownership) and not by a second client, because there isn't
+	# one. They are scenery until an AI (12.2a) or a second peer (12.1) drives them.
+	var cfg := pending_match if pending_match != null else MatchConfig.debug_skirmish()
+	pending_match = null
+	_host.start(cfg, _broadcast_snapshot)
 
 	session_started.emit(true)
 	return OK

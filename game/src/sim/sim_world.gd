@@ -103,6 +103,10 @@ func setup(cfg: MatchConfig) -> void:
 		# on every client -- and every client builds its own world (2.4a).
 		var chosen: int = cfg.colours[i] if i < cfg.colours.size() else -1
 		p.colour = chosen if chosen >= 0 else i
+		# Who is a bot (PLAN.md 12.2a), picked per slot in the skirmish screen (1.6).
+		# The FIELD has existed since 0.6 with nothing writing it; this is the config
+		# side of it. `AISystem` is what will read it.
+		p.is_ai = bool(cfg.ai_players[i]) if i < cfg.ai_players.size() else false
 		players.append(p)
 
 

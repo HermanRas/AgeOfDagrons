@@ -27,6 +27,16 @@ extends RefCounted
 ##                      wins.
 enum Mode { LAST_MAN_STANDING, TROPHY, KING_OF_THE_HILL }
 
+
+## A mode's name for a player to read (the skirmish screen, 1.6/11.3). Spelled out
+## rather than derived from the enum name, so renaming a member is a change you make
+## here too, in front of you, instead of silently retitling a menu entry.
+static func mode_name(mode: Mode) -> String:
+	match mode:
+		Mode.TROPHY: return "Trophy"
+		Mode.KING_OF_THE_HILL: return "King of the Hill"
+		_: return "Last Man Standing"
+
 ## Deliberately small. PLAN.md 10's MVP is "one small map on a phone", and an 8x8
 ## town centre plus 5 villagers on 64x64 tiles is already a generous settlement's
 ## worth of room. 2.4b scales size with player count.
@@ -52,6 +62,11 @@ var mode: Mode = Mode.LAST_MAN_STANDING
 var map_data: MapData = null
 var seed: int = 0
 var map_type: MapGenerator.Type = MapGenerator.Type.RANDOM
+
+## Which slots are bots, position for position with `player_ids` (PLAN.md 12.2a).
+## EMPTY means every player is human, which is what every debug factory here wants.
+## Read by `SimWorld.setup()` into `SimPlayer.is_ai`.
+var ai_players: Array[bool] = []
 
 
 ## A generated skirmish: two players, yellow against red, on a real procedural map.

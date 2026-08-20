@@ -13,6 +13,7 @@ extends Control
 
 const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
+const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
 
 @onready var _play_button: TextureButton = %PlayButton
 @onready var _multiplayer_button: TextureButton = %MultiplayerButton
@@ -38,8 +39,18 @@ func _ready() -> void:
 	_quit_button.pressed.connect(func() -> void: get_tree().quit())
 
 
+## PLAY now goes through the SKIRMISH SETTINGS screen (1.6) rather than straight into
+## a match on the fixed debug map.
+##
+## That is one extra tap before playing, and it is the right one: the map, the colours,
+## the opponent and the victory condition are all real choices now, and a PLAY button
+## that silently picked for you would make the generator unreachable. The screen opens
+## on defaults that are one press from a match, so the cost is a tap and not a form.
+##
+## `Game.tscn` still starts a debug skirmish if reached any other way -- a dev preview,
+## or `run/main_scene` pointed at it -- because `Net.pending_match` is null then.
 func _on_play_pressed() -> void:
-	get_tree().change_scene_to_file(_GAME_SCENE)
+	get_tree().change_scene_to_file(_SKIRMISH_SCENE)
 
 
 func _on_credits_pressed() -> void:
