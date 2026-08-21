@@ -102,6 +102,73 @@ static func debug_generated(p_seed: int = 1,
 var colours: Array[int] = []
 
 
+## THE MATCH CONFIG ON THE WIRE (PLAN.md 12.1b/d).
+##
+## Sent once, by the host, when a match starts: every client builds its own world from
+## it (2.4a), so anything the two sides could disagree about has to be in here. That is
+## why `mode` and `colours` travel -- two clients running different victory rules would
+## disagree about whether the match is over, and two disagreeing about who is yellow is
+## the one difference players read the board by.
+##
+## **The map travels as the map, not as a seed.** 2.4b's generator uses `FastNoiseLite`,
+## whose float maths is not guaranteed identical between an ARM phone and an x86 desktop,
+## so a host and client regenerating from a shared seed can disagree about where the
+## water is -- a desync before the first order, and the one kind `state_hash()` reports
+## without being able to say why. 20-40 KB once, for certainty (corrected 2026-08-17).
+##
+## `seed`/`map_type` ride along as PROVENANCE only, for the lobby to display and for
+## Re-generate to work from; nothing rebuilds the map out of them.
+func to_dict() -> Dictionary:
+	return {
+		"player_ids": player_ids,
+		"colours": colours,
+		"ai_players": ai_players,
+		"map_size": {"x": map_size.x, "y": map_size.y},
+		"mode": int(mode),
+		"seed": seed,
+		"map_type": int(map_type),
+		# null for the fixed debug map, which is integer code and identical everywhere.
+		"map_data": map_data.to_dict() if map_data != null else null,
+	}
+
+
+static func from_dict(d: Dictionary) -> MatchConfig:
+	var c := MatchConfig.new()
+
+	# Rebuilt element by element rather than assigned wholesale: everything off the wire
+	# is an untyped Array of Variants, and these fields are typed. Assigning one straight
+	# across fails at runtime, and `ai_players` in particular would silently become an
+	# array of nulls -- which reads as "nobody is a bot" and quietly turns the AI off.
+	var ids: Array[int] = []
+	for v in d.get("player_ids", []):
+		ids.append(int(v))
+	c.player_ids = ids
+
+	var cols: Array[int] = []
+	for v in d.get("colours", []):
+		cols.append(int(v))
+	c.colours = cols
+
+	var bots: Array[bool] = []
+	for v in d.get("ai_players", []):
+		bots.append(bool(v))
+	c.ai_players = bots
+
+	var ms: Dictionary = d.get("map_size", {})
+	c.map_size = Vector2i(int(ms.get("x", DEBUG_MAP_SIZE.x)), int(ms.get("y", DEBUG_MAP_SIZE.y)))
+	c.mode = int(d.get("mode", Mode.LAST_MAN_STANDING)) as Mode
+	c.seed = int(d.get("seed", 0))
+	c.map_type = int(d.get("map_type", MapGenerator.Type.RANDOM)) as MapGenerator.Type
+
+	var md = d.get("map_data")
+	if md != null and md is Dictionary:
+		c.map_data = MapData.from_dict(md)
+		# The map is the authority on its own size; a config that disagreed with the
+		# map it carries would build a world the wrong shape.
+		c.map_size = c.map_data.size
+	return c
+
+
 ## The MVP session model (PLAN.md 1.1): one human, hosted on loopback.
 static func debug_single_player() -> MatchConfig:
 	var c := MatchConfig.new()
