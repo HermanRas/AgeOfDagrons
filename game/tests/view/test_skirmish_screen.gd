@@ -29,6 +29,12 @@ func after_each() -> void:
 	# otherwise leave port 27015 bound and take the rest of the file down with it.
 	if Net.has_session():
 		Net.leave()
+	# The white-box pokes in the consent tests are undone here rather than in each test:
+	# one that fails part way through would otherwise leave a fake peer registered and
+	# take every later test with it.
+	Net._peer_players.clear()
+	Net._lobby_ready.clear()
+	Net._lobby_config = null
 	screen.free()
 
 
@@ -213,17 +219,20 @@ func test_a_joined_client_configures_nothing_and_cannot_start() -> void:
 	assert_true((screen._slot_rows[0]["role"] as OptionButton).disabled)
 
 
-func test_a_joined_client_stops_showing_a_map_it_will_never_play() -> void:
-	# The worst thing on the joined screen before this: a client generated its own random
-	# map on the way in and showed it captioned "ready", while the map it was actually
-	# waiting for was on the host and does not arrive until the match starts. A
-	# convincing wrong picture is worse than no picture.
+func test_a_joined_client_shows_no_map_until_it_has_the_hosts_map() -> void:
+	# The worst thing on the joined screen before the lobby channel: a client generated
+	# its own random map on the way in and showed it captioned "ready", while the map it
+	# would actually play was on the host and did not arrive until the match started. A
+	# convincing wrong picture is worse than no picture -- so in the one window where
+	# this device genuinely does not know, between connecting and the host's first
+	# broadcast, it shows nothing and says it is waiting. Once a proposal lands it shows
+	# that, which `test_a_joiner_sees_the_hosts_map_rather_than_one_of_its_own` covers.
 	assert_true(screen._preview.visible, "the host's own screen still previews")
 	screen._lobby = SkirmishScreen.Lobby.JOINED
 	screen._refresh_lobby()
-	assert_false(screen._preview.visible)
-	assert_true(screen.status_text().contains("host chooses"),
-			"and it says who does choose, got: %s" % screen.status_text())
+	assert_false(screen._preview.visible, "nothing to show yet, so nothing shown")
+	assert_true(screen.status_text().contains("Waiting for the host"),
+			"and it says what it is waiting for, got: %s" % screen.status_text())
 
 
 func test_why_a_session_ended_survives_the_refresh_that_follows_it() -> void:
@@ -235,6 +244,113 @@ func test_why_a_session_ended_survives_the_refresh_that_follows_it() -> void:
 	assert_true(screen.lobby_text().contains("server disconnected"),
 			"kept the reason, got: %s" % screen.lobby_text())
 	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.LOCAL)
+
+
+# ── consent: the joiner gets to look, and gets to say no ───────────────────
+#
+# The gap the owner spotted after the PC-to-PC run: player 2 never clicked ready and
+# never saw the map, because `_recv_match_config` is only sent from `start_match()` --
+# so a joining player learned the terms at the same instant they were committed to them.
+
+## Register a peer with Net the way a real connection would, so `all_peers_ready()` has
+## somebody to wait for.
+##
+## Reaches into `Net._peer_players` on purpose: `peer_players()` hands back a COPY, and
+## the alternative to a white-box poke here is not testing the consent gate at all.
+## Undone in `after_each`.
+func _register_peer(peer_id: int, player_id: int) -> void:
+	Net._peer_players[peer_id] = player_id
+
+
+func test_a_joined_player_cannot_be_started_over() -> void:
+	_open_slot_two()
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+
+	assert_eq(screen.unfilled_slots(), 0, "the chair is filled")
+	assert_false(screen.can_start(), "but nobody has agreed to anything yet")
+
+	Net._lobby_ready[7777] = true
+	assert_true(screen.can_start(), "now they have")
+
+
+func test_changing_the_match_takes_back_everyones_agreement() -> void:
+	# The rule worth having: whoever said yes said yes to the settings in front of them.
+	# A host who swaps the map after they agreed no longer has their consent, and a start
+	# gated on a stale yes is the bug the whole channel exists to prevent.
+	_open_slot_two()
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+	Net._lobby_ready[7777] = true
+	assert_true(screen.can_start())
+
+	screen._on_seed_changed(9182.0)
+	assert_false(Net.is_peer_ready(7777), "a new map is a new question")
+	assert_false(screen.can_start(), "and it has not been answered")
+
+
+func test_a_peer_that_leaves_does_not_leave_its_yes_behind() -> void:
+	_open_slot_two()
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+	Net._lobby_ready[7777] = true
+
+	Net._on_peer_disconnected(7777)
+	assert_false(Net.is_peer_ready(7777), "their agreement went with them")
+
+
+func test_a_joiner_sees_the_hosts_map_rather_than_one_of_its_own() -> void:
+	# Before the lobby channel this screen hid its preview when joined, because the only
+	# map it had was one it generated itself and would never play. Now there is a real one.
+	var host_cfg := SkirmishScreen.new()
+	host_cfg._on_seed_changed(4242.0)
+	var proposal := host_cfg.build_config()
+
+	Net._lobby_config = proposal
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+
+	assert_eq(screen.map_data().terrain, proposal.map_data.terrain,
+			"the joiner is looking at the host's actual map")
+	assert_eq(screen.build_config().seed, 4242, "and its actual seed")
+	assert_true(screen._preview.visible, "shown, not hidden")
+	assert_true(screen.status_text().contains("4242"), "and stated: %s"
+			% screen.status_text())
+	# The RESOLVED type, the same thing the host's own screen says about this map. A
+	# consent screen telling the two sides different things about one map is the last
+	# thing it should do.
+	var resolved: MapGenerator.Type = proposal.map_data.meta["type"]
+	assert_true(screen.status_text().contains(MapGenerator.type_name(resolved)),
+			"names the map it is showing, not the roll that picked it: %s"
+			% screen.status_text())
+	host_cfg.free()
+
+
+func test_a_joiner_starts_out_not_ready_and_can_change_its_mind() -> void:
+	Net._lobby_config = screen.build_config()
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+
+	assert_false(screen._am_ready, "agreement is never the default")
+	assert_true(screen._ready_button.visible, "and there is a way to give it")
+	assert_eq(screen._ready_button.text, "READY")
+
+	screen._on_ready_pressed()
+	assert_true(screen._am_ready)
+	assert_eq(screen._ready_button.text, "NOT READY", "and a way to take it back")
+
+	screen._on_ready_pressed()
+	assert_false(screen._am_ready)
+
+
+func test_a_joiner_with_no_proposal_yet_cannot_agree_to_one() -> void:
+	# The one honest gap: between connecting and the host's first broadcast, this device
+	# really does not know what it would be agreeing to.
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._refresh_lobby()
+	assert_true(screen._ready_button.disabled)
+	assert_true(screen.status_text().contains("Waiting"), "and says so: %s"
+			% screen.status_text())
 
 
 func test_an_unplayable_map_cannot_be_started_and_says_why() -> void:

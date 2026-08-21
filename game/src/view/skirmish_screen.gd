@@ -66,9 +66,12 @@ var _data: MapData = null
 
 var _lobby: Lobby = Lobby.LOCAL
 
-## Host only, from `--autostart`: press START as soon as every advertised slot is filled.
-## See `_apply_cmdline`.
+## Host only, from `--autostart`: press START as soon as the lobby is full and everyone
+## has agreed. See `_apply_cmdline`.
 var _autostart := false
+
+## Joiner only, from `--autoready`: press READY as soon as the host's proposal arrives.
+var _autoready := false
 
 ## The port advertising a slot binds. `Net.PORT` in the game, always.
 ##
@@ -99,6 +102,11 @@ var _lobby_status: Label
 var _reroll_button: Button
 var _count_picker: OptionButton
 var _mode_picker: OptionButton
+var _ready_button: Button
+
+## This device's own answer, on a joined client. Reset to false whenever a new proposal
+## arrives, because agreeing to one match is not agreeing to the next one.
+var _am_ready := false
 
 
 func _init() -> void:
@@ -135,6 +143,8 @@ func _init() -> void:
 	Net.peer_joined.connect(_on_peer_joined)
 	Net.peer_left.connect(_on_peer_left)
 	Net.match_configured.connect(_on_match_configured)
+	Net.lobby_config_received.connect(_on_lobby_config_received)
+	Net.lobby_ready_changed.connect(_on_lobby_ready_changed)
 	Net.session_ended.connect(_on_session_ended)
 	_refresh_lobby()
 	_apply_cmdline()
@@ -274,6 +284,14 @@ func _build_match_column() -> Control:
 	_start_button = _button("START", _on_start_pressed)
 	_start_button.custom_minimum_size = Vector2(160.0, 48.0)
 	buttons.add_child(_start_button)
+
+	# The joining player's say. Only visible to them -- a host readies by pressing START,
+	# and two buttons meaning the same thing on one screen would be one too many.
+	_ready_button = _button("READY", _on_ready_pressed)
+	_ready_button.custom_minimum_size = Vector2(160.0, 48.0)
+	_ready_button.visible = false
+	buttons.add_child(_ready_button)
+
 	buttons.add_child(_button("Back", _on_back_pressed))
 	column.add_child(buttons)
 	return column
@@ -335,6 +353,18 @@ func regenerate() -> void:
 		_status.text = "Unplayable map: %s" % String(problems[0])
 		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
 	_refresh_start_button()
+	_publish_lobby()
+
+
+## Tell the people waiting what they are waiting for, whenever it changes.
+##
+## Called from every path that alters the match: a regenerated map, a colour, a role. A
+## host who quietly changed the map under a player who had already agreed to it would be
+## the exact failure the lobby channel exists to prevent -- so `broadcast_lobby_config`
+## also cancels every agreement, and everyone has to say yes to the new thing.
+func _publish_lobby() -> void:
+	if _lobby == Lobby.HOSTING:
+		Net.broadcast_lobby_config(build_config())
 
 
 ## The config this screen would start. Exactly a `MatchConfig`, with no translation.
@@ -367,12 +397,18 @@ func map_data() -> MapData:
 ##      match one player short of the one the host set up.
 ##   3. Not a joined client. Over there START belongs to the host, and the local button
 ##      would be a second, competing authority over when the match begins.
+##   4. **Everybody has agreed.** A host who can start over a player who has not said
+##      READY is a host who can drop somebody into a match they never got to look at,
+##      which is the whole reason the lobby channel exists. Agreement is also cancelled
+##      whenever a setting changes, so this cannot be satisfied by a stale yes.
 func can_start() -> bool:
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
 	if _lobby == Lobby.JOINED:
 		return false
-	return unfilled_slots() == 0
+	if unfilled_slots() != 0:
+		return false
+	return Net.all_peers_ready()
 
 
 func _refresh_start_button() -> void:
@@ -432,6 +468,7 @@ func _on_colour_pressed(index: int) -> void:
 		if not _colours.slice(0, _players).has(candidate):
 			_colours[index] = candidate
 			_refresh_colour_button(index)
+			_publish_lobby()
 			return
 
 
@@ -467,6 +504,7 @@ func _on_role_selected(item: int, index: int) -> void:
 		# The host closed the slot itself, so `session_ended`'s "left" is not news.
 		_say("")
 
+	_publish_lobby()
 	_refresh_lobby()
 
 
@@ -525,10 +563,20 @@ func _on_peer_joined(peer_id: int) -> void:
 	# which lists this peer by name anyway -- and a `_say` afterwards would replace that
 	# whole peer list with one line about one arrival. The log still gets both.
 	_say("player %d joined slot %d (peer %d)" % [pid, slot + 1, peer_id])
+	# THE FIRST THING A NEW ARRIVAL IS OWED. Until this call existed, a joining player
+	# learned nothing about the match until it had already started.
+	Net.broadcast_lobby_config(build_config())
 	_refresh_lobby()
 
+	_maybe_autostart()
+
+
+## `--autostart`, re-checked on every event that could satisfy it. Peer arrival is not
+## enough on its own any more: the lobby also waits on agreement, so the moment that
+## makes a start legal is usually somebody pressing READY, not somebody connecting.
+func _maybe_autostart() -> void:
 	if _autostart and can_start():
-		_say("autostart: the lobby is full, starting")
+		_say("autostart: lobby full and everyone agreed, starting")
 		_on_start_pressed()
 
 
@@ -556,6 +604,61 @@ func _slot_for(player_id: int) -> int:
 		if _roles[i] == Role.OPEN and not _slot_peers.has(i):
 			return i
 	return -1
+
+
+## THE HOST'S MATCH, ARRIVING WHILE THERE IS STILL TIME TO LOOK AT IT.
+##
+## Adopted into this screen's own fields rather than rendered through a second read-only
+## path, so the joined screen literally IS the host's screen with the controls off: one
+## set of widgets, one preview, no chance of the two drifting into disagreement about what
+## a config means. Safe precisely because everything is disabled here -- nothing this
+## device does can write back into it.
+##
+## And it resets this device's READY, because a new proposal is a new question. The host
+## side cancels every agreement at the same moment (`broadcast_lobby_config`), so the two
+## sides agree that consent does not survive a change.
+func _on_lobby_config_received() -> void:
+	var cfg := Net.lobby_config()
+	if cfg == null:
+		return
+
+	_seed = cfg.seed
+	_type = cfg.map_type
+	_mode = cfg.mode
+	_data = cfg.map_data
+	for i in range(mini(_colours.size(), cfg.colours.size())):
+		_colours[i] = cfg.colours[i]
+		_refresh_colour_button(i)
+
+	_seed_box.set_value_no_signal(_seed)
+	_type_picker.select(_type_picker.get_item_index(int(_type)))
+	_mode_picker.select(_mode_picker.get_item_index(int(_mode)))
+	if _data != null:
+		_preview.show_map(_data)
+
+	_am_ready = false
+	_say("player %d — review the match, then press READY" % Net.local_player_id())
+	_refresh_lobby()
+
+	if _autoready:
+		# The scripted side of a two-machine test agreeing on cue. It presses the real
+		# button's handler, so it agrees to a proposal it has actually received -- which
+		# is the whole rule, just without a thumb.
+		_on_ready_pressed()
+
+
+func _on_ready_pressed() -> void:
+	_am_ready = not _am_ready
+	Net.set_lobby_ready(_am_ready)
+	_say("ready: %s" % _am_ready)
+	_refresh_lobby()
+
+
+## Somebody's answer changed, on the host. START may have just become available, or may
+## have just stopped being.
+func _on_lobby_ready_changed(_peer_id: int, _ready: bool) -> void:
+	_refresh_lobby()
+	_maybe_autostart()
 
 
 ## The host has described the match, so this client can draw it. Only ever fires on a
@@ -589,12 +692,18 @@ func _refresh_lobby() -> void:
 	_mode_picker.disabled = joined
 	_count_picker.disabled = joined or _MAX_OFFERED_PLAYERS <= MapGenerator.MIN_PLAYERS
 
-	# AND THE PREVIEW GOES, which is the one that actually mattered. A joined client had
-	# generated its own random map on the way in and was showing THAT -- a picture of a
-	# map it will never play, captioned "ready", while the map it is really waiting for
-	# lives on the host and does not arrive until the match starts. A blank panel that
-	# says who chooses is worth more than a convincing wrong one.
-	_preview.visible = not joined
+	# THE PREVIEW SHOWS THE HOST'S MAP, ONCE THERE IS ONE. A joined client used to
+	# generate its own random map on the way in and show THAT -- a picture of a map it
+	# will never play, captioned "ready" -- so the preview was hidden. Now the host sends
+	# its config to the lobby and the client adopts it, so there is a real map to show;
+	# it stays hidden only in the gap before the first one arrives, which is the only
+	# moment this device genuinely does not know.
+	_preview.visible = not joined or Net.lobby_config() != null
+
+	# The joining player's answer, and only theirs.
+	_ready_button.visible = joined
+	_ready_button.disabled = joined and Net.lobby_config() == null
+	_ready_button.text = "NOT READY" if _am_ready else "READY"
 	for i in range(_slot_rows.size()):
 		var role_picker: OptionButton = _slot_rows[i]["role"]
 		# A slot somebody is standing in cannot be un-opened. Simpler than deciding what
@@ -603,7 +712,26 @@ func _refresh_lobby() -> void:
 		(_slot_rows[i]["colour"] as Button).disabled = joined
 
 	if joined:
-		_status.text = "The host chooses the map"
+		var cfg := Net.lobby_config()
+		if cfg == null:
+			_status.text = "Waiting for the host's settings"
+		else:
+			# What the joining player is being asked to agree TO, in words, next to the
+			# map they can now see. The host's screen has these as live controls; here
+			# they are the terms of the invitation.
+			#
+			# The RESOLVED type, not the requested one -- the same thing `regenerate()`
+			# shows the host. `map_type` records what was asked for, so a random pick
+			# reads as "Random" while the map in front of you is plainly a desert; on the
+			# host's own screen that reads as "Desert". Telling the two sides different
+			# things about one map is the last thing a consent screen should do.
+			var resolved := cfg.map_type
+			if cfg.map_data != null:
+				resolved = cfg.map_data.meta.get("type", cfg.map_type) as MapGenerator.Type
+			_status.text = "%s, %d x %d — seed %d — %s" % [
+					MapGenerator.type_name(resolved),
+					cfg.map_size.x, cfg.map_size.y, cfg.seed,
+					MatchConfig.mode_name(cfg.mode)]
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 
 	_join_field.editable = _lobby == Lobby.LOCAL
@@ -620,10 +748,17 @@ func _refresh_lobby_text() -> void:
 			lines.append("Waiting on port %d — dial %s"
 					% [host_port, ", ".join(_own_addresses())])
 			for i in range(_players):
-				if _roles[i] == Role.OPEN:
-					lines.append("  Player %d: %s" % [i + 1,
-							"peer %d joined" % int(_slot_peers[i]) if _slot_peers.has(i)
-							else "waiting..."])
+				if _roles[i] != Role.OPEN:
+					continue
+				if not _slot_peers.has(i):
+					lines.append("  Player %d: waiting for someone to join" % (i + 1))
+					continue
+				# READY IS THE PART THAT MATTERS HERE. "Joined" only says a socket
+				# connected; START is held on agreement, so the host has to be able to
+				# see which of the two it is still waiting for.
+				var peer := int(_slot_peers[i])
+				lines.append("  Player %d: peer %d — %s" % [i + 1, peer,
+						"READY" if Net.is_peer_ready(peer) else "reviewing the match..."])
 			_lobby_status.text = "\n".join(lines)
 		_:
 			# LEFT ALONE ON PURPOSE, rather than cleared. `Net.leave()` emits
@@ -672,13 +807,15 @@ func _say(text: String) -> void:
 # this; it is kept because the need did not go away with it.
 #
 #   Godot --path game res://scenes/menu/Skirmish.tscn -- --net host --autostart
-#   Godot --path game res://scenes/menu/Skirmish.tscn -- --net join --ip 192.168.0.12
+#   Godot --path game res://scenes/menu/Skirmish.tscn -- --net join --ip 1.2.3.4 --autoready
 #
-# `--autostart` is HOST ONLY and presses START the moment every advertised slot is
-# filled. It automates the press, not the rule: the wait for a full lobby is the same
-# wait a thumb would sit through.
+# `--autostart` is HOST ONLY and presses START the moment the lobby is full and everyone
+# has agreed. `--autoready` is JOINER ONLY and presses READY when the host's proposal
+# arrives. Both automate the press, not the rule -- each still waits for exactly what a
+# thumb would wait for, which is why the ready gate cannot be skipped by scripting it.
 func _apply_cmdline() -> void:
 	_autostart = _has_flag("--autostart")
+	_autoready = _has_flag("--autoready")
 	match _string_arg("--net", ""):
 		"host":
 			# Deferred so the node is in the tree first: opening a slot can reach

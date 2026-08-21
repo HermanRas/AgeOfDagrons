@@ -38,6 +38,20 @@ signal match_configured()
 ## a silent one has run out.
 signal match_begun()
 
+## The host has described the match it is SETTING UP, while everyone is still in the
+## lobby (PLAN.md 12.1c). Emitted on a joined client.
+##
+## DELIBERATELY NOT `match_configured`, which is a different event wearing a similar
+## name: that one means "the match is starting, build your world", and a screen listening
+## to it changes scene. This one means "here is what you are being invited to", and the
+## whole point is that it arrives with time left to look at it and refuse. Reusing the
+## one signal for both would make every settings tweak in the lobby launch the match.
+signal lobby_config_received()
+
+## A joined player has said whether they are ready, or stopped being ready. Emitted on
+## the HOST, which is the only side that needs to count them.
+signal lobby_ready_changed(peer_id: int, ready: bool)
+
 ## One port for every session shape. Solo binds it on loopback, an open host binds it
 ## on 0.0.0.0, and a client dials it -- so there is nothing to keep in sync and a
 ## player typing an address never has to think about a port number.
@@ -68,6 +82,18 @@ func is_joined() -> bool:
 ## afterwards (the main menu's own PLAY, a dev preview) gets the debug map rather than
 ## whatever a screen left behind ten minutes ago.
 var pending_match: MatchConfig = null
+
+## What the host says it is SETTING UP, on a joined client, while still in the lobby.
+##
+## Separate from `_match_config` on purpose. That one is the settled answer and the
+## client's only description of the world once play starts; this one is a proposal a
+## player is still entitled to look at and walk away from. Keeping them apart is what
+## stops a lobby preview from being mistaken for a started match.
+var _lobby_config: MatchConfig = null
+
+## peer id -> whether that player has said they are ready. Server-side only, and cleared
+## when they leave: a peer that has gone is not a peer still holding up a start.
+var _lobby_ready: Dictionary = {}
 
 ## The config THIS match is being played on, on both sides of the wire.
 ##
@@ -265,6 +291,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not _peer_players.has(peer_id):
 		return
 	_peer_players.erase(peer_id)
+	# Same rule one stage earlier: a peer that has left the LOBBY is not one still owed a
+	# ready, and leaving their flag behind would let a departed player's stale "yes" count
+	# toward a start -- or their stale "no" block one forever.
+	_lobby_ready.erase(peer_id)
 	# A PEER THAT LEAVES IS NOT A PEER WE ARE STILL WAITING FOR. Without this, someone
 	# who joins and quits during the handshake holds the match at tick 0 until the
 	# timeout, for everybody -- which is the same freeze 12.1e is about, arriving early.
@@ -384,6 +414,84 @@ func _recv_ready() -> void:
 	_begin_when_ready()
 
 
+# ── the lobby, before anything starts (PLAN.md 12.1c) ───────────────────────
+#
+# The lobby used to be one-directional: the host learned who had arrived, and the joiner
+# learned nothing at all until `start_match()` told it what it was already playing. A
+# joining player could not see the map, the seed, the victory condition or the colours
+# before being dropped into a match on someone else's terms, and had no way to say no.
+# These four calls are the reply channel.
+
+## Tell every joined peer what is being set up. The host calls this when somebody arrives
+## and whenever a setting changes.
+##
+## Reliable, and it carries the whole config including the map -- 20-40 KB. Chatty by the
+## standards of a lobby and nothing by the standards of the 18 KB snapshots this same
+## transport pushes ten times a second once play starts. The map is the thing a player
+## most wants to look at before agreeing to play on it, so it is sent rather than
+## described.
+## A CHANGED PROPOSAL CANCELS EVERY AGREEMENT. Whoever said yes said yes to the settings
+## in front of them, so a host who swaps the map after they agreed no longer has their
+## consent -- and a start gated on stale readiness is exactly the bug this whole channel
+## exists to prevent. Cleared here, at the one place a new proposal is issued, rather than
+## trusted to every caller that changes a setting.
+func broadcast_lobby_config(cfg: MatchConfig) -> void:
+	if not is_server() or cfg == null:
+		return
+	_lobby_ready.clear()
+	var wire := cfg.to_dict()
+	for peer in _peer_players:
+		if int(peer) != 1:
+			rpc_id(int(peer), "_recv_lobby_config", wire)
+
+
+@rpc("authority", "reliable")
+func _recv_lobby_config(d: Dictionary) -> void:
+	if _host != null:
+		return                    # the host is looking at the real object already
+	_lobby_config = MatchConfig.from_dict(d)
+	lobby_config_received.emit()
+
+
+## What the host says it is setting up, or null if nothing has been described yet.
+func lobby_config() -> MatchConfig:
+	return _lobby_config
+
+
+## A joined client saying whether it is ready to play. Reliable: a dropped "yes" would
+## leave a host waiting on a player who is sitting there having already agreed.
+func set_lobby_ready(ready: bool) -> void:
+	if _host != null:
+		return                    # the host readies by pressing START
+	rpc_id(1, "_recv_lobby_ready", ready)
+
+
+@rpc("any_peer", "reliable")
+func _recv_lobby_ready(ready: bool) -> void:
+	if not is_server():
+		return
+	var sender := get_tree().get_multiplayer().get_remote_sender_id()
+	if not _peer_players.has(sender):
+		return                    # not somebody this session knows
+	_lobby_ready[sender] = ready
+	lobby_ready_changed.emit(sender, ready)
+
+
+## Whether one joined peer has said it is ready. Absent means no, never means yes: a
+## player who has not answered has not agreed.
+func is_peer_ready(peer_id: int) -> bool:
+	return bool(_lobby_ready.get(peer_id, false))
+
+
+## Whether every joined peer has agreed. True with nobody joined, because then there is
+## nobody left to wait for -- the caller decides whether an empty lobby may start.
+func all_peers_ready() -> bool:
+	for peer in _peer_players:
+		if int(peer) != 1 and not is_peer_ready(int(peer)):
+			return false
+	return true
+
+
 ## The host describing the match to a client. Reliable, and sent before any snapshot.
 @rpc("authority", "reliable")
 func _recv_match_config(d: Dictionary) -> void:
@@ -395,6 +503,10 @@ func _recv_match_config(d: Dictionary) -> void:
 
 func _teardown() -> void:
 	_match_config = null
+	# The lobby goes with the session. A stale proposal outliving the host that made it
+	# would have the next screen previewing a match nobody is offering.
+	_lobby_config = null
+	_lobby_ready.clear()
 	_awaiting_ready.clear()
 	_ready_waited = 0.0
 	if _host != null:

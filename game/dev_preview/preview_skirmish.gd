@@ -69,13 +69,11 @@ func _process(_delta: float) -> void:
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
-			_screen._lobby = SkirmishScreen.Lobby.JOINED
-			_screen._say("joined 192.168.0.12 — waiting for the host to start")
-			_screen._refresh_lobby()
-			_hold(LOBBY_FRAMES)
+			_join_someone_elses_match()
 		6:
 			_shoot("skirmish_lobby_joined")
 		7:
+			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
@@ -145,6 +143,33 @@ func _close_the_slot() -> void:
 	_hold(LOBBY_FRAMES)
 
 
+## The joining device's screen, holding a real proposal from a host.
+##
+## A DIFFERENT SEED ON PURPOSE. The point of the lobby channel is that the joiner reviews
+## the HOST'S map rather than one of its own, and the two are only distinguishable in a
+## picture if they are different maps -- a shot where both sides generated seed 1 would
+## look identical whether the channel worked or not.
+##
+## The lobby state is forced, since a real one needs a second process dialling in (that
+## part is verified by running two of them). What the picture is worth is the LOOK of a
+## screen being asked to agree to something, which no test can judge.
+func _join_someone_elses_match() -> void:
+	var host_side := SkirmishScreen.new()
+	host_side._on_seed_changed(4242.0)
+	var proposal := host_side.build_config()
+	host_side.free()
+
+	Net._lobby_config = proposal
+	_screen._lobby = SkirmishScreen.Lobby.JOINED
+	_screen._on_lobby_config_received()
+	print("joined: reviewing seed %d, %dx%d, %s — ready %s, can start %s"
+			% [proposal.seed, proposal.map_size.x, proposal.map_size.y,
+			MatchConfig.mode_name(proposal.mode), _screen._am_ready, _screen.can_start()])
+	if _screen.map_data() != proposal.map_data:
+		push_warning("preview_skirmish: the joiner is not showing the host's map")
+	_hold(LOBBY_FRAMES)
+
+
 func _report_lobby() -> void:
 	print("lobby: state %d, session %s, unfilled %d, startable %s"
 			% [_screen.lobby_state(), Net.has_session(), _screen.unfilled_slots(),
@@ -158,6 +183,12 @@ func _report_lobby() -> void:
 ## Exactly what START does, minus the scene change.
 func _start_the_match() -> void:
 	_resume_at = 0                   # the match step re-bases _frames; drop any stale hold
+	# Re-read what the screen is showing AT THE MOMENT OF COMMIT, which is what this
+	# comparison is actually about: a config that builds a different world than the screen
+	# previewed. Captured at step 0 originally, and that broke the moment the lobby steps
+	# were added -- the JOINED excursion adopts a host's map into this same screen, so the
+	# shot from six steps ago is no longer what is being started.
+	_expected = _screen.map_data()
 	Net.pending_match = _screen.build_config()
 	_screen.queue_free()
 	_screen = null
