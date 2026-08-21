@@ -30,6 +30,14 @@ func stop() -> void:
 	_running = false
 
 
+## Whether ticks are being pumped. Asked by `SimHost.begin()`, which the match-start
+## handshake (PLAN.md 12.1d) can reach twice -- once when the last client acks and once
+## if the wait times out -- and must not restart a clock that is already going, because
+## `start()` resets the accumulator.
+func is_running() -> bool:
+	return _running
+
+
 func _process(delta: float) -> void:
 	advance(delta)
 

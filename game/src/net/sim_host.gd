@@ -14,9 +14,23 @@ var last_step_usec: int = 0
 var _on_tick: Callable = Callable()
 
 
+## Build the world and start ticking it, in one call. Solo's whole life cycle: there is
+## nobody to wait for, so there is nothing to hold the clock for.
+##
 ## on_tick is called with the Dictionary from SnapshotSystem.build() after
 ## every world.step(), so the caller (Net) can broadcast it.
 func start(cfg: MatchConfig, on_tick: Callable) -> void:
+	build(cfg, on_tick)
+	begin()
+
+
+## Stand the world up WITHOUT starting the clock (PLAN.md 12.1d).
+##
+## Split from `begin()` so a hosted match can hold still while its clients build their
+## own view of the map and say they are ready. Snapshots that arrive before a client has
+## terrain describe a world it cannot draw -- entities on nothing, a camera nowhere --
+## and every tick spent waiting is a tick of the match the joiner never sees.
+func build(cfg: MatchConfig, on_tick: Callable) -> void:
 	world = SimWorld.new()
 	world.setup(cfg)
 	# setup() allocates an empty grid; MapGen puts a world in it (2.3/2.4a/2.4b/2.6) --
@@ -25,7 +39,18 @@ func start(cfg: MatchConfig, on_tick: Callable) -> void:
 	MapGen.build(world, cfg)
 	_on_tick = on_tick
 	SimClock.tick_advanced.connect(_handle_tick)
+
+
+## Let it run. Idempotent, because the handshake can reach "everybody is ready" by two
+## routes -- the last ack arriving, or the wait timing out -- and both call this.
+func begin() -> void:
+	if is_running():
+		return
 	SimClock.start()
+
+
+func is_running() -> bool:
+	return SimClock.is_running()
 
 
 func stop() -> void:

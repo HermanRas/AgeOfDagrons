@@ -415,6 +415,10 @@ func _start_match() -> void:
 		_minimap.build_terrain(md.size, md.terrain)
 		_camera.setup(md.size)
 		_open_camera_on(cfg, md.size)
+		# THE ACK (PLAN.md 12.1d). The host holds the clock until this arrives, so it
+		# goes at the end of the one function that stands the view up -- the point where
+		# a snapshot would actually mean something. A no-op on a host.
+		Net.notify_ready()
 		return
 
 	var host := Net.host()

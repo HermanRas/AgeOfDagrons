@@ -33,6 +33,11 @@ signal snapshot_received(snap: Dictionary)
 ## being there, which is why `GameScene` checks `match_config()` before connecting.
 signal match_configured()
 
+## The clock has started and the match is really running (PLAN.md 12.1d). Emitted on the
+## HOST, once every joined client has said it can draw the world -- or once the wait for
+## a silent one has run out.
+signal match_begun()
+
 ## One port for every session shape. Solo binds it on loopback, an open host binds it
 ## on 0.0.0.0, and a client dials it -- so there is nothing to keep in sync and a
 ## player typing an address never has to think about a port number.
@@ -160,16 +165,23 @@ func start_match(cfg: MatchConfig) -> void:
 	_match_config = cfg
 	_host = SimHost.new()
 	add_child(_host)
-	_host.start(cfg, _broadcast_snapshot)
+	# BUILT, NOT STARTED (PLAN.md 12.1d). The clock is held until every joined client
+	# has the map and says it is ready; see `_begin_when_ready`.
+	_host.build(cfg, _broadcast_snapshot)
 
 	# Every joined peer gets the config before it gets a snapshot. A client cannot make
 	# sense of a snapshot without it -- it has no map to draw the entities on -- and
 	# reliable delivery is the point: this is the one message a match cannot start
 	# without, unlike a snapshot, of which another follows in a tenth of a second.
 	var wire := cfg.to_dict()
+	_awaiting_ready.clear()
 	for peer in _peer_players:
 		if int(peer) != 1:
 			rpc_id(int(peer), "_recv_match_config", wire)
+			_awaiting_ready[int(peer)] = true
+
+	_ready_waited = 0.0
+	_begin_when_ready()
 
 
 ## The config this match is being played on -- null before one has been settled.
@@ -253,6 +265,11 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not _peer_players.has(peer_id):
 		return
 	_peer_players.erase(peer_id)
+	# A PEER THAT LEAVES IS NOT A PEER WE ARE STILL WAITING FOR. Without this, someone
+	# who joins and quits during the handshake holds the match at tick 0 until the
+	# timeout, for everybody -- which is the same freeze 12.1e is about, arriving early.
+	if _awaiting_ready.erase(peer_id):
+		_begin_when_ready()
 	peer_left.emit(peer_id)
 
 
@@ -306,6 +323,67 @@ func _assign_player(pid: int) -> void:
 	session_started.emit(false)
 
 
+# ── the match-start handshake (PLAN.md 12.1d) ───────────────────────────────
+
+## How long the host will hold the clock for a client that has been sent the map and has
+## not said it is ready.
+##
+## Bounded on purpose. A client that crashed between joining and building would otherwise
+## hold the match at tick 0 for everybody, and a match that never starts is worse than a
+## match one player joins late -- that player still gets every snapshot from the moment
+## they arrive, because snapshots are whole-world and not deltas (7.2).
+const READY_TIMEOUT := 8.0
+
+## peer id -> true for every joined peer that has been sent the config and has not acked.
+var _awaiting_ready: Dictionary = {}
+var _ready_waited := 0.0
+
+
+## Start the world if everyone is accounted for. Called when the last ack lands, when a
+## peer we were waiting on disappears, and once up front for the solo case -- where the
+## set is empty and the match begins immediately, exactly as it always did.
+func _begin_when_ready() -> void:
+	if _host == null or _host.is_running():
+		return
+	if not _awaiting_ready.is_empty():
+		return
+	_host.begin()
+	match_begun.emit()
+
+
+func _process(delta: float) -> void:
+	# Only ever busy in the seconds between "match built" and "everyone ready".
+	if _host == null or _host.is_running() or _awaiting_ready.is_empty():
+		return
+	_ready_waited += delta
+	if _ready_waited < READY_TIMEOUT:
+		return
+	push_warning("Net: starting without %d peer(s) that never reported ready: %s"
+			% [_awaiting_ready.size(), _awaiting_ready.keys()])
+	_awaiting_ready.clear()
+	_begin_when_ready()
+
+
+## A client telling the host it has built its view and can make sense of a snapshot.
+##
+## `GameScene` calls this once its terrain is up. Reliable, because a dropped ack costs
+## the whole match `READY_TIMEOUT` seconds of standing still.
+func notify_ready() -> void:
+	if _host != null:
+		return                    # the host is its own audience; nothing to tell
+	rpc_id(1, "_recv_ready")
+
+
+@rpc("any_peer", "reliable")
+func _recv_ready() -> void:
+	if _host == null:
+		return
+	var sender := get_tree().get_multiplayer().get_remote_sender_id()
+	if not _awaiting_ready.erase(sender):
+		return                    # unknown, or already accounted for
+	_begin_when_ready()
+
+
 ## The host describing the match to a client. Reliable, and sent before any snapshot.
 @rpc("authority", "reliable")
 func _recv_match_config(d: Dictionary) -> void:
@@ -317,6 +395,8 @@ func _recv_match_config(d: Dictionary) -> void:
 
 func _teardown() -> void:
 	_match_config = null
+	_awaiting_ready.clear()
+	_ready_waited = 0.0
 	if _host != null:
 		_host.stop()
 		_host.queue_free()

@@ -51,6 +51,7 @@ func _ready() -> void:
 	Net.session_started.connect(_on_session_started)
 	Net.session_ended.connect(_on_session_ended)
 	Net.match_configured.connect(_on_match_configured)
+	Net.match_begun.connect(_on_match_begun)
 	Net.snapshot_received.connect(_on_snapshot)
 
 	if _role == "host":
@@ -105,9 +106,26 @@ func _on_peer_joined(peer_id: int) -> void:
 			% [cfg.map_data.size.x, cfg.map_data.size.y, cfg.player_ids.size(),
 			cfg.map_data.terrain.size()])
 	Net.start_match(cfg)
-	_match_started = Net.host() != null
-	if not _match_started:
+	if Net.host() == null:
 		_finish(false, "start_match did not stand a world up")
+		return
+	# 12.1d: the world exists but the clock does NOT run yet. If it did, the client
+	# would be sent snapshots for ticks it has no map to draw.
+	print("  world built at tick %d, clock running: %s (waiting for the client)"
+			% [Net.host().world.tick, Net.host().is_running()])
+	if Net.host().is_running():
+		_finish(false, "the clock started before the client was ready")
+
+
+## Host side: every client has acked, so the clock is running. The tick it starts on is
+## the assertion that matters -- a match that began before the client was ready would
+## have run on without it.
+func _on_match_begun() -> void:
+	_match_started = true
+	print("  MATCH BEGUN at tick %d, clock running: %s"
+			% [Net.host().world.tick, Net.host().is_running()])
+	if Net.host().world.tick != 0:
+		_finish(false, "the world had already ticked %d times" % Net.host().world.tick)
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -137,6 +155,11 @@ func _on_match_configured() -> void:
 			cfg.map_data.starts.size(), Net.host() == null])
 	if Net.host() != null:
 		_finish(false, "a client must not have an authoritative world")
+		return
+	# Standing in for `GameScene._start_match()`: the view is up, so tell the host it
+	# can start the clock (12.1d). Without this the match waits out READY_TIMEOUT.
+	print("  built the view; reporting ready")
+	Net.notify_ready()
 
 
 func _on_snapshot(snap: Dictionary) -> void:

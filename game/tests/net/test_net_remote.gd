@@ -62,6 +62,71 @@ func test_a_client_has_no_identity_until_the_server_names_it() -> void:
 	assert_null(Net.host(), "a client has no authoritative world")
 
 
+# ── the match-start handshake (12.1d) ───────────────────────────────────────
+
+func test_a_match_with_nobody_to_wait_for_starts_at_once() -> void:
+	# Solo, and the host's own match before anyone joins: an empty wait set must not
+	# hold the clock, or single player would never tick.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	assert_true(Net.host().is_running(), "no peers means nothing to wait for")
+
+
+func test_the_clock_is_held_until_a_joined_client_reports_ready() -> void:
+	Net.host_open()
+	# Stand in for a joined peer. `start_match` takes its wait set from `_peer_players`,
+	# which is what a real `_on_peer_connected` would have filled in.
+	Net._peer_players[1041] = 2
+
+	Net.start_match(MatchConfig.debug_skirmish())
+	assert_not_null(Net.host(), "the world is BUILT")
+	assert_false(Net.host().is_running(),
+			"and deliberately not ticking -- the client has no map to draw yet")
+	assert_eq(Net.host().world.tick, 0)
+
+	Net._awaiting_ready.erase(1041)          # what `_recv_ready` does for that sender
+	Net._begin_when_ready()
+	assert_true(Net.host().is_running(), "the last ack starts the match")
+	assert_eq(Net.host().world.tick, 0, "and it starts from the beginning, not partway")
+
+
+func test_a_peer_that_leaves_during_the_handshake_does_not_freeze_the_match() -> void:
+	# Somebody joins, the match is built for them, and they quit before acking. Without
+	# releasing the wait this holds the match at tick 0 for everyone until the timeout.
+	Net.host_open()
+	Net._peer_players[1041] = 2
+	Net.start_match(MatchConfig.debug_skirmish())
+	assert_false(Net.host().is_running())
+
+	Net._on_peer_disconnected(1041)
+	assert_true(Net.host().is_running(), "their leaving is an answer too")
+
+
+func test_the_wait_is_bounded_so_a_silent_client_cannot_stall_it() -> void:
+	# A client that crashed between joining and building never acks. A match that never
+	# starts is worse than one a player joins late.
+	Net.host_open()
+	Net._peer_players[1041] = 2
+	Net.start_match(MatchConfig.debug_skirmish())
+	assert_false(Net.host().is_running())
+
+	Net._ready_waited = Net.READY_TIMEOUT
+	Net._process(0.1)
+	assert_true(Net.host().is_running(), "the wait ran out and the match went ahead")
+	assert_true(Net._awaiting_ready.is_empty())
+
+
+func test_two_acks_do_not_restart_a_running_clock() -> void:
+	# `begin()` is reachable twice -- the last ack, and the timeout -- and `SimClock.start()`
+	# resets the accumulator, so a second call mid-match would drop a fraction of a tick.
+	Net.host_solo()
+	assert_true(Net.host().is_running())
+	SimClock.advance(0.05)          # part-way to the next tick
+	Net.host().begin()
+	SimClock.advance(0.05)
+	assert_eq(Net.host().world.tick, 1, "the half-accumulated tick still landed")
+
+
 # ── player-id assignment ────────────────────────────────────────────────────
 
 func test_the_host_holds_player_1_and_the_next_peer_gets_2() -> void:
