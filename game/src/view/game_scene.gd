@@ -253,8 +253,15 @@ func _build_hud() -> void:
 	# disabled placeholders so the corner reads as "coming soon" rather than
 	# empty, not real buttons. Added to minimap_area AFTER the minimap so they
 	# sit on top of the rotated diamond's tips and stay clickable rather than
-	# being covered by them; the two VSeparators are flex spacers, not visible
-	# lines, that push each pair of buttons out to the area's own corners.
+	# being covered by them; the two spacers in the middle column push each pair
+	# of buttons out to the area's own corners.
+	#
+	# THE SPACERS ARE PLAIN CONTROLS, and they used to be `VSeparator`s on the
+	# assumption that those draw nothing. They draw a line -- that is what a
+	# separator is for -- and two of them stacked in the middle column drew a 1 px
+	# line straight down the middle of the minimap (owner-reported 2026-08-21). A
+	# bare `Control` expands the same way and paints nothing, which is what a flex
+	# spacer actually is.
 	var minimap_buttons := GridContainer.new()
 	minimap_buttons.columns = 3
 	minimap_buttons.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -270,7 +277,7 @@ func _build_hud() -> void:
 
 	for pair in [["hud_chat.png", "hud_trade.png"], ["hud_techtree.png", "hud_settings.png"]]:
 		minimap_buttons.add_child(_corner_button(pair[0]))
-		var sep := VSeparator.new()
+		var sep := Control.new()
 		sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
