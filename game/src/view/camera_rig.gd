@@ -21,6 +21,11 @@
 class_name CameraRig
 extends Camera2D
 
+## Emitted after an edge-pan step actually moved the view. A placement ghost is
+## anchored to a SCREEN position, so the ground beneath a finger that is holding
+## still changes as the map slides under it, and its owner has to re-read it.
+signal edge_scrolled
+
 ## Only the first finger down drives the camera. Later fingers are ignored rather
 ## than each dragging on top of the other, and it keeps the gesture space clear
 ## for 4.2's two-finger box select.
@@ -38,6 +43,13 @@ enum Gesture { PAN, ZOOM }
 ## reference device (PLAN.md 3.0), at the low end of a comfortable touch target.
 ## Narrower and it gets missed; wider and it eats map you want to drag.
 const EDGE_WIDTH := 100.0
+
+## How fast the map slides under a finger pressed hard against the edge while
+## placing a building (BUGS.md), in screen pixels per second. Measured in screen
+## pixels rather than world units for the same reason `pan_by()` divides by zoom:
+## the gesture is a physical thing happening on the glass, and a world-unit speed
+## would crawl at 2x zoom. One second of it crosses most of the reference screen.
+const EDGE_SCROLL_SPEED := 600.0
 
 ## Zoom range. 1.0 draws a tile at its baked 64x32; the ends are roughly "see the
 ## whole settlement" and "read one villager".
@@ -72,7 +84,18 @@ var _mouse_dragging := false
 ## that is box-select's own trigger (8.3), and one-handed play needs pan
 ## reachable with a single thumb. Locking the camera for the duration of
 ## placement is the alternative that touches neither of those.
+##
+## Locked is not frozen: `edge_push` still moves the view, which is how a player
+## reaches a build site that is off screen without abandoning the placement.
 var locked: bool = false
+
+## Direction the map is currently sliding under a held finger, each axis in -1..1;
+## `Vector2.ZERO` when nothing is pushing.
+##
+## Set by whoever owns the gesture -- placement -- rather than read from input here,
+## because the camera is LOCKED for the whole of a placement and therefore sees no
+## events of its own to read it from.
+var edge_push := Vector2.ZERO
 
 ## Every finger currently down, not just the one driving the camera.
 ##
@@ -173,6 +196,57 @@ func begin_gesture(screen_x: float) -> void:
 	_gesture = Gesture.ZOOM if is_edge(screen_x) else Gesture.PAN
 
 
+## How hard a pointer at `screen_pos` pushes the view, per axis in -1..1: zero at the
+## inner boundary of the edge strip, 1 hard against the glass. Ramped rather than
+## on/off so a finger that strays a few pixels into the strip nudges the map instead
+## of bolting across it.
+##
+## The strips are the same `EDGE_WIDTH` the zoom gesture uses, and the two do not
+## collide: edge-zoom fires on a drag that STARTED in the strip, and during a
+## placement -- the only time anything pushes -- the camera is locked and sees no
+## drags at all. The cost is that you cannot zoom while placing, which is the lesser
+## loss: zoom is one tap away before the build menu opens, whereas reaching an
+## off-screen site used to mean abandoning the placement entirely.
+func edge_push_for(screen_pos: Vector2) -> Vector2:
+	if view_size == Vector2.ZERO:
+		return Vector2.ZERO
+	return Vector2(
+			_push_along(screen_pos.x, view_size.x),
+			_push_along(screen_pos.y, view_size.y))
+
+
+## One axis of `edge_push_for`. Clamped rather than extrapolated, so a finger tracked
+## past the bezel pushes at full speed rather than faster than full speed.
+func _push_along(pos: float, extent: float) -> float:
+	if pos < EDGE_WIDTH:
+		return -clampf((EDGE_WIDTH - pos) / EDGE_WIDTH, 0.0, 1.0)
+	if pos > extent - EDGE_WIDTH:
+		return clampf((pos - (extent - EDGE_WIDTH)) / EDGE_WIDTH, 0.0, 1.0)
+	return 0.0
+
+
+## Advances an edge-pan by one frame. Returns whether the view actually MOVED, which
+## is false when nothing is pushing and also when the clamp already has the camera
+## against the end of the map -- a ghost over ground that did not move needs no
+## re-reading, and reporting a move there would re-preview it every frame for nothing.
+##
+## Public and taking its own delta so the behaviour is testable without a scene tree;
+## `_process` is only the caller.
+func step_edge_scroll(delta: float) -> bool:
+	if edge_push == Vector2.ZERO:
+		return false
+	var before := position
+	# Negated because `pan_by` takes the direction the GROUND is dragged, and pushing
+	# at the right-hand edge is a request to see what lies further right.
+	pan_by(-edge_push * EDGE_SCROLL_SPEED * delta)
+	return position != before
+
+
+func _process(delta: float) -> void:
+	if step_edge_scroll(delta):
+		edge_scrolled.emit()
+
+
 ## One drag step, doing whatever the gesture that started it decided on.
 func apply_drag(relative: Vector2) -> void:
 	if _gesture == Gesture.ZOOM:
@@ -235,6 +309,9 @@ static func _inside_box(centre: Vector2, bounds: Rect2, view: Vector2) -> Vector
 ## when a second finger lifts out of a box (PLAN.md 8.3).
 func set_locked(v: bool) -> void:
 	locked = v
+	# An edge-pan belongs to the placement that started it. Leaving it set would keep
+	# the map sliding after the ghost was gone, with no finger down to stop it.
+	edge_push = Vector2.ZERO
 	if v:
 		_touch_index = NO_TOUCH
 		_touches.clear()

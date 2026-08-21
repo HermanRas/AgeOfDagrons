@@ -61,6 +61,15 @@ var _idle_cycle_id: int = 0
 var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
 
+## Where the placing finger last was, in screen pixels. Kept because an edge-pan moves
+## the ground under a finger that is not itself moving, so the ghost has to be
+## re-previewed at a position no incoming event is carrying.
+var _placing_screen_pos := Vector2.ZERO
+
+## Whether the current placement drag has earned the right to edge-pan. See
+## `_track_edge_push`.
+var _edge_armed := false
+
 ## The way OUT of build mode on a touch screen (project owner, 2026-08-21, found on a
 ## real phone in a two-device match).
 ##
@@ -145,6 +154,7 @@ func _build_world_layers() -> void:
 	_camera = CameraRig.new()
 	add_child(_camera)
 	_camera.make_current()
+	_camera.edge_scrolled.connect(_on_camera_edge_scrolled)
 
 	_router = InputRouter.new()
 	add_child(_router)
@@ -700,7 +710,9 @@ func _clear_selection() -> void:
 ## Enters placement mode for `def_id` (PLAN.md 5.1) and locks the camera: the
 ## same one finger that would otherwise pan now drags the ghost instead (see
 ## `CameraRig.locked`'s own header for why that trade beats swapping pan to two
-## fingers). `_on_placement_pressed/_drag/_released` do the rest.
+## fingers). `_on_placement_pressed/_drag/_released` do the rest, and dragging the
+## ghost into the edge strip pans the locked camera rather than dead-ending there
+## (`_track_edge_push`).
 func _enter_placement(def_id: StringName) -> void:
 	_placing_def_id = def_id
 	_camera.set_locked(true)
@@ -724,13 +736,41 @@ func _exit_placement() -> void:
 
 
 func _on_placement_pressed(screen_pos: Vector2) -> void:
-	if _placing_def_id != &"":
-		_preview_placement(screen_pos)
+	if _placing_def_id == &"":
+		return
+	# A new finger starts DISARMED: see `_track_edge_push`.
+	_edge_armed = false
+	_track_edge_push(screen_pos)
+	_preview_placement(screen_pos)
 
 
 func _on_placement_drag(screen_pos: Vector2) -> void:
 	if _placing_def_id != &"":
+		_track_edge_push(screen_pos)
 		_preview_placement(screen_pos)
+
+
+## Points the camera's edge-pan at wherever the placing finger now is, and remembers
+## the position so `_on_camera_edge_scrolled` can re-read the ground under it.
+##
+## ARMING. The strip cannot push until the finger has been seen outside it at least
+## once during this drag. Without that, a placement that begins with a press inside a
+## strip scrolls the instant it starts -- and the build grid opens along the bottom
+## edge, so the tap that chooses a building leaves the finger exactly there. The
+## player has to mean it.
+func _track_edge_push(screen_pos: Vector2) -> void:
+	_placing_screen_pos = screen_pos
+	var push := _camera.edge_push_for(screen_pos)
+	if push == Vector2.ZERO:
+		_edge_armed = true
+	_camera.edge_push = push if _edge_armed else Vector2.ZERO
+
+
+## The map slid under a finger that is holding still, so the tile beneath it is a
+## different tile now and the ghost has to be recoloured for it.
+func _on_camera_edge_scrolled() -> void:
+	if _placing_def_id != &"":
+		_preview_placement(_placing_screen_pos)
 
 
 ## Desktop only: a touch drags the ghost into position and releases to drop
@@ -750,6 +790,9 @@ func _on_placement_hover(screen_pos: Vector2) -> void:
 func _on_placement_released(screen_pos: Vector2) -> void:
 	if _placing_def_id == &"":
 		return
+	# The finger is up, so the map stops here -- including on a refused drop, which
+	# stays in build mode and would otherwise keep sliding with nothing driving it.
+	_camera.edge_push = Vector2.ZERO
 	var result := _preview_placement(screen_pos)
 	if result.is_empty():
 		return

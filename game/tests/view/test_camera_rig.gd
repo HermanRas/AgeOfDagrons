@@ -352,3 +352,91 @@ func test_locking_drops_a_touch_in_progress_so_it_cannot_resume_on_unlock() -> v
 
 	assert_eq(rig.position, before,
 			"the touch from before the lock was dropped, not silently resumed")
+
+
+# ── edge-pan while placing (BUGS.md) ──────────────────────────────────────
+#
+# The dead end this exists for: build mode locks the camera so one finger can drag
+# the ghost, which used to mean an off-screen build site could only be reached by
+# cancelling the placement, panning, and re-opening the menu. Dragging the ghost
+# into the edge strip now slides the map instead.
+
+func test_the_middle_of_the_screen_pushes_nothing() -> void:
+	assert_eq(rig.edge_push_for(VIEW * 0.5), Vector2.ZERO,
+			"a finger nowhere near an edge leaves the map alone")
+
+
+func test_each_edge_pushes_its_own_way() -> void:
+	var mid_y := VIEW.y * 0.5
+	var mid_x := VIEW.x * 0.5
+	assert_true(rig.edge_push_for(Vector2(1, mid_y)).x < 0.0, "left edge pushes left")
+	assert_true(rig.edge_push_for(Vector2(VIEW.x - 1, mid_y)).x > 0.0, "right edge pushes right")
+	assert_true(rig.edge_push_for(Vector2(mid_x, 1)).y < 0.0, "top edge pushes up")
+	assert_true(rig.edge_push_for(Vector2(mid_x, VIEW.y - 1)).y > 0.0, "bottom edge pushes down")
+
+
+func test_the_push_ramps_up_across_the_strip_and_stops_at_full() -> void:
+	var mid_y := VIEW.y * 0.5
+	# Just inside the strip boundary, halfway in, and hard against the glass.
+	var shallow := absf(rig.edge_push_for(Vector2(CameraRig.EDGE_WIDTH - 1, mid_y)).x)
+	var halfway := absf(rig.edge_push_for(Vector2(CameraRig.EDGE_WIDTH * 0.5, mid_y)).x)
+	var against := absf(rig.edge_push_for(Vector2(0, mid_y)).x)
+	assert_true(shallow < halfway and halfway < against,
+			"deeper into the strip pushes harder: %f < %f < %f" % [shallow, halfway, against])
+	assert_almost_eq(against, 1.0, 0.001, "against the glass is full speed")
+	assert_almost_eq(absf(rig.edge_push_for(Vector2(-500, mid_y)).x), 1.0, 0.001,
+			"a finger tracked past the bezel pushes at full speed, not faster")
+
+
+func test_nothing_pushing_is_not_a_move() -> void:
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	var before := rig.position
+
+	assert_false(rig.step_edge_scroll(0.1), "no push, no move to report")
+	assert_eq(rig.position, before)
+
+
+func test_a_push_slides_the_map_toward_the_pushed_edge() -> void:
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	var before := rig.position
+	rig.edge_push = Vector2(-1, 0)
+
+	assert_true(rig.step_edge_scroll(0.1), "the view moved")
+	assert_true(rig.position.x < before.x,
+			"pushing at the left edge shows what lies further left")
+
+
+func test_a_locked_camera_still_edge_pans() -> void:
+	# The entire point. `locked` stops the camera reading input for itself; it does
+	# not stop the placement that owns the gesture from driving it.
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	rig.set_locked(true)
+	rig.edge_push = Vector2(1, 0)
+
+	assert_true(rig.step_edge_scroll(0.1), "locked is not frozen")
+
+
+func test_pushing_past_the_end_of_the_map_reports_no_move() -> void:
+	# A ghost over ground that did not move needs no re-reading, so a camera parked
+	# against the clamp must stop claiming to have moved -- otherwise it re-previews
+	# the placement every frame for as long as a thumb rests on the edge.
+	rig.map_size = MAP
+	rig.position = _bounds().get_center()
+	rig.edge_push = Vector2(-1, 0)
+	for _i in range(200):
+		rig.step_edge_scroll(0.1)
+
+	assert_false(rig.step_edge_scroll(0.1),
+			"hard against the west clamp, a further push changes nothing")
+
+
+func test_leaving_placement_stops_the_map() -> void:
+	# Otherwise the map keeps sliding after the ghost is gone, with no finger down
+	# to stop it.
+	rig.edge_push = Vector2(1, 1)
+	rig.set_locked(false)
+
+	assert_eq(rig.edge_push, Vector2.ZERO, "the push belonged to the placement")

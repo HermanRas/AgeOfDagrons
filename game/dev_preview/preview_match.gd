@@ -44,6 +44,11 @@ var _await_since := 0
 ## Where the occlusion step sent the villagers, so the wait can tell "arrived
 ## behind the building" from "happened to already be behind something".
 var _occlusion_target := Vector2i.ZERO
+## Where the camera was when the placing finger reached the edge strip, so the next
+## step can say whether the map actually slid rather than photographing one and
+## hoping. Paired with the screen position the finger was left at.
+var _edge_pan_from := Vector2.ZERO
+var _edge_pan_target := Vector2.ZERO
 var _interactive := false
 
 
@@ -250,6 +255,26 @@ func _advance_script() -> void:
 		36:
 			_report_build_mode()
 			_shoot("match_build_mode_cancelled")
+		37:
+			# EDGE-PAN, the other half of the same dead end (BUGS.md). Cancel let a phone
+			# player OUT of a placement they could not finish; edge-pan lets them finish
+			# it, by sliding the map when the ghost is dragged into the edge strip. Driven
+			# through the placement handlers the InputRouter calls rather than by setting
+			# `edge_push` directly, because the WIRING is the thing in doubt -- exactly as
+			# with the cancel button one step above.
+			_select_a_villager()
+			_open_build_menu()
+		38:
+			_start_edge_pan()
+		39:
+			# The camera moved in the frames BETWEEN these two steps, driven by
+			# CameraRig._process with the finger held still against the edge.
+			_report_edge_pan()
+			_shoot("match_edge_pan")
+		40:
+			_start_disarmed_placement()
+		41:
+			_report_disarmed()
 		_:
 			get_tree().quit()
 			return
@@ -334,6 +359,54 @@ func _press_cancel_build() -> void:
 		push_warning("preview_match: no cancel-build button to press")
 		return
 	button.pressed.emit()
+
+
+## Enter placement, put a finger down in the middle, and drag it to the LEFT edge --
+## then let go of nothing. The finger stays there, and the map should start sliding.
+func _start_edge_pan() -> void:
+	_game._enter_placement(&"building.house")
+	var view_rect := get_viewport().get_visible_rect().size
+	# Down in the middle first, which is also what ARMS the edge strip: a drag that
+	# begins inside the strip is ignored by it, because the build grid opens along the
+	# bottom edge and the tap that picks a building leaves a finger exactly there.
+	_game._on_placement_pressed(view_rect * 0.5)
+	# Hard against the left edge, where the push is at full speed.
+	_edge_pan_target = Vector2(2.0, view_rect.y * 0.5)
+	_game._on_placement_drag(_edge_pan_target)
+	_edge_pan_from = _game._camera.position
+	print("  edge pan: finger at %s, push %s, camera %s"
+			% [_edge_pan_target, _game._camera.edge_push, _edge_pan_from])
+
+
+func _report_edge_pan() -> void:
+	var now: Vector2 = _game._camera.position
+	var moved := now - _edge_pan_from
+	print("  edge pan: camera %s -> %s (moved %s), still placing %s, ghost visible %s"
+			% [_edge_pan_from, now, moved, _game._placing_def_id != &"", _game._ghost.visible])
+	if moved.x >= 0.0:
+		push_warning("preview_match: the left edge did not pan the camera left")
+	if _game._placing_def_id == &"":
+		push_warning("preview_match: edge-pan dropped the placement it was serving")
+
+
+## The guard, which is the part a screenshot cannot show: a placement whose FIRST
+## touch lands inside the strip must not scroll, or picking a building from the grid
+## along the bottom edge would send the map flying on its own.
+func _start_disarmed_placement() -> void:
+	_game._exit_placement()
+	_game._enter_placement(&"building.house")
+	var view_rect := get_viewport().get_visible_rect().size
+	_game._on_placement_pressed(Vector2(2.0, view_rect.y * 0.5))
+	_edge_pan_from = _game._camera.position
+	print("  disarmed: pressed inside the strip, push %s" % _game._camera.edge_push)
+
+
+func _report_disarmed() -> void:
+	var moved: Vector2 = _game._camera.position - _edge_pan_from
+	print("  disarmed: camera moved %s (want zero)" % moved)
+	if moved != Vector2.ZERO:
+		push_warning("preview_match: a placement that began at the edge panned anyway")
+	_game._exit_placement()
 
 
 func _report_build_mode() -> void:

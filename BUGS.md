@@ -100,10 +100,37 @@ crossing in front of a building.
       by having the phone HOST and the laptop join (the laptop takes `--net join
       --ip` from a terminal). **This blocks 12.1c**, whose lobby needs an address
       field, and wants sorting before that screen is built.
-- [ ] **Panning while placing.** Cancel removes the dead end, but the workflow is
-      still cancel → pan → re-open the menu. Being able to pan with the ghost up
-      would be better; it needs a gesture decision (two-finger pan, or edge-pan)
-      rather than a default, so it is deliberately not bundled with the fix above.
+- [x] **Panning while placing.** Cancel removed the dead end, but the workflow was
+      still cancel → pan → re-open the menu. **Owner chose edge-pan** over
+      two-finger pan (which is box-select's own trigger, 8.3). Dragging the ghost
+      into the 100-unit edge strip now slides the map under it, ramped by how deep
+      into the strip the finger is, and the ghost is re-read each time the ground
+      moves beneath it. Two guards worth knowing about: the strip cannot push until
+      the finger has been seen OUTSIDE it once during the drag — the build grid
+      opens along the bottom edge, so the tap that picks a building leaves your
+      finger exactly there — and a camera parked against the map's clamp reports no
+      movement, so a resting thumb does not re-preview the placement every frame.
+      The cost is that you cannot zoom while placing: the side strips are the zoom
+      gesture's, and placement owns them for the duration. Zoom is one tap away
+      before the menu opens; reaching an off-screen site was not.
+- [ ] **A test that errors out mid-body still counts as PASS.** Found while running
+      the suite for the edge-pan work, and it is the more serious of the two things
+      here. `test_the_wire_form_survives_json_the_way_a_packet_would` prints three
+      SCRIPT ERRORs and is reported as passed: a GDScript runtime error abandons the
+      rest of the function, so its last three assertions never ran and their absence
+      looks identical to success. Every test in the suite has this property. A floor
+      would catch it — count assertions per test and fail one that made none, or fail
+      any test that logged an error — but which of those is right is a harness
+      decision, not a default.
+- [ ] **`MapData.from_dict()` cannot read its own JSON.** What the vacuous test above
+      was written to catch. `JSON.stringify` encodes a `PackedByteArray` as a
+      *string* — `"[1, 2, 250]"`, verified on 4.7.1 — so `terrain` returns as a
+      String, the assignment on `map_data.gd:183` errors, and `from_dict` returns
+      null. **The two-device match is not affected** and that is why (g) passed:
+      ENet hands the config across as a Dictionary using Godot's own binary
+      serialization, where a `PackedByteArray` survives intact. It breaks the moment
+      anything JSONs a config — 12.4's save/load, or a debug log of one. Fix is for
+      `from_dict` to accept the String and the Array forms as well as the real thing.
 - [ ] **This WiFi isolates clients.** Not a project bug, recorded so the next
       bring-up does not lose time: the office network put the two devices on
       different /24s with no route between them (100% packet loss). `adb reverse`
