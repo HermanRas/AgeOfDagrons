@@ -1201,14 +1201,33 @@ length-prefixed string every time it appears. Three fixes, none of them a delta:
 
 Confirmed on the real transport: ENet's own warning went from **18,532 bytes to 4,360**.
 
-**What is left of (f):** snapshots are still `unreliable_ordered` and still over the MTU, so losing
-one fragment loses the snapshot — but the arithmetic has changed completely. At 1% packet loss, 39
-fragments lost **32%** of snapshots; 5 fragments lose **5%**. The cheapest fix remains
-`reliable_ordered`, and it now wants measuring on real WiFi rather than assuming, because
-head-of-line blocking on a stream where each snapshot supersedes the last may cost more than it
-saves. §7.2's delta encoding is still **out** of this batch (6–10 h) and is no longer the obvious
-next move: the remaining payload is mostly resource nodes, which barely change, so "send statics
-only when they change" would need the absence-means-invisible rule replaced with something else.
+**The transport mode is settled, and measured rather than argued — 2026-08-21.** `Net` counts
+arriving snapshots and reports gaps (ticks are consecutive, so a jump is exactly what went
+missing). Phone joined to a PC host over real WiFi, ~90 seconds of play:
+
+    net: 300 of 312 snapshots arrived (3.85% lost) over 325 ticks
+    net: 600 of 621 snapshots arrived (3.38% lost) over 634 ticks
+
+**~3.4% lost, and every single loss was one snapshot — never a run.** A lost snapshot is one
+100 ms frame of stale state, and the next one is complete, because a full snapshot supersedes its
+predecessor and needs nothing from it. Under interpolation that is invisible, which matches the
+owner's "snappy" verdict from (g).
+
+**So `unreliable_ordered` stays**, and that is now a decision rather than an inheritance. The cheap
+fix — `reliable_ordered` — would remove 3.4% of invisible 100 ms gaps and buy head-of-line
+blocking: a retransmit stalls every snapshot queued behind it, turning a loss nobody can see into a
+stutter everybody can. Worse, retransmitting a snapshot is *worthless by the time it lands*, since a
+newer one describing the same world has already been sent. Reliability is right for a delta stream,
+where a lost message corrupts everything after it, and wrong for this one.
+
+That in turn is the argument against finishing §7.2's delta encoding here. The measured per-fragment
+loss is ~0.7%, which is what makes the fragment count matter so much: **at this morning's 39
+fragments the same link would have dropped ~24% of snapshots, roughly one in four.** Getting to 5
+fragments is what made the unreliable choice viable, and a delta would trade that self-healing
+property away — the remaining payload is mostly resource nodes, which barely change, so "send
+statics only when they change" means replacing the absence-means-invisible rule the view depends on,
+and then needing reliability after all. Deliberately **not** done: 6–10 h to make the transport more
+fragile.
 
 **Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot processes
 on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable and

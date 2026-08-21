@@ -205,7 +205,7 @@ crossing in front of a building.
       `winner_id`) and a decision about how many reasons are worth naming —
       resigned, disconnected, wiped out. Cosmetic, but it tells the winner something
       untrue about how they won.
-- [ ] **Snapshots are four times the MTU and sent unreliably.** 12.1f, with a number on
+- [x] **Snapshots are four times the MTU and sent unreliably.** 12.1f, with a number on
       it at last. **The fog half is fixed** (2026-08-21): the grid is no longer sent at
       all — `ClientFog` computes it from the client's own entities and the map it already
       has, which took the 8-player board from 53,928 bytes to 17,040 and 39 fragments to
@@ -220,12 +220,15 @@ crossing in front of a building.
       once per snapshot instead of once per entity. **53,928 → 6,824 bytes, 39 fragments
       → 5**; ENet's live warning went from 18,532 to 4,360.
 
-      **Still open:** the transport is `unreliable_ordered` and still over the MTU, so
-      losing one fragment loses the snapshot. The arithmetic is far better — at 1% loss,
-      39 fragments cost 32% of snapshots and 5 cost 5% — but it is not nothing.
-      `reliable_ordered` is the cheap fix and wants measuring on real WiFi first, since
-      head-of-line blocking on a stream where each snapshot supersedes the last may cost
-      more than it saves. ENet says so itself, on the host, during an ordinary two-process match:
+      **Measured on real WiFi and closed.** Phone joined to a PC host, ~90 s of play:
+      **3.4% of snapshots lost, every loss a single one** — never a run. One 100 ms frame
+      of stale state, self-healing because a full snapshot needs nothing from its
+      predecessor, and invisible under interpolation. `unreliable_ordered` STAYS, now as
+      a decision: `reliable_ordered` would trade invisible gaps for head-of-line
+      blocking, and a retransmitted snapshot is worthless by the time it lands because a
+      newer one has already been sent. The measured per-fragment loss is ~0.7%, which is
+      why the fragment count mattered so much — at this morning's 39 fragments the same
+      link would have dropped ~24% of snapshots. ENet says so itself, on the host, during an ordinary two-process match:
 
           WARNING: Sending 18532 bytes unreliably which is above the MTU (1392),
                    this will result in higher packet loss

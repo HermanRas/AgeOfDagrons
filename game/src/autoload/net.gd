@@ -553,6 +553,10 @@ func _teardown() -> void:
 	# would have the next screen previewing a match nobody is offering.
 	_lobby_config = null
 	_lobby_ready.clear()
+	# And the delivery counters, so the next match's loss figure is its own.
+	_snapshots_seen = 0
+	_snapshots_missed = 0
+	_last_snapshot_tick = -1
 	_awaiting_ready.clear()
 	_ready_waited = 0.0
 	if _host != null:
@@ -586,10 +590,49 @@ func _recv_command(d: Dictionary) -> void:
 
 @rpc("authority", "call_local", "unreliable_ordered")
 func _recv_snapshot(d: Dictionary) -> void:
+	_count_snapshot(int(d.get("tick", 0)))
 	# Unpacked HERE, at the one point a snapshot arrives, so everything downstream keeps
 	# reading the readable dictionary form (12.1f). A snapshot that was never packed --
 	# a test's, a preview's -- passes through untouched.
 	snapshot_received.emit(SnapshotSystem.from_wire(d))
+
+
+## HOW MANY SNAPSHOTS ACTUALLY ARRIVE (PLAN.md 12.1f).
+##
+## The one number the packing work could not produce for itself: snapshots are
+## `unreliable_ordered` and still exceed the MTU, so a dropped fragment drops the whole
+## snapshot -- and loopback has no loss, so every measurement so far has been arithmetic.
+## Ticks are consecutive (`SimHost` builds one per tick), so a jump is exactly the count
+## that went missing, whether ENet dropped a fragment or discarded a packet that arrived
+## out of order.
+##
+## Logged only when something is LOST, plus a summary every `_STATS_EVERY`. A phone is
+## launched by an intent with no command line to put a flag on, so there is nothing to
+## switch this on with -- and a line that only appears when the news is bad is cheap
+## enough to leave in.
+const _STATS_EVERY := 300
+
+var _snapshots_seen := 0
+var _snapshots_missed := 0
+var _last_snapshot_tick := -1
+
+
+func _count_snapshot(tick: int) -> void:
+	_snapshots_seen += 1
+	if _last_snapshot_tick >= 0 and tick > _last_snapshot_tick + 1:
+		var lost := tick - _last_snapshot_tick - 1
+		_snapshots_missed += lost
+		print("net: lost %d snapshot(s) before tick %d" % [lost, tick])
+	# Assigned either way. A tick that goes BACKWARDS is a new match on an old counter, not
+	# a loss, and the comparison above already declines to count it as one.
+	_last_snapshot_tick = tick
+
+	if _snapshots_seen % _STATS_EVERY == 0:
+		var sent := _snapshots_seen + _snapshots_missed
+		print("net: %d of %d snapshots arrived (%.2f%% lost) over %d ticks"
+				% [_snapshots_seen, sent,
+				100.0 * float(_snapshots_missed) / maxf(1.0, float(sent)),
+				_last_snapshot_tick])
 
 
 ## One player's snapshot to THAT player's peer, and to nobody else.
