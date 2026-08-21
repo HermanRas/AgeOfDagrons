@@ -71,6 +71,12 @@ var _flash: ActionFlash
 ## get right-click to clear instead (`_on_context_cancel`).
 var _ground_tap := DoubleTapDetector.new()
 
+## The ground, on a client that has no `SimWorld` (PLAN.md 12.1b). Built once from the
+## config's `MapData` and never ticked; the placement ghost reads it for terrain and gets
+## everything standing on that terrain from snapshot facts. Null in solo, where the host's
+## own world is the better answer and is right there to ask.
+var _client_map: SimMap = null
+
 ## Bumped by EVERY tap, so a deferred single-tap deselect can tell that some
 ## LATER tap has happened and stand down. `DoubleTapDetector.is_still_pending()`
 ## alone is not enough: it only knows about taps that went through it, and a tap
@@ -401,6 +407,10 @@ func _start_match() -> void:
 	var cfg := Net.match_config()
 	if cfg != null and cfg.map_data != null:
 		var md := cfg.map_data
+		# The client's own copy of the GROUND, for the placement ghost. Terrain only --
+		# it carries no occupancy and is never ticked, so it is not a second simulation:
+		# what is standing on the ground comes from snapshot facts (`PlacementAdvice`).
+		_client_map = _build_client_map(md)
 		_view.build_terrain(md.size, md.terrain)
 		_minimap.build_terrain(md.size, md.terrain)
 		_camera.setup(md.size)
@@ -421,6 +431,23 @@ func _start_match() -> void:
 			_camera.centre_on(Iso.sub_to_world((e as SimBuilding).pos))
 			return
 	_camera.centre_on(Iso.tile_centre_to_world(world.map.size / 2))
+
+
+## The client's own copy of the GROUND, for the placement ghost.
+##
+## Terrain only. It carries no occupancy and is never ticked, so it is not a second
+## simulation -- what is STANDING on the ground comes from snapshot facts, through
+## `PlacementAdvice`. Built the same way `MapGen.build_from()` copies a map into a world,
+## through `set_terrain` rather than a raw array write, so each tile's move cost is
+## derived from its terrain and the two can never disagree (PLAN.md 2.1).
+func _build_client_map(md: MapData) -> SimMap:
+	var map := SimMap.create(md.size)
+	for y in range(md.size.y):
+		for x in range(md.size.x):
+			var t := Vector2i(x, y)
+			if md.in_bounds(t):
+				map.set_terrain(t, md.terrain_at(t) as SimMap.Terrain)
+	return map
 
 
 ## The config landed after the scene was already up, which is the ordinary case for a
@@ -724,8 +751,19 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 ## colours it by legality. Shared by the press/drag/release handlers so all
 ## three agree on exactly the same tile for the same point.
 ##
-## Reads `Net.host().world` directly -- the same documented solo-only exception
-## `_start_match()` already uses, not a new hole in the view/sim boundary.
+## A HOST ASKS ITS WORLD; A CLIENT ASKS WHAT IT CAN SEE (PLAN.md 12.1b).
+##
+## The host keeps the exact answer -- `Net.host().world` is right there, and the ghost
+## then turns red in precisely the places `PlaceBuildingCommand.validate()` will refuse.
+## A client has no world at all, so it falls back to `PlacementAdvice`: the map from the
+## config, occupancy and adjacency from snapshot facts, affordability from the stock the
+## snapshot reported.
+##
+## Two paths for one rule is normally the thing this codebase refuses to do -- and the
+## reason it is right here is that only one of them is ever authoritative. The server
+## validates every placement from either side, so the advisory path being wrong costs a
+## refusal and a toast, never a divergence. See `PlacementAdvice` for where it is
+## deliberately looser and which way it errs.
 func _preview_placement(screen_pos: Vector2) -> Dictionary:
 	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
 	if bd == null:
@@ -733,17 +771,30 @@ func _preview_placement(screen_pos: Vector2) -> Dictionary:
 		return {}
 
 	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
-	var world: SimWorld = Net.host().world
-	var player := world.player_for(Net.local_player_id())
 	var origin := Iso.tile_at(local)
 	var rect := SimMap.footprint_rect(origin, bd.footprint)
-	var can_afford := player != null and player.can_afford(bd.cost)
-	# Same adjacency call PlaceBuildingCommand.validate() makes, so the ghost
-	# turns red exactly where the host would refuse -- a field dragged away from
-	# its mill reads as illegal while it is being dragged, rather than being
-	# accepted by the UI and silently dropped by the server.
-	var placeable := world.adjacency_allows(_placing_def_id, Net.local_player_id(), origin)
-	var valid := can_afford and placeable and world.map.can_place_building(rect)
+	var me := Net.local_player_id()
+
+	var can_afford := false
+	var placeable := false
+	var ground := false
+	var host := Net.host()
+	if host != null:
+		var world: SimWorld = host.world
+		var player := world.player_for(me)
+		can_afford = player != null and player.can_afford(bd.cost)
+		# Same adjacency call PlaceBuildingCommand.validate() makes, so the ghost
+		# turns red exactly where the host would refuse -- a field dragged away from
+		# its mill reads as illegal while it is being dragged, rather than being
+		# accepted by the UI and silently dropped by the server.
+		placeable = world.adjacency_allows(_placing_def_id, me, origin)
+		ground = world.map.can_place_building(rect)
+	else:
+		var facts := _view.all_facts()
+		can_afford = PlacementAdvice.can_afford(bd.cost, _view.stock_of(me))
+		placeable = PlacementAdvice.adjacency_allows(_placing_def_id, me, origin, facts)
+		ground = PlacementAdvice.can_place(_client_map, facts, rect)
+	var valid := can_afford and placeable and ground
 
 	var centre := Vector2(origin) + Vector2(bd.footprint) * 0.5
 	_ghost.position = Iso.tile_to_world_f(centre)

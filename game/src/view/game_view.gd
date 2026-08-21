@@ -39,6 +39,10 @@ const _NEUTRAL_SKIN := {"age": 0, "colour": -1,
 ## Neither is sim state the view may reach for -- both arrive on the wire.
 var _player_skins: Dictionary = {}
 
+## owner_id -> {kind: amount}, from the same `player_state` block. The client's only
+## knowledge of what it can afford; see `_read_player_skins`.
+var _player_stock: Dictionary = {}
+
 ## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
 ## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
 ## answer questions about an entity that the *view* nodes do not carry -- who owns
@@ -368,6 +372,19 @@ func _read_player_skins(snap: Dictionary) -> void:
 			"advance_ticks": int(ps.get("advance_ticks", 0)),
 			"advance_total_ticks": int(ps.get("advance_total_ticks", 0)),
 		}
+		# Stock is kept apart from the skin because it is not one: the skin is two
+		# axes that decide which atlas to draw, and this is the treasury. Cached at
+		# all because a CLIENT has no `SimWorld` to ask what it can afford, and the
+		# placement ghost has to answer that question (PLAN.md 12.1b).
+		_player_stock[int(pid)] = (ps.get("stock", {}) as Dictionary).duplicate()
+
+
+## What a player holds, as the last snapshot reported it. Empty for a player not in it.
+##
+## A copy: the placement ghost reads this every time the finger moves and must not be
+## able to spend the view's own bookkeeping.
+func stock_of(owner_id: int) -> Dictionary:
+	return (_player_stock.get(owner_id, {}) as Dictionary).duplicate()
 
 
 ## Every entity's facts, keyed by id. A copy, for the same reason
