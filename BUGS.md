@@ -188,6 +188,23 @@ crossing in front of a building.
       (2.4c) and 12.4's save/load. `from_dict` now reads bytes, JSON's string, or a
       plain list; `to_dict` goes on sending raw bytes, because base64 would add a
       third to 20–40 KB of terrain and 12.1f is about wire size.
+- [ ] **Snapshots are four times the MTU and sent unreliably.** 12.1f, with a number on
+      it at last. ENet says so itself, on the host, during an ordinary two-process match:
+
+          WARNING: Sending 18532 bytes unreliably which is above the MTU (1392),
+                   this will result in higher packet loss
+             at: put_packet (enet_multiplayer_peer.cpp:365)
+             [0] _broadcast_snapshot (net.gd:451)
+
+      **18.5 KB per snapshot against a 1392-byte MTU** — about fourteen fragments, and
+      losing any one of them loses the whole snapshot, because `_recv_snapshot` is
+      `unreliable_ordered`. This was a 96×96 generated map with 105 entities, and it
+      scales with entity count, so a real army makes it worse rather than better.
+      **Invisible on loopback**, which is exactly why it wanted measuring: the PC-to-PC
+      run it came from looked perfect. The owner's "snappy" verdict from (g) was on
+      ~12 KB over real WiFi, so the fear is not disproved, just not yet reproduced —
+      what is now known is the size, the call site, and that the transport is already
+      complaining before anybody has stress-tested it.
 - [ ] **This WiFi isolates clients.** Not a project bug, recorded so the next
       bring-up does not lose time: the office network put the two devices on
       different /24s with no route between them (100% packet loss). `adb reverse`

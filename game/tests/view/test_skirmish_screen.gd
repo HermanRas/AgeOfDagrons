@@ -7,11 +7,19 @@
 ## screen's entire output, and it is the one thing a wrong pixel cannot explain away.
 extends TestCase
 
+## Somewhere the game itself would never bind, so a running game and a test run do not
+## contend for one port. See `before_each`.
+const _TEST_PORT := 47015
+
 var screen: SkirmishScreen
 
 
 func before_each() -> void:
 	screen = SkirmishScreen.new()
+	# Not Net.PORT. Advertising a slot binds a real socket, so a suite on the game's own
+	# port fights the game: these ten tests went red the first time the owner had this
+	# screen open with a slot advertised while the suite ran.
+	screen.host_port = _TEST_PORT
 
 
 func after_each() -> void:

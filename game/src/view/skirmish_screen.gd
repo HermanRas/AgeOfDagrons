@@ -66,6 +66,19 @@ var _data: MapData = null
 
 var _lobby: Lobby = Lobby.LOCAL
 
+## Host only, from `--autostart`: press START as soon as every advertised slot is filled.
+## See `_apply_cmdline`.
+var _autostart := false
+
+## The port advertising a slot binds. `Net.PORT` in the game, always.
+##
+## Settable because opening a slot binds a REAL socket -- that is the behaviour, and a
+## faked one would test the fake -- and a fixed port makes the suite fight anything else
+## on the machine holding it. Found the honest way: ten lobby tests went red while the
+## owner had this very screen open with a slot advertised, because the game had 27015 and
+## the tests could not have it. The suite now hosts somewhere nobody else would.
+var host_port: int = Net.PORT
+
 ## Slot index -> the peer id standing in it. Only ever holds OPEN slots.
 ##
 ## Kept here rather than asked of `Net.peer_players()` on demand because that map is
@@ -124,6 +137,7 @@ func _init() -> void:
 	Net.match_configured.connect(_on_match_configured)
 	Net.session_ended.connect(_on_session_ended)
 	_refresh_lobby()
+	_apply_cmdline()
 
 
 # ── layout ──────────────────────────────────────────────────────────────────
@@ -428,7 +442,7 @@ func _on_role_selected(item: int, index: int) -> void:
 	_roles[index] = (_slot_rows[index]["role"] as OptionButton).get_item_id(item) as Role
 
 	if _wants_peers() and _lobby == Lobby.LOCAL:
-		var err := Net.host_open()
+		var err := Net.host_open(host_port)
 		if err != OK:
 			# Put the slot back rather than leaving a screen that says it is waiting for
 			# someone who can never arrive. This is how the missing Android INTERNET
@@ -438,6 +452,12 @@ func _on_role_selected(item: int, index: int) -> void:
 			_say("could not open a socket: %s" % error_string(err))
 			return
 		_lobby = Lobby.HOSTING
+		# Logged on the TRANSITION, not from `_refresh_lobby_text`, which runs on every
+		# refresh and would repeat itself. A terminal-driven host has nobody watching the
+		# label, and "am I actually listening, and on what" is the first question a
+		# bring-up asks.
+		print("lobby: listening on port %d as player %d — dial %s"
+				% [host_port, Net.local_player_id(), ", ".join(_own_addresses())])
 	elif not _wants_peers() and _lobby == Lobby.HOSTING:
 		# The last advertised slot just closed, so stop listening. Reachable only while
 		# no peer has arrived -- a slot with somebody in it has its dropdown disabled.
@@ -501,7 +521,15 @@ func _on_peer_joined(peer_id: int) -> void:
 		_say("a peer connected with no open slot to take")
 		return
 	_slot_peers[slot] = peer_id
+	# Said BEFORE the refresh, not after: the refresh rebuilds the standing summary --
+	# which lists this peer by name anyway -- and a `_say` afterwards would replace that
+	# whole peer list with one line about one arrival. The log still gets both.
+	_say("player %d joined slot %d (peer %d)" % [pid, slot + 1, peer_id])
 	_refresh_lobby()
+
+	if _autostart and can_start():
+		_say("autostart: the lobby is full, starting")
+		_on_start_pressed()
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -590,7 +618,7 @@ func _refresh_lobby_text() -> void:
 		Lobby.HOSTING:
 			var lines: Array[String] = []
 			lines.append("Waiting on port %d — dial %s"
-					% [Net.PORT, ", ".join(_own_addresses())])
+					% [host_port, ", ".join(_own_addresses())])
 			for i in range(_players):
 				if _roles[i] == Role.OPEN:
 					lines.append("  Player %d: %s" % [i + 1,
@@ -630,6 +658,57 @@ func _own_addresses() -> Array[String]:
 func _say(text: String) -> void:
 	if _lobby_status != null:
 		_lobby_status.text = text
+	# On stdout as well, because a scripted side of a two-machine test has nobody
+	# watching the label -- the log is the only way to follow a bring-up. Same reason
+	# the throwaway (g) screen did it. Clearing the line is not news, so it is not logged.
+	if not text.is_empty():
+		print("lobby: %s" % text)
+
+
+# ── driving it from a terminal ───────────────────────────────────────────────
+#
+# Two devices, and only one of them has somebody standing at a keyboard -- so the other
+# side has to be startable from a command line. The throwaway (g) screen established
+# this; it is kept because the need did not go away with it.
+#
+#   Godot --path game res://scenes/menu/Skirmish.tscn -- --net host --autostart
+#   Godot --path game res://scenes/menu/Skirmish.tscn -- --net join --ip 192.168.0.12
+#
+# `--autostart` is HOST ONLY and presses START the moment every advertised slot is
+# filled. It automates the press, not the rule: the wait for a full lobby is the same
+# wait a thumb would sit through.
+func _apply_cmdline() -> void:
+	_autostart = _has_flag("--autostart")
+	match _string_arg("--net", ""):
+		"host":
+			# Deferred so the node is in the tree first: opening a slot can reach
+			# `get_tree()` by way of a start, and a peer could in principle be waiting.
+			call_deferred("_host_from_cmdline")
+		"join":
+			_join_field.text = _string_arg("--ip", "127.0.0.1")
+			call_deferred("_on_join_pressed")
+
+
+## Advertise the LAST slot, which is the one a second player would take: slot 1 is this
+## device's own human seat in every default this screen ships with.
+func _host_from_cmdline() -> void:
+	var index := _players - 1
+	var picker: OptionButton = _slot_rows[index]["role"]
+	var item := picker.get_item_index(int(Role.OPEN))
+	picker.select(item)
+	picker.item_selected.emit(item)
+
+
+func _has_flag(name: String) -> bool:
+	return OS.get_cmdline_user_args().has(name)
+
+
+func _string_arg(name: String, fallback: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] == name:
+			return String(args[i + 1])
+	return fallback
 
 
 ## TWO WAYS TO START, because there are two kinds of match and only one of them has a
