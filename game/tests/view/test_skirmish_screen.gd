@@ -15,6 +15,12 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	# The lobby tests below open a REAL socket, because "set a slot to Open" and "start
+	# listening" are the same act and faking one of them would test the fake. Closed here
+	# rather than at the end of each test: a test that fails part way through would
+	# otherwise leave port 27015 bound and take the rest of the file down with it.
+	if Net.has_session():
+		Net.leave()
 	screen.free()
 
 
@@ -103,6 +109,124 @@ func test_choosing_a_role_reaches_the_config() -> void:
 	assert_eq(screen.build_config().ai_players, [false, false] as Array[bool])
 	screen._on_role_selected(1, 1)          # slot 2 -> PlayTest AI
 	assert_eq(screen.build_config().ai_players, [false, true] as Array[bool])
+
+
+# ── the lobby half (12.1c) ─────────────────────────────────────────────────
+#
+# The screen's third state. These drive the real handlers and open a real socket, for
+# the same reason the rest of this file drives dropdowns rather than setting fields:
+# the wiring is what is in doubt.
+
+## Pick a role the way a finger does: move the dropdown, then let its OWN signal carry
+## the change. Calling `_on_role_selected` directly would leave the button showing its
+## old choice and would pass with the signal unconnected -- which is how the preview
+## first came out photographing a slot labelled "PlayTest AI" with a peer sitting in it.
+func _pick_role(index: int, role: SkirmishScreen.Role) -> void:
+	var picker: OptionButton = screen._slot_rows[index]["role"]
+	var item := picker.get_item_index(int(role))
+	picker.select(item)
+	picker.item_selected.emit(item)
+
+
+func _open_slot_two() -> void:
+	_pick_role(1, SkirmishScreen.Role.OPEN)
+
+
+func test_opening_a_slot_is_what_starts_listening() -> void:
+	# There is no separate host button on purpose, so this IS the hosting path.
+	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.LOCAL)
+	_open_slot_two()
+	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.HOSTING,
+			"advertising a slot opened the socket: %s" % screen.lobby_text())
+	assert_true(Net.has_session(), "and there really is a session behind it")
+
+
+func test_an_advertised_slot_nobody_is_in_blocks_the_start() -> void:
+	# Otherwise the host launches a two-player match one player short.
+	_open_slot_two()
+	assert_eq(screen.unfilled_slots(), 1)
+	assert_false(screen.can_start(), "cannot start on an empty chair")
+	assert_true(screen._start_button.disabled, "and the button agrees")
+
+
+func test_a_peer_arriving_fills_the_slot_and_frees_the_start() -> void:
+	_open_slot_two()
+	screen._on_peer_joined(7777)
+	assert_eq(screen.unfilled_slots(), 0)
+	assert_true(screen.can_start(), "the match is now the one that was set up")
+	assert_false(screen._start_button.disabled)
+	assert_true(screen.lobby_text().contains("7777"), "and the peer is shown: %s"
+			% screen.lobby_text())
+
+
+func test_a_slot_with_somebody_in_it_cannot_be_taken_away() -> void:
+	# Simpler than deciding what happens to a connected player whose chair vanishes.
+	_open_slot_two()
+	assert_false((screen._slot_rows[1]["role"] as OptionButton).disabled)
+	screen._on_peer_joined(7777)
+	assert_true((screen._slot_rows[1]["role"] as OptionButton).disabled)
+
+
+func test_a_peer_leaving_empties_the_slot_again() -> void:
+	_open_slot_two()
+	screen._on_peer_joined(7777)
+	screen._on_peer_left(7777)
+	assert_eq(screen.unfilled_slots(), 1, "the chair is free again")
+	assert_false(screen.can_start())
+
+
+func test_closing_the_last_open_slot_stops_listening() -> void:
+	_open_slot_two()
+	_pick_role(1, SkirmishScreen.Role.PLAYTEST_AI)
+	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.LOCAL)
+	assert_false(Net.has_session(), "the socket went with the slot")
+	assert_true(screen.can_start(), "and it is an ordinary skirmish again")
+
+
+func test_an_open_slot_is_a_person_not_a_bot() -> void:
+	# `ai_players` drives SimPlayer.is_ai. An Open slot marked true would put a bot in
+	# the chair a joining player is sitting in.
+	_open_slot_two()
+	assert_eq(screen.build_config().ai_players, [false, false] as Array[bool])
+
+
+func test_a_joined_client_configures_nothing_and_cannot_start() -> void:
+	# START belongs to the host over there; a live one here would be a second authority
+	# over when the match begins.
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._refresh_lobby()
+	assert_false(screen.can_start())
+	assert_true(screen._start_button.disabled)
+	assert_false(screen._seed_box.editable, "the host chose the map, not this device")
+	assert_true(screen._type_picker.disabled)
+	assert_true(screen._reroll_button.disabled)
+	assert_true(screen._mode_picker.disabled)
+	assert_true(screen._count_picker.disabled)
+	assert_true((screen._slot_rows[0]["role"] as OptionButton).disabled)
+
+
+func test_a_joined_client_stops_showing_a_map_it_will_never_play() -> void:
+	# The worst thing on the joined screen before this: a client generated its own random
+	# map on the way in and showed it captioned "ready", while the map it was actually
+	# waiting for was on the host and does not arrive until the match starts. A
+	# convincing wrong picture is worse than no picture.
+	assert_true(screen._preview.visible, "the host's own screen still previews")
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._refresh_lobby()
+	assert_false(screen._preview.visible)
+	assert_true(screen.status_text().contains("host chooses"),
+			"and it says who does choose, got: %s" % screen.status_text())
+
+
+func test_why_a_session_ended_survives_the_refresh_that_follows_it() -> void:
+	# `Net.leave()` emits `session_ended` SYNCHRONOUSLY, so the refresh runs immediately
+	# after the message is written. A refresh that cleared the line would blank the
+	# reason at exactly the moment it matters -- a dropped host reading as nothing at all.
+	_open_slot_two()
+	screen._on_session_ended("server disconnected")
+	assert_true(screen.lobby_text().contains("server disconnected"),
+			"kept the reason, got: %s" % screen.lobby_text())
+	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.LOCAL)
 
 
 func test_an_unplayable_map_cannot_be_started_and_says_why() -> void:

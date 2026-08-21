@@ -20,10 +20,15 @@ const SHOT_DIR := "user://"
 const SETTLE_FRAMES := 30
 const MATCH_FRAMES := 45
 
+## Frames to let the UI redraw between changing a lobby state and photographing it. A
+## shot taken on the same frame as the change catches the screen as it was before.
+const LOBBY_FRAMES := 10
+
 var _screen: SkirmishScreen = null
 var _game: Node = null
 var _frames := 0
 var _step := 0
+var _resume_at := 0
 var _expected: MapData = null
 
 
@@ -34,6 +39,8 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_frames += 1
+	if _frames < _resume_at:
+		return
 	match _step:
 		0:
 			if _frames < SETTLE_FRAMES:
@@ -41,8 +48,42 @@ func _process(_delta: float) -> void:
 			_report_screen()
 			_shoot("skirmish_screen")
 		1:
-			_start_the_match()
+			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
+			# is the hosting path and not a simulation of it.
+			_open_a_slot()
 		2:
+			_report_lobby()
+			_shoot("skirmish_lobby_waiting")
+		3:
+			# A peer arriving. The connection itself is (g)'s ground already proven on two
+			# devices; what is unproven is that this SCREEN shows the chair being taken
+			# and lets START go ahead once it is.
+			_screen._on_peer_joined(7777)
+			_hold(LOBBY_FRAMES)
+		4:
+			_report_lobby()
+			_shoot("skirmish_lobby_filled")
+		5:
+			# The JOINING device's view of the same screen -- the one state that cannot be
+			# reached from here honestly, since a real one needs a second process dialling
+			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
+			# that configures nothing, which no test can judge. The control states
+			# themselves are asserted in test_skirmish_screen.
+			_screen._lobby = SkirmishScreen.Lobby.JOINED
+			_screen._say("joined 192.168.0.12 — waiting for the host to start")
+			_screen._refresh_lobby()
+			_hold(LOBBY_FRAMES)
+		6:
+			_shoot("skirmish_lobby_joined")
+		7:
+			_screen._lobby = SkirmishScreen.Lobby.HOSTING
+			# Back to a plain skirmish, so the solo path below is exercised exactly as it
+			# was before this screen learned to host -- the regression that would matter
+			# most here is the one where adding multiplayer broke playing alone.
+			_close_the_slot()
+		8:
+			_start_the_match()
+		9:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -51,6 +92,12 @@ func _process(_delta: float) -> void:
 			get_tree().quit()
 			return
 	_step += 1
+
+
+## Hold the script for `frames` before the next step, so a UI change has actually been
+## drawn by the time it is photographed.
+func _hold(frames: int) -> void:
+	_resume_at = _frames + frames
 
 
 func _report_screen() -> void:
@@ -67,8 +114,50 @@ func _report_screen() -> void:
 				% [cfg.player_ids[i], cfg.colours[i], cfg.ai_players[i]])
 
 
+## Pick a role on slot `index` the way a finger does: move the dropdown, then let its own
+## signal carry the change.
+##
+## `select()` AND `item_selected.emit()`, not the handler on its own. Calling the handler
+## directly leaves the OptionButton still showing its old choice, so the first version of
+## this photographed a lobby whose Player 2 row read "PlayTest AI" while the peer list
+## below it said somebody had joined that slot -- and it would have passed just as
+## happily with the signal unconnected. Same reason `preview_match` presses the real
+## cancel Button rather than calling `_exit_placement`.
+func _pick_role(index: int, role: SkirmishScreen.Role) -> void:
+	var picker: OptionButton = _screen._slot_rows[index]["role"]
+	var item := picker.get_item_index(int(role))
+	picker.select(item)
+	picker.item_selected.emit(item)
+
+
+func _open_a_slot() -> void:
+	_pick_role(1, SkirmishScreen.Role.OPEN)
+	_hold(LOBBY_FRAMES)
+
+
+func _close_the_slot() -> void:
+	# Through _on_peer_left first: a slot with somebody in it cannot be un-opened, which
+	# is the rule, so the peer has to go before the chair can.
+	_screen._on_peer_left(7777)
+	_pick_role(1, SkirmishScreen.Role.PLAYTEST_AI)
+	print("lobby: closed -- state %d, session %s, startable %s"
+			% [_screen.lobby_state(), Net.has_session(), _screen.can_start()])
+	_hold(LOBBY_FRAMES)
+
+
+func _report_lobby() -> void:
+	print("lobby: state %d, session %s, unfilled %d, startable %s"
+			% [_screen.lobby_state(), Net.has_session(), _screen.unfilled_slots(),
+			_screen.can_start()])
+	for line in _screen.lobby_text().split("\n"):
+		print("    %s" % line)
+	if _screen.lobby_state() != SkirmishScreen.Lobby.HOSTING:
+		push_warning("preview_skirmish: setting a slot to Open did not start hosting")
+
+
 ## Exactly what START does, minus the scene change.
 func _start_the_match() -> void:
+	_resume_at = 0                   # the match step re-bases _frames; drop any stale hold
 	Net.pending_match = _screen.build_config()
 	_screen.queue_free()
 	_screen = null
