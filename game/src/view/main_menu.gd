@@ -14,6 +14,8 @@ extends Control
 const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
 const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
+## Temporary, and deleted with 12.1c. See `net_debug_screen.gd`.
+const _NET_DEBUG_SCENE := "res://scenes/menu/NetDebug.tscn"
 
 @onready var _play_button: TextureButton = %PlayButton
 @onready var _multiplayer_button: TextureButton = %MultiplayerButton
@@ -26,8 +28,11 @@ const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
 
 func _ready() -> void:
 	_play_button.pressed.connect(_on_play_pressed)
-	_multiplayer_button.pressed.connect(
-			func() -> void: _toast.show_message("Multiplayer is not available in this build"))
+	# MULTIPLAYER now opens the throwaway 12.1g entry point rather than answering with a
+	# toast. It is not the real screen -- that is 12.1c, the skirmish screen in lobby
+	# mode -- and it exists so a two-device match can be played on real hardware before
+	# the polish, which is the order PLAN.md 12.1 asks for.
+	_multiplayer_button.pressed.connect(_on_multiplayer_pressed)
 	_settings_button.pressed.connect(
 			func() -> void: _toast.show_message("Settings are not available in this build"))
 	_credits_button.pressed.connect(_on_credits_pressed)
@@ -51,6 +56,10 @@ func _ready() -> void:
 ## or `run/main_scene` pointed at it -- because `Net.pending_match` is null then.
 func _on_play_pressed() -> void:
 	get_tree().change_scene_to_file(_SKIRMISH_SCENE)
+
+
+func _on_multiplayer_pressed() -> void:
+	get_tree().change_scene_to_file(_NET_DEBUG_SCENE)
 
 
 func _on_credits_pressed() -> void:
