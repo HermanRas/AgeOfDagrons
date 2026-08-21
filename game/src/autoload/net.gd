@@ -25,6 +25,14 @@ signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 signal snapshot_received(snap: Dictionary)
 
+## The match config has arrived and a world can be built from it (PLAN.md 12.1b).
+##
+## Emitted on the CLIENT, where it is the first moment the scene knows what map it is
+## playing on. The host never waits for it -- it had the config in its hand when it
+## called `start_match()` -- so anything listening must cope with the config already
+## being there, which is why `GameScene` checks `match_config()` before connecting.
+signal match_configured()
+
 ## One port for every session shape. Solo binds it on loopback, an open host binds it
 ## on 0.0.0.0, and a client dials it -- so there is nothing to keep in sync and a
 ## player typing an address never has to think about a port number.
@@ -55,6 +63,13 @@ func is_joined() -> bool:
 ## afterwards (the main menu's own PLAY, a dev preview) gets the debug map rather than
 ## whatever a screen left behind ten minutes ago.
 var pending_match: MatchConfig = null
+
+## The config THIS match is being played on, on both sides of the wire.
+##
+## Distinct from `pending_match`, which is what a screen wants to start next and is
+## consumed by doing so. This is the settled answer, and on a client it is the only
+## description of the world it will ever have -- there is no `SimWorld` here to ask.
+var _match_config: MatchConfig = null
 
 var _peer: MultiplayerPeer = null
 var _host: SimHost = null
@@ -142,9 +157,34 @@ func start_match(cfg: MatchConfig) -> void:
 	if _peer == null or _host != null:
 		return
 	pending_match = null
+	_match_config = cfg
 	_host = SimHost.new()
 	add_child(_host)
 	_host.start(cfg, _broadcast_snapshot)
+
+	# Every joined peer gets the config before it gets a snapshot. A client cannot make
+	# sense of a snapshot without it -- it has no map to draw the entities on -- and
+	# reliable delivery is the point: this is the one message a match cannot start
+	# without, unlike a snapshot, of which another follows in a tenth of a second.
+	var wire := cfg.to_dict()
+	for peer in _peer_players:
+		if int(peer) != 1:
+			rpc_id(int(peer), "_recv_match_config", wire)
+
+
+## The config this match is being played on -- null before one has been settled.
+##
+## THE CLIENT'S ONLY DESCRIPTION OF THE WORLD. `host()` is null there, so this is where
+## the map comes from: PLAN.md 12.1b's "terrain is a transfer, not a regeneration".
+func match_config() -> MatchConfig:
+	return _match_config
+
+
+## Whether a session exists at all -- hosting or joined, world or no world. `GameScene`
+## asks before hosting solo, because a client that has already joined must not host
+## over the top of its own session.
+func has_session() -> bool:
+	return _peer != null
 
 
 ## Whether this process is the AUTHORITY -- the one that owns the world and validates
@@ -266,7 +306,17 @@ func _assign_player(pid: int) -> void:
 	session_started.emit(false)
 
 
+## The host describing the match to a client. Reliable, and sent before any snapshot.
+@rpc("authority", "reliable")
+func _recv_match_config(d: Dictionary) -> void:
+	if _host != null:
+		return                    # the host already has the real object; never round-trip it
+	_match_config = MatchConfig.from_dict(d)
+	match_configured.emit()
+
+
 func _teardown() -> void:
+	_match_config = null
 	if _host != null:
 		_host.stop()
 		_host.queue_free()

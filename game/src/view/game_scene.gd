@@ -89,17 +89,29 @@ func _ready() -> void:
 	_build_hud()
 
 	Net.snapshot_received.connect(_on_snapshot)
-	var err := Net.host_solo()
-	if err != OK:
-		# Made visible rather than logged: this is exactly how the missing Android
-		# INTERNET permission presented at 0.7 -- no crash, just a game that never
-		# started and never said why.
-		_error = "host_solo() failed: %s" % error_string(err)
-		_error_label.text = _error
-		_error_label.visible = true
-		return
+
+	# ONLY HOST IF NOBODY HAS ALREADY SET A SESSION UP. Entering this scene used to mean
+	# "host a solo match", which is right when the main menu's PLAY brought us here and
+	# wrong for a client that has already joined one -- it would host over the top of
+	# its own session and never draw the match it came for (PLAN.md 12.1b).
+	if not Net.has_session():
+		var err := Net.host_solo()
+		if err != OK:
+			# Made visible rather than logged: this is exactly how the missing Android
+			# INTERNET permission presented at 0.7 -- no crash, just a game that never
+			# started and never said why.
+			_error = "host_solo() failed: %s" % error_string(err)
+			_error_label.text = _error
+			_error_label.visible = true
+			return
+
 	_hud.player_id = Net.local_player_id()
 	_idle_badge.player_id = Net.local_player_id()
+	# A client may arrive before the host has described the match. Connected rather than
+	# waited on, and `_start_match()` is called anyway: on a host, and on a client whose
+	# config beat the scene here, it has everything it needs already.
+	if Net.match_config() == null:
+		Net.match_configured.connect(_on_match_configured)
 	_start_match()
 
 
@@ -371,24 +383,70 @@ func _corner_button(icon_file: String) -> TextureButton:
 	return corner_btn
 
 
-## Terrain is read from the host's map.
+## TERRAIN COMES FROM THE CONFIG, NOT FROM THE HOST'S WORLD (PLAN.md 12.1b).
 ##
-## The view layer does not otherwise touch `SimWorld`, and this is the documented
-## exception `Net.host()` exists for. It holds only in solo play, where the client
-## and the server are the same process: a remote client has no host to ask and
-## will need the map sent to it, which is a job for the multiplayer phase rather
-## than something to fake here.
+## This used to read `Net.host().world` -- the documented solo-only exception -- and on
+## a joining client `Net.host()` is null, so the scene died on entry. That was the whole
+## of the plan's high-risk item.
+##
+## The config carries the map as DATA precisely so both sides can build from the same
+## bytes (12.1b's 2026-08-17 correction: regenerating from a seed risks a host and a
+## client disagreeing about where the water is). One path now serves host and client,
+## which is better than the exception it replaces rather than merely equal to it.
+##
+## The FIXED debug map carries no `MapData` -- it is integer code, identical everywhere
+## -- so solo on that map still reads the host's world. That branch is genuinely
+## solo-only: a hosted match plays on a generated map.
 func _start_match() -> void:
-	var world: SimWorld = Net.host().world
+	var cfg := Net.match_config()
+	if cfg != null and cfg.map_data != null:
+		var md := cfg.map_data
+		_view.build_terrain(md.size, md.terrain)
+		_minimap.build_terrain(md.size, md.terrain)
+		_camera.setup(md.size)
+		_open_camera_on(cfg, md.size)
+		return
+
+	var host := Net.host()
+	if host == null:
+		# A client with no config yet. Not an error -- `_ready()` has connected
+		# `match_configured` and this runs again when it lands.
+		return
+	var world: SimWorld = host.world
 	_view.build_terrain(world.map.size, world.map.terrain)
 	_minimap.build_terrain(world.map.size, world.map.terrain)
 	_camera.setup(world.map.size)
-
 	for e in world.entities.values():
 		if e is SimBuilding and e.owner_id == Net.local_player_id():
 			_camera.centre_on(Iso.sub_to_world((e as SimBuilding).pos))
 			return
 	_camera.centre_on(Iso.tile_centre_to_world(world.map.size / 2))
+
+
+## The config landed after the scene was already up, which is the ordinary case for a
+## client: it joins, changes scene, and the host's description arrives a moment later.
+##
+## Also refreshes the HUD's player id: a client is named by the server (12.1a), and if
+## that happened after `_ready()` the HUD would still be showing player 0's resources.
+func _on_match_configured() -> void:
+	_hud.player_id = Net.local_player_id()
+	_idle_badge.player_id = Net.local_player_id()
+	_start_match()
+
+
+## Open the camera on this player's own corner of the map.
+##
+## From `MapData.starts` rather than by looking for the player's town centre, because a
+## client has no entities yet -- the first snapshot has not arrived when the scene is
+## built, and opening on the middle of the map and then jumping would be worse than
+## opening in the right place straight away. The starts are the same list `MapGen` puts
+## the town centres on, so this lands where the building will be.
+func _open_camera_on(cfg: MatchConfig, size: Vector2i) -> void:
+	var slot := cfg.player_ids.find(Net.local_player_id())
+	if slot >= 0 and slot < cfg.map_data.starts.size():
+		_camera.centre_on(Iso.tile_centre_to_world(cfg.map_data.starts[slot]))
+		return
+	_camera.centre_on(Iso.tile_centre_to_world(size / 2))
 
 
 ## The local player's fog, as the last snapshot carried it (PLAN.md 2.5). Cached
