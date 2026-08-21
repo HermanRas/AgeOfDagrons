@@ -132,6 +132,10 @@ func _ready() -> void:
 
 	_hud.player_id = Net.local_player_id()
 	_idle_badge.player_id = Net.local_player_id()
+	# Whose fog the view computes (12.1f). The same id from the same place, so the fog and
+	# the HUD can never end up describing two different players -- and set on BOTH paths,
+	# because a client is named by the server after `_ready()` has already run.
+	_view.local_player_id = Net.local_player_id()
 	# A client may arrive before the host has described the match. Connected rather than
 	# waited on, and `_start_match()` is called anyway: on a host, and on a client whose
 	# config beat the scene here, it has everything it needs already.
@@ -496,6 +500,10 @@ func _build_client_map(md: MapData) -> SimMap:
 func _on_match_configured() -> void:
 	_hud.player_id = Net.local_player_id()
 	_idle_badge.player_id = Net.local_player_id()
+	# Whose fog the view computes (12.1f). The same id from the same place, so the fog and
+	# the HUD can never end up describing two different players -- and set on BOTH paths,
+	# because a client is named by the server after `_ready()` has already run.
+	_view.local_player_id = Net.local_player_id()
 	_start_match()
 
 
@@ -514,16 +522,19 @@ func _open_camera_on(cfg: MatchConfig, size: Vector2i) -> void:
 	_camera.centre_on(Iso.tile_centre_to_world(size / 2))
 
 
-## The local player's fog, as the last snapshot carried it (PLAN.md 2.5). Cached
-## here for the same reason `_control_groups` is: `_refresh_minimap()` needs it and
-## does not receive the snapshot, and the alternative is asking `GameView` for its
-## overlay's internals.
+## The local player's fog. **No longer cached from the snapshot** (12.1f): the grid is not
+## sent any more, so the answer lives in `GameView.client_fog` and this reads it after
+## `apply_snapshot()` has recomputed it. Kept as a field for the reason it always was --
+## `_refresh_minimap()` needs the bytes and does not receive the snapshot.
 var _last_vision: PackedByteArray = PackedByteArray()
 
 
 func _on_snapshot(snap: Dictionary) -> void:
-	_last_vision = snap.get("vision", PackedByteArray())
 	_view.apply_snapshot(snap)
+	# AFTER apply_snapshot, not before: that call is what recomputes the fog from this
+	# tick's facts, and reading it first would put last tick's fog on the minimap.
+	if _view.client_fog != null:
+		_last_vision = _view.client_fog.cells
 	_refresh_panel()
 	_refresh_hud(snap)
 	_refresh_minimap()

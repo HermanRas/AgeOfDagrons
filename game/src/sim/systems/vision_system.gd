@@ -139,9 +139,31 @@ func _recompute(w: SimWorld, p: SimPlayer) -> void:
 ## and leave the player's own fog untouched.
 static func _reveal(w: SimWorld, p: SimPlayer, rect: Rect2i, range_tiles: int,
 		lit: PackedInt32Array) -> void:
+	for i in tiles_in_range(w.map.size, rect, range_tiles):
+		p.vision[i] = SimPlayer.Fog.VISIBLE
+		lit.append(i)
+
+
+## Grid indices within `range_tiles` of `rect`, on a map of `size`. The geometry above,
+## and nothing else -- no world, no player, no writing.
+##
+## SPLIT OUT SO THE CLIENT CAN USE THE SAME ONE (12.1f). The fog grid is no longer sent
+## in the snapshot; a client computes its own from its own entities, and the one thing
+## that must not happen is a second implementation of this circle drifting from this one.
+## Two algorithms that agree today are two algorithms that disagree after somebody edits
+## one, and fog is exactly the kind of cosmetic thing nobody would notice diverging for
+## weeks.
+##
+## Returns indices rather than writing into a grid passed in, because `PackedByteArray` is
+## copy-on-write: a function that received the grid as a parameter and assigned to an
+## element would mutate its own copy and leave the caller's untouched. Each caller writes
+## into the array it owns. The extra pass is nearly free -- the loop below was already
+## collecting these indices for the incremental decay.
+static func tiles_in_range(size: Vector2i, rect: Rect2i,
+		range_tiles: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
 	if range_tiles < 0:
-		return
-	var size := w.map.size
+		return out
 	var r2 := range_tiles * range_tiles
 
 	# The footprint's own extents, so a tile inside it measures a gap of 0 on that axis
@@ -174,9 +196,8 @@ static func _reveal(w: SimWorld, p: SimPlayer, rect: Rect2i, range_tiles: int,
 				dx = x - right
 			if dx * dx + dy2 > r2:
 				continue
-			var i := row + x
-			p.vision[i] = SimPlayer.Fog.VISIBLE
-			lit.append(i)
+			out.append(row + x)
+	return out
 
 
 static func _rect_of(e: SimEntity) -> Rect2i:

@@ -21,6 +21,15 @@ const _ADJACENT_TO_BUILDING_BONUS := 100000.0
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
 var fog: FogOverlay = FogOverlay.new()
+
+## The fog this client works out for itself (12.1f), instead of being sent it every tick.
+## Null until `build_terrain()` gives it a board -- a snapshot with no board draws unfogged,
+## which is what an empty grid has always meant.
+var client_fog: ClientFog = null
+
+## Whose fog to compute. Set by `GameScene` from `Net.local_player_id()`; 0 means nobody's,
+## which reveals nothing and is the right answer for a view with no session behind it.
+var local_player_id: int = 0
 var selection: Selection = Selection.new()
 
 var _last_tick: int = -1
@@ -78,6 +87,11 @@ func build_terrain(size: Vector2i, terrain_bytes: PackedByteArray) -> void:
 	# Sized off the same grid, so the two can never disagree about where tile (0,0)
 	# is -- both align themselves against Iso rather than against each other.
 	fog.build(size)
+	# And the fog this client COMPUTES (12.1f), on the same grid for the same reason.
+	# Created here rather than at construction because this is the moment the board is
+	# known, and a fog with no board is what "no fog" means.
+	client_fog = ClientFog.new()
+	client_fog.setup(size)
 
 
 func apply_snapshot(snap: Dictionary) -> void:
@@ -309,11 +323,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# test half the units against a stale set of occluders.
 	_refresh_occlusion(occluders)
 
-	# The fog itself (2.5), from the raw bytes the snapshot carries -- the viewer's own
-	# grid and nobody else's, which is SnapshotSystem's business to guarantee. Absent
-	# or empty means the world has no fog and the overlay clears, so a test snapshot
-	# and a pre-2.5 replay both draw an unfogged map rather than a black one.
-	fog.apply(snap.get("vision", PackedByteArray()))
+	# The fog itself (2.5), COMPUTED HERE rather than read off the wire (12.1f). Over the
+	# finished facts, so it sees where everything ended up this snapshot -- the same
+	# reason the occlusion pass above waits until now.
+	#
+	# `client_fog` stays null for a snapshot that has no board behind it: a unit test, or
+	# a replay from before 2.5. Both then draw an unfogged map rather than a black one,
+	# which is what an empty grid has always meant.
+	# From `updated`, the raw wire entries -- NOT from `_facts`, which has already divided
+	# `pos` down into whole tiles and dropped it. See `ClientFog.apply`.
+	if client_fog != null:
+		client_fog.apply(updated, local_player_id)
+		fog.apply(client_fog.cells)
 
 
 ## Facts about one entity, or {} if it is not currently in view.

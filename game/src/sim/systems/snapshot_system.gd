@@ -97,12 +97,17 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 		"updated": updated,
 		"removed": w.removed_this_tick.duplicate(),
 		"player_state": player_state,
-		# ONLY THE VIEWER'S OWN FOG, never everybody's: the grid is what the filter
-		# above was applied with, and shipping another player's copy would hand the
-		# client the very map the filter exists to withhold. Raw bytes with the map
-		# size, the same shape the terrain itself is sent in (`GameView.build_terrain`)
-		# -- and empty when the world has no fog, which the view reads as "draw none".
-		"vision": viewer.vision.duplicate() if viewer != null else PackedByteArray(),
+		# THE FOG GRID IS NO LONGER SENT (12.1f). It was one byte per tile of the whole
+		# board, to every player, every tick -- 36,872 bytes and 68% of the packet on the
+		# 8-player board, and a function of the MAP rather than of the match, so no other
+		# saving would ever have shrunk it. Half of them were byte-for-byte repeats, since
+		# `VisionSystem.VISION_INTERVAL` recomputes every second tick.
+		#
+		# `ClientFog` computes it instead, from the client's own entities and the map it
+		# already has. The SECURITY property does not move: it was never this grid, it is
+		# `_entry_for` above, and that still runs here on the server. The grid was only
+		# ever a bitmap to paint. `ClientFog`'s header records what that costs and the
+		# reliable-delta alternative that was not taken.
 		# The outcome (PLAN.md 11.1), which is about the MATCH and not about any one
 		# player, so it sits beside `tick` rather than in `player_state`.
 		# `match_over` without a `winner_id` is the draw; see SimWorld's own fields.

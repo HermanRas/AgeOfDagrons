@@ -289,21 +289,25 @@ func test_a_big_building_is_seen_from_any_corner_of_its_footprint() -> void:
 	assert_false(bool(entry.get("remembered", false)), "seen, not merely remembered")
 
 
-func test_the_snapshot_carries_only_the_viewers_own_fog() -> void:
-	# Shipping everybody's grid would hand the client the very map the filter exists
-	# to withhold.
+func test_the_snapshot_carries_nobodys_fog_at_all() -> void:
+	# WAS "only the viewer's own fog", which was the right guard while the grid was on the
+	# wire. It is not sent at all now (12.1f) -- the client computes its own from its own
+	# entities, and 36,872 bytes per tick per player stopped leaving the host. The property
+	# the old test protected survives as something stronger: there is no grid to leak.
+	#
+	# What it did NOT protect, and what still matters, is the entity filter -- that is
+	# every other test in this file, and it runs server-side exactly where it did.
 	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
 	w.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
 	w.step()
 
-	var mine: PackedByteArray = SnapshotSystem.build(w, 1)["vision"]
-	assert_eq(mine.size(), 48 * 48)
-	assert_eq(mine, _player(1).vision)
-	assert_ne(mine, _player(2).vision, "and it is not the other player's")
-
 	var snap := SnapshotSystem.build(w, 1)
-	assert_false(snap.has("player_state") and (snap["player_state"][2] as Dictionary).has("vision"),
-			"no per-player vision rides in player_state either")
+	assert_false(snap.has("vision"), "no fog grid rides in the snapshot")
+	assert_false((snap["player_state"][2] as Dictionary).has("vision"),
+			"and none rides in player_state either")
+	# The server still keeps it, because it is what the filter above is applied with.
+	assert_eq(_player(1).vision.size(), 48 * 48, "the SERVER still computes fog")
+	assert_ne(_player(1).vision, _player(2).vision, "per player, as it always was")
 
 
 func test_a_player_who_is_not_in_the_world_sees_everything() -> void:

@@ -197,7 +197,14 @@ crossing in front of a building.
       plain list; `to_dict` goes on sending raw bytes, because base64 would add a
       third to 20–40 KB of terrain and 12.1f is about wire size.
 - [ ] **Snapshots are four times the MTU and sent unreliably.** 12.1f, with a number on
-      it at last. ENet says so itself, on the host, during an ordinary two-process match:
+      it at last. **The fog half is fixed** (2026-08-21): the grid is no longer sent at
+      all — `ClientFog` computes it from the client's own entities and the map it already
+      has, which took the 8-player board from 53,928 bytes to 17,040 and 39 fragments to
+      13. Snapshot size no longer depends on the board. See PLAN.md §12.1f for the option
+      that was not taken and the drawback of the one that was. **Still open:** `entities`
+      is 16 KB of the remainder, sent in full every tick with no delta, and the transport
+      is still `unreliable_ordered`, so losing one fragment of thirteen still drops the
+      whole snapshot. ENet says so itself, on the host, during an ordinary two-process match:
 
           WARNING: Sending 18532 bytes unreliably which is above the MTU (1392),
                    this will result in higher packet loss

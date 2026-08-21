@@ -95,6 +95,10 @@ func _report(w: SimWorld, tick: int) -> void:
 	# alarming. Measured as the transport would encode that value, not as a share of the
 	# whole -- the pieces do not sum exactly to the total because the enclosing dictionary
 	# has its own keys and headers, and that residue is small and uninteresting.
+	# Kept as a column even though 12.1f stopped sending it, because this is the number
+	# the change was made for and a row that no longer shows it cannot show that. Reads 8
+	# when the key is absent -- what an empty PackedByteArray encodes to -- so anything
+	# above that means the grid has come back.
 	var vision := var_to_bytes(snap.get("vision", PackedByteArray())).size()
 	var entities := var_to_bytes(snap.get("updated", [])).size()
 	var state := var_to_bytes(snap.get("player_state", {})).size()

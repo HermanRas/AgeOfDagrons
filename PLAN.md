@@ -1138,12 +1138,45 @@ world about occupancy and adjacency: a client has the map but not what anyone ha
 must be driven from snapshot facts and be **advisory** — the server already validates, so a wrong
 ghost costs a refusal, not a desync.
 
-**(f) is measured.** One tick is **12,092 bytes, 4,104 of it fog** (§3.1). Two problems: the fog
-is resent whole every tick when it changes by tens of tiles (send changed indices — about a third
-off, ~2 h), and 12 KB exceeds ENet's MTU so it fragments, while snapshots are
-`unreliable_ordered`, where losing one fragment drops the whole packet. Cheapest fix is
-`reliable_ordered`; the real fix is §7.2's delta encoding, deliberately **out** of this batch
-(6–10 h on its own). Note 2.4b's size rule interacts directly: fog is a byte per tile per player.
+**(f) is measured.** The 2026-08-17 figure of 12,092 bytes was on the 64×64 debug map. Re-measured
+2026-08-21 on generated boards with `dev_preview/preview_wire_size.tscn`, per player per tick:
+
+| board | tiles | total | fog | entities | fragments |
+|---|---|---|---|---|---|
+| 96×96 | 9,216 | 28,768 | 9,224 | 18,512 | 21 |
+| 128×128 | 16,384 | 31,768 | 16,392 | 14,368 | 23 |
+| 192×192 | 36,864 | 53,928 | **36,872** | 16,024 | 39 |
+
+**The fog half is done (2026-08-21).** It was 68% of the packet on the 8-player board the lobby now
+offers, and a function of the MAP rather than the match, so no other saving would ever have shrunk
+it — and half the grids were byte-for-byte repeats, since `VisionSystem.VISION_INTERVAL` recomputes
+every second tick. Two options were considered, and the drawback of the one taken is worth keeping
+written down:
+
+- **Option 1, taken — the client computes its own fog** (`ClientFog`). Zero bytes on the wire,
+  forever. Its cost: `EXPLORED` accumulates a tick at a time, and snapshots are
+  `unreliable_ordered`, so a dropped snapshot means a thin rim of tiles the client believes it has
+  never seen. It corrects itself when anything of yours passes there again. **Fog only** — entity
+  filtering is the server's answer and arrives with the entities.
+- **Option 2, not taken — the server sends fog CHANGES on a reliable channel.** Tens of bytes
+  instead of tens of thousands, and it cannot drift, because reliable delivery means the client's
+  grid *is* the server's. Its cost is a second channel with its own ordering and reconnect story.
+  **If option 1's slivers ever become a complaint, this is the reinvestment**, and `ClientFog` is
+  where it lands — everything above its `apply()` stays as it is.
+
+**This does not move the security boundary**, which is the objection to answer first: the rule is
+"the server must not send a client entities it cannot see" (§5.1 step 6), it lives in
+`SnapshotSystem._entry_for`, and it still runs on the server. The server still computes every
+player's vision, because it still decides what to send them. The grid was only ever a bitmap to
+paint. Guarded by a test that compares the client's grid to the server's **tile by tile**, because
+two implementations of one circle are two implementations that can drift.
+
+After it: 19,528 / 15,384 / 17,040 bytes — and **snapshot size no longer depends on the board at
+all**, so the 8-player map is now the *cheapest* of the three. What is left is `entities`, still
+12× the MTU: `updated` sends every visible entity in full every tick and is "not a real delta" by
+its own header. That is §7.2's delta encoding, deliberately **out** of this batch (6–10 h on its
+own). The other half of (f) is unchanged: snapshots are `unreliable_ordered`, so losing one fragment
+of thirteen still drops the whole packet, and the cheapest fix remains `reliable_ordered`.
 
 **Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot processes
 on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable and
