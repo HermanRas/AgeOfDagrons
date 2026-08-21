@@ -60,6 +60,16 @@ var _idle_cycle_id: int = 0
 ## the Cancel Build button.
 var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
+
+## The way OUT of build mode on a touch screen (project owner, 2026-08-21, found on a
+## real phone in a two-device match).
+##
+## Build mode locks the camera so one finger can drag the ghost rather than pan, and the
+## only other ways out were Escape and right-click -- neither of which a phone has. With
+## no legal spot on screen and no way to pan to one, a placement could be neither
+## finished nor abandoned: the ghost stayed stuck to the finger for the rest of the
+## match. Visible only while placing, so it is never in the way otherwise.
+var _cancel_build: Button
 var _flash: ActionFlash
 
 ## Touch only: a tap on empty ground with units selected DESELECTS, and only a
@@ -257,6 +267,20 @@ func _build_hud() -> void:
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_toast.position = Vector2(-160.0, 409.0)
 	hud.add_child(_toast)
+
+	# In the gap BETWEEN the build grid and the minimap, which is the only part of the
+	# bottom edge free while placing. Bottom centre looked empty and is not: the build
+	# grid opens there, so a cancel button sat straight on top of the menu it belongs to
+	# -- caught by `preview_match`'s screenshot, not by the code.
+	_cancel_build = Button.new()
+	_cancel_build.text = "CANCEL BUILD"
+	_cancel_build.add_theme_font_size_override("font_size", 24)
+	_cancel_build.custom_minimum_size = Vector2(280.0, 80.0)
+	_cancel_build.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_cancel_build.position = Vector2(-512.0, -120.0)
+	_cancel_build.visible = false
+	_cancel_build.pressed.connect(_exit_placement)
+	hud.add_child(_cancel_build)
 
 	# Phase 9.1's age indicator. Compacted to the mockup's 180x86 at the top
 	# centre -- it was 240 wide when it carried a title and a straight progress
@@ -680,6 +704,10 @@ func _clear_selection() -> void:
 func _enter_placement(def_id: StringName) -> void:
 	_placing_def_id = def_id
 	_camera.set_locked(true)
+	# Offered the moment the camera is locked, because that is the moment a touch player
+	# loses every other way out. See `_cancel_build`.
+	if _cancel_build != null:
+		_cancel_build.visible = true
 	# Shows the ghost immediately under the cursor rather than leaving it
 	# invisible until the mouse so much as twitches (desktop only -- a touch
 	# has no position to preview before it first comes down).
@@ -690,6 +718,8 @@ func _exit_placement() -> void:
 	_placing_def_id = &""
 	_camera.set_locked(false)
 	_ghost.visible = false
+	if _cancel_build != null:
+		_cancel_build.visible = false
 	_refresh_panel()
 
 

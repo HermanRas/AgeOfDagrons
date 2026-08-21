@@ -227,6 +227,29 @@ func _advance_script() -> void:
 		31:
 			_report_occlusion()
 			_shoot("match_occluded_by_gold")
+		32:
+			# BUILD MODE HELD OPEN, which nothing else here does -- steps 16-17 enter it
+			# and place in the same breath. Entering it LOCKS THE CAMERA so one finger
+			# can drag the ghost, and until 2026-08-21 the only ways out were Escape and
+			# right-click: on a phone, with no legal spot on screen and no way to pan to
+			# one, a placement could be neither finished nor abandoned. The project owner
+			# found it in a two-device match, with the ghost stuck to their thumb.
+			#
+			# Reselects a villager first: by this point the script has sent them off
+			# farming and behind the gold, and the Build action only exists on a
+			# villager's panel.
+			_select_a_villager()
+			_open_build_menu()
+		33:
+			_enter_build_mode_and_hold()
+		34:
+			_report_build_mode()
+			_shoot("match_build_mode_cancellable")
+		35:
+			_press_cancel_build()
+		36:
+			_report_build_mode()
+			_shoot("match_build_mode_cancelled")
 		_:
 			get_tree().quit()
 			return
@@ -288,6 +311,37 @@ func _page_build_menu() -> void:
 			panel._on_detail_pressed(slot.action)
 			return
 	push_warning("preview_match: build menu does not page at this age")
+
+
+## Enter build mode and STAY there, which is the state the bug lived in.
+##
+## Through the build grid's own slot rather than by setting `_placing_def_id`, so this
+## exercises the path a player takes -- and so it cannot pass with the grid unwired.
+func _enter_build_mode_and_hold() -> void:
+	# Straight into placement rather than through the build grid, which by this point in
+	# the script is a paged age-4 menu whose contents are not what is under test -- and
+	# the grid-to-placement path is already proven by steps 16-17, which place a real
+	# building through it. What is under test is the way OUT.
+	_game._enter_placement(&"building.house")
+
+
+## Press the button a phone player now has. Deliberately `pressed.emit()` on the real
+## Button rather than calling `_exit_placement()`, because what is in doubt is the
+## WIRING: an unconnected button would leave a touch player exactly as stuck as before.
+func _press_cancel_build() -> void:
+	var button: Button = _game._cancel_build
+	if button == null or not button.visible:
+		push_warning("preview_match: no cancel-build button to press")
+		return
+	button.pressed.emit()
+
+
+func _report_build_mode() -> void:
+	var placing: StringName = _game._placing_def_id
+	var button: Button = _game._cancel_build
+	print("  build mode: placing %s, cancel button visible %s, camera locked %s"
+			% [placing if placing != &"" else "(nothing)",
+			button != null and button.visible, _game._camera.locked])
 
 
 func _select_a_town_centre() -> void:

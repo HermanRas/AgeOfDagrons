@@ -66,6 +66,52 @@ These are what the owner saw while watching it.
 
 ---
 
+## 2026-08-21 — two-device bring-up (PLAN.md 12.1g)
+
+Phone hosting as player 1, laptop joining as player 2, over real WiFi on the same
+subnet. **All six checks passed**, including both view fixes from the batch above,
+which had never been seen on a device. The owner's words on the transport: "it
+plays very well, its snappy and responsive, even clicking on one device and
+watching the other seems instant."
+
+That is step (f)'s risk measured rather than assumed — one snapshot is 12,092
+bytes, which exceeds ENet's MTU and fragments, and snapshots are
+`unreliable_ordered`. At this entity count it is not hurting. It still wants
+re-checking at a bigger army, which is what (f) is for.
+
+Confirmed on device: client→host commands both ways; ownership refusal (player 2
+cannot select or move player 1's units); the advisory placement ghost; fog of war
+per unit per player; villagers facing correctly walking north-east; no teleport
+crossing in front of a building.
+
+- [x] **No way to cancel a building placement on a touch screen.** Entering build
+      mode LOCKS THE CAMERA on purpose, so one finger can drag the ghost rather
+      than pan — and the only ways out were Escape and right-click, neither of
+      which a phone has. With no legal spot on screen and no way to pan to one, a
+      placement could be neither finished nor abandoned: the ghost stayed stuck to
+      the owner's thumb for the rest of the match. The Cancel Build button that
+      used to do this "went away with the dev row". Restored, visible only while
+      placing. **Its first position was wrong too** — bottom centre looked empty
+      and is exactly where the build grid opens, so it covered the menu it belongs
+      to; caught by `preview_match`'s screenshot rather than by the code.
+- [ ] **A LineEdit gets no soft keyboard on Android.** Tapping the address field in
+      the debug screen raises no keyboard, by hand or via `adb input text`, so an
+      address cannot be typed on the phone at all. Worked around for the bring-up
+      by having the phone HOST and the laptop join (the laptop takes `--net join
+      --ip` from a terminal). **This blocks 12.1c**, whose lobby needs an address
+      field, and wants sorting before that screen is built.
+- [ ] **Panning while placing.** Cancel removes the dead end, but the workflow is
+      still cancel → pan → re-open the menu. Being able to pan with the ghost up
+      would be better; it needs a gesture decision (two-finger pan, or edge-pan)
+      rather than a default, so it is deliberately not bundled with the fix above.
+- [ ] **This WiFi isolates clients.** Not a project bug, recorded so the next
+      bring-up does not lose time: the office network put the two devices on
+      different /24s with no route between them (100% packet loss). `adb reverse`
+      is NOT a workaround — it tunnels TCP and ENet is UDP. What worked was
+      putting both devices on the phone's own network.
+
+---
+
 ## Open from the AI-vs-AI match run (not owner-reported)
 
 Found by `dev_preview/preview_ai_match.tscn` on seed 3, forest, 12,000 ticks.
