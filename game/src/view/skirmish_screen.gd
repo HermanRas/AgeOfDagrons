@@ -145,6 +145,7 @@ func _init() -> void:
 	Net.match_configured.connect(_on_match_configured)
 	Net.lobby_config_received.connect(_on_lobby_config_received)
 	Net.lobby_ready_changed.connect(_on_lobby_ready_changed)
+	Net.lobby_colour_cycle_requested.connect(_on_lobby_colour_cycle_requested)
 	Net.session_ended.connect(_on_session_ended)
 	_refresh_lobby()
 	_apply_cmdline()
@@ -299,7 +300,8 @@ func _build_match_column() -> Control:
 
 func _build_slot_row(index: int) -> Control:
 	var row := HBoxContainer.new()
-	row.add_child(_label("Player %d" % (index + 1)))
+	var name_label := _label("Player %d" % (index + 1))
+	row.add_child(name_label)
 
 	var colour := Button.new()
 	colour.custom_minimum_size = Vector2(96.0, 0.0)
@@ -318,7 +320,19 @@ func _build_slot_row(index: int) -> Control:
 	role.item_selected.connect(_on_role_selected.bind(index))
 	row.add_child(role)
 
-	_slot_rows.append({"role": role, "colour": colour})
+	# WHO IS ACTUALLY IN THIS CHAIR, on the row for that chair.
+	#
+	# Occupancy used to live in a separate block of text below, listing only the Open
+	# slots -- so the host had a list of what it was waiting for rather than a list of
+	# players, and the two could disagree with the rows above them. On the row is the one
+	# place it cannot: there is exactly one player list now and both devices render it
+	# from the same fields.
+	var status := Label.new()
+	status.custom_minimum_size = Vector2(220.0, 0.0)
+	status.add_theme_color_override("font_color", HudStyle.GOLD)
+	row.add_child(status)
+
+	_slot_rows.append({"role": role, "colour": colour, "name": name_label, "status": status})
 	_refresh_colour_button(index)
 	return row
 
@@ -461,14 +475,43 @@ func _on_reroll_pressed() -> void:
 ## rule is that two players cannot share a colour -- so a press steps to the next one
 ## nobody else has taken. With colour the ONLY thing telling players apart (§1), a
 ## duplicate is not a cosmetic mistake, it is an unplayable match.
+## YOUR COLOUR IS YOURS, on either device. A joined client used to have every colour
+## button disabled, so the one thing that tells players apart was assigned to them --
+## and it asks rather than sets, because the no-duplicates rule is the host's to keep.
 func _on_colour_pressed(index: int) -> void:
+	if _lobby == Lobby.JOINED:
+		if index != _local_slot():
+			return                # somebody else's identity, not yours to cycle
+		Net.request_colour_cycle()
+		return
+	_cycle_colour(index)
+	_publish_lobby()
+
+
+## Step a slot to the next colour nobody else holds. The host's rule, applied whether the
+## host pressed the button or a joined player asked it to.
+func _cycle_colour(index: int) -> void:
 	var count := _palette_size()
 	for step in range(1, count + 1):
 		var candidate := (_colours[index] + step) % count
 		if not _colours.slice(0, _players).has(candidate):
 			_colours[index] = candidate
 			_refresh_colour_button(index)
+			return
+
+
+## A joined player asked for a different colour. Their slot is found from the peer, so a
+## client cannot ask on somebody else's behalf even if it wanted to.
+##
+## The re-broadcast cancels every agreement, including the asker's own -- consistent with
+## every other change, and cheap: the player who just pressed the button is right there to
+## press READY again.
+func _on_lobby_colour_cycle_requested(peer_id: int) -> void:
+	for slot in _slot_peers:
+		if int(_slot_peers[slot]) == peer_id:
+			_cycle_colour(int(slot))
 			_publish_lobby()
+			_refresh_lobby()
 			return
 
 
@@ -630,6 +673,19 @@ func _on_lobby_config_received() -> void:
 		_colours[i] = cfg.colours[i]
 		_refresh_colour_button(i)
 
+	# THE ROLES TOO, which the first version of this forgot -- so a joined client kept its
+	# own local defaults and showed Player 2 as "PlayTest AI" while the host showed the
+	# same chair as "Open". The joining player was reading that about their own seat.
+	#
+	# `ai_players` is what the wire carries, and it is enough: a bot is a bot, and every
+	# other chair holds a person. It cannot tell the host's own seat from a remote one and
+	# does not need to -- which chair is YOURS comes from `local_player_id()`, and the row
+	# label says so.
+	for i in range(mini(_roles.size(), cfg.ai_players.size())):
+		_roles[i] = Role.PLAYTEST_AI if cfg.ai_players[i] else Role.HUMAN
+		var picker: OptionButton = _slot_rows[i]["role"]
+		picker.select(picker.get_item_index(int(_roles[i])))
+
 	_seed_box.set_value_no_signal(_seed)
 	_type_picker.select(_type_picker.get_item_index(int(_type)))
 	_mode_picker.select(_mode_picker.get_item_index(int(_mode)))
@@ -709,7 +765,8 @@ func _refresh_lobby() -> void:
 		# A slot somebody is standing in cannot be un-opened. Simpler than deciding what
 		# happens to a connected player when their chair is taken away.
 		role_picker.disabled = joined or _slot_peers.has(i)
-		(_slot_rows[i]["colour"] as Button).disabled = joined
+		# Your own colour stays live on a joined client. Everyone else's is theirs.
+		(_slot_rows[i]["colour"] as Button).disabled = joined and i != _local_slot()
 
 	if joined:
 		var cfg := Net.lobby_config()
@@ -738,28 +795,18 @@ func _refresh_lobby() -> void:
 	_join_button.disabled = _lobby != Lobby.LOCAL
 
 	_refresh_start_button()
+	_refresh_slot_rows()
 	_refresh_lobby_text()
 
 
 func _refresh_lobby_text() -> void:
 	match _lobby:
 		Lobby.HOSTING:
-			var lines: Array[String] = []
-			lines.append("Waiting on port %d — dial %s"
-					% [host_port, ", ".join(_own_addresses())])
-			for i in range(_players):
-				if _roles[i] != Role.OPEN:
-					continue
-				if not _slot_peers.has(i):
-					lines.append("  Player %d: waiting for someone to join" % (i + 1))
-					continue
-				# READY IS THE PART THAT MATTERS HERE. "Joined" only says a socket
-				# connected; START is held on agreement, so the host has to be able to
-				# see which of the two it is still waiting for.
-				var peer := int(_slot_peers[i])
-				lines.append("  Player %d: peer %d — %s" % [i + 1, peer,
-						"READY" if Net.is_peer_ready(peer) else "reviewing the match..."])
-			_lobby_status.text = "\n".join(lines)
+			# JUST THE TRANSPORT. Who is in which chair is on the chairs now, in
+			# `_refresh_slot_rows` -- this line is only the thing the rows cannot say,
+			# which is where to dial to reach them.
+			_lobby_status.text = "Waiting on port %d — dial %s" \
+					% [host_port, ", ".join(_own_addresses())]
 		_:
 			# LEFT ALONE ON PURPOSE, rather than cleared. `Net.leave()` emits
 			# `session_ended` synchronously, so this runs immediately after -- and
@@ -767,6 +814,57 @@ func _refresh_lobby_text() -> void:
 			# the reason matters most, turning a dropped host into a screen that says
 			# nothing. Whoever wants the line blank says so with `_say("")`.
 			pass
+
+
+## Which slot is this device's own player.
+##
+## `local_player_id()` is 0 until a session hands one out, and a plain skirmish never
+## does -- but the human at this keyboard is player 1 there, so 0 reads as slot 0 rather
+## than as "nobody".
+func _local_slot() -> int:
+	var pid := Net.local_player_id()
+	return (pid - 1) if pid > 0 else 0
+
+
+## THE PLAYER LIST. Rendered from the same fields on both devices, which is the whole
+## point: the host's screen said Player 2 was "Open" while the joiner's said the same
+## chair was a "PlayTest AI", and the joining player was reading that about themselves.
+func _refresh_slot_rows() -> void:
+	for i in range(_slot_rows.size()):
+		var name_label: Label = _slot_rows[i]["name"]
+		var status: Label = _slot_rows[i]["status"]
+
+		# "(you)" goes on the NAME, never on the role dropdown. Identity on the identity
+		# label, role in the role picker -- the same separation that got "Open (waiting)"
+		# shortened to "Open". Nothing said which player you were before this.
+		var mine := i == _local_slot() and _roles[i] != Role.PLAYTEST_AI
+		name_label.text = "Player %d (you)" % (i + 1) if mine else "Player %d" % (i + 1)
+		status.text = _slot_status(i, mine)
+
+
+## What to say about one chair. Deliberately one function rather than a host version and
+## a client version: two renderers is how the two devices came to disagree.
+func _slot_status(index: int, mine: bool) -> String:
+	if _roles[index] == Role.PLAYTEST_AI:
+		return "bot"
+
+	if _lobby == Lobby.JOINED:
+		# A client knows its own answer and that player 1 is whoever it dialled. It does
+		# NOT know whether a third player has readied -- the host is the only side
+		# counting agreement -- so it says nothing rather than guessing.
+		if mine:
+			return "READY" if _am_ready else "reviewing..."
+		return "host" if index == 0 else ""
+
+	if _roles[index] == Role.OPEN:
+		if not _slot_peers.has(index):
+			return "waiting for a player"
+		# READY IS THE PART THAT MATTERS. "Joined" only says a socket connected, and
+		# START is held on agreement, so the host has to see which of the two it is
+		# still waiting for.
+		return "READY" if Net.is_peer_ready(int(_slot_peers[index])) else "reviewing..."
+
+	return "this device" if mine else ""
 
 
 ## Every address this device answers on, so the other one knows what to dial.

@@ -35,6 +35,9 @@ func after_each() -> void:
 	Net._peer_players.clear()
 	Net._lobby_ready.clear()
 	Net._lobby_config = null
+	# Reset too, or a test that pretends to be player 2 leaves every later test thinking
+	# slot 2 belongs to it -- which is what "(you)" is read from.
+	Net._local_player_id = 0
 	screen.free()
 
 
@@ -169,8 +172,10 @@ func test_a_peer_arriving_fills_the_slot_and_frees_the_start() -> void:
 	assert_eq(screen.unfilled_slots(), 0)
 	assert_true(screen.can_start(), "the match is now the one that was set up")
 	assert_false(screen._start_button.disabled)
-	assert_true(screen.lobby_text().contains("7777"), "and the peer is shown: %s"
-			% screen.lobby_text())
+	# On the ROW for that chair, not in the transport line -- and no longer by peer id,
+	# which was a number no human cares about.
+	assert_eq((screen._slot_rows[1]["status"] as Label).text, "reviewing...",
+			"the chair shows who is in it")
 
 
 func test_a_slot_with_somebody_in_it_cannot_be_taken_away() -> void:
@@ -351,6 +356,114 @@ func test_a_joiner_with_no_proposal_yet_cannot_agree_to_one() -> void:
 	assert_true(screen._ready_button.disabled)
 	assert_true(screen.status_text().contains("Waiting"), "and says so: %s"
 			% screen.status_text())
+
+
+# ── the player list, and whose colour is whose ──────────────────────────────
+#
+# All four reported by the owner from two clients side by side: the host's screen said
+# Player 2 was "Open" while the joiner's said the same chair was a "PlayTest AI"; nothing
+# said which player you were; the host's list showed only the slots it was waiting on;
+# and a joined player could not change the one thing that tells players apart.
+
+func _row_role(index: int) -> String:
+	var picker: OptionButton = screen._slot_rows[index]["role"]
+	return picker.get_item_text(picker.selected)
+
+
+func _row_name(index: int) -> String:
+	return (screen._slot_rows[index]["name"] as Label).text
+
+
+func _row_status(index: int) -> String:
+	return (screen._slot_rows[index]["status"] as Label).text
+
+
+## A host's proposal: player 1 human, player 2 the open chair the joiner is sitting in.
+##
+## Sets `_roles` directly rather than driving the dropdown, which is the one place in this
+## file that is right to do so: going through the picker would open a real socket from a
+## throwaway screen built only to produce a config.
+func _proposal_with_an_open_seat() -> MatchConfig:
+	var host_side := SkirmishScreen.new()
+	host_side._roles[1] = SkirmishScreen.Role.OPEN
+	var cfg := host_side.build_config()
+	host_side.free()
+	return cfg
+
+
+func test_a_joiner_is_not_told_its_own_seat_is_a_bot() -> void:
+	# The reported bug. The joiner kept its local default roles, so the chair it was
+	# sitting in read "PlayTest AI" -- about itself.
+	var proposal := _proposal_with_an_open_seat()
+	assert_eq(proposal.ai_players, [false, false] as Array[bool],
+			"the host is offering two human seats")
+
+	Net._lobby_config = proposal
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+
+	assert_eq(_row_role(1), "Human", "got %s" % _row_role(1))
+	assert_eq(screen.build_config().ai_players, [false, false] as Array[bool])
+
+
+func test_the_rows_say_which_player_you_are() -> void:
+	# Nothing did before: the only mention was in the transport status line, and the host
+	# named the joiner by peer id.
+	assert_true(_row_name(0).contains("(you)"), "got %s" % _row_name(0))
+	assert_false(_row_name(1).contains("(you)"))
+
+
+func test_a_bot_is_never_you() -> void:
+	# Slot 2 is the PlayTest AI by default, and "Player 2 (you) — bot" would be nonsense.
+	assert_eq(_row_status(1), "bot")
+	assert_false(_row_name(1).contains("(you)"))
+
+
+func test_the_rows_are_the_player_list_on_the_hosts_side() -> void:
+	_open_slot_two()
+	assert_eq(_row_status(1), "waiting for a player")
+	assert_eq(_row_status(0), "this device", "the host is IN the list, not implied by it")
+
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+	assert_eq(_row_status(1), "reviewing...", "joined is not the same as agreed")
+
+	Net._lobby_ready[7777] = true
+	screen._refresh_lobby()
+	assert_eq(_row_status(1), "READY")
+
+
+func test_a_joined_player_owns_their_own_colour_and_nobody_elses() -> void:
+	Net._lobby_config = _proposal_with_an_open_seat()
+	Net._local_player_id = 2
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+
+	assert_false((screen._slot_rows[1]["colour"] as Button).disabled,
+			"player 2's colour is player 2's to change")
+	assert_true((screen._slot_rows[0]["colour"] as Button).disabled,
+			"and player 1's is not")
+
+
+func test_a_hosts_colour_cycle_for_a_peer_never_collides() -> void:
+	# The request carries no colour on purpose: the no-duplicates rule stays with the one
+	# authority that can see every slot.
+	_open_slot_two()
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+
+	for i in range(12):
+		screen._on_lobby_colour_cycle_requested(7777)
+		var cfg := screen.build_config()
+		assert_ne(cfg.colours[0], cfg.colours[1], "collided after %d requests" % (i + 1))
+
+
+func test_a_colour_request_from_a_stranger_changes_nothing() -> void:
+	_open_slot_two()
+	var before := screen.build_config().colours.duplicate()
+	screen._on_lobby_colour_cycle_requested(999999)
+	assert_eq(screen.build_config().colours, before,
+			"a peer holding no slot cannot recolour one")
 
 
 func test_an_unplayable_map_cannot_be_started_and_says_why() -> void:
