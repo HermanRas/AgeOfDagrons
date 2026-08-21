@@ -1172,11 +1172,43 @@ paint. Guarded by a test that compares the client's grid to the server's **tile 
 two implementations of one circle are two implementations that can drift.
 
 After it: 19,528 / 15,384 / 17,040 bytes — and **snapshot size no longer depends on the board at
-all**, so the 8-player map is now the *cheapest* of the three. What is left is `entities`, still
-12× the MTU: `updated` sends every visible entity in full every tick and is "not a real delta" by
-its own header. That is §7.2's delta encoding, deliberately **out** of this batch (6–10 h on its
-own). The other half of (f) is unchanged: snapshots are `unreliable_ordered`, so losing one fragment
-of thirteen still drops the whole packet, and the cheapest fix remains `reliable_ordered`.
+all**, so the 8-player map became the *cheapest* of the three.
+
+**Then the entity payload, and it was not what anyone expected.** Only **36 entities are visible**
+on the 8-player board and they cost 16,024 bytes — about **445 bytes each**. The problem was never
+the entity count, so delta encoding was never the first answer. A field-by-field breakdown
+(`preview_wire_size -- --fields`) found that **half of every entry is the names of its own fields**:
+248 bytes of a town centre's 472, because `var_to_bytes` writes a dictionary key as a
+length-prefixed string every time it appears. Three fixes, none of them a delta:
+
+1. **`footprint` is not sent.** Static content the client derives from `def_id` — a building's off
+   its def, a resource's from `footprint_for_size` with the `size_class` already on the wire. Same
+   argument that took `vision_range` off it. 68 B per building and resource entry.
+2. **`pos` is a `Vector2i`, not `{"x": .., "y": ..}`** — 48 bytes to carry two small integers,
+   because the nested dictionary re-encodes "x" and "y" per entry. Twelve. Safe here and
+   deliberately not in `MapData`, which notes the opposite: a saved map goes through JSON and a
+   snapshot never does.
+3. **Shape tables.** Entities come in a handful of shapes, so field names go **once per shape per
+   snapshot** rather than once per entity: `updated` becomes `tables` of `{keys, rows}`. Done at
+   the **transport boundary** (`Net._broadcast_snapshot` / `_recv_snapshot`), not in `build()`, so
+   the simulation still produces readable dictionaries and every other reader is untouched.
+
+| board | start of 12.1f | after fog | after 1 & 2 | after 3 | fragments |
+|---|---|---|---|---|---|
+| 96×96 | 28,768 | 19,528 | 14,840 | **7,528** | 21 → 6 |
+| 128×128 | 31,768 | 15,384 | 11,840 | **6,328** | 23 → 5 |
+| 192×192 | 53,928 | 17,040 | 13,080 | **6,824** | 39 → 5 |
+
+Confirmed on the real transport: ENet's own warning went from **18,532 bytes to 4,360**.
+
+**What is left of (f):** snapshots are still `unreliable_ordered` and still over the MTU, so losing
+one fragment loses the snapshot — but the arithmetic has changed completely. At 1% packet loss, 39
+fragments lost **32%** of snapshots; 5 fragments lose **5%**. The cheapest fix remains
+`reliable_ordered`, and it now wants measuring on real WiFi rather than assuming, because
+head-of-line blocking on a stream where each snapshot supersedes the last may cost more than it
+saves. §7.2's delta encoding is still **out** of this batch (6–10 h) and is no longer the obvious
+next move: the remaining payload is mostly resource nodes, which barely change, so "send statics
+only when they change" would need the absence-means-invisible rule replaced with something else.
 
 **Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot processes
 on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable and

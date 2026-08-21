@@ -586,7 +586,10 @@ func _recv_command(d: Dictionary) -> void:
 
 @rpc("authority", "call_local", "unreliable_ordered")
 func _recv_snapshot(d: Dictionary) -> void:
-	snapshot_received.emit(d)
+	# Unpacked HERE, at the one point a snapshot arrives, so everything downstream keeps
+	# reading the readable dictionary form (12.1f). A snapshot that was never packed --
+	# a test's, a preview's -- passes through untouched.
+	snapshot_received.emit(SnapshotSystem.from_wire(d))
 
 
 ## One player's snapshot to THAT player's peer, and to nobody else.
@@ -604,6 +607,9 @@ func _recv_snapshot(d: Dictionary) -> void:
 ## may have NO peer: the skirmish opponent has none today and an AI (12.2a) never
 ## will, and their snapshot should go nowhere rather than to whoever is listening.
 func _broadcast_snapshot(player_id: int, snap: Dictionary) -> void:
+	# Packed ONCE per player rather than per peer, and only here: the transport is what
+	# cares how a snapshot is encoded, not the simulation that produced it (12.1f).
+	var wire := SnapshotSystem.to_wire(snap)
 	for peer in _peer_players:
 		if int(_peer_players[peer]) == player_id:
-			rpc_id(int(peer), "_recv_snapshot", snap)
+			rpc_id(int(peer), "_recv_snapshot", wire)

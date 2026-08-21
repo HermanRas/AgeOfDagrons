@@ -210,10 +210,22 @@ crossing in front of a building.
       all — `ClientFog` computes it from the client's own entities and the map it already
       has, which took the 8-player board from 53,928 bytes to 17,040 and 39 fragments to
       13. Snapshot size no longer depends on the board. See PLAN.md §12.1f for the option
-      that was not taken and the drawback of the one that was. **Still open:** `entities`
-      is 16 KB of the remainder, sent in full every tick with no delta, and the transport
-      is still `unreliable_ordered`, so losing one fragment of thirteen still drops the
-      whole snapshot. ENet says so itself, on the host, during an ordinary two-process match:
+      that was not taken and the drawback of the one that was.
+
+      **The entity payload is fixed too, and not by delta encoding.** Only 36 entities
+      are visible on the 8-player board and they cost 16 KB — ~445 bytes each — because
+      half of every entry was the names of its own fields. `footprint` is no longer sent
+      (the client derives it from `def_id`), `pos` is a `Vector2i` rather than a
+      two-key dictionary, and entries are packed into per-shape tables so field names go
+      once per snapshot instead of once per entity. **53,928 → 6,824 bytes, 39 fragments
+      → 5**; ENet's live warning went from 18,532 to 4,360.
+
+      **Still open:** the transport is `unreliable_ordered` and still over the MTU, so
+      losing one fragment loses the snapshot. The arithmetic is far better — at 1% loss,
+      39 fragments cost 32% of snapshots and 5 cost 5% — but it is not nothing.
+      `reliable_ordered` is the cheap fix and wants measuring on real WiFi first, since
+      head-of-line blocking on a stream where each snapshot supersedes the last may cost
+      more than it saves. ENet says so itself, on the host, during an ordinary two-process match:
 
           WARNING: Sending 18532 bytes unreliably which is above the MTU (1392),
                    this will result in higher packet loss

@@ -119,6 +119,79 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 	}
 
 
+# ── the wire form (PLAN.md 12.1f) ───────────────────────────────────────────
+#
+# THE SAME FACTS WITHOUT PAYING FOR THE FIELD NAMES ONCE PER ENTITY.
+#
+# `var_to_bytes` writes a dictionary key as a length-prefixed string every time it
+# appears, and half of every entry was its own field names -- 248 bytes of a town centre's
+# 472, measured with `dev_preview/preview_wire_size.tscn -- --fields`. Only 36 entities are
+# visible on an 8-player board, so the cost was never the entity count; it was 36 copies of
+# the same dozen words.
+#
+# Entities come in a handful of SHAPES -- a unit, a building, a resource node, and the
+# remembered variants with their live fields stripped -- so the names go once per shape per
+# snapshot instead of once per entity.
+#
+# AT THE TRANSPORT BOUNDARY, NOT IN `build()`. The simulation produces a snapshot of
+# readable dictionaries and `Net` decides how to encode it. That keeps every other reader
+# -- the view, the tests, the previews, the AI -- working in dictionaries, and leaves
+# exactly one pair of functions that knows the packing exists. The cost is that a packet
+# capture shows a table rather than a self-describing entry per entity; the field names are
+# still in it, once.
+
+## Pack for sending. `updated` becomes `tables`, a distinct key so unpacking never has to
+## guess which form it is looking at.
+static func to_wire(snap: Dictionary) -> Dictionary:
+	var entries: Variant = snap.get("updated", null)
+	if not (entries is Array):
+		return snap                       # nothing to pack, or already packed
+
+	var shapes: Dictionary = {}
+	for e in (entries as Array):
+		var entry: Dictionary = e
+		var keys: Array = entry.keys()
+		# SORTED, so one shape always packs to one table rather than to several that
+		# differ only in the order their fields happened to be written.
+		keys.sort()
+		var signature := ",".join(keys)
+		if not shapes.has(signature):
+			shapes[signature] = {"keys": keys, "rows": []}
+		var row: Array = []
+		for k in keys:
+			row.append(entry[k])
+		(shapes[signature]["rows"] as Array).append(row)
+
+	var out := snap.duplicate()
+	out.erase("updated")
+	out["tables"] = shapes.values()
+	return out
+
+
+## Unpack on arrival. A snapshot with no `tables` is passed through untouched, so a test or
+## a preview can hand a plain one straight to `snapshot_received` without going through the
+## transport at all.
+static func from_wire(snap: Dictionary) -> Dictionary:
+	if not snap.has("tables"):
+		return snap
+
+	var updated: Array[Dictionary] = []
+	for t in (snap["tables"] as Array):
+		var table: Dictionary = t
+		var keys: Array = table.get("keys", [])
+		for r in (table.get("rows", []) as Array):
+			var row: Array = r
+			var entry: Dictionary = {}
+			for i in range(mini(keys.size(), row.size())):
+				entry[keys[i]] = row[i]
+			updated.append(entry)
+
+	var out := snap.duplicate()
+	out.erase("tables")
+	out["updated"] = updated
+	return out
+
+
 ## What `viewer` is told about `e` this tick: its full snapshot, a remembered
 ## version of it, or {} for "not sent".
 static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictionary:

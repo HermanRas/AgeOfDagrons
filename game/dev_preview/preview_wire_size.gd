@@ -96,7 +96,10 @@ func _measure(p_seed: int, slots: int, ticks: int) -> void:
 
 
 func _report(w: SimWorld, tick: int) -> void:
-	var snap := SnapshotSystem.build(w, 1)
+	# THE WIRE FORM, which is what `Net._broadcast_snapshot` actually sends: `build()`
+	# produces readable dictionaries and the transport packs them (12.1f). Measuring the
+	# unpacked form would report a payload nobody transmits.
+	var snap := SnapshotSystem.to_wire(SnapshotSystem.build(w, 1))
 	var total := var_to_bytes(snap).size()
 
 	# Each component measured on its own, so the total is attributable rather than just
@@ -108,7 +111,8 @@ func _report(w: SimWorld, tick: int) -> void:
 	# when the key is absent -- what an empty PackedByteArray encodes to -- so anything
 	# above that means the grid has come back.
 	var vision := var_to_bytes(snap.get("vision", PackedByteArray())).size()
-	var entities := var_to_bytes(snap.get("updated", [])).size()
+	# `tables` since 12.1f -- the packed form of what `updated` used to carry.
+	var entities := var_to_bytes(snap.get("tables", snap.get("updated", []))).size()
 	var state := var_to_bytes(snap.get("player_state", {})).size()
 
 	var frags := int(ceil(float(total) / float(MTU)))
@@ -130,7 +134,10 @@ func _report(w: SimWorld, tick: int) -> void:
 func _report_entities(w: SimWorld, snap: Dictionary) -> void:
 	var counts := {"unit": 0, "building": 0, "resource": 0, "remembered": 0}
 	var bytes := {"unit": 0, "building": 0, "resource": 0, "remembered": 0}
-	for entry in snap.get("updated", []):
+	# Unpacked back to entries to count them by kind. The per-kind byte figures are
+	# therefore the UNPACKED cost, and the `entities` column above is the packed one --
+	# the gap between the two is what the shape tables saved.
+	for entry in SnapshotSystem.from_wire(snap).get("updated", []):
 		var key := "resource"
 		if bool(entry.get("remembered", false)):
 			key = "remembered"
