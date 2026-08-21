@@ -48,40 +48,49 @@ func _process(_delta: float) -> void:
 			_report_screen()
 			_shoot("skirmish_screen")
 		1:
+			# EIGHT SLOTS, SIX CLOSED: two players on a board with eight players' worth of
+			# room. The picker chooses the ROOM; the roles choose who is in it.
+			_pick_slots(8)
+		2:
+			_report_slots()
+			_shoot("skirmish_eight_slots")
+		3:
+			_pick_slots(2)
+		4:
 			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
 			# is the hosting path and not a simulation of it.
 			_open_a_slot()
-		2:
+		5:
 			_report_lobby()
 			_shoot("skirmish_lobby_waiting")
-		3:
+		6:
 			# A peer arriving. The connection itself is (g)'s ground already proven on two
 			# devices; what is unproven is that this SCREEN shows the chair being taken
 			# and lets START go ahead once it is.
 			_screen._on_peer_joined(7777)
 			_hold(LOBBY_FRAMES)
-		4:
+		7:
 			_report_lobby()
 			_shoot("skirmish_lobby_filled")
-		5:
+		8:
 			# The JOINING device's view of the same screen -- the one state that cannot be
 			# reached from here honestly, since a real one needs a second process dialling
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
 			_join_someone_elses_match()
-		6:
+		9:
 			_shoot("skirmish_lobby_joined")
-		7:
+		10:
 			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
 			# most here is the one where adding multiplayer broke playing alone.
 			_close_the_slot()
-		8:
+		11:
 			_start_the_match()
-		9:
+		12:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -126,6 +135,33 @@ func _pick_role(index: int, role: SkirmishScreen.Role) -> void:
 	var item := picker.get_item_index(int(role))
 	picker.select(item)
 	picker.item_selected.emit(item)
+
+
+## Choose how much ROOM the map has, through the picker's own signal.
+func _pick_slots(n: int) -> void:
+	var item := _screen._count_picker.get_item_index(n)
+	_screen._count_picker.select(item)
+	_screen._count_picker.item_selected.emit(item)
+	_hold(LOBBY_FRAMES)
+
+
+func _report_slots() -> void:
+	var cfg := _screen.build_config()
+	print("slots: %d rows, %d players, map %dx%d (room for %d), %d starts, startable %s"
+			% [_screen._slot_rows.size(), cfg.player_ids.size(),
+			cfg.map_size.x, cfg.map_size.y, _screen._slots,
+			_screen.map_data().starts.size(), _screen.can_start()])
+	print("    status: %s" % _screen.status_text())
+	var starts := _screen.map_data().starts
+	if starts.size() == 2:
+		# The reason the two counts are separate: two players on a big board must not be
+		# crammed into one corner of it.
+		var apart := Vector2(starts[0]).distance_to(Vector2(starts[1]))
+		print("    the two starts are %d tiles apart on a %d board"
+				% [int(apart), _screen.map_data().size.x])
+	if _screen._slot_rows.size() != _screen._slots:
+		push_warning("preview_skirmish: %d rows for %d slots"
+				% [_screen._slot_rows.size(), _screen._slots])
 
 
 func _open_a_slot() -> void:

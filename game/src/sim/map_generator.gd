@@ -139,9 +139,26 @@ static func side_for(players: int) -> int:
 
 ## A validated map. `meta.problems` is empty on success; if it is not, every attempt
 ## failed and the caller should refuse to start (1.6 disables Start on it).
+##
+## `size_players` SIZES THE MAP FOR A DIFFERENT NUMBER THAN IT PLACES. Two counts,
+## because the lobby learned to close a slot (12.1c): choosing eight players and closing
+## six is a request for a map with eight players' worth of room and two people in it.
+##
+## Passing `players` alone would ruin exactly that. Starts are spread evenly around a
+## ring for the count they are placed for, so two starts on an eight-start ring sit 45
+## degrees apart -- two players cheek by jowl in one corner of a 192x192 board, which is
+## the opposite of what asking for a big map meant. Placing two starts on a map SIZED for
+## eight puts them 180 degrees apart, which is.
+##
+## 0 means "the same as players", so every existing caller keeps the square map it had.
 static func generate(p_seed: int, type: Type, players: int,
-		attempts: int = MAX_ATTEMPTS) -> MapData:
+		size_players: int = 0, attempts: int = MAX_ATTEMPTS) -> MapData:
 	var count := clampi(players, MIN_PLAYERS, MAX_PLAYERS)
+	var size_count := clampi(size_players if size_players > 0 else count,
+			MIN_PLAYERS, MAX_PLAYERS)
+	# A map cannot be smaller than the people standing on it. Guards a caller that closes
+	# slots and then raises the count of open ones without regenerating.
+	size_count = maxi(size_count, count)
 	var last: MapData = null
 
 	for attempt in range(maxi(1, attempts)):
@@ -150,7 +167,7 @@ static func generate(p_seed: int, type: Type, players: int,
 		# was shown. Mixed rather than incremented so consecutive seeds do not
 		# produce near-identical maps.
 		var attempt_seed := p_seed ^ (attempt * 0x9E3779B9)
-		last = _generate_once(attempt_seed, type, count)
+		last = _generate_once(attempt_seed, type, count, size_count)
 		var problems := MapValidator.problems(last)
 		last.meta["seed"] = p_seed
 		last.meta["attempt"] = attempt
@@ -161,7 +178,7 @@ static func generate(p_seed: int, type: Type, players: int,
 	return last
 
 
-static func _generate_once(p_seed: int, type: Type, count: int) -> MapData:
+static func _generate_once(p_seed: int, type: Type, count: int, size_count: int) -> MapData:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = p_seed
 
@@ -169,7 +186,8 @@ static func _generate_once(p_seed: int, type: Type, count: int) -> MapData:
 	if resolved == Type.RANDOM:
 		resolved = [Type.ISLAND, Type.RIVER, Type.DESERT, Type.FOREST][rng.randi_range(0, 3)]
 
-	var side := side_for(count)
+	# Sized for one count, populated for another. See `generate`.
+	var side := side_for(size_count)
 	var data := MapData.create(Vector2i(side, side))
 
 	# 1 where a tree MAY stand. Kept beside the terrain rather than painted into it as
@@ -203,7 +221,11 @@ static func _generate_once(p_seed: int, type: Type, count: int) -> MapData:
 	_place_trees(data, wood, claimed)
 
 	data.meta["type"] = int(resolved)
+	# BOTH counts recorded. `players` is how many start here; `size_players` is how many
+	# it was sized for, and they differ whenever the lobby closed a slot. A saved map
+	# (2.4c) that recorded only one of them could not be reopened as the map it was.
 	data.meta["players"] = count
+	data.meta["size_players"] = size_count
 	data.meta["format_version"] = MapData.FORMAT_VERSION
 	return data
 

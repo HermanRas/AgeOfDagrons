@@ -41,6 +41,43 @@ func test_player_count_is_clamped_to_what_the_generator_supports() -> void:
 	assert_eq(MapGenerator.side_for(99), MapGenerator.side_for(8), "and 99 down to 8")
 
 
+# ── sized for one count, populated for another (12.1c's closed slots) ───────
+
+func test_a_map_can_be_sized_for_more_players_than_it_places() -> void:
+	# What "eight players, six closed" asks for: eight players' worth of room with two
+	# people in it.
+	var data := MapGenerator.generate(7, MapGenerator.Type.FOREST, 2, 8)
+	assert_eq(data.size.x, MapGenerator.side_for(8), "sized for eight")
+	assert_eq(data.starts.size(), 2, "populated for two")
+	assert_eq(int(data.meta["players"]), 2)
+	assert_eq(int(data.meta["size_players"]), 8, "both counts recorded")
+
+
+func test_two_players_on_a_big_board_start_far_apart() -> void:
+	# THE REASON THE TWO COUNTS ARE SEPARATE. Starts are spread evenly around a ring for
+	# the count they are PLACED for, so generating eight and using two would put them 45
+	# degrees apart -- two players crammed into one corner of a 192x192 board, which is
+	# the opposite of what asking for a big map meant. Placing two spreads them 180.
+	var data := MapGenerator.generate(7, MapGenerator.Type.FOREST, 2, 8)
+	var apart := Vector2(data.starts[0]).distance_to(Vector2(data.starts[1]))
+	assert_true(apart > float(data.size.x) * 0.5,
+			"%d tiles apart on a %d board" % [int(apart), data.size.x])
+
+
+func test_a_map_is_never_smaller_than_the_people_on_it() -> void:
+	# A caller that closed slots and then reopened them without regenerating.
+	var data := MapGenerator.generate(3, MapGenerator.Type.FOREST, 8, 2)
+	assert_eq(data.size.x, MapGenerator.side_for(8), "the bigger of the two wins")
+	assert_eq(data.starts.size(), 8)
+
+
+func test_omitting_the_size_count_leaves_every_existing_caller_alone() -> void:
+	var with_default := MapGenerator.generate(11, MapGenerator.Type.DESERT, 4)
+	var spelled_out := MapGenerator.generate(11, MapGenerator.Type.DESERT, 4, 4)
+	assert_eq(with_default.size, spelled_out.size)
+	assert_eq(with_default.terrain, spelled_out.terrain, "and the same map, byte for byte")
+
+
 # ── every start is playable (fix 3, fix 4) ──────────────────────────────────
 
 func test_every_player_gets_a_town_centre_villagers_and_a_scout() -> void:

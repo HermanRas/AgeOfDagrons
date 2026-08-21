@@ -128,6 +128,112 @@ func test_choosing_a_role_reaches_the_config() -> void:
 	assert_eq(screen.build_config().ai_players, [false, true] as Array[bool])
 
 
+# ── slots are not players (2-8, and closing the rest) ──────────────────────
+#
+# The owner's ask: pick eight and close six, and play two-handed on a map with eight
+# players' worth of room. The count picker and the player list stopped being the same
+# number, which is the whole of it.
+
+func _pick_slots(n: int) -> void:
+	var item := screen._count_picker.get_item_index(n)
+	screen._count_picker.select(item)
+	screen._count_picker.item_selected.emit(item)
+
+
+func test_the_count_picker_offers_two_through_eight() -> void:
+	# Pinned at 2 until now, disabled and visible so the limit did not look like an
+	# oversight. The limit is gone.
+	assert_false(screen._count_picker.disabled)
+	for n in range(2, 9):
+		var item := screen._count_picker.get_item_index(n)
+		assert_true(item >= 0, "%d players is offered" % n)
+		assert_false(screen._count_picker.is_item_disabled(item), "%d is selectable" % n)
+
+
+func test_more_slots_is_a_bigger_map_and_not_more_opponents() -> void:
+	# Raising the count must widen the BOARD, not silently conjure six opponents.
+	_pick_slots(8)
+	assert_eq(screen._slot_rows.size(), 8, "eight rows to choose from")
+	assert_eq(screen.build_config().player_ids, [1, 2] as Array[int],
+			"still the default two players")
+	assert_eq(screen.map_data().size.x, MapGenerator.side_for(8), "on a map for eight")
+
+
+func test_eight_slots_with_six_closed_is_two_players_on_a_big_map() -> void:
+	# The owner's sentence, as a test.
+	_pick_slots(8)
+	for i in range(2, 8):
+		assert_eq(screen._roles[i], SkirmishScreen.Role.CLOSED, "slot %d starts closed" % (i + 1))
+
+	var cfg := screen.build_config()
+	assert_eq(cfg.player_ids, [1, 2] as Array[int])
+	assert_eq(cfg.colours.size(), 2, "two colours, not eight")
+	assert_eq(cfg.ai_players, [false, true] as Array[bool])
+	assert_eq(cfg.map_size.x, MapGenerator.side_for(8), "room for eight")
+	assert_eq(screen.map_data().starts.size(), 2, "and two starts on it")
+	assert_true(screen.can_start(), "startable: %s" % screen.status_text())
+
+
+func test_opening_a_closed_slot_puts_a_player_back() -> void:
+	_pick_slots(8)
+	_pick_role(4, SkirmishScreen.Role.PLAYTEST_AI)
+	var cfg := screen.build_config()
+	assert_eq(cfg.player_ids, [1, 2, 3] as Array[int], "compacted, not [1, 2, 5]")
+	assert_eq(cfg.ai_players, [false, true, true] as Array[bool])
+	assert_eq(screen.map_data().starts.size(), 3)
+
+
+func test_closing_one_slot_too_many_is_refused_and_says_why() -> void:
+	# Easy to do and impossible to diagnose from a greyed button alone.
+	_pick_role(1, SkirmishScreen.Role.CLOSED)
+	assert_eq(screen.build_config().player_ids, [1] as Array[int])
+	assert_false(screen.can_start())
+	assert_true(screen.status_text().contains("a match needs"),
+			"says what is wrong: %s" % screen.status_text())
+
+
+func test_a_closed_slot_says_it_is_keeping_its_room() -> void:
+	# Blank would read as an oversight rather than as a decision.
+	_pick_slots(4)
+	assert_true(_row_status(3).contains("room"), "got %s" % _row_status(3))
+
+
+func test_closed_slots_do_not_hoard_the_colours() -> void:
+	# Counting a closed slot's colour as taken would leave two players on an eight-slot
+	# board with six colours spoken for by empty chairs.
+	_pick_slots(8)
+	var seen := {}
+	for i in range(12):
+		screen._on_colour_pressed(0)
+		seen[screen.build_config().colours[0]] = true
+	assert_true(seen.size() >= 6,
+			"player 1 could reach %d colours, not just the unclosed ones" % seen.size())
+
+
+func test_the_status_line_names_both_numbers() -> void:
+	# They are different numbers now, and the gap between them is the point.
+	_pick_slots(8)
+	assert_true(screen.status_text().contains("2 players"), "got %s" % screen.status_text())
+	assert_true(screen.status_text().contains("room for 8"), "got %s" % screen.status_text())
+
+
+func test_a_joiner_shown_a_bigger_match_grows_its_own_rows() -> void:
+	# A host on eight slots and a client still showing two would leave the host's other
+	# players with no row to appear in.
+	var host_side := SkirmishScreen.new()
+	host_side._slots = 4
+	host_side._roles[2] = SkirmishScreen.Role.PLAYTEST_AI
+	host_side._roles[3] = SkirmishScreen.Role.PLAYTEST_AI
+	var proposal := host_side.build_config()
+	host_side.free()
+
+	assert_eq(proposal.player_ids.size(), 4, "a four-player match")
+	Net._lobby_config = proposal
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+	assert_eq(screen._slot_rows.size(), 4, "the joiner shows all four")
+
+
 # ── the lobby half (12.1c) ─────────────────────────────────────────────────
 #
 # The screen's third state. These drive the real handlers and open a real socket, for

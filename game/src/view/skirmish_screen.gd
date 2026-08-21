@@ -29,7 +29,12 @@ extends Control
 
 ## What fills a player slot. `OPEN` is the multiplayer half: the slot is advertised and a
 ## joining peer takes it (12.1c).
-enum Role { HUMAN, PLAYTEST_AI, OPEN }
+##
+## `CLOSED` is a slot with NOBODY in it, and it is what makes the player count and the map
+## size two different things: eight slots with six closed is a two-player match on a map
+## with eight players' worth of room. Its space on the map is still reserved -- the board
+## is sized for every slot -- it simply holds no player, no base and no bot.
+enum Role { HUMAN, PLAYTEST_AI, OPEN, CLOSED }
 
 ## Which side of a network match this screen is on, which is the third thing it is.
 ##
@@ -50,17 +55,33 @@ const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 const _PREVIEW_SIZE := Vector2(320.0, 320.0)
 const _SEED_MAX := 999999
 
-## Player counts the generator supports. Only 2 is offered while nothing else is
-## tested; shown DISABLED rather than hidden, so the limit is visible rather than
-## looking like an oversight.
-const _MAX_OFFERED_PLAYERS := 2
+## Slot counts offered, which is the whole 2-8 the generator supports. Was pinned at 2
+## while nothing else was tested; the generator has validated every type at every count
+## since 2.4b, and CLOSED means a big board no longer forces a big match.
+const _MAX_OFFERED_PLAYERS := MapGenerator.MAX_PLAYERS
+
+## A match needs two sides. Fewer active slots than this is a lobby, not a game -- and
+## `MapValidator` says the same thing from the other end ("a match needs at least 2
+## starts"), so without this the generator would silently clamp up to 2 and hand back a
+## map with a start nobody is standing on.
+const _MIN_PLAYERS := MapGenerator.MIN_PLAYERS
+
+## HOW MANY SLOTS, WHICH IS HOW BIG THE MAP IS -- not how many people are playing.
+##
+## The two used to be one number, and separating them is the whole of this feature: eight
+## slots with six CLOSED is a request for eight players' worth of room with two people in
+## it. `_active_slots()` is the other number, and every place that used to say `_players`
+## now has to say which one it meant.
+var _slots: int = 2
 
 var _seed: int = 1
 var _type: MapGenerator.Type = MapGenerator.Type.RANDOM
-var _players: int = 2
 var _mode: MatchConfig.Mode = MatchConfig.Mode.LAST_MAN_STANDING
-var _roles: Array[Role] = [Role.HUMAN, Role.PLAYTEST_AI]
-var _colours: Array[int] = [2, 1]          # yellow against red, the owner's default
+
+## Sized for the maximum, so raising the slot count never has to grow them mid-change.
+## Slots past `_slots` are simply not looked at.
+var _roles: Array[Role] = []
+var _colours: Array[int] = []
 
 var _data: MapData = null
 
@@ -103,6 +124,7 @@ var _reroll_button: Button
 var _count_picker: OptionButton
 var _mode_picker: OptionButton
 var _ready_button: Button
+var _slot_box: VBoxContainer
 
 ## This device's own answer, on a joined client. Reset to false whenever a new proposal
 ## arrives, because agreeing to one match is not agreeing to the next one.
@@ -127,6 +149,9 @@ func _init() -> void:
 	var page := VBoxContainer.new()
 	page.add_theme_constant_override("separation", 12)
 	margin.add_child(page)
+
+	# Before any row is built, since a row reads the role and colour it is showing.
+	_seed_slot_defaults()
 
 	page.add_child(_heading("SKIRMISH"))
 	page.add_child(_build_join_row())
@@ -256,11 +281,16 @@ func _build_match_column() -> Control:
 			_count_picker.set_item_disabled(_count_picker.item_count - 1, true)
 	_count_picker.select(0)
 	_count_picker.disabled = _MAX_OFFERED_PLAYERS <= MapGenerator.MIN_PLAYERS
+	_count_picker.item_selected.connect(_on_count_selected)
 	count_row.add_child(_count_picker)
 	column.add_child(count_row)
 
-	for i in range(_players):
-		column.add_child(_build_slot_row(i))
+	# The rows live in their own box so changing the slot count can rebuild just them,
+	# without disturbing the count picker above or the victory row below.
+	_slot_box = VBoxContainer.new()
+	_slot_box.add_theme_constant_override("separation", 8)
+	column.add_child(_slot_box)
+	_rebuild_slot_rows()
 
 	var mode_row := HBoxContainer.new()
 	mode_row.add_child(_label("Victory"))
@@ -298,6 +328,47 @@ func _build_match_column() -> Control:
 	return column
 
 
+## Default roles and colours for as many slots as could ever be shown.
+##
+## Slot 1 is the human at this device, slot 2 the PlayTest AI -- the owner's default, and
+## the one press-to-play skirmish 1.6 exists to protect. Everything past that starts
+## CLOSED: raising the count to eight should widen the BOARD, not silently conjure six
+## opponents nobody asked for.
+func _seed_slot_defaults() -> void:
+	_roles.clear()
+	_colours.clear()
+	for i in range(_MAX_OFFERED_PLAYERS):
+		_roles.append(Role.HUMAN if i == 0 else (
+				Role.PLAYTEST_AI if i == 1 else Role.CLOSED))
+	# Yellow against red first, the owner's default; the rest take whatever is left, since
+	# two players sharing a colour is an unplayable match (§1) at any count.
+	var preferred := [2, 1]
+	for i in range(_MAX_OFFERED_PLAYERS):
+		if i < preferred.size():
+			_colours.append(int(preferred[i]))
+			continue
+		for candidate in range(_palette_size()):
+			if not _colours.has(candidate):
+				_colours.append(candidate)
+				break
+	while _colours.size() < _MAX_OFFERED_PLAYERS:
+		_colours.append(0)          # a palette smaller than the slot count; last resort
+
+
+## Tear the rows down and build exactly `_slots` of them.
+##
+## Rebuilt rather than shown and hidden: a hidden row still holds a role that
+## `build_config()` would read, and the bug that would produce -- a player in the match
+## who is not on the screen -- is the worst kind available here.
+func _rebuild_slot_rows() -> void:
+	for child in _slot_box.get_children():
+		_slot_box.remove_child(child)
+		child.queue_free()
+	_slot_rows.clear()
+	for i in range(_slots):
+		_slot_box.add_child(_build_slot_row(i))
+
+
 func _build_slot_row(index: int) -> Control:
 	var row := HBoxContainer.new()
 	var name_label := _label("Player %d" % (index + 1))
@@ -316,7 +387,8 @@ func _build_slot_row(index: int) -> Control:
 	# as a contradiction the moment somebody was sitting in it -- a slot showing "Open
 	# (waiting)" directly above "Player 2: peer 7777 joined".
 	role.add_item("Open", int(Role.OPEN))
-	role.select(int(_roles[index]))
+	role.add_item("Closed", int(Role.CLOSED))
+	role.select(role.get_item_index(int(_roles[index])))
 	role.item_selected.connect(_on_role_selected.bind(index))
 	row.add_child(role)
 
@@ -351,14 +423,25 @@ func _button(text: String, on_pressed: Callable) -> Button:
 ## Public because it is the whole behaviour of the screen and a test wants to drive it
 ## without pressing anything.
 func regenerate() -> void:
-	_data = MapGenerator.generate(_seed, _type, _players)
+	# TWO COUNTS. The map is SIZED for every slot and POPULATED for the players actually
+	# in them, which is what makes "eight players, six closed" a big empty board for two
+	# rather than two starts crammed into one corner of it.
+	_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
 	_preview.show_map(_data)
 
 	var problems: Array = _data.meta.get("problems", [])
-	if problems.is_empty():
-		_status.text = "%s, %d x %d — ready" % [
+	var active := _active_slots().size()
+	if active < _MIN_PLAYERS:
+		# Said rather than shown as a dead button. Closing one slot too many is easy to do
+		# and impossible to diagnose from a greyed START.
+		_status.text = "%d player — close fewer slots, a match needs %d" % [active, _MIN_PLAYERS]
+		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+	elif problems.is_empty():
+		# The player count AND the size, because they are now different numbers and the
+		# whole point of closing a slot is the gap between them.
+		_status.text = "%s, %d x %d — %d players on room for %d — ready" % [
 				MapGenerator.type_name(_data.meta.get("type", _type) as MapGenerator.Type),
-				_data.size.x, _data.size.y]
+				_data.size.x, _data.size.y, active, _slots]
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 	else:
 		# A MAP THAT FAILS VALIDATION CANNOT BE STARTED (2.4b's gate). Saying why beats
@@ -387,8 +470,16 @@ func build_config() -> MatchConfig:
 	cfg.player_ids = []
 	cfg.colours = []
 	cfg.ai_players = []
-	for i in range(_players):
-		cfg.player_ids.append(i + 1)
+	# ONLY THE SLOTS SOMEBODY IS IN, numbered 1..N over those.
+	#
+	# Compacted rather than keeping the slot number as the player id, because `Net` hands
+	# out the lowest free id to a joining peer and `MapGen.build_from` resolves a map's
+	# player index by POSITION in `world.players` -- so a match whose ids skipped 3 and 4
+	# would hand somebody else's base to the wrong player. Compaction keeps every one of
+	# those assumptions true, and the closed slots have already done their job by the time
+	# this runs: they set the size of the board.
+	for i in _active_slots():
+		cfg.player_ids.append(cfg.player_ids.size() + 1)
 		cfg.colours.append(_colours[i])
 		cfg.ai_players.append(_roles[i] == Role.PLAYTEST_AI)
 	cfg.seed = _seed
@@ -411,7 +502,11 @@ func map_data() -> MapData:
 ##      match one player short of the one the host set up.
 ##   3. Not a joined client. Over there START belongs to the host, and the local button
 ##      would be a second, competing authority over when the match begins.
-##   4. **Everybody has agreed.** A host who can start over a player who has not said
+##   4. **Two players at least.** Closing slots is what makes this reachable: eight
+##      slots with seven closed is one player and no match. Refused here rather than
+##      left to the generator, which clamps a count of 1 up to 2 and would hand back a
+##      map with a start nobody is standing on.
+##   5. **Everybody has agreed.** A host who can start over a player who has not said
 ##      READY is a host who can drop somebody into a match they never got to look at,
 ##      which is the whole reason the lobby channel exists. Agreement is also cancelled
 ##      whenever a setting changes, so this cannot be satisfied by a stale yes.
@@ -419,6 +514,8 @@ func can_start() -> bool:
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
 	if _lobby == Lobby.JOINED:
+		return false
+	if _active_slots().size() < _MIN_PLAYERS:
 		return false
 	if unfilled_slots() != 0:
 		return false
@@ -448,6 +545,25 @@ func lobby_text() -> String:
 
 
 # ── handlers ────────────────────────────────────────────────────────────────
+
+## More or fewer SLOTS, which is a bigger or smaller map. Rebuilds the rows and
+## regenerates, because the board size follows this number directly.
+func _on_count_selected(item: int) -> void:
+	_slots = _count_picker.get_item_id(item)
+	_rebuild_slot_rows()
+	regenerate()
+	_refresh_lobby()
+
+
+## Slots with somebody or something in them: the actual players. CLOSED slots reserve
+## their room on the board and hold nobody, which is the whole point of them.
+func _active_slots() -> Array[int]:
+	var out: Array[int] = []
+	for i in range(_slots):
+		if _roles[i] != Role.CLOSED:
+			out.append(i)
+	return out
+
 
 func _on_type_selected(index: int) -> void:
 	_type = _type_picker.get_item_id(index) as MapGenerator.Type
@@ -491,10 +607,18 @@ func _on_colour_pressed(index: int) -> void:
 ## Step a slot to the next colour nobody else holds. The host's rule, applied whether the
 ## host pressed the button or a joined player asked it to.
 func _cycle_colour(index: int) -> void:
+	# Taken by an ACTIVE slot, not by any slot. A closed slot holds no player, so its
+	# colour is nobody's -- and counting it would leave two players on an eight-slot board
+	# with six colours spoken for by empty chairs and almost nothing to cycle through.
+	var taken: Array[int] = []
+	for i in _active_slots():
+		if i != index:
+			taken.append(_colours[i])
+
 	var count := _palette_size()
 	for step in range(1, count + 1):
 		var candidate := (_colours[index] + step) % count
-		if not _colours.slice(0, _players).has(candidate):
+		if not taken.has(candidate):
 			_colours[index] = candidate
 			_refresh_colour_button(index)
 			return
@@ -519,7 +643,18 @@ func _on_lobby_colour_cycle_requested(peer_id: int) -> void:
 ## a listening host are the same fact stated twice. There is no separate "host" button to
 ## forget to press, and no way to advertise a slot nobody can reach.
 func _on_role_selected(item: int, index: int) -> void:
+	var was_active := _active_slots().size()
 	_roles[index] = (_slot_rows[index]["role"] as OptionButton).get_item_id(item) as Role
+
+	# CLOSING OR REOPENING A SLOT CHANGES THE MAP, because the number of players is the
+	# number of starts placed on it. Only when the ACTIVE count actually moved: swapping a
+	# human for a bot is the same match on the same board, and regenerating there would
+	# throw away the map somebody just picked over a change that did not touch it.
+	#
+	# Reopening returns you to the map you had, since the seed and both counts are back
+	# where they were and generation is deterministic.
+	if _active_slots().size() != was_active:
+		regenerate()
 
 	if _wants_peers() and _lobby == Lobby.LOCAL:
 		var err := Net.host_open(host_port)
@@ -553,7 +688,7 @@ func _on_role_selected(item: int, index: int) -> void:
 
 ## Whether any slot is waiting for a person on another device.
 func _wants_peers() -> bool:
-	for i in range(_players):
+	for i in range(_slots):
 		if _roles[i] == Role.OPEN:
 			return true
 	return false
@@ -564,7 +699,7 @@ func _wants_peers() -> bool:
 ## host set up.
 func unfilled_slots() -> int:
 	var count := 0
-	for i in range(_players):
+	for i in range(_slots):
 		if _roles[i] == Role.OPEN and not _slot_peers.has(i):
 			count += 1
 	return count
@@ -640,10 +775,10 @@ func _on_peer_left(peer_id: int) -> void:
 ## is a cosmetic disagreement and dropping a connected player is not.
 func _slot_for(player_id: int) -> int:
 	var preferred := player_id - 1
-	if preferred >= 0 and preferred < _players \
+	if preferred >= 0 and preferred < _slots \
 			and _roles[preferred] == Role.OPEN and not _slot_peers.has(preferred):
 		return preferred
-	for i in range(_players):
+	for i in range(_slots):
 		if _roles[i] == Role.OPEN and not _slot_peers.has(i):
 			return i
 	return -1
@@ -669,6 +804,22 @@ func _on_lobby_config_received() -> void:
 	_type = cfg.map_type
 	_mode = cfg.mode
 	_data = cfg.map_data
+
+	# THE SLOT COUNT FIRST, and rebuild the rows to match it, because a host on eight
+	# slots and a client still showing two would leave six of the host's players with no
+	# row to appear in -- the joining player would be reading a two-player lobby for an
+	# eight-player match.
+	#
+	# The wire carries the PLAYERS, not the slots, and the difference between them is
+	# whatever the host closed. That gap cannot be recovered from the config and does not
+	# need to be: a closed slot has nobody in it, so there is nobody for it to misdescribe.
+	# What the joiner shows is one row per actual player.
+	var incoming := maxi(cfg.player_ids.size(), _MIN_PLAYERS)
+	if incoming != _slots:
+		_slots = mini(incoming, _MAX_OFFERED_PLAYERS)
+		_count_picker.select(_count_picker.get_item_index(_slots))
+		_rebuild_slot_rows()
+
 	for i in range(mini(_colours.size(), cfg.colours.size())):
 		_colours[i] = cfg.colours[i]
 		_refresh_colour_button(i)
@@ -681,7 +832,7 @@ func _on_lobby_config_received() -> void:
 	# other chair holds a person. It cannot tell the host's own seat from a remote one and
 	# does not need to -- which chair is YOURS comes from `local_player_id()`, and the row
 	# label says so.
-	for i in range(mini(_roles.size(), cfg.ai_players.size())):
+	for i in range(mini(_slot_rows.size(), cfg.ai_players.size())):
 		_roles[i] = Role.PLAYTEST_AI if cfg.ai_players[i] else Role.HUMAN
 		var picker: OptionButton = _slot_rows[i]["role"]
 		picker.select(picker.get_item_index(int(_roles[i])))
@@ -845,6 +996,10 @@ func _refresh_slot_rows() -> void:
 ## What to say about one chair. Deliberately one function rather than a host version and
 ## a client version: two renderers is how the two devices came to disagree.
 func _slot_status(index: int, mine: bool) -> String:
+	if _roles[index] == Role.CLOSED:
+		# Says what a closed slot is FOR, since leaving it blank reads as an oversight:
+		# the room is still on the board, there is just nobody in it.
+		return "empty — room kept on the map"
 	if _roles[index] == Role.PLAYTEST_AI:
 		return "bot"
 
@@ -927,7 +1082,7 @@ func _apply_cmdline() -> void:
 ## Advertise the LAST slot, which is the one a second player would take: slot 1 is this
 ## device's own human seat in every default this screen ships with.
 func _host_from_cmdline() -> void:
-	var index := _players - 1
+	var index := _slots - 1
 	var picker: OptionButton = _slot_rows[index]["role"]
 	var item := picker.get_item_index(int(Role.OPEN))
 	picker.select(item)
