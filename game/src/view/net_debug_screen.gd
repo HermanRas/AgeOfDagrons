@@ -75,6 +75,17 @@ func _ready() -> void:
 	Net.match_configured.connect(_on_match_configured)
 	Net.session_ended.connect(_on_session_ended)
 
+	# `-- --net host` / `-- --net join --ip 192.168.0.12`, so the DESKTOP side can be
+	# driven from a terminal. (g) is a two-device test and only one of the two devices
+	# has somebody standing at a keyboard; the phone is the half that wants thumbs.
+	# Deferred so the buttons exist and the tree is settled before anything fires.
+	match _string_arg("--net", ""):
+		"host":
+			call_deferred("_on_host_pressed")
+		"join":
+			_address.text = _string_arg("--ip", "127.0.0.1")
+			call_deferred("_on_join_pressed")
+
 
 ## Every address this device answers on, so the other one knows what to dial. Loopback
 ## and IPv6 are filtered out: neither is what you type into the other phone.
@@ -97,8 +108,9 @@ func _on_host_pressed() -> void:
 		return
 	_host_button.disabled = true
 	_join_button.disabled = true
-	_status.text = "listening on port %d as player %d -- waiting for a player to join" \
-			% [Net.PORT, Net.local_player_id()]
+	_say("listening on port %d as player %d -- waiting for a player to join"
+			% [Net.PORT, Net.local_player_id()])
+	_say("  dial one of: %s" % ", ".join(_own_addresses()))
 
 
 ## Someone joined. Start the match and hand over to the real game scene.
@@ -108,7 +120,7 @@ func _on_host_pressed() -> void:
 ## nothing is missed by starting the world a moment before the view exists.
 func _on_peer_joined(peer_id: int) -> void:
 	var pid: int = int(Net.peer_players().get(peer_id, 0))
-	_status.text = "peer %d joined as player %d -- starting" % [peer_id, pid]
+	_say("peer %d joined as player %d -- starting the match" % [peer_id, pid])
 	Net.start_match(MatchConfig.debug_generated(_SEED, MapGenerator.Type.FOREST, 2))
 	get_tree().change_scene_to_file(_GAME_SCENE)
 
@@ -138,6 +150,21 @@ func _on_session_ended(reason: String) -> void:
 	_status.text = "session ended: %s" % reason
 	_host_button.disabled = false
 	_join_button.disabled = false
+
+
+## On screen AND on stdout. The host is driven from a terminal (see `--net` in `_ready`),
+## where the label is not visible and the log is the only way to watch a bring-up.
+func _say(text: String) -> void:
+	_status.text = text
+	print("net-debug: %s" % text)
+
+
+func _string_arg(name: String, fallback: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] == name:
+			return String(args[i + 1])
+	return fallback
 
 
 func _label(text: String, size: int) -> Label:
