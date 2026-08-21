@@ -103,6 +103,32 @@ func test_the_wire_form_survives_json_the_way_a_packet_would() -> void:
 
 	assert_not_null(parsed, "the config is JSON-clean")
 	var back := MatchConfig.from_dict(parsed)
+	assert_not_null(back, "a config came back at all")
 	assert_eq(back.map_data.size, c.map_data.size)
 	assert_eq(back.player_ids, c.player_ids)
+	# Asserted non-empty BEFORE it is compared. Two empty terrains match perfectly, so
+	# without this the comparison below passes whether the bytes travelled or not -- and
+	# this test spent its whole life reporting PASS while checking nothing at all, so it
+	# is the last test in the suite that should take a comparison on trust.
+	assert_true(c.map_data.terrain.size() > 0, "there are terrain bytes to lose")
 	assert_eq(back.map_data.terrain, c.map_data.terrain)
+
+
+func test_terrain_survives_every_shape_the_readers_hand_it() -> void:
+	# `JSON.stringify` renders a PackedByteArray as the TEXT "[1, 2, 250]", so terrain
+	# comes off a JSON round trip as a String while off the wire it is real bytes. Both
+	# have to read back the same, and an Array is accepted for a hand-edited sidecar
+	# (2.4c). Left as a table because the whole point is that the three agree.
+	var want := PackedByteArray([0, 1, 2, 250])
+	assert_eq(MapData._terrain_from(want), want, "the wire's own bytes, untouched")
+	assert_eq(MapData._terrain_from("[0, 1, 2, 250]"), want, "JSON's rendering of them")
+	assert_eq(MapData._terrain_from([0, 1, 2, 250]), want, "a hand-written list")
+
+
+func test_terrain_that_is_missing_or_nonsense_reads_as_no_terrain() -> void:
+	# Rather than aborting the read, which is the failure this whole area is about: an
+	# empty map is a visible wrong answer, a null MapData is a silent one.
+	assert_eq(MapData._terrain_from("[]").size(), 0, "an empty JSON list")
+	assert_eq(MapData._terrain_from("").size(), 0, "an empty string")
+	assert_eq(MapData._terrain_from(null).size(), 0, "nothing at all")
+	assert_eq(MapData._terrain_from(42).size(), 0, "a shape with no reading")

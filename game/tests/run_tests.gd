@@ -21,6 +21,49 @@ extends Node
 
 const TEST_ROOT := "res://tests/"
 
+
+## Watches for the one category of error that silently truncates a test.
+##
+## GDScript cannot catch a runtime error. An invalid assignment, or a property read on
+## a null, abandons the REST OF THE FUNCTION and carries on at the caller -- so every
+## assertion after the bad line never runs, and never running is indistinguishable from
+## passing. `test_the_wire_form_survives_json_the_way_a_packet_would` reported PASS on
+## that basis while verifying nothing (found 2026-08-21).
+##
+## The zero-assertion floor in `_run_file` cannot catch it alone, which is what its own
+## comment used to claim: that test made ONE assertion before it died, so it cleared the
+## floor with a truncated body. The two checks catch different things and both are kept.
+##
+## KEYED ON THE ERROR TYPE, NOT ON THE TEST, which is what makes this cheap. Script
+## errors are never deliberate -- no test wants one -- while the noise this suite makes
+## on purpose is engine ERRORs and WARNINGs: the net tests provoke "unknown peer ID" to
+## prove a vanishing peer cannot freeze a match, and the occlusion tests make the shader
+## compiler grumble. Those are ERROR_TYPE_ERROR and ERROR_TYPE_WARNING and pass straight
+## through. So no test has to declare anything, and there is no opt-out list to rot.
+class ScriptErrorSpy extends Logger:
+	var _seen: Array[String] = []
+	var _watching := false
+
+	func _log_error(function: String, file: String, line: int, code: String,
+			rationale: String, _editor_notify: bool, error_type: int,
+			_script_backtraces: Variant) -> void:
+		if not _watching or error_type != ERROR_TYPE_SCRIPT:
+			return
+		var what: String = rationale if rationale != "" else code
+		_seen.append("%s (%s:%d in %s)" % [what, file.get_file(), line, function])
+
+	## Only watch while a test is actually running, so an error raised by discovery or
+	## by loading a file is not pinned on whichever test happened to run next.
+	func begin() -> void:
+		_seen.clear()
+		_watching = true
+
+	func take() -> Array[String]:
+		_watching = false
+		return _seen.duplicate()
+
+
+var _spy := ScriptErrorSpy.new()
 var _total := 0
 var _passed := 0
 var _failed := 0
@@ -30,6 +73,7 @@ var _failure_log: Array[String] = []
 
 func _ready() -> void:
 	var started := Time.get_ticks_msec()
+	OS.add_logger(_spy)
 
 	print_rich("[b]AOD test run[/b]  Godot %s" % Engine.get_version_info().string)
 	print("")
@@ -55,6 +99,7 @@ func _ready() -> void:
 		_run_file(path)
 
 	_report(started)
+	OS.remove_logger(_spy)
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
@@ -111,9 +156,14 @@ func _run_file(path: String) -> void:
 	for method in _test_methods(instance):
 		_total += 1
 		instance._reset()
+		# before_each and after_each are inside the watch on purpose: a setup that
+		# explodes is the 0.2b failure below, and it has to be attributed to the test
+		# it wrecked rather than passing unnoticed.
+		_spy.begin()
 		instance.before_each()
 		instance.call(method)
 		instance.after_each()
+		var truncated := _spy.take()
 
 		_assertions += instance._assertion_count()
 		var failures: Array = instance._failure_list()
@@ -123,10 +173,24 @@ func _run_file(path: String) -> void:
 		# (a null from a broken before_each, a renamed method) by printing and
 		# continuing, so an exploded test records no failures and used to be
 		# counted green. Found at 0.2b, where a whole file's worth of tests
-		# reported PASS while every one of them was erroring on line 1 of its
-		# setup. Zero assertions is the one signal that catches all of it.
+		# reported PASS while every one of them was erroring on line 1 of its setup.
+		#
+		# This catches a test that asserted nothing at all. It does NOT catch one that
+		# died PART WAY THROUGH -- it clears the floor on the assertions it managed
+		# before the bad line, and the rest are silently skipped. That is what the spy
+		# above is for; the two together are the coverage, neither alone.
 		if failures.is_empty() and instance._assertion_count() == 0:
 			failures = ["no assertions ran -- check the output above for a script error"]
+
+		# Reported FIRST, and reported even when the test also recorded ordinary
+		# assertion failures: when a test both errors and comes up short, the error is
+		# the cause and the short assertions are its symptom.
+		if not truncated.is_empty():
+			var with_errors: Array = []
+			for e in truncated:
+				with_errors.append("aborted by a script error -- %s" % e)
+			with_errors.append_array(failures)
+			failures = with_errors
 
 		if failures.is_empty():
 			_passed += 1

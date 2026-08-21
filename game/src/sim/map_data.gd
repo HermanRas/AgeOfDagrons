@@ -177,10 +177,56 @@ func to_dict() -> Dictionary:
 			"entities": out, "starts": starts_out, "meta": meta}
 
 
+## Terrain arrives in one of three shapes, so it is READ rather than assigned straight.
+##
+## Over the WIRE it is a real `PackedByteArray`: Godot's RPC layer encodes Variants in
+## binary and hands the bytes across untouched. That is why a two-device match on a
+## generated map works (12.1g) despite the bug below.
+##
+## Through JSON it is a **String**. `JSON.stringify` renders a `PackedByteArray` as the
+## text `"[1, 2, 250]"` -- verified on 4.7.1 -- so `terrain` comes back as a String, and
+## assigning a String to a typed `PackedByteArray` property is a runtime error that
+## abandons the rest of `from_dict` and returns null. Every other field here is already
+## defended against JSON, with `int()` around each one because JSON numbers return as
+## floats; terrain was the one field that looked like it needed no conversion. It went
+## undetected because the test written to catch it died on the very same error and was
+## counted as a pass -- see `run_tests.gd`'s `ScriptErrorSpy`.
+##
+## The Array form nothing produces today. It is accepted because it is what a
+## hand-written or hand-edited saved sidecar (2.4c) would most naturally contain.
+##
+## `to_dict()` deliberately goes on sending raw bytes rather than switching to base64:
+## the wire carries 20-40 KB of terrain, base64 would add a third to that for nothing,
+## and 12.1f is about wire size. The tolerance belongs on the reading side.
+static func _terrain_from(v: Variant) -> PackedByteArray:
+	if v is PackedByteArray:
+		return v as PackedByteArray
+
+	var numbers: Array = []
+	if v is Array:
+		numbers = v as Array
+	elif v is String:
+		var text := (v as String).strip_edges().trim_prefix("[").trim_suffix("]")
+		if text.strip_edges().is_empty():
+			return PackedByteArray()
+		numbers = Array((text as String).split(","))
+	else:
+		# Not a shape we know. An empty map reads as "no terrain" downstream, which
+		# beats guessing at bytes.
+		return PackedByteArray()
+
+	var out := PackedByteArray()
+	out.resize(numbers.size())
+	for i in numbers.size():
+		var n: Variant = numbers[i]
+		out[i] = int((n as String).strip_edges()) if n is String else int(n)
+	return out
+
+
 static func from_dict(d: Dictionary) -> MapData:
 	var m := MapData.new()
 	m.size = Vector2i(int(d.get("w", 0)), int(d.get("h", 0)))
-	m.terrain = d.get("terrain", PackedByteArray())
+	m.terrain = _terrain_from(d.get("terrain", PackedByteArray()))
 	m.meta = d.get("meta", {})
 	for e in d.get("entities", []):
 		m.add_entity(StringName(e.get("def_id", "")), int(e.get("player", 0)),
