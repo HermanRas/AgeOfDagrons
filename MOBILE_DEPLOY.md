@@ -43,7 +43,16 @@ terminal instead of vanishing into a GUI window.
 
 # 3. Install (or reinstall over whatever build is already on the phone).
 & $adb install -r $apk
+
+# 4. Launch it without touching the phone. The package is com.example.ageofdragons
+#    -- from `package/unique_name="com.example.$genname"` in export_presets.cfg, NOT
+#    from package/name, which is the display name "AgeOfDragons". Guessing the latter
+#    gets "No activities found to run, monkey aborted".
+& $adb shell monkey -p com.example.ageofdragons -c android.intent.category.LAUNCHER 1
 ```
+
+The phone must be **unlocked** for the app to come to the foreground: on a locked
+phone the launch reports success and a screencap shows the lock screen.
 
 Or as one line once the phone is already confirmed connected:
 
