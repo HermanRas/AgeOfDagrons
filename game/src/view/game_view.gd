@@ -121,10 +121,14 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# the project owner's report of 2026-08-17.
 	var occluders: Array[Dictionary] = []
 	for entry in updated:
-		if not entry.has("footprint"):
+		# ASKED OF THE REGISTRY, not inferred from which fields the entry happens to have.
+		# This used to test `entry.has("footprint")`, which stopped meaning anything the
+		# moment 12.1f took `footprint` off the wire -- every entry then looked like a unit
+		# and nothing occluded anything. The same reasoning `_facts`'s own `is_unit`
+		# already gives for not guessing a kind from a snapshot's shape.
+		if GameDataRegistry.unit(StringName(entry.get("def_id", &""))) != null:
 			continue                  # a unit; it occludes nothing and lifts nothing
-		var bp: Dictionary = entry.get("pos", {})
-		var centre_tile := Vector2i(int(bp.get("x", 0)), int(bp.get("y", 0))) / SimWorld.SUBTILE
+		var centre_tile: Vector2i = _sub_pos(entry) / SimWorld.SUBTILE
 		var fp := _footprint_of(entry)
 		var rect := Rect2i(centre_tile - fp / 2, fp)
 		if entry.has("phase"):
@@ -159,8 +163,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 			if view.visual_id != wanted:
 				view.visual_id = wanted
 
-		var p: Dictionary = entry.get("pos", {})
-		var sub_pos := Vector2i(int(p.get("x", 0)), int(p.get("y", 0)))
+		var sub_pos := _sub_pos(entry)
 		var def_id := StringName(entry.get("def_id", ""))
 
 		# Set every snapshot rather than only on spawn: a player advancing an age
@@ -715,9 +718,38 @@ func _covers(f: Dictionary, tile: Vector2i) -> bool:
 ## `footprint` is present only for buildings (SimBuilding.to_snapshot); units and
 ## resource nodes stand on one tile, so the default is right for them rather than
 ## merely safe.
+## DERIVED FROM `def_id`, NOT SENT (12.1f). A footprint was 68 bytes of every building and
+## resource entry, every tick -- and it is static content the client already has, exactly
+## like `vision_range`. A building's comes straight off its def; a resource's is
+## `footprint_for_size`, and `size_class` is on the wire already because the view needs it
+## to pick a sprite.
+##
+## Falls back to one tile, which is what a unit is and what an unknown def should look like
+## rather than a crash.
+## An entry's sub-tile position. One place, because `pos` became a `Vector2i` on the wire
+## in 12.1f and three separate readers were unpacking it as `{"x": .., "y": ..}` by hand.
+##
+## Tolerates the old dictionary shape so a replay or a fixture written against the previous
+## format still loads rather than silently reading (0, 0) -- which is precisely the failure
+## `ClientFog` shipped with for an afternoon.
+func _sub_pos(entry: Dictionary) -> Vector2i:
+	var p: Variant = entry.get("pos", Vector2i.ZERO)
+	if p is Vector2i:
+		return p
+	if p is Dictionary:
+		return Vector2i(int((p as Dictionary).get("x", 0)), int((p as Dictionary).get("y", 0)))
+	return Vector2i.ZERO
+
+
 func _footprint_of(entry: Dictionary) -> Vector2i:
-	var f: Dictionary = entry.get("footprint", {})
-	return Vector2i(int(f.get("x", 1)), int(f.get("y", 1)))
+	var def_id := StringName(entry.get("def_id", &""))
+	var building := GameDataRegistry.building(def_id)
+	if building != null:
+		return building.footprint
+	var res := GameDataRegistry.resource_def(def_id)
+	if res != null:
+		return res.footprint_for_size(int(entry.get("size_class", 0)))
+	return Vector2i.ONE
 
 
 ## Whether `tile` is touching a building AND on its camera-facing side, which is
@@ -831,8 +863,7 @@ func _visual_id_of(entry: Dictionary) -> StringName:
 ## primes from spatial hashing; nothing about them is special beyond being coprime
 ## with small variant counts.
 func _variant_seed(entry: Dictionary) -> int:
-	var p: Dictionary = entry.get("pos", {})
-	var tile := Vector2i(int(p.get("x", 0)), int(p.get("y", 0))) / SimWorld.SUBTILE
+	var tile: Vector2i = _sub_pos(entry) / SimWorld.SUBTILE
 	return absi(tile.x * 73856093 ^ tile.y * 19349663)
 
 

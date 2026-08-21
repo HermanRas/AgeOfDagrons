@@ -164,6 +164,14 @@ func _rect_of(f: Dictionary) -> Rect2i:
 	return SimMap.footprint_rect((pos - half) / SimWorld.SUBTILE, footprint)
 
 
+## `pos` is a `Vector2i` on the wire since 12.1f. The dictionary shape is still accepted
+## because a fixture or a replay written against the old format should load rather than
+## quietly read (0, 0) -- the exact failure this class shipped with for an afternoon, and
+## the reason `GameView._sub_pos` tolerates both too.
 func _pos_of(f: Dictionary) -> Vector2i:
-	var pos: Dictionary = f.get("pos", {})
-	return Vector2i(int(pos.get("x", 0)), int(pos.get("y", 0)))
+	var p: Variant = f.get("pos", Vector2i.ZERO)
+	if p is Vector2i:
+		return p
+	if p is Dictionary:
+		return Vector2i(int((p as Dictionary).get("x", 0)), int((p as Dictionary).get("y", 0)))
+	return Vector2i.ZERO

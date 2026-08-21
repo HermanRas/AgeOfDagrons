@@ -49,5 +49,8 @@ func test_submit_command_reaches_the_world_and_a_snapshot_comes_back() -> void:
 	for entry in last.get("updated", []):
 		if int(entry.get("id", 0)) == v.id:
 			found = true
-			assert_eq(int(entry.get("pos", {}).get("x", 0)), 10 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2)
+			# `pos` is a Vector2i on the wire since 12.1f, not {"x": .., "y": ..}: the
+			# dictionary cost 48 bytes to carry two small integers.
+			var pos: Vector2i = entry.get("pos", Vector2i.ZERO)
+			assert_eq(pos.x, 10 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2)
 	assert_true(found, "the moved unit must appear in its own snapshot")

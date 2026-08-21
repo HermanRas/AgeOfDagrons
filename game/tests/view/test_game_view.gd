@@ -66,8 +66,8 @@ func test_a_building_sorts_by_its_front_tile_but_draws_on_its_centre() -> void:
 	# tile, so villagers on the near side drew over its roof. The node has to sit
 	# further down the screen than the sprite does.
 	var centre := Vector2i(10, 10) * SimWorld.SUBTILE
-	view.apply_snapshot(_snapshot_of(1, "building.town_center", Vector2i(10, 10),
-			{"footprint": {"x": 8, "y": 8}, "phase": SimBuilding.Phase.COMPLETE}))
+	view.apply_snapshot(_snapshot_of(1, "building.market", Vector2i(10, 10),
+			{"phase": SimBuilding.Phase.COMPLETE}))
 
 	var v := view.pool.get_view(1)
 	assert_true(v.position.y > Iso.sub_to_world(centre).y,
@@ -95,7 +95,7 @@ func test_a_unit_sorts_where_it_stands() -> void:
 ## Asserted as the invariant rather than at one hand-picked tile: whenever the
 ## offset changes, the unit must be DRAWN where it stands, on that very frame.
 func test_a_unit_is_drawn_where_it_stands_on_the_tick_its_sort_band_changes() -> void:
-	var building := {"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+	var building := {"id": 1, "def_id": "building.market",
 			"phase": SimBuilding.Phase.COMPLETE,
 			"pos": {"x": 10 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}}
 
@@ -133,7 +133,7 @@ func test_a_unit_in_front_of_a_building_sorts_after_it() -> void:
 	# The assertion the whole fix exists for, stated the way the engine reads it:
 	# Y-sort draws larger position.y last, so "in front" must mean "greater y".
 	view.apply_snapshot({"tick": 1, "updated": [
-		{"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+		{"id": 1, "def_id": "building.market",
 			"phase": SimBuilding.Phase.COMPLETE,
 			"pos": {"x": 10 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}},
 		# Standing on the tile just beyond the footprint's front corner.
@@ -162,7 +162,7 @@ func test_a_unit_that_ties_a_buildings_front_corner_still_sorts_after_it() -> vo
 	# same depth as tile (24, 28), a perfectly ordinary place to stand while
 	# building it.
 	view.apply_snapshot({"tick": 1, "updated": [
-		{"id": 1, "def_id": "building.house", "footprint": {"x": 4, "y": 4},
+		{"id": 1, "def_id": "building.house",
 			"phase": SimBuilding.Phase.UNDER_CONSTRUCTION,
 			"pos": {"x": 22 * SimWorld.SUBTILE, "y": 28 * SimWorld.SUBTILE}},
 		{"id": 2, "def_id": "unit.villager",
@@ -189,7 +189,7 @@ func test_a_unit_beside_the_middle_of_a_large_buildings_edge_sorts_after_it() ->
 	# building's footprint at all -- any edge, not just the front corner --
 	# always sorts after it.
 	view.apply_snapshot({"tick": 1, "updated": [
-		{"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+		{"id": 1, "def_id": "building.market",
 			"phase": SimBuilding.Phase.COMPLETE,
 			"pos": {"x": 32 * SimWorld.SUBTILE, "y": 32 * SimWorld.SUBTILE}},
 		# Tile (36, 32): touches the middle of the east edge, nowhere near
@@ -211,7 +211,7 @@ func test_a_unit_only_diagonally_touching_a_buildings_back_corner_stays_behind()
 	# genuinely behind the building, not beside an edge someone is working
 	# at, and must keep sorting behind it.
 	view.apply_snapshot({"tick": 1, "updated": [
-		{"id": 1, "def_id": "building.town_center", "footprint": {"x": 8, "y": 8},
+		{"id": 1, "def_id": "building.market",
 			"phase": SimBuilding.Phase.COMPLETE,
 			"pos": {"x": 10 * SimWorld.SUBTILE, "y": 10 * SimWorld.SUBTILE}},
 		# One tile up-left of the back corner (6, 6) -- a diagonal touch only.

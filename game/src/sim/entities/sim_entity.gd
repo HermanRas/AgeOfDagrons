@@ -28,12 +28,21 @@ func on_tick(_w: SimWorld) -> void:
 	pass
 
 
+## A `Vector2i` FOR `pos`, NOT A PAIRED-INT DICTIONARY (12.1f). `{"x": .., "y": ..}` cost
+## 48 bytes to carry two small integers, because `var_to_bytes` re-encodes the key names
+## "x" and "y" inside every entry; the Vector2i is 12. Sixty bytes down to twenty-four,
+## on every entity, every tick.
+##
+## Safe here and NOT in `MapData`, which notes the opposite ("Vector2i is not JSON") for a
+## good reason: a saved map goes through JSON, and a snapshot never does. Snapshots cross
+## by RPC, which encodes Variants in binary; the only thing this project puts through JSON
+## is `Replay`, and that carries commands rather than snapshots.
 func to_snapshot() -> Dictionary:
 	return {
 		"id": id,
 		"def_id": def_id,
 		"owner_id": owner_id,
-		"pos": {"x": pos.x, "y": pos.y},
+		"pos": pos,
 		"hp": hp,
 		"max_hp": max_hp,
 		"alive": alive,

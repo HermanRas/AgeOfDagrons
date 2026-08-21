@@ -18,15 +18,25 @@ func after_each() -> void:
 	view.free()
 
 
+## `tile` is the ORIGIN for a building and the tile itself for anything else.
+##
+## THE FOOTPRINT IS NO LONGER A PARAMETER. 12.1f took it off the wire -- it is static
+## content the client derives from `def_id` -- so a fixture that declared its own would be
+## describing a building that does not exist. **These tests were doing exactly that:** they
+## called `building.town_center` 8x8, with a comment saying so, and the real def is 10x10.
+## Nothing caught it because the fixture and the assertions agreed with each other; the
+## view was the only thing that disagreed, and it was being handed the fiction.
+##
+## `pos` is a `Vector2i` here for the same reason it is one on the wire now.
 func _entity(id: int, def_id: String, tile: Vector2i, owner := 1,
-		footprint := Vector2i.ONE, alive := true) -> Dictionary:
+		alive := true) -> Dictionary:
+	var building := GameDataRegistry.building(StringName(def_id))
 	var centre := tile * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE / 2, SimWorld.SUBTILE / 2)
-	if footprint != Vector2i.ONE:
-		centre = SimBuilding.centre_of(tile, footprint)
+	if building != null:
+		centre = SimBuilding.centre_of(tile, building.footprint)
 	var d := {"id": id, "def_id": def_id, "owner_id": owner, "hp": 30, "max_hp": 30,
-			"alive": alive, "pos": {"x": centre.x, "y": centre.y}}
-	if footprint != Vector2i.ONE:
-		d["footprint"] = {"x": footprint.x, "y": footprint.y}
+			"alive": alive, "pos": centre}
+	if building != null:
 		d["phase"] = SimBuilding.Phase.COMPLETE
 	return d
 
@@ -128,7 +138,7 @@ func test_a_remembered_building_is_marked_as_such_in_the_facts() -> void:
 	# What SnapshotSystem._remembered sends: a static in explored territory, stripped
 	# of everything live. hp arrives as 0/0, which SelectionPanel already reads as "no
 	# health bar" without having to know why.
-	var remembered := _entity(3, "building.house", Vector2i(20, 20), 2, Vector2i(4, 4))
+	var remembered := _entity(3, "building.house", Vector2i(20, 20), 2)
 	remembered.erase("hp")
 	remembered.erase("max_hp")
 	remembered["remembered"] = true
@@ -153,7 +163,7 @@ func test_a_corpse_drops_out_of_the_selection_the_tick_it_dies() -> void:
 
 	view.apply_snapshot({"tick": 2, "updated": [
 			_entity(1, "unit.villager", Vector2i(5, 5)),
-			_entity(2, "unit.villager", Vector2i(6, 5), 1, Vector2i.ONE, false)], "removed": []})
+			_entity(2, "unit.villager", Vector2i(6, 5), 1, false)], "removed": []})
 	assert_eq(view.selection.current(), [1] as Array[int])
 	assert_false(view.pool.get_view(2).selected, "no ring on a corpse")
 
@@ -181,9 +191,10 @@ func test_tapping_empty_ground_selects_nothing() -> void:
 
 
 func test_a_building_can_be_tapped_anywhere_on_its_footprint() -> void:
-	# A town centre is 8x8; only tapping its centre tile would make most of it
-	# untappable.
-	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8))])
+	# A town centre is 10x10 -- read off its def now rather than asserted at 8x8 here,
+	# which is what this comment used to claim. Only tapping its centre tile would make
+	# most of it untappable.
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10))])
 	for tile in [Vector2i(10, 10), Vector2i(13, 14), Vector2i(17, 17)]:
 		assert_eq(view.pick(Iso.tile_centre_to_world(tile)), 3, "tapped %s" % tile)
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(9, 9))), 0, "and not just outside it")
@@ -193,7 +204,7 @@ func test_a_unit_standing_on_a_building_wins_the_tap() -> void:
 	# The villager is the thing worth tapping; the town centre is not going
 	# anywhere and is far easier to hit elsewhere.
 	_populate([
-		_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+		_entity(3, "building.town_center", Vector2i(10, 10)),
 		_entity(9, "unit.villager", Vector2i(12, 12)),
 	])
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(12, 12))), 9)
@@ -206,12 +217,12 @@ func test_picking_can_be_limited_to_one_players_things() -> void:
 
 
 func test_a_corpse_cannot_be_picked() -> void:
-	_populate([_entity(7, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	_populate([_entity(7, "unit.villager", Vector2i(5, 5), 1, false)])
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(5, 5))), 0)
 
 
 func test_rubble_cannot_be_picked() -> void:
-	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8), false)])
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, false)])
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(10, 10))), 0)
 
 
@@ -223,7 +234,7 @@ func test_only_units_can_be_ordered_to_move() -> void:
 	# for the villagers too.
 	_populate([
 		_entity(1, "unit.villager", Vector2i(5, 5)),
-		_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+		_entity(3, "building.town_center", Vector2i(10, 10)),
 	])
 	view.select([1, 3] as Array[int])
 	assert_eq(view.movable_selection(), [1] as Array[int])
@@ -272,7 +283,7 @@ func test_a_box_ignores_buildings_and_resources() -> void:
 	# trees and a deer is not what anyone means by a box select.
 	_populate([
 		_entity(1, "unit.villager", Vector2i(5, 5)),
-		_entity(2, "building.town_center", Vector2i(5, 6), 1, Vector2i(8, 8)),
+		_entity(2, "building.town_center", Vector2i(5, 6)),
 		_entity(3, "res.tree", Vector2i(6, 5), 0),
 	])
 	assert_eq(view.units_in_box(_box_over(Vector2i(3, 3), Vector2i(9, 9)), 1),
@@ -294,7 +305,7 @@ func test_a_box_over_empty_ground_selects_nothing() -> void:
 
 
 func test_a_box_ignores_a_corpse() -> void:
-	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false),
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, false),
 			_entity(2, "unit.villager", Vector2i(6, 6))])
 	assert_eq(view.units_in_box(_box_over(Vector2i(4, 4), Vector2i(7, 7)), 1),
 			[2] as Array[int])
@@ -331,7 +342,7 @@ func test_a_box_selection_draws_rings_on_all_of_them() -> void:
 
 func test_control_group_alive_members_drops_the_dead_and_the_unseen() -> void:
 	_populate([_entity(1, "unit.villager", Vector2i(5, 5)),
-			_entity(2, "unit.villager", Vector2i(6, 5), 1, Vector2i.ONE, false)])
+			_entity(2, "unit.villager", Vector2i(6, 5), 1, false)])
 	assert_eq(view.control_group_alive_members([1, 2, 999]), [1] as Array[int])
 
 
@@ -339,7 +350,7 @@ func test_control_group_summary_picks_the_most_represented_alive_def() -> void:
 	_populate([
 		_entity(1, "unit.villager", Vector2i(5, 5)),
 		_entity(2, "unit.villager", Vector2i(6, 5)),
-		_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+		_entity(3, "building.town_center", Vector2i(10, 10)),
 	])
 	var summary := view.control_group_summary([1, 2, 3])
 	assert_eq(summary["icon"], &"unit.villager")
@@ -348,8 +359,8 @@ func test_control_group_summary_picks_the_most_represented_alive_def() -> void:
 
 func test_control_group_summary_ignores_dead_members_for_both_icon_and_count() -> void:
 	_populate([
-		_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false),
-		_entity(2, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8)),
+		_entity(1, "unit.villager", Vector2i(5, 5), 1, false),
+		_entity(2, "building.town_center", Vector2i(10, 10)),
 	])
 	var summary := view.control_group_summary([1, 2])
 	assert_eq(summary["icon"], &"building.town_center")
@@ -357,7 +368,7 @@ func test_control_group_summary_ignores_dead_members_for_both_icon_and_count() -
 
 
 func test_control_group_summary_is_empty_once_every_member_is_dead() -> void:
-	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, false)])
 	var summary := view.control_group_summary([1])
 	assert_eq(summary["icon"], &"")
 	assert_eq(summary["count"], 0)
@@ -375,7 +386,7 @@ func test_control_group_centre_averages_alive_members_positions() -> void:
 
 
 func test_control_group_centre_is_null_with_nothing_alive() -> void:
-	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, Vector2i.ONE, false)])
+	_populate([_entity(1, "unit.villager", Vector2i(5, 5), 1, false)])
 	assert_null(view.control_group_centre([1]))
 
 
@@ -397,18 +408,18 @@ func test_all_facts_is_a_copy() -> void:
 
 
 func test_owned_entity_position_finds_the_players_town_centre() -> void:
-	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8))])
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10))])
 	var pos = view.owned_entity_position(1, &"building.town_center")
 	assert_eq(pos, Iso.tile_centre_to_world(view.facts_for(3)["tile"]))
 
 
 func test_owned_entity_position_is_null_with_none_matching() -> void:
-	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 2, Vector2i(8, 8))])
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 2)])
 	assert_null(view.owned_entity_position(1, &"building.town_center"))
 
 
 func test_owned_entity_position_ignores_a_dead_match() -> void:
-	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, Vector2i(8, 8), false)])
+	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, false)])
 	assert_null(view.owned_entity_position(1, &"building.town_center"))
 
 

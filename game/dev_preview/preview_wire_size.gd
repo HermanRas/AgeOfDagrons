@@ -45,6 +45,14 @@ func _ready() -> void:
 	var p_seed := _int_arg("--seed", 3)
 	var ticks := _int_arg("--ticks", MARKS[MARKS.size() - 1])
 
+	# `-- --fields` instead of the sweep: one entry of each kind, broken down field by
+	# field. A scene rather than a `--script`, because a custom MainLoop skips the boot
+	# that parents the autoloads and `GameDataRegistry` would be missing.
+	if OS.get_cmdline_user_args().has("--fields"):
+		_report_fields(p_seed)
+		get_tree().quit()
+		return
+
 	print("SNAPSHOT WIRE SIZE — one row per reading, bytes as the transport encodes them")
 	print("MTU is %d bytes; anything above it fragments, and an unreliable_ordered" % MTU)
 	print("packet loses the WHOLE snapshot if any one fragment is dropped.")
@@ -107,6 +115,76 @@ func _report(w: SimWorld, tick: int) -> void:
 	print("  %4d  %8d  %6d  %9d  %8d  %6d  %6d  %s"
 			% [tick, w.entities.size(), total, vision, entities, state, frags,
 			"YES" if total > MTU else "no"])
+	_report_entities(w, snap)
+
+
+## WHAT THE ENTITY PAYLOAD IS MADE OF, which is the question that decides what to do about
+## it. `updated` sends every entity a player may see, in full, every tick -- so the split
+## that matters is between things that CHANGE tick to tick and things that do not. A tree
+## re-sent 600 times in a minute is 600 identical copies of a fact that was true the first
+## time.
+##
+## Split by what the client is told, not by class name: a REMEMBERED entry is a static
+## somebody explored and cannot currently see, and it is the most obviously wasteful of
+## all -- it is a fact that by definition cannot have changed since they last looked.
+func _report_entities(w: SimWorld, snap: Dictionary) -> void:
+	var counts := {"unit": 0, "building": 0, "resource": 0, "remembered": 0}
+	var bytes := {"unit": 0, "building": 0, "resource": 0, "remembered": 0}
+	for entry in snap.get("updated", []):
+		var key := "resource"
+		if bool(entry.get("remembered", false)):
+			key = "remembered"
+		elif GameDataRegistry.unit(StringName(entry.get("def_id", &""))) != null:
+			key = "unit"
+		elif GameDataRegistry.building(StringName(entry.get("def_id", &""))) != null:
+			key = "building"
+		counts[key] += 1
+		bytes[key] += var_to_bytes(entry).size()
+
+	var parts: Array[String] = []
+	for key in ["unit", "building", "resource", "remembered"]:
+		parts.append("%s %d/%dB" % [key, counts[key], bytes[key]])
+	print("        of which: %s" % ", ".join(parts))
+
+
+## WHERE THE BYTES IN ONE ENTRY GO. Only 36 entities are visible on the 8-player board and
+## they cost 16,024 bytes, which is ~445 bytes each -- so the question is not how many
+## entities are sent but why one costs that much. This answers it per field, splitting the
+## KEY NAME from the value, because `var_to_bytes` encodes a dictionary key as a full
+## length-prefixed string on every entry that has it.
+func _report_fields(p_seed: int) -> void:
+	var cfg := MatchConfig.debug_generated(p_seed, MapGenerator.Type.FOREST, 2)
+	var w := SimWorld.new()
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	w.step()
+
+	var shown: Dictionary = {}
+	for entry in SnapshotSystem.build(w, 1).get("updated", []):
+		var def_id := StringName(entry.get("def_id", &""))
+		var kind := "resource"
+		if GameDataRegistry.unit(def_id) != null:
+			kind = "unit"
+		elif GameDataRegistry.building(def_id) != null:
+			kind = "building"
+		if shown.has(kind):
+			continue
+		shown[kind] = true
+
+		print("── %s (%s): %d bytes across %d fields ──"
+				% [kind, def_id, var_to_bytes(entry).size(), entry.size()])
+		var rows: Array = []
+		for k in entry:
+			var kb := var_to_bytes(k).size()
+			var vb := var_to_bytes(entry[k]).size()
+			rows.append([kb + vb, String(k), kb, vb, str(entry[k]).substr(0, 36)])
+		rows.sort_custom(func(a, b): return a[0] > b[0])
+		var keys_total := 0
+		for r in rows:
+			keys_total += int(r[2])
+			print("   %5d B  %-16s  key %3d + value %5d   %s" % [r[0], r[1], r[2], r[3], r[4]])
+		print("   key names alone: %d B of %d" % [keys_total, var_to_bytes(entry).size()])
+		print("")
 
 
 func _int_arg(name: String, fallback: int) -> int:

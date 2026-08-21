@@ -85,7 +85,6 @@ func to_snapshot() -> Dictionary:
 	# picking and occlusion all treat a 4x4 rock exactly as they treat a 4x4
 	# building -- none of them needed changing. What DID need changing is anything
 	# that used the presence of this key to mean "this is a building".
-	d["footprint"] = {"x": footprint.x, "y": footprint.y}
 	return d
 
 

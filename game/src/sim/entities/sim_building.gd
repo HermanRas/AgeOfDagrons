@@ -155,7 +155,6 @@ func to_snapshot() -> Dictionary:
 	# GameView keys the fade off whichever of the two an entry carries, so the
 	# wire format stays honest about which kind of remains is counting down.
 	d["rubble_ticks_left"] = rubble_ticks_left
-	d["footprint"] = {"x": footprint.x, "y": footprint.y}
 	d["build_fraction"] = build_fraction()
 	d["queue_len"] = queue.size()
 	d["queue_fraction"] = training_fraction()
