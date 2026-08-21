@@ -3,19 +3,18 @@
 ## `.tscn`-first convention `Credits.tscn` moved to first -- this script only
 ## wires the buttons to what pressing them does.
 ##
-## PLAY and CREDITS are the only buttons with real behaviour in MVP.
-## MULTIPLAYER and SETTINGS are placeholders per 1.1's own wording (their
-## screens are 1.5/1.6, explicitly not `[MVP]`); HOW TO is a placeholder for a
-## future in-game HUD walkthrough that does not exist yet either. All three
-## answer a tap with a `NoticeToast` rather than doing nothing, so the button
-## does not read as broken.
+## PLAY, MULTIPLAYER and CREDITS have real behaviour. PLAY and MULTIPLAYER both open the
+## skirmish screen, which is 11.1's whole design: one screen, and a lobby is that screen
+## with a slot set to Open.
+##
+## SETTINGS is still a placeholder (1.5, not `[MVP]`), and HOW TO a placeholder for an
+## in-game walkthrough that does not exist. Both answer a tap with a `NoticeToast` rather
+## than doing nothing, so the button does not read as broken.
 extends Control
 
 const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
 const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
-## Temporary, and deleted with 12.1c. See `net_debug_screen.gd`.
-const _NET_DEBUG_SCENE := "res://scenes/menu/NetDebug.tscn"
 
 @onready var _play_button: TextureButton = %PlayButton
 @onready var _multiplayer_button: TextureButton = %MultiplayerButton
@@ -28,11 +27,16 @@ const _NET_DEBUG_SCENE := "res://scenes/menu/NetDebug.tscn"
 
 func _ready() -> void:
 	_play_button.pressed.connect(_on_play_pressed)
-	# MULTIPLAYER now opens the throwaway 12.1g entry point rather than answering with a
-	# toast. It is not the real screen -- that is 12.1c, the skirmish screen in lobby
-	# mode -- and it exists so a two-device match can be played on real hardware before
-	# the polish, which is the order PLAN.md 12.1 asks for.
-	_multiplayer_button.pressed.connect(_on_multiplayer_pressed)
+	# MULTIPLAYER AND PLAY GO TO THE SAME PLACE, and that is the point of 11.1's one
+	# screen: a skirmish and a lobby differ only in what fills a player slot, so there is
+	# nowhere else for this button to go. Kept rather than removed because it is what
+	# somebody looking for multiplayer will press, and it now lands on the screen where
+	# setting a slot to Open opens the socket.
+	#
+	# It used to open the throwaway 12.1g entry point, which was deleted once this screen
+	# had hosted a real two-device match (confirmed 2026-08-21: phone joined a PC host
+	# over WiFi, reviewed the map, pressed READY and played).
+	_multiplayer_button.pressed.connect(_on_play_pressed)
 	_settings_button.pressed.connect(
 			func() -> void: _toast.show_message("Settings are not available in this build"))
 	_credits_button.pressed.connect(_on_credits_pressed)
@@ -56,10 +60,6 @@ func _ready() -> void:
 ## or `run/main_scene` pointed at it -- because `Net.pending_match` is null then.
 func _on_play_pressed() -> void:
 	get_tree().change_scene_to_file(_SKIRMISH_SCENE)
-
-
-func _on_multiplayer_pressed() -> void:
-	get_tree().change_scene_to_file(_NET_DEBUG_SCENE)
 
 
 func _on_credits_pressed() -> void:

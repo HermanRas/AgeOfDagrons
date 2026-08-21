@@ -94,6 +94,8 @@ crossing in front of a building.
       placing. **Its first position was wrong too** — bottom centre looked empty
       and is exactly where the build grid opens, so it covered the menu it belongs
       to; caught by `preview_match`'s screenshot rather than by the code.
+      **Confirmed fixed on the device by the owner 2026-08-21**, in the same
+      two-device match that validated the lobby.
 - [x] **A LineEdit gets no soft keyboard on Android.** Tapping the address field in
       the debug screen raises no keyboard, by hand or via `adb input text`, so an
       address cannot be typed on the phone at all. Worked around for the bring-up
@@ -141,6 +143,12 @@ crossing in front of a building.
       behaviour for an address field and wrong for a field you want to edit in
       place. Properly fixing it means mapping a touch to a caret column by hand, and
       nothing needs that yet.
+- [ ] **Every unit feels too fast.** Owner-reported 2026-08-21, from a real
+      two-device match played for several minutes on a phone. **Parked
+      deliberately** — this is a balancing number, not a defect, and it wants
+      doing as one pass over every unit's `speed` in the data rather than a nudge
+      to whichever unit was on screen. Recorded now so the observation survives
+      until that pass; nothing here should be tuned piecemeal before it.
 - [x] **Panning while placing.** Cancel removed the dead end, but the workflow was
       still cancel → pan → re-open the menu. **Owner chose edge-pan** over
       two-finger pan (which is box-select's own trigger, 8.3). Dragging the ghost
