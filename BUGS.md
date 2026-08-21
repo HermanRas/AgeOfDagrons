@@ -154,24 +154,40 @@ crossing in front of a building.
       The cost is that you cannot zoom while placing: the side strips are the zoom
       gesture's, and placement owns them for the duration. Zoom is one tap away
       before the menu opens; reaching an off-screen site was not.
-- [ ] **A test that errors out mid-body still counts as PASS.** Found while running
+- [x] **A test that errors out mid-body still counts as PASS.** Found while running
       the suite for the edge-pan work, and it is the more serious of the two things
       here. `test_the_wire_form_survives_json_the_way_a_packet_would` prints three
       SCRIPT ERRORs and is reported as passed: a GDScript runtime error abandons the
       rest of the function, so its last three assertions never ran and their absence
-      looks identical to success. Every test in the suite has this property. A floor
-      would catch it — count assertions per test and fail one that made none, or fail
-      any test that logged an error — but which of those is right is a harness
-      decision, not a default.
-- [ ] **`MapData.from_dict()` cannot read its own JSON.** What the vacuous test above
+      looks identical to success. Every test in the suite has this property.
+
+      **Fixed by keying on the error TYPE rather than on the test.** The owner asked
+      whether the two candidate checks could be combined — fail-on-logged-error for
+      most tests, the assertion floor for the ones that log errors deliberately. They
+      can, but the second tier turns out to be unnecessary: `OS.add_logger` takes a
+      scriptable `Logger`, and `_log_error` carries an `error_type`. Script errors
+      (`ERROR_TYPE_SCRIPT`) are the ones that abort a test, and no test ever wants
+      one; the noise this suite makes on purpose is `ERROR`s and `WARNING`s — the net
+      tests provoking a vanished peer, the occlusion tests making the shader compiler
+      grumble. So the category separates the two cleanly and no test has to declare
+      anything. The zero-assertion floor (already there since 0.2b) is kept alongside
+      it: it catches a test that asserts nothing, the spy catches one that dies part
+      way through, and neither sees the other's case. Switched on, it found exactly
+      one bad test in 889.
+- [x] **`MapData.from_dict()` cannot read its own JSON.** What the vacuous test above
       was written to catch. `JSON.stringify` encodes a `PackedByteArray` as a
       *string* — `"[1, 2, 250]"`, verified on 4.7.1 — so `terrain` returns as a
       String, the assignment on `map_data.gd:183` errors, and `from_dict` returns
-      null. **The two-device match is not affected** and that is why (g) passed:
-      ENet hands the config across as a Dictionary using Godot's own binary
-      serialization, where a `PackedByteArray` survives intact. It breaks the moment
-      anything JSONs a config — 12.4's save/load, or a debug log of one. Fix is for
-      `from_dict` to accept the String and the Array forms as well as the real thing.
+      null. Notable that every other field there was already defended against JSON,
+      with `int()` around each one because JSON numbers come back as floats; terrain
+      was the one field that looked like it needed no conversion. **The two-device
+      match is not affected** and that is why (g) passed: ENet hands the config across
+      as a Dictionary using Godot's own binary serialization, where a
+      `PackedByteArray` survives intact. Replays are unaffected too — they carry only
+      `player_ids` and `commands`, not a map. It would have bitten the saved sidecar
+      (2.4c) and 12.4's save/load. `from_dict` now reads bytes, JSON's string, or a
+      plain list; `to_dict` goes on sending raw bytes, because base64 would add a
+      third to 20–40 KB of terrain and 12.1f is about wire size.
 - [ ] **This WiFi isolates clients.** Not a project bug, recorded so the next
       bring-up does not lose time: the office network put the two devices on
       different /24s with no route between them (100% packet loss). `adb reverse`
