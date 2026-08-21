@@ -94,7 +94,7 @@ crossing in front of a building.
       placing. **Its first position was wrong too** — bottom centre looked empty
       and is exactly where the build grid opens, so it covered the menu it belongs
       to; caught by `preview_match`'s screenshot rather than by the code.
-- [ ] **A LineEdit gets no soft keyboard on Android.** Tapping the address field in
+- [x] **A LineEdit gets no soft keyboard on Android.** Tapping the address field in
       the debug screen raises no keyboard, by hand or via `adb input text`, so an
       address cannot be typed on the phone at all. Worked around for the bring-up
       by having the phone HOST and the laptop join (the laptop takes `--net join
@@ -116,9 +116,21 @@ crossing in front of a building.
 
       Fixed by [`TouchLineEdit`](game/src/view/touch_line_edit.gd), which grabs focus
       from the touch itself. Flipping the project setting instead was rejected: it
-      would fix typing by breaking the camera. **Still needs a device tap to close** —
-      the focus half is measured on desktop, but that focus actually raises an Android
-      keyboard is the half only the phone can answer, and no device was attached.
+      would fix typing by breaking the camera. **Confirmed on the device 2026-08-21**
+      — the owner reports the keyboard comes up on a tap, and `adb shell input text
+      "192.168.4.77"` now lands in the field, replacing the selected `127.0.0.1`
+      rather than prepending to it. Scripted device input works again too, which it
+      did not before.
+- [ ] **The soft keyboard covers the address field.** Seen in the screenshot that
+      confirmed the fix above, so it is a consequence of there finally BEING a
+      keyboard rather than a regression. The game is landscape (`orientation=4`), and
+      a landscape Android keyboard takes roughly the bottom two thirds: the field sits
+      at y≈340 of 1200 and the keyboard starts at y≈375, so the address is half
+      hidden while it is being typed. Survivable in the throwaway debug screen — you
+      can type blind and check afterwards — but **12.1c's lobby must not lay out an
+      address field and hope.** Either put it in the top third, or shift the layout up
+      while the keyboard is open (`DisplayServer.virtual_keyboard_get_height()`, and
+      `virtual_keyboard_enter`/`virtual_keyboard_exit` on the Window to know when).
 - [ ] **A tap cannot place the caret in a text field.** The same gap one layer down,
       found while fixing the one above: LineEdit places its caret from
       `InputEventMouseButton` only, so tapping 90 px into a field puts the caret at
