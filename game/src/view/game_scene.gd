@@ -28,7 +28,24 @@ var _age_badge: AgeBadge
 var _idle_badge: IdleVillagerBadge
 var _minimap: Minimap
 var _toast: NoticeToast
+## The settings/pause overlay. REACHED FROM THE SETTINGS CORNER BUTTON beside the
+## minimap since 2026-08-21, not from a pause button in the age header -- see
+## `_build_hud`. Still a `PauseMenu`, because Resume/Resign/Quit is still what it
+## holds and renaming the class would only move the mismatch somewhere else.
 var _pause_menu: PauseMenu
+
+## The three full-screen pages behind the minimap's other three corner buttons
+## (PLAN.md 8.2b). One is a mechanism and two are wireframes; see each class.
+var _chat: ChatPanel
+var _tech_tree: TechTreePanel
+var _market: MarketPanel
+
+## The minimap's four corner buttons by name (`chat`/`trade`/`techtree`/`settings`),
+## so a dev preview can press the real control instead of calling its handler. Public
+## for the same reason `PauseMenu` holds its resign button: on this screen a button
+## wired to nothing has twice looked exactly like a working one.
+var corner_buttons: Dictionary = {}
+
 var _result: ResultScreen
 var _error_label: Label
 var _error: String = ""
@@ -247,14 +264,14 @@ func _build_hud() -> void:
 	_minimap.double_tapped.connect(_on_minimap_double_tapped)
 	minimap_area.add_child(_minimap)
 
-	# PLAN.md 8.2b / ASSET_MISSING.md 240: a circular frame with 4 corner
-	# buttons is sourced from the dragon pack but not integrated, and
-	# chat/trade/tech-tree don't exist yet to give these something to do --
-	# disabled placeholders so the corner reads as "coming soon" rather than
-	# empty, not real buttons. Added to minimap_area AFTER the minimap so they
-	# sit on top of the rotated diamond's tips and stay clickable rather than
-	# being covered by them; the two spacers in the middle column push each pair
-	# of buttons out to the area's own corners.
+	# PLAN.md 8.2b: FOUR REAL BUTTONS since 2026-08-21. They were disabled
+	# placeholders while chat, trade and the tech tree had nothing behind them;
+	# all four now open something. SETTINGS took over the pause menu from the
+	# button that used to sit in the age header, which is what retired that one.
+	# Added to minimap_area AFTER the minimap so they sit on top of the rotated
+	# diamond's tips and stay clickable rather than being covered by them; the two
+	# spacers in the middle column push each pair of buttons out to the area's own
+	# corners.
 	#
 	# THE SPACERS ARE PLAIN CONTROLS, and they used to be `VSeparator`s on the
 	# assumption that those draw nothing. They draw a line -- that is what a
@@ -268,21 +285,31 @@ func _build_hud() -> void:
 	# AND IT MUST NOT EAT THE MINIMAP'S INPUT. This grid covers the WHOLE area,
 	# the flex spacers cover its middle, and it is added after the minimap, so
 	# Godot hit-tests it first and every tap on the diamond died here -- the
-	# camera never moved and the double-tap-to-centre never fired. The buttons
-	# are disabled placeholders with nothing to do, so nothing in this subtree
-	# wants the mouse; give it all back. **When these become real buttons they
-	# need `MOUSE_FILTER_STOP` again** -- individually, never on the grid.
+	# camera never moved and the double-tap-to-centre never fired. IGNORE on the
+	# grid and STOP on each button individually is the arrangement that works:
+	# the four corners take their own taps and everything between them falls
+	# through to the map. Never STOP on the grid.
 	minimap_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap_area.add_child(minimap_buttons)
 
-	for pair in [["hud_chat.png", "hud_trade.png"], ["hud_techtree.png", "hud_settings.png"]]:
-		minimap_buttons.add_child(_corner_button(pair[0]))
+	# The pairs are the grid's two rows, so this reads top-left, top-right,
+	# bottom-left, bottom-right -- and SETTINGS lands bottom-right, the corner the
+	# project owner pointed at.
+	var corners := [
+		[[&"chat", "hud_chat.png", _on_chat_pressed],
+			[&"trade", "hud_trade.png", _on_market_pressed]],
+		[[&"techtree", "hud_techtree.png", _on_tech_tree_pressed],
+			[&"settings", "hud_settings.png", _on_settings_pressed]],
+	]
+	for row in range(corners.size()):
+		var pair: Array = corners[row]
+		minimap_buttons.add_child(_corner_button(pair[0], row == 0, true))
 		var sep := Control.new()
 		sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		minimap_buttons.add_child(sep)
-		minimap_buttons.add_child(_corner_button(pair[1]))
+		minimap_buttons.add_child(_corner_button(pair[1], row == 0, false))
 
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -329,10 +356,12 @@ func _build_hud() -> void:
 	age_box.add_theme_constant_override("separation", 2)
 	age_margin.add_child(age_box)
 
-	# Title and pause button share a row -- the pause button used to be its
-	# own top-level TextureButton pinned to the top-right corner, but the
-	# ui_builder HUD mockup folded it into the age header instead so the two
-	# pieces of top-of-screen chrome read as one panel rather than two.
+	# THE PAUSE BUTTON IS GONE FROM HERE (project owner, 2026-08-21). It began as
+	# its own TextureButton pinned to the top-right corner, was folded into this
+	# header by the ui_builder mockup so the top-of-screen chrome read as one panel,
+	# and is now retired: its actions live behind the SETTINGS corner button beside
+	# the minimap, which is where a player looks for them and where three sibling
+	# pages already are. The badge column below is what is left of the pair.
 	var age_top_row := HBoxContainer.new()
 	# The mockup spaces the badge off the column with a 5 px spacer between two
 	# default 4 px separations; one constant here is the same gap with two fewer
@@ -350,41 +379,38 @@ func _build_hud() -> void:
 	_age_badge.advance_requested.connect(_on_age_advance_requested)
 	age_top_row.add_child(_age_badge)
 
-	# Pause above, idle count below, in one narrow column beside the age badge --
-	# the mockup's `VillagersIdle` VBox. The pause button halved (48 -> 22) to
-	# make room: the header's content row is only as tall as the age badge, and
-	# two stacked 48s would have grown the panel rather than fitting inside it.
-	var badge_column := VBoxContainer.new()
-	badge_column.custom_minimum_size = Vector2(IdleVillagerBadge.SIZE, 0.0)
-	age_top_row.add_child(badge_column)
-
-	var pause_btn := TextureButton.new()
-	const pause_icon_path := "res://assets/ui/menu/pause_icon.png"
-	if ResourceLoader.exists(pause_icon_path):
-		pause_btn.texture_normal = load(pause_icon_path)
-	pause_btn.ignore_texture_size = true
-	# KEEP_CENTERED, not KEEP_ASPECT_CENTERED: the icon is 64x64 pixel art and
-	# fitting it to a 22 px cell is a 0.34x non-integer downscale, which mushes it
-	# whatever the filter does. Drawn at its own size, centred on the cell, it
-	# overhangs the column and stays crisp -- the mockup's value, and what the
-	# project owner asked for by name.
-	pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_CENTERED
-	pause_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pause_btn.custom_minimum_size = Vector2(IdleVillagerBadge.SIZE, IdleVillagerBadge.SIZE)
-	pause_btn.pressed.connect(func() -> void: _pause_menu.open())
-	badge_column.add_child(pause_btn)
-
+	# The idle count, beside the age badge -- what is left of the mockup's
+	# `VillagersIdle` VBox now that the pause button above it has gone. Added
+	# straight to the row rather than kept in a one-child column: the column existed
+	# to stack the two, and its minimum width is the badge's own.
 	_idle_badge = IdleVillagerBadge.new()
 	_idle_badge.cycle_requested.connect(_on_idle_cycle_requested)
-	badge_column.add_child(_idle_badge)
+	age_top_row.add_child(_idle_badge)
 
 	_pause_menu = PauseMenu.new()
 	hud.add_child(_pause_menu)
 
-	# ADDED AFTER THE PAUSE MENU, so it draws over it. If the match is decided while
-	# the player happens to have the pause menu open, the result is the thing that
-	# outranks -- and its Resume would otherwise restart a clock the result screen
-	# has just stopped.
+	# The three pages behind the other corner buttons (8.2b). Built here rather than
+	# on first press so a preview and a test can reach them without a tap, which is
+	# the same reason every widget on this screen is built up front.
+	#
+	# NONE OF THEM STOPS THE CLOCK, unlike the pause menu beside them: a market has
+	# to show live stockpiles to be worth opening. See `HudPanel`'s header.
+	_chat = ChatPanel.new()
+	hud.add_child(_chat)
+
+	_tech_tree = TechTreePanel.new()
+	hud.add_child(_tech_tree)
+
+	_market = MarketPanel.new()
+	_market.tribute_requested.connect(_on_tribute_requested)
+	_market.exchange_requested.connect(_on_exchange_requested)
+	hud.add_child(_market)
+
+	# ADDED AFTER ALL OF THEM, so it draws over the lot. If the match is decided
+	# while the player happens to have a page open, the result is the thing that
+	# outranks -- and the pause menu's Resume would otherwise restart a clock the
+	# result screen has just stopped.
 	_result = ResultScreen.new()
 	hud.add_child(_result)
 
@@ -414,24 +440,156 @@ func _build_hud() -> void:
 	hud.add_child(_error_label)
 
 
-## One disabled placeholder corner button (chat/trade/tech-tree/settings);
-## shared by the two rows `_build_hud()` assembles around the minimap.
-func _corner_button(icon_file: String) -> TextureButton:
+## The size of one minimap corner button, and therefore the whole of its hit area --
+## see the shrink flags in `_corner_button` for why that second half matters.
+const CORNER_BUTTON_SIZE := 32.0
+
+
+## One corner button (chat/trade/tech-tree/settings); shared by the two rows
+## `_build_hud()` assembles around the minimap.
+##
+## THESE WERE DISABLED PLACEHOLDERS UNTIL 2026-08-21, dimmed and set to
+## MOUSE_FILTER_IGNORE so they could not block the minimap taps that pass over the
+## rotated diamond's tips. All four have somewhere to go now, so they are STOP --
+## individually, which is the arrangement that keeps the four corners live without
+## the grid between them swallowing the map.
+func _corner_button(spec: Array, to_top: bool, to_left: bool) -> TextureButton:
 	var corner_btn := TextureButton.new()
-	var icon_path := "res://assets/ui/icons/%s" % icon_file
+	var icon_path := "res://assets/ui/icons/%s" % String(spec[1])
 	if ResourceLoader.exists(icon_path):
 		corner_btn.texture_normal = load(icon_path)
 	corner_btn.ignore_texture_size = true
 	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	corner_btn.custom_minimum_size = Vector2(32.0, 32.0)
-	corner_btn.disabled = true
-	corner_btn.modulate = Color(1.0, 1.0, 1.0, 0.5)
-	# A disabled button still BLOCKS the mouse in Godot; these sit over the
-	# minimap's tips (see `_build_hud`), so blocking is exactly what they must
-	# not do. Restore STOP on whichever one gets a real action first.
-	corner_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	corner_btn.custom_minimum_size = Vector2(CORNER_BUTTON_SIZE, CORNER_BUTTON_SIZE)
+	# SHRUNK INTO ITS CORNER, not left to fill its grid cell. A container child
+	# defaults to filling, and the grid covers the whole 200x200 minimap area -- so
+	# each of these came out 32 wide and 98 TALL, a full-height strip down the side of
+	# the diamond. That did not matter while they were MOUSE_FILTER_IGNORE
+	# placeholders; the moment they became real buttons it meant a tap on the
+	# diamond's upper-left edge opened the chat page instead of moving the camera,
+	# which is the same class of bug as the grid itself eating every minimap tap.
+	corner_btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if to_top \
+			else Control.SIZE_SHRINK_END
+	corner_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if to_left \
+			else Control.SIZE_SHRINK_END
+	corner_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Half-lit until the first snapshot says otherwise. Only TRADE ever comes back
+	# lit-or-not (`_feed_pages`); the other three have no precondition, so they are
+	# restored here rather than left dim by an ordering accident.
+	corner_btn.modulate = Color.WHITE
+	corner_btn.pressed.connect(spec[2] as Callable)
+	# HELD BY NAME so a preview can press the REAL button rather than call the
+	# handler behind it. That distinction has already earned its keep twice on this
+	# screen -- the cancel-build button and the resign button were both wired to
+	# nothing at one point, and calling the handler would have passed either way.
+	corner_buttons[spec[0] as StringName] = corner_btn
 	return corner_btn
+
+
+# ── the minimap's four corners (PLAN.md 8.2b) ───────────────────────────────
+
+## Settings, which is the pause menu: Resume, Resign, Quit. It moved here from a
+## button in the age header (see `_build_hud`) and nothing about the menu changed.
+func _on_settings_pressed() -> void:
+	_close_pages()
+	_pause_menu.open()
+
+
+func _on_chat_pressed() -> void:
+	_toggle_page(_chat)
+
+
+func _on_tech_tree_pressed() -> void:
+	_toggle_page(_tech_tree)
+
+
+func _on_market_pressed() -> void:
+	_toggle_page(_market)
+
+
+## ONE PAGE AT A TIME, and pressing the corner you are already on closes it.
+##
+## They are full-screen overlays, so two open at once means one invisibly on top of
+## the other -- and the one underneath would still be taking the taps meant for the
+## page the player can see. Toggling rather than only opening also gives a phone a
+## second way out of every page, which matters because a phone has no Escape key.
+func _toggle_page(page: HudPanel) -> void:
+	var was_open := page.is_open()
+	_close_pages()
+	if not was_open:
+		page.open()
+		_feed_pages(_last_snapshot)
+
+
+func _close_pages() -> void:
+	for page in [_chat, _tech_tree, _market]:
+		if page != null and page.is_open():
+			page.close()
+
+
+## DIMMED, NOT DISABLED, and the difference is the point.
+##
+## Trade needs a finished market, and the corner icon says so by going half-lit --
+## the same "not yet" the build menu's age-gated entries use. It still OPENS, because
+## a disabled icon teaches nobody what a market is for: the page itself names the
+## building and says every button stays refused until one is standing, which is the
+## only place that sentence can be read. The refusal that matters is in
+## `TributeCommand`/`MarketExchangeCommand`, on the server, where it cannot be dimmed
+## around.
+func _set_corner_dimmed(name: StringName, dimmed: bool) -> void:
+	var button: TextureButton = corner_buttons.get(name)
+	if button == null:
+		return
+	button.modulate = Color(1.0, 1.0, 1.0, 0.5 if dimmed else 1.0)
+
+
+## Push this tick's facts into whichever page is open, and only that one. A closed
+## page is not refreshed at all: the market rebuilds a row per player and the chat
+## rebuilds its tab row, and doing that ten times a second for three pages nobody is
+## looking at is work with no reader.
+func _feed_pages(snap: Dictionary) -> void:
+	var player_state: Dictionary = snap.get("player_state", {})
+	if player_state.is_empty():
+		return
+	var me := Net.local_player_id()
+
+	if _chat.is_open():
+		_chat.show_players(player_state, me)
+	if _tech_tree.is_open():
+		var mine: Dictionary = player_state.get(me, {})
+		_tech_tree.set_age(int(mine.get("age", 0)))
+	# ADVISORY, and computed from the client's own view rather than asked of the host:
+	# your own buildings are always sent whatever the fog says, so this is reliable
+	# for the one owner it is asked about -- and both market commands re-check it
+	# against the authoritative world anyway. Same shape as the placement ghost, where
+	# a wrong answer costs a refusal and not a desync.
+	#
+	# Read even when the page is CLOSED, because the corner icon is dimmed by it.
+	var has_market := _view.has_completed_building(
+			me, GameDataRegistry.market_building())
+	_set_corner_dimmed(&"trade", not has_market)
+	if _market.is_open():
+		_market.show_state(player_state, me, has_market)
+
+
+## Tribute (8.2b), through the ordinary command path like every other order. The
+## page names a recipient and an amount; the server decides whether it may happen,
+## and overwrites the sender with the id it knows this peer owns -- so this cannot
+## be made to spend somebody else's stockpile.
+func _on_tribute_requested(to_player_id: int, kind: StringName, amount: int) -> void:
+	if _match_over:
+		return
+	Net.submit_command(TributeCommand.new(
+			Net.local_player_id(), to_player_id, kind, amount))
+
+
+## Buying or selling one lot at the market. The PRICE IS NOT SENT -- the command
+## carries what to trade and which way, and the server looks up what that costs.
+func _on_exchange_requested(kind: StringName, buying: bool) -> void:
+	if _match_over:
+		return
+	Net.submit_command(MarketExchangeCommand.new(Net.local_player_id(), kind, buying))
 
 
 ## TERRAIN COMES FROM THE CONFIG, NOT FROM THE HOST'S WORLD (PLAN.md 12.1b).
@@ -535,6 +693,15 @@ func _open_camera_on(cfg: MatchConfig, size: Vector2i) -> void:
 ## `_refresh_minimap()` needs the bytes and does not receive the snapshot.
 var _last_vision: PackedByteArray = PackedByteArray()
 
+## The last snapshot, kept whole for the three corner pages (8.2b).
+##
+## They are refreshed only while OPEN, so opening one has to draw it from something
+## other than the next snapshot -- otherwise a page opened between ticks shows a
+## blank market for up to 100 ms, which on a touch screen is long enough to press
+## through. The other HUD widgets need no equivalent because they are always visible
+## and are fed every tick.
+var _last_snapshot: Dictionary = {}
+
 
 func _on_snapshot(snap: Dictionary) -> void:
 	_view.apply_snapshot(snap)
@@ -542,9 +709,11 @@ func _on_snapshot(snap: Dictionary) -> void:
 	# tick's facts, and reading it first would put last tick's fog on the minimap.
 	if _view.client_fog != null:
 		_last_vision = _view.client_fog.cells
+	_last_snapshot = snap
 	_refresh_panel()
 	_refresh_hud(snap)
 	_refresh_minimap()
+	_feed_pages(snap)
 	_refresh_result(snap)
 
 
@@ -1104,12 +1273,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 
 	if key.keycode == KEY_ESCAPE:
-		# Escape backs out of build mode first -- the Cancel Build button that
-		# used to do this went away with the dev row, and leaving the pause menu
-		# as the only way out of a half-started placement would be worse than
-		# no way at all.
+		# ONE THING AT A TIME, OUTERMOST FIRST. Escape backs out of build mode
+		# before anything else -- the Cancel Build button that used to do this went
+		# away with the dev row, and leaving a menu as the only way out of a
+		# half-started placement would be worse than no way at all. Then a corner
+		# page, if one is open, because closing the thing covering the screen is
+		# what Escape means to whoever is looking at it. Only then the settings menu.
 		if _placing_def_id != &"":
 			_exit_placement()
+		elif _chat.is_open() or _tech_tree.is_open() or _market.is_open():
+			_close_pages()
 		elif not _pause_menu.visible:
 			_pause_menu.open()
 		return

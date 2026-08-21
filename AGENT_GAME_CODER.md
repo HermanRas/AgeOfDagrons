@@ -48,8 +48,10 @@ answer their questions there rather than only in chat.
    design record for the data. **Read them in full before editing that file.**
    Several encode measurements and decisions that are expensive to re-derive.
 
-⚠️ **PLAN.md is mojibake** — double-encoded UTF-8, so most table rows cannot be
-matched by an exact-string edit. Splice by line prefix if you must change it.
+**PLAN.md used to be mojibake** (double-encoded UTF-8, so table rows could not be
+matched by an exact-string edit). It is **clean as of 2026-08-21** — `grep -c 'â€'`
+finds nothing — so ordinary exact-string edits work. Re-check before assuming
+either way; whatever fixed it could recur.
 
 ---
 
@@ -72,6 +74,11 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 # Run the real match, driven and screenshotted (see §5)
 & $godot --path game res://dev_preview/preview_match.tscn
 & $godot --path game res://dev_preview/preview_match.tscn -- --interactive   # play it
+
+# The other driven previews, all screenshotting
+& $godot --path game res://dev_preview/preview_skirmish.tscn   # lobby + colour picker
+& $godot --path game res://dev_preview/preview_menus.tscn      # front door + campaign
+& $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 ```
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
@@ -162,12 +169,15 @@ maps, 21 units, all footprints measured (each baked atlas resolved back through
 `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**293 atlases staged.** 45 test files, ~517 tests, all passing.
+**293 atlases staged.** 68 test files, 1016 tests, all passing.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
-build menus, a paged build grid, captioned portraits, production queue, and a
-debug age-advance.
+build menus, a paged build grid, captioned portraits, production queue, a real
+timed age-advance, fog of war, an enforced population cap, conquest win
+conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
+(PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
+and tech-tree wireframes, and settings (§8.2b).
 
 ### Known gaps — do not work around these silently
 
@@ -181,18 +191,15 @@ debug age-advance.
   drag-placement, segment-length choice, 8 orientations and gate pass-through.
   As ordinary buildings they would put twelve fixed-orientation blocks in the
   build menu, which is worse than not offering them.
-- **Population is reported but not enforced.** `PopulationSystem` computes
-  `pop_used`/`pop_cap` and the resource panel's bottom row shows them, but
-  `TrainCommand` has no population check — you can train past the cap. That is
-  the remaining half of PLAN.md 4.11.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.
   Trebuchet, ballista, onager and dragon carry `speed: 0` deliberately, so a
   motionless sprite never slides across the map.
-- **Age advancement is debug-only** (`DebugSetAgeCommand`, the gold badge in the
-  HUD header). PLAN.md 9.2 replaces it with a researched action that costs
-  resources and time.
+- **Chat and the tech-tree page are wireframes** (PLAN.md §8.2b) and say so on
+  screen. The tech tree's *renderer* is real and walks `techs.json`, which is
+  deliberately empty until 9.3; chat has no transport at all, and its SEND/CLEAR
+  buttons are disabled rather than made to work locally.
 - **HUD portraits, minimap and control groups** are wired for colour; nothing
   else tints, because colour is in the pixels — **there is no tint shader and
   must not be one.**

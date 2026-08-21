@@ -1,0 +1,58 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/view/campaign_screen.gd" id="1_camp0"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/back_button.png" id="2_camp1"]
+
+[node name="Campaign" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_camp0")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.16862746, 0.11372549, 0.078431375, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 100
+
+[node name="Body" type="RichTextLabel" parent="Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/default_color = Color(0.9372549, 0.8784314, 0.7529412, 1)
+bbcode_enabled = true
+text = "[center][font_size=32][color=#E5B842]CAMPAIGN[/color][/font_size]
+
+[font_size=22][color=#E5B842]Coming soon[/color][/font_size][/center]
+
+The campaign is scripted missions — objectives, triggers and a story order to play them in — run on the same hosted match everything else runs on, with the host on loopback and nobody else invited.
+
+Nothing about it is built yet. Until it is, the game is played from [b]MULTIPLAYER[/b] on the main menu, which opens the skirmish and lobby screen: pick a map, set the opponents to PlayTest AI for a game on your own, or set a slot to Open and give somebody your address for a game against a person.
+
+[color=#E5B842]Tracked as PLAN.md 12.3.[/color]"
+fit_content = true
+
+[node name="BackButton" type="TextureButton" parent="."]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(180, 58)
+layout_mode = 0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -78.0
+offset_right = 24.0
+offset_bottom = -78.0
+texture_normal = ExtResource("2_camp1")
+ignore_texture_size = true
+stretch_mode = 5

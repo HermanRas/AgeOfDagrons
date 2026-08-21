@@ -126,6 +126,13 @@ var _mode_picker: OptionButton
 var _ready_button: Button
 var _slot_box: VBoxContainer
 
+## The palette grid a colour button opens. ONE instance for the whole screen rather
+## than one per slot row: the rows are torn down and rebuilt whenever the slot count
+## changes, and a picker owned by a row would be freed underneath the finger that
+## opened it. `_picking_slot` is which row it was opened for.
+var _colour_picker: ColourPickerPopup
+var _picking_slot: int = -1
+
 ## This device's own answer, on a joined client. Reset to false whenever a new proposal
 ## arrives, because agreeing to one match is not agreeing to the next one.
 var _am_ready := false
@@ -163,6 +170,13 @@ func _init() -> void:
 	columns.add_child(_build_map_column())
 	columns.add_child(_build_match_column())
 
+	# LAST CHILD, so it draws over the page it covers. Added to the screen rather
+	# than to a slot row for the reason `_colour_picker`'s own note gives.
+	_colour_picker = ColourPickerPopup.new()
+	_colour_picker.colour_chosen.connect(_on_colour_chosen)
+	_colour_picker.cancelled.connect(func() -> void: _picking_slot = -1)
+	add_child(_colour_picker)
+
 	regenerate()
 
 	Net.peer_joined.connect(_on_peer_joined)
@@ -170,7 +184,7 @@ func _init() -> void:
 	Net.match_configured.connect(_on_match_configured)
 	Net.lobby_config_received.connect(_on_lobby_config_received)
 	Net.lobby_ready_changed.connect(_on_lobby_ready_changed)
-	Net.lobby_colour_cycle_requested.connect(_on_lobby_colour_cycle_requested)
+	Net.lobby_colour_requested.connect(_on_lobby_colour_requested)
 	Net.session_ended.connect(_on_session_ended)
 	_refresh_lobby()
 	_apply_cmdline()
@@ -587,56 +601,92 @@ func _on_reroll_pressed() -> void:
 	regenerate()
 
 
-## Colour is a cycle rather than a palette popup: one button per slot, and the only
-## rule is that two players cannot share a colour -- so a press steps to the next one
-## nobody else has taken. With colour the ONLY thing telling players apart (§1), a
-## duplicate is not a cosmetic mistake, it is an unplayable match.
-## YOUR COLOUR IS YOURS, on either device. A joined client used to have every colour
-## button disabled, so the one thing that tells players apart was assigned to them --
-## and it asks rather than sets, because the no-duplicates rule is the host's to keep.
+## A COLOUR BUTTON OPENS THE PALETTE, showing only what is free.
+##
+## This used to be a cycle: a press stepped the slot to the next colour nobody else held.
+## Cheap, and it made picking violet out of eight a matter of pressing five times and
+## watching -- worse on a joined client, where every press was a round trip to the host, so
+## the player was cycling blind through a list they could never see. The rule has not
+## changed, only where it is expressed: taken colours are not on the grid at all rather
+## than being skipped by the step. With colour the ONLY thing telling players apart (§1),
+## a duplicate is not a cosmetic mistake, it is an unplayable match.
+##
+## YOUR COLOUR IS YOURS, on either device -- a joined client used to have every colour
+## button disabled, so the one thing that tells players apart was assigned to them. What
+## a joined client does NOT get is the authority: `_on_colour_chosen` asks rather than
+## sets, because the no-duplicates rule belongs to whoever can see every slot.
 func _on_colour_pressed(index: int) -> void:
-	if _lobby == Lobby.JOINED:
-		if index != _local_slot():
-			return                # somebody else's identity, not yours to cycle
-		Net.request_colour_cycle()
+	if _lobby == Lobby.JOINED and index != _local_slot():
+		return                    # somebody else's identity, not yours to change
+	_picking_slot = index
+	_colour_picker.open_for("Player %d" % (index + 1), _colours[index],
+			_taken_colours(index))
+
+
+## What everybody ELSE holds, which is what the picker must not offer.
+##
+## ACTIVE slots only, never every slot. A closed slot holds no player, so its colour is
+## nobody's -- counting it would leave two players on an eight-slot board with six colours
+## spoken for by empty chairs and almost nothing left to choose from. That distinction was
+## a real bug in the cycle it replaced and it is the same distinction here.
+func _taken_colours(exclude_index: int) -> Array[int]:
+	var taken: Array[int] = []
+	for i in _active_slots():
+		if i != exclude_index:
+			taken.append(_colours[i])
+	return taken
+
+
+## A swatch was pressed. On the host this is the decision; on a joined client it is a
+## request, and the host's re-broadcast is what actually moves the colour on this screen.
+func _on_colour_chosen(colour_index: int) -> void:
+	var slot := _picking_slot
+	_picking_slot = -1
+	if slot < 0 or slot >= _colours.size():
 		return
-	_cycle_colour(index)
+
+	if _lobby == Lobby.JOINED:
+		Net.request_colour(colour_index)
+		return
+	_set_colour(slot, colour_index)
 	_publish_lobby()
 
 
-## Step a slot to the next colour nobody else holds. The host's rule, applied whether the
-## host pressed the button or a joined player asked it to.
-func _cycle_colour(index: int) -> void:
-	# Taken by an ACTIVE slot, not by any slot. A closed slot holds no player, so its
-	# colour is nobody's -- and counting it would leave two players on an eight-slot board
-	# with six colours spoken for by empty chairs and almost nothing to cycle through.
-	var taken: Array[int] = []
-	for i in _active_slots():
-		if i != index:
-			taken.append(_colours[i])
+## Give a slot a colour, refusing a collision. The host's rule, applied whether the host
+## pressed the swatch or a joined player asked for it -- one function, because two copies
+## of "is this colour free" is how the two come to disagree.
+##
+## Returns false and changes NOTHING on a collision rather than substituting some other
+## colour: a client's idea of what was free can be a moment stale, and the re-broadcast
+## that follows every lobby change is what corrects it. Silently handing them a different
+## colour than the one they pressed would be worse than leaving them where they were.
+func _set_colour(index: int, colour_index: int) -> bool:
+	if index < 0 or index >= _colours.size():
+		return false
+	if colour_index < 0 or colour_index >= _palette_size():
+		return false
+	if _taken_colours(index).has(colour_index):
+		return false
+	_colours[index] = colour_index
+	_refresh_colour_button(index)
+	return true
 
-	var count := _palette_size()
-	for step in range(1, count + 1):
-		var candidate := (_colours[index] + step) % count
-		if not taken.has(candidate):
-			_colours[index] = candidate
-			_refresh_colour_button(index)
-			return
 
-
-## A joined player asked for a different colour. Their slot is found from the peer, so a
-## client cannot ask on somebody else's behalf even if it wanted to.
+## A joined player asked for a colour. Their slot is found from the PEER, so a client
+## cannot ask on somebody else's behalf even if it wanted to.
 ##
 ## The re-broadcast cancels every agreement, including the asker's own -- consistent with
-## every other change, and cheap: the player who just pressed the button is right there to
-## press READY again.
-func _on_lobby_colour_cycle_requested(peer_id: int) -> void:
+## every other change, and cheap: the player who just pressed the swatch is right there to
+## press READY again. Skipped entirely when the request was refused, since nothing changed
+## and cancelling everybody's consent over a no-op would be a hostile way to say no.
+func _on_lobby_colour_requested(peer_id: int, colour_index: int) -> void:
 	for slot in _slot_peers:
-		if int(_slot_peers[slot]) == peer_id:
-			_cycle_colour(int(slot))
+		if int(_slot_peers[slot]) != peer_id:
+			continue
+		if _set_colour(int(slot), colour_index):
 			_publish_lobby()
 			_refresh_lobby()
-			return
+		return
 
 
 ## Changing a slot's role is what opens and closes the socket, because the OPEN role and
@@ -1147,14 +1197,46 @@ func _palette_size() -> int:
 	return maxi(1, GameDataRegistry.colour_count())
 
 
+## The slot's colour button, drawn AS the colour rather than as its name written in it.
+##
+## It used to be the name in coloured text on the default button background. That was
+## legible enough at eight distinct hues and stopped being the right thing the moment the
+## picker existed: the grid this button opens is flat blocks of colour, so a button that
+## previewed the choice differently from the way the choice is made is one more thing to
+## compare. Now the row and the grid draw a swatch the same way.
 func _refresh_colour_button(index: int) -> void:
 	var button: Button = _slot_rows[index]["colour"]
 	var palette_index: int = _colours[index]
-	if GameDataRegistry != null:
-		button.text = String(GameDataRegistry.colour_slug(palette_index)) \
-				.trim_prefix("colour.").capitalize()
-		# The label is drawn IN the colour, which is the swatch -- there is no separate
-		# colour chip to keep in step with the name.
-		button.add_theme_color_override("font_color", GameDataRegistry.colour(palette_index))
-	else:
+	if GameDataRegistry == null:
 		button.text = "Colour %d" % (palette_index + 1)
+		return
+
+	var colour := GameDataRegistry.colour(palette_index)
+	button.text = String(GameDataRegistry.colour_slug(palette_index)) \
+			.trim_prefix("colour.").capitalize()
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = colour
+	style.border_color = Color(0.0, 0.0, 0.0, 0.6)
+	style.set_border_width_all(1)
+	style.set_content_margin_all(6)
+	button.add_theme_stylebox_override("normal", style)
+	var lit := style.duplicate() as StyleBoxFlat
+	lit.bg_color = colour.lightened(0.15)
+	button.add_theme_stylebox_override("hover", lit)
+	button.add_theme_stylebox_override("pressed", lit)
+	button.add_theme_stylebox_override("focus", style)
+	# A DISABLED SWATCH STILL SHOWS ITS COLOUR, dimmed. Every colour button but your
+	# own is disabled on a joined client (`_refresh_lobby`), and left to the theme's
+	# default those rows would all go grey -- which on this screen means the player
+	# list stops saying who is which colour, the one thing it exists to say.
+	var dim := style.duplicate() as StyleBoxFlat
+	dim.bg_color = Color(colour, 0.55)
+	button.add_theme_stylebox_override("disabled", dim)
+
+	# Black on yellow, white on blue: the palette deliberately spans L* 36 to 100
+	# (colours.json's ladder), so one fixed ink colour is illegible at one end of it.
+	var ink := Color.BLACK if colour.get_luminance() > 0.5 else Color.WHITE
+	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, ink)
+	button.add_theme_color_override("font_disabled_color", Color(ink, 0.7))

@@ -57,40 +57,53 @@ func _process(_delta: float) -> void:
 		3:
 			_pick_slots(2)
 		4:
+			# THE COLOUR PICKER (2026-08-21), which replaced a cycle. Pressed through the
+			# slot row's real Button, because what is in doubt is that a press on that row
+			# opens the grid -- the handler on its own would pass with the button unwired.
+			_open_the_colour_picker()
+		5:
+			_report_colour_picker()
+			_shoot("skirmish_colour_picker")
+		6:
+			_pick_a_colour()
+		7:
+			_report_colours()
+			_shoot("skirmish_colour_picked")
+		8:
 			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
 			# is the hosting path and not a simulation of it.
 			_open_a_slot()
-		5:
+		9:
 			_report_lobby()
 			_shoot("skirmish_lobby_waiting")
-		6:
+		10:
 			# A peer arriving. The connection itself is (g)'s ground already proven on two
 			# devices; what is unproven is that this SCREEN shows the chair being taken
 			# and lets START go ahead once it is.
 			_screen._on_peer_joined(7777)
 			_hold(LOBBY_FRAMES)
-		7:
+		11:
 			_report_lobby()
 			_shoot("skirmish_lobby_filled")
-		8:
+		12:
 			# The JOINING device's view of the same screen -- the one state that cannot be
 			# reached from here honestly, since a real one needs a second process dialling
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
 			_join_someone_elses_match()
-		9:
+		13:
 			_shoot("skirmish_lobby_joined")
-		10:
+		14:
 			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
 			# most here is the one where adding multiplayer broke playing alone.
 			_close_the_slot()
-		11:
+		15:
 			_start_the_match()
-		12:
+		16:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -162,6 +175,55 @@ func _report_slots() -> void:
 	if _screen._slot_rows.size() != _screen._slots:
 		push_warning("preview_skirmish: %d rows for %d slots"
 				% [_screen._slot_rows.size(), _screen._slots])
+
+
+## Press slot 1's colour swatch, which is what opens the grid.
+##
+## The REAL Button on the row, not `_on_colour_pressed` -- the same reason `_pick_role`
+## goes through the dropdown's own signal, and the same reason `preview_match` presses
+## the real cancel-build button. A press is what is in doubt.
+func _open_the_colour_picker() -> void:
+	var button: Button = _screen._slot_rows[0]["colour"]
+	print("colour: slot 1 button '%s', rect %s, disabled %s"
+			% [button.text, button.get_global_rect(), button.disabled])
+	button.pressed.emit()
+	_hold(LOBBY_FRAMES)
+
+
+func _report_colour_picker() -> void:
+	var picker: ColourPickerPopup = _screen._colour_picker
+	var taken := _screen.build_config().colours
+	print("colour: grid open %s, offering %s, taken by others %s"
+			% [picker.is_open(), picker.offered(), [taken[1]]])
+	if not picker.is_open():
+		push_warning("preview_skirmish: the colour button did not open the grid")
+	# THE WHOLE RULE, checked rather than eyeballed: a colour somebody else holds is
+	# not on the grid at all.
+	if picker.offered().has(int(taken[1])):
+		push_warning("preview_skirmish: the grid offers player 2's colour to player 1")
+
+
+## Take a colour off the grid, through its own swatch button.
+func _pick_a_colour() -> void:
+	var picker: ColourPickerPopup = _screen._colour_picker
+	var current := int(_screen.build_config().colours[0])
+	for index in picker.offered():
+		if index == current:
+			continue
+		print("colour: pressing swatch %d (was %d)" % [index, current])
+		picker.swatch_for(index).pressed.emit()
+		_hold(LOBBY_FRAMES)
+		return
+	push_warning("preview_skirmish: nothing else on the grid to pick")
+
+
+func _report_colours() -> void:
+	var cfg := _screen.build_config()
+	print("colour: now %s, grid open %s" % [cfg.colours, _screen._colour_picker.is_open()])
+	if _screen._colour_picker.is_open():
+		push_warning("preview_skirmish: the grid stayed up after a swatch was pressed")
+	if cfg.colours[0] == cfg.colours[1]:
+		push_warning("preview_skirmish: two players share a colour")
 
 
 func _open_a_slot() -> void:

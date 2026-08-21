@@ -624,6 +624,26 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects (`src
 file and an empty one are different states — only one is a bug. Its single entry is
 `faction.default`, named for its job as *the default skin key*.
 
+**`market.json`** (added 2026-08-21, §8.7) is the only data file whose numbers are spent *inside
+a state transition* rather than read to describe an entity, so it carries a constraint the others
+do not: **every value is an integer**. `TributeCommand` and `MarketExchangeCommand` run in the
+sim, whose arithmetic must be bit-identical on an ARM phone and an x86 host, so the tax is
+`tax_percent: 10` — a multiply and an integer divide — and never `0.1`. Same reason `ages.json`
+counts advancement in ticks and not seconds. It also names the **building** that licenses trading,
+so the two commands cannot end up gated on different things, and gets the age gate for free from
+that building's own `age_required`.
+
+```jsonc
+// market.json - gold is the currency, so it has no price entry of its own
+"building": "building.market",
+"tribute":  { "increment": 100, "tax_percent": 10,
+              "kinds": ["food", "wood", "stone", "gold"] },
+"exchange": { "currency": "gold", "lot": 100,
+              "prices": { "food":  { "buy": 130, "sell": 70 },
+                          "wood":  { "buy": 130, "sell": 70 },
+                          "stone": { "buy": 130, "sell": 70 } } }
+```
+
 **`colours.json`** is the v1 player palette, read by `GameDataRegistry.colour(index)` and indexed
 by `SimPlayer.colour`. Eight hues cannot all be told apart by hue: red-green colour blindness
 (~8% of men) collapses red, orange, green and yellow onto one axis, so **those four are separated
@@ -1052,10 +1072,84 @@ badge, which is a button that walks to them. `[MVP]`
 | 8.1b | ✅ Train button + queue count + cancel, inside the framed panel. Per-slot queue **icons** deferred while there is one trainable unit — a row of near-identical icons says less than a count | `[MVP]` |
 | 8.1c | ✅ Multi-select grid of portraits, capped at 20 (UI_Design.md's own figure) since the title's "(+N)" covers the rest. Per-portrait mini health overlays deferred as polish | `[MVP]` |
 | 8.2a | ✅ `Minimap` — terrain baked once into an `Image`, blips redrawn per snapshot, fog painted **over** the blips (2.5) | `[MVP]` |
-| 8.2b | 4 corner buttons — disabled placeholders today; chat/trade/tech-tree do not exist to give them anything to do | |
+| 8.2b | ✅ **DONE 2026-08-21** — 4 corner buttons, all four real. `hud_settings` took over the pause menu from the button that used to sit in the age header; `hud_trade` opens a **working market**; `hud_chat` and `hud_techtree` open **wireframes**. See §8.2b below | |
+| 8.6 | **Chat** — wireframe only (§8.2b). The transport is unbuilt and the design question is per-team versus all-players | |
+| 8.7 | ✅ **DONE 2026-08-21** — **Market**: tribute with a tax, and buy/sell against gold. Two commands, one data file, one page. See §8.2b | |
 | 8.3 | ✅ Two-finger box select, drawn in **screen** space (world space would slide it under the fingers holding it whenever the camera moved). Own units only; tested against each unit's ground point, not its sprite; returned in **id order**, because a box catching more than `MAX_SELECTED` must keep the same units on every machine | `[MVP]` |
 | 8.4 | ✅ `NoticeToast` | `[MVP]` |
-| 8.5 | ✅ `PauseMenu` — stops `SimClock`, so a real pause rather than a panel over a ticking match | `[MVP]` |
+| 8.5 | ✅ `PauseMenu` — stops `SimClock`, so a real pause rather than a panel over a ticking match. **Reached from the SETTINGS corner button since 2026-08-21**, not from a pause button in the age header: that button was the project owner's call to retire, and its actions belong beside the three sibling pages rather than in the top-centre chrome. Still the same class — Resume/Resign/Quit is still what it holds | `[MVP]` |
+
+#### 8.2b The minimap's four corner pages — ✅ built 2026-08-21
+
+Four buttons that were dimmed placeholders for as long as there was nothing behind them.
+They share `HudPanel`: a dimmed backdrop, a framed page, a title, a body and a button row.
+**None of them stops the clock**, unlike the pause menu beside them — a market has to show
+live stockpiles to be worth opening, and on a joined client a local pause was never a pause
+anyway (the host keeps ticking; see `PauseMenu`'s header). One page at a time, and pressing
+the corner you are already on closes it, which gives a phone a second way out of every page.
+
+**Two mechanical details that cost real time and would cost it again.** The grid holding the
+four buttons covers the whole 200×200 minimap area, so the buttons must be `MOUSE_FILTER_STOP`
+**individually** and the grid `IGNORE` — the other way round and every tap on the diamond
+dies in the grid. And each button must be *shrunk into its corner*: a container child fills
+its cell by default, so all four came out 32 wide and **98 tall**, a full-height strip down
+the side of the diamond. Harmless while they were `IGNORE` placeholders; a tap on the
+diamond's upper-left edge opened the chat page the moment they became real.
+
+**They do not use `panel_background.png`.** That texture is 160×192 — a small *portrait*
+panel with a heavy gold dragon ornament, sized for the resource counter. Stretched across a
+872×568 landscape page the dragon inflates into the middle of the content and reads as
+damage (photographed). So these pages take the line `Minimap` already took when the pack had
+nothing at its shape: a flat dark fill with a gold border, honest about being a stand-in.
+When the arch art the mockups draw exists, it replaces the title and the fill and the layout
+below does not move.
+
+| Corner | Page | State |
+|---|---|---|
+| top-left | **Chat** (8.6) | **Wireframe.** The player tabs are the real players with their real colours off the snapshot, so the row is the right width; the messages are samples and the page says so. SEND and CLEAR are **disabled** — a wireframe whose buttons worked *locally* would be worse than one whose buttons do not, because a message appearing on your own screen and nowhere else is a bug report waiting to happen. **The real thing** is a reliable RPC pair on `Net` rebroadcast by the host (the `_recv_command` trick that makes `ResignCommand` unforgeable), **not** a `Command` — chat changes no sim state, so putting it through the tick would give it a 100 ms floor and put text in `state_hash()`. What is actually open is a design question: all-players or per-team |
+| top-right | **Market** (8.7) | **Working.** Below |
+| bottom-left | **Tech tree** (9.4) | **Wireframe, and a real renderer with no data.** It walks `GameDataRegistry.tech_ids()` and lays each tech out in its age's column with its prerequisites named, so the day 9.3 fills `techs.json` in this page fills in with it. `techs.json` is deliberately empty, so today it draws a placeholder lattice and says which it is. **Read-only by design, not by shortcut**: researching happens at the building that offers it, the way training does, so there is nothing to press and no command behind it. Two states only — reached ages lit, later ages locked. `RESEARCHED` is in the legend and never assigned, because `SimPlayer` has no researched-tech field and a field the HUD reads that nothing writes is exactly the hole 4.11's population counter was |
+| bottom-right | **Settings** (8.5) | The pause menu, moved here |
+
+##### 8.7 The market
+
+Everything it needs already existed — `SimPlayer.stock`, `building.market` in `buildings.json`,
+and every player's id and colour on the snapshot — so this is wired end to end rather than
+drawn. `data/market.json` holds the numbers, and **every one of them is an integer**: this
+arithmetic runs inside the sim, where a float is free to round differently on an ARM phone
+than on an x86 host, so the tax is `10` percent and not `0.1`.
+
+- **`TributeCommand`** — the sender pays `increment` (100) and the recipient receives
+  `increment × (100 − tax) / 100` (90). **The tax is why this is one command and not two**: a
+  tribute is not a transfer, the resources are destroyed in the middle, and splitting it
+  would give a tick where they exist nowhere. Refuses a self-tribute, a defeated recipient,
+  and a negative amount — that last one is the resource generator.
+- **`MarketExchangeCommand`** — one command for both directions, distinguished by a bool,
+  because every rule around them is shared. **The price is not on the wire**: a client says
+  what it wants to trade and the server looks up what that costs, the same reason
+  `TrainCommand` carries a unit id and not a cost.
+- **Gold is the currency**, which is why it has no exchange entry: the market buys and sells
+  food, wood and stone *for* gold. A market that traded any resource for any other would make
+  three of the four interchangeable and the fourth pointless.
+- **Buy 130, sell 70**, so a round trip loses 60% — an emergency valve for a shortage and
+  never a substitute for gathering. AoE2's market opens at 100/100 and **drifts** with every
+  trade, which is the better mechanism and is deliberately not this one: a drifting price is
+  per-player mutable state, so it would have to live on `SimPlayer`, ride the snapshot and
+  enter `state_hash()`. Worth doing once the market has been played with. Fixed prices are one
+  data change away from being that mechanism's starting point.
+- **`GameDataRegistry.validate()` fails the suite if buy ever drops to sell**, because that is
+  infinite gold at the speed of a finger, and a test asserts the same thing against the
+  transaction rather than the data.
+- **The gate is a finished market**, named in `market.json` so the two commands cannot end up
+  gated on different things — and because `building.market` is age 2, requiring the building
+  requires the age without stating it twice. The corner icon is **dimmed, not disabled**,
+  while none stands: a disabled icon teaches nobody what a market is for, and the page names
+  the building and says the buttons stay refused until one is up.
+- **What is deliberately not shown**: the other players' stockpiles. `player_state` carries
+  every player's `stock` to every client, so this page *could* print an opponent's gold — and
+  a fog of war that hides their buildings while the HUD prints their bank balance would be a
+  strange kind of secrecy. That leak is `SnapshotSystem`'s to close; this page declines to be
+  the thing that makes it matter.
 
 ### Phase 9 — Ages & tech
 
@@ -1063,7 +1157,7 @@ badge, which is a button that walks to them. `[MVP]`
 |---|---|---|
 | 9.1/9.2 | ✅ `AgeBadge` — the numeral in a gold circle, with advance progress as the **ring around the badge** rather than a separate bar. Progress rides the snapshot as **int ticks**; the view does the division, so the sim carries no floats | |
 | 9.3 | `TechSystem`: research timers, stat modifiers, gating. **The field yield's per-age ladder is standing in for a mill tech until this lands** | |
-| 9.4 | Tech tree screen | |
+| 9.4 | Tech tree screen — **the page exists as a wireframe** behind the minimap's bottom-left corner (§8.2b), and the renderer is real: it walks `techs.json` and will populate the day 9.3 fills it in. Read-only by design — research happens at the building | |
 | 9.5 | Additional civilisations — the **re-skin tier** is pure content (a `visuals.json` skin set plus a name table, no sim change, partially shippable). Unique units and per-civ bonuses are the expensive tier and want a separate decision | |
 | 9.6 | Age re-skin: visuals resolve through the owner's current age. Pure view work — `SimPlayer.age` already reaches the client | |
 
@@ -1096,7 +1190,7 @@ Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 | 12.1b | LAN discovery, reconnect, lag compensation, desync detection | |
 | 12.2a | **PlayTest AI.** See §12.2 | |
 | 12.2b | AI difficulty levels and real decision flow — **the part deliberately parked** until the game's balance has been played | |
-| 12.3 | Campaign: scripted triggers/objectives on the host-loopback path | |
+| 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 | |
 | 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
 
 #### 12.1 Multiplayer approach — ordered steps for two-device play
@@ -1111,7 +1205,7 @@ features stack on it.
 |---|---|---|---|
 | a | `Net.host_open()` on 0.0.0.0 + `join(ip)`, peer lifecycle, player-id assignment | 2–4 h | low |
 | b | **The client has no world** (below) | 4–8 h | **high** |
-| c | ✅ **DONE 2026-08-21** — 1.6's screen in lobby mode. Went beyond the row: the spec described a lobby that only worked one way (the host learns who arrived, the joiner learns nothing back), so it also gained a **lobby config broadcast and a READY gate** — a joining player sees the host's real map and settings and must agree before START unlocks, and changing any setting cancels every agreement. Slots also became 2–8 with a **CLOSED** role, so the player count and the map size are two numbers. Validated phone↔PC over WiFi | 6–10 h | low, volume |
+| c | ✅ **DONE 2026-08-21** — 1.6's screen in lobby mode. Went beyond the row: the spec described a lobby that only worked one way (the host learns who arrived, the joiner learns nothing back), so it also gained a **lobby config broadcast and a READY gate** — a joining player sees the host's real map and settings and must agree before START unlocks, and changing any setting cancels every agreement. Slots also became 2–8 with a **CLOSED** role, so the player count and the map size are two numbers. Validated phone↔PC over WiFi. **Colour became a picker on 2026-08-21** (below) | 6–10 h | low, volume |
 | d | Match-start handshake: host broadcasts the agreed `MatchConfig`, everyone builds, acks, then the clock starts | 2–3 h | medium |
 | e | ✅ **DONE 2026-08-21** — resign is a `ResignCommand` through the ordinary command path, so the server overwrites the player id and it cannot be forged for somebody else; a vanished peer is issued the same command by the host. `WinConditionSystem` now excludes `defeated` players from the standing count, which is what makes either mean anything. Proven by killing a real joiner process mid-match (host showed VICTORY) and by pressing the real Resign button (DEFEAT, "Player 2 won") | 2–3 h | low |
 | f | Wire size and packet reliability (below) | 3–6 h | medium |
@@ -1201,6 +1295,21 @@ length-prefixed string every time it appears. Three fixes, none of them a delta:
 
 Confirmed on the real transport: ENet's own warning went from **18,532 bytes to 4,360**.
 
+**Colour is a PICKER, not a cycle — 2026-08-21.** A colour button used to step the slot to the
+next colour nobody else held. Cheap to write, and it made choosing violet out of eight a matter
+of pressing five times and watching — worse on a joined client, where every press was a round
+trip to the host, so the player was cycling blind through a list they could never see.
+`ColourPickerPopup` shows the list. **The rule has not changed, only where it is expressed:** a
+colour somebody else holds is not on the grid at all, rather than being skipped by the step.
+Active slots only — a closed slot holds no player, so its colour is nobody's, and counting it
+would leave two players on an eight-slot board with six colours spoken for by empty chairs.
+
+The wire message now **names a colour** where it used to name none, and the host still holds the
+rule: it re-checks the index and **ignores** a collision rather than substituting something,
+because a client's idea of what is free can be a moment stale and the re-broadcast that follows
+every lobby change is what corrects it. Silently handing somebody a different colour than the one
+they pressed would be worse than leaving them where they were.
+
 **The transport mode is settled, and measured rather than argued — 2026-08-21.** `Net` counts
 arriving snapshots and reports gaps (ticks are consecutive, so a jump is exactly what went
 missing). Phone joined to a PC host over real WiFi, ~90 seconds of play:
@@ -1238,6 +1347,23 @@ needs hardware and a second pair of thumbs.
 so a remote player's orders land whenever they arrive — fine on LAN, visibly rubber-bandy when
 latency spikes. A fixed 2–3 tick input delay is the standard fix, about 2 h, but it changes how
 the game **feels** and wants a decision rather than a default.
+
+#### 12.3 The front door, and where PLAY goes — changed 2026-08-21
+
+PLAY and MULTIPLAYER both opened the skirmish screen, and that was the honest consequence of
+1.6's design: a lobby *is* that screen with a slot set to Open, so there was one screen and
+PLAY had nowhere of its own to lead. What it cost was the front door — either button did the
+same thing, and the campaign this table has always had a row for was reachable from nothing.
+
+PLAY now opens a **campaign placeholder**, and MULTIPLAYER opens the skirmish/lobby screen. A
+real screen rather than a `NoticeToast` — which is what SETTINGS and HOW TO get — because
+those are features with no shape yet and a campaign is a list of missions: this is the frame
+that list appears in, so when 12.3 lands it is a body replacing a placeholder.
+
+**The wrinkle, and it is a label rather than a screen.** A solo skirmish is now behind a
+button marked MULTIPLAYER. Nothing is unreachable — all-local slots is a skirmish, an Open
+slot is a lobby, one screen — but a player wanting a game against the AI presses the wrong-
+sounding button to get there. The project owner has the menu art in hand.
 
 #### 12.2 PlayTest AI (12.2a) — ✅ built 2026-08-17
 
@@ -1304,11 +1430,12 @@ it is baked.)*
 | **Field yield balance** | Medium | Low | ✅ **DONE** 2026-08-17 — see below |
 | 2.4b Map generator | High | Medium | ✅ **DONE** 2026-08-17 |
 | 1.6 Skirmish screen | High | Medium | ✅ **DONE** 2026-08-17 |
-| 12.2a PlayTest AI | High | Low-medium | **Next** — cheap, and it buys an automated full-match test |
-| 12.1 Real multiplayer (LAN, 2 devices) | High | Medium | **After the map work** — §12.1 |
+| 12.2a PlayTest AI | High | Low-medium | ✅ **DONE** 2026-08-17 — and it bought an automated full-match test |
+| 12.1 Real multiplayer (LAN, 2 devices) | High | Medium | ✅ **DONE** 2026-08-21, a–g, validated phone↔PC on real WiFi — §12.1 |
+| 8.2b The minimap's four corner pages | Medium | Low-medium | ✅ **DONE** 2026-08-21 — market working, chat and tech tree as wireframes, settings absorbed the pause menu — §8.2b |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | 9.x Ages & tech | High — the age axis now carries what factions would have | High: four age skins of every building | Batch later |
-| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | The largest block of finished art the game cannot reach: 24 baked, declared, unbuildable pieces |
+| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | **NEXT.** The largest block of finished art the game cannot reach: 24 baked, declared, unbuildable pieces — and the only remaining high-impact row with no art dependency. See §15 |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
 
 **Field yield, balanced against Age of Empires 2026-08-17.** It was 0/100/250/400 food per 100
@@ -1461,5 +1588,15 @@ Live risks only. Retired ones are in `b904b76`.
 
 1. ✅ **Map generator in the game** (2.4b, §11.2). Still open from it: the **PNG + sidecar save format**, which 2.4c needs. It also found that `terrain.water_shallow`, `terrain.water_deep`, `terrain.rock` and the forest floor were **baked and staged but never declared in `visuals.json`** — the debug map only ever paints grass and dirt, so nothing had asked for them, and a generated map's water would have drawn as the magenta unknown. Four data entries, now wired: exactly the gap the asset seam's totality rule is meant to surface rather than hide.
 2. ✅ **Skirmish settings screen** (1.6, §11.1), with PLAY routed through it. Open from it: saved maps (waits on 2.4c), the OPEN slot (waits on 12.1), and the skin.
-3. **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically. **The screen already offers it and `SimPlayer.is_ai` is already set**, so what is missing is only `AISystem` itself: player 2 is currently marked as a bot and does nothing.
-4. **Then multiplayer** (§12.1) in the order given: a → b → d → g → c → e → f.
+3. ✅ **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically.
+4. ✅ **Multiplayer** (§12.1), the whole block a–g, validated on hardware.
+5. ✅ **UI batch, 2026-08-21.** PLAY split off to a campaign placeholder (§12.3); the lobby's colour cycle became a picker (§12.1c); the age header's pause button retired into the SETTINGS corner button; and the minimap's four corner buttons became real — a working market, and chat and tech-tree wireframes (§8.2b).
+6. **Walls.** The largest block of finished art the game cannot reach: 24 pieces baked and declared in `visuals.json`, unbuildable, because a wall needs drag placement, segment-length choice, 8 orientations and gate pass-through. The only remaining high-impact candidate in §12 with **no art dependency** — every other one is gated on bakes (5.7 needs ~70, 9.6 needs four age skins of every building, 13.x needs rigging). It also changes how the game *plays* before the unit-speed balancing pass in `BUGS.md`, which is the right order: chokepoints and defence alter what "too fast" even means.
+7. **Then the rest of 4.13** — the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing, so ranged combat currently resolves with no visible cause). Same "declared art the game cannot reach" complaint as the walls, one size smaller.
+
+**Retired from this list, because the architecture answered it rather than the work:** 12.1b's
+*desync detection*. `Net` has no `SimWorld` on a client — it says so outright — and `state_hash()`
+appears only in tests. With one authoritative simulation and full snapshots down there is no
+second simulation to diverge from. What is still live in that row is **LAN discovery** (typing an
+IP was the friction point on hardware in (g)) and **reconnect**; "lag compensation" is the parked
+input-delay decision at the end of §12.1.

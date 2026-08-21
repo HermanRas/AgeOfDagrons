@@ -434,6 +434,28 @@ func owned_entity_position(owner: int, def_id: StringName) -> Variant:
 	return null
 
 
+## Whether `owner` has a FINISHED building of `def_id`, from snapshot facts alone.
+##
+## THE CLIENT-SIDE TWIN of `SimWorld.has_completed_building`, and advisory in exactly
+## the way `PlacementGhost` is: it exists so the market page can grey a button the
+## server would refuse, not so anything can be decided here. Trustworthy for the one
+## question it is asked -- "do *I* have a market" -- because a player's own entities
+## are always sent whatever the fog says (`SnapshotSystem._entry_for`). For anybody
+## else's buildings it would be answering out of what the fog last showed, which is
+## why nothing asks it that.
+##
+## `phase` is COMPLETE for a unit or a resource node (see `_facts`), so this leans on
+## the `def_id` match to mean "a building" rather than testing the kind separately.
+func has_completed_building(owner: int, def_id: StringName) -> bool:
+	for f in _facts.values():
+		if int(f.get("owner_id", -1)) != owner or not bool(f.get("alive", true)):
+			continue
+		if StringName(f.get("def_id", &"")) == def_id \
+				and int(f.get("phase", -1)) == SimBuilding.Phase.COMPLETE:
+			return true
+	return false
+
+
 ## Replace the selection and repaint the rings.
 func select(ids: Array[int]) -> void:
 	for id in selection.current():

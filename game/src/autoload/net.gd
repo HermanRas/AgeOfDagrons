@@ -52,14 +52,21 @@ signal lobby_config_received()
 ## the HOST, which is the only side that needs to count them.
 signal lobby_ready_changed(peer_id: int, ready: bool)
 
-## A joined player wants the next free colour for their own slot. Emitted on the HOST.
+## A joined player wants a PARTICULAR colour for their own slot. Emitted on the HOST.
 ##
-## A REQUEST, not an instruction, and it names no colour. The rule that two players never
-## share one is the host's to enforce -- colour is the only thing telling players apart
-## (§1), so a duplicate is not a cosmetic slip but an unplayable match -- and a client
-## that picked its own index could collide with a change the host made in the same breath.
-## Asking to advance leaves the one authority holding the one rule.
-signal lobby_colour_cycle_requested(peer_id: int)
+## STILL A REQUEST, NOT AN INSTRUCTION, and that has not changed with the picker -- only
+## what the request carries. It used to name no colour at all ("give me the next free
+## one"), which kept the whole no-duplicates rule on the host but meant a joined player
+## chose violet out of eight by pressing five times and watching. `ColourPickerPopup`
+## shows them the list, so the request now names an index.
+##
+## The host still holds the rule. It re-checks the index against every other active slot
+## and IGNORES a collision rather than substituting something -- the client's list of what
+## was free can be a moment stale, and the re-broadcast that follows every lobby change is
+## what corrects it. Colour is the only thing telling players apart (§1), so a duplicate is
+## not a cosmetic slip but an unplayable match, and the authority for that stays in one
+## place.
+signal lobby_colour_requested(peer_id: int, colour_index: int)
 
 ## One port for every session shape. Solo binds it on loopback, an open host binds it
 ## on 0.0.0.0, and a client dials it -- so there is nothing to keep in sync and a
@@ -505,22 +512,26 @@ func _recv_lobby_ready(ready: bool) -> void:
 	lobby_ready_changed.emit(sender, ready)
 
 
-## Ask the host for the next free colour for this device's own slot. See
-## `lobby_colour_cycle_requested` for why it names no colour.
-func request_colour_cycle() -> void:
+## Ask the host for one particular colour for this device's own slot. See
+## `lobby_colour_requested` for why this is still a request the host may refuse.
+##
+## WHICH SLOT IS NOT ON THE WIRE, and that is the security property, the same one
+## `ResignCommand` relies on: the host resolves the asker's slot from the peer id the
+## transport reports, so a client cannot recolour somebody else even if it tried.
+func request_colour(index: int) -> void:
 	if _host != null:
 		return                    # the host changes its own colours directly
-	rpc_id(1, "_recv_colour_cycle_request")
+	rpc_id(1, "_recv_colour_request", index)
 
 
 @rpc("any_peer", "reliable")
-func _recv_colour_cycle_request() -> void:
+func _recv_colour_request(index: int) -> void:
 	if not is_server():
 		return
 	var sender := get_tree().get_multiplayer().get_remote_sender_id()
 	if not _peer_players.has(sender):
 		return                    # not somebody this session knows
-	lobby_colour_cycle_requested.emit(sender)
+	lobby_colour_requested.emit(sender, index)
 
 
 ## Whether one joined peer has said it is ready. Absent means no, never means yes: a

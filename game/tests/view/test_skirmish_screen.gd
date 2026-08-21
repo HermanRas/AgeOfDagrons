@@ -104,19 +104,63 @@ func test_random_stays_random_in_the_config_but_resolves_in_the_map() -> void:
 	assert_ne(int(screen.map_data().meta["type"]), int(MapGenerator.Type.RANDOM))
 
 
-func test_cycling_a_colour_never_lands_on_one_already_taken() -> void:
-	# Colour is the ONLY thing telling players apart (§1), so a duplicate is not a
-	# cosmetic slip -- it is an unplayable match.
-	for i in range(12):
-		screen._on_colour_pressed(0)
-		var cfg := screen.build_config()
-		assert_ne(cfg.colours[0], cfg.colours[1], "collided after %d presses" % (i + 1))
+# ── the colour picker (replaced the cycle) ──────────────────────────────────
+#
+# Colour used to be a cycle: one press stepped the slot to the next free colour. The
+# rule has not changed -- two players may never share one, because colour is the ONLY
+# thing telling them apart (§1) and a duplicate is an unplayable match -- but it is now
+# expressed by what the grid OFFERS rather than by where a step lands. So these test the
+# offer as well as the outcome.
+
+## Press a slot's colour button and pick a swatch, the way a thumb would.
+func _pick_colour(slot: int, colour_index: int) -> void:
+	screen._on_colour_pressed(slot)
+	var button := screen._colour_picker.swatch_for(colour_index)
+	assert_not_null(button, "colour %d is not on the grid" % colour_index)
+	if button != null:
+		button.pressed.emit()
 
 
-func test_a_colour_cycle_actually_moves() -> void:
+func test_the_picker_never_offers_a_colour_somebody_else_holds() -> void:
+	var cfg := screen.build_config()
+	screen._on_colour_pressed(0)
+	assert_true(screen._colour_picker.is_open(), "pressing a colour opens the grid")
+	assert_false(screen._colour_picker.offered().has(cfg.colours[1]),
+			"player 2's colour is not on player 1's grid")
+	assert_true(screen._colour_picker.offered().has(cfg.colours[0]),
+			"but your own is, marked, or nothing says which one you have")
+
+
+func test_picking_a_swatch_reaches_the_config() -> void:
+	# The whole point of replacing the cycle: one press, one colour, chosen rather
+	# than arrived at.
 	var before := screen.build_config().colours[0]
 	screen._on_colour_pressed(0)
-	assert_ne(screen.build_config().colours[0], before)
+	var wanted := -1
+	for candidate in screen._colour_picker.offered():
+		if candidate != before:
+			wanted = candidate
+			break
+	assert_true(wanted >= 0, "the palette offers more than one colour")
+
+	_pick_colour(0, wanted)
+	assert_eq(screen.build_config().colours[0], wanted)
+	assert_ne(screen.build_config().colours[0], screen.build_config().colours[1],
+			"and still nobody shares")
+
+
+func test_a_colour_already_taken_is_refused_rather_than_substituted() -> void:
+	# Reachable only from a stale client, since the grid does not offer it -- but the
+	# host applies the rule, and silently handing somebody a DIFFERENT colour to the one
+	# they pressed would be worse than leaving them where they were.
+	var cfg := screen.build_config()
+	assert_false(screen._set_colour(0, cfg.colours[1]), "refused")
+	assert_eq(screen.build_config().colours[0], cfg.colours[0], "and nothing moved")
+
+
+func test_the_picker_closes_when_a_swatch_is_pressed() -> void:
+	_pick_colour(0, screen.build_config().colours[0])
+	assert_false(screen._colour_picker.is_open())
 
 
 func test_choosing_a_role_reaches_the_config() -> void:
@@ -200,14 +244,15 @@ func test_a_closed_slot_says_it_is_keeping_its_room() -> void:
 
 func test_closed_slots_do_not_hoard_the_colours() -> void:
 	# Counting a closed slot's colour as taken would leave two players on an eight-slot
-	# board with six colours spoken for by empty chairs.
+	# board with six colours spoken for by empty chairs. Asked of the GRID now rather
+	# than by cycling and collecting: what the picker offers is the same question, and
+	# it answers it in one press instead of twelve.
 	_pick_slots(8)
-	var seen := {}
-	for i in range(12):
-		screen._on_colour_pressed(0)
-		seen[screen.build_config().colours[0]] = true
-	assert_true(seen.size() >= 6,
-			"player 1 could reach %d colours, not just the unclosed ones" % seen.size())
+	screen._on_colour_pressed(0)
+	var offered := screen._colour_picker.offered().size()
+	assert_true(offered >= GameDataRegistry.colour_count() - 1,
+			"player 1 was offered %d of %d colours -- only player 2's is spoken for"
+			% [offered, GameDataRegistry.colour_count()])
 
 
 func test_the_status_line_names_both_numbers() -> void:
@@ -551,23 +596,45 @@ func test_a_joined_player_owns_their_own_colour_and_nobody_elses() -> void:
 			"and player 1's is not")
 
 
-func test_a_hosts_colour_cycle_for_a_peer_never_collides() -> void:
-	# The request carries no colour on purpose: the no-duplicates rule stays with the one
-	# authority that can see every slot.
+func test_a_peer_gets_the_colour_it_asked_the_host_for() -> void:
+	# The request NAMES a colour now -- the picker showed the joining player the list,
+	# so asking for "the next free one" would be asking them to press blind again. What
+	# has not moved is the authority: the host applies it, or does not.
 	_open_slot_two()
 	_register_peer(7777, 2)
 	screen._on_peer_joined(7777)
 
-	for i in range(12):
-		screen._on_lobby_colour_cycle_requested(7777)
-		var cfg := screen.build_config()
-		assert_ne(cfg.colours[0], cfg.colours[1], "collided after %d requests" % (i + 1))
+	var free := -1
+	for candidate in range(GameDataRegistry.colour_count()):
+		if not screen._taken_colours(1).has(candidate):
+			free = candidate
+			break
+	assert_true(free >= 0, "some colour is free in a two-player lobby")
+
+	screen._on_lobby_colour_requested(7777, free)
+	assert_eq(screen.build_config().colours[1], free, "player 2 got what it asked for")
+	assert_ne(screen.build_config().colours[0], screen.build_config().colours[1])
+
+
+func test_a_peer_asking_for_a_taken_colour_is_ignored() -> void:
+	# A client's list of what is free can be a moment stale. The host refuses rather
+	# than substituting, and the re-broadcast that follows every lobby change is what
+	# corrects the client -- so the failure mode is "your press did nothing", never
+	# "you are now some other colour".
+	_open_slot_two()
+	_register_peer(7777, 2)
+	screen._on_peer_joined(7777)
+
+	var before := screen.build_config().colours.duplicate()
+	screen._on_lobby_colour_requested(7777, int(before[0]))
+	assert_eq(screen.build_config().colours, before,
+			"asking for player 1's colour changes nothing")
 
 
 func test_a_colour_request_from_a_stranger_changes_nothing() -> void:
 	_open_slot_two()
 	var before := screen.build_config().colours.duplicate()
-	screen._on_lobby_colour_cycle_requested(999999)
+	screen._on_lobby_colour_requested(999999, 5)
 	assert_eq(screen.build_config().colours, before,
 			"a peer holding no slot cannot recolour one")
 

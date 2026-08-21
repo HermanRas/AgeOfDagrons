@@ -35,7 +35,12 @@ const _ICON_DIR := "res://assets/ui/icons/"
 const _ICON_SIZE := Vector2(24.0, 24.0)
 
 ## UI_Design.md 3's stacking order: Stone, Gold, Wood, Food, then villagers.
-const _DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
+##
+## PUBLIC, because it is the order the player has already learned -- the market
+## page (8.2b) orders its tribute buttons and exchange rows by it so the four
+## resources read the same way everywhere they are listed. Was private until there
+## was a second place that listed them.
+const DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
 
 
 ## Built in `_init()`, not `_ready()`: nothing here needs the node to be inside
@@ -84,7 +89,7 @@ func _init() -> void:
 	column.add_theme_constant_override("separation", 4)
 	margin.add_child(column)
 
-	for kind in _DISPLAY_ORDER:
+	for kind in DISPLAY_ORDER:
 		_stock_labels[kind] = _add_badge(column, "res_%s.png" % kind)
 	_pop_label = _add_badge(column, "res_villagers.png")
 

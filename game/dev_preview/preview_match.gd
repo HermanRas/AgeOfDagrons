@@ -276,6 +276,53 @@ func _advance_script() -> void:
 		41:
 			_report_disarmed()
 		42:
+			# THE MINIMAP'S FOUR CORNER PAGES (8.2b), all four of them real buttons since
+			# 2026-08-21. Pressed through the actual TextureButtons rather than by calling
+			# the handlers: these were disabled placeholders with MOUSE_FILTER_IGNORE until
+			# today, and "the page opens" proves nothing about whether a thumb on the
+			# corner of the minimap can open it.
+			#
+			# A MARKET FIRST, or the trade page is a screenful of correctly greyed buttons
+			# and a line explaining why. Spawned straight into the world like the dropsites
+			# above: what is under test is the page, and the placement path is proven by
+			# steps 16-17.
+			_stand_up_a_market()
+		43:
+			_press_corner(&"trade")
+		44:
+			_report_page(_game._market, "market")
+			_shoot("match_market")
+		45:
+			# A real trade, through the real button, so the page is exercised and not just
+			# photographed. Shot on the NEXT step: the command round-trips through a
+			# snapshot, and shooting here would photograph the stockpile before it moved.
+			_buy_at_the_market()
+		46:
+			_report_market_trade()
+			_shoot("match_market_traded")
+		47:
+			_press_corner(&"techtree")
+		48:
+			_report_page(_game._tech_tree, "tech tree")
+			_shoot("match_techtree")
+		49:
+			_press_corner(&"chat")
+		50:
+			_report_page(_game._chat, "chat")
+			_shoot("match_chat")
+		51:
+			# SETTINGS, which is where the pause menu went when the age header's pause
+			# button was retired. Closes the chat page on the way, which is the other half
+			# of the rule: one page at a time.
+			_press_corner(&"settings")
+		52:
+			_report_settings()
+			_shoot("match_settings")
+		53:
+			# Back out of it, so the resign below opens it again the way a player would
+			# rather than finding it already up.
+			_game._pause_menu._on_resume_pressed()
+		54:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -285,7 +332,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		43:
+		55:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -420,6 +467,119 @@ func _report_disarmed() -> void:
 	if moved != Vector2.ZERO:
 		push_warning("preview_match: a placement that began at the edge panned anyway")
 	_game._exit_placement()
+
+
+# ── the minimap's corner pages (PLAN.md 8.2b) ───────────────────────────────
+
+## Somewhere clear of everything else this script has built. The market is 8x8 and
+## the debug map is 64x64, so it goes in the top-left corner the script never uses.
+const MARKET_SITE := Vector2i(3, 3)
+
+
+## A finished market, so the trade page has something to license its buttons with.
+func _stand_up_a_market() -> void:
+	var world: SimWorld = Net.host().world
+	var me := Net.local_player_id()
+	if world.spawn_building(GameDataRegistry.market_building(), me, MARKET_SITE,
+			SimBuilding.Phase.COMPLETE, true) == null:
+		push_warning("preview_match: no room for a market at %s" % MARKET_SITE)
+		return
+	# And something to trade WITH, or every button is correctly greyed for lack of
+	# funds and the picture says nothing about the page.
+	var p := world.player_for(me)
+	for kind in [&"food", &"wood", &"stone", &"gold"]:
+		p.stock[kind] = maxi(int(p.stock.get(kind, 0)), 2000)
+
+
+## Press one of the four corner buttons -- the REAL TextureButton, found by name on
+## `GameScene.corner_buttons`. They were disabled placeholders with
+## MOUSE_FILTER_IGNORE until 2026-08-21, so "the page opened" is not evidence that a
+## thumb on the corner of the minimap opens it.
+func _press_corner(name: StringName) -> void:
+	var button: TextureButton = _game.corner_buttons.get(name)
+	if button == null:
+		push_warning("preview_match: no corner button named %s" % name)
+		return
+	print("  corner %s: rect %s, filter %d, disabled %s"
+			% [name, button.get_global_rect(), button.mouse_filter, button.disabled])
+	if button.disabled or button.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		push_warning("preview_match: the %s corner button cannot be pressed" % name)
+	button.pressed.emit()
+
+
+## Whether a page is actually open and how big it came out. The rect is the half a
+## screenshot cannot argue with: a page laid out to zero size is invisible and looks
+## exactly like a page that never opened.
+func _report_page(page: HudPanel, label: String) -> void:
+	print("  %s: open %s, rect %s" % [label, page.is_open(), page.get_global_rect()])
+	if not page.is_open():
+		push_warning("preview_match: the %s page did not open" % label)
+	# ONE AT A TIME. They are full-screen overlays, so two open at once means one
+	# invisibly on top of the other still taking the taps meant for the visible one.
+	var others: Array[String] = []
+	for other in [_game._chat, _game._tech_tree, _game._market]:
+		if other != page and other.is_open():
+			others.append(other.title())
+	if not others.is_empty():
+		push_warning("preview_match: %s opened with %s still up" % [label, others])
+
+
+## Buy a lot at the market, through the page's own button. What is in doubt is the
+## whole chain: a press emits a signal, `GameScene` turns it into a command, the
+## server validates it against a market it can see, and the stockpile moves.
+func _buy_at_the_market() -> void:
+	var world: SimWorld = Net.host().world
+	var me := Net.local_player_id()
+	var kinds := GameDataRegistry.market_kinds()
+	if kinds.is_empty():
+		push_warning("preview_match: no market prices declared")
+		return
+	_market_kind = kinds[0]
+	_market_before = int(world.player_for(me).stock.get(_market_kind, 0))
+	_market_gold_before = int(world.player_for(me).stock.get(
+			GameDataRegistry.market_currency(), 0))
+
+	for row in _game._market._exchange_box.get_children():
+		for child in row.get_children():
+			if child is Button and child.get_meta(&"kind", &"") == _market_kind \
+					and bool(child.get_meta(&"buying", false)):
+				print("  market: buying %s, button '%s', disabled %s"
+						% [_market_kind, child.text, child.disabled])
+				if child.disabled:
+					push_warning("preview_match: the buy button is greyed with a market up")
+				child.pressed.emit()
+				return
+	push_warning("preview_match: no buy button for %s" % _market_kind)
+
+
+var _market_kind: StringName = &""
+var _market_before := 0
+var _market_gold_before := 0
+
+
+func _report_market_trade() -> void:
+	var world: SimWorld = Net.host().world
+	var p := world.player_for(Net.local_player_id())
+	var currency := GameDataRegistry.market_currency()
+	var after := int(p.stock.get(_market_kind, 0))
+	var gold_after := int(p.stock.get(currency, 0))
+	print("  market: %s %d -> %d, %s %d -> %d"
+			% [_market_kind, _market_before, after, currency,
+			_market_gold_before, gold_after])
+	if after <= _market_before:
+		push_warning("preview_match: the buy never reached the simulation")
+	if gold_after >= _market_gold_before:
+		push_warning("preview_match: the buy was free")
+
+
+func _report_settings() -> void:
+	print("  settings: pause menu visible %s, pages open %s"
+			% [_game._pause_menu.visible,
+			[_game._chat.is_open(), _game._tech_tree.is_open(), _game._market.is_open()]])
+	if not _game._pause_menu.visible:
+		push_warning("preview_match: the settings corner button did not open the menu")
+	if _game._chat.is_open() or _game._tech_tree.is_open() or _game._market.is_open():
+		push_warning("preview_match: settings opened over a page it should have closed")
 
 
 ## Open the pause menu and concede, both through the real controls.

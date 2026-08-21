@@ -504,6 +504,28 @@ func get_entity(id: int) -> SimEntity:
 	return entities.get(id)
 
 
+## Whether `owner` has a FINISHED building of `def_id` standing somewhere.
+##
+## The gate the two market commands need: trading is a thing a market lets you do,
+## the same way training is a thing a barracks lets you do, and without this the
+## market page would be a free ability every player has from tick 1. A foundation
+## does not count -- `is_complete()` is the same test `TrainCommand` applies to the
+## building it is queueing at.
+##
+## A LINEAR SCAN, and deliberately not an index. This runs once per market command,
+## which is once per deliberate button press by a person; the per-tick systems are
+## where a scan over every entity is worth caring about (PLAN.md 14's "per-player
+## work reads as cheap and is O(players x world)"), and adding a per-player,
+## per-def index to keep in sync would be a new thing that can silently go stale.
+func has_completed_building(owner: int, def_id: StringName) -> bool:
+	for e in entities.values():
+		if e.owner_id != owner or not e.alive or not (e is SimBuilding):
+			continue
+		if e.def_id == def_id and (e as SimBuilding).is_complete():
+			return true
+	return false
+
+
 func player_for(owner: int) -> SimPlayer:
 	for p in players:
 		if p.id == owner:

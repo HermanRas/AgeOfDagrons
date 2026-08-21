@@ -37,6 +37,10 @@ static func from_dict(d: Dictionary) -> Command:
 			return CancelProductionCommand.from_dict(d)
 		"resign":
 			return ResignCommand.from_dict(d)
+		"tribute":
+			return TributeCommand.from_dict(d)
+		"market_exchange":
+			return MarketExchangeCommand.from_dict(d)
 		"debug_destroy":
 			return DebugDestroyCommand.from_dict(d)
 		"advance_age":

@@ -41,6 +41,7 @@ const TECHS_PATH := "res://data/techs.json"
 const AGES_PATH := "res://data/ages.json"
 const FACTIONS_PATH := "res://data/factions.json"
 const COLOURS_PATH := "res://data/colours.json"
+const MARKET_PATH := "res://data/market.json"
 
 ## Keys starting with this are documentation inside the JSON, not entries.
 const _COMMENT_PREFIX := "_"
@@ -74,6 +75,14 @@ var _colours: Array[Color] = []
 ## resolving a player's atlas needs the word, not the Color.
 var _colour_slugs: Array[StringName] = []
 
+## `market.json`, raw. Two blocks of integers -- tribute and exchange -- read by
+## `TributeCommand` and `MarketExchangeCommand` through `SimWorld`, and by the
+## market page to LABEL the buttons with the same figures the commands charge.
+## Kept raw rather than parsed into a *Def because there is nothing to parse: the
+## accessors below are the whole schema, and a class holding four ints would only
+## make a second place for the defaults to disagree.
+var _market: Dictionary = {}
+
 ## Non-fatal problems found while loading -- a malformed entry, an atlas whose
 ## pixels_per_metre disagrees with Iso. Surfaced for tests and the debug overlay
 ## instead of push_error() alone, so the test suite can assert the data is clean.
@@ -100,6 +109,7 @@ func load_all(force := false) -> void:
 	_resources = _read_defs(RESOURCES_PATH, ResourceDef.from_dict)
 	_techs = _read_defs(TECHS_PATH, TechDef.from_dict)
 	_factions = _read_json(FACTIONS_PATH)
+	_market = _read_json(MARKET_PATH)
 	_read_ages()
 	_read_colours()
 
@@ -555,6 +565,14 @@ func resource_ids() -> Array[StringName]:
 	return _sorted_keys(_resources)
 
 
+## Every declared tech, sorted. EMPTY TODAY and that is the correct answer, not a
+## failure: `techs.json` is deliberately empty until 9.3 (its own note says so).
+## Exists so the tech-tree page can render the real set the day there is one,
+## rather than being written twice.
+func tech_ids() -> Array[StringName]:
+	return _sorted_keys(_techs)
+
+
 func faction_ids() -> Array[StringName]:
 	return _sorted_keys(_factions)
 
@@ -575,6 +593,115 @@ func colour_count() -> int:
 	if not _loaded:
 		load_all()
 	return _colours.size()
+
+
+# ── the market (data/market.json) ────────────────────────────────────────────
+#
+# Read by the two market commands through `SimWorld`, and by `MarketPanel` to put
+# the same figures on the buttons that the commands will charge. ONE source, so a
+# button cannot advertise a price the server refuses -- the trust-boundary rule
+# (PLAN.md 5.1 step 4) says the server must re-check everything, and it says
+# nothing about the two being allowed to disagree about the number.
+#
+# Every accessor returns an INTEGER. See market.json's own note: this arithmetic
+# runs inside the simulation, where a float would be free to round differently on
+# an ARM phone than on an x86 host.
+
+## The building a player must have STANDING AND FINISHED to trade at all -- both
+## market commands ask for this one, so they cannot drift onto different gates, and
+## its own `age_required` is how the age gate is inherited without being restated.
+func market_building() -> StringName:
+	if not _loaded:
+		load_all()
+	return StringName(str(_market.get(&"building", "")))
+
+
+## What one press of a Tribute button sends, before tax.
+func tribute_increment() -> int:
+	return maxi(0, int(_market_block(&"tribute").get("increment", 0)))
+
+
+## The cut the sender loses in transit, as whole percent. 0 makes tribute free.
+func tribute_tax_percent() -> int:
+	return clampi(int(_market_block(&"tribute").get("tax_percent", 0)), 0, 100)
+
+
+## What arrives when `amount` is sent. The one place the tax is arithmetic, so the
+## command that charges it and the label that advertises it cannot round
+## differently -- integer division, floor, and the sender always pays in full.
+func tribute_received(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	return amount * (100 - tribute_tax_percent()) / 100
+
+
+## Whether `kind` may be tributed at all. Declared rather than derived from the
+## stock dictionary, which is whatever anybody has happened to gather.
+func can_tribute(kind: StringName) -> bool:
+	return _name_list(_market_block(&"tribute").get("kinds", [])).has(kind)
+
+
+## The resource the market prices everything in. Never itself tradeable.
+func market_currency() -> StringName:
+	return StringName(str(_market_block(&"exchange").get("currency", "gold")))
+
+
+## How much one buy or sell moves.
+func market_lot() -> int:
+	return maxi(0, int(_market_block(&"exchange").get("lot", 0)))
+
+
+## The tradeable kinds in DECLARED order, which is the order the market page draws
+## its rows in -- so re-ordering the data re-orders the UI and nothing else has to
+## know.
+func market_kinds() -> Array[StringName]:
+	var out: Array[StringName] = []
+	var prices: Variant = _market_block(&"exchange").get("prices", {})
+	if prices is Dictionary:
+		for key in (prices as Dictionary):
+			out.append(StringName(str(key)))
+	return out
+
+
+## Gold to receive one lot of `kind`. 0 means "not for sale", which is also the
+## honest answer for the currency itself and for an unknown kind.
+func market_buy_price(kind: StringName) -> int:
+	return _market_price(kind, "buy")
+
+
+## Gold paid for one lot of `kind`. 0 means the market will not take it.
+func market_sell_price(kind: StringName) -> int:
+	return _market_price(kind, "sell")
+
+
+func _market_price(kind: StringName, direction: String) -> int:
+	if kind == market_currency():
+		return 0
+	var prices: Variant = _market_block(&"exchange").get("prices", {})
+	if not prices is Dictionary:
+		return 0
+	var entry: Variant = (prices as Dictionary).get(String(kind), null)
+	if not entry is Dictionary:
+		return 0
+	return maxi(0, int((entry as Dictionary).get(direction, 0)))
+
+
+func _market_block(key: StringName) -> Dictionary:
+	if not _loaded:
+		load_all()
+	var block: Variant = _market.get(key, {})
+	return block if block is Dictionary else {}
+
+
+## JSON strings to StringNames. `GameDefs.name_list` does this for the *Defs; the
+## market has no Def to hang it off, and re-parsing raw JSON in three accessors is
+## how the three come to disagree about a malformed entry.
+func _name_list(raw: Variant) -> Array[StringName]:
+	var out: Array[StringName] = []
+	if raw is Array:
+		for v in (raw as Array):
+			out.append(StringName(str(v)))
+	return out
 
 
 ## Cross-file consistency. Appends to load_warnings; the test suite asserts it
@@ -643,6 +770,50 @@ func validate() -> void:
 			load_warnings.append("unit '%s' is trainable at no building" % id)
 
 	_validate_skins()
+	_validate_market()
+
+
+## `market.json`'s two blocks, checked against the rest of the data rather than
+## against themselves. Every one of these is a typo that would present as a button
+## the server silently refuses -- the market page reads its labels from the same
+## accessors, so a misspelled kind draws a perfectly convincing row that can never
+## be pressed successfully.
+func _validate_market() -> void:
+	if _market.is_empty():
+		load_warnings.append("market.json is empty -- the trade page has no prices")
+		return
+
+	for kind in _name_list(_market_block(&"tribute").get("kinds", [])):
+		if not GameDefs.RESOURCE_KINDS.has(kind):
+			load_warnings.append("market tribute names unknown kind '%s'" % kind)
+	if tribute_increment() <= 0:
+		load_warnings.append("market tribute increment is %d -- nothing to send"
+				% tribute_increment())
+
+	# A market gated on a building that does not exist is a market nobody can ever
+	# reach, and it would present as two silent pages of dead buttons.
+	if not _buildings.has(market_building()):
+		load_warnings.append("market is gated on unknown building '%s'" % market_building())
+
+	var currency := market_currency()
+	if not GameDefs.RESOURCE_KINDS.has(currency):
+		load_warnings.append("market currency '%s' is not a resource kind" % currency)
+	if market_lot() <= 0:
+		load_warnings.append("market lot is %d -- nothing to trade" % market_lot())
+
+	for kind in market_kinds():
+		if not GameDefs.RESOURCE_KINDS.has(kind):
+			load_warnings.append("market prices unknown kind '%s'" % kind)
+		# The currency cannot be traded for itself, and `_market_price` already
+		# returns 0 for it -- so an entry here is a row that draws two dead buttons.
+		if kind == currency:
+			load_warnings.append("market prices its own currency '%s'" % kind)
+		# BUY BELOW SELL IS FREE GOLD, in a loop, as fast as a finger can move. The
+		# spread is the whole cost of trading (market.json's note), and inverting it
+		# turns the market into an infinite resource generator.
+		if market_buy_price(kind) <= market_sell_price(kind):
+			load_warnings.append("market buys '%s' back for at least what it sells it for (%d/%d)"
+					% [kind, market_buy_price(kind), market_sell_price(kind)])
 
 
 ## The `ages` map is DENSE by contract (PLAN.md 2.7.1): every age names a skin

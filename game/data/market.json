@@ -1,0 +1,67 @@
+{
+  "_note": [
+    "PLAN.md 8.2b's TRADE corner button, made real. The market page is the one of",
+    "the four that is a mechanism rather than a wireframe, so it needs numbers, and",
+    "the numbers belong here rather than inside the two commands that spend them:",
+    "these are balance figures the project owner will want to move without reading",
+    "GDScript.",
+    "",
+    "EVERY VALUE IS AN INTEGER, and that is a hard constraint rather than a style",
+    "choice. `TributeCommand` and `MarketExchangeCommand` run inside the sim, whose",
+    "arithmetic must be bit-identical on an ARM phone and an x86 desktop (PLAN.md",
+    "5). A tax of `0.1` would be a float in the middle of a state transition; a tax",
+    "of `10` percent is a multiply and an integer divide, which cannot drift. Same",
+    "reason ages.json counts advancement in ticks and not in seconds.",
+    "",
+    "GOLD IS THE CURRENCY, which is why it has no exchange entry: the market buys",
+    "and sells food, wood and stone FOR gold. That is Age of Empires' model and it",
+    "is the reason gold is worth mining at all -- a market that traded any resource",
+    "for any other would make three of the four interchangeable and the fourth",
+    "pointless.",
+    "",
+    "`building` IS THE PRECONDITION FOR BOTH HALVES. Trading is something a market",
+    "lets you do, the way training is something a barracks lets you do -- and it is",
+    "declared here rather than written into the two commands so the two cannot end",
+    "up gated on different buildings, or on nothing. It is also how the age gate is",
+    "inherited for free: `building.market` is age 2 in buildings.json, so requiring",
+    "the building requires the age without stating it twice.",
+    "",
+    "THE SPREAD IS THE WHOLE COST OF TRADING. Buy at 130 gold a hundred, sell at",
+    "70: a round trip loses 60% of what it moved, so the market is an emergency",
+    "valve for a shortage and never a substitute for gathering. AoE2's market opens",
+    "at 100/100 and DRIFTS with every trade, which is a better mechanism and is",
+    "deliberately not this one -- a drifting price is per-player mutable state, so",
+    "it would have to live on SimPlayer, ride the snapshot and enter",
+    "`state_hash()`. Worth doing when the market has been played with; not worth",
+    "guessing at now. Fixed prices are one data change away from being the",
+    "starting point of that.",
+    "",
+    "TRIBUTE'S TAX is 10%, matching the mockup the project owner drew",
+    "(UI_Design_Market). AoE2 charges 30% until Coinage removes it; 10% with no",
+    "tech to remove it is the same idea at a tenth the sting, and it exists at all",
+    "so that shuffling resources between allies is not free -- otherwise two",
+    "players are one economy with two build queues.",
+    "",
+    "`increment` is what one press of a Tribute button sends. 100 rather than 10,",
+    "because a button that moves a tenth of a villager-load is a button somebody",
+    "has to press forty times."
+  ],
+
+  "building": "building.market",
+
+  "tribute": {
+    "increment": 100,
+    "tax_percent": 10,
+    "kinds": ["food", "wood", "stone", "gold"]
+  },
+
+  "exchange": {
+    "currency": "gold",
+    "lot": 100,
+    "prices": {
+      "food":  { "buy": 130, "sell": 70 },
+      "wood":  { "buy": 130, "sell": 70 },
+      "stone": { "buy": 130, "sell": 70 }
+    }
+  }
+}
