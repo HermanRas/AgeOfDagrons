@@ -100,6 +100,35 @@ crossing in front of a building.
       by having the phone HOST and the laptop join (the laptop takes `--net join
       --ip` from a terminal). **This blocks 12.1c**, whose lobby needs an address
       field, and wants sorting before that screen is built.
+
+      **Root cause found, and it is ours, not Android's.** This project sets
+      `input_devices/pointing/emulate_mouse_from_touch = false`
+      ([project.godot:35](game/project.godot#L35)) — it has to, because `CameraRig`
+      handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch
+      arriving as both would pan two thumbs' worth per thumb. Godot's GUI does still
+      route raw touches to controls: a Button reacts to one, and a LineEdit's
+      `gui_input` sees them. What the touch path does not do is grab keyboard
+      **focus**, and LineEdit asks for the keyboard on focus-enter. Measured on
+      4.7.1 with an identical field:
+
+          focus after a SCREEN TOUCH = false
+          focus after a MOUSE CLICK  = true
+
+      Fixed by [`TouchLineEdit`](game/src/view/touch_line_edit.gd), which grabs focus
+      from the touch itself. Flipping the project setting instead was rejected: it
+      would fix typing by breaking the camera. **Still needs a device tap to close** —
+      the focus half is measured on desktop, but that focus actually raises an Android
+      keyboard is the half only the phone can answer, and no device was attached.
+- [ ] **A tap cannot place the caret in a text field.** The same gap one layer down,
+      found while fixing the one above: LineEdit places its caret from
+      `InputEventMouseButton` only, so tapping 90 px into a field puts the caret at
+      column 0 where clicking the same spot puts it at column 11. With the caret
+      pinned at 0, typing into a field pre-filled with `127.0.0.1` inserts in FRONT
+      of it — "192" gives "192127.0.0.1". `TouchLineEdit` sidesteps it by selecting
+      all on focus, so the first keystroke replaces the lot, which is the right
+      behaviour for an address field and wrong for a field you want to edit in
+      place. Properly fixing it means mapping a touch to a caret column by hand, and
+      nothing needs that yet.
 - [x] **Panning while placing.** Cancel removed the dead end, but the workflow was
       still cancel → pan → re-open the menu. **Owner chose edge-pan** over
       two-finger pan (which is box-select's own trigger, 8.3). Dragging the ghost

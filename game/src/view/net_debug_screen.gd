@@ -50,7 +50,11 @@ func _ready() -> void:
 	_status = _label("idle", 26)
 	box.add_child(_status)
 
-	_address = LineEdit.new()
+	# TouchLineEdit, not LineEdit: a plain one cannot be typed into on Android at all,
+	# because this project turns off mouse emulation from touch and the touch path never
+	# grabs keyboard focus. See that class's header. This screen is throwaway (12.1c
+	# replaces it), but the widget is not -- the lobby's address field is what it is for.
+	_address = TouchLineEdit.new()
 	_address.placeholder_text = "host address, e.g. 192.168.0.12"
 	_address.text = "127.0.0.1"
 	_address.add_theme_font_size_override("font_size", 30)
