@@ -15,6 +15,10 @@ extends TestCase
 
 func after_each() -> void:
 	Net.leave()
+	# The 12.1e tests register a peer by hand, and `leave()` tears down the session
+	# without clearing that map. Left behind, it would have the next test's host think
+	# somebody is already in slot 2.
+	Net._peer_players.clear()
 
 
 # ── opening and joining ─────────────────────────────────────────────────────
@@ -60,6 +64,56 @@ func test_a_client_has_no_identity_until_the_server_names_it() -> void:
 	assert_false(Net.is_joined(), "and is not usable until told")
 	assert_false(Net.is_server())
 	assert_null(Net.host(), "a client has no authoritative world")
+
+
+# ── a match must not be left unresolvable (12.1e) ───────────────────────────
+#
+# A peer cannot really be connected in this process (see the header), so these register
+# one in `_peer_players` the way `_on_peer_connected` would and then call the real
+# handler. What is under test is what `Net` DOES about a departure, which is the part that
+# was missing; the socket teardown around it is proven by two processes.
+
+func test_a_peer_that_vanishes_mid_match_concedes() -> void:
+	# Without this the match cannot resolve: WinConditionSystem counts whoever still owns
+	# something, and a player whose phone went into a tunnel still owns their whole base.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var world := Net.host().world
+	Net._peer_players[4242] = 2
+
+	assert_false(world.player_for(2).defeated, "player 2 is in the match")
+	Net._on_peer_disconnected(4242)
+	world.step()
+
+	assert_true(world.player_for(2).defeated, "the departed player is out")
+	assert_true(world.match_over, "so the match can end")
+	assert_eq(world.winner_id, 1, "and the player still here won")
+
+
+func test_a_peer_leaving_the_LOBBY_concedes_nothing() -> void:
+	# There is no match to concede yet, and queueing a command against a world that does
+	# not exist would be a crash rather than a forfeit.
+	Net.host_open()
+	Net._peer_players[4242] = 2
+	Net._on_peer_disconnected(4242)
+	assert_null(Net.host(), "still no world, and no crash reaching for one")
+
+
+func test_a_peer_that_resigned_before_dropping_is_not_defeated_twice() -> void:
+	# The ordinary way of leaving a match: concede, see the defeat screen, then close the
+	# game. The resign and the disconnect both arrive, and the second must be a no-op.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var world := Net.host().world
+	Net._peer_players[4242] = 2
+
+	world.queue_command(ResignCommand.new(2, world.tick))
+	world.step()
+	assert_true(world.player_for(2).defeated)
+
+	Net._on_peer_disconnected(4242)
+	world.step()
+	assert_true(world.player_for(2).defeated, "still out, once")
 
 
 # ── the match-start handshake (12.1d) ───────────────────────────────────────

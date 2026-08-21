@@ -275,6 +275,19 @@ func _advance_script() -> void:
 			_start_disarmed_placement()
 		41:
 			_report_disarmed()
+		42:
+			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
+			# after it would have a match to photograph.
+			#
+			# Until today this button called `Net.leave()` and changed scene -- a local act
+			# the simulation never heard about. It now submits a `ResignCommand`, and what
+			# is in doubt is exactly that: that a real press reaches the sim and comes back
+			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
+			# reason the cancel-build one is.
+			_resign_the_match()
+		43:
+			_report_resigned()
+			_shoot("match_resigned")
 		_:
 			get_tree().quit()
 			return
@@ -407,6 +420,33 @@ func _report_disarmed() -> void:
 	if moved != Vector2.ZERO:
 		push_warning("preview_match: a placement that began at the edge panned anyway")
 	_game._exit_placement()
+
+
+## Open the pause menu and concede, both through the real controls.
+func _resign_the_match() -> void:
+	var pause: PauseMenu = _game._pause_menu
+	pause.open()
+	var button: TextureButton = pause._resign_button
+	if button == null:
+		push_warning("preview_match: no resign button to press")
+		return
+	print("  resign: pause open, submitting as player %d" % Net.local_player_id())
+	button.pressed.emit()
+	# The step machinery's own STEP_FRAMES gap before the next step is what gives the
+	# command time to land: it is queued for a tick boundary, and the defeat has to come
+	# back round through a snapshot before the result screen can know about it.
+
+
+func _report_resigned() -> void:
+	var world: SimWorld = Net.host().world
+	var me := Net.local_player_id()
+	print("  resign: player %d defeated %s, match_over %s, winner %d, result shown %s"
+			% [me, world.player_for(me).defeated, world.match_over, world.winner_id,
+			_game._result.is_shown()])
+	if not world.player_for(me).defeated:
+		push_warning("preview_match: the resign never reached the simulation")
+	if not _game._result.is_shown():
+		push_warning("preview_match: conceded, but nothing on screen says so")
 
 
 func _report_build_mode() -> void:

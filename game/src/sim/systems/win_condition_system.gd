@@ -70,7 +70,13 @@ func _last_man_standing(w: SimWorld) -> void:
 	var owners := _owners_with_anything(w)
 	var standing: Array[int] = []
 	for p in w.players:
-		if owners.has(p.id):
+		# `not p.defeated` is what makes RESIGNING mean anything (12.1e). Owning something
+		# used to be the whole test, so a player who conceded -- or whose device vanished,
+		# which `Net` turns into the same command -- went on counting as standing while
+		# their abandoned base sat there, and the match could never resolve. Safe to read
+		# here precisely because the flag is one-way: it is set below and by
+		# `ResignCommand`, and never cleared by anything.
+		if owners.has(p.id) and not p.defeated:
 			standing.append(p.id)
 		else:
 			# ONE WAY ONLY, never cleared. A player with no units and no buildings

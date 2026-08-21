@@ -299,6 +299,8 @@ func _on_peer_connected(peer_id: int) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	if not _peer_players.has(peer_id):
 		return
+	# Read BEFORE the erase below, because that is what knows which player this was.
+	var pid := int(_peer_players[peer_id])
 	_peer_players.erase(peer_id)
 	# Same rule one stage earlier: a peer that has left the LOBBY is not one still owed a
 	# ready, and leaving their flag behind would let a departed player's stale "yes" count
@@ -309,6 +311,23 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# timeout, for everybody -- which is the same freeze 12.1e is about, arriving early.
 	if _awaiting_ready.erase(peer_id):
 		_begin_when_ready()
+
+	# A VANISHED PLAYER CONCEDES (PLAN.md 12.1e). Without this the match cannot resolve:
+	# `WinConditionSystem` counts whoever still owns something, and a player whose phone
+	# went into a tunnel still owns their whole base -- so the remaining player fights an
+	# abandoned town forever with no way to win and no way to be told why.
+	#
+	# The same `ResignCommand` a player sends by hand, queued by the server on their
+	# behalf, so there is one path to being out of a match rather than two that could
+	# disagree. Queued rather than applied directly because the sim owns when things
+	# happen: it lands on a tick boundary like every other command, and every client sees
+	# it at the same tick.
+	#
+	# `validate()` refuses a second resign, so a peer who conceded and THEN dropped -- the
+	# ordinary way of leaving -- is not defeated twice.
+	if _host != null and _host.world != null and pid > 0:
+		_host.world.queue_command(ResignCommand.new(pid, _host.world.tick))
+
 	peer_left.emit(peer_id)
 
 

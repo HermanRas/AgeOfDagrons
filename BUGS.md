@@ -196,6 +196,15 @@ crossing in front of a building.
       (2.4c) and 12.4's save/load. `from_dict` now reads bytes, JSON's string, or a
       plain list; `to_dict` goes on sending raw bytes, because base64 would add a
       third to 20–40 KB of terrain and 12.1f is about wire size.
+- [ ] **A forfeit is announced as an elimination.** Seen while proving 12.1e: the
+      joiner's process was killed mid-match and the host's screen read **"All
+      opponents eliminated"**. Nobody was eliminated — they left. Same wording for a
+      resign. It is the existing message for "match over and you won", and the
+      snapshot carries no reason for a defeat, only the fact of one, so telling a
+      forfeit from a conquest needs a reason field on `player_state` (or beside
+      `winner_id`) and a decision about how many reasons are worth naming —
+      resigned, disconnected, wiped out. Cosmetic, but it tells the winner something
+      untrue about how they won.
 - [ ] **Snapshots are four times the MTU and sent unreliably.** 12.1f, with a number on
       it at last. **The fog half is fixed** (2026-08-21): the grid is no longer sent at
       all — `ClientFog` computes it from the client's own entities and the map it already

@@ -1113,7 +1113,7 @@ features stack on it.
 | b | **The client has no world** (below) | 4–8 h | **high** |
 | c | ✅ **DONE 2026-08-21** — 1.6's screen in lobby mode. Went beyond the row: the spec described a lobby that only worked one way (the host learns who arrived, the joiner learns nothing back), so it also gained a **lobby config broadcast and a READY gate** — a joining player sees the host's real map and settings and must agree before START unlocks, and changing any setting cancels every agreement. Slots also became 2–8 with a **CLOSED** role, so the player count and the map size are two numbers. Validated phone↔PC over WiFi | 6–10 h | low, volume |
 | d | Match-start handshake: host broadcasts the agreed `MatchConfig`, everyone builds, acks, then the clock starts | 2–3 h | medium |
-| e | Match end over the wire: resign must reach the host, a disconnect must not freeze the match | 2–3 h | low |
+| e | ✅ **DONE 2026-08-21** — resign is a `ResignCommand` through the ordinary command path, so the server overwrites the player id and it cannot be forged for somebody else; a vanished peer is issued the same command by the host. `WinConditionSystem` now excludes `defeated` players from the standing count, which is what makes either mean anything. Proven by killing a real joiner process mid-match (host showed VICTORY) and by pressing the real Resign button (DEFEAT, "Player 2 won") | 2–3 h | low |
 | f | Wire size and packet reliability (below) | 3–6 h | medium |
 | g | Two-device bring-up on real WiFi — firewall, IP entry, thumb testing | 2–3 h | medium |
 
