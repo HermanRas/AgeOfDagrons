@@ -80,6 +80,7 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_menus.tscn      # front door + campaign
 & $godot --path game res://dev_preview/preview_walls.tscn      # both wall axes + gate
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
+& $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
 ```
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
@@ -87,6 +88,18 @@ art faces. A wall lying across its own footprint has the same footprint, the sam
 origin and the same hash as one lying along it — so both axes get a screenshot and
 somebody looks. It also finishes the walls before shooting, because a wall
 *foundation* at nine tiles reads as a row of disconnected stubs.
+
+`preview_projectiles` is there for the same reason, harder: a projectile carries no
+damage, so its **entire** job is to be looked at and a green suite proves nothing about
+it. Two things it does that are worth copying:
+
+- **It freezes the sim before shooting** (`SimClock.stop()`). The viewport texture lags
+  a frame and the step cadence lets another tick or two slip by, so a screenshot
+  chasing a live 2-tick arrow lands wherever it lands — the first version could not
+  tell the arrow apart from the bow in the archer's hands.
+- **It prints each projectile's screen position.** They are 2–8 px; at 1:1 you cannot
+  see one and cannot tell "not drawn" from "too small to notice". Crop to the printed
+  coordinate at 8× and the question answers itself.
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
 

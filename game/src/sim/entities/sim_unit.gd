@@ -55,6 +55,12 @@ var corpse_ticks_left: int = -1
 var path_pending: bool = false
 
 
+## Units move, so the fog never sends one it cannot currently see. See
+## `SimEntity.is_mobile`.
+func is_mobile() -> bool:
+	return true
+
+
 func set_task_move(t: Vector2i) -> void:
 	task = Task.MOVE
 	task_target_tile = t

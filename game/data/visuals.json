@@ -1467,5 +1467,63 @@
       "height_m": 0.76,
       "color": "#8a5a2b"
     }
+  },
+
+  "_note_projectiles": [
+    "PROJECTILES (PLAN.md 4.13), declared 2026-08-22. All three were staged with the",
+    "weapon bakes and referenced by nothing until then -- the same 'staged but never",
+    "declared' state the walls were found in, one size smaller, and predicted in",
+    "PLAN.md 15 item 7 before it was checked.",
+    "",
+    "THESE IDS ARE ALSO DEF IDS, which nothing else in this file is. A projectile has",
+    "no entry in units.json or buildings.json because there is nothing to say about an",
+    "arrow beyond which sprite it is: `UnitDef.attack_projectile` names one of these",
+    "directly, `SimWorld.spawn_projectile` uses it as the entity's def_id, and",
+    "`GameDataRegistry.visual_for` resolves an id that is already a declared visual to",
+    "itself rather than there being a fourth def table with one column in it.",
+    "",
+    "WHO THROWS WHAT is in units.json, not here: arrow for the three bow units and the",
+    "two ships, bolt for the ballista, stone for the onager and trebuchet. The dragon",
+    "throws nothing -- it is range 3 and type pierce and would be handed an arrow by",
+    "any rule clever enough to infer one, and it breathes fire.",
+    "",
+    "PLACEHOLDER SIZES are the measured sprite, which for these is genuinely tiny:",
+    "arrow 0.09 x 0.75 m, bolt 0.22 x 1.33, stone 0.35 x 0.35, all read off the",
+    "atlases' own frame rects at 22.63 px/m. They are the honest figures rather than",
+    "useful ones -- a projectile is never selected, so nothing sizes a ring from them,",
+    "and the placeholder only ever draws if the art pack is missing.",
+    "",
+    "NO `ages` MAP. An arrow is an arrow in every age, which is the same reason units",
+    "carry none (PLAN.md 2.7.1: buildings carry the age, units do not)."
+  ],
+
+  "vis.projectile_arrow": {
+    "atlas": "res://assets/atlases/vis.projectile_arrow.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [0.09, 0.09],
+      "height_m": 0.75,
+      "color": "#c8b48a"
+    }
+  },
+
+  "vis.projectile_bolt": {
+    "atlas": "res://assets/atlases/vis.projectile_bolt.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [0.22, 0.22],
+      "height_m": 1.33,
+      "color": "#9a8f7a"
+    }
+  },
+
+  "vis.projectile_stone": {
+    "atlas": "res://assets/atlases/vis.projectile_stone.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [0.35, 0.35],
+      "height_m": 0.35,
+      "color": "#8d8781"
+    }
   }
 }

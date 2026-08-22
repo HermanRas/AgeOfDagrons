@@ -89,8 +89,15 @@ func setup(cfg: MatchConfig) -> void:
 	# finished tick and its orders are queued for the next one, exactly like a player
 	# reacting to what is on screen. Running it earlier would let it act on a
 	# half-finished tick that no human can see.
+	# ProjectileSystem (4.13) sits directly BEFORE CombatSystem, which is what looses
+	# what it flies, so an arrow is never advanced on the tick it was created. Putting
+	# it after was the first attempt and it was wrong: the arrow was spawned, stepped
+	# and -- for any shot at the low end of the range -- landed and despawned inside a
+	# single tick, so it never appeared in a snapshot at all. Every test passed and
+	# nothing was ever drawn.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(), CombatSystem.new(),
+			GatherSystem.new(), BuildSystem.new(),
+			ProjectileSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
@@ -547,6 +554,38 @@ func spawn_resource_node(def_id: StringName, origin: Vector2i, size_class: int =
 	return n
 
 
+## Loose a projectile from `from` toward `to`, both in sub-tile units (PLAN.md 4.13).
+##
+## `visual_id` is BOTH the def id and the visual: a projectile has no entry in any
+## data file because there is nothing to say about one beyond which sprite it is, and
+## `GameDataRegistry.visual_for` resolves an id that is already a declared visual to
+## itself. The shooter's `UnitDef.attack_projectile` is where the choice actually
+## lives, so arrow/bolt/stone is a data decision like everything else.
+##
+## NOT in the spatial hash and NOT in the occupancy grid. Nothing ever asks what is
+## near an arrow, and putting one in the grid would mean `despawn()` marking its tile
+## dirty for the pathfinder every time a shot landed -- a full-rate path invalidation
+## driven by archery. `_footprint_of` returns an empty rect for it, which is what keeps
+## that from happening.
+func spawn_projectile(visual_id: StringName, owner: int, from: Vector2i,
+		to: Vector2i) -> SimProjectile:
+	var p := SimProjectile.new()
+	p.id = _next_id
+	_next_id += 1
+	p.def_id = visual_id
+	p.owner_id = owner
+	p.pos = from
+	p.origin_pos = from
+	p.target_pos = to
+	p.total_ticks = SimProjectile.flight_ticks(from, to)
+	# The RAW sub-tile delta, not one divided down to tiles: `facing_toward` only wants
+	# a direction, and dividing first collapses every shot shorter than a tile to
+	# (0, 0), which is due east whichever way the archer was actually aiming.
+	p.facing = SimUnit.facing_toward(to - from)
+	entities[p.id] = p
+	return p
+
+
 func despawn(id: int) -> void:
 	if not entities.has(id):
 		return
@@ -577,9 +616,11 @@ func free_footprint(id: int) -> void:
 
 ## The tiles an entity holds in the occupancy grid. Units hold none -- they are in
 ## SpatialHash, not the grid (SimMap's static-footprint rule) -- so removing one
-## changes nothing the pathfinder cares about.
+## changes nothing the pathfinder cares about. Nor do projectiles, which are in
+## neither: an empty rect here is what stops every landing arrow marking a tile dirty
+## and invalidating paths at the rate the archers are firing.
 func _footprint_of(e: SimEntity) -> Rect2i:
-	if e is SimUnit:
+	if e is SimUnit or e is SimProjectile:
 		return Rect2i()
 	if e is SimBuilding:
 		return (e as SimBuilding).footprint_rect()
@@ -758,6 +799,14 @@ func state_hash() -> int:
 			# whose villagers gathered at different rates would hash identically
 			# right up until the node ran out on one of them and not the other.
 			parts.append([e.amount])
+		elif e is SimProjectile:
+			# A projectile carries no damage (4.13), so nothing it does can change the
+			# outcome of the match -- and it is hashed anyway, because it is still SIM
+			# state and it still DESPAWNS. Two hosts a tick apart on a flight would
+			# disagree about `removed[]` on the tick it landed, which is a real wire
+			# difference over a purely cosmetic entity. Cheaper to include than to
+			# explain away, and `pos` above already rides on every entity.
+			parts.append([e.elapsed_ticks, e.total_ticks, e.facing])
 
 	for p in players:
 		var stock_keys := p.stock.keys()

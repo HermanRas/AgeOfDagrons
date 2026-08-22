@@ -126,8 +126,17 @@ func apply_snapshot(snap: Dictionary) -> void:
 		# moment 12.1f took `footprint` off the wire -- every entry then looked like a unit
 		# and nothing occluded anything. The same reasoning `_facts`'s own `is_unit`
 		# already gives for not guessing a kind from a snapshot's shape.
-		if GameDataRegistry.unit(StringName(entry.get("def_id", &""))) != null:
-			continue                  # a unit; it occludes nothing and lifts nothing
+		#
+		# A POSITIVE TEST as of 4.13, where it used to be "not a unit". Only a building
+		# or a resource node occludes; a unit never did, and the world now contains a
+		# third thing -- a projectile -- which the old phrasing would have swept into
+		# the else branch below and made an occluder of. Every arrow in flight would
+		# have been a one-tile column hiding whatever stood behind it, flickering on
+		# and off at the rate the archers were firing.
+		var entry_def := StringName(entry.get("def_id", &""))
+		if GameDataRegistry.building(entry_def) == null \
+				and GameDataRegistry.resource_def(entry_def) == null:
+			continue
 		var centre_tile: Vector2i = _sub_pos(entry) / SimWorld.SUBTILE
 		var fp := _footprint_of(entry)
 		var rect := Rect2i(centre_tile - fp / 2, fp)
@@ -271,6 +280,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# Inferring "no phase field means a unit" would call a resource node a
 			# unit, and 3.6 would then send move orders naming trees.
 			"is_unit": GameDataRegistry.unit(def_id) != null,
+			# SOMETHING TO LOOK AT RATHER THAN SOMETHING IN THE GAME (4.13). True for
+			# an arrow in flight and nothing else today. It is in `_facts` at all only
+			# because the forget pass below reads `_facts` to release pooled views --
+			# leave it out and every projectile leaks a view.
+			#
+			# A POSITIVE test against the three def tables, so anything the data does
+			# not know as a gameplay entity is an effect BY DEFAULT rather than by
+			# being listed here. Read by `pick()` (you cannot tap an arrow) and by the
+			# minimap (an arrow is not a blip).
+			"is_effect": GameDataRegistry.unit(def_id) == null
+					and GameDataRegistry.building(def_id) == null
+					and GameDataRegistry.resource_def(def_id) == null,
 			# Present only on units (SimUnit.to_snapshot); absent on a building or
 			# resource node entry, where it defaults to IDLE and is never read since
 			# _is_own_living_villager() has already filtered those out by is_unit.
@@ -510,6 +531,8 @@ func pick(local: Vector2, owner: int = 0) -> int:
 		var f: Dictionary = _facts[id]
 		if not bool(f.get("alive", true)):
 			continue          # a corpse or rubble is unselectable (4.7, 5.5)
+		if bool(f.get("is_effect", false)):
+			continue          # an arrow in flight is scenery, not a target (4.13)
 		if owner != 0 and int(f["owner_id"]) != owner:
 			continue
 		if not _covers(f, tile):

@@ -29,6 +29,18 @@ var attack_type: StringName = &"melee"
 var attack_range: int = 0
 var attack_cooldown_ticks: int = 0
 
+## The VISUAL ID of what this unit throws, or `&""` for a unit that throws nothing
+## (PLAN.md 4.13). A projectile has no def of its own -- there is nothing to say about
+## an arrow beyond which sprite it is -- so this names `vis.projectile_arrow` directly
+## and `SimWorld.spawn_projectile` uses it as both the def id and the visual.
+##
+## ABSENCE IS THE SWITCH, and it is a per-unit choice rather than a rule derived from
+## `attack_range` or `attack_type`. Every melee unit correctly has none. So does the
+## DRAGON, which is range 3 and type pierce and would have been given an arrow by any
+## rule clever enough to infer one -- it breathes fire, there is no bake for that, and
+## a dragon spitting arrows is worse than a dragon spitting nothing.
+var attack_projectile: StringName = &""
+
 var armor_melee: int = 0
 var armor_pierce: int = 0
 
@@ -67,6 +79,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.attack_type = StringName(atk.get("type", "melee"))
 	u.attack_range = int(atk.get("range", 0))
 	u.attack_cooldown_ticks = int(atk.get("cooldown_ticks", 0))
+	u.attack_projectile = StringName(atk.get("projectile", ""))
 
 	var armor: Dictionary = d.get("armor", {})
 	u.armor_melee = int(armor.get("melee", 0))

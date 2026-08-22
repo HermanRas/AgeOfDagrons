@@ -480,6 +480,20 @@ func visual_for(def_id: StringName, phase: int = -1, size_class: int = -1) -> St
 	if r != null:
 		return r.visual_for_size(size_class)
 
+	# AN ID THAT IS ALREADY A VISUAL RESOLVES TO ITSELF (4.13). A projectile has no
+	# entry in any def table because there is nothing to say about an arrow beyond
+	# which sprite it is -- `UnitDef.attack_projectile` names `vis.projectile_arrow`
+	# and `SimWorld.spawn_projectile` uses that as the entity's def id too. Rather
+	# than a fourth table with one column in it, the seam simply accepts a visual
+	# where a def id is expected.
+	#
+	# Same shape as `variant_of`, which returns an id with no variants unchanged: the
+	# fallthrough is the answer, not a failure to find one. It cannot mask a typo,
+	# because an id that is neither a def nor a declared visual still lands on the
+	# `&""` below and draws the loud magenta placeholder.
+	if _visuals.has(def_id):
+		return def_id
+
 	return &""
 
 

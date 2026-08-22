@@ -28,6 +28,25 @@ func on_tick(_w: SimWorld) -> void:
 	pass
 
 
+## Whether this entity's POSITION is the thing that would leak if it were sent
+## through the fog (PLAN.md 2.5, and `SnapshotSystem._entry_for`'s four categories).
+##
+## The fog splits entities into mobile and static, and static ones are sent
+## REMEMBERED once explored -- a building or a tree does not move, so telling you it
+## is there gives away nothing that will have changed by the time you look again. A
+## mobile entity is simply not sent, because where it is now is exactly the fact its
+## owner is entitled to keep.
+##
+## A VIRTUAL RATHER THAN `e is SimUnit` AT THE CALL SITE, which is what it used to be.
+## That read as "units move and nothing else does", which was true until 4.13 gave the
+## world a second moving thing: an arrow in flight would have fallen through to the
+## static branch and been sent as a REMEMBERED entity to anyone who had ever explored
+## the tile it was over -- a running commentary on where somebody is fighting, drawn
+## through the fog. Asking the entity means the next moving thing cannot repeat it.
+func is_mobile() -> bool:
+	return false
+
+
 ## A `Vector2i` FOR `pos`, NOT A PAIRED-INT DICTIONARY (12.1f). `{"x": .., "y": ..}` cost
 ## 48 bytes to carry two small integers, because `var_to_bytes` re-encodes the key names
 ## "x" and "y" inside every entry; the Vector2i is 12. Sixty bytes down to twenty-four,

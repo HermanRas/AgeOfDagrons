@@ -19,10 +19,13 @@
 ##   stances (4.12), and guessing at it here would mean every villager in the
 ##   game charging the first enemy that walked past, since a villager carries
 ##   damage 3.
-## - **No projectiles.** A ranged hit lands the instant it is fired. An arrow with
-##   travel time is a real thing to want, but it needs its own entity in the sim
-##   and a view that draws it; nothing about the damage model below changes when
-##   it arrives.
+## - **Projectiles are COSMETIC, and arrived on 2026-08-22.** A ranged hit still lands
+##   the instant it is fired -- this line used to say "no projectiles" and predicted
+##   that "nothing about the damage model below changes when it arrives", which is
+##   exactly the shape the project owner chose. `SimProjectile` is spawned after the
+##   damage and carries none of it. What that buys is the thing that was wrong: ranged
+##   combat resolved with no visible cause. What it costs is that the health bar drops
+##   about 400 ms before the arrow lands.
 ## - **No siege pack/unpack state machine and no hostile wolf**, both of which
 ##   PLAN.md files under 4.13. They are separate machines rather than the shape of
 ##   combat, and neither has a unit on the map to exercise it yet.
@@ -85,6 +88,16 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	if u.attack_cooldown > 0:
 		return
 	target.take_damage(_damage_against(w, target, def), 0)
+	# THE ARROW IS LOOSED AFTER THE DAMAGE, and it carries none of it (4.13). The blow
+	# has already landed; this is only what shows where it came from. `SimProjectile`'s
+	# header has the argument for keeping those two apart, and the consequence: the
+	# health bar drops about 400 ms before the arrow arrives.
+	#
+	# Aimed at where the target IS RIGHT NOW, captured here rather than followed --
+	# see `SimProjectile.target_pos`. Nothing is spawned for a unit whose def names no
+	# projectile, which is every melee unit and the dragon.
+	if def.attack_projectile != &"":
+		w.spawn_projectile(def.attack_projectile, u.owner_id, u.pos, target.pos)
 	u.attack_cooldown = maxi(1, def.attack_cooldown_ticks)
 	# Retire on the killing blow rather than noticing next tick. A tick of
 	# swinging at something already dead is a tick of the attack animation

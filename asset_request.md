@@ -10,6 +10,49 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
+
+**What's needed:** a pitch on the two SHAFT projectiles so they lie along their flight
+instead of standing on end. `vis.projectile_stone` is correct and needs nothing — it is
+a sphere, so there is no orientation to get wrong.
+
+**Why:** the projectile system landed today and the three atlases are wired and drawing.
+The plumbing is right — the arrow spawns at the archer, flies to the target, points the
+correct one of eight ways, and despawns on arrival. What it looks like is a **fence
+post**. Both shafts are baked standing vertically, so a volley reads as a row of stakes
+being planted across the field rather than as arrows in the air.
+
+I froze the sim mid-flight and photographed all three; the crops are the evidence and
+they are unambiguous at 8×. Happy to re-shoot on request — `preview_projectiles.tscn`
+takes all three pictures and prints each projectile's exact screen position so you can
+crop straight to it.
+
+**Candidate source:** unchanged actors, they are the right ones —
+`props/units/weapons/arrow_front.xml` and `props/units/weapons/bolt.xml`. This is a
+recipe orientation question, the same family as `yaw_offset_deg` on the buildings that
+showed their backs, except that it is **pitch** rather than yaw: the shaft needs laying
+down toward the horizon, not spinning about the vertical.
+
+Two things I do not know and you will:
+
+- whether isobake has a pitch control at all, or whether `yaw_offset_deg` is the only
+  rotation a recipe can ask for. If it is yaw-only, this is a pipeline change and worth
+  saying so rather than forcing it;
+- what angle actually reads. A projectile flying in an isometric view is not simply
+  horizontal — my guess is that something around 20–30° of nose-down looks more like
+  flight than a true horizontal would, but that is a guess from one screenshot and you
+  have the contact sheets.
+
+**Not urgent and not blocking.** Everything works; it just looks wrong. Ranged combat
+had *no* visible cause at all before today, so a badly-angled arrow is still strictly
+better than what shipped yesterday. Fold it into whatever batch is convenient.
+
+**Where it plugs in once baked:** nowhere. Same ids, same paths, re-stage and it is
+picked up — the game reads the arrow's direction from the sim and the atlas' own
+8-direction table, neither of which changes.
+
+---
+
 ### `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
 
 **What's needed:** the PACKED half of all three siege engines. One bake each, same

@@ -14,6 +14,12 @@
 ##
 ## Four categories, and the line between them is MOBILE versus STATIC:
 ##
+## MOBILE IS ASKED OF THE ENTITY (`SimEntity.is_mobile`), not tested as `e is SimUnit`.
+## It was the type test until 4.13 gave the world a second moving thing: an arrow in
+## flight would have taken the static branch and been sent REMEMBERED to anyone who had
+## ever explored the tile it was over, which is a live commentary on where a battle is
+## happening, drawn through the fog.
+##
 ##   your own          always sent, whatever the fog says. You always know where your
 ##                     own things are, and a unit walking into an unexplored corner
 ##                     must not vanish from its owner.
@@ -203,7 +209,7 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 	var rect := _rect_of(e)
 	if VisionSystem.can_see_rect(w, viewer, rect):
 		return e.to_snapshot()
-	if e is SimUnit:
+	if e.is_mobile():
 		return {}                       # mobile: its position is what it would leak
 	if not e.alive:
 		return {}                       # see the header's known simplification

@@ -129,6 +129,11 @@ func update_entities(facts: Dictionary, local_owner: int) -> void:
 	for f in facts.values():
 		if not bool(f.get("alive", true)):
 			continue
+		# An arrow in flight is not a thing on the map (4.13). Without this every
+		# volley would strobe extra blips across the minimap in the shooter's own
+		# colour, which reads as reinforcements arriving.
+		if bool(f.get("is_effect", false)):
+			continue
 		var owner_id := int(f.get("owner_id", 0))
 		var color := GAIA_COLOR
 		if owner_id == local_owner:

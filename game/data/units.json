@@ -185,7 +185,8 @@
     "cost": { "wood": 25, "gold": 45 },
     "build_time_ticks": 350,
 
-    "attack": { "damage": 4, "type": "pierce", "range": 4, "cooldown_ticks": 20 },
+    "attack": { "damage": 4, "type": "pierce", "range": 4, "cooldown_ticks": 20,
+                "projectile": "vis.projectile_arrow" },
     "armor": { "melee": 0, "pierce": 0 },
 
     "carry_cap": {},
@@ -208,7 +209,8 @@
     "cost": { "wood": 25, "gold": 45 },
     "build_time_ticks": 270,
 
-    "attack": { "damage": 5, "type": "pierce", "range": 5, "cooldown_ticks": 20 },
+    "attack": { "damage": 5, "type": "pierce", "range": 5, "cooldown_ticks": 20,
+                "projectile": "vis.projectile_bolt" },
     "armor": { "melee": 0, "pierce": 0 },
 
     "carry_cap": {},
@@ -300,7 +302,8 @@
     "cost": { "wood": 40, "gold": 60 },
     "build_time_ticks": 340,
 
-    "attack": { "damage": 6, "type": "pierce", "range": 4, "cooldown_ticks": 20 },
+    "attack": { "damage": 6, "type": "pierce", "range": 4, "cooldown_ticks": 20,
+                "projectile": "vis.projectile_arrow" },
     "armor": { "melee": 0, "pierce": 0 },
 
     "carry_cap": {},
@@ -369,7 +372,8 @@
     "cost": { "wood": 180, "gold": 80 },
     "build_time_ticks": 400,
 
-    "attack": { "damage": 25, "type": "pierce", "range": 9, "cooldown_ticks": 60 },
+    "attack": { "damage": 25, "type": "pierce", "range": 9, "cooldown_ticks": 60,
+                "projectile": "vis.projectile_bolt" },
     "armor": { "melee": 2, "pierce": 6 },
 
     "carry_cap": {},
@@ -392,7 +396,8 @@
     "cost": { "wood": 200, "gold": 120 },
     "build_time_ticks": 460,
 
-    "attack": { "damage": 35, "type": "pierce", "range": 10, "cooldown_ticks": 80 },
+    "attack": { "damage": 35, "type": "pierce", "range": 10, "cooldown_ticks": 80,
+                "projectile": "vis.projectile_stone" },
     "armor": { "melee": 2, "pierce": 7 },
 
     "carry_cap": {},
@@ -415,7 +420,8 @@
     "cost": { "wood": 200, "gold": 160 },
     "build_time_ticks": 500,
 
-    "attack": { "damage": 40, "type": "pierce", "range": 12, "cooldown_ticks": 100 },
+    "attack": { "damage": 40, "type": "pierce", "range": 12, "cooldown_ticks": 100,
+                "projectile": "vis.projectile_stone" },
     "armor": { "melee": 2, "pierce": 8 },
 
     "carry_cap": {},
@@ -507,7 +513,8 @@
     "cost": { "wood": 90, "gold": 30 },
     "build_time_ticks": 360,
 
-    "attack": { "damage": 6, "type": "pierce", "range": 5, "cooldown_ticks": 30 },
+    "attack": { "damage": 6, "type": "pierce", "range": 5, "cooldown_ticks": 30,
+                "projectile": "vis.projectile_arrow" },
     "armor": { "melee": 0, "pierce": 6 },
 
     "carry_cap": {},
@@ -530,7 +537,8 @@
     "cost": { "wood": 200, "gold": 70 },
     "build_time_ticks": 360,
 
-    "attack": { "damage": 12, "type": "pierce", "range": 7, "cooldown_ticks": 30 },
+    "attack": { "damage": 12, "type": "pierce", "range": 7, "cooldown_ticks": 30,
+                "projectile": "vis.projectile_arrow" },
     "armor": { "melee": 0, "pierce": 8 },
 
     "carry_cap": {},
