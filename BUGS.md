@@ -252,6 +252,40 @@ crossing in front of a building.
 
 ---
 
+## 2026-08-22 — walls, facing and the lobby
+
+- [x] **Every unit faces the wrong way, and it is not just the units.** Reported as
+      "the attack animation faces away from the thing they are attacking"; combat is
+      only where it is *visible*. The cause is in the recipes, not the game —
+      isobake's zeroad adapter turns every subject 180° from the direction the atlas
+      labels it, and 81 of 171 recipes cancel it with `yaw_offset_deg = 180.0`.
+      **The owner declined the re-bake for now** ("no to the rebake of the entire
+      asset suite and all recipes, can we fix it in code, and add it as a polish item
+      at the end, before investing 3 days of baking time") — they are getting a
+      faster machine for it. So the game compensates: `"directions_reversed": true`
+      on 31 `visuals.json` entries adds half a turn (`AtlasEntry.facing_offset`).
+      Covers units, ships, siege, animals and the wall foundations and rubble, all of
+      which had the same hole. **The flags must come off per entry as the art is
+      re-baked** — PLAN.md §13.2 item 10, contract in `asset_request.md`.
+- [x] **Short wall pieces should merge into longer ones** (the owner's design, and it
+      wins on its own terms: fewer entities, seams and vision circles). Built as
+      `WallMerge`, with the owner's amendment that **only complete pieces merge** —
+      otherwise a merge eats a foundation out from under its builder. Health is the
+      exact sum, the merge is silent and free, and a merged long can then be upgraded
+      to a gate, which is how a wall built in short pieces gets a door at all.
+- [x] **The lobby preview should be rotated to match the in-game minimap.** It was a
+      square with north-west top-left; the match opens on `Iso`'s projection with tile
+      (0, 0) at the top, so the layout a player picked a start position on arrived
+      turned 45°. Turned in the pixels (`MapPreview.to_diamond`) rather than by
+      rotating the Control, which a `VBoxContainer` lays out by its unrotated rect.
+      The dev tool's PNG stays square deliberately.
+- [ ] **No wall corner piece**, and 0 A.D. has none either — it puts a `wall_tower` at
+      every corner, which is art we already have (`building.guard_tower` is baked from
+      exactly those actors). What is missing is anything that *detects* a corner and
+      places one there; two drags meeting at 90° still overlap or leave a notch.
+
+---
+
 ## Open from the AI-vs-AI match run (not owner-reported)
 
 Found by `dev_preview/preview_ai_match.tscn` on seed 3, forest, 12,000 ticks.

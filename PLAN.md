@@ -888,6 +888,20 @@ point the screen is gone, so the config has to wait somewhere that outlives both
 afterwards still gets the debug map rather than whatever a screen left behind. That is
 what keeps every dev preview working unchanged.
 
+**The preview stands the map on its corner** (project owner, 2026-08-22: *"can we rotate the
+map to match the in-game minimap?"*). It used to be a square with north-west top-left, and
+then the match opened on `Iso`'s projection with tile (0, 0) at the *top* — so the layout a
+player had just picked a start position on arrived turned 45°, and the minimap they would
+read for the rest of the match disagreed with the picture they chose it from. The turn is
+baked into the **pixels** (`MapPreview.to_diamond`) rather than done with `rotation` on the
+Control, which is how `Minimap` does it: that widget owns its own area and centres a square
+inside a footprint sized for the rotated bounding box, where this one is a row in a
+`VBoxContainer` — and a container lays a child out by its *unrotated* rect, so a rotated
+TextureRect would keep its 320×320 slot and spill its tips over the Map and Seed rows. The
+dev tool's PNG stays square on purpose: judging whether a river cuts a map in two is a
+question about tile space, and both pictures still come from one `image()` so they cannot
+disagree about what the map *contains*.
+
 **Still open on this screen:** saved maps in the map-source picker, which waits on 2.4c's
 file format; the OPEN slot role, which needs 12.1's listening host; and the art — it is
 built from stock `OptionButton`/`SpinBox` controls, the `ResourceHUD`-at-7.1 stage where
@@ -1044,7 +1058,7 @@ all twenty. What it deliberately does not do is stop an already-paid-for unit fr
 | 5.5 | ✅ Destruction → `DESTROYED` phase + `free_footprint()`, so the ground is buildable the instant it falls. Rubble stays opaque forever (no damaged art tier) | `[MVP]` |
 | 5.6 | ✅ Building health on the shared dot | `[MVP]` |
 | 5.7 | Full building roster — 23 buildings. Low code effort, ~70 bakes behind it | |
-| 5.8 | ✅ **DONE 2026-08-22** — **Walls and gates**: drag placement, automatic short/medium/long segment choice, two orientations, and a gate that opens and shuts. Three tiers, twelve defs, three menu entries. The gate is an **upgrade of a long segment**, not a placement — tap-placing one could only ever lie east-west. See §5.8 | |
+| 5.8 | ✅ **DONE 2026-08-22** — **Walls and gates**: drag placement, automatic short/medium/long segment choice, two orientations, and a gate that opens and shuts. Three tiers, twelve defs, three menu entries. The gate is an **upgrade of a long segment**, not a placement — tap-placing one could only ever lie east-west. Finished short pieces that meet **merge into one longer piece**, so a wall built in stages ends up the shape one drag would have laid. See §5.8 | |
 
 #### 5.8 Walls and gates — ✅ built 2026-08-22
 
@@ -1229,8 +1243,56 @@ allies-only gate.
 grid*, so two hosts disagreeing about a doorway would route the same army two different
 ways and diverge in position a tick later — which `pos` reports long after the cause.
 
+##### Short pieces that meet become one long piece (2026-08-22)
+
+The project owner's design, approved with one amendment that turned out to be the load-bearing
+one. A wall built up over several drags ends as a row of short pieces where a single drag
+would have laid long ones: same ground, same cost, three times the entities, seams, vision
+circles and snapshot rows. `WallMerge` closes that — on completion, a segment looks along its
+own axis and, if a contiguous stretch of same-tier neighbours adds up to a length the tier
+declares, they become that one piece.
+
+**Only complete pieces merge**, which is the owner's amendment and the answer to the one real
+hazard: absorbing a foundation would delete the building a villager is walking towards. A
+piece under construction is a wall of its own until the tick it is finished — which is also
+the tick it gets its own chance to be merged, so nothing is lost by waiting.
+
+- **The survivor is the piece at the LOW end of the run**, not the one that just finished. It
+  keeps its origin and only grows, so nothing moves a corner backwards over ground another
+  entity still holds — and the outcome does not depend on which piece was completed last,
+  which is what stops two hosts that raised the same wall in a different order from
+  producing different entities.
+- **Health is the sum, and it is exact.** Wall hp is authored strictly per tile (400 / 800 /
+  1200 for 3 / 6 / 9), so three undamaged shorts are one undamaged long, and a merge neither
+  repairs nor weakens. Clamped to the new maximum, which only bites if that proportion is
+  ever broken. This is deliberately *not* the fraction rule the gate upgrade uses: an upgrade
+  is one building becoming another, where a merge is several becoming one.
+- **Silent, and free.** No toast, no cost, no refund. The wall the player paid for is still
+  standing on the ground they put it on, and announcing an improvement nobody asked for is
+  noise.
+- **Longest-first, then leftmost**, the same rule `WallPlan` fills a drag with — so six
+  shorts become long + long rather than three mediums, and a wall built in stages ends up the
+  shape one drag would have given it. The tie-break is not cosmetic: a run of six contains
+  four different stretches of three, and "whichever the scan found first" would depend on
+  which end the walk started from.
+- **A merged long can then be upgraded to a gate**, which is the payoff rather than a side
+  effect: a gate is an upgrade of the long piece, so until now a player who walled a gap in
+  short pieces could never put a door in their own wall.
+- **A gate is never merged away**, and that falls out of the data rather than being a rule in
+  `WallMerge`: no tier's `wall_lengths` names a gate, so `GameDataRegistry.wall_tier()` does
+  not resolve one. Nor is anything merged across an owner, a tier, an axis, a gap, or a
+  parallel wall one row over — twenty-one tests, most of them about exactly that, because the
+  ways this could eat something it should not all present as *a building vanished*.
+- The absorbed pieces go through `despawn`, which is the **silent** removal: it frees their
+  ground and files them under `removed_this_tick` so clients drop the view node, where the
+  destruction path (5.5) would leave rubble and tell a player something of theirs was killed.
+
 ##### Not done, and why
 
+- **No wall corner piece, and 0 A.D. has none either.** Two drags meeting at 90° overlap or
+  leave a notch. 0 A.D. puts a `wall_tower` at every corner instead — which is art we
+  already have, since `building.guard_tower` is baked from exactly those actors. What is
+  missing is not the art but anything that *detects* a corner and places one there.
 - **No wall tower**, and none is needed: the roster's `Pers/wall_tower` and
   `rome/wall_tower` are exactly what `vis.guard_tower` is baked from, so
   `building.guard_tower` already *is* the wall turret. 0 A.D. auto-places towers at wall
@@ -1742,6 +1804,7 @@ nothing in the logs marking where. **Do not touch `isobake/` while a batch is in
 | 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
 | 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |
 | 4b | **`act_enter`/`act_garrison` and `act_exit`/`act_leave`** are two icon pairs covering one concept each — decide whether they are distinct actions (board transport vs garrison building) and reclaim the spares if not | with 4.8 |
+| 10 | ⏸️ **`yaw_offset_deg = 180.0` on the remaining 36 recipes — DEFERRED by the owner 2026-08-22, and the game compensates in the meantime.** isobake's zeroad adapter turns every subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it and the rest — every unit, ship, animal, siege engine, and the wall foundations and rubble — were baked backwards, which is why an archer shot over her own shoulder. The recipes are the real fix and it is ~21 units × 8 colours, most of a day of bake time on the machine the owner is working on, so it waits for the heavy rig (i9 / 64 GB / NVMe, ~12 Blenders in parallel). Until then `directions_reversed` in `visuals.json` adds half a turn per atlas (`AtlasEntry.facing_offset`), which only works because these store 5 or 8 directions — the `directions: 1` buildings had no second frame to rotate to and are why the offset was applied one at a time in the first place. **WHEN THE REBAKE LANDS THE FLAGS COME OFF IN THE SAME STEP**, per entry: a fixed atlas with its flag still set faces backwards again. `GameDataRegistry.reversed_direction_atlases()` is the list, `tests/view/test_facing_compensation.gd` goes with them, and `dev_preview/preview_facing_chart.tscn` is how you check | polish, before A.8 colour bakes |
 
 **Retired open items**, kept as one-liners because they were expensive to answer: the render
 pipeline produces usable sprites (0.9); actor→entity mapping is complete for all 23 buildings, 22

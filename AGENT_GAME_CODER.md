@@ -189,7 +189,7 @@ maps, 21 units, all footprints measured (each baked atlas resolved back through
 `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**293 atlases staged.** 68 test files, 1016 tests, all passing.
+**293 atlases staged.** 71 test files, 1163 tests, all passing.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -226,12 +226,37 @@ and tech-tree wireframes, and settings (§8.2b).
   Worth remembering as a class: **the placement path has exactly one orientation**,
   so anything non-square that needs a second one cannot be tap-placed. Walls get
   theirs from the drag; the gate now gets it by inheriting.
-  What remains unbuilt around them: **no diagonal walls** (six of the eight baked
-  directions are unreachable — a [9,2] box does not tile a square grid at 45°),
+  **FINISHED SHORT PIECES MERGE** (2026-08-22, the owner's design): on completion a
+  segment looks along its axis, and a contiguous stretch of same-tier neighbours that
+  adds up to a declared length becomes that one piece — `WallMerge`, called from
+  `BuildSystem._finished`. Only COMPLETE pieces (absorbing a foundation would delete
+  what a builder is walking to), the survivor is the piece at the low end of the run so
+  nothing moves a corner backwards, health is the exact sum, and it is silent and free.
+  Most of its 21 tests are about what must *not* be merged, because every one of those
+  mistakes presents as a building that vanished. A merged long can then be upgraded to a
+  gate, which is how a wall built in short pieces gets a door at all.
+  What remains unbuilt around them: **no corner piece** (0 A.D. has none either — it
+  puts a `wall_tower` at every corner, which is art we already have as
+  `building.guard_tower`; what is missing is anything that detects a corner), **no
+  diagonal walls** (six of the eight baked directions are unreachable — a [9,2] box does
+  not tile a square grid at 45°),
   **no garrison on a wall** (4.8), and **an open gate is open to everyone**
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
+- **31 atlases are drawn through a HALF-TURN COMPENSATION and it must come off per
+  entry as the art is re-baked** (2026-08-22). isobake's zeroad adapter turns every
+  subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel that
+  with `yaw_offset_deg = 180.0` and the rest — every unit, ship, animal, siege engine,
+  and the wall foundations and rubble — were baked backwards. The owner deferred the
+  re-bake (a day of machine time, waiting on a faster box) and asked for a code fix, so
+  `"directions_reversed": true` in `visuals.json` sets `AtlasEntry.facing_offset`.
+  `GameDataRegistry.reversed_direction_atlases()` is the live list,
+  `tests/view/test_facing_compensation.gd` is written to be deleted with the last flag,
+  and `preview_facing_chart` is how you check. **A re-baked atlas with its flag still
+  set faces backwards again, identically and silently** — which is the whole reason the
+  flag is per entry and enumerable rather than one global constant. PLAN.md §13.2 item
+  10, and the contract with the art side is in `asset_request.md`.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.

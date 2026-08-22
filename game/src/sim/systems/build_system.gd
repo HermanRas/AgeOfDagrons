@@ -58,7 +58,19 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 ## placed by this player on purpose and is standing there unbuilt. The bound is
 ## `SimSystem.SAME_WORK_RADIUS`, which is what keeps it "the site I am on" rather than
 ## "every building site I own".
+## A FINISHED WALL SEGMENT MAY BE SWALLOWED BY ITS OWN NEIGHBOURS (project owner,
+## 2026-08-22): three shorts that meet become one long piece. Done first, and before
+## the builder is given anything else to do, because `b` may not survive it -- the
+## merge keeps the piece at the low end of the run and despawns the others, so
+## `GatherSystem.is_harvestable(b, ...)` below could be asked about an entity that no
+## longer exists. A wall is never harvestable and never the next foundation, so the
+## re-read costs the ordinary case nothing.
 func _finished(w: SimWorld, u: SimUnit, b: SimBuilding) -> void:
+	if WallMerge.apply(w, b):
+		if not _next_foundation(w, u, b):
+			u.stop()
+		return
+
 	if GatherSystem.is_harvestable(b, u.owner_id):
 		var spot := GatherSystem.harvest_spot(b, u.id)
 		u.set_task_gather(b.id, spot)

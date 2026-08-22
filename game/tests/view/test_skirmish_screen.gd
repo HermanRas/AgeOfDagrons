@@ -665,8 +665,13 @@ func test_regenerating_after_a_bad_map_re_enables_start() -> void:
 func test_the_preview_draws_the_map_it_was_given() -> void:
 	var texture := screen._preview.texture
 	assert_not_null(texture, "there is a picture")
-	assert_eq(texture.get_size(), Vector2(screen.map_data().size),
-			"one pixel per tile, at the map's own size")
+	# Still one pixel per tile, but STOOD ON ITS CORNER (2026-08-22): the lobby shows
+	# the map the way the match and the minimap do, so the picture is the diagonal of
+	# the square it used to be. test_map_preview asserts which tile lands on which
+	# tip; this only asserts the lobby is showing the turned one.
+	var size: Vector2i = screen.map_data().size
+	assert_eq(texture.get_size(), Vector2(size.x + size.y, size.x + size.y),
+			"the diamond's bounding box, i.e. the map's own diagonal")
 
 
 func test_a_config_with_no_map_falls_back_rather_than_crashing() -> void:

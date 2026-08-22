@@ -10,6 +10,12 @@
 ## prototype used the pixels AS the format, which is why a town centre, a villager and
 ## a scout were all `ff0000` and could only be told apart by guessing at blob sizes
 ## (11.2 fix 2). Here the data is authoritative and the colours are free to be legible.
+##
+## The two callers now differ in ORIENTATION and only in that: `show_map` turns the
+## picture 45 degrees to stand the map on the same corner the match and the minimap
+## do, while the dev tool keeps it square. Both draw from one `image()`, so what they
+## say about the map cannot drift apart -- which is what the paragraph above is
+## protecting, and it is not the same thing as which way up they show it.
 class_name MapPreview
 extends TextureRect
 
@@ -37,13 +43,31 @@ func _init() -> void:
 
 
 ## Draw `data`, or clear to nothing when it is null.
+##
+## ON SCREEN THE MAP IS A DIAMOND, because in the match it is one (project owner,
+## 2026-08-22). The lobby used to show a square with north-west in the top-left
+## corner, and then the match opened on `Iso`'s projection with tile (0, 0) at the
+## TOP -- so the layout a player had just chosen a start position on arrived turned
+## 45 degrees, and the minimap they would spend the match reading disagreed with the
+## picture they picked it from.
 func show_map(data: MapData) -> void:
-	texture = render(data) if data != null else null
+	var flat := image(data)
+	texture = ImageTexture.create_from_image(to_diamond(flat)) if flat != null else null
 
 
-## One pixel per tile. `scale` is for callers writing a PNG to look at by eye
-## (`preview_mapgen`); on screen the TextureRect does the scaling, so 1 is right there.
+## One pixel per tile, AXIS-ALIGNED -- `to_diamond` is what turns it. Kept
+## unrotated here because `preview_mapgen` writes this straight to a PNG, and a
+## top-down picture is the view the generator was designed against (see that file):
+## judging whether a river cuts the map in two is a question about tile space, not
+## about the camera.
 static func render(data: MapData, scale: int = 1) -> ImageTexture:
+	var img := image(data, scale)
+	return ImageTexture.create_from_image(img) if img != null else null
+
+
+## `scale` is for callers writing a PNG to look at by eye (`preview_mapgen`); on
+## screen the TextureRect does the scaling, so 1 is right there.
+static func image(data: MapData, scale: int = 1) -> Image:
 	if data == null or data.size.x <= 0 or data.size.y <= 0:
 		return null
 	var img := Image.create(data.size.x * scale, data.size.y * scale, false, Image.FORMAT_RGBA8)
@@ -68,7 +92,51 @@ static func render(data: MapData, scale: int = 1) -> ImageTexture:
 						sin(deg_to_rad(degrees))) * float(radius))
 				_blot(img, t, scale, C_START)
 
-	return ImageTexture.create_from_image(img)
+	return img
+
+
+## The same picture turned 45 degrees, tile (0, 0) at the TOP -- which is what
+## `Minimap` shows and what `Iso._project` draws the match in.
+##
+## The rotation is baked into the PIXELS rather than done with `rotation` on the
+## Control, which is how `Minimap` does it. That widget owns its own area and
+## centres a square inside a footprint big enough for the rotated bounding box; this
+## one is a row in the lobby's `VBoxContainer`, and a container lays a child out by
+## its UNROTATED rect -- so a rotated TextureRect would keep its 320x320 slot and
+## spill its four tips over the Map and Seed rows below it. Baked in, the diamond is
+## inscribed in the slot the layout already reserved and every other Control
+## property keeps meaning what it says.
+##
+## Read INVERSELY -- every destination pixel asks which tile it came from -- because
+## the forward map lands only on every other pixel (x-y and x+y have the same
+## parity), so drawing tile by tile would sieve holes through the whole map.
+##
+## The axes match `Iso`: +x runs down-right, +y down-left, so the four tips are
+## tile (0,0) at the top, (w,0) right, (w,h) bottom, (0,h) left. A square of side
+## n becomes n*sqrt(2) across, and the corners outside the diamond stay transparent
+## for the panel behind to show through -- the same void the camera clamp leaves at
+## the corners of the real map (`Iso.map_bounds`).
+static func to_diamond(flat: Image) -> Image:
+	if flat == null:
+		return null
+	var w := flat.get_width()
+	var h := flat.get_height()
+	if w <= 0 or h <= 0:
+		return flat
+
+	var size := w + h
+	var out := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for py in range(size):
+		for px in range(size):
+			# Inverse of (px, py) = (x - y + h, x + y). The halves floor rather than
+			# truncate: px < h gives a negative x - y, and truncation there would
+			# fold the left half of the diamond back on itself.
+			var d := px - h
+			var x := floori(float(d + py) * 0.5)
+			var y := floori(float(py - d) * 0.5)
+			if x >= 0 and y >= 0 and x < w and y < h:
+				out.set_pixel(px, py, flat.get_pixel(x, y))
+	return out
 
 
 static func terrain_colour(kind: int) -> Color:

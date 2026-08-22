@@ -285,23 +285,47 @@ func set_gate_locked(b: SimBuilding, locked: bool) -> void:
 ## the pooled sprite; `GameView._visual_id_of` re-points the art off the new `def_id`
 ## on the next snapshot with nothing else to do.
 ##
-## The footprint deliberately does NOT change -- `UpgradeBuildingCommand` refuses a
-## target whose footprint differs, so the ground this holds is the ground it already
-## held and no placement check is needed. Every other def-derived field is re-read
-## rather than patched selectively: a field left over from the old def is exactly the
-## kind of thing that stays wrong quietly.
+## For an UPGRADE the footprint does not change -- `UpgradeBuildingCommand` refuses a
+## target whose footprint differs, so the ground it holds is the ground it already
+## held and no placement check is needed. Every def-derived field is re-read rather
+## than patched selectively: a field left over from the old def is exactly the kind of
+## thing that stays wrong quietly.
+##
+## `footprint_override` is the second caller, `WallMerge`: three short wall segments
+## become one long one, and the survivor GROWS along its own axis. It keeps its
+## ORIGIN -- the merge always survives the piece at the low end of the run -- so the
+## new footprint extends over ground the absorbed pieces are giving up in the same
+## tick, and there is still nothing to place-check. The old claim is cleared first
+## regardless, because occupancy is keyed by id over a rect and a shrink would
+## otherwise leave tiles held by a building that no longer covers them.
 ##
 ## HEALTH CARRIES ITS FRACTION, not its absolute value. A wall at 1200/1200 becoming
 ## a 1000 hp gate is undamaged, and a wall at half health becoming one at half health
 ## is the only rule that neither heals nor hurts as a side effect of upgrading. Full
 ## health is pinned exactly, so the commonest case cannot round to 999.
-func convert_building(b: SimBuilding, new_def_id: StringName) -> void:
+## `hp_override` is again for the merge, which adds its pieces' health together
+## instead -- see `WallMerge` for why that is the honest sum there and a fraction is
+## the honest one here.
+func convert_building(b: SimBuilding, new_def_id: StringName,
+		footprint_override: Vector2i = Vector2i.ZERO, hp_override: int = -1) -> void:
 	var d: BuildingDef = building_def(new_def_id)
 	if d == null:
 		return
 
 	var was_full := b.hp >= b.max_hp
 	var old_max := maxi(1, b.max_hp)
+
+	# BEFORE the footprint moves: `origin_tile()` derives the corner from `pos` and
+	# the footprint together, so reading it after either changes reads a corner the
+	# building never stood on.
+	var origin := b.origin_tile()
+	if footprint_override != Vector2i.ZERO and footprint_override != b.footprint:
+		if map != null:
+			map.clear_occupant(b.id)
+		_occupancy_changed(b.footprint_rect())
+		b.footprint = footprint_override
+		b.pos = SimBuilding.centre_of(origin, b.footprint)
+		spatial.move(b.id, b.tile())
 
 	b.def_id = new_def_id
 	b.is_gate = d.is_gate
@@ -313,7 +337,10 @@ func convert_building(b: SimBuilding, new_def_id: StringName) -> void:
 	b.gather_kind = d.gather_kind
 	b.gather_amount = d.gather_amount
 	b.gather_slots = d.gather_slots
-	b.hp = b.max_hp if was_full else clampi(b.hp * b.max_hp / old_max, 1, b.max_hp)
+	if hp_override >= 0:
+		b.hp = clampi(hp_override, 1, b.max_hp)
+	else:
+		b.hp = b.max_hp if was_full else clampi(b.hp * b.max_hp / old_max, 1, b.max_hp)
 	# A COMPLETE building stays complete. `build_progress` is compared against
 	# `build_total`, and the new def's build time is a different number, so leaving the
 	# old progress behind would make a finished gate read as a part-built one.
@@ -741,6 +768,13 @@ func unit_def(def_id: StringName) -> UnitDef:
 
 func building_def(def_id: StringName) -> BuildingDef:
 	return GameDataRegistry.building(def_id) if GameDataRegistry != null else null
+
+
+## The wall tier a segment def belongs to, or null if it is not a wall segment.
+## `WallMerge` asks it of every wall piece that finishes; the reverse index behind it
+## is the registry's, since it is a fact about buildings.json.
+func wall_tier(def_id: StringName) -> BuildingDef:
+	return GameDataRegistry.wall_tier(def_id) if GameDataRegistry != null else null
 
 
 func resource_def(def_id: StringName) -> ResourceDef:
