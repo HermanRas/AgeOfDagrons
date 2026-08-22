@@ -46,19 +46,102 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 ## would otherwise have to find and re-order every farmer by hand the moment each
 ## plot came up.
 ##
-## Anything else stops, as before -- a house or a barracks has no work to offer,
-## and inventing some would be a unit wandering off on an order nobody gave.
-## `is_harvestable()` is the same test GatherCommand validates against, so this
-## can never start a gather the system would then refuse.
+## OTHERWISE IT LOOKS FOR ANOTHER FOUNDATION (project owner, 2026-08-22). Until then
+## this simply called `stop()`, and the reasoning recorded here was that a house or a
+## barracks has no work to offer so inventing some would be a unit wandering off on an
+## order nobody gave. That held while a placement was one building. **A wall drag lays
+## a dozen at once**, spreads the builders round-robin across them, and every villager
+## downed tools after its first segment -- reported from play as "builder does not
+## continue to build all the pieces, stops after 1".
+##
+## It is not wandering off on an order nobody gave: every foundation it can find was
+## placed by this player on purpose and is standing there unbuilt. The bound is
+## `SimSystem.SAME_WORK_RADIUS`, which is what keeps it "the site I am on" rather than
+## "every building site I own".
 func _finished(w: SimWorld, u: SimUnit, b: SimBuilding) -> void:
-	if not GatherSystem.is_harvestable(b, u.owner_id):
-		u.stop()
+	if GatherSystem.is_harvestable(b, u.owner_id):
+		var spot := GatherSystem.harvest_spot(b, u.id)
+		u.set_task_gather(b.id, spot)
+		if w.paths != null:
+			w.paths.request(u.id, spot)
 		return
 
-	var spot := GatherSystem.harvest_spot(b, u.id)
-	u.set_task_gather(b.id, spot)
-	if w.paths != null:
-		w.paths.request(u.id, spot)
+	if not _next_foundation(w, u, b):
+		u.stop()
+
+
+## Send `u` to another unfinished building of its owner's near the one just raised.
+## True if one was found and the unit is now walking to it.
+##
+## PREFERS A FOUNDATION NOBODY IS ALREADY BUILDING, which is what preserves the
+## round-robin spread `PlaceWallCommand` set up. Without it, the first villager to
+## finish walks to the segment the second is already raising, they finish it together,
+## and from then on the whole crew moves as one pack down the wall -- correct, and
+## about as slow as one villager doing the lot. Ranked rather than filtered, so a crew
+## larger than the number of foundations still all find work instead of stopping.
+##
+## Measured from where the FINISHED BUILDING stood, not from the unit: a villager who
+## has just raised a nine-tile wall may be standing at either end of it, and using its
+## own tile would make which segment it picks next depend on where it happened to
+## finish. The building is the site.
+##
+## Deterministic, and it has to be: a strict minimum over
+## (already-claimed, distance, id) walked in sorted id order -- the same shape
+## `CombatSystem._reacquire` uses, and for the same reason. Two hosts sending one
+## villager to different foundations is a desync.
+func _next_foundation(w: SimWorld, u: SimUnit, done: SimBuilding) -> bool:
+	if w.paths == null:
+		return false
+	var from := done.tile()
+	var ids := w.entities.keys()
+	ids.sort()
+
+	var best: SimBuilding = null
+	var best_claimed := 0
+	var best_d := 0
+	for id in ids:
+		if id == done.id:
+			continue
+		var e: SimEntity = w.entities[id]
+		if not (e is SimBuilding):
+			continue
+		var candidate: SimBuilding = e
+		if candidate.owner_id != u.owner_id or not candidate.alive or candidate.is_complete():
+			continue
+		if candidate.phase == SimBuilding.Phase.DESTROYED:
+			continue
+		var gap := CombatSystem.tile_gap(from, candidate.footprint_rect())
+		if gap > SimSystem.SAME_WORK_RADIUS:
+			continue
+		var claimed := 1 if _has_builder(w, candidate.id, u.id) else 0
+		if best != null:
+			if claimed > best_claimed:
+				continue
+			if claimed == best_claimed:
+				if gap > best_d:
+					continue
+				if gap == best_d and int(id) > best.id:
+					continue
+		best = candidate
+		best_claimed = claimed
+		best_d = gap
+
+	if best == null:
+		return false
+	u.set_task_build(best.id, best.tile())
+	w.paths.request(u.id, best.tile())
+	return true
+
+
+## Whether anybody but `except_id` is already on their way to build `building_id`.
+static func _has_builder(w: SimWorld, building_id: int, except_id: int) -> bool:
+	for e in w.entities.values():
+		if not (e is SimUnit) or e.id == except_id or not e.alive:
+			continue
+		var other: SimUnit = e
+		if other.task == SimUnit.Task.BUILD and other.task_target_id == building_id:
+			return true
+	return false
 
 
 func _adjacent_to_rect(from: Vector2i, rect: Rect2i) -> bool:

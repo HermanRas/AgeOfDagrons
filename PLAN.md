@@ -1169,6 +1169,32 @@ piece, and was getting *nothing* — with wall they could plainly pay for on the
 buys the largest affordable piece that fits the segment's own span, so two shorts' worth
 of wood becomes one medium: same ground, same money, one fewer seam.
 
+**A builder carries on to the next foundation** (2026-08-22, from play: *"builder does
+not continue to build all the pieces, stops after 1"*). It did — `BuildSystem._finished`
+called `stop()` for anything that was not a field, and there was **no re-scan at all**.
+That was correct while a placement was one building and exactly wrong for a drag that
+lays a dozen: the crew was spread across them and every villager downed tools after its
+first segment.
+
+The bound is a new shared `SimSystem.SAME_WORK_RADIUS` — **10 tiles**, the owner's
+number, "in general increase scan for same work to 10 tiles" — which also **raises
+`GatherSystem.RESCAN_RADIUS` from 1**. That reverses the earlier 3×3 call, and the
+earlier reasoning was not wrong so much as answering a different question: it was
+protecting against a worker setting off across the map on an order the player did not
+give, and a wall drag *is* an order the player gave, covering more ground than three
+tiles. Combat's `REACQUIRE_RADIUS` stays at 2 — that one looks for the next thing to
+*hit*, and ten tiles of it is an aggro range, which its own note rules out.
+
+It measures from **the segment just finished, not from the unit** (a villager who has
+raised a nine-tile wall may be at either end of it), and **prefers a foundation nobody
+is already on**, which is what preserves the round-robin spread below — ranked rather
+than filtered, so a crew larger than the number of sites still all find work.
+
+*1082 tests did not catch this*, because every build fixture in the suite placed exactly
+one foundation, so `stop()` was always the right answer and nothing ever asked for a
+second. The seven new tests were checked against a sabotaged `_finished` and all seven
+fail without the fix.
+
 **Builders are spread round-robin across the segments**, not all queued on the first.
 Five villagers on the first of twelve foundations raise it in a fifth of the time and
 then idle beside eleven untouched ones — the same "a foundation nobody returns to"

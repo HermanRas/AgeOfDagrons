@@ -173,11 +173,16 @@ func _process_return(w: SimWorld, u: SimUnit) -> void:
 
 
 ## How far around a spent or crowded node a villager will look for the next one,
-## in tiles. 1 is the 3x3 ring the project owner asked for, and the tightness is
-## the point: a worker should carry on with the wood it was already standing in
-## rather than set off across the map on its own initiative, which is an order
-## the player did not give and cannot see coming.
-const RESCAN_RADIUS := 1
+## in tiles. Now `SimSystem.SAME_WORK_RADIUS`, which is 10 -- see its note for why
+## this went from 1 to 10 on 2026-08-22 and what the original 3x3 was protecting.
+##
+## The old reasoning, kept because it still bounds the behaviour: a worker should
+## carry on with the wood it was already standing in rather than set off across the
+## map on its own initiative, which is an order the player did not give and cannot
+## see coming. Ten tiles is still a neighbourhood rather than the map -- on the
+## 64-tile debug board it is a sixth of it -- and the slot check below still stops a
+## villager hopping into somebody else's queue.
+const RESCAN_RADIUS := SimSystem.SAME_WORK_RADIUS
 
 
 ## Send `u` to another `kind` source beside where its last one stood. Returns

@@ -341,6 +341,69 @@ func test_you_cannot_open_somebody_elses_gate() -> void:
 	assert_true(gate.gate_locked)
 
 
+# ── the crew builds the WHOLE run (2026-08-22) ──────────────────────────────
+
+func test_one_villager_raises_every_segment_of_a_run() -> void:
+	# THE REPORTED BUG, end to end: "builder does not continue to build all the
+	# pieces, stops after 1". `BuildSystem._finished` called `stop()` for anything that
+	# was not a field and there was no re-scan at all -- harmless while a placement was
+	# one building, and exactly wrong for a drag that lays a dozen.
+	#
+	# One villager and a two-piece run, so the only way every segment finishes is by
+	# the builder finding the next one itself.
+	var origin := _clear_run(12)
+	var villager := world.spawn_unit(&"unit.villager", 1, origin + Vector2i(0, 3))
+	assert_true(_run(PlaceWallCommand.new(1, WOOD, origin, origin + Vector2i(11, 0),
+			[villager.id])))
+
+	var segments := _walls()
+	assert_true(segments.size() >= 2, "a 12-tile drag is more than one piece")
+
+	# 9 + 3 tiles is 360 + 120 ticks of work, plus the walk between them.
+	for i in range(1200):
+		world.step()
+		var all_up := true
+		for s in segments:
+			if not s.is_complete():
+				all_up = false
+				break
+		if all_up:
+			return
+	var standing := 0
+	for s in segments:
+		if s.is_complete():
+			standing += 1
+	assert_true(false, "only %d of %d segments went up" % [standing, segments.size()])
+
+
+func test_the_builder_walks_the_length_of_a_run_it_did_not_start_at_the_end_of() -> void:
+	# The bound is `SimSystem.SAME_WORK_RADIUS`, measured from the SEGMENT just
+	# finished rather than from the unit, so a run longer than the radius is still
+	# built end to end -- each piece is within ten tiles of the one before it even
+	# when the far end is thirty tiles from where the villager started.
+	var origin := _clear_run(24)
+	var villager := world.spawn_unit(&"unit.villager", 1, origin + Vector2i(0, 3))
+	assert_true(_run(PlaceWallCommand.new(1, WOOD, origin, origin + Vector2i(23, 0),
+			[villager.id])))
+	var segments := _walls()
+	assert_true(segments.size() >= 3, "24 tiles is 9 + 9 + 6")
+
+	for i in range(3000):
+		world.step()
+		var all_up := true
+		for s in segments:
+			if not s.is_complete():
+				all_up = false
+				break
+		if all_up:
+			return
+	var standing := 0
+	for s in segments:
+		if s.is_complete():
+			standing += 1
+	assert_true(false, "only %d of %d segments went up" % [standing, segments.size()])
+
+
 # ── upgrading a wall into a gate (2026-08-22) ───────────────────────────────
 #
 # THE ONLY WAY TO GET A GATE, and the reason is orientation. A gate is 9x2 and
