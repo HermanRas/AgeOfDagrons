@@ -347,10 +347,10 @@ func _report_ghost() -> void:
 	var ghost: PlacementGhost = _game._ghost
 	print("  ghost: %d boxes, %d legal, visible %s, readout '%s'"
 			% [ghost.box_count(), ghost.valid_count(), ghost.visible,
-			_game._wall_readout.text])
+			_game._placement_readout.text])
 	if ghost.box_count() < 2:
 		push_warning("preview_walls: a 24-tile drag drew %d box(es)" % ghost.box_count())
-	if not _game._wall_readout.visible:
+	if not _game._placement_readout.visible:
 		push_warning("preview_walls: no cost readout under the drag")
 
 

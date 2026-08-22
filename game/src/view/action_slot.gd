@@ -57,6 +57,8 @@ var _icon_rect: TextureRect
 var _label: Label
 var _caption_bg: ColorRect
 var _caption: Label
+var _cost_bg: ColorRect
+var _cost: Label
 var _badge: Label
 
 
@@ -162,6 +164,39 @@ func _init() -> void:
 	_caption.visible = false
 	add_child(_caption)
 
+	# WHAT IT COSTS, along the TOP of the tile (project owner, 2026-08-22). Top,
+	# because the other three edges are taken: the caption names the thing along the
+	# bottom, the badge puts a queue percentage bottom-right, and the middle is the
+	# portrait. It is also the least identifying part of an isometric sprite -- the
+	# sky above the roof -- which is the same argument the caption makes for the
+	# foundation at the other end.
+	_cost_bg = ColorRect.new()
+	_cost_bg.color = CAPTION_BG
+	_cost_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_cost_bg.offset_left = CAPTION_INSET
+	_cost_bg.offset_right = -CAPTION_INSET
+	_cost_bg.offset_top = CAPTION_INSET
+	_cost_bg.offset_bottom = CAPTION_INSET + CAPTION_HEIGHT
+	_cost_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cost_bg.visible = false
+	add_child(_cost_bg)
+
+	_cost = Label.new()
+	_cost.add_theme_font_size_override("font_size", 9)
+	_cost.add_theme_color_override("font_color", HudStyle.GOLD)
+	_cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_cost.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_cost.clip_text = true
+	_cost.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_cost.offset_left = CAPTION_INSET
+	_cost.offset_right = -CAPTION_INSET
+	_cost.offset_top = CAPTION_INSET
+	_cost.offset_bottom = CAPTION_INSET + CAPTION_HEIGHT
+	_cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cost.visible = false
+	add_child(_cost)
+
 	_badge = Label.new()
 	_badge.add_theme_font_size_override("font_size", 11)
 	_badge.add_theme_color_override("font_color", Color.WHITE)
@@ -192,6 +227,7 @@ func set_action(p_action: HudAction) -> void:
 	# it WILL be, see HudAction's own header.
 	modulate = Color(1.0, 1.0, 1.0, 1.0 if p_action.enabled else DISABLED_ALPHA)
 	_badge.text = p_action.badge
+	_set_cost(p_action.cost)
 
 	var icon_path := _ICON_DIR + p_action.icon
 	if not p_action.icon.is_empty() and ResourceLoader.exists(icon_path):
@@ -230,6 +266,38 @@ func set_action(p_action: HudAction) -> void:
 	_icon_rect.visible = false
 	_label.text = p_action.label
 	_set_caption("")
+
+
+## Single letters for the four resources, in `ResourceHUD.DISPLAY_ORDER`.
+##
+## LETTERS RATHER THAN THE ICONS, which is a real loss and bought something. The icons
+## exist (`res_wood.png` and friends) and would read faster, but a 72 px tile has room
+## for about eighteen characters along its top edge and an icon costs the width of
+## three of them -- a stone gate at "40W 75S" fits as text and does not fit as two
+## icons, two numbers and a gap. The letters are also unambiguous here in a way they
+## would not be in prose: there are exactly four, and no two share a first letter.
+const _COST_LETTERS := {&"stone": "S", &"gold": "G", &"wood": "W", &"food": "F"}
+
+
+## "30W", "60F 20G" -- the price along the top of the tile, or nothing at all for
+## something free.
+##
+## Ordered by `ResourceHUD.DISPLAY_ORDER` rather than by the dictionary, so every cost
+## in the game lists its kinds the same way round and in the same order as the counter
+## the player reads them off. Dictionary order here would be JSON authoring order,
+## which differs entry to entry.
+func _set_cost(cost: Dictionary) -> void:
+	if cost.is_empty():
+		_cost.visible = false
+		_cost_bg.visible = false
+		return
+	var parts: Array[String] = []
+	for kind in ResourceHUD.DISPLAY_ORDER:
+		if cost.has(kind) and int(cost[kind]) > 0:
+			parts.append("%d%s" % [int(cost[kind]), _COST_LETTERS.get(kind, "?")])
+	_cost.text = " ".join(parts)
+	_cost.visible = not parts.is_empty()
+	_cost_bg.visible = _cost.visible
 
 
 ## Show or hide the name strip. Empty text hides both halves, so a slot with no

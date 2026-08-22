@@ -45,6 +45,16 @@ var expands: bool = false
 ## names, the entity id a portrait stands for. Never interpreted here.
 var payload: Variant = null
 
+## What pressing this costs, as `{kind: amount}` -- empty for anything free
+## (project owner, 2026-08-22: "add resource cost per building & unit, per type of
+## resource").
+##
+## A DICTIONARY RATHER THAN A FORMATTED STRING, so the one place that knows how to
+## abbreviate a cost is `ActionSlot`. A pre-rendered "60F 20G" here would put a
+## rendering decision in the pure-data half of the split this class exists to keep,
+## and the panel could not then order the kinds the way the resource counter does.
+var cost: Dictionary = {}
+
 
 func _init(p_id: StringName = &"", p_label: String = "", p_icon: String = "",
 		p_enabled: bool = true) -> void:

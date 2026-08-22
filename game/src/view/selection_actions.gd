@@ -160,6 +160,11 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		var a := HudAction.new(&"train:%s" % unit_def_id,
 				ud.name if ud != null and not ud.name.is_empty() else String(unit_def_id))
 		a.payload = unit_def_id          # ActionSlot crops the unit's own portrait
+		# What it costs, along the top of the tile (project owner, 2026-08-22). Handed
+		# over as the def's own dictionary rather than a formatted string; `ActionSlot`
+		# is what knows how to abbreviate one.
+		if ud != null:
+			a.cost = ud.cost
 		out.append(a)
 
 	out.append(_upgrade_action(bd, age, facts))
@@ -273,6 +278,11 @@ static func _buildable_details(age: int = 1) -> Array[HudAction]:
 		var action := HudAction.new(&"place:%s" % bd.id,
 				bd.name if not bd.name.is_empty() else String(bd.id))
 		action.payload = bd.id
+		# A WALL TIER PRICES ITS SHORT SEGMENT, which is what the tile stands for and
+		# what one tap of the drag lays down. A run costs a multiple of it and the
+		# readout under the finger gives the real total once the drag is under way --
+		# there is no single number that is true of a wall before it is dragged.
+		action.cost = bd.cost
 		out.append(action)
 	return out
 

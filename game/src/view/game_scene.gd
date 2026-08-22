@@ -92,11 +92,19 @@ var _wall_anchor: Vector2i = Vector2i(-1, -1)
 ## was showing rather than re-planning against a tile the finger has since left.
 var _wall_plan: Dictionary = {}
 
-## "12 segments, 144 wood" under the drag. A wall's cost depends on how it segments,
-## which a player cannot count under their own thumb -- and `PlaceWallCommand` places
-## what it can afford and stops, so without this the run simply comes out shorter than
-## the ghost with no explanation.
-var _wall_readout: Label
+## What the thing under the finger costs, in words, over CANCEL BUILD.
+##
+## "12 segments, 144 wood" for a wall drag, and that is where it started: a wall's cost
+## depends on how the run segments, which a player cannot count under their own thumb,
+## and `PlaceWallCommand` places what it can afford and stops -- so without this a run
+## simply came out shorter than the ghost with no explanation.
+##
+## It carries ORDINARY buildings too as of 2026-08-22 ("House — 30 wood"), on the
+## project owner's request for costs per building and per unit. The grid tile already
+## shows a compact "30W"; this is the roomy version and the only one that can say WHICH
+## resource you are short of. The ghost turns red for three different reasons and its
+## colour never said which one.
+var _placement_readout: Label
 
 ## Where the placing finger last was, in screen pixels. Kept because an edge-pan moves
 ## the ground under a finger that is not itself moving, so the ghost has to be
@@ -118,13 +126,28 @@ var _edge_armed := false
 var _cancel_build: Button
 var _flash: ActionFlash
 
-## Touch only: a tap on empty ground with units selected DESELECTS, and only a
-## double tap moves them there. Found on device -- a small, quick pan clears
-## `InputRouter`'s slop and time bounds, so it registered as a tap and sent the
-## selection wandering off whenever the player tried to scroll the map.
+## Touch only: a tap on empty ground with units selected MOVES them there, and a
+## DOUBLE tap deselects (project owner, 2026-08-22).
 ##
-## A mouse keeps single-click-to-move: it does not wobble, and desktop players
-## get right-click to clear instead (`_on_context_cancel`).
+## THIS IS A DELIBERATE REVERSAL and the reasoning it reverses was not wrong, so it is
+## worth keeping. The two were the other way round -- tap to deselect, double tap to
+## move -- because a small, quick pan clears `InputRouter`'s slop and time bounds and
+## so registers as a tap, which sent the selection wandering off whenever a player
+## tried to scroll the map. That was found on device and it was real.
+##
+## What it traded away is worse, and it took playing to see it: EVERY order cost two
+## taps. Moving is the commonest thing anybody does in an RTS, and paying double for it
+## to protect against an occasional misfire is the wrong side of that bargain -- a
+## stray move is one tap to correct, where a doubled tap count is paid on every order
+## for the whole match.
+##
+## So the misfire is back and is now the known cost. If it bites on device the fix is
+## `InputRouter.TAP_SLOP` / `TAP_TIME_MS`, which is where the discrimination actually
+## belongs: telling a pan from a tap is the router's job, and encoding the answer in
+## the gesture VOCABULARY was always a workaround for the router being too generous.
+##
+## A mouse was never affected either way: it does not wobble, it moves on one click,
+## and desktop players get right-click to clear (`_on_context_cancel`).
 var _ground_tap := DoubleTapDetector.new()
 
 ## The ground, on a client that has no `SimWorld` (PLAN.md 12.1b). Built once from the
@@ -132,14 +155,6 @@ var _ground_tap := DoubleTapDetector.new()
 ## everything standing on that terrain from snapshot facts. Null in solo, where the host's
 ## own world is the better answer and is right there to ask.
 var _client_map: SimMap = null
-
-## Bumped by EVERY tap, so a deferred single-tap deselect can tell that some
-## LATER tap has happened and stand down. `DoubleTapDetector.is_still_pending()`
-## alone is not enough: it only knows about taps that went through it, and a tap
-## that selected a unit never does -- without this, tapping the ground and then
-## quickly picking a new unit would clear that new selection a moment later.
-var _tap_token: int = 0
-
 
 func _ready() -> void:
 	# A full-rect Control defaults to MOUSE_FILTER_STOP and would swallow every
@@ -352,16 +367,16 @@ func _build_hud() -> void:
 
 	# Directly above CANCEL BUILD, in the same gap between the build grid and the
 	# minimap -- the only part of the bottom edge free while placing.
-	_wall_readout = Label.new()
-	_wall_readout.add_theme_font_size_override("font_size", 20)
-	_wall_readout.add_theme_color_override("font_color", HudStyle.GOLD)
-	_wall_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_wall_readout.custom_minimum_size = Vector2(280.0, 0.0)
-	_wall_readout.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_wall_readout.position = Vector2(-512.0, -156.0)
-	_wall_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wall_readout.visible = false
-	hud.add_child(_wall_readout)
+	_placement_readout = Label.new()
+	_placement_readout.add_theme_font_size_override("font_size", 20)
+	_placement_readout.add_theme_color_override("font_color", HudStyle.GOLD)
+	_placement_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_placement_readout.custom_minimum_size = Vector2(280.0, 0.0)
+	_placement_readout.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_placement_readout.position = Vector2(-512.0, -156.0)
+	_placement_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_placement_readout.visible = false
+	hud.add_child(_placement_readout)
 
 	# Phase 9.1's age indicator. Compacted to the mockup's 180x86 at the top
 	# centre -- it was 240 wide when it carried a title and a straight progress
@@ -845,9 +860,6 @@ func _refresh_hud(snap: Dictionary) -> void:
 func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 	if _orders_refused():
 		return
-	# Any tap at all invalidates a deferred deselect still waiting to fire; see
-	# `_tap_token`'s own header for why the detector cannot tell on its own.
-	_tap_token += 1
 	# In build mode this tap is handled by `single_released` instead, once it
 	# fires right after this. `InputRouter` guarantees `tapped` is resolved and
 	# emitted BEFORE `single_released` for the same gesture (see its own
@@ -879,34 +891,22 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 			_flash.play(ActionFlash.Kind.ATTACK,
 					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
 		GameView.TapAction.MOVE:
-			if from_touch and not _commit_ground_tap(tile):
-				return                    # deselect instead, once the window closes
+			# SINGLE TAP MOVES, DOUBLE TAP LETS GO. The two were the other way round
+			# until 2026-08-22; see `_ground_tap`'s header for what that cost and why
+			# the project owner swapped them back.
+			#
+			# The move goes out on the FIRST tap, so a double tap moves and then
+			# deselects rather than doing nothing. That is the honest reading of "tap
+			# to move, double tap to deselect" and it is also the only one that keeps
+			# a single tap instant: waiting to find out whether a second tap is coming
+			# would put `DOUBLE_TAP_MS` of lag on every order in the game.
+			if from_touch and _ground_tap.register_tap(Time.get_ticks_msec()):
+				_clear_selection()
+				return
 			Net.submit_command(MoveCommand.new(owner, movable, tile))
 			_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
 		GameView.TapAction.NONE:
 			_clear_selection()
-
-
-## True when this ground tap is the SECOND of a double and the move should go
-## through now; false for a first tap, which instead schedules a deselect that
-## fires only if no second tap arrives inside `DoubleTapDetector.DOUBLE_TAP_MS`.
-##
-## Touch only -- see `_ground_tap`'s header for why a mouse skips all of this.
-func _commit_ground_tap(_tile: Vector2i) -> bool:
-	var now := Time.get_ticks_msec()
-	if _ground_tap.register_tap(now):
-		return true
-
-	# A widget outside a tree cannot schedule the wait; the same guard
-	# `ControlGroupsHud` and `Minimap` document for their own deferred singles.
-	if is_inside_tree():
-		var token := _tap_token
-		get_tree().create_timer(DoubleTapDetector.DOUBLE_TAP_MS / 1000.0).timeout.connect(
-				func() -> void:
-					if is_instance_valid(self) and token == _tap_token \
-							and _ground_tap.is_still_pending(now):
-						_clear_selection())
-	return false
 
 
 ## Right-click on desktop (PLAN.md input feedback): back out of build mode if
@@ -954,8 +954,8 @@ func _exit_placement() -> void:
 	_wall_plan = {}
 	if _cancel_build != null:
 		_cancel_build.visible = false
-	if _wall_readout != null:
-		_wall_readout.visible = false
+	if _placement_readout != null:
+		_placement_readout.visible = false
 	_refresh_panel()
 
 
@@ -1152,8 +1152,8 @@ func _preview_wall(screen_pos: Vector2) -> Dictionary:
 	_ghost.set_run(entries)
 	_ghost.visible = true
 
-	_wall_readout.text = _wall_cost_text(legal, segments.size(), cost)
-	_wall_readout.visible = true
+	_placement_readout.text = _wall_cost_text(legal, segments.size(), cost)
+	_placement_readout.visible = true
 	return {"segments": segments.size(), "legal": legal, "cost": cost}
 
 
@@ -1250,8 +1250,45 @@ func _preview_placement(screen_pos: Vector2) -> Dictionary:
 	_ghost.set_state(Vector2(bd.footprint) * Iso.METRES_PER_TILE, valid)
 	_ghost.visible = true
 
+	# THE PRICE, over CANCEL BUILD, for an ordinary placement as well as for a wall
+	# drag (project owner, 2026-08-22). The tile in the grid already carries a compact
+	# "30W"; this is the roomy version, and it is the one that can say you cannot
+	# afford it -- the ghost turns red for three different reasons and the colour
+	# alone never said which.
+	_placement_readout.text = _building_cost_text(bd, can_afford)
+	_placement_readout.visible = true
+
 	return {"origin": origin, "valid": valid, "can_afford": can_afford,
 			"placeable": placeable}
+
+
+## "House — 30 wood", plus what is missing. The single-building twin of
+## `_wall_cost_text`, kept separate because the two say genuinely different things: a
+## wall's total depends on how the run segments and is not known until the drag, where
+## a house costs what its def says before the finger goes down.
+func _building_cost_text(bd: BuildingDef, can_afford: bool) -> String:
+	var parts: Array[String] = []
+	# The resource counter's order, so the two read the same way round -- the same
+	# reason the market page and the wall readout order theirs.
+	for kind in ResourceHUD.DISPLAY_ORDER:
+		if bd.cost.has(kind) and int(bd.cost[kind]) > 0:
+			parts.append("%d %s" % [int(bd.cost[kind]), kind])
+	var name := bd.name if not bd.name.is_empty() else String(bd.id)
+	if parts.is_empty():
+		return name
+	var line := "%s — %s" % [name, ", ".join(parts)]
+	if can_afford:
+		return line
+	# WHICH resource, not just "you cannot afford it". A player short on stone for a
+	# blacksmith needs to know it is the stone, since the fix is a different one.
+	var stock := _view.stock_of(Net.local_player_id())
+	var short: Array[String] = []
+	for kind in ResourceHUD.DISPLAY_ORDER:
+		if bd.cost.has(kind) and int(stock.get(kind, 0)) < int(bd.cost[kind]):
+			short.append(String(kind))
+	if short.is_empty():
+		return line
+	return "%s (short on %s)" % [line, ", ".join(short)]
 
 
 ## Open or shut the selected gate (PLAN.md 5.8).
