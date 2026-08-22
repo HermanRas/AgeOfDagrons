@@ -108,12 +108,27 @@
     "visuals.json', and they were not: only the tower's rubble and foundation were.",
     "See visuals.json's own `_note_walls`.",
     "",
-    "TWELVE DEFS, SIX MENU ENTRIES. Each tier is four defs -- short, medium, long,",
-    "gate -- and only two of the four are offered: the short segment carries",
+    "TWELVE DEFS, THREE MENU ENTRIES. Each tier is four defs -- short, medium, long,",
+    "gate -- and only ONE of the four is offered: the short segment carries",
     "`wall_lengths` and is the WALL entry (the drag reads that list and lays down",
-    "whichever lengths fit), and the gate is placed on its own. Medium and long are",
-    "`buildable: false`, which is a new flag meaning 'the system may place this, the",
-    "menu may not offer it'. Without it the build grid would list all twelve.",
+    "whichever lengths fit). The other three are `buildable: false`, a flag meaning",
+    "'the system may place this, the menu may not offer it'. Without it the build",
+    "grid would list all twelve.",
+    "",
+    "THE GATE CAME OFF THAT MENU ON 2026-08-22 and became an UPGRADE, which is a fix",
+    "and not a restriction. It was a menu entry placed by tapping, and the project",
+    "owner found the hole in a day of playing: 'how do I rotate a gate?' You could",
+    "not. A gate is [9, 2], `PlaceBuildingCommand` carries no facing and never",
+    "transposes a footprint, so every tap-placed gate lay east-west -- and a",
+    "NORTH-SOUTH WALL COULD NOT HAVE A GATE IN IT AT ALL.",
+    "",
+    "So the long segment now carries `upgrades_to` and you convert one where it",
+    "stands. That does not answer the rotation question, it deletes it: the wall",
+    "already knows which axis it was dragged along and the gate inherits its origin,",
+    "footprint and facing. See `UpgradeBuildingCommand`. The target must declare the",
+    "SAME footprint -- validated, not trusted -- because the conversion keeps the",
+    "ground the building already holds, and that is also why only the LONG piece",
+    "carries the field: a 3x2 short segment has nowhere to put a 9x2 gate.",
     "",
     "FOOTPRINTS, and this is the one pleasant surprise in the whole feature: every",
     "civ 0 A.D. bakes a wall from agrees on the segment lengths. Measured the usual",
@@ -725,7 +740,8 @@
     "drop_off": [],
     "age_required": 2,
 
-    "buildable": false
+    "buildable": false,
+    "upgrades_to": "building.wall_wood_gate"
   },
 
   "building.wall_wood_gate": {
@@ -748,6 +764,7 @@
     "drop_off": [],
     "age_required": 2,
 
+    "buildable": false,
     "is_gate": true
   },
 
@@ -818,7 +835,8 @@
     "drop_off": [],
     "age_required": 3,
 
-    "buildable": false
+    "buildable": false,
+    "upgrades_to": "building.wall_stone_gate"
   },
 
   "building.wall_stone_gate": {
@@ -841,6 +859,7 @@
     "drop_off": [],
     "age_required": 3,
 
+    "buildable": false,
     "is_gate": true
   },
 
@@ -911,7 +930,8 @@
     "drop_off": [],
     "age_required": 4,
 
-    "buildable": false
+    "buildable": false,
+    "upgrades_to": "building.wall_reinforced_gate"
   },
 
   "building.wall_reinforced_gate": {
@@ -934,6 +954,7 @@
     "drop_off": [],
     "age_required": 4,
 
+    "buildable": false,
     "is_gate": true
   }
 }

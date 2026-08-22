@@ -36,6 +36,9 @@ var _interactive := false
 var _across := Vector2i.ZERO
 var _down := Vector2i.ZERO
 var _gate_id := 0
+## Where the north-south run that becomes a gate went. Kept so the upgrade step can
+## find that exact segment again rather than guessing among the walls already up.
+var _gate_wall_origin := Vector2i.ZERO
 
 
 func _ready() -> void:
@@ -96,22 +99,29 @@ func _process(_delta: float) -> void:
 			_report_partial()
 			_shoot("wall_blocked")
 		11:
-			# A GATE, and the pathing question. Placed as an ordinary building (a gate
-			# is not dragged) and photographed open, then shut.
-			_place_a_gate()
+			# A GATE, and the pathing question. Made by UPGRADING a wall (2026-08-22),
+			# which is now the only way to get one -- and deliberately a NORTH-SOUTH
+			# wall, because that is the case tap-placement could never do: a gate is
+			# 9x2 and `PlaceBuildingCommand` has no facing, so every gate before this
+			# lay east-west. This picture is the whole reason the feature exists.
+			_drag_the_gate_wall()
 		12:
-			# Finished a STEP EARLIER than the press, and that gap is the point: the
-			# panel's Open/Close button is drawn from SNAPSHOT facts, so a gate
-			# completed and selected in the same frame still reads as a foundation and
-			# offers no button at all. Found exactly that way.
+			# Finished a STEP EARLIER than the selection, and that gap is the point:
+			# the panel is drawn from SNAPSHOT facts, so a wall completed and selected
+			# in the same frame still reads as a foundation and offers no upgrade
+			# button at all. Found exactly that way with the gate's Open/Close button.
 			_finish_the_walls()
 		13:
+			_select_the_wall_to_upgrade()
+		14:
+			_upgrade_into_a_gate()
+		15:
 			_select_the_gate()
 			_report_gate("open")
 			_shoot("wall_gate_open")
-		14:
+		16:
 			_lock_the_gate()
-		15:
+		17:
 			_report_gate("locked")
 			_shoot("wall_gate_locked")
 		_:
@@ -234,15 +244,69 @@ func _drag_across_the_town_centre() -> void:
 
 # ── gates ───────────────────────────────────────────────────────────────────
 
-## A gate is placed one at a time like an ordinary building, so this goes through
-## `_enter_placement` and a single tap rather than a drag.
-func _place_a_gate() -> void:
-	var origin := _pick_ground(12)
-	_game._camera.centre_on(Iso.tile_centre_to_world(origin + Vector2i(4, 1)))
-	_game._enter_placement(GATE)
-	var at := _screen_of(origin)
-	_game._on_placement_pressed(at)
-	_game._on_placement_released(at)
+## The wall that is going to become a gate: one long segment, dragged NORTH-SOUTH.
+##
+## The axis is the point. A gate is 9x2 and `PlaceBuildingCommand` carries no facing
+## and never transposes a footprint, so every gate placed by tapping lay east-west and
+## a north-south wall could not have one at all -- reported by the project owner
+## playing on 2026-08-22. Upgrading inherits the segment's own axis, so this run is
+## what proves it.
+##
+## Nine tiles exactly, so the plan is a single long piece and the thing selected two
+## steps later is unambiguous.
+func _drag_the_gate_wall() -> void:
+	_gate_wall_origin = _pick_ground(12)
+	_game._camera.centre_on(Iso.tile_centre_to_world(
+			_gate_wall_origin + Vector2i(1, 4)))
+	_game._enter_placement(TIER)
+	_game._on_placement_pressed(_screen_of(_gate_wall_origin))
+	_game._on_placement_drag(_screen_of(_gate_wall_origin + Vector2i(0, 8)))
+	_game._on_placement_released(_screen_of(_gate_wall_origin + Vector2i(0, 8)))
+
+
+## Select the long segment standing where the drag just went, so its panel is up and
+## its upgrade button exists.
+func _select_the_wall_to_upgrade() -> void:
+	var world: SimWorld = Net.host().world
+	var ids := world.entities.keys()
+	ids.sort()
+	for id in ids:
+		var e = world.entities[id]
+		if not (e is SimBuilding) or e.owner_id != Net.local_player_id():
+			continue
+		var b := e as SimBuilding
+		if b.origin_tile() != _gate_wall_origin:
+			continue
+		var bd: BuildingDef = GameDataRegistry.building(b.def_id)
+		if bd == null or bd.upgrades_to == &"":
+			continue
+		_gate_id = int(id)          # the id survives the upgrade; see convert_building
+		_zoom_to(b.origin_tile(), b.footprint.x, b.footprint.y)
+		_game._view.select([_gate_id] as Array[int])
+		_game._refresh_panel()
+		print("  upgrading %s at %s%s (facing %d)"
+				% [b.def_id, b.origin_tile(), b.footprint, b.facing])
+		return
+	push_warning("preview_walls: no upgradeable wall at %s" % _gate_wall_origin)
+
+
+## Press the panel's own upgrade button, not `Net.submit_command`.
+##
+## Same reason `_lock_the_gate` goes through the panel: the button is built from
+## snapshot facts and labelled with the TARGET's name, and a preview that called the
+## command directly would pass with the button unwired -- which is most of what could
+## actually be broken here.
+func _upgrade_into_a_gate() -> void:
+	var panel: SelectionPanel = _game._panel
+	for slot in panel._action_slots:
+		if slot.visible and slot.action != null and slot.action.id == &"upgrade":
+			if not slot.action.enabled:
+				push_warning("preview_walls: the upgrade button is greyed out")
+				return
+			print("  upgrade: pressing '%s'" % slot.action.label)
+			panel._on_action_pressed(slot.action)
+			return
+	push_warning("preview_walls: no upgrade action on the panel")
 
 
 ## Find the gate and select it, so its panel is up and its Open/Close button exists.
@@ -338,10 +402,21 @@ func _report_gate(state: String) -> void:
 	if gate == null:
 		push_warning("preview_walls: the gate is gone")
 		return
-	var doorway := gate.origin_tile() + Vector2i(gate.footprint.x / 2, 0)
-	print("  gate %s: locked %s, phase %d, doorway %s passable %s"
-			% [state, gate.gate_locked, gate.phase, doorway,
-			world.map.is_passable(doorway)])
+	# THE DOORWAY IS THE MIDDLE OF THE RUN, along whichever axis it lies. Hardcoding
+	# `footprint.x / 2` was right while every gate was east-west and picks a tile
+	# outside a north-south one, which now exists.
+	var doorway := gate.origin_tile() + gate.footprint / 2
+	print("  gate %s: %s at %s%s facing %d, locked %s, phase %d, doorway %s passable %s"
+			% [state, gate.def_id, gate.origin_tile(), gate.footprint, gate.facing,
+			gate.gate_locked, gate.phase, doorway, world.map.is_passable(doorway)])
+	# The upgrade has to have produced the TIER'S OWN gate, not some other one.
+	if gate.def_id != GATE:
+		push_warning("preview_walls: expected %s, got %s" % [GATE, gate.def_id])
+	# And it has to have kept the axis it was dragged on -- the whole point of making
+	# a gate by upgrading rather than by tapping.
+	if gate.footprint != Vector2i(WallPlan.DEPTH, 9):
+		push_warning("preview_walls: the gate lost its north-south footprint (%s)"
+				% gate.footprint)
 	# THE ASSERTION THAT MATTERS, and it is about the movement grid rather than the
 	# picture: an open gate has to be walkable and a locked one must not be.
 	if gate.gate_locked and world.map.is_passable(doorway):

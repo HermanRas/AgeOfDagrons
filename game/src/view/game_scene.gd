@@ -1270,6 +1270,33 @@ func _toggle_selected_gate() -> void:
 	_toast.show_message("Opening the gate" if locked else "Closing the gate")
 
 
+## Turn the selected building into what its def upgrades to (PLAN.md 5.8) -- a long
+## wall segment into its tier's gate, which is the only upgrade that exists.
+##
+## The affordability check here is the POLITE half, exactly as `_on_train_requested`'s
+## population check is: `UpgradeBuildingCommand.validate()` is what actually refuses,
+## and a failed command is dropped silently, so without this the button would simply
+## do nothing and say nothing. The price is read through the command's own
+## `cost_delta`, so the message cannot quote a figure the server would not charge.
+func _upgrade_selected_building() -> void:
+	var id := _view.selection.primary()
+	if id == 0:
+		return
+	var from: BuildingDef = GameDataRegistry.building(_view.facts_for(id).get("def_id", &""))
+	if from == null or from.upgrades_to == &"":
+		return
+	var to: BuildingDef = GameDataRegistry.building(from.upgrades_to)
+	if to == null:
+		return
+
+	var price := UpgradeBuildingCommand.cost_delta(from, to)
+	if not PlacementAdvice.can_afford(price, _view.stock_of(Net.local_player_id())):
+		_toast.show_message("Not enough resources")
+		return
+	Net.submit_command(UpgradeBuildingCommand.new(Net.local_player_id(), id))
+	_toast.show_message("Building %s" % to.name.to_lower())
+
+
 ## Why an adjacency-gated placement was refused, in the player's words. Built
 ## from the def rather than hardcoded for the field, so the day a second building
 ## needs a host it says the right thing without being edited.
@@ -1318,6 +1345,8 @@ func _on_action_requested(action_id: StringName) -> void:
 			_toast.show_message("Tap an enemy to attack")
 		&"gate":
 			_toggle_selected_gate()
+		&"upgrade":
+			_upgrade_selected_building()
 
 
 ## The polite half of the population cap (PLAN.md 4.11). `TrainCommand.validate()`

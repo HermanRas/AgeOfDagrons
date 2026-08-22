@@ -341,6 +341,183 @@ func test_you_cannot_open_somebody_elses_gate() -> void:
 	assert_true(gate.gate_locked)
 
 
+# ── upgrading a wall into a gate (2026-08-22) ───────────────────────────────
+#
+# THE ONLY WAY TO GET A GATE, and the reason is orientation. A gate is 9x2 and
+# `PlaceBuildingCommand` carries no facing and never transposes a footprint, so a
+# tap-placed gate could only ever lie east-west -- a north-south wall could not have
+# one, which is what the project owner hit while playing. Upgrading the segment
+# sidesteps the question: the wall already knows its axis and the gate inherits it.
+
+const WOOD_LONG := &"building.wall_wood_long"
+
+
+## A finished long segment on the given axis, ready to upgrade.
+func _a_long_wall(axis: int = WallPlan.AXIS_X, at: Vector2i = CLEAR) -> SimBuilding:
+	return world.spawn_building(WOOD_LONG, 1, at, SimBuilding.Phase.COMPLETE, true,
+			WallPlan.footprint_for(9, axis), WallPlan.FACING_FOR_AXIS[axis])
+
+
+func test_upgrading_a_long_wall_turns_it_into_that_tier_s_gate() -> void:
+	var wall := _a_long_wall()
+	var id := wall.id
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+
+	assert_eq(wall.def_id, WOOD_GATE, "it is a gate now")
+	assert_true(wall.is_gate)
+	# THE ID SURVIVES. A despawn-and-respawn would empty the panel the player pressed
+	# the button on, and would tell every other client a building was destroyed when
+	# one was improved.
+	assert_eq(wall.id, id, "same entity, upgraded in place")
+	assert_eq(world.get_entity(id), wall)
+	assert_false(world.removed_this_tick.has(id), "an upgrade is not a demolition")
+
+
+func test_the_gate_inherits_the_wall_s_axis_rather_than_choosing_one() -> void:
+	# The whole point of the feature. A north-south wall could never carry a gate
+	# before this, because the only way to get one was a tap placement that was always
+	# 9x2 east-west.
+	var origin := _clear_run(9)
+	var wall := world.spawn_building(WOOD_LONG, 1, origin, SimBuilding.Phase.COMPLETE,
+			true, WallPlan.footprint_for(9, WallPlan.AXIS_Y),
+			WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y])
+	var before := wall.footprint_rect()
+
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_eq(wall.footprint, Vector2i(WallPlan.DEPTH, 9), "still lying north-south")
+	assert_eq(wall.facing, WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y], "and still facing that way")
+	assert_eq(wall.footprint_rect(), before, "on exactly the ground it already held")
+
+
+func test_the_upgrade_opens_the_wall_because_a_new_gate_is_open() -> void:
+	# A wall blocks and an unlocked gate does not, so this is the tick the hole
+	# appears. It follows from `blocks_now()` rather than being special-cased.
+	var wall := _a_long_wall()
+	assert_false(world.map.is_passable(CLEAR), "solid while it is a wall")
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_false(wall.gate_locked, "a new gate starts open")
+	assert_true(world.map.is_passable(CLEAR), "and the ground opened with it")
+	# Still CLAIMED, though -- nothing may be built in the doorway.
+	assert_false(world.map.can_place_building(SimMap.footprint_rect(CLEAR, Vector2i(1, 1))))
+
+
+func test_the_price_is_the_difference_and_not_the_whole_gate() -> void:
+	# 36 wood was already spent on the wall and the gate lists 50, so the upgrade is
+	# 14. Charging 50 again would make upgrading dearer than demolishing and rebuilding.
+	var wall := _a_long_wall()
+	var before := _held(&"wood")
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+
+	var from: BuildingDef = GameDataRegistry.building(WOOD_LONG)
+	var to: BuildingDef = GameDataRegistry.building(WOOD_GATE)
+	var expected := int(to.cost.get(&"wood", 0)) - int(from.cost.get(&"wood", 0))
+	assert_eq(before - _held(&"wood"), expected, "paid the difference only")
+	assert_true(expected > 0 and expected < int(to.cost.get(&"wood", 0)),
+			"and the difference is a real, smaller number")
+
+
+func test_a_kind_the_wall_never_paid_for_is_charged_in_full() -> void:
+	# The stone gate costs 30 wood on top of its stone, and the stone wall paid no
+	# wood at all -- so the delta is the whole 30 there and the difference in stone.
+	# Floored PER KIND, so a cheaper kind cannot hand back a refund in another.
+	var from: BuildingDef = GameDataRegistry.building(&"building.wall_stone_long")
+	var to: BuildingDef = GameDataRegistry.building(&"building.wall_stone_gate")
+	var delta := UpgradeBuildingCommand.cost_delta(from, to)
+	assert_eq(int(delta.get(&"wood", 0)), int(to.cost[&"wood"]), "wood was never paid before")
+	assert_eq(int(delta.get(&"stone", 0)),
+			int(to.cost[&"stone"]) - int(from.cost[&"stone"]), "stone is the difference")
+	for kind in delta:
+		assert_true(int(delta[kind]) > 0, "%s is a charge, never a refund" % kind)
+
+
+func test_health_carries_its_fraction_across_the_upgrade() -> void:
+	# A wall at half health becomes a gate at half health. Anything else would make
+	# upgrading a way to heal, or a way to be punished for it -- the two defs have
+	# different maxima (1200 and 1000), so the absolute number cannot simply ride over.
+	var wall := _a_long_wall()
+	wall.hp = wall.max_hp / 2
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_eq(wall.max_hp, GameDataRegistry.building(WOOD_GATE).hp, "the gate's own maximum")
+	assert_almost_eq(float(wall.hp) / float(wall.max_hp), 0.5, 0.02, "still half hurt")
+
+
+func test_an_undamaged_wall_becomes_an_undamaged_gate_exactly() -> void:
+	# Pinned rather than left to the fraction, because the commonest case must not
+	# round to 999/1000 and show a damage dot on a brand new gate.
+	var wall := _a_long_wall()
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_eq(wall.hp, wall.max_hp, "full health, not a rounding of it")
+
+
+func test_only_the_long_segment_upgrades() -> void:
+	# The gate is 9x2 and `convert_building` keeps the ground the building already
+	# holds, so a 3x2 short segment has nowhere to put one. The rule is enforced by
+	# which defs declare `upgrades_to` and re-checked on the footprint.
+	for short_id in [&"building.wall_wood_short", &"building.wall_wood_medium"]:
+		var seg := world.spawn_building(short_id, 1, CLEAR, SimBuilding.Phase.COMPLETE,
+				true, Vector2i.ZERO, 0)
+		assert_false(UpgradeBuildingCommand.new(1, seg.id).validate(world),
+				"%s is too short to hold a gate" % short_id)
+		world.despawn(seg.id)
+
+
+func test_a_foundation_cannot_be_upgraded() -> void:
+	# Otherwise a player skips most of a wall's build time by ordering the cheap thing
+	# and immediately improving it -- and there is no finished wall to convert anyway.
+	var wall := world.spawn_building(WOOD_LONG, 1, CLEAR, SimBuilding.Phase.FOUNDATION,
+			true, Vector2i(9, WallPlan.DEPTH), 0)
+	assert_false(UpgradeBuildingCommand.new(1, wall.id).validate(world))
+
+
+func test_you_cannot_upgrade_somebody_elses_wall() -> void:
+	var wall := _a_long_wall()
+	assert_false(UpgradeBuildingCommand.new(2, wall.id).validate(world))
+	assert_eq(wall.def_id, WOOD_LONG, "untouched")
+
+
+func test_a_gate_does_not_upgrade_again() -> void:
+	# It declares no `upgrades_to`, so the chain ends rather than looping.
+	var gate := _a_gate()
+	assert_false(UpgradeBuildingCommand.new(1, gate.id).validate(world))
+
+
+func test_an_upgrade_you_cannot_afford_is_refused_and_charges_nothing() -> void:
+	var wall := _a_long_wall()
+	world.player_for(1).stock[&"wood"] = 1
+	assert_false(UpgradeBuildingCommand.new(1, wall.id).validate(world))
+	assert_eq(wall.def_id, WOOD_LONG, "still a wall")
+	assert_eq(_held(&"wood"), 1, "and still holding the wood")
+
+
+func test_the_age_gate_is_on_the_gate_and_not_on_the_wall_you_have() -> void:
+	# A stone wall is age 3 and so is its gate, so this bites on a player who somehow
+	# holds a wall above their own age -- the server is the only trust boundary, and
+	# the panel hiding the button is not a rule.
+	var wall := world.spawn_building(&"building.wall_stone_long", 1, CLEAR,
+			SimBuilding.Phase.COMPLETE, true, Vector2i(9, WallPlan.DEPTH), 0)
+	world.player_for(1).age = 2
+	assert_false(UpgradeBuildingCommand.new(1, wall.id).validate(world))
+	world.player_for(1).age = 3
+	assert_true(UpgradeBuildingCommand.new(1, wall.id).validate(world))
+
+
+func test_the_upgrade_survives_the_wire() -> void:
+	var round_tripped := Command.from_dict(UpgradeBuildingCommand.new(1, 77).to_dict())
+	assert_true(round_tripped is UpgradeBuildingCommand)
+	assert_eq((round_tripped as UpgradeBuildingCommand).building_id, 77)
+	assert_eq(round_tripped.player_id, 1)
+
+
+func test_the_upgrade_moves_the_state_hash() -> void:
+	# It changes `def_id`, the movement grid and the player's stock. Two hosts that
+	# disagreed about whether a wall had become a gate would route armies through a
+	# hole one of them does not have.
+	var wall := _a_long_wall()
+	var before := world.state_hash()
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_ne(world.state_hash(), before)
+
+
 func test_a_gate_survives_the_wire() -> void:
 	var back := Command.from_dict(ToggleGateCommand.new(4, 77, true, 5).to_dict())
 	assert_not_null(back, "the dispatch table knows the type")

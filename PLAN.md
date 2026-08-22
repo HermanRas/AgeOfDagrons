@@ -1044,7 +1044,7 @@ all twenty. What it deliberately does not do is stop an already-paid-for unit fr
 | 5.5 | ✅ Destruction → `DESTROYED` phase + `free_footprint()`, so the ground is buildable the instant it falls. Rubble stays opaque forever (no damaged art tier) | `[MVP]` |
 | 5.6 | ✅ Building health on the shared dot | `[MVP]` |
 | 5.7 | Full building roster — 23 buildings. Low code effort, ~70 bakes behind it | |
-| 5.8 | ✅ **DONE 2026-08-22** — **Walls and gates**: drag placement, automatic short/medium/long segment choice, two orientations, and a gate that opens and shuts. Three tiers, twelve defs, six menu entries. See §5.8 | |
+| 5.8 | ✅ **DONE 2026-08-22** — **Walls and gates**: drag placement, automatic short/medium/long segment choice, two orientations, and a gate that opens and shuts. Three tiers, twelve defs, three menu entries. The gate is an **upgrade of a long segment**, not a placement — tap-placing one could only ever lie east-west. See §5.8 | |
 
 #### 5.8 Walls and gates — ✅ built 2026-08-22
 
@@ -1079,14 +1079,56 @@ be substitutable for a long piece or it cannot sit in a run without leaving a ga
 A.D. makes the gate an *upgrade* of a long wall for exactly this reason), and the cost is
 a half-tile of art overhang — the same deliberate disagreement the house's roof makes.
 
-**Three tiers, six menu entries, twelve defs.** The project owner's call: all three stay
-available at age 4 rather than one re-skinning the other two away, so wood (age 2),
+**Three tiers, three menu entries, twelve defs.** The project owner's call: all three
+stay available at age 4 rather than one re-skinning the other two away, so wood (age 2),
 stone (3) and reinforced (4) are three ladders and not one. The tier's SHORT segment
 carries `wall_lengths` and is the WALL entry — the drag reads that list to decide what
-to lay — the gate is placed on its own, and medium and long are `buildable: false`, a
-new flag meaning *the system may place this, the menu may not offer it*. Without it the
-build grid would carry all twelve pieces and eight of them would each place one
-fixed-length block, which is the outcome walls were held back over.
+to lay — and the other nine pieces are `buildable: false`, a new flag meaning *the
+system may place this, the menu may not offer it*. Without it the build grid would carry
+all twelve pieces and eleven of them would each place one fixed-length block, which is
+the outcome walls were held back over.
+
+##### The gate is an upgrade, not a placement (2026-08-22)
+
+It shipped as a menu entry placed by tapping, and the project owner found the hole
+inside a day of playing: **"how do I rotate a gate?"** You could not. A gate is [9, 2]
+and `PlaceBuildingCommand` carries no facing and never transposes a footprint, so every
+tap-placed gate lay east-west — which meant **a north-south wall could not have a gate
+in it at all**, and there was no rotate control to fix it with.
+
+Three ways out were on the table: a rotate button on the ghost, folding the gate into
+the wall drag, or inferring the axis from the ground. The owner picked the fourth —
+**tap a finished long segment and upgrade it** — which does not answer the rotation
+question so much as delete it: the wall already knows which axis it was dragged along,
+and the gate inherits its origin, its footprint and its facing. There is nothing left to
+rotate, on any screen size. It is also what 0 A.D. does, and this section had already
+said so four paragraphs earlier without noticing it was the answer.
+
+- **All three gates are now `buildable: false`.** Upgrading is the only way to get one,
+  so the broken axis case cannot be reached rather than being worked around.
+- **`BuildingDef.upgrades_to`** is the new field, on the three long segments only. The
+  target must declare the SAME footprint and `UpgradeBuildingCommand.validate()`
+  enforces it, because `SimWorld.convert_building` keeps the ground the building already
+  holds and a target wanting more of it would silently occupy tiles nobody checked.
+- **Converted in place, keeping the entity id.** A despawn-and-respawn would empty the
+  panel the player pressed the button on, and would put the wall in `removed_this_tick`
+  — telling every other client a building was *destroyed* when one was improved.
+- **The price is the difference, floored per resource kind.** 36 wood paid for the wall,
+  the gate lists 50, so the upgrade is 14. Floored per kind rather than in total, so a
+  target cheaper in one resource cannot hand back a refund in it.
+- **Health carries its fraction**, since the two defs have different maxima (1200 and
+  1000). Full health is pinned exactly, so the commonest case cannot round to 999 and
+  show a damage dot on a brand new gate.
+- It turned the `upgrade` slot — a disabled placeholder on every building since the
+  panel was written — into the first real upgrade in the game.
+
+**A bug the screenshot found, not the suite:** the selection ring on a north-south wall
+was drawn eighteen metres *east*, sprawling across open grass. Every other consumer
+already read the transposed footprint; the ring read the visual's placeholder, which is
+authored east-west because the art is. `EntityView.ground_m` now carries the claimed
+ground, and `GameView` sets it only where the actual footprint disagrees with the def's
+— narrow on purpose, since sizing every ring from the footprint would have doubled the
+villager's and moved every building's off its measured mesh.
 
 **`WallPlan` is one function with two callers**, and that is the design rather than a
 convenience: the ghost draws what it returns and `PlaceWallCommand` places what it

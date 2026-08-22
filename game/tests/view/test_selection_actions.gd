@@ -446,12 +446,12 @@ func test_the_whole_build_roster_is_reachable_by_paging() -> void:
 
 
 func test_the_menu_does_not_offer_the_wall_segments_the_drag_chooses() -> void:
-	# PLAN.md 5.8's `buildable: false`. A wall tier is four defs and only two of them
-	# are a player's to pick: the short segment IS the tier (it carries
-	# `wall_lengths`, and the drag reads that to decide what to lay), and the gate is
-	# placed on its own. Without the filter the grid would carry all twelve pieces and
-	# eight of them would each place one fixed-length block -- which is exactly the
-	# outcome buildings.json refused to ship walls at all rather than allow.
+	# PLAN.md 5.8's `buildable: false`. A wall tier is four defs and only ONE of them
+	# is a player's to pick: the short segment IS the tier, since it carries
+	# `wall_lengths` and the drag reads that to decide what to lay. Without the filter
+	# the grid would carry all twelve pieces and eleven of them would each place one
+	# fixed-length block -- which is exactly the outcome buildings.json refused to ship
+	# walls at all rather than allow.
 	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
 	var offered: Array = []
 	for a in details:
@@ -463,22 +463,111 @@ func test_the_menu_does_not_offer_the_wall_segments_the_drag_chooses() -> void:
 			&"building.wall_reinforced_medium", &"building.wall_reinforced_long"]:
 		assert_false(offered.has(hidden), "%s is placed by the drag, not by the menu" % hidden)
 
-	for shown in [&"building.wall_wood_short", &"building.wall_wood_gate",
-			&"building.wall_stone_short", &"building.wall_stone_gate",
-			&"building.wall_reinforced_short", &"building.wall_reinforced_gate"]:
+	# THE GATES LEFT THE MENU on 2026-08-22, and that is a fix rather than a
+	# restriction. A gate is 9x2 and `PlaceBuildingCommand` carries no facing and never
+	# transposes a footprint, so a tap-placed gate could only ever lie east-west -- a
+	# north-south wall could not have one at all, and there was no rotate control to
+	# fix it with. `UpgradeBuildingCommand` replaces the whole idea: a gate is now made
+	# by upgrading a long segment, which already knows its axis.
+	for hidden_gate in [&"building.wall_wood_gate", &"building.wall_stone_gate",
+			&"building.wall_reinforced_gate"]:
+		assert_false(offered.has(hidden_gate),
+				"%s is made by upgrading a wall, not from the menu" % hidden_gate)
+
+	for shown in [&"building.wall_wood_short", &"building.wall_stone_short",
+			&"building.wall_reinforced_short"]:
 		assert_true(offered.has(shown), "%s is a menu entry" % shown)
 
 
-func test_a_wall_tier_is_one_entry_per_material_plus_its_gate() -> void:
+func test_a_wall_tier_is_one_menu_entry() -> void:
 	# The project owner's shape (2026-08-21): all three tiers stay available at age 4,
-	# so a player there has six wall entries -- wood, stone and reinforced, each with
-	# a gate -- rather than one wall that re-skinned the other two away.
+	# so a player there has three wall entries -- wood, stone and reinforced -- rather
+	# than one wall that re-skinned the other two away. Three and not six, because the
+	# gates came off this list when they became an upgrade (2026-08-22).
 	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
 	var walls := 0
 	for a in details:
 		if a.payload != null and String(a.payload).begins_with("building.wall_"):
 			walls += 1
-	assert_eq(walls, 6, "three tiers, a wall and a gate each")
+	assert_eq(walls, 3, "one entry per tier, no gates")
+
+
+## A finished wall segment, which is what the upgrade button needs to see. `phase`
+## matters here where it does not for `_building_facts`: only a COMPLETE building
+## offers the upgrade, the same rule the gate's open/close button already follows.
+func _wall_facts(def_id: StringName,
+		phase: int = SimBuilding.Phase.COMPLETE) -> Dictionary:
+	var f := _building_facts(def_id)
+	f["phase"] = phase
+	return f
+
+
+func test_a_finished_long_wall_offers_its_tier_s_gate() -> void:
+	# The `upgrade` slot has been a disabled placeholder on every building since the
+	# panel was written. This is the first thing that makes it a real verb.
+	var action := _by_id(SelectionActions.for_selection(
+			_wall_facts(&"building.wall_wood_long"), 1, true, [], 2), &"upgrade")
+	assert_true(action.enabled, "a long wall can become a gate")
+	assert_eq(action.payload, &"building.wall_wood_gate", "and it names which one")
+	# LABELLED WITH THE TARGET, not "Upgrade": the player is being asked to spend, and
+	# "Upgrade" on a wall says nothing about what they get. Same rule as a train button.
+	assert_eq(action.label, GameDataRegistry.building(&"building.wall_wood_gate").name)
+	# And NO icon, so `ActionSlot` falls through to cropping the gate's own sprite
+	# rather than drawing the tech-tree glyph `ICONS` maps upgrade to.
+	assert_eq(action.icon, "", "the gate's portrait reads better than a stand-in glyph")
+
+
+func test_a_wall_still_being_built_does_not_offer_the_upgrade() -> void:
+	var action := _by_id(SelectionActions.for_selection(
+			_wall_facts(&"building.wall_wood_long", SimBuilding.Phase.FOUNDATION),
+			1, true, [], 2), &"upgrade")
+	assert_false(action.enabled, "there is no finished wall to convert yet")
+
+
+func test_the_short_and_medium_segments_offer_no_upgrade() -> void:
+	# A gate is 9x2 and the conversion keeps the ground the building already holds,
+	# so only the long piece has room for one.
+	for too_short in [&"building.wall_wood_short", &"building.wall_wood_medium"]:
+		var action := _by_id(SelectionActions.for_selection(
+				_wall_facts(too_short), 1, true, [], 2), &"upgrade")
+		assert_false(action.enabled, "%s is too short to hold a gate" % too_short)
+
+
+func test_a_gate_does_not_offer_to_become_another_gate() -> void:
+	var action := _by_id(SelectionActions.for_selection(
+			_wall_facts(&"building.wall_wood_gate"), 1, true, [], 2), &"upgrade")
+	assert_false(action.enabled, "the chain ends at the gate")
+
+
+func test_the_upgrade_button_is_age_gated_on_the_gate() -> void:
+	# Held as well as on the server (`UpgradeBuildingCommand.validate`), so a player
+	# is not shown a live button for something the host would refuse.
+	var wall := _wall_facts(&"building.wall_stone_long")
+	assert_false(_by_id(SelectionActions.for_selection(wall, 1, true, [], 2),
+			&"upgrade").enabled, "a stone gate is age 3")
+	assert_true(_by_id(SelectionActions.for_selection(wall, 1, true, [], 3),
+			&"upgrade").enabled)
+
+
+func test_every_building_that_declares_an_upgrade_can_actually_take_it() -> void:
+	# Derived from the data rather than listed: the target must exist and must have
+	# the SAME footprint, because `SimWorld.convert_building` keeps the ground the
+	# building already holds. A target that wanted more of it would silently occupy
+	# tiles nobody checked were free, and that is a relationship between two separate
+	# JSON entries with nothing else pinning it.
+	for id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		if bd == null or bd.upgrades_to == &"":
+			continue
+		var to: BuildingDef = GameDataRegistry.building(bd.upgrades_to)
+		assert_not_null(to, "%s upgrades to %s, which exists" % [id, bd.upgrades_to])
+		assert_eq(to.footprint, bd.footprint,
+				"%s and %s claim the same ground" % [id, bd.upgrades_to])
+		assert_true(to.upgrades_to == &"", "%s does not upgrade onward" % bd.upgrades_to)
+		# The upgrade must cost SOMETHING, or the tier's cheaper piece is strictly
+		# worse than the thing it becomes and nobody would ever build one.
+		assert_false(UpgradeBuildingCommand.cost_delta(bd, to).is_empty(),
+				"%s charges for the upgrade" % id)
 
 
 func test_walls_are_age_gated_like_everything_else() -> void:
@@ -492,9 +581,9 @@ func test_walls_are_age_gated_like_everything_else() -> void:
 				offered.append(a.payload)
 		by_age[age] = offered
 	assert_true((by_age[1] as Array).is_empty(), "no walls in age 1")
-	assert_eq((by_age[2] as Array).size(), 2, "wood and its gate at age 2")
-	assert_eq((by_age[3] as Array).size(), 4, "stone joins at age 3")
-	assert_eq((by_age[4] as Array).size(), 6, "reinforced joins at age 4")
+	assert_eq((by_age[2] as Array).size(), 1, "wood at age 2")
+	assert_eq((by_age[3] as Array).size(), 2, "stone joins at age 3")
+	assert_eq((by_age[4] as Array).size(), 3, "reinforced joins at age 4")
 
 
 func test_the_age_four_build_list_pages() -> void:

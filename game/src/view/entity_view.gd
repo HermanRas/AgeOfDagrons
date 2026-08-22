@@ -290,12 +290,35 @@ const RING_SEGMENTS := 24
 ## draws a ring too small to see it is there.
 const RING_MIN_METRES := 1.2
 
+## The ground this entity actually claims, when that differs from what its VISUAL
+## declares. `Vector2.ZERO` means "they agree", which is every entity but one.
+##
+## The exception is a NORTH-SOUTH WALL (PLAN.md 5.8). A wall's art is baked along the
+## x axis and `visuals.json` sizes its placeholder to match -- `vis.wall_wood_gate` is
+## authored [18, 4] metres -- but a wall dragged north-south claims the transpose of
+## that, [4, 18]. The ring is the only thing that reads the placeholder for its SHAPE
+## rather than as a fallback sprite, so it was the only thing that got it wrong: a
+## selected north-south gate drew a fat ellipse sprawling eighteen metres east into
+## open grass. Found by looking at `preview_walls`' own screenshot, 2026-08-22.
+##
+## Set by `GameView` from `_footprint_of`, which already derives the transpose from
+## `facing` for hit-testing and occlusion -- so this is one more consumer of a fact
+## the view had already worked out, not a new derivation that could disagree with it.
+var ground_m: Vector2 = Vector2.ZERO:
+	set(value):
+		if ground_m == value:
+			return
+		ground_m = value
+		queue_redraw()
+
 
 func _draw_selection_ring() -> void:
-	var spec := GameDataRegistry.placeholder_for(visual_id)
+	var footprint_m := ground_m
+	if footprint_m == Vector2.ZERO:
+		footprint_m = GameDataRegistry.placeholder_for(visual_id).footprint_m
 	var extent := Vector2(
-		maxf(spec.footprint_m.x, RING_MIN_METRES) * 0.5,
-		maxf(spec.footprint_m.y, RING_MIN_METRES) * 0.5)
+		maxf(footprint_m.x, RING_MIN_METRES) * 0.5,
+		maxf(footprint_m.y, RING_MIN_METRES) * 0.5)
 
 	var points := PackedVector2Array()
 	for i in range(RING_SEGMENTS + 1):

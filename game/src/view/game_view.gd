@@ -175,7 +175,9 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 		# The node goes where the entity SORTS, the art goes where the entity IS.
 		# For everything 1x1 those are the same point and the offset is zero.
-		var sort_offset := Iso.footprint_sort_offset(_footprint_of(entry))
+		var footprint := _footprint_of(entry)
+		var sort_offset := Iso.footprint_sort_offset(footprint)
+		view.ground_m = _ring_ground_m(entry, footprint)
 		# A single sort point per building (3.1, the building's own front
 		# corner) only compares fairly against a unit standing right at that
 		# corner. A worker beside the MIDDLE of a large building's long south
@@ -779,6 +781,29 @@ func _sub_pos(entry: Dictionary) -> Vector2i:
 	if p is Dictionary:
 		return Vector2i(int((p as Dictionary).get("x", 0)), int((p as Dictionary).get("y", 0)))
 	return Vector2i.ZERO
+
+
+## How big to draw the selection ring, in metres, or `Vector2.ZERO` for "ask the
+## visual's own placeholder" -- which is the answer for everything but one case.
+##
+## The case is a NORTH-SOUTH WALL. `visuals.json` sizes a wall's placeholder to the
+## footprint its ART was authored at, always east-west (`vis.wall_wood_gate` is
+## [18, 4] metres), and `_footprint_of` transposes the real footprint to [4, 18] when
+## the piece lies the other way. Everything else in the view already reads the
+## transposed figure; the ring read the placeholder, so a selected north-south gate
+## drew a fat ellipse sprawling eighteen metres east across open grass.
+##
+## DELIBERATELY NARROW -- only where the actual footprint disagrees with the def's
+## authored one. Sizing every ring from the footprint instead would have been the
+## tidier-looking change and a worse one: a villager claims one tile and her ring is
+## drawn from a measured 0.6 m, so it would have doubled, and every building's ring
+## would have moved off its measured mesh onto its gameplay box. This fixes the
+## entities that are wrong and touches none of the ones that are right.
+func _ring_ground_m(entry: Dictionary, footprint: Vector2i) -> Vector2:
+	var bd := GameDataRegistry.building(StringName(entry.get("def_id", &"")))
+	if bd == null or footprint == bd.footprint:
+		return Vector2.ZERO
+	return Vector2(footprint) * Iso.METRES_PER_TILE
 
 
 func _footprint_of(entry: Dictionary) -> Vector2i:

@@ -35,6 +35,8 @@ static func from_dict(d: Dictionary) -> Command:
 			return PlaceWallCommand.from_dict(d)
 		"toggle_gate":
 			return ToggleGateCommand.from_dict(d)
+		"upgrade_building":
+			return UpgradeBuildingCommand.from_dict(d)
 		"train":
 			return TrainCommand.from_dict(d)
 		"cancel_production":

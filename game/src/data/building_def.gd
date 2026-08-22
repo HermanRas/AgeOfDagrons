@@ -100,6 +100,22 @@ var buildable: bool = true
 ## open to everybody, including whoever is besieging it. See `ToggleGateCommand`.
 var is_gate: bool = false
 
+## What this building can be turned into where it stands, or `&""` for the
+## overwhelming majority that cannot be upgraded at all (PLAN.md 5.8).
+##
+## Only the three LONG wall segments carry one today, and each names its own tier's
+## gate. That is what makes a gate placeable at all on a north-south wall: a gate is
+## 9x2 and `PlaceBuildingCommand` has no facing and never transposes a footprint, so
+## a tap-placed gate could only ever lie east-west. Upgrading in place sidesteps the
+## whole question -- the segment already knows its axis, and the gate inherits it.
+##
+## THE TARGET MUST HAVE THE SAME FOOTPRINT, which is why this sits on the long piece
+## and not on the short one: a 3x2 segment has nowhere to put a 9x2 gate, and growing
+## the footprint would mean re-checking ground the player cannot see is needed.
+## `UpgradeBuildingCommand.validate()` enforces the match rather than trusting it,
+## since it is a fact about two separate JSON entries that nothing else pins.
+var upgrades_to: StringName = &""
+
 ## `amount: -1` in the JSON: this building's crop never runs out. A FIELD IS
 ## INEXHAUSTIBLE (project owner, 2026-08-17), which reverses the call recorded
 ## here before -- the balancing lever is the per-age YIELD below, not a total, and
@@ -173,6 +189,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
 	b.buildable = bool(d.get("buildable", true))
 	b.is_gate = bool(d.get("is_gate", false))
+	b.upgrades_to = StringName(d.get("upgrades_to", ""))
 
 	var g: Dictionary = d.get("gather", {})
 	b.gather_kind = StringName(g.get("kind", ""))

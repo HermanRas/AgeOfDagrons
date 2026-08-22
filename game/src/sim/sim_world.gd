@@ -263,6 +263,61 @@ func set_gate_locked(b: SimBuilding, locked: bool) -> void:
 	_occupancy_changed(rect)
 
 
+## Turn a standing building into a different one WHERE IT STANDS, keeping its id
+## (PLAN.md 5.8). Today: a finished long wall segment becoming its tier's gate.
+##
+## IN PLACE, NOT DESPAWN-AND-RESPAWN, and the id is the reason. A respawn would hand
+## the player's own selection a dead id the tick their upgrade landed, so the panel
+## they pressed the button on would empty itself -- and it would file the wall under
+## `removed_this_tick`, telling every other player's client that a building was
+## destroyed when one was improved. Mutating keeps the selection, the view node and
+## the pooled sprite; `GameView._visual_id_of` re-points the art off the new `def_id`
+## on the next snapshot with nothing else to do.
+##
+## The footprint deliberately does NOT change -- `UpgradeBuildingCommand` refuses a
+## target whose footprint differs, so the ground this holds is the ground it already
+## held and no placement check is needed. Every other def-derived field is re-read
+## rather than patched selectively: a field left over from the old def is exactly the
+## kind of thing that stays wrong quietly.
+##
+## HEALTH CARRIES ITS FRACTION, not its absolute value. A wall at 1200/1200 becoming
+## a 1000 hp gate is undamaged, and a wall at half health becoming one at half health
+## is the only rule that neither heals nor hurts as a side effect of upgrading. Full
+## health is pinned exactly, so the commonest case cannot round to 999.
+func convert_building(b: SimBuilding, new_def_id: StringName) -> void:
+	var d: BuildingDef = building_def(new_def_id)
+	if d == null:
+		return
+
+	var was_full := b.hp >= b.max_hp
+	var old_max := maxi(1, b.max_hp)
+
+	b.def_id = new_def_id
+	b.is_gate = d.is_gate
+	b.max_hp = d.hp
+	b.vision_range = d.los
+	b.provides_pop = d.provides_pop
+	b.garrison_cap = d.garrison_cap
+	b.build_total = d.build_time_ticks
+	b.gather_kind = d.gather_kind
+	b.gather_amount = d.gather_amount
+	b.gather_slots = d.gather_slots
+	b.hp = b.max_hp if was_full else clampi(b.hp * b.max_hp / old_max, 1, b.max_hp)
+	# A COMPLETE building stays complete. `build_progress` is compared against
+	# `build_total`, and the new def's build time is a different number, so leaving the
+	# old progress behind would make a finished gate read as a part-built one.
+	if b.phase == SimBuilding.Phase.COMPLETE:
+		b.build_progress = b.build_total
+
+	# Through `blocks_now()` for the same reason `spawn_building` is: a wall blocks and
+	# an unlocked gate does not, so this is the tick the hole appears. No eviction --
+	# the only direction this can go today is solid-to-open, and `set_gate_locked` is
+	# what handles the other one.
+	var rect := b.footprint_rect()
+	map.set_occupied(rect, b.id, b.blocks_now(d.blocks_movement))
+	_occupancy_changed(rect)
+
+
 ## Nothing may be left standing INSIDE ground that has just become solid.
 ##
 ## `can_place_building()` asks the MAP whether the footprint is free, and units are

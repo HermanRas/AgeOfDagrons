@@ -200,6 +200,19 @@ and tech-tree wireframes, and settings (§8.2b).
   undeclared id resolves to the magenta placeholder, and no def was pointing at
   one). Worth remembering as a class: *staged* and *wired* are different states,
   and only a def reaching for an id proves the second.
+  **A GATE IS AN UPGRADE, NOT A PLACEMENT** (2026-08-22). It shipped as a menu
+  entry placed by tapping and the owner found the hole in a day: a gate is [9,2],
+  `PlaceBuildingCommand` carries no facing and never transposes a footprint, so
+  every tap-placed gate lay east-west and **a north-south wall could not have one
+  at all**. Now all three gates are `buildable: false` and you tap a finished long
+  segment and press its upgrade button — the wall already knows its axis and the
+  gate inherits it, so there is nothing to rotate. `BuildingDef.upgrades_to` +
+  `UpgradeBuildingCommand` + `SimWorld.convert_building`, which mutates in place
+  and keeps the entity id (a respawn would empty the panel the player just pressed
+  and report a *destruction* to every other client).
+  Worth remembering as a class: **the placement path has exactly one orientation**,
+  so anything non-square that needs a second one cannot be tap-placed. Walls get
+  theirs from the drag; the gate now gets it by inheriting.
   What remains unbuilt around them: **no diagonal walls** (six of the eight baked
   directions are unreachable — a [9,2] box does not tile a square grid at 45°),
   **no garrison on a wall** (4.8), and **an open gate is open to everyone**

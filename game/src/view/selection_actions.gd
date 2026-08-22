@@ -162,10 +162,41 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		a.payload = unit_def_id          # ActionSlot crops the unit's own portrait
 		out.append(a)
 
-	out.append(_act(&"upgrade", false))
+	out.append(_upgrade_action(bd, age, facts))
 	out.append(_act(&"repair", false))
 	out.append(_act(&"destroy"))
 	return out
+
+
+## Upgrade, which is a REAL verb for anything declaring `upgrades_to` and the same
+## disabled placeholder it has always been for everything else (PLAN.md 5.8).
+##
+## Only the three long wall segments qualify today, and each becomes its tier's gate.
+## The label is the TARGET's own name -- "Palisade Gate", not "Upgrade" -- because
+## "Upgrade" on a wall says nothing about what you are about to get, and the player is
+## being asked to spend on it. Same reason a train button says "Archer".
+##
+## Age is checked here as well as in `UpgradeBuildingCommand.validate()`, so a player
+## holding an age-2 wall does not get a live button for a gate they cannot buy yet.
+## Affordability deliberately is NOT: the panel shows what a building can do, the
+## command refuses what the player cannot pay for, and a button that vanishes when
+## your wood dips is harder to find than one that says no.
+static func _upgrade_action(bd: BuildingDef, age: int, facts: Dictionary) -> HudAction:
+	if bd.upgrades_to == &"" or int(facts.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		return _act(&"upgrade", false)
+	var to: BuildingDef = GameDataRegistry.building(bd.upgrades_to)
+	if to == null or to.age_required > age:
+		return _act(&"upgrade", false)
+	# NO ICON, deliberately, where the disabled placeholder above keeps one. `ICONS`
+	# maps upgrade to `hud_techtree.png`, which its own note admits is the nearest
+	# thing in the pack rather than art for this -- and `ActionSlot` prefers an icon
+	# file over the payload portrait, so passing it would draw a tech-tree glyph on
+	# top of a perfectly good picture of the gate. Left blank, the slot crops the
+	# gate's own sprite exactly as the train and place cells do.
+	var a := HudAction.new(&"upgrade",
+			to.name if not to.name.is_empty() else String(to.id), "", true)
+	a.payload = to.id
+	return a
 
 
 ## A unit's own verbs. Harvest and Build are gated on the def actually being a
