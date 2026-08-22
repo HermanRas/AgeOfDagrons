@@ -294,10 +294,29 @@ func _set_cost(cost: Dictionary) -> void:
 	var parts: Array[String] = []
 	for kind in ResourceHUD.DISPLAY_ORDER:
 		if cost.has(kind) and int(cost[kind]) > 0:
-			parts.append("%d%s" % [int(cost[kind]), _COST_LETTERS.get(kind, "?")])
+			parts.append("%s%s" % [_short_amount(int(cost[kind])),
+					_COST_LETTERS.get(kind, "?")])
 	_cost.text = " ".join(parts)
 	_cost.visible = not parts.is_empty()
 	_cost_bg.visible = _cost.visible
+
+
+## A price in as few characters as it can be said in: "30", "1k", "1.5k".
+##
+## Only the wonder needs this, and it needed it badly -- at 1000 stone and 1000 wood it
+## came out as "1000S 1000…", with the ellipsis eating the one digit that was load
+## bearing. Eleven characters do not fit the top of a 72 px tile and seven do.
+##
+## The threshold is 1000 rather than something tuned, because that is exactly where a
+## cost stops fitting, and everything else in the game is three digits or fewer and is
+## printed in full. A rounded "1.5k" would be a lie about a price if anything ever cost
+## 1550 -- nothing does, and the day something might, this is the one place to notice.
+static func _short_amount(v: int) -> String:
+	if v < 1000:
+		return str(v)
+	if v % 1000 == 0:
+		return "%dk" % (v / 1000)
+	return "%.1fk" % (float(v) / 1000.0)
 
 
 ## Show or hide the name strip. Empty text hides both halves, so a slot with no
