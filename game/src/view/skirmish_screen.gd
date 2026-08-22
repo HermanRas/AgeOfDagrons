@@ -34,7 +34,42 @@ extends Control
 ## size two different things: eight slots with six closed is a two-player match on a map
 ## with eight players' worth of room. Its space on the map is still reserved -- the board
 ## is sized for every slot -- it simply holds no player, no base and no bot.
-enum Role { HUMAN, PLAYTEST_AI, OPEN, CLOSED }
+## The four AI roles past `PLAYTEST_AI` are APPENDED rather than slotted in beside it,
+## which keeps HUMAN/PLAYTEST_AI/OPEN/CLOSED on the integers they have always had. The
+## order the player SEES is the order `_add_role_items` lists them in and owes nothing
+## to these numbers.
+##
+## `PLAYTEST_AI` keeps its name and is labelled **AI (Easy)** on screen (project owner,
+## 2026-08-22). The name is what it IS -- the PlayTest AI of 12.2a, unchanged -- and the
+## label is what it means to somebody choosing an opponent. Renaming the member would
+## have churned a dozen tests to say the same thing.
+enum Role { HUMAN, PLAYTEST_AI, OPEN, CLOSED, AI_PASSIVE, AI_NORMAL, AI_HARD, AI_UNFAIR }
+
+## Role -> `SimPlayer.AILevel`, for the roles that are bots. Anything absent is not a
+## bot, which is what `_is_ai_role` reads it for -- one table rather than a predicate
+## and a mapping that could disagree about which roles are AI.
+const AI_ROLE_LEVELS := {
+	Role.AI_PASSIVE: SimPlayer.AILevel.PASSIVE,
+	Role.PLAYTEST_AI: SimPlayer.AILevel.EASY,
+	Role.AI_NORMAL: SimPlayer.AILevel.NORMAL,
+	Role.AI_HARD: SimPlayer.AILevel.HARD,
+	Role.AI_UNFAIR: SimPlayer.AILevel.UNFAIR,
+}
+
+
+static func _is_ai_role(role: Role) -> bool:
+	return AI_ROLE_LEVELS.has(role)
+
+
+## The inverse of `AI_ROLE_LEVELS`, for a joined client turning a host's config back
+## into rows. Derived from the same table rather than written out again, so the two
+## directions cannot disagree; an unknown level lands on Easy, which is also what
+## `SimWorld.setup` falls back to.
+static func _role_for_level(level: int) -> Role:
+	for role in AI_ROLE_LEVELS:
+		if int(AI_ROLE_LEVELS[role]) == level:
+			return role
+	return Role.PLAYTEST_AI
 
 ## Which side of a network match this screen is on, which is the third thing it is.
 ##
@@ -395,7 +430,15 @@ func _build_slot_row(index: int) -> Control:
 
 	var role := OptionButton.new()
 	role.add_item("Human", int(Role.HUMAN))
-	role.add_item("PlayTest AI", int(Role.PLAYTEST_AI))
+	# THE AI LADDER, easiest first, with the placeholders SAYING SO on screen. Listing
+	# them before they work is deliberate (project owner, 2026-08-22): it shows the
+	# shape of the choice, and it means the list does not renumber under a player's
+	# muscle memory when 12.2b fills them in. All three placeholders play as Easy.
+	role.add_item("AI (Passive)", int(Role.AI_PASSIVE))
+	role.add_item("AI (Easy)", int(Role.PLAYTEST_AI))
+	role.add_item("AI (Normal) — as Easy", int(Role.AI_NORMAL))
+	role.add_item("AI (Hard) — as Easy", int(Role.AI_HARD))
+	role.add_item("AI (Unfair) — as Easy", int(Role.AI_UNFAIR))
 	# "Open", not "Open (waiting)". A dropdown lists the CHOICES; whether the chair is
 	# still empty is status, and the lobby line below already says. The longer label read
 	# as a contradiction the moment somebody was sitting in it -- a slot showing "Open
@@ -495,7 +538,10 @@ func build_config() -> MatchConfig:
 	for i in _active_slots():
 		cfg.player_ids.append(cfg.player_ids.size() + 1)
 		cfg.colours.append(_colours[i])
-		cfg.ai_players.append(_roles[i] == Role.PLAYTEST_AI)
+		cfg.ai_players.append(_is_ai_role(_roles[i]))
+		# Position for position with `ai_players`. Humans get a level too and it is
+		# never read -- a hole here would misalign every bot after it.
+		cfg.ai_levels.append(int(AI_ROLE_LEVELS.get(_roles[i], SimPlayer.AILevel.EASY)))
 	cfg.seed = _seed
 	cfg.map_type = _type
 	cfg.map_data = _data
@@ -882,8 +928,18 @@ func _on_lobby_config_received() -> void:
 	# other chair holds a person. It cannot tell the host's own seat from a remote one and
 	# does not need to -- which chair is YOURS comes from `local_player_id()`, and the row
 	# label says so.
+	#
+	# The LEVEL rides along, so a joiner sees "AI (Passive)" where the host set one
+	# rather than a generic bot. `ai_levels` may be shorter or absent -- from a host
+	# built before difficulty existed -- and each bot then falls back to Easy, which is
+	# the AI that host is actually running.
 	for i in range(mini(_slot_rows.size(), cfg.ai_players.size())):
-		_roles[i] = Role.PLAYTEST_AI if cfg.ai_players[i] else Role.HUMAN
+		if cfg.ai_players[i]:
+			var level: int = int(cfg.ai_levels[i]) if i < cfg.ai_levels.size() \
+					else SimPlayer.AILevel.EASY
+			_roles[i] = _role_for_level(level)
+		else:
+			_roles[i] = Role.HUMAN
 		var picker: OptionButton = _slot_rows[i]["role"]
 		picker.select(picker.get_item_index(int(_roles[i])))
 

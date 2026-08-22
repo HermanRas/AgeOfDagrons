@@ -118,6 +118,10 @@ func setup(cfg: MatchConfig) -> void:
 		# The FIELD has existed since 0.6 with nothing writing it; this is the config
 		# side of it. `AISystem` is what will read it.
 		p.is_ai = bool(cfg.ai_players[i]) if i < cfg.ai_players.size() else false
+		# And how hard it plays. A short or absent `ai_levels` leaves the default, so a
+		# config from before difficulty existed still produces the AI it always did.
+		p.ai_level = int(cfg.ai_levels[i]) if i < cfg.ai_levels.size() \
+				else SimPlayer.AILevel.EASY
 		players.append(p)
 
 

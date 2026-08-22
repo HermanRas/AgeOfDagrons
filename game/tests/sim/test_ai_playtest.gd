@@ -46,6 +46,152 @@ func _run(w: SimWorld, ticks: int = RUN_TICKS) -> void:
 		w.step()
 
 
+# ── difficulty (2026-08-22) ─────────────────────────────────────────────────
+#
+# Five levels in the lobby and only two of them behave differently: PASSIVE never
+# attacks, EASY is the PlayTest AI unchanged, and NORMAL / HARD / UNFAIR are declared
+# placeholders that play as EASY. What is worth testing is exactly that -- that passive
+# really is harmless, and that the placeholders really are wired to something rather
+# than silently doing nothing.
+
+
+## A world where player 1 is a bot at `level`.
+func _match_at(level: int, players: int = 2, p_seed: int = 3) -> SimWorld:
+	var cfg := MatchConfig.debug_generated(p_seed, MapGenerator.Type.FOREST, players)
+	cfg.ai_players = [true, false] as Array[bool]
+	cfg.ai_levels = [level, SimPlayer.AILevel.EASY] as Array[int]
+	var w := SimWorld.new()
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	return w
+
+
+## Every attack order this player's units are currently carrying out.
+func _attackers(w: SimWorld, owner: int) -> int:
+	var n := 0
+	for e in w.entities.values():
+		if e is SimUnit and e.alive and e.owner_id == owner \
+				and (e as SimUnit).task == SimUnit.Task.ATTACK:
+			n += 1
+	return n
+
+
+func test_a_level_is_carried_from_the_config_to_the_player() -> void:
+	var w := _match_at(SimPlayer.AILevel.PASSIVE)
+	assert_true(w.player_for(1).is_ai, "still a bot")
+	assert_eq(w.player_for(1).ai_level, SimPlayer.AILevel.PASSIVE)
+
+
+func test_an_unnamed_level_defaults_to_easy() -> void:
+	# Every debug factory and every config recorded before difficulty existed leaves
+	# `ai_levels` empty, and all of them should keep getting the AI they always got.
+	var w := _match()
+	assert_true(w.player_for(1).is_ai)
+	assert_eq(w.player_for(1).ai_level, SimPlayer.AILevel.EASY,
+			"a config that names no level still plays the PlayTest AI")
+
+
+func test_a_passive_bot_still_builds_an_economy() -> void:
+	# Passive is a punching bag, not a paused bot. If it stopped playing entirely it
+	# would be useless for developing against, which is the whole point of it.
+	var w := _match_at(SimPlayer.AILevel.PASSIVE)
+	_run(w, 600)
+	assert_true(_ai(w).step_of(1) > 0, "it is running its script")
+	var built := 0
+	for e in w.entities.values():
+		if e is SimBuilding and e.owner_id == 1:
+			built += 1
+	assert_true(built > 1, "it has put something up beyond its town centre")
+
+
+## Put `owner` at the END of its script with an army in hand, which is the state the
+## standing-order attack fires in.
+##
+## FAST-FORWARDED RATHER THAN PLAYED OUT, and that is the only reason these two tests
+## are worth having. The first version simply ran 1200 ticks and asserted nobody
+## attacked -- and it passed with the gate REMOVED, because the script does not finish
+## inside 1200 ticks and the branch under test was never reached. A test that cannot
+## fail is worse than no test: it is a claim nobody will re-check. Running long enough
+## to finish honestly was measured at ten minutes of suite time (see `RUN_TICKS`).
+func _finish_the_script(w: SimWorld, owner: int) -> void:
+	_run(w, 100)          # let it register some progress first
+	var ai := _ai(w)
+	ai._progress[owner]["step"] = AIPlaytest.SCRIPT.size()
+	# An army, standing next to nothing in particular. `_idle_military` picks up any
+	# free non-villager, and player 2's town centre is what `_nearest_enemy` finds.
+	var home := Vector2i.ZERO
+	for e in w.entities.values():
+		if e is SimBuilding and e.owner_id == owner:
+			home = (e as SimBuilding).tile()
+			break
+	for i in range(3):
+		w.spawn_unit(&"unit.swordsman", owner, home + Vector2i(i + 2, 2))
+
+
+func test_an_easy_bot_with_a_finished_script_does_attack() -> void:
+	# THE CONTROL, and the reason the passive test below means anything: it proves the
+	# fixture actually reaches the attacking branch. Without this pair, "passive did not
+	# attack" is indistinguishable from "nothing would have attacked".
+	var w := _match_at(SimPlayer.AILevel.EASY)
+	_finish_the_script(w, 1)
+	_run(w, 60)
+	assert_true(_attackers(w, 1) > 0,
+			"a finished script turns the standing-order attack on")
+
+
+func test_a_passive_bot_never_attacks_even_once_its_script_is_done() -> void:
+	# THE TRAP. Skipping the script's `attack` step is not enough on its own -- skipping
+	# it COMPLETES the script, and a completed script is what switches the standing
+	# order's attack on. A passive bot would have built its economy and then thrown its
+	# army at you anyway.
+	var w := _match_at(SimPlayer.AILevel.PASSIVE)
+	_finish_the_script(w, 1)
+	for i in range(60):
+		w.step()
+		assert_eq(_attackers(w, 1), 0, "passive attacked on tick %d" % (i + 1))
+
+
+func test_the_placeholder_levels_are_wired_to_something() -> void:
+	# They play as Easy. Asserting they PLAY is the honest test: asserting they are
+	# identical to Easy would pin an implementation detail that 12.2b is going to
+	# change, and asserting they are different would be a lie today.
+	for level in [SimPlayer.AILevel.NORMAL, SimPlayer.AILevel.HARD,
+			SimPlayer.AILevel.UNFAIR]:
+		var w := _match_at(level)
+		_run(w, 400)
+		assert_true(_ai(w).step_of(1) > 0,
+				"level %d runs the script rather than standing still" % level)
+
+
+func test_the_level_survives_the_wire() -> void:
+	var cfg := MatchConfig.debug_generated(3, MapGenerator.Type.FOREST, 2)
+	cfg.ai_players = [true, true] as Array[bool]
+	cfg.ai_levels = [SimPlayer.AILevel.PASSIVE, SimPlayer.AILevel.UNFAIR] as Array[int]
+	var back := MatchConfig.from_dict(cfg.to_dict())
+	assert_eq(back.ai_levels, [SimPlayer.AILevel.PASSIVE, SimPlayer.AILevel.UNFAIR]
+			as Array[int])
+	var w := SimWorld.new()
+	w.setup(back)
+	assert_eq(w.player_for(1).ai_level, SimPlayer.AILevel.PASSIVE)
+	assert_eq(w.player_for(2).ai_level, SimPlayer.AILevel.UNFAIR)
+
+
+func test_a_config_with_no_levels_at_all_still_makes_bots() -> void:
+	# What a host built before today sends. `ai_levels` is simply absent from the
+	# dictionary and every bot has to come out at the default rather than at 0, which
+	# is PASSIVE and would silently turn every opponent in the match harmless.
+	var cfg := MatchConfig.debug_generated(3, MapGenerator.Type.FOREST, 2)
+	cfg.ai_players = [true, false] as Array[bool]
+	var wire := cfg.to_dict()
+	wire.erase("ai_levels")
+	var back := MatchConfig.from_dict(wire)
+	var w := SimWorld.new()
+	w.setup(back)
+	assert_true(w.player_for(1).is_ai)
+	assert_eq(w.player_for(1).ai_level, SimPlayer.AILevel.EASY,
+			"absent must not read as PASSIVE, which is level 0")
+
+
 # ── it plays ────────────────────────────────────────────────────────────────
 
 func test_only_ai_players_are_driven() -> void:

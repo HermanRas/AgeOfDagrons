@@ -138,8 +138,14 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 	#
 	# It is safe now for the same reason it was needed: `_pick_units` can pull a villager
 	# off gathering, so a step does not depend on anybody being idle.
+	#
+	# A PASSIVE BOT NEVER GETS THE ATTACK HALF OF THEM. Skipping the script's `attack`
+	# step is not enough on its own: skipping it COMPLETES the script, and a completed
+	# script is exactly what switches the standing order's attack on -- so a passive bot
+	# would have finished its economy and then thrown its army at you anyway. Gated
+	# here, at the one call site, so `_keep_busy` stays ignorant of difficulty.
 	if w.tick % STANDING_ORDER_INTERVAL == 0:
-		_keep_busy(w, p, script_done)
+		_keep_busy(w, p, script_done and p.ai_level != SimPlayer.AILevel.PASSIVE)
 	if script_done:
 		return
 	var step: Dictionary = AIPlaytest.SCRIPT[index]
@@ -283,6 +289,20 @@ static func _describe(step: Dictionary) -> String:
 ## target in sight -- and the step is retried next tick until its timeout.
 func _issue(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
 	state["assigned"] = [] as Array[int]
+	# A PASSIVE BOT SKIPS THE FIGHTING AND KEEPS THE ECONOMY (project owner,
+	# 2026-08-22). Skipped rather than refused: returning false would retry the step
+	# every tick until its timeout and stall the script behind it, where returning true
+	# reports "orders away" for orders it deliberately did not give and moves on.
+	#
+	# This is the ONLY difference any difficulty makes today. Normal, Hard and Unfair
+	# all fall through to Easy -- see `SimPlayer.ai_level`.
+	#
+	# It also means a passive bot never ends the match, which is exactly what it is for:
+	# a punching bag to develop against. `preview_ai_match` still uses two Easy bots so
+	# the headless full-match regression keeps finishing.
+	if p.ai_level == SimPlayer.AILevel.PASSIVE and String(step.get("do", "")) == "attack":
+		return true
+
 	match String(step.get("do", "")):
 		"gather":
 			return _issue_gather(w, p, step, state)

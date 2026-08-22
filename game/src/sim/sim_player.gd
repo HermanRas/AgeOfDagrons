@@ -32,6 +32,23 @@ var faction: StringName = &"faction.default"
 ## the tint itself is a view concern (A.6).
 var colour: int = 0
 var is_ai: bool = false
+
+## How hard the bot in this chair plays (project owner, 2026-08-22). Meaningless when
+## `is_ai` is false, and never read there.
+##
+## TWO FIELDS RATHER THAN ONE, and they answer genuinely different questions: `is_ai`
+## is "is there a bot in this chair", which is what the wire, `AISystem`'s loop and
+## every existing test ask, and this is "which bot". Collapsing them into one int with
+## a HUMAN sentinel would have rewritten forty call sites to say the same thing.
+##
+## **ONLY PASSIVE AND EASY DO ANYTHING DIFFERENT TODAY.** Passive runs the whole
+## economy and never attacks; Easy is the PlayTest AI exactly as it was. Normal, Hard
+## and Unfair are declared and play as Easy -- they are in the lobby so the shape of
+## the choice is visible and so the list does not renumber when they land, which is
+## 12.2b's job. That is a deliberate placeholder and it is named as one on screen.
+enum AILevel { PASSIVE, EASY, NORMAL, HARD, UNFAIR }
+var ai_level: int = AILevel.EASY
+
 var team: int = 0
 var stock: Dictionary = {}           # StringName kind -> int amount
 var pop_used: int = 0

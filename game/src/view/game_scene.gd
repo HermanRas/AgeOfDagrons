@@ -156,7 +156,31 @@ var _ground_tap := DoubleTapDetector.new()
 ## own world is the better answer and is right there to ask.
 var _client_map: SimMap = null
 
+## TOUCH EMULATION IS OFF INSIDE THE MATCH AND ON EVERYWHERE ELSE (2026-08-22).
+##
+## The project setting is now `true`, and this is the one scene that turns it back off.
+## The arrangement used to be the other way round -- off globally, because box select
+## needs raw `InputEventScreenTouch` with real finger indices and emulation collapses
+## them into one mouse (`InputRouter`'s header).
+##
+## That was right about the match and wrong about everything else. The MENUS are
+## ordinary Godot UI, and Godot's `OptionButton` opens a `PopupMenu`, which is an
+## embedded subwindow that never sees a raw touch: on the phone the lobby's Map, Seed,
+## Players and Victory dropdowns opened and then would not accept a selection --
+## reported from the device, reproduced over adb, and confirmed by the highlight never
+## even moving off the first item, so the popup was getting no pointer input at all
+## rather than mishandling it.
+##
+## Emulation cannot simply be left on for everyone: `InputRouter` handles
+## `InputEventScreenTouch` AND `InputEventMouseButton` on separate paths, so with both
+## arriving every tap would fire `tapped` twice and issue every order twice.
+##
+## So the special case now lives where the special input handling lives, which is also
+## the honest place for it: exactly one scene does its own gesture recognition, and it
+## is the only one that needs the raw events.
 func _ready() -> void:
+	Input.set_emulate_mouse_from_touch(false)
+
 	# A full-rect Control defaults to MOUSE_FILTER_STOP and would swallow every
 	# mouse event before the camera or the router saw it -- pan would work on the
 	# phone and do nothing on the desktop.
@@ -957,6 +981,12 @@ func _exit_placement() -> void:
 	if _placement_readout != null:
 		_placement_readout.visible = false
 	_refresh_panel()
+
+
+## Hand touch emulation back on the way out, or every menu the player returns to has
+## dead dropdowns for the rest of the session. See `_ready`.
+func _exit_tree() -> void:
+	Input.set_emulate_mouse_from_touch(true)
 
 
 ## Whether the thing being placed is a wall tier rather than one building.

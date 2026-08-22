@@ -68,6 +68,16 @@ var map_type: MapGenerator.Type = MapGenerator.Type.RANDOM
 ## Read by `SimWorld.setup()` into `SimPlayer.is_ai`.
 var ai_players: Array[bool] = []
 
+## How hard each bot plays, position for position with `player_ids`
+## (`SimPlayer.AILevel`, 2026-08-22). Only meaningful where `ai_players` is true.
+##
+## SHORTER THAN `ai_players` IS LEGAL and means "the rest play at the default", which
+## is what every debug factory and every older recorded config wants -- none of them
+## names a level and all of them should keep getting the AI they always got. That is
+## also why this is a separate array rather than a widening of `ai_players`: a config
+## from before difficulty existed still deserializes into exactly the match it used to.
+var ai_levels: Array[int] = []
+
 
 ## A generated skirmish: two players, yellow against red, on a real procedural map.
 ##
@@ -123,6 +133,7 @@ func to_dict() -> Dictionary:
 		"player_ids": player_ids,
 		"colours": colours,
 		"ai_players": ai_players,
+		"ai_levels": ai_levels,
 		"map_size": {"x": map_size.x, "y": map_size.y},
 		"mode": int(mode),
 		"seed": seed,
@@ -153,6 +164,13 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	for v in d.get("ai_players", []):
 		bots.append(bool(v))
 	c.ai_players = bots
+
+	# Absent on the wire from a client built before difficulty existed, which leaves
+	# this empty and every bot at the default -- see the field's own note.
+	var levels: Array[int] = []
+	for v in d.get("ai_levels", []):
+		levels.append(int(v))
+	c.ai_levels = levels
 
 	var ms: Dictionary = d.get("map_size", {})
 	c.map_size = Vector2i(int(ms.get("x", DEBUG_MAP_SIZE.x)), int(ms.get("y", DEBUG_MAP_SIZE.y)))
