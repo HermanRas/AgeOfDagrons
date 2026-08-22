@@ -10,6 +10,89 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
+
+**What's needed:** the PACKED half of all three siege engines. One bake each, same
+treatment as their unpacked halves (which are staged and correct).
+
+**Why:** 4.13's last item is the pack/unpack state machine — a siege engine travels
+packed and cannot shoot, deploys to shoot and cannot move. It is scoped with 4.13 by
+PLAN.md 9.2.1 item 5. The machine is sim-side work I can do; what it has no way to
+show is the *packed* pose, because **every siege atlas staged today is the unpacked
+one**. Without these three the state machine is invisible — a limbered trebuchet
+would trundle across the map fully deployed, arm cocked, which reads as a bug rather
+than as a state.
+
+I would rather not build it against the magenta placeholder: the whole point of the
+machine is that the two states look different, so a test can prove the transition
+happened but only the art can show it is the right way round. Same class as the wall
+art — *staged* and *wired* are different states — one size smaller.
+
+**Candidate source:** all three resolve cleanly through the roster's own template
+pair, and I checked each file is present in the checkout:
+
+| id | packed actor | unpacked (already staged, for reference) |
+|---|---|---|
+| `vis.ballista_packed` | `units/carthaginians/siege_rock_packed.xml` | `units/carthaginians/siege_lithobolos_med.xml` |
+| `vis.onager_packed` | `units/romans/siege_onager_packed.xml` | `units/romans/siege_onager_pivot.xml` |
+| `vis.trebuchet_packed` | `units/han/siege_mangonel_pivot_packed.xml` | `units/han/siege_mangonel.xml` |
+
+Two notes that may save you time. `tools/recipes/trebuchet_deployed.toml` already
+says the packed half has no recipe and names the right actor in its header comment,
+so that one is half-written. And the Carthaginian and Roman packed templates do
+**not** follow the naming the roster implies — the roster's `siege_rock_packed` is a
+template under `units/cart/siege_ballista_packed.xml`, and *its* actor is the one in
+the table. I resolved all three through `<VisualActor><Actor>` rather than by
+filename, per §9.2's rule.
+
+**Colour:** all three unpacked halves except the ballista carry `"colours": true`.
+Worth measuring rather than assuming — a limbered engine is a different silhouette
+and may expose a different amount of tunic, exactly the way the onager's correct
+seated pose did.
+
+**Where it plugs in once baked:** three new `visuals.json` entries, dense four-age
+maps pointing at the one bake (units do not re-skin per age). `SimUnit` carries the
+deploy state and `UnitView` picks the id from it. Nothing else moves.
+
+**Not blocking the rest of 4.13** — arrow projectiles and the hostile wolf need no
+new art and I am doing both now. This is the only piece that waits on you.
+
+---
+
+### `vis.wolf` animated (your A.4a) + `vis.wolf_carcass` — requested 2026-08-22
+
+**What's needed:** two things, and the first is already on your list.
+
+1. **`vis.wolf`, animated** — idle / walk / attack / die / decay. This is A.4a, and
+   `tools/recipes/wolf.toml` already reasons it through in full: every clip exists in
+   `fauna/wolf.xml` (Idle ×3, Walk, Run, attack_melee ×2, death ×2), the quadruped
+   `location_scale` bug that blocked it is fixed, and the recipe says the "still
+   static" note is now a workaround for a problem that no longer exists. I am not
+   adding anything to that analysis — only saying it now has a caller.
+2. **`vis.wolf_carcass`** — new, and the deer already shows the shape: `vis.deer_carcass`
+   is a separate bake of `fauna/deer.xml` carrying a single `carcass` anim. Same
+   treatment on `fauna/wolf.xml`. `tools/recipes/deer_carcass.toml` is the template.
+
+**Why:** 4.13's hostile wolf. The project owner picked the full version on 2026-08-22
+— the wolf is a gaia-owned unit that roams, chases and bites, and killing it drops a
+gatherable carcass worth 30 food. So the wolf now *moves*, which is what makes the
+animation load-bearing rather than nice: **`vis.wolf` today has one `static` anim, and
+this project's own convention is that anything without a walk clip carries `speed: 0`
+precisely so a motionless sprite never slides across the map** (ships, dragon, and all
+three siege engines all do). A hostile wolf cannot take that out, so it is the first
+entity in the game that has to move without a walk clip.
+
+**Not blocking me.** I am building the sim side now and the wolf will slide until A.4a
+lands — a known, temporary, visibly-wrong state rather than a hidden one. Say if you
+would rather I hold the wolf's `speed` at 0 until then and I will; it makes it
+harmless and useless in equal measure.
+
+**Where it plugs in once baked:** `vis.wolf` needs no wiring change, it re-skins in
+place. `vis.wolf_carcass` becomes a `visuals.json` entry and the visual for a new
+`res.wolf_carcass` node in `resources.json`.
+
+---
+
 ### `vis.onager` still renders nose-up — **agent 2, 2026-08-16; FIXED 2026-08-17**
 
 **Fixed and staged.** Both halves as diagnosed: isobake `e257ae8` stops the
