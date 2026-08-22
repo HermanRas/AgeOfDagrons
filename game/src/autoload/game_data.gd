@@ -58,6 +58,9 @@ var _loaded := false
 
 var _units: Dictionary = {}                       # StringName -> UnitDef
 var _buildings: Dictionary = {}                   # StringName -> BuildingDef
+## Wall segment id -> the id of the tier that lists it. Derived from the defs on
+## first use by `wall_tier()`, and cleared with them on reload.
+var _wall_tier_of: Dictionary = {}
 var _resources: Dictionary = {}                   # StringName -> ResourceDef
 var _techs: Dictionary = {}                       # StringName -> TechDef
 var _factions: Dictionary = {}                    # StringName -> Dictionary (raw, 9.5).
@@ -106,6 +109,7 @@ func load_all(force := false) -> void:
 
 	_units = _read_defs(UNITS_PATH, UnitDef.from_dict)
 	_buildings = _read_defs(BUILDINGS_PATH, BuildingDef.from_dict)
+	_wall_tier_of.clear()          # derived from _buildings; see wall_tier()
 	_resources = _read_defs(RESOURCES_PATH, ResourceDef.from_dict)
 	_techs = _read_defs(TECHS_PATH, TechDef.from_dict)
 	_factions = _read_json(FACTIONS_PATH)
@@ -366,6 +370,28 @@ func missing_colour_atlases() -> Array[Dictionary]:
 	return out
 
 
+## Every visual whose atlas is drawn through a half-turn compensation, i.e. every
+## one carrying `directions_reversed` in visuals.json (`AtlasEntry.facing_offset`
+## is the mechanism and explains the bake defect behind it). Sorted by id.
+##
+## DIAGNOSTIC, and specifically a to-do list: each of these is art that will be
+## re-baked with `yaw_offset_deg = 180.0` in its recipe, and the day one is, its
+## flag here has to come off in the same step or it goes back to facing backwards.
+## A compensation that must be removed in time with a delivery is exactly the kind
+## that gets double-applied and then re-diagnosed from scratch, so it is
+## enumerable rather than scattered: this list and `dev_preview/preview_facing_
+## chart.tscn` are the two places to look when a rebake lands.
+func reversed_direction_atlases() -> Array[StringName]:
+	if not _loaded:
+		load_all()
+	var out: Array[StringName] = []
+	for visual_id in _visuals:
+		if bool((_visuals[visual_id] as Dictionary).get("directions_reversed", false)):
+			out.append(visual_id)
+	out.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+	return out
+
+
 ## The decorative props that stand AROUND a visual -- the plank stacks at a
 ## lumber camp, the cut stone at a mining camp, the produce crates at a mill.
 ## Each entry is `{"visual": StringName, "offset_m": Vector2}`, in the declared
@@ -538,6 +564,34 @@ func building(id: StringName) -> BuildingDef:
 	if not _loaded:
 		load_all()
 	return _buildings.get(id)
+
+
+## The wall TIER a segment def belongs to -- the def carrying the `wall_lengths`
+## list that names it -- or null for the great majority of buildings, which are not
+## wall pieces at all (PLAN.md 5.8).
+##
+## The reverse of `wall_lengths`, and derived rather than declared: a `wall_tier`
+## field on each segment would be the same fact written twice, and the day the two
+## disagreed a medium wall would merge into the wrong tier's long piece. Built once
+## and cached, because `WallMerge` asks on every wall segment that completes.
+##
+## A tier names ITSELF among its lengths (the short piece carries the list), so the
+## short piece maps to itself and the answer is never null for a real wall piece.
+## Gates are NOT in any tier's list -- they are an upgrade of the long piece, not a
+## length a drag can lay -- so a gate maps to null, which is exactly what stops one
+## being merged away.
+func wall_tier(id: StringName) -> BuildingDef:
+	if not _loaded:
+		load_all()
+	if _wall_tier_of.is_empty():
+		for tier_id in _buildings:
+			var tier: BuildingDef = _buildings[tier_id]
+			if not tier.is_wall_run():
+				continue
+			for segment in tier.wall_lengths:
+				_wall_tier_of[segment] = tier_id
+	var owner: Variant = _wall_tier_of.get(id)
+	return _buildings.get(owner) if owner != null else null
 
 
 func resource_def(id: StringName) -> ResourceDef:
@@ -1031,6 +1085,12 @@ func _resolve(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEnt
 
 	var atlas := _load_atlas(visual_id, _atlas_path_for_skin(decl, age, colour))
 	if atlas != null:
+		# Set here rather than read inside AtlasEntry, because it is a fact about the
+		# subject and not about the file: a colour tint and an age skin are separate
+		# bakes of the same actor and are turned the same way round, so one flag on
+		# the entry covers every path _atlas_path_for_skin can choose.
+		if bool(decl.get("directions_reversed", false)):
+			atlas.facing_offset = AtlasEntry.HALF_TURN
 		return atlas
 
 	var ph: Variant = decl.get("placeholder")

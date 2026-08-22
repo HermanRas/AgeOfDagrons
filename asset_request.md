@@ -78,6 +78,57 @@ while the batch runs and I will add one behind a single named constant.
 and column 4 a back. `preview_combat_facing.tscn` is the in-game version — eight
 attackers in a ring plus a walking ring for comparison.
 
+#### ⚠ THE OWNER SAID CARRY THE STOPGAP — READ THIS BEFORE YOU BAKE (2026-08-22, same day)
+
+**The re-bake is deferred to the heavy rig, and the game compensates in the meantime.**
+The owner's call, verbatim: *"no to the rebake of the entire asset suite and all
+recipes, can we fix it in code, and add it as a polish item at the end, before
+investing 3 days of baking time"* — they are getting access to an i9 / 64 GB / NVMe box
+where ~12 Blenders can run in parallel, and this batch waits for it. It is PLAN.md §13.2
+item 10.
+
+**What the game now does.** `"directions_reversed": true` on an entry in
+`visuals.json` adds half a turn to every facing before the direction table is read
+(`AtlasEntry.facing_offset`). It is on **31 entries**, and the chart now shows a face at
+column 0. It is not a global flip and could not have been one: your table was right, but
+the split is not units-vs-walls — it is **whether the recipe carries the offset**, and
+that splits cleanly. Mechanically it only works at all because these bakes store 5 or 8
+directions; a `directions: 1` building has no other frame to rotate to, which is exactly
+why the buildings had to be fixed in the recipe and were.
+
+**What I derived from your recipes, and it is wider than units.** 23 recipes at
+`directions = 8` and 39 at `5` carry no `yaw_offset_deg`. Everything in them whose front
+matters is 180° out, not just the units:
+
+| group | recipes | e.g. |
+|---|---|---|
+| units | 12 + villager | swordsman, knight, monk, scout_cavalry |
+| ships | 4 | galley, galleon, transport, fishing |
+| siege + carts | 5 | ram, ballista, onager, trebuchet, trade_cart |
+| animals | 8 (3 wired) | deer, sheep, cattle |
+| wall foundations + rubble | 6 | `foundation_9x3_wall`, `rubble_wall_long` |
+
+The wall foundations and rubble are worth a look on your side: the completed pieces carry
+`yaw_offset_deg = 180.0` and their own foundations and rubble do not, so a wall and its
+own footings disagree by half a turn. Nearly invisible on a symmetric palisade, which is
+presumably why nobody saw it.
+
+Left alone deliberately: trees, mines, props, cliffs and berry bushes (5 directions, no
+offset, no front — which stored angle faces the camera is arbitrary for a rock), and the
+**three projectiles**, because they are baked standing on end so their yaw is invisible
+until the pitch request below is done. **Please put `yaw_offset_deg = 180.0` on the
+projectile recipes when you fix the pitch** — they are unflagged on my side precisely so
+that the two land together.
+
+**WHAT YOU HAVE TO DO WHEN YOU BAKE, and it is the whole risk:** tell me which ids you
+re-baked, in this file, and I take their flags off in the same step. A fixed atlas with
+its flag still set faces backwards again — identically, silently, and it will look like
+the bake failed. `GameDataRegistry.reversed_direction_atlases()` prints the live list,
+and per-id flags mean a spot-check of one unit is a one-line change rather than an
+all-or-nothing switch. **Your spot-check suggestion still stands and I would still like
+it:** bake the swordsman with the offset, stage it, say so here, and I will pull its flag
+and re-run the chart before you commit the batch.
+
 ---
 
 ### `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
