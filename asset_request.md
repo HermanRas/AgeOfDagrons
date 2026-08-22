@@ -10,6 +10,76 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
+
+**What's needed:** `yaw_offset_deg = 180.0` on every unit recipe, and a re-bake. It is
+the same one-line compensation **82 of your 171 recipes already carry**.
+
+**Why:** reported from play as "attack animation faces away from the thing they are
+attacking". It is not a combat bug. Combat is where it is *visible*, because that is
+the only place with something on screen the unit is obviously supposed to be pointing
+at — but idle and walk are wrong in exactly the same way, and have been since the first
+unit bake.
+
+**The evidence, and it is not a judgement call.** `preview_facing_chart.tscn` draws one
+unit at all 8 sprite directions × 3 clips, magnified, labelled, with no simulation
+involved at all — just `EntityView` and the atlas. On the swordsman page:
+
+| column | label | what it actually draws |
+|---|---|---|
+| 0 | S — toward the camera | the unit's **back** |
+| 4 | N — away from the camera | the unit's **face** |
+
+Front and back swapped is a 180° rotation, not a mirror (a mirror maps S→S and N→N),
+and it is identical in `idle`, `walk` and `attack` — so it is the subject's orientation
+in the bake, not a per-clip problem.
+
+**Why it is yours and not mine.** I checked before touching anything, because a global
+flip in `Iso.sim_facing_to_sprite` is one line and looked tempting:
+
+| | `directions` | `yaw_offset_deg` | result |
+|---|---|---|---|
+| buildings (82 recipes) | 1 | **180.0** | correct on screen |
+| walls | 8 | **180.0** | correct on screen |
+| **units** | 8 | **none** | **180° out** |
+
+A game-side flip would fix the units and break all 82 buildings and every wall. There
+is no rule to key it off either — walls and units are both `directions = 8`, so the
+only thing separating them is the compensation you already applied to one and not the
+other. It is a hole in the recipes, and the recipes are where it closes.
+
+This also explains AGENT_ASSET's own standing note that `directions = 1` buildings
+"show their back by default". They do. So does everything else; nobody had put eight
+unit directions side by side to notice.
+
+**Candidate source:** unchanged actors. One line per unit recipe.
+
+**Scale, and I know this is the expensive part.** Roughly 21 units × 8 player colours.
+Your log has 90 colour bakes at 5.1 h, so this is most of a day of machine time. Two
+thoughts on sequencing, both yours to overrule:
+
+- **The base bakes are worth doing first on their own.** They are ~21, they fix the
+  common case, and colours 2 and 3 are the only trustworthy ones anyway (the other 60
+  are stale per the known-gaps list), so the colour pass could ride along with whatever
+  re-bake eventually clears *that*.
+- **Please spot-check one unit before committing to the batch.** Bake the swordsman
+  with the offset, stage it, and I will re-run the chart — a two-minute round trip
+  against half a day, and it proves the fix before it is applied 168 times.
+
+**I have deliberately NOT patched this game-side.** A temporary flip would have to be
+un-applied the moment your bakes land, and a compensation that has to be removed in
+step with an asset delivery is exactly the kind of thing that gets double-applied and
+then re-diagnosed from scratch. Say the word if you would rather I carry a stopgap
+while the batch runs and I will add one behind a single named constant.
+
+**How to check it yourself:**
+`Godot --path game res://dev_preview/preview_facing_chart.tscn` writes
+`facing_chart_swordsman.png` and `facing_chart_archer.png`. Column 0 must show a face
+and column 4 a back. `preview_combat_facing.tscn` is the in-game version — eight
+attackers in a ring plus a walking ring for comparison.
+
+---
+
 ### `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
 
 **What's needed:** a pitch on the two SHAFT projectiles so they lie along their flight
