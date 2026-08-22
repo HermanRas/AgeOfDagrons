@@ -588,6 +588,312 @@
     }
   },
 
+  "_note_walls": [
+    "WALLS (PLAN.md 5.8). Staged since the wall bakes landed and DECLARED HERE",
+    "2026-08-21 -- buildings.json used to claim they were already declared in this",
+    "file, and they were not: only the tower's rubble and foundation were. That is",
+    "why nothing rendered a wall and nothing failed either; an undeclared id is not",
+    "an error, it resolves to the loud magenta placeholder, and no building def",
+    "pointed at one to make it appear.",
+    "",
+    "THREE TIERS, EACH RE-SKINNING BY AGE, per the roster's wall lines and the",
+    "project owner's call (2026-08-21): a player at age 4 may still build any of the",
+    "three, so these are three separate ladders rather than one ladder's rungs.",
+    "",
+    "  tier         age 1     age 2     age 3     age 4      roster line",
+    "  wood         germ      germ      brit      brit       'wall Lumber'",
+    "  stone        achae     achae     achae     achae      'wall Stone'",
+    "  reinforced   rome      rome      rome      rome       'wall reinforced'",
+    "",
+    "Ages below a tier's `age_required` still name an atlas because the skin map is",
+    "DENSE BY CONTRACT (PLAN.md 2.7.1) and `_validate_skins()` fails the suite on a",
+    "gap -- they simply point at the earliest bake, and the building gate is what",
+    "stops anyone seeing them there.",
+    "",
+    "EIGHT DIRECTIONS, unlike every other building. Wall segments are the first",
+    "building in the project with `directions: 8` -- SimBuilding's header says",
+    "buildings have no facing and every building atlas is a single frame, and walls",
+    "are the exception that gave SimBuilding a `facing` field. A wall has to run",
+    "along whichever axis it was dragged on, so the art was baked rotated and the",
+    "sim stores which rotation. Only two of the eight are reachable today, because",
+    "the footprint system is axis-aligned; the other six are what a diagonal wall",
+    "would need.",
+    "",
+    "THE ATHENIAN BAKES ARE UNUSED. `vis.wall_short/medium/long/gate` (no age",
+    "suffix) predate the age ladder and are not in any tier above -- the roster does",
+    "not name Athens for walls. Left staged rather than deleted: they are the",
+    "obvious stand-in if a fourth tier is ever wanted, and staged art costs nothing",
+    "but disk.",
+    "",
+    "THE WALL TOWER IS ALREADY IN THE GAME under another name. The roster's",
+    "'Pers/wall_tower (Guard Tower)' and 'rome/wall_tower' are exactly what",
+    "`vis.guard_tower` is baked from (achaemenids/wall_tower age 3, romans/wall_tower",
+    "age 4), so `building.guard_tower` IS the wall turret and needs nothing. The two",
+    "spare `vis.wall_wood_tower_age2/age3` bakes are the germ and brit variants of",
+    "the same piece and are unused for the same reason the Athenian set is.",
+    "",
+    "PLACEHOLDER SIZES are the GAMEPLAY footprint in metres (tiles x 2 m), not the",
+    "measured mesh -- the reverse of every other entry here. A wall's mesh extent and",
+    "its footprint are the same thing to within a rounding, the placeholder only ever",
+    "draws if the atlas goes missing, and a diamond the size of the tiles it claims is",
+    "the more useful thing to see in that case. Heights are the 0 A.D. template",
+    "`<Footprint><Height>` halved to project metres, maxed across the tier's ages:",
+    "wood 10.3 -> 5.15 (gate 18.0 -> 9.0), stone 11.6 -> 5.8 (gate 13.8 -> 6.9),",
+    "reinforced 9.9 -> 4.95 (gate 11.9 -> 5.95)."
+  ],
+
+  "vis.wall_wood_short": {
+    "atlas": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 4.0],
+      "height_m": 5.15,
+      "color": "#7a6242"
+    }
+  },
+
+  "vis.wall_wood_medium": {
+    "atlas": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 4.0],
+      "height_m": 5.15,
+      "color": "#7a6242"
+    }
+  },
+
+  "vis.wall_wood_long": {
+    "atlas": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 5.15,
+      "color": "#7a6242"
+    }
+  },
+
+  "vis.wall_wood_gate": {
+    "atlas": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 9.0,
+      "color": "#8a6f47"
+    }
+  },
+
+  "vis.wall_stone_short": {
+    "atlas": "res://assets/atlases/vis.wall_stone_short_age3.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_stone_short_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_stone_short_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_stone_short_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_stone_short_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 4.0],
+      "height_m": 5.8,
+      "color": "#9a9488"
+    }
+  },
+
+  "vis.wall_stone_medium": {
+    "atlas": "res://assets/atlases/vis.wall_stone_medium_age3.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_stone_medium_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_stone_medium_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_stone_medium_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_stone_medium_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 4.0],
+      "height_m": 5.8,
+      "color": "#9a9488"
+    }
+  },
+
+  "vis.wall_stone_long": {
+    "atlas": "res://assets/atlases/vis.wall_stone_long_age3.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_stone_long_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_stone_long_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_stone_long_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_stone_long_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 5.8,
+      "color": "#9a9488"
+    }
+  },
+
+  "vis.wall_stone_gate": {
+    "atlas": "res://assets/atlases/vis.wall_stone_gate_age3.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_stone_gate_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_stone_gate_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_stone_gate_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_stone_gate_age3.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 6.9,
+      "color": "#a8a196"
+    }
+  },
+
+  "vis.wall_reinforced_short": {
+    "atlas": "res://assets/atlases/vis.wall_reinforced_short_age4.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_reinforced_short_age4.atlas.json",
+      "2": "res://assets/atlases/vis.wall_reinforced_short_age4.atlas.json",
+      "3": "res://assets/atlases/vis.wall_reinforced_short_age4.atlas.json",
+      "4": "res://assets/atlases/vis.wall_reinforced_short_age4.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 4.0],
+      "height_m": 4.95,
+      "color": "#b0a89a"
+    }
+  },
+
+  "vis.wall_reinforced_medium": {
+    "atlas": "res://assets/atlases/vis.wall_reinforced_medium_age4.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_reinforced_medium_age4.atlas.json",
+      "2": "res://assets/atlases/vis.wall_reinforced_medium_age4.atlas.json",
+      "3": "res://assets/atlases/vis.wall_reinforced_medium_age4.atlas.json",
+      "4": "res://assets/atlases/vis.wall_reinforced_medium_age4.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 4.0],
+      "height_m": 4.95,
+      "color": "#b0a89a"
+    }
+  },
+
+  "vis.wall_reinforced_long": {
+    "atlas": "res://assets/atlases/vis.wall_reinforced_long_age4.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_reinforced_long_age4.atlas.json",
+      "2": "res://assets/atlases/vis.wall_reinforced_long_age4.atlas.json",
+      "3": "res://assets/atlases/vis.wall_reinforced_long_age4.atlas.json",
+      "4": "res://assets/atlases/vis.wall_reinforced_long_age4.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 4.95,
+      "color": "#b0a89a"
+    }
+  },
+
+  "vis.wall_reinforced_gate": {
+    "atlas": "res://assets/atlases/vis.wall_reinforced_gate_age4.atlas.json",
+    "ages": {
+      "1": "res://assets/atlases/vis.wall_reinforced_gate_age4.atlas.json",
+      "2": "res://assets/atlases/vis.wall_reinforced_gate_age4.atlas.json",
+      "3": "res://assets/atlases/vis.wall_reinforced_gate_age4.atlas.json",
+      "4": "res://assets/atlases/vis.wall_reinforced_gate_age4.atlas.json"
+    },
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 5.95,
+      "color": "#bdb4a4"
+    }
+  },
+
+  "vis.foundation_3x3_wall": {
+    "atlas": "res://assets/atlases/vis.foundation_3x3_wall.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 4.0],
+      "height_m": 1.35,
+      "color": "#8a7f6b"
+    }
+  },
+
+  "vis.foundation_6x3_wall": {
+    "atlas": "res://assets/atlases/vis.foundation_6x3_wall.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 4.0],
+      "height_m": 1.35,
+      "color": "#8a7f6b"
+    }
+  },
+
+  "vis.foundation_9x3_wall": {
+    "atlas": "res://assets/atlases/vis.foundation_9x3_wall.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 1.35,
+      "color": "#8a7f6b"
+    }
+  },
+
+  "vis.rubble_wall_short": {
+    "atlas": "res://assets/atlases/vis.rubble_wall_short.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 4.0],
+      "height_m": 1.10,
+      "color": "#6b6459"
+    }
+  },
+
+  "vis.rubble_wall_medium": {
+    "atlas": "res://assets/atlases/vis.rubble_wall_medium.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 4.0],
+      "height_m": 1.10,
+      "color": "#6b6459"
+    }
+  },
+
+  "vis.rubble_wall_long": {
+    "atlas": "res://assets/atlases/vis.rubble_wall_long.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 4.0],
+      "height_m": 1.10,
+      "color": "#6b6459"
+    }
+  },
+
   "vis.foundation_3x3": {
     "atlas": "res://assets/atlases/vis.foundation_3x3.atlas.json",
     "placeholder": {

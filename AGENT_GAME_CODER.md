@@ -78,8 +78,15 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 # The other driven previews, all screenshotting
 & $godot --path game res://dev_preview/preview_skirmish.tscn   # lobby + colour picker
 & $godot --path game res://dev_preview/preview_menus.tscn      # front door + campaign
+& $godot --path game res://dev_preview/preview_walls.tscn      # both wall axes + gate
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 ```
+
+`preview_walls` exists for the one thing **no test can judge**: which way a wall's
+art faces. A wall lying across its own footprint has the same footprint, the same
+origin and the same hash as one lying along it — so both axes get a screenshot and
+somebody looks. It also finishes the walls before shooting, because a wall
+*foundation* at nine tiles reads as a row of disconnected stubs.
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
 
@@ -186,11 +193,19 @@ and tech-tree wireframes, and settings (§8.2b).
   pipeline defects were fixed mid-roster. `GameDataRegistry.stale_colour_atlases()`
   enumerates them; `missing_colour_atlases()` finds absent ones. Develop against
   players 2 and 3.
-- **Walls have no building defs.** All 24 pieces are baked and declared in
-  `visuals.json` so the art is wired and testable, but a wall needs
-  drag-placement, segment-length choice, 8 orientations and gate pass-through.
-  As ordinary buildings they would put twelve fixed-orientation blocks in the
-  build menu, which is worse than not offering them.
+- **Walls are DONE** (PLAN.md 5.8, 2026-08-22) — this entry used to say they had
+  no defs, and also that all the pieces were "baked and declared in
+  `visuals.json`". Half of that was wrong: they were **staged but never
+  declared**, which is exactly the failure mode that reports nothing (an
+  undeclared id resolves to the magenta placeholder, and no def was pointing at
+  one). Worth remembering as a class: *staged* and *wired* are different states,
+  and only a def reaching for an id proves the second.
+  What remains unbuilt around them: **no diagonal walls** (six of the eight baked
+  directions are unreachable — a [9,2] box does not tile a square grid at 45°),
+  **no garrison on a wall** (4.8), and **an open gate is open to everyone**
+  because per-player passability needs a pathfinding grid per player. There is no
+  wall-tower def and none is needed: `building.guard_tower` already *is* the wall
+  turret, baked from achaemenid/roman `wall_tower`.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.

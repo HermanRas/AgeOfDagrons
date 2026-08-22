@@ -415,12 +415,24 @@ func test_a_page_number_past_the_end_clamps_to_the_last_page() -> void:
 			"a stale page number lands on the last real page, not an empty grid")
 
 
+## The buildings the MENU is supposed to offer at `age` -- every def gated by age and
+## not flagged `buildable: false`. Derived from the data rather than listed, so adding
+## a building does not need this test edited; the point is the FILTER, not the count.
+func _offerable(age: int) -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		if bd != null and bd.buildable and bd.age_required <= age:
+			out.append(id)
+	return out
+
+
 func test_the_whole_build_roster_is_reachable_by_paging() -> void:
-	# Against the real shipped data, not fakes: 19 buildings in a 12-slot grid is
-	# the case this was built for.
+	# Against the real shipped data, not fakes: a roster that does not fit a 12-slot
+	# grid is the case this was built for.
 	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
-	assert_eq(details.size(), GameDataRegistry.building_ids().size(),
-			"details_for hands back the WHOLE list -- capping it is what paging replaced")
+	assert_eq(details.size(), _offerable(4).size(),
+			"details_for hands back the WHOLE offerable list -- capping it is what paging replaced")
 
 	var reachable: Array = []
 	for page in range(SelectionActions.page_count(details.size())):
@@ -428,15 +440,71 @@ func test_the_whole_build_roster_is_reachable_by_paging() -> void:
 			if a.payload != null and a.payload != &"":
 				reachable.append(a.payload)
 
-	for building_id in GameDataRegistry.building_ids():
+	for building_id in _offerable(4):
 		assert_true(reachable.has(building_id),
 				"%s can be reached by an age-4 villager" % building_id)
 
 
-func test_the_age_four_build_list_is_two_pages() -> void:
+func test_the_menu_does_not_offer_the_wall_segments_the_drag_chooses() -> void:
+	# PLAN.md 5.8's `buildable: false`. A wall tier is four defs and only two of them
+	# are a player's to pick: the short segment IS the tier (it carries
+	# `wall_lengths`, and the drag reads that to decide what to lay), and the gate is
+	# placed on its own. Without the filter the grid would carry all twelve pieces and
+	# eight of them would each place one fixed-length block -- which is exactly the
+	# outcome buildings.json refused to ship walls at all rather than allow.
 	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
-	assert_eq(SelectionActions.page_count(details.size()), 2,
-			"19 buildings is 11 on page 1 and 8 on page 2")
+	var offered: Array = []
+	for a in details:
+		if a.payload != null:
+			offered.append(a.payload)
+
+	for hidden in [&"building.wall_wood_medium", &"building.wall_wood_long",
+			&"building.wall_stone_medium", &"building.wall_stone_long",
+			&"building.wall_reinforced_medium", &"building.wall_reinforced_long"]:
+		assert_false(offered.has(hidden), "%s is placed by the drag, not by the menu" % hidden)
+
+	for shown in [&"building.wall_wood_short", &"building.wall_wood_gate",
+			&"building.wall_stone_short", &"building.wall_stone_gate",
+			&"building.wall_reinforced_short", &"building.wall_reinforced_gate"]:
+		assert_true(offered.has(shown), "%s is a menu entry" % shown)
+
+
+func test_a_wall_tier_is_one_entry_per_material_plus_its_gate() -> void:
+	# The project owner's shape (2026-08-21): all three tiers stay available at age 4,
+	# so a player there has six wall entries -- wood, stone and reinforced, each with
+	# a gate -- rather than one wall that re-skinned the other two away.
+	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
+	var walls := 0
+	for a in details:
+		if a.payload != null and String(a.payload).begins_with("building.wall_"):
+			walls += 1
+	assert_eq(walls, 6, "three tiers, a wall and a gate each")
+
+
+func test_walls_are_age_gated_like_everything_else() -> void:
+	# Wood at age 2, stone at 3, reinforced at 4 -- the roster's ladder. Age 1 offers
+	# no wall at all, which is also why a new player still sees no paging arrow.
+	var by_age := {}
+	for age in [1, 2, 3, 4]:
+		var offered: Array = []
+		for a in SelectionActions.details_for(&"build", _villager_facts(), 1, [], age):
+			if a.payload != null and String(a.payload).begins_with("building.wall_"):
+				offered.append(a.payload)
+		by_age[age] = offered
+	assert_true((by_age[1] as Array).is_empty(), "no walls in age 1")
+	assert_eq((by_age[2] as Array).size(), 2, "wood and its gate at age 2")
+	assert_eq((by_age[3] as Array).size(), 4, "stone joins at age 3")
+	assert_eq((by_age[4] as Array).size(), 6, "reinforced joins at age 4")
+
+
+func test_the_age_four_build_list_pages() -> void:
+	# Not pinned to a number: the roster grows, and what matters is that paging
+	# covers whatever it has grown to. `page_count` is arithmetic over the list size,
+	# so this asserts the two agree rather than restating one of them.
+	var details := SelectionActions.details_for(&"build", _villager_facts(), 1, [], 4)
+	assert_true(details.size() > SelectionActions.MAX_DETAILS,
+			"the age-4 roster does not fit one grid, which is why paging exists")
+	assert_true(SelectionActions.page_count(details.size()) >= 2)
 
 
 func test_age_one_needs_no_paging_at_all() -> void:

@@ -70,6 +70,20 @@ func test_the_full_roster_is_present() -> void:
 		&"building.watch_tower", &"building.guard_tower", &"building.castle",
 		&"building.monastery", &"building.university", &"building.siege_workshop",
 		&"building.wonder",
+		# WALLS, three tiers of four pieces (PLAN.md 5.8). Twelve defs and only six
+		# of them are ever offered: the short segment of each tier carries
+		# `wall_lengths` and is the tier's WALL entry, the gate is placed on its own,
+		# and the medium and long segments are `buildable: false` because the drag
+		# chooses them rather than a player. There is no wall-tower def --
+		# `building.guard_tower` already IS the wall turret (it is baked from
+		# achaemenids/romans `wall_tower`), which is why this list has 31 entries and
+		# not 34.
+		&"building.wall_wood_short", &"building.wall_wood_medium",
+		&"building.wall_wood_long", &"building.wall_wood_gate",
+		&"building.wall_stone_short", &"building.wall_stone_medium",
+		&"building.wall_stone_long", &"building.wall_stone_gate",
+		&"building.wall_reinforced_short", &"building.wall_reinforced_medium",
+		&"building.wall_reinforced_long", &"building.wall_reinforced_gate",
 	]
 	assert_eq(_by_content(reg.building_ids()), _by_content(expected_buildings),
 			"every age-skinned building has a definition, and nothing extra")

@@ -251,10 +251,26 @@ func _open_build(age: int) -> void:
 	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
 
 
+## Turn to the page holding `action_id` and return its slot, or null if no page has
+## it. Written because the age-4 roster grows -- it was 19 buildings and one page
+## turn, it is 25 and two since walls landed (PLAN.md 5.8) -- and a test that hunts
+## for the building it wants keeps testing PAGING rather than the roster's size.
+func _find_across_pages(action_id: StringName) -> ActionSlot:
+	for page in range(panel.detail_page_count()):
+		while panel.current_detail_page() < page:
+			if not _press_detail(SelectionActions.PAGE_NEXT):
+				return null
+		var slot := _slot_with_action(panel._detail_slots, action_id)
+		if slot != null:
+			return slot
+	return null
+
+
 func test_the_build_grid_opens_on_page_one() -> void:
 	_open_build(4)
 	assert_eq(panel.current_detail_page(), 0)
-	assert_eq(panel.detail_page_count(), 2, "19 buildings do not fit 12 slots")
+	assert_true(panel.detail_page_count() >= 2,
+			"the age-4 roster does not fit 12 slots, which is why paging exists")
 	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV),
 			"there is nothing before page 1")
 	assert_not_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT))
@@ -282,27 +298,35 @@ func test_the_back_arrow_returns_to_page_one() -> void:
 	assert_eq(panel.current_detail_page(), 0)
 
 
-func test_a_building_on_page_two_can_actually_be_placed() -> void:
+func test_a_building_past_the_first_page_can_actually_be_placed() -> void:
 	# The whole point: before paging, the buildings past slot 12 were unreachable.
+	# The wonder is the LAST thing in the (age, name) sort at age 4, so it is on
+	# whichever page is last -- which is the case that matters and the one that moves
+	# whenever the roster grows.
 	var placed: Array = []
 	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
 
 	_open_build(4)
-	_press_detail(SelectionActions.PAGE_NEXT)
-	var wonder := _slot_with_action(panel._detail_slots, &"place:building.wonder")
-	assert_not_null(wonder, "the wonder is on page 2 and is on screen")
-	panel._on_detail_pressed(wonder.action)
+	var wonder := _find_across_pages(&"place:building.wonder")
+	assert_not_null(wonder, "the wonder is reachable by paging")
+	assert_true(panel.current_detail_page() > 0, "and it is not on page 1")
+	if wonder != null:
+		panel._on_detail_pressed(wonder.action)
 	assert_eq(placed, [&"building.wonder"])
 
 
-func test_placing_from_page_two_stays_on_page_two() -> void:
+func test_placing_from_a_later_page_stays_on_that_page() -> void:
 	# Placement leaves build mode open on purpose (coming back for a second house
 	# should not need Build tapped again); the page has to survive with it, or
 	# every placement would bounce the player back to page 1.
 	_open_build(4)
-	_press_detail(SelectionActions.PAGE_NEXT)
-	_press_detail(&"place:building.wonder")
-	assert_eq(panel.current_detail_page(), 1)
+	var wonder := _find_across_pages(&"place:building.wonder")
+	assert_not_null(wonder)
+	var page := panel.current_detail_page()
+	assert_true(page > 0, "on a page that is not the first")
+	if wonder != null:
+		panel._on_detail_pressed(wonder.action)
+	assert_eq(panel.current_detail_page(), page)
 
 
 func test_reopening_build_starts_at_page_one_again() -> void:
@@ -385,9 +409,10 @@ func test_a_portrait_slot_is_captioned_with_its_name() -> void:
 	assert_eq(_caption_of(panel._detail_slots, &"place:building.house"), "House")
 	assert_eq(_caption_of(panel._detail_slots, &"place:building.town_center"), "Town Center")
 
-	# The wonder is an age-4 building, so it is on page 2 -- captions have to
-	# survive a page turn, since the slots are reused in place rather than rebuilt.
-	_press_detail(SelectionActions.PAGE_NEXT)
+	# The wonder is last in the age-4 sort, so it is on the last page -- captions
+	# have to survive a page turn, since the slots are reused in place rather than
+	# rebuilt.
+	assert_not_null(_find_across_pages(&"place:building.wonder"))
 	assert_eq(_caption_of(panel._detail_slots, &"place:building.wonder"), "Wonder")
 
 

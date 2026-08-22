@@ -41,6 +41,13 @@ const ICONS := {
 	&"upgrade": "hud_techtree.png",
 	&"destroy": "act_destroy.png",
 	&"garrison": "act_garrison.png",
+	# A GATE'S TWO STATES SHARE THE ENTER/EXIT PAIR, which is the nearest thing the
+	# pack has to a door -- and it is the same "nearest existing icon" call the three
+	# above make. It also puts PLAN.md 13.2 item 4b to some use: that open item asks
+	# whether act_enter/act_garrison and act_exit/act_leave are two pairs covering one
+	# concept each, and a gate is a second real consumer of one half of them.
+	&"enter": "act_enter.png",
+	&"exit": "act_exit.png",
 }
 
 ## The two page-navigation slots. They are real HudActions in the grid rather
@@ -86,7 +93,7 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 		])
 
 	if GameDataRegistry.building(def_id) != null:
-		return _capped(_building_actions(def_id, age))
+		return _capped(_building_actions(def_id, age, facts))
 	return _capped(_unit_actions(def_id))
 
 
@@ -128,11 +135,23 @@ static func details_for(action_id: StringName, facts: Dictionary,
 ## disabled Crossbowman in age 2 would be a promise about a future age, and the
 ## tech tree (9.4) is where that belongs. It also keeps the row inside its 8
 ## slots: a castle trains four things and an age-4 dock four more.
-static func _building_actions(def_id: StringName, age: int = 1) -> Array[HudAction]:
+static func _building_actions(def_id: StringName, age: int = 1,
+		facts: Dictionary = {}) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var bd: BuildingDef = GameDataRegistry.building(def_id)
 	if bd == null:
 		return out
+
+	# A GATE OPENS AND SHUTS (PLAN.md 5.8), and the button says which of the two it is
+	# about to do rather than being labelled "gate". Read off the snapshot, so a gate
+	# somebody else's command just locked reads correctly the next tick.
+	#
+	# ONLY WHEN COMPLETE: `ToggleGateCommand` refuses a gate that is still a
+	# foundation, and offering the button anyway would be a button that does nothing.
+	if bd.is_gate and int(facts.get("phase", -1)) == SimBuilding.Phase.COMPLETE:
+		var locked := bool(facts.get("gate_locked", false))
+		out.append(HudAction.new(&"gate", "Open Gate" if locked else "Close Gate",
+				ICONS.get(&"exit" if locked else &"enter", ""), true))
 
 	for unit_def_id in bd.trains:
 		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
@@ -203,6 +222,13 @@ static func _buildable_details(age: int = 1) -> Array[HudAction]:
 	for id in GameDataRegistry.building_ids():
 		var bd: BuildingDef = GameDataRegistry.building(id)
 		if bd == null or bd.age_required > age:
+			continue
+		# `buildable: false` is "the system may place this, the menu may not offer
+		# it" (PLAN.md 5.8). Only walls use it: a tier is four defs and two of them
+		# -- the medium and long segments -- are chosen by the drag rather than by a
+		# player, so without this filter the grid would carry all twelve wall pieces
+		# and each of the eight extras would place one fixed-length block.
+		if not bd.buildable:
 			continue
 		matching.append(bd)
 

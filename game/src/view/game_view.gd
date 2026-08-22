@@ -243,6 +243,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# Iso.sim_facing_to_sprite, never the raw number -- see its header.
 			view.play_anim(StringName(entry["anim"]),
 					Iso.sim_facing_to_sprite(int(entry.get("facing", 0))))
+		elif entry.has("phase"):
+			# A BUILDING, AND SINCE WALLS IT CAN BE TURNED (PLAN.md 5.8). Buildings
+			# send no `anim` -- they have one, `static` -- so nothing here used to
+			# call `play_anim` for them at all, and their `EntityView` sat on facing 0
+			# forever. That was right while every building atlas was `directions: 1`;
+			# a wall is baked at eight, and a wall drawn at facing 0 whichever way it
+			# was dragged is a wall lying across half its own footprint.
+			#
+			# Through the SAME conversion a unit uses, so there is still exactly one
+			# place that knows the sim and sprite tables run opposite ways.
+			view.play_anim(AtlasEntry.STATIC_ANIM,
+					Iso.sim_facing_to_sprite(int(entry.get("facing", 0))))
 
 		_facts[id] = {
 			"id": id,
@@ -281,6 +293,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# can say so -- hp arrives as 0/0, which SelectionPanel already reads as
 			# "no health bar" without needing to know why.
 			"remembered": bool(entry.get("remembered", false)),
+			# Which way a wall piece is turned, and whether a gate is shut (5.8).
+			# `facing` is here as well as being fed to the view above because
+			# `_footprint_of` derives a transposed footprint from it, and the panel
+			# needs `gate_locked` to label the button Open or Close.
+			"facing": int(entry.get("facing", 0)),
+			"gate_locked": bool(entry.get("gate_locked", false)),
 		}
 		# A corpse or rubble is unselectable (4.7, 5.5) even if it was selected
 		# the tick it died -- `alive` wins over a selection built before this.
@@ -767,6 +785,22 @@ func _footprint_of(entry: Dictionary) -> Vector2i:
 	var def_id := StringName(entry.get("def_id", &""))
 	var building := GameDataRegistry.building(def_id)
 	if building != null:
+		# A NORTH-SOUTH WALL IS ITS DEF'S FOOTPRINT TRANSPOSED (PLAN.md 5.8), and it
+		# is DERIVED here rather than sent. Sending it would be the first building
+		# field 12.1f took OFF the wire coming straight back, and it does not need to:
+		# `facing` is already there and already says which axis the piece lies on.
+		# Without this a north-south wall hit-tests, occludes and blips as though it
+		# lay east-west -- nine tiles in the wrong direction.
+		#
+		# FACING IS THE FLAG, with no "is this a wall" test beside it, because
+		# `PlaceWallCommand` is the only thing in the game that sets a building's
+		# facing at all: every other building is baked at one direction and stays at 0
+		# forever (SimBuilding's header). The square-footprint guard costs nothing --
+		# a square transposes to itself -- and is there so that giving some future
+		# building a facing cannot silently rotate its footprint too.
+		if building.footprint.x != building.footprint.y \
+				and int(entry.get("facing", 0)) == WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y]:
+			return Vector2i(building.footprint.y, building.footprint.x)
 		return building.footprint
 	var res := GameDataRegistry.resource_def(def_id)
 	if res != null:

@@ -167,11 +167,22 @@ func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
 ##
 ## `force` skips the placement check for 2.6's starting town centres, which are
 ## put down before any legality rules apply to the player.
+## `facing` is in the SIM convention and matters only to walls (SimBuilding's
+## header): every other building is baked at one direction and stays at 0. It does
+## NOT rotate the footprint -- `PlaceWallCommand` transposes that itself, because a
+## footprint is grid arithmetic and a facing is which of eight sprites to draw, and
+## conflating them would mean a diagonal wall silently claiming an axis-aligned box.
 func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 		phase: SimBuilding.Phase = SimBuilding.Phase.COMPLETE,
-		force := false) -> SimBuilding:
+		force := false, footprint_override: Vector2i = Vector2i.ZERO,
+		facing: int = 0) -> SimBuilding:
 	var d: BuildingDef = building_def(def_id)
 	var footprint := d.footprint if d != null else Vector2i.ONE
+	# A WALL RUNNING NORTH-SOUTH IS ITS DEF'S FOOTPRINT TRANSPOSED. Passed in rather
+	# than derived from `facing` here, so this function stays ignorant of what a wall
+	# is: the caller that decided the axis is the caller that knows.
+	if footprint_override != Vector2i.ZERO:
+		footprint = footprint_override
 	var rect := SimMap.footprint_rect(origin, footprint)
 
 	if not force and not map.can_place_building(rect):
@@ -192,8 +203,10 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 	b.footprint = footprint
 	b.pos = SimBuilding.centre_of(origin, footprint)
 	b.phase = phase
+	b.facing = facing
 
 	if d != null:
+		b.is_gate = d.is_gate
 		b.max_hp = d.hp
 		b.vision_range = d.los
 		b.provides_pop = d.provides_pop
@@ -215,12 +228,39 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 
 	entities[b.id] = b
 	spatial.insert(b.id, b.tile())
-	var blocks := d == null or d.blocks_movement
+	# THROUGH `blocks_now()`, not off the def directly. A gate is placed OPEN (see
+	# SimBuilding.gate_locked), so its footprint is claimed without being closed --
+	# which also means nobody standing in the doorway is evicted, exactly as with a
+	# field. Locking it later is what shoves them out, in `set_gate_locked()`.
+	var blocks := b.blocks_now(d == null or d.blocks_movement)
 	map.set_occupied(rect, b.id, blocks)
 	if blocks:
 		_evict_from_footprint(rect)
 	_occupancy_changed(rect)
 	return b
+
+
+## Open or shut a gate, and move the movement grid with it (PLAN.md 5.8).
+##
+## The whole mechanism, and it is three lines because `SimMap.set_occupied` already
+## takes a `blocks` flag -- the one a field uses to be claimed and walkable at once.
+## A gate is the only thing in the game that changes its answer mid-match.
+##
+## LOCKING EVICTS WHOEVER IS IN THE DOORWAY, for the reason `_evict_from_footprint`
+## records at length: a unit inside a blocked cell is a unit `AStarGrid2D` will not
+## plan a route out of, so it stands there for the rest of the match. A gate swinging
+## shut on a villager has to push them clear, and which side it pushes them to is
+## whatever the fixed ring scan finds first -- deterministic, and not necessarily the
+## side they were heading for.
+func set_gate_locked(b: SimBuilding, locked: bool) -> void:
+	b.gate_locked = locked
+	var d: BuildingDef = building_def(b.def_id)
+	var rect := b.footprint_rect()
+	var blocks := b.blocks_now(d == null or d.blocks_movement)
+	map.set_occupied(rect, b.id, blocks)
+	if blocks:
+		_evict_from_footprint(rect)
+	_occupancy_changed(rect)
 
 
 ## Nothing may be left standing INSIDE ground that has just become solid.
@@ -650,8 +690,14 @@ func state_hash() -> int:
 			# `gather_amount` is a field's crop, depleted at runtime exactly as a
 			# tree's is -- two clients whose villagers farmed at different rates
 			# would otherwise hash identically until one field ran out first.
+			# `gate_locked` is the only building field a player can flip at will
+			# (5.8), and it moves the MOVEMENT GRID -- two hosts disagreeing about
+			# whether a doorway is shut would route the same army two different ways
+			# and diverge in position a tick later, which `pos` reports long after the
+			# cause. `facing` rides along for the reason `SimUnit.facing` does: it is
+			# placement state that nothing recomputes, so a wrong one stays wrong.
 			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left,
-					e.gather_amount])
+					e.gather_amount, e.facing, e.gate_locked])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

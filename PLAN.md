@@ -1044,6 +1044,136 @@ all twenty. What it deliberately does not do is stop an already-paid-for unit fr
 | 5.5 | ✅ Destruction → `DESTROYED` phase + `free_footprint()`, so the ground is buildable the instant it falls. Rubble stays opaque forever (no damaged art tier) | `[MVP]` |
 | 5.6 | ✅ Building health on the shared dot | `[MVP]` |
 | 5.7 | Full building roster — 23 buildings. Low code effort, ~70 bakes behind it | |
+| 5.8 | ✅ **DONE 2026-08-22** — **Walls and gates**: drag placement, automatic short/medium/long segment choice, two orientations, and a gate that opens and shuts. Three tiers, twelve defs, six menu entries. See §5.8 | |
+
+#### 5.8 Walls and gates — ✅ built 2026-08-22
+
+The largest block of finished art the game could not reach: 22 wall pieces baked and
+staged, and no way to put one on the map. Four things stood between them and the build
+menu — drag placement, automatic segment choice, an orientation, and a gate that lets
+your own people through — and all four are here.
+
+**The art was staged but NOT declared**, which is worth recording because two documents
+said otherwise. `buildings.json` claimed "all 24 wall pieces are baked and declared in
+visuals.json"; only the tower's rubble and foundation were. Nothing failed and nothing
+rendered, because an undeclared id is not an error — it resolves to the magenta
+placeholder, and no building def pointed at one to make it appear. The lesson is the
+same one the staged-atlas gotcha teaches: *staged* and *wired* are different states, and
+only a def reaching for an id proves the second one.
+
+**Every civ agrees on the segment lengths, and that is the whole reason this is
+tractable.** Measured the usual way — `<Obstruction><Static>` at 4 units per tile,
+rounded up, maxed per axis across each tier's ages:
+
+| piece | germ | brit | achae | rome | tiles |
+|---|---|---|---|---|---|
+| short | 12×8 | 12×6 | 12×6 | 12×8 | **[3, 2]** |
+| medium | 24×8 | 24×6 | 24×6 | 24×8 | **[6, 2]** |
+| long | 36×8 | 36×6 | 36×6 | 36×8 | **[9, 2]** |
+| gate | 37×6.5 | 36×7 | 36×6 | 36×6 | **[9, 2]** |
+
+3 / 6 / 9 tiles long and 2 deep, universally — so one segmentation function is correct
+for all three tiers, and a tier is nothing but a skin and a price. **The gate is forced
+to a long segment's [9, 2]** even though the germ one measures 9.25 tiles: a gate has to
+be substitutable for a long piece or it cannot sit in a run without leaving a gap (0
+A.D. makes the gate an *upgrade* of a long wall for exactly this reason), and the cost is
+a half-tile of art overhang — the same deliberate disagreement the house's roof makes.
+
+**Three tiers, six menu entries, twelve defs.** The project owner's call: all three stay
+available at age 4 rather than one re-skinning the other two away, so wood (age 2),
+stone (3) and reinforced (4) are three ladders and not one. The tier's SHORT segment
+carries `wall_lengths` and is the WALL entry — the drag reads that list to decide what
+to lay — the gate is placed on its own, and medium and long are `buildable: false`, a
+new flag meaning *the system may place this, the menu may not offer it*. Without it the
+build grid would carry all twelve pieces and eight of them would each place one
+fixed-length block, which is the outcome walls were held back over.
+
+**`WallPlan` is one function with two callers**, and that is the design rather than a
+convenience: the ghost draws what it returns and `PlaceWallCommand` places what it
+returns. Two implementations of "which pieces fill this line" would differ by a segment
+somewhere, and the player would only ever find out after letting go. It lives in
+`src/sim/` because the server is what lays the wall down; it is integer arithmetic over
+tiles, so the boundary rule is satisfied and the view reading it is the allowed
+direction.
+
+- **A sloppy diagonal becomes a straight wall.** The drag snaps to whichever axis it
+  mostly ran along — the finger is on a phone and the grid is isometric, so nobody drags
+  a clean line, and refusing an imperfect one would make the feature unusable on the
+  device it is for.
+- **The run is rounded to a whole number of short segments** and filled longest-first,
+  which on a multiple of 3 always fills exactly: 12 → 9+3, 15 → 9+6, 18 → 9+9. Longest
+  first because fewer pieces is fewer seams to attack, fewer vision circles and fewer
+  snapshot entries.
+- **Always laid in the +axis direction from the lower end**, so dragging backwards
+  describes the same wall and the ghost does not reshuffle when a drag crosses its own
+  anchor. The perpendicular coordinate comes from the anchor, so the wall stays on the
+  row the drag started on rather than sliding onto the row it ended on.
+- **A tap is one short segment.** A drag of zero length still means "put a wall here".
+
+**Only two of the eight baked directions are reachable**, and that is the footprint
+system rather than the art: a [9, 2] box rotated 45° does not tile a square grid. A
+north-south wall is its def's footprint *transposed*, which is the whole of what "8
+orientations" reduces to. `SimBuilding` gained a `facing` for it — buildings had none,
+and its header says why every other one is baked at `directions: 1` and stays at 0
+forever. **The view DERIVES the transposed footprint from `facing`** rather than being
+sent it: sending it would be the first field 12.1f took off the wire coming straight
+back, and `facing` already says which axis the piece lies on.
+
+**A run is partial by design.** Blocked tiles are skipped, and when the money runs out
+the last piece is **downgraded** to whatever the tier still affords before the run ends.
+That downgrade was not in the first version and the suite is what found it: a player with
+two shorts' worth of wood who drags thirty tiles cannot afford the leading nine-tile
+piece, and was getting *nothing* — with wall they could plainly pay for on the table. It
+buys the largest affordable piece that fits the segment's own span, so two shorts' worth
+of wood becomes one medium: same ground, same money, one fewer seam.
+
+**Builders are spread round-robin across the segments**, not all queued on the first.
+Five villagers on the first of twelve foundations raise it in a fifth of the time and
+then idle beside eleven untouched ones — the same "a foundation nobody returns to"
+pattern that needed a standing order in the PlayTest AI.
+
+##### Gates
+
+**A gate starts OPEN and can be locked** (project owner, 2026-08-22). The alternative was
+closed-by-default: a wall that defends the moment it is finished, at the price of
+stranding your own villagers behind it before you have noticed there is a gate to open.
+Open never strands anybody, and the price is that a new wall does nothing until somebody
+shuts it.
+
+The mechanism is three lines because `SimMap.set_occupied` already takes a `blocks`
+flag — the one that makes a field claimed and walkable at once. `SimBuilding.blocks_now()`
+is the whole rule. **Locking evicts whoever is in the doorway**, for the reason
+`_evict_from_footprint` records at length: a unit inside a blocked cell is a unit
+`AStarGrid2D` will not plan a route *out* of, and a gate swinging shut is the only thing
+in the game that can create that situation on purpose.
+
+`ToggleGateCommand` **names the target state rather than meaning "flip"**. A toggle
+depends on when it lands: on a client the second tap goes out before the first one's
+snapshot returns, so a double tap would be as likely to shut a gate as open it.
+
+**AN OPEN GATE IS OPEN TO EVERYONE**, the besieging army included. Per-player passability
+is the real fix and needs a pathfinding grid per player — `PathService` has exactly one
+`AStarGrid2D` — so it is deliberately not attempted. What exists is 0 A.D.'s own model
+("can be locked to prevent access") and it is one honest step short of AoE2's
+allies-only gate.
+
+**`gate_locked` and `facing` are both in `state_hash()`.** The lock moves the *movement
+grid*, so two hosts disagreeing about a doorway would route the same army two different
+ways and diverge in position a tick later — which `pos` reports long after the cause.
+
+##### Not done, and why
+
+- **No wall tower**, and none is needed: the roster's `Pers/wall_tower` and
+  `rome/wall_tower` are exactly what `vis.guard_tower` is baked from, so
+  `building.guard_tower` already *is* the wall turret. 0 A.D. auto-places towers at wall
+  corners, which is a nicety that wants the wall system settled first.
+- **No garrison.** 0 A.D.'s medium wall declares eight turret points; ours hold nobody.
+  Garrison is 4.8 and unbuilt, and a wall is the wrong place to introduce it.
+- **No diagonal walls.** Six of the eight baked directions are unused. It needs a
+  footprint model that is not a box.
+- **The Athenian bakes are unused** (`vis.wall_short/medium/long/gate`, no age suffix) —
+  they predate the age ladder and the roster does not name Athens for walls. Left staged;
+  they are the obvious stand-in for a fourth tier.
 
 ### Phase 6 — Resources & wildlife
 
@@ -1435,7 +1565,7 @@ it is baked.)*
 | 8.2b The minimap's four corner pages | Medium | Low-medium | ✅ **DONE** 2026-08-21 — market working, chat and tech tree as wireframes, settings absorbed the pause menu — §8.2b |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | 9.x Ages & tech | High — the age axis now carries what factions would have | High: four age skins of every building | Batch later |
-| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | **NEXT.** The largest block of finished art the game cannot reach: 24 baked, declared, unbuildable pieces — and the only remaining high-impact row with no art dependency. See §15 |
+| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | ✅ **DONE** 2026-08-22 — 22 staged pieces reached the build menu; the art turned out to be staged but never *declared*. See §5.8 |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
 
 **Field yield, balanced against Age of Empires 2026-08-17.** It was 0/100/250/400 food per 100
@@ -1591,8 +1721,9 @@ Live risks only. Retired ones are in `b904b76`.
 3. ✅ **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically.
 4. ✅ **Multiplayer** (§12.1), the whole block a–g, validated on hardware.
 5. ✅ **UI batch, 2026-08-21.** PLAY split off to a campaign placeholder (§12.3); the lobby's colour cycle became a picker (§12.1c); the age header's pause button retired into the SETTINGS corner button; and the minimap's four corner buttons became real — a working market, and chat and tech-tree wireframes (§8.2b).
-6. **Walls.** The largest block of finished art the game cannot reach: 24 pieces baked and declared in `visuals.json`, unbuildable, because a wall needs drag placement, segment-length choice, 8 orientations and gate pass-through. The only remaining high-impact candidate in §12 with **no art dependency** — every other one is gated on bakes (5.7 needs ~70, 9.6 needs four age skins of every building, 13.x needs rigging). It also changes how the game *plays* before the unit-speed balancing pass in `BUGS.md`, which is the right order: chokepoints and defence alter what "too fast" even means.
-7. **Then the rest of 4.13** — the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing, so ranged combat currently resolves with no visible cause). Same "declared art the game cannot reach" complaint as the walls, one size smaller.
+6. ✅ **Walls** (5.8, 2026-08-22). Three tiers, drag placement, two orientations and a lockable gate. Found on the way: the wall art was staged but never **declared** in `visuals.json`, despite two documents saying it was — and the suite found that a run whose leading long piece was unaffordable placed *nothing*, which is why the last piece now downgrades.
+7. **The rest of 4.13** — the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing, so ranged combat currently resolves with no visible cause). Same "staged art the game cannot reach" complaint the walls had, one size smaller.
+8. **Then the balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means.
 
 **Retired from this list, because the architecture answered it rather than the work:** 12.1b's
 *desync detection*. `Net` has no `SimWorld` on a client — it says so outright — and `state_hash()`

@@ -78,6 +78,26 @@ var _idle_cycle_id: int = 0
 var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
 
+## WALL DRAGS (PLAN.md 5.8), which use the same one-finger gesture to mean something
+## else: for an ordinary building a drag MOVES the ghost, and for a wall it stretches
+## a run between where the finger went down and where it is now.
+##
+## `_wall_anchor` is the tile the finger landed on, `Vector2i(-1, -1)` when no run is
+## in progress. Kept rather than re-derived because the anchor is the one point in the
+## gesture that no later event carries -- an edge-pan moves the ground under a finger
+## that has not moved, and the anchor has to stay on the tile it was pressed on.
+var _wall_anchor: Vector2i = Vector2i(-1, -1)
+
+## The last planned run, so `_on_placement_released` submits exactly what the ghost
+## was showing rather than re-planning against a tile the finger has since left.
+var _wall_plan: Dictionary = {}
+
+## "12 segments, 144 wood" under the drag. A wall's cost depends on how it segments,
+## which a player cannot count under their own thumb -- and `PlaceWallCommand` places
+## what it can afford and stops, so without this the run simply comes out shorter than
+## the ghost with no explanation.
+var _wall_readout: Label
+
 ## Where the placing finger last was, in screen pixels. Kept because an edge-pan moves
 ## the ground under a finger that is not itself moving, so the ghost has to be
 ## re-previewed at a position no incoming event is carrying.
@@ -329,6 +349,19 @@ func _build_hud() -> void:
 	_cancel_build.visible = false
 	_cancel_build.pressed.connect(_exit_placement)
 	hud.add_child(_cancel_build)
+
+	# Directly above CANCEL BUILD, in the same gap between the build grid and the
+	# minimap -- the only part of the bottom edge free while placing.
+	_wall_readout = Label.new()
+	_wall_readout.add_theme_font_size_override("font_size", 20)
+	_wall_readout.add_theme_color_override("font_color", HudStyle.GOLD)
+	_wall_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wall_readout.custom_minimum_size = Vector2(280.0, 0.0)
+	_wall_readout.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_wall_readout.position = Vector2(-512.0, -156.0)
+	_wall_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wall_readout.visible = false
+	hud.add_child(_wall_readout)
 
 	# Phase 9.1's age indicator. Compacted to the mockup's 180x86 at the top
 	# centre -- it was 240 wide when it carried a title and a straight progress
@@ -917,9 +950,19 @@ func _exit_placement() -> void:
 	_placing_def_id = &""
 	_camera.set_locked(false)
 	_ghost.visible = false
+	_wall_anchor = Vector2i(-1, -1)
+	_wall_plan = {}
 	if _cancel_build != null:
 		_cancel_build.visible = false
+	if _wall_readout != null:
+		_wall_readout.visible = false
 	_refresh_panel()
+
+
+## Whether the thing being placed is a wall tier rather than one building.
+func _placing_a_wall() -> bool:
+	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
+	return bd != null and bd.is_wall_run()
 
 
 func _on_placement_pressed(screen_pos: Vector2) -> void:
@@ -927,6 +970,11 @@ func _on_placement_pressed(screen_pos: Vector2) -> void:
 		return
 	# A new finger starts DISARMED: see `_track_edge_push`.
 	_edge_armed = false
+	# THE FINGER GOING DOWN IS WHAT ANCHORS A WALL RUN. Set before the preview, so
+	# the first frame of the drag already has both ends -- a run anchored on the frame
+	# after would flash a single segment at the origin.
+	if _placing_a_wall():
+		_wall_anchor = _tile_under(screen_pos)
 	_track_edge_push(screen_pos)
 	_preview_placement(screen_pos)
 
@@ -980,6 +1028,11 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 	# The finger is up, so the map stops here -- including on a refused drop, which
 	# stays in build mode and would otherwise keep sliding with nothing driving it.
 	_camera.edge_push = Vector2.ZERO
+
+	if _placing_a_wall():
+		_release_wall(screen_pos)
+		return
+
 	var result := _preview_placement(screen_pos)
 	if result.is_empty():
 		return
@@ -1028,7 +1081,139 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 ## validates every placement from either side, so the advisory path being wrong costs a
 ## refusal and a toast, never a divergence. See `PlacementAdvice` for where it is
 ## deliberately looser and which way it errs.
+## The tile under a screen point. One place, because the wall drag needs it for its
+## anchor and `_preview_placement` needs it for the ghost, and two copies of the
+## canvas-transform inverse is two chances to use the wrong one.
+func _tile_under(screen_pos: Vector2) -> Vector2i:
+	var local: Vector2 = _view.get_global_transform_with_canvas().affine_inverse() * screen_pos
+	return Iso.tile_at(local)
+
+
+# ── wall runs (PLAN.md 5.8) ─────────────────────────────────────────────────
+
+## Plan the run from the anchor to the finger, draw every segment, and say what it
+## costs. Called from press, drag, hover and release, so all four agree.
+##
+## PLANNED BY `WallPlan`, the same function `PlaceWallCommand` will use on the server.
+## That is the whole reason the segmentation lives in `src/sim/`: a ghost drawn from
+## one implementation and a wall built from another would differ by a segment
+## somewhere, and the player would only ever see it after letting go.
+##
+## Legality is per segment and ADVISORY, exactly as for a single building -- a host
+## asks its own world, a client asks `PlacementAdvice`. What it cannot show is the
+## budget running out mid-run, because that depends on the order the server pays in;
+## the readout gives the total instead.
+func _preview_wall(screen_pos: Vector2) -> Dictionary:
+	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
+	if bd == null:
+		_exit_placement()
+		return {}
+
+	var head := _tile_under(screen_pos)
+	# A hover before the finger has ever gone down has no anchor, so the run is the
+	# single segment under the cursor -- which is also what a tap-and-release places.
+	var anchor := _wall_anchor if _wall_anchor != Vector2i(-1, -1) else head
+
+	var lengths := WallPlan.lengths_of(bd.wall_lengths, GameDataRegistry.building)
+	_wall_plan = WallPlan.plan(anchor, head, lengths)
+	var segments: Array = _wall_plan.get("segments", [])
+
+	var me := Net.local_player_id()
+	var host := Net.host()
+	var facts := _view.all_facts() if host == null else {}
+	var cost: Dictionary = {}
+	var entries: Array[Dictionary] = []
+	var legal := 0
+
+	for seg in segments:
+		var origin: Vector2i = seg["origin"]
+		var footprint: Vector2i = seg["footprint"]
+		var rect := SimMap.footprint_rect(origin, footprint)
+		var ground := false
+		if host != null:
+			ground = (host.world as SimWorld).map.can_place_building(rect)
+		else:
+			ground = PlacementAdvice.can_place(_client_map, facts, rect)
+		if ground:
+			legal += 1
+			var seg_def: BuildingDef = GameDataRegistry.building(seg["def_id"])
+			if seg_def != null:
+				for kind in seg_def.cost:
+					cost[kind] = int(cost.get(kind, 0)) + int(seg_def.cost[kind])
+		entries.append({
+			"world": Iso.tile_to_world_f(Vector2(origin) + Vector2(footprint) * 0.5),
+			"footprint_m": Vector2(footprint) * Iso.METRES_PER_TILE,
+			"valid": ground,
+		})
+
+	# The node sits on the ANCHOR and every segment is drawn as an offset from it, so
+	# the run moves as one object rather than each box being positioned absolutely.
+	_ghost.position = Iso.tile_to_world_f(Vector2(anchor) + Vector2(0.5, 0.5))
+	_ghost.set_run(entries)
+	_ghost.visible = true
+
+	_wall_readout.text = _wall_cost_text(legal, segments.size(), cost)
+	_wall_readout.visible = true
+	return {"segments": segments.size(), "legal": legal, "cost": cost}
+
+
+## "9 segments — 108 wood", or what is missing. Reads the same stock the resource
+## counter shows, so a player can tell "the run is too long" from "I am short".
+func _wall_cost_text(legal: int, total: int, cost: Dictionary) -> String:
+	if total == 0:
+		return ""
+	var parts: Array[String] = []
+	# In the resource counter's order, so the two read the same way round -- the same
+	# reason the market page reorders its rows.
+	for kind in ResourceHUD.DISPLAY_ORDER:
+		if cost.has(kind):
+			parts.append("%d %s" % [int(cost[kind]), kind])
+	var head := "%d segment%s" % [legal, "" if legal == 1 else "s"]
+	if legal < total:
+		head += " of %d" % total
+	if parts.is_empty():
+		return head
+	var line := "%s — %s" % [head, ", ".join(parts)]
+	# AFFORDABILITY IS ADVISORY AND SAID PLAINLY. `PlaceWallCommand` places what it
+	# can and stops, so a player who drags past their budget gets a shorter wall; this
+	# is the only warning before that happens.
+	var stock := _view.stock_of(Net.local_player_id())
+	for kind in cost:
+		if int(stock.get(kind, 0)) < int(cost[kind]):
+			return "%s (short on %s)" % [line, kind]
+	return line
+
+
+## Let go of a wall drag: submit the run and leave build mode.
+##
+## Submitted even when some segments are illegal, because a run is partial by design
+## and the server skips what it cannot place -- refusing the whole thing because a
+## drag clipped one tree would be the opposite of what dragging means. Refused only
+## when NOTHING can be placed, which is the case worth a message.
+func _release_wall(screen_pos: Vector2) -> void:
+	var result := _preview_wall(screen_pos)
+	if result.is_empty():
+		return
+	if int(result.get("legal", 0)) == 0:
+		_toast.show_message("No room for a wall there")
+		get_tree().create_timer(0.3).timeout.connect(func() -> void:
+			if _placing_def_id != &"":
+				_ghost.visible = false)
+		return
+
+	# The selection that opened the build menu is who walks over, spread across the
+	# segments by the command -- see `PlaceWallCommand._send_builders`.
+	Net.submit_command(PlaceWallCommand.new(
+			Net.local_player_id(), _placing_def_id,
+			_wall_anchor if _wall_anchor != Vector2i(-1, -1) else _tile_under(screen_pos),
+			_tile_under(screen_pos), _view.movable_selection()))
+	_exit_placement()
+
+
 func _preview_placement(screen_pos: Vector2) -> Dictionary:
+	if _placing_a_wall():
+		return _preview_wall(screen_pos)
+
 	var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
 	if bd == null:
 		_exit_placement()
@@ -1067,6 +1252,22 @@ func _preview_placement(screen_pos: Vector2) -> Dictionary:
 
 	return {"origin": origin, "valid": valid, "can_afford": can_afford,
 			"placeable": placeable}
+
+
+## Open or shut the selected gate (PLAN.md 5.8).
+##
+## SENDS THE TARGET STATE, not "flip it" -- see `ToggleGateCommand`'s header for why
+## a toggle is the wrong shape for something that round-trips through a snapshot. The
+## state is read from the same facts the button's own label was drawn from, so the
+## button and the command can never disagree about which way it is about to go.
+func _toggle_selected_gate() -> void:
+	var id := _view.selection.primary()
+	if id == 0:
+		return
+	var facts := _view.facts_for(id)
+	var locked := bool(facts.get("gate_locked", false))
+	Net.submit_command(ToggleGateCommand.new(Net.local_player_id(), id, not locked))
+	_toast.show_message("Opening the gate" if locked else "Closing the gate")
 
 
 ## Why an adjacency-gated placement was refused, in the player's words. Built
@@ -1115,6 +1316,8 @@ func _on_action_requested(action_id: StringName) -> void:
 			# already attacks it, so a second targeting mode would be a parallel
 			# way to issue an order the map already accepts.
 			_toast.show_message("Tap an enemy to attack")
+		&"gate":
+			_toggle_selected_gate()
 
 
 ## The polite half of the population cap (PLAN.md 4.11). `TrainCommand.validate()`

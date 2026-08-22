@@ -70,6 +70,36 @@ var max_per_host_by_age: Array[int] = []
 ## been one -- 0 A.D.'s own fields are walked over.
 var blocks_movement: bool = true
 
+## WALLS (PLAN.md 5.8), and the three fields that make one.
+##
+## `wall_lengths` is what turns a building into a DRAG TOOL. It lists the segment
+## defs of one wall tier in ascending length order, including this def itself, and a
+## non-empty list is the flag: `WallPlan` reads it to decide what to lay along a
+## drag, and the build menu offers only the def that carries one. Length comes from
+## each named def's own `footprint.x` -- there is no separate length number to fall
+## out of step with the footprint it has to match.
+##
+## Empty for every ordinary building, which is placed one at a time.
+var wall_lengths: Array[StringName] = []
+
+## Whether the BUILD MENU may offer this. False for a wall's medium and long
+## segments: the wall system places them, a player never picks them, and without
+## this the grid would list all twelve wall pieces (see buildings.json).
+##
+## Deliberately NOT a substitute for `age_required` -- that gates by progress and is
+## enforced on the server as well, where this is only ever about what the menu draws.
+## `PlaceBuildingCommand` does not check it, because a segment placed by
+## `PlaceWallCommand` is a perfectly legal placement of a def the menu will not show.
+var buildable: bool = true
+
+## Whether this is a GATE: a wall piece that can be opened and closed.
+##
+## The mechanism is `SimBuilding.gate_locked` plus `blocks_now()`, and it is cheap
+## because `SimMap.set_occupied` already takes a `blocks` flag -- the same one that
+## makes a field walkable. What it is NOT is per-player passability: an OPEN gate is
+## open to everybody, including whoever is besieging it. See `ToggleGateCommand`.
+var is_gate: bool = false
+
 ## `amount: -1` in the JSON: this building's crop never runs out. A FIELD IS
 ## INEXHAUSTIBLE (project owner, 2026-08-17), which reverses the call recorded
 ## here before -- the balancing lever is the per-age YIELD below, not a total, and
@@ -140,6 +170,10 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.max_per_host_by_age = GameDefs.int_list(d.get("max_per_host_by_age", []))
 	b.blocks_movement = bool(d.get("blocks_movement", true))
 
+	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
+	b.buildable = bool(d.get("buildable", true))
+	b.is_gate = bool(d.get("is_gate", false))
+
 	var g: Dictionary = d.get("gather", {})
 	b.gather_kind = StringName(g.get("kind", ""))
 	b.gather_amount = int(g.get("amount", 0))
@@ -150,6 +184,11 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 
 func accepts_drop_off(kind: StringName) -> bool:
 	return drop_off.has(kind)
+
+
+## Whether a drag lays this down as a run of segments rather than placing one.
+func is_wall_run() -> bool:
+	return not wall_lengths.is_empty()
 
 
 ## Whether a villager can harvest this building at all -- true for a field and

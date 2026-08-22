@@ -99,14 +99,70 @@
     "off. The house's rubble moves from vis.rubble_3x3 to vis.rubble_4x4 here --",
     "it was on the 3x3 only because 4x4 had not been baked at 0.4.",
     "",
-    "WALLS AND GATES ARE DELIBERATELY ABSENT. All 24 wall pieces are baked and",
-    "declared in visuals.json, so the art is wired and testable, but a wall is",
-    "not an ordinary building: it needs drag-placement, automatic short/medium/",
-    "long segment choice, one of 8 orientations, and gate pass-through, none of",
-    "which the sim has. Declaring them as ordinary buildings would put twelve",
-    "entries in the villager's build menu that each place one fixed-orientation",
-    "3x2 block, which is worse than not offering them at all. They come back",
-    "with the wall system, not before.",
+    "WALLS AND GATES, added 2026-08-21 with the wall system (PLAN.md 5.8). They",
+    "were absent because a wall is not an ordinary building -- it needs drag",
+    "placement, automatic short/medium/long segment choice, an orientation, and a",
+    "gate that opens -- and declaring them as ordinary buildings would have put",
+    "twelve fixed-orientation blocks in the build menu. All four of those exist now.",
+    "The note that used to sit here also claimed the pieces were 'declared in",
+    "visuals.json', and they were not: only the tower's rubble and foundation were.",
+    "See visuals.json's own `_note_walls`.",
+    "",
+    "TWELVE DEFS, SIX MENU ENTRIES. Each tier is four defs -- short, medium, long,",
+    "gate -- and only two of the four are offered: the short segment carries",
+    "`wall_lengths` and is the WALL entry (the drag reads that list and lays down",
+    "whichever lengths fit), and the gate is placed on its own. Medium and long are",
+    "`buildable: false`, which is a new flag meaning 'the system may place this, the",
+    "menu may not offer it'. Without it the build grid would list all twelve.",
+    "",
+    "FOOTPRINTS, and this is the one pleasant surprise in the whole feature: every",
+    "civ 0 A.D. bakes a wall from agrees on the segment lengths. Measured the usual",
+    "way -- <Obstruction><Static> in 0 A.D. units at 4 per tile, rounded up, maxed",
+    "per axis across the tier's ages:",
+    "",
+    "                  germ      brit      achae     rome      tiles",
+    "  wall short      12x8      12x6      12x6      12x8      [3, 2]",
+    "  wall medium     24x8      24x6      24x6      24x8      [6, 2]",
+    "  wall long       36x8      36x6      36x6      36x8      [9, 2]",
+    "  wall gate       37x6.5    36x7      36x6      36x6      [9, 2]  see below",
+    "",
+    "So 3 / 6 / 9 tiles long and 2 deep, universally, and the tier is nothing but a",
+    "skin and a price. That is what makes one segmentation function correct for all",
+    "three tiers.",
+    "",
+    "THE GATE IS FORCED TO A LONG SEGMENT'S [9, 2] even though the germ one measures",
+    "9.25 tiles wide. A gate has to be substitutable for a long segment or it cannot",
+    "sit in a wall run without leaving a gap -- 0 A.D. makes the gate an UPGRADE of a",
+    "long wall for exactly this reason. The cost is a half-tile of art overhang, the",
+    "same deliberate art/gameplay disagreement the house's roof already makes.",
+    "",
+    "HP IS PER 3-TILE SEGMENT, so a long wall is worth exactly three short ones and",
+    "there is no cheapest-per-tile way to wall a town: wood 400, stone 600,",
+    "reinforced 900 for every 3 tiles. 0 A.D.'s own numbers (1000/2000/3000) are on a",
+    "different scale to ours -- our town centre is 2000 -- and a long wall tougher",
+    "than a town centre would be a wall nothing in the roster can break. Gates are",
+    "5/6 of the wall they replace: a door is the weak point, and it gives an attacker",
+    "something better to hit than 9 tiles of stone.",
+    "",
+    "COSTS FOLLOW THE ROSTER'S MATERIAL, which is the whole difference between the",
+    "tiers: wood walls cost wood ('wall Lumber'), stone and reinforced cost stone.",
+    "Per 3 tiles: wood 12, stone 15, reinforced 25. Gates add wood for the doors.",
+    "",
+    "`los: 3` on a segment is deliberately small. A wall you cannot see past is odd,",
+    "and a wall is also the cheapest possible tripwire -- but a 40-segment wall is 40",
+    "vision circles, and PLAN.md 14 already has a risk about vision being a tick cost",
+    "before it is a wire cost. Three tiles is 28 tiles a circle; a gate gets 5",
+    "because it is a gate you want to watch.",
+    "",
+    "NO GARRISON. 0 A.D. walls hold turrets (its medium wall declares eight turret",
+    "points) and ours hold nobody -- garrison is 4.8 and unbuilt, and a wall is the",
+    "wrong place to introduce it.",
+    "",
+    "THE WALL TOWER IS ALREADY HERE as `building.guard_tower`: the roster's",
+    "'Pers/wall_tower (Guard Tower)' and 'rome/wall_tower' are exactly what",
+    "vis.guard_tower is baked from. Nothing to add, and no wall-tower def -- 0 A.D.",
+    "auto-places towers at wall corners, which is a nicety that wants the wall system",
+    "settled first.",
     "",
     "TRAINS IS THE BUILDING'S WHOLE LIST, NOT ITS LIST FOR ONE AGE. An archery",
     "range trains archers from age 2 and crossbowmen from age 3, and that gate",
@@ -600,5 +656,284 @@
     "trains": [],
     "drop_off": [],
     "age_required": 4
+  },
+
+  "building.wall_wood_short": {
+    "name": "Palisade Wall",
+    "visual": "vis.wall_wood_short",
+    "visual_foundation": "vis.foundation_3x3_wall",
+    "visual_rubble": "vis.rubble_wall_short",
+
+    "hp": 400,
+    "footprint": [3, 2],
+    "los": 3,
+
+    "cost": { "wood": 12 },
+    "build_time_ticks": 120,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2,
+
+    "wall_lengths": ["building.wall_wood_short", "building.wall_wood_medium",
+                     "building.wall_wood_long"]
+  },
+
+  "building.wall_wood_medium": {
+    "name": "Palisade Wall",
+    "visual": "vis.wall_wood_medium",
+    "visual_foundation": "vis.foundation_6x3_wall",
+    "visual_rubble": "vis.rubble_wall_medium",
+
+    "hp": 800,
+    "footprint": [6, 2],
+    "los": 3,
+
+    "cost": { "wood": 24 },
+    "build_time_ticks": 240,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2,
+
+    "buildable": false
+  },
+
+  "building.wall_wood_long": {
+    "name": "Palisade Wall",
+    "visual": "vis.wall_wood_long",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 1200,
+    "footprint": [9, 2],
+    "los": 3,
+
+    "cost": { "wood": 36 },
+    "build_time_ticks": 360,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2,
+
+    "buildable": false
+  },
+
+  "building.wall_wood_gate": {
+    "name": "Palisade Gate",
+    "visual": "vis.wall_wood_gate",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 1000,
+    "footprint": [9, 2],
+    "los": 5,
+
+    "cost": { "wood": 50 },
+    "build_time_ticks": 300,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 2,
+
+    "is_gate": true
+  },
+
+  "building.wall_stone_short": {
+    "name": "Stone Wall",
+    "visual": "vis.wall_stone_short",
+    "visual_foundation": "vis.foundation_3x3_wall",
+    "visual_rubble": "vis.rubble_wall_short",
+
+    "hp": 600,
+    "footprint": [3, 2],
+    "los": 3,
+
+    "cost": { "stone": 15 },
+    "build_time_ticks": 150,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3,
+
+    "wall_lengths": ["building.wall_stone_short", "building.wall_stone_medium",
+                     "building.wall_stone_long"]
+  },
+
+  "building.wall_stone_medium": {
+    "name": "Stone Wall",
+    "visual": "vis.wall_stone_medium",
+    "visual_foundation": "vis.foundation_6x3_wall",
+    "visual_rubble": "vis.rubble_wall_medium",
+
+    "hp": 1200,
+    "footprint": [6, 2],
+    "los": 3,
+
+    "cost": { "stone": 30 },
+    "build_time_ticks": 300,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3,
+
+    "buildable": false
+  },
+
+  "building.wall_stone_long": {
+    "name": "Stone Wall",
+    "visual": "vis.wall_stone_long",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 1800,
+    "footprint": [9, 2],
+    "los": 3,
+
+    "cost": { "stone": 45 },
+    "build_time_ticks": 450,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3,
+
+    "buildable": false
+  },
+
+  "building.wall_stone_gate": {
+    "name": "Stone Gate",
+    "visual": "vis.wall_stone_gate",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 1500,
+    "footprint": [9, 2],
+    "los": 5,
+
+    "cost": { "wood": 30, "stone": 45 },
+    "build_time_ticks": 400,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 3,
+
+    "is_gate": true
+  },
+
+  "building.wall_reinforced_short": {
+    "name": "Reinforced Wall",
+    "visual": "vis.wall_reinforced_short",
+    "visual_foundation": "vis.foundation_3x3_wall",
+    "visual_rubble": "vis.rubble_wall_short",
+
+    "hp": 900,
+    "footprint": [3, 2],
+    "los": 3,
+
+    "cost": { "stone": 25 },
+    "build_time_ticks": 180,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 4,
+
+    "wall_lengths": ["building.wall_reinforced_short", "building.wall_reinforced_medium",
+                     "building.wall_reinforced_long"]
+  },
+
+  "building.wall_reinforced_medium": {
+    "name": "Reinforced Wall",
+    "visual": "vis.wall_reinforced_medium",
+    "visual_foundation": "vis.foundation_6x3_wall",
+    "visual_rubble": "vis.rubble_wall_medium",
+
+    "hp": 1800,
+    "footprint": [6, 2],
+    "los": 3,
+
+    "cost": { "stone": 50 },
+    "build_time_ticks": 360,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 4,
+
+    "buildable": false
+  },
+
+  "building.wall_reinforced_long": {
+    "name": "Reinforced Wall",
+    "visual": "vis.wall_reinforced_long",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 2700,
+    "footprint": [9, 2],
+    "los": 3,
+
+    "cost": { "stone": 75 },
+    "build_time_ticks": 540,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 4,
+
+    "buildable": false
+  },
+
+  "building.wall_reinforced_gate": {
+    "name": "Reinforced Gate",
+    "visual": "vis.wall_reinforced_gate",
+    "visual_foundation": "vis.foundation_9x3_wall",
+    "visual_rubble": "vis.rubble_wall_long",
+
+    "hp": 2250,
+    "footprint": [9, 2],
+    "los": 5,
+
+    "cost": { "wood": 40, "stone": 75 },
+    "build_time_ticks": 480,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 4,
+
+    "is_gate": true
   }
 }

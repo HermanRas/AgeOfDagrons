@@ -1,9 +1,11 @@
 ## A building (PLAN.md 6.2). Phase 2.3 -- enough to exist, be placed into the grid
 ## and be drawn; the behaviour that acts on it lands in phase 5.
 ##
-## Buildings have no facing. Placement snaps to the grid without rotation
-## (PLAN.md 5.1), which is why every building atlas is a single frame at
-## `directions = 1` (ASSET_MISSING.md 1.2) and why there is no `facing` field here.
+## BUILDINGS HAD NO FACING UNTIL WALLS (PLAN.md 5.8, 2026-08-21). Placement snaps to
+## the grid without rotation (5.1), which is why all nineteen ordinary buildings are
+## baked at `directions = 1` and stay at facing 0 forever. A wall is the exception
+## that forced the field: it has to run along whichever axis it was dragged on, so
+## the wall bakes carry `directions = 8` and the sim has to say which one.
 ##
 ## `pos` is inherited from SimEntity and is in sub-tile units like everything
 ## else, but for a building it means **the centre of its footprint** rather than
@@ -22,6 +24,32 @@ enum Phase { FOUNDATION, UNDER_CONSTRUCTION, COMPLETE, DESTROYED }
 
 var phase: Phase = Phase.FOUNDATION
 var footprint: Vector2i = Vector2i.ONE
+
+## Which way this building is turned, in the SIM's facing convention (the same
+## octant numbering `SimUnit.facing` uses -- 0 along +x, counting anticlockwise with
+## the y axis flipped). 0 for every building but a wall; see this file's header.
+##
+## In the sim convention rather than the sprite one on purpose, and `SimUnit`'s own
+## `facing` records why: `facing` is in `state_hash()`, so its meaning is frozen into
+## every recorded replay, and `Iso.sim_facing_to_sprite` is the single place that
+## knows the two tables run opposite ways.
+var facing: int = 0
+
+## GATES (PLAN.md 5.8). `is_gate` mirrors the def so the entity can answer for
+## itself -- `blocks_now()` is asked once per occupancy change and going back to the
+## registry for it would put a data lookup inside the movement grid.
+##
+## `gate_locked` STARTS FALSE, i.e. a new gate is OPEN, which was the project owner's
+## call (2026-08-21). The alternative was closed-by-default: a wall that defends the
+## moment it is finished, at the price of stranding your own villagers behind it
+## before you have noticed there is a gate to open. Open-by-default never strands
+## anybody, and the cost is that a wall does nothing until somebody locks it.
+##
+## OPEN IS OPEN TO EVERYONE, including the army outside. Per-player passability would
+## need a pathfinding grid per player -- `PathService` has exactly one
+## `AStarGrid2D` -- and that is the real fix, deliberately not attempted here.
+var is_gate: bool = false
+var gate_locked: bool = false
 
 var build_progress: int = 0
 var build_total: int = 0
@@ -139,6 +167,25 @@ func is_complete() -> bool:
 	return phase == Phase.COMPLETE
 
 
+## Whether this building's tiles are closed to movement RIGHT NOW.
+##
+## Two independent reasons a footprint might be walkable, and they are different
+## questions: `blocks` is the def's standing answer (false for a field, whose crop is
+## claimed ground rather than a wall), and an unlocked gate is a doorway in something
+## that otherwise blocks. A gate is the only thing in the game whose answer changes
+## during a match, which is why this is a function and the field is not.
+##
+## AN UNFINISHED GATE IS A HOLE, and that falls out rather than being special-cased:
+## `ToggleGateCommand` refuses a gate that is not complete, so a foundation gate is
+## still unlocked and still passable. A wall foundation, by contrast, blocks from the
+## moment it is placed -- which is the same rule as every other building and is what
+## lets a player wall a gap before the wall is built.
+func blocks_now(blocks: bool) -> bool:
+	if is_gate:
+		return blocks and gate_locked
+	return blocks
+
+
 ## Construction progress as 0..1, for the build bar. Guards `build_total == 0`,
 ## which is what a building placed straight into COMPLETE has (2.6's starting
 ## town centre) -- dividing by it would be a crash on the very first frame.
@@ -151,6 +198,14 @@ func build_fraction() -> float:
 func to_snapshot() -> Dictionary:
 	var d := super()
 	d["phase"] = int(phase)
+	# WALLS ONLY IN PRACTICE, sent for every building all the same. The wire cost is
+	# one int and one field NAME per shape per snapshot (12.1f's shape tables), and a
+	# field present on some buildings and absent on others would split every building
+	# into two shapes -- which costs more than the int it was saving.
+	d["facing"] = facing
+	# Whether the doorway is shut, which is the one piece of building state that
+	# changes without any construction or damage happening.
+	d["gate_locked"] = gate_locked
 	# Named for what it is rather than sharing SimUnit's `corpse_ticks_left`:
 	# GameView keys the fade off whichever of the two an entry carries, so the
 	# wire format stays honest about which kind of remains is counting down.
