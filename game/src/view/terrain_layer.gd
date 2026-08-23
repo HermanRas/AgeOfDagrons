@@ -83,9 +83,8 @@ const BLEND_ORDER := {
 ## what stops a one-tile isthmus of sand from having a hard seam down its spine.
 const BLEND_REACH := 0.58
 
-## The four EDGE-sharing neighbours, in mask-bit order. Diagonals are deliberately
-## absent: they share a corner, not an edge, and there is no edge for a ramp to start
-## from. In this projection these four are the NE, SE, SW and NW sides on screen.
+## The four EDGE-sharing neighbours, bits 0-3. In this projection these are the NE,
+## SE, SW and NW sides on screen.
 const EDGE_OFFSETS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
 ## Sign pair per edge for the diamond's own equation. A tile is |X| + |Y| <= 1 about
@@ -94,9 +93,26 @@ const EDGE_OFFSETS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i
 const EDGE_SIGNS := [Vector2(1.0, -1.0), Vector2(1.0, 1.0),
 		Vector2(-1.0, 1.0), Vector2(-1.0, -1.0)]
 
-## Every non-empty subset of four edges. Packed one per column of a strip texture, so
-## a terrain's fifteen transitions are one image and one TileSet source.
-const EDGE_COMBOS := 15
+## The four CORNER-sharing neighbours, bits 4-7, each between the two edges of the same
+## index and the next -- corner 0 sits between edge 0 (NE) and edge 1 (SE), which is the
+## diamond's right-hand point. On screen these four are straight up, right, down, left.
+##
+## THEY WERE LEFT OUT OF THE FIRST VERSION and the project owner reported the result in
+## one word: "the diagonals need work". A tile touching another terrain only at a VERTEX
+## got no blend at all, so every step of the staircase kept one hard point -- the soft
+## edges made those points MORE conspicuous, not less, because they were then the only
+## crisp thing left on the boundary.
+const CORNER_OFFSETS := [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
+
+## A corner's ramp peaks at one POINT rather than along a line, and `min` of its two
+## adjacent edge functions is exactly that: both reach 1 at their shared vertex and at
+## least one is negative everywhere else on the diamond.
+##
+## A corner bit is dropped whenever either adjacent edge carries the same terrain, since
+## an edge ramp is already opaque along its whole length INCLUDING both its endpoints.
+## That is what keeps the variant count at 47 rather than 256 -- the classic blob set,
+## arrived at here for the same reason it exists everywhere else.
+const CORNER_BIT := 4
 
 var _size: Vector2i = Vector2i.ZERO
 
@@ -104,6 +120,11 @@ var _size: Vector2i = Vector2i.ZERO
 ## and then its children, and the whole terrain subtree still comes before the entity
 ## pool, which is GameView's next sibling. So it covers the ground and nothing else.
 var _blend: TileMapLayer = null
+
+## canonical mask -> strip column, and its inverse. Built once for the class: the set
+## of 47 is a property of the geometry, not of any particular map.
+static var _mask_column: Dictionary = {}
+static var _mask_at_column: Array[int] = []
 
 
 ## Paint `terrain` (row-major, one byte per tile, values are SimMap.Terrain) over
@@ -137,6 +158,18 @@ func size() -> Vector2i:
 ## invisible to every other caller and there is nothing here to configure.
 func blend_layer() -> TileMapLayer:
 	return _blend
+
+
+## Which neighbours the transition at `tile` is reaching in from, as a canonical mask,
+## or 0 for none. A test seam: the column a cell points at is an index into a packed
+## strip and says nothing readable on its own.
+func blend_mask_at(tile: Vector2i) -> int:
+	if _blend == null:
+		return 0
+	var column := _blend.get_cell_atlas_coords(tile)
+	if column.x < 0 or column.x >= _mask_at_column.size():
+		return 0
+	return _mask_at_column[column.x]
 
 
 ## Godot's isometric TileMapLayer has its own idea of where tile (0, 0) sits, and
@@ -211,38 +244,86 @@ func _build_blend(size: Vector2i, terrain: PackedByteArray) -> void:
 			var bits := _edges_facing(size, terrain, t, over)
 			if bits == 0:
 				continue
-			_blend.set_cell(t, over, Vector2i(bits - 1, 0))
+			_blend.set_cell(t, over, Vector2i(int(_mask_column[bits]), 0))
 
 
 ## The neighbouring terrain that should reach over `mine`, or -1 for none. Highest
 ## `BLEND_ORDER` wins; ties cannot happen because a tie means the same terrain.
+## ALL EIGHT NEIGHBOURS, edges and corners alike. Scanning only the edges was the
+## other half of the diagonal bug: a tile whose sole higher-order neighbour met it at a
+## vertex was rejected here and never reached the mask at all, so the corner ramps
+## could not have helped it however correct they were.
 func _dominant_neighbour(size: Vector2i, terrain: PackedByteArray, t: Vector2i,
 		mine: int) -> int:
 	var best := -1
 	var best_order: int = BLEND_ORDER.get(mine, 0)
-	for offset in EDGE_OFFSETS:
-		var n: Vector2i = t + offset
-		if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
-			continue
-		var kind: int = terrain[n.y * size.x + n.x]
-		var order: int = BLEND_ORDER.get(kind, 0)
-		if order > best_order:
-			best_order = order
-			best = kind
+	for offsets in [EDGE_OFFSETS, CORNER_OFFSETS]:
+		for offset in offsets:
+			var n: Vector2i = t + offset
+			if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+				continue
+			var kind: int = terrain[n.y * size.x + n.x]
+			var order: int = BLEND_ORDER.get(kind, 0)
+			if order > best_order:
+				best_order = order
+				best = kind
 	return best
 
 
-## Bitmask of which of `t`'s four edges face `kind`, in EDGE_OFFSETS order.
+## Which of `t`'s eight neighbours are `kind`: bits 0-3 the edges, 4-7 the corners,
+## already canonicalised so a corner shadowed by one of its edges is dropped.
 func _edges_facing(size: Vector2i, terrain: PackedByteArray, t: Vector2i,
 		kind: int) -> int:
 	var bits := 0
 	for i in range(EDGE_OFFSETS.size()):
-		var n: Vector2i = t + EDGE_OFFSETS[i]
-		if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
-			continue
-		if int(terrain[n.y * size.x + n.x]) == kind:
+		if _terrain_at_is(size, terrain, t + EDGE_OFFSETS[i], kind):
 			bits |= 1 << i
-	return bits
+	for i in range(CORNER_OFFSETS.size()):
+		if _terrain_at_is(size, terrain, t + CORNER_OFFSETS[i], kind):
+			bits |= 1 << (CORNER_BIT + i)
+	return canonical_mask(bits)
+
+
+func _terrain_at_is(size: Vector2i, terrain: PackedByteArray, n: Vector2i,
+		kind: int) -> bool:
+	if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+		return false
+	return int(terrain[n.y * size.x + n.x]) == kind
+
+
+## `bits` with every corner dropped that one of its own edges already covers. Two masks
+## that canonicalise the same draw the same picture, which is what collapses 256
+## combinations to 47.
+static func canonical_mask(bits: int) -> int:
+	var out := bits & 0x0F
+	for c in range(CORNER_OFFSETS.size()):
+		if bits & (1 << (CORNER_BIT + c)) == 0:
+			continue
+		# The two edges either side of corner c. Either one being present makes the
+		# corner redundant -- an edge ramp is opaque right up to both its endpoints.
+		if bits & (1 << c) != 0 or bits & (1 << ((c + 1) % 4)) != 0:
+			continue
+		out |= 1 << (CORNER_BIT + c)
+	return out
+
+
+## Every distinct canonical mask, lowest first. Column `i` of a blend strip is
+## `_mask_at_column[i]`.
+static func _mask_table() -> Array[int]:
+	if not _mask_at_column.is_empty():
+		return _mask_at_column
+	var seen: Dictionary = {}
+	for bits in range(1 << 8):
+		seen[canonical_mask(bits)] = true
+	var keys: Array = seen.keys()
+	keys.sort()
+	for i in range(keys.size()):
+		var m := int(keys[i])
+		if m == 0:
+			continue          # nothing to draw; never gets a column
+		_mask_column[m] = _mask_at_column.size()
+		_mask_at_column.append(m)
+	return _mask_at_column
 
 
 ## A source per terrain that could ever reach over another -- i.e. every kind on the
@@ -277,17 +358,17 @@ func _blend_source_for(kind: int) -> TileSetAtlasSource:
 	var w := src.get_width()
 	var h := src.get_height()
 
-	var strip := Image.create(w * EDGE_COMBOS, h, false, Image.FORMAT_RGBA8)
+	var masks := _mask_table()
+	var strip := Image.create(w * masks.size(), h, false, Image.FORMAT_RGBA8)
 	strip.fill(Color(0.0, 0.0, 0.0, 0.0))
-	for bits in range(1, EDGE_COMBOS + 1):
-		strip.blit_rect(_masked(src, bits), Rect2i(0, 0, w, h),
-				Vector2i((bits - 1) * w, 0))
+	for i in range(masks.size()):
+		strip.blit_rect(_masked(src, masks[i]), Rect2i(0, 0, w, h), Vector2i(i * w, 0))
 
 	var source := TileSetAtlasSource.new()
 	source.texture = ImageTexture.create_from_image(strip)
 	source.texture_region_size = Vector2i(w, h)
-	for bits in range(1, EDGE_COMBOS + 1):
-		source.create_tile(Vector2i(bits - 1, 0))
+	for i in range(masks.size()):
+		source.create_tile(Vector2i(i, 0))
 	return source
 
 
@@ -322,12 +403,29 @@ func _edge_alpha(nx: float, ny: float, bits: int) -> float:
 	for i in range(EDGE_OFFSETS.size()):
 		if bits & (1 << i) == 0:
 			continue
-		var s: Vector2 = EDGE_SIGNS[i]
 		# 1 exactly on that edge, -1 at the opposite point of the diamond.
-		var f := s.x * nx + s.y * ny
-		var a := (f - (1.0 - 2.0 * BLEND_REACH)) / (2.0 * BLEND_REACH)
-		best = maxf(best, smoothstep(0.0, 1.0, clampf(a, 0.0, 1.0)))
+		best = maxf(best, _ramp(_edge_field(nx, ny, i)))
+	for c in range(CORNER_OFFSETS.size()):
+		if bits & (1 << (CORNER_BIT + c)) == 0:
+			continue
+		# A point, not a line: `min` of the two edges meeting at that vertex is 1
+		# there and below 1 everywhere else, so the ramp closes to a rounded cap
+		# over the corner instead of washing along a whole side.
+		best = maxf(best, _ramp(minf(_edge_field(nx, ny, c),
+				_edge_field(nx, ny, (c + 1) % 4))))
 	return best
+
+
+## The diamond's own edge equation for edge `i`: 1 along that side, -1 at the point
+## opposite it.
+func _edge_field(nx: float, ny: float, i: int) -> float:
+	var s: Vector2 = EDGE_SIGNS[i]
+	return s.x * nx + s.y * ny
+
+
+func _ramp(f: float) -> float:
+	var a := (f - (1.0 - 2.0 * BLEND_REACH)) / (2.0 * BLEND_REACH)
+	return smoothstep(0.0, 1.0, clampf(a, 0.0, 1.0))
 
 
 ## One terrain's tile as a plain Image, from the bake if there is one and from the

@@ -58,22 +58,62 @@ func test_the_higher_terrain_reaches_over_the_lower_one() -> void:
 
 
 func test_the_mask_names_the_edges_the_neighbour_is_actually_on() -> void:
-	# One water tile with grass on all four sides is mask 1111; a water tile in the
-	# middle of a lake with grass on one side only names that one side.
+	# A lone water tile has grass on all four edges. Its four corners are grass too,
+	# but every one of them is shadowed by an edge and drops out -- so the mask is
+	# 0b1111 and not 0b11111111.
 	var size := Vector2i(5, 5)
 	layer.build(size, _terrain(size, SimMap.Terrain.GRASS,
 			{Vector2i(2, 2): SimMap.Terrain.WATER_SHALLOW}))
-	# atlas x is `bits - 1`, so all four edges is column 14.
-	assert_eq(layer.blend_layer().get_cell_atlas_coords(Vector2i(2, 2)),
-			Vector2i(14, 0), "surrounded on four sides")
+	assert_eq(layer.blend_mask_at(Vector2i(2, 2)), 0b1111, "surrounded on four sides")
 
-	# A 2x1 pond: the left tile has grass on three sides, not four -- its east
-	# neighbour is the other water tile. Bit 1 is (1, 0), so the mask is 1101 = 13.
+	# A 2x1 pond. The left tile keeps three edges -- bit 1 is (1, 0), its own water --
+	# and gains no corner, because the two corners on that side are water as well.
 	layer.build(size, _terrain(size, SimMap.Terrain.GRASS,
 			{Vector2i(2, 2): SimMap.Terrain.WATER_SHALLOW,
 			Vector2i(3, 2): SimMap.Terrain.WATER_SHALLOW}))
-	assert_eq(layer.blend_layer().get_cell_atlas_coords(Vector2i(2, 2)),
-			Vector2i(12, 0), "three sides, not the one facing its own water")
+	assert_eq(layer.blend_mask_at(Vector2i(2, 2)), 0b1101,
+			"three sides, not the one facing its own water")
+
+
+func test_a_terrain_touching_only_at_a_corner_still_blends() -> void:
+	# THE DIAGONALS. Reported by the project owner against the first version, which
+	# had edge bits only: a tile meeting another terrain at a single VERTEX got no
+	# transition at all, so every step of a staircase boundary kept one hard point --
+	# and the soft edges around it made that point more conspicuous, not less.
+	#
+	# A lake with one island tile of grass in it. Grass outranks water, so the water
+	# tiles are the ones that receive -- and (2, 2) meets the grass at (3, 3) ONLY at
+	# a corner, offset (1, 1). All four of its edges are water.
+	var size := Vector2i(6, 6)
+	layer.build(size, _terrain(size, SimMap.Terrain.WATER_SHALLOW,
+			{Vector2i(3, 3): SimMap.Terrain.GRASS}))
+
+	var mask := layer.blend_mask_at(Vector2i(2, 2))
+	assert_eq(mask & 0b1111, 0, "no edge of it touches the grass")
+	assert_true(mask != 0, "but the corner still produces a transition")
+	assert_eq(layer.blend_layer().get_cell_source_id(Vector2i(2, 2)),
+			int(SimMap.Terrain.GRASS), "and it is the grass reaching in")
+
+
+func test_a_corner_is_dropped_when_its_own_edge_already_covers_it() -> void:
+	# What keeps the strip at 47 columns rather than 256. An edge ramp is opaque all
+	# the way to both its endpoints, so a corner beside a matching edge would draw
+	# nothing new and only multiply the variants.
+	assert_eq(TerrainLayer.canonical_mask(0b00010001), 0b00000001,
+			"corner 0 sits between edges 0 and 1; edge 0 is set")
+	assert_eq(TerrainLayer.canonical_mask(0b00010010), 0b00000010,
+			"and edge 1 shadows it just as well")
+	assert_eq(TerrainLayer.canonical_mask(0b00010000), 0b00010000,
+			"but with neither edge, the corner survives")
+
+
+func test_there_are_forty_seven_distinct_transitions() -> void:
+	# The classic blob count, arrived at here for the reason it exists everywhere:
+	# four edges free, and a corner only meaningful where neither of its edges is.
+	var seen: Dictionary = {}
+	for bits in range(1 << 8):
+		seen[TerrainLayer.canonical_mask(bits)] = true
+	assert_eq(seen.size(), 47, "46 drawable plus the empty mask")
 
 
 func test_the_ramp_is_opaque_at_the_shared_edge_and_gone_at_the_far_one() -> void:
@@ -85,6 +125,19 @@ func test_the_ramp_is_opaque_at_the_shared_edge_and_gone_at_the_far_one() -> voi
 	assert_almost_eq(layer._edge_alpha(0.5, -0.5, ne), 1.0, 0.01, "on the NE edge")
 	assert_almost_eq(layer._edge_alpha(-0.5, 0.5, ne), 0.0, 0.01, "at the far SW point")
 	assert_true(layer._edge_alpha(0.0, 0.0, ne) > 0.0, "and reaches the middle")
+
+
+func test_a_corner_ramp_peaks_at_its_vertex_and_not_along_a_side() -> void:
+	# Corner 0 is between edges 0 (NE) and 1 (SE), i.e. the diamond's RIGHT point.
+	# If this behaved like an edge it would wash along a whole side and the corner
+	# fix would look like a smear rather than a rounded cap.
+	var corner := 1 << TerrainLayer.CORNER_BIT
+	assert_almost_eq(layer._edge_alpha(1.0, 0.0, corner), 1.0, 0.01, "at the vertex")
+	assert_almost_eq(layer._edge_alpha(-1.0, 0.0, corner), 0.0, 0.01, "opposite it")
+	# The two vertices either side of it are the ends of the adjacent edges, and a
+	# corner cap must have fallen well off by the time it reaches them.
+	assert_true(layer._edge_alpha(0.0, -1.0, corner) < 0.5, "not up at the top point")
+	assert_true(layer._edge_alpha(0.0, 1.0, corner) < 0.5, "nor down at the bottom")
 
 
 func test_two_edges_take_the_stronger_rather_than_the_sum() -> void:
