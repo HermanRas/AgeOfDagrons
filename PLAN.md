@@ -194,10 +194,10 @@ One villager, one gender. One civilisation, shared by every player. IDs read
 | `walk_carry_stone` | | |
 | `work_chop` | gathering wood | ✓ |
 | `work_mine` | gathering gold or stone | ✓ |
-| `work_hunt` | gathering from a carcass | ✓ |
+| `work_hunt` | gathering **any food** — `AnimationSystem` maps the whole `food` kind here, berry bushes and carcasses alike, so the name is narrower than the behaviour | ✓ |
 | `work_build` | building or repairing | ✓ |
-| `work_forage` / `work_farm` / `work_fish` / `work_herd` | later food sources | |
-| `attack` | combat | |
+| `work_forage` / `work_farm` / `work_fish` / `work_herd` | unused — food has one clip, above | |
+| `attack` | combat | ✓ since 4.13 |
 | `die` / `decay` | death, corpse pre-removal | ✓ |
 
 `EntityView.play_anim()` tries `walk_carry_<kind>` and falls back to `walk`, so carry variants
@@ -303,7 +303,7 @@ HONOR LNA-NX1 · Android 16 (SDK 36) · MediaTek MT6858 · **ARM Mali-G610 MC2**
 | Texture memory | < 256 MB |
 | **APK size** | **< 300 MB** — code + placeholders only (an empty project exports to 54 MB) |
 | Asset pack | art ~150–400 MB, audio ~50–100 MB, downloaded |
-| **Snapshot wire size** | **< 64 KB/tick.** Measured 2026-08-17 on the real debug map: **12,092 bytes, 4,104 of it fog** = 118 KB/s per player. Pinned by `test_snapshot_system.gd` |
+| **Snapshot wire size** | **< 64 KB/tick.** Current figures are **§12.1f's table** — 6,328–7,528 bytes across 2P/4P/8P boards, with **zero fog on the wire**. The 2026-08-17 figure that used to be quoted here (12,092 bytes, 4,104 of it fog) was the debug map before 12.1f and contradicted §12.1f in the same document. `test_snapshot_system.gd` pins only the 64 KB ceiling; the per-board numbers come from `dev_preview/preview_wire_size.tscn` |
 
 Checked by `StressTest.tscn` from early on, and it must run **on the phone**.
 
@@ -424,10 +424,14 @@ an out-of-date API listing is worse than none. Read the file headers; they carry
 | `Net` (`net.gd`) | Transport + RPC boundary. `host_solo()`, `submit_command()`, `_recv_command` (up, reliable), `_recv_snapshot` (down, unreliable_ordered). `host_open()`/`join()` are §12.1 |
 | `SimClock` (`sim_clock.gd`) | 10 Hz pump; `advance()` holds the logic separately from `_process` so it runs headless |
 | `EventBus` (`event_bus.gd`) | Decouples HUD widgets from whoever receives the snapshot |
-| `AssetPacks` | §3.2 |
+**That is all four.** `project.godot`'s `[autoload]` block lists exactly these. Two names this
+document used to put in this table do **not** exist and were listed as though they did:
+`AssetPacks` is 0.3 and unbuilt (§3.2 describes it; the Phase 0 table already says it is the one
+Phase 0 item still open), and `AudioManager` never existed at all — see §7.5.
 
-Three autoloads (`net.gd`, `sim_clock.gd`, `event_bus.gd`) deliberately carry **no `class_name`** —
-it would shadow the singleton identifier.
+**None of the four carries a `class_name`**, which would shadow the singleton identifier. This
+said "three autoloads", naming `net.gd`, `sim_clock.gd` and `event_bus.gd` as a special case;
+`game_data.gd` is the same, so it is a universal rule for autoloads rather than a trio.
 
 ### 6.2 Simulation (`src/sim/`)
 
@@ -451,7 +455,11 @@ Systems run in this fixed order by `SimWorld.step()`:
 | `CommandSystem` | Validate + apply queued commands; reject anything the sender doesn't own | ✅ |
 | `PathSystem` | Solve queued path requests against a per-tick budget | ✅ |
 | `TaskSystem` | Per-unit task state machine | ✅ |
-| `GatherSystem` / `BuildSystem` / `CombatSystem` | Arrival-time work: gather, build, fight | ✅ |
+| `GatherSystem` / `BuildSystem` | Arrival-time work: gather, build | ✅ |
+| `ProjectileSystem` | Advance arrows in flight | ✅ 4.13 |
+| `WildlifeSystem` | Gaia animals: roam, flee, and the game's only auto-acquire | ✅ 4.13 / 6.1b |
+| `HerdSystem` | Livestock changing hands by proximity (`herded_by`) | ✅ 6.5 |
+| `CombatSystem` | Arrival-time work: fight | ✅ |
 | `ProductionSystem` | Training queues; a finished order is not popped until it spawns | ✅ |
 | `AgeSystem` | Age advancement timers | ✅ |
 | `MovementSystem` | Path following, waypoint by waypoint | ✅ |
@@ -461,8 +469,14 @@ Systems run in this fixed order by `SimWorld.step()`:
 | `PopulationSystem` | Recount `pop_used`/`pop_cap`; owns the cap rule | ✅ |
 | `VisionSystem` | Recompute per-player fog | ✅ |
 | `WinConditionSystem` | Evaluate the active mode's victory rule | ✅ |
-| `TechSystem` | Research timers, stat modifiers | 9.3 |
-| `AISystem` | Drive AI players (emits Commands like any player) | 12.2a |
+| `AISystem` | Drive AI players (emits Commands like any player) | ✅ 12.2a |
+| `TechSystem` | Research timers, stat modifiers | **not built — 9.3** |
+
+The State column means *built unless it says otherwise*. It used to carry a bare phase number for
+both `TechSystem` and `AISystem`, which read as "scheduled" for one and was wrong for the other.
+
+**The three new systems sit before `CombatSystem` on purpose**, and `wildlife_system.gd`'s header
+argues it: a wolf that picks a target this tick bites on this tick rather than the next.
 
 `SnapshotSystem` is **not** in the list — it mutates nothing and crosses the sim/net boundary, so
 `SimHost` calls it after each `step()`.
@@ -474,20 +488,37 @@ drift with nothing on screen to explain it.
 
 **Commands are the only way state changes.** Every one validates ownership server-side; a
 `validate()` that fails drops the command silently, so anything the UI offers must be gated the
-same way the command is. Built: move, stop, gather, build, place-building, train,
-cancel-production, attack, advance-age, set-control-group, debug-destroy, debug-set-age. Later:
-garrison, research, stance, special ability, trade, resign.
+same way the command is. **All 18 built:** move, stop, gather, build, place-building, place-wall,
+upgrade-building, toggle-gate, train, cancel-production, attack, advance-age, set-control-group,
+tribute, market-exchange, resign, debug-destroy, debug-set-age. **Later:** garrison, research,
+stance, special ability. *(Trade and resign sat in the "later" list while `TributeCommand`,
+`MarketExchangeCommand` and `ResignCommand` were all shipped and marked ✅ elsewhere in this
+document.)*
 
 `PathService` wraps `AStarGrid2D` with a **per-tick budget** (`MAX_SOLVES_PER_TICK = 12`, measured:
 32 → 9.48 ms, 16 → 5.09 ms, 12 → 4.30 ms against the <5 ms tick). Grid updates are incremental by
-dirty rect; the one full 64×64 sweep (~12 ms) happens at map-gen time where it hides in load.
+dirty rect; the full sweep (~12 ms on 64×64) happens at map-gen time where it hides in load.
+
+**ONE GRID PER `Domain` since 2026-08-23**, not one grid. It held a single land grid, and the note
+where `_walkable` hard-coded `Domain.LAND` said why it would have to change: `AStarGrid2D` holds
+solidity *in the grid*, not in the query, so a second domain needs a second grid rather than a
+filter. Fishing made that real — a ship routed against the land grid sails up the beach. Grids are
+built **lazily**, so a land-only map still pays for exactly one, and `rebuild()` pre-builds the
+water grid only when the map has water, keeping the sweep in load time. `_sync` re-reads every grid
+that exists, because a `mark_dirty` cannot know which domain a new building blocked.
 
 ### 6.3 View layer (`src/view/`)
 
 `GameView` owns three layers — `TerrainLayer`, the `EntityViewPool`, and `FogOverlay` — and turns
 a snapshot into pooled, interpolated `EntityView`s. **It is handed raw bytes, never a `SimMap` or
-a `SimPlayer`**: terrain bytes to draw ground, fog bytes to draw fog. That is the shape a
-networked client receives, and it keeps the tests free of a world.
+a `SimPlayer`**: terrain bytes to draw ground. That is the shape a networked client receives, and
+it keeps the tests free of a world.
+
+This used to say "and fog bytes to draw fog", which stopped being true at 12.1f: **fog is no longer
+on the wire at all.** `GameView` owns a `ClientFog` and computes its own grid from the snapshot's
+entity list, and `FogOverlay` paints that. The security boundary did not move — the server still
+decides what to *send* (`SnapshotSystem._entry_for`) — the grid was only ever a bitmap to paint.
+§12.1f has the argument and the cost.
 
 `Iso` is **the only place grid↔screen math lives**. Two distinctions that cost real debugging:
 `tile_to_world()` is a tile **corner** while the sim stands entities at tile **centres**
@@ -500,9 +531,19 @@ carrying the equal and opposite shift, so the art stays on the centre while the 
 
 UI widgets live in `src/view/` alongside it (there is no `src/ui/`): `SelectionPanel`,
 `ResourceHUD`, `Minimap`, `ControlGroupsHud`, `AgeBadge`, `IdleVillagerBadge`, `NoticeToast`,
-`PauseMenu`, `ResultScreen`, `PlacementGhost`, `SelectionBox`, `ActionFlash`. They read from
-`EventBus` or from facts handed in, **never** from the sim, and they are built in `_init()` rather
-than `_ready()` so a bare `.new()` is fully wired for a headless test.
+`PauseMenu`, `ResultScreen`, `PlacementGhost`, `SelectionBox`, `ActionFlash` — **plus, and this
+list had stopped keeping up:** `HudPanel`/`HudStyle`/`HudAction`/`ActionSlot` (8.2's shared
+chrome), `ChatPanel`, `MarketPanel`, `TechTreePanel`, `ColourPickerPopup`, `MapPreview`,
+`SkirmishScreen`, `SelectionActions`, `PlacementAdvice`, `Occlusion`, `ClientFog`, `HealthDot`,
+`OutlineView`, `EntityPortrait`, `TouchLineEdit`, `DoubleTapDetector`. They read from `EventBus` or
+from facts handed in, **never** from the sim, and they are built in `_init()` rather than `_ready()`
+so a bare `.new()` is fully wired for a headless test.
+
+Two of those are gameplay-visible and have no phase row of their own, which is why they went
+unrecorded: **`Occlusion` + `OutlineView`** draw a player-coloured rim on a unit hidden behind a
+building or a tree (owner-requested 2026-08-16, `BEHIND_TILES = 5`, headless-tested), and
+**`PlacementAdvice`** is the advisory client-side ghost §12.1 predicted would be needed once a
+client had the map but not what anyone had built on it.
 
 ---
 
@@ -514,8 +555,15 @@ tapped. Only the resulting `Command`, with explicit `unit_ids`, crosses the wire
 are the exception: **persisted in `SimPlayer`** via `SetControlGroupCommand` so they survive
 reconnect.
 
-**7.2 Snapshots.** Per-player, fog-filtered, `{tick, spawned[], updated[], removed[],
-player_state, vision, mode, match_over, winner_id}`. **Not yet a real delta** — everything a
+**7.2 Snapshots.** Per-player, fog-filtered: `{tick, spawned[], updated[], removed[],
+player_state, mode, match_over, winner_id}`. Two corrections this entry had missed, both from
+12.1f and both recorded only there: **`vision` is gone** — the client computes its own fog
+(`ClientFog`) and no grid crosses the wire; and **`updated` becomes `tables`** at the transport
+boundary, a `{keys, rows}` shape table per entity shape, so field names are written once per shape
+rather than once per entity. The conversion is in `Net`, not in `build()`, so the simulation still
+produces readable dictionaries and every other reader is untouched.
+
+**Not yet a real delta** — everything a
 player may see is sent every tick, so the client currently treats *absence* from `updated` as "I
 can no longer see that". A true delta against the last acknowledged tick must add an explicit
 per-entity "you have lost sight of X" signal, and it must **not** be a list of hidden ids, which
@@ -529,8 +577,17 @@ multi-touch box select needs raw `InputEventScreenTouch`/`Drag`. Touch and mouse
 separately, because handling one would work on the phone and not on the desktop the work is done
 on. Test on device.
 
-**7.5 Audio.** `AudioManager` exists with a no-op implementation and a stable ID vocabulary, so
-gameplay emits `play_sfx(&"villager.chop")` from day one and the pack lands later.
+**7.5 Audio — NOT BUILT, and this entry claimed otherwise for months.** It said "`AudioManager`
+exists with a no-op implementation … so gameplay emits `play_sfx(&"villager.chop")` from day one".
+There is no `AudioManager`: not an autoload, not a `class_name`, not a file, and **zero call sites**
+for `play_sfx` anywhere in `game/`. The only traces are comments in `audio.json` and
+`game_data.gd` citing this very paragraph, which is how a false claim survives — the code cited the
+plan and the plan cited nothing.
+
+What *does* exist is the **ID vocabulary**: `data/audio.json` declares every sound id with a null
+stream, and `GameDataRegistry.has_sfx()` answers for it, so the seam's totality rule already
+covers audio. The plan was sound; only the object was never written. Whoever builds it gets a
+declared table to build against and no call sites to migrate.
 
 **7.6 Optimisation policy.** GDScript everywhere. Profile on the target Android device. Move a hot
 loop to GDExtension only when profiling proves it dominates.
@@ -781,12 +838,32 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `unit.dragon` | — | Castle | `fauna/dragon` ✅ |
 | `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at 10% scale. **Also what `Mode.TROPHY` needs** (11.2) |
 
-**Resources** (`res.*`, gaia-owned): `res.gold_mine` · `res.stone` · `res.tree` ·
-`res.berry_bush` · `res.sheep` (→ `fauna/sheep3`, **not** `sheep1` — sheep3's only material is
-`animal_sheep_no_player_color_a.dds`, which is why it does not pick up the player tint) ·
-`res.deer` · `res.cattle` (→ `fauna/zebu_wild`, **not** `cow` — `_wild` matters, 0 A.D. ships wild
-*and* trainable variants of every herd animal) · `res.bear` (no recipe) · `res.wolf` (food 30 and
-**attacks** — the only hostile gaia entity, so it needs `CombatSystem`, 4.13).
+**GAIA — and the split matters, because it moved on 2026-08-23.** This paragraph listed every
+animal as a `res.*` resource node and was the last place in the document still describing the world
+that way; 4.13, 6.1a, 6.1b and 6.5 had all moved on without it.
+
+**Resource nodes** (`res.*`, gaia-owned, cannot move): `res.tree` · `res.gold_mine` · `res.stone` ·
+`res.berry_bush` · `res.fish` (the only node not on LAND — see `ResourceDef.domain`) · and five
+**carcasses**, `res.deer_carcass` / `res.wolf_carcass` / `res.boar_carcass` / `res.sheep_carcass` /
+`res.cattle_carcass`, which MapGen never places — `DeathSystem` spawns one where an animal dies.
+
+**Gaia units** (`unit.*`, owner 0, nobody trains them): every animal that has to *move* is one,
+because a task, a path and a facing all live on `SimUnit` and a node has none of them.
+
+| Unit | Behaviour | Actor note |
+|---|---|---|
+| `unit.wolf` | hostile, aggro 6, roams 9 → 30 food | `fauna/wolf` |
+| `unit.boar` | hostile, aggro 4, roams 5 → 150 food | `fauna/boar` |
+| `unit.bear` | hostile, aggro 5, roams 6 → 300 food | `fauna/bear_brown` |
+| `unit.deer` | flees, roams 6, no attack → 140 food | `fauna/deer` |
+| `unit.sheep` | **herdable**, stands still → 100 food | `fauna/sheep3`, **not** `sheep1` — sheep3's only material is `animal_sheep_no_player_color_a.dds`, which is why it takes no player tint |
+| `unit.cattle` | **herdable**, stands still → 500 food | `fauna/zebu_wild`, **not** `cow` — `_wild` matters, 0 A.D. ships wild *and* trainable variants of every herd animal |
+
+Three claims this paragraph used to make are now wrong and worth naming so they are not re-derived:
+the wolf is **not** "the only hostile gaia entity" (three are); `res.bear` does **not** lack a
+recipe (`bear.toml` exists and `vis.bear` is baked, staged and declared); and none of these needs
+`CombatSystem` *added* — `WildlifeSystem` writes the same `set_task_attack` an `AttackCommand`
+would, and `Diplomacy` is what let gaia be split by type so a wolf is a target and a tree is not.
 
 > Resolving gaia templates the same way as units **found three errors in six animals**. The
 > template-resolution rule is not a units rule.
@@ -938,9 +1015,21 @@ gate, and it is built into `generate()` rather than offered beside it.
 The owner's `game_map_gen/` prototype is **left untouched** — it is theirs, and the two can
 diverge freely now.
 
-Sizes: 2P 96×96, 4P 128×128, 8P 192×192. Generation takes 30–170 ms and every type validates
-first try. Look at the output with `dev_preview/preview_mapgen.tscn`, which writes one PNG per
-type — it is the only way to judge a map layout.
+Sizes: 2P 96×96, 4P 128×128, 8P 192×192. *(`map_generator.gd`'s own header still says 184 for 8P;
+the code computes 192 and this document is the correct one — the reverse of the usual direction.)*
+Generation takes 30–170 ms and every type validates first try. Look at the output with
+`dev_preview/preview_mapgen.tscn`, which writes one PNG per type — it is the only way to judge a
+map layout.
+
+**It also places wildlife, per START rather than per map (2026-08-23).** Sheep herds, deer herds
+and one predator species chosen by map type (`PREDATORS`, keyed by `Type` and read with
+`.get(type, {})`, so an unlisted type gets none). Per-start is a fairness choice, not a literal
+reading of "two per player": scattering 2n animals over the board hands them all to whoever the
+noise favours, where hanging them off each start makes the count exact and identical for everyone
+and still lands them at a random angle. Every placer here is **best-effort** — it skips claimed and
+unwalkable ground and gives up after a bounded number of tries, because a start hemmed in by water
+should yield fewer sheep rather than fail the whole map. Herds are anchored then clumped, with the
+anchor retried, because one bad angle loses a herd of seven where it would cost one berry bush.
 
 **Two assumptions in this plan turned out to be wrong, and both are corrected elsewhere in it.**
 The map is now **sent** to joining clients rather than regenerated by them (see §12.1 step b),
@@ -1034,7 +1123,15 @@ this is built rather than after.
 #### 11.4 Fog of war (2.5) — done 2026-08-17
 
 `VisionSystem` writes `SimPlayer.vision`, one `Fog` byte per tile (UNSEEN/EXPLORED/VISIBLE),
-recomputed from scratch every tick after `DeathSystem` so a scout killed this tick lights nothing.
+recomputed from scratch after `DeathSystem` so a scout killed this tick lights nothing — **every
+second tick, not every tick** (`VisionSystem.VISION_INTERVAL = 2`). This said "every tick" and
+§12.1f said otherwise; the code's own header was wrong the same way, which is how the two got out
+of step without either looking wrong on its own.
+
+**Half of this is now client-side.** The server keeps `VisionSystem` because it decides what to
+*send*, and that is the security property. The **grid** is computed on the client by `ClientFog`
+and painted by `FogOverlay` — see §12.1f for why, what it costs, and what the reinvestment is if
+the cost ever shows.
 Vision is a **Euclidean circle measured to the footprint**, not the centre tile — a 10×10 town
 centre at los 8 measured from its middle would see barely three tiles past its own walls, putting
 a blind spot exactly where the player's base is. EXPLORED is sticky.
@@ -1084,7 +1181,7 @@ ms avg. One figure over budget: sim tick **max 7.63 ms** against <5 ms — it is
 |---|---|---|
 | 4.1 | ✅ `MovementSystem` walks the route waypoint by waypoint; a tick's budget carries across waypoints. **Stop at nearest reachable**: `set_path()` rewrites `task_target_tile` to where the route actually ends, or a unit sent to a tree stands beside it in MOVE forever | `[MVP]` |
 | 4.2 | ✅ `PathService` on `AStarGrid2D` with a per-tick budget, plus `SeparationSystem` — pushes overlapping units apart by half the shortfall each, visiting units and pairs **sorted by id** so every client resolves the same overlaps in the same order. A push is capped under half a tile and dropped if it would land on impassable ground. Diagonals do not cut corners past a blocked tile | `[MVP]` |
-| 4.3 | ✅ `Selection` (client-side; a selection in the state hash would desync the moment one player tapped), `InputRouter` taps, selection ring, panel from `units.json`.<br><br>**Tap targets, 2026-08-23.** Picking goes by the tile under the finger and still does — but the *art* is not drawn on that tile, which is the whole complaint. **When the tile holds nothing**, the tap falls back to any resource node whose art is painted over it, asked as `Occlusion.hides()` — the same call, with the same measured `{rect, pad, reach}`, that decides whether a villager behind a tree gets outlined. *If the art hides that tile, tapping it is tapping the art*, and those two answers have to agree. Three properties come free: tiles **in front** are never covered, so walking past a tree still works; the **screen column** rejects taps behind in depth but visibly beside; and the reach is **measured** off `height_m`. It took two goes — the first tried a 2×2 `pick_footprints` on the tree, which reaches 48 px against 157 px of trunk, and no tile rect can grow up-screen without also eating the ground in front. `res.tree`'s footprint never moved: one tile, forest still walkable | `[MVP]` |
+| 4.3 | ✅ `Selection` (client-side; a selection in the state hash would desync the moment one player tapped), `InputRouter` taps, selection ring, panel from `units.json`.<br><br>**Tap targets, 2026-08-23.** Picking goes by the tile under the finger and still does — but the *art* is not drawn on that tile, which is the whole complaint. Two mechanisms, and they are what SHIPPED after a false start (below):<br>1. **`ResourceDef.pick_footprints`** — a tap box separate from the ground footprint, read by `GameView._covers` and nothing else. `res.tree` sets 2×2 and still **claims one tile**, so a forest stays walkable; `centre - footprint / 2` floors, so an even box leans up-screen where the art is.<br>2. **`TAP_REACH_PX` (24 px)** — a tap landing on **bare ground** falls back to the nearest one-tile *resource node*'s **artwork**, measured to the ground point lifted by half the visual's `height_m`. Never units: a mis-tap near a fight must not turn a retreat into an attack. 24 px is measured against the tile — adjacent centres are 35.8 px apart, so the reach can never cross into a neighbour's.<br>Ranked **unit > standing on ground it holds > merely reaching**, which is what stops two trees a tile apart answering for each other.<br><br>⚠️ **A third mechanism was built and reverted the same morning, and the reason is worth keeping.** It replaced both of the above with `Occlusion.hides()` — *"if the art hides that tile, tapping it is tapping the art"* — reusing the outline band's own `{rect, pad, reach}`. It reads well and it was worse: `hides()` answers *"what do I obscure **behind** me"*, which excludes the node's own rect and everything `is_in_front` of it, so **a tree could not be picked from its own roots** — and a different tree further down the slope had that tile squarely in its canopy column and won it. Tapping one tree gathered another. Reverted in `5de8d12`; do not reach for it again without solving the roots case first | `[MVP]` |
 | 4.4 | ✅ `GatherCommand`/`BuildCommand` reuse the walk-there machinery; `MovementSystem` advances **any** unit with a route left rather than only ones tasked MOVE, so GATHER/RETURN/BUILD travel for free | `[MVP]` |
 | 4.5 | ✅ `GameView.tap_action()` decides what a tap means from pure facts; `ActionFlash` shows which order fired. This closed a real gap: gather and build existed sim-side and **nothing in the view had ever dispatched them** | `[MVP]` |
 | 4.6 | ✅ Health dot, positioned off the visual's declared `height_m`, sharing thresholds with the panel through `HealthDot.color_for()` | `[MVP]` |
