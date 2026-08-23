@@ -1066,7 +1066,7 @@
 
   "vis.tree": {
     "atlas": "res://assets/atlases/vis.tree.atlas.json",
-    "variants": ["vis.tree", "vis.tree_elm", "vis.tree_teak", "vis.tree_toona"],
+    "variants": ["vis.tree", "vis.tree_elm", "vis.tree_toona"],
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [7.25, 7.25],

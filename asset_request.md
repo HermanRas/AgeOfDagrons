@@ -10,6 +10,58 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
+
+**What's needed:** a fourth tree species to restore `vis.tree`'s variant list to four.
+The project owner's preference is a **palm**, for riverbanks and the island game mode,
+so this is a request for a new look rather than a like-for-like re-bake of the teak.
+
+**What I did on the game side, already committed.** `vis.tree_teak` is out of
+`visuals.json`'s `variants` array for `vis.tree`. Nothing else changed: the atlas, its
+PNG and its own `visuals.json` declaration are all still on disk and still valid, so
+putting it back is a one-word edit if you disagree with any of this. Forests now roll
+between oak, elm and toona.
+
+**Why it went.** It is far and away the biggest sprite in the set, and its size made
+trees unselectable in a way the other three do not:
+
+| variant | actor | widest frame | tallest frame | page |
+|---|---|---|---|---|
+| `vis.tree` | `flora/trees/oak.xml` | 239 px | 225 px | 462 KB |
+| `vis.tree_elm` | `flora/trees/elm.xml` | 223 px | 339 px | 395 KB |
+| **`vis.tree_teak`** | `flora/trees/teak.xml` | **296 px** | **388 px** | **743 KB** |
+| `vis.tree_toona` | `flora/trees/tree_tropic.xml` | 220 px | 250 px | 302 KB |
+
+A tile is 64×32 px. The teak is **4.6 tiles wide and 12 tiles tall**, and a tree claims
+**one** tile of ground — deliberately, because at 4×4 apiece a twelve-tree forest would
+be an impassable wall (`resources.json`'s own note). So the trunk and roots you can
+plainly see are painted across tiles the tree does not own and cannot answer for. The
+owner reported tapping the teak's roots and gathering *a different tree entirely*.
+
+**This is not a defect in your bake** and there is nothing to fix in `teak.toml`. The
+sprite is a faithful render of a big tree; the game simply has no way to make a
+one-tile entity answer for 4.6 tiles of art without breaking pathing. Two game-side
+fixes were tried and both reverted the same morning (`f06058d`, `f8720f2`) — the second
+made it actively worse. Dropping the outlier is the owner's call and the cheap one.
+
+**So the constraint on the replacement is size, not species.** Anything in the oak-to-
+toona band — roughly **≤ 250 px wide, ≤ 300 px tall** — sits inside what one tile can
+carry. A palm is a good fit for that on its own: tall and thin beats broad and dense.
+If a palm can only be had at teak proportions, say so and I will take a fourth
+temperate species instead rather than have the problem back.
+
+**Known blocker, and it is why I am asking rather than assuming.** PLAN.md A.4 already
+lists palms as open with the reason *"needs variant selection in isobake — no
+deterministic actor exists"*. If that is still true, this request is really two: the
+isobake side first, then the bake. Tell me which and I will re-plan around it — three
+species is a perfectly good forest in the meantime, and nothing is blocked on this.
+
+**Where it plugs in:** one new `visuals.json` entry with a measured `footprint_m` /
+`height_m`, and its id appended to `vis.tree`'s `variants`. No code, no `resources.json`
+change — the variant axis is already wired and `variant_of()` reads the list's length.
+
+---
+
 ### EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
 
 **What's needed:** `yaw_offset_deg = 180.0` on every unit recipe, and a re-bake. It is
