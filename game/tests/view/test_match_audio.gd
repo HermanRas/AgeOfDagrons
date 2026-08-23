@@ -217,6 +217,20 @@ func test_a_unit_swinging_plays_its_weapon() -> void:
 			"the spearman's weapon is heard, got %s" % [_played()])
 
 
+func test_a_swing_names_the_unit_that_swung() -> void:
+	# The source id is what lets AudioManager pace each unit at its own cadence
+	# rather than pacing the SOUND globally -- without it, ten swordsmen share one
+	# 2-second slot and nine of them swing silently. Easy to drop in a refactor
+	# and impossible to hear the absence of, so it is asserted.
+	audio.observe(_snap([_unit(10, ME, &"unit.spearman")]), ME)
+	var swinging := _unit(10, ME, &"unit.spearman")
+	swinging["anim"] = &"attack"
+	audio.observe(_snap([swinging]), ME)
+	var at := _played().find("attack.spear")
+	assert_true(at != -1, "the spear was heard, got %s" % [_played()])
+	assert_eq(_spy.sources[at], 10, "and it was attributed to entity 10")
+
+
 func test_a_unit_with_no_weapon_is_silent_when_it_attacks() -> void:
 	# The monk has no `attack` in audio_map.json because he carries nothing.
 	# `entity_sfx` returns &"" and `play_sfx` treats that as a no-op -- the
@@ -420,22 +434,33 @@ class _AudioSpy:
 	extends RefCounted
 
 	var calls: Array = []
+	## Parallel to `calls`, for the positional ones: which entity was named as the
+	## source. Only meaningful for `play_sfx_at`.
+	var sources: Array = []
 
 	func play_sfx(sound_id: StringName) -> bool:
 		if sound_id != &"":
 			calls.append(String(sound_id))
+			# -1, so `sources` stays INDEX-ALIGNED with `calls`. Appending only in
+			# play_sfx_at let the two drift apart and an assertion indexed off the
+			# end -- a flat sound has no source, which is not the same as there
+			# being no entry for it.
+			sources.append(-1)
 		return true
 
 	func play_sfx_at(sound_id: StringName, _pos: Vector2,
-			_listener := Vector2.INF) -> bool:
+			_listener := Vector2.INF, source_id: int = 0) -> bool:
 		if sound_id != &"":
 			calls.append(String(sound_id))
+			sources.append(source_id)
 		return true
 
 	func play_music(music_id: StringName) -> bool:
 		calls.append("music:" + String(music_id))
+		sources.append(-1)
 		return true
 
 	func play_ambient(sound_id: StringName) -> bool:
 		calls.append("ambient:" + String(sound_id))
+		sources.append(-1)
 		return true

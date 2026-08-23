@@ -179,12 +179,17 @@ func _transitions(now: Dictionary, was: Dictionary, me: int, listener: Vector2) 
 	# `throttle_ms` in audio.json, not by a transition test -- chopping is a
 	# continuous noise, and firing once when the anim changed would give one
 	# chop per tree.
+	# The ENTITY ID goes with these two, and only these two. `AudioManager` paces
+	# each source at its own cadence and caps the crowd separately, which is what
+	# makes one villager chop about once a second while twenty of them sound like
+	# a work site rather than either a machine gun or a single lonely axe.
+	var id := int(now.get("id", 0))
 	var anim := StringName(now.get("anim", was.get("anim", &"")))
 	if anim == &"attack":
 		_out().play_sfx_at(
-			GameDataRegistry.entity_sfx(def_id, &"attack"), at, listener)
+			GameDataRegistry.entity_sfx(def_id, &"attack"), at, listener, id)
 	elif anim.begins_with("work_"):
-		_out().play_sfx_at(_work_sound(now, anim), at, listener)
+		_out().play_sfx_at(_work_sound(now, anim), at, listener, id)
 
 
 ## Which working noise a unit is making. The unit's own def cannot say -- a

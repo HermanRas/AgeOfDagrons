@@ -82,6 +82,24 @@ const BUS_SENDS: Array = [
 ## The three a settings page should show, Master first. The rest are trim.
 const MIXER_SLIDERS: Array[StringName] = [&"Master", &"MUSIC", &"SFX"]
 
+## STARTING LEVELS, and music does NOT start at full (project owner, 2026-08-23,
+## from a real session: "music default is very loud, i had to drop it about 80%
+## to start hearing the ingame sounds").
+##
+## 0 A.D. mixes its music for a game whose sound effects are also its own; ours
+## sit on the same bus ladder but there are fewer of them per second, so the music
+## buries them. Halving it is the owner's call and it only sets the DEFAULT -- the
+## slider still goes to 1.0, and a player who has moved it keeps their value,
+## because `_load_settings` only falls back to these when the config has no entry.
+const DEFAULT_VOLUME := {
+	&"Master": 1.0,
+	&"MUSIC": 0.5,
+	&"SFX": 1.0,
+	&"UI": 1.0,
+	&"VOICE": 1.0,
+	&"AMBIENT": 1.0,
+}
+
 ## Non-positional voices: UI clicks and match announcements, which have no place
 ## on the map and must be audible wherever the camera is.
 const _FLAT_VOICES := 8
@@ -101,8 +119,30 @@ var _ambient_player: AudioStreamPlayer
 
 ## id -> Array[AudioStream], filled on first play (property 2).
 var _cache: Dictionary = {}
-## id -> the msec at which it last played, for `throttle_ms`.
+## id -> the msec at which it last played, for `crowd_ms`.
 var _last_played: Dictionary = {}
+
+## id -> {source entity id -> msec}, for `throttle_ms`.
+##
+## WHY THERE ARE TWO LIMITS AND NOT ONE. A single global gap per sound cannot be
+## right for both cases, and the first version of this got both wrong with one
+## number. A swordsman swings every 20 ticks -- 2 seconds -- so one unit fighting
+## wants a sound roughly that often, where the 90 ms gap it shipped with could fire
+## eleven times a second. But raise that one number to 2000 ms and a battle of ten
+## swordsmen produces ONE clang every two seconds while ten men visibly swing,
+## which reads as broken audio rather than as restraint.
+##
+## So: `throttle_ms` paces each SOURCE (a unit's own cadence) and `crowd_ms` caps
+## how often the sound may play at all (so a work site does not machine-gun). One
+## villager chops about once a second; twenty of them make a busy camp rather than
+## twenty axes in perfect unison. The voice pool is the third and last limit.
+var _last_by_source: Dictionary = {}
+
+## Above this many remembered sources for one id, drop the stale ones. Entities
+## die and their ids never return, so without this the dictionary is a slow leak
+## over a long match.
+const _SOURCE_MEMORY_CAP := 256
+const _SOURCE_MEMORY_MAX_AGE_MS := 5000
 ## id -> index of the variation played last, so a two-variation group alternates
 ## instead of repeating itself half the time.
 var _last_variation: Dictionary = {}
@@ -218,7 +258,7 @@ func play_sfx(sound_id: StringName) -> bool:
 	var entry := _entry(sound_id)
 	if entry.is_empty():
 		return false
-	if _throttled(sound_id, entry):
+	if _throttled(sound_id, entry, 0):
 		return false
 
 	var stream := _pick(sound_id, entry)
@@ -234,7 +274,7 @@ func play_sfx(sound_id: StringName) -> bool:
 	player.volume_db = float(entry.get("gain_db", 0.0))
 	player.pitch_scale = _pitch(entry)
 	player.play()
-	_last_played[sound_id] = Time.get_ticks_msec()
+	_mark_played(sound_id, 0)
 	return true
 
 
@@ -243,13 +283,18 @@ func play_sfx(sound_id: StringName) -> bool:
 ## have it handy pass nothing and get an uncalled sound, which is why GameScene
 ## feeds it from the rig rather than this reaching for the camera itself (the
 ## autoload has no business knowing the scene tree's shape).
-func play_sfx_at(sound_id: StringName, world_pos: Vector2, listener: Vector2 = Vector2.INF) -> bool:
+## `source_id` is the entity making the noise. Passing it is what lets one unit's
+## chop be paced at its own cadence while a crowd is capped separately -- see
+## `_last_by_source`. 0 means "no particular source" and falls back to pacing the
+## sound globally.
+func play_sfx_at(sound_id: StringName, world_pos: Vector2,
+		listener: Vector2 = Vector2.INF, source_id: int = 0) -> bool:
 	var entry := _entry(sound_id)
 	if entry.is_empty():
 		return false
 	if listener != Vector2.INF and world_pos.distance_to(listener) > _AUDIBLE_RADIUS_PX:
 		return false
-	if _throttled(sound_id, entry):
+	if _throttled(sound_id, entry, source_id):
 		return false
 
 	var stream := _pick(sound_id, entry)
@@ -266,7 +311,7 @@ func play_sfx_at(sound_id: StringName, world_pos: Vector2, listener: Vector2 = V
 	player.volume_db = float(entry.get("gain_db", 0.0))
 	player.pitch_scale = _pitch(entry)
 	player.play()
-	_last_played[sound_id] = Time.get_ticks_msec()
+	_mark_played(sound_id, source_id)
 	return true
 
 
@@ -383,9 +428,9 @@ func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	var loaded := cfg.load(_CONFIG_PATH) == OK
 	for bus in all_buses():
-		var linear := 1.0
+		var linear := float(DEFAULT_VOLUME.get(bus, 1.0))
 		if loaded:
-			linear = float(cfg.get_value("volume", String(bus), 1.0))
+			linear = float(cfg.get_value("volume", String(bus), linear))
 		# Straight to the server, NOT through set_bus_volume() -- that saves, and
 		# saving while loading would write the defaults back over a config we are
 		# in the middle of reading.
@@ -431,12 +476,44 @@ func _complain(sound_id: StringName, kind: String) -> void:
 	push_error("AudioManager: no such %s id %s (data/audio.json)" % [kind, sound_id])
 
 
-func _throttled(sound_id: StringName, entry: Dictionary) -> bool:
+## Whether this sound must stay quiet, against both limits. `source_id` is the
+## entity making it, or 0 for a sound with no source (UI, announcements) -- in
+## which case `throttle_ms` is applied globally, which is what a UI sound wants.
+func _throttled(sound_id: StringName, entry: Dictionary, source_id: int) -> bool:
+	var now := Time.get_ticks_msec()
+
+	# The crowd limit: how often this sound may play at all.
+	var crowd := int(entry.get("crowd_ms", 0))
+	if crowd > 0 and now - int(_last_played.get(sound_id, -1_000_000)) < crowd:
+		return true
+
 	var gap := int(entry.get("throttle_ms", 0))
 	if gap <= 0:
 		return false
-	var last := int(_last_played.get(sound_id, -1_000_000))
-	return Time.get_ticks_msec() - last < gap
+
+	if source_id == 0:
+		return now - int(_last_played.get(sound_id, -1_000_000)) < gap
+
+	# The per-source limit: this unit's own cadence.
+	var per: Dictionary = _last_by_source.get(sound_id, {})
+	if now - int(per.get(source_id, -1_000_000)) < gap:
+		return true
+	return false
+
+
+## Record a play against both limits.
+func _mark_played(sound_id: StringName, source_id: int) -> void:
+	var now := Time.get_ticks_msec()
+	_last_played[sound_id] = now
+	if source_id == 0:
+		return
+	var per: Dictionary = _last_by_source.get(sound_id, {})
+	per[source_id] = now
+	if per.size() > _SOURCE_MEMORY_CAP:
+		for key in per.keys():
+			if now - int(per[key]) > _SOURCE_MEMORY_MAX_AGE_MS:
+				per.erase(key)
+	_last_by_source[sound_id] = per
 
 
 ## Load and cache the streams for an id. Only paths that actually exist are

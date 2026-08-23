@@ -114,181 +114,205 @@ _PITCH_CEIL = 2.0
 # suffix; a value ending in `.ogg` is a bare file with no group XML (0 A.D. has a
 # few). Prefix `mod:` to read from the `mod` root instead of `public`.
 #
-# `throttle_ms` is OURS, not 0 A.D.'s -- the minimum gap between two plays of the
-# same id. It is the difference between a woodcutting camp and a machine gun, and
-# 0 A.D.'s own <Threshold> does not answer it (that field culls by gain, not by
-# rate). 0 means "never throttle" and is right for one-shot events a player
-# causes deliberately; the chatty per-tick gameplay sounds all carry one.
-SFX: dict[str, tuple[str, str, int]] = {
+# TWO RATE LIMITS, both OURS rather than 0 A.D.'s -- its <Threshold> culls by
+# gain, not by rate, and answers neither question.
+#
+#   throttle_ms  the minimum gap for ONE SOURCE. A unit's own cadence.
+#   crowd_ms     the minimum gap for the sound AT ALL, however many units.
+#
+# WHY TWO. Retuned 2026-08-23 after the project owner reported chopping, mining
+# and wildlife attacks all repeating about twice too fast. They were worse than
+# that, and for a reason worth writing down: a tick is 100 ms and a swordsman's
+# `cooldown_ticks` is 20, so he swings once every TWO SECONDS -- against an
+# `attack.sword` gap of 90 ms, which could fire eleven times a second. The owner's
+# theory was that unit speed drove it and halving speed would halve the sound.
+# It does not: while a unit holds its work or attack animation the rate is set by
+# this number alone and by nothing else.
+#
+# But one number cannot fix it. Raise the single global gap to 2000 ms and a
+# battle of ten swordsmen makes ONE clang every two seconds while ten men visibly
+# swing, which reads as broken. So `throttle_ms` now paces each unit at roughly
+# its real cadence and `crowd_ms` keeps a mob from machine-gunning. The values
+# below are the swing/work periods, taken from `units.json`'s cooldown_ticks
+# where there is one:
+#
+#   sword/bow/crossbow/knife 20t = 2.0s   spear 30t = 3.0s
+#   sword_cavalry/knight 18t = 1.8s       ram 50t = 5.0s
+#   ballista 60t = 6.0s                   onager 80t / trebuchet 100t = 8.0s
+#   wolf 15t / boar 18t / bear 22t = 1.5s dragon 30t = 3.0s
+#
+# Gathering has no discrete event to key off -- `GatherSystem` accrues a fraction
+# per tick -- so those are set to a plausible swing of the tool instead.
+SFX: dict[str, tuple[str, str, int, int]] = {
     # ── UI and menus ────────────────────────────────────────────────────────
     # Every button in the game. `mod:` root because public/ has no plain click.
-    "ui.click": ("mod:interface/ui/ui_button_click", "UI", 0),
-    "ui.click_long": ("mod:interface/ui/ui_button_longclick", "UI", 0),
+    "ui.click": ("mod:interface/ui/ui_button_click", "UI", 0, 0),
+    "ui.click_long": ("mod:interface/ui/ui_button_longclick", "UI", 0, 0),
     # A refused order: too expensive, wrong age, illegal placement. 0 A.D. uses
     # its invalid-placement alarm for the same job.
-    "ui.error": ("interface/alarm/alarm_invalid_building_placement", "UI", 120),
-    "ui.no_resources": ("interface/alarm/alarm_noresources", "UI", 1500),
-    "ui.no_idle_unit": ("interface/alarm/alarm_no_idle_unit", "UI", 500),
-    "ui.chat": ("interface/ui/chat_alert.ogg", "UI", 0),
+    "ui.error": ("interface/alarm/alarm_invalid_building_placement", "UI", 120, 120),
+    "ui.no_resources": ("interface/alarm/alarm_noresources", "UI", 1500, 1500),
+    "ui.no_idle_unit": ("interface/alarm/alarm_no_idle_unit", "UI", 500, 500),
+    "ui.chat": ("interface/ui/chat_alert.ogg", "UI", 0, 0),
     # Selecting a thing. Buildings get a per-kind sound further down; these two
     # are the generic fallbacks the seam resolves to when a kind has none.
-    "ui.select_unit": ("interface/select/building/sel_universal", "UI", 60),
-    "ui.select_building": ("interface/select/building/sel_universal", "UI", 60),
-    "ui.select_resource_tree": ("interface/select/resource/sel_tree", "UI", 60),
-    "ui.select_resource_stone": ("interface/select/resource/sel_stone", "UI", 60),
-    "ui.select_resource_gold": ("interface/select/resource/sel_metal", "UI", 60),
-    "ui.select_resource_food": ("interface/select/resource/sel_fruit", "UI", 60),
+    "ui.select_unit": ("interface/select/building/sel_universal", "UI", 60, 60),
+    "ui.select_building": ("interface/select/building/sel_universal", "UI", 60, 60),
+    "ui.select_resource_tree": ("interface/select/resource/sel_tree", "UI", 60, 60),
+    "ui.select_resource_stone": ("interface/select/resource/sel_stone", "UI", 60, 60),
+    "ui.select_resource_gold": ("interface/select/resource/sel_metal", "UI", 60, 60),
+    "ui.select_resource_food": ("interface/select/resource/sel_fruit", "UI", 60, 60),
     # Match-shaping announcements.
-    "ui.age_advance": ("interface/alarm/alarm_phase", "UI", 0),
-    "ui.tech_complete": ("interface/alarm/alarm_techcomplete", "UI", 0),
-    "ui.under_attack": ("interface/alarm/alarm_attackplayer", "UI", 4000),
-    "ui.victory": ("interface/alarm/alarm_victory", "UI", 0),
-    "ui.defeat": ("interface/alarm/alarm_defeated", "UI", 0),
+    "ui.age_advance": ("interface/alarm/alarm_phase", "UI", 0, 0),
+    "ui.tech_complete": ("interface/alarm/alarm_techcomplete", "UI", 0, 0),
+    "ui.under_attack": ("interface/alarm/alarm_attackplayer", "UI", 4000, 4000),
+    "ui.victory": ("interface/alarm/alarm_victory", "UI", 0, 0),
+    "ui.defeat": ("interface/alarm/alarm_defeated", "UI", 0, 0),
     # A trained unit reporting for duty, by broad class. 0 A.D. keys these by
     # role rather than by unit, which is exactly the granularity we want -- 28
     # unit defs do not need 28 sounds.
-    "trained.worker": ("interface/alarm/alarm_create_worker", "UI", 0),
-    "trained.female": ("interface/alarm/alarm_create_female", "UI", 0),
-    "trained.infantry": ("interface/alarm/alarm_create_infantry", "UI", 0),
-    "trained.cavalry": ("interface/alarm/alarm_create_cav", "UI", 0),
-    "trained.priest": ("interface/alarm/alarm_create_priest", "UI", 0),
-    "trained.warship": ("interface/alarm/alarm_create_warship", "UI", 0),
-    "trained.siege": ("attack/siege/ram_trained", "UI", 0),
+    "trained.worker": ("interface/alarm/alarm_create_worker", "UI", 0, 0),
+    "trained.female": ("interface/alarm/alarm_create_female", "UI", 0, 0),
+    "trained.infantry": ("interface/alarm/alarm_create_infantry", "UI", 0, 0),
+    "trained.cavalry": ("interface/alarm/alarm_create_cav", "UI", 0, 0),
+    "trained.priest": ("interface/alarm/alarm_create_priest", "UI", 0, 0),
+    "trained.warship": ("interface/alarm/alarm_create_warship", "UI", 0, 0),
+    "trained.siege": ("attack/siege/ram_trained", "UI", 0, 0),
     # ── villager work ───────────────────────────────────────────────────────
     # Throttled hard: these fire per gather tick, and a dozen villagers on one
     # forest would otherwise stack into noise.
-    "villager.chop": ("resource/lumbering/lumbering", "SFX", 180),
-    "villager.mine_stone": ("resource/mining/mining", "SFX", 180),
-    "villager.mine_gold": ("resource/mining/pickaxe", "SFX", 180),
-    "villager.forage": ("resource/foraging/forage_leaves", "SFX", 220),
-    "villager.farm": ("resource/farming/farm", "SFX", 220),
-    "villager.hunt": ("resource/gathering/gather_meat", "SFX", 220),
-    "villager.fish": ("resource/gathering/gathering", "SFX", 220),
-    "villager.build_wood": ("resource/construction/con_wood", "SFX", 180),
-    "villager.build_stone": ("resource/construction/con_stone", "SFX", 180),
-    "villager.build_saw": ("resource/construction/con_saw", "SFX", 180),
-    "tree.fall": ("resource/lumbering/treefall", "SFX", 0),
+    "villager.chop": ("resource/lumbering/lumbering", "SFX", 1000, 220),
+    "villager.mine_stone": ("resource/mining/mining", "SFX", 1000, 220),
+    "villager.mine_gold": ("resource/mining/pickaxe", "SFX", 1000, 220),
+    "villager.forage": ("resource/foraging/forage_leaves", "SFX", 1200, 260),
+    "villager.farm": ("resource/farming/farm", "SFX", 1200, 260),
+    "villager.hunt": ("resource/gathering/gather_meat", "SFX", 1200, 260),
+    "villager.fish": ("resource/gathering/gathering", "SFX", 1400, 300),
+    "villager.build_wood": ("resource/construction/con_wood", "SFX", 1000, 220),
+    "villager.build_stone": ("resource/construction/con_stone", "SFX", 1000, 220),
+    "villager.build_saw": ("resource/construction/con_saw", "SFX", 1000, 220),
+    "tree.fall": ("resource/lumbering/treefall", "SFX", 0, 0),
     # ── weapons ─────────────────────────────────────────────────────────────
     # One id per WEAPON, not per unit: `units.json` says what a unit swings and
     # the view maps that to one of these. A crossbow has no 0 A.D. equivalent,
     # so it borrows the bow -- the honest best match rather than silence.
-    "attack.sword": ("attack/weapon/sword_attack", "SFX", 90),
-    "attack.spear": ("attack/weapon/spear_attack", "SFX", 90),
-    "attack.pike": ("attack/weapon/pike_attack", "SFX", 90),
-    "attack.knife": ("attack/weapon/knife_attack", "SFX", 90),
-    "attack.bow": ("attack/weapon/bow_attack", "SFX", 90),
-    "attack.crossbow": ("attack/weapon/bow_attack", "SFX", 90),
-    "attack.sling": ("attack/weapon/sling_attack", "SFX", 90),
-    "attack.javelin": ("attack/weapon/javelin_attack", "SFX", 90),
-    "attack.ram": ("attack/siege/ram_attack", "SFX", 0),
-    "attack.ballista": ("attack/siege/ballist_attack", "SFX", 0),
+    "attack.sword": ("attack/weapon/sword_attack", "SFX", 2000, 200),
+    "attack.spear": ("attack/weapon/spear_attack", "SFX", 3000, 220),
+    "attack.pike": ("attack/weapon/pike_attack", "SFX", 3000, 220),
+    "attack.knife": ("attack/weapon/knife_attack", "SFX", 2000, 200),
+    "attack.bow": ("attack/weapon/bow_attack", "SFX", 2000, 200),
+    "attack.crossbow": ("attack/weapon/bow_attack", "SFX", 2000, 200),
+    "attack.sling": ("attack/weapon/sling_attack", "SFX", 2000, 200),
+    "attack.javelin": ("attack/weapon/javelin_attack", "SFX", 2000, 200),
+    "attack.ram": ("attack/siege/ram_attack", "SFX", 5000, 400),
+    "attack.ballista": ("attack/siege/ballist_attack", "SFX", 6000, 400),
     # Onager and trebuchet are both counterweight/torsion throwers; 0 A.D.'s
     # Roman ballista is the closest heavy release it has.
-    "attack.catapult": ("attack/siege/ballist_rome_attack", "SFX", 0),
+    "attack.catapult": ("attack/siege/ballist_rome_attack", "SFX", 8000, 400),
     # The dragon's breath. 0 A.D. has no dragon and no breath weapon, so this is
     # its spreading-fire loop -- the nearest thing it owns to a gout of flame,
     # and better than the arrow twang any rule reading `attack_type: pierce`
     # would have picked (see UnitDef.attack_projectile's note on the same trap).
-    "attack.fire": ("attack/fire/spreading_fire", "SFX", 300),
-    "ambient.fire": ("attack/fire/crackling_fire", "AMBIENT", 0),
-    "projectile.arrow_fly": ("attack/weapon/arrowfly", "SFX", 120),
-    "impact.arrow": ("attack/impact/arrow_impact", "SFX", 90),
-    "impact.metal": ("attack/impact/shield_metal", "SFX", 90),
-    "impact.wood": ("attack/impact/shield_wood", "SFX", 90),
-    "impact.siege": ("attack/impact/siegeprojectilehit", "SFX", 0),
+    "attack.fire": ("attack/fire/spreading_fire", "SFX", 3000, 300),
+    "ambient.fire": ("attack/fire/crackling_fire", "AMBIENT", 0, 0),
+    "projectile.arrow_fly": ("attack/weapon/arrowfly", "SFX", 2000, 160),
+    "impact.arrow": ("attack/impact/arrow_impact", "SFX", 600, 140),
+    "impact.metal": ("attack/impact/shield_metal", "SFX", 600, 140),
+    "impact.wood": ("attack/impact/shield_wood", "SFX", 600, 140),
+    "impact.siege": ("attack/impact/siegeprojectilehit", "SFX", 0, 0),
     # ── death ───────────────────────────────────────────────────────────────
-    "die.male": ("actor/human/death/male_death", "VOICE", 60),
-    "die.female": ("actor/human/death/female_death", "VOICE", 60),
-    "die.mounted": ("actor/mounted/death/death_mounted", "VOICE", 60),
-    "die.ship": ("actor/ship/warship_death", "SFX", 0),
-    "die.animal": ("actor/fauna/death/death_animal_gen", "SFX", 60),
-    "die.horse": ("actor/fauna/death/death_horse", "SFX", 60),
-    "die.predator": ("actor/fauna/animal/lion_death", "SFX", 60),
-    "die.pig": ("actor/fauna/animal/pig_death", "SFX", 60),
+    "die.male": ("actor/human/death/male_death", "VOICE", 60, 60),
+    "die.female": ("actor/human/death/female_death", "VOICE", 60, 60),
+    "die.mounted": ("actor/mounted/death/death_mounted", "VOICE", 60, 60),
+    "die.ship": ("actor/ship/warship_death", "SFX", 0, 0),
+    "die.animal": ("actor/fauna/death/death_animal_gen", "SFX", 60, 60),
+    "die.horse": ("actor/fauna/death/death_horse", "SFX", 60, 60),
+    "die.predator": ("actor/fauna/animal/lion_death", "SFX", 60, 60),
+    "die.pig": ("actor/fauna/animal/pig_death", "SFX", 60, 60),
     # ── wildlife ────────────────────────────────────────────────────────────
     # Lion is 0 A.D.'s only fauna attack clip, so wolf and bear share it.
-    "animal.predator_attack": ("actor/fauna/attack/lion", "SFX", 200),
-    "animal.sheep": ("actor/fauna/animal/sheep", "SFX", 900),
-    "animal.cattle": ("actor/fauna/animal/cattle_select", "SFX", 900),
-    "animal.boar": ("actor/fauna/animal/pig", "SFX", 900),
+    "animal.predator_attack": ("actor/fauna/attack/lion", "SFX", 1500, 260),
+    "animal.sheep": ("actor/fauna/animal/sheep", "SFX", 9000, 900),
+    "animal.cattle": ("actor/fauna/animal/cattle_select", "SFX", 9000, 900),
+    "animal.boar": ("actor/fauna/animal/pig", "SFX", 9000, 900),
     # ── buildings ───────────────────────────────────────────────────────────
-    "building.destroyed": ("attack/destruction/building_collapse_large", "SFX", 0),
-    "building.debris": ("attack/destruction/explode_debris", "SFX", 0),
-    "gate.open": ("actor/gate/stonegate_open", "SFX", 0),
-    "gate.close": ("actor/gate/stonegate_close", "SFX", 0),
-    "ship.move": ("actor/ship/ship_move", "SFX", 400),
+    "building.destroyed": ("attack/destruction/building_collapse_large", "SFX", 0, 0),
+    "building.debris": ("attack/destruction/explode_debris", "SFX", 0, 0),
+    "gate.open": ("actor/gate/stonegate_open", "SFX", 0, 0),
+    "gate.close": ("actor/gate/stonegate_close", "SFX", 0, 0),
+    "ship.move": ("actor/ship/ship_move", "SFX", 400, 400),
     # Completion, per building kind. Our 19 non-wall buildings against 0 A.D.'s
     # complete_* set; the walls and the three gates share one each.
-    "complete.town_center": ("interface/complete/building/complete_civ_center", "UI", 0),
-    "complete.house": ("interface/complete/building/complete_house", "UI", 0),
-    "complete.mill": ("interface/complete/building/complete_farmstead", "UI", 0),
-    "complete.lumber_camp": ("interface/complete/building/complete_storehouse", "UI", 0),
-    "complete.mining_camp": ("interface/complete/building/complete_storehouse", "UI", 0),
-    "complete.barracks": ("interface/complete/building/complete_barracks", "UI", 0),
-    "complete.market": ("interface/complete/building/complete_market", "UI", 0),
-    "complete.blacksmith": ("interface/complete/building/complete_forge", "UI", 0),
-    "complete.stable": ("interface/complete/building/complete_stable", "UI", 0),
-    "complete.archery_range": ("interface/complete/building/complete_range", "UI", 0),
-    "complete.dock": ("interface/complete/building/complete_dock", "UI", 0),
-    "complete.field": ("interface/complete/building/complete_field", "UI", 0),
-    "complete.tower": ("interface/complete/building/complete_tower", "UI", 0),
-    "complete.castle": ("interface/complete/building/complete_fortress", "UI", 0),
-    "complete.monastery": ("interface/complete/building/complete_temple", "UI", 0),
-    "complete.university": ("interface/complete/building/complete_library", "UI", 0),
-    "complete.siege_workshop": ("interface/complete/building/complete_ffactri", "UI", 0),
-    "complete.wonder": ("interface/complete/building/complete_wonder", "UI", 0),
-    "complete.wall": ("interface/complete/building/complete_wall", "UI", 0),
-    "complete.gate": ("interface/complete/building/complete_gate", "UI", 0),
-    "complete.universal": ("interface/complete/building/complete_universal", "UI", 0),
+    "complete.town_center": ("interface/complete/building/complete_civ_center", "UI", 0, 0),
+    "complete.house": ("interface/complete/building/complete_house", "UI", 0, 0),
+    "complete.mill": ("interface/complete/building/complete_farmstead", "UI", 0, 0),
+    "complete.lumber_camp": ("interface/complete/building/complete_storehouse", "UI", 0, 0),
+    "complete.mining_camp": ("interface/complete/building/complete_storehouse", "UI", 0, 0),
+    "complete.barracks": ("interface/complete/building/complete_barracks", "UI", 0, 0),
+    "complete.market": ("interface/complete/building/complete_market", "UI", 0, 0),
+    "complete.blacksmith": ("interface/complete/building/complete_forge", "UI", 0, 0),
+    "complete.stable": ("interface/complete/building/complete_stable", "UI", 0, 0),
+    "complete.archery_range": ("interface/complete/building/complete_range", "UI", 0, 0),
+    "complete.dock": ("interface/complete/building/complete_dock", "UI", 0, 0),
+    "complete.field": ("interface/complete/building/complete_field", "UI", 0, 0),
+    "complete.tower": ("interface/complete/building/complete_tower", "UI", 0, 0),
+    "complete.castle": ("interface/complete/building/complete_fortress", "UI", 0, 0),
+    "complete.monastery": ("interface/complete/building/complete_temple", "UI", 0, 0),
+    "complete.university": ("interface/complete/building/complete_library", "UI", 0, 0),
+    "complete.siege_workshop": ("interface/complete/building/complete_ffactri", "UI", 0, 0),
+    "complete.wonder": ("interface/complete/building/complete_wonder", "UI", 0, 0),
+    "complete.wall": ("interface/complete/building/complete_wall", "UI", 0, 0),
+    "complete.gate": ("interface/complete/building/complete_gate", "UI", 0, 0),
+    "complete.universal": ("interface/complete/building/complete_universal", "UI", 0, 0),
     # Selection, per building kind -- the same mapping as completion. Only the
     # kinds whose sound is actually distinctive; the rest fall back to
     # `ui.select_building`, which is why that is `sel_universal`.
-    "select.town_center": ("interface/select/building/sel_civ_center", "UI", 60),
-    "select.house": ("interface/select/building/sel_house", "UI", 60),
-    "select.mill": ("interface/select/building/sel_farmstead", "UI", 60),
-    "select.storehouse": ("interface/select/building/sel_storehouse", "UI", 60),
-    "select.barracks": ("interface/select/building/sel_barracks", "UI", 60),
-    "select.market": ("interface/select/building/sel_market", "UI", 60),
-    "select.blacksmith": ("interface/select/building/sel_forge", "UI", 60),
-    "select.stable": ("interface/select/building/sel_stable", "UI", 60),
-    "select.dock": ("interface/select/building/sel_dock", "UI", 60),
-    "select.field": ("interface/select/building/sel_field", "UI", 60),
-    "select.tower": ("interface/select/building/sel_tower", "UI", 60),
-    "select.castle": ("interface/select/building/sel_fortress", "UI", 60),
-    "select.monastery": ("interface/select/building/sel_temple", "UI", 60),
-    "select.university": ("interface/select/building/sel_library", "UI", 60),
-    "select.wonder": ("interface/select/building/sel_wonder", "UI", 60),
-    "select.wall": ("interface/select/building/sel_wall", "UI", 60),
-    "select.gate": ("interface/select/building/sel_gate", "UI", 60),
+    "select.town_center": ("interface/select/building/sel_civ_center", "UI", 60, 60),
+    "select.house": ("interface/select/building/sel_house", "UI", 60, 60),
+    "select.mill": ("interface/select/building/sel_farmstead", "UI", 60, 60),
+    "select.storehouse": ("interface/select/building/sel_storehouse", "UI", 60, 60),
+    "select.barracks": ("interface/select/building/sel_barracks", "UI", 60, 60),
+    "select.market": ("interface/select/building/sel_market", "UI", 60, 60),
+    "select.blacksmith": ("interface/select/building/sel_forge", "UI", 60, 60),
+    "select.stable": ("interface/select/building/sel_stable", "UI", 60, 60),
+    "select.dock": ("interface/select/building/sel_dock", "UI", 60, 60),
+    "select.field": ("interface/select/building/sel_field", "UI", 60, 60),
+    "select.tower": ("interface/select/building/sel_tower", "UI", 60, 60),
+    "select.castle": ("interface/select/building/sel_fortress", "UI", 60, 60),
+    "select.monastery": ("interface/select/building/sel_temple", "UI", 60, 60),
+    "select.university": ("interface/select/building/sel_library", "UI", 60, 60),
+    "select.wonder": ("interface/select/building/sel_wonder", "UI", 60, 60),
+    "select.wall": ("interface/select/building/sel_wall", "UI", 60, 60),
+    "select.gate": ("interface/select/building/sel_gate", "UI", 60, 60),
     # ── unit voices ─────────────────────────────────────────────────────────
     # LATIN ONLY, per PLAN.md 9.2.1 and A.7 -- 0 A.D.'s voices are
     # civilisation-specific and taking all four would be four accents in one
     # army. Latin covers the age-4 Roman skin and is the least wrong for the
     # Celtic ages, which have no Celtic voice set in 0 A.D. at all.
-    "voice.male.select": ("voice/latin/civ/civ_male_select", "VOICE", 80),
-    "voice.male.move": ("voice/latin/civ/civ_male_walk", "VOICE", 80),
-    "voice.male.attack": ("voice/latin/civ/civ_male_attack", "VOICE", 80),
-    "voice.male.build": ("voice/latin/civ/civ_male_build", "VOICE", 80),
-    "voice.male.gather": ("voice/latin/civ/civ_male_gather", "VOICE", 80),
-    "voice.male.repair": ("voice/latin/civ/civ_male_repair", "VOICE", 80),
-    "voice.male.garrison": ("voice/latin/civ/civ_male_garrison", "VOICE", 80),
-    "voice.male.retreat": ("voice/latin/civ/civ_male_retreat", "VOICE", 80),
-    "voice.male.trade": ("voice/latin/civ/civ_male_trade", "VOICE", 80),
-    "voice.female.select": ("voice/latin/civ/civ_female_select", "VOICE", 80),
-    "voice.female.move": ("voice/latin/civ/civ_female_walk", "VOICE", 80),
-    "voice.female.attack": ("voice/latin/civ/civ_female_attack", "VOICE", 80),
-    "voice.female.build": ("voice/latin/civ/civ_female_build", "VOICE", 80),
-    "voice.female.gather": ("voice/latin/civ/civ_female_gather", "VOICE", 80),
-    "voice.female.herd": ("voice/latin/civ/civ_female_herd", "VOICE", 80),
-    "voice.female.hunt": ("voice/latin/civ/civ_female_hunt", "VOICE", 80),
-    "voice.female.work_land": ("voice/latin/civ/civ_female_work_land", "VOICE", 80),
+    "voice.male.select": ("voice/latin/civ/civ_male_select", "VOICE", 80, 80),
+    "voice.male.move": ("voice/latin/civ/civ_male_walk", "VOICE", 80, 80),
+    "voice.male.attack": ("voice/latin/civ/civ_male_attack", "VOICE", 80, 80),
+    "voice.male.build": ("voice/latin/civ/civ_male_build", "VOICE", 80, 80),
+    "voice.male.gather": ("voice/latin/civ/civ_male_gather", "VOICE", 80, 80),
+    "voice.male.repair": ("voice/latin/civ/civ_male_repair", "VOICE", 80, 80),
+    "voice.male.garrison": ("voice/latin/civ/civ_male_garrison", "VOICE", 80, 80),
+    "voice.male.retreat": ("voice/latin/civ/civ_male_retreat", "VOICE", 80, 80),
+    "voice.male.trade": ("voice/latin/civ/civ_male_trade", "VOICE", 80, 80),
+    "voice.female.select": ("voice/latin/civ/civ_female_select", "VOICE", 80, 80),
+    "voice.female.move": ("voice/latin/civ/civ_female_walk", "VOICE", 80, 80),
+    "voice.female.attack": ("voice/latin/civ/civ_female_attack", "VOICE", 80, 80),
+    "voice.female.build": ("voice/latin/civ/civ_female_build", "VOICE", 80, 80),
+    "voice.female.gather": ("voice/latin/civ/civ_female_gather", "VOICE", 80, 80),
+    "voice.female.herd": ("voice/latin/civ/civ_female_herd", "VOICE", 80, 80),
+    "voice.female.hunt": ("voice/latin/civ/civ_female_hunt", "VOICE", 80, 80),
+    "voice.female.work_land": ("voice/latin/civ/civ_female_work_land", "VOICE", 80, 80),
     # ── ambient ─────────────────────────────────────────────────────────────
-    "ambient.day": ("ambient/dayscape/day_temperate", "AMBIENT", 0),
-    "ambient.wind": ("ambient/weather/wind_reg", "AMBIENT", 0),
-    "ambient.farm": ("ambient/building/amb_farm", "AMBIENT", 0),
-    "ambient.port": ("ambient/building/amb_port", "AMBIENT", 0),
-    "ambient.market": ("ambient/building/amb_trade", "AMBIENT", 0),
-    "ambient.shore": ("ambient/water/coastline_beach", "AMBIENT", 0),
+    "ambient.day": ("ambient/dayscape/day_temperate", "AMBIENT", 0, 0),
+    "ambient.wind": ("ambient/weather/wind_reg", "AMBIENT", 0, 0),
+    "ambient.farm": ("ambient/building/amb_farm", "AMBIENT", 0, 0),
+    "ambient.port": ("ambient/building/amb_port", "AMBIENT", 0, 0),
+    "ambient.market": ("ambient/building/amb_trade", "AMBIENT", 0, 0),
+    "ambient.shore": ("ambient/water/coastline_beach", "AMBIENT", 0, 0),
 }
 
 # Music is single files, not groups -- there is nothing to vary and nothing to
@@ -539,12 +563,14 @@ def main() -> int:
     # ── resolve every id to its sources ─────────────────────────────────────
     resolved: dict[str, dict] = {}
     missing_groups: list[str] = []
-    for sound_id, (spec, bus, throttle) in SFX.items():
+    for sound_id, (spec, bus, throttle, crowd) in SFX.items():
         group = read_group(spec, args.max_variations)
         if group is None:
             missing_groups.append(sound_id)
             continue
-        group.update({"bus": bus, "throttle": throttle, "spec": spec})
+        group.update({
+            "bus": bus, "throttle": throttle, "crowd": crowd, "spec": spec,
+        })
         resolved[sound_id] = group
 
     music: dict[str, dict] = {}
@@ -642,12 +668,13 @@ def main() -> int:
             "pitch_min": round(entry["pitch"][0], 3),
             "pitch_max": round(entry["pitch"][1], 3),
             "throttle_ms": entry["throttle"],
+            "crowd_ms": entry["crowd"],
             "source_group": entry["spec"],
         }
     # Ids whose group is missing entirely still get an entry, with no streams.
     # The vocabulary is the contract (PLAN.md 7.5): a declared id that is silent
     # and an id that was never declared have to stay distinguishable.
-    for sound_id, (spec, bus, throttle) in SFX.items():
+    for sound_id, (spec, bus, throttle, crowd) in SFX.items():
         sfx_out.setdefault(
             sound_id,
             {
@@ -657,6 +684,7 @@ def main() -> int:
                 "pitch_min": 1.0,
                 "pitch_max": 1.0,
                 "throttle_ms": throttle,
+                "crowd_ms": crowd,
                 "source_group": spec,
             },
         )
@@ -671,6 +699,7 @@ def main() -> int:
             "pitch_min": 1.0,
             "pitch_max": 1.0,
             "throttle_ms": 0,
+            "crowd_ms": 0,
             "source_group": MUSIC[music_id],
         }
 
@@ -698,9 +727,15 @@ def main() -> int:
             "from the sound group's <Gain>/<RandGain>/<PitchLower|Upper>. A",
             "pitch range of 1..1 means that group asked for no jitter.",
             "",
-            "`throttle_ms` is OURS, not 0 A.D.'s -- the minimum gap between two",
-            "plays of one id. Gather and melee sounds fire per tick and a dozen",
-            "villagers on one forest would stack into noise without it.",
+            "TWO RATE LIMITS, both OURS rather than 0 A.D.'s. `throttle_ms` is",
+            "the minimum gap for ONE SOURCE -- a unit's own cadence, roughly its",
+            "cooldown_ticks. `crowd_ms` is the minimum gap for the sound at all,",
+            "however many units are making it.",
+            "",
+            "One number could not do both. A swordsman swings every 2 s, so a",
+            "single global gap either lets one unit fire eleven times a second",
+            "or reduces a battle of ten to one clang every two seconds while ten",
+            "men visibly swing. See tools/stage_audio.py for the full reasoning.",
             "",
             "`source_group` is provenance, for game/assets/LICENCES.md and the",
             "licence audit. 0 A.D. is CC-BY-SA 3.0.",

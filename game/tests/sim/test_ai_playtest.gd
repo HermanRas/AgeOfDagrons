@@ -219,9 +219,19 @@ func _diagnose(w: SimWorld, ai: AISystem) -> String:
 			"\n            ".join(ai.log_lines())]
 
 
+## 1200 TICKS, NOT 600, since every unit speed was halved on 2026-08-23
+## (units.json's note carries the owner's instruction). The claim being tested is
+## "three villagers are gathering", and that is unchanged; what changed is how
+## long it takes them to WALK to a node. At 600 ticks this now catches two
+## gathering and the rest still in MOVE, with the economy demonstrably running --
+## the failure printed food 200, wood 70, gold 260, stone 200 banked.
+##
+## Doubled rather than dropping the threshold to 2, deliberately: the threshold is
+## the assertion and the window is the calibration, and lowering the assertion to
+## fit a slower world would quietly weaken the test that the AI works at all.
 func test_it_puts_its_villagers_to_work() -> void:
 	var w := _match()
-	_run(w, 600)
+	_run(w, 1200)
 	var working := 0
 	for e in w.entities.values():
 		if e is SimUnit and e.owner_id == 1 and e.alive \

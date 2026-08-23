@@ -20,15 +20,33 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ### Balance — the top of the list
 
-- [ ] **Every unit feels too fast.** Owner-reported 2026-08-21 from a real two-device
-      match on a phone, and **still the single most valuable open item**. Parked
-      deliberately: this is a balancing number, not a defect, and it wants doing as one
-      pass over every unit's `speed` in the data rather than a nudge to whichever unit was
-      on screen. **Nothing should be tuned piecemeal before it.**
+- [x] **Every unit feels too fast — DONE 2026-08-23, every speed halved.** Owner-reported
+      2026-08-21 from a real two-device match on a phone, parked deliberately until it could
+      be done as ONE pass over the whole roster rather than a nudge to whichever unit was on
+      screen. The owner's instruction closed it: *"if we reduce the unit speed by 50% making
+      them half as slow as they are now"*. The villager went 200 → 100 and every other unit
+      scaled by the same half, so relative pacing is untouched; `units.json`'s note carries
+      the arithmetic and the four `speed: 0` units stayed 0.
 
-      The queue behind it has grown since it was raised — walls and chokepoints, three
-      hostile predators, fleeing deer and driven livestock all change what "too fast"
-      means. **Only the owner can judge this one.**
+      **Two consequences to weigh before tuning anything else**, both of them new open items
+      rather than reasons to undo this:
+
+      1. **It cut the economy, not just the walking speed.** A gather trip is walk-out,
+         extract, walk-home, deposit — halving speed doubles both walks, so resource income
+         is closer to halved than unaffected, and worse the further the node. If the game now
+         feels slow rather than merely calmer, `gather_rate` is the lever, not `speed`.
+      2. **It broke the AI-vs-AI baseline** (see that section below), by amplifying the
+         already-open "a build step gives up when short of resources" bug until both AIs
+         reach their attack step with no army.
+
+      **The sound half of the same report was a separate cause and is fixed separately.**
+      The report reasoned that chopping, mining and wildlife attacks repeated too fast
+      *because* units moved too fast. They do not: while a unit holds a work or attack
+      animation, the repeat rate is set by `throttle_ms`/`crowd_ms` in `data/audio.json` and
+      by nothing else — a stationary villager chopping is unaffected by how fast she walks.
+      Those were retuned in the same session against the real `cooldown_ticks` (a swordsman
+      swings once every 2 s and the sound was gated at 90 ms). Kept because the two symptoms
+      arrived together and will look related again.
 
 ### Input and HUD
 
@@ -144,18 +162,48 @@ Found by `dev_preview/preview_ai_match.tscn`, forest, 12,000 ticks.
       not re-targeting — and `CombatSystem` re-targets now (see the reversal below). Nobody
       has checked what the standing order still needs to do.
 
-**Baseline, so a regression is visible.** Forest, 12,000 ticks:
+**Baseline, so a regression is visible.** Forest, 12,000 ticks. **Re-measured 2026-08-23
+after every unit speed was halved** (see the balance item at the top — that was the owner's
+call and this is what it cost):
 
-| seed | outcome |
-|---|---|
-| 3 | MATCH OVER t8282, winner p1 |
-| 4 | MATCH OVER t7776, winner **p2** |
-| 5 | MATCH OVER t8763, winner p1 |
-| 6 | UNRESOLVED — p2 at 0 units and one unreachable foundation (parked, above) |
+| seed | outcome | before the halving |
+|---|---|---|
+| 3 | MATCH OVER t8806, winner p1 | t8282, p1 |
+| 4 | **UNRESOLVED** | t7776, **p2** |
+| 5 | MATCH OVER t9470, winner p1 | t8763, p1 |
+| 6 | UNRESOLVED — p2 at 0 units and one unreachable foundation (parked, above) | UNRESOLVED |
 
-Three in four resolve and both sides win across the set, so the result is not an artefact
-of the script favouring player 1. Seed 6 is understood rather than hanging: the match is
-decided in every practical sense and only the win condition cannot fire.
+- [ ] **Halving unit speed cost the baseline its best property, and the cause is the
+      already-open "gives up when short of resources" bug, amplified.** Two in four resolve
+      now rather than three, and — the part that matters — **seed 4 was the only seed p2
+      ever won**, which is what made the set evidence that the result is not an artefact of
+      the script favouring player 1. That evidence is gone.
+
+      **Not a window problem: seed 4 does not resolve at 20,000 ticks either**, so it is
+      not a match that merely fell just outside the cut. What happens is on the record:
+
+      ```
+      t2445  p2 step 14 -- cannot place barracks: cost 175 wood vs stock 74 wood
+      t2450  p2 step 15: gather wood x1
+      t3430  p2 step 16 -- no building.barracks standing
+      t3435  p2 step 17: attack                     <- attacks with nothing
+      t2736  p1 step 15 timed out
+      t3640  p1 step 16 -- building.barracks is still a foundation (0% built)
+      t3645  p1 step 17: attack                     <- also attacks with nothing
+      ```
+
+      Both sides reach the attack step with no army, and neither can kill the other, so it
+      runs forever. That is **exactly the open item above** — a build step that gives up
+      when short of resources — now hitting BOTH players instead of one.
+
+      **Why halving speed did this, and it is worth understanding before tuning further:**
+      a gather trip is walk-out, extract, walk-home, deposit, and halving speed doubles both
+      walks. Resource income is therefore closer to HALVED than unaffected, and the further
+      the node the worse it is. Meanwhile every AI step timeout is still the number it was.
+      So the speed change did not just make units slower to watch — it cut the economy, and
+      the AI's timeouts are now far too tight for the world they run in. Fixing the
+      affordability timeout is the first thing to try; re-tuning `gather_rate` upward to
+      compensate is the other lever, and that one is the owner's call.
 
 ---
 

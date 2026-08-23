@@ -256,7 +256,11 @@ func test_the_villager_parses_every_field_the_schema_declares() -> void:
 	assert_eq(v.name, "Villager")
 	assert_eq(v.visual, &"vis.villager")
 	assert_eq(v.hp, 30)
-	assert_eq(v.speed, 200)
+	# 100 since 2026-08-23: every unit speed was halved on the owner's instruction
+	# (units.json's note, and BUGS.md's oldest open item). This assertion is about
+	# PARSING, not balance -- it pins one known value per field to catch a schema
+	# field silently dropped -- so it tracks the data rather than arguing with it.
+	assert_eq(v.speed, 100)
 	assert_eq(v.pop_cost, 1)
 	assert_eq(int(v.cost[&"food"]), 50)
 	assert_eq(v.build_time_ticks, 250)

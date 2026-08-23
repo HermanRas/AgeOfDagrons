@@ -67,6 +67,18 @@ func test_every_declared_sfx_entry_has_the_fields_audio_manager_reads() -> void:
 				"%s pitch range is not inverted" % id)
 		assert_true(int(entry.get("throttle_ms", -1)) >= 0,
 				"%s throttle_ms is not negative" % id)
+		assert_true(int(entry.get("crowd_ms", -1)) >= 0,
+				"%s crowd_ms is not negative" % id)
+		# The crowd gap must not exceed a source's own gap, or the second limit
+		# would be the binding one and per-source pacing would do nothing --
+		# which is exactly the single-global-number behaviour the two limits
+		# exist to replace.
+		var throttle := int(entry.get("throttle_ms", 0))
+		var crowd := int(entry.get("crowd_ms", 0))
+		if throttle > 0 and crowd > 0:
+			assert_true(crowd <= throttle,
+					"%s crowd_ms (%d) does not exceed throttle_ms (%d)"
+					% [id, crowd, throttle])
 
 
 func test_every_declared_bus_is_one_the_audio_manager_creates() -> void:
