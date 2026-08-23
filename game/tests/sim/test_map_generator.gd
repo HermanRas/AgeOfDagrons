@@ -173,6 +173,99 @@ func test_random_resolves_to_a_real_type_and_is_still_deterministic() -> void:
 
 # ── the four types are actually different ───────────────────────────────────
 
+# ── wildlife (2026-08-23) ───────────────────────────────────────────────────
+#
+# The bug these exist for: the wolf and the boar were wired into the DEBUG map when
+# 4.13 landed and this generator got nothing, so a generated match -- which is what
+# the project owner was actually playing -- had no wildlife at all.
+
+func test_every_player_gets_the_same_wildlife_however_many_there_are() -> void:
+	# Per-start placement is what makes the count exact and the same for everybody.
+	# Scattered over the board it would be neither.
+	for players in [2, 4]:
+		var data := _generate(7, MapGenerator.Type.FOREST, players)
+		assert_eq(_entities_of(data, &"unit.wolf").size(),
+				MapGenerator.WOLF_COUNT * players, "%s players, wolves" % players)
+		assert_eq(_entities_of(data, &"res.sheep").size(),
+				MapGenerator.SHEEP_HERDS * MapGenerator.SHEEP_PER_HERD * players,
+				"%s players, sheep" % players)
+		assert_eq(_entities_of(data, &"res.deer").size(),
+				MapGenerator.DEER_HERDS * MapGenerator.DEER_PER_HERD * players,
+				"%s players, deer" % players)
+
+
+func test_the_wolves_belong_to_nobody() -> void:
+	# `player` 0 is what MapGen.build_from turns into owner 0. Any other index would
+	# hand a player a free unit they never trained.
+	for e in _entities_of(_generate(3), &"unit.wolf"):
+		assert_eq(int(e["player"]), 0)
+
+
+func test_a_wolf_never_spawns_on_top_of_the_opening() -> void:
+	# WOLF_MIN's whole argument. At aggro 6 against five villagers ringing the town
+	# centre, near means eating the opening before the player has read the screen.
+	var data := _generate(11)
+	for e in _entities_of(data, &"unit.wolf"):
+		var tile: Vector2i = e["tile"]
+		for start in data.starts:
+			var gap: int = maxi(absi(tile.x - start.x), absi(tile.y - start.y))
+			assert_true(gap >= MapGenerator.WOLF_MIN - MapGenerator.HERD_SPREAD,
+					"wolf at %s is %s from the start at %s" % [tile, gap, start])
+
+
+func test_deer_arrive_in_herds_rather_than_sprinkled() -> void:
+	# Seven deer spread evenly round a base is not a herd, it is seven deer. Each
+	# animal should have several of its own kind within a herd's spread of it.
+	var deer := _entities_of(_generate(5), &"res.deer")
+	assert_true(deer.size() >= MapGenerator.DEER_PER_HERD, "enough to group at all")
+	for e in deer:
+		var near := 0
+		for other in deer:
+			var d: Vector2i = (other["tile"] as Vector2i) - (e["tile"] as Vector2i)
+			if maxi(absi(d.x), absi(d.y)) <= MapGenerator.HERD_SPREAD * 2:
+				near += 1
+		assert_true(near >= 3, "deer at %s has only %s neighbours" % [e["tile"], near])
+
+
+# ── shorelines (2026-08-23) ─────────────────────────────────────────────────
+
+func test_grass_never_touches_water_directly() -> void:
+	# The point of the sand band. Every grass/water boundary on the map should have
+	# been separated by at least one tile of shore.
+	for type in [MapGenerator.Type.RIVER, MapGenerator.Type.ISLAND,
+			MapGenerator.Type.FOREST]:
+		var data := _generate(4, type)
+		for y in range(data.size.y):
+			for x in range(data.size.x):
+				var t := Vector2i(x, y)
+				if data.terrain_at(t) != SimMap.Terrain.GRASS:
+					continue
+				for dy in range(-1, 2):
+					for dx in range(-1, 2):
+						var n := t + Vector2i(dx, dy)
+						if not data.in_bounds(n):
+							continue
+						var k := data.terrain_at(n)
+						assert_false(k == SimMap.Terrain.WATER_SHALLOW
+								or k == SimMap.Terrain.WATER_DEEP,
+								"grass at %s touches water at %s" % [t, n])
+
+
+func test_a_river_map_actually_grows_a_beach() -> void:
+	# The assertion above passes vacuously on a map with no water at all.
+	var data := _generate(4, MapGenerator.Type.RIVER)
+	assert_true(_terrain_share(data, SimMap.Terrain.SAND) > 0.01,
+			"a river map is more than 1%% sand")
+
+
+func test_the_shore_does_not_pave_over_the_whole_map() -> void:
+	# The failure mode of a beach pass that reads its own output: it eats the map one
+	# ring at a time. SHORE_WIDTH is 2, and the snapshot-then-write is what holds it.
+	var data := _generate(4, MapGenerator.Type.RIVER)
+	assert_true(_terrain_share(data, SimMap.Terrain.SAND) < 0.5,
+			"and less than half of one")
+
+
 func _terrain_share(data: MapData, kind: int) -> float:
 	var n := 0
 	for i in range(data.terrain.size()):

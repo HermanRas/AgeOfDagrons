@@ -97,6 +97,46 @@ const START_WOOD_MIN := 11
 const START_WOOD_MAX := 17
 const START_FOOD_COUNT := 4
 
+## WILDLIFE, PER START (project owner, 2026-08-23). The debug map got animals when the
+## wolf landed and this generator did not, so a generated match had none at all -- which
+## is what the owner hit: "i did not find any wildlife at all".
+##
+## PER START rather than scattered over the whole board, and that is a fairness choice
+## rather than a literal reading of "x2 per player". Sprinkling 2n animals at random
+## across the map gives them all to whoever the noise favours; hanging them off each
+## start gives every player the same opening and still lands them at a random angle and
+## distance. The COUNT is what "per player" was about, and the count is exact.
+##
+## Distances are banded by what the thing is for. Sheep are an opening food source and
+## sit just past the berry ring; deer are a second wave worth walking to; the wolf is a
+## hazard you should meet by exploring, not by stepping outside. Nothing is placed
+## nearer the base than `WOLF_MIN` allows, which is the number that matters: at aggro 6
+## against five villagers, close means eating the opening before the player has read the
+## screen.
+const SHEEP_HERDS := 2
+const SHEEP_PER_HERD := 3
+const SHEEP_MIN := 13
+const SHEEP_MAX := 19
+
+const DEER_HERDS := 2
+const DEER_PER_HERD := 7
+const DEER_MIN := 19
+const DEER_MAX := 27
+
+const WOLF_COUNT := 2
+const WOLF_MIN := 24
+const WOLF_MAX := 33
+
+## How far a herd's animals spread from the anchor the herd was placed at. Small: a
+## flock reads as a flock only if the sprites nearly touch, and seven deer spread over
+## eight tiles is not a herd, it is seven deer.
+const HERD_SPREAD := 3
+
+## How many anchors a herd may try before giving up on that herd entirely. A herd is
+## seven animals in one throw, so losing one to a single unlucky angle is a visible
+## hole where losing one scattered berry bush is not.
+const ANCHOR_ATTEMPTS := 8
+
 ## How many times to regenerate before giving up on validation.
 const MAX_ATTEMPTS := 8
 
@@ -214,6 +254,17 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	for centre in data.starts:
 		_clear_base(data, wood, centre)
 
+	# AFTER the clearings and BEFORE anything is placed on the ground. Both halves of
+	# that were found by a failing test rather than reasoned out. `_clear_base` paints
+	# GRASS over its whole radius, so a shore pass run before it gets overwritten and a
+	# base sited by the water goes straight back to a hard green-on-blue edge -- which
+	# is precisely the case a player is most likely to be looking at. Running it after
+	# `_place_base` instead would grow beaches under nodes already standing there.
+	#
+	# Sand is buildable and walkable ground (`SimMap.DOMAIN_TERRAIN`), so a clearing
+	# that turns out to be half beach costs the player nothing.
+	_paint_shores(data, wood, rng)
+
 	var claimed: Dictionary = {}
 	for i in range(count):
 		_place_base(data, claimed, i + 1, data.starts[i], resolved, rng)
@@ -316,6 +367,70 @@ static func _paint_river(data: MapData, wood: PackedByteArray,
 				continue
 			data.set_terrain(t, SimMap.Terrain.WATER_SHALLOW)
 			wood[data.index_of(t)] = 0
+
+
+## Sand wherever grass meets water (project owner, 2026-08-23: "can we add sand around
+## rivers"). Runs over every map type, after the terrain and before anything stands on
+## it.
+##
+## WHAT IT IS REALLY FOR is the hard edge. Terrain is one flat diamond per kind on a
+## TileMapLayer, so grass meeting water is a pixel-crisp zigzag of 64x32 diamonds and
+## reads as a staircase. There is no blend to reach for -- `TerrainLayer` has no
+## transition tiles and nothing for a shader to interpolate between. A sand band does
+## not remove the staircase; it replaces ONE high-contrast edge (saturated green
+## against saturated blue) with TWO low-contrast ones, and low-contrast staircases are
+## much harder for the eye to pick out. It is the cheap eighty per cent.
+##
+## THE OUTER RING IS RAGGED ON PURPOSE. A uniform two-tile band just draws the same
+## staircase twice, parallel, which is arguably worse -- two crisp lines read as a
+## deliberate stripe. Dropping tiles from the outer pass at random breaks the second
+## edge into something that looks like a coastline instead.
+const SHORE_WIDTH := 2
+const SHORE_RAGGED := 0.45
+
+static func _paint_shores(data: MapData, wood: PackedByteArray,
+		rng: RandomNumberGenerator) -> void:
+	var side := data.size.x
+	for pass_index in range(SHORE_WIDTH):
+		# Collected first and written after, over a SNAPSHOT of the terrain. Writing
+		# as we go would let a tile turned to sand this pass seed the next tile in the
+		# same pass, and the beach would eat the whole map one row at a time.
+		var to_sand: Array[Vector2i] = []
+		for y in range(side):
+			for x in range(side):
+				var t := Vector2i(x, y)
+				if data.terrain_at(t) != SimMap.Terrain.GRASS:
+					continue
+				if not _touches_shore(data, t, pass_index > 0):
+					continue
+				if pass_index > 0 and rng.randf() < SHORE_RAGGED:
+					continue
+				to_sand.append(t)
+		for t in to_sand:
+			data.set_terrain(t, SimMap.Terrain.SAND)
+			# No copse on the waterline. `_place_trees` reads this mask, and an oak
+			# standing in the surf reads as a bug rather than as scenery -- the palm
+			# that would make a beach tree look deliberate is requested and unbaked.
+			wood[data.index_of(t)] = 0
+
+
+## Whether `t` has water beside it -- or, once the first ring is down, sand, which is
+## how the band widens outward one ring at a time. All eight neighbours: a diagonal
+## touch is a visible corner in this projection, and leaving it out notches the beach.
+static func _touches_shore(data: MapData, t: Vector2i, sand_counts: bool) -> bool:
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			var n := t + Vector2i(dx, dy)
+			if not data.in_bounds(n):
+				continue
+			var kind := data.terrain_at(n)
+			if kind == SimMap.Terrain.WATER_SHALLOW or kind == SimMap.Terrain.WATER_DEEP:
+				return true
+			if sand_counts and kind == SimMap.Terrain.SAND:
+				return true
+	return false
 
 
 static func _paint_desert(data: MapData, wood: PackedByteArray,
@@ -526,6 +641,16 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	_place_scatter(data, claimed, centre, &"res.tree", START_WOOD_COUNT,
 			START_WOOD_MIN, START_WOOD_MAX, rng)
 
+	# Wildlife. Sheep and deer are nodes harvested where they stand; the wolf is a
+	# gaia UNIT that comes at you (4.13), which is why it goes through a different
+	# placer -- `_place_scatter` asks the resource table and a unit is not in it.
+	_place_herds(data, claimed, centre, &"res.sheep", SHEEP_HERDS, SHEEP_PER_HERD,
+			SHEEP_MIN, SHEEP_MAX, rng)
+	_place_herds(data, claimed, centre, &"res.deer", DEER_HERDS, DEER_PER_HERD,
+			DEER_MIN, DEER_MAX, rng)
+	_place_gaia_units(data, claimed, centre, &"unit.wolf", WOLF_COUNT,
+			WOLF_MIN, WOLF_MAX, rng)
+
 
 ## Tiles at exactly Chebyshev `radius` from `centre`, clockwise from the north-west
 ## corner. A fixed order, because two clients placing a start must agree.
@@ -582,6 +707,65 @@ static func _place_scatter(data: MapData, claimed: Dictionary, centre: Vector2i,
 		data.add_entity(def_id, 0, tile, size_class)
 		for t in MapData.footprint_rect_of(data.entities[data.entities.size() - 1]):
 			claimed[t] = true
+		placed += 1
+
+
+## `herds` clumps of `per_herd` animals, each clump anchored somewhere in the ring
+## between `min_r` and `max_r` of the base.
+##
+## TWO STAGES, and the reason is that a herd is a shape rather than a count. Scattering
+## `herds * per_herd` animals over the whole ring in one pass gives an even sprinkle --
+## six sheep spread evenly around a base is not two flocks, and the player reads it as
+## noise. Anchoring first and clumping second is `_place_trees`'s copse argument applied
+## to livestock, and for the same reason: the grouping is the thing you can see.
+static func _place_herds(data: MapData, claimed: Dictionary, centre: Vector2i,
+		def_id: StringName, herds: int, per_herd: int, min_r: int, max_r: int,
+		rng: RandomNumberGenerator) -> void:
+	for i in range(herds):
+		# Anchors stepped evenly apart with a random rotation, so two herds land on
+		# opposite sides of the base rather than on top of each other -- the same
+		# even-sweep trick `_place_scatter` uses within one cluster.
+		var base_angle := rng.randf_range(0.0, TAU) + float(i) * TAU / float(maxi(1, herds))
+		# RETRIED, because one bad anchor loses a WHOLE HERD and that is visible. The
+		# first version took whatever the angle gave it, and a seed that put a deer
+		# anchor in a river dropped seven deer and left the map short a food source
+		# nobody could see was missing. Each retry nudges the angle rather than
+		# re-rolling it, so the herd stays on the side of the base it was meant for.
+		for attempt in range(ANCHOR_ATTEMPTS):
+			var angle := base_angle + float(attempt) * 0.4
+			var radius := rng.randf_range(float(min_r), float(max_r))
+			var anchor := centre + Vector2i(Vector2(cos(angle), sin(angle)) * radius)
+			if not data.in_bounds(anchor) or not data.is_ground_passable(anchor):
+				continue
+			_place_scatter(data, claimed, anchor, def_id, per_herd, 0, HERD_SPREAD, rng)
+			break
+
+
+## Gaia units -- the wolf, and the bear when it lands. Deliberately NOT `_place_scatter`,
+## which reads `GameDataRegistry.resource_def` and bails on anything that is not a node.
+##
+## Owner 0 is passed as the `player` INDEX, which `MapGen.build_from` maps straight to
+## owner 0 rather than to a seat: index 0 means gaia there, and every animal on the map
+## already goes in that way.
+static func _place_gaia_units(data: MapData, claimed: Dictionary, centre: Vector2i,
+		def_id: StringName, count: int, min_r: int, max_r: int,
+		rng: RandomNumberGenerator) -> void:
+	if GameDataRegistry.unit(def_id) == null:
+		return
+	var offset := rng.randf_range(0.0, TAU)
+	var placed := 0
+	var attempts := 0
+	while placed < count and attempts < count * 12:
+		var angle := offset + float(attempts) * TAU / float(maxi(1, count * 3))
+		var radius := rng.randf_range(float(min_r), float(max_r))
+		attempts += 1
+		var tile := centre + Vector2i(Vector2(cos(angle), sin(angle)) * radius)
+		if claimed.has(tile) or not data.is_ground_passable(tile):
+			continue
+		# Claimed even though a unit is never written into the occupancy grid, so two
+		# wolves cannot be handed the same tile and nothing else is placed under them.
+		claimed[tile] = true
+		data.add_entity(def_id, 0, tile)
 		placed += 1
 
 
