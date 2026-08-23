@@ -563,7 +563,11 @@ func spawn_resource_node(def_id: StringName, origin: Vector2i, size_class: int =
 	var d: ResourceDef = resource_def(def_id)
 	var footprint := d.footprint_for_size(size_class) if d != null else Vector2i.ONE
 	var rect := SimMap.footprint_rect(origin, footprint)
-	if not map.can_place_building(rect):
+	# THE NODE'S OWN DOMAIN, not the building one. This called `can_place_building` for
+	# months, which is land-only by design and correct for every node there was -- and
+	# refused `res.fish` every tile of the sea it is supposed to live in (6.5).
+	var domain := SimMap.from_domain_name(d.domain) if d != null else SimMap.Domain.LAND
+	if not map.can_place(rect, domain):
 		return null
 
 	var n := SimResourceNode.new()

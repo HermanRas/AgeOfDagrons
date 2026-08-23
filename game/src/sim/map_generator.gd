@@ -148,6 +148,19 @@ const PREDATORS := {
 ## eight tiles is not a herd, it is seven deer.
 const HERD_SPREAD := 3
 
+## FISH, per start, in SHALLOW water only (6.5). Deep water is excluded on purpose --
+## it is what an island's middle ocean is made of, and a shoal five tiles from any
+## shore is a food source a player can see and never reach until they have a dock and a
+## ship, which is precisely the frustration the whole guaranteed-opening rule exists to
+## avoid. Shallow is the rim and the river, which is where a dock can actually go.
+##
+## Best-effort like every placer here, and more so: a start with no water in range gets
+## no fish, which is the right answer rather than a failure. A desert oasis map will
+## come out with a couple and an island with the full count.
+const FISH_COUNT := 5
+const FISH_MIN := 8
+const FISH_MAX := 26
+
 ## How many anchors a herd may try before giving up on that herd entirely. A herd is
 ## seven animals in one throw, so losing one to a single unlucky angle is a visible
 ## hole where losing one scattered berry bush is not.
@@ -667,6 +680,11 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	# herd goes through the gaia-unit placer. The shape of the herd is unchanged.
 	_place_unit_herds(data, claimed, centre, &"unit.deer", DEER_HERDS, DEER_PER_HERD,
 			DEER_MIN, DEER_MAX, rng)
+	# Fish, wherever there is shallow water in reach. Every map type gets the call and
+	# the ones with no water near this start simply place none.
+	_place_water_scatter(data, claimed, centre, &"res.fish", FISH_COUNT,
+			FISH_MIN, FISH_MAX, rng)
+
 	# THE MAP TYPE PICKS THE PREDATOR -- see PREDATORS. One species per map, so a
 	# player learns one animal's behaviour per match rather than three at once.
 	var predator: Dictionary = PREDATORS.get(type, {})
@@ -762,6 +780,40 @@ static func _place_herds(data: MapData, claimed: Dictionary, centre: Vector2i,
 				continue
 			_place_scatter(data, claimed, anchor, def_id, per_herd, 0, HERD_SPREAD, rng)
 			break
+
+
+## `_place_scatter` for nodes that live in SHALLOW WATER -- the fish, and nothing else.
+##
+## A SEPARATE SWEEP RATHER THAN A FLAG ON `_place_scatter`, because the two differ in
+## the one line that matters and agree nowhere else: this one wants water and cannot use
+## `is_ground_passable`, which is land-only by definition. Sharing them would have meant
+## a domain parameter threaded through a function whose every other caller is a tree.
+##
+## Sweeps a wide arc rather than stepping evenly: water is not distributed around a base
+## the way trees are -- a river cuts one side of it and an island rims the whole thing --
+## so the angle has to be free to wander until it finds some.
+static func _place_water_scatter(data: MapData, claimed: Dictionary, centre: Vector2i,
+		def_id: StringName, count: int, min_r: int, max_r: int,
+		rng: RandomNumberGenerator) -> void:
+	if GameDataRegistry.resource_def(def_id) == null:
+		return
+	var offset := rng.randf_range(0.0, TAU)
+	var placed := 0
+	var attempts := 0
+	# A bigger budget than the land placers get, for the reason above: most of a ring
+	# around a river start is dry, and giving up early would leave the water empty.
+	while placed < count and attempts < count * 60:
+		var angle := offset + float(attempts) * 0.11
+		var radius := rng.randf_range(float(min_r), float(max_r))
+		attempts += 1
+		var tile := centre + Vector2i(Vector2(cos(angle), sin(angle)) * radius)
+		if not data.in_bounds(tile) or claimed.has(tile):
+			continue
+		if data.terrain_at(tile) != SimMap.Terrain.WATER_SHALLOW:
+			continue
+		claimed[tile] = true
+		data.add_entity(def_id, 0, tile)
+		placed += 1
 
 
 ## `_place_herds` for gaia UNITS. Same anchor-then-clump shape, same retry, different

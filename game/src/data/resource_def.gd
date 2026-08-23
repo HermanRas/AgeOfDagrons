@@ -49,6 +49,15 @@ var footprints: Array[Vector2i] = []
 ## problem is where the art is, not what ground the tree holds.
 var pick_footprints: Array[Vector2i] = []
 
+## Which surfaces this node may stand on -- a `SimMap.Domain` name, `land` for all but
+## one thing in the game (6.5's fish).
+##
+## IT EXISTS BECAUSE `spawn_resource_node` ASKED THE WRONG QUESTION. It called
+## `can_place_building`, whose own comment says buildings are land-only and the domain
+## is therefore not a parameter -- correct about buildings and quietly fatal to a fish,
+## which was refused every tile of the sea it was supposed to live in.
+var domain: StringName = &"land"
+
 ## Starting amount per size class, small to large.
 var amounts: Array[int] = []
 ## How many villagers can work this node at once.
@@ -71,6 +80,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> ResourceDef:
 		r.footprints.append(GameDefs.tile_size(f, Vector2i.ONE))
 	for f in (d.get("pick_footprints", []) as Array):
 		r.pick_footprints.append(GameDefs.tile_size(f, Vector2i.ONE))
+	r.domain = StringName(d.get("domain", "land"))
 	r.gather_slots = int(d.get("gather_slots", 1))
 
 	var w: Variant = d.get("wildlife")

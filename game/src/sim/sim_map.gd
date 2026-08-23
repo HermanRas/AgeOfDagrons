@@ -248,11 +248,20 @@ func clear_occupant(id: int) -> void:
 ## calling the movement question here would let a second building be dropped on
 ## top of a standing crop.
 func can_place_building(rect: Rect2i) -> bool:
+	return can_place(rect, Domain.LAND)
+
+
+## The same question for any domain, which is what a FISH needed (6.5). Buildings keep
+## their own no-argument entry point above, because the comment on it is still true --
+## a building is land-only and the domain is not a choice its caller should be offered.
+## A resource node is different: `res.fish` declares `domain: water` and `SimMap` is the
+## only thing that can decide whether a given tile satisfies it.
+func can_place(rect: Rect2i, domain: int) -> bool:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return false
 	for y in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):
-			if not is_buildable(Vector2i(x, y), Domain.LAND):
+			if not is_buildable(Vector2i(x, y), domain):
 				return false
 	return true
 

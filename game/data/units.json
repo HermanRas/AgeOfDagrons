@@ -470,8 +470,8 @@
     "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
     "armor": { "melee": 0, "pierce": 4 },
 
-    "carry_cap": {},
-    "gather_rate": {},
+    "carry_cap": { "food": 20 },
+    "gather_rate": { "food": 30 },
 
     "trainable_at": ["building.dock"],
     "age_required": 2

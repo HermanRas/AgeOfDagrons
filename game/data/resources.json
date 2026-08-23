@@ -160,6 +160,14 @@
     "gather_slots": 4
   },
 
+  "res.fish": {
+    "kind": "food",
+    "visual": "vis.fish",
+    "domain": "water",
+    "amounts": [200, 200, 200],
+    "gather_slots": 2
+  },
+
   "res.deer_carcass": {
     "kind": "food",
     "visual": "vis.deer_carcass",

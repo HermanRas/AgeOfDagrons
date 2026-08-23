@@ -117,13 +117,18 @@ func test_the_full_roster_is_present() -> void:
 	# `res.boar_carcass` -- the owner's call is that a boar fights back, so its 150
 	# food moved from standing in a field to being inside something that charges.
 	#
-	# NO PREDATOR IS A RESOURCE. Wolf, boar and bear are all `unit.*` in units.json,
-	# because a thing that chases needs a task and a path. Only the fish is still
-	# absent, and for a reason resources.json spells out: it needs water placement, a
-	# gathering ship and a dock, none of which exist.
+	# NO ANIMAL IS A RESOURCE ANY MORE except as a carcass. Predators, deer and
+	# livestock are all `unit.*` in units.json, because each of them has to be able to
+	# move -- to chase, to bolt, or to be walked home.
+	#
+	# `res.fish` is the exception and the only node left with an animal's name: it is
+	# the one creature that genuinely holds still. It is also the only node in the game
+	# that is not on LAND -- see its `domain` -- which is what `SimMap.can_place` had to
+	# be split out of `can_place_building` for.
 	assert_eq(_by_content(reg.resource_ids()),
 			_by_content([&"res.berry_bush", &"res.gold_mine", &"res.tree",
-					&"res.stone", &"res.deer_carcass", &"res.sheep_carcass", &"res.cattle_carcass",
+					&"res.stone", &"res.fish",
+					&"res.deer_carcass", &"res.sheep_carcass", &"res.cattle_carcass",
 					&"res.wolf_carcass", &"res.boar_carcass", &"res.bear_carcass"]))
 
 

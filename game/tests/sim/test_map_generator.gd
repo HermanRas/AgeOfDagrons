@@ -286,6 +286,56 @@ func test_deer_arrive_in_herds_rather_than_sprinkled() -> void:
 		assert_true(near >= 3, "deer at %s has only %s neighbours" % [e["tile"], near])
 
 
+# ── fish (6.5) ──────────────────────────────────────────────────────────────
+
+func test_a_watery_map_has_fish_in_it() -> void:
+	# The first blocker was that `spawn_resource_node` asked `can_place_building`,
+	# which is land-only, so a fish was refused every tile of the sea it lives in.
+	for type in [MapGenerator.Type.ISLAND, MapGenerator.Type.RIVER]:
+		var data := _generate(6, type)
+		assert_true(_entities_of(data, &"res.fish").size() > 0,
+				"%s should have fish" % MapGenerator.type_name(type))
+
+
+func test_every_fish_is_in_shallow_water() -> void:
+	# DEEP water is excluded deliberately: an island's middle ocean is made of it, and
+	# a shoal five tiles from any shore is food a player can see and never reach.
+	# Shallow is the rim and the river, which is where a dock can actually go.
+	for type in [MapGenerator.Type.ISLAND, MapGenerator.Type.RIVER,
+			MapGenerator.Type.FOREST, MapGenerator.Type.DESERT]:
+		var data := _generate(6, type)
+		for e in _entities_of(data, &"res.fish"):
+			assert_eq(data.terrain_at(e["tile"]), SimMap.Terrain.WATER_SHALLOW,
+					"fish at %s on a %s map" % [e["tile"], MapGenerator.type_name(type)])
+
+
+func test_a_fish_can_be_spawned_on_water_and_a_tree_still_cannot() -> void:
+	# The domain split, at the level it actually happens. Same tile, same call.
+	var world := SimWorld.new()
+	world.setup(MatchConfig.debug_single_player())
+	var wet := Vector2i(20, 20)
+	world.map.set_terrain(wet, SimMap.Terrain.WATER_SHALLOW)
+
+	assert_not_null(world.spawn_resource_node(&"res.fish", wet, 0), "a fish swims")
+	world.map.set_terrain(Vector2i(21, 21), SimMap.Terrain.WATER_SHALLOW)
+	assert_null(world.spawn_resource_node(&"res.tree", Vector2i(21, 21), 0),
+			"an oak does not")
+
+
+func test_a_fishing_ship_can_actually_fish() -> void:
+	# The second blocker, and it was pure data: the ship carried empty `gather_rate`
+	# and `carry_cap`, so `harvest_rate` returned 0, `take_schedule` returned nothing
+	# and `_process_gather` stopped the unit on arrival. It would have sailed out,
+	# reached the shoal and quietly given up.
+	var ship: UnitDef = GameDataRegistry.unit(&"unit.fishing_ship")
+	assert_true(ship.gather_per_tick(&"food") > 0.0, "it has a rate")
+	assert_true(int(ship.carry_cap.get("food", 0)) > 0, "and somewhere to put the catch")
+	assert_eq(ship.domain, &"water")
+	# And somewhere to take it: the dock has accepted food all along.
+	var dock: BuildingDef = GameDataRegistry.building(&"building.dock")
+	assert_true(dock.accepts_drop_off(&"food"))
+
+
 # ── shorelines (2026-08-23) ─────────────────────────────────────────────────
 
 func test_grass_never_touches_water_directly() -> void:
