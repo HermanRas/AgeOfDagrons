@@ -18,6 +18,22 @@ enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK }
 ## odds.
 const _ADJACENT_TO_BUILDING_BONUS := 100000.0
 
+## How far a tap that hit BARE GROUND may reach for a one-tile resource node, measured
+## in LOCAL pixels from the middle of that node's artwork (PLAN.md 4.3, added
+## 2026-08-23). See the fallback at the end of `pick()`.
+##
+## 24 px is chosen against the tile, not by feel. Adjacent tile centres are 35.8 px
+## apart, so the reach can never cross into the neighbour's centre and steal a tap
+## that was unambiguously somewhere else; and the tile diamond is only 16 px tall,
+## so up and down -- the two directions where a tile gives the least room and the
+## isometric art leans hardest -- it is where the whole gain is.
+##
+## IN LOCAL SPACE, so it is a fixed WORLD distance and shrinks on screen as the camera
+## zooms out. That is the price of `pick()` not knowing a camera exists, which is a
+## property worth more than the last few pixels; if zoomed-out tapping is still hard,
+## the fix is for `GameScene` to scale this, not for picking to grow a camera.
+const TAP_REACH_PX := 24.0
+
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
 var fog: FogOverlay = FogOverlay.new()
@@ -276,6 +292,14 @@ func apply_snapshot(snap: Dictionary) -> void:
 			"max_hp": int(max_hp),
 			"alive": alive,
 			"footprint": _footprint_of(entry),
+			# WHERE A TAP MAY LAND, which is not the same question as what ground the
+			# entity holds -- see ResourceDef.pick_footprints. Read by `_covers` and by
+			# nothing else; occlusion, depth sort, the selection ring and placement
+			# advice all keep reading `footprint` above, and must, because each of them
+			# is asking about the ground.
+			"pick_footprint": _pick_footprint_of(entry),
+			# Ground point -> middle of the artwork, for the tap fallback in `pick()`.
+			"pick_lift": _pick_lift_of(entry),
 			# Asked of the registry rather than guessed from the snapshot's shape.
 			# Inferring "no phase field means a unit" would call a resource node a
 			# unit, and 3.6 would then send move orders naming trees.
@@ -523,6 +547,11 @@ func select(ids: Array[int]) -> void:
 ## `owner` restricts the pick to one player's things; pass 0 to pick anything.
 ## Units win ties, because a villager standing on a tree's tile is the thing worth
 ## tapping and the tree is not going anywhere.
+##
+## WHEN THE TILE HOLDS NOTHING there is a second pass -- see `_nearest_small_node`.
+## The paragraph above is still the rule and this is still not bounds-picking: the
+## tile always answers first, and the fallback only runs where the answer was "bare
+## ground", which is the one case that cannot be a wrong pick of something else.
 func pick(local: Vector2, owner: int = 0) -> int:
 	var tile := Iso.tile_at(local)
 	var best := 0
@@ -541,7 +570,51 @@ func pick(local: Vector2, owner: int = 0) -> int:
 		if best == 0 or (is_unit and not best_is_unit):
 			best = int(id)
 			best_is_unit = is_unit
-	return best
+	if best != 0:
+		return best
+	return _nearest_small_node(local, owner)
+
+
+## The one-tile resource node whose ARTWORK the tap came nearest, or 0 (2026-08-23).
+## Only ever called by `pick()`, and only when the tile under the finger was empty.
+##
+## THE PROBLEM IT SOLVES is that a tile is 64x32 px and a berry bush is smaller than a
+## fingertip. Tapping the picture of a bush misses it -- not because the pick is wrong
+## but because the picture is drawn ABOVE the ground point that answers taps, and a
+## 3.4 m bush lifts its own middle a whole tile up-screen. The player is aiming at the
+## art, so the art is what this measures to: `pick_lift` is the ground point raised by
+## half the visual's height, i.e. the middle of the blob you can see.
+##
+## ONE-TILE NODES ONLY, and resource nodes only. Both limits are the same caution.
+## A 4x4 gold seam or a 2x2 tree is already the size of a fingertip and does not need
+## this; letting one reach out another 24 px would only start eating taps that meant
+## the grass beside it. And keeping it to resource nodes keeps the cost of a mistake
+## at "gathered the wrong thing" -- had it caught units too, a tap meant to retreat
+## from a fight would have become an attack order on whatever stood nearest, which is
+## a far worse trade than a hard-to-tap sheep.
+func _nearest_small_node(local: Vector2, owner: int) -> int:
+	var nearest := 0
+	var nearest_d := TAP_REACH_PX
+	# Sorted for the reason `units_in_box` sorts: two nodes at the same distance
+	# should resolve the same way every time, not by Dictionary insertion order.
+	var ids := _facts.keys()
+	ids.sort()
+	for id in ids:
+		var f: Dictionary = _facts[id]
+		if not bool(f.get("alive", true)):
+			continue
+		if owner != 0 and int(f["owner_id"]) != owner:
+			continue
+		if f["pick_footprint"] != Vector2i.ONE:
+			continue
+		if GameDataRegistry.resource_def(f["def_id"]) == null:
+			continue
+		var art: Vector2 = Iso.tile_centre_to_world(f["tile"]) + f["pick_lift"]
+		var d := local.distance_to(art)
+		if d < nearest_d:
+			nearest_d = d
+			nearest = int(id)
+	return nearest
 
 
 ## Every unit of `owner` standing inside a box, in LOCAL space (PLAN.md 8.3).
@@ -767,8 +840,16 @@ func next_idle_villager(owner: int, after_id: int) -> int:
 	return ids[0]
 
 
+## THE PICK footprint, not the ground one. For everything but the tree they are the
+## same value; where they differ, this is the question being asked -- may a tap land
+## here -- and the ground footprint is the answer to a different one.
+##
+## Note what `centre - footprint / 2` does for an even box: integer division floors,
+## so a 2x2 centred on a tile covers that tile and its three UP-SCREEN neighbours,
+## which is exactly where a tall sprite's art is drawn. Nothing had to be added to
+## bias it; the existing rounding already leans the right way.
 func _covers(f: Dictionary, tile: Vector2i) -> bool:
-	var footprint: Vector2i = f["footprint"]
+	var footprint: Vector2i = f["pick_footprint"]
 	var centre: Vector2i = f["tile"]
 	# A footprint's `tile` is its centre; recover the rect it actually holds.
 	var origin := centre - footprint / 2
@@ -854,6 +935,33 @@ func _footprint_of(entry: Dictionary) -> Vector2i:
 	if res != null:
 		return res.footprint_for_size(int(entry.get("size_class", 0)))
 	return Vector2i.ONE
+
+
+## The tap box, which only a resource node can widen (`ResourceDef.pick_footprints`).
+##
+## BUILDINGS DELIBERATELY GO THROUGH `_footprint_of` UNCHANGED, transpose and all. A
+## building already covers the ground it looks like it covers, so there is nothing to
+## fix; and a building's footprint is the same rect the sim refuses to build on, so a
+## pick box wider than it would let the player tap a house on tiles where placement
+## advice is simultaneously drawing "you cannot build here".
+func _pick_footprint_of(entry: Dictionary) -> Vector2i:
+	var res := GameDataRegistry.resource_def(StringName(entry.get("def_id", &"")))
+	if res == null:
+		return _footprint_of(entry)
+	return res.pick_footprint_for_size(int(entry.get("size_class", 0)))
+
+
+## Ground point -> the middle of the sprite, in local pixels: straight up the screen by
+## half the visual's authored height. Only resource nodes get one, because only
+## `_nearest_small_node` reads it and it considers nothing else.
+##
+## HALF the height, not all of it. The art stands ON the tile and reaches up from it,
+## so its midpoint is half a height above the ground point -- and the midpoint is what
+## a player aims at when they mean "that bush", not its top leaf.
+func _pick_lift_of(entry: Dictionary) -> Vector2:
+	if GameDataRegistry.resource_def(StringName(entry.get("def_id", &""))) == null:
+		return Vector2.ZERO
+	return Iso.height_to_world(GameDataRegistry.placeholder_for(_visual_id_of(entry)).height_m * 0.5)
 
 
 ## Whether `tile` is touching a building AND on its camera-facing side, which is

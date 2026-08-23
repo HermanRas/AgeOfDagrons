@@ -41,6 +41,16 @@ func _entity(id: int, def_id: String, tile: Vector2i, owner := 1,
 	return d
 
 
+## A gaia resource node. Separate from `_entity` because it needs `size_class` -- the
+## field that picks the sprite, the amount and the footprint -- and because owner 0 is
+## not a default worth hiding: nobody owns a tree.
+func _node(id: int, def_id: String, tile: Vector2i, size_class := 0,
+		alive := true) -> Dictionary:
+	var centre := tile * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE / 2, SimWorld.SUBTILE / 2)
+	return {"id": id, "def_id": def_id, "owner_id": 0, "hp": 30, "max_hp": 30,
+			"alive": alive, "pos": centre, "size_class": size_class}
+
+
 func _populate(entries: Array) -> void:
 	view.apply_snapshot({"tick": 1, "updated": entries, "removed": []})
 
@@ -224,6 +234,92 @@ func test_a_corpse_cannot_be_picked() -> void:
 func test_rubble_cannot_be_picked() -> void:
 	_populate([_entity(3, "building.town_center", Vector2i(10, 10), 1, false)])
 	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(10, 10))), 0)
+
+
+# ── tapping small and tall things (2026-08-23) ─────────────────────────────
+#
+# Two complaints, one shape: the thing you aim at is the ART, and the art is not
+# where the tile is. A tree's trunk is drawn up-screen of the tile it stands on; a
+# bush is drawn above its tile and is smaller than a fingertip either way.
+
+func test_a_tree_can_be_tapped_where_its_trunk_is_drawn() -> void:
+	# 2x2 centred on (10, 10) floors to origin (9, 9), so the box is the tile plus
+	# its three UP-SCREEN neighbours -- which is where the canopy and trunk are.
+	_populate([_node(5, "res.tree", Vector2i(10, 10))])
+	for tile in [Vector2i(10, 10), Vector2i(9, 9), Vector2i(10, 9), Vector2i(9, 10)]:
+		assert_eq(view.pick(Iso.tile_centre_to_world(tile)), 5, "tapped %s" % tile)
+
+
+func test_a_trees_tap_box_does_not_reach_down_screen() -> void:
+	# The whole point of leaning the box up-screen is that the ground IN FRONT of a
+	# tree stays tappable -- that is where a player sends a villager to walk past it.
+	_populate([_node(5, "res.tree", Vector2i(10, 10))])
+	for tile in [Vector2i(11, 11), Vector2i(10, 11), Vector2i(11, 10)]:
+		assert_eq(view.pick(Iso.tile_centre_to_world(tile)), 0, "tapped %s" % tile)
+
+
+func test_a_tree_still_claims_only_one_tile_of_ground() -> void:
+	# The pick box is a screen affordance and must not have leaked into the footprint.
+	# If these ever agree at 2x2, a twelve-tree forest has become an impassable wall
+	# and pathing will be the symptom, not selection.
+	var tree := GameDataRegistry.resource_def(&"res.tree")
+	assert_eq(tree.footprint_for_size(0), Vector2i.ONE, "ground")
+	assert_eq(tree.pick_footprint_for_size(0), Vector2i(2, 2), "tap box")
+
+
+func test_a_kind_that_declares_no_pick_box_falls_back_to_its_footprint() -> void:
+	var stone := GameDataRegistry.resource_def(&"res.stone")
+	assert_eq(stone.pick_footprint_for_size(2), stone.footprint_for_size(2))
+
+
+func test_tapping_the_picture_of_a_berry_bush_selects_it() -> void:
+	# vis.berry_bush is 3.40 m tall, so its middle sits 33.3 px up-screen of the tile
+	# it stands on -- just past the centre of the tile above, which is empty ground.
+	# Tapping the blob you can see used to select nothing at all.
+	_populate([_node(8, "res.berry_bush", Vector2i(5, 5))])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(4, 4))), 8)
+
+
+func test_the_reach_for_a_small_node_is_bounded() -> void:
+	# Two tiles up-screen is 64 px, i.e. 30.7 px past the middle of the art, and
+	# TAP_REACH_PX is 24. If this starts failing, check vis.berry_bush's height_m
+	# before assuming the reach is wrong.
+	_populate([_node(8, "res.berry_bush", Vector2i(5, 5))])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(3, 3))), 0, "above the art")
+	# And down-screen it barely reaches at all, because the art does not go down.
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(6, 6))), 0, "below the tile")
+
+
+func test_the_tile_under_the_finger_still_answers_first() -> void:
+	# The villager is standing exactly where the bush's art is drawn. The tap is on
+	# her tile, so she wins outright -- the reach is a fallback for BARE GROUND and
+	# never competes with something the player actually pointed at.
+	_populate([
+		_node(8, "res.berry_bush", Vector2i(5, 5)),
+		_entity(9, "unit.villager", Vector2i(4, 4)),
+	])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(4, 4))), 9)
+
+
+func test_the_reach_never_picks_a_unit() -> void:
+	# Deliberate: a tap near a fight is a retreat order far more often than it is an
+	# attack, and turning one into the other is a much worse mistake than a missed
+	# sheep. Resource nodes only.
+	_populate([_entity(9, "unit.villager", Vector2i(5, 5), 2)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(4, 4))), 0)
+
+
+func test_the_reach_never_picks_a_node_bigger_than_a_tile() -> void:
+	# A 4x4 quarry is already the size of a fingertip. Letting it reach further would
+	# only take taps meant for the grass beside it.
+	_populate([_node(6, "res.stone", Vector2i(20, 20), 2)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(20, 20))), 6, "on it")
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(17, 17))), 0, "just outside it")
+
+
+func test_a_gathered_out_node_cannot_be_reached_for() -> void:
+	_populate([_node(8, "res.berry_bush", Vector2i(5, 5), 0, false)])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(4, 4))), 0)
 
 
 # ── what can be given a move order (3.6) ───────────────────────────────────

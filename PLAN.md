@@ -1879,13 +1879,17 @@ Live risks only. Retired ones are in `b904b76`.
 8. ✅ **AI difficulty list** (12.2b, 2026-08-22) — eight slot roles, Passive real, three placeholders honest about being Easy. §12.2.
 9. ✅ **Walls merge, lobby preview rotated** (5.8 / 1.6, 2026-08-22). And **the facing compensation was built and reverted** (2026-08-22 → 23): the owner's rule is that an art defect gets fixed in the recipe, so the 36-recipe re-bake is §13.2 item 10 and there is no game-side half of it.
 
+10. ✅ **Tap targets for tall and small art** (4.3, 2026-08-23), both reported off a screenshot. Picking has always gone by the tile under the finger, and that is still the rule — but the *art* is not drawn on that tile. A tree's trunk stands a tile and a half up-screen of the ground it holds, so it now carries a `pick_footprints` of 2x2 in `resources.json`, **separate from the footprint** and read by `GameView._covers` alone: the tree still claims one tile, so a forest is still walkable. A berry bush is simply smaller than a fingertip, so a tap that lands on **bare ground** now falls back to the nearest one-tile resource node's *artwork* within `TAP_REACH_PX` (24 px). Deliberately never units — a mis-tap in a fight must not turn a retreat into an attack.
+
 **Next, in the order it makes sense to do it:**
 
-10. **The balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means. This is the one the owner can only answer by playing, so it wants a build on the device.
-11. **Wire the wildlife that is already baked** — `vis.wolf`, `vis.bear`, `vis.boar`, `vis.fish` and `vis.deer_carcass` are staged and declared in **nothing** (`resources.json`'s own note explains why each was held back). That is the walls' failure mode exactly: art on disk that no def reaches for. The wolf is also the 4.13 item above, so hostile behaviour and the declaration are one job.
-12. **Then 4.8 garrison**, which unlocks 4.9 and is the last big hole in the wall feature (0 A.D.'s medium wall declares eight turret points; ours hold nobody).
+11. **The balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means. This is the one the owner can only answer by playing, so it wants a build on the device.
+12. **Wire the wildlife that is already baked** — `vis.wolf`, `vis.bear`, `vis.boar`, `vis.fish` and `vis.deer_carcass` are staged and declared in **nothing** (`resources.json`'s own note explains why each was held back). That is the walls' failure mode exactly: art on disk that no def reaches for. The wolf is also the 4.13 item above, so hostile behaviour and the declaration are one job.
+13. **Then 4.8 garrison**, which unlocks 4.9 and is the last big hole in the wall feature (0 A.D.'s medium wall declares eight turret points; ours hold nobody).
 
 Further out and unchanged in priority: 9.3 `TechSystem` (the field yield's per-age ladder is standing in for a mill tech), 2.4c the map save format, 12.1b LAN discovery, and 13.x dragons once the RTS is a game.
+
+**Still open, later: 12.2b's decision flow.** Item 8 above shipped the *list*, not the opponents — Normal / Hard / Unfair are Easy wearing three names, and the screen admits it. The real per-difficulty behaviour (build-order aggression, expansion rate, what each tier is allowed to cheat at) stays parked until item 11's balancing pass has been played, because tuning an AI against unbalanced unit speeds tunes it against the wrong game. Reopen it after 11.
 
 **Retired from this list, because the architecture answered it rather than the work:** 12.1b's
 *desync detection*. `Net` has no `SimWorld` on a client — it says so outright — and `state_hash()`
