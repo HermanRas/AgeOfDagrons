@@ -18,21 +18,15 @@ enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK }
 ## odds.
 const _ADJACENT_TO_BUILDING_BONUS := 100000.0
 
-## How far a tap that hit BARE GROUND may reach for a one-tile resource node, measured
-## in LOCAL pixels from the middle of that node's artwork (PLAN.md 4.3, added
-## 2026-08-23). See the fallback at the end of `pick()`.
+## Caps how far up-screen a tap may reach for a resource node whose ART covers the
+## tapped tile, in tiles (PLAN.md 4.3, 2026-08-23). See `_nearest_art_cover`.
 ##
-## 24 px is chosen against the tile, not by feel. Adjacent tile centres are 35.8 px
-## apart, so the reach can never cross into the neighbour's centre and steal a tap
-## that was unambiguously somewhere else; and the tile diamond is only 16 px tall,
-## so up and down -- the two directions where a tile gives the least room and the
-## isometric art leans hardest -- it is where the whole gain is.
-##
-## IN LOCAL SPACE, so it is a fixed WORLD distance and shrinks on screen as the camera
-## zooms out. That is the price of `pick()` not knowing a camera exists, which is a
-## property worth more than the last few pixels; if zoomed-out tapping is still hard,
-## the fix is for `GameScene` to scale this, not for picking to grow a camera.
-const TAP_REACH_PX := 24.0
+## `Occlusion.reach_for` is already clamped to `Occlusion.BEHIND_TILES` (5), so today
+## this changes nothing and exists to be turned DOWN. The risk it is the dial for is a
+## dense forest: every tile behind a tree becomes a gather target rather than a move
+## target, and if walking a squad through a wood starts feeling sticky, lower this
+## before touching anything else.
+const PICK_COVER_REACH_TILES := Occlusion.BEHIND_TILES
 
 var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
@@ -292,14 +286,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 			"max_hp": int(max_hp),
 			"alive": alive,
 			"footprint": _footprint_of(entry),
-			# WHERE A TAP MAY LAND, which is not the same question as what ground the
-			# entity holds -- see ResourceDef.pick_footprints. Read by `_covers` and by
-			# nothing else; occlusion, depth sort, the selection ring and placement
-			# advice all keep reading `footprint` above, and must, because each of them
-			# is asking about the ground.
-			"pick_footprint": _pick_footprint_of(entry),
-			# Ground point -> middle of the artwork, for the tap fallback in `pick()`.
-			"pick_lift": _pick_lift_of(entry),
+			# The tiles this entity's ART is painted over, as the same {rect, pad, reach}
+			# the occlusion pass uses. Read only by `_nearest_art_cover`. An empty rect
+			# for anything but a resource node, which makes `Occlusion.hides` false and
+			# needs no type test at the other end.
+			"art_cover": _art_cover_of(entry),
 			# Asked of the registry rather than guessed from the snapshot's shape.
 			# Inferring "no phase field means a unit" would call a resource node a
 			# unit, and 3.6 would then send move orders naming trees.
@@ -548,10 +539,10 @@ func select(ids: Array[int]) -> void:
 ## Units win ties, because a villager standing on a tree's tile is the thing worth
 ## tapping and the tree is not going anywhere.
 ##
-## WHEN THE TILE HOLDS NOTHING there is a second pass -- see `_nearest_small_node`.
-## The paragraph above is still the rule and this is still not bounds-picking: the
-## tile always answers first, and the fallback only runs where the answer was "bare
-## ground", which is the one case that cannot be a wrong pick of something else.
+## WHEN THE TILE HOLDS NOTHING there is a second pass -- see `_nearest_art_cover`.
+## The paragraph above is still the rule: the tile always answers first, and the
+## second pass only runs where the answer was "bare ground", which is the one case
+## that cannot be a wrong pick of something else.
 func pick(local: Vector2, owner: int = 0) -> int:
 	var tile := Iso.tile_at(local)
 	var best := 0
@@ -572,31 +563,44 @@ func pick(local: Vector2, owner: int = 0) -> int:
 			best_is_unit = is_unit
 	if best != 0:
 		return best
-	return _nearest_small_node(local, owner)
+	return _nearest_art_cover(tile, owner)
 
 
-## The one-tile resource node whose ARTWORK the tap came nearest, or 0 (2026-08-23).
-## Only ever called by `pick()`, and only when the tile under the finger was empty.
+## The resource node whose ART is painted over `tile`, or 0 (2026-08-23). Only ever
+## called by `pick()`, and only when the tile under the finger held nothing.
 ##
-## THE PROBLEM IT SOLVES is that a tile is 64x32 px and a berry bush is smaller than a
-## fingertip. Tapping the picture of a bush misses it -- not because the pick is wrong
-## but because the picture is drawn ABOVE the ground point that answers taps, and a
-## 3.4 m bush lifts its own middle a whole tile up-screen. The player is aiming at the
-## art, so the art is what this measures to: `pick_lift` is the ground point raised by
-## half the visual's height, i.e. the middle of the blob you can see.
+## ONE IDEA: IF THE ART HIDES THAT TILE, TAPPING IT IS TAPPING THE ART. So this asks
+## `Occlusion.hides` -- the very same question, with the very same {rect, pad, reach},
+## that decides whether a villager standing there gets outlined because a tree is over
+## her. Those two answers must agree. A tile where the game draws an outline saying
+## "there is something in front of you" and then refuses the tap on that something
+## would be the game contradicting itself.
 ##
-## ONE-TILE NODES ONLY, and resource nodes only. Both limits are the same caution.
-## A 4x4 gold seam or a 2x2 tree is already the size of a fingertip and does not need
-## this; letting one reach out another 24 px would only start eating taps that meant
-## the grass beside it. And keeping it to resource nodes keeps the cost of a mistake
-## at "gathered the wrong thing" -- had it caught units too, a tap meant to retreat
-## from a fight would have become an attack order on whatever stood nearest, which is
-## a far worse trade than a hard-to-tap sheep.
-func _nearest_small_node(local: Vector2, owner: int) -> int:
-	var nearest := 0
-	var nearest_d := TAP_REACH_PX
-	# Sorted for the reason `units_in_box` sorts: two nodes at the same distance
-	# should resolve the same way every time, not by Dictionary insertion order.
+## WHY THE EARLIER TRY WAS NOT ENOUGH. A pick box of 2x2 tiles reaches 48 px up-screen.
+## `vis.tree` is 8.03 m tall -- 157 px -- and 232 px wide, so the lower third of the
+## trunk was tappable and the rest of the tree was not; the project owner reported
+## exactly that, with a screenshot, the same morning it shipped. No tile RECT can fix
+## it either, because a rect that grows up-screen grows down-screen too and would eat
+## the ground in front of the tree, which is where you tap to walk past it. The art's
+## own measured column is the only shape that fits the art.
+##
+## `hides()` gives that for free: it returns false for anything `is_in_front` of the
+## rect, so the ground in front of a tree stays a move order, and false inside the rect
+## itself, which the tile test above has already answered.
+##
+## RESOURCE NODES ONLY -- everything else carries an empty `rect` and fails at the
+## first line of `hides()`. Deliberate, and the limit is not about size: a tap near a
+## fight is a retreat far more often than it is an attack, and letting a soldier's art
+## claim the ground behind him would turn one into the other. Gathering the wrong tree
+## is a cheap mistake; charging is not.
+##
+## Nearest wins where two arts overlap, measured to the RECT rather than to a centre --
+## the same footprint-not-centre rule the sim keeps everywhere.
+func _nearest_art_cover(tile: Vector2i, owner: int) -> int:
+	var best := 0
+	var best_gap := 1 << 30
+	# Sorted for the reason `units_in_box` sorts: two nodes at the same distance should
+	# resolve the same way every time, not by Dictionary insertion order.
 	var ids := _facts.keys()
 	ids.sort()
 	for id in ids:
@@ -605,16 +609,16 @@ func _nearest_small_node(local: Vector2, owner: int) -> int:
 			continue
 		if owner != 0 and int(f["owner_id"]) != owner:
 			continue
-		if f["pick_footprint"] != Vector2i.ONE:
+		var cover: Dictionary = f["art_cover"]
+		var rect: Rect2i = cover["rect"]
+		if not Occlusion.hides(rect, tile, int(cover["pad"]),
+				mini(int(cover["reach"]), PICK_COVER_REACH_TILES)):
 			continue
-		if GameDataRegistry.resource_def(f["def_id"]) == null:
-			continue
-		var art: Vector2 = Iso.tile_centre_to_world(f["tile"]) + f["pick_lift"]
-		var d := local.distance_to(art)
-		if d < nearest_d:
-			nearest_d = d
-			nearest = int(id)
-	return nearest
+		var gap := Occlusion.gap_to(tile, rect)
+		if gap < best_gap:
+			best_gap = gap
+			best = int(id)
+	return best
 
 
 ## Every unit of `owner` standing inside a box, in LOCAL space (PLAN.md 8.3).
@@ -840,16 +844,8 @@ func next_idle_villager(owner: int, after_id: int) -> int:
 	return ids[0]
 
 
-## THE PICK footprint, not the ground one. For everything but the tree they are the
-## same value; where they differ, this is the question being asked -- may a tap land
-## here -- and the ground footprint is the answer to a different one.
-##
-## Note what `centre - footprint / 2` does for an even box: integer division floors,
-## so a 2x2 centred on a tile covers that tile and its three UP-SCREEN neighbours,
-## which is exactly where a tall sprite's art is drawn. Nothing had to be added to
-## bias it; the existing rounding already leans the right way.
 func _covers(f: Dictionary, tile: Vector2i) -> bool:
-	var footprint: Vector2i = f["pick_footprint"]
+	var footprint: Vector2i = f["footprint"]
 	var centre: Vector2i = f["tile"]
 	# A footprint's `tile` is its centre; recover the rect it actually holds.
 	var origin := centre - footprint / 2
@@ -937,31 +933,31 @@ func _footprint_of(entry: Dictionary) -> Vector2i:
 	return Vector2i.ONE
 
 
-## The tap box, which only a resource node can widen (`ResourceDef.pick_footprints`).
+## The tiles a resource node's ART is painted over, as {rect, pad, reach} -- the same
+## three values the occlusion pass builds for the same node a few lines into
+## `apply_snapshot`, from the same two `Occlusion` conversions, because it is the same
+## question. Read by `_nearest_art_cover`.
 ##
-## BUILDINGS DELIBERATELY GO THROUGH `_footprint_of` UNCHANGED, transpose and all. A
-## building already covers the ground it looks like it covers, so there is nothing to
-## fix; and a building's footprint is the same rect the sim refuses to build on, so a
-## pick box wider than it would let the player tap a house on tiles where placement
-## advice is simultaneously drawing "you cannot build here".
-func _pick_footprint_of(entry: Dictionary) -> Vector2i:
-	var res := GameDataRegistry.resource_def(StringName(entry.get("def_id", &"")))
-	if res == null:
-		return _footprint_of(entry)
-	return res.pick_footprint_for_size(int(entry.get("size_class", 0)))
-
-
-## Ground point -> the middle of the sprite, in local pixels: straight up the screen by
-## half the visual's authored height. Only resource nodes get one, because only
-## `_nearest_small_node` reads it and it considers nothing else.
+## AN EMPTY RECT FOR EVERYTHING ELSE, which `Occlusion.hides` rejects on its first
+## line. That is the type test: a unit, a building and an arrow all get one and none of
+## them can ever be reached for. Doing it here rather than at the other end keeps the
+## per-tap loop free of registry lookups.
 ##
-## HALF the height, not all of it. The art stands ON the tile and reaches up from it,
-## so its midpoint is half a height above the ground point -- and the midpoint is what
-## a player aims at when they mean "that bush", not its top leaf.
-func _pick_lift_of(entry: Dictionary) -> Vector2:
+## BUILDINGS ARE EXCLUDED ON PURPOSE, not by oversight. A building already covers the
+## ground it looks like it covers, so there is nothing to fix -- and its footprint is
+## the same rect the sim refuses to build on, so letting a tap reach past it would put
+## a house on tiles where placement advice is simultaneously drawing "you cannot build
+## here".
+func _art_cover_of(entry: Dictionary) -> Dictionary:
 	if GameDataRegistry.resource_def(StringName(entry.get("def_id", &""))) == null:
-		return Vector2.ZERO
-	return Iso.height_to_world(GameDataRegistry.placeholder_for(_visual_id_of(entry)).height_m * 0.5)
+		return {"rect": Rect2i(), "pad": 1, "reach": 1}
+	var fp := _footprint_of(entry)
+	var ph := GameDataRegistry.placeholder_for(_visual_id_of(entry))
+	return {
+		"rect": Rect2i(Vector2i(_sub_pos(entry) / SimWorld.SUBTILE) - fp / 2, fp),
+		"pad": Occlusion.column_pad_for(ph.footprint_m, fp),
+		"reach": Occlusion.reach_for(ph.height_m),
+	}
 
 
 ## Whether `tile` is touching a building AND on its camera-facing side, which is
