@@ -294,6 +294,47 @@ crossing in front of a building.
 
 ---
 
+## 2026-08-23 — mobile playtest
+
+The owner's verdict on the build: **"it feels really good"** — one bug, and it is an
+input-discrimination one rather than anything in the sim.
+
+- [ ] **Double-tap to clear the selection does not work reliably on the phone.**
+      Documented, **not** to be fixed as-is: the owner's call is to replace the gesture
+      with a button rather than keep tuning it.
+
+      The behaviour is real and deliberate — single tap on empty ground moves, double tap
+      lets go ([game_scene.gd:927](game/src/view/game_scene.gd#L927)), swapped to that
+      order on the owner's word on 2026-08-22. The move goes out on the *first* tap, so a
+      double tap moves and then deselects; waiting to find out whether a second tap is
+      coming would put `DOUBLE_TAP_MS` of lag on every order in the game, which is why it
+      is not done the other way.
+
+      **`_ground_tap`'s own header predicted this**, and named the right fix location:
+      *"if it bites on device the fix is `InputRouter.TAP_SLOP` / `TAP_TIME_MS`, which is
+      where the discrimination actually belongs — telling a pan from a tap is the
+      router's job."* A thumb wobbles where a mouse does not, so a second tap that the
+      router scores as a small drag never reaches the detector. Desktop was never
+      affected: right-click clears (`_on_context_cancel`).
+
+      **The owner's interim workaround, worth recording because it reveals the real
+      shape:** a two-finger box select over empty space clears the selection. That path
+      works because a box select has no double-tap timing to get wrong.
+
+      **The fix chosen: an explicit [X] button.** Top of the details / action panel
+      (`SelectionPanel`), **hugging the left edge of the screen, below the five control
+      group icons** (`SimPlayer.CONTROL_GROUP_COUNT`). Visible only when something is
+      selected, since that is the only time it means anything.
+
+      Three reasons it is the right answer rather than a workaround for a workaround:
+      clearing a selection is a discoverable action on a touch screen where a gesture is
+      not; it costs nothing on desktop, which keeps right-click; and it does not require
+      the router's tap/pan discrimination to get any better, so it can ship before that
+      is looked at. **The double-tap gesture stays** — it is not in anybody's way, and it
+      is the faster route once your thumb has learned it. See PLAN.md 8.8.
+
+---
+
 ## Open from the AI-vs-AI match run (not owner-reported)
 
 Found by `dev_preview/preview_ai_match.tscn` on seed 3, forest, 12,000 ticks.

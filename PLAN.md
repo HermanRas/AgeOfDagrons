@@ -672,10 +672,36 @@ Static data is JSON in `game/data/`, loaded once into typed `*Def` objects (`src
               "yield_per_age": [0, 25, 28, 32] }   // food per 100 ticks per villager
 }
 
+// a building that must touch shallow water (6.5). Only the dock.
+"building.dock": { "requires_shore": true, "drop_off": ["food"], "age_required": 2 }
+
 // resources.json - `amounts` is indexed by size_class, and since 2026-08-17
 // `visuals` is too, so a rich seam and a poor one are different pictures
-"res.tree": { "kind": "wood", "amounts": [40, 100, 175], "gather_slots": 1 }
+"res.tree": {
+  "kind": "wood", "amounts": [40, 100, 175], "gather_slots": 1,
+  "pick_footprints": [[2, 2]]        // TAP box only, never the ground it claims (4.3)
+}
+
+// the one node that is not on land (6.5)
+"res.fish": { "kind": "food", "domain": "water", "amounts": [200, 200, 200] }
+
+// units.json - a gaia animal. Nobody trains it, so `trainable_at` is empty and
+// `validate()` exempts wildlife from the "trainable somewhere" rule (4.13, 6.1b, 6.5)
+"unit.wolf": {
+  "hp": 40, "speed": 330, "pop_cost": 0, "trainable_at": [],
+  "attack": { "damage": 4, "type": "melee", "range": 0, "cooldown_ticks": 15 },
+  "wildlife": { "aggro_radius": 6, "roam_radius": 9, "carcass": "res.wolf_carcass" }
+}
+"unit.sheep": {
+  "wildlife": { "aggro_radius": 0, "roam_radius": 0, "flees": false,
+                "herdable": true, "carcass": "res.sheep_carcass" }
+}
 ```
+
+The four fields above the `unit.wolf` sample were all added on 2026-08-23 and **none of them
+was in this section until 2026-08-23's audit** — `requires_shore`, `ResourceDef.domain`,
+`pick_footprints` and the whole `wildlife` block. This is the schema of record; a field that
+ships without a line here is a field the next reader has to find by grepping.
 
 **`factions.json` stays** despite §1: one civilisation is a v1 *scope* decision, and a missing
 file and an empty one are different states — only one is a bug. Its single entry is
@@ -829,6 +855,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `unit.monk` | 3 | Monastery | `units/athenians/healer` ✅ |
 | `unit.knight` | 3 | Castle | `units/germans/cavalry_swordsman_c_m` |
 | `unit.galley` | 3 | Dock | `structures/athenians/trireme` |
+| `unit.trade_cart` | 3 | Market | `units/brit/support_trader` → `units/britons/trader`. **Missing from this table until 2026-08-23** — the def has been in `units.json` all along and only `vis.trade_cart` appeared in the plan, over in A.8 as blocked art, so the entity read as though it did not exist. It has no trade route mechanic yet; the market (8.7) is tribute and buy/sell only |
 | `unit.siege_ram` | 3 | Siege Workshop | `structures/iberians/siege_ram` — note the template says `cart` and the actor is `iberians`: **the civ in the template path need not match the civ in the actor path** |
 | `unit.ballista` | 3 | Siege Workshop | `units/carthaginians/siege_rock_packed` + `_unpacked` |
 | `unit.onager` | 3 | Siege Workshop | `units/romans/siege_onager_packed` + `_unpacked` ✅ |
@@ -1163,6 +1190,8 @@ AoE's stale ghost, which would need a per-player last-seen copy of every static.
 | 3.3 | ✅ `CameraRig`. **Clamping is two rules**: the centre stays on the map DIAMOND (clamped in tile space, where it is an axis-aligned box) and then the viewport stays inside the projected box. Box-only clamping is what `Camera2D.limit_*` does, passed every unit test, and still left a screen ~85% void at the west corner | `[MVP]` |
 | 3.4 | ✅ Double-tap minimap → centre on own town centre | `[MVP]` |
 | 3.5 | Camera follow selected unit | |
+| 3.9 | ✅ **Occlusion outlines** (`Occlusion` + `OutlineView`, owner-requested 2026-08-16). A unit hidden behind a building or a tree draws as a player-coloured rim instead of vanishing. **Recorded late** — it shipped with no phase row of its own, which is why the §6.3 widget list and §7.3 both described the depth sort as though nothing had been added on top. Three conditions, all needed: behind it by the same comparison the depth sort itself makes, within `BEHIND_TILES` of the footprint, and inside its **screen column** — a unit outside the `(x − y)` band is beside the thing on screen rather than behind it, however close in tiles. `column_pad_for` and `reach_for` derive the band from the art's own measured metres, which is why a one-tile oak pads by 3 and a fitted 4×4 seam by 1 | |
+| 3.10 | ✅ **`PlacementAdvice`** — the advisory client-side ghost §12.1 predicted would be needed once a client had the map but not what anyone had built on it. Also recorded late, and its own header cites 12.1b back | |
 | 3.6 | ✅ `Game.tscn`/`game_scene.gd` — the first thing in the project that is a game rather than a harness. Hosts through `Net.host_solo()` so local orders take the same route a remote player's would | `[MVP]` |
 | 3.7 | Tap minimap to move selected units | |
 | 3.8 | ✅ Tap minimap → centre camera there | `[MVP]` |
@@ -1403,6 +1432,7 @@ badge, which is a button that walks to them. `[MVP]`
 | 8.2a | ✅ `Minimap` — terrain baked once into an `Image`, blips redrawn per snapshot, fog painted **over** the blips (2.5) | `[MVP]` |
 | 8.2b | ✅ **DONE 2026-08-21** — 4 corner buttons, all four real. `hud_settings` took over the pause menu from the button that used to sit in the age header; `hud_trade` opens a **working market**; `hud_chat` and `hud_techtree` open **wireframes**. See §8.2b below | |
 | 8.6 | **Chat** — wireframe only (§8.2b). The transport is unbuilt and the design question is per-team versus all-players | |
+| 8.8 | **A [X] clear-selection button** — owner's call from the 2026-08-23 mobile playtest. Top of the `SelectionPanel`, **hugging the left edge of the screen, below the five control-group icons**, visible only while something is selected. It replaces a gesture that does not survive a thumb: double-tap on empty ground clears the selection ([game_scene.gd:927](game/src/view/game_scene.gd#L927)) and misfires on the phone, because a second tap the router scores as a small drag never reaches the detector. **The gesture stays** — it is in nobody's way and it is faster once learned — and desktop keeps right-click. Three reasons the button is the answer rather than a patch: clearing is a *discoverable* action on a touch screen where a gesture is not; it costs desktop nothing; and it does not wait on `InputRouter`'s tap/pan discrimination getting better, which is the real root and a separate job. `BUGS.md` 2026-08-23 | |
 | 8.7 | ✅ **DONE 2026-08-21** — **Market**: tribute with a tax, and buy/sell against gold. Two commands, one data file, one page. See §8.2b | |
 | 8.3 | ✅ Two-finger box select, drawn in **screen** space (world space would slide it under the fingers holding it whenever the camera moved). Own units only; tested against each unit's ground point, not its sprite; returned in **id order**, because a box catching more than `MAX_SELECTED` must keep the same units on every machine | `[MVP]` |
 | 8.4 | ✅ `NoticeToast` | `[MVP]` |
@@ -1842,6 +1872,7 @@ nothing in the logs marking where. **Do not touch `isobake/` while a batch is in
 
 | # | Item | Owner |
 |---|---|---|
+| **11** | 🔊 **AUDIO IS NOT BUILT, and this document said it was.** §7.5 claimed "`AudioManager` exists with a no-op implementation … so gameplay emits `play_sfx(&"villager.chop")` from day one". There is no `AudioManager` — not an autoload, not a `class_name`, not a file — and **zero call sites** for `play_sfx` in the whole of `game/`. Found 2026-08-23 by verifying the document against the code, and it had gone unnoticed because the only references to it are *comments in the code citing this plan*: the code cited the plan and the plan cited nothing.<br><br>**What exists is the half that mattered:** `data/audio.json` declares every sound id with a null stream and `GameDataRegistry.has_sfx()` answers for it, so the asset seam's totality rule already covers audio and a bad id cannot fail silently. **What is missing is the object.** Whoever builds it gets a declared table to build against, no call sites to migrate, and A.7's "take `audio/{actor,attack,resource,interface,ambient,music}` whole plus `audio/voice/latin`" already decided for them. The one real design question left is **mixing buses and per-category volume**, since the SETTINGS page (8.2b) has nowhere to put a slider yet | game side; unblocked, low priority |
 | 5 | **Second pack mirror.** Primary is settled (`aod.dragoon.co.za`); GitHub Releases is the obvious fallback. Costs nothing to defer — `packs.json` carries a URL *list*, so adding one is a manifest edit | before first public build |
 | 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
 | 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |
@@ -1911,10 +1942,15 @@ content side is nearly free — `PREDATORS` is keyed by map type and read with `
 `MapValidator` requires every start to reach every other by land, which an archipelago fails
 by definition, so that claim has to *change* rather than relax.
 
+**4. 8.8, the [X] clear-selection button** — small, and the only thing on this list the owner
+reported from actually playing the 2026-08-23 build. Double-tap-to-clear misfires on a phone
+and the interim workaround is a two-finger box select over empty ground.
+
 **Then, in no strongly forced order:** 12.2b's real AI decision flow (parked behind item 1
-on purpose); 9.3 `TechSystem`, where the field yield's per-age ladder is currently standing
-in for a mill tech; 2.4c the map save format; 12.1b LAN discovery; 12.3 campaign; and 13.x
-dragons once the RTS is a game.
+on purpose); **7.5 audio, which was never built at all** and is §13.2 item 11; 9.3
+`TechSystem`, where the field yield's per-age ladder is currently standing in for a mill
+tech; 2.4c the map save format; 12.1b LAN discovery; 12.3 campaign; and 13.x dragons once
+the RTS is a game.
 
 ### What is waiting on art, not on code
 
