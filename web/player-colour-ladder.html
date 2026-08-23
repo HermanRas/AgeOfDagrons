@@ -1,0 +1,570 @@
+<title>Player Colour Ladder</title>
+
+<style>
+  /* Deliberately single-theme. This page is a colour instrument: a ground that
+     shifts with the viewer's OS theme would invalidate every comparison on it.
+     So every colour is painted explicitly, and the grounds that *matter* --
+     the ones the game actually draws on -- are switchable in section 4. */
+  :root {
+    --ink:    #0B0D10;
+    --panel:  #14181D;
+    --raise:  #1B2128;
+    --line:   #262E37;
+    --text:   #DEE4EB;
+    --muted:  #7C8896;
+    --dim:    #55606C;
+    --ember:  #FF7A18;
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --s1: 0.5rem;  --s2: 0.875rem; --s3: 1.5rem;
+    --s4: 2.5rem;  --s5: 4rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: var(--s4) var(--s3) var(--s5); }
+
+  /* ---- masthead ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin: 0 0 var(--s2);
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.75rem, 5vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    text-wrap: balance;
+    margin: 0 0 var(--s2);
+  }
+  .standfirst {
+    max-width: 62ch;
+    font-size: 1.0625rem;
+    color: var(--muted);
+    margin: 0 0 var(--s3);
+  }
+  .standfirst strong { color: var(--text); font-weight: 600; }
+
+  .facts {
+    display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3);
+    padding: var(--s2) 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .facts b { color: var(--muted); font-weight: 500; }
+
+  /* ---- sections ---- */
+  section { margin-top: var(--s5); }
+  .shead { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s1); }
+  .snum {
+    font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.14em;
+    color: var(--ember); padding-top: 0.35em;
+  }
+  h2 {
+    font-family: var(--mono); font-size: 1.125rem; font-weight: 600;
+    letter-spacing: -0.01em; margin: 0;
+  }
+  .lede { max-width: 68ch; color: var(--muted); margin: 0 0 var(--s3); font-size: 0.9375rem; }
+  .lede code, .note code {
+    font-family: var(--mono); font-size: 0.875em;
+    background: var(--raise); padding: 0.1em 0.35em; border-radius: 3px; color: var(--text);
+  }
+
+  .scroller { overflow-x: auto; padding-bottom: var(--s1); }
+
+  /* ---- 1. roster ---- */
+  .roster { display: grid; grid-template-columns: repeat(8, minmax(88px, 1fr)); gap: 2px; min-width: 720px; }
+  .chip { display: flex; flex-direction: column; background: var(--panel); }
+  .chip .well { height: 132px; position: relative; }
+  .chip .slot {
+    position: absolute; top: 6px; left: 7px;
+    font-family: var(--mono); font-size: 0.625rem; font-weight: 700;
+    letter-spacing: 0.06em; padding: 1px 4px; border-radius: 2px;
+  }
+  .chip .meta { padding: var(--s1) 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 1px; }
+  .chip .nm { font-size: 0.8125rem; font-weight: 600; }
+  .chip .hx, .chip .ls {
+    font-family: var(--mono); font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums; color: var(--muted);
+  }
+  .chip .fam { font-family: var(--mono); font-size: 0.625rem; color: var(--dim); margin-top: 2px; }
+
+  /* ---- 2. ladder ---- */
+  .lanes { display: flex; flex-direction: column; gap: var(--s3); min-width: 640px; }
+  .lane { position: relative; }
+  .lane-label {
+    font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: var(--s1);
+  }
+  .lane-label span { color: var(--dim); text-transform: none; letter-spacing: 0; }
+  .track {
+    position: relative; height: 58px;
+    background: linear-gradient(90deg, #000 0%, #fff 100%);
+    border: 1px solid var(--line); border-radius: 2px;
+  }
+  .dot {
+    position: absolute; top: 50%; width: 34px; height: 34px;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px rgba(255,255,255,0.35);
+  }
+  .dot-cap {
+    position: absolute; top: calc(50% + 24px); transform: translateX(-50%);
+    font-family: var(--mono); font-size: 0.625rem; white-space: nowrap;
+    color: var(--text); text-shadow: 0 1px 3px #000, 0 0 6px #000;
+    font-variant-numeric: tabular-nums;
+  }
+  .axis {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 0.625rem; color: var(--dim);
+    margin-top: 4px; font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- 3. simulation ---- */
+  .sim { min-width: 760px; }
+  .sim-row { display: grid; grid-template-columns: 148px repeat(8, 1fr); gap: 2px; margin-bottom: 2px; align-items: stretch; }
+  .sim-head { display: grid; grid-template-columns: 148px repeat(8, 1fr); gap: 2px; margin-bottom: var(--s1); }
+  .sim-head div {
+    font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--dim); text-align: center;
+  }
+  .sim-head div:first-child { text-align: left; }
+  .sim-name {
+    display: flex; flex-direction: column; justify-content: center;
+    padding: var(--s1) 0.625rem; background: var(--panel);
+  }
+  .sim-name b { font-size: 0.8125rem; font-weight: 600; }
+  .sim-name i {
+    font-style: normal; font-family: var(--mono); font-size: 0.625rem; color: var(--muted);
+  }
+  .cell { height: 48px; }
+  .verdict {
+    display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3);
+    font-family: var(--mono); font-size: 0.75rem;
+  }
+  .tag { padding: 0.3em 0.6em; border-radius: 3px; border: 1px solid; }
+  .tag.ok   { color: #6FE39B; border-color: #1F5237; background: #10251A; }
+  .tag.warn { color: #FFC46B; border-color: #5A431B; background: #241B0D; }
+
+  /* ---- 4. sprite scale ---- */
+  .controls { display: flex; flex-wrap: wrap; gap: var(--s1); margin-bottom: var(--s3); }
+  .gbtn {
+    font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.06em;
+    text-transform: uppercase; cursor: pointer;
+    background: var(--panel); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 3px; padding: 0.5em 0.85em;
+  }
+  .gbtn:hover { color: var(--text); border-color: var(--dim); }
+  .gbtn[aria-pressed="true"] { color: var(--ink); background: var(--text); border-color: var(--text); }
+  .gbtn:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+  .field {
+    display: flex; flex-wrap: wrap; gap: var(--s3);
+    padding: var(--s3); border-radius: 4px; border: 1px solid var(--line);
+    transition: background-color 140ms linear;
+  }
+  .pawn { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .pawn svg { display: block; }
+  .pawn span {
+    font-family: var(--mono); font-size: 0.625rem;
+    color: rgba(0,0,0,0.55); background: rgba(255,255,255,0.65);
+    padding: 0 3px; border-radius: 2px;
+  }
+  .field.dk .pawn span { color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.4); }
+
+  /* ---- 5. before / after ---- */
+  .compare { display: grid; gap: var(--s3); grid-template-columns: 1fr; }
+  @media (min-width: 800px) { .compare { grid-template-columns: 1fr 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 4px; padding: var(--s3);
+  }
+  .panel h3 {
+    font-family: var(--mono); font-size: 0.8125rem; font-weight: 600;
+    margin: 0 0 var(--s1); letter-spacing: 0.02em;
+  }
+  .panel .sub { font-size: 0.8125rem; color: var(--muted); margin: 0 0 var(--s2); }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+  .strip div { height: 40px; }
+  .striplab {
+    font-family: var(--mono); font-size: 0.625rem; color: var(--dim);
+    margin: 5px 0 var(--s2); letter-spacing: 0.04em;
+  }
+
+  .note {
+    border-left: 2px solid var(--ember); padding: var(--s1) 0 var(--s1) var(--s3);
+    color: var(--muted); font-size: 0.9375rem; max-width: 70ch;
+  }
+  .note b { color: var(--text); }
+
+  ul.tight { margin: var(--s2) 0 0; padding-left: 1.15rem; color: var(--muted); font-size: 0.9375rem; }
+  ul.tight li { margin-bottom: var(--s1); }
+  ul.tight b { color: var(--text); font-weight: 600; }
+
+  footer {
+    margin-top: var(--s5); padding-top: var(--s2);
+    border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--dim);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Age of Dragons &middot; player identity</p>
+  <h1>Player Colour Ladder</h1>
+  <p class="standfirst">
+    Colour is the <strong>only</strong> thing that distinguishes one player from another in v1 &mdash;
+    no faction, no unique unit, no silhouette difference. That makes these eight values a
+    legibility requirement, not a styling preference. Eight hues cannot all be separated by hue
+    alone, so four of them are separated by <strong>lightness</strong> instead.
+  </p>
+  <div class="facts">
+    <span><b>File</b> game/data/colours.json</span>
+    <span><b>Slots</b> 8</span>
+    <span><b>Index</b> 0 = player 1, order is contract</span>
+    <span><b>Tint</b> runtime shader over mask (A.6)</span>
+  </div>
+
+  <section>
+    <div class="shead"><span class="snum">01</span><h2>The roster</h2></div>
+    <p class="lede">
+      Slot order is part of the design. Most matches are 1v1 or 2v2, so slots&nbsp;1&ndash;4 are the
+      four most separable colours; green sits at slot&nbsp;5 so it never meets yellow before a
+      five-player game. <code>L*</code> is CIE lightness &mdash; 0 is black, 100 is white.
+    </p>
+    <div class="scroller"><div class="roster" id="roster"></div></div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="snum">02</span><h2>Why the ladder exists</h2></div>
+    <p class="lede">
+      Red&ndash;green colour blindness collapses red, orange, green and yellow onto one axis. Those
+      four therefore have to differ in brightness, spread about 16&nbsp;L* apart. The blue&ndash;yellow
+      axis survives every form of colour blindness, so colours in <em>different</em> lanes are
+      free to sit close in lightness &mdash; and the pairs that do are always cross-lane.
+    </p>
+    <div class="scroller"><div class="lanes" id="lanes"></div></div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="snum">03</span><h2>Simulated colour vision</h2></div>
+    <p class="lede">
+      Machado&nbsp;et&nbsp;al. (2009) transforms at full severity, applied in linear&nbsp;RGB. Read
+      <em>across</em> a row to check that eight colours stay eight colours. The greyscale row is the
+      hard test: it is what is left when hue carries no information at all.
+    </p>
+    <div class="scroller"><div class="sim" id="sim"></div></div>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="snum">04</span><h2>At sprite scale, on real ground</h2></div>
+    <p class="lede">
+      A unit is roughly 44&nbsp;px tall on the reference device. These are the placeholder capsules
+      with a facing marker, on the grounds the game actually paints &mdash; grass and dirt come
+      straight out of the placeholder renderer.
+    </p>
+    <div class="controls" id="controls"></div>
+    <div class="field" id="field"></div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="snum">05</span><h2>Against the first palette</h2></div>
+    <p class="lede">
+      The original eight were strong, saturated and high-contrast against the page &mdash; but three
+      of them clustered at the dark end and two collided outright once hue was removed. Compare the
+      greyscale rows.
+    </p>
+    <div class="compare">
+      <div class="panel">
+        <h3>First pass</h3>
+        <p class="sub">Purple L*&nbsp;53 and red L*&nbsp;53 are the same brightness; green&nbsp;88 sits
+          beside yellow&nbsp;92; blue, purple and red all crowd the bottom.</p>
+        <div class="strip" id="oldStrip"></div>
+        <p class="striplab">AS SEEN</p>
+        <div class="strip" id="oldGrey"></div>
+        <p class="striplab">BRIGHTNESS ONLY &mdash; two pairs merge</p>
+      </div>
+      <div class="panel">
+        <h3>Shipped</h3>
+        <p class="sub">Eight distinct rungs from L*&nbsp;36 to 100. Every within-family gap is at
+          least 14&nbsp;L*, so no pair merges when hue is removed.</p>
+        <div class="strip" id="newStrip"></div>
+        <p class="striplab">AS SEEN</p>
+        <div class="strip" id="newGrey"></div>
+        <p class="striplab">BRIGHTNESS ONLY &mdash; eight steps hold</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead"><span class="snum">06</span><h2>What this still depends on</h2></div>
+    <p class="note">
+      <b>The shader's blend mode decides whether any of this survives.</b> 0 A.D. multiplies the
+      player colour into the texture, and <code>isobake</code> reproduces that at bake time. Under
+      pure multiply, white is a no-op &mdash; that player simply looks untinted &mdash; and dark
+      colours crush the texture detail underneath, compressing this whole ladder back together.
+    </p>
+    <ul class="tight">
+      <li><b>Mix toward the colour</b>, or take its hue and keep the texture's own luminance. Either
+        preserves the spread; multiply does not.</li>
+      <li><b>Gaia takes no tint.</b> Some 0 A.D. wildlife actors declare a player-colour mask anyway
+        &mdash; the sheep does &mdash; so the shader must key off who owns the entity, not off whether
+        the sprite has a mask.</li>
+      <li><b>The outline comes free.</b> A team-colour outline is a second pass over the same mask,
+        and it removes what little risk is left, because an outline reads as shape rather than hue.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Derivation lives in game/data/colours.json &middot; decision record in PLAN.md &sect;13.2 item 11
+    &middot; pipeline gap in ASSET_MISSING.md &sect;5
+  </footer>
+</div>
+
+<script>
+  "use strict";
+
+  const SHIPPED = [
+    { slot: 1, name: "Blue",   hex: "#0043D6", fam: "blue"    },
+    { slot: 2, name: "Red",    hex: "#D50032", fam: "yellow"  },
+    { slot: 3, name: "Yellow", hex: "#FFEB00", fam: "yellow"  },
+    { slot: 4, name: "Cyan",   hex: "#00E5FF", fam: "blue"    },
+    { slot: 5, name: "Green",  hex: "#00A344", fam: "yellow"  },
+    { slot: 6, name: "Violet", hex: "#B44DFF", fam: "blue"    },
+    { slot: 7, name: "Orange", hex: "#FFAB00", fam: "yellow"  },
+    { slot: 8, name: "White",  hex: "#FFFFFF", fam: "neutral" }
+  ];
+
+  const FIRST = ["#1167fc", "#FFFFFF", "#FF6D00", "#07ff03",
+                 "#D500F9", "#FFEA00", "#00E5FF", "#f80b3b"];
+
+  /* ---------- colour maths ---------- */
+  const srgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+  const toLin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const toSrgb = c => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+  const clamp = c => Math.min(1, Math.max(0, c));
+  const hex = rgb => "#" + rgb.map(c =>
+    Math.round(clamp(c) * 255).toString(16).padStart(2, "0")).join("");
+
+  const lum = h => { const [r, g, b] = srgb(h).map(toLin);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+
+  const lstar = h => { const y = lum(h);
+    return y > 0.008856 ? 116 * Math.pow(y, 1 / 3) - 16 : y * 903.3; };
+
+  const MATRICES = {
+    protan: [[0.152286, 1.052583, -0.204868],
+             [0.114503, 0.786281,  0.099216],
+             [-0.003882, -0.048116, 1.051998]],
+    deutan: [[0.367322, 0.860646, -0.227968],
+             [0.280085, 0.672501,  0.047413],
+             [-0.011820, 0.042940, 0.968881]],
+    tritan: [[1.255528, -0.076749, -0.178779],
+             [-0.078411, 0.930809, 0.147602],
+             [0.004733,  0.691367, 0.303900]]
+  };
+
+  function simulate(h, kind) {
+    if (kind === "normal") return h;
+    if (kind === "grey") {
+      const g = toSrgb(lum(h));
+      return hex([g, g, g]);
+    }
+    const m = MATRICES[kind];
+    const lin = srgb(h).map(toLin);
+    const out = m.map(row => row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]);
+    return hex(out.map(c => toSrgb(clamp(c))));
+  }
+
+  const readable = h => (lum(h) > 0.32 ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.86)");
+
+  const el = (tag, cls, txt) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt !== undefined) n.textContent = txt;
+    return n;
+  };
+
+  /* ---------- 01 roster ---------- */
+  const roster = document.getElementById("roster");
+  SHIPPED.forEach(c => {
+    const chip = el("div", "chip");
+    const well = el("div", "well");
+    well.style.background = c.hex;
+    const slot = el("span", "slot", "P" + c.slot);
+    slot.style.color = readable(c.hex);
+    slot.style.background = lum(c.hex) > 0.32 ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.22)";
+    well.appendChild(slot);
+    const meta = el("div", "meta");
+    meta.appendChild(el("span", "nm", c.name));
+    meta.appendChild(el("span", "hx", c.hex.toUpperCase()));
+    meta.appendChild(el("span", "ls", "L* " + lstar(c.hex).toFixed(0)));
+    meta.appendChild(el("span", "fam", c.fam === "neutral" ? "neutral" : c.fam + "-axis"));
+    chip.append(well, meta);
+    roster.appendChild(chip);
+  });
+
+  /* ---------- 02 ladder ---------- */
+  const lanes = document.getElementById("lanes");
+  [
+    { key: "yellow", title: "Yellow-axis family",
+      hint: "collapses under red–green colour blindness — must differ in lightness" },
+    { key: "blue", title: "Blue-axis family (plus neutral)",
+      hint: "survives every dichromacy — free to sit close in lightness" }
+  ].forEach(lane => {
+    const wrap = el("div", "lane");
+    const label = el("div", "lane-label");
+    label.append(document.createTextNode(lane.title + " "), el("span", null, "— " + lane.hint));
+    const track = el("div", "track");
+
+    const members = SHIPPED
+      .filter(c => lane.key === "yellow" ? c.fam === "yellow" : c.fam !== "yellow")
+      .sort((a, b) => lstar(a.hex) - lstar(b.hex));
+
+    members.forEach(c => {
+      const L = lstar(c.hex);
+      const dot = el("div", "dot");
+      dot.style.left = L + "%";
+      dot.style.background = c.hex;
+      dot.title = c.name + " — L* " + L.toFixed(1);
+      const cap = el("div", "dot-cap", c.name + " " + L.toFixed(0));
+      cap.style.left = L + "%";
+      track.append(dot, cap);
+    });
+
+    const axis = el("div", "axis");
+    ["L* 0", "25", "50", "75", "100"].forEach(t => axis.appendChild(el("span", null, t)));
+    wrap.append(label, track, axis);
+    lanes.appendChild(wrap);
+  });
+
+  /* ---------- 03 simulation ---------- */
+  const sim = document.getElementById("sim");
+  const head = el("div", "sim-head");
+  head.appendChild(el("div", null, "Vision"));
+  SHIPPED.forEach(c => head.appendChild(el("div", null, "P" + c.slot)));
+  sim.appendChild(head);
+
+  [
+    { kind: "normal", label: "Normal",       note: "trichromatic" },
+    { kind: "deutan", label: "Deuteranopia", note: "~6% of men" },
+    { kind: "protan", label: "Protanopia",   note: "~2% of men" },
+    { kind: "tritan", label: "Tritanopia",   note: "rare" },
+    { kind: "grey",   label: "Brightness",   note: "hue removed" }
+  ].forEach(row => {
+    const r = el("div", "sim-row");
+    const nm = el("div", "sim-name");
+    nm.appendChild(el("b", null, row.label));
+    nm.appendChild(el("i", null, row.note));
+    r.appendChild(nm);
+    SHIPPED.forEach(c => {
+      const cell = el("div", "cell");
+      cell.style.background = simulate(c.hex, row.kind);
+      cell.title = c.name + " as " + row.label.toLowerCase();
+      r.appendChild(cell);
+    });
+    sim.appendChild(r);
+  });
+
+  /* worst remaining pair, measured rather than asserted */
+  const verdict = document.getElementById("verdict");
+  ["deutan", "protan", "tritan", "grey"].forEach(kind => {
+    let worst = Infinity, pair = "";
+    for (let i = 0; i < SHIPPED.length; i++) {
+      for (let j = i + 1; j < SHIPPED.length; j++) {
+        const a = simulate(SHIPPED[i].hex, kind), b = simulate(SHIPPED[j].hex, kind);
+        const d = Math.hypot(...srgb(a).map((v, k) => (v - srgb(b)[k]) * 255));
+        if (d < worst) { worst = d; pair = SHIPPED[i].name + "/" + SHIPPED[j].name; }
+      }
+    }
+    const label = { deutan: "Deuteranopia", protan: "Protanopia",
+                    tritan: "Tritanopia", grey: "Brightness only" }[kind];
+    const tag = el("span", "tag " + (worst >= 60 ? "ok" : "warn"),
+      label + ": closest pair " + pair + " · Δ" + worst.toFixed(0));
+    verdict.appendChild(tag);
+  });
+
+  /* ---------- 04 sprite scale ---------- */
+  const GROUNDS = [
+    { name: "Grass",  hex: "#4A6F30", dark: true  },
+    { name: "Dirt",   hex: "#8A6A43", dark: true  },
+    { name: "Sand",   hex: "#D9C79A", dark: false },
+    { name: "Shadow", hex: "#1A2118", dark: true  }
+  ];
+  const field = document.getElementById("field");
+  const controls = document.getElementById("controls");
+
+  function pawn(colour) {
+    const p = el("div", "pawn");
+    p.innerHTML =
+      '<svg width="26" height="44" viewBox="0 0 26 44" aria-hidden="true">' +
+        '<ellipse cx="13" cy="40" rx="9" ry="3.5" fill="rgba(0,0,0,0.28)"/>' +
+        '<rect x="4" y="8" width="18" height="30" rx="9" fill="' + colour + '"/>' +
+        '<rect x="4" y="8" width="18" height="30" rx="9" fill="none" ' +
+              'stroke="rgba(0,0,0,0.45)" stroke-width="1.25"/>' +
+        '<circle cx="13" cy="33" r="3" fill="rgba(0,0,0,0.5)"/>' +
+      '</svg>';
+    return p;
+  }
+
+  function paint(ground) {
+    field.style.background = ground.hex;
+    field.classList.toggle("dk", ground.dark);
+    field.textContent = "";
+    SHIPPED.forEach(c => {
+      const p = pawn(c.hex);
+      p.appendChild(el("span", null, "P" + c.slot));
+      field.appendChild(p);
+    });
+  }
+
+  GROUNDS.forEach((g, i) => {
+    const b = el("button", "gbtn", g.name);
+    b.type = "button";
+    b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    b.addEventListener("click", () => {
+      controls.querySelectorAll(".gbtn").forEach(o => o.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      paint(g);
+    });
+    controls.appendChild(b);
+  });
+  paint(GROUNDS[0]);
+
+  /* ---------- 05 before / after ---------- */
+  const fill = (id, list, kind) => {
+    const host = document.getElementById(id);
+    list.forEach(h => {
+      const d = el("div");
+      d.style.background = simulate(h, kind);
+      d.title = h.toUpperCase() + " · L* " + lstar(h).toFixed(0);
+      host.appendChild(d);
+    });
+  };
+  fill("oldStrip", FIRST, "normal");
+  fill("oldGrey",  FIRST, "grey");
+  fill("newStrip", SHIPPED.map(c => c.hex), "normal");
+  fill("newGrey",  SHIPPED.map(c => c.hex), "grey");
+</script>
