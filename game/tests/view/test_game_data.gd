@@ -69,6 +69,9 @@ func test_the_full_roster_is_present() -> void:
 		# wanders, it bolts when hit, and it is a unit purely so it can do either --
 		# nodes cannot move, which is why its roam_radius sat unread for months.
 		&"unit.wolf", &"unit.boar", &"unit.bear", &"unit.deer",
+		# HERDABLE, and the only gaia units a player can give orders to (6.5). They stay
+		# owner 0 -- `SimUnit.herded_by` is what moves. See `HerdSystem`.
+		&"unit.sheep", &"unit.cattle",
 	]
 	assert_eq(_by_content(reg.unit_ids()), _by_content(expected_units),
 			"every baked unit has a definition, and nothing extra")
@@ -120,7 +123,7 @@ func test_the_full_roster_is_present() -> void:
 	# gathering ship and a dock, none of which exist.
 	assert_eq(_by_content(reg.resource_ids()),
 			_by_content([&"res.berry_bush", &"res.gold_mine", &"res.tree",
-					&"res.stone", &"res.sheep", &"res.cattle", &"res.deer_carcass",
+					&"res.stone", &"res.deer_carcass", &"res.sheep_carcass", &"res.cattle_carcass",
 					&"res.wolf_carcass", &"res.boar_carcass", &"res.bear_carcass"]))
 
 

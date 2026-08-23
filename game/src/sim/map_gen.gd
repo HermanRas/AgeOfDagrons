@@ -391,13 +391,11 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.berry_bush", origin + offset, 0)
 	for i in range(DEBUG_STONE.size()):
 		w.spawn_resource_node(&"res.stone", origin + DEBUG_STONE[i], i)
-	# Size class 0 for both: sheep and cattle declare one amount for all three
-	# (resources.json), so the class is not a choice -- passing it explicitly
-	# rather than relying on a default keeps that visible.
-	for offset in DEBUG_SHEEP:
-		w.spawn_resource_node(&"res.sheep", origin + offset, 0)
-	for offset in DEBUG_CATTLE:
-		w.spawn_resource_node(&"res.cattle", origin + offset, 0)
+	# LIVESTOCK ARE UNITS since 6.5 -- herdable, so they have to be able to walk. They
+	# keep their places in this band because the point of them here is unchanged: a
+	# sheep beside a cow is a size comparison as much as two food sources.
+	_place_gaia_animals(w, origin, DEBUG_SHEEP, &"unit.sheep")
+	_place_gaia_animals(w, origin, DEBUG_CATTLE, &"unit.cattle")
 	# PREDATORS ARE UNITS, not nodes, and so they are spawned here rather than beside
 	# the animals they are filed with. That is the whole shape of 4.13's wildlife: a
 	# thing you harvest is a `SimResourceNode` and a thing that comes at you is a
@@ -406,17 +404,17 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 	#
 	# OWNER 0, like every animal here -- but unlike the rest of gaia they are legal
 	# targets, which is `Diplomacy`'s entire subject.
-	_place_predators(w, origin, DEBUG_WOLF, &"unit.wolf")
-	_place_predators(w, origin, DEBUG_BOAR, &"unit.boar")
-	_place_predators(w, origin, DEBUG_BEAR, &"unit.bear")
+	_place_gaia_animals(w, origin, DEBUG_WOLF, &"unit.wolf")
+	_place_gaia_animals(w, origin, DEBUG_BOAR, &"unit.boar")
+	_place_gaia_animals(w, origin, DEBUG_BEAR, &"unit.bear")
 
 
-## One species of gaia predator at fixed offsets from the town centre.
+## One species of gaia animal at fixed offsets from the town centre -- predator or
 ##
 ## Passability is checked for the reason `_place_enemy_squad` checks it: a unit is not
 ## written into the occupancy grid, so an offset that ever reached water or the map edge
 ## would fail silently and only show up as an animal standing in the sea.
-static func _place_predators(w: SimWorld, origin: Vector2i, offsets: Array,
+static func _place_gaia_animals(w: SimWorld, origin: Vector2i, offsets: Array,
 		def_id: StringName) -> void:
 	for offset in offsets:
 		var tile: Vector2i = origin + (offset as Vector2i)

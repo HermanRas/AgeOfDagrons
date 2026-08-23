@@ -97,6 +97,16 @@ var roam_radius: int = 0
 ## nobody ever had to deal with.
 var flees: bool = false
 
+## Whether walking a unit past this animal puts it under that player's orders (6.5's
+## livestock, 2026-08-23). Sheep and cattle; nothing else.
+##
+## IT DOES NOT CHANGE WHO OWNS IT, and that distinction is the whole reason this was
+## cheap. A herded sheep stays gaia's -- so `GatherSystem` never had to learn about
+## units, `WinConditionSystem` cannot be kept alive by a flock, and a player can still
+## ATTACK the animal they are herding, which is how you eventually eat it. All that
+## moves is `SimUnit.herded_by`, and `MoveCommand` is the only thing that reads it.
+var is_herdable: bool = false
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var u := UnitDef.new()
@@ -136,6 +146,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 		u.carcass_def = StringName((wild as Dictionary).get("carcass", ""))
 		u.roam_radius = int((wild as Dictionary).get("roam_radius", 0))
 		u.flees = bool((wild as Dictionary).get("flees", false))
+		u.is_herdable = bool((wild as Dictionary).get("herdable", false))
 	return u
 
 

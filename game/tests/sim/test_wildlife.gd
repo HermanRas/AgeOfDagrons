@@ -229,6 +229,130 @@ func test_hunting_a_deer_yields_the_food_it_used_to_stand_around_holding() -> vo
 	assert_true(GatherSystem.is_harvestable(carcass, 1))
 
 
+# ── herding livestock (6.5) ────────────────────────────────────────────────
+
+func test_walking_a_unit_past_a_sheep_claims_it() -> void:
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	assert_eq(sheep.herded_by, 0, "nobody's to begin with")
+	w.spawn_unit(&"unit.villager", 1, Vector2i(42, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1)
+
+
+func test_claiming_does_not_transfer_OWNERSHIP() -> void:
+	# THE DESIGN, in one assertion. A herded sheep stays gaia's, which is what kept
+	# GatherSystem, WinConditionSystem and AttackCommand out of this entirely.
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1, "claimed")
+	assert_eq(sheep.owner_id, 0, "and still nobody's")
+
+
+func test_a_claimed_sheep_takes_move_orders_from_its_herder_and_nobody_else() -> void:
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+
+	var ids: Array[int] = [sheep.id]
+	assert_true(MoveCommand.new(1, ids, Vector2i(30, 30)).validate(w), "its herder")
+	assert_false(MoveCommand.new(2, ids, Vector2i(30, 30)).validate(w), "not player 2")
+
+
+func test_an_unclaimed_sheep_takes_orders_from_nobody() -> void:
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	var ids: Array[int] = [sheep.id]
+	assert_false(MoveCommand.new(1, ids, Vector2i(30, 30)).validate(w))
+
+
+func test_a_sheep_can_actually_be_walked_home() -> void:
+	# The whole point of the feature: a food source you move rather than travel to.
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	var start := sheep.tile()
+	w.queue_command(MoveCommand.new(1, [sheep.id] as Array[int], Vector2i(34, 40)))
+	_run(120)
+	assert_true(sheep.tile() != start, "it walked, from %s to %s" % [start, sheep.tile()])
+
+
+func test_another_player_walking_closer_takes_the_sheep() -> void:
+	# Exactly what the project owner asked for: "if another player walks past them
+	# they claim them and they can manage them".
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	var mine := w.spawn_unit(&"unit.villager", 1, Vector2i(43, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1, "player 1 got there first")
+
+	w.spawn_unit(&"unit.villager", 2, Vector2i(41, 40))     # nearer
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 2, "and player 2 walked closer")
+	assert_true(mine.alive, "nobody had to fight over it")
+
+
+func test_walking_away_does_not_give_the_sheep_back() -> void:
+	# Sticky, so a flock can be penned at home and left there while the shepherd goes
+	# back to work. Releasing on distance would make herding useless.
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1)
+
+	w.despawn(villager.id)
+	_run(HerdSystem.THINK_INTERVAL_TICKS * 3)
+	assert_eq(sheep.herded_by, 1, "still ours")
+
+
+func test_a_sheep_beyond_the_claim_radius_is_not_claimed() -> void:
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(40 + HerdSystem.CLAIM_RADIUS + 3, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 0)
+
+
+func test_a_predator_cannot_be_herded() -> void:
+	# `herdable` is per-animal data. A tame wolf is a different feature.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.herded_by, 0)
+	assert_false(MoveCommand.new(1, [wolf.id] as Array[int], Vector2i(30, 30)).validate(w))
+
+
+func test_you_may_still_slaughter_the_sheep_you_are_herding() -> void:
+	# The consequence of herding not being owning, and the reason it is not: had the
+	# sheep become yours, `AttackCommand` would refuse it and eating your own
+	# livestock would have needed a command of its own.
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1)
+	assert_true(AttackCommand.new(1, [villager.id] as Array[int], sheep.id).validate(w))
+
+
+func test_a_slaughtered_sheep_leaves_the_food_it_was_carrying() -> void:
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	sheep.take_damage(9999, 0)
+	_run(1)
+	var carcass: SimResourceNode = null
+	for e in w.entities.values():
+		if e is SimResourceNode and (e as SimResourceNode).def_id == &"res.sheep_carcass":
+			carcass = e
+	assert_not_null(carcass)
+	assert_eq(carcass.amount, 100, "the old res.sheep figure, unchanged")
+
+
+func test_a_flock_cannot_keep_a_defeated_player_in_the_game() -> void:
+	# What a real ownership transfer would have cost. `WinConditionSystem` counts
+	# living units by owner, and a sheep is owner 0 however many players have herded
+	# it -- so losing your last villager to a wolf really is losing.
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(HerdSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(sheep.herded_by, 1)
+	assert_eq(sheep.owner_id, 0, "so it counts for nobody")
+
+
 # ── the player may hunt it back ────────────────────────────────────────────
 
 func test_a_player_may_order_an_attack_on_a_wolf() -> void:

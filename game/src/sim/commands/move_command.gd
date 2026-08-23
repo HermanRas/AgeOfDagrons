@@ -45,7 +45,13 @@ func validate(w: SimWorld) -> bool:
 		return false
 	for id in unit_ids:
 		var e := w.get_entity(id)
-		if e == null or not e.alive or e.owner_id != player_id or not (e is SimUnit):
+		if e == null or not e.alive or not (e is SimUnit):
+			return false
+		# OWNED, OR HERDED. Livestock stays gaia's and is ordered through `herded_by`
+		# instead (6.5) -- see `HerdSystem` for why the two are kept apart. This is the
+		# only command that accepts the second form: a sheep may be walked home and
+		# nothing else, which is the whole of what herding is.
+		if e.owner_id != player_id and (e as SimUnit).herded_by != player_id:
 			return false
 	return true
 

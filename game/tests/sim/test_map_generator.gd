@@ -194,7 +194,7 @@ func test_wildlife_scales_with_the_player_count() -> void:
 	# wired into one placer and not the other, or a count that ignores the players.
 	for players in [2, 4]:
 		var data := _generate(7, MapGenerator.Type.FOREST, players)
-		_assert_about(data, &"res.sheep",
+		_assert_about(data, &"unit.sheep",
 				MapGenerator.SHEEP_HERDS * MapGenerator.SHEEP_PER_HERD * players, players)
 		_assert_about(data, &"unit.deer",
 				MapGenerator.DEER_HERDS * MapGenerator.DEER_PER_HERD * players, players)

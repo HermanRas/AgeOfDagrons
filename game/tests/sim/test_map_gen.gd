@@ -250,12 +250,11 @@ func test_a_buildings_origin_tile_round_trips_through_its_centre_position() -> v
 
 func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
 	var nodes := _of_type(SimResourceNode)
-	# The three PREDATOR lists are absent on purpose: wolf, boar and bear are units,
-	# not nodes, so none of them is counted here. Only the animals that stand still
-	# and are harvested -- sheep and cattle -- belong in this sum.
+	# EVERY ANIMAL IS A UNIT NOW and none of them is counted here: predators since
+	# 4.13, deer since 6.1b, sheep and cattle since 6.5. What is left in this sum is
+	# the things that genuinely cannot move -- trees, seams and bushes.
 	var expected := MapGen.DEBUG_WOOD_CLUSTER.size() + MapGen.DEBUG_GOLD.size() \
-			+ MapGen.DEBUG_FOOD.size() + MapGen.DEBUG_STONE.size() \
-			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size()
+			+ MapGen.DEBUG_FOOD.size() + MapGen.DEBUG_STONE.size()
 	assert_eq(nodes.size(), expected, "every declared cluster found room")
 	var kinds: Array[StringName] = []
 	for n in nodes:
@@ -290,18 +289,26 @@ func test_every_resource_a_building_costs_can_be_gathered_on_this_map() -> void:
 					"%s costs %s and the debug map yields none" % [def_id, kind])
 
 
-func test_livestock_is_gathered_where_it_stands_rather_than_hunted() -> void:
-	# Sheep and cattle are harvested like a berry bush -- that is the whole reason
-	# they could be wired without 4.13's hostile behaviour or a carcass state
-	# machine. A `wildlife` block on either would be a promise nothing keeps.
+func test_livestock_stands_around_as_gaia_units_waiting_to_be_claimed() -> void:
+	# This asserted the opposite until 6.5: sheep and cattle were resource nodes
+	# harvested where they stood, which was the whole reason they could be wired
+	# without any of 4.13's machinery. Herding overturned it -- a thing you walk home
+	# has to be able to walk, and only a `SimUnit` can.
+	#
+	# WHAT SURVIVES is the part that mattered: they still stand still. `roam_radius`
+	# is 0, unlike the deer's 6, so nothing wanders out of the pen you put it in.
 	var seen := 0
-	for n in _of_type(SimResourceNode):
-		var node: SimResourceNode = n
-		if node.def_id != &"res.sheep" and node.def_id != &"res.cattle":
+	for e in _of_type(SimUnit):
+		var u: SimUnit = e
+		if u.def_id != &"unit.sheep" and u.def_id != &"unit.cattle":
 			continue
 		seen += 1
-		assert_false(node.is_wildlife, "%s stands still and is gathered" % node.def_id)
-		assert_eq(node.kind, &"food")
+		assert_eq(u.owner_id, 0, "%s is nobody's until somebody walks past" % u.def_id)
+		assert_eq(u.herded_by, 0, "and unclaimed on tick 0")
+		var def: UnitDef = w.unit_def(u.def_id)
+		assert_true(def.is_herdable)
+		assert_eq(def.roam_radius, 0, "%s does not wander off" % u.def_id)
+		assert_eq(def.attack_damage, 0, "nor fight back")
 	assert_eq(seen, MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size())
 
 

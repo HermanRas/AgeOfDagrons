@@ -96,12 +96,20 @@
     "well below them; stone and gold are the two mined kinds, four slots each, so",
     "matching them is one fewer number to tune blind.",
     "",
-    "SHEEP and CATTLE take the roster's own amounts (100 and 500 -- cattle is one",
-    "animal worth a lot, which is 0 A.D.'s balance and reads fine here). Both are",
-    "gathered like a berry bush and neither carries a `wildlife` block: they stand",
-    "still and are harvested, which needs no hunt/kill/carcass machinery. Both are",
-    "SINGLE-SIZE for the reason the deer is -- a flock of differently-sized sheep",
-    "reads as an art bug, not as variety.",
+    "SHEEP AND CATTLE FOLLOWED THE DEER OUT, 2026-08-23, and for a different reason:",
+    "they are HERDABLE now (6.5). Walk any unit past one and it takes your orders --",
+    "`unit.sheep` / `unit.cattle`, with the 100 and 500 food waiting in the carcass.",
+    "",
+    "The note here used to say they 'stand still and are harvested, which needs no",
+    "hunt/kill/carcass machinery'. That was true and is now the point: a thing you walk",
+    "home has to be able to walk, and only a SimUnit can. They still stand still until",
+    "told otherwise -- roam_radius 0, unlike the deer -- so nothing wanders off the pen",
+    "you put it in.",
+    "",
+    "HERDING IS NOT OWNING, and that is what kept it cheap: the animal stays gaia's and",
+    "only `SimUnit.herded_by` moves. So GatherSystem never learned about units, a flock",
+    "cannot keep a defeated player alive, and the herder can still ATTACK the thing it",
+    "is herding -- which is how it becomes food. See HerdSystem.",
     "",
     "THE PREDATORS ARE NOT IN THIS FILE. Wolf, boar and bear are all `unit.*` in",
     "units.json, because a thing that chases needs a task, a path, a facing and a",
@@ -196,16 +204,16 @@
     "gather_slots": 4
   },
 
-  "res.sheep": {
+  "res.sheep_carcass": {
     "kind": "food",
-    "visual": "vis.sheep",
+    "visual": "vis.deer_carcass",
     "amounts": [100, 100, 100],
     "gather_slots": 1
   },
 
-  "res.cattle": {
+  "res.cattle_carcass": {
     "kind": "food",
-    "visual": "vis.cattle",
+    "visual": "vis.deer_carcass",
     "amounts": [500, 500, 500],
     "gather_slots": 2
   }

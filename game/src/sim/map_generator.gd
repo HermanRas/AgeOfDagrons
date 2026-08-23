@@ -660,7 +660,8 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	# Wildlife. Sheep and deer are nodes harvested where they stand; the wolf is a
 	# gaia UNIT that comes at you (4.13), which is why it goes through a different
 	# placer -- `_place_scatter` asks the resource table and a unit is not in it.
-	_place_herds(data, claimed, centre, &"res.sheep", SHEEP_HERDS, SHEEP_PER_HERD,
+	# Sheep are units since 6.5 -- a thing you walk home has to be able to walk.
+	_place_unit_herds(data, claimed, centre, &"unit.sheep", SHEEP_HERDS, SHEEP_PER_HERD,
 			SHEEP_MIN, SHEEP_MAX, rng)
 	# DEER ARE UNITS since 6.1b -- they wander and bolt, which nodes cannot -- so the
 	# herd goes through the gaia-unit placer. The shape of the herd is unchanged.

@@ -548,6 +548,58 @@
     "age_required": 4
   },
 
+  "unit.sheep": {
+    "name": "Sheep",
+    "visual": "vis.sheep",
+
+    "hp": 25,
+    "speed": 160,
+    "los": 2,
+    "domain": "land",
+    "pop_cost": 0,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": [],
+    "age_required": 1,
+
+    "wildlife": { "aggro_radius": 0, "roam_radius": 0, "flees": false,
+      "herdable": true, "carcass": "res.sheep_carcass" }
+  },
+
+  "unit.cattle": {
+    "name": "Cattle",
+    "visual": "vis.cattle",
+
+    "hp": 40,
+    "speed": 150,
+    "los": 2,
+    "domain": "land",
+    "pop_cost": 0,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": [],
+    "age_required": 1,
+
+    "wildlife": { "aggro_radius": 0, "roam_radius": 0, "flees": false,
+      "herdable": true, "carcass": "res.cattle_carcass" }
+  },
+
   "unit.deer": {
     "name": "Deer",
     "visual": "vis.deer",

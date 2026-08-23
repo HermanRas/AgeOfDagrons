@@ -100,7 +100,10 @@ func setup(cfg: MatchConfig) -> void:
 			# WildlifeSystem BEFORE CombatSystem, so a wolf that picks a target this
 			# tick bites on this tick. It only ever writes the same task an
 			# AttackCommand would, which is why nothing in combat knows it exists.
-			ProjectileSystem.new(), WildlifeSystem.new(), CombatSystem.new(),
+			# HerdSystem beside WildlifeSystem and before the commands act, so a sheep
+			# claimed this tick can be ordered on the next one.
+			ProjectileSystem.new(), WildlifeSystem.new(), HerdSystem.new(),
+			CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),

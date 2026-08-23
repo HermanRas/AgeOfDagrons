@@ -58,6 +58,18 @@ var flee_ticks: int = 0
 ## through `take_damage` -- see `WildlifeSystem._check_flee`.
 var last_hp: int = -1
 
+## Which player may give this animal orders, or 0 for nobody (6.5's livestock).
+##
+## SEPARATE FROM `owner_id` ON PURPOSE, and it is the whole design. A herded sheep is
+## still gaia's: `GatherSystem` never learns about units, `WinConditionSystem` cannot be
+## kept alive by a flock, and the herder can still attack the animal, which is how it
+## eventually becomes food. `MoveCommand` is the only thing that reads this.
+##
+## STICKY. Once claimed it stays claimed until somebody else walks closer -- walking
+## away does not release it, which is what makes a flock something you can leave at home
+## and come back to.
+var herded_by: int = 0
+
 ## Ticks left as a corpse before DeathSystem despawns it (PLAN.md 4.7): 60 s of
 ## corpse plus a 10 s fade, at SimClock's 10 ticks/sec. -1 means "not dead" --
 ## DeathSystem reads that sentinel to tell a fresh death from one it has already
@@ -266,4 +278,11 @@ func to_snapshot() -> Dictionary:
 	d["anim"] = anim
 	d["facing"] = facing
 	d["corpse_ticks_left"] = corpse_ticks_left
+	# ON THE WIRE, unlike every other wildlife field, because the CLIENT has to know:
+	# `GameView.movable_selection` uses it to decide whether tapping the ground with a
+	# sheep selected is an order or nothing at all. Without it the client would offer
+	# moves the sim silently refused, which is the worst of both -- the player taps and
+	# nothing happens and nothing says why. Only sent when non-zero.
+	if herded_by != 0:
+		d["herded_by"] = herded_by
 	return d

@@ -304,6 +304,9 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# Inferring "no phase field means a unit" would call a resource node a
 			# unit, and 3.6 would then send move orders naming trees.
 			"is_unit": GameDataRegistry.unit(def_id) != null,
+			# Who may order this animal about, or 0 (6.5). `SimUnit.to_snapshot` sends it
+			# only for a claimed herdable, so everything else defaults to nobody's.
+			"herded_by": int(entry.get("herded_by", 0)),
 			# SOMETHING TO LOOK AT RATHER THAN SOMETHING IN THE GAME (4.13). True for
 			# an arrow in flight and nothing else today. It is in `_facts` at all only
 			# because the forget pass below reads `_facts` to release pooled views --
@@ -738,8 +741,17 @@ func _is_gatherable_building(f: Dictionary) -> bool:
 func movable_selection() -> Array[int]:
 	var movable: Array[int] = []
 	for id in selection.current():
-		if bool(_facts.get(id, {}).get("is_unit", false)):
-			movable.append(id)
+		var f: Dictionary = _facts.get(id, {})
+		if not bool(f.get("is_unit", false)):
+			continue
+		# GAIA'S ANIMALS ARE MOVABLE ONLY IF WE ARE HERDING THEM (6.5). Without this
+		# the client would offer an order `MoveCommand.validate` then refused, and a
+		# refused command is invisible -- the player taps, nothing happens, and nothing
+		# says why. `herded_by` rides the snapshot for exactly this test.
+		if int(f.get("owner_id", 0)) == 0 \
+				and int(f.get("herded_by", 0)) != local_player_id:
+			continue
+		movable.append(id)
 	return movable
 
 
