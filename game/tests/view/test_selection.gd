@@ -258,6 +258,29 @@ func test_a_trees_tap_box_does_not_reach_down_screen() -> void:
 		assert_eq(view.pick(Iso.tile_centre_to_world(tile)), 0, "tapped %s" % tile)
 
 
+func test_the_tree_whose_own_tile_you_tapped_wins() -> void:
+	# Two trees a tile apart on the screen diagonal: tree 6 stands on (9, 9), and tree
+	# 5's 2x2 pick box reaches over that same tile. A tap there is unambiguous to the
+	# player -- they are pointing at tree 6 -- and it must not answer with tree 5,
+	# which is the "gathers a completely different tree" report of 2026-08-23.
+	_populate([
+		_node(5, "res.tree", Vector2i(10, 10)),
+		_node(6, "res.tree", Vector2i(9, 9)),
+	])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(9, 9))), 6, "its own tile")
+	# And the reach still works where nothing else claims the ground.
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(10, 9))), 5, "only 5 reaches here")
+
+
+func test_a_unit_still_beats_the_tree_whose_tile_it_stands_on() -> void:
+	# Ground beats reach, but a UNIT beats both -- the order the header gives.
+	_populate([
+		_node(5, "res.tree", Vector2i(10, 10)),
+		_entity(9, "unit.villager", Vector2i(10, 10)),
+	])
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(10, 10))), 9)
+
+
 func test_a_tree_still_claims_only_one_tile_of_ground() -> void:
 	# The pick box is a screen affordance and must not have leaked into the footprint.
 	# If these ever agree at 2x2, a twelve-tree forest has become an impassable wall

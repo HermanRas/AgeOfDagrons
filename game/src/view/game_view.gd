@@ -548,6 +548,13 @@ func select(ids: Array[int]) -> void:
 ## Units win ties, because a villager standing on a tree's tile is the thing worth
 ## tapping and the tree is not going anywhere.
 ##
+## AND THE THING WHOSE REAL GROUND YOU TAPPED BEATS ONE THAT ONLY REACHED. Two trees
+## a tile apart have overlapping 2x2 pick boxes, so a tap on tree B's own tile was
+## once free to answer with tree A -- whichever the Dictionary happened to yield
+## first. That is the "clicking one tree gathers a completely different tree" the
+## project owner reported on 2026-08-23, and it is a wrong answer rather than a
+## missed one, which makes it much the worse failure of the two.
+##
 ## WHEN THE TILE HOLDS NOTHING there is a second pass -- see `_nearest_small_node`.
 ## The paragraph above is still the rule and this is still not bounds-picking: the
 ## tile always answers first, and the fallback only runs where the answer was "bare
@@ -556,7 +563,12 @@ func pick(local: Vector2, owner: int = 0) -> int:
 	var tile := Iso.tile_at(local)
 	var best := 0
 	var best_is_unit := false
-	for id in _facts:
+	var best_on_ground := false
+	# Sorted so that two candidates the ranking cannot separate resolve the same way
+	# every time, rather than by whatever order the Dictionary happened to hold.
+	var ids := _facts.keys()
+	ids.sort()
+	for id in ids:
 		var f: Dictionary = _facts[id]
 		if not bool(f.get("alive", true)):
 			continue          # a corpse or rubble is unselectable (4.7, 5.5)
@@ -567,9 +579,17 @@ func pick(local: Vector2, owner: int = 0) -> int:
 		if not _covers(f, tile):
 			continue
 		var is_unit: bool = f["is_unit"]
-		if best == 0 or (is_unit and not best_is_unit):
+		# Whether the tap landed on ground this entity actually HOLDS, as opposed to
+		# ground its pick box merely reaches over. Ranked below `is_unit` and above
+		# nothing else -- see the header.
+		var on_ground: bool = Rect2i(f["tile"] - f["footprint"] / 2,
+				f["footprint"]).has_point(tile)
+		if best == 0 \
+				or (is_unit and not best_is_unit) \
+				or (is_unit == best_is_unit and on_ground and not best_on_ground):
 			best = int(id)
 			best_is_unit = is_unit
+			best_on_ground = on_ground
 	if best != 0:
 		return best
 	return _nearest_small_node(local, owner)
