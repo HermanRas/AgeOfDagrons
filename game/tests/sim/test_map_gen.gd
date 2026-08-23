@@ -250,12 +250,12 @@ func test_a_buildings_origin_tile_round_trips_through_its_centre_position() -> v
 
 func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
 	var nodes := _of_type(SimResourceNode)
-	# DEBUG_WOLF is absent on purpose: it is a unit, not a node, so it is not counted
-	# here and would not be even if it were placed beside the boar.
+	# The three PREDATOR lists are absent on purpose: wolf, boar and bear are units,
+	# not nodes, so none of them is counted here. Only the animals that stand still
+	# and are harvested -- sheep and cattle -- belong in this sum.
 	var expected := MapGen.DEBUG_WOOD_CLUSTER.size() + MapGen.DEBUG_GOLD.size() \
 			+ MapGen.DEBUG_FOOD.size() + MapGen.DEBUG_STONE.size() \
-			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size() \
-			+ MapGen.DEBUG_BOAR.size()
+			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size()
 	assert_eq(nodes.size(), expected, "every declared cluster found room")
 	var kinds: Array[StringName] = []
 	for n in nodes:

@@ -97,29 +97,36 @@
     "SINGLE-SIZE for the reason the deer is -- a flock of differently-sized sheep",
     "reads as an art bug, not as variety.",
     "",
-    "BOAR joined them 2026-08-23, and it is the one of the four held-back animals",
-    "that needed no machinery at all: harvested where it stands, exactly like the",
-    "sheep. 150 food is a judgement, not a roster figure -- the boar is not on the",
-    "roster (Age & Unit Planning.md lists no pig) -- and it is set between the sheep's",
-    "100 and the deer's 140 because it is plainly a bigger animal than either, and",
-    "well under the cattle's 500, which is meant to be the prize. Tune it by play.",
+    "THE PREDATORS ARE NOT IN THIS FILE. Wolf, boar and bear are all `unit.*` in",
+    "units.json, because a thing that chases needs a task, a path, a facing and a",
+    "cooldown and every one of those lives on SimUnit. What IS here is the three",
+    "carcasses they drop -- the only nodes in the game spawned by a death rather than",
+    "by MapGen (DeathSystem), which is the seam where a hunted thing becomes a",
+    "harvested one.",
     "",
-    "res.wolf_carcass is the OTHER half of the hostile wolf, and the first thing in",
-    "the game to be spawned by a death rather than by MapGen (DeathSystem). 30 food",
-    "is the roster's own figure for a wolf. It draws vis.deer_carcass TEMPORARILY --",
-    "vis.wolf_carcass is requested and not baked, and a dead deer where a dead wolf",
-    "should be reads as the wrong animal, where pointing at an undeclared id would",
-    "have drawn the magenta unknown AND failed the no-load-warnings test. One line",
-    "changes when the bake lands.",
+    "res.boar was briefly a harvestable node (2026-08-23, morning) and stopped being",
+    "one the same day: the project owner's call is that boar and bear both FIGHT BACK,",
+    "which is what a real one does and what 0 A.D. models. So the 150 food that used",
+    "to be standing in a field is now inside something that charges.",
     "",
-    "STILL NOT WIRED, and each for a reason that outlived the 2026-08-23 pass: the",
-    "bear (300) is huntable and FIGHTS BACK, so it wants the wolf's hostile machinery",
-    "plus a carcass of its own -- it is now a small job rather than a blocked one, and",
-    "is deliberately left until the wolf has been played. The fish needs water, a dock",
-    "and a fishing ship: `spawn_resource_node` calls `can_place_building`, which hard-",
-    "codes Domain.LAND and would refuse a fish on shallow water, and unit.fishing_ship",
-    "carries empty gather_rate and carry_cap. That is a feature, not a wiring gap.",
-    "Both are baked, staged, and now at least DECLARED in visuals.json."
+    "Amounts: 30 / 150 / 300 for wolf / boar / bear. The wolf and bear are the",
+    "roster's own figures; the boar's 150 is a judgement, since Age & Unit Planning.md",
+    "lists no pig. The spread is the point -- a wolf is barely worth butchering and a",
+    "bear is a prize worth losing a villager over. gather_slots rises with the animal",
+    "for the same reason: three people can work a bear and only one a wolf.",
+    "",
+    "ALL THREE DRAW vis.deer_carcass, temporarily. Only the deer's carcass is baked;",
+    "vis.wolf_carcass is requested and vis.boar_carcass and vis.bear_carcass are not",
+    "yet. A dead deer where a dead bear should be reads as the wrong animal -- but",
+    "pointing at an undeclared id would draw the magenta unknown AND fail the",
+    "no-load-warnings test, so the wrong animal is the better of the two. One line",
+    "each when the bakes land.",
+    "",
+    "STILL NOT WIRED: the fish, and it is a feature rather than a wiring gap.",
+    "`spawn_resource_node` calls `can_place_building`, which hard-codes Domain.LAND and",
+    "would refuse a fish on shallow water; unit.fishing_ship carries empty gather_rate",
+    "and carry_cap; and nothing treats building.dock as a drop-off. Baked, staged and",
+    "declared in visuals.json, and waiting on all three of those."
   ],
 
   "res.tree": {
@@ -147,18 +154,25 @@
     "wildlife": { "roam_radius": 6, "flees": true }
   },
 
-  "res.boar": {
-    "kind": "food",
-    "visual": "vis.boar",
-    "amounts": [150, 150, 150],
-    "gather_slots": 1
-  },
-
   "res.wolf_carcass": {
     "kind": "food",
     "visual": "vis.deer_carcass",
     "amounts": [30, 30, 30],
     "gather_slots": 1
+  },
+
+  "res.boar_carcass": {
+    "kind": "food",
+    "visual": "vis.deer_carcass",
+    "amounts": [150, 150, 150],
+    "gather_slots": 2
+  },
+
+  "res.bear_carcass": {
+    "kind": "food",
+    "visual": "vis.deer_carcass",
+    "amounts": [300, 300, 300],
+    "gather_slots": 3
   },
 
   "res.berry_bush": {

@@ -161,10 +161,16 @@ const DEBUG_SHEEP := [Vector2i(2, -7), Vector2i(4, -7), Vector2i(6, -7)]
 ## other's sprite.
 const DEBUG_CATTLE := [Vector2i(0, -7)]
 
-## Two boar, below the flock and a good step away from it. They are harvested where
-## they stand exactly as the sheep are, so they belong to this band -- and they are
-## twice the sheep's food, which is easier to believe when the two are side by side.
-const DEBUG_BOAR := [Vector2i(-2, -5), Vector2i(-4, -5)]
+## THE DEBUG MAP KEEPS ALL THREE PREDATORS, which is the one place that deliberately
+## breaks the owner's "not many angry mobs on one map" rule -- because this is not a
+## map anybody plays, it is the sandbox where every piece of art has to be reachable to
+## be looked at. A generated match gets exactly one species (MapGenerator.PREDATORS).
+##
+## Spread wide and far from the base for the reason DEBUG_WOLF gives, and far from each
+## OTHER as well: three predators that find one another on the way in would fight,
+## and a dead bear before the player has seen a live one is a poor sandbox.
+const DEBUG_BOAR := [Vector2i(-18, -6)]
+const DEBUG_BEAR := [Vector2i(4, 20)]
 
 ## ONE WOLF, AND IT IS FAR AWAY ON PURPOSE (4.13). The others in this file are placed
 ## to be looked at; this one is placed not to be. Its aggro radius is 6, and the five
@@ -392,23 +398,32 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.sheep", origin + offset, 0)
 	for offset in DEBUG_CATTLE:
 		w.spawn_resource_node(&"res.cattle", origin + offset, 0)
-	for offset in DEBUG_BOAR:
-		w.spawn_resource_node(&"res.boar", origin + offset, 0)
-	# THE WOLF IS A UNIT, not a node, and so it is spawned here rather than beside the
-	# animals it is filed with. That is the whole shape of 4.13's wildlife: a thing you
-	# harvest is a `SimResourceNode` and a thing that comes at you is a `SimUnit`, and
-	# the wolf is the second until it dies and DeathSystem turns it into the first.
+	# PREDATORS ARE UNITS, not nodes, and so they are spawned here rather than beside
+	# the animals they are filed with. That is the whole shape of 4.13's wildlife: a
+	# thing you harvest is a `SimResourceNode` and a thing that comes at you is a
+	# `SimUnit`, and a predator is the second until it dies and DeathSystem turns it
+	# into the first.
 	#
-	# OWNER 0, like every animal here -- but unlike the rest of gaia it is a legal
-	# target, which is `Diplomacy`'s entire subject. Passability is checked for the
-	# reason `_place_enemy_squad` checks it: a unit is not written into occupancy, so
-	# an offset that ever reached water would fail silently and late.
-	for offset in DEBUG_WOLF:
+	# OWNER 0, like every animal here -- but unlike the rest of gaia they are legal
+	# targets, which is `Diplomacy`'s entire subject.
+	_place_predators(w, origin, DEBUG_WOLF, &"unit.wolf")
+	_place_predators(w, origin, DEBUG_BOAR, &"unit.boar")
+	_place_predators(w, origin, DEBUG_BEAR, &"unit.bear")
+
+
+## One species of gaia predator at fixed offsets from the town centre.
+##
+## Passability is checked for the reason `_place_enemy_squad` checks it: a unit is not
+## written into the occupancy grid, so an offset that ever reached water or the map edge
+## would fail silently and only show up as an animal standing in the sea.
+static func _place_predators(w: SimWorld, origin: Vector2i, offsets: Array,
+		def_id: StringName) -> void:
+	for offset in offsets:
 		var tile: Vector2i = origin + (offset as Vector2i)
 		if not w.map.is_passable(tile, SimMap.Domain.LAND):
-			push_warning("MapGen: no room for the wolf at %s" % tile)
+			push_warning("MapGen: no room for %s at %s" % [def_id, tile])
 			continue
-		w.spawn_unit(&"unit.wolf", 0, tile)
+		w.spawn_unit(def_id, 0, tile)
 
 
 ## The hostile squad (DEBUG_ENEMY_SQUAD), placed relative to the FIRST player's

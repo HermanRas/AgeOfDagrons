@@ -548,6 +548,56 @@
     "age_required": 4
   },
 
+  "unit.boar": {
+    "name": "Boar",
+    "visual": "vis.boar",
+
+    "hp": 80,
+    "speed": 300,
+    "los": 6,
+    "domain": "land",
+    "pop_cost": 0,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "attack": { "damage": 6, "type": "melee", "range": 0, "cooldown_ticks": 18 },
+    "armor": { "melee": 1, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": [],
+    "age_required": 1,
+
+    "wildlife": { "aggro_radius": 4, "carcass": "res.boar_carcass" }
+  },
+
+  "unit.bear": {
+    "name": "Bear",
+    "visual": "vis.bear",
+
+    "hp": 150,
+    "speed": 280,
+    "los": 7,
+    "domain": "land",
+    "pop_cost": 0,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "attack": { "damage": 10, "type": "melee", "range": 0, "cooldown_ticks": 22 },
+    "armor": { "melee": 2, "pierce": 1 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": [],
+    "age_required": 1,
+
+    "wildlife": { "aggro_radius": 5, "carcass": "res.bear_carcass" }
+  },
+
   "unit.wolf": {
     "name": "Wolf",
     "visual": "vis.wolf",

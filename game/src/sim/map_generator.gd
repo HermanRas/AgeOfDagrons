@@ -123,17 +123,25 @@ const DEER_PER_HERD := 7
 const DEER_MIN := 19
 const DEER_MAX := 27
 
-## SINGLY, not in a herd, and that is what a boar is: 0 A.D. and every RTS that has
-## one treat it as a lone animal worth more than a sheep and found rather than farmed.
-## It is passive here -- it stands and is harvested -- which is a simplification the
-## bear will have to undo, since both really fight back.
-const BOAR_COUNT := 2
-const BOAR_MIN := 16
-const BOAR_MAX := 24
-
-const WOLF_COUNT := 2
-const WOLF_MIN := 24
-const WOLF_MAX := 33
+## ONE PREDATOR SPECIES PER MAP TYPE (project owner, 2026-08-23): "i dont want to
+## many angry mobs on one map". So the map decides which animal is hunting you, and a
+## match has one kind of danger rather than three overlapping ones.
+##
+## It also makes the four map types feel different for a reason other than terrain,
+## which they did not before -- a river map and a desert map played identically once
+## you were past the water. Now a forest is where the bear is.
+##
+## The pairings are the owner's. The counts and distances are mine, banded by how
+## dangerous the animal is: the bear is alone because at 150 hp and 10 damage two of
+## them per player is not a hazard, it is a siege.
+const PREDATORS := {
+	Type.DESERT: {"def": &"unit.wolf", "count": 2, "min": 24, "max": 33},
+	Type.RIVER: {"def": &"unit.wolf", "count": 2, "min": 24, "max": 33},
+	Type.FOREST: {"def": &"unit.bear", "count": 1, "min": 22, "max": 32},
+	# Nearer, because an island's land is a fraction of its board and a boar placed
+	# out at the wolf's range would spend most of its rolls in the sea.
+	Type.ISLAND: {"def": &"unit.boar", "count": 2, "min": 15, "max": 24},
+}
 
 ## How far a herd's animals spread from the anchor the herd was placed at. Small: a
 ## flock reads as a flock only if the sprites nearly touch, and seven deer spread over
@@ -656,13 +664,12 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 			SHEEP_MIN, SHEEP_MAX, rng)
 	_place_herds(data, claimed, centre, &"res.deer", DEER_HERDS, DEER_PER_HERD,
 			DEER_MIN, DEER_MAX, rng)
-	# Scattered rather than herded -- see BOAR_COUNT. It was on the debug map from the
-	# day it was wired and missing here, which is the same one-placer-of-two mistake
-	# that made the wolf invisible; caught by asking what was left rather than by play.
-	_place_scatter(data, claimed, centre, &"res.boar", BOAR_COUNT,
-			BOAR_MIN, BOAR_MAX, rng)
-	_place_gaia_units(data, claimed, centre, &"unit.wolf", WOLF_COUNT,
-			WOLF_MIN, WOLF_MAX, rng)
+	# THE MAP TYPE PICKS THE PREDATOR -- see PREDATORS. One species per map, so a
+	# player learns one animal's behaviour per match rather than three at once.
+	var predator: Dictionary = PREDATORS.get(type, {})
+	if not predator.is_empty():
+		_place_gaia_units(data, claimed, centre, predator["def"], int(predator["count"]),
+				int(predator["min"]), int(predator["max"]), rng)
 
 
 ## Tiles at exactly Chebyshev `radius` from `centre`, clockwise from the north-west

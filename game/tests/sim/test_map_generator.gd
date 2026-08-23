@@ -194,14 +194,13 @@ func test_wildlife_scales_with_the_player_count() -> void:
 	# wired into one placer and not the other, or a count that ignores the players.
 	for players in [2, 4]:
 		var data := _generate(7, MapGenerator.Type.FOREST, players)
-		_assert_about(data, &"unit.wolf", MapGenerator.WOLF_COUNT * players, players)
 		_assert_about(data, &"res.sheep",
 				MapGenerator.SHEEP_HERDS * MapGenerator.SHEEP_PER_HERD * players, players)
 		_assert_about(data, &"res.deer",
 				MapGenerator.DEER_HERDS * MapGenerator.DEER_PER_HERD * players, players)
-		# The boar was on the debug map and missing here for a day -- the same
-		# one-placer-of-two hole that hid the wolf, found by asking what was left.
-		_assert_about(data, &"res.boar", MapGenerator.BOAR_COUNT * players, players)
+		# A forest's predator is the bear, one per player -- see PREDATORS.
+		var bears: int = int(MapGenerator.PREDATORS[MapGenerator.Type.FOREST]["count"])
+		_assert_about(data, &"unit.bear", bears * players, players)
 
 
 ## `def_id` appears `wanted` times, give or take what crowded ground costs.
@@ -214,11 +213,36 @@ func _assert_about(data: MapData, def_id: StringName, wanted: int, players: int)
 			% [players, got, wanted, def_id])
 
 
-func test_the_wolves_belong_to_nobody() -> void:
+func test_predators_belong_to_nobody() -> void:
 	# `player` 0 is what MapGen.build_from turns into owner 0. Any other index would
-	# hand a player a free unit they never trained.
-	for e in _entities_of(_generate(3), &"unit.wolf"):
-		assert_eq(int(e["player"]), 0)
+	# hand a player a free unit they never trained -- and one that attacks them.
+	for type in MapGenerator.PREDATORS:
+		var def_id: StringName = MapGenerator.PREDATORS[type]["def"]
+		var found := _entities_of(_generate(3, type), def_id)
+		assert_true(found.size() > 0, "%s carries some %s" % [type, def_id])
+		for e in found:
+			assert_eq(int(e["player"]), 0, "%s is nobody's" % def_id)
+
+
+func test_each_map_type_carries_exactly_one_predator_species() -> void:
+	# The project owner's rule: "i dont want to many angry mobs on one map". A match
+	# should teach you one animal's behaviour, not three at once.
+	var all_predators: Array[StringName] = [&"unit.wolf", &"unit.boar", &"unit.bear"]
+	for type in MapGenerator.PREDATORS:
+		var data := _generate(9, type)
+		var wanted: StringName = MapGenerator.PREDATORS[type]["def"]
+		for def_id in all_predators:
+			var count := _entities_of(data, def_id).size()
+			if def_id == wanted:
+				assert_true(count > 0, "%s should carry %s" % [type, def_id])
+			else:
+				assert_eq(count, 0, "%s should carry no %s" % [type, def_id])
+
+
+func test_the_forest_gets_a_single_bear_because_two_would_be_a_siege() -> void:
+	# 150 hp and 10 damage apiece. The count is the balance lever, and it is 1.
+	assert_eq(int(MapGenerator.PREDATORS[MapGenerator.Type.FOREST]["count"]), 1)
+	assert_eq(MapGenerator.PREDATORS[MapGenerator.Type.FOREST]["def"], &"unit.bear")
 
 
 func test_a_wolf_never_spawns_within_reach_of_anybody_s_opening() -> void:
@@ -233,15 +257,19 @@ func test_a_wolf_never_spawns_within_reach_of_anybody_s_opening() -> void:
 	# 24 tiles from its own start can be 18 from somebody else's. That is fine and this
 	# is where it is asserted to be fine; the earlier version of this test used
 	# WOLF_MIN as the threshold for every start and failed on exactly that case.
-	var aggro := 6                     # unit.wolf's own figure, units.json
-	for p_seed in [11, 12, 13]:
-		var data := _generate(p_seed, MapGenerator.Type.FOREST, 4)
-		for e in _entities_of(data, &"unit.wolf"):
-			var tile: Vector2i = e["tile"]
-			for start in data.starts:
-				var gap: int = maxi(absi(tile.x - start.x), absi(tile.y - start.y))
-				assert_true(gap > aggro * 2,
-						"wolf at %s is %s tiles from a start at %s" % [tile, gap, start])
+	# Every map type, because each carries a different animal at a different range --
+	# the island's boar is placed nearest and is the one most likely to break this.
+	for type in MapGenerator.PREDATORS:
+		var def_id: StringName = MapGenerator.PREDATORS[type]["def"]
+		var aggro: int = (GameDataRegistry.unit(def_id) as UnitDef).aggro_radius
+		for p_seed in [11, 12, 13]:
+			var data := _generate(p_seed, type, 4)
+			for e in _entities_of(data, def_id):
+				var tile: Vector2i = e["tile"]
+				for start in data.starts:
+					var gap: int = maxi(absi(tile.x - start.x), absi(tile.y - start.y))
+					assert_true(gap > aggro * 2, "%s at %s is %s tiles from %s"
+							% [def_id, tile, gap, start])
 
 
 func test_deer_arrive_in_herds_rather_than_sprinkled() -> void:

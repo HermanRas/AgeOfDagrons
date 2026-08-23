@@ -58,10 +58,14 @@ func test_the_full_roster_is_present() -> void:
 		&"unit.trebuchet", &"unit.trade_cart",
 		&"unit.fishing_ship", &"unit.transport_ship", &"unit.galley",
 		&"unit.galleon", &"unit.dragon",
-		# GAIA'S, and the only unit here nobody trains (4.13). It is a `UnitDef` and
-		# not a `ResourceDef` because it moves and bites, which are `SimUnit` powers;
-		# it turns into a node when it dies. See `UnitDef.is_wildlife`.
-		&"unit.wolf",
+		# GAIA'S, and the only units here nobody trains (4.13). They are `UnitDef` and
+		# not `ResourceDef` because they move and bite, which are `SimUnit` powers;
+		# each turns into a node when it dies. See `UnitDef.is_wildlife`.
+		#
+		# All three fight back, which is the owner's call of 2026-08-23 and what a real
+		# boar and bear do. Which one you meet is decided by the MAP -- see
+		# `MapGenerator.PREDATORS` -- so a match has one kind of danger, not three.
+		&"unit.wolf", &"unit.boar", &"unit.bear",
 	]
 	assert_eq(_by_content(reg.unit_ids()), _by_content(expected_units),
 			"every baked unit has a definition, and nothing extra")
@@ -98,20 +102,23 @@ func test_the_full_roster_is_present() -> void:
 	# no map yielded any. res.deer stays defined but unspawned: res.berry_bush
 	# replaced it as the MVP food node, and hunting is 6.1a.
 	#
-	# res.boar joined 2026-08-23 -- it is harvested where it stands like the sheep and
-	# needed no machinery. res.wolf_carcass joined with it and is unlike everything
-	# else here: MapGen never places one, DeathSystem spawns it where a wolf dies.
+	# THE THREE CARCASSES are unlike everything else here: MapGen never places one,
+	# DeathSystem spawns it where a predator dies. They are the seam where a hunted
+	# thing becomes a harvested one, and the only reason a `res.*` exists for an animal
+	# that fights back.
 	#
-	# THE WOLF ITSELF IS NOT A RESOURCE and never will be -- it is `unit.wolf`, over in
-	# units.json, because a thing that chases needs a task and a path. The bear is
-	# still absent for the reason the wolf was until today (it fights back, so it wants
-	# the same machinery plus a carcass), and the fish because no map has water and
-	# `spawn_resource_node` hard-codes Domain.LAND. Both are baked and now declared, so
-	# their absence stays a decision rather than a gap -- resources.json says so.
+	# `res.boar` was here for one morning as a harvestable node and is now
+	# `res.boar_carcass` -- the owner's call is that a boar fights back, so its 150
+	# food moved from standing in a field to being inside something that charges.
+	#
+	# NO PREDATOR IS A RESOURCE. Wolf, boar and bear are all `unit.*` in units.json,
+	# because a thing that chases needs a task and a path. Only the fish is still
+	# absent, and for a reason resources.json spells out: it needs water placement, a
+	# gathering ship and a dock, none of which exist.
 	assert_eq(_by_content(reg.resource_ids()),
 			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree",
-					&"res.stone", &"res.sheep", &"res.cattle", &"res.boar",
-					&"res.wolf_carcass"]))
+					&"res.stone", &"res.sheep", &"res.cattle",
+					&"res.wolf_carcass", &"res.boar_carcass", &"res.bear_carcass"]))
 
 
 ## Sorted by STRING content, so a comparison does not depend on StringName
