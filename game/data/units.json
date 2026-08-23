@@ -548,6 +548,32 @@
     "age_required": 4
   },
 
+  "unit.deer": {
+    "name": "Deer",
+    "visual": "vis.deer",
+
+    "hp": 40,
+    "speed": 220,
+    "los": 6,
+    "domain": "land",
+    "pop_cost": 0,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "attack": { "damage": 0, "type": "melee", "range": 0, "cooldown_ticks": 0 },
+    "armor": { "melee": 0, "pierce": 0 },
+
+    "carry_cap": {},
+    "gather_rate": {},
+
+    "trainable_at": [],
+    "age_required": 1,
+
+    "wildlife": { "aggro_radius": 0, "roam_radius": 6, "flees": true,
+      "carcass": "res.deer_carcass" }
+  },
+
   "unit.boar": {
     "name": "Boar",
     "visual": "vis.boar",
@@ -570,7 +596,7 @@
     "trainable_at": [],
     "age_required": 1,
 
-    "wildlife": { "aggro_radius": 4, "carcass": "res.boar_carcass" }
+    "wildlife": { "aggro_radius": 4, "roam_radius": 5, "carcass": "res.boar_carcass" }
   },
 
   "unit.bear": {
@@ -595,7 +621,7 @@
     "trainable_at": [],
     "age_required": 1,
 
-    "wildlife": { "aggro_radius": 5, "carcass": "res.bear_carcass" }
+    "wildlife": { "aggro_radius": 5, "roam_radius": 6, "carcass": "res.bear_carcass" }
   },
 
   "unit.wolf": {
@@ -620,7 +646,7 @@
     "trainable_at": [],
     "age_required": 1,
 
-    "wildlife": { "aggro_radius": 6, "carcass": "res.wolf_carcass" }
+    "wildlife": { "aggro_radius": 6, "roam_radius": 9, "carcass": "res.wolf_carcass" }
   },
 
   "unit.dragon": {

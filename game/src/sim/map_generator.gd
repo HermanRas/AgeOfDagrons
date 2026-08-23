@@ -662,7 +662,9 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	# placer -- `_place_scatter` asks the resource table and a unit is not in it.
 	_place_herds(data, claimed, centre, &"res.sheep", SHEEP_HERDS, SHEEP_PER_HERD,
 			SHEEP_MIN, SHEEP_MAX, rng)
-	_place_herds(data, claimed, centre, &"res.deer", DEER_HERDS, DEER_PER_HERD,
+	# DEER ARE UNITS since 6.1b -- they wander and bolt, which nodes cannot -- so the
+	# herd goes through the gaia-unit placer. The shape of the herd is unchanged.
+	_place_unit_herds(data, claimed, centre, &"unit.deer", DEER_HERDS, DEER_PER_HERD,
 			DEER_MIN, DEER_MAX, rng)
 	# THE MAP TYPE PICKS THE PREDATOR -- see PREDATORS. One species per map, so a
 	# player learns one animal's behaviour per match rather than three at once.
@@ -761,7 +763,25 @@ static func _place_herds(data: MapData, claimed: Dictionary, centre: Vector2i,
 			break
 
 
-## Gaia units -- the wolf, and the bear when it lands. Deliberately NOT `_place_scatter`,
+## `_place_herds` for gaia UNITS. Same anchor-then-clump shape, same retry, different
+## placer at the bottom -- because a deer is a unit and `_place_scatter` reads the
+## resource table and bails on anything that is not a node.
+static func _place_unit_herds(data: MapData, claimed: Dictionary, centre: Vector2i,
+		def_id: StringName, herds: int, per_herd: int, min_r: int, max_r: int,
+		rng: RandomNumberGenerator) -> void:
+	for i in range(herds):
+		var base_angle := rng.randf_range(0.0, TAU) + float(i) * TAU / float(maxi(1, herds))
+		for attempt in range(ANCHOR_ATTEMPTS):
+			var angle := base_angle + float(attempt) * 0.4
+			var radius := rng.randf_range(float(min_r), float(max_r))
+			var anchor := centre + Vector2i(Vector2(cos(angle), sin(angle)) * radius)
+			if not data.in_bounds(anchor) or not data.is_ground_passable(anchor):
+				continue
+			_place_gaia_units(data, claimed, anchor, def_id, per_herd, 0, HERD_SPREAD, rng)
+			break
+
+
+## Gaia units -- the predators, and the deer. Deliberately NOT `_place_scatter`,
 ## which reads `GameDataRegistry.resource_def` and bails on anything that is not a node.
 ##
 ## Owner 0 is passed as the `player` INDEX, which `MapGen.build_from` maps straight to

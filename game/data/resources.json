@@ -65,11 +65,17 @@
     "seam is graded by richness, and the two mechanisms stay separate because they",
     "answer different questions.",
     "",
-    "The deer is single-size on purpose: a herd of differently-sized deer reads as",
-    "an art bug, not as variety. It also ships STATIC -- 0 A.D.'s quadruped clips",
-    "will not transfer (PLAN.md 13.2 item 8) -- which costs nothing here, since",
-    "6.1a only needs a huntable node and roaming is 6.1b. The carcass still has no",
-    "art and stays on its placeholder.",
+    "THE DEER LEFT THIS FILE at 6.1b (2026-08-23) and is `unit.deer` now. It carried",
+    "`wildlife: { roam_radius: 6, flees: true }` here for months and NOTHING EVER READ",
+    "IT -- and nothing could have: roaming needs MovementSystem, which moves SimUnit",
+    "and skips nodes, so the data sat on a class physically unable to act on it. What",
+    "is left behind is res.deer_carcass, and vis.deer_carcass is finally drawing the",
+    "thing it was baked for rather than sitting unreferenced.",
+    "",
+    "A deer is therefore HUNTED now, not harvested: it wanders, it bolts when hit, and",
+    "the 140 food is in the body afterwards. The berry bush remains the easy opening",
+    "food (6.1a's substitution stands) and sheep and cattle still stand still to be",
+    "taken, so nothing forces a player to hunt before they want to.",
     "",
     "res.berry_bush stands in for the MVP food node for now (session decision):",
     "it needs no hunt/kill/carcass state machine at all -- gather it like a tree",
@@ -146,12 +152,11 @@
     "gather_slots": 4
   },
 
-  "res.deer": {
+  "res.deer_carcass": {
     "kind": "food",
-    "visual": "vis.deer",
+    "visual": "vis.deer_carcass",
     "amounts": [140, 140, 140],
-    "gather_slots": 2,
-    "wildlife": { "roam_radius": 6, "flees": true }
+    "gather_slots": 2
   },
 
   "res.wolf_carcass": {

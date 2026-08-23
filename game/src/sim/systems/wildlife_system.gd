@@ -24,12 +24,29 @@ extends SimSystem
 const THINK_INTERVAL_TICKS := 5
 
 
+## How long a frightened animal runs before it stops and looks around (6.1b).
+##
+## A BURST RATHER THAN AN ESCAPE, and that is the whole balance of hunting. A deer that
+## outran its pursuer forever would be a food source that is not one; a deer that never
+## gained ground would be scenery with extra steps. Running in bursts means a villager
+## loses distance while it bolts and takes it back in the pause, so a hunt converges --
+## slowly, and only if you commit more than one villager to it.
+const FLEE_TICKS := 40
+
+## How far it tries to get, in tiles, per burst.
+const FLEE_DISTANCE := 7
+
+## Ticks between wandering somewhere new, once settled. Deliberately long: an animal
+## repathing every few ticks would eat PathService's per-tick budget (4.2) and visibly
+## stall the villagers' own orders, which is the cost `CombatSystem._close_in` documents
+## at length for exactly the same reason.
+const ROAM_INTERVAL_TICKS := 90
+
+
 func process_tick(w: SimWorld) -> void:
-	if w.tick % THINK_INTERVAL_TICKS != 0:
-		return
-	# Sorted, because the target choice below has to be identical on every machine
-	# running this sim -- the same reason `AISystem` and `CombatSystem._reacquire`
-	# sort. Two hosts disagreeing about what a wolf bit is a desync.
+	# Sorted, because every decision below has to be identical on every machine running
+	# this sim -- the same reason `AISystem` and `CombatSystem._reacquire` sort. Two
+	# hosts disagreeing about where a deer ran is a desync.
 	var ids := w.entities.keys()
 	ids.sort()
 	for id in ids:
@@ -40,25 +57,166 @@ func process_tick(w: SimWorld) -> void:
 		if not u.alive or u.owner_id != 0:
 			continue
 		var def := w.unit_def(u.def_id)
-		if def == null or not def.is_wildlife or def.aggro_radius <= 0:
+		if def == null or not def.is_wildlife:
 			continue
-		# ALREADY BUSY IS LEFT ALONE. A wolf mid-chase must not re-target every five
-		# ticks onto whoever is momentarily nearest, or it oscillates between two
-		# villagers and reaches neither. `CombatSystem` drops it back to IDLE when
-		# its target dies or gets away, and that is when this looks again.
-		if u.task == SimUnit.Task.ATTACK and w.get_entity(u.task_target_id) != null:
+		_tick_animal(w, u, def)
+
+
+## COUNTERS EVERY TICK, DECISIONS EVERY FIFTH. Fleeing has to be checked at full rate:
+## its trigger is a drop in hp, and at one look in five a deer shot four times between
+## looks would notice only one of them -- and a hit landing the tick after a look would
+## leave the animal grazing for half a second with an arrow in it.
+func _tick_animal(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
+	# Claimed on the first tick it is seen rather than lazily inside `_roam`, so that
+	# "where does this animal consider home" has an answer from the start -- a bolt can
+	# move it, and moving it from the (-1, -1) sentinel would mean nothing.
+	if u.roam_home == Vector2i(-1, -1):
+		u.roam_home = u.tile()
+	if u.roam_cooldown > 0:
+		u.roam_cooldown -= 1
+
+	if _check_flee(w, u, def):
+		return
+	if u.flee_ticks > 0:
+		u.flee_ticks -= 1
+		if u.flee_ticks == 0:
+			# RELOCATE, which is the second half of 6.1b's own name. Wherever the bolt
+			# ended is home now, so a herd that gets hunted moves off rather than
+			# drifting back to the clearing it was shot in.
+			u.roam_home = u.tile()
+			u.roam_cooldown = ROAM_INTERVAL_TICKS
+		return
+
+	if w.tick % THINK_INTERVAL_TICKS != 0:
+		return
+
+	if def.aggro_radius > 0 and _hunt(w, u, def):
+		return
+	_roam(w, u, def)
+
+
+## Start a bolt if this animal has just been hurt. True only when it STARTED one.
+##
+## NOT "true while it is running", which is what this said first and cost a test. The
+## caller returns early on true, so reporting an ongoing bolt here short-circuited the
+## very block that counts `flee_ticks` down -- and a deer hit once ran until something
+## killed it, forever, never settling and never relocating.
+##
+## BY WATCHING HP rather than by being told. `SimEntity.take_damage` is handed a number
+## and no attacker -- `CombatSystem` does not pass one -- so plumbing "who hit me"
+## through it would mean changing the one call every damage source in the game shares,
+## for one animal's benefit. A drop in hp is the same information for the price of a
+## field, and it catches damage from sources that will never have an attacker at all.
+func _check_flee(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
+	var was := u.last_hp
+	u.last_hp = u.hp
+	if not def.flees:
+		return false
+	if was < 0 or u.hp >= was:
+		return false
+	# Hurt. Run directly away from whatever is nearest -- or just run, if whatever hit
+	# it is beyond looking distance, because an animal shot by an archer it cannot see
+	# still bolts.
+	var threat := _nearest_threat(w, u)
+	var away := u.tile() - threat if threat != Vector2i(-1, -1) else Vector2i.ONE
+	if away == Vector2i.ZERO:
+		away = Vector2i.ONE
+	u.flee_ticks = FLEE_TICKS
+	_walk_to(w, u, u.tile() + _scaled(away, FLEE_DISTANCE))
+	return true
+
+
+## Pick a fight if there is one within reach. True if it did, or is already in one.
+func _hunt(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
+	# ALREADY BUSY IS LEFT ALONE. A wolf mid-chase must not re-target every five ticks
+	# onto whoever is momentarily nearest, or it oscillates between two villagers and
+	# reaches neither. `CombatSystem` drops it back to IDLE when its target dies or
+	# gets away, and that is when this looks again.
+	if u.task == SimUnit.Task.ATTACK and w.get_entity(u.task_target_id) != null:
+		return true
+	var prey := _nearest_prey(w, u, def.aggro_radius)
+	if prey == 0:
+		return false
+	var tile: Vector2i = w.get_entity(prey).tile()
+	u.set_task_attack(prey, tile)
+	# The path request is not optional, for the reason `CombatSystem._reacquire` spells
+	# out at length: `set_task_attack` raises `path_pending`, `_close_in` reads that as
+	# "already on the way", and a wolf that skipped it would stand and stare from three
+	# tiles off forever.
+	if w.paths != null:
+		w.paths.request(u.id, tile)
+	return true
+
+
+## Wander somewhere new within `roam_radius` of home, if it is idle and due.
+func _roam(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
+	if def.roam_radius <= 0:
+		return
+	if u.task != SimUnit.Task.IDLE or u.roam_cooldown > 0 or u.path_pending:
+		return
+
+	# DETERMINISTIC BY CONSTRUCTION, not by sharing a generator. A seeded rng would work
+	# only while every host drew from it in the same order, and the order here is
+	# "however many animals happened to be alive and idle" -- so one deer dying a tick
+	# earlier on one machine would shift every subsequent roll on it. Hashing the id and
+	# the tick has no order to get wrong.
+	var h := _hash(u.id * 2654435761 + w.tick)
+	var angle := float(h % 3600) / 3600.0 * TAU
+	var radius := 1.0 + float((h >> 12) % maxi(1, def.roam_radius))
+	u.roam_cooldown = ROAM_INTERVAL_TICKS
+	_walk_to(w, u, u.roam_home + Vector2i(Vector2(cos(angle), sin(angle)) * radius))
+
+
+## Send it walking, if the tile is somewhere it could actually stand. An animal that
+## asked for a route into the sea would sit with `path_pending` raised and never roam
+## again, since `_roam` skips anything already waiting on a path.
+func _walk_to(w: SimWorld, u: SimUnit, tile: Vector2i) -> void:
+	if w.paths == null:
+		return
+	if not w.map.in_bounds(tile) or not w.map.is_passable(tile, u.domain):
+		return
+	u.set_task_move(tile)
+	w.paths.request(u.id, tile)
+
+
+## Where the nearest thing worth running from is standing, or (-1, -1).
+##
+## A WIDER LOOK THAN `aggro_radius`, and prey has no aggro radius at all -- this is the
+## only distance a deer knows. A deer that noticed an attacker only once it was on the
+## next tile would already be dead.
+func _nearest_threat(w: SimWorld, u: SimUnit) -> Vector2i:
+	var span := FLEE_DISTANCE * 2 + 1
+	var rect := Rect2i(u.tile() - Vector2i(FLEE_DISTANCE, FLEE_DISTANCE),
+			Vector2i(span, span))
+	var best := Vector2i(-1, -1)
+	var best_gap := 1 << 30
+	var best_id := 0
+	for e in w.entities_in_rect(rect):
+		if not (e is SimUnit) or not Diplomacy.is_enemy(e, u.owner_id):
 			continue
-		var prey := _nearest_prey(w, u, def.aggro_radius)
-		if prey == 0:
-			continue
-		var tile: Vector2i = w.get_entity(prey).tile()
-		u.set_task_attack(prey, tile)
-		# The path request is not optional, for the reason `CombatSystem._reacquire`
-		# spells out at length: `set_task_attack` raises `path_pending`, `_close_in`
-		# reads that as "already on the way", and a wolf that skipped it would stand
-		# and stare from three tiles off forever.
-		if w.paths != null:
-			w.paths.request(u.id, tile)
+		var gap := CombatSystem.tile_gap(u.tile(), Rect2i(e.tile(), Vector2i.ONE))
+		# Lowest id breaks a tie, as everywhere else here: determinism, not fairness.
+		if best_id == 0 or gap < best_gap or (gap == best_gap and int(e.id) < best_id):
+			best_gap = gap
+			best_id = int(e.id)
+			best = e.tile()
+	return best
+
+
+## `v` pointing the same way but about `length` tiles long. Integer, so a diagonal comes
+## out slightly longer than a straight run, which nothing here cares about.
+static func _scaled(v: Vector2i, length: int) -> Vector2i:
+	var f := Vector2(v).normalized() * float(length)
+	return Vector2i(roundi(f.x), roundi(f.y))
+
+
+## A cheap integer scramble. It only has to be stable and well spread -- it decides
+## which way a deer wanders, and `randi()` would have done if determinism allowed it.
+static func _hash(n: int) -> int:
+	var x := n & 0x7FFFFFFF
+	x = (x ^ (x >> 15)) * 0x2545F491
+	x = (x ^ (x >> 13)) * 0x27220A95
+	return (x ^ (x >> 16)) & 0x7FFFFFFF
 
 
 ## The nearest thing this animal is willing to bite, or 0.

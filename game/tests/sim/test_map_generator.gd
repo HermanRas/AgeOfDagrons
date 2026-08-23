@@ -196,7 +196,7 @@ func test_wildlife_scales_with_the_player_count() -> void:
 		var data := _generate(7, MapGenerator.Type.FOREST, players)
 		_assert_about(data, &"res.sheep",
 				MapGenerator.SHEEP_HERDS * MapGenerator.SHEEP_PER_HERD * players, players)
-		_assert_about(data, &"res.deer",
+		_assert_about(data, &"unit.deer",
 				MapGenerator.DEER_HERDS * MapGenerator.DEER_PER_HERD * players, players)
 		# A forest's predator is the bear, one per player -- see PREDATORS.
 		var bears: int = int(MapGenerator.PREDATORS[MapGenerator.Type.FOREST]["count"])
@@ -275,7 +275,7 @@ func test_a_wolf_never_spawns_within_reach_of_anybody_s_opening() -> void:
 func test_deer_arrive_in_herds_rather_than_sprinkled() -> void:
 	# Seven deer spread evenly round a base is not a herd, it is seven deer. Each
 	# animal should have several of its own kind within a herd's spread of it.
-	var deer := _entities_of(_generate(5), &"res.deer")
+	var deer := _entities_of(_generate(5), &"unit.deer")
 	assert_true(deer.size() >= MapGenerator.DEER_PER_HERD, "enough to group at all")
 	for e in deer:
 		var near := 0

@@ -65,7 +65,10 @@ func test_the_full_roster_is_present() -> void:
 		# All three fight back, which is the owner's call of 2026-08-23 and what a real
 		# boar and bear do. Which one you meet is decided by the MAP -- see
 		# `MapGenerator.PREDATORS` -- so a match has one kind of danger, not three.
-		&"unit.wolf", &"unit.boar", &"unit.bear",
+		# `unit.deer` joined them at 6.1b. It is the only one that does not fight: it
+		# wanders, it bolts when hit, and it is a unit purely so it can do either --
+		# nodes cannot move, which is why its roam_radius sat unread for months.
+		&"unit.wolf", &"unit.boar", &"unit.bear", &"unit.deer",
 	]
 	assert_eq(_by_content(reg.unit_ids()), _by_content(expected_units),
 			"every baked unit has a definition, and nothing extra")
@@ -116,8 +119,8 @@ func test_the_full_roster_is_present() -> void:
 	# absent, and for a reason resources.json spells out: it needs water placement, a
 	# gathering ship and a dock, none of which exist.
 	assert_eq(_by_content(reg.resource_ids()),
-			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree",
-					&"res.stone", &"res.sheep", &"res.cattle",
+			_by_content([&"res.berry_bush", &"res.gold_mine", &"res.tree",
+					&"res.stone", &"res.sheep", &"res.cattle", &"res.deer_carcass",
 					&"res.wolf_carcass", &"res.boar_carcass", &"res.bear_carcass"]))
 
 
@@ -334,15 +337,18 @@ func test_an_out_of_range_size_class_clamps_rather_than_crashing() -> void:
 	assert_eq(tree.amount_for(-5), 40, "clamps to the smallest")
 
 
-func test_the_deer_is_wildlife_and_the_others_are_not() -> void:
-	var deer: ResourceDef = reg.resource_def(&"res.deer")
-	assert_true(deer.is_wildlife)
-	assert_eq(deer.roam_radius, 6)
-	assert_true(deer.flees)
-	assert_eq(deer.kind, &"food")
-
-	assert_false((reg.resource_def(&"res.tree") as ResourceDef).is_wildlife,
-			"a tree does not roam")
+func test_no_resource_node_claims_to_roam_any_more() -> void:
+	# `ResourceDef.is_wildlife` is what is LEFT of a field that was never read: res.deer
+	# declared `roam_radius: 6` here for months on a class MovementSystem skips, so it
+	# could not have roamed whatever the data said. 6.1b moved the deer to `unit.deer`
+	# and the live flags to `UnitDef` -- see test_wildlife.gd.
+	#
+	# The parser stays, because the schema is still legal and a future node that really
+	# does hold still while being flagged is not worth forbidding. Nothing shipped uses
+	# it, and this is the assertion that says so.
+	for id in reg.resource_ids():
+		assert_false((reg.resource_def(id) as ResourceDef).is_wildlife,
+				"%s should not claim to roam" % id)
 
 
 # ── ages, techs, factions ──────────────────────────────────────────────────

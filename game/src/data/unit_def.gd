@@ -82,6 +82,21 @@ var aggro_radius: int = 0
 ## deer never did.
 var carcass_def: StringName = &""
 
+## How far from where it was last settled a roaming animal will wander, in tiles, or 0
+## for one that stands where it was put (PLAN.md 6.1b).
+##
+## THIS FIELD ALREADY EXISTED ON `ResourceDef` AND WAS READ BY NOTHING for months --
+## `res.deer` declared `roam_radius: 6` and no system ever looked. It could not have:
+## roaming needs `MovementSystem`, which moves `SimUnit` and skips nodes, so the data
+## was on a class that was physically unable to act on it. Living here is what made it
+## real, and the deer had to become a unit to get it.
+var roam_radius: int = 0
+
+## Whether being hurt makes it run (6.1b's "flee-and-relocate"). False for the three
+## predators -- a wolf that bolted the first time a villager hit it would be a hazard
+## nobody ever had to deal with.
+var flees: bool = false
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var u := UnitDef.new()
@@ -119,6 +134,8 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 		u.is_wildlife = true
 		u.aggro_radius = int((wild as Dictionary).get("aggro_radius", 0))
 		u.carcass_def = StringName((wild as Dictionary).get("carcass", ""))
+		u.roam_radius = int((wild as Dictionary).get("roam_radius", 0))
+		u.flees = bool((wild as Dictionary).get("flees", false))
 	return u
 
 

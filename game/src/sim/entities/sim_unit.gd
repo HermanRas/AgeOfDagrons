@@ -38,6 +38,26 @@ var gather_node_tile: Vector2i = Vector2i.ZERO
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 
+## WILDLIFE ONLY (PLAN.md 6.1b), all three driven by `WildlifeSystem` and read by
+## nothing else. They are here rather than on a subclass because a wolf and a villager
+## differ in DATA -- `UnitDef.is_wildlife` -- and splitting the class would make every
+## system that iterates units care which kind it had.
+##
+## Where this animal currently considers home, and what it wanders around. `(-1, -1)`
+## means "not settled yet" and is claimed on the first think tick; tile (0, 0) is a
+## real tile on every map, so it cannot be the sentinel.
+var roam_home: Vector2i = Vector2i(-1, -1)
+## Ticks until it will consider wandering again. Counts down whatever else happens, so
+## an animal that spent a while being chased does not then stand still for the same
+## while afterwards.
+var roam_cooldown: int = 0
+## Ticks of running left. Non-zero locks out roaming and re-targeting, which is what
+## stops a frightened animal from stopping to graze mid-bolt.
+var flee_ticks: int = 0
+## Hp at the last think tick, so a drop can be noticed without plumbing an attacker
+## through `take_damage` -- see `WildlifeSystem._check_flee`.
+var last_hp: int = -1
+
 ## Ticks left as a corpse before DeathSystem despawns it (PLAN.md 4.7): 60 s of
 ## corpse plus a 10 s fade, at SimClock's 10 ticks/sec. -1 means "not dead" --
 ## DeathSystem reads that sentinel to tell a fresh death from one it has already
