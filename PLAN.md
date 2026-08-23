@@ -916,11 +916,12 @@ from either picture alone.
 | # | Item | Tag |
 |---|---|---|
 | 2.1 | ✅ `SimMap` — four packed arrays, `Domain`, `TERRAIN_COST` on a base-10 scale so slower ground stays integral. Folded into `state_hash()`, without which clients disagreeing about terrain would hash identically | `[MVP]` |
-| 2.2 | ✅ Land only, in practice as well as principle: `MapGen` paints only GRASS and DIRT, so WATER/AIR are unreachable in a match. Reopens the day a map has water or cliffs | `[MVP]` (land) |
+| 2.2 | ✅ **Land and water both real, as of 2026-08-23.** This said "land only, in practice as well as principle" and was true only of the debug map — `MapGenerator` has painted rivers, island rims, lakes and oases since 2.4b. Two things closed the gap: `PathService` holds **one A\* grid per `Domain`** (it held one, land's, and a ship routed against it sailed up the beach), and `ProductionSystem` asks for a spawn tile in the **trained unit's** domain rather than always LAND. AIR is still unreachable — the dragon has no rig and `speed: 0` | `[MVP]` |
 | 2.3 | ✅ Footprints written into `occupancy`; `despawn()` frees tiles **before** dropping the entity, or occupancy keyed by id would leave tiles claimed forever. A building's `pos` is its footprint **centre** so the view draws every entity identically | `[MVP]` |
 | 2.4a | ✅ `MapGen.build_debug_map()` — one start position, fully deterministic, asserted by building two worlds from one config and comparing hashes | `[MVP]` |
 | 2.4b | ✅ **DONE 2026-08-17** — `MapData` / `MapGenerator` / `MapValidator` in `src/sim/`, all eight changes applied; see §11.2. The `game_map_gen/` prototype is left untouched | |
 | 2.4c | **Save map.** See §11.3 | |
+| 2.4d | **Archipelago map type** — one island per player, a few sheep, no predators. See §11.6 | |
 | 2.5 | ✅ Fog of war — `VisionSystem` + snapshot filtering + `FogOverlay`. See §11.4 | |
 | 2.6 | ✅ Starting conditions: town centre, 5 villagers on distinct passable tiles, plus wood/gold/stone/food/livestock clusters placed **for the screen** as much as for the grid (iso sends `dx-dy` to screen x, so "below the town centre where the map is empty" is behind the HUD) | `[MVP]` |
 | 2.7 | Real terrain tileset (art track A.1) | |
@@ -947,16 +948,23 @@ because `FastNoiseLite`'s float maths is not guaranteed identical across CPUs. A
 resources are placed, not sampled**: the validator's first run caught a desert start with one
 reachable tree and no food at all, which is exactly what it exists for.
 
-The eight changes, all applied:
+Eight changes were applied on the way in. Six were prototype bugs and are dead history now
+that the two codebases have diverged — they live in the code and its tests. **Three of them
+were rules rather than fixes, and those still bind anything that touches this generator:**
 
-1. **SIZE IS THE LOAD-BEARING DECISION AND IT IS QUADRATICALLY WRONG.** The rule (`players * 150`, code `* 100`) grows the **side** linearly, so 8 players get 8× the side and **64× the area** of 2. A 300×300 map is 90,000 tiles against the debug map's 4,096 — and 2.4a's own note calls 64×64 a generous settlement's room for *one* player. The pathfinding rebuild goes ~12 ms → ~264 ms, and worse, **fog is one byte per tile per player**, so the snapshot's vision payload goes 4,104 → ~90,000 bytes, taking one tick from 12 KB to ~100 KB and one player's stream to ~1 MB/s. Use **area** per player: `side = 64 * sqrt(players)` → 2P 96, 4P 128, 8P 184.
-2. **The pixel format is ambiguous.** Town centre, villager and scout are all `ff0000`, so a loader cannot tell them apart except by blob-size analysis, and nothing says *whose* base it is. Split it: the **PNG stays authoritative for terrain and resource veins** — spatial, numerous, the part you want to see by looking — and the handful of **entities** (2–8 town centres, five villagers each, scouts, the dragon: under 60 entries) move to a **sidecar JSON** as (role, player, tile). The PNG can still draw them for the human preview, with the loader ignoring those pixels.
-3. **Footprints must come from `buildings.json`.** The plan reserves 5×5 for a town centre that is **10×10** in the data, and rings units at radius 4 — *inside* it — so every villager spawns inside its own town centre. Clear `footprint + 6`; ring units at radius 7+.
-4. **`unit.scout` does not exist**; it is `unit.scout_cavalry`.
-5. **Connectivity is not guaranteed** — only Forest carves paths, so island/river/desert can wall a player in, invisibly, until someone plays it. Flood-fill from every start: each must reach every other start and a minimum of wood/gold/stone, else regenerate. **A hard gate**, and what makes the generator headlessly testable.
-6. **The river must divide the map — but keep the land bridges.** The bridges are the liked part and stay (owner, 2026-08-17). The defect was that both samples showed **three disjoint segments with 20-tile gaps**, so it read as three lakes and the opposite-sides rule meant nothing. Now: a **continuous** river with **1–3 five-tile bridges**, sides assigned by the sign of the perpendicular distance to the centre line, and the direction varying over four axes rather than hardcoded to `y = x`. A test asserts the straight line between two starts crosses water, and the validator asserts they can still reach each other — which together is what "divided but crossable" means.
-7. **Determinism:** `rng.randomize()` has to go. The seed comes from `MatchConfig` so two peers generate byte-identical maps (§7.1) — which also makes "share a map by sharing a seed" free and generator tests reproducible.
-8. **Bugs found reading it:** terrain is generated **twice** (the first pass is entirely overwritten, and it consumes rng draws so the passes disagree); `_place_resource_vein` **can spin forever**, since `placed` only increments when a pixel is actually written and a vein that walks off-map writes none — cap the iterations; veins have no guard against covering a town centre or water; `_place_dragon`'s centre fallback skips its own water check; `ShowMap.save_current_map()` writes to `res://maps/`, read-only in an exported build.
+1. **SIZE IS BY AREA, NEVER BY SIDE.** `side = 64 * sqrt(players)`. Growing the side
+   linearly gives 8 players 64× the area of 2, and **fog is one byte per tile per player** —
+   a 300×300 map takes one tick from 12 KB to ~100 KB and one player's stream to ~1 MB/s.
+   This is a wire-format constraint wearing a level-design costume.
+2. **STARTING RESOURCES ARE PLACED, NOT SAMPLED.** The validator's first run caught a
+   desert start with one reachable tree and no food at all. Every real generator guarantees
+   an opening; hoping the noise put a wood nearby is how a player gets a start they cannot
+   play.
+3. **CONNECTIVITY IS A HARD GATE, not a warning.** Flood-fill from every start: each must
+   reach every other start and a minimum of each resource, else regenerate. It is also what
+   makes the generator headlessly testable — "does it look right" needs eyes, "can everyone
+   reach everyone" is an assertion. *Being revisited for Archipelago, where the claim has to
+   change rather than relax — see §11.6.*
 
 #### 11.3 Save map (2.4c)
 
@@ -966,6 +974,62 @@ and shared — can name it, keep it, and pick it again from 1.6. Three things it
 - **It saves the MAP, not the MATCH.** By the time the button is pressed the world is full of buildings and rubble. What gets written is the terrain and start layout the match was **started** with, so `GameScene` must hold on to its map source rather than reading the live `SimMap`. Saving current state is a save *game* (12.4) — the button must not blur the two.
 - **`user://maps/`, never `res://`**, which is read-only once exported. The picker lists bundled maps from `res://maps/` and saved ones from `user://maps/` together.
 - **The PNG is authoritative; the seed is provenance.** A sidecar JSON carries {name, type, players, size, seed, format_version, created}. The seed alone cannot reproduce a map, because any generator change makes the same seed produce something else.
+
+#### 11.6 Archipelago (2.4d) — a map type where the sea is the map
+
+**One island per player, a few sheep on it, and nothing that bites.** A quiet opening and
+a naval midgame: you cannot be attacked until somebody crosses, so the pressure is
+economic and the first fight is a landing.
+
+Most of it is cheap, because the machinery landed with fishing and wildlife. Three things
+carry the work, and the first is the only hard one.
+
+**1. THE VALIDATOR REFUSES IT BY DEFINITION, and that is the whole design problem.**
+`MapValidator` floods once from player 1 and requires every other start to be in that
+component (`map_validator.gd:60-68`) — a hard gate, retried `MAX_ATTEMPTS` times and then
+surfaced as `meta.problems`, which 1.6 uses to grey out Start. An archipelago fails it
+every time, correctly by the rule as written and wrongly by intent.
+
+So the rule has to become **per type**, and the honest replacement is not "skip the
+check" — it is *a different connectivity claim*:
+
+- every start reaches **its own** resources by land (the existing `MIN_NEARBY` sweep,
+  unchanged, and the thing that actually keeps a start playable);
+- every start touches **shallow water**, or a dock can never be built and the player is
+  sealed in for the whole match;
+- the **water is one body**, so a ship can get from any island to any other. That is the
+  archipelago's version of "everybody can reach everybody", and it is a flood fill over
+  the water domain rather than the land one — which `PathService` can now answer, since
+  it holds a grid per domain.
+
+Nothing else may relax. A player who cannot reach their own gold is broken on any map.
+
+**2. Islands are painted around the starts, not the centre.** `_paint_island` fills deep
+water and carves one landmass in the middle; this needs the inverse — `_start_positions`
+first, then an island per start. Radius is the constraint and it is set by the validator,
+not by taste: `MIN_NEARBY` wants 4 wood, 1 gold, 1 stone and 1 food within 34 tiles of
+walking, plus a 22×22 clearing for the base, so an island materially smaller than about
+30 tiles across cannot pass its own opening. Bigger than that and the sea stops mattering.
+
+**3. Content is per-type, which the code half-supports already.** `PREDATORS` is keyed by
+`Type` and read with `.get(type, {})`, so an unlisted type gets **no predators for free** —
+this is the one requirement that needs no code at all. Sheep want a per-type count (the
+owner asked for "a few", against the current 2 herds of 3), and deer probably want to be
+absent: a herd of seven on a one-base island is most of an opening's food standing still.
+Fish should go **up**, since the sea is the point.
+
+**Also needed, and small:** `Type.ARCHIPELAGO` appended to the enum (appended, so saved
+`MatchConfig.map_type` ints keep meaning what they meant); the literal in `generate()`'s
+RANDOM branch, which indexes `[ISLAND, RIVER, DESERT, FOREST]` by hand and silently will
+not roll a fifth type; `type_name()`; and the picker list at `skirmish_screen.gd:291`.
+
+**What it exposes that no current map does.** Every naval path in the game is untested by
+play: transport ships have no load/unload, `unit.galley` and `unit.galleon` have attacks
+but nothing has ever fought at sea, and a landing is a transport reaching a shore it can
+unload onto. None of that is required for the map type to *work* — you can play an
+archipelago as four peaceful economies and a fishing fleet — but the moment somebody wants
+to attack, transports become the blocker, and they are not written. Worth knowing before
+this is built rather than after.
 
 #### 11.4 Fog of war (2.5) — done 2026-08-17
 
@@ -997,7 +1061,7 @@ AoE's stale ghost, which would need a per-player last-seen copy of every static.
 
 | # | Item | Tag |
 |---|---|---|
-| 3.1 | ✅ `TerrainLayer` (a real `TileMapLayer`, built from raw bytes). `rendering_quadrant_size = 8` was **measured**, and the answer is backwards from the obvious reasoning: 8 gives 32 draw calls where the engine default 16 gives 165 and 32 gives 280, because a large isometric chunk is a diamond straddling a rectangular viewport. Also fixed a half-tile terrain offset — invisible on uniform grass, obvious at any boundary | `[MVP]` |
+| 3.1 | ✅ `TerrainLayer` (a real `TileMapLayer`, built from raw bytes). `rendering_quadrant_size = 8` was **measured**, and the answer is backwards from the obvious reasoning: 8 gives 32 draw calls where the engine default 16 gives 165 and 32 gives 280, because a large isometric chunk is a diamond straddling a rectangular viewport. Also fixed a half-tile terrain offset — invisible on uniform grass, obvious at any boundary.<br><br>**Transition blending, 2026-08-23, and generated rather than drawn.** Grass meeting water was a pixel-crisp zigzag of 64×32 diamonds. The owner chose a runtime mask over baked corner art for a reason worth keeping: *"adding more sprites will make theme packs harder later on"* — a theme pack still ships **one diamond per terrain** and gets every transition free. A second `TileMapLayer`, a child of this one so it draws above without touching `GameView`, redraws each tile's higher-priority neighbour through an alpha ramp opaque at the shared edge. `BLEND_ORDER` decides which way the reach goes and it is the natural one: sand washes over a waterline, grass grows down onto sand; reversed, the sea climbs the beach. **47 canonical masks** — four edges plus four corners, with a corner dropped whenever either adjacent edge carries the same terrain, since an edge ramp is already opaque to both its endpoints. That is the classic blob set, and it keeps a strip at 47 columns rather than 256. Two edges take the **stronger** ramp rather than the sum, or a corner is brighter than either edge and draws a wedge where two coastlines meet. Corners were the second pass: a tile meeting another terrain only at a **vertex** got nothing, so every staircase step kept one hard point — and the softened edges around it made that point *more* conspicuous, not less. Known limit: **one neighbour per tile**, since a `TileMapLayer` holds one cell per coordinate, so where three terrains meet the strongest wins and the third join stays crisp | `[MVP]` |
 | 3.2 | ✅ Edge-swipe zoom on either strip, 0.6–2.0, **multiplied not added** — a fixed step per pixel would crawl at 2× and leap at 0.6×. The gesture is decided on touch-down and held until release | `[MVP]` |
 | 3.3 | ✅ `CameraRig`. **Clamping is two rules**: the centre stays on the map DIAMOND (clamped in tile space, where it is an axis-aligned box) and then the viewport stays inside the projected box. Box-only clamping is what `Camera2D.limit_*` does, passed every unit test, and still left a screen ~85% void at the west corner | `[MVP]` |
 | 3.4 | ✅ Double-tap minimap → centre on own town centre | `[MVP]` |
@@ -1020,7 +1084,7 @@ ms avg. One figure over budget: sim tick **max 7.63 ms** against <5 ms — it is
 |---|---|---|
 | 4.1 | ✅ `MovementSystem` walks the route waypoint by waypoint; a tick's budget carries across waypoints. **Stop at nearest reachable**: `set_path()` rewrites `task_target_tile` to where the route actually ends, or a unit sent to a tree stands beside it in MOVE forever | `[MVP]` |
 | 4.2 | ✅ `PathService` on `AStarGrid2D` with a per-tick budget, plus `SeparationSystem` — pushes overlapping units apart by half the shortfall each, visiting units and pairs **sorted by id** so every client resolves the same overlaps in the same order. A push is capped under half a tile and dropped if it would land on impassable ground. Diagonals do not cut corners past a blocked tile | `[MVP]` |
-| 4.3 | ✅ `Selection` (client-side; a selection in the state hash would desync the moment one player tapped), `InputRouter` taps, selection ring, panel from `units.json` | `[MVP]` |
+| 4.3 | ✅ `Selection` (client-side; a selection in the state hash would desync the moment one player tapped), `InputRouter` taps, selection ring, panel from `units.json`.<br><br>**Tap targets, 2026-08-23.** Picking goes by the tile under the finger and still does — but the *art* is not drawn on that tile, which is the whole complaint. **When the tile holds nothing**, the tap falls back to any resource node whose art is painted over it, asked as `Occlusion.hides()` — the same call, with the same measured `{rect, pad, reach}`, that decides whether a villager behind a tree gets outlined. *If the art hides that tile, tapping it is tapping the art*, and those two answers have to agree. Three properties come free: tiles **in front** are never covered, so walking past a tree still works; the **screen column** rejects taps behind in depth but visibly beside; and the reach is **measured** off `height_m`. It took two goes — the first tried a 2×2 `pick_footprints` on the tree, which reaches 48 px against 157 px of trunk, and no tile rect can grow up-screen without also eating the ground in front. `res.tree`'s footprint never moved: one tile, forest still walkable | `[MVP]` |
 | 4.4 | ✅ `GatherCommand`/`BuildCommand` reuse the walk-there machinery; `MovementSystem` advances **any** unit with a route left rather than only ones tasked MOVE, so GATHER/RETURN/BUILD travel for free | `[MVP]` |
 | 4.5 | ✅ `GameView.tap_action()` decides what a tap means from pure facts; `ActionFlash` shows which order fired. This closed a real gap: gather and build existed sim-side and **nothing in the view had ever dispatched them** | `[MVP]` |
 | 4.6 | ✅ Health dot, positioned off the visual's declared `height_m`, sharing thresholds with the panel through `HealthDot.color_for()` | `[MVP]` |
@@ -1030,7 +1094,7 @@ ms avg. One figure over budget: sim tick **max 7.63 ms** against <5 ms — it is
 | 4.10 | Special abilities + cooldowns | |
 | 4.11 | ✅ Population cap, **enforced**. See §11.5 | |
 | 4.12 | Stances | |
-| 4.13 | ✅ **mostly** — `CombatSystem`: walk to the target, stand at reach, strike on cooldown, damage after matching armour with a `MIN_DAMAGE` floor (armour must blunt an attack but never make a defender invulnerable to a whole class, because nothing on screen would explain it). Reach is measured to a **footprint**, not a centre, or melee could never touch an 8×8 building. Deliberately **no auto-acquire and no retaliation** — a unit fights what it was ordered to fight, since guessing means every villager charging the first enemy that walks past (that is 4.12). **Projectiles landed 2026-08-22** — `SimProjectile`, `ProjectileSystem`, three atlases wired: the shot spawns at the attacker, flies, points one of eight ways and despawns on arrival, and it carries **no damage** (the blow has already landed; this is only what shows where it came from). What it looks like is a fence post, because both shafts are baked standing on end — art side, `asset_request.md`. **Left in 4.13:** the packed/unpacked siege state machine and the hostile wolf, both waiting on art that has been requested | |
+| 4.13 | ✅ **mostly** — `CombatSystem`: walk to the target, stand at reach, strike on cooldown, damage after matching armour with a `MIN_DAMAGE` floor (armour must blunt an attack but never make a defender invulnerable to a whole class, because nothing on screen would explain it). Reach is measured to a **footprint**, not a centre, or melee could never touch an 8×8 building. Deliberately **no auto-acquire and no retaliation** — a unit fights what it was ordered to fight, since guessing means every villager charging the first enemy that walks past (that is 4.12). **Projectiles landed 2026-08-22** — `SimProjectile`, `ProjectileSystem`, three atlases wired: the shot spawns at the attacker, flies, points one of eight ways and despawns on arrival, and it carries **no damage** (the blow has already landed; this is only what shows where it came from). What it looks like is a fence post, because both shafts are baked standing on end — art side, `asset_request.md`.<br><br>**Hostile wildlife closed this out on 2026-08-23** and needed no new combat code, only a new way in: `WildlifeSystem` writes the same `set_task_attack` an `AttackCommand` would and CombatSystem never learns that nobody ordered it. What it did need was `Diplomacy`, because "owner 0 is neutral" was a fair reading of the world until something neutral bit somebody — gaia owns the trees *and* the wolf, so hostility had to split gaia by **type**: a gaia unit is fair game, a gaia node is scenery. That predicate replaced four separately-written copies of `owner_id != 0 && owner_id != mine`. **`AISystem._nearest_enemy` deliberately kept its own copy** — it asks "who am I at war with", not "may I attack that", and `_issue_attack` sends the whole army at the answer, so routing it through `Diplomacy` would march the AI off to hunt bears.<br><br>**Left in 4.13:** the packed/unpacked siege state machine, waiting on art that has been requested. | |
 | 4.14 | Formations | |
 
 #### 11.5 Population cap (4.11)
@@ -1062,258 +1126,166 @@ all twenty. What it deliberately does not do is stop an already-paid-for unit fr
 
 #### 5.8 Walls and gates — ✅ built 2026-08-22
 
-The largest block of finished art the game could not reach: 22 wall pieces baked and
-staged, and no way to put one on the map. Four things stood between them and the build
-menu — drag placement, automatic segment choice, an orientation, and a gate that lets
-your own people through — and all four are here.
+22 baked wall pieces the game could not reach. Four things stood between them and the
+build menu — drag placement, automatic segment choice, an orientation, and a gate that
+lets your own people through — and all four shipped. *Compressed 2026-08-23; the
+how-we-found-it narrative now lives in the code and in git.*
 
-**The art was staged but NOT declared**, which is worth recording because two documents
-said otherwise. `buildings.json` claimed "all 24 wall pieces are baked and declared in
-visuals.json"; only the tower's rubble and foundation were. Nothing failed and nothing
-rendered, because an undeclared id is not an error — it resolves to the magenta
-placeholder, and no building def pointed at one to make it appear. The lesson is the
-same one the staged-atlas gotcha teaches: *staged* and *wired* are different states, and
-only a def reaching for an id proves the second one.
+**Every civ agrees on the segment lengths, which is the whole reason this is tractable.**
+Measured from `<Obstruction><Static>` at 4 units per tile, rounded up, maxed per axis
+across each tier's ages:
 
-**Every civ agrees on the segment lengths, and that is the whole reason this is
-tractable.** Measured the usual way — `<Obstruction><Static>` at 4 units per tile,
-rounded up, maxed per axis across each tier's ages:
+| piece | tiles |
+|---|---|
+| short | **[3, 2]** |
+| medium | **[6, 2]** |
+| long | **[9, 2]** |
+| gate | **[9, 2]** (forced) |
 
-| piece | germ | brit | achae | rome | tiles |
-|---|---|---|---|---|---|
-| short | 12×8 | 12×6 | 12×6 | 12×8 | **[3, 2]** |
-| medium | 24×8 | 24×6 | 24×6 | 24×8 | **[6, 2]** |
-| long | 36×8 | 36×6 | 36×6 | 36×8 | **[9, 2]** |
-| gate | 37×6.5 | 36×7 | 36×6 | 36×6 | **[9, 2]** |
+3 / 6 / 9 long and 2 deep universally, so one segmentation function serves all three tiers
+and a tier is nothing but a skin and a price. **The gate is forced to [9, 2]** even though
+the germanic one measures 9.25: a gate must be substitutable for a long piece or it leaves
+a gap in a run. The cost is half a tile of art overhang.
 
-3 / 6 / 9 tiles long and 2 deep, universally — so one segmentation function is correct
-for all three tiers, and a tier is nothing but a skin and a price. **The gate is forced
-to a long segment's [9, 2]** even though the germ one measures 9.25 tiles: a gate has to
-be substitutable for a long piece or it cannot sit in a run without leaving a gap (0
-A.D. makes the gate an *upgrade* of a long wall for exactly this reason), and the cost is
-a half-tile of art overhang — the same deliberate disagreement the house's roof makes.
+**Three tiers stay available at age 4** (owner's call) — wood (2), stone (3), reinforced
+(4) are three ladders, not one re-skinning the others away. The tier's SHORT segment
+carries `wall_lengths` and is the menu entry; the other nine pieces are
+**`buildable: false`**, meaning *the system may place this, the menu may not offer it*.
+Without that flag the build grid carries twelve pieces, eleven of which place one fixed
+block each — the outcome walls were held back over.
 
-**Three tiers, three menu entries, twelve defs.** The project owner's call: all three
-stay available at age 4 rather than one re-skinning the other two away, so wood (age 2),
-stone (3) and reinforced (4) are three ladders and not one. The tier's SHORT segment
-carries `wall_lengths` and is the WALL entry — the drag reads that list to decide what
-to lay — and the other nine pieces are `buildable: false`, a new flag meaning *the
-system may place this, the menu may not offer it*. Without it the build grid would carry
-all twelve pieces and eleven of them would each place one fixed-length block, which is
-the outcome walls were held back over.
+**`WallPlan` is one function with two callers**, and that is the design: the ghost draws
+what it returns and `PlaceWallCommand` places what it returns. Two implementations of
+"which pieces fill this line" would differ somewhere, and the player would find out only
+after letting go.
 
-##### The gate is an upgrade, not a placement (2026-08-22)
-
-It shipped as a menu entry placed by tapping, and the project owner found the hole
-inside a day of playing: **"how do I rotate a gate?"** You could not. A gate is [9, 2]
-and `PlaceBuildingCommand` carries no facing and never transposes a footprint, so every
-tap-placed gate lay east-west — which meant **a north-south wall could not have a gate
-in it at all**, and there was no rotate control to fix it with.
-
-Three ways out were on the table: a rotate button on the ghost, folding the gate into
-the wall drag, or inferring the axis from the ground. The owner picked the fourth —
-**tap a finished long segment and upgrade it** — which does not answer the rotation
-question so much as delete it: the wall already knows which axis it was dragged along,
-and the gate inherits its origin, its footprint and its facing. There is nothing left to
-rotate, on any screen size. It is also what 0 A.D. does, and this section had already
-said so four paragraphs earlier without noticing it was the answer.
-
-- **All three gates are now `buildable: false`.** Upgrading is the only way to get one,
-  so the broken axis case cannot be reached rather than being worked around.
-- **`BuildingDef.upgrades_to`** is the new field, on the three long segments only. The
-  target must declare the SAME footprint and `UpgradeBuildingCommand.validate()`
-  enforces it, because `SimWorld.convert_building` keeps the ground the building already
-  holds and a target wanting more of it would silently occupy tiles nobody checked.
-- **Converted in place, keeping the entity id.** A despawn-and-respawn would empty the
-  panel the player pressed the button on, and would put the wall in `removed_this_tick`
-  — telling every other client a building was *destroyed* when one was improved.
-- **The price is the difference, floored per resource kind.** 36 wood paid for the wall,
-  the gate lists 50, so the upgrade is 14. Floored per kind rather than in total, so a
-  target cheaper in one resource cannot hand back a refund in it.
-- **Health carries its fraction**, since the two defs have different maxima (1200 and
-  1000). Full health is pinned exactly, so the commonest case cannot round to 999 and
-  show a damage dot on a brand new gate.
-- It turned the `upgrade` slot — a disabled placeholder on every building since the
-  panel was written — into the first real upgrade in the game.
-
-**A bug the screenshot found, not the suite:** the selection ring on a north-south wall
-was drawn eighteen metres *east*, sprawling across open grass. Every other consumer
-already read the transposed footprint; the ring read the visual's placeholder, which is
-authored east-west because the art is. `EntityView.ground_m` now carries the claimed
-ground, and `GameView` sets it only where the actual footprint disagrees with the def's
-— narrow on purpose, since sizing every ring from the footprint would have doubled the
-villager's and moved every building's off its measured mesh.
-
-**`WallPlan` is one function with two callers**, and that is the design rather than a
-convenience: the ghost draws what it returns and `PlaceWallCommand` places what it
-returns. Two implementations of "which pieces fill this line" would differ by a segment
-somewhere, and the player would only ever find out after letting go. It lives in
-`src/sim/` because the server is what lays the wall down; it is integer arithmetic over
-tiles, so the boundary rule is satisfied and the view reading it is the allowed
-direction.
-
-- **A sloppy diagonal becomes a straight wall.** The drag snaps to whichever axis it
-  mostly ran along — the finger is on a phone and the grid is isometric, so nobody drags
-  a clean line, and refusing an imperfect one would make the feature unusable on the
-  device it is for.
-- **The run is rounded to a whole number of short segments** and filled longest-first,
-  which on a multiple of 3 always fills exactly: 12 → 9+3, 15 → 9+6, 18 → 9+9. Longest
-  first because fewer pieces is fewer seams to attack, fewer vision circles and fewer
-  snapshot entries.
+- **A sloppy diagonal becomes a straight wall** — snapped to whichever axis it mostly ran
+  along. The finger is on a phone and the grid is isometric; refusing an imperfect drag
+  would make the feature unusable on the device it is for.
+- **Rounded to whole short segments, filled longest-first.** Fewer pieces is fewer seams,
+  vision circles and snapshot rows.
 - **Always laid in the +axis direction from the lower end**, so dragging backwards
-  describes the same wall and the ghost does not reshuffle when a drag crosses its own
-  anchor. The perpendicular coordinate comes from the anchor, so the wall stays on the
-  row the drag started on rather than sliding onto the row it ended on.
-- **A tap is one short segment.** A drag of zero length still means "put a wall here".
+  describes the same wall and the ghost does not reshuffle when a drag crosses its anchor.
+- **A tap is one short segment.**
+- **A partial run downgrades its last piece** to whatever the tier still affords. Without
+  it, a player with two shorts' worth of wood who drags thirty tiles got *nothing*.
 
-**Only two of the eight baked directions are reachable**, and that is the footprint
-system rather than the art: a [9, 2] box rotated 45° does not tile a square grid. A
-north-south wall is its def's footprint *transposed*, which is the whole of what "8
-orientations" reduces to. `SimBuilding` gained a `facing` for it — buildings had none,
-and its header says why every other one is baked at `directions: 1` and stays at 0
-forever. **The view DERIVES the transposed footprint from `facing`** rather than being
-sent it: sending it would be the first field 12.1f took off the wire coming straight
-back, and `facing` already says which axis the piece lies on.
+**Only two of the eight baked directions are reachable**, and that is the footprint system
+rather than the art: a [9, 2] box rotated 45° does not tile a square grid. A north-south
+wall is its def's footprint **transposed**, which is all "8 orientations" reduces to.
+`SimBuilding.facing` exists for this, and the view **derives** the transpose from it rather
+than being sent it.
 
-**A run is partial by design.** Blocked tiles are skipped, and when the money runs out
-the last piece is **downgraded** to whatever the tier still affords before the run ends.
-That downgrade was not in the first version and the suite is what found it: a player with
-two shorts' worth of wood who drags thirty tiles cannot afford the leading nine-tile
-piece, and was getting *nothing* — with wall they could plainly pay for on the table. It
-buys the largest affordable piece that fits the segment's own span, so two shorts' worth
-of wood becomes one medium: same ground, same money, one fewer seam.
+**A builder carries on to the next foundation.** `BuildSystem` re-scans within
+`SimSystem.SAME_WORK_RADIUS` — **10 tiles**, the owner's number — which also raised
+`GatherSystem.RESCAN_RADIUS` from 1. That reversed an earlier 3×3 call, and the earlier
+reasoning was answering a different question: it guarded against a worker setting off
+across the map unasked, and *a wall drag is an order the player gave*. Combat's
+`REACQUIRE_RADIUS` stays at 2 — ten tiles of "next thing to hit" is an aggro range.
+Measured from the segment just finished, not from the unit, and prefers a foundation
+nobody is on. Builders spread round-robin rather than all queuing on the first.
 
-**A builder carries on to the next foundation** (2026-08-22, from play: *"builder does
-not continue to build all the pieces, stops after 1"*). It did — `BuildSystem._finished`
-called `stop()` for anything that was not a field, and there was **no re-scan at all**.
-That was correct while a placement was one building and exactly wrong for a drag that
-lays a dozen: the crew was spread across them and every villager downed tools after its
-first segment.
+##### The gate is an upgrade, not a placement
 
-The bound is a new shared `SimSystem.SAME_WORK_RADIUS` — **10 tiles**, the owner's
-number, "in general increase scan for same work to 10 tiles" — which also **raises
-`GatherSystem.RESCAN_RADIUS` from 1**. That reverses the earlier 3×3 call, and the
-earlier reasoning was not wrong so much as answering a different question: it was
-protecting against a worker setting off across the map on an order the player did not
-give, and a wall drag *is* an order the player gave, covering more ground than three
-tiles. Combat's `REACQUIRE_RADIUS` stays at 2 — that one looks for the next thing to
-*hit*, and ten tiles of it is an aggro range, which its own note rules out.
+It shipped as a menu entry and the owner found the hole in a day: **"how do I rotate a
+gate?"** You could not — `PlaceBuildingCommand` carries no facing, so every tap-placed
+gate lay east-west and a north-south wall could not have one at all.
 
-It measures from **the segment just finished, not from the unit** (a villager who has
-raised a nine-tile wall may be at either end of it), and **prefers a foundation nobody
-is already on**, which is what preserves the round-robin spread below — ranked rather
-than filtered, so a crew larger than the number of sites still all find work.
+The fix deletes the question rather than answering it: **tap a finished long segment and
+upgrade it.** The wall already knows its axis, and the gate inherits its origin, footprint
+and facing. It is also what 0 A.D. does.
 
-*1082 tests did not catch this*, because every build fixture in the suite placed exactly
-one foundation, so `stop()` was always the right answer and nothing ever asked for a
-second. The seven new tests were checked against a sabotaged `_finished` and all seven
-fail without the fix.
-
-**Builders are spread round-robin across the segments**, not all queued on the first.
-Five villagers on the first of twelve foundations raise it in a fifth of the time and
-then idle beside eleven untouched ones — the same "a foundation nobody returns to"
-pattern that needed a standing order in the PlayTest AI.
+- **All three gates are `buildable: false`** — upgrading is the only route, so the broken
+  axis case cannot be reached rather than being worked around.
+- **`BuildingDef.upgrades_to`**, on the three long segments only. The target must declare
+  the SAME footprint and `UpgradeBuildingCommand.validate()` enforces it, because
+  `convert_building` keeps the ground already held and a bigger target would silently
+  occupy unchecked tiles.
+- **Converted in place, keeping the entity id.** A despawn/respawn would empty the panel
+  the player just pressed, and would report a *destroyed* building to every other client.
+- **The price is the difference, floored per resource kind**, so a target cheaper in one
+  resource cannot hand back a refund in it.
+- **Health carries its fraction**, with full health pinned exactly so a brand new gate
+  cannot show a damage dot.
 
 ##### Gates
 
-**A gate starts OPEN and can be locked** (project owner, 2026-08-22). The alternative was
-closed-by-default: a wall that defends the moment it is finished, at the price of
-stranding your own villagers behind it before you have noticed there is a gate to open.
-Open never strands anybody, and the price is that a new wall does nothing until somebody
-shuts it.
+**A gate starts OPEN and can be locked** (owner, 2026-08-22). Closed-by-default defends
+the moment it is finished, at the price of stranding your own villagers behind it before
+you have noticed there is a gate to open.
 
-The mechanism is three lines because `SimMap.set_occupied` already takes a `blocks`
-flag — the one that makes a field claimed and walkable at once. `SimBuilding.blocks_now()`
-is the whole rule. **Locking evicts whoever is in the doorway**, for the reason
-`_evict_from_footprint` records at length: a unit inside a blocked cell is a unit
-`AStarGrid2D` will not plan a route *out* of, and a gate swinging shut is the only thing
-in the game that can create that situation on purpose.
+`SimMap.set_occupied` already takes a `blocks` flag, so `SimBuilding.blocks_now()` is the
+whole rule. **Locking evicts whoever is in the doorway** — a unit inside a blocked cell is
+one `AStarGrid2D` will not plan a route *out* of, and a closing gate is the only thing in
+the game that creates that on purpose.
 
-`ToggleGateCommand` **names the target state rather than meaning "flip"**. A toggle
-depends on when it lands: on a client the second tap goes out before the first one's
-snapshot returns, so a double tap would be as likely to shut a gate as open it.
+`ToggleGateCommand` **names the target state rather than meaning "flip"**: on a client the
+second tap goes out before the first one's snapshot returns, so a double tap would be as
+likely to shut a gate as open it.
 
-**AN OPEN GATE IS OPEN TO EVERYONE**, the besieging army included. Per-player passability
-is the real fix and needs a pathfinding grid per player — `PathService` has exactly one
-`AStarGrid2D` — so it is deliberately not attempted. What exists is 0 A.D.'s own model
-("can be locked to prevent access") and it is one honest step short of AoE2's
+**AN OPEN GATE IS OPEN TO EVERYONE**, besiegers included. Per-player passability is the
+real fix and needs a pathfinding grid **per player** — and note that `PathService` now
+holds one grid per *domain* (2026-08-23), which is the same shape of change and evidence
+it is affordable, but per-player multiplies by player count rather than by two. Deliberately
+not attempted. What exists is 0 A.D.'s own model, one honest step short of AoE2's
 allies-only gate.
 
-**`gate_locked` and `facing` are both in `state_hash()`.** The lock moves the *movement
-grid*, so two hosts disagreeing about a doorway would route the same army two different
-ways and diverge in position a tick later — which `pos` reports long after the cause.
+**`gate_locked` and `facing` are both in `state_hash()`.** The lock moves the movement
+grid, so two hosts disagreeing about a doorway route the same army two different ways.
 
-##### Short pieces that meet become one long piece (2026-08-22)
+##### Short pieces that meet become one long piece
 
-The project owner's design, approved with one amendment that turned out to be the load-bearing
-one. A wall built up over several drags ends as a row of short pieces where a single drag
-would have laid long ones: same ground, same cost, three times the entities, seams, vision
-circles and snapshot rows. `WallMerge` closes that — on completion, a segment looks along its
-own axis and, if a contiguous stretch of same-tier neighbours adds up to a length the tier
-declares, they become that one piece.
+A wall built over several drags ends as a row of shorts where one drag would have laid
+longs: same ground, same cost, three times the entities. `WallMerge` closes that — on
+completion a segment looks along its axis and, if a contiguous stretch of same-tier
+neighbours sums to a length the tier declares, they become that one piece.
 
-**Only complete pieces merge**, which is the owner's amendment and the answer to the one real
-hazard: absorbing a foundation would delete the building a villager is walking towards. A
-piece under construction is a wall of its own until the tick it is finished — which is also
-the tick it gets its own chance to be merged, so nothing is lost by waiting.
-
-- **The survivor is the piece at the LOW end of the run**, not the one that just finished. It
-  keeps its origin and only grows, so nothing moves a corner backwards over ground another
-  entity still holds — and the outcome does not depend on which piece was completed last,
-  which is what stops two hosts that raised the same wall in a different order from
-  producing different entities.
-- **Health is the sum, and it is exact.** Wall hp is authored strictly per tile (400 / 800 /
-  1200 for 3 / 6 / 9), so three undamaged shorts are one undamaged long, and a merge neither
-  repairs nor weakens. Clamped to the new maximum, which only bites if that proportion is
-  ever broken. This is deliberately *not* the fraction rule the gate upgrade uses: an upgrade
-  is one building becoming another, where a merge is several becoming one.
-- **Silent, and free.** No toast, no cost, no refund. The wall the player paid for is still
-  standing on the ground they put it on, and announcing an improvement nobody asked for is
-  noise.
-- **Longest-first, then leftmost**, the same rule `WallPlan` fills a drag with — so six
-  shorts become long + long rather than three mediums, and a wall built in stages ends up the
-  shape one drag would have given it. The tie-break is not cosmetic: a run of six contains
-  four different stretches of three, and "whichever the scan found first" would depend on
-  which end the walk started from.
-- **A merged long can then be upgraded to a gate**, which is the payoff rather than a side
-  effect: a gate is an upgrade of the long piece, so until now a player who walled a gap in
-  short pieces could never put a door in their own wall.
-- **A gate is never merged away**, and that falls out of the data rather than being a rule in
-  `WallMerge`: no tier's `wall_lengths` names a gate, so `GameDataRegistry.wall_tier()` does
-  not resolve one. Nor is anything merged across an owner, a tier, an axis, a gap, or a
-  parallel wall one row over — twenty-one tests, most of them about exactly that, because the
-  ways this could eat something it should not all present as *a building vanished*.
-- The absorbed pieces go through `despawn`, which is the **silent** removal: it frees their
-  ground and files them under `removed_this_tick` so clients drop the view node, where the
-  destruction path (5.5) would leave rubble and tell a player something of theirs was killed.
+- **Only complete pieces merge** (the owner's amendment, and the load-bearing one):
+  absorbing a foundation would delete the building a villager is walking towards.
+- **The survivor is the piece at the LOW end**, not the one that just finished — it keeps
+  its origin and only grows, and the outcome cannot depend on completion order, which is
+  what stops two hosts producing different entities.
+- **Health is the sum, exactly.** Wall hp is authored strictly per tile (400/800/1200 for
+  3/6/9), so three undamaged shorts are one undamaged long. Deliberately *not* the
+  fraction rule the gate upgrade uses: an upgrade is one building becoming another, a
+  merge is several becoming one.
+- **Silent and free** — no toast, no cost, no refund.
+- **Longest-first, then leftmost**, matching `WallPlan`. The tie-break is not cosmetic: a
+  run of six contains four different stretches of three.
+- **A merged long can then be upgraded to a gate**, which is the payoff: until this, a
+  player who walled a gap in short pieces could never put a door in their own wall.
+- **A gate is never merged away**, and that falls out of the data — no tier's
+  `wall_lengths` names a gate. Nor is anything merged across an owner, tier, axis, gap or
+  parallel row; 21 tests, most about exactly that, because every way this could eat
+  something presents as *a building vanished*.
+- Absorbed pieces go through `despawn`, the **silent** removal, where the destruction path
+  (5.5) would leave rubble and report a kill.
 
 ##### Not done, and why
 
-- **No wall corner piece, and 0 A.D. has none either.** Two drags meeting at 90° overlap or
-  leave a notch. 0 A.D. puts a `wall_tower` at every corner instead — which is art we
-  already have, since `building.guard_tower` is baked from exactly those actors. What is
-  missing is not the art but anything that *detects* a corner and places one there.
-- **No wall tower**, and none is needed: the roster's `Pers/wall_tower` and
-  `rome/wall_tower` are exactly what `vis.guard_tower` is baked from, so
-  `building.guard_tower` already *is* the wall turret. 0 A.D. auto-places towers at wall
-  corners, which is a nicety that wants the wall system settled first.
+- **No wall corner piece, and 0 A.D. has none either.** Two drags meeting at 90° overlap
+  or leave a notch. 0 A.D. puts a `wall_tower` at every corner instead — art we already
+  have. What is missing is anything that *detects* a corner and places one.
+- **No wall tower needed**: `building.guard_tower` is baked from `Pers/wall_tower` and
+  `rome/wall_tower`, so it already *is* the wall turret. Auto-placing at corners wants the
+  wall system settled first.
 - **No garrison.** 0 A.D.'s medium wall declares eight turret points; ours hold nobody.
-  Garrison is 4.8 and unbuilt, and a wall is the wrong place to introduce it.
-- **No diagonal walls.** Six of the eight baked directions are unused. It needs a
-  footprint model that is not a box.
+  That is 4.8, and a wall is the wrong place to introduce it.
+- **No diagonal walls.** Six of the eight baked directions are unused. Needs a footprint
+  model that is not a box.
 - **The Athenian bakes are unused** (`vis.wall_short/medium/long/gate`, no age suffix) —
   they predate the age ladder and the roster does not name Athens for walls. Left staged;
-  they are the obvious stand-in for a fourth tier.
+  the obvious stand-in for a fourth tier.
 
 ### Phase 6 — Resources & wildlife
 
 | # | Item | Tag |
 |---|---|---|
-| 6.1a | ✅ superseded — `res.berry_bush` is the MVP food node: no hunt/kill/carcass machinery, gathers like a tree, and its art is fully delivered where the deer carcass is not | `[MVP]` |
+| 6.1a | ✅ `res.berry_bush` is the MVP food node and **stays** the easy opening one — it gathers like a tree, so nothing forces a player to hunt before they want to. The hunt/kill/carcass machinery this item was deferred to avoid now exists anyway, arriving with the hostile wolf (4.13) rather than with the deer: a predator has to be killed before it can be harvested, and `DeathSystem` is the seam where a hunted thing becomes a harvested one | `[MVP]` |
 | 6.1b | ✅ **Roaming + flee-and-relocate**, 2026-08-23. `WildlifeSystem` wanders any gaia animal within `roam_radius` of where it last settled; anything with `flees` bolts for 4 s when its hp drops and makes wherever it stopped its new home. **The deer had to become a unit to get either** — it declared `roam_radius: 6` in `resources.json` for months and nothing read it, and nothing could have: `MovementSystem` moves `SimUnit` and skips nodes, so the data sat on a class physically unable to act on it. So a deer is now **hunted** (`unit.deer` → `res.deer_carcass`, 140 food) where it used to be harvested standing still, and `vis.deer_carcass` finally draws the thing it was baked for. Fleeing is detected by **watching hp**, not by plumbing an attacker through `take_damage` — same information, one field, and it catches damage that will never have an attacker. Roam targets are hashed from `(id, tick)` rather than drawn from a shared rng, which has no draw order to get out of step | |
 | 6.2/6.3 | ✅ Size classes are pure data. Since the 2026-08-17 ore/tree rebake the class picks the **sprite** as well as the amount, so a rich seam and a poor one are different pictures | `[MVP]` |
 | 6.4 | ✅ `GatherSystem`: walk, extract on a whole-tick countdown (a float accumulator would round differently across machines and desync), fill `carry_cap`, walk to `nearest_drop_off()`, deposit, return or retire. `gather_slots` is enforced by **recomputing** which ids rank lowest among holders every tick rather than reserving a field — so a competitor stopping, dying or being re-tasked frees its spot with nothing to keep in sync. A short last take costs a **proportional** wait, not a full interval (see §12 field balance) | `[MVP]` |
-| 6.5 | ✅ **mostly** — stone, berry bushes, livestock, farms/fields and (2026-08-23) **herding** all land. Walk any unit within 4 tiles of a sheep or cow and it takes your orders; walk somebody else's closer and it takes theirs. **Herding is not owning:** the animal stays gaia's and only `SimUnit.herded_by` moves, which is what kept `GatherSystem`, `WinConditionSystem` and `AttackCommand` entirely out of it — and is why you can still attack the animal you are herding, which is how it becomes food. Claim is sticky, so a penned flock stays yours. Only **fishing** remains | |
+| 6.5 | ✅ **mostly** — stone, berry bushes, livestock, farms/fields and (2026-08-23) **herding** all land. Walk any unit within 4 tiles of a sheep or cow and it takes your orders; walk somebody else's closer and it takes theirs. **Herding is not owning:** the animal stays gaia's and only `SimUnit.herded_by` moves, which is what kept `GatherSystem`, `WinConditionSystem` and `AttackCommand` entirely out of it — and is why you can still attack the animal you are herding, which is how it becomes food. Claim is sticky, so a penned flock stays yours.<br><br>**Fishing landed the same day**, which closes this item. `res.fish` in shallow water, and two real blockers behind it: `spawn_resource_node` asked `can_place_building`, which is land-only by design and refused a fish every tile of the sea — `ResourceDef.domain` and `SimMap.can_place(rect, domain)` split that apart — and `unit.fishing_ship` carried empty `gather_rate`/`carry_cap`, so it would have sailed to the shoal and quietly given up. **`building.dock` now `requires_shore`**, enforced through `adjacency_allows` so the placement ghost cannot show green for a spot the host refuses: a ship is domain water and must reach a tile adjacent to its drop-off, so an inland dock trains ships that can never deliver | |
 
 ### Phase 7 — Resource HUD
 
@@ -1453,160 +1425,101 @@ Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 | |
 | 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
 
-#### 12.1 Multiplayer approach — ordered steps for two-device play
+#### 12.1 Multiplayer — ✅ steps a–g all built and validated phone↔PC on real WiFi
 
-**What exists and is unvalidated:** ENet transport, commands up with a peer→player map and
-server-side ownership validation, per-player fog-filtered snapshots down, deterministic `MapGen`,
-a result screen driven purely by snapshot data, and a proven Android build with the INTERNET
-permission. See §1.1 for why the unvalidated part is the argument for doing this before more
-features stack on it.
+*Compressed 2026-08-23. The step table carried est/risk columns and an ordering plan for
+work that finished on 2026-08-21; §15 had recorded a–g as done while this table still
+showed five of them pending. What survives is the decisions that still bind.*
 
-| Step | Work | Est. | Risk |
-|---|---|---|---|
-| a | `Net.host_open()` on 0.0.0.0 + `join(ip)`, peer lifecycle, player-id assignment | 2–4 h | low |
-| b | **The client has no world** (below) | 4–8 h | **high** |
-| c | ✅ **DONE 2026-08-21** — 1.6's screen in lobby mode. Went beyond the row: the spec described a lobby that only worked one way (the host learns who arrived, the joiner learns nothing back), so it also gained a **lobby config broadcast and a READY gate** — a joining player sees the host's real map and settings and must agree before START unlocks, and changing any setting cancels every agreement. Slots also became 2–8 with a **CLOSED** role, so the player count and the map size are two numbers. Validated phone↔PC over WiFi. **Colour became a picker on 2026-08-21** (below) | 6–10 h | low, volume |
-| d | Match-start handshake: host broadcasts the agreed `MatchConfig`, everyone builds, acks, then the clock starts | 2–3 h | medium |
-| e | ✅ **DONE 2026-08-21** — resign is a `ResignCommand` through the ordinary command path, so the server overwrites the player id and it cannot be forged for somebody else; a vanished peer is issued the same command by the host. `WinConditionSystem` now excludes `defeated` players from the standing count, which is what makes either mean anything. Proven by killing a real joiner process mid-match (host showed VICTORY) and by pressing the real Resign button (DEFEAT, "Player 2 won") | 2–3 h | low |
-| f | Wire size and packet reliability (below) | 3–6 h | medium |
-| g | Two-device bring-up on real WiFi — firewall, IP entry, thumb testing | 2–3 h | medium |
+**All seven shipped:** `host_open()`/`join()` with peer lifecycle and player ids (a); the
+client's world (b); the lobby with a config broadcast and a READY gate, 2–8 slots with a
+CLOSED role (c); the match-start handshake (d); resign and peer-drop, both through the
+ordinary command path so neither can be forged (e); wire size (f); two-device bring-up (g).
 
-**Order: a → b → d → g → c → e → f.** Front-loads the risk and puts a two-device match you can
-see at roughly the halfway point, before the polish.
+**Terrain is a transfer, not a regeneration.** This originally said each client runs
+`MapGen` from the shared `MatchConfig`, which holds for the integer-only debug map and
+**not** for 2.4b's generator: `FastNoiseLite`'s float maths is not guaranteed identical
+between an ARM phone and an x86 desktop, and a host and client that disagree about where
+the water is have desynced before the first order — in the one way `state_hash()` cannot
+help with, since it reports the divergence without saying why. So `MatchConfig` carries the
+`MapData` (20–40 KB) and it is sent once. Certainty for one small message.
 
-**(b) is the item with real design in it.** `GameScene._start_match()` and `_preview_placement()`
-both read `Net.host().world`, documented as a solo-only exception; on a joining client
-`Net.host()` is null, so the scene dies on entry.
+**The placement ghost is advisory.** A client has the map but not what anyone has built
+since, so the ghost is driven from snapshot facts. The server validates, so a wrong ghost
+costs a refusal rather than a desync.
 
-**Terrain is a transfer, not a regeneration — corrected 2026-08-17.** This said each client runs
-`MapGen` from the shared `MatchConfig` so nothing needs sending, which holds for the hand-built
-debug map because it is integer code. 2.4b's generator uses `FastNoiseLite`, whose float maths is
-not guaranteed identical between an ARM phone and an x86 desktop — and a host and client that
-disagree about where the water is have desynced before the first order, in the one way
-`state_hash()` cannot help with, because it reports the divergence without saying why. So
-`MatchConfig` carries the `MapData` (20–40 KB via `to_dict()`) and it is sent once at match
-start. Certainty for one small message.
+##### Wire size (12.1f) — measured, per player per tick
 
-The real question is the **placement ghost**, which colours itself by asking the authoritative
-world about occupancy and adjacency: a client has the map but not what anyone has built since. It
-must be driven from snapshot facts and be **advisory** — the server already validates, so a wrong
-ghost costs a refusal, not a desync.
-
-**(f) is measured.** The 2026-08-17 figure of 12,092 bytes was on the 64×64 debug map. Re-measured
-2026-08-21 on generated boards with `dev_preview/preview_wire_size.tscn`, per player per tick:
-
-| board | tiles | total | fog | entities | fragments |
-|---|---|---|---|---|---|
-| 96×96 | 9,216 | 28,768 | 9,224 | 18,512 | 21 |
-| 128×128 | 16,384 | 31,768 | 16,392 | 14,368 | 23 |
-| 192×192 | 36,864 | 53,928 | **36,872** | 16,024 | 39 |
-
-**The fog half is done (2026-08-21).** It was 68% of the packet on the 8-player board the lobby now
-offers, and a function of the MAP rather than the match, so no other saving would ever have shrunk
-it — and half the grids were byte-for-byte repeats, since `VisionSystem.VISION_INTERVAL` recomputes
-every second tick. Two options were considered, and the drawback of the one taken is worth keeping
-written down:
-
-- **Option 1, taken — the client computes its own fog** (`ClientFog`). Zero bytes on the wire,
-  forever. Its cost: `EXPLORED` accumulates a tick at a time, and snapshots are
-  `unreliable_ordered`, so a dropped snapshot means a thin rim of tiles the client believes it has
-  never seen. It corrects itself when anything of yours passes there again. **Fog only** — entity
-  filtering is the server's answer and arrives with the entities.
-- **Option 2, not taken — the server sends fog CHANGES on a reliable channel.** Tens of bytes
-  instead of tens of thousands, and it cannot drift, because reliable delivery means the client's
-  grid *is* the server's. Its cost is a second channel with its own ordering and reconnect story.
-  **If option 1's slivers ever become a complaint, this is the reinvestment**, and `ClientFog` is
-  where it lands — everything above its `apply()` stays as it is.
-
-**This does not move the security boundary**, which is the objection to answer first: the rule is
-"the server must not send a client entities it cannot see" (§5.1 step 6), it lives in
-`SnapshotSystem._entry_for`, and it still runs on the server. The server still computes every
-player's vision, because it still decides what to send them. The grid was only ever a bitmap to
-paint. Guarded by a test that compares the client's grid to the server's **tile by tile**, because
-two implementations of one circle are two implementations that can drift.
-
-After it: 19,528 / 15,384 / 17,040 bytes — and **snapshot size no longer depends on the board at
-all**, so the 8-player map became the *cheapest* of the three.
-
-**Then the entity payload, and it was not what anyone expected.** Only **36 entities are visible**
-on the 8-player board and they cost 16,024 bytes — about **445 bytes each**. The problem was never
-the entity count, so delta encoding was never the first answer. A field-by-field breakdown
-(`preview_wire_size -- --fields`) found that **half of every entry is the names of its own fields**:
-248 bytes of a town centre's 472, because `var_to_bytes` writes a dictionary key as a
-length-prefixed string every time it appears. Three fixes, none of them a delta:
-
-1. **`footprint` is not sent.** Static content the client derives from `def_id` — a building's off
-   its def, a resource's from `footprint_for_size` with the `size_class` already on the wire. Same
-   argument that took `vision_range` off it. 68 B per building and resource entry.
-2. **`pos` is a `Vector2i`, not `{"x": .., "y": ..}`** — 48 bytes to carry two small integers,
-   because the nested dictionary re-encodes "x" and "y" per entry. Twelve. Safe here and
-   deliberately not in `MapData`, which notes the opposite: a saved map goes through JSON and a
-   snapshot never does.
-3. **Shape tables.** Entities come in a handful of shapes, so field names go **once per shape per
-   snapshot** rather than once per entity: `updated` becomes `tables` of `{keys, rows}`. Done at
-   the **transport boundary** (`Net._broadcast_snapshot` / `_recv_snapshot`), not in `build()`, so
-   the simulation still produces readable dictionaries and every other reader is untouched.
-
-| board | start of 12.1f | after fog | after 1 & 2 | after 3 | fragments |
+| board | start | after fog | after 1 & 2 | after shape tables | fragments |
 |---|---|---|---|---|---|
 | 96×96 | 28,768 | 19,528 | 14,840 | **7,528** | 21 → 6 |
 | 128×128 | 31,768 | 15,384 | 11,840 | **6,328** | 23 → 5 |
 | 192×192 | 53,928 | 17,040 | 13,080 | **6,824** | 39 → 5 |
 
-Confirmed on the real transport: ENet's own warning went from **18,532 bytes to 4,360**.
+Confirmed on the real transport: ENet's own warning went from 18,532 bytes to 4,360. Two
+findings, both counter-intuitive enough to keep:
 
-**Colour is a PICKER, not a cycle — 2026-08-21.** A colour button used to step the slot to the
-next colour nobody else held. Cheap to write, and it made choosing violet out of eight a matter
-of pressing five times and watching — worse on a joined client, where every press was a round
-trip to the host, so the player was cycling blind through a list they could never see.
-`ColourPickerPopup` shows the list. **The rule has not changed, only where it is expressed:** a
-colour somebody else holds is not on the grid at all, rather than being skipped by the step.
-Active slots only — a closed slot holds no player, so its colour is nobody's, and counting it
-would leave two players on an eight-slot board with six colours spoken for by empty chairs.
+**Fog was 68% of the packet** on the 8-player board, and a function of the MAP rather than
+the match — so no other saving would ever have shrunk it. `ClientFog` computes it on the
+client instead: zero bytes, forever. Its cost is that `EXPLORED` accumulates a tick at a
+time over an unreliable channel, so a dropped snapshot leaves a thin rim of tiles the
+client believes it never saw; it self-corrects when anything of yours passes there again.
+**If those slivers ever become a complaint, the reinvestment is sending fog CHANGES on a
+reliable channel** — tens of bytes, cannot drift — and it lands in `ClientFog`, with
+everything above its `apply()` unchanged. This did **not** move the security boundary: the
+rule is "the server must not send a client entities it cannot see", it lives in
+`SnapshotSystem._entry_for`, and it still runs on the server. The grid was only ever a
+bitmap to paint. A test compares client grid to server grid tile by tile, because two
+implementations of one circle are two that can drift.
 
-The wire message now **names a colour** where it used to name none, and the host still holds the
-rule: it re-checks the index and **ignores** a collision rather than substituting something,
-because a client's idea of what is free can be a moment stale and the re-broadcast that follows
-every lobby change is what corrects it. Silently handing somebody a different colour than the one
-they pressed would be worse than leaving them where they were.
+**Half of every entity entry was the names of its own fields** — 248 bytes of a town
+centre's 472, because `var_to_bytes` writes a dictionary key as a length-prefixed string
+every time it appears. Only 36 entities are visible on the 8-player board, so the count was
+never the problem and a delta was never the first answer. Three fixes: `footprint` is not
+sent (derived from `def_id`, same argument that took `vision_range` off); `pos` is a
+`Vector2i` rather than `{"x": .., "y": ..}` (48 bytes for two small integers) — safe here
+and deliberately **not** in `MapData`, which goes through JSON where a snapshot never does;
+and **shape tables**, so field names go once per shape per snapshot, done at the transport
+boundary so the simulation still produces readable dictionaries.
 
-**The transport mode is settled, and measured rather than argued — 2026-08-21.** `Net` counts
-arriving snapshots and reports gaps (ticks are consecutive, so a jump is exactly what went
-missing). Phone joined to a PC host over real WiFi, ~90 seconds of play:
+##### Transport mode — settled by measurement
 
-    net: 300 of 312 snapshots arrived (3.85% lost) over 325 ticks
-    net: 600 of 621 snapshots arrived (3.38% lost) over 634 ticks
+Phone joined to a PC host over real WiFi, ~90 s of play: **~3.4% of snapshots lost, and
+every single loss was one snapshot — never a run.** A lost snapshot is one 100 ms frame of
+stale state and the next is complete, because a full snapshot supersedes its predecessor
+and needs nothing from it.
 
-**~3.4% lost, and every single loss was one snapshot — never a run.** A lost snapshot is one
-100 ms frame of stale state, and the next one is complete, because a full snapshot supersedes its
-predecessor and needs nothing from it. Under interpolation that is invisible, which matches the
-owner's "snappy" verdict from (g).
+**So `unreliable_ordered` stays, as a decision rather than an inheritance.**
+`reliable_ordered` would remove 3.4% of invisible gaps and buy head-of-line blocking — a
+retransmit stalls every snapshot behind it, turning a loss nobody can see into a stutter
+everybody can — and retransmitting a snapshot is worthless by the time it lands.
 
-**So `unreliable_ordered` stays**, and that is now a decision rather than an inheritance. The cheap
-fix — `reliable_ordered` — would remove 3.4% of invisible 100 ms gaps and buy head-of-line
-blocking: a retransmit stalls every snapshot queued behind it, turning a loss nobody can see into a
-stutter everybody can. Worse, retransmitting a snapshot is *worthless by the time it lands*, since a
-newer one describing the same world has already been sent. Reliability is right for a delta stream,
-where a lost message corrupts everything after it, and wrong for this one.
+**That is also the argument against finishing §7.2's delta encoding.** Per-fragment loss is
+~0.7%, so at the pre-fix 39 fragments this link would have dropped ~24% of snapshots.
+Getting to 5 fragments is what made the unreliable choice viable, and a delta trades that
+self-healing property away: the remaining payload is mostly resource nodes, which barely
+change, so "send statics only when they change" means replacing the absence-means-invisible
+rule the view depends on — and then needing reliability after all. Deliberately not done.
 
-That in turn is the argument against finishing §7.2's delta encoding here. The measured per-fragment
-loss is ~0.7%, which is what makes the fragment count matter so much: **at this morning's 39
-fragments the same link would have dropped ~24% of snapshots, roughly one in four.** Getting to 5
-fragments is what made the unreliable choice viable, and a delta would trade that self-healing
-property away — the remaining payload is mostly resource nodes, which barely change, so "send
-statics only when they change" means replacing the absence-means-invisible rule the view depends on,
-and then needing reliability after all. Deliberately **not** done: 6–10 h to make the transport more
-fragile.
+##### Still open
 
-**Most of this needs no phone.** Steps a, b, d, e and f are verifiable with **two Godot processes
-on one desktop** — one hosting on 0.0.0.0, one joining 127.0.0.1 — both scriptable and
-screenshottable the way `dev_preview/preview_victory.tscn` drives the real game today. Only (g)
-needs hardware and a second pair of thumbs.
+- **12.1b LAN discovery and reconnect.** Typing an IP was the friction point on hardware.
+  *Desync detection is retired* — `Net` has no `SimWorld` on a client and `state_hash()`
+  appears only in tests, so with one authoritative sim and full snapshots there is no
+  second simulation to diverge from.
+- **Input delay is parked.** Commands queue for `tick + 1` with no buffer, so a remote
+  player's orders land whenever they arrive — fine on LAN, visibly rubber-bandy when
+  latency spikes. A fixed 2–3 tick delay is the standard fix, about 2 h, but it changes how
+  the game **feels** and wants a decision rather than a default.
 
-**Deliberately not in this batch:** commands are queued for `tick + 1` with no input-delay buffer,
-so a remote player's orders land whenever they arrive — fine on LAN, visibly rubber-bandy when
-latency spikes. A fixed 2–3 tick input delay is the standard fix, about 2 h, but it changes how
-the game **feels** and wants a decision rather than a default.
+**Colour is a picker, not a cycle** (2026-08-21). Stepping to the next free colour made
+choosing violet out of eight a matter of pressing five times and watching — worse on a
+joined client, where every press was a round trip. The rule did not change, only where it
+is expressed: a colour somebody else holds is not on the grid at all. Active slots only, or
+two players on an eight-slot board would find six colours spoken for by empty chairs. The
+host still holds the rule and **ignores** a collision rather than substituting, because
+silently handing somebody a different colour than the one they pressed is worse than
+leaving them where they were.
 
 #### 12.3 The front door, and where PLAY goes — changed 2026-08-21
 
@@ -1703,22 +1616,32 @@ it is baked.)*
 
 ## 12. Post-MVP prioritisation
 
-| Candidate | Impact | Effort | Verdict |
+**Shipped since MVP**, one line each — the detail is in the phase item each names.
+2026-08-17: fog of war (2.5), population cap (4.11), conquest win condition (11.1), field
+yield balance (below), map generator (2.4b), skirmish screen (1.6), PlayTest AI (12.2a).
+2026-08-21: real multiplayer a–g validated phone↔PC (12.1), the minimap's four corner
+pages (8.2b), the UI batch. 2026-08-22: walls and gates (5.8), arrow projectiles (4.13),
+the AI difficulty list (12.2b's list only), wall merging. 2026-08-23: tap targets for tall
+and small art (4.3), terrain transition blending (3.1), hostile wildlife and the carcass
+flow (4.13), roaming and fleeing (6.1b), herding (6.5), fishing (6.5).
+
+**Still open, in the order it makes sense to take it:**
+
+| Candidate | Impact | Effort | Notes |
 |---|---|---|---|
-| 4.13 Military units + combat | Very high | Medium | ✅ **mostly done** — siege pack/unpack, hostile wolf, arrow projectiles remain |
-| 2.5 Fog of war | High | Medium | ✅ **DONE** 2026-08-17 |
-| 4.11 Population cap | Medium | Low | ✅ **DONE** 2026-08-17 |
-| 11.1 Win condition | High | Low | ✅ **DONE** 2026-08-17 (conquest; 11.2's two modes declared inert) |
-| **Field yield balance** | Medium | Low | ✅ **DONE** 2026-08-17 — see below |
-| 2.4b Map generator | High | Medium | ✅ **DONE** 2026-08-17 |
-| 1.6 Skirmish screen | High | Medium | ✅ **DONE** 2026-08-17 |
-| 12.2a PlayTest AI | High | Low-medium | ✅ **DONE** 2026-08-17 — and it bought an automated full-match test |
-| 12.1 Real multiplayer (LAN, 2 devices) | High | Medium | ✅ **DONE** 2026-08-21, a–g, validated phone↔PC on real WiFi — §12.1 |
-| 8.2b The minimap's four corner pages | Medium | Low-medium | ✅ **DONE** 2026-08-21 — market working, chat and tech tree as wireframes, settings absorbed the pause menu — §8.2b |
+| **Unit-speed balancing pass** | High — it is how the game *feels* | Low in code, playing time | `BUGS.md`. Walls, wildlife and three predators have all changed what "too fast" means since it was raised. **Only the owner can judge it** |
+| 4.8 Garrison → 4.9 defensive bonus | High | Medium | The largest remaining hole in walls: 0 A.D.'s medium wall declares eight turret points and ours hold nobody. Also what `garrison_cap` on every building has been waiting for |
+| 2.4d Archipelago | Medium | Medium | New map type; the validator's connectivity claim has to change rather than relax. §11.6 |
+| 12.2b AI decision flow | High | Medium-high | The difficulty *list* ships and the opponents behind it do not — Normal/Hard/Unfair are Easy wearing three names and say so on screen. Parked until the balancing pass has been played, because tuning an AI against unbalanced speeds tunes it against the wrong game |
+| 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | `TechSystem` is unbuilt; the field yield's per-age ladder stands in for a mill tech |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
-| 9.x Ages & tech | High — the age axis now carries what factions would have | High: four age skins of every building | Batch later |
-| **Walls** | Medium | Medium — drag placement, segment choice, 8 orientations, gate pass-through | ✅ **DONE** 2026-08-22 — 22 staged pieces reached the build menu; the art turned out to be staged but never *declared*. See §5.8 |
+| 2.4c Save map | Medium | Low-medium | §11.3 |
+| 12.1b LAN discovery | Medium | Low | Typing an IP was the friction point on hardware |
+| 12.3 Campaign | Medium | Medium | The screen exists as a placeholder and PLAY opens it |
+| 12.4 Save/load and replays | Medium | Medium | Replay record/play already exists as a test fixture (0.7) |
+| 4.12 Stances, 4.14 formations, 4.10 abilities, 5.3 upgrades | Medium | Medium each | 5.3 is half-built: the gate upgrade is the first real one |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
+| **Naval combat** | Medium | Medium | Newly *reachable* rather than newly wanted: ships float and path since 2026-08-23. Transports have no load/unload, and nothing has ever fought at sea. Archipelago is what would demand it |
 
 **Field yield, balanced against Age of Empires 2026-08-17.** It was 0/100/250/400 food per 100
 ticks per farmer by age — 4× a berry bush per farmer at age 2 rising to **16×** at age 4, and four
@@ -1746,12 +1669,12 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 
 | # | Item | State |
 |---|---|---|
-| A.1 | Terrain tile set from 0 A.D. ground textures — grass, dirt, sand, shallow + deep water, rock, forest floor, plus `vis.cliff`. All 64×32 exact, no fitting | ✅ — remaining are not tiles: transition/blend edges and shoreline |
+| A.1 | Terrain tile set from 0 A.D. ground textures — grass, dirt, sand, shallow + deep water, rock, forest floor, plus `vis.cliff`. All 64×32 exact, no fitting | ✅ **and closed 2026-08-23.** The "remaining" here was transition and shoreline edges, and they are no longer art at all: `TerrainLayer` generates all 47 transitions per terrain from the one diamond each already ships (3.1), and the shoreline is a sand band the generator paints. Deliberate — the owner's call was that more sprites make theme packs harder |
 | A.2 | Town centre + house, each with foundation and rubble. Foundations and generic rubble keyed by **footprint size** so the rest of the roster reuses them. No damaged tier — 0 A.D. has none, and health is the dot | ✅ |
 | A.3 | Villager: 11 animations × **8** directions = 960 frames (8 not 5 — she holds an axe in one hand, so mirroring would swap it) | ✅ — one rebake owed (§13.2 item 9) |
 | A.4 | Resource nodes: gold, stone, berry bush, deer + carcass, boar, sheep, wolf, fish, six extra tree species | Largely ✅. Open: tree **size-class variants** and palms (both need variant selection in isobake — no deterministic actor exists), and `vis.farm`, blocked on a 64-instance prop scatter the importer collapses to one |
-| A.4a | **Animate the wildlife** — wolf, sheep, cattle. Every animal ships static, and every recipe justified it with "no clip attached, so the quadruped transfer bug never triggers" — **that bug is fixed**, so the justification outlived the problem. Wolf has the richest set and is the only animal needing an attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something. Deer and boar come free on the same path | Cost is the **per-clip measurement**, not the bake: `location_scale` is not a global constant (the deer death clip measured 0.0319) |
-| A.4b | **Two gaia food nodes have no art at all** — `res.cattle` (`cattle.toml` written, unbaked) and `res.bear` (no recipe). Missing, not placeholder | |
+| A.4a | **Animate the wildlife — now the single most visible gap in the game.** Every fauna atlas is one static rest pose, and as of 2026-08-23 **six species move**: wolf, boar and bear chase and bite, deer roam and bolt, sheep and cattle are driven home by hand. All six slide. This project's own convention is that anything without a walk clip carries `speed: 0` precisely so nothing slides (ships, dragon, all three siege engines) — wildlife is the first thing to break it, knowingly, on the owner's call. Wolf needs the richest set and the only attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something | **Highest-value art item.** Cost is the **per-clip measurement**, not the bake: `location_scale` is not a global constant (the deer death clip measured 0.0319) |
+| A.4b | ✅ **Closed 2026-08-23** — this said `res.cattle` and `res.bear` had no art at all. Both are baked, staged and now declared; every fauna atlas the game names exists. What replaced it is a **carcass** gap: only `vis.deer_carcass` is baked, and five defs draw it (`res.deer_carcass` plus wolf / boar / bear / sheep). A dead deer where a dead bear should be is the wrong animal, and it beats the magenta unknown, but four bakes are owed. `asset_request.md` | Four carcass bakes owed |
 | A.5 | UI chrome from the itch.io dragon packs | Largely in use |
 | A.6 | **Player colour — prerequisite, not polish** (§2.7 consequence 3). Bake untinted, emit the source alpha as a mask page, tint in a `canvas_item` shader. **Blend mode decided:** neither obvious option works — *multiply* (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the lightness ladder; *luminance-preserving hue transfer* destroys the ladder outright, since every colour inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the **base** level with the texture contributing only its **local deviation**: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, `k ≈ 0.8` scaled by remaining headroom so a light colour does not clip flat. **The mask needs its own greyscale page** (~+12% atlas bytes) — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | **Must land before A.8** |
 | A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | Unblocked, low priority |
@@ -1869,31 +1792,57 @@ Live risks only. Retired ones are in `b904b76`.
 
 ## 15. Immediate next actions
 
-1. ✅ **Map generator in the game** (2.4b, §11.2). Still open from it: the **PNG + sidecar save format**, which 2.4c needs. It also found that `terrain.water_shallow`, `terrain.water_deep`, `terrain.rock` and the forest floor were **baked and staged but never declared in `visuals.json`** — the debug map only ever paints grass and dirt, so nothing had asked for them, and a generated map's water would have drawn as the magenta unknown. Four data entries, now wired: exactly the gap the asset seam's totality rule is meant to surface rather than hide.
-2. ✅ **Skirmish settings screen** (1.6, §11.1), with PLAY routed through it. Open from it: saved maps (waits on 2.4c), the OPEN slot (waits on 12.1), and the skin.
-3. ✅ **PlayTest AI** (12.2a) per §12.2 — including the closing attack-move, so a headless match ends and the win condition is exercised automatically.
-4. ✅ **Multiplayer** (§12.1), the whole block a–g, validated on hardware.
-5. ✅ **UI batch, 2026-08-21.** PLAY split off to a campaign placeholder (§12.3); the lobby's colour cycle became a picker (§12.1c); the age header's pause button retired into the SETTINGS corner button; and the minimap's four corner buttons became real — a working market, and chat and tech-tree wireframes (§8.2b).
-6. ✅ **Walls** (5.8, 2026-08-22). Three tiers, drag placement, two orientations and a lockable gate. Found on the way: the wall art was staged but never **declared** in `visuals.json`, despite two documents saying it was — and the suite found that a run whose leading long piece was unaffordable placed *nothing*, which is why the last piece now downgrades.
-7. ✅ **Projectiles** (4.13, 2026-08-22) — ranged combat had *no* visible cause before it. **Left in 4.13:** the packed/unpacked siege state machine and the hostile wolf, both waiting on requested art.
-8. ✅ **AI difficulty list** (12.2b, 2026-08-22) — eight slot roles, Passive real, three placeholders honest about being Easy. §12.2.
-9. ✅ **Walls merge, lobby preview rotated** (5.8 / 1.6, 2026-08-22). And **the facing compensation was built and reverted** (2026-08-22 → 23): the owner's rule is that an art defect gets fixed in the recipe, so the 36-recipe re-bake is §13.2 item 10 and there is no game-side half of it.
+*Rewritten 2026-08-23. This had grown into a numbered log of everything shipped since the
+MVP, with the actual next actions at the bottom — and the numbering had been renumbered
+twice, so cross-references inside it were drifting. The shipped list now lives in §12 as
+prose; what is left here is only what has not been done.*
 
-10. ✅ **Tap targets for tall and small art** (4.3, 2026-08-23), both reported off a screenshot. Picking has always gone by the tile under the finger, and that is still the rule — but the *art* is not drawn on that tile. A tree's trunk stands a tile and a half up-screen of the ground it holds, so it now carries a `pick_footprints` of 2x2 in `resources.json`, **separate from the footprint** and read by `GameView._covers` alone: the tree still claims one tile, so a forest is still walkable. A berry bush is simply smaller than a fingertip, so a tap that lands on **bare ground** now falls back to the nearest one-tile resource node's *artwork* within `TAP_REACH_PX` (24 px). Deliberately never units — a mis-tap in a fight must not turn a retreat into an attack.
+**1. The unit-speed balancing pass** (`BUGS.md`). Top of the list and unchanged for a week,
+because it is the one item nobody but the owner can do. It was deliberately queued behind
+walls, and the queue has since grown: chokepoints, three predators, fleeing deer and driven
+livestock all change what "too fast" means. Everything below this is code and can wait; this
+needs playing.
 
-**Next, in the order it makes sense to do it:**
+**2. 4.8 garrison**, which unlocks 4.9 and closes the largest remaining hole in walls —
+0 A.D.'s medium wall declares eight turret points and ours hold nobody. It is also what
+`garrison_cap` on every building def has been waiting for, and it settles §13.2 item 4b
+(whether `act_enter`/`act_garrison` are one concept or two).
 
-11. **The balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means. This is the one the owner can only answer by playing, so it wants a build on the device.
-12. **Wire the wildlife that is already baked** — `vis.wolf`, `vis.bear`, `vis.boar`, `vis.fish` and `vis.deer_carcass` are staged and declared in **nothing** (`resources.json`'s own note explains why each was held back). That is the walls' failure mode exactly: art on disk that no def reaches for. The wolf is also the 4.13 item above, so hostile behaviour and the declaration are one job.
-13. **Then 4.8 garrison**, which unlocks 4.9 and is the last big hole in the wall feature (0 A.D.'s medium wall declares eight turret points; ours hold nobody).
+**3. 2.4d Archipelago** (§11.6). One island per player, a few sheep, nothing hostile. The
+content side is nearly free — `PREDATORS` is keyed by map type and read with `.get(type,
+{})`, so an unlisted type gets no predators without a line of code. The work is that
+`MapValidator` requires every start to reach every other by land, which an archipelago fails
+by definition, so that claim has to *change* rather than relax.
 
-Further out and unchanged in priority: 9.3 `TechSystem` (the field yield's per-age ladder is standing in for a mill tech), 2.4c the map save format, 12.1b LAN discovery, and 13.x dragons once the RTS is a game.
+**Then, in no strongly forced order:** 12.2b's real AI decision flow (parked behind item 1
+on purpose); 9.3 `TechSystem`, where the field yield's per-age ladder is currently standing
+in for a mill tech; 2.4c the map save format; 12.1b LAN discovery; 12.3 campaign; and 13.x
+dragons once the RTS is a game.
 
-**Still open, later: 12.2b's decision flow.** Item 8 above shipped the *list*, not the opponents — Normal / Hard / Unfair are Easy wearing three names, and the screen admits it. The real per-difficulty behaviour (build-order aggression, expansion rate, what each tier is allowed to cheat at) stays parked until item 11's balancing pass has been played, because tuning an AI against unbalanced unit speeds tunes it against the wrong game. Reopen it after 11.
+### What is waiting on art, not on code
 
-**Retired from this list, because the architecture answered it rather than the work:** 12.1b's
-*desync detection*. `Net` has no `SimWorld` on a client — it says so outright — and `state_hash()`
-appears only in tests. With one authoritative simulation and full snapshots down there is no
-second simulation to diverge from. What is still live in that row is **LAN discovery** (typing an
-IP was the friction point on hardware in (g)) and **reconnect**; "lag compensation" is the parked
-input-delay decision at the end of §12.1.
+- **`vis.wolf` and five siblings need walk clips** (§12A A.4a) — and this is now the most
+  visible defect in the game rather than a nicety. Six species move as of 2026-08-23 and
+  every one of them slides, because every fauna atlas is a single static rest pose.
+- **Four carcass bakes** (§12A A.4b). Five defs draw `vis.deer_carcass`; a dead deer where a
+  dead bear should be is the wrong animal.
+- **The 36-recipe `yaw_offset_deg` re-bake** (§13.2 item 10). Art side, and there is
+  deliberately no game-side half — a compensation was built and reverted inside a day.
+- **A replacement for `vis.tree_teak`**, ideally a palm for riverbanks and Archipelago. The
+  teak was pulled from the forest rotation on 2026-08-23 for being 4.6 tiles wide and 12
+  tall on a one-tile footprint, which made trees unselectable.
+- **Five estimated `footprint_m` figures** to confirm with `isobake inspect`. Low priority;
+  they feed the selection ring and the occlusion band, not gameplay.
+
+### Known gaps worth writing down rather than filing
+
+- **A dock built inland before 2026-08-23 stays inland.** `requires_shore` gates new
+  placement only; an existing dock will train ships that cannot deliver.
+- **Naval combat does not exist.** Ships float and path since 2026-08-23, but transports
+  have no load/unload and nothing has ever fought at sea. Archipelago is what would demand
+  it, and it is not a prerequisite for the map type to be playable.
+- **An open gate is open to everyone**, besiegers included. Per-player passability needs a
+  pathfinding grid per player. §5.8 argues it, and the per-domain split of 2026-08-23 is
+  evidence the shape is affordable — but per player multiplies by player count, not by two.
+- **A static destroyed behind the fog stops being sent** rather than leaving AoE's stale
+  ghost, which would need a per-player last-seen copy of every static (§11.4).
