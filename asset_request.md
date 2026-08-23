@@ -10,6 +10,47 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ## Open requests
 
+### Confirm five `footprint_m` figures I had to estimate — 2026-08-23
+
+**What's needed:** the measured ground footprint, in metres, for `vis.wolf`, `vis.bear`,
+`vis.boar`, `vis.fish` and `vis.deer_carcass`. One `isobake inspect` each. **Low
+priority** — nothing is blocked and nothing looks wrong; I would simply rather these
+were measured than guessed, and only you can measure them.
+
+**Why I could not.** All five were baked, staged and declared in `visuals.json` by
+nothing until today, when wiring the wolf forced the declarations. `height_m` I could
+derive exactly: the anchor gives it, and the method reproduces your existing figures
+for `vis.tree` (8.03), `vis.sheep` (1.09) and `vis.cattle` (2.55) to the last digit.
+
+`footprint_m` does not come out of the atlas. Animals are authored NON-SQUARE — the
+sheep is `[1.5, 0.65]` — so one frame cannot give both axes, and a tight frame crop
+catches antlers and misses tucked legs. Calibrating the crop against your three known
+animals gives implied scales of **23.3, 23.6 and 31.3 px/m along the length** and
+**21.4, 21.5 and 15.4 across**, which is not a constant and so not a conversion.
+
+**What I shipped in the meantime**, scaled off the sheep's recipe measurements:
+
+| id | footprint_m | height_m | derived from |
+|---|---|---|---|
+| `vis.wolf` | [1.70, 0.48] | 1.39 | `wolf.toml`'s raw 0.800 x 3.410 |
+| `vis.bear` | [2.53, 1.30] | 1.70 | frame crops; `bear.toml` says "Unmeasured" |
+| `vis.boar` | [1.81, 0.71] | 1.04 | `boar.toml`'s raw 1.175 x 3.639 |
+| `vis.fish` | [1.40, 0.70] | 0.26 | `fish.toml`'s raw 1.162 x 2.814 |
+| `vis.deer_carcass` | [1.60, 1.20] | 0.90 | a lying deer, by eye |
+
+**What they affect, and it is not gameplay:** the selection-ring size and
+`Occlusion.column_pad_for`'s outline band. Being 30% out means a ring slightly the
+wrong size and a unit behind a bear outlined a tile early. `height_m` I trust; the
+footprints are the ask.
+
+**One I know is wrong.** `vis.deer_carcass`'s height derives from its anchor as **2.47
+m**, taller than the standing deer at 2.02, which cannot be right for a body lying
+down — its `death` clip is the one `deer_carcass.toml` records a hand-probed
+`location_scale` of 0.0319 for, so I suspect the anchor rather than the arithmetic.
+I shipped 0.90 by eye. Worth a look while you are in there.
+
+---
+
 ### `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
 
 **What's needed:** a fourth tree species to restore `vis.tree`'s variant list to four.

@@ -123,6 +123,14 @@ const DEER_PER_HERD := 7
 const DEER_MIN := 19
 const DEER_MAX := 27
 
+## SINGLY, not in a herd, and that is what a boar is: 0 A.D. and every RTS that has
+## one treat it as a lone animal worth more than a sheep and found rather than farmed.
+## It is passive here -- it stands and is harvested -- which is a simplification the
+## bear will have to undo, since both really fight back.
+const BOAR_COUNT := 2
+const BOAR_MIN := 16
+const BOAR_MAX := 24
+
 const WOLF_COUNT := 2
 const WOLF_MIN := 24
 const WOLF_MAX := 33
@@ -648,6 +656,11 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 			SHEEP_MIN, SHEEP_MAX, rng)
 	_place_herds(data, claimed, centre, &"res.deer", DEER_HERDS, DEER_PER_HERD,
 			DEER_MIN, DEER_MAX, rng)
+	# Scattered rather than herded -- see BOAR_COUNT. It was on the debug map from the
+	# day it was wired and missing here, which is the same one-placer-of-two mistake
+	# that made the wolf invisible; caught by asking what was left rather than by play.
+	_place_scatter(data, claimed, centre, &"res.boar", BOAR_COUNT,
+			BOAR_MIN, BOAR_MAX, rng)
 	_place_gaia_units(data, claimed, centre, &"unit.wolf", WOLF_COUNT,
 			WOLF_MIN, WOLF_MAX, rng)
 
