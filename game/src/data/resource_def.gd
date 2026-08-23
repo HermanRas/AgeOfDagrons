@@ -37,6 +37,18 @@ var visuals: Array[StringName] = []
 ## claiming 4x4 for each would make a twelve-tree forest an impassable wall.
 var footprints: Array[Vector2i] = []
 
+## Tiles a TAP is allowed to land on, per size class, or empty to use `footprints`.
+## A screen-space affordance and nothing more: no part of this reaches the sim, so a
+## node can be easy to hit without becoming harder to walk past.
+##
+## THE TWO HAD TO COME APART FOR THE TREE (project owner, 2026-08-23). An oak's trunk
+## is drawn well up-screen of the tile it stands on, so a player aiming at the trunk
+## taps the grass behind it and the tree is simply hard to select. Widening
+## `footprints` to fix that is exactly what the note above forbids -- it would make a
+## twelve-tree forest impassable -- and it is the wrong tool anyway, because the
+## problem is where the art is, not what ground the tree holds.
+var pick_footprints: Array[Vector2i] = []
+
 ## Starting amount per size class, small to large.
 var amounts: Array[int] = []
 ## How many villagers can work this node at once.
@@ -57,6 +69,8 @@ static func from_dict(p_id: StringName, d: Dictionary) -> ResourceDef:
 	r.visuals = GameDefs.name_list(d.get("visuals", []))
 	for f in (d.get("footprints", []) as Array):
 		r.footprints.append(GameDefs.tile_size(f, Vector2i.ONE))
+	for f in (d.get("pick_footprints", []) as Array):
+		r.pick_footprints.append(GameDefs.tile_size(f, Vector2i.ONE))
 	r.gather_slots = int(d.get("gather_slots", 1))
 
 	var w: Variant = d.get("wildlife")
@@ -95,3 +109,12 @@ func footprint_for_size(size_class: int) -> Vector2i:
 	if footprints.is_empty():
 		return Vector2i.ONE
 	return footprints[clampi(size_class, 0, footprints.size() - 1)]
+
+
+## Tiles a tap on a node of this size may land on. Defaults to the ground footprint,
+## which is the right answer for everything whose art sits inside the tiles it claims
+## -- only the tree overrides it today. Clamps when short, like every list here.
+func pick_footprint_for_size(size_class: int) -> Vector2i:
+	if pick_footprints.is_empty():
+		return footprint_for_size(size_class)
+	return pick_footprints[clampi(size_class, 0, pick_footprints.size() - 1)]
