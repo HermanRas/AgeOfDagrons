@@ -254,19 +254,27 @@ crossing in front of a building.
 
 ## 2026-08-22 — walls, facing and the lobby
 
-- [x] **Every unit faces the wrong way, and it is not just the units.** Reported as
+- [ ] **Every unit faces the wrong way, and it is the art side's to fix.** Reported as
       "the attack animation faces away from the thing they are attacking"; combat is
-      only where it is *visible*. The cause is in the recipes, not the game —
-      isobake's zeroad adapter turns every subject 180° from the direction the atlas
-      labels it, and 81 of 171 recipes cancel it with `yaw_offset_deg = 180.0`.
-      **The owner declined the re-bake for now** ("no to the rebake of the entire
-      asset suite and all recipes, can we fix it in code, and add it as a polish item
-      at the end, before investing 3 days of baking time") — they are getting a
-      faster machine for it. So the game compensates: `"directions_reversed": true`
-      on 31 `visuals.json` entries adds half a turn (`AtlasEntry.facing_offset`).
-      Covers units, ships, siege, animals and the wall foundations and rubble, all of
-      which had the same hole. **The flags must come off per entry as the art is
-      re-baked** — PLAN.md §13.2 item 10, contract in `asset_request.md`.
+      only where it is *visible*. The cause is in the recipes — isobake's zeroad
+      adapter turns every subject 180° from the direction the atlas labels it, and 81
+      of 171 recipes cancel it with `yaw_offset_deg = 180.0`.
+      **A game-side compensation was built and then reverted, on the owner's word both
+      times, inside a day.** 08-22: *"no to the rebake of the entire asset suite and
+      all recipes, can we fix it in code, and add it as a polish item at the end"* —
+      so `"directions_reversed"` on 31 `visuals.json` entries added half a turn.
+      08-23, with a screenshot of a mounted unit: *"when attacking the unit is still
+      facing the wrong way. undo the reverse changes, add notes to asset_agent for the
+      full proper fix, i dont want to waist any more time on patching a known root
+      cause."* Reverted commit-for-commit — nothing in `game/` compensates, and
+      nothing has to be un-applied when the bakes land. **Open until the re-bake**:
+      PLAN.md §13.2 item 10, request and 36-recipe list in `asset_request.md`.
+      Kept from the exercise, because it is what makes the recipe fix a one-liner:
+      the `unit.knight` chart is 180° out **uniformly across idle, walk and attack**,
+      so rider and horse turn together and no clip needs its own treatment. The sim
+      side is not implicated — `CombatSystem` sets `facing` toward the target on every
+      swing (`combat_system.gd:86`). `preview_facing_chart` now takes
+      `-- --units unit.knight,…` so any actor can be charted without editing it.
 - [x] **Short wall pieces should merge into longer ones** (the owner's design, and it
       wins on its own terms: fewer entities, seams and vision circles). Built as
       `WallMerge`, with the owner's amendment that **only complete pieces merge** —

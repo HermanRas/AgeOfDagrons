@@ -18,6 +18,7 @@
 ##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_facing_chart.tscn
+##   ... -- --units unit.knight,unit.villager    -- chart those instead of the default set
 extends Node2D
 
 const SHOT_DIR := "user://"
@@ -32,9 +33,18 @@ const MAGNIFY := 3.0
 const CLIPS: Array[StringName] = [&"idle", &"walk", &"attack"]
 
 ## One page per unit, so a wrong clip can be blamed on one actor rather than on the
-## pipeline. The swordsman is the melee case from the report and the archer the ranged
-## one.
-const UNITS: Array[StringName] = [&"unit.swordsman", &"unit.archer"]
+## pipeline. The swordsman is the melee case from the report, the archer the ranged one,
+## and the KNIGHT is here because the owner's 2026-08-23 screenshots are of a mounted
+## unit: a rider and a horse are two meshes with two authored headings, so "the whole
+## roster is 180 degrees out" is a claim about infantry until a horse has been looked at.
+const DEFAULT_UNITS: Array[StringName] = [
+	&"unit.swordsman", &"unit.archer", &"unit.knight", &"unit.scout_cavalry",
+]
+
+## Overridable from the command line, because the next unit somebody doubts is not
+## necessarily one of these four and rebuilding the list in code to look at one actor is
+## how a diagnostic tool stops being reached for.
+var _units: Array[StringName] = DEFAULT_UNITS
 
 var _page := 0
 var _frames := 0
@@ -43,7 +53,24 @@ var _labels: Array[Node] = []
 
 
 func _ready() -> void:
-	_build(UNITS[0])
+	_units = _units_argument()
+	_build(_units[0])
+
+
+## `-- --units a,b,c`, falling back to the default set. Unknown ids are kept rather than
+## filtered: a page that draws a magenta placeholder says "there is no such unit" out
+## loud, where dropping it silently would look like the chart agreeing with a typo.
+func _units_argument() -> Array[StringName]:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] != "--units":
+			continue
+		var out: Array[StringName] = []
+		for name in args[i + 1].split(",", false):
+			out.append(StringName(name.strip_edges()))
+		if not out.is_empty():
+			return out
+	return DEFAULT_UNITS
 
 
 func _process(_delta: float) -> void:
@@ -53,12 +80,12 @@ func _process(_delta: float) -> void:
 	if _frames < 12:
 		return
 	_frames = 0
-	_shoot("facing_chart_%s" % String(UNITS[_page]).trim_prefix("unit."))
+	_shoot("facing_chart_%s" % String(_units[_page]).trim_prefix("unit."))
 	_page += 1
-	if _page >= UNITS.size():
+	if _page >= _units.size():
 		get_tree().quit()
 		return
-	_build(UNITS[_page])
+	_build(_units[_page])
 
 
 func _build(unit_id: StringName) -> void:

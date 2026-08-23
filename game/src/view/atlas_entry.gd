@@ -19,10 +19,6 @@ extends RefCounted
 ## of re-deriving mirroring per asset (PLAN.md 9.1).
 const FACINGS := ["S", "SW", "W", "NW", "N", "NE", "E", "SE"]
 
-## Half a turn in FACINGS steps: S<->N, SW<->NE, and so on. The only value
-## `facing_offset` is ever set to -- see it for why anything needs one.
-const HALF_TURN := 4
-
 const STATIC_ANIM := &"static"
 
 var id: StringName = &""
@@ -40,34 +36,18 @@ var frames: Array[Dictionary] = []
 ## anim name -> {fps:float, loop:bool, frames:int, first:int}
 var anims: Dictionary = {}
 ## 8 entries in FACINGS order. Each: {stored_index:int, flip_x:bool}
+##
+## **READ EXACTLY AS THE FILE STATES IT, and there is now a decision behind that.**
+## A half-turn compensation lived here for one day (2026-08-22): the zeroad adapter
+## bakes a subject 180 degrees from the direction the atlas labels it, 81 of 171
+## recipes cancel that with `yaw_offset_deg = 180.0`, and the rest -- every unit,
+## ship, animal and siege engine -- do not. Flagging those atlases in visuals.json
+## and rotating the request here fixed idle and walk and **did not fix attacking**,
+## which is where the project owner had reported it in the first place. The owner's
+## call, and it is the right one: the defect is in the recipes, the fix belongs in
+## the bake, and a compensation that has to be un-applied in step with a delivery
+## is not worth carrying for a partial result. See PLAN.md 13.2 item 10.
 var dir_table: Array[Dictionary] = []
-
-## FACINGS steps added to every requested facing before it is looked up in
-## `dir_table`. Almost always 0; `HALF_TURN` for an atlas whose subject was baked
-## facing the opposite way from the game's convention.
-##
-## **THIS COMPENSATES FOR THE BAKE, NOT FOR THE GAME.** isobake's zeroad adapter
-## renders a subject 180 degrees from the direction the atlas then labels it, and
-## a recipe cancels that with `yaw_offset_deg = 180.0`. 81 of the 171 recipes
-## carry it; the ones that do not -- every unit, ship, animal, siege engine, and
-## the wall foundations and rubble -- are baked backwards, which is why an archer
-## shot over her own shoulder and a villager walked away from where she was going.
-## `directions_reversed` in visuals.json is where that is declared per atlas, and
-## `GameDataRegistry.reversed_direction_atlases()` enumerates what still carries it.
-##
-## It sits HERE, and not in `Iso.sim_facing_to_sprite`, because it is a fact about
-## one atlas file and not about the projection: a single flip in Iso would fix the
-## units and turn all 81 correctly-baked buildings and walls around. The two are
-## indistinguishable on screen and completely different in scope, and the earlier
-## reading -- that the game had no rule to key one off -- was drawn from the atlas
-## JSON, which indeed carries no trace of the offset. The RECIPES carry it, and
-## they split cleanly.
-##
-## Applied to the requested facing rather than by rewriting `dir_table`, so a
-## mirrored 5-direction bake keeps resolving its own flips: rotating the request
-## by half a turn and then reading the table gives the same answer as rotating
-## the table, and leaves the parsed file saying exactly what the file says.
-var facing_offset := 0
 
 var _textures: Array[Texture2D] = []
 
@@ -166,9 +146,6 @@ func loops(name: StringName) -> bool:
 ##
 ## The index formula is PLAN.md 9.1: within an anim, frames are direction-major --
 ## `first + stored_direction * frames + frame`.
-##
-## `facing` is what the CALLER wants to see pointing which way; `facing_offset`
-## turns that into which stored direction actually shows it.
 func frame_at(name: StringName, facing: int, frame: int) -> Dictionary:
 	if is_placeholder or dir_table.is_empty():
 		return {}
@@ -177,7 +154,7 @@ func frame_at(name: StringName, facing: int, frame: int) -> Dictionary:
 	if a.is_empty():
 		return {}
 
-	var dir: Dictionary = dir_table[posmod(facing + facing_offset, dir_table.size())]
+	var dir: Dictionary = dir_table[posmod(facing, dir_table.size())]
 	var count := int(a["frames"])
 	var index := int(a["first"]) + int(dir["stored_index"]) * count + posmod(frame, count)
 	if index < 0 or index >= frames.size():

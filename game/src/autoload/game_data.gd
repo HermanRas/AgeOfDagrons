@@ -370,28 +370,6 @@ func missing_colour_atlases() -> Array[Dictionary]:
 	return out
 
 
-## Every visual whose atlas is drawn through a half-turn compensation, i.e. every
-## one carrying `directions_reversed` in visuals.json (`AtlasEntry.facing_offset`
-## is the mechanism and explains the bake defect behind it). Sorted by id.
-##
-## DIAGNOSTIC, and specifically a to-do list: each of these is art that will be
-## re-baked with `yaw_offset_deg = 180.0` in its recipe, and the day one is, its
-## flag here has to come off in the same step or it goes back to facing backwards.
-## A compensation that must be removed in time with a delivery is exactly the kind
-## that gets double-applied and then re-diagnosed from scratch, so it is
-## enumerable rather than scattered: this list and `dev_preview/preview_facing_
-## chart.tscn` are the two places to look when a rebake lands.
-func reversed_direction_atlases() -> Array[StringName]:
-	if not _loaded:
-		load_all()
-	var out: Array[StringName] = []
-	for visual_id in _visuals:
-		if bool((_visuals[visual_id] as Dictionary).get("directions_reversed", false)):
-			out.append(visual_id)
-	out.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
-	return out
-
-
 ## The decorative props that stand AROUND a visual -- the plank stacks at a
 ## lumber camp, the cut stone at a mining camp, the produce crates at a mill.
 ## Each entry is `{"visual": StringName, "offset_m": Vector2}`, in the declared
@@ -1085,12 +1063,6 @@ func _resolve(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEnt
 
 	var atlas := _load_atlas(visual_id, _atlas_path_for_skin(decl, age, colour))
 	if atlas != null:
-		# Set here rather than read inside AtlasEntry, because it is a fact about the
-		# subject and not about the file: a colour tint and an age skin are separate
-		# bakes of the same actor and are turned the same way round, so one flag on
-		# the entry covers every path _atlas_path_for_skin can choose.
-		if bool(decl.get("directions_reversed", false)):
-			atlas.facing_offset = AtlasEntry.HALF_TURN
 		return atlas
 
 	var ph: Variant = decl.get("placeholder")

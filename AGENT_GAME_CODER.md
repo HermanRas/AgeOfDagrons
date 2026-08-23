@@ -179,6 +179,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |
 | **A visual id is not a filename** | `vis.field_1` is baked as `vis.field_age2`, `vis.field_4` as `vis.farm`. The seam maps ids to paths precisely so ids outlive the art side's naming — and never rename a staged file to match, because `stage_atlases.py` will put it back. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
+| **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
 
 ---
 
@@ -244,19 +245,21 @@ and tech-tree wireframes, and settings (§8.2b).
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
-- **31 atlases are drawn through a HALF-TURN COMPENSATION and it must come off per
-  entry as the art is re-baked** (2026-08-22). isobake's zeroad adapter turns every
-  subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel that
-  with `yaw_offset_deg = 180.0` and the rest — every unit, ship, animal, siege engine,
-  and the wall foundations and rubble — were baked backwards. The owner deferred the
-  re-bake (a day of machine time, waiting on a faster box) and asked for a code fix, so
-  `"directions_reversed": true` in `visuals.json` sets `AtlasEntry.facing_offset`.
-  `GameDataRegistry.reversed_direction_atlases()` is the live list,
-  `tests/view/test_facing_compensation.gd` is written to be deleted with the last flag,
-  and `preview_facing_chart` is how you check. **A re-baked atlas with its flag still
-  set faces backwards again, identically and silently** — which is the whole reason the
-  flag is per entry and enumerable rather than one global constant. PLAN.md §13.2 item
-  10, and the contract with the art side is in `asset_request.md`.
+- **EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS, and this is
+  the art side's, not ours. Do not patch it again.** The zeroad adapter turns every
+  subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it with
+  `yaw_offset_deg = 180.0` and 36 do not. **A game-side compensation was written and
+  reverted inside a day** (2026-08-22 → 23) — `directions_reversed` in `visuals.json`
+  setting a half-turn offset per atlas. It fixed idle and walk; the owner still saw an
+  attacking unit facing the wrong way and called it: *"undo the reverse changes… i dont
+  want to waist any more time on patching a known root cause."* It is out, and the
+  standing instruction is that the fix is a re-bake (PLAN.md §13.2 item 10,
+  `asset_request.md` for the request and the 36-recipe list). If you find yourself
+  reaching for `Iso.sim_facing_to_sprite` or a per-atlas offset, this is the paragraph
+  saying somebody already did and it was not wanted. What the exercise established and
+  is worth keeping: the `unit.knight` chart is 180° out **uniformly across idle, walk
+  and attack**, so one recipe line per actor covers the attack clip too. The sim side
+  is fine — `CombatSystem` sets `facing` toward the target every tick it swings.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.

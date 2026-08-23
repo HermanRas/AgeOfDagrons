@@ -78,23 +78,37 @@ while the batch runs and I will add one behind a single named constant.
 and column 4 a back. `preview_combat_facing.tscn` is the in-game version — eight
 attackers in a ring plus a walking ring for comparison.
 
-#### ⚠ THE OWNER SAID CARRY THE STOPGAP — READ THIS BEFORE YOU BAKE (2026-08-22, same day)
+#### ⚠ THIS IS YOURS AFTER ALL — THE GAME-SIDE PATCH IS OUT (2026-08-23)
 
-**The re-bake is deferred to the heavy rig, and the game compensates in the meantime.**
-The owner's call, verbatim: *"no to the rebake of the entire asset suite and all
-recipes, can we fix it in code, and add it as a polish item at the end, before
-investing 3 days of baking time"* — they are getting access to an i9 / 64 GB / NVMe box
-where ~12 Blenders can run in parallel, and this batch waits for it. It is PLAN.md §13.2
-item 10.
+**Read this section and ignore the two above it where they disagree.** For one day the
+game carried a half-turn compensation (`directions_reversed` in `visuals.json`). The
+owner has taken that decision back and it is **reverted** — commit-for-commit, nothing
+of it is left in `game/`:
 
-**What the game now does.** `"directions_reversed": true` on an entry in
-`visuals.json` adds half a turn to every facing before the direction table is read
-(`AtlasEntry.facing_offset`). It is on **31 entries**, and the chart now shows a face at
-column 0. It is not a global flip and could not have been one: your table was right, but
-the split is not units-vs-walls — it is **whether the recipe carries the offset**, and
-that splits cleanly. Mechanically it only works at all because these bakes store 5 or 8
-directions; a `directions: 1` building has no other frame to rotate to, which is exactly
-why the buildings had to be fixed in the recipe and were.
+> *"when attacking the unit is still facing the wrong way. undo the reverse changes, add
+> notes to asset_agent for the full proper fix, i dont want to waist any more time on
+> patching a known root cause."*
+
+So this is a plain request with no game-side half of it. **Please do not wait for a
+green light on a stopgap and please do not bake half of it** — a partial delivery now
+leaves the roster in two states with nothing in the game distinguishing them.
+
+**What the patch did and did not do**, since it is the reason you are getting this back:
+it fixed `idle` and `walk` — the chart went from a back at column 0 to a face — and the
+owner still saw an attacking unit facing the wrong way. Their screenshots are of a
+**mounted** unit. I cannot tell you from here whether that was the compensation failing
+on the attack clip or a build without the compensation in it (the staged APK predates it
+by twelve hours), and the owner is right that it does not matter: chasing that is
+debugging a workaround.
+
+**The one thing I did establish before reverting, and it is the useful part:** the
+`unit.knight` chart is **180° out uniformly, in all three clips** — column 0 (S) draws
+the horse's hindquarters and tail, column 4 (N) its head and chest, and `walk` and
+`attack` agree with `idle`. So a rider and a horse are turned together, the melee and
+cavalry cases are the same defect, and **one `yaw_offset_deg = 180.0` per recipe does
+cover attacking too.** `preview_facing_chart` now takes `-- --units unit.knight,...` so
+you can chart any actor without editing it; the four defaults are swordsman, archer,
+knight and scout_cavalry.
 
 **What I derived from your recipes, and it is wider than units.** 23 recipes at
 `directions = 8` and 39 at `5` carry no `yaw_offset_deg`. Everything in them whose front
@@ -111,23 +125,49 @@ matters is 180° out, not just the units:
 The wall foundations and rubble are worth a look on your side: the completed pieces carry
 `yaw_offset_deg = 180.0` and their own foundations and rubble do not, so a wall and its
 own footings disagree by half a turn. Nearly invisible on a symmetric palisade, which is
-presumably why nobody saw it.
+presumably why nobody saw it — but it is six recipes and they are cheap.
 
-Left alone deliberately: trees, mines, props, cliffs and berry bushes (5 directions, no
-offset, no front — which stored angle faces the camera is arbitrary for a rock), and the
-**three projectiles**, because they are baked standing on end so their yaw is invisible
-until the pitch request below is done. **Please put `yaw_offset_deg = 180.0` on the
-projectile recipes when you fix the pitch** — they are unflagged on my side precisely so
-that the two land together.
+**The three projectiles want the same line while you are there.** `vis.projectile_arrow`
+and `_bolt` are also on the request below for their PITCH; their yaw is unverifiable
+today because a shaft baked standing on end looks the same pointing either way, so add
+the offset in the same edit as the pitch rather than as a separate pass.
 
-**WHAT YOU HAVE TO DO WHEN YOU BAKE, and it is the whole risk:** tell me which ids you
-re-baked, in this file, and I take their flags off in the same step. A fixed atlas with
-its flag still set faces backwards again — identically, silently, and it will look like
-the bake failed. `GameDataRegistry.reversed_direction_atlases()` prints the live list,
-and per-id flags mean a spot-check of one unit is a one-line change rather than an
-all-or-nothing switch. **Your spot-check suggestion still stands and I would still like
-it:** bake the swordsman with the offset, stage it, say so here, and I will pull its flag
-and re-run the chart before you commit the batch.
+Left alone deliberately, and I do not want these baked for this: trees, mines, props,
+cliffs and berry bushes. Five directions, no offset, and no front — which stored angle
+faces the camera is arbitrary for a rock, so it is machine time for nothing.
+
+##### The complete list, 36 recipes
+
+Nothing in `game/` needs to change when these land, per id or in total: the game reads
+the atlas exactly as the file states it, so a corrected bake is correct the moment it is
+staged and a stale one is wrong until it is re-baked. **There is no flag to remove and
+nothing to keep in step.** That is the point of taking the patch out.
+
+- **Units (13):** villager, militia, spearman, swordsman, elite_swordsman, archer,
+  crossbowman, monk, scout_cavalry, sword_cavalry, cavalry_archer, knight, dragon
+- **Ships (4):** fishing_ship, transport_ship, galley, galleon
+- **Siege and carts (5):** siege_ram, ballista, onager, trebuchet, trade_cart
+- **Animals (8):** deer, deer_carcass, sheep, cattle, boar, bear, wolf, fish
+  (only deer, sheep and cattle are wired today — the other five are staged and referenced
+  by nothing, so they can ride along or wait)
+- **Wall foundations and rubble (6):** foundation_3x3_wall, foundation_6x3_wall,
+  foundation_9x3_wall, rubble_wall_short, rubble_wall_medium, rubble_wall_long
+- **Projectiles (3, with the pitch fix):** projectile_arrow, projectile_bolt,
+  projectile_stone
+
+**Sequencing, still yours to decide.** The owner has said this waits for the i9 / 64 GB /
+NVMe box where ~12 Blenders run in parallel, so the calendar is theirs rather than either
+of ours. If you want a proof before committing the batch, your own earlier suggestion is
+still the cheapest one available: bake **one unit and one cavalry unit** with the offset,
+stage them, say so here, and I will run
+`preview_facing_chart -- --units unit.swordsman,unit.knight` and report back with the
+picture. Two actors against 36, and it settles the pitch of the whole batch.
+
+**How I will verify the batch when it lands:** the chart for four actors (column 0 must
+show a face, column 4 a back, and all three clip rows must agree), then
+`preview_combat_facing` for the in-game version, then a real match screenshot of two
+units fighting. The owner reports this from play, so the last one is the only one that
+actually closes it.
 
 ---
 

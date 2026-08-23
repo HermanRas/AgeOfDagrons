@@ -158,39 +158,15 @@
     "vis.villager lesson above describes, and it had been wrong since the plots were",
     "last re-pointed.",
     "",
-    "\"directions_reversed\": true  (2026-08-22) IS A TEMPORARY COMPENSATION AND",
-    "COMES OFF PER ENTRY AS THE ART IS RE-BAKED. It says: this atlas's subject was",
-    "rendered 180 degrees from the direction the atlas labels it, so the view must",
-    "add half a turn before reading the direction table (AtlasEntry.facing_offset).",
-    "",
-    "isobake's zeroad adapter turns every subject the same way round, and a recipe",
-    "cancels it with `yaw_offset_deg = 180.0`. 81 of the 171 recipes carry that line;",
-    "the ones below are what remains, and they were never a mystery -- nobody had put",
-    "eight directions of one unit side by side until preview_facing_chart did, and by",
-    "then the buildings had been quietly compensated one at a time. Every unit, ship,",
-    "animal and siege engine was drawn facing away from where it was going, and in",
-    "combat, away from what it was hitting.",
-    "",
-    "The project owner's call, and it is the right one: 21 units x 8 colours is most",
-    "of a day of bake time on a machine they are using, so the game compensates now",
-    "and the recipes get fixed in one batch on faster hardware later (PLAN.md's",
-    "polish list). WHICHEVER LANDS FIRST, THE OTHER MUST FOLLOW IN THE SAME STEP --",
-    "a re-baked atlas with its flag still set faces backwards again.",
-    "",
-    "THIS ONLY WORKS FOR MULTI-DIRECTION BAKES, which is why it was not an option",
-    "for the buildings. An entry storing ONE direction serves all eight facings from",
-    "that one image, so there is no other frame to rotate to and the flag would do",
-    "literally nothing. Buildings are `directions = 1` and had to be re-baked; these",
-    "31 store 5 or 8, so the frame that shows the right side already exists in the",
-    "file and only needs asking for.",
-    "",
-    "NOT FLAGGED, deliberately: trees, mines, props, cliffs and berry bushes store 5",
-    "directions and lack the offset too, but they have no front -- which stored angle",
-    "faces the camera is arbitrary for a rock. The three projectiles are also left",
-    "alone: they are baked standing on end (see asset_request.md), so their yaw is",
-    "invisible until that is fixed, and the pitch fix is a re-bake that should carry",
-    "the yaw offset with it. GameDataRegistry.reversed_direction_atlases() lists what",
-    "is flagged; dev_preview/preview_facing_chart.tscn is how you check it."
+    "THERE IS NO FACING FLAG HERE, and one was tried and taken out again on",
+    "2026-08-22. `directions_reversed` set a half-turn offset on the 31 entries whose",
+    "recipes lack `yaw_offset_deg = 180.0` -- every unit, ship, animal and siege",
+    "engine is baked 180 degrees from the direction its atlas labels. It fixed idle",
+    "and walk and did NOT fix attacking, which is where the owner had reported it, so",
+    "they called it: the defect is in the recipes and the fix belongs in the bake",
+    "(PLAN.md 13.2 item 10, asset_request.md carries the request). Do not re-add it",
+    "without an answer for the attack clip -- the same patch failing twice is worse",
+    "than the bug, which at least is honest about being an art problem."
   ],
 
   "terrain.grass": {
@@ -258,7 +234,6 @@
 
   "vis.villager": {
     "atlas": "res://assets/atlases/vis.villager.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -871,7 +846,6 @@
 
   "vis.foundation_3x3_wall": {
     "atlas": "res://assets/atlases/vis.foundation_3x3_wall.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [6.0, 4.0],
@@ -882,7 +856,6 @@
 
   "vis.foundation_6x3_wall": {
     "atlas": "res://assets/atlases/vis.foundation_6x3_wall.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [12.0, 4.0],
@@ -893,7 +866,6 @@
 
   "vis.foundation_9x3_wall": {
     "atlas": "res://assets/atlases/vis.foundation_9x3_wall.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [18.0, 4.0],
@@ -904,7 +876,6 @@
 
   "vis.rubble_wall_short": {
     "atlas": "res://assets/atlases/vis.rubble_wall_short.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [6.0, 4.0],
@@ -915,7 +886,6 @@
 
   "vis.rubble_wall_medium": {
     "atlas": "res://assets/atlases/vis.rubble_wall_medium.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [12.0, 4.0],
@@ -926,7 +896,6 @@
 
   "vis.rubble_wall_long": {
     "atlas": "res://assets/atlases/vis.rubble_wall_long.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [18.0, 4.0],
@@ -1178,7 +1147,6 @@
 
   "vis.deer": {
     "atlas": "res://assets/atlases/vis.deer.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [1.6, 0.7],
@@ -1210,7 +1178,6 @@
 
   "vis.sheep": {
     "atlas": "res://assets/atlases/vis.sheep.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [1.5, 0.65],
@@ -1222,7 +1189,6 @@
 
   "vis.cattle": {
     "atlas": "res://assets/atlases/vis.cattle.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [2.8, 1.3],
@@ -1234,7 +1200,6 @@
 
   "vis.militia": {
     "atlas": "res://assets/atlases/vis.militia.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1247,7 +1212,6 @@
 
   "vis.spearman": {
     "atlas": "res://assets/atlases/vis.spearman.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1260,7 +1224,6 @@
 
   "vis.swordsman": {
     "atlas": "res://assets/atlases/vis.swordsman.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1273,7 +1236,6 @@
 
   "vis.elite_swordsman": {
     "atlas": "res://assets/atlases/vis.elite_swordsman.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1286,7 +1248,6 @@
 
   "vis.archer": {
     "atlas": "res://assets/atlases/vis.archer.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1299,7 +1260,6 @@
 
   "vis.crossbowman": {
     "atlas": "res://assets/atlases/vis.crossbowman.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1312,7 +1272,6 @@
 
   "vis.monk": {
     "atlas": "res://assets/atlases/vis.monk.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1325,7 +1284,6 @@
 
   "vis.scout_cavalry": {
     "atlas": "res://assets/atlases/vis.scout_cavalry.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1338,7 +1296,6 @@
 
   "vis.sword_cavalry": {
     "atlas": "res://assets/atlases/vis.sword_cavalry.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1351,7 +1308,6 @@
 
   "vis.cavalry_archer": {
     "atlas": "res://assets/atlases/vis.cavalry_archer.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1364,7 +1320,6 @@
 
   "vis.knight": {
     "atlas": "res://assets/atlases/vis.knight.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "capsule",
@@ -1377,7 +1332,6 @@
 
   "vis.siege_ram": {
     "atlas": "res://assets/atlases/vis.siege_ram.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1389,7 +1343,6 @@
 
   "vis.ballista": {
     "atlas": "res://assets/atlases/vis.ballista.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "box",
       "footprint_m": [3.06, 3.06],
@@ -1400,7 +1353,6 @@
 
   "vis.onager": {
     "atlas": "res://assets/atlases/vis.onager.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1412,7 +1364,6 @@
 
   "vis.trebuchet": {
     "atlas": "res://assets/atlases/vis.trebuchet.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1424,7 +1375,6 @@
 
   "vis.trade_cart": {
     "atlas": "res://assets/atlases/vis.trade_cart.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1436,7 +1386,6 @@
 
   "vis.fishing_ship": {
     "atlas": "res://assets/atlases/vis.fishing_ship.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1448,7 +1397,6 @@
 
   "vis.transport_ship": {
     "atlas": "res://assets/atlases/vis.transport_ship.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1460,7 +1408,6 @@
 
   "vis.galley": {
     "atlas": "res://assets/atlases/vis.galley.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1472,7 +1419,6 @@
 
   "vis.galleon": {
     "atlas": "res://assets/atlases/vis.galleon.atlas.json",
-    "directions_reversed": true,
     "colours": true,
     "placeholder": {
       "shape": "box",
@@ -1484,7 +1430,6 @@
 
   "vis.dragon": {
     "atlas": "res://assets/atlases/vis.dragon.atlas.json",
-    "directions_reversed": true,
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [6.53, 6.53],
