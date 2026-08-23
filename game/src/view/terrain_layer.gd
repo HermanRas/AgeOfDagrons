@@ -51,7 +51,59 @@ const TERRAIN_VISUALS := {
 ## map (256 chunks against 1024) more than it does on this one.
 const QUADRANT_TILES := 8
 
+## THE BLEND (project owner, 2026-08-23). Terrain is one flat diamond per kind, so
+## grass meeting water is a pixel-crisp zigzag of 64x32 diamonds and reads as a
+## staircase. The sand band softened the contrast; this softens the EDGE.
+##
+## NO NEW ART, and that was the owner's reason for choosing this over baked corner
+## tiles: "adding more sprites will make theme packs harder later on". A theme pack
+## still ships exactly one diamond per terrain and gets its blending for free, because
+## every transition below is generated from that diamond at load time.
+##
+## HOW. A second TileMapLayer sits above the base one. For each tile, the neighbour
+## with the higher `BLEND_ORDER` is drawn over it a second time, through an alpha ramp
+## that is opaque at the shared edge and gone by the far side -- so grass reaches into
+## sand and sand reaches into water, and the join stops being a line.
+##
+## Which of the two neighbours does the reaching is what `BLEND_ORDER` decides, and it
+## is the natural direction rather than an arbitrary one: sand washes over a waterline,
+## grass grows down onto sand. Reversed, the water would climb the beach.
+const BLEND_ORDER := {
+	SimMap.Terrain.WATER_DEEP: 0,
+	SimMap.Terrain.WATER_SHALLOW: 1,
+	SimMap.Terrain.SAND: 2,
+	SimMap.Terrain.DIRT: 3,
+	SimMap.Terrain.GRASS: 4,
+	SimMap.Terrain.ROCK: 5,
+	SimMap.Terrain.FOREST: 6,
+}
+
+## How far into the tile the neighbour reaches, as a fraction of the diamond's
+## half-width. Above 0.5 the ramps from opposite edges overlap in the middle, which is
+## what stops a one-tile isthmus of sand from having a hard seam down its spine.
+const BLEND_REACH := 0.58
+
+## The four EDGE-sharing neighbours, in mask-bit order. Diagonals are deliberately
+## absent: they share a corner, not an edge, and there is no edge for a ramp to start
+## from. In this projection these four are the NE, SE, SW and NW sides on screen.
+const EDGE_OFFSETS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+
+## Sign pair per edge for the diamond's own equation. A tile is |X| + |Y| <= 1 about
+## its centre, and each of its four sides is where `sx*X + sy*Y == 1` -- so this is
+## both which side a bit means and the distance function that fades away from it.
+const EDGE_SIGNS := [Vector2(1.0, -1.0), Vector2(1.0, 1.0),
+		Vector2(-1.0, 1.0), Vector2(-1.0, -1.0)]
+
+## Every non-empty subset of four edges. Packed one per column of a strip texture, so
+## a terrain's fifteen transitions are one image and one TileSet source.
+const EDGE_COMBOS := 15
+
 var _size: Vector2i = Vector2i.ZERO
+
+## Drawn above this layer because it is a CHILD of it: Godot draws a parent CanvasItem
+## and then its children, and the whole terrain subtree still comes before the entity
+## pool, which is GameView's next sibling. So it covers the ground and nothing else.
+var _blend: TileMapLayer = null
 
 
 ## Paint `terrain` (row-major, one byte per tile, values are SimMap.Terrain) over
@@ -74,9 +126,17 @@ func build(size: Vector2i, terrain: PackedByteArray) -> void:
 			if tile_set.has_source(kind):
 				set_cell(Vector2i(x, y), kind, Vector2i.ZERO)
 
+	_build_blend(size, terrain)
+
 
 func size() -> Vector2i:
 	return _size
+
+
+## The transition layer, or null before the first `build()`. A test seam: the blend is
+## invisible to every other caller and there is nothing here to configure.
+func blend_layer() -> TileMapLayer:
+	return _blend
 
 
 ## Godot's isometric TileMapLayer has its own idea of where tile (0, 0) sits, and
@@ -118,6 +178,189 @@ func _kinds_used(terrain: PackedByteArray) -> Array[int]:
 			seen.append(kind)
 	seen.sort()                        # deterministic source order
 	return seen
+
+
+## Paint the transition layer. One cell wherever a tile has a higher-order neighbour,
+## carrying that neighbour's terrain faded in from the shared edge or edges.
+##
+## ONE NEIGHBOUR PER TILE, the highest-order one, because a TileMapLayer holds a single
+## cell per coordinate. Where three terrains meet -- grass, sand and water on one tile,
+## which the shore pass makes rare but not impossible -- the strongest wins and the
+## other join stays crisp. A second layer per order would fix it and is not worth its
+## cost until somebody can point at one.
+func _build_blend(size: Vector2i, terrain: PackedByteArray) -> void:
+	if _blend == null:
+		_blend = TileMapLayer.new()
+		add_child(_blend)
+	_blend.clear()
+	# Zero, not `_align_to_iso`: it is a child, so it already inherits this layer's
+	# alignment. Shifting it again would offset every transition by one tile.
+	_blend.position = Vector2.ZERO
+	_blend.rendering_quadrant_size = QUADRANT_TILES
+	_blend.tile_set = _build_blend_tile_set(terrain)
+	if _blend.tile_set == null:
+		return
+
+	for y in range(size.y):
+		for x in range(size.x):
+			var t := Vector2i(x, y)
+			var mine: int = terrain[y * size.x + x]
+			var over := _dominant_neighbour(size, terrain, t, mine)
+			if over < 0 or not _blend.tile_set.has_source(over):
+				continue
+			var bits := _edges_facing(size, terrain, t, over)
+			if bits == 0:
+				continue
+			_blend.set_cell(t, over, Vector2i(bits - 1, 0))
+
+
+## The neighbouring terrain that should reach over `mine`, or -1 for none. Highest
+## `BLEND_ORDER` wins; ties cannot happen because a tie means the same terrain.
+func _dominant_neighbour(size: Vector2i, terrain: PackedByteArray, t: Vector2i,
+		mine: int) -> int:
+	var best := -1
+	var best_order: int = BLEND_ORDER.get(mine, 0)
+	for offset in EDGE_OFFSETS:
+		var n: Vector2i = t + offset
+		if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+			continue
+		var kind: int = terrain[n.y * size.x + n.x]
+		var order: int = BLEND_ORDER.get(kind, 0)
+		if order > best_order:
+			best_order = order
+			best = kind
+	return best
+
+
+## Bitmask of which of `t`'s four edges face `kind`, in EDGE_OFFSETS order.
+func _edges_facing(size: Vector2i, terrain: PackedByteArray, t: Vector2i,
+		kind: int) -> int:
+	var bits := 0
+	for i in range(EDGE_OFFSETS.size()):
+		var n: Vector2i = t + EDGE_OFFSETS[i]
+		if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+			continue
+		if int(terrain[n.y * size.x + n.x]) == kind:
+			bits |= 1 << i
+	return bits
+
+
+## A source per terrain that could ever reach over another -- i.e. every kind on the
+## map except the lowest-order one, which nothing is below.
+func _build_blend_tile_set(terrain: PackedByteArray) -> TileSet:
+	var kinds := _kinds_used(terrain)
+	if kinds.size() < 2:
+		return null                    # a single-terrain map has nothing to blend
+
+	var ts := TileSet.new()
+	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
+	ts.tile_offset_axis = TileSet.TILE_OFFSET_AXIS_HORIZONTAL
+	ts.tile_size = Vector2i(Iso.TILE_SIZE)
+	for kind in kinds:
+		var source := _blend_source_for(kind)
+		if source != null:
+			ts.add_source(source, kind)
+	return ts
+
+
+## One terrain's fifteen edge combinations, packed across a single strip texture.
+##
+## A strip rather than fifteen sources or fifteen alternative tiles: alternatives in
+## Godot share one texture region and differ only by transform, so they cannot carry
+## fifteen different masks, and fifteen sources per terrain would multiply the source
+## ids the base layer deliberately keeps equal to the Terrain enum.
+func _blend_source_for(kind: int) -> TileSetAtlasSource:
+	var src := _terrain_image(kind)
+	if src == null:
+		return null
+	var w := src.get_width()
+	var h := src.get_height()
+
+	var strip := Image.create(w * EDGE_COMBOS, h, false, Image.FORMAT_RGBA8)
+	strip.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for bits in range(1, EDGE_COMBOS + 1):
+		strip.blit_rect(_masked(src, bits), Rect2i(0, 0, w, h),
+				Vector2i((bits - 1) * w, 0))
+
+	var source := TileSetAtlasSource.new()
+	source.texture = ImageTexture.create_from_image(strip)
+	source.texture_region_size = Vector2i(w, h)
+	for bits in range(1, EDGE_COMBOS + 1):
+		source.create_tile(Vector2i(bits - 1, 0))
+	return source
+
+
+## `src` with its alpha multiplied by the ramp for the edges in `bits`.
+func _masked(src: Image, bits: int) -> Image:
+	var w := src.get_width()
+	var h := src.get_height()
+	var out := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	out.fill(Color(0.0, 0.0, 0.0, 0.0))
+
+	for y in range(h):
+		# Normalised to the diamond: -1 at the top point, +1 at the bottom. Half-pixel
+		# centres, so the extreme rows sample inside the tile rather than exactly on
+		# its boundary where the ramp is degenerate.
+		var ny := (y + 0.5) / (h * 0.5) - 1.0
+		for x in range(w):
+			var nx := (x + 0.5) / (w * 0.5) - 1.0
+			var a := _edge_alpha(nx, ny, bits)
+			if a <= 0.0:
+				continue
+			var c := src.get_pixel(x, y)
+			c.a *= a
+			out.set_pixel(x, y, c)
+	return out
+
+
+## How strongly the neighbour shows through at diamond coordinate (nx, ny), given the
+## edges it is arriving from. The strongest edge wins rather than the sum, so a tile
+## with water on two sides is not doubly transparent along the diagonal between them.
+func _edge_alpha(nx: float, ny: float, bits: int) -> float:
+	var best := 0.0
+	for i in range(EDGE_OFFSETS.size()):
+		if bits & (1 << i) == 0:
+			continue
+		var s: Vector2 = EDGE_SIGNS[i]
+		# 1 exactly on that edge, -1 at the opposite point of the diamond.
+		var f := s.x * nx + s.y * ny
+		var a := (f - (1.0 - 2.0 * BLEND_REACH)) / (2.0 * BLEND_REACH)
+		best = maxf(best, smoothstep(0.0, 1.0, clampf(a, 0.0, 1.0)))
+	return best
+
+
+## One terrain's tile as a plain Image, from the bake if there is one and from the
+## declared placeholder if there is not.
+##
+## Separate from `_source_for`'s texture path on purpose: that one hands the TileSet an
+## AtlasTexture pointing into the shared page, which costs nothing and is right for
+## drawing. Masking needs the pixels themselves.
+func _terrain_image(kind: int) -> Image:
+	var visual_id: StringName = TERRAIN_VISUALS.get(kind, &"")
+	if visual_id == &"":
+		return null
+
+	var entry := GameDataRegistry.atlas_for(visual_id)
+	if entry.is_placeholder:
+		return _placeholder_image(entry)
+
+	var f := entry.frame_at(AtlasEntry.STATIC_ANIM, 0, 0)
+	if f.is_empty():
+		return null
+	var page := entry.texture(int(f["page"]))
+	if page == null:
+		return null
+	var img := page.get_image()
+	if img == null:
+		return null
+	# An imported texture arrives in whatever format the importer chose, and
+	# `get_region` and `get_pixel` both refuse a compressed one.
+	if img.is_compressed():
+		if img.decompress() != OK:
+			return null
+	var rect: Rect2i = f["rect"]
+	return img.get_region(rect)
 
 
 func _source_for(kind: int) -> TileSetAtlasSource:
@@ -164,6 +407,10 @@ func _atlas_texture(entry: AtlasEntry) -> Texture2D:
 ## Sized to one tile exactly, so an undeclared terrain still tiles seamlessly and
 ## the gap reads as "wrong colour" rather than "holes in the ground".
 func _placeholder_texture(entry: AtlasEntry) -> Texture2D:
+	return ImageTexture.create_from_image(_placeholder_image(entry))
+
+
+func _placeholder_image(entry: AtlasEntry) -> Image:
 	var w := int(Iso.TILE_SIZE.x)
 	var h := int(Iso.TILE_SIZE.y)
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
@@ -181,4 +428,4 @@ func _placeholder_texture(entry: AtlasEntry) -> Texture2D:
 			if absf((x + 0.5) - w * 0.5) <= half:
 				img.set_pixel(x, y, color)
 
-	return ImageTexture.create_from_image(img)
+	return img
