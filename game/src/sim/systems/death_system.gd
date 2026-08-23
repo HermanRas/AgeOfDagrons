@@ -10,14 +10,60 @@ extends SimSystem
 
 func process_tick(w: SimWorld) -> void:
 	var to_despawn: Array[int] = []
+	var carcasses: Array[Array] = []          # [def_id, tile]
 	for e in w.entities.values():
 		if e is SimUnit:
+			if _process_wildlife(w, e as SimUnit, to_despawn, carcasses):
+				continue
 			_process_unit(e as SimUnit, to_despawn)
 		elif e is SimBuilding:
 			_process_building(w, e as SimBuilding, to_despawn)
 
+	# Despawn BEFORE spawning the carcass. Both want the same tile, and
+	# `spawn_resource_node` refuses ground that is already claimed -- so the other
+	# order silently drops every carcass and the hunt yields nothing.
 	for id in to_despawn:
 		w.despawn(id)
+	for c in carcasses:
+		w.spawn_resource_node(c[0], c[1], 0)
+
+
+## A dead animal becomes a CARCASS rather than a corpse, and the difference is that a
+## carcass is a thing you can eat (PLAN.md 4.13, and the hunt half of 6.1a). True when
+## this unit was handled here, so the caller skips the ordinary corpse path.
+##
+## NO CORPSE PHASE AT ALL. A villager's death takes seventy seconds to clear -- die,
+## lie there, decay, despawn (4.7) -- and that is right for a body nobody wants. But
+## the wolf's body is the reward for killing it, and a hunter standing over a fresh
+## kill for a minute waiting for permission to butcher it is not a delay anybody would
+## read as deliberate. So the unit leaves the moment it dies and the node takes its
+## place on the same tile, in the same tick.
+##
+## The animal crosses from `SimUnit` to `SimResourceNode` here, which sounds violent
+## and is in fact the only way the two capabilities can meet: `CombatSystem` iterates
+## units and `GatherSystem.is_harvestable` accepts nodes, with no shared interface
+## between them. A thing that is both hunted and harvested has to be one and then the
+## other, and its death is the seam.
+##
+## WILDLIFE THAT NAMES NO CARCASS falls through to the ordinary corpse path, so a
+## future harmless animal can die like anything else without special-casing.
+func _process_wildlife(w: SimWorld, u: SimUnit, to_despawn: Array[int],
+		carcasses: Array[Array]) -> bool:
+	if u.alive:
+		return false
+	var def := w.unit_def(u.def_id)
+	if def == null or not def.is_wildlife or def.carcass_def == &"":
+		return false
+	# `corpse_ticks_left` is the "already handled" sentinel everywhere else in this
+	# file; reuse it so a second pass over the same dead wolf cannot queue a second
+	# carcass. It never counts down -- the despawn below happens this tick.
+	if u.corpse_ticks_left >= 0:
+		return true
+	u.corpse_ticks_left = 0
+	u.stop()
+	to_despawn.append(u.id)
+	carcasses.append([def.carcass_def, u.tile()])
+	return true
 
 
 ## A unit's death plays out over time -- die anim, drop cargo, corpse, decay,

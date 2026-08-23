@@ -143,11 +143,10 @@ func _reacquire(w: SimWorld, u: SimUnit) -> bool:
 	var best_is_building := 0
 	var best_gap := 0
 	for e in w.entities_in_rect(rect):
-		# Gaia is not a belligerent (`AttackCommand` refuses it), so a re-acquire
-		# must not walk a swordsman into a tree the moment a fight ends.
-		if not e.alive or e.owner_id == 0 or e.owner_id == u.owner_id:
-			continue
-		if not (e is SimUnit or e is SimBuilding):
+		# Trees are not belligerents and wolves are -- both are gaia, so the test
+		# cannot be about owner 0 alone. `Diplomacy` owns that distinction; before
+		# it, this line was one of four copies of the same clause.
+		if not Diplomacy.is_enemy(e, u.owner_id):
 			continue
 		var is_building := 1 if e is SimBuilding else 0
 		var gap := tile_gap(here, _rect_of(e))

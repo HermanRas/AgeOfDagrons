@@ -811,8 +811,20 @@ func validate() -> void:
 
 	# Every unit must be trainable somewhere, or it can never enter a match. Not
 	# true in reverse -- a building that trains nothing is fine.
+	#
+	# EXCEPT WILDLIFE, which enters a match by being placed on the map and would fail
+	# this check by design (4.13's wolf). The exemption is keyed off `is_wildlife`
+	# rather than off the id, so the bear costs nothing to add -- and the check below
+	# is what stops the exemption from becoming a hole: wildlife that names a carcass
+	# nobody defined would kill silently and drop nothing.
 	for id in _units:
-		if (_units[id] as UnitDef).trainable_at.is_empty():
+		var u: UnitDef = _units[id]
+		if u.is_wildlife:
+			if u.carcass_def != &"" and not _resources.has(u.carcass_def):
+				load_warnings.append("unit '%s' drops unknown carcass '%s'"
+						% [id, u.carcass_def])
+			continue
+		if u.trainable_at.is_empty():
 			load_warnings.append("unit '%s' is trainable at no building" % id)
 
 	_validate_skins()

@@ -58,6 +58,30 @@ var trainable_at: Array[StringName] = []
 ## from 2, crossbowmen from 3" is one number in one place.
 var age_required: int = 1
 
+## GAIA WILDLIFE (PLAN.md 4.13's hostile wolf). Present on a unit nobody trains,
+## nobody owns and nobody pays population for -- the wolf today, the bear next.
+##
+## It lives on `UnitDef` rather than on `ResourceDef`, where `res.deer`'s long-dead
+## `wildlife` block sits, because the two are answering opposite questions. A deer is
+## a thing you HARVEST and so it is a resource node: static, no task, no path. A wolf
+## is a thing that COMES AT YOU, which needs a task, a path, a facing and a cooldown --
+## every one of which lives on `SimUnit` and none of which a node has. The audit that
+## preceded this found the two capabilities sitting on disjoint classes with no shared
+## interface, and that is still true; the wolf is simply on the other side of the line
+## from the deer, and drops a node when it dies to get back across.
+var is_wildlife: bool = false
+
+## How far it looks for something to bite, as a Chebyshev radius in tiles. Nothing
+## else in the game auto-acquires -- 4.13 rules it out for player units on purpose --
+## so this number is the entire aggression of the thing.
+var aggro_radius: int = 0
+
+## The `res.*` node dropped where it dies, or `&""` for wildlife that leaves nothing.
+## This is the hunt/kill/carcass flow 6.1a deferred, arriving for the predator rather
+## than the deer, because a wolf has to be killed before it can be harvested and a
+## deer never did.
+var carcass_def: StringName = &""
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var u := UnitDef.new()
@@ -89,6 +113,12 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.gather_rate = GameDefs.int_map(d.get("gather_rate", {}))
 	u.trainable_at = GameDefs.name_list(d.get("trainable_at", []))
 	u.age_required = int(d.get("age_required", 1))
+
+	var wild: Variant = d.get("wildlife")
+	if wild is Dictionary:
+		u.is_wildlife = true
+		u.aggro_radius = int((wild as Dictionary).get("aggro_radius", 0))
+		u.carcass_def = StringName((wild as Dictionary).get("carcass", ""))
 	return u
 
 

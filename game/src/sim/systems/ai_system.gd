@@ -610,6 +610,13 @@ func _nearest_enemy(w: SimWorld, p: SimPlayer, from_unit: int) -> int:
 	var candidates: Array = []          # [distance, id, is_building]
 	for id in _sorted_ids(w):
 		var e = w.entities[id]
+		# DELIBERATELY NOT `Diplomacy.is_enemy`, which the other three copies of this
+		# clause became when the wolf arrived. This one asks a different question: not
+		# "may I attack that" but "who am I at war with", and a wolf is a hazard rather
+		# than a war. Routed through Diplomacy, an AI whose base happened to have
+		# wildlife nearby would march its whole army off to hunt it instead of the
+		# player -- `_issue_attack` sends the ENTIRE military at whatever this returns.
+		# Wildlife defence is retaliation, which is 4.12's stances and not this.
 		if not e.alive or e.owner_id == 0 or e.owner_id == p.id:
 			continue
 		if not (e is SimUnit or e is SimBuilding):

@@ -58,6 +58,10 @@ func test_the_full_roster_is_present() -> void:
 		&"unit.trebuchet", &"unit.trade_cart",
 		&"unit.fishing_ship", &"unit.transport_ship", &"unit.galley",
 		&"unit.galleon", &"unit.dragon",
+		# GAIA'S, and the only unit here nobody trains (4.13). It is a `UnitDef` and
+		# not a `ResourceDef` because it moves and bites, which are `SimUnit` powers;
+		# it turns into a node when it dies. See `UnitDef.is_wildlife`.
+		&"unit.wolf",
 	]
 	assert_eq(_by_content(reg.unit_ids()), _by_content(expected_units),
 			"every baked unit has a definition, and nothing extra")
@@ -94,12 +98,20 @@ func test_the_full_roster_is_present() -> void:
 	# no map yielded any. res.deer stays defined but unspawned: res.berry_bush
 	# replaced it as the MVP food node, and hunting is 6.1a.
 	#
-	# The roster's wolf and bear are deliberately NOT here (they fight back, which
-	# is 4.13), nor is the fish (no water on any map yet). All three are baked, so
-	# their absence is a decision rather than a gap -- resources.json says so.
+	# res.boar joined 2026-08-23 -- it is harvested where it stands like the sheep and
+	# needed no machinery. res.wolf_carcass joined with it and is unlike everything
+	# else here: MapGen never places one, DeathSystem spawns it where a wolf dies.
+	#
+	# THE WOLF ITSELF IS NOT A RESOURCE and never will be -- it is `unit.wolf`, over in
+	# units.json, because a thing that chases needs a task and a path. The bear is
+	# still absent for the reason the wolf was until today (it fights back, so it wants
+	# the same machinery plus a carcass), and the fish because no map has water and
+	# `spawn_resource_node` hard-codes Domain.LAND. Both are baked and now declared, so
+	# their absence stays a decision rather than a gap -- resources.json says so.
 	assert_eq(_by_content(reg.resource_ids()),
 			_by_content([&"res.deer", &"res.berry_bush", &"res.gold_mine", &"res.tree",
-					&"res.stone", &"res.sheep", &"res.cattle"]))
+					&"res.stone", &"res.sheep", &"res.cattle", &"res.boar",
+					&"res.wolf_carcass"]))
 
 
 ## Sorted by STRING content, so a comparison does not depend on StringName

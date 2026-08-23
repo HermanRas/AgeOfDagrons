@@ -1105,6 +1105,60 @@
     }
   },
 
+  "vis.wolf": {
+    "atlas": "res://assets/atlases/vis.wolf.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.70, 0.48],
+      "height_m": 1.39,
+      "color": "#6b6255",
+      "facing_marker": true
+    }
+  },
+
+  "vis.bear": {
+    "atlas": "res://assets/atlases/vis.bear.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.53, 1.30],
+      "height_m": 1.70,
+      "color": "#5b4433",
+      "facing_marker": true
+    }
+  },
+
+  "vis.boar": {
+    "atlas": "res://assets/atlases/vis.boar.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.81, 0.71],
+      "height_m": 1.04,
+      "color": "#4a3b30",
+      "facing_marker": true
+    }
+  },
+
+  "vis.fish": {
+    "atlas": "res://assets/atlases/vis.fish.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.40, 0.70],
+      "height_m": 0.26,
+      "color": "#4a7a8c",
+      "facing_marker": true
+    }
+  },
+
+  "vis.deer_carcass": {
+    "atlas": "res://assets/atlases/vis.deer_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.60, 1.20],
+      "height_m": 0.90,
+      "color": "#7a5a3c"
+    }
+  },
+
   "vis.gold_mine_small": {
     "atlas": "res://assets/atlases/vis.gold_mine_small.atlas.json",
     "placeholder": {

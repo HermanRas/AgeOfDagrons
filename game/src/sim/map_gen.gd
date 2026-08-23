@@ -161,6 +161,22 @@ const DEBUG_SHEEP := [Vector2i(2, -7), Vector2i(4, -7), Vector2i(6, -7)]
 ## other's sprite.
 const DEBUG_CATTLE := [Vector2i(0, -7)]
 
+## Two boar, below the flock and a good step away from it. They are harvested where
+## they stand exactly as the sheep are, so they belong to this band -- and they are
+## twice the sheep's food, which is easier to believe when the two are side by side.
+const DEBUG_BOAR := [Vector2i(-2, -5), Vector2i(-4, -5)]
+
+## ONE WOLF, AND IT IS FAR AWAY ON PURPOSE (4.13). The others in this file are placed
+## to be looked at; this one is placed not to be. Its aggro radius is 6, and the five
+## starting villagers spawn ringing the town centre, so anything inside about ten tiles
+## would have it eating the opening before the player has finished reading the screen.
+##
+## Down-LEFT of the base, where the wood cluster is not, so walking to it is a decision
+## rather than something that happens on the way to the trees. Far enough that it has
+## to be gone looking for, near enough that a villager sent to the map edge will find
+## it -- which is the point: it is the first thing in the game that starts a fight.
+const DEBUG_WOLF := [Vector2i(-16, 14)]
+
 ## What a SECOND player gets on the debug map (MatchConfig.debug_skirmish): two
 ## soldiers and nothing else -- no town centre, no villagers, no stock. Offsets
 ## are from the FIRST player's town-centre origin, same frame as the resource
@@ -376,6 +392,23 @@ static func _place_resources(w: SimWorld, origin: Vector2i) -> void:
 		w.spawn_resource_node(&"res.sheep", origin + offset, 0)
 	for offset in DEBUG_CATTLE:
 		w.spawn_resource_node(&"res.cattle", origin + offset, 0)
+	for offset in DEBUG_BOAR:
+		w.spawn_resource_node(&"res.boar", origin + offset, 0)
+	# THE WOLF IS A UNIT, not a node, and so it is spawned here rather than beside the
+	# animals it is filed with. That is the whole shape of 4.13's wildlife: a thing you
+	# harvest is a `SimResourceNode` and a thing that comes at you is a `SimUnit`, and
+	# the wolf is the second until it dies and DeathSystem turns it into the first.
+	#
+	# OWNER 0, like every animal here -- but unlike the rest of gaia it is a legal
+	# target, which is `Diplomacy`'s entire subject. Passability is checked for the
+	# reason `_place_enemy_squad` checks it: a unit is not written into occupancy, so
+	# an offset that ever reached water would fail silently and late.
+	for offset in DEBUG_WOLF:
+		var tile: Vector2i = origin + (offset as Vector2i)
+		if not w.map.is_passable(tile, SimMap.Domain.LAND):
+			push_warning("MapGen: no room for the wolf at %s" % tile)
+			continue
+		w.spawn_unit(&"unit.wolf", 0, tile)
 
 
 ## The hostile squad (DEBUG_ENEMY_SQUAD), placed relative to the FIRST player's

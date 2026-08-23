@@ -54,12 +54,24 @@ func test_building_the_same_map_twice_assigns_the_same_entity_ids() -> void:
 
 func test_the_player_starts_with_one_town_centre_and_five_villagers() -> void:
 	var buildings := _of_type(SimBuilding)
-	var units := _of_type(SimUnit)
+	# OWNED units, not every unit: since 4.13 the debug map also carries a gaia wolf,
+	# which is nobody's and must not be counted as part of anyone's opening.
+	var units := _owned_units()
 	assert_eq(buildings.size(), 1, "exactly one town centre")
 	assert_eq((buildings[0] as SimBuilding).def_id, &"building.town_center")
 	assert_eq(units.size(), MapGen.STARTING_VILLAGERS, "5 villagers (PLAN.md 2.6)")
 	for u in units:
 		assert_eq((u as SimUnit).def_id, &"unit.villager")
+
+
+## Every unit somebody actually owns. Gaia's wildlife is a unit too and is spawned by
+## MapGen like everything else, so "all the units" stopped meaning "the player's".
+func _owned_units() -> Array:
+	var out: Array = []
+	for u in _of_type(SimUnit):
+		if (u as SimUnit).owner_id != 0:
+			out.append(u)
+	return out
 
 
 func test_the_starting_town_centre_is_complete_and_at_full_health() -> void:
@@ -72,7 +84,12 @@ func test_the_starting_town_centre_is_complete_and_at_full_health() -> void:
 
 func test_starting_units_take_their_stats_from_units_json() -> void:
 	# This is what replaced SimWorld's hardcoded _UNIT_DEFS table at 0.4.
-	var u: SimUnit = _of_type(SimUnit)[0]
+	#
+	# `_owned_units()[0]`, not `_of_type(SimUnit)[0]`. The wolf spawns before the
+	# villagers do -- `_place_resources` runs first -- so the old index quietly
+	# started asserting the villager's stats against the WOLF's def and failed with
+	# three numbers that looked like a data corruption rather than a new animal.
+	var u: SimUnit = _owned_units()[0]
 	var d: UnitDef = w.unit_def(&"unit.villager")
 	assert_not_null(d, "the registry resolves the villager")
 	assert_eq(u.max_hp, d.hp)
@@ -233,9 +250,12 @@ func test_a_buildings_origin_tile_round_trips_through_its_centre_position() -> v
 
 func test_resource_nodes_are_placed_and_occupy_their_tiles() -> void:
 	var nodes := _of_type(SimResourceNode)
+	# DEBUG_WOLF is absent on purpose: it is a unit, not a node, so it is not counted
+	# here and would not be even if it were placed beside the boar.
 	var expected := MapGen.DEBUG_WOOD_CLUSTER.size() + MapGen.DEBUG_GOLD.size() \
 			+ MapGen.DEBUG_FOOD.size() + MapGen.DEBUG_STONE.size() \
-			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size()
+			+ MapGen.DEBUG_SHEEP.size() + MapGen.DEBUG_CATTLE.size() \
+			+ MapGen.DEBUG_BOAR.size()
 	assert_eq(nodes.size(), expected, "every declared cluster found room")
 	var kinds: Array[StringName] = []
 	for n in nodes:
@@ -391,21 +411,44 @@ func test_nodes_take_their_amounts_from_resources_json() -> void:
 		assert_eq(node.gather_slots, d.gather_slots)
 
 
-func test_the_debug_map_places_no_wildlife_at_all() -> void:
-	# res.berry_bush replaced res.deer as the debug map's food node (session
-	# decision, MapGen.DEBUG_FOOD's own header) -- it is gathered like a tree,
-	# not hunted, so nothing the debug map places should carry the wildlife
-	# flag. res.deer's own wildlife flag is still exercised directly at the
-	# data level (test_game_data.gd), just not spawned here any more.
+func test_no_resource_node_on_the_debug_map_is_wildlife() -> void:
+	# THIS TEST PREDICTED ITS OWN REWRITE. It was `..._places_no_wildlife_at_all`, and
+	# it said: "the day something here does carry the flag, it is because 4.13 landed
+	# and the wolf arrived, and this assertion should be the thing that makes that a
+	# deliberate change." 4.13 landed on 2026-08-23 and the wolf arrived. This is that
+	# deliberate change.
 	#
-	# Still true with livestock on the map (2026-08-17), and that is the point:
-	# sheep and cattle were wired precisely BECAUSE they need none of the hunt
-	# machinery. The day something here does carry the flag, it is because 4.13
-	# landed and the wolf arrived, and this assertion should be the thing that
-	# makes that a deliberate change.
+	# What survives is narrower and truer. `ResourceDef.is_wildlife` marks a node that
+	# ROAMS AND FLEES -- res.deer's block, which is still parsed and still read by
+	# nothing -- and no node the debug map places should carry it, because every one of
+	# them is harvested where it stands: bushes, sheep, cattle and now boar alike.
+	#
+	# The wolf does not contradict that. It is not a node at all until it dies, and
+	# `UnitDef.is_wildlife` is a different flag on a different class answering a
+	# different question -- see the test below, which is the other half of this one.
 	for n in _of_type(SimResourceNode):
 		assert_false((n as SimResourceNode).is_wildlife,
 				"%s should not be wildlife on the debug map" % (n as SimResourceNode).def_id)
+
+
+func test_the_debug_map_places_one_hostile_wolf_and_it_belongs_to_nobody() -> void:
+	var wolves: Array = []
+	for u in _of_type(SimUnit):
+		if (u as SimUnit).def_id == &"unit.wolf":
+			wolves.append(u)
+	assert_eq(wolves.size(), MapGen.DEBUG_WOLF.size(), "the declared wolf found room")
+
+	var wolf: SimUnit = wolves[0]
+	assert_eq(wolf.owner_id, 0, "gaia's, like every animal on the map")
+	assert_true(wolf.alive)
+	# Far from the opening, which is the whole of DEBUG_WOLF's placement argument: at
+	# aggro 6 against five villagers ringing the town centre, near would mean eating
+	# the opening. Measured to the town centre's MIDDLE rather than its origin.
+	var tc: SimBuilding = _of_type(SimBuilding)[0]
+	var middle := tc.footprint_rect().position + tc.footprint_rect().size / 2
+	var gap := CombatSystem.tile_gap(wolf.tile(), Rect2i(middle, Vector2i.ONE))
+	var aggro: int = (w.unit_def(&"unit.wolf") as UnitDef).aggro_radius
+	assert_true(gap > aggro * 2, "%s tiles from the base, aggro is %s" % [gap, aggro])
 
 
 func test_nothing_overlaps_anything_else() -> void:

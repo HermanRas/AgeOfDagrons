@@ -704,12 +704,16 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 			and GameDataRegistry.resource_def(StringName(f["def_id"])) != null:
 		return TapAction.GATHER
 
-	# Somebody else's, and not gaia's: tapping it attacks it (4.13). Checked
+	# Somebody else's, or gaia's WILDLIFE: tapping it attacks it (4.13). Checked
 	# AFTER the resource branch, so a tree stays a thing to chop rather than a
 	# thing to shoot -- gaia owns both, and only the resource def tells them
 	# apart. With nothing selected it still just reselects, so an enemy's panel
 	# and health stay readable without an army in hand.
-	if int(f["owner_id"]) != 0:
+	#
+	# THROUGH `Diplomacy`, sharing the sim's answer rather than keeping the view's
+	# own. When these two drift the player taps an enemy, the tap offers an attack,
+	# `AttackCommand.validate` refuses it, and nothing happens with nothing said.
+	if Diplomacy.is_enemy_fact(f, owner):
 		return TapAction.ATTACK if has_movable_selection else TapAction.SELECT
 
 	return TapAction.MOVE if has_movable_selection else TapAction.NONE

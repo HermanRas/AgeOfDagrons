@@ -60,12 +60,10 @@ func validate(w: SimWorld) -> bool:
 	if unit_ids.is_empty():
 		return false
 
-	var target := w.get_entity(target_id)
-	if target == null or not target.alive:
-		return false
-	if not (target is SimUnit or target is SimBuilding):
-		return false
-	if target.owner_id == player_id or target.owner_id == 0:
+	# Null, dead, a resource node, somebody's own, and gaia's scenery are all refused
+	# here -- but gaia's WILDLIFE is not, which is how a wolf can be hunted at all.
+	# See `Diplomacy`, which replaced this file's own copy of the owner clause.
+	if not Diplomacy.is_enemy(w.get_entity(target_id), player_id):
 		return false
 
 	var armed := false

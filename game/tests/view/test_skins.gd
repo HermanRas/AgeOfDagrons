@@ -167,6 +167,14 @@ func test_units_carry_the_colour_flag_and_buildings_do_not_yet() -> void:
 	var tinted := _entries_with("colours")
 	for unit_id in reg.unit_ids():
 		var ud: UnitDef = reg.unit(unit_id)
+		# WILDLIFE IS SKIPPED BY RULE, not added to the list above, and the difference
+		# matters. The two exemptions are facts about particular art -- somebody could
+		# bake the dragon a mask tomorrow. A wolf is owner 0's: there is no player
+		# whose colour it could wear, so there is nothing to bake and never will be.
+		if ud.is_wildlife:
+			assert_false(tinted.has(String(ud.visual)),
+					"%s is gaia's and has no colour to wear" % unit_id)
+			continue
 		if UNTINTABLE.has(unit_id):
 			assert_false(tinted.has(String(ud.visual)),
 					"%s claims no colour bake it has not got" % unit_id)

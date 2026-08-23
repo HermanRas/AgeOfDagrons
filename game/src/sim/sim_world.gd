@@ -97,7 +97,10 @@ func setup(cfg: MatchConfig) -> void:
 	# nothing was ever drawn.
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
 			GatherSystem.new(), BuildSystem.new(),
-			ProjectileSystem.new(), CombatSystem.new(),
+			# WildlifeSystem BEFORE CombatSystem, so a wolf that picks a target this
+			# tick bites on this tick. It only ever writes the same task an
+			# AttackCommand would, which is why nothing in combat knows it exists.
+			ProjectileSystem.new(), WildlifeSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
