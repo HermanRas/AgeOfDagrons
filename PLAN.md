@@ -1030,7 +1030,7 @@ ms avg. One figure over budget: sim tick **max 7.63 ms** against <5 ms — it is
 | 4.10 | Special abilities + cooldowns | |
 | 4.11 | ✅ Population cap, **enforced**. See §11.5 | |
 | 4.12 | Stances | |
-| 4.13 | ✅ **mostly** — `CombatSystem`: walk to the target, stand at reach, strike on cooldown, damage after matching armour with a `MIN_DAMAGE` floor (armour must blunt an attack but never make a defender invulnerable to a whole class, because nothing on screen would explain it). Reach is measured to a **footprint**, not a centre, or melee could never touch an 8×8 building. Deliberately **no auto-acquire and no retaliation** — a unit fights what it was ordered to fight, since guessing means every villager charging the first enemy that walks past (that is 4.12). **Left in 4.13:** the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing) | |
+| 4.13 | ✅ **mostly** — `CombatSystem`: walk to the target, stand at reach, strike on cooldown, damage after matching armour with a `MIN_DAMAGE` floor (armour must blunt an attack but never make a defender invulnerable to a whole class, because nothing on screen would explain it). Reach is measured to a **footprint**, not a centre, or melee could never touch an 8×8 building. Deliberately **no auto-acquire and no retaliation** — a unit fights what it was ordered to fight, since guessing means every villager charging the first enemy that walks past (that is 4.12). **Projectiles landed 2026-08-22** — `SimProjectile`, `ProjectileSystem`, three atlases wired: the shot spawns at the attacker, flies, points one of eight ways and despawns on arrival, and it carries **no damage** (the blow has already landed; this is only what shows where it came from). What it looks like is a fence post, because both shafts are baked standing on end — art side, `asset_request.md`. **Left in 4.13:** the packed/unpacked siege state machine and the hostile wolf, both waiting on art that has been requested | |
 | 4.14 | Formations | |
 
 #### 11.5 Population cap (4.11)
@@ -1446,10 +1446,10 @@ Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 
 | # | Item | Tag |
 |---|---|---|
-| 12.1a | `host_open()` on 0.0.0.0 + `join()`. See §12.1 | |
-| 12.1b | LAN discovery, reconnect, lag compensation, desync detection | |
-| 12.2a | **PlayTest AI.** See §12.2 | |
-| 12.2b | AI difficulty levels and real decision flow — **the part deliberately parked** until the game's balance has been played | |
+| 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
+| 12.1b | LAN discovery and reconnect. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
+| 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
+| 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 | |
 | 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
 
@@ -1670,6 +1670,28 @@ is **enforced** now, so overrunning shows up as silent refusals. And the resourc
 assume *where* anything is, since 2.4b puts veins nine tiles out in a random direction: they
 resolve "nearest node of kind".
 
+##### Eight slot roles, and only two of them are opponents (2026-08-22)
+
+The lobby's per-slot picker now offers **Human / Passive / Easy / Normal / Hard / Unfair / Open /
+Closed**, with Easy the default. Two of the five AI entries do something distinct:
+
+- **Easy** is the PlayTest AI above, unchanged.
+- **Passive** builds its economy and never attacks — the sparring partner for testing anything
+  that is not combat. It took two changes, and the second is the one worth knowing:
+  **skipping the script's attack step completes the script, and a completed script is precisely
+  what switches the standing attack order on**, so the first version built its whole economy and
+  then attacked anyway.
+- **Normal / Hard / Unfair** resolve to Easy and label themselves "as Easy" on screen. A
+  placeholder that admits what it is costs nothing; three names for one opponent would make the
+  first balance report unreadable.
+
+**The test for Passive did not work the first time**, and how it failed is the lesson: it ran
+1,200 ticks and passed even with the gate removed, because the script does not *finish* inside
+1,200 ticks and the branch was never reached. It now fast-forwards the AI to the end of its
+script, and sabotaged it reports "passive attacked on tick 6". It ships with a **control** — an
+Easy bot in the identical fixture that does attack — because otherwise "the passive one did not
+attack" is indistinguishable from "nothing in this fixture would have".
+
 ### Phase 13 — Dragons
 
 13.1 Dragon unit: air domain, castle-tier stats, fire-breath AoE + cooldown.
@@ -1853,8 +1875,17 @@ Live risks only. Retired ones are in `b904b76`.
 4. ✅ **Multiplayer** (§12.1), the whole block a–g, validated on hardware.
 5. ✅ **UI batch, 2026-08-21.** PLAY split off to a campaign placeholder (§12.3); the lobby's colour cycle became a picker (§12.1c); the age header's pause button retired into the SETTINGS corner button; and the minimap's four corner buttons became real — a working market, and chat and tech-tree wireframes (§8.2b).
 6. ✅ **Walls** (5.8, 2026-08-22). Three tiers, drag placement, two orientations and a lockable gate. Found on the way: the wall art was staged but never **declared** in `visuals.json`, despite two documents saying it was — and the suite found that a run whose leading long piece was unaffordable placed *nothing*, which is why the last piece now downgrades.
-7. **The rest of 4.13** — the packed/unpacked siege state machine, the hostile wolf, and arrow projectiles (`vis.projectile_arrow`/`_bolt`/`_stone` are staged and referenced by nothing, so ranged combat currently resolves with no visible cause). Same "staged art the game cannot reach" complaint the walls had, one size smaller.
-8. **Then the balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means.
+7. ✅ **Projectiles** (4.13, 2026-08-22) — ranged combat had *no* visible cause before it. **Left in 4.13:** the packed/unpacked siege state machine and the hostile wolf, both waiting on requested art.
+8. ✅ **AI difficulty list** (12.2b, 2026-08-22) — eight slot roles, Passive real, three placeholders honest about being Easy. §12.2.
+9. ✅ **Walls merge, lobby preview rotated** (5.8 / 1.6, 2026-08-22). And **the facing compensation was built and reverted** (2026-08-22 → 23): the owner's rule is that an art defect gets fixed in the recipe, so the 36-recipe re-bake is §13.2 item 10 and there is no game-side half of it.
+
+**Next, in the order it makes sense to do it:**
+
+10. **The balancing pass on unit speeds** (`BUGS.md`), which walls were deliberately done before: chokepoints and defence change what "too fast" even means. This is the one the owner can only answer by playing, so it wants a build on the device.
+11. **Wire the wildlife that is already baked** — `vis.wolf`, `vis.bear`, `vis.boar`, `vis.fish` and `vis.deer_carcass` are staged and declared in **nothing** (`resources.json`'s own note explains why each was held back). That is the walls' failure mode exactly: art on disk that no def reaches for. The wolf is also the 4.13 item above, so hostile behaviour and the declaration are one job.
+12. **Then 4.8 garrison**, which unlocks 4.9 and is the last big hole in the wall feature (0 A.D.'s medium wall declares eight turret points; ours hold nobody).
+
+Further out and unchanged in priority: 9.3 `TechSystem` (the field yield's per-age ladder is standing in for a mill tech), 2.4c the map save format, 12.1b LAN discovery, and 13.x dragons once the RTS is a game.
 
 **Retired from this list, because the architecture answered it rather than the work:** 12.1b's
 *desync detection*. `Net` has no `SimWorld` on a client — it says so outright — and `state_hash()`
