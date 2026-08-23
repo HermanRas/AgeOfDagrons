@@ -8,9 +8,34 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ---
 
+## Priority — set 2026-08-23 against where the PHASES actually are
+
+Ordered by how much a phase is waiting on it, not by how long it has been queued. See
+`PROGRESS.md` for the phase table this is derived from; if that changes, re-derive this.
+
+| P | Request | The phase it is holding up |
+|---|---|---|
+| **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round |
+| **P2** | `yaw_offset_deg` on 36 recipes | Phases 4 and 12. Every unit faces backwards; combat is only where it shows. A game-side patch was built and reverted on the owner's word, so nothing else can absorb this |
+| **P3** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
+| **P4** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
+| **P5** | Arrow and bolt pitch | Cosmetic. 4.13 is otherwise done and projectiles work; they read as fence posts |
+| **P6** | Confirm five `footprint_m` figures | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
+
+**Running in the background and not in this queue:** **A.10, the building roster age by
+age**, which paces phase **5.7** and every age skin phase **9** will need. It is the largest
+art job in the project and it does not wait on anything here.
+
+**What is NOT wanted, so it does not get baked on spec:** terrain transition and shoreline
+edges. Those were an open art item (A.1) until 2026-08-23 and are now **generated at load
+time** from the one diamond each terrain already ships — the owner's call, so that a theme
+pack stays one sprite per terrain. Do not bake transition tiles.
+
+---
+
 ## Open requests
 
-### Confirm five `footprint_m` figures I had to estimate — 2026-08-23
+### [P6] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
 
 **What's needed:** the measured ground footprint, in metres, for `vis.wolf`, `vis.bear`,
 `vis.boar`, `vis.fish` and `vis.deer_carcass`. One `isobake inspect` each. **Low
@@ -51,7 +76,7 @@ I shipped 0.90 by eye. Worth a look while you are in there.
 
 ---
 
-### `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
+### [P4] `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
 
 **What's needed:** a fourth tree species to restore `vis.tree`'s variant list to four.
 The project owner's preference is a **palm**, for riverbanks and the island game mode,
@@ -103,7 +128,7 @@ change — the variant axis is already wired and `variant_of()` reads the list's
 
 ---
 
-### EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
+### [P2] EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
 
 **What's needed:** `yaw_offset_deg = 180.0` on every unit recipe, and a re-bake. It is
 the same one-line compensation **82 of your 171 recipes already carry**.
@@ -264,7 +289,7 @@ actually closes it.
 
 ---
 
-### `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
+### [P5] `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
 
 **What's needed:** a pitch on the two SHAFT projectiles so they lie along their flight
 instead of standing on end. `vis.projectile_stone` is correct and needs nothing — it is
@@ -307,7 +332,7 @@ picked up — the game reads the arrow's direction from the sim and the atlas' o
 
 ---
 
-### `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
+### [P3] `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
 
 **What's needed:** the PACKED half of all three siege engines. One bake each, same
 treatment as their unpacked halves (which are staged and correct).
@@ -356,83 +381,54 @@ new art and I am doing both now. This is the only piece that waits on you.
 
 ---
 
-### `vis.wolf` animated (your A.4a) + `vis.wolf_carcass` — requested 2026-08-22
+### [P1] Animate the wildlife (your A.4a) + FIVE carcass bakes — requested 2026-08-22, re-scoped 2026-08-23
 
-**What's needed:** two things, and the first is already on your list.
+⚠️ **RE-SCOPED 2026-08-23, and it grew by five species.** This was a request for one
+animated wolf and one wolf carcass. Phase 6 closed the same week and **six species now
+move**, so the whole of A.4a became load-bearing at once. Nothing about the analysis
+below changed — only how many animals it applies to.
 
-1. **`vis.wolf`, animated** — idle / walk / attack / die / decay. This is A.4a, and
-   `tools/recipes/wolf.toml` already reasons it through in full: every clip exists in
-   `fauna/wolf.xml` (Idle ×3, Walk, Run, attack_melee ×2, death ×2), the quadruped
-   `location_scale` bug that blocked it is fixed, and the recipe says the "still
-   static" note is now a workaround for a problem that no longer exists. I am not
-   adding anything to that analysis — only saying it now has a caller.
-2. **`vis.wolf_carcass`** — new, and the deer already shows the shape: `vis.deer_carcass`
-   is a separate bake of `fauna/deer.xml` carrying a single `carcass` anim. Same
-   treatment on `fauna/wolf.xml`. `tools/recipes/deer_carcass.toml` is the template.
+**MOVEMENT CLIPS — six species, all currently one static rest pose:**
 
-**Why:** 4.13's hostile wolf. The project owner picked the full version on 2026-08-22
-— the wolf is a gaia-owned unit that roams, chases and bites, and killing it drops a
-gatherable carcass worth 30 food. So the wolf now *moves*, which is what makes the
-animation load-bearing rather than nice: **`vis.wolf` today has one `static` anim, and
-this project's own convention is that anything without a walk clip carries `speed: 0`
-precisely so a motionless sprite never slides across the map** (ships, dragon, and all
-three siege engines all do). A hostile wolf cannot take that out, so it is the first
-entity in the game that has to move without a walk clip.
-
-**Not blocking me.** I am building the sim side now and the wolf will slide until A.4a
-lands — a known, temporary, visibly-wrong state rather than a hidden one. Say if you
-would rather I hold the wolf's `speed` at 0 until then and I will; it makes it
-harmless and useless in equal measure.
-
-**Where it plugs in once baked:** `vis.wolf` needs no wiring change, it re-skins in
-place. `vis.wolf_carcass` becomes a `visuals.json` entry and the visual for a new
-`res.wolf_carcass` node in `resources.json`.
-
----
-
-### `vis.onager` still renders nose-up — **agent 2, 2026-08-16; FIXED 2026-08-17**
-
-**Fixed and staged.** Both halves as diagnosed: isobake `e257ae8` stops the
-all-anchored `subject_armature` branch ranking by bone count, so the clip lands on
-the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe now declares
-`idle` / `attack` / `die` / `decay`. The engine sits flat on its base and the arm
-lies along the frame. The full working is in `tools/recipes/onager.toml` and the
-isobake commit message; nothing about it needs to live here.
-
-**One thing to check on your side, and it is small.** The atlas shape changed the
-way `vis.ballista`'s did when it stopped being static:
-
-| | before | after |
+| id | what it does now | clips wanted |
 |---|---|---|
-| anims | `static`, 1 frame | `idle` 12, `attack` 12, `die` 2, `decay` 2 |
-| frame0 | 118×107, anchor (55.0, 53.6) | 115×108, anchor (60.0, 57.6) |
+| `vis.wolf` | chases and bites | idle / **walk** / **attack** / die / decay |
+| `vis.boar` | chases and bites | idle / **walk** / **attack** / die / decay |
+| `vis.bear` | chases and bites | idle / **walk** / **attack** / die / decay |
+| `vis.deer` | roams, and bolts when hit | idle / **walk** (a Run would earn its place) / die |
+| `vis.sheep` | driven home by a player | idle / **walk** |
+| `vis.cattle` | driven home by a player | idle / **walk**, and `zebu_wild` has a **Feeding** clip — the one idle that reads as an animal doing something |
 
-The sprite is the same size to within 3 px, so unlike the gold and stone re-points
-I do **not** think `footprint_m` / `height_m` want re-measuring — the old figures
-were taken off this same actor, only in a wrong pose. Worth one look, not a
-re-derivation. `speed: 0` still stands: there is no walk clip on this rig, only
-`Idle` and `attack_ranged`.
+`tools/recipes/wolf.toml` already reasons the wolf through in full: every clip exists in
+`fauna/wolf.xml` (Idle ×3, Walk, Run, attack_melee ×2, death ×2), the quadruped
+`location_scale` bug that blocked it is fixed, and the recipe's own "still static" note
+is a workaround for a problem that no longer exists. I am adding nothing to that
+analysis — only saying it now has six callers.
 
-**It also tints less than it used to, and that is a consequence of the fix, not a
-regression.** The reared arm was exposing a big player-coloured surface that the
-correct seated pose hides. Measured across the five stored directions: **4.7% of
-the sprite, ranging 1.7% from due N/S to 7.9% from the side** — where the old
-figure was 7.1%, sampled from one direction. It still separates cleanly (closest
-pair of the eight, orange vs yellow, is ΔRGB 49 over the mask) and `"colours":
-true` stands. But if a player has to tell whose onager that is at a glance, from
-head-on it is now about 100 px of tunic. Worth knowing when you decide what leans
-on baked-in colour and what leans on the selection ring or the control-group HUD.
+**FIVE CARCASS BAKES.** `res.*_carcass` exists for deer, wolf, boar, bear, sheep and
+cattle. Only `vis.deer_carcass` is baked, and **the other five all draw it** — so a dead
+bear currently looks like a dead deer. `vis.deer_carcass` is the template: a separate
+bake of the same actor carrying a single `carcass` anim, per
+`tools/recipes/deer_carcass.toml`.
 
-**Known cosmetic limit, deliberate.** The three crew do not collapse on death the
-way the ballista's and the ram's do. 0 A.D. gives this arm no `Death` animation at
-all, so `die`/`decay` freeze the idle pose, and because a clip's identity here has
-to be its animation *file* (the pivot actor the recipe names declares no
-animations, so clip names cannot resolve), `die` cannot carry an identity separate
-from `idle`'s and so cannot hand the crew a death clip of their own. A still crew
-around a still engine reads as stopped, not as broken. Say so if you disagree and
-I will look at giving a recipe a way to name rider clips directly.
+**WHY THIS IS P1.** Not because it is old — because the game has gone ahead of the art,
+which is the reverse of the usual direction here and the only art item where that is
+true. **This project's own convention is that anything without a walk clip carries
+`speed: 0`**, precisely so a motionless sprite never slides across the map — ships, the
+dragon and all three siege engines all do. Wildlife is the first thing to break that
+rule, knowingly, on the owner's call of 2026-08-23 when they were told the art was
+static and chose the full version anyway. Six sliding animals is the cost being paid
+until this lands.
 
----
+**Still not blocking.** Everything is wired and playable; it looks wrong rather than
+being broken. The offer from 2026-08-22 stands and is now worse value: holding the
+animals at `speed: 0` would make six features harmless and useless together.
+
+**Where it plugs in once baked:** the six movement bakes need **no wiring change at
+all** — they re-skin in place, and `EntityView.play_anim` already falls back to `static`
+per clip, so a partial delivery is safe. Each carcass becomes a `visuals.json` entry and
+one line in `resources.json` swapping that def off `vis.deer_carcass`.
+
 
 ## Delivered
 
@@ -441,6 +437,7 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-08-17 | `vis.onager` nose-up | Fixed both halves: isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe declares `idle`/`attack`/`die`/`decay`. **Retired from the open queue 2026-08-23** — it had sat there as a 43-line resolved entry against this file's own housekeeping rule. Three things worth keeping are already where they belong: `speed: 0` still stands (no walk clip on the rig) and is in `units.json`; the tint dropped to 4.7% of the sprite because the correct seated pose hides the surface the reared arm exposed, and `"colours": true` still separates cleanly, which is noted in `visuals.json`; and the crew do not collapse on death because 0 A.D. gives this arm no `Death` clip at all — recorded in `onager.toml` |
 | 2026-08-08 | `vis.berry_bush` | Found already baked and unwired; became the MVP food node in place of `res.deer` |
 | 2026-08-08 | `vis.deer_carcass` | Baked; prompted the per-clip `location_scale` fix that unblocked animated fauna. Not wired — nothing hunts deer since the berry-bush switch |
 | 2026-08-16 | `game/assets/atlases/` stale | Re-staged. Root cause was `stage_atlases.py`'s non-recursive glob missing `tools/recipes/player/`, not a script nobody ran |
