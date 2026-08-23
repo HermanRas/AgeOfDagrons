@@ -38,8 +38,17 @@ func _process(_delta: float) -> void:
 			_report_menu_wiring()
 			_shoot("menu_main")
 		2:
-			_show("res://scenes/menu/Campaign.tscn")
+			# SETTINGS, which is a real screen since 2026-08-23 -- it used to
+			# answer with a toast saying settings did not exist. Built in code
+			# rather than authored in MainMenu.tscn, so nothing but a photograph
+			# says whether the overlay lands inside the window.
+			_press_settings()
 		3:
+			_report_settings()
+			_shoot("menu_settings")
+		4:
+			_show("res://scenes/menu/Campaign.tscn")
+		5:
 			_report_campaign()
 			_shoot("menu_campaign")
 		_:
@@ -70,9 +79,7 @@ func _report_menu_wiring() -> void:
 		if button == null:
 			push_warning("preview_menus: no %s on the main menu" % name)
 			continue
-		var targets: Array[String] = []
-		for c in button.pressed.get_connections():
-			targets.append(String((c["callable"] as Callable).get_method()))
+		var targets := _handlers(button)
 		print("  %s -> %s" % [name, targets])
 		if targets.is_empty():
 			push_warning("preview_menus: %s is wired to nothing" % name)
@@ -80,12 +87,58 @@ func _report_menu_wiring() -> void:
 	var play: TextureButton = _current.get_node_or_null("%PlayButton")
 	var multi: TextureButton = _current.get_node_or_null("%MultiplayerButton")
 	if play != null and multi != null:
-		var play_target := String((play.pressed.get_connections()[0]["callable"]
-				as Callable).get_method())
-		var multi_target := String((multi.pressed.get_connections()[0]["callable"]
-				as Callable).get_method())
-		if play_target == multi_target:
+		var play_targets := _handlers(play)
+		var multi_targets := _handlers(multi)
+		if not play_targets.is_empty() and play_targets == multi_targets:
 			push_warning("preview_menus: PLAY and MULTIPLAYER still go to the same place")
+
+
+## A button's OWN handlers, with `AudioManager`'s click hook filtered out.
+##
+## THIS FILTER IS LOAD-BEARING AND WAS ADDED AFTER A FALSE ALARM. `AudioManager`
+## connects to `SceneTree.node_added` and gives every `BaseButton` in the game a
+## click sound, so `pressed.get_connections()` now has one extra entry on
+## everything -- and because the autoload is in the tree before any menu, that
+## entry comes FIRST. This function used to read `get_connections()[0]`, which
+## after that change reported `_on_any_button_pressed` for both PLAY and
+## MULTIPLAYER and warned that they went to the same place. They do not.
+##
+## Anything else that inspects a button's connections needs the same filter.
+func _handlers(button: BaseButton) -> Array[String]:
+	var out: Array[String] = []
+	for c in button.pressed.get_connections():
+		var method := String((c["callable"] as Callable).get_method())
+		if method == "_on_any_button_pressed":
+			continue
+		out.append(method)
+	return out
+
+
+## Press the REAL settings button, not its handler -- the point is the wiring as
+## much as the layout, and calling the handler would prove only the handler.
+func _press_settings() -> void:
+	var button: TextureButton = _current.get_node_or_null("%SettingsButton")
+	if button == null:
+		push_warning("preview_menus: no SettingsButton on the main menu")
+		return
+	button.pressed.emit()
+
+
+## The three sliders, and whether the overlay is actually on screen. A panel laid
+## out off the window edge looks identical to one that never opened, which is the
+## thing a print cannot tell you and a rect can.
+func _report_settings() -> void:
+	var sliders: Array[Node] = _current.find_children("*", "HSlider", true, false)
+	print("  settings: %d slider(s)" % sliders.size())
+	if sliders.size() != 3:
+		push_warning("preview_menus: expected 3 volume sliders, got %d" % sliders.size())
+	var window := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for s in sliders:
+		var slider: HSlider = s
+		var rect := slider.get_global_rect()
+		print("    %s at %s value %.2f" % [slider.name, rect, slider.value])
+		if not window.encloses(rect):
+			push_warning("preview_menus: a volume slider is outside the window: %s" % rect)
 
 
 func _report_campaign() -> void:

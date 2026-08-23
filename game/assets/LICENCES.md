@@ -68,6 +68,41 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 
 ---
 
+## Audio pack — 0 A.D. sound groups
+
+**Everything under `game/assets/audio/` is 0 A.D. audio, used unmodified.** The
+attribution above applies to it in full and is the same obligation: 0 A.D.'s
+`audio/LICENSE.txt` carries the same **CC-BY-SA 3.0** terms as `art/LICENSE.txt`,
+naming **Wildfire Games** as author with the author link
+http://www.wildfiregames.com/ and the licence deed
+http://creativecommons.org/licenses/by-sa/3.0/.
+
+**Modification made: none.** Unlike the atlases, nothing is rendered, re-encoded
+or re-packed — the `.ogg` files are byte-identical to 0 A.D.'s, verified by
+sha256 against the git-LFS oid at fetch time (`tools/stage_audio.py`). What this
+project adds is the *selection*: which sound group answers which game event.
+
+**Declared by population, not by filename**, exactly as the atlases above are.
+`game/assets/audio/` is gitignored build output; the durable record is
+[`game/data/audio.json`](../data/audio.json), which is committed and carries a
+`source_group` per sound id naming the 0 A.D. group it came from — and the
+mapping's *reasoning* is in `tools/stage_audio.py`. `licence_audit.py` checks
+nothing sits in the staged directory that no sound id accounts for, which is the
+same coverage check `staged_atlas_ids()` performs for the bakes.
+
+| What | Source | Licence |
+|---|---|---|
+| Sound effects — `audio/{actor,attack,resource,interface,ambient}` | 0 A.D. `binaries/data/mods/public/audio/` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| Unit voices — `audio/voice/latin` only | 0 A.D. `binaries/data/mods/public/audio/voice/latin/` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| Music — 8 of the 62 tracks | 0 A.D. `binaries/data/mods/public/audio/music/` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| UI button click | 0 A.D. `binaries/data/mods/mod/audio/interface/ui/` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+
+0 A.D.'s music is credited per-composer in its own `audio/music/` metadata; the
+eight tracks taken are named in `MUSIC` in `tools/stage_audio.py`, and
+[`../../CREDITS.md`](../../CREDITS.md) carries the project-level credit.
+
+---
+
 ## Shipped inside the APK
 
 Assets committed under `game/assets/`. These are **not** from 0 A.D. and each needs its

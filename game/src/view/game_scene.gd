@@ -156,6 +156,11 @@ var _ground_tap := DoubleTapDetector.new()
 ## own world is the better answer and is right there to ask.
 var _client_map: SimMap = null
 
+## Turns snapshots into sound (PLAN.md 7.5). Here rather than inside `GameView`
+## because it is a consumer of the snapshot, not part of the view's model of the
+## world -- the same reason the HUD signals go out through `EventBus` from here.
+var _audio := MatchAudio.new()
+
 ## TOUCH EMULATION IS OFF INSIDE THE MATCH AND ON EVERYWHERE ELSE (2026-08-22).
 ##
 ## The project setting is now `true`, and this is the one scene that turns it back off.
@@ -787,6 +792,13 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_refresh_minimap()
 	_feed_pages(snap)
 	_refresh_result(snap)
+	# The camera's centre is the listener, so a battle off the edge of the screen
+	# is not heard (`AudioManager._AUDIBLE_RADIUS_PX`). Passed in rather than
+	# looked up, because the autoload has no business knowing this scene's shape.
+	# A CameraRig's `position` IS the middle of the screen (`centre_on` sets it
+	# through `clamped_centre`), so it is the listener with nothing to derive.
+	_audio.observe(snap, Net.local_player_id(),
+		_camera.position if _camera != null else Vector2.INF)
 
 
 ## The end of the match (PLAN.md 11.1), read off the snapshot rather than worked

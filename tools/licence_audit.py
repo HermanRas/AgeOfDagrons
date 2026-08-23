@@ -32,6 +32,7 @@ and whenever you add an asset.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import tomllib
@@ -114,9 +115,23 @@ def load_recipes() -> tuple[list[dict], list[Problem]]:
 #: nothing turns up in here that no recipe accounts for.
 STAGED_ATLASES = ASSETS / "atlases"
 
+#: Staged 0 A.D. audio, excluded from the file scan for exactly the same reason
+#: as the atlases above and covered the same way -- by POPULATION rather than by
+#: filename. 267 rows naming individual .ogg files would say nothing that one
+#: statement about where all of them came from does not, and every one of them
+#: would go stale the moment `--max-variations` changed.
+#:
+#: The durable record here is `game/data/audio.json`, which is committed and
+#: carries a `source_group` per sound id naming the 0 A.D. sound group it came
+#: from. `unaccounted_audio()` keeps that honest, the same way
+#: `staged_atlas_ids()` does for the bakes: nothing may sit in this directory
+#: waiting to be packed unless the seam actually points at it.
+STAGED_AUDIO = ASSETS / "audio"
+AUDIO_MANIFEST = REPO / "game" / "data" / "audio.json"
+
 
 def shipped_asset_files() -> list[Path]:
-    """Asset files inside game/assets/, excluding staged bake output."""
+    """Asset files inside game/assets/, excluding staged build output."""
     if not ASSETS.is_dir():
         return []
     return sorted(
@@ -124,6 +139,34 @@ def shipped_asset_files() -> list[Path]:
         if p.is_file()
         and p.suffix.lower() in ASSET_SUFFIXES
         and STAGED_ATLASES not in p.parents
+        and STAGED_AUDIO not in p.parents
+    )
+
+
+def unaccounted_audio() -> list[str]:
+    """Staged .ogg files that data/audio.json does not point at.
+
+    The audio analogue of `staged_atlas_ids()`'s coverage check. A file here that
+    no sound id names is an asset that would be packed with no provenance -- and
+    since the directory is gitignored build output, nothing else would ever
+    notice it. Lowering `--max-variations` in stage_audio.py is the realistic way
+    to produce one: the tool stops referencing a file it already fetched.
+    """
+    if not STAGED_AUDIO.is_dir():
+        return []
+
+    referenced: set[str] = set()
+    if AUDIO_MANIFEST.is_file():
+        manifest = json.loads(AUDIO_MANIFEST.read_text(encoding="utf-8"))
+        for block in ("sfx", "music"):
+            for entry in manifest.get(block, {}).values():
+                for path in entry.get("streams", []):
+                    referenced.add(str(path).removeprefix("res://assets/audio/"))
+
+    return sorted(
+        p.relative_to(STAGED_AUDIO).as_posix()
+        for p in STAGED_AUDIO.rglob("*.ogg")
+        if p.relative_to(STAGED_AUDIO).as_posix() not in referenced
     )
 
 
@@ -211,6 +254,15 @@ def audit() -> list[Problem]:
                 f"{_rel(STAGED_ATLASES)}/{staged}.atlas.json",
                 "is staged for packing but no recipe declares it -- unknown provenance",
             ))
+
+    # 4. The same hole, for audio: a staged .ogg that data/audio.json does not
+    #    reference would be packed with nothing recording where it came from.
+    for orphan in unaccounted_audio():
+        problems.append(Problem(
+            f"{_rel(STAGED_AUDIO)}/{orphan}",
+            "is staged but no sound id in data/audio.json names it -- "
+            "unknown provenance (re-run tools/stage_audio.py)",
+        ))
 
     # 4. Declared-but-unlicensed. Being NAMED in LICENCES.md is not the same as
     #    having a licence, and treating it as such would make this tool report

@@ -577,17 +577,42 @@ multi-touch box select needs raw `InputEventScreenTouch`/`Drag`. Touch and mouse
 separately, because handling one would work on the phone and not on the desktop the work is done
 on. Test on device.
 
-**7.5 Audio — NOT BUILT, and this entry claimed otherwise for months.** It said "`AudioManager`
-exists with a no-op implementation … so gameplay emits `play_sfx(&"villager.chop")` from day one".
-There is no `AudioManager`: not an autoload, not a `class_name`, not a file, and **zero call sites**
-for `play_sfx` anywhere in `game/`. The only traces are comments in `audio.json` and
-`game_data.gd` citing this very paragraph, which is how a false claim survives — the code cited the
-plan and the plan cited nothing.
+**7.5 Audio — BUILT 2026-08-23, and this entry lied about that for months before it.** It used to
+say "`AudioManager` exists with a no-op implementation … so gameplay emits
+`play_sfx(&"villager.chop")` from day one". There was no `AudioManager` — not an autoload, not a
+`class_name`, not a file — and **zero call sites**. The only traces were comments in `audio.json`
+and `game_data.gd` citing *this very paragraph*: the code cited the plan and the plan cited
+nothing. **Kept in full because it is the clearest example this document has of its own worst
+failure mode**, and because the shape of it recurs: a claim survives by being referenced.
 
-What *does* exist is the **ID vocabulary**: `data/audio.json` declares every sound id with a null
-stream, and `GameDataRegistry.has_sfx()` answers for it, so the seam's totality rule already
-covers audio. The plan was sound; only the object was never written. Whoever builds it gets a
-declared table to build against and no call sites to migrate.
+**What exists now.** `AudioManager` (`src/autoload/audio_manager.gd`) is a real autoload with a
+bus graph, a voice pool, per-id throttling and persisted volume; `MatchAudio`
+(`src/view/match_audio.gd`) turns snapshots into sound; `data/audio_map.json` says which sound each
+of the 59 unit/building/resource defs makes; `tools/stage_audio.py` fetches the audio from 0 A.D.
+and generates `data/audio.json`. 131 sound ids, mapped to 0 A.D. sound groups.
+
+**Five decisions worth not re-litigating.**
+
+1. **The SIM emits nothing.** §4's boundary forbids it loading assets or touching the tree, and a
+   sim that made noise would make it during a headless AI-vs-AI run and inside a host's simulation
+   of a client it is not rendering. `MatchAudio` **diffs consecutive snapshots** on the view side,
+   which as a bonus works identically on host and joined client with no event forwarding.
+2. **`task_target_id` stays off the wire.** A villager's work sound is found by *position* —
+   nearest node or building within four tiles — because 12.1f's shape tables make a field that is
+   present on working units and absent on idle ones cost *more* than the bytes it saves.
+3. **`throttle_ms` per id, in the data.** Gather and melee sounds fire per tick; a dozen villagers
+   on one forest is a hundred chops a second. 0 A.D.'s own `<Threshold>` does not answer this (it
+   culls by gain, not by rate), so the number is ours.
+4. **Three sliders, not six.** UI, VOICE and AMBIENT route into SFX, so Master/Music/Effects covers
+   the whole mix. This is the answer to what §13.2 item 11 left open.
+5. **Silence is legitimate; an undeclared id is not.** An empty `streams` list plays nothing, which
+   is what lets the game ship before the audio pack (3.2) — and an id nobody declared calls
+   `push_error` once. `GameDataRegistry.silent_sfx_ids()` reports the first case so it is never
+   diagnosed by ear.
+
+**What is NOT done:** the fetch is incomplete because 0 A.D.'s LFS endpoint rate-limits to roughly
+one object per 20 seconds after an initial burst. Re-running `tools/stage_audio.py` costs only the
+difference. Nothing in the code waits on it.
 
 **7.6 Optimisation policy.** GDScript everywhere. Profile on the target Android device. Move a hot
 loop to GDExtension only when profiling proves it dominates.
@@ -1805,7 +1830,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.4b | ✅ **Closed 2026-08-23** — this said `res.cattle` and `res.bear` had no art at all. Both are baked, staged and now declared; every fauna atlas the game names exists. What replaced it is a **carcass** gap: only `vis.deer_carcass` is baked, and five defs draw it (`res.deer_carcass` plus wolf / boar / bear / sheep). A dead deer where a dead bear should be is the wrong animal, and it beats the magenta unknown, but four bakes are owed. `asset_request.md` | Five carcass bakes owed |
 | A.5 | UI chrome from the itch.io dragon packs | Largely in use |
 | A.6 | **Player colour — prerequisite, not polish** (§2.7 consequence 3). Bake untinted, emit the source alpha as a mask page, tint in a `canvas_item` shader. **Blend mode decided:** neither obvious option works — *multiply* (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the lightness ladder; *luminance-preserving hue transfer* destroys the ladder outright, since every colour inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the **base** level with the texture contributing only its **local deviation**: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, `k ≈ 0.8` scaled by remaining headroom so a light colour does not clip flat. **The mask needs its own greyscale page** (~+12% atlas bytes) — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | **Must land before A.8** |
-| A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | Unblocked, low priority |
+| A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | ✅ **Done 2026-08-23, with two deliberate departures from "whole".** (1) **Five variations per sound group, not all of them** — `lumbering` ships 22 chop samples and `gathering` 66; the ear is listening for "not the same twice" and five is past that, so taking every one spent the audio pack's 50–100 MB budget (§3.2) on chopping noises. `--max-variations` raises it and re-fetches only the difference. (2) **8 of 62 music tracks**, chosen against the age ladder — the other 54 are 219 MB nothing selects. **And a hazard worth knowing:** the .ogg files in the 0 A.D. checkout are git-LFS *pointers*, that repo's index carries ~30k staged deletions so `git lfs pull` exits 0 having done nothing, and the host is behind an Anubis bot wall that a `git-lfs` User-Agent passes. `tools/stage_audio.py` goes round all three and **writes nothing into the art checkout** |
 | A.8 | Military unit art — ~22 bakes, one hand-picked actor per unit, no per-age variants. **A full re-bake is owed on two counts and they should be spent together:** the corrected actors (§9.2) and the ground-decal strip. `vis.trebuchet`/`vis.trade_cart` stay blocked on isobake's armature picking and its lack of particle support for impact VFX. ~22 against the ~88 four factions would have cost is where the single-civilisation decision actually pays | **After A.6** |
 | A.9 | **Dragon + nest** — not bespoke after all: `fauna/dragon.xml` ships with 0 A.D., complete and textured, 9.2 m wingspan; the nest composes from existing gaia props | ✅ — **static**, the model has no armature |
 | A.10 | **Building roster, age by age** — ~70 bakes. **The first batch is five buildings, not seventy**: age 1 unlocks only town centre, house, mill, mining camp and lumber camp, which is a complete playable settlement. Age 2 adds eight. Two free savings: composite props are the same gaia assets in all four ages, so bake once and reuse; the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2 (both Celtic, so similar) — it saves ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of the age axis. **Measure all four skins before declaring a footprint** — it is the max across ages and cannot be read off the age-1 bake | In progress |
@@ -1873,7 +1898,7 @@ nothing in the logs marking where. **Do not touch `isobake/` while a batch is in
 
 | # | Item | Owner |
 |---|---|---|
-| **11** | 🔊 **AUDIO IS NOT BUILT, and this document said it was.** §7.5 claimed "`AudioManager` exists with a no-op implementation … so gameplay emits `play_sfx(&"villager.chop")` from day one". There is no `AudioManager` — not an autoload, not a `class_name`, not a file — and **zero call sites** for `play_sfx` in the whole of `game/`. Found 2026-08-23 by verifying the document against the code, and it had gone unnoticed because the only references to it are *comments in the code citing this plan*: the code cited the plan and the plan cited nothing.<br><br>**What exists is the half that mattered:** `data/audio.json` declares every sound id with a null stream and `GameDataRegistry.has_sfx()` answers for it, so the asset seam's totality rule already covers audio and a bad id cannot fail silently. **What is missing is the object.** Whoever builds it gets a declared table to build against, no call sites to migrate, and A.7's "take `audio/{actor,attack,resource,interface,ambient,music}` whole plus `audio/voice/latin`" already decided for them. The one real design question left is **mixing buses and per-category volume**, since the SETTINGS page (8.2b) has nowhere to put a slider yet | game side; unblocked, low priority |
+| **11** | ✅ **CLOSED 2026-08-23 — audio is built.** This said "AUDIO IS NOT BUILT, and this document said it was", which was the finding that started it: §7.5 had claimed an `AudioManager` existed for months when there was no such file and zero call sites, and it survived because the only references to it were comments in the code citing this plan. Now real — `AudioManager`, `MatchAudio`, `data/audio_map.json`, `tools/stage_audio.py`, 131 sound ids mapped to 0 A.D. sound groups, mapped per unit and per menu item. **The design question this row named as the only one left — "mixing buses and per-category volume, since the SETTINGS page (8.2b) has nowhere to put a slider yet" — is answered:** UI, VOICE and AMBIENT route into SFX so three sliders (Master/Music/Effects) cover the whole mix, and they live in a shared `VolumePanel` used by both the in-match SETTINGS page and the front door's SETTINGS button, which until now answered with a toast saying settings did not exist. See §7.5 for the five decisions not worth re-litigating. **Remaining is bytes, not code:** 0 A.D.'s LFS endpoint rate-limits to ~1 object/20 s, so the fetch is incremental and unfinished; nothing waits on it, because an id with no stream is silence by contract | ✅ done; fetch is incremental |
 | 5 | **Second pack mirror.** Primary is settled (`aod.dragoon.co.za`); GitHub Releases is the obvious fallback. Costs nothing to defer — `packs.json` carries a URL *list*, so adding one is a manifest edit | before first public build |
 | 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
 | 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |

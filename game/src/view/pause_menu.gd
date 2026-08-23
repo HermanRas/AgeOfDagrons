@@ -19,10 +19,40 @@ const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 const _PANEL_BG_PATH := "res://assets/ui/hud/panel_background.png"
 const _BUTTON_SIZE := Vector2(240.0, 76.0)
 
+## WHERE THE VOLUME BLOCK STARTS, and it is 80 rather than the ~26 the buttons
+## get away with, for a reason a screenshot found: `panel_background.png` has a
+## large dragon ornament across its top, and the first slider was drawn BEHIND
+## it with its label above the panel's own top edge. The buttons never showed this
+## because the first one starts lower down.
+const _VOLUME_TOP := 80.0
+
+## Horizontal inset for the volume block, 12 px tighter each side than the
+## buttons. The buttons are textures with padding baked into the art, so a
+## bare `Label` at the same x sits right on the frame's border and reads as
+## overflowing it.
+const _VOLUME_WIDTH := 216.0
+
+## Between the last slider and the first button.
+const _VOLUME_GAP := 20.0
+
 signal resumed()
 
-var _panel_size := Vector2(300.0, 320.0)
+## Sized to fit BOTH stacks rather than guessed: the volume block above (measured
+## by `VolumePanel.height()`, not restated here) and the three 76 px buttons below.
+## It was 320 and had 24 px spare, which is exactly what PLAN.md 13.2 item 11 meant
+## by the SETTINGS page having nowhere to put a slider.
+var _panel_size := Vector2(300.0, _buttons_top() + 3.0 * _BUTTON_SIZE.y + 2.0 * 14.0 + 24.0)
 var _resign_button: TextureButton
+## Shared with the front door's SETTINGS button rather than built twice here --
+## see `VolumePanel`.
+var _volume: VolumePanel
+
+
+## Where the button stack begins: below the volume block. A function, not a
+## constant, because `_panel_size` is derived from it and a constant would have to
+## restate `VolumePanel.height()` -- which is the drift this is avoiding.
+static func _buttons_top() -> float:
+	return _VOLUME_TOP + VolumePanel.height() + _VOLUME_GAP
 
 
 func _init() -> void:
@@ -48,9 +78,17 @@ func _init() -> void:
 		bg.size = _panel_size
 		panel_root.add_child(bg)
 
+	# SOUND FIRST, because it is the only thing here that is actually a SETTING --
+	# the three below it leave the match. This is the settings page (it is reached
+	# from the SETTINGS corner button, see GameScene) and until now it held no
+	# settings at all.
+	_volume = VolumePanel.new(_VOLUME_WIDTH)
+	_volume.position = Vector2((_panel_size.x - _VOLUME_WIDTH) * 0.5, _VOLUME_TOP)
+	panel_root.add_child(_volume)
+
 	var buttons := VBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 14)
-	buttons.position = Vector2((_panel_size.x - _BUTTON_SIZE.x) * 0.5, 40.0)
+	buttons.position = Vector2((_panel_size.x - _BUTTON_SIZE.x) * 0.5, _buttons_top())
 	panel_root.add_child(buttons)
 
 	buttons.add_child(_menu_button("resume_button.png", _on_resume_pressed))
@@ -64,6 +102,10 @@ func _init() -> void:
 
 func open() -> void:
 	visible = true
+	# Re-read rather than trust what the sliders were built with: the front door
+	# has its own copy of this panel, and whichever was touched last is the truth.
+	if _volume != null:
+		_volume.refresh()
 	SimClock.stop()
 
 

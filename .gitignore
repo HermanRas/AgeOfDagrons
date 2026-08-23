@@ -71,6 +71,13 @@ build/
 packs/
 game/assets/atlases/
 
+# Staged 0 A.D. audio (tools/stage_audio.py). Same call as the atlases above:
+# it IS redistributable -- 0 A.D. is CC-BY-SA 3.0, unlike the itch.io UI packs
+# -- but it is ~52 MB of derived files that reach players through the audio
+# pack (PLAN.md 3.2, pack_audio_v1.pck), not through git. Re-stage with
+#     python tools/stage_audio.py
+game/assets/audio/
+
 # Kibyra UI pack art copied locally from assets/UI_Sprites/ for use in the
 # built game (permitted) but not for redistribution of the originals via git
 # (not permitted -- see game/assets/LICENCES.md). Each developer re-copies

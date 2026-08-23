@@ -44,14 +44,21 @@ answer their questions there rather than only in chat.
    §2.7/§2.7.1 the age+faction skin model, §9 the data schema.
 3. **[IDEA.md](IDEA.md)** — what we're building. **[UI_Design.md](UI_Design.md)**
    — how it looks, plus the `.jpg` mockups beside it.
-4. `game/data/*.json` `_note` blocks — these are long, and they are the real
+4. **[BUGS.md](BUGS.md)** — the owner's playtest findings, and **the authority on
+   behaviour they want**. Where a finding reverses an earlier deliberate decision
+   the reversal is noted rather than argued; treat it as settled. It also carries a
+   "standing hazards" section of traps left behind by *fixed* bugs, each of which
+   can bite again. Cleaned 2026-08-23 from 424 lines to 170 with nothing open lost.
+5. `game/data/*.json` `_note` blocks — these are long, and they are the real
    design record for the data. **Read them in full before editing that file.**
    Several encode measurements and decisions that are expensive to re-derive.
 
 **PLAN.md used to be mojibake** (double-encoded UTF-8, so table rows could not be
-matched by an exact-string edit). It is **clean as of 2026-08-21** — `grep -c 'â€'`
-finds nothing — so ordinary exact-string edits work. Re-check before assuming
-either way; whatever fixed it could recur.
+matched by an exact-string edit). It is **clean, re-confirmed 2026-08-23** —
+`grep -c 'â€'` finds nothing in PLAN.md or BUGS.md — so ordinary exact-string
+edits work. Re-check before assuming either way; whatever fixed it could recur.
+`.gitignore` is *still* mojibake in its comment banners, so the repo has not been
+swept as a whole and the recurrence risk is real.
 
 ---
 
@@ -102,6 +109,39 @@ it. Two things it does that are worth copying:
   coordinate at 8× and the question answers itself.
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
+
+Two tools that are not Godot, both needing the project's Python
+(`C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe` —
+Windows has no `python` on PATH, only the Microsoft Store stub):
+
+```powershell
+# Fetch 0 A.D. audio and regenerate the audio seam. Incremental and idempotent.
+& $py tools\stage_audio.py --dry-run          # what it would fetch
+& $py tools\stage_audio.py                    # fetch + write data/audio.json
+& $py tools\stage_audio.py --manifest-only    # rewrite audio.json from what is staged
+& $py tools\stage_audio.py --prune            # drop files no sound id names any more
+
+# Attribution. A licence obligation, not a warning, and nothing runs it for you.
+& $py tools\licence_audit.py
+
+# What actually resolved, and a listen through the roster (PLAN.md 7.7 layer 4).
+& $godot --path game res://dev_preview/preview_audio.tscn -- --report-only
+& $godot --path game res://dev_preview/preview_audio.tscn   # plays them, with sound on
+```
+
+**A NEWLY STAGED `.ogg` IS NOT LOADABLE UNTIL `--import` HAS SEEN IT.** Godot
+imports audio the same way it imports textures, so `ResourceLoader.exists()`
+answers **false** for a file that is sitting right there on disk — which means
+`stage_audio.py` can report 71 ids with streams while the game finds 67. The
+sequence is always **stage → `--import` → run**, and skipping the middle step
+looks exactly like a failed fetch.
+
+`stage_audio.py` is **slow and that is the server, not the script** — the 0 A.D.
+LFS endpoint serves a fast burst and then rate-limits to roughly one object per
+20 seconds, dropping connections rather than answering 429. It retries with
+backoff and skips what is already staged, so re-running it after an interruption
+costs only the difference. Run it in the background and get on with something
+else.
 
 There is **no CI**. Every check is a local command someone runs by hand.
 
@@ -175,22 +215,33 @@ carry `age_required`, which is a *gate*, not a skin.
 | **PS 5.1 splits a here-string into git pathspecs** | Write the commit message to a file, `git commit -F <file>`. Never pipe a here-string. |
 | **`Set-Content -Encoding utf8` adds a BOM** and has corrupted `project.godot` | Use .NET `WriteAllText`/`WriteAllLines` with `UTF8Encoding($false)`. |
 | **A new `class_name` is invisible until `--import`** | Run it, then the suite. |
+| **EVERY button now has an extra `pressed` connection, and it is FIRST** | `AudioManager` listens on `SceneTree.node_added` and gives every `BaseButton` in the game a click sound from one place, rather than 40 call sites each able to be forgotten. The cost: anything reading `button.pressed.get_connections()` sees `_on_any_button_pressed` at index 0. It already caused one false alarm — `preview_menus` read `[0]` and reported that PLAY and MULTIPLAYER went to the same place. **Filter it** (see `preview_menus._handlers`). Opt a button out with the `no_click_sound` group. |
+| **A newly staged `.ogg` is invisible until `--import` too** | Godot imports audio like it imports textures, so `ResourceLoader.exists()` says false for a file plainly on disk. `stage_audio.py` reporting more ids with streams than `preview_audio` finds is this, every time — not a failed fetch. Always **stage → `--import` → run**. |
 | **Staged atlases lag `art_work/out` silently** | A stale-but-valid atlas renders fine and is simply the wrong actor. Read `attribution.actor` out of the staged `.atlas.json` to tell — filenames and mtimes will not show it. |
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |
 | **A visual id is not a filename** | `vis.field_1` is baked as `vis.field_age2`, `vis.field_4` as `vis.farm`. The seam maps ids to paths precisely so ids outlive the art side's naming — and never rename a staged file to match, because `stage_atlases.py` will put it back. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
 | **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
+| **Touch does NOT take keyboard focus, so every new text field needs `TouchLineEdit`** | `emulate_mouse_from_touch = false` ([project.godot:35](game/project.godot#L35)) is *required* — `CameraRig` handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch arriving as both pans twice per thumb. Godot still routes raw touches to controls, but the touch path takes no focus and `LineEdit` asks for the keyboard on focus-enter. Measured on 4.7.1: focus after a screen touch = false, after a mouse click = true. Flipping the setting fixes typing by breaking the camera. |
+| **A `Control` laid over the minimap swallows every tap** | The four corner buttons were a `PRESET_FULL_RECT` grid added *over* it and Godot hit-tested them first — minimap click-to-move and double-tap-to-centre were both dead while looking implemented. Check hit-test order before concluding a minimap feature is missing. |
+| **`JSON.stringify` encodes a `PackedByteArray` as a STRING** — `"[1, 2, 250]"`, verified on 4.7.1 | It bit `MapData.from_dict()`, which now reads bytes, JSON's string, or a plain list. Relevant to 2.4c's saved sidecar and 12.4's save/load — the next two places sim data goes through JSON. Everything else there was already defended with `int()` because JSON numbers come back as floats; `terrain` was the one field that looked like it needed no conversion. |
+| **Wall-clock timings are worthless on this workstation** | The same seed ran 41.3 s and 161.0 s; the suite swung 34 s to 110 s across four runs of identical code. Trust `test_tick_cost`, which reports per-system milliseconds. Do not conclude anything from how long a run took. |
+| **The 0 A.D. checkout's media files are git-LFS POINTERS, not content** | Every `.ogg`/`.dae`/`.png`/`.pmd` on disk is a ~130-byte pointer. Worse, that repo's **index is emptied** (30,114 staged deletions) and its `.gitattributes`/`.lfsconfig` are gone from the working tree, so `git lfs pull` exits 0 having done nothing. Do **not** repair it — it is the art agent's tree and memory records that git operations there have destroyed art. The route that works is documented in `tools/stage_audio.py`: read the oid out of the pointer, fetch through the LFS batch API, write the bytes into `game/` and never into the checkout. |
+| **`gitea.wildfiregames.com` is behind an Anubis proof-of-work bot wall** | A plain HTTP client gets an HTML "Making sure you're not a bot!" challenge instead of JSON, which is easy to misread as a broken endpoint. A **`git-lfs/...` User-Agent is allowed through** — that one header is the whole difference. |
 
 ---
 
 ## 7. Where things stand
 
-**Data is complete for the v1 roster:** 19 buildings with dense four-age skin
-maps, 21 units, all footprints measured (each baked atlas resolved back through
-`attribution.actor` to its 0 A.D. template, parent chain walked to
+**Data is complete for the v1 roster:** 31 building defs (19 non-wall plus the
+twelve wall/gate pieces) with dense four-age skin maps, 28 unit defs (21 military
+and civilian plus seven fauna), all footprints measured (each baked atlas resolved
+back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**293 atlases staged.** 71 test files, 1163 tests, all passing.
+**331 atlases staged.** 76 test files, **1232 tests, 199,129 assertions, all
+passing** — measured 2026-08-23, not quoted. The previous figures here (293/71/1163)
+were stale; re-measure rather than trusting this line, it is the first thing to rot.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -199,6 +250,48 @@ timed age-advance, fog of war, an enforced population cap, conquest win
 conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
 and tech-tree wireframes, and settings (§8.2b).
+
+### The one standing order that outranks other tuning
+
+**"Every unit feels too fast"** (BUGS.md, owner-reported 2026-08-21 from a real
+two-device phone match) is the most valuable open item and it is **parked
+deliberately**. It is a balancing number, not a defect, and it wants doing as one
+pass over every unit's `speed` in the data — so **nothing gets tuned piecemeal
+before it**, and a nudge to whichever unit is on screen is the wrong move even
+when it looks obviously right. Only the owner can judge it, and the queue behind
+it (walls, chokepoints, three hostile predators, fleeing deer, driven livestock)
+keeps changing what "too fast" means.
+
+### Owner-reported and open (BUGS.md is authoritative)
+
+Listed here so this file does not read as though the game were finished. Do not
+re-diagnose these from scratch — each already has a diagnosis.
+
+- **Double-tap to clear the selection is unreliable on the phone**, and the call is
+  **not** to keep tuning the gesture: the fix chosen is an **[X] button** at the top
+  of `SelectionPanel`, visible only while something is selected (PLAN.md 8.8). The
+  root cause is `InputRouter.TAP_SLOP`/`TAP_TIME_MS` — a thumb wobbles where a mouse
+  does not, so a second tap the router scores as a small drag never reaches the
+  detector — and improving the router is a separate job. **The gesture stays.**
+  Desktop was never affected: right-click clears.
+- **A forfeit is announced as an elimination.** The snapshot carries the fact of a
+  defeat but no *reason*, so a resign and a disconnect both read "All opponents
+  eliminated". Needs a reason field beside `winner_id` and a decision about how many
+  reasons are worth naming.
+- **The soft keyboard covers the address field** and **a tap cannot place the caret**
+  in a text field. Both are consequences of there finally being a keyboard, both are
+  survivable in the debug screen, and both bite the moment a real lobby lays out a
+  field. See the `TouchLineEdit` row in §6.
+- **The AI's biggest gap: a build step gives up when short of resources.** p2 abandoned
+  a barracks 73 wood short, never built one, and died holding 950 wood — a person waits
+  for the wood, and the timeout should not count affordability. Also open:
+  `MAX_PLACEMENT_RADIUS` 26 → 14 now blocks 6×6 placements, and **nobody has checked
+  what `AISystem`'s standing order 3 still needs to do** now that `CombatSystem`
+  re-targets (which itself reversed PLAN.md 4.13 — see BUGS.md "Reversed decisions").
+  The AI-vs-AI baseline table in BUGS.md exists so a regression is visible; keep it.
+- **No wall corner piece** — 0 A.D. has none either, it puts a `wall_tower` at every
+  corner and we already have that art as `building.guard_tower`. What is missing is
+  anything that *detects* a corner.
 
 ### Known gaps — do not work around these silently
 
@@ -272,6 +365,32 @@ and tech-tree wireframes, and settings (§8.2b).
 - **HUD portraits, minimap and control groups** are wired for colour; nothing
   else tints, because colour is in the pixels — **there is no tint shader and
   must not be one.**
+- **AUDIO IS BUILT (2026-08-23), and the gap left is BYTES, not code.** PLAN.md
+  §7.5 claimed an `AudioManager` existed for months when there was no such file
+  and zero call sites; that is now real — `src/autoload/audio_manager.gd`,
+  `src/view/match_audio.gd`, `data/audio_map.json`, `tools/stage_audio.py`, and
+  131 sound ids mapped to 0 A.D. sound groups. Four things worth knowing before
+  touching it:
+  - **The sim does not and must not make sound.** `src/sim/` cannot load an asset
+    or touch the tree, and a sim that made noise would make it during a headless
+    AI-vs-AI run. `MatchAudio` **diffs consecutive snapshots** instead, which also
+    means it works identically on a host and a joined client with no event
+    forwarding. Its header documents the three traps in doing that (the first
+    snapshot must be swallowed, absence from `updated` is ambiguous between death
+    and fog, and a remembered entity carries no live fields).
+  - **`task_target_id` is NOT on the wire**, so the sound a villager makes is
+    found by *position* — nearest resource node or building within four tiles.
+    Do not add the field for audio: 12.1f spent an optimisation pass removing
+    per-entity field names, and a field present on working units and absent on
+    idle ones splits every unit into two shape tables.
+  - **Silence is a legitimate state and is reported.** An empty `streams` list
+    plays nothing; an *undeclared* id calls `push_error` once. Keeping those
+    apart is the whole contract, and `GameDataRegistry.silent_sfx_ids()` names
+    the first case so nobody has to diagnose it by ear.
+  - **`game/assets/audio/` is gitignored build output** like the atlases, and the
+    fetch is rate-limited by 0 A.D.'s server (see §3). A clean checkout has no
+    audio and the game is expected to run silently — the suite asserts the seam,
+    never that bytes are present.
 
 ---
 
