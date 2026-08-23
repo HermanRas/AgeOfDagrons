@@ -336,6 +336,79 @@ func test_a_fishing_ship_can_actually_fish() -> void:
 	assert_true(dock.accepts_drop_off(&"food"))
 
 
+## A world with a lake, for the water tests below: shallow water filling the rect
+## `wet`, everything else grass.
+func _lake_world(wet: Rect2i) -> SimWorld:
+	var world := SimWorld.new()
+	world.setup(MatchConfig.debug_single_player())
+	for y in range(wet.position.y, wet.end.y):
+		for x in range(wet.position.x, wet.end.x):
+			world.map.set_terrain(Vector2i(x, y), SimMap.Terrain.WATER_SHALLOW)
+	world.paths.rebuild(world.map)
+	return world
+
+
+func test_a_boat_will_not_sail_across_dry_land() -> void:
+	# "boats spawn and sail on land, its very funny" (project owner, 2026-08-23).
+	# `PathService` held ONE land-only grid, so a water unit routed against it walked
+	# up the beach quite happily. Now there is a grid per domain.
+	var world := _lake_world(Rect2i(10, 10, 8, 8))
+	var dry := Vector2i(30, 30)
+
+	# Asserted on the GOAL rather than on the route, because the route is correctly
+	# empty and a loop over an empty array asserts nothing at all -- which the runner
+	# now counts as a failure, and rightly: the first version of this test passed
+	# vacuously and would have passed against the bug.
+	assert_ne(world.paths.goal_for(world.map, dry, SimMap.Domain.WATER), dry,
+			"a ship's route must not END on dry land")
+
+	var route := world.paths.find_path(world.map, Vector2i(11, 11), dry,
+			SimMap.Domain.WATER)
+	for p in route:
+		var t := Vector2i(p)
+		assert_true(world.map.is_passable(t, SimMap.Domain.WATER),
+				"a ship's route went through %s, which is not water" % t)
+
+
+func test_a_boat_can_still_sail_across_water() -> void:
+	# The other half: a domain filter that refused everything would pass the test
+	# above and break the game.
+	var world := _lake_world(Rect2i(10, 10, 8, 8))
+	var route := world.paths.find_path(world.map, Vector2i(11, 11), Vector2i(16, 16),
+			SimMap.Domain.WATER)
+	assert_true(route.size() > 0, "it found a way across the lake")
+
+
+func test_a_villager_still_will_not_swim() -> void:
+	# The land grid has to keep excluding water, which a single shared grid would
+	# have made impossible the moment the water one was added.
+	var world := _lake_world(Rect2i(10, 10, 8, 8))
+	var route := world.paths.find_path(world.map, Vector2i(5, 5), Vector2i(13, 13))
+	for p in route:
+		var t := Vector2i(p)
+		assert_true(world.map.is_passable(t, SimMap.Domain.LAND),
+				"a villager's route went through %s" % t)
+
+
+func test_a_dock_must_touch_the_water() -> void:
+	# Not a cosmetic rule: a fishing ship is domain water and has to reach a tile
+	# adjacent to its drop-off, so an inland dock trains ships that cannot deliver.
+	var world := _lake_world(Rect2i(20, 20, 8, 8))
+	# Footprint is 6x6, so an origin of (14, 20) puts its right edge on x = 19, one
+	# tile from the lake -- touching.
+	assert_true(world.adjacency_allows(&"building.dock", 1, Vector2i(14, 20)),
+			"on the shore")
+	assert_false(world.adjacency_allows(&"building.dock", 1, Vector2i(4, 4)),
+			"in the middle of a meadow")
+
+
+func test_everything_that_is_not_a_dock_ignores_the_shore_rule() -> void:
+	var world := _lake_world(Rect2i(20, 20, 8, 8))
+	for def_id in [&"building.house", &"building.barracks", &"building.mill"]:
+		assert_true(world.adjacency_allows(def_id, 1, Vector2i(4, 4)),
+				"%s does not need a coastline" % def_id)
+
+
 # ── shorelines (2026-08-23) ─────────────────────────────────────────────────
 
 func test_grass_never_touches_water_directly() -> void:

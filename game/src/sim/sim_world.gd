@@ -461,7 +461,22 @@ func _step_aside_tile(rect: Rect2i, from: Vector2i, domain: int) -> Vector2i:
 ## building but the field.
 func adjacency_allows(def_id: StringName, player_id: int, origin: Vector2i) -> bool:
 	var d: BuildingDef = building_def(def_id)
-	if d == null or d.requires_adjacent.is_empty():
+	if d == null:
+		return true
+
+	# A DOCK MUST TOUCH WATER (project owner, 2026-08-23: "dock needs to touch water").
+	# It goes here rather than in the command for this function's own stated reason --
+	# the ghost colours the drag by this, so a rule the command enforced alone would
+	# show green and then be refused.
+	#
+	# It is not a cosmetic rule. A fishing ship is domain water and has to reach a tile
+	# adjacent to its drop-off, so a dock in the middle of a meadow trains ships that
+	# can never deliver and has no way to say so.
+	if d.requires_shore \
+			and not _touches_water(SimMap.footprint_rect(origin, d.footprint)):
+		return false
+
+	if d.requires_adjacent.is_empty():
 		return true
 
 	var rect := SimMap.footprint_rect(origin, d.footprint)
@@ -479,6 +494,32 @@ func adjacency_allows(def_id: StringName, player_id: int, origin: Vector2i) -> b
 	if cap <= 0:
 		return false         # a limit that is zero at this age, e.g. fields in age 1
 	return _count_abutting(d.id, player_id, host) < cap
+
+
+## Whether any tile orthogonally touching `rect` is water a ship could float on.
+##
+## SHALLOW ONLY, matching where fish are placed and where a ship can actually be: deep
+## water is passable to the water domain too, but a dock whose only water is a deep
+## channel is a dock on a cliff edge as far as fishing is concerned.
+##
+## Orthogonal, not diagonal: a corner touch is not a berth. A ship parked diagonally off
+## the dock's corner is not adjacent to its footprint by `CombatSystem.tile_gap`'s
+## reckoning either, so allowing it here would let a dock pass placement and still fail
+## to take a delivery.
+func _touches_water(rect: Rect2i) -> bool:
+	for x in range(rect.position.x - 1, rect.end.x + 1):
+		for y in range(rect.position.y - 1, rect.end.y + 1):
+			var t := Vector2i(x, y)
+			if rect.has_point(t):
+				continue
+			# Skip the four diagonal corners of the grown ring.
+			var dx := 0 if t.x >= rect.position.x and t.x < rect.end.x else 1
+			var dy := 0 if t.y >= rect.position.y and t.y < rect.end.y else 1
+			if dx + dy > 1:
+				continue
+			if map.in_bounds(t) and map.terrain_at(t) == SimMap.Terrain.WATER_SHALLOW:
+				return true
+	return false
 
 
 ## A COMPLETE building of `player`'s, of one of the kinds `d` must abut, whose

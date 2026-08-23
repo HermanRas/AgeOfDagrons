@@ -28,6 +28,37 @@ func _train() -> void:
 	w.step()
 
 
+func test_a_ship_is_launched_onto_water_and_not_onto_the_beach() -> void:
+	# "boats spawn and sail on land, its very funny" (project owner, 2026-08-23).
+	# `ProductionSystem` hard-coded `Domain.LAND` when asking for a free tile, so a
+	# dock put its fishing ships on the sand -- and a water unit standing on sand is
+	# not merely misplaced: every route it could be given starts from a tile its own
+	# domain says it cannot occupy, so nothing would ever move it off again.
+	var dock_origin := Vector2i(30, 30)
+	# A channel of water down the dock's left-hand edge.
+	for y in range(28, 40):
+		w.map.set_terrain(Vector2i(29, y), SimMap.Terrain.WATER_SHALLOW)
+		w.map.set_terrain(Vector2i(28, y), SimMap.Terrain.WATER_SHALLOW)
+	w.paths.rebuild(w.map)
+
+	var dock := w.spawn_building(&"building.dock", 1, dock_origin,
+			SimBuilding.Phase.COMPLETE, true)
+	player.stock = {&"wood": 1000}
+	# The dock and the fishing ship are both age 2, and TrainCommand enforces it.
+	player.age = 2
+	w.queue_command(TrainCommand.new(1, dock.id, &"unit.fishing_ship"))
+	for i in range(500):        # build_time_ticks 400 plus margin
+		w.step()
+
+	var ship: SimUnit = null
+	for e in w.entities.values():
+		if e is SimUnit and (e as SimUnit).def_id == &"unit.fishing_ship":
+			ship = e
+	assert_not_null(ship, "the ship was launched")
+	assert_true(w.map.is_passable(ship.tile(), SimMap.Domain.WATER),
+			"it is afloat at %s, not beached" % ship.tile())
+
+
 func test_training_pays_the_cost_up_front_and_queues_it() -> void:
 	_train()
 	assert_eq(player.stock[&"food"], 1000 - 50, "villager costs 50 food (data/units.json)")

@@ -49,7 +49,20 @@ const MAX_SOLVES_PER_TICK := 12
 ## the middle of a lake should give up, not scan the map.
 const MAX_SUBSTITUTE_RINGS := 8
 
-var _grid: AStarGrid2D = null
+## ONE GRID PER DOMAIN, keyed by `SimMap.Domain` (2026-08-23).
+##
+## It was a single land-only grid, and the note where `_walkable` used to hard-code
+## `Domain.LAND` said why: "MVP units are all land, and a second domain wants its own
+## grid rather than a per-query filter -- AStarGrid2D holds solidity IN THE GRID, not in
+## the query." That is still the reason it has to be a second grid and not a flag; what
+## changed is that the premise stopped being true. Fishing arrived, and a water unit
+## routed against the land grid sails happily across a beach -- reported by the project
+## owner as "boats spawn and sail on land, its very funny".
+##
+## Built lazily, because most maps never float anything: a desert start pays for exactly
+## one grid. `rebuild()` pre-builds the water one when the map has water in it, so the
+## full sweep lands in load time rather than as a hitch on the first ship order.
+var _grids: Dictionary = {}
 
 ## Rebuild bookkeeping. A full sweep of a 64x64 map is 4096 `set_point_solid()`
 ## calls and measured at ~12 ms on desktop -- five times the per-tick sim budget on
@@ -87,7 +100,22 @@ func mark_dirty(rect: Rect2i = Rect2i()) -> void:
 ## spending it on the player's first move order.
 func rebuild(map: SimMap) -> void:
 	_needs_full = true
+	# Land always; water only where there is any, so a land map never pays for a grid
+	# nothing will ever route against.
+	_grid_for(SimMap.Domain.LAND)
+	if _map_has_water(map):
+		_grid_for(SimMap.Domain.WATER)
 	_sync(map)
+
+
+## Whether anything on this map floats a ship. One sweep, at load time, to decide
+## whether the water grid is worth building at all.
+static func _map_has_water(map: SimMap) -> bool:
+	for i in range(map.terrain.size()):
+		var t := map.terrain[i]
+		if t == SimMap.Terrain.WATER_SHALLOW or t == SimMap.Terrain.WATER_DEEP:
+			return true
+	return false
 
 
 func queued() -> int:
@@ -137,8 +165,8 @@ func process(w: SimWorld, budget: int = MAX_SOLVES_PER_TICK) -> void:
 		# tile just outside" that `_nearest_walkable` then chose as the goal. Every
 		# evicted builder was therefore retired on the spot, and the AI's opening
 		# lost its mining camp and lumber camp to it.
-		var route := find_path(w.map, u.tile(), to)
-		if route.is_empty() and goal_for(w.map, to) == u.tile():
+		var route := find_path(w.map, u.tile(), to, u.domain)
+		if route.is_empty() and goal_for(w.map, to, u.domain) == u.tile():
 			u.arrive()
 		else:
 			u.set_path(route)
@@ -149,16 +177,20 @@ func process(w: SimWorld, budget: int = MAX_SOLVES_PER_TICK) -> void:
 ## The returned path EXCLUDES the starting tile, so an empty result means "nowhere
 ## to go" rather than "already there" -- callers do not have to special-case the
 ## first waypoint being the tile the unit is standing on.
-func find_path(map: SimMap, from: Vector2i, to: Vector2i) -> PackedVector2Array:
+## `domain` defaults to LAND, which is what every caller but a ship wants and what
+## every existing one passed implicitly before there was a choice.
+func find_path(map: SimMap, from: Vector2i, to: Vector2i,
+		domain: int = SimMap.Domain.LAND) -> PackedVector2Array:
+	var grid := _grid_for(domain)
 	_sync(map)
 	if not map.in_bounds(from) or not map.in_bounds(to):
 		return PackedVector2Array()
 
-	var goal := goal_for(map, to)
+	var goal := goal_for(map, to, domain)
 	if goal.x < 0 or goal == from:
 		return PackedVector2Array()
 
-	var path := _grid.get_id_path(from, goal)
+	var path := grid.get_id_path(from, goal)
 	# AStarGrid2D includes the starting cell; the unit is already standing there.
 	if path.size() > 0:
 		path.remove_at(0)
@@ -171,10 +203,10 @@ func find_path(map: SimMap, from: Vector2i, to: Vector2i) -> PackedVector2Array:
 ## Shared by `find_path` and by `process`, which needs to tell "there is no route"
 ## apart from "you are standing on it" -- two answers that were the same empty array
 ## and are not the same thing at all.
-func goal_for(map: SimMap, to: Vector2i) -> Vector2i:
+func goal_for(map: SimMap, to: Vector2i, domain: int = SimMap.Domain.LAND) -> Vector2i:
 	if not map.in_bounds(to):
 		return Vector2i(-1, -1)
-	return to if _walkable(map, to) else _nearest_walkable(map, to)
+	return to if _walkable(map, to, domain) else _nearest_walkable(map, to, domain)
 
 
 ## The closest tile to `t` that a unit could stand on, or (-1, -1).
@@ -184,7 +216,8 @@ func goal_for(map: SimMap, to: Vector2i) -> Vector2i:
 ## by a stable sweep, never by which direction the loop happened to run. Two
 ## clients picking different substitute tiles for the same blocked order is a
 ## desync in the shape of a unit standing on the wrong side of a tree.
-func _nearest_walkable(map: SimMap, t: Vector2i) -> Vector2i:
+func _nearest_walkable(map: SimMap, t: Vector2i,
+		domain: int = SimMap.Domain.LAND) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	for ring in range(1, MAX_SUBSTITUTE_RINGS + 1):
 		var best_d := -1
@@ -193,7 +226,7 @@ func _nearest_walkable(map: SimMap, t: Vector2i) -> Vector2i:
 				if absi(dx) != ring and absi(dy) != ring:
 					continue                 # interior, covered by a smaller ring
 				var c := t + Vector2i(dx, dy)
-				if not _walkable(map, c):
+				if not _walkable(map, c, domain):
 					continue
 				var d := dx * dx + dy * dy
 				if best_d < 0 or d < best_d:
@@ -204,8 +237,23 @@ func _nearest_walkable(map: SimMap, t: Vector2i) -> Vector2i:
 	return best
 
 
-func _walkable(map: SimMap, t: Vector2i) -> bool:
-	return map.is_passable(t, SimMap.Domain.LAND)
+func _walkable(map: SimMap, t: Vector2i, domain: int = SimMap.Domain.LAND) -> bool:
+	return map.is_passable(t, domain)
+
+
+## The grid for `domain`, built on first use. A map with no water never builds a water
+## grid; asking for one is what creates it, and it arrives already synced because the
+## caller runs `_sync` immediately afterwards.
+func _grid_for(domain: int) -> AStarGrid2D:
+	if _grids.has(domain):
+		return _grids[domain]
+	var grid := AStarGrid2D.new()
+	_grids[domain] = grid
+	# A grid that has never been swept is not usable, and `_sync` only re-sweeps what
+	# is dirty -- so a grid created after the last full sweep would be all-passable and
+	# route a ship straight across the land it was built to keep it off.
+	_needs_full = true
+	return grid
 
 
 ## Bring the grid back in line with the map, doing the least work that will do it.
@@ -213,40 +261,52 @@ func _walkable(map: SimMap, t: Vector2i) -> bool:
 ## Land-only, single grid. MVP units are all land (PLAN.md 2.2), and a second
 ## domain wants its own grid rather than a per-query filter -- `AStarGrid2D` holds
 ## solidity in the grid, not in the query.
+## EVERY grid, not just one. A building going up blocks the land grid and leaves the
+## water grid alone, but a `mark_dirty` cannot know which -- so both are re-read and
+## each answers for its own domain. The cost is per grid that EXISTS, and a land-only
+## map only ever has one.
 func _sync(map: SimMap) -> void:
-	var resized := _grid != null and _grid.region.size != map.size
-	if _grid == null or _needs_full or resized:
+	var resized := false
+	for domain in _grids:
+		var g: AStarGrid2D = _grids[domain]
+		if g.region.size != map.size:
+			resized = true
+	if _needs_full or resized:
 		_full_sync(map)
 		return
 
 	for rect in _dirty_rects:
-		_sync_rect(map, rect)
+		for domain in _grids:
+			_sync_rect(map, rect, int(domain))
 	_dirty_rects.clear()
 
 
 func _full_sync(map: SimMap) -> void:
-	if _grid == null:
-		_grid = AStarGrid2D.new()
+	# There is always a land grid, so a service asked for a path before anything called
+	# `rebuild` still has one to answer with.
+	_grid_for(SimMap.Domain.LAND)
+	for domain in _grids:
+		var grid: AStarGrid2D = _grids[domain]
+		grid.region = Rect2i(Vector2i.ZERO, map.size)
+		grid.cell_size = Vector2.ONE
+		# Corners are not cut past a blocked tile: a villager must not slip diagonally
+		# between two buildings that touch, which looks like walking through a wall.
+		grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+		grid.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+		grid.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+		grid.update()
+		_sync_rect(map, Rect2i(Vector2i.ZERO, map.size), int(domain))
 
-	_grid.region = Rect2i(Vector2i.ZERO, map.size)
-	_grid.cell_size = Vector2.ONE
-	# Corners are not cut past a blocked tile: a villager must not slip diagonally
-	# between two buildings that touch, which looks like walking through a wall.
-	_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	_grid.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	_grid.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	_grid.update()
-
-	_sync_rect(map, Rect2i(Vector2i.ZERO, map.size))
 	_needs_full = false
 	_dirty_rects.clear()
 
 
-## Re-read solidity for one area, clipped to the map so a caller may pass a rect
-## grown past the edge without checking.
-func _sync_rect(map: SimMap, rect: Rect2i) -> void:
+## Re-read solidity for one area of one domain's grid, clipped to the map so a caller
+## may pass a rect grown past the edge without checking.
+func _sync_rect(map: SimMap, rect: Rect2i, domain: int) -> void:
+	var grid: AStarGrid2D = _grids[domain]
 	var clipped := rect.intersection(Rect2i(Vector2i.ZERO, map.size))
 	for y in range(clipped.position.y, clipped.end.y):
 		for x in range(clipped.position.x, clipped.end.x):
 			var t := Vector2i(x, y)
-			_grid.set_point_solid(t, not _walkable(map, t))
+			grid.set_point_solid(t, not _walkable(map, t, domain))

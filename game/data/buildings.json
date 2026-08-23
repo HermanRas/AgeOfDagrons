@@ -481,6 +481,7 @@
     "hp": 1800,
     "footprint": [6, 6],
     "los": 8,
+    "requires_shore": true,
 
     "cost": { "wood": 150 },
     "build_time_ticks": 350,

@@ -70,6 +70,16 @@ var max_per_host_by_age: Array[int] = []
 ## been one -- 0 A.D.'s own fields are walked over.
 var blocks_movement: bool = true
 
+## Whether this building must be placed touching shallow water. The dock, and nothing
+## else (2026-08-23).
+##
+## NOT COSMETIC. A fishing ship is domain water and has to reach a tile adjacent to its
+## drop-off, so a dock inland trains ships that can never deliver -- and has no way to
+## tell the player why. Enforced through `SimWorld.adjacency_allows`, which is the one
+## call both `PlaceBuildingCommand` and the placement ghost read, so the drag cannot
+## show green for a spot the host will refuse.
+var requires_shore: bool = false
+
 ## WALLS (PLAN.md 5.8), and the three fields that make one.
 ##
 ## `wall_lengths` is what turns a building into a DRAG TOOL. It lists the segment
@@ -168,6 +178,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.visual_rubble = StringName(d.get("visual_rubble", ""))
 
 	b.hp = int(d.get("hp", 1))
+	b.requires_shore = bool(d.get("requires_shore", false))
 	b.footprint = GameDefs.tile_size(d.get("footprint", []), Vector2i.ONE)
 	b.los = int(d.get("los", 0))
 

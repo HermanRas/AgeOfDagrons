@@ -28,8 +28,17 @@ func process_tick(w: SimWorld) -> void:
 			else:
 				continue
 
-		var tile := w.map.find_free_adjacent(b.footprint_rect(), SimMap.Domain.LAND)
+		# THE UNIT'S OWN DOMAIN, not LAND. This hard-coded LAND, so a dock launched its
+		# fishing ships onto the beach -- reported 2026-08-23 as "boats spawn and sail
+		# on land, its very funny". A water unit put on sand is not merely misplaced:
+		# nothing else in the sim will ever move it off, because every route it could
+		# be given starts from a tile its own domain says it cannot occupy.
+		var trained := StringName(front.get("def_id", &""))
+		var td: UnitDef = w.unit_def(trained)
+		var domain := SimMap.from_domain_name(td.domain) if td != null \
+				else SimMap.Domain.LAND
+		var tile := w.map.find_free_adjacent(b.footprint_rect(), domain)
 		if tile.x < 0:
 			continue          # no room yet; retried next tick, nothing is lost
-		w.spawn_unit(StringName(front.get("def_id", &"")), b.owner_id, tile)
+		w.spawn_unit(trained, b.owner_id, tile)
 		b.queue.pop_front()
