@@ -123,7 +123,7 @@ if ($ShardRoot) {
     for ($s = 1; $s -le $Parallel; $s++) {
         $p = Join-Path $ShardRoot "slot$s\public"
         if (-not (Test-Path (Join-Path $p "art"))) {
-            throw "shard $s incomplete: expected an art\ directory under $p (run render_box_setup.ps1)"
+            throw "shard $s incomplete: expected an art\ directory under $p (run render_box_bake.ps1 -Setup)"
         }
         $ShardPath[$s] = $p
     }
