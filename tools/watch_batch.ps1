@@ -6,16 +6,21 @@
   Run this in a SECOND shell while render_box_bake.ps1 works. It touches nothing
   -- it reads the newest batch log directory and the Blender processes.
 
-  WHY YOU CANNOT JUST READ THE LOGS. isobake's console output is REDIRECTED into
-  each recipe's log, and that redirect BUFFERS. A log that is empty, or that
-  stops growing for several minutes, does not mean the bake died -- it usually
-  means Blender is mid-render and has not flushed. The reliable liveness signal
-  is a blender.exe burning CPU, which is why that is reported here alongside the
-  log counts rather than instead of them.
+  WHY IT DOES NOT COUNT PROGRESS FROM THE LOGS, which was this script's first
+  design and was wrong within two minutes of its first real run. isobake's
+  console output is REDIRECTED into each recipe's log, and that redirect BUFFERS:
+  four bakes into a healthy batch, all four logs were still 0 bytes. Grepping
+  them for a completion marker reported one recipe finished one second after the
+  batch started, while the bake output directory showed nothing had finished at
+  all.
 
-  "done" counts logs carrying the line isobake prints when it has packed an
-  atlas. A log without it is either still rendering or has failed; the two are
-  told apart by whether Blender is still running, not by the log.
+  So completion is read from the ARTEFACT instead: a recipe is done when
+  out\<its id>\atlas.json has been written since the batch began. That cannot be
+  faked by buffering, it is what the bake exists to produce, and it stays correct
+  for a rebake of an atlas that already existed.
+
+  Liveness is still a blender.exe burning CPU. A log that is not growing means
+  nothing either way, so the logs are used only for detail after a failure.
 
 .PARAMETER Seconds
   Refresh interval. 0 prints one snapshot and exits -- use that from a phone or
@@ -37,30 +42,64 @@ $BatchDir = "$OutRoot\_batch"
 
 if (-not (Test-Path $BatchDir)) { throw "no batch directory at $BatchDir" }
 
-# The finished-bake marker, matching what bake_batch.ps1 itself greps for.
-$DONE = "bake \S+: \d+ frames -> \d+ page"
+# recipe name -> atlas id. The log is named for the recipe; the output directory
+# is named for the recipe's `id`, and the two differ (swordsman -> vis.swordsman,
+# and the colour variants more so). Read once: 331 small files.
+$Repo = Split-Path $PSScriptRoot -Parent
+$idOf = @{}
+foreach ($dir in @("$Repo\tools\recipes", "$Repo\tools\recipes\player")) {
+    if (-not (Test-Path $dir)) { continue }
+    foreach ($f in Get-ChildItem $dir -Filter "*.toml") {
+        $m = [regex]::Match([IO.File]::ReadAllText($f.FullName), '(?m)^\s*id\s*=\s*"([^"]+)"')
+        if ($m.Success) { $idOf[$f.BaseName] = $m.Groups[1].Value }
+    }
+}
 
 while ($true) {
     $batch = Get-ChildItem $BatchDir -Directory | Sort-Object Name -Descending | Select-Object -First 1
     if (-not $batch) { throw "no batches yet" }
 
-    $logs  = @(Get-ChildItem $batch.FullName -Filter "*.log" -ErrorAction SilentlyContinue)
-    $done  = @(); $busy = @()
+    $started = $batch.CreationTime
+    $logs    = @(Get-ChildItem $batch.FullName -Filter "*.log" -ErrorAction SilentlyContinue)
+
+    # Done means the ATLAS exists and postdates the batch. Not "the log says so":
+    # the log is buffered and lies by omission for minutes at a time.
+    $done = @(); $busy = @(); $doneAt = @{}
     foreach ($l in $logs) {
-        $text = ""
-        try { $text = [IO.File]::ReadAllText($l.FullName) } catch { }
-        if ($text -match $DONE) { $done += $l.BaseName } else { $busy += $l.BaseName }
+        $id = $idOf[$l.BaseName]
+        $atlas = if ($id) { Join-Path $OutRoot "$id\atlas.json" } else { $null }
+        if ($atlas -and (Test-Path $atlas) -and ((Get-Item $atlas).LastWriteTime -gt $started)) {
+            $done += $l.BaseName
+            $doneAt[$l.BaseName] = (Get-Item $atlas).LastWriteTime
+        } else {
+            $busy += $l.BaseName
+        }
     }
 
     $blender = @(Get-Process blender -ErrorAction SilentlyContinue)
     $ram = if ($blender) { ($blender | Measure-Object WorkingSet64 -Sum).Sum / 1GB } else { 0 }
-    $started = $batch.CreationTime
     $elapsed = (Get-Date) - $started
 
+    # How many this batch will eventually run. bake_batch does not record it
+    # until _summary.csv exists at the very end, so until then it is taken from
+    # the list files render_box_bake wrote for the run -- choosing base or colour
+    # by whether this batch's recipes are colour variants, which are the only
+    # ones whose names carry the `__<colour>` suffix.
     $expect = $Total
     if ($expect -le 0) {
         $summary = Join-Path $batch.FullName "_summary.csv"
-        if (Test-Path $summary) { $expect = @(Import-Csv $summary).Count } else { $expect = $logs.Count }
+        if (Test-Path $summary) {
+            $expect = @(Import-Csv $summary).Count
+        } else {
+            $expect = $logs.Count
+            $run = Get-ChildItem "$OutRoot\_run" -Directory -ErrorAction SilentlyContinue |
+                   Sort-Object Name -Descending | Select-Object -First 1
+            if ($run) {
+                $isColour = @($logs | Where-Object { $_.BaseName -like "*__*" }).Count -gt 0
+                $listFile = Join-Path $run.FullName $(if ($isColour) { "player.txt" } else { "base.txt" })
+                if (Test-Path $listFile) { $expect = @(Get-Content $listFile | Where-Object { $_.Trim() }).Count }
+            }
+        }
     }
 
     if ($Seconds -gt 0) { Clear-Host }
@@ -84,11 +123,21 @@ while ($true) {
     }
 
     if ($done.Count) {
-        $recent = $logs | Where-Object { $done -contains $_.BaseName } |
-                  Sort-Object LastWriteTime -Descending | Select-Object -First 5
+        # Throughput measured over the whole batch, not per bake: the slots run
+        # concurrently, so wall-clock divided by completions is the number that
+        # actually predicts the finish.
+        $perBake = $elapsed.TotalMinutes / $done.Count
+        if ($expect -gt $done.Count) {
+            $eta = [TimeSpan]::FromMinutes($perBake * ($expect - $done.Count))
+            Write-Host ("  rate      {0:n1} min/bake overall -> about {1:hh\:mm} left, finishing ~{2:HH:mm}" -f `
+                $perBake, $eta, ((Get-Date) + $eta)) -ForegroundColor DarkCyan
+        }
+
         Write-Host ""
         Write-Host "  most recently finished:" -ForegroundColor DarkGray
-        foreach ($r in $recent) { Write-Host ("    {0,-28} {1:HH:mm:ss}" -f $r.BaseName, $r.LastWriteTime) }
+        foreach ($r in ($doneAt.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5)) {
+            Write-Host ("    {0,-28} {1:HH:mm:ss}" -f $r.Key, $r.Value)
+        }
     }
 
     $summary = Join-Path $batch.FullName "_summary.csv"
