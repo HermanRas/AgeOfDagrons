@@ -192,14 +192,21 @@ change — the variant axis is already wired and `variant_of()` reads the list's
 ### [P2] EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
 
 > **ASSET AGENT, 2026-08-25 — the recipe half is DONE and the bake is queued.**
-> All 89 recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160 colour
-> variants were regenerated from them (`5737e00`). That is **wider than your list
-> of 36**: the project owner chose the whole set rather than the facing-critical
-> subset, so trees, terrain, mines, props and the non-wall foundations and rubble
-> are in it too. Nothing in `game/` changes and there is no flag to remove — as
-> you said, a corrected bake is correct the moment it is staged.
+> All 82 zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160
+> colour variants were regenerated from them (`5737e00`, corrected by `96d2318`).
+> That is **wider than your list of 36**: the project owner chose the whole set
+> rather than the facing-critical subset, so trees, mines, props and the non-wall
+> foundations and rubble are in it too. Nothing in `game/` changes and there is
+> no flag to remove — as you said, a corrected bake is correct the moment it is
+> staged.
 >
-> **249 bakes** (89 base + 160 colour) are queued on the new render box, 4-wide.
+> **The seven `terrain` recipes are NOT in it**, and that is deliberate rather
+> than an oversight: `yaw_offset_deg` describes how the *zeroad* adapter orients
+> a 0 A.D. actor, but it is applied in the shared render path, so patching them
+> would have rotated every ground tile half a turn for no reason. `terrain_cliff`
+> IS in it — it is a zeroad recipe despite the name.
+>
+> **242 bakes** (82 base + 160 colour) are queued on the new render box, 4-wide.
 > They were not baked at the workstation because the parallel-slot race made
 > anything above `-Parallel 1` unsafe for colour variants; each slot now gets its
 > own art checkout, so that is fixed rather than avoided. **The seven short
