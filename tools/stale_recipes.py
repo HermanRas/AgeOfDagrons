@@ -6,6 +6,14 @@ So "has this recipe changed since the atlas was baked" is an exact question with
 an exact answer, and it does not need a hand-kept list of pending work that goes
 stale the moment somebody edits a recipe without updating it.
 
+IT IS SENSITIVE TO LINE ENDINGS, and that is inherited, not a choice. isobake
+hashes the recipe's raw bytes, so a file rewritten CRLF reads as changed even
+when every character of its content is identical. Two things do that on Windows
+without meaning to: `git checkout` under core.autocrlf, and Python's
+`Path.write_text`, whose default translates \n to \r\n. Both have already caused
+a false "needs rebaking" here. Recipes in this repo are LF; if this tool reports
+a suspiciously round number of stale recipes, check for CRLF before believing it.
+
 WHAT IT DOES NOT CATCH, and the distinction matters. This compares the RECIPE
 against the atlas. It says nothing about whether the isobake code that baked it
 has since changed -- an atlas can be present, match its recipe exactly, and still

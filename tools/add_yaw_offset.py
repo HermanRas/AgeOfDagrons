@@ -46,8 +46,18 @@ NOTE = (
 
 
 def patch(text: str) -> str | None:
-    """Return the rewritten recipe, or None if it already sets the key."""
+    """Return the rewritten recipe, or None if it should be left alone."""
     if re.search(r"(?m)^\s*yaw_offset_deg\s*=", text):
+        return None
+
+    # ZEROAD ONLY. The 180 is a fact about how the zeroad adapter orients a
+    # 0 A.D. actor, not about rendering in general -- but `yaw_offset_deg` is
+    # applied in the SHARED render path (render_impl.py), so it takes effect
+    # whatever the adapter is. The first run of this script patched the seven
+    # `terrain` recipes too and would have baked every ground tile rotated half
+    # a turn for no reason; caught in the render box's -WhatIf list, before the
+    # batch. An adapter this does not know about gets nothing.
+    if not re.search(r'(?m)^\s*adapter\s*=\s*"zeroad"', text):
         return None
 
     lines = text.splitlines(keepends=True)
@@ -82,10 +92,17 @@ def main() -> None:
             continue
         changed.append(path.name)
         if not dry:
-            path.write_text(out, encoding="utf-8")
+            # newline="\n" is load-bearing. The default translates every \n to
+            # \r\n on Windows, which rewrites the WHOLE file -- and isobake's
+            # `recipe_sha256` hashes raw bytes, so a line-ending change is
+            # indistinguishable from a content change and makes every touched
+            # recipe read as needing a rebake. The first run of this script did
+            # exactly that to all 89.
+            with path.open("w", encoding="utf-8", newline="\n") as fh:
+                fh.write(out)
 
     print(f"  already set : {len(skipped)}")
-    print(f"  no [render] : {len(norender)}" + (f"  {norender}" if norender else ""))
+    print(f"  not zeroad  : {len(norender)}" + (f"  {norender}" if norender else ""))
     print(f"  {'would patch' if dry else 'patched'}     : {len(changed)}")
     for name in changed:
         print(f"      {name}")

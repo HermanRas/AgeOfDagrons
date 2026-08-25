@@ -1,0 +1,13 @@
+# Recipes are LF in the working tree on every platform, deliberately.
+#
+# isobake stamps `generator.recipe_sha256` into each atlas and computes it from
+# the recipe's RAW BYTES. Under Windows autocrlf a plain `git checkout` rewrites
+# these files CRLF, which changes every hash without changing a single character
+# of content -- so `tools/stale_recipes.py` reports the whole set as needing a
+# rebake, and a render box pointed at that answer would spend a night rebaking
+# 171 recipes to produce byte-identical art.
+#
+# That already happened once, on 2026-08-25, from the other direction: a patch
+# script written with Python's default `write_text` translated \n to \r\n and
+# made 89 recipes look changed when 82 of them were.
+*.toml text eol=lf
