@@ -67,7 +67,10 @@ while ($true) {
     $done = @(); $busy = @(); $doneAt = @{}
     foreach ($l in $logs) {
         $id = $idOf[$l.BaseName]
-        $atlas = if ($id) { Join-Path $OutRoot "$id\atlas.json" } else { $null }
+        # out\<id>\<id>.atlas.json -- the id appears TWICE. Getting this wrong
+        # made every finished bake read as still running, which combined with the
+        # slot-handoff gap below to report a perfectly healthy batch as dead.
+        $atlas = if ($id) { Join-Path $OutRoot "$id\$id.atlas.json" } else { $null }
         if ($atlas -and (Test-Path $atlas) -and ((Get-Item $atlas).LastWriteTime -gt $started)) {
             $done += $l.BaseName
             $doneAt[$l.BaseName] = (Get-Item $atlas).LastWriteTime
@@ -114,9 +117,20 @@ while ($true) {
         $cpu = ($blender | Measure-Object CPU -Sum).Sum
         Write-Host ("  blender   {0} process(es), {1:n1} GB, {2:n0}s CPU total" -f $blender.Count, $ram, $cpu) -ForegroundColor Green
     } else {
-        # No Blender and unfinished logs is the one combination worth alarming on.
-        if ($busy.Count) {
-            Write-Host "  blender   NONE RUNNING while $($busy.Count) log(s) are unfinished -- batch has stopped" -ForegroundColor Red
+        # "No Blender" ALONE IS NOT A FAILURE. bake_batch finishes a slot's job
+        # before launching the next, so there is a gap of a few seconds after
+        # every completion where no Blender exists -- and with 4 slots finishing
+        # together, that gap is hit often. Reporting it as "batch has stopped"
+        # cried wolf on a run that was 16 bakes in and perfectly healthy.
+        #
+        # A stop is no Blender AND nothing written for a while. Log mtimes are
+        # coarse (the redirect buffers) but a job STARTING creates its log, so a
+        # live batch touches this directory every few minutes.
+        $quiet = if ($logs) { (Get-Date) - ($logs | Sort-Object LastWriteTime -Descending)[0].LastWriteTime } else { [TimeSpan]::Zero }
+        if ($busy.Count -and $quiet.TotalMinutes -gt 5) {
+            Write-Host ("  blender   none running, and nothing written for {0:n0} min -- batch has STOPPED" -f $quiet.TotalMinutes) -ForegroundColor Red
+        } elseif ($busy.Count) {
+            Write-Host ("  blender   none this instant (slot handoff, {0:n0}s quiet) -- normal" -f $quiet.TotalSeconds) -ForegroundColor DarkGray
         } else {
             Write-Host "  blender   none running" -ForegroundColor DarkGray
         }
