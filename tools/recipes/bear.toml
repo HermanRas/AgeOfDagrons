@@ -37,6 +37,9 @@ samples = 24
 # than by blocker -- PLAN.md 13.2 item 8's quadruped animation-transfer bug is
 # fixed. Animating it is A.4a work and needs a per-clip measured
 # `location_scale`; see sheep.toml for the procedure.
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+yaw_offset_deg = 180.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

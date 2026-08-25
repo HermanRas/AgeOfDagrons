@@ -76,6 +76,9 @@ samples = 24
 # one that seats the whole engine, which is the entire defect this fixes. The
 # frames are not wasted on a near-still engine either, because the three crew are
 # driven from their own operator actors' Idle and do move.
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+yaw_offset_deg = 180.0
 [anims.idle]
 clip = "Idle"
 file = "mechanical/siege_onager_idle.dae"

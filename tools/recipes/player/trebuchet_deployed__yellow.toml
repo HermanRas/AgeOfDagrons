@@ -79,6 +79,9 @@ samples = 24
 #      work around a defect in four props riding on it.
 # The actual fix separates the two: the engine's armature is driven, the crew's
 # are not.
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+yaw_offset_deg = 180.0
 [anims.idle]
 clip = "Idle"
 frames = 12

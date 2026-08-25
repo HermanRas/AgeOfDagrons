@@ -37,6 +37,9 @@ samples = 24
 # + slingrock props are declared inside base_slinger_ready.xml's own
 # <props>, not the top-level actor -- same "prop lives in the animation
 # variant file" pattern as the villager's gather tools.
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+yaw_offset_deg = 180.0
 [anims.idle]
 clip = "Idle"
 frames = 12
