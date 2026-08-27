@@ -231,9 +231,27 @@ def main() -> int:
     )
     if short_units or warn_units:
         print(
-            "Rebake the flagged variants at -Parallel 1 and re-run; confirm a WARN with\n"
-            "--pixels before spending the time. This is the parallel-slot import race,\n"
-            "not a colour problem: see AGENT_ASSET.md 4."
+            "This is NOT a colour problem -- a tint cannot change an opaque pixel count.\n"
+            "There are two causes and they need opposite responses, so tell them apart\n"
+            "before spending machine time:\n"
+            "\n"
+            "  RACE      the parallel-slot import race (AGENT_ASSET.md 4). Rebake the\n"
+            "            flagged variants at -Parallel 1, or anywhere sharded, and it\n"
+            "            goes away. The tell is that it does NOT reproduce: a race\n"
+            "            lands on different colours, or different counts, each run.\n"
+            "\n"
+            "  VARIANT   the actor declares several equal-frequency variants and they\n"
+            "            do not all carry the same props, so different colours import\n"
+            "            different objects. The tell is that it reproduces EXACTLY --\n"
+            "            same colours, same pixel counts, on a re-bake or another\n"
+            "            machine. Rebaking cannot fix this at any width; isobake has no\n"
+            "            variant pinning (PLAN.md A.4), so the workaround is\n"
+            "            `drop_objects` in the recipe.\n"
+            "\n"
+            "vis.fishing_ship is the known VARIANT case: celts/fishing_boat.xml has six\n"
+            "variants in one group and three of them attach fish props. It was misfiled\n"
+            "as the race for a fortnight, and a 244-bake sharded run reproduced it to\n"
+            "the pixel on 2026-08-27, which is what settled it."
         )
     return 1 if (short_units or warn_units) else 0
 
