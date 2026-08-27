@@ -476,3 +476,37 @@ func test_a_missing_footprint_falls_back_to_one_tile_not_zero() -> void:
 	# A zero footprint would occupy no tiles and collide with nothing.
 	var b := BuildingDef.from_dict(&"building.x", {})
 	assert_eq(b.footprint, Vector2i.ONE)
+
+
+# -- atlas provenance (added 2026-08-27, after a sample bake was misjudged) --
+
+func test_the_path_an_atlas_resolves_to_is_reportable() -> void:
+	# The seam is the only place filenames live, so it is also the only place that
+	# can answer "which file did that picture come from" -- a question a sample bake
+	# cannot be judged without, since a stale staged file draws perfectly happily.
+	var reg := GameDataRegistry
+	var path := reg.atlas_path_for(&"vis.villager")
+	assert_false(path.is_empty(), "a declared visual reports a path")
+	assert_true(path.ends_with(".atlas.json"), "the atlas file, not one of its pages")
+
+
+func test_an_undeclared_visual_reports_no_path_rather_than_guessing_one() -> void:
+	# Empty, not a constructed path: a plausible-looking filename for an id nobody
+	# declared would send the reader hunting for a file that was never meant to exist.
+	assert_eq(GameDataRegistry.atlas_path_for(&"vis.no_such_thing_at_all"), "")
+	assert_eq(GameDataRegistry.atlas_identity_for(&"vis.no_such_thing_at_all"), "")
+
+
+func test_the_identity_is_the_one_staleness_compares() -> void:
+	# Same stamp `stale_colour_atlases()` reads, so a chart's provenance line and a
+	# staleness report can be held against each other. Art is gitignored build output
+	# and a clean checkout has none, so the assertion is on the CONTRACT: either the
+	# file is absent and the answer is empty, or it is present and the answer is not.
+	var reg := GameDataRegistry
+	var path := reg.atlas_path_for(&"vis.villager")
+	var identity := reg.atlas_identity_for(&"vis.villager")
+	if FileAccess.file_exists(path):
+		assert_false(identity.is_empty(),
+				"a staged atlas answers with a build identity, even if 'unstamped'")
+	else:
+		assert_eq(identity, "", "nothing staged reports nothing rather than guessing")

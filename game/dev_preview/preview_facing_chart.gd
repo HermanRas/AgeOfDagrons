@@ -23,7 +23,10 @@ extends Node2D
 
 const SHOT_DIR := "user://"
 const CELL := Vector2(168.0, 210.0)
-const ORIGIN := Vector2(130.0, 150.0)
+## y clears the two header lines. A sprite's anchor puts most of it ABOVE the cell
+## origin, so at 150 the idle row was drawn over the title and the provenance line --
+## and the provenance line is the one that says which file you are looking at.
+const ORIGIN := Vector2(130.0, 215.0)
 
 ## A villager is about 40 px tall at native scale, which is the size the game draws her
 ## at and far too small to tell a front from a back in a screenshot. The chart exists
@@ -31,6 +34,11 @@ const ORIGIN := Vector2(130.0, 150.0)
 ## pixel art and a smoothed sprite would invent detail to be misled by.
 const MAGNIFY := 3.0
 const CLIPS: Array[StringName] = [&"idle", &"walk", &"attack"]
+
+## Which way each sprite index must point ON SCREEN, in `AtlasEntry.FACINGS` order.
+## Drawn beside the name so the column is read against a direction rather than
+## against a compass letter the reader has to project for themselves.
+const SCREEN_ARROWS := ["v", "v-left", "<-", "^-left", "^", "^-right", "->", "v-right"]
 
 ## One page per unit, so a wrong clip can be blamed on one actor rather than on the
 ## pipeline. The swordsman is the melee case from the report, the archer the ranged one,
@@ -52,7 +60,24 @@ var _views: Array[EntityView] = []
 var _labels: Array[Node] = []
 
 
+## The grid is 8 columns of 168 px from x=130, and three rows of 210 from y=150 with a
+## legend under them -- 1474 x 872. The project window is 1152 x 648, so **column 7 has
+## been off the right-hand edge and the legend off the bottom since this preview was
+## written**, which is why nobody ever read the instruction it carries. `_draw()` paints
+## a 1600 x 900 backdrop, so that was always the intended size; only the window was
+## never asked for it.
+const CHART_WINDOW := Vector2i(1600, 900)
+
+
 func _ready() -> void:
+	# BOTH, and the second one is the one that matters. `window/stretch/mode` is
+	# `canvas_items` (project.godot), so resizing the window alone just magnifies the
+	# same 1152 x 648 of content and column 7 stays off the edge. `content_scale_size`
+	# is the design resolution being stretched, so raising it is what actually buys
+	# room. Set here rather than in project.godot: that file is shared with the game,
+	# and Godot deletes comments in it on every save.
+	get_window().size = CHART_WINDOW
+	get_window().content_scale_size = CHART_WINDOW
 	_units = _units_argument()
 	_build(_units[0])
 
@@ -102,6 +127,23 @@ func _build(unit_id: StringName) -> void:
 			"%s  (%s)   columns are SPRITE INDEX -- the number the view passes down"
 			% [unit_id, visual], 20)
 
+	# WHICH FILE THIS PAGE IS ACTUALLY DRAWING, on the page itself. A sample bake is
+	# judged from this picture, and without the provenance the picture cannot say
+	# whether it is showing the new art or the old file still sitting in
+	# `game/assets/atlases/` because nobody re-staged. That mistake is free to make
+	# and expensive to find. `skin_colour` is -1 here, so this is the BASE bake --
+	# which is what a sample usually is, and is NOT what a match draws for a
+	# colourable unit.
+	var path := GameDataRegistry.atlas_path_for(visual, 0, -1)
+	var identity := GameDataRegistry.atlas_identity_for(visual, 0, -1)
+	_add_label(Vector2(20.0, 56.0),
+			"base bake: %s   [%s]" % [
+				path if not path.is_empty() else "NOTHING DECLARED",
+				identity if not identity.is_empty() else "not staged"], 16)
+	print("  %s -> %s  [%s]" % [unit_id,
+			path if not path.is_empty() else "nothing declared",
+			identity if not identity.is_empty() else "not staged"])
+
 	for row in range(CLIPS.size()):
 		var clip := CLIPS[row]
 		_add_label(Vector2(10.0, ORIGIN.y + row * CELL.y - 10.0), String(clip), 18)
@@ -121,14 +163,27 @@ func _build(unit_id: StringName) -> void:
 			view.play_anim(clip, col)
 			_views.append(view)
 			if row == 0:
+				# The arrow is the whole point of the label: the column has to be read
+				# against the direction it CLAIMS, and a name alone makes the reader
+				# reconstruct the isometric axes in their head, which is how a mirror
+				# survives inspection twice.
 				_add_label(at + Vector2(-24.0, -128.0),
-						"%d %s" % [col, AtlasEntry.FACINGS[col]], 18)
+						"%d %s %s" % [col, AtlasEntry.FACINGS[col], SCREEN_ARROWS[col]], 18)
 
 	# The legend that makes the picture readable without the axes in your head.
 	_add_label(Vector2(20.0, ORIGIN.y + CLIPS.size() * CELL.y + 20.0),
-			"Screen directions:  S = toward the camera (down).  N = away (up).", 18)
+			"Screen directions:  S = down (toward the camera).  N = up (away).  W = LEFT.  E = RIGHT.",
+			18)
+	# THIS LINE USED TO SAY "column 0 must show its face and column 4 its back", AND
+	# NOTHING ELSE. That check is blind to a mirror by construction -- S and N are
+	# exactly the two columns a reflection about the N-S axis leaves alone -- and on
+	# 2026-08-27 it passed a mirrored roster and cost a re-bake. Four columns, or the
+	# chart is not evidence.
 	_add_label(Vector2(20.0, ORIGIN.y + CLIPS.size() * CELL.y + 46.0),
-			"E = right.  W = left.  So column 0 (S) must SHOW ITS FACE and column 4 (N) its BACK.",
+			"CHECK ALL FOUR:  0 face-on.  4 from behind.  2 heading LEFT.  6 heading RIGHT.",
+			18)
+	_add_label(Vector2(20.0, ORIGIN.y + CLIPS.size() * CELL.y + 72.0),
+			"0 and 4 alone cannot catch a MIRROR -- they are the two a mirror leaves alone.",
 			18)
 
 

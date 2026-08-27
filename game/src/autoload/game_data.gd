@@ -198,6 +198,36 @@ func has_atlas(visual_id: StringName, age: int = 0, colour: int = -1) -> bool:
 	return not atlas_for(visual_id, age, colour).is_placeholder
 
 
+## WHICH FILE a skin key resolves to, and WHICH BAKE that file came from. For
+## diagnostics only; gameplay reads `atlas_for()` and never a path.
+##
+## These exist because of 2026-08-27, which cost a 242-atlas batch: a sample bake
+## was judged from a picture, and nothing in the picture said whether the art on
+## screen was the new bake or the old one still sitting in `game/assets/atlases/`.
+## *Staged* and *baked* are different states (the walls taught us the same lesson
+## in a different costume), and a diagnostic that cannot tell them apart will
+## happily confirm whichever one is there.
+##
+## `atlas_identity_for()` answers with the same `isobake_commit` /
+## `isobake_build` stamp `stale_colour_atlases()` compares, so "unstamped" means
+## art baked before isobake stamped its output rather than a missing file --
+## which is itself the answer when a re-bake was expected.
+func atlas_path_for(visual_id: StringName, age: int = 0, colour: int = -1) -> String:
+	if not _loaded:
+		load_all()
+	var decl: Dictionary = _visuals.get(visual_id, {})
+	if decl.is_empty():
+		return ""
+	return _atlas_path_for_skin(decl, age, colour)
+
+
+func atlas_identity_for(visual_id: StringName, age: int = 0, colour: int = -1) -> String:
+	var path := atlas_path_for(visual_id, age, colour)
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return ""
+	return _build_identity(path)
+
+
 ## The lowercase colour word isobake suffixes a tinted bake with -- `colour.blue`
 ## in colours.json is `vis.villager.blue` on disk. Wraps like colour(), for the
 ## same reason: an out-of-range index must not be what stops a match rendering.
