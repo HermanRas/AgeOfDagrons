@@ -358,7 +358,12 @@ func garrison_unit(b: SimBuilding, u: SimUnit) -> bool:
 ## impassable tile, is the entombment `_evict_from_footprint`'s header spent a
 ## paragraph on: `AStarGrid2D` will not plan a route out of a solid cell, so the unit
 ## would be stuck for the rest of the match with nothing to say why.
-func ungarrison_unit(b: SimBuilding, u: SimUnit) -> bool:
+## `send` is false for the one caller that does not want the rally point honoured:
+## `DeathSystem._kill_garrison`, which puts the occupants out only so their corpses have
+## somewhere to be. Walking a unit toward a flag on the tick it dies would queue a route
+## search for a corpse -- harmless, since `PathService` drops requests for the dead, and
+## still a lie about what happened.
+func ungarrison_unit(b: SimBuilding, u: SimUnit, send := true) -> bool:
 	if b == null or u == null:
 		return false
 	var index := b.garrison_index(u.id)
@@ -374,6 +379,36 @@ func ungarrison_unit(b: SimBuilding, u: SimUnit) -> bool:
 	u.pos = to * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
 	u.task_target_tile = to
 	spatial.insert(u.id, to)
+	# PLACED FIRST, THEN SENT. The route has to be planned from where the unit actually
+	# is, and until the two lines above it was nowhere -- out of the spatial index with
+	# a `pos` from whenever it walked in.
+	if send:
+		send_to_waypoint(b, u)
+	return true
+
+
+## Walk `u` to `b`'s rally point, if it has one. True if an order was given.
+##
+## ONE IMPLEMENTATION, TWO CALLERS -- `ungarrison_unit` above and `ProductionSystem` --
+## because they are the same rule ("anything leaving this building goes there") and
+## `diplomacy.gd`'s header is a standing warning about what happens to a predicate
+## written out twice. It also means the two can never disagree about whether a rally
+## point survives, which is the sort of difference nobody would notice for weeks.
+##
+## AN UNREACHABLE RALLY POINT IS SELF-CORRECTING AND THAT IS DELIBERATE. `PathService`
+## answers an impossible route with an empty path, `SimUnit.set_path([])` retires the
+## task, and the unit simply stands where it came out -- which is exactly the old
+## behaviour. The case that matters is a **dock**: its fishing ships are domain water
+## and a rally point dropped on grass is unreachable for them, so a dock with a landward
+## waypoint launches its boats and they stay put rather than being walked onto the beach.
+## That was a real bug once (2026-08-23, "boats spawn and sail on land, its very funny"),
+## and this is the shape that cannot reintroduce it.
+func send_to_waypoint(b: SimBuilding, u: SimUnit) -> bool:
+	if b == null or u == null or not u.alive or not b.waypoint_set():
+		return false
+	u.set_task_move(b.waypoint)
+	if paths != null:
+		paths.request(u.id, b.waypoint)
 	return true
 
 
@@ -1002,8 +1037,13 @@ func state_hash() -> int:
 				g.append([entry.get("id", 0), entry.get("def_id", &"")])
 			# The building's own firing cooldown (4.9), for the reason SimUnit's is
 			# hashed: a tick's difference in rate of fire decides who dies first.
+			# The rally point (4.8's follow-up): a player-set tile that decides where
+			# every unit leaving this building walks to, so two hosts disagreeing about
+			# it send the same trained army to two different places. `pos` reports that
+			# several seconds later, as a divergence with no visible cause.
 			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left,
-					e.gather_amount, e.facing, e.gate_locked, g, e.attack_cooldown])
+					e.gather_amount, e.facing, e.gate_locked, g, e.attack_cooldown,
+					e.waypoint.x, e.waypoint.y])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

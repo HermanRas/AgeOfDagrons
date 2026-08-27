@@ -77,6 +77,10 @@ var _idle_cycle_id: int = 0
 ## the Cancel Build button.
 var _placing_def_id: StringName = &""
 var _ghost: PlacementGhost
+## The flag on the selected building's rally point, or hidden. ONE node reused rather
+## than one per building: only the selected building's flag is ever drawn, so there is
+## never a second to show — see `_refresh_waypoint_flag`.
+var _waypoint_flag: WaypointFlag
 
 ## WALL DRAGS (PLAN.md 5.8), which use the same one-finger gesture to mean something
 ## else: for an ordinary building a drag MOVES the ghost, and for a wall it stretches
@@ -232,6 +236,13 @@ func _build_world_layers() -> void:
 	_ghost = PlacementGhost.new()
 	_ghost.visible = false
 	_view.add_child(_ghost)
+
+	# BEFORE the flash, so a rally-point flash drawn on the same tile lands on top of
+	# the flag rather than under it. Both are children of `_view`, so both pan and zoom
+	# with the world.
+	_waypoint_flag = WaypointFlag.new()
+	_waypoint_flag.visible = false
+	_view.add_child(_waypoint_flag)
 
 	_flash = ActionFlash.new()
 	_view.add_child(_flash)
@@ -950,6 +961,18 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 				return
 			Net.submit_command(MoveCommand.new(owner, movable, tile))
 			_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
+		GameView.TapAction.WAYPOINT:
+			# The rally point for the ONE selected building (4.8's follow-up).
+			# `waypoint_target` is what decided this branch was reachable at all, so it
+			# is asked again rather than a second rule being written here.
+			var building := _view.waypoint_target(owner)
+			if building != 0:
+				Net.submit_command(SetWaypointCommand.new(owner, building, tile))
+				# The flash fires NOW and the flag appears on the next snapshot, which is
+				# the whole reason there is a flash: a command round-trips through the
+				# sim, so without it a tap on grass would look like nothing happened for
+				# a tick or two.
+				_flash.play(ActionFlash.Kind.WAYPOINT, Iso.tile_centre_to_world(tile))
 		GameView.TapAction.NONE:
 			_clear_selection()
 
@@ -1680,3 +1703,41 @@ func _refresh_panel() -> void:
 		var owner_id := int(facts.get("owner_id", 0))
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids,
 				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)))
+	_refresh_waypoint_flag()
+
+
+## Show the selected building's rally point, or nothing.
+##
+## Called from here rather than from a `_process`, which gets it both cases for free:
+## `_on_snapshot` calls `_refresh_panel` every tick, so a rally point somebody's command
+## just set appears as soon as the sim reports it, and a selection change redraws
+## immediately because that also comes through here.
+##
+## ONLY WHILE ITS BUILDING IS SELECTED, which is a deliberate limit and not laziness. A
+## player with eight rally points set would otherwise have eight flags standing in their
+## base permanently, and the one thing a marker must not become is scenery. The cost is
+## that you cannot see them all at once; the mitigation is that you cannot set one
+## without the building being selected either, so the flag is always visible exactly when
+## you are working on it.
+##
+## `waypoint_target` gates it, so this can never draw a flag on somebody ELSE'S building
+## — which matters because the server blanks an enemy's rally point anyway
+## (`SnapshotSystem._without_the_rally_point`) and two independent guards on an
+## information leak is the right number.
+func _refresh_waypoint_flag() -> void:
+	if _waypoint_flag == null:
+		return
+	var building := _view.waypoint_target(Net.local_player_id())
+	if building == 0:
+		_waypoint_flag.visible = false
+		return
+	var facts := _view.facts_for(building)
+	var tile: Vector2i = facts.get("waypoint", SimBuilding.NO_WAYPOINT)
+	if tile == SimBuilding.NO_WAYPOINT:
+		_waypoint_flag.visible = false
+		return
+	# Index -> Color through the registry, the same two-step `_refresh_panel` above makes:
+	# `SimPlayer.colour` is an INDEX into colours.json (its own note says why the palette
+	# is data and not a Color), and `GameDataRegistry.colour` wraps rather than failing.
+	var index := int(_view.skin_for(Net.local_player_id()).get("colour", -1))
+	_waypoint_flag.show_on(tile, GameDataRegistry.colour(index))

@@ -36,6 +36,11 @@ die with the building, and **buildings can attack for the first time**: each gar
 archer adds half its own damage to the tower's shot. Siege out-ranges every tower on
 purpose. It moved the AI ladder's tick counts, because the AI builds towers — see BUGS.md.
 
+**Rally points landed with it.** Select one of your own buildings, tap bare ground, and a
+flag goes down; anything leaving that building walks to it — an ejected garrison **and**
+every unit it trains. No waypoint means the old behaviour, unchanged. What is missing is a
+way to *clear* one (BUGS.md); moving it works.
+
 ---
 
 ## Phases

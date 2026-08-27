@@ -70,13 +70,15 @@ enum {
 	ROSTER, SHOT_ROSTER,
 	RAID, WAIT_BONUS_HIT, CATCH_ARROW, SHOT_ARROW,
 	EJECT, WAIT_OUT, SHOT_OUT, WAIT_BASE_HIT,
+	SET_WAYPOINT, SHOT_FLAG, REGARRISON, EJECT_TO_FLAG, WAIT_WALKING, SHOT_RALLY,
 	REFILL, DESTROY, SHOT_DEAD, DONE,
 }
 
 ## The polling phases, which check every frame rather than waiting out a fixed delay.
 ## An arrow is in the air for a handful of ticks and a walk across open ground takes
 ## as long as it takes; both would be missed by a timer.
-const POLLING := [WAIT_IN, WAIT_BONUS_HIT, CATCH_ARROW, WAIT_OUT, WAIT_BASE_HIT]
+const POLLING := [WAIT_IN, WAIT_BONUS_HIT, CATCH_ARROW, WAIT_OUT, WAIT_BASE_HIT,
+		WAIT_WALKING]
 
 
 func _process(_delta: float) -> void:
@@ -116,6 +118,11 @@ func _process(_delta: float) -> void:
 		SHOT_ARROW: _photograph_the_arrow()
 		EJECT: _turn_them_out()
 		SHOT_OUT: _shoot("garrison_5_out")
+		SET_WAYPOINT: _plant_the_flag()
+		SHOT_FLAG: _shoot("garrison_7_flag")
+		REGARRISON: _put_them_back()
+		EJECT_TO_FLAG: _turn_them_out()
+		SHOT_RALLY: _report_the_walk()
 		REFILL: _put_them_back()
 		DESTROY: _burn_it_down()
 		SHOT_DEAD: _shoot("garrison_6_dead")
@@ -152,7 +159,34 @@ func _poll() -> bool:
 			return _tower() != null and _tower().garrison.is_empty()
 		WAIT_BASE_HIT:
 			return _record_hit(false)
+		WAIT_WALKING:
+			return _walking_to_the_flag()
 	return true
+
+
+## True once every ejected archer is actually EN ROUTE to the rally point and has left
+## the tower's footprint behind.
+##
+## `task == MOVE` alone is not enough to photograph: the order lands on the tick they
+## come out, so a picture taken then shows three archers standing against the tower
+## looking exactly as they did before the flag existed. Waiting for one of them to be
+## two tiles clear is what makes the screenshot show a WALK rather than an intention.
+func _walking_to_the_flag() -> bool:
+	var w := _world()
+	var t := _tower()
+	if w == null or t == null:
+		return true
+	var moving := 0
+	var clear := 0
+	for id in _archer_ids:
+		var u := w.get_entity(id) as SimUnit
+		if u == null or not u.alive:
+			continue
+		if u.task == SimUnit.Task.MOVE and u.task_target_tile == t.waypoint:
+			moving += 1
+			if CombatSystem.tile_gap(u.tile(), t.footprint_rect()) >= 2:
+				clear += 1
+	return moving > 0 and clear >= moving
 
 
 ## Watch the raider's health for one shot and record what it cost. Two calls, one with
@@ -374,6 +408,50 @@ func _photograph_the_arrow() -> void:
 func _turn_them_out() -> void:
 	Net.submit_command(UngarrisonCommand.new(Net.local_player_id(), _tower_id,
 			UngarrisonCommand.ALL))
+	var t := _tower()
+	if t != null and t.waypoint_set():
+		print("  ejecting %d toward the rally point at %s"
+				% [t.garrison.size(), t.waypoint])
+
+
+## Set the tower's rally point, through the real command (the tap that produces it is
+## `GameView.tap_action` returning WAYPOINT, covered in tests/view/test_waypoint_ui.gd).
+##
+## Placed on the SOUTH side of the tower, down-screen, which is the whole point of the
+## feature: `find_free_adjacent` sweeps the footprint's top edge first, so without a
+## rally point everything leaving a building appears BEHIND it and is visible only as an
+## occlusion outline. A flag two tiles down-screen puts them in front of it instead.
+func _plant_the_flag() -> void:
+	var t := _tower()
+	if t == null:
+		return
+	var at := t.tile() + Vector2i(0, 4)
+	Net.submit_command(SetWaypointCommand.new(Net.local_player_id(), t.id, at))
+	# The flag is only drawn while its building is SELECTED -- deliberately, so eight
+	# rally points do not become eight permanent flags in a player's base. The tower has
+	# been selected since the PANEL step, so there is nothing to re-select here; this
+	# print is what says so if the picture comes back without a flag in it.
+	print("  rally point at %s, tower selected: %s"
+			% [at, _game._view.waypoint_target(Net.local_player_id()) == t.id])
+	var on_screen: Vector2 = _game._view.get_global_transform_with_canvas() \
+			* Iso.tile_centre_to_world(at)
+	print("  flag should be at SCREEN %s" % on_screen.round())
+
+
+## Where each archer actually is on its way to the flag, so a picture that looks like
+## three units milling around beside a tower can be told from one that is genuinely a
+## walk in progress.
+func _report_the_walk() -> void:
+	var w := _world()
+	var t := _tower()
+	for id in _archer_ids:
+		var u := w.get_entity(id) as SimUnit
+		if u == null or not u.alive:
+			continue
+		print("    archer %d at %s, task %d -> %s, %d tiles clear of the tower"
+				% [id, u.tile(), u.task, u.task_target_tile,
+				CombatSystem.tile_gap(u.tile(), t.footprint_rect())])
+	_shoot("garrison_8_rally")
 
 
 ## Straight into the sim rather than through the command, because this is set-up for

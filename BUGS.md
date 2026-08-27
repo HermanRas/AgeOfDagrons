@@ -325,14 +325,25 @@ Short, and kept because each can bite again.
   **`AISystem._nearest_enemy` keeps its own copy of this for the identical reason**, and its
   comment says so; anything else that acquires targets *unasked* needs the war question, not
   the permission question.
-- **Ejected units come out BEHIND a building**, tower or barracks alike. `find_free_adjacent`
-  sweeps the rect's top edge first, so a garrison turned out of a tower — and every unit ever
-  trained anywhere — appears up-screen of it, where the occlusion outline is the only thing
-  making them visible. Left consistent rather than special-cased for garrison; changing it is
-  a one-line change to that sweep order and affects every building in the game, so it is the
-  owner's call. Related and cosmetic: **corpses stack**, because the eject-then-kill path in
+- **Ejected units come out BEHIND a building**, tower or barracks alike — **and the answer
+  is now a RALLY POINT** (owner, 2026-08-27: *"if a way point is set the ejected units will
+  queue a walk to destination"*). `find_free_adjacent` sweeps the rect's top edge first, so
+  anything leaving a building appears up-screen of it, where the occlusion outline is the
+  only thing making it visible. Set a waypoint and they walk out of it; set none and the old
+  behaviour stands, which is what the owner asked for. **The underlying sweep order was NOT
+  changed** — it affects every building in the game and a rally point makes it opt-out
+  per building, which is the cheaper fix by a wide margin.
+  Still open and cosmetic: **corpses stack**, because the eject-then-kill path in
   `DeathSystem._kill_garrison` puts every occupant on the same tile and `SeparationSystem`
-  does not move the dead. A castle losing 15 reads as one body until they fade.
+  does not move the dead. A castle losing 15 reads as one body until they fade. A rally
+  point does not help here and must not — the dead are put out so their corpses have
+  somewhere to be, not sent anywhere (`ungarrison_unit`'s `send` flag).
+- **A rally point has no CLEAR gesture yet.** Tapping bare ground with one of your buildings
+  selected moves the flag; nothing takes it away. `SetWaypointCommand` already accepts
+  `SimBuilding.NO_WAYPOINT` and clearing is always legal, so the sim half is done — what is
+  missing is a gesture or a button to send it. Not urgent (moving it covers almost every
+  real need) and worth pairing with 8.8's [X] button, which is the other selection-panel
+  affordance still to be built.
 - **Wall-clock timings are worthless on this workstation** — the same seed ran 41.3 s and
   161.0 s, and the test suite swung 34 s to 110 s across four runs of identical code. Trust
   `test_tick_cost`, which reports per-system milliseconds.

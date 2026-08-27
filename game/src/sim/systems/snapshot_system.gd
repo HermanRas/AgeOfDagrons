@@ -221,7 +221,7 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 
 	var rect := _rect_of(e)
 	if VisionSystem.can_see_rect(w, viewer, rect):
-		return e.to_snapshot()
+		return _without_the_rally_point(e.to_snapshot())
 	if e.is_mobile():
 		return {}                       # mobile: its position is what it would leak
 	if not e.alive:
@@ -229,6 +229,28 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 	if VisionSystem.has_explored_rect(w, viewer, rect):
 		return _remembered(e)
 	return {}
+
+
+## A building's rally point BLANKED, for an entry going to anybody but its owner.
+##
+## Where an enemy is massing their army is not a fact about the world -- it is their
+## INTENTION, and the one piece of information on the wire that is. Everything else
+## `_entry_for` sends about a visible enemy building is something you could see by
+## looking at it; a flag on a tile three screens away is not.
+##
+## BLANKED RATHER THAN ERASED, which is the whole reason this is a function and not a
+## `d.erase()`. Erasing would give own buildings and enemy buildings different field
+## sets, and `to_wire`'s shape tables (12.1f) group `updated` by sorted field names --
+## so every building in the game would split into two shapes and cost more than the
+## Vector2i it saved. `SimBuilding.to_snapshot`'s own note records that trade for
+## `facing`.
+##
+## Not applied to `_remembered` below, which erases the key outright: a remembered entry
+## is already its own shape, having dropped a dozen other fields.
+static func _without_the_rally_point(d: Dictionary) -> Dictionary:
+	if d.has("waypoint"):
+		d["waypoint"] = SimBuilding.NO_WAYPOINT
+	return d
 
 
 ## A static entity as the player REMEMBERS it: where it is, what it is, and whose
@@ -251,6 +273,11 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 ##                 between a tower worth walking past and one that will shoot for 18.
 ##                 Both go, not just the roster -- a headcount alone still prices the
 ##                 shot, because the bonus is per occupant.
+##   waypoint      an enemy's rally point is their INTENTION, and the only such thing on
+##                 the wire. Erased here and *blanked* for a visible enemy building
+##                 (`_without_the_rally_point`) -- two mechanisms because a remembered
+##                 entry is already its own wire shape and a live one must not become
+##                 a second one.
 ##   amount        how much wood is left in a forest you last saw an hour ago is a
 ##                 running commentary on somebody else's economy.
 ##   build_fraction  a foundation going up is live. `phase` STAYS, because the view
@@ -266,7 +293,7 @@ static func _remembered(e: SimEntity) -> Dictionary:
 	var d := e.to_snapshot()
 	for key in ["hp", "max_hp", "queue", "queue_len", "queue_fraction", "anim",
 			"carry_kind", "carry_amount", "task", "amount", "build_fraction",
-			"garrison", "garrison_count"]:
+			"garrison", "garrison_count", "waypoint"]:
 		d.erase(key)
 	d["remembered"] = true
 	return d

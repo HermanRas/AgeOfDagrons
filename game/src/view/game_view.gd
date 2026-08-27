@@ -8,7 +8,7 @@ extends Node2D
 ## What tapping something should lead to (PLAN.md 4.5): NONE clears the
 ## selection, SELECT reselects (own unit, or own building with nothing to send
 ## it), GATHER/BUILD/MOVE/ATTACK are the four orders a tap can issue.
-enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK, GARRISON }
+enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK, GARRISON, WAYPOINT }
 
 ## Forces a unit adjacent to a building to Y-sort after it (see
 ## apply_snapshot()), regardless of how the footprint-corner math alone would
@@ -348,6 +348,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# would tell a client about an entity it is otherwise not being told about.
 			# `UngarrisonCommand` therefore names a SLOT.
 			"garrison": _names(entry.get("garrison", [])),
+			# The rally point, for the flag (`WaypointFlag`). `SimBuilding.NO_WAYPOINT`
+			# for a building that has none, and for **every** building that is not the
+			# local player's -- the server blanks it rather than sending it, so this
+			# never has an enemy's rally point to leak in the first place.
+			"waypoint": entry.get("waypoint", SimBuilding.NO_WAYPOINT) as Vector2i,
 			# Present only on buildings; SimBuilding.Phase.COMPLETE elsewhere, so a
 			# unit or resource node always reads as "not something to build" without
 			# its own guard (4.5's build-assist tap needs to tell a foundation from
@@ -698,7 +703,18 @@ func units_in_box(box: Rect2, owner: int) -> Array[int]:
 ## its training row stay reachable when there is nothing to send.
 func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 	if id == 0:
-		return TapAction.MOVE if has_movable_selection else TapAction.NONE
+		# BARE GROUND WITH ONE OF YOUR OWN BUILDINGS SELECTED SETS ITS RALLY POINT
+		# (project owner, 2026-08-27), the genre-standard gesture. It costs nothing: that
+		# tap previously did nothing but clear the selection, and clearing still has
+		# right-click on desktop and 8.8's [X] button coming on mobile.
+		#
+		# **After the movable test, and that ordering is the whole safety of it.** With
+		# any unit in hand a ground tap is a MOVE and must stay one, so this can only
+		# fire for a selection of exactly one owned building -- which is what
+		# `waypoint_target()` answers. No mixed selection can reach it.
+		if has_movable_selection:
+			return TapAction.MOVE
+		return TapAction.WAYPOINT if waypoint_target(owner) != 0 else TapAction.NONE
 
 	var f := facts_for(id)
 	if f.is_empty():
@@ -778,6 +794,33 @@ func _has_garrison_room(f: Dictionary) -> bool:
 	if bd == null or bd.garrison_cap <= 0:
 		return false
 	return int(f.get("garrison_count", 0)) < bd.garrison_cap
+
+
+## The building whose rally point a ground tap should set, or 0 for none.
+##
+## EXACTLY ONE, ALIVE, `owner`'s OWN. One because a rally point belongs to a building
+## and a group tap would have to pick which -- and a player who box-selected their whole
+## base and tapped the ground would otherwise flag every building they own at once.
+##
+## Not gated on the building being COMPLETE, and not on it training or holding anything:
+## `SetWaypointCommand.validate` accepts any owned building for the reason recorded
+## there, so a flag on a house is allowed and simply does nothing. A tap that is silently
+## ignored is worse than a flag that turns out to be pointless.
+func waypoint_target(owner: int) -> int:
+	if selection.size() != 1:
+		return 0
+	var id := selection.primary()
+	var f: Dictionary = _facts.get(id, {})
+	if f.is_empty() or not bool(f.get("alive", true)):
+		return 0
+	if bool(f.get("is_unit", false)) or int(f.get("owner_id", 0)) != owner:
+		return 0
+	# A resource node is not a unit and not owned by a player, so the owner test above
+	# already excludes it -- this is the positive check that it really is a building,
+	# asked of the registry the same way `_is_gatherable_building` asks.
+	if GameDataRegistry.building(StringName(f.get("def_id", &""))) == null:
+		return 0
+	return id
 
 
 ## The selected entities that can actually be given a move order (PLAN.md 3.6).

@@ -179,7 +179,9 @@ func _kill_garrison(w: SimWorld, b: SimBuilding) -> void:
 		if u == null:
 			b.garrison.remove_at(i)
 			continue
-		if not w.ungarrison_unit(b, u):
+		# `send = false`: these are being put out so their corpses have somewhere to be,
+		# not sent anywhere. See `SimWorld.ungarrison_unit`.
+		if not w.ungarrison_unit(b, u, false):
 			# Could not be placed. Drop the entry by hand so the list does not keep a
 			# unit that is about to be a corpse, and let it die where it stands.
 			b.garrison.remove_at(i)

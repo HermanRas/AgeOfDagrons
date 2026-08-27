@@ -40,5 +40,15 @@ func process_tick(w: SimWorld) -> void:
 		var tile := w.map.find_free_adjacent(b.footprint_rect(), domain)
 		if tile.x < 0:
 			continue          # no room yet; retried next tick, nothing is lost
-		w.spawn_unit(trained, b.owner_id, tile)
+		var spawned := w.spawn_unit(trained, b.owner_id, tile)
+		# AND THEN IT WALKS TO THE RALLY POINT, if its building has one (project owner,
+		# 2026-08-27). This function's header has described `find_free_adjacent`'s spot
+		# as "a full rally point" since 5.4 without there being one; now there is.
+		#
+		# It is the same call `ungarrison_unit` makes, on purpose: a unit trained here and
+		# a garrison turned out of here are both "something leaving this building", they
+		# had the same defect (appearing up-screen of it, behind the art), and one rule
+		# fixes both. A building with no waypoint is untouched, which is every building
+		# until a player sets one.
+		w.send_to_waypoint(b, spawned)
 		b.queue.pop_front()

@@ -263,6 +263,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **Godot silently rewrites `scenes/ui_builder/*.tscn` layout properties** when the project is open | Check `git status` before committing; those are authored mockups and should not drift. |
 | **`Array[StringName].sort()` orders by StringName IDENTITY, not string content** — and identity order is not stable between runs | Never take `unit_ids()`/`building_ids()` order into UI. Re-sort explicitly (the build menu sorts by age, then name). |
 | **`&"unit.villager" == "unit.villager"` is FALSE** | JSON has no StringName, so everything off the wire is a String. Convert at the boundary (`GameView._names()`). |
+| **`some_array as Array[int]` SILENTLY FAILS on a variable — it only works on a literal** | `[picked] as Array[int]` is fine and is what `GameScene` does; `ids as Array[int]` where `ids: Array` is an untyped parameter produces an untyped array, and the *callee* then rejects it at runtime with "the array of argument 1 does not have the same element type". Nine tests died on one helper this way. Build it element by element, the same conversion every `Command.from_dict` does. Worth knowing that the harness's **script-error spy** is what caught it — the tests reported FAIL rather than passing with zero assertions, which is exactly the case that guard exists for. |
 | **PS 5.1 splits a here-string into git pathspecs** | Write the commit message to a file, `git commit -F <file>`. Never pipe a here-string. |
 | **`Set-Content -Encoding utf8` adds a BOM** and has corrupted `project.godot` | Use .NET `WriteAllText`/`WriteAllLines` with `UTF8Encoding($false)`. |
 | **A new `class_name` is invisible until `--import`** | Run it, then the suite. |
@@ -293,10 +294,10 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**331 atlases staged.** 80 test files, **1353 tests, 202,395 assertions, all
-passing** — measured 2026-08-27 after 4.8/4.9, not quoted. The figures before these
-(1272/78, 1232/76, and 293/71/1163) were each stale within days; re-measure rather than
-trusting this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
+**331 atlases staged.** 82 test files, **1395 tests, 202,513 assertions, all
+passing** — measured 2026-08-27 after 4.8/4.9 and rally points, not quoted. The figures
+before these (1353/80, 1272/78, 1232/76, and 293/71/1163) were each stale within days;
+re-measure rather than trusting this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
 2026-08-27** from the facing re-bake; the other 89 (buildings, walls, terrain) were already
 correct and are untouched since 2026-08-17.
 
@@ -334,6 +335,29 @@ buildings since 0.4 and read by nothing. Five things worth knowing before touchi
   no-auto-acquire rule does not apply and the two share no code. That is also where the one
   real bug was: see the `Diplomacy.is_enemy` row in §6, found by `preview_garrison` and not
   by any of the 60 tests written alongside it.
+
+**RALLY POINTS followed the same day** (owner: *"happy for current ejection if no waypoint
+is set, if a way point is set the ejected units will queue a walk to destination"*).
+`SimBuilding.waypoint`, set by **selecting one of your own buildings and tapping bare
+ground** — a gesture that previously did nothing but clear the selection — and shown as a
+`WaypointFlag`, a procedural pole-and-pennant in the player's colour (*"use shape
+placeholder"*, so no bake is waiting on it). Four things worth knowing:
+
+- **It covers TRAINED units too, on the owner's call**, and that is the half that makes it
+  useful: a new archer appearing behind the archery range is the identical defect for the
+  identical reason. `SimWorld.send_to_waypoint` is one function with two callers
+  (`ungarrison_unit`, `ProductionSystem`) so the two can never drift.
+- **`find_free_adjacent`'s top-edge sweep was NOT changed**, and that was the decision:
+  everything leaving any building appears up-screen of it, and a rally point makes that
+  opt-out per building rather than altering a function every building shares.
+- **An unreachable rally point is self-correcting, and that is load-bearing.** An empty
+  route retires the task and the unit stands where it came out — which is what stops a
+  **dock** with a landward flag walking its fishing ships onto the beach, the exact bug
+  reported on 2026-08-23 as *"boats spawn and sail on land, its very funny"*.
+- **An enemy's rally point is the only pure INTENTION on the wire**, and the only field
+  `_entry_for` filters by owner. It is **blanked, not erased** — erasing would split every
+  building into two wire shapes (12.1f). **There is no clear gesture yet**: the command
+  accepts `NO_WAYPOINT` and clearing is always legal, so only the affordance is missing.
 
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),

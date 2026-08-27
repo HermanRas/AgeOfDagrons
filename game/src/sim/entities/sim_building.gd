@@ -141,6 +141,34 @@ var attack_range: int = 0
 var attack_cooldown_ticks: int = 0
 var attack_projectile: StringName = &""
 
+## WHERE ANYTHING LEAVING THIS BUILDING SHOULD WALK TO (project owner, 2026-08-27), or
+## `NO_WAYPOINT` for "stand where you came out". A rally point.
+##
+## It answers a complaint about 4.8's ejection and it applies to BOTH ways out, on the
+## owner's call: a garrison turned out of a tower, and every unit the building finishes
+## training. Those had the same defect for the same reason -- `find_free_adjacent`
+## sweeps the rect's top edge first, so a unit coming out of a building appears
+## *up-screen of it*, behind the art, where only the occlusion outline makes it visible.
+## `ProductionSystem`'s header has been calling that spot "a full rally point" since 5.4
+## without there being one.
+##
+## `(-1, -1)` IS THE SENTINEL RATHER THAN A BOOL, and tile (0, 0) is why: it is a real
+## tile on every map, so zero cannot mean "unset". Same choice `SimUnit.roam_home`
+## made, and for the same reason.
+##
+## NOT DEF-DERIVED, so `convert_building` leaves it alone -- a long wall upgraded to a
+## gate keeps the rally point its owner set, which is right: the ground did not move.
+const NO_WAYPOINT := Vector2i(-1, -1)
+var waypoint: Vector2i = NO_WAYPOINT
+
+## Named `waypoint_set()` and NOT `has_waypoint()` deliberately: `SimUnit.has_waypoint()`
+## already exists and means something completely different (there is a step left on my
+## current path). Two same-named predicates about unrelated things, one tile apart in the
+## same tick, is a mistake waiting to be made.
+func waypoint_set() -> bool:
+	return waypoint != NO_WAYPOINT
+
+
 ## Ticks until this building may fire again. The building-side twin of
 ## `SimUnit.attack_cooldown`, and hashed for the same reason: two hosts a single
 ## tick out of step on a castle's rate of fire would kill the same attacker on
@@ -335,6 +363,15 @@ func to_snapshot() -> Dictionary:
 	# `facing` is sent for every building when only walls use it. A field present on
 	# some buildings and absent on others splits every building into two wire shapes
 	# (12.1f), which costs more than the two fields it would save.
+	# THE RALLY POINT, so the view can draw its flag. A Vector2i is legal here and
+	# would NOT be in a Command: snapshots are binary (`SimEntity.to_snapshot`'s own
+	# note) where a command dict has to survive JSON for the replay log, which is why
+	# `SetWaypointCommand` sends {x, y} instead.
+	#
+	# Sent on every building, `NO_WAYPOINT` for the ones that have none, for the shape-
+	# table reason `facing` is. `SnapshotSystem` blanks it for anybody but the owner --
+	# where an enemy is massing is not something to hand them.
+	d["waypoint"] = waypoint
 	d["garrison_count"] = garrison.size()
 	var inside: Array[String] = []
 	for entry in garrison:

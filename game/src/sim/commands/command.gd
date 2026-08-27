@@ -33,6 +33,8 @@ static func from_dict(d: Dictionary) -> Command:
 			return GarrisonCommand.from_dict(d)
 		"ungarrison":
 			return UngarrisonCommand.from_dict(d)
+		"set_waypoint":
+			return SetWaypointCommand.from_dict(d)
 		"place_building":
 			return PlaceBuildingCommand.from_dict(d)
 		"place_wall":

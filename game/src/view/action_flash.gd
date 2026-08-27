@@ -10,7 +10,7 @@
 class_name ActionFlash
 extends Node2D
 
-enum Kind { MOVE, GATHER, BUILD, ATTACK, GARRISON }
+enum Kind { MOVE, GATHER, BUILD, ATTACK, GARRISON, WAYPOINT }
 
 const _COLOR := {
 	Kind.MOVE: Color(0.35, 1.0, 0.45, 0.85),
@@ -25,6 +25,11 @@ const _COLOR := {
 	# confused, because the same tap on the same tower means "help finish it" while it
 	# is a foundation and "go inside" once it is not.
 	Kind.GARRISON: Color(0.70, 0.50, 1.0, 0.88),
+	# Near-white, and the only one of the six that is not a hue. A rally point is the
+	# one of these that LEAVES SOMETHING BEHIND -- `WaypointFlag` stands on the tile
+	# afterwards -- so the flash is deliberately colourless: it says "landed here" and
+	# then hands the tile over to the flag, which carries the player's own colour.
+	Kind.WAYPOINT: Color(0.95, 0.97, 1.0, 0.85),
 }
 
 ## Quick enough to read as a flash rather than a lingering marker -- long enough
