@@ -125,14 +125,38 @@ gate_closed    gate_opening    gate_open    gate_closing
 for. The recipes need an `[anims]` block, which is the same shape as any other.
 
 **The one that cannot: the age-3 wooden gate.** The Briton actor has no animations of any
-kind — it has `garrisoned`/`ungarrisoned` variants and that is all. Three ways out, and
-**this is the owner's call because it is a look, not a technique**:
+kind — it has `garrisoned`/`ungarrisoned` variants and that is all.
 
-1. **Leave it static.** It is the only gate that never opens, which is visible.
-2. **Re-point it to `carthaginians/gate.xml`**, which does declare all four. Different
-   civ, different look, and age 2 and age 3 would no longer be the same family.
-3. **Re-point it to the German gate** used at age 2 — animates, but then ages 2 and 3
-   share one sprite.
+> **RESOLVED BY THE OWNER, same day: the whole age-3 wood tier moves to the ROMAN SIEGE
+> WALLS.** Not just the gate — all five pieces, so the tier stays one civ:
+>
+> | recipe | was | becomes | mesh |
+> |---|---|---|---|
+> | `wall_wood_short_age3` | `britons/wall_short` | `romans/siege_wall_short` | `siege_small_wood.dae` |
+> | `wall_wood_medium_age3` | `britons/wall_medium` | `romans/siege_wall_medium` | `siege_medium_wood.dae` |
+> | `wall_wood_long_age3` | `britons/wall_long` | `romans/siege_wall_long` | `siege_large_wood.dae` |
+> | `wall_wood_tower_age3` | `britons/wall_tower` | `romans/siege_wall_tower` | `siege_walltwr_wood.dae` |
+> | **`wall_wood_gate_age3`** | `britons/wall_gate` | **`romans/siege_wall_gate`** | `siege_gate_wood.dae` — ✅ **all four clips** |
+>
+> **It solves the problem rather than working around it**, and the tier arguably fits
+> better: every mesh in the set is `*_wood` siege works, so an age-3 *wooden* wall is
+> literally that, and age 2 stays a German palisade so the two ages remain distinct.
+>
+> **A trap for whoever bakes it: the two civs put the clips in OPPOSITE places.** The
+> Athenian gate keeps them on `wall_gate_door.xml` and props the structure onto it; the
+> Roman keeps them on `siege_wall_gate.xml` while its `siege_wall_gate_door.xml` has
+> none. Picking the `_door` file by analogy gets a static gate.
+>
+> **Three things I will confirm by baking rather than assume:** the canvases (all five
+> age-3 figures are copies of the age-2 German ones, and this is different geometry, so
+> expect a `CLIPPED` or two); whether `siege_wall_long`'s `scaf_9x3_wall` scaffolding and
+> `destruction_dust_small` particle import into a normal bake, since they belong to
+> construction/destroyed variant groups; and whether the `siege_walls_*_banners` props
+> carry player colour, which no wall does today and which would be a change either way.
+>
+> `Age & Unit Planning.md` and `PLAN.md`'s roster table are updated. **The recipes are
+> not** — all five are in the batch running now, and editing a recipe a slot has not
+> reached would change what it bakes.
 
 **How I would ship it, for the game side to confirm:** **one atlas per gate with `closed`
 and `open` as clips**, not two visual ids. `EntityView.play_anim` already falls back to

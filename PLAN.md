@@ -847,7 +847,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `building.monastery` | 3 | Monk | `pers` · `rome` `/temple` |
 | `building.university` | 3 | Upgrades | `iber/temple` · `mace/temple` |
 | `building.siege_workshop` | 3 | Ram, ballista, onager; trebuchet from 4 | `pers/arsenal` · `rome/arsenal` |
-| `building.wall_wood` + `gate_wood` | 2 | Short/medium/long + gate | `germ/*` · `brit/*` — **all pieces of a tier from one civ** |
+| `building.wall_wood` + `gate_wood` | 2 | Short/medium/long + gate | `germ/*` · `rome/siege_wall_*` — **all pieces of a tier from one civ**. Age-3 skin re-pointed off `brit/*` on 2026-08-27: the Briton gate declares no animations at all, so it could never open, and every other gate in the game ships `gate_closed`/`opening`/`open`/`closing` |
 | `building.wall_stone` + `gate_stone` | 3 | | `pers/*` |
 | `building.wall_reinforced` + `gate_reinforced` | 4 | | `rome/*` |
 | `building.wonder` | 4 | Wonder victory (11.2) | `hellenic_epic_temple` |
