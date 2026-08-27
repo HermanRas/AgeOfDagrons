@@ -453,6 +453,93 @@ entry has the algebra to say what the end state has to be rather than another gu
 
 ---
 
+### ONE PROBE EACH OF P1, P2 AND P4 — built and measured 2026-08-27, before tonight's batch
+
+The owner asked for one of each, built here, so that whatever works rides tonight's run
+and whatever does not becomes its own batch. **Two of the three are in. The third is
+parked.** isobake is now **`db9dc8e`, build 38**.
+
+**✅ P4 — THE ARROW FLIES. `pitch_offset_deg` now exists.** You asked whether isobake had
+a pitch control at all: it did not. `RenderSpec` carried only `yaw_offset_deg`, and the
+render hardcoded X and Y to zero. It is one field plus one euler component, defaults to
+0, and is therefore a no-op for every other recipe.
+
+`projectile_arrow.toml` carries **`pitch_offset_deg = 115.0`**. The trimmed frame sizes
+are the evidence, and they say it better than a picture can at 18 px:
+
+| | S (toward camera) | E (across) | NE |
+|---|---|---|---|
+| before | 2 × 17 | 2 × 17 | 2 × 17 |
+| after | **2 × 3** | **18 × 9** | **14 × 14** |
+
+Identical in every direction before — the fence post. Now it foreshortens to nearly a dot
+head-on and lies flat side-on. **The head's elevation is `90 − pitch`**, measured from two
+probes, so 115 is the 25° nose-down you guessed at, and your guess reads well.
+
+Worth knowing: the first probe laid the shaft down perfectly and **backwards**, because
+the mesh's `+Z` end is the fletching. Nothing in the bounding box predicts which end
+leads.
+
+**`vis.projectile_bolt` is NOT done** — same treatment, but the bolt is a different mesh
+and may well need a different value. It rides tonight only if I probe it too; say if you
+want it and I will.
+
+**✅ P1 — THE WOLF MOVES.** `idle` / `walk` / `attack` / `die` / `decay`, 240 frames, all
+five resolving against clips the actor really declares.
+
+- **`location_scale` is left at the default, and that is a measurement.** The idle frame
+  renders a complete wolf — tail, four attached legs — and every clip's bbox sits within
+  20% of every other. A torn mesh is many times larger; the deer's death clip needed
+  0.0319. Do not copy that figure to the other five.
+- **Canvas 128 → 256.** A moving wolf does not fit a canvas calibrated on a standing one:
+  at 128 the clip-check caught **67 of 240 frames** touching the render edge, and it
+  started with `idle`, not the run. **Expect a canvas bump on the other five species.**
+- **The clip names are case-inconsistent across fauna and it will bite:** wolf
+  `attack_melee`/`death`, boar `attack_melee`/`Death`, bear **`Attack_Melee`**, zebu
+  **`Attack_melee`**, deer all lower case. `tools/check_clips.py` resolves every name in
+  about a second; the alternative is a bake that dies ten minutes in.
+- **`zebu_wild` really does have `Feeding`**, as you said — plus Walk, Run, Idle ×4 and
+  two Deaths. Bear has Idle ×4, Walk, Run, Attack_Melee, Death. **Neither declares them in
+  its own actor file**; both pull a shared `art/variants/quadraped/base_*.xml`, which is
+  why a naive read of `bear_brown.xml` reports an animal with no animations at all.
+
+**⏸️ P2 — THE PACKED TREBUCHET IS PARKED, and it is closer than "not done".** It bakes,
+and **a packed mangonel turns out to be a wagon drawn by two zebu with the engine struck
+down as cargo** — exactly the unmistakably-different silhouette the request wanted. The
+wagon, the oxen and the cargo are all correct.
+
+Two things are not:
+
+1. **The four crew do not place.** `engineer_a..d` land stacked in a vertical column
+   beside the cart, overlapping each other at staggered heights, rather than standing
+   around it.
+2. **It cannot animate yet.** The wagon declares `Idle` and **`Walk`** — so a packed
+   engine could roll rather than skate, and would not need `speed: 0` — but those clips
+   belong to a **nested prop**, and the subject's clip set is built from what the actor in
+   `[source]` declares. That is a pivot base declaring nothing. Both attempts failed
+   identically with `Available: []`. The onager works because its subject armature is the
+   arm that owns the clips; here the rig is one level further down. The fix is in the
+   zeroad adapter, with the onager as the regression test that it does not break the
+   working case.
+
+**It is in `tools/recipes/parked/`, which neither `bake_batch.ps1` nor `stale_recipes.py`
+globs**, so it cannot join tonight by accident. That mattered more than tidiness:
+**both machines share `tools/` through Google Drive**, so a recipe reaches the render box
+whether or not it is committed, and one with no staged atlas counts as work to do.
+
+**So tonight is 242 bakes: 82 base + 160 colour.** Not the 232 I quoted this morning, and
+the difference is worth understanding rather than just noting: committing the pitch
+control moved isobake to `db9dc8e`, which makes the ten atlases already at build 37 — the
+scout's nine and the wolf — **pipeline-stale again**. They are re-baked with everything
+else. That costs ten bakes on a four-wide box and buys **one uniform build id across the
+entire roster**, which is what your equality-based staleness rule wants to see.
+
+The wolf and the arrow are selected by recipe hash alone, so they would be picked up even
+without `-PipelineStale`. `vis.trebuchet_packed` is a separate job and cannot join by
+accident.
+
+---
+
 ### [P5] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
 
 **What's needed:** the measured ground footprint, in metres, for `vis.wolf`, `vis.bear`,
