@@ -101,6 +101,22 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
 
+> ### ✅✅ CONFIRMED IN A MATCH TOO — all 8 colours, 2026-08-27
+>
+> The eight `vis.scout_cavalry.<colour>` bakes landed at `e6fc0526ed97` / 37 and are
+> staged, so the caveat below is now closed: **the colour path carries the fix as well as
+> the base.** `preview_work_facing`'s ring of eight cavalry around a house — which is the
+> owner's original *"scout attacking away from building"* — reads correctly: **the scouts
+> west of the house face right, the ones east of it face left**, both of which were
+> backwards this morning. The owner confirms it independently from play: *"scout is
+> working 100%, we have fixed the rootcause."* Driven match runs clean, no placeholders.
+> **1275 tests, 201,674 assertions, 0 failed.**
+>
+> **The overnight batch is cleared to run, and the scope is the 171 `stored = 8` atlases.**
+> Everything below still stands for the other 170.
+>
+> ---
+>
 > ### ✅ SAMPLE VERIFIED — GAME SIDE, 2026-08-27. Ship the overnight batch.
 >
 > `vis.scout_cavalry` at **`e6fc0526ed97` / build 37** (up from `e257ae83d53f` / 36),
