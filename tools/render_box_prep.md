@@ -28,8 +28,15 @@ toolchain root   C:\Users\herman.ras\Downloads\AOD_game
   art shards     C:\Users\herman.ras\Downloads\AOD_game\art_shards\slot<N>\public     (render box only)
   bake output    C:\Users\herman.ras\Downloads\AOD_game\art_work\out
 
-MinGit            C:\Users\herman.ras\AppData\Roaming\MinGit
-  the PATH entry  C:\Users\herman.ras\AppData\Roaming\MinGit\cmd
+MinGit            C:\Users\herman.ras\AppData\Roaming\MinGit      <- workstation
+                  C:\Users\herman.ras\AppData\Local\MinGit        <- render box
+  the PATH entry  ...\MinGit\cmd
+
+  THE TWO MACHINES DIFFER, verified 2026-08-27: the workstation has it under
+  Roaming (which is what provision_render_box.ps1 copies) and the render box
+  resolves it from Local. Both work. Do not "correct" either to match the
+  other -- ask Get-Command where git actually is, per step 2b, rather than
+  trusting a path in this table.
 
 repo (Drive)     C:\Users\herman.ras\GoogleDrive\DEV\Godot\DEV\AOD_Mobile
 ```
@@ -90,8 +97,9 @@ and appends a redundant copy. `Get-Command` is the honest question, and it is
 the same one the preflight asks:
 
 ```powershell
-# On the RENDER BOX.
-$mingit = "C:\Users\herman.ras\AppData\Roaming\MinGit\cmd"
+# On the RENDER BOX. Both locations are real -- see the table in step 0.
+$mingit = "C:\Users\herman.ras\AppData\Local\MinGit\cmd"
+if (-not (Test-Path $mingit)) { $mingit = "C:\Users\herman.ras\AppData\Roaming\MinGit\cmd" }
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
     "already resolves: " + (Get-Command git).Source
@@ -221,6 +229,23 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 `art_work\out`, so anything baked as a one-off probe is staged along with the
 batch whether you meant it or not.
 
+**THE COLOUR CHECK IS A GATE ON STAGING, AND AN OLD ACCEPTED DEFECT WILL HOLD
+THE WHOLE RUN.** `render_box_bake.ps1` skips staging entirely when
+`check_colour_consistency.py` reports anything, and that check looks at **every**
+colourable unit in `art_work\out`, not just the ones this run baked. On
+2026-08-27 a four-recipe run baked cleanly and staged nothing, because
+`vis.fishing_ship` blue and orange have been 0.84% short since a 3-wide batch in
+August and the project owner had chosen to leave them.
+
+Two ways out, and prefer the first:
+
+1. **Re-bake the flagged unit's eight colours here.** The shards make that safe
+   at width, so the shortfall is repaired rather than tolerated, and the gate
+   then passes honestly. A full `-PipelineStale` run does it as a side effect.
+2. Stage by hand once you have *read* the shortfall and accepted it:
+   `& $py tools\stage_atlases.py`. Do not do this without reading it — the check
+   exists because a short bake reports `ok`, packs cleanly and tints correctly.
+
 The master art checkout is never written by a sharded run, so **no restore is
 needed afterwards**. It is verified at the end of every run anyway, because an
 assumption that is never checked is only a hope.
@@ -232,6 +257,8 @@ assumption that is never checked is only a hope.
 | symptom | cause |
 |---|---|
 | `nothing is out of date` on a pipeline fix | missing `-PipelineStale` |
+| a **handful** of bakes when you expected hundreds | also missing `-PipelineStale` — it selected only the recipes someone edited |
+| `staging SKIPPED -- colour consistency failed` | a colourable unit is short **anywhere** in `out`, not necessarily one this run baked (step 7) |
 | atlases stamp `isobake_commit: null` | git not on the **Windows** PATH (step 2b) |
 | venv cannot import anything | toolchain copied to a different path or user (step 2a) |
 | `shard N missing` | needs `-Setup` once (step 4) |

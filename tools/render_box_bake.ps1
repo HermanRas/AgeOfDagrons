@@ -198,15 +198,22 @@ Write-Host ("  colour variants: {0}" -f $playerNames.Count)
 Write-Host ("  total          : {0} bakes" -f ($baseNames.Count + $playerNames.Count))
 Write-Host ("  lists written to {0}" -f $RunDir) -ForegroundColor DarkGray
 
+# Warn whenever the pipeline dimension was not asked for, NOT only when the
+# selection came out empty. A partial selection is the more dangerous case: on
+# 2026-08-27 this ran without -PipelineStale, found the 4 recipes that happened
+# to have been edited that day, baked them, and reported a successful run -- while
+# leaving 240 mirrored atlases untouched. A zero would at least have looked odd.
+if (-not $PipelineStale) {
+    Write-Host ""
+    Write-Host "  NOTE: this selection is recipe-hash only. It says NOTHING about whether the" -ForegroundColor Yellow
+    Write-Host "  isobake code that baked an atlas has changed since. If you are here because" -ForegroundColor Yellow
+    Write-Host "  the PIPELINE changed, stop and re-run with -PipelineStale (and -Directions" -ForegroundColor Yellow
+    Write-Host "  to bound it) -- otherwise this run does only the recipes someone edited." -ForegroundColor Yellow
+}
+
 if (($baseNames.Count + $playerNames.Count) -eq 0) {
     Write-Host ""
     Write-Host "nothing is out of date. Done." -ForegroundColor Green
-    if (-not $PipelineStale) {
-        Write-Host "  NOTE: every recipe matches its atlas -- but this says nothing about the" -ForegroundColor Yellow
-        Write-Host "  isobake code that baked them. If you are here because the PIPELINE changed," -ForegroundColor Yellow
-        Write-Host "  re-run with -PipelineStale (and -Directions to bound it), or the night" -ForegroundColor Yellow
-        Write-Host "  does nothing at all." -ForegroundColor Yellow
-    }
     exit 0
 }
 
