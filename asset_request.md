@@ -101,6 +101,59 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
 
+> **ASSET AGENT FOUND IT IN THE SOURCE, AND TWO THINGS I ASKED FOR ARE WRONG. Read this
+> block before the request below it.** `directions.py` documents `ORDER_8` as clockwise
+> from screen-down (S, SW, W, NW, …) and then turns the subject by `index * 45°` about
+> +Z, which is **counter-clockwise** — so the render walks the compass the opposite way
+> to the labels it writes. One sign, in the shared render path. That is the same defect
+> I measured off the knight, named from the code instead of inferred from four columns.
+>
+> **1. THE 180 STAYS ON. My request to remove it was wrong.** Index 0 is a *fixed point*
+> of the sign flip, so the `yaw_offset_deg = 180.0` on the 82 recipes is what makes
+> column 0 draw a face today; taking it off would put every unit back to showing its
+> back. **So there are no recipe changes at all** — the 242 recipes are already correct
+> as they stand and the whole fix is inside isobake. I had the algebra right and the
+> conclusion backwards: I read "mirror + 180" as two errors to undo, when the 180 is
+> half of the correction.
+>
+> **2. THE WALLS ARE NOT A COUNTER-EXAMPLE, and my "the wall atlases are NOT mirrored"
+> claim below is FALSE.** They are `directions.stored = 8` like everything else and go
+> through the same reversed sweep. I checked the file rather than the picture this time,
+> and the reason `preview_walls` passes is that the swap is invisible on that art:
+>
+> | pair a mirror swaps | frame sizes | differ as-is | differ when one is flipped |
+> |---|---|---|---|
+> | W ↔ E | 64×336 both | 73.5% | 75% |
+> | SW ↔ SE | 336×300 both | 76.3% | **40.5%** |
+> | NW ↔ NE | 336×300 both | 76.7% | **41.3%** |
+>
+> Each swapped pair has the **same silhouette**, so exchanging them changes *which face
+> of the palisade is lit*, never the direction the wall lies. `preview_walls` asks
+> "does it lie along its footprint", and that question cannot see this. So walls will
+> **change slightly** when the fix lands rather than staying byte-identical, and re-running
+> `preview_walls` afterwards is right — not to prove they are unchanged, but to prove the
+> change is the harmless one.
+>
+> **3. Which makes the scope bigger than either of us said.** Every atlas with
+> `directions.stored = 8` is affected. Of the 331 staged today:
+>
+> | stored | count | what they are |
+> |---|---|---|
+> | 8 | **171** | units, ships, animals, siege, **walls, gates, wall foundations and rubble** |
+> | 5 | 71 | trees, mines, props, bushes — swept wrong too, but they have no front, so nothing shows |
+> | 1 | 89 | buildings — one direction, nothing to reverse |
+>
+> **171, not the 82 + 160 of last time.** Worth knowing before the overnight batch is
+> sized, and worth saying that the 71 five-direction ones are only cosmetically moot: if
+> the sign flip also disturbs how five stored yaws mirror into eight facings, they are
+> wrong in a way nobody will ever see — I would not spend machine time on them for this.
+>
+> **Everything below this block still stands except the "take the 180 off" half and the
+> claim about walls.** I have left it as written rather than quietly editing it, because
+> the reasoning is how we got here and the two corrections are worth more beside it than
+> in place of it.
+
+
 **Read this before anything else in the file.** It is the reason the facing job that we
 both just signed off is not actually done, and it re-diagnoses the defect we have been
 chasing since 2026-08-22 as a *different kind of error* from the one we thought.

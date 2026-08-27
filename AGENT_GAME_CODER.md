@@ -449,15 +449,30 @@ plugs in; read the row rather than re-deriving it:
   reflection** — the half-turn just moved the mirror from the E–W axis (which reads as
   "faces backwards") to the N–S one. Measured on `unit.knight`: stored index 2, labelled
   W, draws a horse whose head points screen RIGHT; index 6, labelled E, points LEFT.
-  **The game cannot fix it either, and that was checked rather than assumed:** the
-  one-character change to `Iso.sim_facing_to_sprite` (`7 - facing` → `facing + 1`) fixes
-  every unit and **breaks the walls, whose atlases are NOT mirrored** — `preview_walls`
-  renders both axes lying along their footprints, which is exactly the check a mirror
-  fails. Two atlas families that disagree can only be reconciled per-atlas, and per-atlas
-  is the `directions_reversed` patch the owner reverted. So it is the art side's, with a
-  specification this time rather than a guess: emit the 8 directions in the wall bakes'
-  rotational sense and take the 180 back off in the same edit. PLAN.md §13.2 item 10,
-  `asset_request.md` [P0]. **What the re-bake DID close: the stale colour atlases.**
+  **Root-caused in isobake's source the same day** (the art agent, from the code rather
+  than from pictures): `directions.py` documents `ORDER_8` as clockwise from screen-down
+  and then turns the subject by `index * 45°` about +Z, which is counter-clockwise. **One
+  sign in the shared render path**, so the render walks the compass the opposite way to
+  the labels it writes.
+
+  Two things that follow, and I had both of them wrong first:
+  - **The 180° STAYS ON.** Index 0 is a *fixed point* of the sign flip, so the
+    `yaw_offset_deg = 180.0` added on 2026-08-25 is half the correction, not a second
+    error. I asked for it to be removed; that would put every unit back to showing its
+    back. **No recipe changes at all** — the fix is entirely inside isobake.
+  - **The walls ARE mirrored, and are not the counter-example I claimed.** They are
+    `stored = 8` like everything else. `preview_walls` passes because the swap is
+    *invisible on that art*, not absent: each swapped pair has the same silhouette
+    (W↔E both 64×336; SW↔SE both 336×300, 40% different flipped against 76% as-is), so
+    exchanging them changes which face of the palisade is lit and never the direction it
+    lies. **That check cannot see this fault** — the second time in one day a green check
+    turned out to be blind to the thing it was being trusted for.
+  - So **scope is 171 of the 331 staged atlases**, not 82 + 160: everything `stored = 8`,
+    walls and gates and wall foundations and rubble included. The 71 `stored = 5` ones
+    (trees, mines, props) are swept wrong too and have no front, so nothing shows.
+
+  PLAN.md §13.2 item 10, `asset_request.md` [P0]. **What the re-bake DID close: the
+  stale colour atlases.**
 
   The rest of this entry is the record of that re-bake, which is still worth reading:
   - **The recipe half landed 2026-08-25** (`5737e00`, corrected by `96d2318`): all 82
