@@ -4,10 +4,17 @@
 # Actor verified 2026-08-15: gaia/fauna_wolf.xml -> fauna/wolf.xml, already
 # correct.
 #
-# STILL STATIC, but no longer because it has to be. PLAN.md 13.2 item 8's
-# quadruped animation-transfer bug is FIXED (per-clip `location_scale`), so the
-# reason recorded here -- "no clip attached, so the bug never triggers" -- is a
-# workaround for a problem that no longer exists. Scheduled as A.4a.
+# ANIMATED 2026-08-27 (asset_request.md P1 / A.4a). It was static for a reason
+# that had already been fixed: PLAN.md 13.2 item 8's quadruped
+# animation-transfer bug, worked around here by attaching no clip at all so the
+# bug could never trigger. Per-clip `location_scale` fixed the bug itself, and
+# this recipe kept the workaround long after it stopped being needed.
+#
+# `location_scale` is NOT set on any clip below, and that is a measurement
+# rather than an omission -- the wolf's clip .dae files import at the same
+# scale as its mesh, so the default 1.0 is correct and the mesh does not tear.
+# Do not copy deer_carcass.toml's 0.0319 here: that figure is specific to the
+# deer's death clip and applying it would collapse the animation to nothing.
 #
 # wolf.xml declares the richest clip set of any animal in the roster: Idle
 # (wolf_idle_01/02/03), Walk (wolf_walk), Run (wolf_run), attack_melee
@@ -27,7 +34,14 @@ actor = "fauna/wolf.xml"
 [render]
 # `isobake inspect` measures 0.800 x 3.410 x 2.291 m raw -- close to deer.xml,
 # slightly taller/leaner, so deer.toml's canvas is a safe start.
-canvas = [128, 128]
+#
+# 256, up from 128, when the clips landed 2026-08-27. A MOVING wolf does not fit
+# a canvas calibrated on a standing one: at 128 the clip-check reported 67 of
+# 240 frames touching the render edge, and it started with `idle` rather than
+# the run or the lunge -- the rest pose was already close to the edge and any
+# animation at all pushed it over. Expect the same on the other five species;
+# read the batch summary rather than assuming their canvases still hold.
+canvas = [256, 256]
 supersample = 4
 directions = 5
 frame_origin_at = 0.15
@@ -36,6 +50,48 @@ samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
 # atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
 yaw_offset_deg = 180.0
+
+# Clip names are case-sensitive and 0 A.D. is NOT consistent about them across
+# fauna: the wolf declares `attack_melee` and `death` in lower case, the boar
+# `attack_melee` but `Death`, the bear `Attack_Melee` and the zebu
+# `Attack_melee`. Run `tools/check_clips.py` after editing any of these -- it
+# resolves every name against the actor in about a second, and the alternative
+# is a bake that fails ten minutes in.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+# The roster's only hostile gaia entity, so it is the one animal that needs an
+# attack at all.
+clip = "attack_melee"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "death"
+frames = 10
+fps = 12
+loop = false
+
+[anims.decay]
+clip = "death"
+frames = 2
+fps = 1
+loop = false
+# Pinned to the clip's final pose: without it, decay samples position 0.0, which
+# is the death clip's FIRST frame -- the wolf still standing -- so the corpse
+# stands up for a frame before falling over again.
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

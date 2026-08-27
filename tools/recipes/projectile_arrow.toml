@@ -21,6 +21,25 @@ samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
 # atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
 yaw_offset_deg = 180.0
+# MEASURED 2026-08-27 -- asset_request.md P4. 0 A.D. authors this shaft STANDING
+# UP (inspect: 1.645 m on Z against 0.11 across) because its engine points
+# projectiles at runtime; a baked sprite has no runtime, so a volley read as a
+# row of planted stakes: every direction trimmed to an identical 2 x 17 px
+# vertical stick.
+#
+# The rule, measured from two probes rather than derived: the HEAD's elevation
+# above the horizontal is (90 - pitch). So 90 flies flat, 65 points 25 deg UP,
+# and 115 points 25 deg DOWN. Values below 0 or above 180 fly the shaft
+# BACKWARDS -- -115 put the arrowhead at the trailing end, because which end of
+# the mesh leads is not predictable from the bounding box.
+#
+# 115 = 25 deg nose-down, which reads as flight in an isometric view where a
+# true horizontal reads as a floating stick.
+#
+# Verified by the trimmed frame sizes, which say it better than a picture:
+#   before  S 2x17   E 2x17   NE 2x17    <- a stick, identical from every angle
+#   after   S 2x3    E 18x9   NE 14x14   <- foreshortens head-on, lies flat side-on
+pitch_offset_deg = 115.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

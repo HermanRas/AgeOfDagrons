@@ -1,0 +1,116 @@
+# PARKED -- NOT READY TO BAKE. This directory exists so that a recipe can be
+# kept, with its findings, without being picked up by a run: `bake_batch.ps1` and
+# `stale_recipes.py` both glob `recipes/*.toml` NON-recursively, so a subdirectory
+# is invisible to them (the same mechanism that keeps the 160 generated colour
+# recipes out of an ordinary batch). Move it back up one level when it is fixed.
+#
+# Parking it is not optional tidiness: BOTH MACHINES SHARE THIS FOLDER THROUGH
+# GOOGLE DRIVE, so a recipe merely existing in recipes/ reaches the render box
+# whether or not it is committed, and a recipe with no staged atlas counts as
+# "never baked" and therefore as work to do.
+#
+# WHAT IS WRONG, both found by probe on 2026-08-27 and both real:
+#   1. The four crew do not place. `engineer_a..d` land stacked in a vertical
+#      column beside the cart, overlapping each other at staggered heights,
+#      instead of standing around it.
+#   2. It cannot animate yet -- see the [anims] note below.
+# The wagon, the oxen and the cargo are all correct, so this is close.
+#
+# Trebuchet (PACKED state) -- the travelling half of the pack/unpack state
+# machine, PLAN.md 9.2.1 item 5, scoped with 4.13. asset_request.md P2.
+#
+# Pairs with trebuchet_deployed.toml. The roster names two actors, not one actor
+# in two poses:
+#
+#   units/han/siege_mangonel_unpacked -> units/han/siege_mangonel.xml
+#   units/han/siege_mangonel_packed   -> units/han/siege_mangonel_pivot_packed.xml   <- THIS FILE
+#
+# A PACKED MANGONEL IS A WAGON, which is the whole point of the request: the two
+# states must be tellable apart at a glance. This is a four-wheeled cart drawn by
+# two zebu with the engine struck down as cargo and four crew walking alongside --
+# not the deployed engine with its arm lowered.
+#
+# NESTED-ACTOR STRUCTURE, and it is the onager's exactly (AGENT_ASSET.md §4).
+# The actor in [source] is a PIVOT BASE: an unrigged mesh
+# (structural/han_mangonel_packed_pivot.dae) that declares NO animations at all
+# and carries everything else as props --
+#
+#   whagon      units/han/siege_mangonel_packed.xml   <- the wagon, and the rig
+#   engineer_a..d  props/units/han/mangonel_infantry_*.xml
+#
+# -- and the wagon in turn carries the mangonel at `cargo` and a zebu at each of
+# `horse_l` / `horse_r`.
+#
+# So `clip = "Idle"` WOULD RESOLVE TO NOTHING AND ABORT THE BAKE: clip names
+# resolve against the actor named in [source], and this one declares none. The
+# clips are on the nested wagon. Naming the FILE bypasses the lookup, which is
+# the same workaround onager.toml uses and for the same reason.
+#
+# Know the consequence before copying this: `file` also becomes the clip's
+# IDENTITY, so two anims naming one file share a single clip. That is survivable
+# here only because idle and walk name different files -- 0 A.D. points Walk and
+# Run at the same `_move.dae`, so a `run` added later would silently be `walk`.
+id      = "vis.trebuchet_packed"
+adapter = "zeroad"
+
+[source]
+actor = "units/han/siege_mangonel_pivot_packed.xml"
+# NO `drive_riders = false` HERE, unlike the deployed half, and the difference is
+# structural rather than a preference. On the deployed engine the rig belongs to
+# the SUBJECT and the crew are riders, so switching riders off costs only the
+# crew's motion. Here the rig belongs to a nested prop -- the wagon -- so the
+# clips this recipe needs ARE rider clips, and switching them off leaves nothing
+# to play. Probed 2026-08-27: with `drive_riders = false` the bake aborts with
+#   animation 'idle' wants clip '...', which this source does not have. Available: []
+# which is an empty list because the root pivot declares nothing and the wagon's
+# own animations were never imported.
+
+[render]
+# 512 is the deployed half's calibrated figure, carried over as the starting
+# guess per the interpolate-then-trust-the-clip-check rule. A packed engine is
+# LOWER but LONGER than a deployed one -- a cart plus a pair of draught animals
+# nose to tail -- so length is what will decide this, not height.
+canvas = [512, 512]
+supersample = 2
+directions = 5
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+# The zeroad adapter renders every subject 180 deg from the direction the atlas
+# then labels it; this cancels it. Kept from the deployed half -- it is a
+# per-source correction and both halves share a source convention.
+yaw_offset_deg = 180.0
+
+# STATIC, AND NOT BECAUSE IT HAS TO STAY THAT WAY -- probed 2026-08-27 and
+# parked deliberately, because the silhouette is what P2 asked for and the
+# animation is a pipeline question that should not hold it up.
+#
+# The wagon HAS the clips. `units/han/siege_mangonel_packed.xml` declares Idle
+# (x3, all pointing at one file) and Walk/Run (both pointing at another), so a
+# packed engine could roll its wheels rather than skate. Two attempts, both
+# failing identically with `Available: []`:
+#
+#   1. file only, drive_riders = false  -> riders are never imported, and the
+#      wagon IS a rider here, so there was nothing to play.
+#   2. clip + file, drive_riders default -> the animation .dae LOADS (the log
+#      names it as an input file) and the subject's clip set is still empty.
+#
+# So it is not the recipe. The clip set is built from the animations the actor in
+# [source] DECLARES, and this pivot declares none; the onager works because its
+# subject armature is the arm that owns the clips, while here the rig belongs to
+# a prop one level further down. Fixing it means teaching the zeroad adapter to
+# merge a nested prop's animations into the subject's clip set when the subject's
+# own actor declares none -- a real change, with the onager as the regression
+# test that it does not break the working case.
+#
+# Until then this bakes as one rest-pose frame per direction, which still tells a
+# packed engine from a deployed one at a glance, and the game already wires every
+# siege engine at `speed: 0`.
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/han/siege_mangonel_pivot_packed.xml"
