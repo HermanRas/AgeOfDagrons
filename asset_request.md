@@ -99,6 +99,61 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
+### PROJECT OWNER, 2026-08-27 — GATES NEED AN OPEN AND A CLOSED STATE
+
+**Filed by the project owner.** Wire it to the gate's **locked status**: a locked gate
+draws closed, an unlocked one draws open.
+
+**Checked, and the answer is better than "does it exist" — 0 A.D. ships all four states
+and we are already baking the right actors.** Each gate actor declares:
+
+```
+gate_closed    gate_opening    gate_open    gate_closing
+```
+
+**Four of our five gate recipes can have this today, with no re-pointing:**
+
+| id | actor | clips | age |
+|---|---|---|---|
+| `vis.wall_gate` | athenians `wall_gate_door.xml` | ✅ all four | 1 |
+| `vis.wall_wood_gate_age2` | germans `wooden_wall_gate.xml` | ✅ all four | 2 |
+| `vis.wall_stone_gate_age3` | achaemenids `wall_gate.xml` | ✅ all four | 3 |
+| `vis.wall_reinforced_gate_age4` | romans `wall_gate.xml` | ✅ all four | 4 |
+| **`vis.wall_wood_gate_age3`** | britons `wall_gate.xml` | ❌ **none at all** | 3 |
+
+**All five bake STATIC today.** Nothing is broken — the states were simply never asked
+for. The recipes need an `[anims]` block, which is the same shape as any other.
+
+**The one that cannot: the age-3 wooden gate.** The Briton actor has no animations of any
+kind — it has `garrisoned`/`ungarrisoned` variants and that is all. Three ways out, and
+**this is the owner's call because it is a look, not a technique**:
+
+1. **Leave it static.** It is the only gate that never opens, which is visible.
+2. **Re-point it to `carthaginians/gate.xml`**, which does declare all four. Different
+   civ, different look, and age 2 and age 3 would no longer be the same family.
+3. **Re-point it to the German gate** used at age 2 — animates, but then ages 2 and 3
+   share one sprite.
+
+**How I would ship it, for the game side to confirm:** **one atlas per gate with `closed`
+and `open` as clips**, not two visual ids. `EntityView.play_anim` already falls back to
+`static` per clip, so a gate whose atlas lacks `open` degrades to its rest pose instead of
+vanishing — which is exactly what the Briton one needs. Picking a clip by locked status is
+then the same code path as picking `walk` over `idle`.
+
+I would bake **all four clips** rather than two. `closed` and `open` are held poses and
+cost one frame each; `opening` and `closing` are ~12 frames and give you the swing for
+free if you ever want it. **Use two and ignore the others** — an unused clip costs page
+space, not complexity.
+
+**Cannot be baked this minute:** the batch running now has all five gate recipes in it, so
+editing them mid-run would change a recipe a slot has not reached yet. It is five small
+recipes and a short re-bake once the box is free.
+
+**Where it plugs in once baked (game side):** no new `visuals.json` entries and no new
+ids — the same five atlases gain clips. `SimWall`/whatever carries the locked flag picks
+`closed` or `open`, the way `UnitView` picks a unit's clip. **I will ping you here when the
+bake lands** rather than assume you are watching.
+
 ### PROJECT OWNER, 2026-08-27 — EXTRA TREES, FOUR POOLS, so the game side can vary flora per map
 
 **Filed by the project owner directly.** The game side picks a pool per map type and rolls
