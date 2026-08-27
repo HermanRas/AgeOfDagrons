@@ -259,6 +259,7 @@ static func build(w: SimWorld, cfg: MatchConfig) -> void:
 		build_from(w, cfg.map_data)
 	else:
 		build_debug_map(w)
+	_place_ai_handicaps(w)
 
 
 ## Populate `w` from a `MapData` (2.4b): copy the terrain, then spawn everything the
@@ -456,6 +457,51 @@ static func _place_villagers(w: SimWorld, player_id: int, tc: SimBuilding) -> vo
 			break                      # nowhere left; better 4 villagers than a crash
 		taken.append(tile)
 		w.spawn_unit(&"unit.villager", player_id, tile)
+
+
+## THE UNFAIR BOT'S HEAD START (`AI_Player_difficulty.md`: *"starts with 8 villagers and
+## 2 swordsmen and 1 scout"*), read from `AIProfile.start_units` so every difficulty can
+## have one and only Unfair currently does.
+##
+## AFTER BOTH MAP KINDS, at the one call site in `build()`, because the two place their
+## opening units by completely different routes: the debug map calls `_place_villagers`,
+## and a generated map spawns everything out of `MapData.entities`. Hooked into the
+## first only, this silently did nothing on every generated map -- which is every map a
+## real match uses.
+##
+## Goes through the same `_next_free_tile` walk as the ordinary five, so the handicap
+## cannot land a swordsman in the sea or on top of a villager, and it is deterministic
+## for the same reason they are.
+##
+## **It is the START that cheats, not the thinking.** Unfair plays Hard's rule set; if
+## it also played better, that would be two changes wearing one name and nobody could
+## say afterwards which one made it hard.
+static func _place_ai_handicaps(w: SimWorld) -> void:
+	for p in w.players:
+		if not p.is_ai:
+			continue
+		var profile: AIProfile = GameDataRegistry.ai_profile(p.ai_level)
+		if profile.start_units.is_empty():
+			continue
+		var rect := Rect2i(_fallback_origin(w), Vector2i.ONE)
+		for id in w.entities:
+			var b = w.entities[id]
+			if b is SimBuilding and b.owner_id == p.id \
+					and b.def_id == &"building.town_center":
+				rect = (b as SimBuilding).footprint_rect()
+				break
+		var taken: Array[Vector2i] = []
+		# Sorted, because iterating a Dictionary's insertion order is exactly the kind
+		# of thing that is stable on one machine and not on another (PLAN.md 7.1).
+		var ids := profile.start_units.keys()
+		ids.sort()
+		for def_id in ids:
+			for i in range(int(profile.start_units[def_id])):
+				var tile := _next_free_tile(w, rect, taken)
+				if tile.x < 0:
+					break
+				taken.append(tile)
+				w.spawn_unit(def_id, p.id, tile)
 
 
 static func _next_free_tile(w: SimWorld, rect: Rect2i, taken: Array[Vector2i]) -> Vector2i:

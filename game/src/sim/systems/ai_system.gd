@@ -1,11 +1,16 @@
-## Drives every `SimPlayer.is_ai` player through `AIPlaytest.SCRIPT` (PLAN.md 12.2a).
+## Drives every `SimPlayer.is_ai` player from its difficulty's rule set (PLAN.md 12.2b),
+## loaded from `data/ai_<level>.json`. See `AIProfile` for the shape of a rule and for
+## why this replaced a timed script.
 ##
-## **This is the PlayTest AI, and it is deliberately not the AI that was parked.**
-## Difficulty levels and real decision flow are 12.2b, and they want a game whose
-## balance has been played first. What this is for is threefold: an opponent for solo
-## play, something for the win condition to be won against, and -- the reason it comes
-## before multiplayer -- **an automated full-match regression test**, since a match that
-## ends exercises 11.1 and the result screen without anybody holding two phones.
+## **The five levels are real as of 2026-08-27.** Until then only PASSIVE differed and
+## Normal, Hard and Unfair all fell through to Easy. The switches were already in place
+## -- `SimPlayer.AILevel`, the lobby's roles, `MatchConfig.ai_levels` -- and what was
+## missing was behaviour behind them, which is now a file each.
+##
+## What this is for is threefold: an opponent for solo play, something for the win
+## condition to be won against, and -- the reason it came before multiplayer -- **an
+## automated full-match regression test**, since a match that ends exercises 11.1 and
+## the result screen without anybody holding two phones.
 ##
 ## ## The four rules it is built on
 ##
@@ -117,17 +122,36 @@ func log_lines() -> Array[String]:
 	return _log
 
 
-func step_of(player_id: int) -> int:
-	return int((_progress.get(player_id, {}) as Dictionary).get("step", 0))
+## How many decisions this bot has taken. **Not a position in a script** -- there is no
+## script and no order to be partway through -- so it answers "is it playing at all"
+## and "did that change anything", which is what every caller actually wanted from the
+## old `step_of()`. Renamed rather than reused: a number that used to mean "how far
+## through the opening" and now means "how many times it acted" would read the same and
+## be wrong.
+func decisions_of(player_id: int) -> int:
+	return int((_progress.get(player_id, {}) as Dictionary).get("fired", 0))
 
 
+## The rule index this bot last acted on, or -1. For the log and for a test that wants
+## to say WHICH decision, not merely that there was one.
+func last_rule_of(player_id: int) -> int:
+	return int((_progress.get(player_id, {}) as Dictionary).get("rule", -1))
+
+
+## ONE DECISION PER THINK INTERVAL, chosen by CONDITION rather than by position in a
+## script (PLAN.md 12.2b). See `AIProfile` for why the script and its timeouts went.
+##
+## The loop is: walk the profile's rules in order; the first whose `when` holds and
+## which can actually be issued wins, and nothing else happens this interval. A rule
+## that matches but cannot be carried out **reserves its cost and the walk continues**
+## -- which is the whole of "saving up", and the reason a 200-wood house does not
+## starve a 400-wood barracks forever.
+##
+## There is no step pointer and no progress state to keep. The AI's state IS the world,
+## which is what makes this survive a random map: nothing here assumes how far anything
+## is, only what exists.
 func _advance(w: SimWorld, p: SimPlayer) -> void:
-	var state: Dictionary = _progress.get(p.id,
-			{"step": 0, "since": w.tick, "issued": false, "assigned": [] as Array[int]})
-	_progress[p.id] = state
-
-	var index: int = state["step"]
-	var script_done := index >= AIPlaytest.SCRIPT.size()
+	var profile: AIProfile = GameDataRegistry.ai_profile(p.ai_level)
 
 	# STANDING ORDERS RUN FIRST AND ALWAYS, and getting that wrong deadlocked the AI in
 	# a way only a full run showed. They used to be skipped while the current step was
@@ -136,40 +160,212 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 	# gather, because the villagers who would have gathered it were the ones being held
 	# in reserve. Five idle villagers, forever.
 	#
-	# It is safe now for the same reason it was needed: `_pick_units` can pull a villager
-	# off gathering, so a step does not depend on anybody being idle.
+	# TWO GATES ON THE ATTACK HALF, and both were paid for.
 	#
-	# A PASSIVE BOT NEVER GETS THE ATTACK HALF OF THEM. Skipping the script's `attack`
-	# step is not enough on its own: skipping it COMPLETES the script, and a completed
-	# script is exactly what switches the standing order's attack on -- so a passive bot
-	# would have finished its economy and then thrown its army at you anyway. Gated
-	# here, at the one call site, so `_keep_busy` stays ignorant of difficulty.
+	# `profile.attacks` keeps a PASSIVE bot from throwing the scout it started with at
+	# you having never decided to. That used to be a hard-coded `ai_level != PASSIVE`.
+	#
+	# `state.attacked` preserves what the old "script has finished" gate was really for:
+	# **the rule set decides WHEN to attack, and this only keeps it going afterwards.**
+	# Without it the standing order threw the starting scout at the enemy base on tick
+	# 600, which is not an opening -- it is giving away a unit before the first house is
+	# up. The script version happened to express "not yet" as "not finished"; a rule set
+	# has no end, so the honest form is "its attack rule has fired at least once".
+	var state: Dictionary = _progress.get(p.id,
+			{"wake": 0, "fired": 0, "rule": -1, "attacked": false})
+	_progress[p.id] = state
+
 	if w.tick % STANDING_ORDER_INTERVAL == 0:
-		_keep_busy(w, p, script_done and p.ai_level != SimPlayer.AILevel.PASSIVE)
-	if script_done:
-		return
-	var step: Dictionary = AIPlaytest.SCRIPT[index]
+		_keep_busy(w, p, profile.attacks and bool(state["attacked"]))
 
-	# Issue once, then watch. Re-issuing every tick would spam the command queue with
-	# orders for units already carrying them out, and for `train` it would empty the
-	# treasury into a queue nobody asked for.
-	if not state["issued"]:
-		if w.tick % THINK_INTERVAL != 0:
-			return          # see THINK_INTERVAL: retrying this every tick was the hang
+	if w.tick % THINK_INTERVAL != 0:
+		return          # see THINK_INTERVAL: thinking every tick was the hang
+	# The reaction delay. Not a timeout: it never abandons anything, it only decides
+	# how long after the conditions come true this bot notices (`AIProfile.lag_min`).
+	if w.tick < int(state["wake"]):
+		return
+
+	var reserved: Dictionary = {}
+	for index in range(profile.rules.size()):
+		var rule: Dictionary = profile.rules[index]
+		if not _matches(w, p, profile, rule.get("when", {}) as Dictionary):
+			continue
+
+		# AN ATTACK RULE FIRES ONCE. It is the one verb with no self-limiting condition
+		# -- "attack" does not stop being worth doing -- so without this it re-fires
+		# every interval, and each firing re-targets the WHOLE army at whatever is
+		# nearest. Measured in a full AI-vs-AI run: both bots issuing an attack order
+		# roughly twice a second for 12,000 ticks, which is an army that never settles
+		# on anything long enough to finish killing it.
+		#
+		# Once is all it takes, because `_keep_busy`'s standing order picks it up from
+		# there and sends every idle soldier back out. That division is the design:
+		# **the rule set decides WHEN to attack, the standing orders keep it going.**
+		if String(rule.get("do", "")) == "attack" and bool(state["attacked"]):
+			continue
+
+		# Money it does not have YET. Reserve and keep walking: a cheaper rule below
+		# may still run, but only on what is left after this one's cost is set aside.
+		if not _affordable(w, p, rule, reserved):
+			_reserve(reserved, _cost_of(rule))
+			continue
+
 		_why = ""
-		state["issued"] = _issue(w, p, step, state)
-		if state["issued"]:
-			state["since"] = w.tick
-			_note(w, "p%d step %d: %s" % [p.id, index, _describe(step)])
-		elif w.tick - int(state["since"]) > int(step.get("timeout", 300)):
-			_skip(w, p, state, index, "could not be issued -- %s"
-					% (_why if _why != "" else "no reason given"))
-		return
+		var scratch: Dictionary = {}
+		if _issue(w, p, rule, scratch):
+			state["wake"] = w.tick + _lag(profile, p.id, w.tick, index)
+			state["fired"] = int(state["fired"]) + 1
+			state["rule"] = index
+			if String(rule.get("do", "")) == "attack":
+				state["attacked"] = true          # unlocks the standing-order attack
+			_note(w, "p%d rule %d: %s" % [p.id, index, _describe(rule)])
+			return
 
-	if _is_done(w, p, step, state):
-		_next(w, p, state, index, "done")
-	elif w.tick - int(state["since"]) > int(step.get("timeout", 300)):
-		_skip(w, p, state, index, "timed out")
+		# It matched and was affordable and STILL could not be issued -- no villager
+		# free, no legal spot, no node of that kind left. Reserve anyway and try the
+		# next rule: the alternative is a bot that stands still because the thing it
+		# most wants to do happens to be impossible on this map, which is the old
+		# script's failure mode wearing a new hat.
+		_reserve(reserved, _cost_of(rule))
+
+	# Nothing matched. That is a legitimate, common state -- the economy is running and
+	# every target is met -- and the standing orders above are what fill it.
+
+
+# ── the condition vocabulary ────────────────────────────────────────────────
+#
+# Everything a rule can ask about the world. Deliberately small: each of these is a
+# question a person asks themselves while playing, and anything needing more than
+# these is probably a rule that wants splitting in two.
+
+func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary) -> bool:
+	if when.has("age") and p.age != int(when["age"]):
+		return false
+	if when.has("age_min") and p.age < int(when["age_min"]):
+		return false
+	if when.has("age_max") and p.age > int(when["age_max"]):
+		return false
+	# Ticks since the match began. The ONLY clock in the design, and it gates when
+	# aggression unlocks rather than abandoning anything -- see `ai_easy.json`.
+	if when.has("after_ticks") and w.tick < int(when["after_ticks"]):
+		return false
+
+	for kind in when.get("stock", {}):
+		if int(p.stock.get(kind, 0)) < int((when["stock"] as Dictionary)[kind]):
+			return false
+	for def_id in when.get("fewer_than", {}):
+		if _count_owned(w, p, def_id) >= int((when["fewer_than"] as Dictionary)[def_id]):
+			return false
+	for def_id in when.get("at_least", {}):
+		if _count_owned(w, p, def_id) < int((when["at_least"] as Dictionary)[def_id]):
+			return false
+	for kind in when.get("gathering_fewer_than", {}):
+		if _count_gathering(w, p, kind) \
+				>= int((when["gathering_fewer_than"] as Dictionary)[kind]):
+			return false
+	return true
+
+
+## How many of `def_id` the player has, **counting the ones not finished yet**.
+##
+## THIS IS THE LOAD-BEARING DETAIL OF THE WHOLE DESIGN. Rules are re-evaluated every
+## interval, so a count that ignored foundations and production queues would report
+## "no house" for the entire minute it takes to build one -- and the AI would order
+## another house every half second until it ran out of wood and villagers. A building
+## under construction and a unit in a queue are both "one I have already started", and
+## that is what a person means.
+func _count_owned(w: SimWorld, p: SimPlayer, def_id: StringName) -> int:
+	var n := 0
+	for e in w.entities.values():
+		if not e.alive or e.owner_id != p.id:
+			continue
+		if e.def_id == def_id:
+			n += 1
+		if e is SimBuilding:
+			for entry in (e as SimBuilding).queue:
+				if StringName((entry as Dictionary).get("def_id", &"")) == def_id:
+					n += 1
+	return n
+
+
+## Villagers working a resource of `kind`, walking to it or carrying it home. What
+## "two on berries" means once the walk has started.
+##
+## **KEYED ON `gather_node_id`, NOT ON `task_target_id`.** A gather trip is walk-out,
+## extract, walk-home, deposit, and on the way home `task_target_id` is the DROP-OFF
+## BUILDING -- so asking it what kind this villager is on answers "none" for the whole
+## return leg. That is not a rounding error: it counted 1 of 5 villagers, which kept
+## `gathering_fewer_than: {food: 2}` true forever, so the AI re-issued the same berry
+## order 26 times in 1200 ticks and never reached a single build rule. `gather_node_id`
+## is the node being worked and survives the whole round trip, which is what the
+## question means.
+func _count_gathering(w: SimWorld, p: SimPlayer, kind: StringName) -> int:
+	var n := 0
+	for e in w.entities.values():
+		if not (e is SimUnit) or not e.alive or e.owner_id != p.id:
+			continue
+		var u: SimUnit = e
+		if u.task != SimUnit.Task.GATHER and u.task != SimUnit.Task.RETURN:
+			continue
+		var node = w.entities.get(u.gather_node_id)
+		if node != null and GatherSystem.harvest_kind(node) == kind:
+			n += 1
+		elif node == null and u.carry_kind == kind:
+			# The node ran dry and was despawned while this one was carrying its last
+			# load home. Still working that kind until it arrives.
+			n += 1
+	return n
+
+
+# ── saving up ───────────────────────────────────────────────────────────────
+
+## What a rule will cost, read from the real def rather than written in the JSON, so a
+## rule can never disagree with what a barracks actually costs. `{}` for verbs that
+## cost nothing to order.
+## **`advance_age` is deliberately absent.** The cost of an age belongs to the age
+## being entered (`AdvanceAgeCommand._next_def`), so it depends on the player rather
+## than on the rule -- and reserving for it would hold back the economy that has to pay
+## for it. An age advance simply waits until it is affordable, which is what a person
+## does.
+func _cost_of(rule: Dictionary) -> Dictionary:
+	match String(rule.get("do", "")):
+		"build":
+			var bd: BuildingDef = GameDataRegistry.building(StringName(rule.get("def", &"")))
+			return bd.cost if bd != null else {}
+		"train":
+			var ud: UnitDef = GameDataRegistry.unit(StringName(rule.get("unit", &"")))
+			return ud.cost if ud != null else {}
+		_:
+			return {}
+
+
+## Can it be paid for out of what is NOT already spoken for by a higher-priority goal.
+func _affordable(w: SimWorld, p: SimPlayer, rule: Dictionary, reserved: Dictionary) -> bool:
+	var cost := _cost_of(rule)
+	for kind in cost:
+		if int(p.stock.get(kind, 0)) - int(reserved.get(kind, 0)) < int(cost[kind]):
+			return false
+	return true
+
+
+static func _reserve(reserved: Dictionary, cost: Dictionary) -> void:
+	for kind in cost:
+		reserved[kind] = int(reserved.get(kind, 0)) + int(cost[kind])
+
+
+## The reaction delay for one decision, in ticks.
+##
+## DETERMINISTIC, AND IT HAS TO BE: two hosts drawing different delays send different
+## commands and the match diverges. `randi()` is forbidden in `src/sim/` for exactly
+## this reason. Hashed from the decision's own coordinates -- who, when, which rule --
+## the way `WildlifeSystem` hashes its roam targets rather than drawing from a shared
+## rng that two hosts can get out of step with.
+static func _lag(profile: AIProfile, player_id: int, tick: int, rule: int) -> int:
+	if profile.lag_max <= profile.lag_min:
+		return profile.lag_min
+	var span := profile.lag_max - profile.lag_min + 1
+	var h := hash("%d:%d:%d" % [player_id, tick, rule])
+	return profile.lag_min + posmod(h, span)
 
 
 ## THE STANDING ORDERS: what the AI does continuously, underneath the script.
@@ -252,20 +448,6 @@ static func _poorest_kind(p: SimPlayer) -> StringName:
 	return poorest
 
 
-func _next(w: SimWorld, p: SimPlayer, state: Dictionary, index: int, why: String) -> void:
-	state["step"] = index + 1
-	state["since"] = w.tick
-	state["issued"] = false
-	_note(w, "p%d step %d %s" % [p.id, index, why])
-
-
-func _skip(w: SimWorld, p: SimPlayer, state: Dictionary, index: int, why: String) -> void:
-	# A skip is a real outcome, not a failure: the map may simply not have what the step
-	# wanted. Logged distinctly from "done" so a run that skipped half its script is
-	# visible rather than merely slow.
-	_next(w, p, state, index, why)
-
-
 func _note(w: SimWorld, line: String) -> void:
 	_log.append("t%-6d %s" % [w.tick, line])
 	if _log.size() > 200:
@@ -289,19 +471,28 @@ static func _describe(step: Dictionary) -> String:
 ## target in sight -- and the step is retried next tick until its timeout.
 func _issue(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
 	state["assigned"] = [] as Array[int]
-	# A PASSIVE BOT SKIPS THE FIGHTING AND KEEPS THE ECONOMY (project owner,
-	# 2026-08-22). Skipped rather than refused: returning false would retry the step
-	# every tick until its timeout and stall the script behind it, where returning true
-	# reports "orders away" for orders it deliberately did not give and moves on.
+	var profile: AIProfile = GameDataRegistry.ai_profile(p.ai_level)
+
+	# WHAT A DIFFICULTY MAY DO AT ALL, enforced here as well as by which rules its file
+	# contains. Belt to the rule set's braces, and the reason is modding: these files
+	# are `data/ai_*.json` precisely so people can edit them, and a passive bot that
+	# attacks because somebody added a rule is not a passive bot. The rule set says what
+	# this profile INTENDS; these two say what it is allowed to intend.
 	#
-	# This is the ONLY difference any difficulty makes today. Normal, Hard and Unfair
-	# all fall through to Easy -- see `SimPlayer.ai_level`.
-	#
-	# It also means a passive bot never ends the match, which is exactly what it is for:
-	# a punching bag to develop against. `preview_ai_match` still uses two Easy bots so
-	# the headless full-match regression keeps finishing.
-	if p.ai_level == SimPlayer.AILevel.PASSIVE and String(step.get("do", "")) == "attack":
-		return true
+	# **FALSE, NOT TRUE.** Reporting "done" would consume the whole think interval on a
+	# rule that is never going to happen, and every rule below it would starve -- a
+	# modder who left `advance_age` in a `max_age: 2` profile would get a bot that
+	# stopped playing at age 2 rather than one that stopped ageing. False falls through
+	# to the next rule, which is what an impossible rule should do.
+	match String(step.get("do", "")):
+		"attack":
+			if not profile.attacks:
+				_why = "profile '%s' does not attack" % profile.id
+				return false
+		"advance_age":
+			if p.age >= profile.max_age:
+				_why = "profile '%s' stops at age %d" % [profile.id, profile.max_age]
+				return false
 
 	match String(step.get("do", "")):
 		"gather":
@@ -323,10 +514,24 @@ func _issue(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> b
 			return true          # an unknown verb is skipped rather than fatal
 
 
+## **IDLE VILLAGERS ONLY, and this is not a detail.** A gather rule that could pull a
+## worker off another resource makes two opening rules steal from each other forever:
+## "two on food" takes the stone gatherer, "one on stone" takes it back, and the AI
+## spends its whole match re-issuing the first two rules and never reaches the one that
+## builds a house. Measured, 26 decisions in 1200 ticks and not one building.
+##
+## A script needed the stealing, because a step had to COMPLETE before the next one ran.
+## A rule does not: if nobody is spare the rule simply does not fire this interval, the
+## walk falls through to the rules below it, and the standing orders put idle villagers
+## on the poorest resource anyway -- which is a better allocator than any fixed opening
+## split once the economy is running.
+##
+## `build` and `train` still take from wherever they must. A building nobody can be
+## spared for is a building that never goes up.
 func _issue_gather(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
-	var units := _pick_units(w, p, step.get("units", 1))
+	var units := _pick_units(w, p, step.get("units", 1), true)
 	if units.is_empty():
-		_why = "no villager could be freed for it"
+		_why = "no IDLE villager to put on it"
 		return false
 	var node := _nearest_node(w, StringName(step.get("kind", &"food")), units[0])
 	if node == 0:
@@ -421,29 +626,17 @@ func _issue_attack(w: SimWorld, p: SimPlayer) -> bool:
 
 
 # ── completion ──────────────────────────────────────────────────────────────
-
-func _is_done(w: SimWorld, p: SimPlayer, step: Dictionary, state: Dictionary) -> bool:
-	match String(step.get("do", "")):
-		"gather":
-			# THE UNITS THIS STEP ORDERED are working -- not "anybody is working", which
-			# is what this asked first and it made the whole script race: once one
-			# villager gathered, every later gather step reported done on the same tick
-			# and the AI was nine steps in by tick 600 with nothing built.
-			#
-			# The order being ACCEPTED is the completion, not the resource being banked;
-			# gathering never ends on its own.
-			return _all_working(w, state.get("assigned", []) as Array)
-		"build":
-			return _own_building(w, p, StringName(step.get("def", &""))) != 0
-		"train":
-			return _has_queue(w, p, StringName(step.get("at", &""))) \
-					or _count_of(w, p, StringName(step.get("unit", &""))) > 0
-		"advance_age":
-			return p.is_advancing() or p.age > 1
-		"attack":
-			return true          # the last step; issuing it is finishing it
-		_:
-			return true
+#
+# THERE IS NONE ANY MORE, and that is the design rather than an omission. A script had
+# to ask "is this step finished" so it could move to the next one; a rule set asks the
+# opposite question -- "is this still worth doing" -- and that is the rule's own `when`.
+#
+# The old `_is_done()` lived here and carried a hard-won note worth keeping: a gather
+# step could not be judged by "anybody is gathering", because once one villager reached
+# a bush every later gather step reported done on the same tick and the AI was nine
+# steps in by tick 600 with nothing built. The rule-set equivalent is
+# `gathering_fewer_than`, which counts the villagers actually on that resource, so the
+# same mistake cannot be expressed.
 
 
 # ── reading the world ───────────────────────────────────────────────────────
@@ -462,7 +655,7 @@ func _sorted_ids(w: SimWorld) -> Array:
 
 ## `count` idle villagers, lowest id first; "newest" the highest-id idle one; "all"
 ## every idle one; "military" every non-villager unit.
-func _pick_units(w: SimWorld, p: SimPlayer, spec: Variant) -> Array[int]:
+func _pick_units(w: SimWorld, p: SimPlayer, spec: Variant, idle_only := false) -> Array[int]:
 	if typeof(spec) == TYPE_STRING or typeof(spec) == TYPE_STRING_NAME:
 		match String(spec):
 			"military":
@@ -476,6 +669,18 @@ func _pick_units(w: SimWorld, p: SimPlayer, spec: Variant) -> Array[int]:
 
 	var wanted := int(spec)
 	var pool := _idle_villagers(w, p)
+	if idle_only:
+		# See `_issue_gather`: an opening gather rule that could steal makes two rules
+		# fight over the same villager for the whole match.
+		#
+		# An `if` rather than a ternary: a ternary over two arrays infers plain `Array`
+		# and will not assign into `Array[int]` at runtime.
+		if pool.size() < wanted:
+			return [] as Array[int]
+		var taken: Array[int] = []
+		for i in range(wanted):
+			taken.append(pool[i])
+		return taken
 	if pool.size() < wanted:
 		# PULL LABOUR OFF GATHERING rather than waiting for someone to come free, which
 		# is what a person does: you grab a villager off wood to put a house up.

@@ -1,0 +1,115 @@
+{
+  "_note": [
+    "UNFAIR -- Hard's plan with a head start and no hesitation (AI_Player_difficulty.md).",
+    "",
+    "THE RULES ARE HARD'S, AND THAT IS THE DESIGN. The difficulty table gives Unfair the",
+    "same four lines as Hard -- strong economy, attacks once established, age 4, towers",
+    "and castles -- and adds exactly one thing: 'starts with 8 villagers and 2 swordsmen",
+    "and 1 scout'. So the cheat is the START, not the thinking, which is what the word",
+    "'unfair' should mean. A bot that also played better would be two changes wearing",
+    "one name, and nobody could tell you afterwards which one made it hard.",
+    "",
+    "IT DECLARES THE DIFFERENCE, NOT THE TOTAL, and the scout is why that is worth",
+    "saying. The table asks for '8 villagers and 2 swordsmen and 1 scout'; every player",
+    "already starts with 5 villagers and a scout, so what belongs here is +3 villagers",
+    "and +2 swordsmen and NO scout. Declaring the scout gave Unfair two of them, which",
+    "the test caught -- and it is exactly the kind of thing that would otherwise ship as",
+    "a bot that is mysteriously better at scouting than the table says.",
+    "",
+    "start_units IS THE ONLY THING IN ANY OF THESE FILES THAT IS NOT A RULE. It is a",
+    "handicap applied once by SimWorld.setup(), not a decision the AI makes, and it is",
+    "here rather than in the map or the lobby because it belongs to the DIFFICULTY --",
+    "the same map has to be playable against Easy.",
+    "",
+    "THE EXTRA VILLAGERS ARE WORTH MORE THAN THE SOLDIERS, and it is worth knowing which",
+    "way round that is before tuning it. Eight villagers against the usual five is a",
+    "~60% opening economy lead that compounds for the whole match; two swordsmen and a",
+    "scout is a raid that trades once. If Unfair ever feels merely annoying rather than",
+    "hard, the villagers are the number to move.",
+    "",
+    "lag_ticks IS [0, 0] -- it acts on the tick its conditions come true. Every other",
+    "level draws a delay to model a human noticing late; this one does not pretend."
+  ],
+
+  "id": "unfair",
+  "lag_ticks": [0, 0],
+  "max_age": 4,
+  "attacks": true,
+  "techs": true,
+
+  "start_units": {
+    "unit.villager": 3,
+    "unit.swordsman": 2
+  },
+
+  "rules": [
+    {"do": "gather", "kind": "food", "units": 3,
+     "when": {"age_max": 1, "gathering_fewer_than": {"food": 3}}},
+    {"do": "gather", "kind": "stone", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"stone": 1}}},
+    {"do": "gather", "kind": "wood", "units": 2,
+     "when": {"age_max": 1, "gathering_fewer_than": {"wood": 2}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 1}}},
+
+    {"do": "build", "def": "building.mining_camp", "near": "res.stone", "units": 1,
+     "when": {"fewer_than": {"building.mining_camp": 1}}},
+    {"do": "build", "def": "building.lumber_camp", "near": "res.tree", "units": 1,
+     "when": {"fewer_than": {"building.lumber_camp": 1}}},
+
+    {"do": "gather", "kind": "gold", "units": 2,
+     "when": {"gathering_fewer_than": {"gold": 2}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 12}}},
+
+    {"do": "advance_age",
+     "when": {"age": 1, "at_least": {"unit.villager": 8}}},
+
+    {"do": "build", "def": "building.mill", "near": "self", "units": 1,
+     "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
+    {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
+     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 3}}},
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 3}}},
+
+    {"do": "build", "def": "building.barracks", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.barracks": 1}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 18}}},
+
+    {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.watch_tower": 2}}},
+
+    {"do": "advance_age",
+     "when": {"age": 2, "at_least": {"unit.villager": 12, "building.mill": 1}}},
+
+    {"do": "build", "def": "building.archery_range", "near": "self", "units": 1,
+     "when": {"age_min": 3, "fewer_than": {"building.archery_range": 1}}},
+    {"do": "build", "def": "building.stable", "near": "self", "units": 1,
+     "when": {"age_min": 3, "fewer_than": {"building.stable": 1}}},
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 6}}},
+
+    {"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 4,
+     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 14}}},
+    {"do": "train", "at": "building.archery_range", "unit": "unit.archer", "count": 4,
+     "when": {"at_least": {"building.archery_range": 1}, "fewer_than": {"unit.archer": 10}}},
+    {"do": "train", "at": "building.stable", "unit": "unit.knight", "count": 2,
+     "when": {"at_least": {"building.stable": 1}, "fewer_than": {"unit.knight": 6}}},
+
+    {"do": "advance_age",
+     "when": {"age": 3, "at_least": {"unit.villager": 16, "building.barracks": 1}}},
+
+    {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
+     "when": {"age_min": 4, "fewer_than": {"building.watch_tower": 5}}},
+    {"do": "build", "def": "building.castle", "near": "self", "units": 2,
+     "when": {"age_min": 4, "fewer_than": {"building.castle": 1}}},
+
+    {"do": "attack", "units": "military",
+     "when": {"at_least": {"unit.villager": 10, "building.barracks": 1,
+                           "unit.swordsman": 6}}}
+  ]
+}

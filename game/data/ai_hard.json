@@ -1,0 +1,105 @@
+{
+  "_note": [
+    "HARD -- 'strong economy followed by continuous attacks', and 'attacks after eco has",
+    "been established' (AI_Player_difficulty.md).",
+    "",
+    "THE ONE PLACE THE DIFFICULTY TABLE STOPS NAMING A CLOCK AND NAMES A STATE, which is",
+    "the whole design in one line. Easy and Normal unlock aggression at 10 and 7 minutes",
+    "because a handicap is honest about being a handicap. Hard has none, so its attack",
+    "rule waits on the thing the sentence actually means:",
+    "",
+    "    12 villagers, a mill, a barracks and 8 swordsmen",
+    "",
+    "That is a definition of 'established', written down where it can be argued with,",
+    "rather than a minute count somebody tuned once. It also makes Hard MAP-SENSITIVE in",
+    "the right direction: on a poor map it attacks later, because it genuinely is not",
+    "ready -- which is what the owner was asking for when they ruled out ticks.",
+    "",
+    "THE ECONOMY IS THE DIFFICULTY. Hard trains to 16 villagers before it thinks about",
+    "an army at all, where Easy stops at 7. That single number is worth more than any",
+    "amount of extra military rules: a bot with twice the income can replace what it",
+    "loses, and 'continuous attacks' is a consequence of being able to afford them",
+    "rather than a separate behaviour. The standing orders already send every idle",
+    "soldier back out, so continuity is free once production keeps up.",
+    "",
+    "CASTLES ARE AGE 4 AND EXPENSIVE, and the rule sits last on purpose: reservation",
+    "means a goal higher in the list holds its cost back, so a castle can never starve",
+    "the army that keeps the bot alive while it saves for one."
+  ],
+
+  "id": "hard",
+  "lag_ticks": [0, 15],
+  "max_age": 4,
+  "attacks": true,
+  "techs": true,
+
+  "rules": [
+    {"do": "gather", "kind": "food", "units": 2,
+     "when": {"age_max": 1, "gathering_fewer_than": {"food": 2}}},
+    {"do": "gather", "kind": "stone", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"stone": 1}}},
+    {"do": "gather", "kind": "wood", "units": 2,
+     "when": {"age_max": 1, "gathering_fewer_than": {"wood": 2}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 1}}},
+
+    {"do": "build", "def": "building.mining_camp", "near": "res.stone", "units": 1,
+     "when": {"fewer_than": {"building.mining_camp": 1}}},
+    {"do": "build", "def": "building.lumber_camp", "near": "res.tree", "units": 1,
+     "when": {"fewer_than": {"building.lumber_camp": 1}}},
+
+    {"do": "gather", "kind": "gold", "units": 1,
+     "when": {"gathering_fewer_than": {"gold": 1}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 10}}},
+
+    {"do": "advance_age",
+     "when": {"age": 1, "at_least": {"unit.villager": 8}}},
+
+    {"do": "build", "def": "building.mill", "near": "self", "units": 1,
+     "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
+    {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
+     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 3}}},
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 3}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 16}}},
+
+    {"do": "build", "def": "building.barracks", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.barracks": 1}}},
+    {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.watch_tower": 2}}},
+
+    {"do": "advance_age",
+     "when": {"age": 2, "at_least": {"unit.villager": 12, "building.mill": 1}}},
+
+    {"do": "build", "def": "building.archery_range", "near": "self", "units": 1,
+     "when": {"age_min": 3, "fewer_than": {"building.archery_range": 1}}},
+    {"do": "build", "def": "building.stable", "near": "self", "units": 1,
+     "when": {"age_min": 3, "fewer_than": {"building.stable": 1}}},
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 6}}},
+
+    {"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 4,
+     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 12}}},
+    {"do": "train", "at": "building.archery_range", "unit": "unit.archer", "count": 4,
+     "when": {"at_least": {"building.archery_range": 1}, "fewer_than": {"unit.archer": 8}}},
+    {"do": "train", "at": "building.stable", "unit": "unit.knight", "count": 2,
+     "when": {"at_least": {"building.stable": 1}, "fewer_than": {"unit.knight": 4}}},
+
+    {"do": "advance_age",
+     "when": {"age": 3, "at_least": {"unit.villager": 16, "building.barracks": 1}}},
+
+    {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
+     "when": {"age_min": 4, "fewer_than": {"building.watch_tower": 5}}},
+    {"do": "build", "def": "building.castle", "near": "self", "units": 2,
+     "when": {"age_min": 4, "fewer_than": {"building.castle": 1}}},
+
+    {"do": "attack", "units": "military",
+     "when": {"at_least": {"unit.villager": 12, "building.mill": 1,
+                           "building.barracks": 1, "unit.swordsman": 8}}}
+  ]
+}

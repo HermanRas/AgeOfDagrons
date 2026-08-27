@@ -238,8 +238,9 @@ func _report_line(w: SimWorld) -> void:
 					military += 1
 			elif e is SimBuilding:
 				buildings += 1
-		parts.append("p%d step %d: %d units (%d mil), %d bldg, pop %d/%d"
-				% [p.id, ai.step_of(p.id), units, military, buildings, p.pop_used, p.pop_cap])
+		parts.append("p%d %d acts: %d units (%d mil), %d bldg, pop %d/%d"
+				% [p.id, ai.decisions_of(p.id), units, military, buildings,
+				p.pop_used, p.pop_cap])
 	print("  t%-6d %s" % [w.tick, "  |  ".join(parts)])
 
 

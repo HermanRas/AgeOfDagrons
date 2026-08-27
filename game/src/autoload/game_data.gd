@@ -44,6 +44,13 @@ const FACTIONS_PATH := "res://data/factions.json"
 const COLOURS_PATH := "res://data/colours.json"
 const MARKET_PATH := "res://data/market.json"
 
+## One file per difficulty (PLAN.md 12.2b), named for `SimPlayer.AILevel`. Separate
+## files rather than one keyed document, on the project owner's call: the game already
+## ships moddable assets, so *"making custom ai options to match the custom skins /
+## units make sense"* -- and a modder adding a difficulty should be adding a file, not
+## editing around four others they did not write.
+const AI_PROFILE_DIR := "res://data/"
+
 ## Keys starting with this are documentation inside the JSON, not entries.
 const _COMMENT_PREFIX := "_"
 
@@ -69,6 +76,7 @@ var _buildings: Dictionary = {}                   # StringName -> BuildingDef
 var _wall_tier_of: Dictionary = {}
 var _resources: Dictionary = {}                   # StringName -> ResourceDef
 var _techs: Dictionary = {}                       # StringName -> TechDef
+var _ai_profiles: Dictionary = {}                 # StringName -> AIProfile (12.2b)
 var _factions: Dictionary = {}                    # StringName -> Dictionary (raw, 9.5).
                                                   # One entry, `faction.default`: v1 is one
                                                   # civilisation (PLAN.md 1) and this is the
@@ -123,6 +131,7 @@ func load_all(force := false) -> void:
 	_market = _read_json(MARKET_PATH)
 	_read_ages()
 	_read_colours()
+	_read_ai_profiles()
 
 	_loaded = true
 	validate()
@@ -680,6 +689,48 @@ func silent_sfx_ids() -> Array[StringName]:
 # These return null for an unknown ID, unlike atlas_for(). A missing sprite has a
 # sensible stand-in; a missing unit definition does not, and inventing one would
 # turn a typo into a unit that exists with nonsense stats.
+
+## The rules a bot at `level` (a `SimPlayer.AILevel`) plays by. **Never null** -- an
+## out-of-range level or a missing file falls back to Easy, because a lobby that
+## somehow names difficulty 9 should give you an opponent rather than a bot that stands
+## still. A profile with no rules at all is legal and does nothing; that is what a
+## broken mod looks like, and it is reported in `load_warnings` rather than crashing.
+func ai_profile(level: int) -> AIProfile:
+	if not _loaded:
+		load_all()
+	var key: StringName = AIProfile.IDS[level] if level >= 0 and level < AIProfile.IDS.size() \
+			else &"easy"
+	var p: AIProfile = _ai_profiles.get(key)
+	if p != null:
+		return p
+	p = _ai_profiles.get(&"easy")
+	return p if p != null else AIProfile.new()
+
+
+func ai_profile_ids() -> Array:
+	if not _loaded:
+		load_all()
+	var out := _ai_profiles.keys()
+	out.sort()
+	return out
+
+
+func _read_ai_profiles() -> void:
+	_ai_profiles.clear()
+	for name in AIProfile.IDS:
+		var path := "%sai_%s.json" % [AI_PROFILE_DIR, name]
+		if not FileAccess.file_exists(path):
+			load_warnings.append("no AI profile for '%s' at %s" % [name, path])
+			continue
+		var raw := _read_json(path)
+		if raw.is_empty():
+			load_warnings.append("AI profile '%s' is empty or unparseable" % name)
+			continue
+		var profile := AIProfile.from_dict(raw)
+		if profile.rules.is_empty():
+			load_warnings.append("AI profile '%s' declares no rules" % name)
+		_ai_profiles[StringName(name)] = profile
+
 
 func unit(id: StringName) -> UnitDef:
 	if not _loaded:

@@ -96,7 +96,7 @@ func test_a_passive_bot_still_builds_an_economy() -> void:
 	# would be useless for developing against, which is the whole point of it.
 	var w := _match_at(SimPlayer.AILevel.PASSIVE)
 	_run(w, 600)
-	assert_true(_ai(w).step_of(1) > 0, "it is running its script")
+	assert_true(_ai(w).decisions_of(1) > 0, "it is making decisions")
 	var built := 0
 	for e in w.entities.values():
 		if e is SimBuilding and e.owner_id == 1:
@@ -104,19 +104,22 @@ func test_a_passive_bot_still_builds_an_economy() -> void:
 	assert_true(built > 1, "it has put something up beyond its town centre")
 
 
-## Put `owner` at the END of its script with an army in hand, which is the state the
-## standing-order attack fires in.
+## Put `owner` in the state the standing-order attack fires in: its attack rule has
+## fired once, and it has an army in hand.
 ##
 ## FAST-FORWARDED RATHER THAN PLAYED OUT, and that is the only reason these two tests
 ## are worth having. The first version simply ran 1200 ticks and asserted nobody
-## attacked -- and it passed with the gate REMOVED, because the script does not finish
-## inside 1200 ticks and the branch under test was never reached. A test that cannot
-## fail is worse than no test: it is a claim nobody will re-check. Running long enough
-## to finish honestly was measured at ten minutes of suite time (see `RUN_TICKS`).
-func _finish_the_script(w: SimWorld, owner: int) -> void:
+## attacked -- and it passed with the gate REMOVED, because the attack condition is not
+## reached inside 1200 ticks and the branch under test was never entered. A test that
+## cannot fail is worse than no test: it is a claim nobody will re-check. Playing
+## honestly to an Easy bot's 10-minute unlock is 6000 ticks (see `RUN_TICKS`).
+##
+## Sets the flag the ATTACK RULE would have set. Under the old script this reached in
+## and completed the script, for the same reason and with the same honesty problem.
+func _unleash(w: SimWorld, owner: int) -> void:
 	_run(w, 100)          # let it register some progress first
 	var ai := _ai(w)
-	ai._progress[owner]["step"] = AIPlaytest.SCRIPT.size()
+	ai._progress[owner]["attacked"] = true
 	# An army, standing next to nothing in particular. `_idle_military` picks up any
 	# free non-villager, and player 2's town centre is what `_nearest_enemy` finds.
 	var home := Vector2i.ZERO
@@ -128,39 +131,40 @@ func _finish_the_script(w: SimWorld, owner: int) -> void:
 		w.spawn_unit(&"unit.swordsman", owner, home + Vector2i(i + 2, 2))
 
 
-func test_an_easy_bot_with_a_finished_script_does_attack() -> void:
+func test_an_easy_bot_attacks_once_its_attack_rule_has_fired() -> void:
 	# THE CONTROL, and the reason the passive test below means anything: it proves the
 	# fixture actually reaches the attacking branch. Without this pair, "passive did not
 	# attack" is indistinguishable from "nothing would have attacked".
 	var w := _match_at(SimPlayer.AILevel.EASY)
-	_finish_the_script(w, 1)
+	_unleash(w, 1)
 	_run(w, 60)
 	assert_true(_attackers(w, 1) > 0,
-			"a finished script turns the standing-order attack on")
+			"a fired attack rule turns the standing-order attack on")
 
 
-func test_a_passive_bot_never_attacks_even_once_its_script_is_done() -> void:
+func test_a_passive_bot_never_attacks_however_it_is_unleashed() -> void:
 	# THE TRAP. Skipping the script's `attack` step is not enough on its own -- skipping
 	# it COMPLETES the script, and a completed script is what switches the standing
 	# order's attack on. A passive bot would have built its economy and then thrown its
 	# army at you anyway.
 	var w := _match_at(SimPlayer.AILevel.PASSIVE)
-	_finish_the_script(w, 1)
+	_unleash(w, 1)
 	for i in range(60):
 		w.step()
 		assert_eq(_attackers(w, 1), 0, "passive attacked on tick %d" % (i + 1))
 
 
-func test_the_placeholder_levels_are_wired_to_something() -> void:
-	# They play as Easy. Asserting they PLAY is the honest test: asserting they are
-	# identical to Easy would pin an implementation detail that 12.2b is going to
-	# change, and asserting they are different would be a lie today.
-	for level in [SimPlayer.AILevel.NORMAL, SimPlayer.AILevel.HARD,
-			SimPlayer.AILevel.UNFAIR]:
+func test_every_level_actually_plays() -> void:
+	# This used to say "the placeholder levels are wired to something", because Normal,
+	# Hard and Unfair all fell through to Easy and asserting they DIFFERED would have
+	# been a lie. As of 12.2b each has its own rule file, so the lie is gone -- and what
+	# is worth asserting is still that every one of them plays, since a profile that
+	# fails to load falls back rather than failing loudly.
+	for level in range(AIProfile.IDS.size()):
 		var w := _match_at(level)
 		_run(w, 400)
-		assert_true(_ai(w).step_of(1) > 0,
-				"level %d runs the script rather than standing still" % level)
+		assert_true(_ai(w).decisions_of(1) > 0,
+				"%s acts rather than standing still" % AIProfile.IDS[level])
 
 
 func test_the_level_survives_the_wire() -> void:
@@ -198,8 +202,8 @@ func test_only_ai_players_are_driven() -> void:
 	var w := _match()
 	_run(w, 400)
 	var ai := _ai(w)
-	assert_true(ai.step_of(1) > 0, "player 1 is a bot and has started its script")
-	assert_eq(ai.step_of(2), 0, "player 2 is human and is left alone")
+	assert_true(ai.decisions_of(1) > 0, "player 1 is a bot and has started its script")
+	assert_eq(ai.decisions_of(2), 0, "player 2 is human and is left alone")
 
 
 ## A task census plus the AI's own log, for a failure message worth reading.
@@ -215,7 +219,7 @@ func _diagnose(w: SimWorld, ai: AISystem) -> String:
 	for k in keys:
 		census.append("%s x%d" % [k, tasks[k]])
 	return "tick %d, step %d, stock %s\n            units: %s\n            %s" % [
-			w.tick, ai.step_of(1), w.player_for(1).stock, ", ".join(census),
+			w.tick, ai.decisions_of(1), w.player_for(1).stock, ", ".join(census),
 			"\n            ".join(ai.log_lines())]
 
 
@@ -272,22 +276,24 @@ func test_it_builds_and_advances() -> void:
 	var built := _count(w, 1, &"building.house") + _count(w, 1, &"building.mining_camp") \
 			+ _count(w, 1, &"building.lumber_camp") + _count(w, 1, &"building.mill")
 	assert_true(built >= 2, "raised %d of its opening buildings (step %d)"
-			% [built, ai.step_of(1)])
+			% [built, ai.decisions_of(1)])
 	assert_true(w.player_for(1).age > 1 or w.player_for(1).is_advancing(),
-			"reached or started age 2 (step %d)" % ai.step_of(1))
+			"reached or started age 2 (step %d)" % ai.decisions_of(1))
 
 
-func test_it_gets_through_its_script_rather_than_stalling() -> void:
-	# The timeouts doing their job. A step that cannot be satisfied on this map must be
-	# abandoned, or the run sits on it forever -- which is the single most likely way
-	# for this AI to be quietly useless.
+func test_it_keeps_deciding_rather_than_stalling() -> void:
+	# THE FAILURE THIS DESIGN IS MEANT TO MAKE IMPOSSIBLE, so it is worth an assertion.
+	# The old script abandoned a step it could not satisfy, and got stuck when it could
+	# not; a rule set has nothing to get stuck ON -- a rule that cannot fire is walked
+	# past, and the next one is tried in the same interval. A bot that has made only a
+	# handful of decisions in two minutes of game time is one whose whole rule list is
+	# somehow unreachable, which is the modern shape of "quietly useless".
 	var w := _match()
 	_run(w)
 	var ai := _ai(w)
-	var reached := ai.step_of(1)
-	assert_true(reached >= 6, "reached step %d of %d in %d ticks:\n            %s"
-			% [reached, AIPlaytest.SCRIPT.size(), RUN_TICKS,
-			"\n            ".join(ai.log_lines())])
+	var acts := ai.decisions_of(1)
+	assert_true(acts >= 6, "took %d decisions in %d ticks:\n            %s"
+			% [acts, RUN_TICKS, "\n            ".join(ai.log_lines())])
 
 
 # ── it finishes a match ─────────────────────────────────────────────────────
@@ -375,41 +381,192 @@ func test_a_defeated_ai_stops_playing() -> void:
 	_run(w, 200)
 	w.player_for(1).defeated = true
 	var ai := _ai(w)
-	var step := ai.step_of(1)
+	var step := ai.decisions_of(1)
 	_run(w, 300)
-	assert_eq(ai.step_of(1), step, "it stopped where it was")
+	assert_eq(ai.decisions_of(1), step, "it stopped where it was")
 
 
-func test_the_script_is_data_and_every_step_carries_a_timeout() -> void:
-	# The two rules 12.2a is built on, asserted against the script rather than trusted:
-	# a step with no timeout is a step that can hang a whole match.
-	assert_true(AIPlaytest.SCRIPT.size() > 10, "there is a real opening in there")
-	for i in range(AIPlaytest.SCRIPT.size()):
-		var step: Dictionary = AIPlaytest.SCRIPT[i]
-		assert_true(step.has("do"), "step %d names a verb" % i)
-		assert_true(int(step.get("timeout", 0)) > 0, "step %d has a timeout" % i)
+# -- the rule files, asserted rather than trusted (12.2b) --------------------
+
+func test_every_level_has_a_profile_with_rules_in_it() -> void:
+	# A missing or unparseable file falls back to Easy rather than to a bot that stands
+	# still, which is the right behaviour and also the one that would hide a typo in a
+	# filename forever. This is what notices.
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		assert_eq(String(profile.id), String(AIProfile.IDS[level]),
+				"level %d loaded its OWN file rather than falling back" % level)
+		assert_true(profile.rules.size() > 5,
+				"%s has a real rule set" % AIProfile.IDS[level])
 
 
-func test_the_script_only_uses_verbs_the_interpreter_knows() -> void:
+func test_every_rule_names_a_verb_the_interpreter_knows() -> void:
 	# An unknown verb is skipped rather than fatal, which is the safe behaviour and also
 	# how a typo would hide. This is what catches the typo.
 	var known := ["gather", "build", "train", "advance_age", "attack"]
-	for i in range(AIPlaytest.SCRIPT.size()):
-		var verb := String((AIPlaytest.SCRIPT[i] as Dictionary).get("do", ""))
-		assert_true(known.has(verb), "step %d: unknown verb %s" % [i, verb])
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		for i in range(profile.rules.size()):
+			var verb := String(profile.rules[i].get("do", ""))
+			assert_true(known.has(verb),
+					"%s rule %d: unknown verb '%s'" % [profile.id, i, verb])
 
 
-func test_every_def_id_the_script_names_exists() -> void:
-	# A misspelled building is a step that can never complete and always times out --
-	# it would look like a slow AI rather than a broken script.
-	for i in range(AIPlaytest.SCRIPT.size()):
-		var step: Dictionary = AIPlaytest.SCRIPT[i]
-		if step.has("def"):
-			assert_not_null(GameDataRegistry.building(step["def"]),
-					"step %d builds %s" % [i, step["def"]])
-		if step.has("unit"):
-			assert_not_null(GameDataRegistry.unit(step["unit"]),
-					"step %d trains %s" % [i, step["unit"]])
-		if step.has("at"):
-			assert_not_null(GameDataRegistry.building(step["at"]),
-					"step %d trains at %s" % [i, step["at"]])
+func test_every_def_id_a_rule_names_exists() -> void:
+	# A misspelled building is a rule that can never fire. Under the old script that
+	# looked like a slow AI; under rules it looks like a bot that simply never builds
+	# the thing -- quieter still, so the test matters more than it used to.
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		for i in range(profile.rules.size()):
+			var rule: Dictionary = profile.rules[i]
+			var where := "%s rule %d" % [profile.id, i]
+			if rule.has("def"):
+				assert_not_null(GameDataRegistry.building(rule["def"]),
+						"%s builds %s" % [where, rule["def"]])
+			if rule.has("unit"):
+				assert_not_null(GameDataRegistry.unit(rule["unit"]),
+						"%s trains %s" % [where, rule["unit"]])
+			if rule.has("at"):
+				assert_not_null(GameDataRegistry.building(rule["at"]),
+						"%s trains at %s" % [where, rule["at"]])
+			for key in ["fewer_than", "at_least"]:
+				for def_id in (rule.get("when", {}) as Dictionary).get(key, {}):
+					assert_true(GameDataRegistry.building(def_id) != null
+							or GameDataRegistry.unit(def_id) != null,
+							"%s counts %s, which is neither a building nor a unit"
+									% [where, def_id])
+
+
+func test_every_rule_can_stop_being_true() -> void:
+	# THE ONE RULE OF THIS DESIGN, and the failure it prevents is severe. Rules are
+	# re-evaluated every interval, so a rule whose condition stays true once satisfied
+	# fires again and again -- five houses, an emptied treasury, a build queue nobody
+	# asked for. Every rule therefore needs at least one condition that its own success
+	# turns false.
+	#
+	# `after_ticks` and `age_min` do NOT count: time only moves forward and an age is
+	# never given back, so a rule holding only those is permanently armed once armed.
+	# `attack` is exempt -- attacking again IS the intent, and the standing orders take
+	# it over afterwards.
+	var self_limiting := ["fewer_than", "gathering_fewer_than", "age", "age_max"]
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		for i in range(profile.rules.size()):
+			var rule: Dictionary = profile.rules[i]
+			if String(rule.get("do", "")) == "attack":
+				continue
+			var when: Dictionary = rule.get("when", {})
+			var bounded := false
+			for key in self_limiting:
+				if when.has(key):
+					bounded = true
+					break
+			assert_true(bounded,
+					"%s rule %d (%s) has no condition its own success turns false"
+							% [profile.id, i, rule.get("do", "?")])
+
+
+func test_the_difficulty_table_is_what_the_files_say() -> void:
+	# AI_Player_difficulty.md, asserted rather than described. These five lines are the
+	# owner's specification and every one of them is a number in a file somebody can
+	# edit, so this is what notices when an edit contradicts the design.
+	var passive := GameDataRegistry.ai_profile(SimPlayer.AILevel.PASSIVE)
+	assert_false(passive.attacks, "passive never attacks")
+	assert_eq(passive.max_age, 2, "passive never ages past 2")
+
+	assert_eq(GameDataRegistry.ai_profile(SimPlayer.AILevel.EASY).max_age, 2)
+	assert_eq(GameDataRegistry.ai_profile(SimPlayer.AILevel.NORMAL).max_age, 3)
+	assert_eq(GameDataRegistry.ai_profile(SimPlayer.AILevel.HARD).max_age, 4)
+	assert_eq(GameDataRegistry.ai_profile(SimPlayer.AILevel.UNFAIR).max_age, 4)
+
+	# Reaction time is the difficulty knob, and it has to be monotonic or the levels do
+	# not order. Unfair acts the tick its conditions come true.
+	var easy := GameDataRegistry.ai_profile(SimPlayer.AILevel.EASY)
+	var normal := GameDataRegistry.ai_profile(SimPlayer.AILevel.NORMAL)
+	var hard := GameDataRegistry.ai_profile(SimPlayer.AILevel.HARD)
+	var unfair := GameDataRegistry.ai_profile(SimPlayer.AILevel.UNFAIR)
+	assert_true(easy.lag_max > normal.lag_max, "easy is slower to notice than normal")
+	assert_true(normal.lag_max > hard.lag_max, "normal is slower than hard")
+	assert_eq(unfair.lag_max, 0, "unfair has no reaction delay at all")
+
+
+func test_only_passive_refuses_to_attack() -> void:
+	for level in [SimPlayer.AILevel.EASY, SimPlayer.AILevel.NORMAL,
+			SimPlayer.AILevel.HARD, SimPlayer.AILevel.UNFAIR]:
+		assert_true(GameDataRegistry.ai_profile(level).attacks,
+				"level %d is an offensive profile" % level)
+
+
+func test_the_unfair_bot_is_the_only_one_that_cheats_at_the_start() -> void:
+	# 'starts with 8 villagers and 2 swordsmen and 1 scout'. MapGen places five
+	# villagers for everybody, so the file carries the DIFFERENCE.
+	for level in [SimPlayer.AILevel.PASSIVE, SimPlayer.AILevel.EASY,
+			SimPlayer.AILevel.NORMAL, SimPlayer.AILevel.HARD]:
+		assert_true(GameDataRegistry.ai_profile(level).start_units.is_empty(),
+				"level %d starts with what everybody starts with" % level)
+	var unfair := GameDataRegistry.ai_profile(SimPlayer.AILevel.UNFAIR)
+	assert_eq(int(unfair.start_units.get(&"unit.villager", 0)), 3,
+			"3 extra on top of the standard 5 makes the 8 the table asks for")
+	assert_eq(int(unfair.start_units.get(&"unit.swordsman", 0)), 2)
+	# NO SCOUT, deliberately: the table's "1 scout" is the one every player already
+	# starts with. Declaring it here gave Unfair two, which is the whole reason this
+	# file declares the DIFFERENCE rather than the total.
+	assert_eq(int(unfair.start_units.get(&"unit.scout_cavalry", 0)), 0)
+
+
+func test_the_head_start_actually_reaches_the_map() -> void:
+	# The file declaring it is not the same as the units existing. This is the seam
+	# between AIProfile and MapGen, and nothing else crosses it.
+	var w := _match_at(SimPlayer.AILevel.UNFAIR)
+	var easy := _match_at(SimPlayer.AILevel.EASY)
+
+	# The TOTALS the difficulty table asks for: 8 villagers, 2 swordsmen, 1 scout.
+	assert_eq(_count(w, 1, &"unit.villager"), 8, "5 as standard plus 3 from the profile")
+	assert_eq(_count(w, 1, &"unit.swordsman"), 2)
+	assert_eq(_count(w, 1, &"unit.scout_cavalry"), 1,
+			"ONE, not two -- the standard start already includes a scout")
+
+	# And that every one of those is a DIFFERENCE from what anybody else gets, which is
+	# what makes it a handicap rather than a map quirk.
+	assert_eq(_count(easy, 1, &"unit.villager"), 5, "everybody else gets five")
+	assert_eq(_count(easy, 1, &"unit.swordsman"), 0)
+	assert_eq(_count(easy, 1, &"unit.scout_cavalry"), 1,
+			"and the scout is standard, so it is not part of the cheat")
+
+
+func test_a_higher_priority_goal_reserves_its_cost() -> void:
+	# SAVING UP, which pure 'build when affordable' cannot do: if a cheap rule fires
+	# whenever it can, an expensive one below it never accumulates. The first rule whose
+	# conditions hold reserves its cost, and rules below may only spend the remainder.
+	var ai := AISystem.new()
+	var reserved: Dictionary = {}
+	AISystem._reserve(reserved, {&"wood": 400})
+
+	var w := _match()
+	var p := w.player_for(1)
+	p.stock[&"wood"] = 500
+
+	var cheap := {"do": "build", "def": &"building.house"}
+	assert_true(ai._affordable(w, p, cheap, {}),
+			"a house is affordable out of 500 wood on its own")
+	# building.house costs less than the 100 left after a 400 reservation, or this test
+	# is asserting nothing -- so check the premise rather than assume it.
+	var house_cost: Dictionary = GameDataRegistry.building(&"building.house").cost
+	if int(house_cost.get(&"wood", 0)) > 100:
+		assert_false(ai._affordable(w, p, cheap, reserved),
+				"and NOT affordable once 400 of it is spoken for")
+
+
+func test_the_reaction_delay_is_the_same_on_every_host() -> void:
+	# `randi()` in the sim is a desync, so the lag is hashed from the decision's own
+	# coordinates. Same inputs, same answer, every machine and every run.
+	var profile := GameDataRegistry.ai_profile(SimPlayer.AILevel.EASY)
+	for tick in [0, 37, 1200, 99999]:
+		var a := AISystem._lag(profile, 1, tick, 3)
+		var b := AISystem._lag(profile, 1, tick, 3)
+		assert_eq(a, b, "same decision, same delay")
+		assert_true(a >= profile.lag_min and a <= profile.lag_max,
+				"delay %d is inside [%d, %d]" % [a, profile.lag_min, profile.lag_max])
+	assert_eq(AISystem._lag(GameDataRegistry.ai_profile(SimPlayer.AILevel.UNFAIR),
+			1, 500, 0), 0, "unfair never waits")

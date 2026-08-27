@@ -1,0 +1,86 @@
+{
+  "_note": [
+    "EASY -- the default, and the direct descendant of AIPlaytest.SCRIPT (PLAN.md 12.2a).",
+    "",
+    "THE OPENING IS THE PROJECT OWNER'S OWN SCRIPT, RULE FOR RULE, in the order they",
+    "wrote it: two villagers to berries, one to stone, one to wood, the fifth starts a",
+    "house; the two drop-off camps beside the resources they serve; gold, then the age;",
+    "two more villagers, a mill and a field; then a house, a tower, a barracks and five",
+    "swordsmen. What changed is not the plan but what drives it -- every step used to",
+    "carry a TIMEOUT IN TICKS and was abandoned when it expired, which is how p2 gave up",
+    "on a barracks 73 wood short and died holding 950 (BUGS.md). A rule has no timeout.",
+    "It waits.",
+    "",
+    "EVERY RULE CARRIES A CONDITION THAT GOES FALSE ONCE IT IS SATISFIED. Rules are",
+    "re-evaluated every think interval and the first match wins, so a rule that stayed",
+    "true would fire again and again -- five houses, five barracks. `fewer_than` counts",
+    "FOUNDATIONS and PRODUCTION QUEUES for exactly this reason: 'I have already started",
+    "one' has to read as 'I have one', or the AI orders another every half second while",
+    "the first is being built.",
+    "",
+    "WHY THE OPENING GATHER RULES ARE CAPPED AT AGE 1. The standing orders (AISystem)",
+    "already put every idle villager on the poorest resource, which is a better rule",
+    "than any fixed split once the economy is running. These four exist to shape the",
+    "FIRST minute -- berries before wood, a stone gatherer before anybody needs stone --",
+    "and would otherwise fight the standing orders for the rest of the match.",
+    "",
+    "DIFFICULTY, per AI_Player_difficulty.md: focus on building and defending; attacks",
+    "after 10 minutes of game time, then keeps going; ages to 2; one tower.",
+    "",
+    "THE 10-MINUTE TRIGGER IS A CLOCK, AND THAT IS NOT THE THING THE OWNER RULED OUT.",
+    "A per-step timeout ABANDONS A GOAL because the world was slower than a number",
+    "somebody guessed -- that is the defect. A global clock that decides when aggression",
+    "unlocks abandons nothing and does not depend on how far the gold is; it is a",
+    "handicap, deliberately expressed in time, and it is what makes Easy easy."
+  ],
+
+  "id": "easy",
+  "lag_ticks": [20, 60],
+  "max_age": 2,
+  "attacks": true,
+  "techs": true,
+
+  "rules": [
+    {"do": "gather", "kind": "food", "units": 2,
+     "when": {"age_max": 1, "gathering_fewer_than": {"food": 2}}},
+    {"do": "gather", "kind": "stone", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"stone": 1}}},
+    {"do": "gather", "kind": "wood", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"wood": 1}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 1}}},
+
+    {"do": "build", "def": "building.mining_camp", "near": "res.stone", "units": 1,
+     "when": {"fewer_than": {"building.mining_camp": 1}}},
+    {"do": "build", "def": "building.lumber_camp", "near": "res.tree", "units": 1,
+     "when": {"fewer_than": {"building.lumber_camp": 1}}},
+
+    {"do": "gather", "kind": "gold", "units": 1,
+     "when": {"gathering_fewer_than": {"gold": 1}}},
+
+    {"do": "advance_age",
+     "when": {"age": 1, "at_least": {"unit.villager": 5}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 2,
+     "when": {"fewer_than": {"unit.villager": 7}}},
+
+    {"do": "build", "def": "building.mill", "near": "self", "units": 1,
+     "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
+    {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
+     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 1}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 2}}},
+    {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.watch_tower": 1}}},
+    {"do": "build", "def": "building.barracks", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.barracks": 1}}},
+
+    {"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 5,
+     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 5}}},
+
+    {"do": "attack", "units": "military",
+     "when": {"after_ticks": 6000, "at_least": {"unit.swordsman": 5}}}
+  ]
+}

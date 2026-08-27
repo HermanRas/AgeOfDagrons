@@ -1,0 +1,76 @@
+{
+  "_note": [
+    "PASSIVE -- the one level that is genuinely a different plan rather than the same",
+    "plan with the dials moved (AI_Player_difficulty.md, and the project owner's own",
+    "note that this is the one that would differ a lot).",
+    "",
+    "IT NEVER ATTACKS AND NEVER TRAINS A SOLDIER, so the difference is mostly what is",
+    "ABSENT: there is no barracks rule, no train-military rule and no attack rule in",
+    "this file at all. That is the point of a rule set over a flag -- 'passive' is not a",
+    "special case inside the interpreter, it is a shorter list.",
+    "",
+    "TWO BELTS TO THAT BRACES, both of which matter and neither of which is redundant:",
+    "  attacks: false   stops the STANDING ORDERS sending idle soldiers at the enemy.",
+    "                   A passive bot can still end up owning soldiers -- the map may",
+    "                   start it with a scout -- and without this it would throw them",
+    "                   at you having never decided to. This is the gate that already",
+    "                   existed in AISystem for AILevel.PASSIVE, moved into data.",
+    "  max_age: 2       'never ages up past age 2'. Enforced in code as well as by the",
+    "                   absence of a second advance_age rule, so that a modder editing",
+    "                   this file cannot age a passive bot to 4 by adding one.",
+    "",
+    "IT BUILDS DEFENCES BUT NOT TOWERS. 'never builds defense buildings (towers)' and",
+    "'can build gates and walls' read as a contradiction until you notice a tower SHOOTS",
+    "and a wall does not: passive means it will not hurt you, not that it will not shut",
+    "a door. Walls are not in the opening because nothing yet decides WHERE a wall goes",
+    "-- 5.8 built the pieces and the merge, and a bot that cannot pick a line would put",
+    "nine tiles of palisade through its own gold. Left out honestly rather than faked.",
+    "",
+    "WHAT IT IS FOR: a sparring partner for testing economy and buildings without a",
+    "clock on you, and the opponent that makes an AI-vs-AI run terminate on ECONOMY",
+    "rather than on a rush -- which is the harder half of the balance question."
+  ],
+
+  "id": "passive",
+  "lag_ticks": [40, 100],
+  "max_age": 2,
+  "attacks": false,
+  "techs": false,
+
+  "rules": [
+    {"do": "gather", "kind": "food", "units": 2,
+     "when": {"age_max": 1, "gathering_fewer_than": {"food": 2}}},
+    {"do": "gather", "kind": "stone", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"stone": 1}}},
+    {"do": "gather", "kind": "wood", "units": 1,
+     "when": {"age_max": 1, "gathering_fewer_than": {"wood": 1}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 1}}},
+
+    {"do": "build", "def": "building.mining_camp", "near": "res.stone", "units": 1,
+     "when": {"fewer_than": {"building.mining_camp": 1}}},
+    {"do": "build", "def": "building.lumber_camp", "near": "res.tree", "units": 1,
+     "when": {"fewer_than": {"building.lumber_camp": 1}}},
+
+    {"do": "gather", "kind": "gold", "units": 1,
+     "when": {"gathering_fewer_than": {"gold": 1}}},
+
+    {"do": "advance_age",
+     "when": {"age": 1, "at_least": {"unit.villager": 5}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 10}}},
+
+    {"do": "build", "def": "building.mill", "near": "self", "units": 1,
+     "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
+    {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
+     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 2}}},
+
+    {"do": "build", "def": "building.house", "near": "self", "units": 1,
+     "when": {"fewer_than": {"building.house": 3}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 16}}}
+  ]
+}
