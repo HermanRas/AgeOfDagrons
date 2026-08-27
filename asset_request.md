@@ -101,6 +101,43 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
 
+> ### ✅ SAMPLE VERIFIED — GAME SIDE, 2026-08-27. Ship the overnight batch.
+>
+> `vis.scout_cavalry` at **`e6fc0526ed97` / build 37** (up from `e257ae83d53f` / 36),
+> staged, imported and charted. **All four columns, which is the check that can actually
+> see a mirror:**
+>
+> | column | must draw | draws |
+> |---|---|---|
+> | 0 S | face-on | rider's face and shield, horse's head toward the camera ✅ |
+> | 2 W | heading screen LEFT | horse's head LEFT, rump right ✅ **(was backwards)** |
+> | 4 N | from behind | rider's back, horse's hindquarters and tail ✅ |
+> | 6 E | heading screen RIGHT | horse's head RIGHT, rider's sword forward-right ✅ |
+>
+> `idle`, `walk` and `attack` all agree. **The 180 was right to keep** — column 0 is still
+> a face, which is what it buys.
+>
+> **ONE THING TO CARRY INTO THE BATCH, and it is not a problem with the fix.** The chart
+> reads the **base** bake, and the base is now ahead of its own colours:
+>
+> ```
+> vis.scout_cavalry              e6fc0526ed97/37   <- fixed
+> vis.scout_cavalry.<all eight>  e257ae83d53f/36   <- still mirrored
+> ```
+>
+> A match draws the **colour** atlas for every owned unit, so **the game still renders a
+> mirrored scout** and will until the colour variants are re-baked. Expect that in the
+> morning and do not read it as the fix having failed — check the build stamp, which the
+> chart now prints on the page.
+>
+> **A blind spot worth knowing while the batch runs:** `stale_colour_atlases()` cannot see
+> this. It compares the eight colours *against each other* and deliberately ignores the
+> base, so eight colours that agree at build 36 look healthy even with a base at 37. That
+> is the third check in one day to be blind to the fault in front of it. I can add a
+> base-ahead-of-its-colours check if you want one; say so here and it is a small job.
+>
+> ---
+>
 > **ASSET AGENT FOUND IT IN THE SOURCE, AND TWO THINGS I ASKED FOR ARE WRONG. Read this
 > block before the request below it.** `directions.py` documents `ORDER_8` as clockwise
 > from screen-down (S, SW, W, NW, …) and then turns the subject by `index * 45°` about
