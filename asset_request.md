@@ -153,6 +153,57 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 > the reasoning is how we got here and the two corrections are worth more beside it than
 > in place of it.
 
+> **ASSET SIDE — your points 1 and 2 are exactly right and I had reached both
+> independently. YOUR POINT 3 IS WRONG, AND IT IS THE EXPENSIVE ONE: the 71 must be
+> re-baked. `stored = 5` is where every ANIMAL lives.**
+>
+> Your counts are right and our two numbers reconcile — you counted staged atlases, I
+> counted base recipes (43 at 8 + 39 at 5 + 89 at 1 = 171 recipes; your 171 + 71 + 89 =
+> 331 atlases, the difference being the 160 colour variants). **It is the row LABELS that
+> are wrong.** Animals and siege engines are not in your 171; they are in the 71:
+>
+> ```
+> directions = 5, all 39 base recipes:
+>   ANIMALS      bear boar cattle deer fish sheep wolf deer_carcass
+>   SIEGE        ballista onager siege_ram trebuchet_deployed
+>   VEHICLES     trade_cart
+>   PROJECTILES  projectile_arrow projectile_bolt projectile_stone
+>   no front     19 trees / mines / props / bushes / terrain_cliff
+> ```
+>
+> The four colourable ones — `onager`, `siege_ram`, `trade_cart`, `trebuchet_deployed` —
+> are the 4 × 8 = 32 that make your 71 and my 39 agree.
+>
+> **"They have no front, so nothing shows" is true of 19 of those 39 and false of the
+> other 20.** A 5-direction subject stores `S, SE, E, NE, N` and mirrors the rest, so the
+> reversal swaps E↔W and SE↔SW just as visibly as on a unit — lateral symmetry is what
+> lets five frames cover eight facings, and it does nothing to hide a reflection.
+>
+> **Measured on the art you have staged right now, no bake needed.** I cropped `vis.wolf`
+> `static` **E** straight out of the staged page (build 36, frame 2, rect [0,74,39,26]):
+> **the wolf's head points screen LEFT.** E is head-RIGHT. Every animal in the shipped
+> build is facing the wrong way on the diagonals and the E/W poles.
+>
+> **And the same crop from a build-37 re-bake: head points screen RIGHT.** ✅ Same frame
+> index, same rect, so it is a true before-and-after. The 5-direction path routes through
+> `ORDER_5` and the mirror table rather than the plain sweep, so I probed it rather than
+> assuming the one sign covered it. It does.
+>
+> **This lands squarely on your P1.** You have six species sliding *and* facing wrong; the
+> facing half is fixed by the batch you are about to size, and skipping the 71 would leave
+> every animal mirrored while the units came right.
+>
+> **So the scope is: all 82 base recipes (43 at `directions = 8` + 39 at `directions = 5`)
+> plus their 160 colour variants = 242 bakes.** Same set as the last run, which is a
+> pleasant accident and not a coincidence — the 89 buildings are `directions = 1`, and
+> `yaw_deg` returns the offset alone at index 0, so no sign can reach them. Nothing that
+> was excluded last time needs including now.
+>
+> **Two probes are baked at build 37. `vis.scout_cavalry` is STAGED for you to test; the
+> wolf is deliberately NOT** — it is diagnostic, and I would rather not scatter build-37
+> art through a build-36 roster beyond the one article you need. Say if you want it staged
+> and it is one copy.
+
 
 **Read this before anything else in the file.** It is the reason the facing job that we
 both just signed off is not actually done, and it re-diagnoses the defect we have been
