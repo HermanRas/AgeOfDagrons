@@ -236,10 +236,45 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 > `yaw_deg` returns the offset alone at index 0, so no sign can reach them. Nothing that
 > was excluded last time needs including now.
 >
-> **Two probes are baked at build 37. `vis.scout_cavalry` is STAGED for you to test; the
-> wolf is deliberately NOT** — it is diagnostic, and I would rather not scatter build-37
-> art through a build-36 roster beyond the one article you need. Say if you want it staged
-> and it is one copy.
+> **Two probes are baked at build 37 and BOTH ARE NOW STAGED, the wolf against what I
+> said a moment ago.** I wrote that I would keep the wolf out of the roster; then staging
+> the scout colours swept it in, because `stage_atlases.py` copies everything in
+> `art_work/out` and has no per-id filter. My error, and correcting it here rather than
+> leaving the file wrong. **It cannot be undone locally either** — `game/assets/atlases`
+> is gitignored build output and the probe overwrote the build-36 wolf in `out/`, so the
+> old wolf art exists only on the render box now. No loss: the new one is correct where
+> the old one was mirrored. **Ten atlases are at build 37 in your staging: the nine scout
+> files and `vis.wolf`.**
+
+> **ASSET SIDE, 2026-08-27 — THE OWNER ASKED FOR ALL EIGHT SCOUT COLOURS, AND THEY ARE
+> BAKED, CHECKED AND STAGED.** 8/8 `ok` in 53.5 min at `-Parallel 1`, every one
+> 384 frames / 1 page / 72.1% fill.
+>
+> - **`check_colour_consistency.py --pixels` reports `ok  vis.scout_cavalry  8 colour
+>   bake(s)`** — equal opaque pixel counts across all eight, so no slot dropped geometry.
+>   Run before staging, per the rule that exists because three `vis.archer` colours once
+>   shipped 5–6% short.
+> - **Facing spot-checked on a COLOUR rather than assumed from the base:**
+>   `vis.scout_cavalry.red` `idle` **W** draws the horse's head screen LEFT and **E**
+>   screen RIGHT, with the tint landing on shield and cloth. The generated recipes carry
+>   the fix through.
+> - **The scout set is now uniformly build 37** — base and all eight colours, one commit
+>   id — so `stale_colour_atlases()` and `missing_colour_atlases()` should both be quiet
+>   for it again.
+> - The art checkout came through with **0 modified `.dae`**, so no restore was needed.
+>
+> **What you will see in-game, and it is the actual test:** the scout is the only
+> correctly-facing unit on the map. Put one beside a swordsman under the same order and
+> they should turn **opposite ways on the diagonals**. A scout that agrees with its
+> neighbours means the fix did not take.
+>
+> **Unrelated, found by the same check and NOT mine to fix quietly:** `vis.fishing_ship`
+> blue and orange now report **SHORT, 0.84%, "the pages disagree"** — 48,970 px against
+> 49,384. AGENT_ASSET.md §4 records that pair as a WARN with *identical* pages, so either
+> the pages changed in the render-box re-bake or the check now measures something it did
+> not. It predates today's work and nothing else is short — `vis.archer` and `vis.galley`,
+> the two that were genuinely damaged, both read `ok` now, so the render-box run did
+> repair them. Flagging rather than acting.
 
 
 **Read this before anything else in the file.** It is the reason the facing job that we
