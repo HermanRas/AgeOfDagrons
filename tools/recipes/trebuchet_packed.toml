@@ -1,20 +1,21 @@
-# PARKED -- NOT READY TO BAKE. This directory exists so that a recipe can be
-# kept, with its findings, without being picked up by a run: `bake_batch.ps1` and
-# `stale_recipes.py` both glob `recipes/*.toml` NON-recursively, so a subdirectory
-# is invisible to them (the same mechanism that keeps the 160 generated colour
-# recipes out of an ordinary batch). Move it back up one level when it is fixed.
+# SHIPPED KNOWINGLY IMPERFECT, on the project owner's call of 2026-08-27:
+# "trebuchet and onager packed even if not looking correct or not animated is
+# still better as a placeholder than not working at all." Without it a limbered
+# trebuchet trundles across the map fully deployed, arm cocked, which reads as a
+# bug rather than as a state.
 #
-# Parking it is not optional tidiness: BOTH MACHINES SHARE THIS FOLDER THROUGH
-# GOOGLE DRIVE, so a recipe merely existing in recipes/ reaches the render box
-# whether or not it is committed, and a recipe with no staged atlas counts as
-# "never baked" and therefore as work to do.
+# It was parked for half an hour after the probe found two real defects. Both
+# still stand and NEITHER is cosmetic drift that will fix itself:
 #
-# WHAT IS WRONG, both found by probe on 2026-08-27 and both real:
-#   1. The four crew do not place. `engineer_a..d` land stacked in a vertical
+#   1. THE FOUR CREW DO NOT PLACE. `engineer_a..d` land stacked in a vertical
 #      column beside the cart, overlapping each other at staggered heights,
-#      instead of standing around it.
-#   2. It cannot animate yet -- see the [anims] note below.
-# The wagon, the oxen and the cargo are all correct, so this is close.
+#      instead of standing around it. The wagon, the oxen and the cargo are all
+#      correct, so the silhouette reads -- but look closely and there is a
+#      totem pole of soldiers next to it.
+#   2. IT CANNOT ANIMATE -- see the [anims] note below.
+#
+# Do not read a later "looks fine" as either being fixed; check the crew
+# explicitly, because at map zoom the column is easy to miss.
 #
 # Trebuchet (PACKED state) -- the travelling half of the pack/unpack state
 # machine, PLAN.md 9.2.1 item 5, scoped with 4.13. asset_request.md P2.

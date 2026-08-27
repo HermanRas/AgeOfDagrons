@@ -1,0 +1,73 @@
+# Onager (PACKED state) -- the travelling half of the pack/unpack state machine,
+# PLAN.md 9.2.1 item 5, scoped with 4.13. asset_request.md P2.
+#
+# Pairs with onager.toml. The roster names two actors, not one actor in two
+# poses:
+#
+#   units/romans/siege_onager_unpacked -> units/romans/siege_onager_pivot.xml
+#   units/romans/siege_onager_packed   -> units/romans/siege_onager_packed.xml   <- THIS FILE
+#
+# A PACKED ONAGER IS A WAGON: a four-wheeled cart with the engine struck down as
+# cargo, two draught figures at `horse_l`/`horse_r` and three crew walking
+# alongside. Unmistakably not a deployed engine at a glance, which is the whole
+# point of the request.
+#
+# THIS ONE ANIMATES AND THE TREBUCHET'S PACKED HALF DOES NOT, and the difference
+# is worth understanding before copying either. Both are wagons; the STRUCTURE
+# differs:
+#
+#   onager_packed      the wagon IS the root actor and declares Idle/Walk/Run
+#                      on itself, so a plain `clip = "Idle"` resolves.
+#   trebuchet_packed   the root is a PIVOT that declares nothing and carries the
+#                      wagon as a prop, so the clips belong to a nested actor and
+#                      the subject's clip set comes up empty.
+#
+# So do not copy this recipe's [anims] block into trebuchet_packed.toml and
+# expect it to work -- that was probed on 2026-08-27 and fails with
+# `Available: []`.
+id      = "vis.onager_packed"
+adapter = "zeroad"
+
+[source]
+actor = "units/romans/siege_onager_packed.xml"
+
+[render]
+# 512 carried from the deployed half and from trebuchet_packed.toml, which fits
+# the same wagon-plus-draught-team silhouette at 26.5% fill. A packed engine is
+# LOWER but LONGER than a deployed one, so length decides this, not height.
+# Trust the clip-check rather than this comment.
+canvas = [512, 512]
+supersample = 2
+directions = 5
+frame_origin_at = 0.2
+engine = "eevee"
+samples = 24
+# The zeroad adapter renders every subject 180 deg from the direction the atlas
+# then labels it; this cancels it. Kept from the deployed half -- it is a
+# per-source correction and both halves share a source convention.
+yaw_offset_deg = 180.0
+
+# Resolved against the ROOT actor, which declares these itself -- see the header.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+# A packed siege engine is the one siege state that MOVES, so unlike every other
+# engine in the roster this one has a real walk clip and need not be wired at
+# `speed: 0`. 0 A.D. points Walk and Run at the same `_move.dae`, so a `run`
+# added later would be the same animation at a different rate.
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/romans/siege_onager_packed.xml"
