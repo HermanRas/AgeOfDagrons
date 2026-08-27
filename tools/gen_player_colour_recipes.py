@@ -86,6 +86,16 @@ UNITS = [
     # opaque and it tints anyway, and the ballista's props are player_trans and
     # it does not.
     "onager",
+    # Not a unit at all -- the rally/waypoint marker, added on the owner's
+    # request 2026-08-27. It belongs here because this list is really "things
+    # that get one atlas per player colour", and a marker whose entire job is to
+    # say WHOSE it is needs that more than most.
+    #
+    # 75.4% of the sprite tints (4881 opaque px, 3681 moved > 64), which is the
+    # highest in the project by a wide margin -- it is nearly all banner cloth.
+    # Measured the same way as everything above, because the actor's
+    # player_trans material would still not have proved it.
+    "waypoint_flag",
 ]
 
 

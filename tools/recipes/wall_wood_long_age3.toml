@@ -1,4 +1,4 @@
-# Wall (long) -- Briton timber, the wood wall tier (PLAN.md 9.2, 9.2.1 item 3).
+# Wall (long) -- Roman siege works, the wood wall tier (PLAN.md 9.2, 9.2.1 item 3).
 #
 # WALLS ARE KEYED BY MATERIAL, NOT BY AGE. Wood, stone and reinforced are three
 # parallel buildings costing three different resources, and all of them stay
@@ -9,15 +9,25 @@
 # The age-3 RE-SKIN of the age-2 timber wall -- same building, same cost, newer look. This is the only wall tier that re-skins; stone and reinforced each have one appearance.
 #
 # Actor resolved through its entity template:
-#   simulation/templates/structures/brit/wall_long.xml -> <VisualActor><Actor>
+#   simulation/templates/structures/rome/siege_wall_long.xml -> <VisualActor><Actor>
 #
+#
+# RE-POINTED 2026-08-27, from `britons/wall_long.xml`, on the owner's call.
+# The reason is the GATE: the Briton gate actor declares no animations of any
+# kind, so it could never draw an open state, while every other gate in 0 A.D.
+# ships gate_closed / gate_opening / gate_open / gate_closing. Since a tier
+# comes from one civ, the whole set moved rather than the gate alone.
+#
+# The Roman siege walls suit the tier better than the swap cost: every mesh in
+# the set is `*_wood` siege works, so an age-3 WOODEN wall is literally that,
+# and age 2 stays a German palisade so the two ages remain tellable apart.
 # Every piece of a tier comes from ONE civ (9.2.1 item 3, settled after the
 # roster's mixed-civ wall lines turned out to be copy-paste errors).
 id      = "vis.wall_wood_long_age3"
 adapter = "zeroad"
 
 [source]
-actor = "structures/britons/wall_long.xml"
+actor = "structures/romans/siege_wall_long.xml"
 
 [render]
 canvas = [1280, 1056]
@@ -38,4 +48,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/britons/wall_long.xml"
+actor = "art/actors/structures/romans/siege_wall_long.xml"

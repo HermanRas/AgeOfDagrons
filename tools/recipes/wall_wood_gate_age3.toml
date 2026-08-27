@@ -1,4 +1,4 @@
-# Gate -- Briton timber, the wood wall tier (PLAN.md 9.2, 9.2.1 item 3).
+# Gate -- Roman siege works, the wood wall tier (PLAN.md 9.2, 9.2.1 item 3).
 #
 # WALLS ARE KEYED BY MATERIAL, NOT BY AGE. Wood, stone and reinforced are three
 # parallel buildings costing three different resources, and all of them stay
@@ -9,15 +9,25 @@
 # The age-3 RE-SKIN of the age-2 timber wall -- same building, same cost, newer look. This is the only wall tier that re-skins; stone and reinforced each have one appearance.
 #
 # Actor resolved through its entity template:
-#   simulation/templates/structures/brit/wall_gate.xml -> <VisualActor><Actor>
+#   simulation/templates/structures/rome/siege_wall_gate.xml -> <VisualActor><Actor>
 #
+#
+# RE-POINTED 2026-08-27, from `britons/wall_gate.xml`, on the owner's call.
+# The reason is the GATE: the Briton gate actor declares no animations of any
+# kind, so it could never draw an open state, while every other gate in 0 A.D.
+# ships gate_closed / gate_opening / gate_open / gate_closing. Since a tier
+# comes from one civ, the whole set moved rather than the gate alone.
+#
+# The Roman siege walls suit the tier better than the swap cost: every mesh in
+# the set is `*_wood` siege works, so an age-3 WOODEN wall is literally that,
+# and age 2 stays a German palisade so the two ages remain tellable apart.
 # Every piece of a tier comes from ONE civ (9.2.1 item 3, settled after the
 # roster's mixed-civ wall lines turned out to be copy-paste errors).
 id      = "vis.wall_wood_gate_age3"
 adapter = "zeroad"
 
 [source]
-actor = "structures/britons/wall_gate.xml"
+actor = "structures/romans/siege_wall_gate.xml"
 
 [render]
 canvas = [1344, 832]
@@ -32,10 +42,39 @@ engine = "eevee"
 samples = 32
 yaw_offset_deg = 180.0
 
+# OPEN AND CLOSED, on the owner's request 2026-08-27: the game draws one or the
+# other from the gate's locked status.
+#
+# `static` IS THE CLOSED POSE, DELIBERATELY, and the naming is the delivery
+# rather than an oversight. The game asks for `static` today and would ask for
+# it again for any entity whose state it does not track; a gate at rest is
+# CLOSED, so pointing `static` at `gate_closed` means the art can land before
+# the game wires anything and nothing breaks or changes on screen. Adding a
+# clip called `closed` as well would bake a second identical set of frames.
+#
+# ONLY TWO CLIPS, and the reason is page budget rather than taste. 0 A.D. also
+# ships `gate_opening` and `gate_closing`, ~12 frames each, and the swing would
+# be nice. But a gate canvas is 1344x832 and EIGHT frames already fill 31-60% of
+# a 4096 page, so the two transitions at 8 directions apiece come to ~192 extra
+# frames -- on the order of fourteen pages per gate, for an animation that plays
+# for half a second. Two held poses roughly double the frame count instead, which
+# takes the larger gates to two pages and is the whole cost.
+[anims.static]
+clip = "gate_closed"
+frames = 1
+fps = 1
+loop = false
+
+[anims.open]
+clip = "gate_open"
+frames = 1
+fps = 1
+loop = false
+
 [attribution]
 source = "0 A.D. (Wildfire Games)"
 licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/structures/britons/wall_gate.xml"
+actor = "art/actors/structures/romans/siege_wall_gate.xml"

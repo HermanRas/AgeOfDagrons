@@ -54,6 +54,35 @@ yaw_offset_deg = 180.0
 engine = "eevee"
 samples = 32
 
+# OPEN AND CLOSED, on the owner's request 2026-08-27: the game draws one or the
+# other from the gate's locked status.
+#
+# `static` IS THE CLOSED POSE, DELIBERATELY, and the naming is the delivery
+# rather than an oversight. The game asks for `static` today and would ask for
+# it again for any entity whose state it does not track; a gate at rest is
+# CLOSED, so pointing `static` at `gate_closed` means the art can land before
+# the game wires anything and nothing breaks or changes on screen. Adding a
+# clip called `closed` as well would bake a second identical set of frames.
+#
+# ONLY TWO CLIPS, and the reason is page budget rather than taste. 0 A.D. also
+# ships `gate_opening` and `gate_closing`, ~12 frames each, and the swing would
+# be nice. But a gate canvas is 1344x832 and EIGHT frames already fill 31-60% of
+# a 4096 page, so the two transitions at 8 directions apiece come to ~192 extra
+# frames -- on the order of fourteen pages per gate, for an animation that plays
+# for half a second. Two held poses roughly double the frame count instead, which
+# takes the larger gates to two pages and is the whole cost.
+[anims.static]
+clip = "gate_closed"
+frames = 1
+fps = 1
+loop = false
+
+[anims.open]
+clip = "gate_open"
+frames = 1
+fps = 1
+loop = false
+
 [attribution]
 source = "0 A.D. (Wildfire Games)"
 licence = "CC-BY-SA 3.0"
