@@ -27,6 +27,13 @@
     "DIFFICULTY, per AI_Player_difficulty.md: focus on building and defending; attacks",
     "after 10 minutes of game time, then keeps going; ages to 2; one tower.",
     "",
+    "ARMY CAPS RISE WITH DIFFICULTY (project owner, 2026-08-27), and every one of them",
+    "is bounded by POPULATION rather than by taste. A unit is 1 pop, a town centre",
+    "gives 10 and a house 5, so the house count in each file has to carry the army the",
+    "same file asks for: Easy's 3 houses is a cap of 25 against 7 villagers and 10",
+    "swordsmen. Raise a cap without raising the houses and TrainCommand simply refuses",
+    "-- a bot that stops training for no visible reason.",
+    "",
     "THE 10-MINUTE TRIGGER IS A CLOCK, AND THAT IS NOT THE THING THE OWNER RULED OUT.",
     "A per-step timeout ABANDONS A GOAL because the world was slower than a number",
     "somebody guessed -- that is the defect. A global clock that decides when aggression",
@@ -71,14 +78,14 @@
      "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 1}}},
 
     {"do": "build", "def": "building.house", "near": "self", "units": 1,
-     "when": {"fewer_than": {"building.house": 2}}},
+     "when": {"fewer_than": {"building.house": 3}}},
     {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
      "when": {"fewer_than": {"building.watch_tower": 1}}},
     {"do": "build", "def": "building.barracks", "near": "self", "units": 1,
      "when": {"fewer_than": {"building.barracks": 1}}},
 
     {"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 5,
-     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 5}}},
+     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 10}}},
 
     {"do": "attack", "units": "military",
      "when": {"after_ticks": 6000, "at_least": {"unit.swordsman": 5}}}

@@ -1765,6 +1765,42 @@ attack" is indistinguishable from "nothing in this fixture would have".
 *(The nest is composed entirely from existing gaia props; only the dragon needed bespoke art, and
 it is baked.)*
 
+### Phase 14 — **NEEDS UPGRADE**: the AI cannot see what it is fighting
+
+**Opened 2026-08-27, the moment 12.2b shipped, and by the person who built it.** Not a defect —
+a **declared ceiling** of the rule design, written down while the reason is fresh rather than
+rediscovered as a mystery later. Nothing here is required for v1; the levels play, they ladder,
+and the owner has judged a stalemate between evenly matched bots a correct result.
+
+**What the ceiling is.** Every condition a rule can ask is about the bot's OWN world: its age,
+its stock, how many of a thing it owns, how many villagers are on a resource. **There is no
+condition that can see the opponent.** So an army is a target number — `fewer_than:
+{unit.swordsman: 20}` — and never a response. The consequences are all the same shape:
+
+- It builds 20 swordsmen into a wall of towers and keeps sending them, because "the last
+  fifteen died" is not a fact any rule can read.
+- It cannot counter. Archers against cavalry, spearmen against knights — the whole
+  rock-paper-scissors the roster is built around is invisible to it.
+- It cannot defend a place. It has no notion of *where* it is being attacked, only that it owns
+  fewer things than it did.
+- It cannot judge whether an attack worked. `attack` fires once and the standing orders keep
+  soldiers walking at the nearest enemy forever, win or lose.
+
+**Why not simply add more rules.** Because this is a vocabulary limit, not a coverage one. More
+rules in the same language produce more precise blindness. What it wants is a second class of
+condition — *what the enemy has, what I have lost recently, where the fighting is* — and the
+moment those exist, "first match wins over a flat list" stops being the right evaluator too,
+because two rules can both be urgent for different reasons.
+
+**What is worth keeping when it is rebuilt.** The parts of 12.2b that are not implicated:
+conditions rather than timers; costs read from the defs; reservation for saving up; a
+deterministic hashed reaction delay; and one file per difficulty in `data/`, which is what makes
+a modded AI possible at all.
+
+**Where it would start.** `AISystem._census()` is the one function that reads the world into
+conditions. An enemy census beside the player's own is the smallest honest first step, and
+`SimPlayer` already carries what a "what did I lose" window would need.
+
 ---
 
 ## 12. Post-MVP prioritisation

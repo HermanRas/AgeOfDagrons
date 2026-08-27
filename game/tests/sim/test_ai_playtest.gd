@@ -269,16 +269,41 @@ func test_it_banks_resources_it_did_not_start_with() -> void:
 			% [banked, _diagnose(w, _ai(w))])
 
 
-func test_it_builds_and_advances() -> void:
+func test_it_builds_its_opening() -> void:
+	# THE AGE HALF OF THIS TEST MOVED OUT, and deliberately. It used to assert the bot
+	# reached age 2 inside 1200 ticks, which it did easily while advancing was FREE --
+	# ages.json now charges 500 food (2026-08-27), so age 2 is a real economic goal
+	# several minutes in, and asserting it here would be asserting the economy's SPEED
+	# rather than that the AI works.
 	var w := _match()
 	_run(w)
 	var ai := _ai(w)
 	var built := _count(w, 1, &"building.house") + _count(w, 1, &"building.mining_camp") \
 			+ _count(w, 1, &"building.lumber_camp") + _count(w, 1, &"building.mill")
-	assert_true(built >= 2, "raised %d of its opening buildings (step %d)"
+	assert_true(built >= 2, "raised %d of its opening buildings in %d decisions"
 			% [built, ai.decisions_of(1)])
-	assert_true(w.player_for(1).age > 1 or w.player_for(1).is_advancing(),
-			"reached or started age 2 (step %d)" % ai.decisions_of(1))
+
+
+func test_it_saves_up_for_the_age_rather_than_spending_past_it() -> void:
+	# 500 food at the AI's opening gather rate takes minutes, so this is the one test in
+	# the file that pays for a long window. It is worth it, because it exercises the
+	# thing that replaced the script's timeouts: a rule WAITS for a cost.
+	#
+	# AND IT NEEDS RESERVATION TO PASS. Villagers cost food and so does the age, so a
+	# bot that spends whatever it has never accumulates 500 -- which is not a theory:
+	# `_cost_of` returned `{}` for `advance_age` in the first version, and Hard finished
+	# two 20,000-tick ladder matches still in age 1 on 46 food, having lost to Normal.
+	#
+	# 9000 ticks rather than 5000 because at 5000 it was measured mid-save, holding 510
+	# food with villager training already stopped -- the behaviour under test working,
+	# caught one decision before it showed. The window is the calibration; the claim is
+	# the assertion.
+	var w := _match()
+	_run(w, 9000)
+	var p := w.player_for(1)
+	assert_true(p.age > 1 or p.is_advancing(),
+			"reached or started age 2 in 9000 ticks -- food %s, %s"
+					% [p.stock.get(&"food", 0), _diagnose(w, _ai(w))])
 
 
 func test_it_keeps_deciding_rather_than_stalling() -> void:

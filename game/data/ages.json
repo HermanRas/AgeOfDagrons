@@ -36,16 +36,33 @@
     "owner set the test figure deliberately and it is one number per age to",
     "change back.",
     "",
-    "`cost` is declared and EMPTY. Advancing is free for now; the field is here",
-    "because PLAN.md 9.2 charges for it, and AdvanceAgeCommand already refuses a",
-    "cost the player cannot afford -- so filling these in is a data change with",
-    "no code behind it."
+    "ADVANCING NOW COSTS SOMETHING (project owner, 2026-08-27), and the numbers are",
+    "Age of Empires II's, which is what they asked for and is a defensible place to",
+    "start: 500 food; 800 food + 200 gold; 1000 food + 800 gold. This was the one",
+    "field in the file declared and left empty, and the note said so -- a data change",
+    "with no code behind it, because AdvanceAgeCommand has always refused a cost the",
+    "player could not afford. That prediction held: nothing in the sim changed.",
+    "",
+    "WHAT IT CHANGES IS THE WHOLE SHAPE OF A MATCH, and the AI is where it shows",
+    "first. Everybody starts with 200 food, so age 2 is now a real economic goal",
+    "reached in minutes rather than a button pressed at t115. The AI's own advance",
+    "rules already gate on villager counts, so they wait for the food without any",
+    "change -- that is what came of driving them by conditions rather than by ticks.",
+    "",
+    "The names stay ours; only the numbers are borrowed. See the note above on why",
+    "the Dark/Feudal/Castle/Imperial ladder is deliberately not used.",
+    "",
+    "`advance_time_ticks` is STILL the 100-tick test value and is a separate decision",
+    "from the cost. A real pace is nearer 1200."
   ],
 
   "ages": [
     { "name": "Age of Ash",     "numeral": "I",   "cost": {}, "advance_time_ticks": 0 },
-    { "name": "Age of Embers",  "numeral": "II",  "cost": {}, "advance_time_ticks": 100 },
-    { "name": "Age of Flame",   "numeral": "III", "cost": {}, "advance_time_ticks": 100 },
-    { "name": "Age of Dragons", "numeral": "IV",  "cost": {}, "advance_time_ticks": 100 }
+    { "name": "Age of Embers",  "numeral": "II",  "cost": { "food": 500 },
+      "advance_time_ticks": 100 },
+    { "name": "Age of Flame",   "numeral": "III", "cost": { "food": 800, "gold": 200 },
+      "advance_time_ticks": 100 },
+    { "name": "Age of Dragons", "numeral": "IV",  "cost": { "food": 1000, "gold": 800 },
+      "advance_time_ticks": 100 }
   ]
 }

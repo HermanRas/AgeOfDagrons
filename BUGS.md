@@ -197,56 +197,57 @@ Found by `dev_preview/preview_ai_match.tscn`, forest, 12,000 ticks.
       not re-targeting — and `CombatSystem` re-targets now (see the reversal below). Nobody
       has checked what the standing order still needs to do.
 
-**Baseline, so a regression is visible.** Forest, 12,000 ticks. **Re-measured 2026-08-23
-after every unit speed was halved** (see the balance item at the top — that was the owner's
-call and this is what it cost):
+**Baseline, so a regression is visible. REPLACED 2026-08-27, and the old one is gone
+rather than kept**: it measured two EASY bots against each other under a script that no
+longer exists (12.2b), and the owner agreed it is meaningless. Two identical bots could
+only ever report that the simulation is symmetric.
 
-| seed | outcome | before the halving |
+**What replaced it is the LADDER** — each difficulty against the one above it, which is
+the question `AI_Player_difficulty.md` actually makes a claim about. Run it with:
+
+```
+Godot --headless --path game res://dev_preview/preview_ai_match.tscn -- --ticks 20000
+```
+
+**A STALEMATE IS A RESULT** (project owner, 2026-08-27): *"the stalemate 1v1 dead lock is
+a result in it self, meaning its balancing correctly."* So an UNRESOLVED row is evidence
+the two levels are evenly matched, not a bug to chase. What WOULD be a finding is the
+lower level winning, or a level that never gets an economy up.
+
+**Seed 3, Forest 96×96, 20,000 ticks (33 min of game time), measured 2026-08-27** with
+the army caps, the AoE age costs and the 12.2b rule sets all in:
+
+| rung | outcome | reads as |
 |---|---|---|
-| 3 | MATCH OVER t8806, winner p1 | t8282, p1 |
-| 4 | **UNRESOLVED** | t7776, **p2** |
-| 5 | MATCH OVER t9470, winner p1 | t8763, p1 |
-| 6 | UNRESOLVED — p2 at 0 units and one unreachable foundation (parked, above) | UNRESOLVED |
+| passive v easy | **easy wins at t8327** (13.9 min) | ✅ correct |
+| easy v normal | **normal wins at t11366** (18.9 min) | ✅ correct |
+| normal v hard | **normal wins at t14726** (24.5 min) | ❌ **the wrong way round** |
+| hard v unfair | stalemate | ✅ acceptable — evenly matched |
 
-- [ ] **UP NEXT — the owner's call on 2026-08-27**, after playtesting the halved speed:
-      *"sound and speed is much better. We may need to revisit the AI actions to adjust
-      after the speed fix to get consistent game resolutions or identify why its not
-      completing."* So this row is no longer just a recorded consequence; it is the next
-      job, and PLAN.md §15 item 1 carries the plan. **One lever at a time** — the build
-      step, `gather_rate`, or the AI's step budget — with all five seeds re-measured
-      either side, or nothing below is measurable.
+- [ ] **NORMAL BEATS HARD, and the cause is a design tension rather than a bug.** Hard is
+      GREEDIER: it waits for 12 villagers, a mill, a barracks and 8 swordsmen before its
+      attack rule fires, where Normal pushes on a 7-minute clock with 4. So Normal lands
+      a timing attack while Hard is still teching, and Hard dies at age 2 having never
+      spent the economy it built — 1,400 stone and 510 gold banked at the end.
 
-      **Halving unit speed cost the baseline its best property, and the cause is the
-      already-open "gives up when short of resources" bug, amplified.** Two in four resolve
-      now rather than three, and — the part that matters — **seed 4 was the only seed p2
-      ever won**, which is what made the set evidence that the result is not an artefact of
-      the script favouring player 1. That evidence is gone.
+      **Both halves of that are working as designed**, which is what makes it a balance
+      question rather than a defect: "attacks after eco has been established" is the
+      difficulty table's own wording for Hard, and an economy-first build order genuinely
+      does lose to a well-timed rush. The levers, in the order I would try them:
+      **lower Hard's attack gate** (it is the greediest number in any profile), give Hard
+      **towers before its third production building** so it survives the window, or slow
+      Normal's clock. All three are balance and belong to the owner.
 
-      **Not a window problem: seed 4 does not resolve at 20,000 ticks either**, so it is
-      not a match that merely fell just outside the cut. What happens is on the record:
+      Two things this run DID prove: Hard now ages (it was stuck at age 1 for two whole
+      runs before the reservation and rule-order fixes), and three of the four rungs
+      order correctly.
 
-      ```
-      t2445  p2 step 14 -- cannot place barracks: cost 175 wood vs stock 74 wood
-      t2450  p2 step 15: gather wood x1
-      t3430  p2 step 16 -- no building.barracks standing
-      t3435  p2 step 17: attack                     <- attacks with nothing
-      t2736  p1 step 15 timed out
-      t3640  p1 step 16 -- building.barracks is still a foundation (0% built)
-      t3645  p1 step 17: attack                     <- also attacks with nothing
-      ```
-
-      Both sides reach the attack step with no army, and neither can kill the other, so it
-      runs forever. That is **exactly the open item above** — a build step that gives up
-      when short of resources — now hitting BOTH players instead of one.
-
-      **Why halving speed did this, and it is worth understanding before tuning further:**
-      a gather trip is walk-out, extract, walk-home, deposit, and halving speed doubles both
-      walks. Resource income is therefore closer to HALVED than unaffected, and the further
-      the node the worse it is. Meanwhile every AI step timeout is still the number it was.
-      So the speed change did not just make units slower to watch — it cut the economy, and
-      the AI's timeouts are now far too tight for the world they run in. Fixing the
-      affordability timeout is the first thing to try; re-tuning `gather_rate` upward to
-      compensate is the other lever, and that one is the owner's call.
+**What this replaced, kept in one line because the conclusion outlived the numbers:**
+halving unit speed doubled both legs of every gather trip, which cut income roughly in
+half and starved a build step that gave up when short of resources — so both bots reached
+their attack step with no army and the match ran forever. **12.2b removed the mechanism
+entirely.** A rule has no timeout: it waits. The old table's seed-4 tick log is in git if
+the failure shape is ever wanted again.
 
 ---
 

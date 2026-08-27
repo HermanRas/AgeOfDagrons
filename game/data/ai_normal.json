@@ -10,7 +10,8 @@
     "  max_age     2 -> 3",
     "  attack      6000 ticks (10 min) -> 4200 (7 min)",
     "  towers      max 1 -> max 5",
-    "  army        5 swordsmen -> 8, plus archers once the range is up",
+    "  army        10 swordsmen -> 15, plus 6 archers once the range is up",
+    "  houses      3 -> 5, because 15 + 6 + 9 villagers is 30 pop and a house is 5",
     "",
     "A SECOND advance_age RULE IS WHAT AGE 3 COSTS, and it is gated on an economy",
     "rather than on a clock: ageing with six villagers and no farm produces a bot that",
@@ -72,16 +73,16 @@
      "when": {"age": 2, "at_least": {"unit.villager": 8, "building.mill": 1}}},
 
     {"do": "build", "def": "building.house", "near": "self", "units": 1,
-     "when": {"fewer_than": {"building.house": 4}}},
+     "when": {"fewer_than": {"building.house": 5}}},
     {"do": "build", "def": "building.archery_range", "near": "self", "units": 1,
      "when": {"age_min": 3, "fewer_than": {"building.archery_range": 1}}},
     {"do": "build", "def": "building.watch_tower", "near": "self", "units": 1,
      "when": {"age_min": 3, "fewer_than": {"building.watch_tower": 5}}},
 
     {"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 4,
-     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 8}}},
+     "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 15}}},
     {"do": "train", "at": "building.archery_range", "unit": "unit.archer", "count": 4,
-     "when": {"at_least": {"building.archery_range": 1}, "fewer_than": {"unit.archer": 4}}},
+     "when": {"at_least": {"building.archery_range": 1}, "fewer_than": {"unit.archer": 6}}},
 
     {"do": "attack", "units": "military",
      "when": {"after_ticks": 4200, "at_least": {"unit.swordsman": 4}}}

@@ -17,6 +17,14 @@ func before_each() -> void:
 	cfg.map_size = Vector2i(48, 48)
 	w.setup(cfg)
 	w.map.fill_terrain(SimMap.Terrain.GRASS)
+	# ADVANCING COSTS RESOURCES since 2026-08-27 (ages.json took Age of Empires II's
+	# ladder: 500 food, then 800+200, then 1000+800). These tests are about the TIMING
+	# of an advance, not about affording one, so every player is handed enough to pay
+	# for all three. Without it they were being refused for a reason none of them are
+	# asking about -- which is what a fixture is for.
+	for p in w.players:
+		for kind in [&"food", &"wood", &"gold", &"stone"]:
+			p.stock[kind] = 100000
 
 
 func _player(id: int = 1) -> SimPlayer:
@@ -294,6 +302,11 @@ func test_an_advance_in_flight_is_part_of_the_state_hash() -> void:
 	cfg.map_size = Vector2i(48, 48)
 	other.setup(cfg)
 	other.map.fill_terrain(SimMap.Terrain.GRASS)
+	# The same handout `before_each` gives `w`. Stock is in the hash, so a second world
+	# built without it is not the identical world this test needs it to be.
+	for p in other.players:
+		for kind in [&"food", &"wood", &"gold", &"stone"]:
+			p.stock[kind] = 100000
 	assert_eq(w.state_hash(), other.state_hash(), "identical worlds start equal")
 
 	w.queue_command(AdvanceAgeCommand.new(1))
@@ -310,11 +323,31 @@ func test_the_wire_format_round_trips() -> void:
 	assert_eq(decoded.player_id, 1)
 
 
-func test_a_free_advance_is_still_gated_on_cost_being_affordable() -> void:
-	# `cost` is empty today, so this pins the MECHANISM rather than a number:
-	# whatever ages.json eventually charges, validate() refuses it unpaid and
-	# apply() takes it.
+func test_an_advance_is_paid_for_out_of_stock() -> void:
+	# This used to read "a free advance is still gated on cost being affordable" and
+	# asserted the stock was UNCHANGED, pinning the mechanism while `cost` was empty.
+	# ages.json now charges Age of Empires II's ladder (2026-08-27), so the same test
+	# can assert the thing it was always standing in for.
+	var cost: Dictionary = GameDataRegistry.age(2).cost
+	assert_false(cost.is_empty(), "age 2 costs something")
+
 	var before: Dictionary = _player().stock.duplicate()
 	w.queue_command(AdvanceAgeCommand.new(1))
 	w.step()
-	assert_eq(_player().stock, before, "advancing is free for now, and visibly so")
+	for kind in cost:
+		assert_eq(int(_player().stock.get(kind, 0)),
+				int(before.get(kind, 0)) - int(cost[kind]),
+				"%s was charged at the moment the research started" % kind)
+
+
+func test_an_advance_nobody_can_pay_for_is_refused() -> void:
+	# The other half, and the one the AI leans on: a bot whose rules say "advance"
+	# simply waits until the food is there, because the command refuses it until then.
+	# That is what replaced a script step timing out and giving up.
+	_player().stock[&"food"] = 0
+	assert_false(AdvanceAgeCommand.new(1).validate(w),
+			"cannot advance on an empty larder")
+	w.queue_command(AdvanceAgeCommand.new(1))
+	w.step()
+	assert_eq(_player().age, 1, "and nothing happened")
+	assert_false(_player().is_advancing())

@@ -9,9 +9,22 @@
 ## ticks: at 10 Hz of simulated time it is minutes of game and seconds of wall clock,
 ## which is too slow to pay on every test run and exactly right to run on demand.
 ##
+## ## THE LADDER, and what it is for now (project owner, 2026-08-27)
+##
+## Default is no longer two Easy bots. It runs the **four adjacent matchups** --
+## passive v easy, easy v normal, normal v hard, hard v unfair -- because that is the
+## question the difficulty table actually poses: *is each level harder than the one
+## below it*. Two identical bots can only ever answer "the simulation is symmetric".
+##
+## **A STALEMATE IS A RESULT, not a failure.** The owner's call, and it changes what
+## this preview is for: two evenly matched bots that grind to a standstill is evidence
+## the balance is working, so an UNRESOLVED line is data rather than a bug. What would
+## be a finding is the WRONG side winning, or a level that cannot get an economy up.
+##
 ## Usage:
 ##   Godot --headless --path game res://dev_preview/preview_ai_match.tscn
 ##   ... -- --seed 7 --type forest --ticks 20000
+##   ... -- --levels easy,unfair      one specific pairing instead of the ladder
 extends Node
 
 ## Ceiling on the run. A match that has not resolved by here has stalled, and saying so
@@ -23,19 +36,66 @@ const REPORT_EVERY := 1500
 const STUCK_EVERY := 300
 
 
+## Each rung of the ladder: player 1's level against player 2's. Adjacent pairs only --
+## easy against unfair says nothing you could not guess, where easy against normal is
+## the comparison the difficulty table is making a claim about.
+const LADDER := [
+	[SimPlayer.AILevel.PASSIVE, SimPlayer.AILevel.EASY],
+	[SimPlayer.AILevel.EASY, SimPlayer.AILevel.NORMAL],
+	[SimPlayer.AILevel.NORMAL, SimPlayer.AILevel.HARD],
+	[SimPlayer.AILevel.HARD, SimPlayer.AILevel.UNFAIR],
+]
+
+
 func _ready() -> void:
 	var p_seed := _int_arg("--seed", 3)
 	var ticks := _int_arg("--ticks", DEFAULT_TICKS)
 	var type := _type_arg()
 
+	var pairs := _levels_arg()
+	var summary: Array[String] = []
+	for pair in pairs:
+		summary.append(_run_one(p_seed, type, ticks, pair[0], pair[1]))
+
+	print("")
+	print("=== THE LADDER, seed %d ===" % p_seed)
+	for line in summary:
+		print("  " + line)
+	# WITHOUT THIS THE RUN NEVER ENDS. `_ready` returning just hands control back to a
+	# tree with nothing in it.
+	get_tree().quit()
+
+
+## `-- --levels easy,normal` runs one pairing; absent runs the whole ladder.
+func _levels_arg() -> Array:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] != "--levels":
+			continue
+		var names := String(args[i + 1]).split(",")
+		if names.size() < 2:
+			continue
+		var a := AIProfile.IDS.find(names[0].strip_edges())
+		var b := AIProfile.IDS.find(names[1].strip_edges())
+		if a >= 0 and b >= 0:
+			return [[a, b]]
+		push_warning("preview_ai_match: unknown level in '%s'" % args[i + 1])
+	return LADDER
+
+
+## One rung. Returns the one-line verdict for the summary table at the end.
+func _run_one(p_seed: int, type: int, ticks: int, level_a: int, level_b: int) -> String:
 	var cfg := MatchConfig.debug_generated(p_seed, type, 2)
 	cfg.ai_players = [true, true] as Array[bool]
+	cfg.ai_levels = [level_a, level_b] as Array[int]
 	var w := SimWorld.new()
 	w.setup(cfg)
 	MapGen.build(w, cfg)
 
-	print("AI vs AI -- %s %dx%d, seed %d, %s"
-			% [MapGenerator.type_name(type), w.map.size.x, w.map.size.y, p_seed,
+	print("")
+	print("=== %s (p1) vs %s (p2) -- %s %dx%d, seed %d, %s"
+			% [AIProfile.IDS[level_a], AIProfile.IDS[level_b],
+			MapGenerator.type_name(type), w.map.size.x, w.map.size.y, p_seed,
 			MatchConfig.mode_name(cfg.mode)])
 
 	var started := Time.get_ticks_msec()
@@ -72,11 +132,19 @@ func _ready() -> void:
 				% [p.id, p.defeated, p.age, p.stock])
 		_report_buildings(w, p)
 	_report_ai_log(w)
-	# WITHOUT THIS THE RUN NEVER ENDS. `_ready` returning just hands control back to a
-	# headless main loop with nothing to do, which Godot then spins at max FPS forever:
-	# the report is printed at ~40 s and the process was still burning a core minutes
-	# later. A scene whose whole purpose is to run once and report has to quit itself.
-	get_tree().quit()
+
+	# The one line that goes in the ladder table. A STALEMATE IS A RESULT: what this
+	# says is who won or that nobody did, and the reader decides whether that is the
+	# right answer for these two levels.
+	var a: String = AIProfile.IDS[level_a]
+	var b: String = AIProfile.IDS[level_b]
+	if resolved_at <= 0:
+		return "%-8s v %-8s  STALEMATE at %d ticks" % [a, b, ticks]
+	if w.winner_id <= 0:
+		return "%-8s v %-8s  draw at t%d" % [a, b, resolved_at]
+	var who: String = a if w.winner_id == 1 else b
+	return "%-8s v %-8s  %s wins at t%d (%.1f min)" % [a, b, who, resolved_at,
+			float(resolved_at) / 600.0]
 
 
 ## Both armies and what they are actually doing, plus what is left of each side.

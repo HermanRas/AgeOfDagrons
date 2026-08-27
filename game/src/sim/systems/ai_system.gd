@@ -23,13 +23,15 @@
 ## without sorting. Two hosts running the same world produce the same AI, which is what
 ## lets a replay reproduce an AI match from the human's commands alone (7.7).
 ##
-## **Every step has a timeout and may be skipped.** On a generated map there may be no
-## berry bush within reach, or nowhere flat to put a barracks. A step that waited
-## forever would take the whole match with it, so a step that cannot finish is
-## abandoned and the next one starts.
+## **NOTHING IS EVER ABANDONED.** This rule used to read "every step has a timeout and
+## may be skipped", which is exactly what 12.2b removed: a rule that cannot fire is
+## walked past this interval and reconsidered the next one, forever if need be. On a
+## generated map there may be no berry bush within reach or nowhere flat for a barracks,
+## and the answer is that those rules simply never match while the ones below them do.
 ##
-## **It says what it is doing.** `log_line()` reports the step and why it advanced,
-## which is the difference between a debuggable failed match and a mystery.
+## **It says what it is doing.** `log_lines()` reports each decision and, when one could
+## not be carried out, why -- the difference between a debuggable failed match and a
+## mystery.
 ##
 ## Runs LAST in the tick order, after the world has settled: it looks at the finished
 ## tick and acts on the next one, which is what a player does. Its commands are queued
@@ -85,7 +87,11 @@ const REACH_PROBES := 6
 ## symptom is a 0% foundation that keeps its owner formally alive, and ranged units
 ## will change the geometry of it anyway.
 
-## player id -> {step: int, since: int, issued: bool, assigned: Array[int]}
+## player id -> {wake: int, fired: int, rule: int, attacked: bool}
+##
+## `wake` is the tick this bot next considers anything (the profile's reaction delay);
+## `attacked` is whether its attack rule has fired, which is what unlocks the standing
+## orders' attack. There is no step pointer: the AI's state is the world.
 var _progress: Dictionary = {}
 
 ## What each player last did, for the log.
@@ -185,10 +191,18 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 	if w.tick < int(state["wake"]):
 		return
 
+	# ONE WALK OF THE ENTITY LIST PER THINK, not one per condition. Every `fewer_than`
+	# and `gathering_fewer_than` asks a question about the whole world, and a profile
+	# has ~25 rules -- so evaluating them one at a time scanned the entities up to fifty
+	# times per player per think. Measured on the 8-player generated map: 55.7 ms a tick
+	# against PLAN.md 3.1's 5 ms budget, caught by `test_tick_cost`. The AI runs INSIDE
+	# the tick, so an expensive AI is an expensive simulation.
+	var census := _census(w, p)
+
 	var reserved: Dictionary = {}
 	for index in range(profile.rules.size()):
 		var rule: Dictionary = profile.rules[index]
-		if not _matches(w, p, profile, rule.get("when", {}) as Dictionary):
+		if not _matches(w, p, profile, rule.get("when", {}) as Dictionary, census):
 			continue
 
 		# AN ATTACK RULE FIRES ONCE. It is the one verb with no self-limiting condition
@@ -207,26 +221,43 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 		# Money it does not have YET. Reserve and keep walking: a cheaper rule below
 		# may still run, but only on what is left after this one's cost is set aside.
 		if not _affordable(w, p, rule, reserved):
-			_reserve(reserved, _cost_of(rule))
+			_reserve(reserved, _cost_of(rule, p))
 			continue
 
 		_why = ""
 		var scratch: Dictionary = {}
 		if _issue(w, p, rule, scratch):
-			state["wake"] = w.tick + _lag(profile, p.id, w.tick, index)
 			state["fired"] = int(state["fired"]) + 1
 			state["rule"] = index
 			if String(rule.get("do", "")) == "attack":
 				state["attacked"] = true          # unlocks the standing-order attack
 			_note(w, "p%d rule %d: %s" % [p.id, index, _describe(rule)])
-			return
+
+			# PUTTING LABOUR TO WORK IS NOT A GOAL, so it does not consume the turn.
+			#
+			# One decision per interval starves the list whenever a cheap rule near the
+			# top is frequently true. Measured: a berry bush holds 80 food and two
+			# villagers strip it in ~160 ticks, so "fewer than 2 on food" comes true
+			# again every few seconds -- and a passive bot fired that one rule 82 times
+			# in 7,000 ticks and never once reached the rules that train a villager or
+			# advance an age. It sat at five villagers and age 1 with 660 food banked.
+			#
+			# A `gather` is a reassignment of somebody already standing idle; a build, a
+			# train, an advance or an attack COMMITS the treasury or the army, and those
+			# still take the turn one at a time. So the walk continues past a gather and
+			# stops at a goal, which is also how a person plays: sending an idle worker
+			# back to the trees is not the decision you were making.
+			if String(rule.get("do", "")) != "gather":
+				state["wake"] = w.tick + _lag(profile, p.id, w.tick, index)
+				return
+			continue
 
 		# It matched and was affordable and STILL could not be issued -- no villager
 		# free, no legal spot, no node of that kind left. Reserve anyway and try the
 		# next rule: the alternative is a bot that stands still because the thing it
 		# most wants to do happens to be impossible on this map, which is the old
 		# script's failure mode wearing a new hat.
-		_reserve(reserved, _cost_of(rule))
+		_reserve(reserved, _cost_of(rule, p))
 
 	# Nothing matched. That is a legitimate, common state -- the economy is running and
 	# every target is met -- and the standing orders above are what fill it.
@@ -238,7 +269,47 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 # question a person asks themselves while playing, and anything needing more than
 # these is probably a rule that wants splitting in two.
 
-func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary) -> bool:
+## Everything the conditions need to know about this player's world, counted in ONE
+## pass. `owned` counts foundations and production queues (see below); `gathering`
+## counts villagers by the resource they are working.
+func _census(w: SimWorld, p: SimPlayer) -> Dictionary:
+	var owned: Dictionary = {}
+	var gathering: Dictionary = {}
+	for e in w.entities.values():
+		if not e.alive or e.owner_id != p.id:
+			continue
+		owned[e.def_id] = int(owned.get(e.def_id, 0)) + 1
+
+		if e is SimBuilding:
+			# A UNIT IN A QUEUE IS ONE I HAVE ALREADY STARTED. Without this, a rule
+			# capped at 5 swordsmen orders five more every interval while the first
+			# batch is still being trained.
+			for entry in (e as SimBuilding).queue:
+				var qid := StringName((entry as Dictionary).get("def_id", &""))
+				owned[qid] = int(owned.get(qid, 0)) + 1
+			continue
+
+		if not (e is SimUnit):
+			continue
+		var u: SimUnit = e
+		if u.task != SimUnit.Task.GATHER and u.task != SimUnit.Task.RETURN:
+			continue
+		# KEYED ON `gather_node_id`, NOT `task_target_id`. On the way home
+		# `task_target_id` is the DROP-OFF BUILDING, so asking it what kind this
+		# villager is on answers "none" for the whole return leg -- which counted 1 of
+		# 5 villagers, kept "fewer than 2 on food" true forever, and left the AI
+		# re-issuing the same berry order 26 times in 1200 ticks without ever reaching
+		# a build rule. `gather_node_id` survives the round trip.
+		var node = w.entities.get(u.gather_node_id)
+		var kind: StringName = GatherSystem.harvest_kind(node) if node != null \
+				else u.carry_kind
+		if kind != &"":
+			gathering[kind] = int(gathering.get(kind, 0)) + 1
+	return {"owned": owned, "gathering": gathering}
+
+
+func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary,
+		census: Dictionary) -> bool:
 	if when.has("age") and p.age != int(when["age"]):
 		return false
 	if when.has("age_min") and p.age < int(when["age_min"]):
@@ -250,71 +321,22 @@ func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary) -
 	if when.has("after_ticks") and w.tick < int(when["after_ticks"]):
 		return false
 
+	var owned: Dictionary = census["owned"]
+	var gathering: Dictionary = census["gathering"]
 	for kind in when.get("stock", {}):
 		if int(p.stock.get(kind, 0)) < int((when["stock"] as Dictionary)[kind]):
 			return false
 	for def_id in when.get("fewer_than", {}):
-		if _count_owned(w, p, def_id) >= int((when["fewer_than"] as Dictionary)[def_id]):
+		if int(owned.get(def_id, 0)) >= int((when["fewer_than"] as Dictionary)[def_id]):
 			return false
 	for def_id in when.get("at_least", {}):
-		if _count_owned(w, p, def_id) < int((when["at_least"] as Dictionary)[def_id]):
+		if int(owned.get(def_id, 0)) < int((when["at_least"] as Dictionary)[def_id]):
 			return false
 	for kind in when.get("gathering_fewer_than", {}):
-		if _count_gathering(w, p, kind) \
+		if int(gathering.get(kind, 0)) \
 				>= int((when["gathering_fewer_than"] as Dictionary)[kind]):
 			return false
 	return true
-
-
-## How many of `def_id` the player has, **counting the ones not finished yet**.
-##
-## THIS IS THE LOAD-BEARING DETAIL OF THE WHOLE DESIGN. Rules are re-evaluated every
-## interval, so a count that ignored foundations and production queues would report
-## "no house" for the entire minute it takes to build one -- and the AI would order
-## another house every half second until it ran out of wood and villagers. A building
-## under construction and a unit in a queue are both "one I have already started", and
-## that is what a person means.
-func _count_owned(w: SimWorld, p: SimPlayer, def_id: StringName) -> int:
-	var n := 0
-	for e in w.entities.values():
-		if not e.alive or e.owner_id != p.id:
-			continue
-		if e.def_id == def_id:
-			n += 1
-		if e is SimBuilding:
-			for entry in (e as SimBuilding).queue:
-				if StringName((entry as Dictionary).get("def_id", &"")) == def_id:
-					n += 1
-	return n
-
-
-## Villagers working a resource of `kind`, walking to it or carrying it home. What
-## "two on berries" means once the walk has started.
-##
-## **KEYED ON `gather_node_id`, NOT ON `task_target_id`.** A gather trip is walk-out,
-## extract, walk-home, deposit, and on the way home `task_target_id` is the DROP-OFF
-## BUILDING -- so asking it what kind this villager is on answers "none" for the whole
-## return leg. That is not a rounding error: it counted 1 of 5 villagers, which kept
-## `gathering_fewer_than: {food: 2}` true forever, so the AI re-issued the same berry
-## order 26 times in 1200 ticks and never reached a single build rule. `gather_node_id`
-## is the node being worked and survives the whole round trip, which is what the
-## question means.
-func _count_gathering(w: SimWorld, p: SimPlayer, kind: StringName) -> int:
-	var n := 0
-	for e in w.entities.values():
-		if not (e is SimUnit) or not e.alive or e.owner_id != p.id:
-			continue
-		var u: SimUnit = e
-		if u.task != SimUnit.Task.GATHER and u.task != SimUnit.Task.RETURN:
-			continue
-		var node = w.entities.get(u.gather_node_id)
-		if node != null and GatherSystem.harvest_kind(node) == kind:
-			n += 1
-		elif node == null and u.carry_kind == kind:
-			# The node ran dry and was despawned while this one was carrying its last
-			# load home. Still working that kind until it arrives.
-			n += 1
-	return n
 
 
 # ── saving up ───────────────────────────────────────────────────────────────
@@ -322,12 +344,22 @@ func _count_gathering(w: SimWorld, p: SimPlayer, kind: StringName) -> int:
 ## What a rule will cost, read from the real def rather than written in the JSON, so a
 ## rule can never disagree with what a barracks actually costs. `{}` for verbs that
 ## cost nothing to order.
-## **`advance_age` is deliberately absent.** The cost of an age belongs to the age
-## being entered (`AdvanceAgeCommand._next_def`), so it depends on the player rather
-## than on the rule -- and reserving for it would hold back the economy that has to pay
-## for it. An age advance simply waits until it is affordable, which is what a person
-## does.
-func _cost_of(rule: Dictionary) -> Dictionary:
+##
+## **`advance_age` IS INCLUDED, and leaving it out was a real bug.** The cost of an age
+## belongs to the age being ENTERED (`AdvanceAgeCommand._next_def`), so it depends on
+## the player rather than on the rule -- which is why this takes `p`.
+##
+## The first version returned `{}` for it, reasoning that reserving for an age would
+## hold back the economy that has to pay for it. The opposite happened: with no cost to
+## reserve, every rule BELOW the advance kept spending, and since villagers and
+## swordsmen both cost food, the 500 food for age 2 never accumulated. Measured on the
+## ladder -- **Hard finished two 20,000-tick matches still in age 1**, sitting on 2,644
+## wood with 46 food, and lost to Normal. An age is the most expensive thing a rule set
+## ever asks for, so it is the one that most needs the money set aside.
+func _cost_of(rule: Dictionary, p: SimPlayer) -> Dictionary:
+	if String(rule.get("do", "")) == "advance_age":
+		var next := GameDataRegistry.age(p.age + 1)
+		return next.cost if next != null else {}
 	match String(rule.get("do", "")):
 		"build":
 			var bd: BuildingDef = GameDataRegistry.building(StringName(rule.get("def", &"")))
@@ -341,7 +373,7 @@ func _cost_of(rule: Dictionary) -> Dictionary:
 
 ## Can it be paid for out of what is NOT already spoken for by a higher-priority goal.
 func _affordable(w: SimWorld, p: SimPlayer, rule: Dictionary, reserved: Dictionary) -> bool:
-	var cost := _cost_of(rule)
+	var cost := _cost_of(rule, p)
 	for kind in cost:
 		if int(p.stock.get(kind, 0)) - int(reserved.get(kind, 0)) < int(cost[kind]):
 			return false
