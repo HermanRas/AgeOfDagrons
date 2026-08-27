@@ -292,8 +292,50 @@ report the rest rather than acting on it. The near-miss was found by probing the
 roster at `directions = 1`, which is the cheap way to check a pipeline change
 against actors you did not have in mind when you wrote it.
 
+**The compass ran backwards for the whole life of the project, and only a CHIRAL
+subject in an E/W column could show it.** `directions.py` declares `ORDER_8` as
+clockwise from screen-down and then turned the object `+i × 45°` about +Z, which
+is counter-clockwise — so the render walked the compass the opposite way to the
+labels it was writing into the atlas. Fixed by negating the step, isobake
+`e6fc052`.
+
+The shape of the error is what matters, because it defeated three separate
+verifications. **A reversed sweep is a REFLECTION, not a rotation**, so:
+
+- **No `yaw_offset_deg` can undo it.** Rotating a mirrored set only slides the
+  mirror's axis around. Two whole rounds of work were aimed at the wrong kind of
+  error before anyone said the word "reflection".
+- **Indices 0 and 4 are its FIXED POINTS.** The agreed check — "column 0 shows a
+  face, column 4 shows a back" — tests only those two and passes perfectly on
+  mirrored art.
+- **`yaw_offset_deg = 180.0` STAYS ON** for exactly that reason: index 0 is
+  unmoved by the sign flip, so the 180 is half the correction, not a second error
+  to undo. Removing it puts every unit back to showing its back.
+- **An achiral subject cannot fail a chirality test.** The wall atlases were
+  quoted as proof the pipeline was sound; they are reversed too, and a palisade
+  lying along its own axis maps onto itself. Same blindness, one shape larger.
+- **`directions = 5` is affected just as much**, and that is where every ANIMAL
+  lives, plus all four siege engines, the trade cart and the projectiles. Lateral
+  symmetry is what lets five frames cover eight facings; it does nothing to hide
+  a reflection. The staged build-36 wolf's `E` frame has its head pointing screen
+  LEFT.
+
+**The test that actually works: columns 0, 2, 4 AND 6 on a subject with a
+handedness.** A horse's head. All four, or it proves nothing.
+
+**A PIPELINE FIX CHANGES NO RECIPE, AND THE OVERNIGHT JOB IS BLIND TO IT BY
+DEFAULT.** `stale_recipes.py` compares a recipe's bytes to the hash in its atlas,
+so after `e6fc052` it reported `total to bake: 0` for all 331 — and
+`render_box_bake.ps1` asks that tool what to do. It would have idled all night.
+Both now take `--isobake` / `-PipelineStale` (flag an atlas whose
+`isobake_commit` is not the installed one) and `--directions` / `-Directions` (bound
+the run to the recipes a change can reach). **Opt-in**, because the pipeline flag
+alone selects 321 of 331. Use both, and say why in the commit that runs them.
+
 **`-Parallel`**: 2 while the owner is using the machine, 3 when idle, 4 saturates
-it. The ceiling is RAM — a full Blender scene per slot.
+it. The ceiling is RAM — a full Blender scene per slot. On the RENDER BOX 4 is
+safe at any width because each slot gets its own art shard, which removes the
+shared state the race needs rather than scheduling around it.
 
 **Canvas sizing**: interpolate from the nearest calibrated recipe plus margin and
 trust the clip-check (`CLIPPED` in the summary). Do not compute it by hand.
@@ -312,10 +354,59 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-17
+## 5. State as of 2026-08-27
+
+> ### ⏳ AN OVERNIGHT RUN IS PREPPED AND NOT YET LAUNCHED — 232 bakes
+>
+> **The render box was OFF when this was written.** Everything else is ready and
+> verified; the run is waiting on the machine, not on a decision.
+>
+> **Why:** isobake `e6fc052` (build 37) fixes a REFLECTION that mirrored every 8-
+> and 5-direction atlas in the project. See §4, "The compass ran backwards". Two
+> probes are baked, staged and confirmed correct — `vis.scout_cavalry` with all
+> eight colours, and `vis.wolf`.
+>
+> **The sequence, all three steps, in order:**
+>
+> ```powershell
+> # 1. ON THE WORKSTATION, once the box is on. Pushes isobake e6fc052 to it.
+> powershell -File tools\provision_render_box.ps1 -WhatIf     # check the target
+> powershell -File tools\provision_render_box.ps1
+>
+> # 2. ON THE RENDER BOX, from the synced repo.
+> powershell -File tools\render_box_bake.ps1 -PipelineStale -Directions "5,8" -WhatIf
+> powershell -File tools\render_box_bake.ps1 -PipelineStale -Directions "5,8"
+> ```
+>
+> **`-PipelineStale` IS NOT OPTIONAL AND THE RUN SILENTLY DOES NOTHING WITHOUT
+> IT.** `stale_recipes.py` compares recipe bytes, and this fix changed no recipe —
+> without the flag the box prints "nothing is out of date" and idles until morning.
+> `-Directions "5,8"` keeps the 89 one-direction buildings, which the fix cannot
+> reach, out of the night. Together they select **80 base + 152 colour = 232**;
+> the scout and wolf are already at `e6fc052` and drop out on their own.
+>
+> **STEP 1 IS THE ONE THAT WILL BITE.** The box still holds isobake **build 36**.
+> Bake before provisioning and it re-mirrors all 232 with the old code, reports
+> `ok` for every one of them, and the only sign is the stamp. Worse, the box
+> computes "current commit" from *its own* isobake: at build 36 it would either
+> select nothing, or select the two probes and bake them BACKWARDS.
+>
+> **The repo reaches the box through Google Drive, the toolchain does not.**
+> `tools/stale_recipes.py` and `tools/render_box_bake.ps1` both changed today
+> (`7685fa0`) — let Drive settle on the box before launching, or it runs the old
+> selection logic, which is the do-nothing case again.
+>
+> **Verify after, not just the summary** — a summary full of `ok` is exactly what
+> the coloured-faces batch produced. `check_colour_consistency.py --pixels` before
+> staging, then `preview_facing_chart` columns 0/2/4/6 on a chiral unit. The game
+> side re-runs `preview_walls` to confirm the walls changed *harmlessly* rather
+> than not at all.
 
 - **171 base recipes**, **160 generated colour recipes** (20 units × 8).
-- **Nothing is running.**
+- **Nothing is running** on the workstation.
+- **10 atlases are at build 37 and the other 321 are not**, which is deliberate
+  and temporary: `vis.scout_cavalry` + its 8 colours, and `vis.wolf`. Everything
+  else is still mirrored until the run above lands.
 - **Staging is complete and current: `331/331, RESULT: OK`.** All eight colours
   are correct for all 20 colourable units; the game agent is no longer restricted
   to red and yellow.
