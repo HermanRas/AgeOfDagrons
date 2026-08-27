@@ -366,7 +366,8 @@ with WinError 5. Delete contents, not the directory.
 > probes are baked, staged and confirmed correct — `vis.scout_cavalry` with all
 > eight colours, and `vis.wolf`.
 >
-> **The sequence, all three steps, in order:**
+> **Full prep — env paths, shards, and what each skipped step breaks:**
+> [tools/render_box_prep.md](tools/render_box_prep.md). The short form:
 >
 > ```powershell
 > # 1. ON THE WORKSTATION, once the box is on. Pushes isobake e6fc052 to it.
