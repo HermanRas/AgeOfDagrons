@@ -119,7 +119,7 @@ func _process(_delta: float) -> void:
 		EJECT: _turn_them_out()
 		SHOT_OUT: _shoot("garrison_5_out")
 		SET_WAYPOINT: _plant_the_flag()
-		SHOT_FLAG: _shoot("garrison_7_flag")
+		SHOT_FLAG: _report_the_flag()
 		REGARRISON: _put_them_back()
 		EJECT_TO_FLAG: _turn_them_out()
 		SHOT_RALLY: _report_the_walk()
@@ -324,14 +324,7 @@ func _report_inside() -> void:
 func _open_the_panel() -> void:
 	_game._view.select([_tower_id] as Array[int])
 	_game._refresh_panel()
-	var panel: SelectionPanel = _game._panel
-	var badges: Array[String] = []
-	for slot in panel._action_slots:
-		if slot.visible and slot.action != null:
-			badges.append("%s%s" % [slot.action.id,
-					"[%s]" % slot.action.badge if slot.action.badge != "" else ""])
-	print("  action row (%d of %d slots): %s"
-			% [badges.size(), SelectionActions.MAX_ACTIONS, ", ".join(badges)])
+	_print_the_action_row()
 
 
 ## Presses the Garrison slot, which is an `expands` action -- so this fills the detail
@@ -436,6 +429,48 @@ func _plant_the_flag() -> void:
 	var on_screen: Vector2 = _game._view.get_global_transform_with_canvas() \
 			* Iso.tile_centre_to_world(at)
 	print("  flag should be at SCREEN %s" % on_screen.round())
+
+
+## The action row again, now that a rally point exists -- because STOP only appears when
+## there is one to clear (owner, 2026-08-27), so this is the only step that can show it.
+## Printed rather than merely photographed because the row is what the 8-slot cap acts on,
+## and a verb silently sliced off the end is invisible in a picture.
+func _report_the_flag() -> void:
+	_print_the_action_row()
+	_shoot("garrison_7_flag")
+
+
+func _print_the_action_row() -> void:
+	var panel: SelectionPanel = _game._panel
+	var slots: Array[String] = []
+	for slot in panel._action_slots:
+		if slot.visible and slot.action != null:
+			slots.append("%s%s" % [slot.action.id,
+					"[%s]" % slot.action.badge if slot.action.badge != "" else ""])
+	print("  action row (%d of %d slots): %s"
+			% [slots.size(), SelectionActions.MAX_ACTIONS, ", ".join(slots)])
+
+	# DOES THE PANEL STILL FIT ON THE SCREEN. A fifth slot is a second grid row, and a
+	# building's panel growing a row is exactly what pushed it off the bottom edge once
+	# before -- `GameScene` records it at 4.6/5.5, when the Destroy button was added to a
+	# panel that already had a Train row. `grow_vertical = GROW_DIRECTION_BEGIN` is the
+	# fix and this is the check that it is still working, because a panel half off the
+	# bottom of a phone is invisible in a log and easy to miss in a screenshot.
+	var rect: Rect2 = panel.get_global_rect()
+	var screen := float(get_viewport().get_visible_rect().size.y)
+	print("  panel %s..%s of %d px tall" % [rect.position.y, rect.end.y, screen])
+	if rect.end.y > screen + 0.5:
+		push_warning("preview_garrison: the selection panel runs %.0f px off the bottom"
+				% (rect.end.y - screen))
+	if rect.position.y < 0.0:
+		push_warning("preview_garrison: the selection panel runs off the TOP")
+	# Only a complaint once there IS a rally point: STOP is deliberately absent until
+	# then, so warning unconditionally would fire on the first, correct panel.
+	var t := _tower()
+	if t != null and t.waypoint_set() and not slots.has("stop"):
+		push_warning("preview_garrison: a rally point is set and STOP is not offered")
+	if (t == null or not t.waypoint_set()) and slots.has("stop"):
+		push_warning("preview_garrison: STOP is offered with no rally point to clear")
 
 
 ## Where each archer actually is on its way to the flag, so a picture that looks like

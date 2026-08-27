@@ -58,23 +58,51 @@ func test_it_stays_visible_with_nobody_idle() -> void:
 	assert_true(badge.visible)
 
 
-## The caption is drawn past the badge's own 22 px box so the column stays one
-## square cell wide; without the widened hit test, "Idle" would look pressable
-## and not be, and the ring alone is a small target for a thumb.
+## The caption is BELOW the ring now (project owner, 2026-08-27), so the hit area
+## is the ring plus the band under it rather than the ring plus a word to its right.
+## Both are still pressable, which is the point: on a phone the ring alone is a
+## small target and "Idle" would look pressable without being so.
 func test_the_caption_is_part_of_the_hit_area() -> void:
-	assert_true(badge._has_point(Vector2(IdleVillagerBadge.SIZE * 0.5, IdleVillagerBadge.SIZE * 0.5)),
-			"the ring itself")
-	assert_true(badge._has_point(Vector2(IdleVillagerBadge.SIZE + IdleVillagerBadge.CAPTION_GAP + 1.0,
-			IdleVillagerBadge.SIZE * 0.5)),
-			"and the word beside it")
+	assert_true(badge._has_point(Vector2(IdleVillagerBadge.SIZE * 0.5,
+			IdleVillagerBadge.SIZE * 0.5)), "the ring itself")
+	assert_true(badge._has_point(Vector2(IdleVillagerBadge.SIZE * 0.5,
+			IdleVillagerBadge.SIZE + IdleVillagerBadge.CAPTION_GAP + 1.0)),
+			"and the word under it")
 	assert_false(badge._has_point(Vector2(-4.0, IdleVillagerBadge.SIZE * 0.5)),
 			"but not the age badge's side of the gap")
+	assert_false(badge._has_point(Vector2(IdleVillagerBadge.SIZE + 8.0,
+			IdleVillagerBadge.SIZE * 0.5)),
+			"and no longer the empty space to the right, where the word used to be")
+
+
+func test_the_box_reserves_room_for_the_caption_under_the_ring() -> void:
+	# A column the width of the RING and the height of ring-plus-caption, which is
+	# what keeps the two badges reading as two circles in a row rather than as a
+	# circle and a circle-with-a-word.
+	assert_eq(badge.custom_minimum_size,
+			Vector2(IdleVillagerBadge.SIZE,
+					IdleVillagerBadge.SIZE + IdleVillagerBadge.CAPTION_BAND))
+
+
+func test_the_circle_is_bigger_than_it_was_and_smaller_than_the_age_badge() -> void:
+	# The owner's specification in full: "make the circle bigger but still smaller
+	# than age". Asserted against `AgeBadge.SIZE` rather than against 44, so the
+	# relationship survives either badge being retuned.
+	assert_true(IdleVillagerBadge.SIZE > 22.0, "bigger than it was")
+	assert_true(IdleVillagerBadge.SIZE < AgeBadge.SIZE,
+			"and still smaller than the age badge, which is the thing you press to "
+			+ "advance the game and must stay the larger of the two")
 
 
 func test_it_matches_the_ui_builder_mockups_circle() -> void:
-	# The mockup draws this from primitives (see the class header), so nothing
-	# but this test notices if the two copies drift. StyleBoxFlat_o7l18 in
-	# scenes/ui_builder/HUD.tscn carries these same numbers.
-	assert_almost_eq(IdleVillagerBadge.SIZE, 22.0, 0.001)
-	assert_almost_eq(IdleVillagerBadge.RING_WIDTH, 1.0, 0.001)
+	# The mockup draws this from primitives (see the class header), so nothing but
+	# this test notices if the two copies drift. StyleBoxFlat_o7l18 and the
+	# VillagersIdle/Circle nodes in scenes/ui_builder/HUD.tscn carry these same
+	# numbers, and both copies were moved together on 2026-08-27 -- the mockup's
+	# corner_radius is SIZE / 2, which is what keeps it a circle rather than a
+	# rounded square.
+	assert_almost_eq(IdleVillagerBadge.SIZE, 34.0, 0.001)
+	assert_almost_eq(IdleVillagerBadge.RING_WIDTH, 2.0, 0.001)
 	assert_eq(IdleVillagerBadge.RING_COLOR, Color(0.898039, 0.0, 0.258824, 1.0))
+	assert_eq(IdleVillagerBadge.COUNT_FONT_SIZE, 14)
+	assert_eq(IdleVillagerBadge.CAPTION_FONT_SIZE, 8)

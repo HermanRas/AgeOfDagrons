@@ -200,9 +200,46 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		out.append(a)
 
 	out.append(_upgrade_action(bd, age, facts))
-	out.append(_act(&"repair", false))
+
+	# STOP CLEARS THE RALLY POINT (project owner, 2026-08-27: *"resuse stop action
+	# button to clear waypoint with building selected"*), and it is offered ONLY when
+	# there is one to clear — like the gate button, which appears only for a gate.
+	#
+	# The disabled-placeholder convention does not apply: that is for verbs the game
+	# has not implemented yet, shown greyed so the panel reads finished. This verb is
+	# implemented and simply has nothing to act on, which is the gate's situation and
+	# not Repair's.
+	#
+	# It is also what keeps the castle inside its slots. With a rally point set the
+	# castle asks for nine of `MAX_ACTIONS`' eight, and the ORDER BELOW is what
+	# decides which one falls off — see the note on Repair.
+	if _has_rally_point(facts):
+		out.append(_act(&"stop"))
+
 	out.append(_act(&"destroy"))
+	# REPAIR IS LAST, AND IT MOVED HERE ON PURPOSE. `_capped` slices at MAX_ACTIONS,
+	# so whatever sits ninth is dropped silently — and a castle with a rally point set
+	# is exactly nine. Repair has been a disabled placeholder since 4.3 and does
+	# nothing when pressed; Destroy is a real command. Given one of the two has to go,
+	# it must be the placeholder, and the only way to say so is to put it last.
+	#
+	# This is the trap AGENT_GAME_CODER.md warns about, arriving on schedule: the
+	# castle emitted exactly 8 before today, so the very next verb added to a building
+	# was always going to cost something.
+	out.append(_act(&"repair", false))
 	return out
+
+
+## Whether these facts describe a building with a rally point set.
+##
+## Read defensively rather than as a typed assignment, because `facts` is a plain
+## Dictionary off the wire: a building that predates the field, a remembered enemy
+## entry (which has it stripped), and a unit or resource node all arrive here with no
+## `waypoint` at all, and any of them typed-assigned to a Vector2i is a hard error
+## rather than a false.
+static func _has_rally_point(facts: Dictionary) -> bool:
+	var raw = facts.get("waypoint", null)
+	return raw is Vector2i and raw != SimBuilding.NO_WAYPOINT
 
 
 ## Upgrade, which is a REAL verb for anything declaring `upgrades_to` and the same

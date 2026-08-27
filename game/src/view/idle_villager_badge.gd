@@ -30,20 +30,39 @@
 ## AgeHeader/Margin/Box/HBoxContainer/VillagersIdle/Circle, as a rounded
 ## StyleBoxFlat and two Labels -- the same primitives-not-instances arrangement
 ## `AgeBadge` documents. SIZE, RING_WIDTH, RING_COLOR, FILL_COLOR and the two
-## font sizes are the shared contract between the two copies; nothing checks that
-## they agree.
+## font sizes are the shared contract between the two copies, and
+## `test_idle_villager_badge` is the only thing that notices when they drift. Both
+## copies were moved together on 2026-08-27.
+##
+## ONE PIECE OF DRIFT IS LEFT AND IT IS DELIBERATE: the mockup's `VillagersIdle`
+## VBox still contains a `PauseButton` above the circle. That button was retired
+## from the game on 2026-08-21 (`GameScene` records why -- its actions live behind
+## the SETTINGS corner button now), and it is left alone here because the ui_builder
+## scenes are the owner's authored design source rather than a mirror this file gets
+## to prune. It is why the mockup's column is taller than the game's.
 class_name IdleVillagerBadge
 extends Button
 
 signal cycle_requested
 
-## 22 px, half the age badge's 44, because the two stack differently: the age
-## badge is one item in a 54 px-tall row and this shares that height with the
-## pause button above it. Small for a finger -- which is why `_has_point()` below
-## hands the caption's width to the hit test as well.
-const SIZE := 22.0
+## 34 px (project owner, 2026-08-27: *"make the circle bigger but still smaller
+## than age"*), against the age badge's 44.
+##
+## IT WAS 22, AND THE REASON IT WAS 22 HAD ALREADY EXPIRED. The note here read
+## "half the age badge's 44, because this shares that height with the pause button
+## above it" -- and the pause button was retired on 2026-08-21 (`GameScene`, which
+## says so), leaving the badge alone in the row with 54 px of header to itself and
+## no reason to be half-height. So this is not a resize against a constraint; it is
+## a constraint that stopped existing and a number nobody had revisited.
+##
+## Still deliberately SMALLER than the age badge, which is the owner's wording and
+## the right hierarchy: the age is the thing you press to advance the game, and a
+## count of idle villagers must not compete with it.
+const SIZE := 34.0
 const RING_COLOR := Color(0.898039, 0.0, 0.258824, 1.0)
-const RING_WIDTH := 1.0
+## 2 px, between the old 1 and the age badge's 3 -- a 1 px ring that read as a
+## hairline at 22 px reads as a mistake at 34.
+const RING_WIDTH := 2.0
 const RING_SEGMENTS := 24
 const FILL_COLOR := Color(0.17, 0.11, 0.08, 0.9)
 ## Greyed rather than hidden when there is nothing to walk to, the same choice
@@ -51,8 +70,19 @@ const FILL_COLOR := Color(0.17, 0.11, 0.08, 0.9)
 const IDLE_NONE_COLOR := Color(0.45, 0.42, 0.38)
 
 const CAPTION := "Idle"
-const CAPTION_GAP := 4.0
-const COUNT_FONT_SIZE := 10
+## Vertical gap between the ring and the word now, not horizontal (project owner,
+## 2026-08-27: *"move the idle text below the circle"*).
+const CAPTION_GAP := 2.0
+## The band under the ring the caption is drawn into, so the control's height is
+## `SIZE + CAPTION_BAND` rather than a number that has to be kept in step by hand.
+## 10 matches `AgeBadge`'s own `SIZE + 10.0`, which puts MAX/ADVANCE under its
+## numeral -- the two badges now stack the same way, which is the whole point of
+## the change.
+const CAPTION_BAND := 10.0
+## 14 rather than 10: a 10 px digit centred in a 34 px ring reads as an error.
+const COUNT_FONT_SIZE := 14
+## 8, the same size `AgeBadge` draws MAX/ADVANCE at, so the two captions under the
+## two circles are one typographic row rather than two sizes side by side.
 const CAPTION_FONT_SIZE := 8
 
 ## Which player this reports on, same filter and same reason as `ResourceHUD`'s.
@@ -62,7 +92,11 @@ var count: int = 0
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(SIZE, SIZE)
+	# TALLER THAN IT IS WIDE NOW, because the caption is inside the box rather than
+	# drawn past its right edge. Same shape as `AgeBadge`'s `SIZE + 10.0`, and it is
+	# what lets the header's HBox reserve a column the width of the ring alone --
+	# which is what keeps the two badges reading as two circles in a row.
+	custom_minimum_size = Vector2(SIZE, SIZE + CAPTION_BAND)
 	focus_mode = Control.FOCUS_NONE
 	flat = true
 	tooltip_text = "Jump to the next idle villager"
@@ -81,14 +115,17 @@ func _exit_tree() -> void:
 	EventBus.idle_villagers_changed.disconnect(_on_idle_villagers_changed)
 
 
-## The caption sits OUTSIDE this control's own 22x22 box -- it is drawn past the
-## right edge so the badge stays one square cell in the header's column, which is
-## what keeps the pause button above it centred over the ring rather than over a
-## ring-plus-word. That would leave "Idle" unpressable, and on a phone 22 px is
-## already a small target, so the hit test is widened to cover the word too.
+## The whole box -- ring AND the caption band under it -- is pressable.
+##
+## This override used to exist for the opposite reason: the caption was drawn PAST
+## the right edge, outside the control, so the hit test had to be widened sideways
+## to make the word pressable. Now that the caption is below and inside
+## `custom_minimum_size`, the default `Control` behaviour would very nearly do --
+## the override stays because the container stretches this control to the header's
+## full 54 px and the default would make that dead space pressable too, so the
+## explicit rect is the tighter and more honest answer.
 func _has_point(point: Vector2) -> bool:
-	return Rect2(Vector2.ZERO, Vector2(SIZE + CAPTION_GAP + _caption_width(), SIZE)) \
-			.has_point(point)
+	return Rect2(Vector2.ZERO, Vector2(SIZE, SIZE + CAPTION_BAND)).has_point(point)
 
 
 func _on_idle_villagers_changed(p_id: int, idle: int) -> void:
@@ -116,9 +153,10 @@ func _draw() -> void:
 			RING_COLOR if count > 0 else IDLE_NONE_COLOR, RING_WIDTH, true)
 
 	var font := get_theme_default_font()
-	# Three digits do not fit a 22 px ring, and a clipped "1" reading as part of
-	# the next number is worse than an approximation. A hundred idle villagers is
-	# a long way from likely, and this costs one comparison to never be wrong.
+	# Three digits do not fit the ring even at 34 px, and a clipped "1" reading as
+	# part of the next number is worse than an approximation. A hundred idle
+	# villagers is a long way from likely, and this costs one comparison to never be
+	# wrong.
 	var label := str(count) if count < 100 else "99+"
 	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, COUNT_FONT_SIZE)
 	# draw_string's y is the BASELINE, not the top of the box -- centring on the
@@ -127,14 +165,13 @@ func _draw() -> void:
 			centre.y + font.get_ascent(COUNT_FONT_SIZE) * 0.5 - 1.0),
 			label, HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FONT_SIZE, tint)
 
-	draw_string(font, Vector2(SIZE + CAPTION_GAP,
-			centre.y + font.get_ascent(CAPTION_FONT_SIZE) * 0.5 - 1.0),
+	# BELOW THE RING AND CENTRED UNDER IT (project owner, 2026-08-27). Centred by
+	# measuring the word rather than by handing `draw_string` a width and an
+	# alignment, because the width it would need is the caption band's and the word
+	# is narrower than the ring -- so the two ways of centring agree here and
+	# measuring is the one that keeps agreeing if the word ever gets longer.
+	var caption_size := font.get_string_size(CAPTION, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			CAPTION_FONT_SIZE)
+	draw_string(font, Vector2(centre.x - caption_size.x * 0.5,
+			SIZE + CAPTION_GAP + font.get_ascent(CAPTION_FONT_SIZE)),
 			CAPTION, HORIZONTAL_ALIGNMENT_LEFT, -1, CAPTION_FONT_SIZE, tint)
-
-
-func _caption_width() -> float:
-	var font := get_theme_default_font()
-	if font == null:
-		return 0.0
-	return font.get_string_size(CAPTION, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			CAPTION_FONT_SIZE).x

@@ -338,12 +338,16 @@ Short, and kept because each can bite again.
   does not move the dead. A castle losing 15 reads as one body until they fade. A rally
   point does not help here and must not — the dead are put out so their corpses have
   somewhere to be, not sent anywhere (`ungarrison_unit`'s `send` flag).
-- **A rally point has no CLEAR gesture yet.** Tapping bare ground with one of your buildings
-  selected moves the flag; nothing takes it away. `SetWaypointCommand` already accepts
-  `SimBuilding.NO_WAYPOINT` and clearing is always legal, so the sim half is done — what is
-  missing is a gesture or a button to send it. Not urgent (moving it covers almost every
-  real need) and worth pairing with 8.8's [X] button, which is the other selection-panel
-  affordance still to be built.
+- ~~**A rally point has no CLEAR gesture yet.**~~ **CLOSED 2026-08-27, same day it was
+  filed** — the owner's answer: *"resuse stop action button to clear waypoint with building
+  selected"*. Stop now means two things, chosen by the selection: halt these units, or take
+  this building's rally point down. They cannot collide, because `movable_selection()` is
+  units-only and `waypoint_target()` demands exactly one building, so at most one is ever
+  non-empty. **Reusing the button is what made it affordable** — the castle's action row was
+  already sitting on its eighth and last slot, so a ninth verb would have dropped something.
+  The hazard that produced instead: **`repair` moved to LAST in a building's row**, so a
+  castle with a rally point sheds the disabled placeholder rather than `destroy`. Anything
+  added to `SelectionActions._building_actions` from now on drops a real command.
 - **Wall-clock timings are worthless on this workstation** — the same seed ran 41.3 s and
   161.0 s, and the test suite swung 34 s to 110 s across four runs of identical code. Trust
   `test_tick_cost`, which reports per-system milliseconds.

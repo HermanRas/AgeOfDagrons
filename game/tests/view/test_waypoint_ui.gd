@@ -133,6 +133,71 @@ func test_tapping_the_building_itself_still_reselects_it() -> void:
 	assert_eq(view.tap_action(10, 1, false), GameView.TapAction.SELECT)
 
 
+# ── Stop, reused to clear it ────────────────────────────────────────────────
+
+func _actions(facts: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for a in SelectionActions.for_selection(facts, 1, true, [], 4):
+		out.append(String(a.id))
+	return out
+
+
+func test_a_building_with_a_rally_point_offers_stop() -> void:
+	var facts := _building_facts(10, &"building.barracks", 1, Vector2i(30, 30))
+	assert_true(_actions(facts).has("stop"))
+
+
+func test_a_building_without_one_does_not() -> void:
+	# Offered only when there is something to clear, like the gate button — not shown
+	# disabled, because that convention is for verbs the game has not implemented and
+	# this one is implemented with nothing to act on.
+	assert_false(_actions(_building_facts(10, &"building.barracks")).has("stop"))
+
+
+func test_the_castle_sheds_repair_rather_than_destroy_at_the_cap() -> void:
+	# A castle with a rally point asks for nine of MAX_ACTIONS' eight. Repair has been
+	# a disabled placeholder since 4.3 and does nothing when pressed; Destroy is a real
+	# command. Repair is last in the row precisely so the cap takes it.
+	var facts := _building_facts(10, &"building.castle", 1, Vector2i(30, 30))
+	var ids := _actions(facts)
+	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS)
+	assert_true(ids.has("stop"), "the new verb is there")
+	assert_true(ids.has("destroy"), "and the real command survived")
+	assert_false(ids.has("repair"), "the placeholder is what fell off")
+
+
+func test_the_castle_still_keeps_repair_when_it_has_no_rally_point() -> void:
+	var ids := _actions(_building_facts(10, &"building.castle"))
+	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS)
+	assert_true(ids.has("repair"))
+	assert_true(ids.has("destroy"))
+
+
+func test_a_watch_tower_has_room_for_everything() -> void:
+	# Nothing to train, so the cap is nowhere near — this is the ordinary case and it
+	# should carry the whole row.
+	var ids := _actions(_building_facts(10, &"building.watch_tower", 1, Vector2i(30, 30)))
+	for expected in ["garrison", "stop", "destroy", "repair"]:
+		assert_true(ids.has(expected), expected)
+
+
+func test_a_unit_still_gets_its_own_stop() -> void:
+	# The verb is shared, and a unit's Stop is untouched: `GameScene` branches on the
+	# selection, and `movable_selection()` and `waypoint_target()` can never both be
+	# non-empty.
+	assert_true(_actions(_unit_facts(11)).has("stop"))
+
+
+func test_facts_with_no_waypoint_field_at_all_are_safe() -> void:
+	# A remembered enemy building has it stripped, and a resource node never had one.
+	# Typed-assigning a missing key to a Vector2i would be a hard error rather than a
+	# false, which is why `_has_rally_point` reads it defensively.
+	var facts := _building_facts(10, &"building.barracks")
+	facts.erase("waypoint")
+	assert_false(SelectionActions._has_rally_point(facts))
+	assert_false(_actions(facts).has("stop"))
+
+
 # ── the flag ────────────────────────────────────────────────────────────────
 
 func test_the_flag_stands_on_the_tile_it_is_given() -> void:

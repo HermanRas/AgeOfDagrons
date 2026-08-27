@@ -1442,9 +1442,25 @@ func _on_action_requested(action_id: StringName) -> void:
 	var movable := _view.movable_selection()
 	match action_id:
 		&"stop":
+			# STOP MEANS TWO THINGS AND WHICH ONE DEPENDS ON THE SELECTION (project
+			# owner, 2026-08-27: *"resuse stop action button to clear waypoint with
+			# building selected"*). With units in hand it halts them, as it always
+			# has; with one of your own buildings selected it takes that building's
+			# rally point down.
+			#
+			# **They cannot both fire**, and that is the selection's own doing rather
+			# than an ordering here: `movable_selection()` is units only and
+			# `waypoint_target()` demands a selection of exactly one building, so at
+			# most one of the two is ever non-empty. The `elif` is belt to that brace.
+			#
+			# It reuses the existing button rather than adding a ninth verb, which is
+			# the whole reason it fits: the castle's action row is already at its
+			# eight-slot cap (`SelectionActions.MAX_ACTIONS`).
 			if not movable.is_empty():
 				Net.submit_command(StopCommand.new(Net.local_player_id(), movable))
 				_toast.show_message("Holding position")
+			elif _view.waypoint_target(Net.local_player_id()) != 0:
+				_clear_selected_waypoint()
 		&"move":
 			_toast.show_message("Tap where to move")
 		&"harvest":
@@ -1486,6 +1502,28 @@ func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 
 func _on_cancel_requested(building_id: int, index: int) -> void:
 	Net.submit_command(CancelProductionCommand.new(Net.local_player_id(), building_id, index))
+
+
+## Take the selected building's rally point down (project owner, 2026-08-27), which is
+## the gesture BUGS.md recorded as the one thing 4.8b was missing: setting a waypoint
+## moved it, and nothing took it away.
+##
+## Reuses the STOP button rather than adding a verb, and reusing it is what made it
+## affordable — the castle's action row already sits on its eighth and last slot. It
+## also reads correctly: "stop" on a building is exactly "stop sending things over
+## there", which is the same word doing the same work it does on a unit.
+##
+## Sends the sentinel through the ordinary command, so the clear is server-authoritative
+## and replayable like any other order. `SetWaypointCommand.validate` accepts
+## `NO_WAYPOINT` unconditionally, so this can never be refused for a building the player
+## owns.
+func _clear_selected_waypoint() -> void:
+	var building := _view.waypoint_target(Net.local_player_id())
+	if building == 0:
+		return
+	Net.submit_command(SetWaypointCommand.new(Net.local_player_id(), building,
+			SimBuilding.NO_WAYPOINT))
+	_toast.show_message("Rally point cleared")
 
 
 ## Turn a garrison out (PLAN.md 4.8). `index` is a slot, or `UngarrisonCommand.ALL`

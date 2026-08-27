@@ -356,8 +356,15 @@ placeholder"*, so no bake is waiting on it). Four things worth knowing:
   reported on 2026-08-23 as *"boats spawn and sail on land, its very funny"*.
 - **An enemy's rally point is the only pure INTENTION on the wire**, and the only field
   `_entry_for` filters by owner. It is **blanked, not erased** — erasing would split every
-  building into two wire shapes (12.1f). **There is no clear gesture yet**: the command
-  accepts `NO_WAYPOINT` and clearing is always legal, so only the affordance is missing.
+  building into two wire shapes (12.1f).
+- **STOP CLEARS IT** (owner, same day): the verb means two things now, chosen by the
+  selection — halt these units, or take this building's rally point down. They cannot
+  collide, since `movable_selection()` is units-only and `waypoint_target()` demands exactly
+  one building. **Reusing the button is what made it affordable**, and it cost something
+  anyway: **`repair` is now LAST in a building's action row**, so a castle with a rally
+  point (9 verbs against `MAX_ACTIONS`' 8) sheds the disabled placeholder instead of
+  `destroy`. **The next verb added to `_building_actions` drops a real command** — that
+  slot is spent.
 
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
