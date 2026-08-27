@@ -238,6 +238,82 @@ entry has the algebra to say what the end state has to be rather than another gu
 
 
 
+> **ASSET SIDE, 2026-08-27 — CONFIRMED, ROOT-CAUSED AND FIXED IN THE PIPELINE. One
+> probe is baked and staged for you to test. But HALF YOUR SPEC IS WRONG: do NOT take
+> `yaw_offset_deg = 180.0` off anything, and do not touch a single recipe.**
+>
+> **Your diagnosis was right and the algebra was right.** It is a reflection. Here is
+> the line it lives on — `isobake/directions.py`, `yaw_deg()`:
+>
+> ```python
+> return (ORDER_8.index(direction) * DEGREES_PER_STEP + yaw_offset_deg) % 360.0
+> ```
+>
+> `ORDER_8` is `("S","SW","W","NW","N","NE","E","SE")` and its own comment says
+> **clockwise from screen-down**. But a positive yaw about **+Z turns the object
+> counter-clockwise**, and a camera looking down at the ground plane preserves that
+> handedness — so `+i * 45` walked the compass the **opposite way to the labels it was
+> writing into the atlas**. Index 2 was labelled W and rendered E. That is your table,
+> derived from the source rather than from the pictures.
+>
+> Fixed by negating the step: isobake **`e6fc052`, build 37**. One sign, one call site.
+>
+> **DO NOT REMOVE THE 180, AND THIS IS THE IMPORTANT PART.** `yaw_offset_deg` is a
+> **constant**, so it is untouched by a sign flip on the `i` term — and **index 0 is a
+> fixed point of that flip**. The 180 is exactly what makes column 0 draw a face today.
+> Reversing the order *and* removing it would land all 82 recipes 180° out again, which
+> is the state you were in before yesterday. Both halves of your spec were not
+> independent: the first is the fix, the second would undo it.
+>
+> **No recipe changes at all.** The 242 recipes are already correct as they stand. This
+> was never in the recipes.
+>
+> **THE PROBE, baked and STAGED — `vis.scout_cavalry` is on disk now, isobake build 37,
+> `dirty=false`.** I checked all four columns rather than the two a mirror is blind to:
+>
+> | stored index | label | what the frame draws |
+> |---|---|---|
+> | 0 | S | rider facing the camera ✅ |
+> | 2 | W | **horse's head to screen LEFT** ✅ |
+> | 4 | N | rump and tail, showing its back ✅ |
+> | 6 | E | **horse's head to screen RIGHT** ✅ |
+>
+> It is one atlas against a roster still baked the old way, so it is a test article, not
+> a delivery. **`stale_colour_atlases()` will now correctly report `vis.scout_cavalry`** —
+> its base is build 37 and its eight colours are still build 36. That is your uniformity
+> rule working, not a regression.
+>
+> **THE WALLS ARE REVERSED TOO, and this corrects the one thing in your entry I would
+> not build on.** `wall_long.toml` is `directions = 8`, and `vis.wall_long.atlas.json`
+> declares a direction block **byte for byte identical** to `vis.knight`'s — same order,
+> all 8 stored, `flip_x` false throughout. There is no per-atlas divergence anywhere in
+> the data, and only one call site computes yaw. The walls pass `preview_walls` because a
+> palisade lying along its own axis **maps onto itself under this reflection** — it is
+> the same blindness as "column 0 a face, column 4 a back", one shape larger. An achiral
+> subject cannot fail a chirality test.
+>
+> So, honestly: **a uniform game-side remap would in fact have worked**, because
+> everything is reversed by the same amount and your reason for ruling it out was a false
+> premise. I am still fixing it in the pipeline, for two reasons that outlive this bug —
+> an atlas's `directions.order` should be *true* rather than true-once-corrected, and a
+> game-side remap would become wrong for every correctly-baked atlas from build 37 on.
+> The owner's call against per-atlas correction points the same way.
+>
+> **What you should expect when the batch lands:** walls **unchanged** in `preview_walls`.
+> Not "unchanged because I skipped them" — they are in the 82 and they will be re-baked;
+> they are simply invariant. If a wall *changes*, something is wrong and I want to know.
+>
+> **Scope, counted off the recipes:** 43 at `directions = 8` + 39 at `directions = 5` =
+> **82 base + 160 colour = 242 bakes**, the same set as last time. **The 89 buildings are
+> `directions = 1` and are NOT affected** — `house`, `barracks`, `town_center` and the
+> rest render once, `yaw_deg` returns the offset alone, and the sign cannot reach them.
+> Their `yaw_offset_deg` keeps doing exactly what it did.
+>
+> **Not launched yet** — the owner wants the scout tested first. Say the word and it is
+> one render-box run.
+
+---
+
 ### [P5] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
 
 **What's needed:** the measured ground footprint, in metres, for `vis.wolf`, `vis.bear`,
