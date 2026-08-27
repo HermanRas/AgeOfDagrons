@@ -263,8 +263,9 @@ back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 **331 atlases staged.** 78 test files, **1268 tests, 201,463 assertions, all
 passing** — measured 2026-08-27, not quoted. The figures before these (1232/76, and
 293/71/1163 before that) were both stale within days; re-measure rather than trusting
-this line, it is the first thing in the file to rot. **The 331 staged atlases are now
-stale too, but as a batch rather than as a count** — see the 180° item below.
+this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
+2026-08-27** from the facing re-bake; the other 89 (buildings, walls, terrain) were already
+correct and are untouched since 2026-08-17.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -291,8 +292,9 @@ open item, parked from 2026-08-21 until the owner could judge it, and they did:
 *"if we reduce the unit speed by 50%…"*. **Every unit's `speed` was halved in one
 pass** — villager 200 → 100 and everything else by the same factor, so the
 relative pacing `units.json` describes is untouched; the four `speed: 0` units
-stayed 0 and odd values rounded away from zero. PLAN.md §15 and PROGRESS.md both
-still list this as the top open item; **they are stale, BUGS.md line 23 is right.**
+stayed 0 and odd values rounded away from zero. **The owner playtested it on 2026-08-27
+and confirmed it: *"sound and speed is much better."*** PROGRESS.md still lists this as
+the top open item and is stale; PLAN.md §15 has been rewritten around what it left behind.
 
 Two consequences were recorded in BUGS.md rather than smoothed over, and neither
 is a reason to undo it:
@@ -380,14 +382,14 @@ plugs in; read the row rather than re-deriving it:
 
 ### Known gaps — do not work around these silently
 
-- **Only `red` and `yellow` colour bakes are trustworthy** — *until the 2026-08-26
-  re-bake is staged*, which repairs this in the same run as the facing fix below.
-  The 60 others are *stale, not absent*: present, parsing, drawing, and wrong,
-  because three pipeline defects were fixed mid-roster.
-  `GameDataRegistry.stale_colour_atlases()` enumerates them;
-  `missing_colour_atlases()` finds absent ones. Develop against players 2 and 3
-  until the staging is done, then **re-run both queries rather than assuming** —
-  they are the check that this actually closed.
+- ~~**Only `red` and `yellow` colour bakes are trustworthy.**~~ **CLOSED 2026-08-27.**
+  For months 60 colour atlases were *stale, not absent* — present, parsing, drawing,
+  and wrong, because three pipeline defects were fixed mid-roster. The facing re-bake
+  regenerated all 160 colour variants from the corrected recipes, and after staging
+  **all 20 colourable sets carry 8 colours from one build identity**, which is exactly
+  the predicate `stale_colour_atlases()` tests. Both that and `missing_colour_atlases()`
+  are empty. **Develop against any player now**, and keep the two queries — they are how
+  this gets caught next time, and a mid-roster pipeline fix is not a rare event.
 - **Walls are DONE** (PLAN.md 5.8, 2026-08-22) — this entry used to say they had
   no defs, and also that all the pieces were "baked and declared in
   `visuals.json`". Half of that was wrong: they were **staged but never
@@ -426,31 +428,32 @@ plugs in; read the row rather than re-deriving it:
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
-- **EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS — and the
-  re-bake that fixes it is DONE but NOT STAGED (as of 2026-08-27).** This is the one
-  entry in this section that is about to change state, so check it before believing it.
-  Where things actually are:
+- ~~**EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS.**~~ **FIXED,
+  STAGED AND VERIFIED 2026-08-27** — the art side re-baked it and the game side staged
+  it; PLAN.md §13.2 item 10 is closed. What happened, because the shape of it is worth
+  keeping:
   - **The recipe half landed 2026-08-25** (`5737e00`, corrected by `96d2318`): all 82
     zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160 colour
-    variants were regenerated from them. That is **wider than the 36 the game side
-    asked for** — the owner chose the whole set, so trees, mines, props, foundations
-    and rubble are in it. The seven `terrain` recipes are deliberately excluded
-    (`terrain_cliff` is not: it is a zeroad recipe despite the name).
-  - **242 bakes (82 base + 160 colour) have completed** and sit in the machine-local
-    isobake output — `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`, the path
-    `tools/isobake.local.toml` declares, **not** a directory inside this repo.
-    244 entries, newest 2026-08-26.
-  - **`game/assets/atlases/` has not moved since 2026-08-17.** So the game still draws
-    the backwards art, and *every screenshot taken before staging is evidence about
-    the old bake.* The sequence is the art agent's `tools/stage_atlases.py`, then
-    `--import`, then `preview_facing_chart -- --units unit.swordsman,unit.knight`
-    (column 0 a face, column 4 a back, all three clip rows agreeing), then
-    `preview_combat_facing`, then a real match screenshot — which is the only one that
-    closes it, because the owner reports this from play.
+    variants were regenerated from them — **wider than the 36 asked for**, the owner's
+    call, so trees, mines, props, foundations and rubble came too. The seven `terrain`
+    recipes are deliberately excluded, because the offset is a *zeroad-adapter*
+    correction applied in the shared render path and patching them would have spun
+    every ground tile half a turn (`terrain_cliff` IS in it — a zeroad recipe despite
+    the name).
+  - **242 bakes staged, 331/331 current**, then `--import`, then the checks:
+    `preview_facing_chart -- --units unit.swordsman,unit.knight` (column 0 a face,
+    column 4 a back, `idle`/`walk`/`attack` agreeing), `preview_combat_facing`, and a
+    driven match. Suite green against the new art.
+  - **The staged art and the bake output are different places and only one of them is
+    a repo.** The bakes were in `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`,
+    the path `tools/isobake.local.toml` declares. When that directory holds *only* the
+    latest batch, `stage_atlases.py` reports the rest as "not baked yet" and exits 1 —
+    **that is not a failure and nothing is lost**: it copies, it never deletes without
+    `--clean`, so the ids it cannot see keep the staged copy they already had.
 
-  **Nothing in `game/` changes when it is staged.** The game reads the atlas exactly as
-  the file states it, so a corrected bake is correct the moment it is on disk; there is
-  no flag to remove and nothing to keep in step. That is the whole point of the revert:
+  **Nothing in `game/` changed when it was staged.** The game reads the atlas exactly as
+  the file states it, so a corrected bake is correct the moment it is on disk; there was
+  no flag to remove and nothing to keep in step. That was the whole point of the revert:
   **a game-side compensation was written and reverted inside a day** (2026-08-22 → 23)
   — `directions_reversed` in `visuals.json`, a half-turn offset per atlas. It fixed idle
   and walk; the owner still saw an attacking unit facing the wrong way and called it:
@@ -520,9 +523,19 @@ plugs in; read the row rather than re-deriving it:
 
 ### What PLAN.md §15 says is next
 
-Its item 1 is the unit-speed pass, which is **done** — read the rest, which is not:
-
-1. **4.8 garrison**, which unlocks 4.9 and closes the largest hole in walls: 0 A.D.'s
+1. **RE-TUNE THE AI FOR THE HALVED SPEED — up next, the owner's call on 2026-08-27**
+   after playing the change: *"sound and speed is much better. We may need to revisit the
+   AI actions to adjust after the speed fix to get consistent game resolutions or identify
+   why its not completing."* The symptom is a match that does not finish; the cause is
+   already diagnosed and is **not** the speed itself — halving it doubled both legs of
+   every gather trip, which amplified the open "a build step gives up when short of
+   resources" bug until both AIs reach their attack step with no army. **The first
+   question is which lever**: the build step (a person waits for the wood, and the
+   timeout should not count affordability), `gather_rate` (the economy, the owner's
+   call), or the AI's step budget. **Do not move two of them at once** or neither is
+   measurable — the BUGS.md baseline table is the instrument, and all five seeds want
+   re-measuring either side of the change.
+2. **4.8 garrison**, which unlocks 4.9 and closes the largest hole in walls: 0 A.D.'s
    medium wall declares eight turret points and ours hold nobody. It is what
    `garrison_cap` on every building def has been waiting for, and it settles §13.2
    item 4b (whether `act_enter`/`act_garrison` are one concept or two).

@@ -7,7 +7,8 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-23.** Suite: **1232 tests, 0 failures**. Android build: 320.6 MB.
+**Updated 2026-08-27.** Suite: **1268 tests, 201,463 assertions, 0 failures**. Android
+build: 320.6 MB, unchanged — nothing since it has been a code change to the APK.
 
 ---
 
@@ -15,9 +16,15 @@ read next to the code, so fix this one.
 
 **The MVP is achieved and the game is played on a phone.** Four phases are finished
 outright, seven are one or two items short, and **two have not been started: 9 (ages and
-tech) and 13 (dragons)**. Nothing is blocked on a decision. The single item most worth
-doing is not code at all — it is the **unit-speed balancing pass**, which only the project
-owner can judge.
+tech) and 13 (dragons)**. Nothing is blocked on a decision.
+
+**The unit-speed balancing pass — which this line named as the single most valuable item
+— is DONE** (2026-08-23, every speed halved; owner-confirmed on 2026-08-27: *"sound and
+speed is much better"*). **The whole roster's facing re-bake is also done and staged**
+(2026-08-27), which closed both the 180° defect and the stale colour atlases. What is next
+is what the speed change left behind: **re-tuning the AI**, which now fails to resolve a
+match it used to win, because halving movement halved the economy and starved an
+already-known build-step bug. See PLAN.md §15 item 1.
 
 ---
 

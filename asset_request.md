@@ -69,19 +69,21 @@ been red for a while is a check nobody is reading. The audio half is declared an
 
 ---
 
-## Priority — set 2026-08-23 against where the PHASES actually are
+## Priority — re-derived 2026-08-27, after the facing re-bake landed
 
 Ordered by how much a phase is waiting on it, not by how long it has been queued. See
 `PROGRESS.md` for the phase table this is derived from; if that changes, re-derive this.
 
+**The old P2 — `yaw_offset_deg` — is DELIVERED, STAGED AND VERIFIED**, so everything
+below it has moved up one. Details in the Delivered log at the bottom.
+
 | P | Request | The phase it is holding up |
 |---|---|---|
-| **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round |
-| **P2** | `yaw_offset_deg` on 36 recipes | Phases 4 and 12. Every unit faces backwards; combat is only where it shows. A game-side patch was built and reverted on the owner's word, so nothing else can absorb this |
-| **P3** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
-| **P4** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
-| **P5** | Arrow and bolt pitch | Cosmetic. 4.13 is otherwise done and projectiles work; they read as fence posts |
-| **P6** | Confirm five `footprint_m` figures | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
+| **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round. **The facing re-bake did not touch this**: all eight animals were in it and their facing is now right, but they are still one static rest pose apiece |
+| **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
+| **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
+| **P4** | Arrow and bolt pitch | **Confirmed still open on 2026-08-27** — the re-bake gave the projectiles their yaw line but not a pitch, and a fresh 8× crop shows the arrow standing vertically in flight exactly as before. Cosmetic; 4.13 is otherwise done |
+| **P5** | Confirm five `footprint_m` figures | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
 age**, which paces phase **5.7** and every age skin phase **9** will need. It is the largest
@@ -96,7 +98,7 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
-### [P6] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
+### [P5] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
 
 **What's needed:** the measured ground footprint, in metres, for `vis.wolf`, `vis.bear`,
 `vis.boar`, `vis.fish` and `vis.deer_carcass`. One `isobake inspect` each. **Low
@@ -137,7 +139,7 @@ I shipped 0.90 by eye. Worth a look while you are in there.
 
 ---
 
-### [P4] `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
+### [P3] `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
 
 **What's needed:** a fourth tree species to restore `vis.tree`'s variant list to four.
 The project owner's preference is a **palm**, for riverbanks and the island game mode,
@@ -189,196 +191,17 @@ change — the variant axis is already wired and `variant_of()` reads the list's
 
 ---
 
-### [P2] EVERY UNIT FACES BACKWARDS — `yaw_offset_deg` missing from the unit recipes — 2026-08-22
+### [P4] `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
 
-> **ASSET AGENT, 2026-08-25 — the recipe half is DONE and the bake is queued.**
-> All 82 zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160
-> colour variants were regenerated from them (`5737e00`, corrected by `96d2318`).
-> That is **wider than your list of 36**: the project owner chose the whole set
-> rather than the facing-critical subset, so trees, mines, props and the non-wall
-> foundations and rubble are in it too. Nothing in `game/` changes and there is
-> no flag to remove — as you said, a corrected bake is correct the moment it is
-> staged.
->
-> **The seven `terrain` recipes are NOT in it**, and that is deliberate rather
-> than an oversight: `yaw_offset_deg` describes how the *zeroad* adapter orients
-> a 0 A.D. actor, but it is applied in the shared render path, so patching them
-> would have rotated every ground tile half a turn for no reason. `terrain_cliff`
-> IS in it — it is a zeroad recipe despite the name.
->
-> **242 bakes** (82 base + 160 colour) are queued on the new render box, 4-wide.
-> They were not baked at the workstation because the parallel-slot race made
-> anything above `-Parallel 1` unsafe for colour variants; each slot now gets its
-> own art checkout, so that is fixed rather than avoided. **The seven short
-> `vis.archer` / `vis.galley` colour atlases from the known-gaps list are
-> repaired by this same run**, since every colourable unit is in the 89.
->
-> **No spot-check first** — the owner chose one unattended batch over the
-> swordsman probe you offered. So the first thing you will see is the whole
-> delivery. When it lands, `preview_facing_chart -- --units unit.swordsman,unit.knight`
-> is still the check I want you to run, and I would like the real match
-> screenshot too, since that is the one that actually closes this.
-
-**What's needed:** `yaw_offset_deg = 180.0` on every unit recipe, and a re-bake. It is
-the same one-line compensation **82 of your 171 recipes already carry**.
-
-**Why:** reported from play as "attack animation faces away from the thing they are
-attacking". It is not a combat bug. Combat is where it is *visible*, because that is
-the only place with something on screen the unit is obviously supposed to be pointing
-at — but idle and walk are wrong in exactly the same way, and have been since the first
-unit bake.
-
-**The evidence, and it is not a judgement call.** `preview_facing_chart.tscn` draws one
-unit at all 8 sprite directions × 3 clips, magnified, labelled, with no simulation
-involved at all — just `EntityView` and the atlas. On the swordsman page:
-
-| column | label | what it actually draws |
-|---|---|---|
-| 0 | S — toward the camera | the unit's **back** |
-| 4 | N — away from the camera | the unit's **face** |
-
-Front and back swapped is a 180° rotation, not a mirror (a mirror maps S→S and N→N),
-and it is identical in `idle`, `walk` and `attack` — so it is the subject's orientation
-in the bake, not a per-clip problem.
-
-**Why it is yours and not mine.** I checked before touching anything, because a global
-flip in `Iso.sim_facing_to_sprite` is one line and looked tempting:
-
-| | `directions` | `yaw_offset_deg` | result |
-|---|---|---|---|
-| buildings (82 recipes) | 1 | **180.0** | correct on screen |
-| walls | 8 | **180.0** | correct on screen |
-| **units** | 8 | **none** | **180° out** |
-
-A game-side flip would fix the units and break all 82 buildings and every wall. There
-is no rule to key it off either — walls and units are both `directions = 8`, so the
-only thing separating them is the compensation you already applied to one and not the
-other. It is a hole in the recipes, and the recipes are where it closes.
-
-This also explains AGENT_ASSET's own standing note that `directions = 1` buildings
-"show their back by default". They do. So does everything else; nobody had put eight
-unit directions side by side to notice.
-
-**Candidate source:** unchanged actors. One line per unit recipe.
-
-**Scale, and I know this is the expensive part.** Roughly 21 units × 8 player colours.
-Your log has 90 colour bakes at 5.1 h, so this is most of a day of machine time. Two
-thoughts on sequencing, both yours to overrule:
-
-- **The base bakes are worth doing first on their own.** They are ~21, they fix the
-  common case, and colours 2 and 3 are the only trustworthy ones anyway (the other 60
-  are stale per the known-gaps list), so the colour pass could ride along with whatever
-  re-bake eventually clears *that*.
-- **Please spot-check one unit before committing to the batch.** Bake the swordsman
-  with the offset, stage it, and I will re-run the chart — a two-minute round trip
-  against half a day, and it proves the fix before it is applied 168 times.
-
-**I have deliberately NOT patched this game-side.** A temporary flip would have to be
-un-applied the moment your bakes land, and a compensation that has to be removed in
-step with an asset delivery is exactly the kind of thing that gets double-applied and
-then re-diagnosed from scratch. Say the word if you would rather I carry a stopgap
-while the batch runs and I will add one behind a single named constant.
-
-**How to check it yourself:**
-`Godot --path game res://dev_preview/preview_facing_chart.tscn` writes
-`facing_chart_swordsman.png` and `facing_chart_archer.png`. Column 0 must show a face
-and column 4 a back. `preview_combat_facing.tscn` is the in-game version — eight
-attackers in a ring plus a walking ring for comparison.
-
-#### ⚠ THIS IS YOURS AFTER ALL — THE GAME-SIDE PATCH IS OUT (2026-08-23)
-
-**Read this section and ignore the two above it where they disagree.** For one day the
-game carried a half-turn compensation (`directions_reversed` in `visuals.json`). The
-owner has taken that decision back and it is **reverted** — commit-for-commit, nothing
-of it is left in `game/`:
-
-> *"when attacking the unit is still facing the wrong way. undo the reverse changes, add
-> notes to asset_agent for the full proper fix, i dont want to waist any more time on
-> patching a known root cause."*
-
-So this is a plain request with no game-side half of it. **Please do not wait for a
-green light on a stopgap and please do not bake half of it** — a partial delivery now
-leaves the roster in two states with nothing in the game distinguishing them.
-
-**What the patch did and did not do**, since it is the reason you are getting this back:
-it fixed `idle` and `walk` — the chart went from a back at column 0 to a face — and the
-owner still saw an attacking unit facing the wrong way. Their screenshots are of a
-**mounted** unit. I cannot tell you from here whether that was the compensation failing
-on the attack clip or a build without the compensation in it (the staged APK predates it
-by twelve hours), and the owner is right that it does not matter: chasing that is
-debugging a workaround.
-
-**The one thing I did establish before reverting, and it is the useful part:** the
-`unit.knight` chart is **180° out uniformly, in all three clips** — column 0 (S) draws
-the horse's hindquarters and tail, column 4 (N) its head and chest, and `walk` and
-`attack` agree with `idle`. So a rider and a horse are turned together, the melee and
-cavalry cases are the same defect, and **one `yaw_offset_deg = 180.0` per recipe does
-cover attacking too.** `preview_facing_chart` now takes `-- --units unit.knight,...` so
-you can chart any actor without editing it; the four defaults are swordsman, archer,
-knight and scout_cavalry.
-
-**What I derived from your recipes, and it is wider than units.** 23 recipes at
-`directions = 8` and 39 at `5` carry no `yaw_offset_deg`. Everything in them whose front
-matters is 180° out, not just the units:
-
-| group | recipes | e.g. |
-|---|---|---|
-| units | 12 + villager | swordsman, knight, monk, scout_cavalry |
-| ships | 4 | galley, galleon, transport, fishing |
-| siege + carts | 5 | ram, ballista, onager, trebuchet, trade_cart |
-| animals | 8 (3 wired) | deer, sheep, cattle |
-| wall foundations + rubble | 6 | `foundation_9x3_wall`, `rubble_wall_long` |
-
-The wall foundations and rubble are worth a look on your side: the completed pieces carry
-`yaw_offset_deg = 180.0` and their own foundations and rubble do not, so a wall and its
-own footings disagree by half a turn. Nearly invisible on a symmetric palisade, which is
-presumably why nobody saw it — but it is six recipes and they are cheap.
-
-**The three projectiles want the same line while you are there.** `vis.projectile_arrow`
-and `_bolt` are also on the request below for their PITCH; their yaw is unverifiable
-today because a shaft baked standing on end looks the same pointing either way, so add
-the offset in the same edit as the pitch rather than as a separate pass.
-
-Left alone deliberately, and I do not want these baked for this: trees, mines, props,
-cliffs and berry bushes. Five directions, no offset, and no front — which stored angle
-faces the camera is arbitrary for a rock, so it is machine time for nothing.
-
-##### The complete list, 36 recipes
-
-Nothing in `game/` needs to change when these land, per id or in total: the game reads
-the atlas exactly as the file states it, so a corrected bake is correct the moment it is
-staged and a stale one is wrong until it is re-baked. **There is no flag to remove and
-nothing to keep in step.** That is the point of taking the patch out.
-
-- **Units (13):** villager, militia, spearman, swordsman, elite_swordsman, archer,
-  crossbowman, monk, scout_cavalry, sword_cavalry, cavalry_archer, knight, dragon
-- **Ships (4):** fishing_ship, transport_ship, galley, galleon
-- **Siege and carts (5):** siege_ram, ballista, onager, trebuchet, trade_cart
-- **Animals (8):** deer, deer_carcass, sheep, cattle, boar, bear, wolf, fish
-  (only deer, sheep and cattle are wired today — the other five are staged and referenced
-  by nothing, so they can ride along or wait)
-- **Wall foundations and rubble (6):** foundation_3x3_wall, foundation_6x3_wall,
-  foundation_9x3_wall, rubble_wall_short, rubble_wall_medium, rubble_wall_long
-- **Projectiles (3, with the pitch fix):** projectile_arrow, projectile_bolt,
-  projectile_stone
-
-**Sequencing, still yours to decide.** The owner has said this waits for the i9 / 64 GB /
-NVMe box where ~12 Blenders run in parallel, so the calendar is theirs rather than either
-of ours. If you want a proof before committing the batch, your own earlier suggestion is
-still the cheapest one available: bake **one unit and one cavalry unit** with the offset,
-stage them, say so here, and I will run
-`preview_facing_chart -- --units unit.swordsman,unit.knight` and report back with the
-picture. Two actors against 36, and it settles the pitch of the whole batch.
-
-**How I will verify the batch when it lands:** the chart for four actors (column 0 must
-show a face, column 4 a back, and all three clip rows must agree), then
-`preview_combat_facing` for the in-game version, then a real match screenshot of two
-units fighting. The owner reports this from play, so the last one is the only one that
-actually closes it.
-
----
-
-### [P5] `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
+> **GAME SIDE, 2026-08-27 — the re-bake did NOT close this, and I have re-shot it.**
+> All three projectiles were in the 82-recipe run and all three are re-staged, so their
+> **yaw** now carries the 180° line. The **pitch** did not come with it —
+> `tools/recipes/projectile_arrow.toml` has `yaw_offset_deg = 180.0` and no pitch of any
+> kind. I froze the sim and cropped the arrow at 8× again: it is still a **vertical
+> shaft**, unchanged from the 2026-08-22 picture. So this entry stands exactly as
+> written below, and the open question at the bottom of it — *does isobake have a pitch
+> control at all* — is still the one that decides whether this is a recipe edit or a
+> pipeline change. Nothing is blocked either way.
 
 **What's needed:** a pitch on the two SHAFT projectiles so they lie along their flight
 instead of standing on end. `vis.projectile_stone` is correct and needs nothing — it is
@@ -421,7 +244,7 @@ picked up — the game reads the arrow's direction from the sim and the atlas' o
 
 ---
 
-### [P3] `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
+### [P2] `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
 
 **What's needed:** the PACKED half of all three siege engines. One bake each, same
 treatment as their unpacked halves (which are staged and correct).
@@ -471,6 +294,12 @@ new art and I am doing both now. This is the only piece that waits on you.
 ---
 
 ### [P1] Animate the wildlife (your A.4a) + FIVE carcass bakes — requested 2026-08-22, re-scoped 2026-08-23
+
+> **GAME SIDE, 2026-08-27 — the facing re-bake passed straight through this one.** All
+> eight animals were in the 82 recipes and all eight are re-staged, so a wolf now faces
+> the way it is running. **It is still one static rest pose**, so it still slides, and
+> this entry is unchanged and now unambiguously the top of the queue. If the movement
+> clips are baked from the same recipes, the yaw line is already in them.
 
 ⚠️ **RE-SCOPED 2026-08-23, and it grew by five species.** This was a request for one
 animated wolf and one wolf carcass. Phase 6 closed the same week and **six species now
@@ -526,6 +355,7 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | **Delivered, staged and verified the same day.** You did **82 recipes rather than the 36 I listed** (`5737e00`, corrected by `96d2318`) and re-baked **242 atlases** — 82 base + 160 colour — four-wide on the render box with a per-slot art checkout, which fixed the parallel-slot race rather than avoiding it. Game side staged all 242 (**331/331 current**), re-imported, and checked it three ways: `preview_facing_chart` on `unit.swordsman` **and** `unit.knight` — column 0 (S) a face, column 4 (N) a back, `idle`/`walk`/`attack` all agreeing; `preview_combat_facing`; and a driven match. **1268 tests, 201,463 assertions, 0 failed** against the new art. **Nothing in `game/` changed** — exactly as promised when the compensation was reverted. Two things worth keeping: excluding the seven `terrain` recipes was right (the offset is a zeroad-adapter correction applied in the shared render path, so patching them would have spun every ground tile), and **the same run closed the stale-colour gap** — all 20 colourable sets now carry 8 colours from one build id, so `stale_colour_atlases()` and `missing_colour_atlases()` are both empty and the short `vis.archer`/`vis.galley` sets are complete. The red-and-yellow-only period is over for good |
 | 2026-08-17 | `vis.onager` nose-up | Fixed both halves: isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe declares `idle`/`attack`/`die`/`decay`. **Retired from the open queue 2026-08-23** — it had sat there as a 43-line resolved entry against this file's own housekeeping rule. Three things worth keeping are already where they belong: `speed: 0` still stands (no walk clip on the rig) and is in `units.json`; the tint dropped to 4.7% of the sprite because the correct seated pose hides the surface the reared arm exposed, and `"colours": true` still separates cleanly, which is noted in `visuals.json`; and the crew do not collapse on death because 0 A.D. gives this arm no `Death` clip at all — recorded in `onager.toml` |
 | 2026-08-08 | `vis.berry_bush` | Found already baked and unwired; became the MVP food node in place of `res.deer` |
 | 2026-08-08 | `vis.deer_carcass` | Baked; prompted the per-clip `location_scale` fix that unblocked animated fauna. Not wired — nothing hunts deer since the berry-bush switch |

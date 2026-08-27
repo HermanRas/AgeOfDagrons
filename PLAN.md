@@ -1906,7 +1906,7 @@ nothing in the logs marking where. **Do not touch `isobake/` while a batch is in
 | 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
 | 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |
 | 4b | **`act_enter`/`act_garrison` and `act_exit`/`act_leave`** are two icon pairs covering one concept each — decide whether they are distinct actions (board transport vs garrison building) and reclaim the spares if not | with 4.8 |
-| 10 | ⏸️ **`yaw_offset_deg = 180.0` on the remaining 36 recipes — ART SIDE, and there is no game-side half of it.** isobake's zeroad adapter turns every subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it and the rest — every unit, ship, animal, siege engine, and the wall foundations and rubble — are baked backwards, which is why an archer shoots over her own shoulder. **A game-side compensation was built and reverted inside a day** (2026-08-22 → 23): `directions_reversed` in `visuals.json` set a half-turn offset per atlas, it fixed idle and walk, and the owner still saw an attacking unit facing wrong — *"undo the reverse changes… i dont want to waist any more time on patching a known root cause."* Reverted commit-for-commit; nothing in `game/` compensates and nothing has to be un-applied when the bakes land, which is the whole gain. What the exercise did establish is worth keeping: the `unit.knight` chart is 180° out **uniformly across idle, walk and attack**, so rider and horse turn together and one recipe line per actor covers the attack clip too. The request, the 36-recipe list and the verification plan are in `asset_request.md`; `preview_facing_chart` now takes `-- --units …` so any actor can be charted without editing it. Waits on the owner's heavy rig (i9 / 64 GB / NVMe, ~12 Blenders in parallel) | art side; before A.8 colour bakes |
+| 10 | ✅ **CLOSED 2026-08-27 — baked, staged and verified.** The art side did **82 recipes rather than the 36 asked for** (`5737e00`, corrected by `96d2318`; the seven `terrain` recipes deliberately excluded, `terrain_cliff` included since it is a zeroad recipe despite the name) and re-baked **242 atlases** — 82 base plus 160 colour — on a dedicated render box, four-wide with a per-slot art checkout so the parallel-slot race that made anything above `-Parallel 1` unsafe for colour variants is fixed rather than avoided. The game side staged all 242 (331/331 now current), re-imported, and charted `unit.swordsman` and `unit.knight`: **column 0 (S) draws a face, column 4 (N) a back, and `idle`/`walk`/`attack` agree.** `preview_combat_facing` shows the ring of attackers facing inward. **Nothing in `game/` changed** — no flag to remove, nothing to keep in step, which is exactly what taking the compensation out bought. The same run repaired the stale colour bakes (see A.8). *What follows is the original entry, kept because the reasoning is why there was no game-side half:* isobake's zeroad adapter turns every subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it and the rest — every unit, ship, animal, siege engine, and the wall foundations and rubble — are baked backwards, which is why an archer shoots over her own shoulder. **A game-side compensation was built and reverted inside a day** (2026-08-22 → 23): `directions_reversed` in `visuals.json` set a half-turn offset per atlas, it fixed idle and walk, and the owner still saw an attacking unit facing wrong — *"undo the reverse changes… i dont want to waist any more time on patching a known root cause."* Reverted commit-for-commit; nothing in `game/` compensates and nothing has to be un-applied when the bakes land, which is the whole gain. What the exercise did establish is worth keeping: the `unit.knight` chart is 180° out **uniformly across idle, walk and attack**, so rider and horse turn together and one recipe line per actor covers the attack clip too. The request, the 36-recipe list and the verification plan are in `asset_request.md`; `preview_facing_chart` now takes `-- --units …` so any actor can be charted without editing it. Waits on the owner's heavy rig (i9 / 64 GB / NVMe, ~12 Blenders in parallel) | art side; before A.8 colour bakes |
 
 **Retired open items**, kept as one-liners because they were expensive to answer: the render
 pipeline produces usable sprites (0.9); actor→entity mapping is complete for all 23 buildings, 22
@@ -1954,11 +1954,32 @@ MVP, with the actual next actions at the bottom — and the numbering had been r
 twice, so cross-references inside it were drifting. The shipped list now lives in §12 as
 prose; what is left here is only what has not been done.*
 
-**1. The unit-speed balancing pass** (`BUGS.md`). Top of the list and unchanged for a week,
-because it is the one item nobody but the owner can do. It was deliberately queued behind
-walls, and the queue has since grown: chokepoints, three predators, fleeing deer and driven
-livestock all change what "too fast" means. Everything below this is code and can wait; this
-needs playing.
+**1. Re-tune the AI for the halved speed** — **up next**, the owner's call on 2026-08-27
+after playtesting the change: *"sound and speed is much better. We may need to revisit the AI
+actions to adjust after the speed fix to get consistent game resolutions or identify why its
+not completing."*
+
+*This row used to be the unit-speed balancing pass. That is **done** — every unit's speed was
+halved on 2026-08-23 (`962b1c5`), which closed the oldest item in `BUGS.md`. What replaced it
+here is the damage it did downstream, and the sequencing is the same argument as before: the
+AI is the thing standing between the baseline table and being evidence again, so it comes
+before the features below it.*
+
+**The symptom is a game that does not finish.** Seeds 3 and 5 still resolve, ~6% slower with
+the same winners; **seed 4 went from "p2 wins at t7776" to unresolved, and not because of the
+12,000-tick window — it does not resolve at 20,000 either.** Seed 4 was the only seed p2 ever
+won, which is precisely what made that table evidence rather than an artefact of the script
+favouring player 1.
+
+**The cause is already diagnosed and is NOT the speed itself.** Halving speed doubled both
+legs of every gather trip, so income is closer to halved than unaffected — and that amplified
+the open "a build step gives up when short of resources" bug until *both* AIs reach their
+attack step with no army. So the first question is whether the fix is the build step (a person
+waits for the wood; the timeout should not count affordability), `gather_rate` (the economy
+lever, the owner's call), or the AI's step budget — and **which one is asked first decides
+whether this is an AI fix or a balance change.** Do not tune them together, or neither will be
+measurable. The AI-vs-AI baseline table in `BUGS.md` is the instrument; re-measure all five
+seeds before and after.
 
 **2. 4.8 garrison**, which unlocks 4.9 and closes the largest remaining hole in walls —
 0 A.D.'s medium wall declares eight turret points and ours hold nobody. It is also what
@@ -1975,8 +1996,8 @@ by definition, so that claim has to *change* rather than relax.
 reported from actually playing the 2026-08-23 build. Double-tap-to-clear misfires on a phone
 and the interim workaround is a two-finger box select over empty ground.
 
-**Then, in no strongly forced order:** 12.2b's real AI decision flow (parked behind item 1
-on purpose); **7.5 audio, which was never built at all** and is §13.2 item 11; 9.3
+**Then, in no strongly forced order:** 12.2b's real AI decision flow (which item 1 above may
+well turn into, rather than sitting behind it); 9.3
 `TechSystem`, where the field yield's per-age ladder is currently standing in for a mill
 tech; 2.4c the map save format; 12.1b LAN discovery; 12.3 campaign; and 13.x dragons once
 the RTS is a game.
@@ -1988,8 +2009,13 @@ the RTS is a game.
   every one of them slides, because every fauna atlas is a single static rest pose.
 - **Four carcass bakes** (§12A A.4b). Five defs draw `vis.deer_carcass`; a dead deer where a
   dead bear should be is the wrong animal.
-- **The 36-recipe `yaw_offset_deg` re-bake** (§13.2 item 10). Art side, and there is
-  deliberately no game-side half — a compensation was built and reverted inside a day.
+- ~~**The 36-recipe `yaw_offset_deg` re-bake**~~ (§13.2 item 10) — **DELIVERED AND STAGED
+  2026-08-27.** The art side did 82 recipes rather than the 36 asked for, re-baked 242 atlases
+  (82 base + 160 colour), and the game side staged all 242 and re-imported. Verified with
+  `preview_facing_chart` on `unit.swordsman` and `unit.knight`: column 0 (S) draws a face,
+  column 4 (N) a back, and `idle`/`walk`/`attack` agree. **Nothing in `game/` changed**, which
+  was the whole point of reverting the compensation — a corrected bake is correct the moment
+  it is staged.
 - **A replacement for `vis.tree_teak`**, ideally a palm for riverbanks and Archipelago. The
   teak was pulled from the forest rotation on 2026-08-23 for being 4.6 tiles wide and 12
   tall on a one-tile footprint, which made trees unselectable.

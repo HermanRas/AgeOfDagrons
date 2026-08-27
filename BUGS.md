@@ -173,7 +173,15 @@ call and this is what it cost):
 | 5 | MATCH OVER t9470, winner p1 | t8763, p1 |
 | 6 | UNRESOLVED — p2 at 0 units and one unreachable foundation (parked, above) | UNRESOLVED |
 
-- [ ] **Halving unit speed cost the baseline its best property, and the cause is the
+- [ ] **UP NEXT — the owner's call on 2026-08-27**, after playtesting the halved speed:
+      *"sound and speed is much better. We may need to revisit the AI actions to adjust
+      after the speed fix to get consistent game resolutions or identify why its not
+      completing."* So this row is no longer just a recorded consequence; it is the next
+      job, and PLAN.md §15 item 1 carries the plan. **One lever at a time** — the build
+      step, `gather_rate`, or the AI's step budget — with all five seeds re-measured
+      either side, or nothing below is measurable.
+
+      **Halving unit speed cost the baseline its best property, and the cause is the
       already-open "gives up when short of resources" bug, amplified.** Two in four resolve
       now rather than three, and — the part that matters — **seed 4 was the only seed p2
       ever won**, which is what made the set evidence that the result is not an artefact of
