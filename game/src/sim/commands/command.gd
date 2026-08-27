@@ -29,6 +29,10 @@ static func from_dict(d: Dictionary) -> Command:
 			return BuildCommand.from_dict(d)
 		"attack":
 			return AttackCommand.from_dict(d)
+		"garrison":
+			return GarrisonCommand.from_dict(d)
+		"ungarrison":
+			return UngarrisonCommand.from_dict(d)
 		"place_building":
 			return PlaceBuildingCommand.from_dict(d)
 		"place_wall":

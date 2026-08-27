@@ -14,9 +14,11 @@
 ## `origin_tile()` recovers the top-left tile the footprint was placed at, which is
 ## what the grid cares about.
 ##
-## Deliberately absent until their phases: the production queue (5.4) and garrison
-## (4.8). Stubbing them now would mean inventing `ProductionOrder`'s shape before
-## anything uses it.
+## Both of the things this header used to list as deliberately absent are here now:
+## the production queue landed with 5.4 and the GARRISON with 4.8 (2026-08-27). What
+## garrison brought with it is the pair of fields nobody expected on a building --
+## `attack_damage` and `attack_cooldown` -- because a building that holds archers has
+## to have something for them to add their damage TO (4.9). See `attack_bonus()`.
 class_name SimBuilding
 extends SimEntity
 
@@ -109,6 +111,42 @@ func is_spent() -> bool:
 var provides_pop: int = 0
 var garrison_cap: int = 0
 
+## Who is inside, in the order they entered (PLAN.md 4.8). Each entry is
+## `{id, def_id}`.
+##
+## SHAPED LIKE `queue` BELOW, and for the identical reason. Ids alone would have been
+## the obvious choice -- and `to_snapshot()` cannot resolve one, because it is handed
+## no `SimWorld` and a garrisoned unit is not in the snapshot for the client to look
+## up either. The queue hit this exact wall in 5.4 (its own note records the panel
+## drawing the word "Queued" twelve times for want of def ids) and answered it by
+## carrying the def id in the entry. A unit's `def_id` never changes, so the copy
+## cannot drift from the entity it names.
+##
+## Never a reference to the SimUnit itself, so nothing here can outlive
+## `SimWorld.entities` -- the same reason `task_target_id` is an int.
+##
+## INSERTION ORDER, and it is in `state_hash()` as a list rather than a count, so
+## two hosts that admitted the same units in a different order are caught here
+## rather than several seconds later when a player ejects "the first one" and gets
+## different units on the two machines.
+var garrison: Array[Dictionary] = []
+
+## What this building shoots with, copied off its def at spawn exactly as
+## `provides_pop` and `garrison_cap` are -- so the building-attack loop is a scan
+## over entities and never a registry lookup per shot. 0 damage for 28 of the 31
+## defs, which is what keeps a house out of that loop entirely.
+var attack_damage: int = 0
+var attack_type: StringName = &"melee"
+var attack_range: int = 0
+var attack_cooldown_ticks: int = 0
+var attack_projectile: StringName = &""
+
+## Ticks until this building may fire again. The building-side twin of
+## `SimUnit.attack_cooldown`, and hashed for the same reason: two hosts a single
+## tick out of step on a castle's rate of fire would kill the same attacker on
+## different ticks and then disagree about who died first.
+var attack_cooldown: int = 0
+
 ## Training queue (5.4). Each entry is {def_id, progress, total, ready, cost}.
 ## `cost` is snapshotted at enqueue time rather than re-read from UnitDef later,
 ## so a cancel always refunds exactly what was paid, even though nothing in MVP
@@ -117,6 +155,70 @@ var garrison_cap: int = 0
 ## every RTS this is modelled on -- so entries behind it need no state of their
 ## own until they reach the front.
 var queue: Array[Dictionary] = []
+
+
+## Room for one more (PLAN.md 4.8). False for everything with `garrison_cap` 0,
+## which is 28 of the 31 buildings, so this single test covers "walls hold nobody"
+## and "a house is not a shelter" without either being spelled out anywhere.
+##
+## PHASE IS PART OF IT: a foundation is a hole in the ground. Without the check a
+## player could garrison a tower they had not paid to finish, and the building would
+## then be shooting at `attack_damage` before it existed.
+func has_garrison_room() -> bool:
+	return is_complete() and alive and garrison.size() < garrison_cap
+
+
+## Extra damage per shot from the archers inside (PLAN.md 4.9, project owner
+## 2026-08-27): **half of each garrisoned archer's own damage, floored**.
+##
+## "Archer" IS `attack_range > 0` AND NOT A LIST OF IDS. The owner named the two ends
+## of it -- archers add, pikemen and swordsmen do not -- and every melee unit in the
+## roster declares `range: 0`, so the data already separates them and nobody has to
+## maintain a list that a new unit could be left off. Archer 4 -> +2, crossbowman
+## 5 -> +2, cavalry archer 6 -> +3, all twelve melee units -> +0.
+##
+## INTEGER DIVISION, deliberately, and this is the market.json rule applied to
+## combat: the number is spent inside a state transition whose result has to be
+## bit-identical on an ARM phone and an x86 host, so 5 / 2 is 2 and never 2.5.
+##
+## ONE SHOT, NOT SIXTEEN. This is added to the building's own `attack_damage` once
+## per swing, so fifteen archers in a castle are one heavier arrow every two seconds
+## rather than fifteen separate attackers -- which is also why a garrisoned archer's
+## own `attack_cooldown_ticks` is never read.
+##
+## Walks `garrison` in stored order and sums, so it needs no sort: addition
+## commutes, unlike the target choice in `CombatSystem._reacquire`.
+## Read off the entry's own `def_id` rather than the live entity, so it is the same
+## answer whether or not the unit is still resolvable -- and one fewer `entities`
+## lookup per shot. Through `w.unit_def()` rather than the registry directly, which
+## is how every other read of a def inside `sim/` goes.
+func attack_bonus(w: SimWorld) -> int:
+	var bonus := 0
+	for entry in garrison:
+		var ud := w.unit_def(entry["def_id"])
+		if ud == null or ud.attack_range <= 0:
+			continue
+		bonus += ud.attack_damage / 2
+	return bonus
+
+
+## Where `unit_id` sits in the garrison, or -1. Used by the eject path, which is
+## given a unit and needs the slot, and by the tests.
+func garrison_index(unit_id: int) -> int:
+	for i in range(garrison.size()):
+		if int(garrison[i]["id"]) == unit_id:
+			return i
+	return -1
+
+
+## Every id inside, for the callers that want to walk the occupants rather than
+## price them. Sorted is not needed and not offered: `garrison` is already in a
+## deterministic order and every caller either sums (which commutes) or indexes.
+func garrison_ids() -> Array[int]:
+	var out: Array[int] = []
+	for entry in garrison:
+		out.append(int(entry["id"]))
+	return out
 
 
 ## The top-left tile of the footprint. Derived from `pos` rather than stored, so
@@ -223,6 +325,21 @@ func to_snapshot() -> Dictionary:
 	for entry in queue:
 		queued.append(String(entry["def_id"]))
 	d["queue"] = queued
+	# WHO IS INSIDE (4.8), and both halves for the same reason `queue_len` sits beside
+	# `queue`: the count is what the action button's badge reads and it must be right
+	# even for a fogged building whose roster has been stripped, while the def ids are
+	# what let the detail grid crop each occupant's own portrait instead of drawing
+	# twelve identical cells.
+	#
+	# SENT ON EVERY BUILDING, empty for the 28 that can hold nobody, exactly as
+	# `facing` is sent for every building when only walls use it. A field present on
+	# some buildings and absent on others splits every building into two wire shapes
+	# (12.1f), which costs more than the two fields it would save.
+	d["garrison_count"] = garrison.size()
+	var inside: Array[String] = []
+	for entry in garrison:
+		inside.append(String(entry["def_id"]))
+	d["garrison"] = inside
 	return d
 
 

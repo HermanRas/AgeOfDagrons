@@ -30,7 +30,48 @@ var cost: Dictionary = {}
 var build_time_ticks: int = 0
 
 var provides_pop: int = 0
+
+## How many units may shelter inside this building (PLAN.md 4.8). 0 for everything
+## that is not a tower or the castle, which is what makes "may this be garrisoned"
+## a data question rather than a list of ids in a system.
+##
+## THE FIELD HAS EXISTED SINCE 0.4 AND NOTHING READ IT UNTIL 2026-08-27. It was
+## declared on all 31 buildings with five non-zero, and the numbers it carried were
+## the ones IDEA.md 4.9 sketched (town centre 5, tower 10, castle 50). The project
+## owner replaced them: **towers 5, castle 15, everything else 0** -- walls
+## explicitly ("walls will not be garrisoned"), and the town centre, barracks and
+## monastery by the same "only" that excluded them. So a unit under attack has
+## nowhere to hide, which is deliberate: garrison here is a way to make a tower
+## shoot harder, not a bunker.
 var garrison_cap: int = 0
+
+## WHAT THIS BUILDING SHOOTS WITH (PLAN.md 4.9), mirroring UnitDef's four attack
+## fields name for name and reading the same nested `"attack"` object out of JSON --
+## so there is one shape of "a thing that attacks" in the data and `CombatSystem`
+## can put both through one damage function.
+##
+## Zero for 28 of the 31 buildings, and that zero is load-bearing: `attack_damage
+## <= 0` is what keeps a house out of the building-attack loop entirely, exactly as
+## it keeps a trade cart out of the unit one.
+##
+## Only three carry it, and they are the three that can be garrisoned. That is not a
+## coincidence in the data and it is not enforced either -- a garrisoned archer adds
+## half its damage to whatever the building already has (`SimBuilding.attack_bonus`),
+## so a garrisonable building with no attack simply gains nothing and one with an
+## attack and no garrison simply never gains anything. Neither combination needs a
+## flag to say so.
+var attack_damage: int = 0
+## `&"melee"` or `&"pierce"`, matched against the target's armour of the same name.
+## Pierce for all three, because a tower shoots arrows.
+var attack_type: StringName = &"melee"
+## Chebyshev tiles, measured from the FOOTPRINT (`CombatSystem.tile_gap`), so a
+## castle's reach is 8 tiles beyond its 7x7 rather than 8 from its middle.
+var attack_range: int = 0
+var attack_cooldown_ticks: int = 0
+## A visual id, resolved the same way `UnitDef.attack_projectile` is. `&""` means no
+## arrow is drawn -- which for a tower would be a shot with no visible cause, so all
+## three name one.
+var attack_projectile: StringName = &""
 
 var trains: Array[StringName] = []
 ## Resource kinds a villager may return a load to here.
@@ -201,6 +242,16 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.buildable = bool(d.get("buildable", true))
 	b.is_gate = bool(d.get("is_gate", false))
 	b.upgrades_to = StringName(d.get("upgrades_to", ""))
+
+	# THE SAME KEYS units.json USES -- damage/type/range/cooldown_ticks/projectile --
+	# so the two files describe an attack identically and neither reader has to know
+	# which kind of thing it is reading for.
+	var atk: Dictionary = d.get("attack", {})
+	b.attack_damage = int(atk.get("damage", 0))
+	b.attack_type = StringName(atk.get("type", "melee"))
+	b.attack_range = int(atk.get("range", 0))
+	b.attack_cooldown_ticks = int(atk.get("cooldown_ticks", 0))
+	b.attack_projectile = StringName(atk.get("projectile", ""))
 
 	var g: Dictionary = d.get("gather", {})
 	b.gather_kind = StringName(g.get("kind", ""))

@@ -217,12 +217,24 @@ lower level winning, or a level that never gets an economy up.
 **Seed 3, Forest 96×96, 20,000 ticks (33 min of game time), measured 2026-08-27** with
 the army caps, the AoE age costs and the 12.2b rule sets all in:
 
-| rung | outcome | reads as |
-|---|---|---|
-| passive v easy | **easy wins at t8327** (13.9 min) | ✅ correct |
-| easy v normal | **normal wins at t11366** (18.9 min) | ✅ correct |
-| normal v hard | **normal wins at t14726** (24.5 min) | ❌ **the wrong way round** |
-| hard v unfair | stalemate | ✅ acceptable — evenly matched |
+| rung | outcome | was, before towers shot back | reads as |
+|---|---|---|---|
+| passive v easy | **easy wins at t8323** (13.9 min) | t8327 | ✅ correct |
+| easy v normal | **normal wins at t18351** (30.6 min) | t11366 — **+62%** | ✅ correct |
+| normal v hard | **normal wins at t13054** (21.8 min) | t14726 | ❌ **the wrong way round** |
+| hard v unfair | stalemate at 20,000 ticks | stalemate | ✅ acceptable — evenly matched |
+
+**RE-MEASURED 2026-08-27 after 4.9 gave buildings an attack**, and the third column is
+kept because the shift is the point: `ai_normal`, `ai_hard` and `ai_unfair` all build
+watch towers, guard towers or a castle, so **every rung now has to get through one**.
+Every winner held and only the durations moved — which is the outcome that says the
+feature changed the game without breaking the ladder. `easy v normal` is the one worth
+noticing: a timing attack that used to land at t11366 now takes half again as long,
+because the thing it is attacking shoots.
+
+The two open items below were written against the OLD numbers and both still hold: the
+`normal v hard` inversion is a build-order argument that towers do not settle either way,
+and Unfair still fails to beat Hard.
 
 - [ ] **NORMAL BEATS HARD, and the cause is a design tension rather than a bug.** Hard is
       GREEDIER: it waits for 12 villagers, a mill, a barracks and 8 swordsmen before its
@@ -301,6 +313,26 @@ Short, and kept because each can bite again.
 - **You cannot zoom while placing a building.** Edge-pan owns the side strips for the
   duration of a placement and they are the zoom gesture's. Deliberate: zoom is one tap away
   before the menu opens, where reaching an off-screen site was not.
+- **`Diplomacy.is_enemy` answers "MAY I attack this", not "am I at WAR with this", and a
+  tower needs the second one.** Shipped wrong in 4.9 and found by `preview_garrison`, not by
+  60 green tests: a sheep *may* be attacked, because hunting is how a deer becomes food, so
+  a watch tower opened fire on the livestock — and a **herded** sheep is still gaia's
+  (`herded_by` is separate from `owner_id` by design), so a player's own flock grazing past
+  their own tower was shot by it. It presented as something else: nearest-target-wins meant
+  every shot went to an animal two tiles away and the raider five tiles out was never
+  touched, so the tower read as broken rather than as mis-aimed. `CombatSystem._is_at_war_with`
+  is the auto-acquire predicate — enemy players always, gaia only if `aggro_radius > 0`.
+  **`AISystem._nearest_enemy` keeps its own copy of this for the identical reason**, and its
+  comment says so; anything else that acquires targets *unasked* needs the war question, not
+  the permission question.
+- **Ejected units come out BEHIND a building**, tower or barracks alike. `find_free_adjacent`
+  sweeps the rect's top edge first, so a garrison turned out of a tower — and every unit ever
+  trained anywhere — appears up-screen of it, where the occlusion outline is the only thing
+  making them visible. Left consistent rather than special-cased for garrison; changing it is
+  a one-line change to that sweep order and affects every building in the game, so it is the
+  owner's call. Related and cosmetic: **corpses stack**, because the eject-then-kill path in
+  `DeathSystem._kill_garrison` puts every occupant on the same tile and `SeparationSystem`
+  does not move the dead. A castle losing 15 reads as one body until they fade.
 - **Wall-clock timings are worthless on this workstation** — the same seed ran 41.3 s and
   161.0 s, and the test suite swung 34 s to 110 s across four runs of identical code. Trust
   `test_tick_cost`, which reports per-system milliseconds.

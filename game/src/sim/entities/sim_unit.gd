@@ -70,6 +70,29 @@ var last_hp: int = -1
 ## and come back to.
 var herded_by: int = 0
 
+## The building this unit is INSIDE, or 0 for on the map (PLAN.md 4.8).
+##
+## Shaped after `herded_by` above -- one int, written by one system, meaning nothing
+## when zero -- but it does far more, because it is the first field in the project
+## that takes an entity OFF the map without despawning it. What it means, exactly:
+##
+##   - the unit is still in `SimWorld.entities`, so it still counts against the
+##     population cap. A garrisoned army is an army you have; hiding fifteen units
+##     in a castle must not buy fifteen free villagers.
+##   - it is NOT in `SpatialHash`, so nothing finds it: `CombatSystem._reacquire`
+##     cannot target it, `WildlifeSystem` cannot see it, and `pick()` cannot tap it.
+##     That is the whole "removed from the world map" of IDEA.md 4.8, and it is one
+##     line -- `spatial.remove()` without `despawn()`.
+##   - it is NOT in the snapshot at all (`SnapshotSystem.build` skips it), so the
+##     client forgets it and releases its sprite. That is also what deselects it,
+##     for free, via `GameView`'s `retain_only` pass.
+##
+## `pos` is left where it last stood rather than moved to the building, and nothing
+## reads it while this is set. On the way OUT the unit is placed by
+## `SimWorld._step_aside_tile` from the building's own footprint, so a stale `pos`
+## can never leak into where it reappears.
+var garrisoned_in: int = 0
+
 ## Ticks left as a corpse before DeathSystem despawns it (PLAN.md 4.7): 60 s of
 ## corpse plus a 10 s fade, at SimClock's 10 ticks/sec. -1 means "not dead" --
 ## DeathSystem reads that sentinel to tell a fresh death from one it has already
@@ -150,6 +173,22 @@ func set_task_attack(target_id: int, tile: Vector2i) -> void:
 	path_pending = true
 
 
+## Walk toward a friendly building and step inside it on arrival (PLAN.md 4.8).
+##
+## `tile` is the building's own tile, which is occupied ground -- PathService
+## substitutes the nearest tile that can be stood on, exactly as walking up to a
+## tree or a foundation does, and `GarrisonSystem` then accepts anything adjacent to
+## the footprint. So a unit sent to a [7, 7] castle stops at its wall and goes in
+## from wherever it happened to reach, rather than needing a door.
+func set_task_garrison(building_id: int, tile: Vector2i) -> void:
+	task = Task.GARRISON
+	task_target_id = building_id
+	task_target_tile = tile
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
 ## Drop the route but KEEP the task -- what an attacker does the moment its
 ## target comes into reach, so it stands and fights instead of walking the rest
 ## of a path it no longer needs. Distinct from stop(), which retires the order
@@ -161,13 +200,20 @@ func halt() -> void:
 	path_pending = false
 
 
-## MOVE, GATHER, RETURN, BUILD and ATTACK all walk somewhere before doing
+## MOVE, GATHER, RETURN, BUILD, ATTACK and GARRISON all walk somewhere before doing
 ## anything else -- this is PathService's and MovementSystem's test for "does this
 ## unit want a route", so neither has to enumerate every task that happens to
 ## travel.
+##
+## GARRISON JOINED IT ON 2026-08-27 AND HAD TO. `Task.GARRISON` had been declared
+## and unassigned since 4.3, and this function's omission of it was load-bearing
+## while that was true; the moment something set the task, `PathService.process()`
+## (which drops any request whose unit is not on a travel task) would have thrown
+## the route away and left the unit standing where it was ordered from, in GARRISON,
+## forever. That is the same failure the header of `SimUnit.replan()` describes.
 func is_travel_task() -> bool:
 	return task == Task.MOVE or task == Task.GATHER or task == Task.RETURN \
-			or task == Task.BUILD or task == Task.ATTACK
+			or task == Task.BUILD or task == Task.ATTACK or task == Task.GARRISON
 
 
 ## The 8-way facing a delta points along. Shared by MovementSystem (which faces a

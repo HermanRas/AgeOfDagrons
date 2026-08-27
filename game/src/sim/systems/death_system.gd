@@ -125,6 +125,14 @@ func _process_building(w: SimWorld, b: SimBuilding, to_despawn: Array[int]) -> v
 		b.phase = SimBuilding.Phase.DESTROYED
 		b.rubble_ticks_left = SimBuilding.RUBBLE_TOTAL_TICKS
 		w.free_footprint(b.id)
+		# THE GARRISON DIES WITH IT (project owner, 2026-08-27: "units garrisoned when
+		# a building is destroyed is killed with building"). Deliberately not an
+		# auto-eject: a castle holding fifteen is a real commitment, and that is what
+		# makes out-ranging it with siege worth doing rather than merely possible.
+		#
+		# AFTER `free_footprint`, so the ground they are put out onto is no longer
+		# claimed by the building that is killing them.
+		_kill_garrison(w, b)
 		return
 
 	# A building already DESTROYED when this system first sees it -- one spawned
@@ -137,3 +145,44 @@ func _process_building(w: SimWorld, b: SimBuilding, to_despawn: Array[int]) -> v
 	b.rubble_ticks_left -= 1
 	if b.rubble_ticks_left <= 0:
 		to_despawn.append(b.id)
+
+
+## Everybody inside a building that has just fallen, put out and then killed
+## (PLAN.md 4.8).
+##
+## PUT OUT FIRST, AND THAT IS THE WHOLE TRICK. A corpse has to be somewhere: while a
+## unit is garrisoned it is out of `SpatialHash` and its `pos` is wherever it last
+## stood, so killing it in place would leave a body lying at the tile it walked in
+## from -- possibly on the far side of the map from the tower it died in, and
+## possibly under a building somebody has since put there. `ungarrison_unit` places
+## it beside the wreckage and puts it back in the index, and only then does it die.
+## The result on screen is a tower falling with bodies appearing around it, which is
+## what the event actually was.
+##
+## Killed by `take_damage(hp)` rather than by setting `alive` directly, so the
+## ordinary corpse path in `_process_unit` picks them up on the NEXT tick and they
+## die, decay and despawn exactly like anything else. That is also why this does not
+## touch `corpse_ticks_left`: leaving it at -1 is what tells that function these are
+## fresh deaths it has not seen.
+##
+## A UNIT IT CANNOT PUT OUT IS STILL KILLED. `ungarrison_unit` refuses when there is
+## nowhere legal to stand -- a tower walled in by its own owner -- and the alternative
+## to killing it anyway is a unit alive inside a building that no longer exists,
+## unreachable and un-selectable for the rest of the match. It stays where it is,
+## which is a corpse at a stale tile: the wrong body in the wrong place beats a unit
+## the player owns and can never find.
+func _kill_garrison(w: SimWorld, b: SimBuilding) -> void:
+	# Backwards, because `ungarrison_unit` removes the entry it is handed and a
+	# forward walk over a shrinking array skips every other occupant.
+	for i in range(b.garrison.size() - 1, -1, -1):
+		var u := w.get_entity(int(b.garrison[i]["id"])) as SimUnit
+		if u == null:
+			b.garrison.remove_at(i)
+			continue
+		if not w.ungarrison_unit(b, u):
+			# Could not be placed. Drop the entry by hand so the list does not keep a
+			# unit that is about to be a corpse, and let it die where it stands.
+			b.garrison.remove_at(i)
+			u.garrisoned_in = 0
+		if u.alive:
+			u.take_damage(u.hp, 0)

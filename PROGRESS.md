@@ -26,9 +26,15 @@ triggers in `data/ai_*.json` instead of a script of timed steps. The owner's sum
 it matters — *"the update system support customization and supports random maps, thats the
 big win from this update."*
 
-**What is next is features rather than repair**: 4.8 garrison, 2.4d Archipelago, 8.8's [X]
-button, and then 9.3 `TechSystem`, which moved up because ages now cost resources and the
-tech tree is what the age ladder is *for*.
+**What is next is features rather than repair**: 2.4d Archipelago, 8.8's [X] button, and
+then 9.3 `TechSystem`, which moved up because ages now cost resources and the tech tree is
+what the age ladder is *for*.
+
+**4.8 garrison and 4.9 landed 2026-08-27.** Towers and the castle hold units (5/5/15,
+nothing else — walls ruled out by the owner), garrisoned units heal 1 hp per 5 ticks and
+die with the building, and **buildings can attack for the first time**: each garrisoned
+archer adds half its own damage to the tower's shot. Siege out-ranges every tower on
+purpose. It moved the AI ladder's tick counts, because the AI builds towers — see BUGS.md.
 
 ---
 
@@ -43,7 +49,7 @@ real work remains · ⛔ not started
 | 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet |
 | 2 | Map | 🟢 | **2.4c save map**; **2.4d Archipelago** (new, specified) |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
-| 4 | Units | 🟡 | **4.8 garrison → 4.9 defensive bonus**, 4.10 abilities, 4.12 stances, 4.14 formations. 4.13 needs only the siege pack/unpack machine |
+| 4 | Units | 🟡 | **4.8/4.9 done 2026-08-27** — garrison, and buildings that shoot. Left: 4.10 abilities, 4.12 stances, 4.14 formations. 4.13 needs only the siege pack/unpack machine |
 | 5 | Buildings | 🟡 | **5.7 more buildings — art-paced, not code-paced**. 5.3 upgrades half-built: the wall→gate upgrade is the first real one |
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
@@ -64,21 +70,22 @@ rate-limited and incremental, and a clean checkout runs silently by design.
 
 ## What is actually next
 
-**1. The unit-speed balancing pass** (`BUGS.md`). Top of the list for a week. Walls,
-chokepoints, three predators, fleeing deer and driven livestock have all changed what "too
-fast" means since it was raised. **Nobody but the owner can do this one.**
+*The two items that used to head this list are both closed. **The unit-speed pass** was
+done 2026-08-23 and the owner confirmed it on 2026-08-27 — *"sound and speed is much
+better"*. **4.8 garrison** was done 2026-08-27, and it did not close the wall hole it was
+billed as closing: the owner ruled walls out of garrison, so 0 A.D.'s eight turret points
+per medium wall stay unused by decision rather than by omission.*
 
-**2. 4.8 garrison.** Unlocks 4.9, closes the largest hole in walls (0 A.D.'s medium wall
-declares eight turret points; ours hold nobody), and is what `garrison_cap` on every
-building def has been waiting for.
-
-**3. 2.4d Archipelago.** One island per player, a few sheep, nothing hostile. Specified in
+**1. 2.4d Archipelago.** One island per player, a few sheep, nothing hostile. Specified in
 `PLAN.md` §11.6, including the one hard part: `MapValidator` requires every start to reach
 every other **by land**, which an archipelago fails by definition, so that claim has to
 change rather than relax.
 
-**4. 8.8, the [X] button.** Small, and the only item the owner reported from playing the
+**2. 8.8, the [X] button.** Small, and the only item the owner reported from playing the
 current build.
+
+**3. 9.3 `TechSystem`.** The biggest genuinely unstarted phase, and it moved up because
+ages now cost resources — which makes the tech tree what the age ladder is *for*.
 
 ---
 

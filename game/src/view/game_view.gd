@@ -8,7 +8,7 @@ extends Node2D
 ## What tapping something should lead to (PLAN.md 4.5): NONE clears the
 ## selection, SELECT reselects (own unit, or own building with nothing to send
 ## it), GATHER/BUILD/MOVE/ATTACK are the four orders a tap can issue.
-enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK }
+enum TapAction { NONE, SELECT, GATHER, BUILD, MOVE, ATTACK, GARRISON }
 
 ## Forces a unit adjacent to a building to Y-sort after it (see
 ## apply_snapshot()), regardless of how the footprint-corner math alone would
@@ -332,6 +332,22 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# wire's Strings, because everything downstream compares against
 			# StringName literals and a String never matches one.
 			"queue": _names(entry.get("queue", [])),
+			# WHO IS GARRISONED (4.8). `garrison_count` is what the Ungarrison button's
+			# badge reads, and it survives the fog strip's removal of the roster -- a
+			# remembered enemy tower reports neither, which reads as an empty one.
+			# 0 on units and resource nodes, which is correct rather than merely
+			# harmless: nothing can be garrisoned inside a unit.
+			"garrison_count": int(entry.get("garrison_count", 0)),
+			# The occupants' def ids, so each garrison slot can crop that unit's own
+			# portrait -- the same reason `queue` above carries them, and through the
+			# same String -> StringName conversion, because everything downstream
+			# compares against StringName literals and a String never matches one.
+			#
+			# DEF IDS AND NOT ENTITY IDS, and that is a wire decision rather than an
+			# oversight: a garrisoned unit is not in the snapshot, so sending its id
+			# would tell a client about an entity it is otherwise not being told about.
+			# `UngarrisonCommand` therefore names a SLOT.
+			"garrison": _names(entry.get("garrison", [])),
 			# Present only on buildings; SimBuilding.Phase.COMPLETE elsewhere, so a
 			# unit or resource node always reads as "not something to build" without
 			# its own guard (4.5's build-assist tap needs to tell a foundation from
@@ -701,6 +717,19 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 		# so its panel and health stay reachable.
 		if has_movable_selection and _is_gatherable_building(f):
 			return TapAction.GATHER
+		# A TOWER OR CASTLE WITH ROOM IN IT is a thing to go inside (4.8), and with
+		# units in hand tapping it garrisons them -- the same shape as the field
+		# immediately above, and the reason IDEA.md 4.8 asks for "the garrison action
+		# flash" rather than a button: the order is issued by the tap and `ActionFlash`
+		# says which one fired.
+		#
+		# ROOM IS CHECKED, not just capacity, and that is the rule this file already
+		# follows for `Diplomacy` a few lines down: never offer an order the sim will
+		# refuse, because a refused command is invisible -- the player taps, nothing
+		# happens, and nothing says why. A FULL tower reselects instead, which is also
+		# how the player gets at its Ungarrison button.
+		if has_movable_selection and _has_garrison_room(f):
+			return TapAction.GARRISON
 		return TapAction.SELECT
 
 	if has_movable_selection and not bool(f["is_unit"]) \
@@ -731,6 +760,24 @@ func _is_gatherable_building(f: Dictionary) -> bool:
 		return false
 	var bd: BuildingDef = GameDataRegistry.building(StringName(f.get("def_id", &"")))
 	return bd != null and bd.is_gatherable()
+
+
+## Whether these facts describe a COMPLETE building with a free garrison slot
+## (PLAN.md 4.8). False for 28 of the 31 buildings, because `garrison_cap` is 0 on
+## all of them -- which is how "walls hold nobody" and "a house is not a shelter"
+## reach the tap without either being named here.
+##
+## THE CAP COMES FROM THE DEF AND THE COUNT FROM THE WIRE, which is the same division
+## `_is_gatherable_building` above draws: the snapshot carries what is true right now
+## and the registry answers what a thing is capable of. Sending the cap as well would
+## be one more int per building per tick to say something the client already has.
+func _has_garrison_room(f: Dictionary) -> bool:
+	if int(f.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		return false
+	var bd: BuildingDef = GameDataRegistry.building(StringName(f.get("def_id", &"")))
+	if bd == null or bd.garrison_cap <= 0:
+		return false
+	return int(f.get("garrison_count", 0)) < bd.garrison_cap
 
 
 ## The selected entities that can actually be given a move order (PLAN.md 3.6).

@@ -35,6 +35,15 @@ signal train_requested(building_id: int, unit_def_id: StringName)
 ## Cancel the production entry at `index` (always 0 today -- the front entry).
 signal cancel_requested(building_id: int, index: int)
 
+## Turn a garrison out of `building_id` (PLAN.md 4.8) -- the occupant in slot
+## `index`, or **everybody** when `index` is `UngarrisonCommand.ALL` (-1).
+##
+## Mirrors `cancel_requested` deliberately, down to naming a SLOT rather than a unit:
+## both are "the player tapped the third cell of a list this panel drew", and neither
+## has an entity id to send. `UngarrisonCommand`'s header has why that is a wire
+## decision rather than a convenience.
+signal ungarrison_requested(building_id: int, index: int)
+
 ## Enter placement mode for `def_id` (5.1) -- the villager Build action's grid.
 signal place_requested(def_id: StringName)
 
@@ -344,6 +353,15 @@ func _on_detail_pressed(action: HudAction) -> void:
 		return
 	if id.begins_with("cancel:") and _building_id != 0:
 		cancel_requested.emit(_building_id, int(id.trim_prefix("cancel:")))
+		return
+	# `ungarrison:all` and `ungarrison:<index>` (4.8). "all" is checked as a STRING
+	# rather than relying on `int("all")` returning 0 -- which it does, and which would
+	# quietly eject the first occupant instead of the lot. That is the sort of bug a
+	# green test suite never notices, because both paths eject somebody.
+	if id.begins_with("ungarrison:") and _building_id != 0:
+		var which := id.trim_prefix("ungarrison:")
+		ungarrison_requested.emit(_building_id,
+				UngarrisonCommand.ALL if which == "all" else int(which))
 
 
 ## The authored name from units.json / buildings.json, falling back to a tidied

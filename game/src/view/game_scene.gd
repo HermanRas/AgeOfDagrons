@@ -291,6 +291,7 @@ func _build_hud() -> void:
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_panel.train_requested.connect(_on_train_requested)
 	_panel.cancel_requested.connect(_on_cancel_requested)
+	_panel.ungarrison_requested.connect(_on_ungarrison_requested)
 	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
 	_panel.place_requested.connect(_enter_placement)
 	_panel.action_requested.connect(_on_action_requested)
@@ -926,6 +927,14 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 			Net.submit_command(AttackCommand.new(owner, movable, picked))
 			_flash.play(ActionFlash.Kind.ATTACK,
 					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
+		GameView.TapAction.GARRISON:
+			# Sent WHOLE rather than trimmed to the free slots (4.8). The tower may fill
+			# up while they walk and `GarrisonSystem` stands the latecomers down where
+			# they arrive; deciding here how many will fit would be the client guessing
+			# at a state several seconds in the future.
+			Net.submit_command(GarrisonCommand.new(owner, movable, picked))
+			_flash.play(ActionFlash.Kind.GARRISON,
+					Iso.tile_centre_to_world(_view.facts_for(picked)["tile"]))
 		GameView.TapAction.MOVE:
 			# SINGLE TAP MOVES, DOUBLE TAP LETS GO. The two were the other way round
 			# until 2026-08-22; see `_ground_tap`'s header for what that cost and why
@@ -1454,6 +1463,19 @@ func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 
 func _on_cancel_requested(building_id: int, index: int) -> void:
 	Net.submit_command(CancelProductionCommand.new(Net.local_player_id(), building_id, index))
+
+
+## Turn a garrison out (PLAN.md 4.8). `index` is a slot, or `UngarrisonCommand.ALL`
+## for the lot -- passed straight through, because the panel and the command agree on
+## what -1 means and nothing here needs to interpret it.
+##
+## No toast on refusal, matching `_on_cancel_requested`: the only way this is refused
+## is an empty building or a stale index, and both are already invisible in the panel
+## the player is looking at. A unit that cannot be let out because the tower has been
+## walled in DOES deserve one, and does not get it -- the sim refuses per unit inside
+## `apply()` and the command has no way to report back. Logged as the known gap it is.
+func _on_ungarrison_requested(building_id: int, index: int) -> void:
+	Net.submit_command(UngarrisonCommand.new(Net.local_player_id(), building_id, index))
 
 
 func _on_debug_destroy_requested(target_id: int) -> void:

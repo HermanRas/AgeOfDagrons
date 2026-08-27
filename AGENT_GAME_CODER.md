@@ -100,6 +100,7 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_walls.tscn      # both wall axes + gate
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
+& $godot --path game res://dev_preview/preview_garrison.tscn   # 4.8/4.9, six screenshots
 
 # The facing trio — how a re-baked atlas gets checked (see §7, the mirror item)
 & $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
@@ -140,6 +141,23 @@ it. Two things it does that are worth copying:
 - **It prints each projectile's screen position.** They are 2–8 px; at 1:1 you cannot
   see one and cannot tell "not drawn" from "too small to notice". Crop to the printed
   coordinate at 8× and the question answers itself.
+
+`preview_garrison` earns its place the way `preview_projectiles` does, and it proved it on
+the first run: **it found a bug 60 green tests had missed** (a tower shooting the
+livestock — see §6) purely because the log said what the tower was aiming at. Three things
+worth copying out of it:
+
+- **It refuses ground that has a STRANGER standing near it**, not just ground that is
+  unoccupied. `can_place_building` asks the *map*, and units are not in map occupancy — so
+  the first version put the tower one tile from a **bear**, which has 130 hp, and
+  nearest-target-wins meant the raider five tiles out was never touched. The measurement
+  was worthless and every assertion in it was true.
+- **It prints the declared damage AND the landed damage.** A guard tower with three archers
+  declares 14 and lands 13, because the target is a militia and militia carry pierce
+  armour. Printing one number would have read as the bonus arithmetic being wrong.
+- **It shoots the panel one phase AFTER pressing the button.** §5's rule is not only about
+  commands: pressing an `expands` action and photographing the same frame produced a panel
+  with an **empty detail grid** while the log correctly listed four slots in it.
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
 
@@ -253,6 +271,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **Staged atlases lag `art_work/out` silently** | A stale-but-valid atlas renders fine and is simply the wrong actor. Read `attribution.actor` out of the staged `.atlas.json` to tell — filenames and mtimes will not show it. |
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |
 | **A visual id is not a filename** | `vis.field_1` is baked as `vis.field_age2`, `vis.field_4` as `vis.farm`. The seam maps ids to paths precisely so ids outlive the art side's naming — and never rename a staged file to match, because `stage_atlases.py` will put it back. |
+| **`Diplomacy.is_enemy` is "MAY I attack that", NOT "am I at war with that"** | The two differ on gaia, and anything that acquires a target **unasked** needs the second question. A sheep *may* be attacked — hunting is how a deer becomes food — so 4.9's tower auto-acquire shipped shooting the livestock, including a player's own herd (a herded sheep is still gaia's; `herded_by` is separate from `owner_id` by design). It presented as a tower that did not work: nearest-target-wins spent every shot on an animal two tiles away and never reached the raider five out. `CombatSystem._is_at_war_with` is the predicate now, and **`AISystem._nearest_enemy` has kept its own copy for exactly this reason all along** — its comment says so and it was right. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
 | **A verification that cannot see the fault it is for** | The facing check was "column 0 a face, column 4 a back" — **the two columns a mirror about N–S leaves alone**. A mirrored roster passed it twice and a 242-atlas re-bake was spent on the wrong diagnosis. Before trusting any check, ask which failures it is *blind* to; a green check on a fault it cannot express is worse than no check, because it ends the investigation. |
 | **A facing that is drawn wrong is not necessarily set wrong** | Two different faults, two different owners. `preview_work_facing` prints the sim's `facing` beside what `SimUnit.facing_toward` would pick now: **STALE means nothing turned the unit** (a sim gap — until 2026-08-27 only `MovementSystem` and `CombatSystem` ever wrote `facing`, so gathering and building never turned anybody), while numbers that agree with a picture that disagrees is the atlas. Settle which one before writing anything. |
@@ -274,10 +293,10 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**331 atlases staged.** 78 test files, **1272 tests, 201,669 assertions, all
-passing** — measured 2026-08-27, not quoted. The figures before these (1232/76, and
-293/71/1163 before that) were both stale within days; re-measure rather than trusting
-this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
+**331 atlases staged.** 80 test files, **1353 tests, 202,395 assertions, all
+passing** — measured 2026-08-27 after 4.8/4.9, not quoted. The figures before these
+(1272/78, 1232/76, and 293/71/1163) were each stale within days; re-measure rather than
+trusting this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
 2026-08-27** from the facing re-bake; the other 89 (buildings, walls, terrain) were already
 correct and are untouched since 2026-08-17.
 
@@ -288,6 +307,33 @@ timed age-advance, fog of war, an enforced population cap, conquest win
 conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
 and tech-tree wireframes, and settings (§8.2b).
+
+**4.8 GARRISON AND 4.9 CLOSED 2026-08-27.** Tap your own tower or castle with units in hand
+and they walk in; `garrison_cap` finally means something after being declared on all 31
+buildings since 0.4 and read by nothing. Five things worth knowing before touching it:
+
+- **Who: the two towers (5) and the castle (15), and nothing else.** The owner ruled walls
+  out by name and the "only" was exclusive, so town centre 15, barracks 10 and monastery 10
+  all went to **0** — IDEA.md 4.9's sketch numbers, which nothing had ever read. **A
+  villager under attack has nowhere to hide, deliberately**: garrison here makes a tower
+  shoot harder, it is not a bunker.
+- **`SimUnit.garrisoned_in` is the first field that takes an entity OFF THE MAP without
+  despawning it.** It stays in `entities` (so population still charges for it), leaves
+  `SpatialHash` (so nothing can find, target or tap it), and is **skipped by
+  `SnapshotSystem.build` entirely** — which is where "removed from the world map" actually
+  happens, and it buys the sprite release, the deselection and the fog circle for one line.
+- **BUILDINGS CAN ATTACK NOW**, which nothing could before: `BuildingDef` carries UnitDef's
+  five attack fields under the same JSON keys, and `CombatSystem.process_tick` has a second
+  branch. Only three defs have one (watch 6/6, guard 8/7, castle 12/8, all cooldown 20).
+  The garrison bonus is **half each archer's damage, floored, added once per shot** —
+  `attack.range > 0` is the "is an archer" test, so every melee unit gives 0 for free.
+- **The range ladder is design content, not tuning.** Infantry is out-ranged by every tower;
+  **siege out-ranges every tower**, which is the only answer to a loaded castle that does
+  not cost an army. `unit.galleon` at 7 is the one deliberate exception and it is a ship.
+- **A building MUST auto-acquire** — nothing can order one to attack — so §4.13's
+  no-auto-acquire rule does not apply and the two share no code. That is also where the one
+  real bug was: see the `Diplomacy.is_enemy` row in §6, found by `preview_garrison` and not
+  by any of the 60 tests written alongside it.
 
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
@@ -438,7 +484,9 @@ plugs in; read the row rather than re-deriving it:
   `building.guard_tower`; what is missing is anything that detects a corner), **no
   diagonal walls** (six of the eight baked directions are unreachable — a [9,2] box does
   not tile a square grid at 45°),
-  **no garrison on a wall** (4.8), and **an open gate is open to everyone**
+  **no garrison on a wall — now a DECISION, not a gap** (the owner ruled walls out of 4.8
+  by name on 2026-08-27, so 0 A.D.'s eight turret points per medium wall stay unused; the
+  wall turret you *can* garrison is `building.guard_tower`), and **an open gate is open to everyone**
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
@@ -578,10 +626,14 @@ plugs in; read the row rather than re-deriving it:
    call), or the AI's step budget. **Do not move two of them at once** or neither is
    measurable — the BUGS.md baseline table is the instrument, and all five seeds want
    re-measuring either side of the change.
-2. **4.8 garrison**, which unlocks 4.9 and closes the largest hole in walls: 0 A.D.'s
-   medium wall declares eight turret points and ours hold nobody. It is what
-   `garrison_cap` on every building def has been waiting for, and it settles §13.2
-   item 4b (whether `act_enter`/`act_garrison` are one concept or two).
+   *(This item is also now stale on one point: the AI ladder was re-measured on
+   2026-08-27 after buildings gained an attack, since the AI builds towers. Every winner
+   held; `easy v normal` went t11366 → t18351. The new table is in BUGS.md, and it is the
+   baseline any AI change is measured against.)*
+2. ~~**4.8 garrison**~~ — **DONE 2026-08-27, with 4.9.** It settled §13.2 item 4b (one
+   concept; `act_leave` left as the spare for boarding a transport) and it did **not**
+   close the wall hole it was billed as closing: the owner ruled walls out of garrison, so
+   0 A.D.'s eight turret points per medium wall stay unused by decision. See §7.
 2. **2.4d Archipelago** (§11.6). The content is nearly free — `PREDATORS` is keyed by
    map type and read with `.get(type, {})`, so an unlisted type gets no predators
    without a line of code. The work is that `MapValidator` requires every start to

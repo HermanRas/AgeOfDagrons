@@ -7,13 +7,18 @@
 ## keeps `SelectionPanel` down to "draw what this returns", the same division
 ## `GameView.tap_action()` already draws between deciding and doing.
 ##
-## MVP reality check: only move, stop, gather, build, train, cancel-production
-## and destroy have commands behind them (`src/sim/commands/`). Attack, repair,
-## research/upgrades, garrison and formations do not -- `SimUnit.Task` declares
-## ATTACK/GARRISON/STAND_GROUND/FLEE but only IDLE/MOVE/GATHER/RETURN/BUILD are
-## implemented. Those are emitted here as `enabled = false` placeholders so the
-## panel reads finished; see `HudAction`'s header for why that beats omitting
-## them.
+## Reality check, kept current: move, stop, gather, build, train,
+## cancel-production, attack, upgrade, gate, GARRISON and destroy all have commands
+## behind them (`src/sim/commands/`). **Repair and formations do not**, and
+## `SimUnit.Task` still declares STAND_GROUND and FLEE with no verb here. Those are
+## emitted as `enabled = false` placeholders so the panel reads finished; see
+## `HudAction`'s header for why that beats omitting them.
+##
+## This list said garrison was unimplemented until 2026-08-27, when 4.8 landed. Note
+## which side of it is here: the GARRISON order itself is issued by a TAP on the
+## building (`GameView.tap_action`), exactly as gather and build-assist are, so the
+## action in this file is the one on the BUILDING -- who is inside, and letting them
+## out again.
 class_name SelectionActions
 extends RefCounted
 
@@ -113,6 +118,13 @@ static func details_for(action_id: StringName, facts: Dictionary,
 	# away the buildings page 2 exists to show.
 	if action_id == &"build":
 		return _buildable_details(age)
+	# The garrison is the SECOND list that can outgrow the grid, and it is why this
+	# one is uncapped too: a full castle is 15 occupants plus the Empty slot, which is
+	# 16 against MAX_DETAILS' 12. Capped, the last four archers would be silently
+	# un-ejectable -- the exact failure `_buildable_details` records having had with
+	# the town centre falling off the end of the build list.
+	if action_id == &"garrison":
+		return _garrison_details(facts)
 	if action_id == &"move":
 		return _capped_details(_formation_details())
 
@@ -152,6 +164,26 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		var locked := bool(facts.get("gate_locked", false))
 		out.append(HudAction.new(&"gate", "Open Gate" if locked else "Close Gate",
 				ICONS.get(&"exit" if locked else &"enter", ""), true))
+
+	# WHO IS INSIDE, AND A WAY OUT (PLAN.md 4.8). Only for a building that can hold
+	# anybody at all -- three of the 31 -- so 28 buildings are unchanged and the
+	# castle's row stays inside its 8 slots (4 trains + this + upgrade + repair +
+	# destroy = 8 exactly; `_capped` would have dropped Destroy at 9).
+	#
+	# The badge is the count against the cap, which is the only place in the HUD that
+	# says how full a tower is. Disabled at 0 rather than hidden, so the slot does not
+	# move under the player's thumb as archers walk in and out -- the same reasoning
+	# `HudAction`'s header gives for showing unimplemented verbs disabled.
+	#
+	# `expands`, so tapping it lists the occupants and one of them can be picked out
+	# individually; the ORDER goes out from the detail grid, not from this button.
+	if bd.garrison_cap > 0 and int(facts.get("phase", -1)) == SimBuilding.Phase.COMPLETE:
+		var inside := int(facts.get("garrison_count", 0))
+		var g := HudAction.new(&"garrison", "Garrison",
+				ICONS.get(&"garrison", ""), inside > 0)
+		g.badge = "%d/%d" % [inside, bd.garrison_cap]
+		g.expands = true
+		out.append(g)
 
 	for unit_def_id in bd.trains:
 		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
@@ -313,6 +345,41 @@ static func _queue_details(facts: Dictionary) -> Array[HudAction]:
 		# The front entry is the one actually building; show its progress.
 		if i == 0:
 			a.badge = "%d%%" % roundi(float(facts.get("queue_fraction", 0.0)) * 100.0)
+		out.append(a)
+	return out
+
+
+## Who is garrisoned, one slot each, plus an "Empty" slot that turns the lot out
+## (PLAN.md 4.8). Tapping an occupant ejects that one.
+##
+## THE EMPTY SLOT COMES FIRST AND IS `ungarrison:all`. Turning everybody out is the
+## common action -- it is what a player does when the raid is over -- and it must not
+## be fifteen taps. It lives in the DETAIL grid rather than being what the Garrison
+## action itself does, because that action has to expand to show the roster at all,
+## and an action cannot both expand and issue an order (`SelectionPanel`'s
+## `_on_action_pressed` treats `expands` as a view toggle and returns).
+##
+## Occupant slots carry the unit's def id as `payload`, so `ActionSlot` crops that
+## unit's own portrait -- the same mechanism the production queue uses, and the reason
+## `SimBuilding.to_snapshot` sends def ids for the garrison at all.
+##
+## INDEXED, NOT NAMED BY ENTITY. `UngarrisonCommand`'s header has the argument: a
+## garrisoned unit is not in the snapshot, so the client has no id to send, and a
+## stale index ejecting the wrong archer is an accepted and recoverable cost.
+static func _garrison_details(facts: Dictionary) -> Array[HudAction]:
+	var out: Array[HudAction] = []
+	var inside: Array = facts.get("garrison", [])
+	var count := int(facts.get("garrison_count", inside.size()))
+	if count <= 0:
+		return out
+
+	out.append(HudAction.new(&"ungarrison:all", "Empty", ICONS.get(&"exit", ""), true))
+	for i in range(count):
+		var unit_def_id: StringName = inside[i] if i < inside.size() else &""
+		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
+		var a := HudAction.new(&"ungarrison:%d" % i,
+				ud.name if ud != null and not ud.name.is_empty() else "Garrisoned")
+		a.payload = unit_def_id
 		out.append(a)
 	return out
 

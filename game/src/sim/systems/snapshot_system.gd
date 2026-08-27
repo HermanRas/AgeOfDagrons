@@ -64,6 +64,19 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 	var viewer := w.player_for(player_id)
 	var updated: Array[Dictionary] = []
 	for e in w.entities.values():
+		# A GARRISONED UNIT IS NOT ON THE WIRE AT ALL (PLAN.md 4.8), not even to its own
+		# owner. That is what "removed from the world map" means in IDEA.md 4.8, and
+		# doing it here rather than in the view buys three things for one line:
+		# `GameView`'s forget pass releases the sprite, its `retain_only` pass drops the
+		# unit from the selection, and `ClientFog` stops lighting a circle around a unit
+		# that is indoors. A view-side "draw it invisibly" would have had to do all three
+		# by hand and would have left it tappable.
+		#
+		# The building reports it instead -- `garrison_count` and `garrison` on
+		# `SimBuilding.to_snapshot()` -- which is also the only way the client could
+		# learn about it, since it has no entity to attach the fact to.
+		if e is SimUnit and (e as SimUnit).garrisoned_in != 0:
+			continue
 		var entry := _entry_for(w, viewer, e)
 		if not entry.is_empty():
 			updated.append(entry)
@@ -231,6 +244,13 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 ##                 the health bar when max_hp is 0.
 ##   queue         what they are training, and how far along, is the most valuable
 ##                 thing on the wire.
+##   garrison / garrison_count
+##                 how many units are in the enemy castle you last saw an hour ago,
+##                 and which units they are, is the same class of fact as their
+##                 production queue and a better one to have: it is the difference
+##                 between a tower worth walking past and one that will shoot for 18.
+##                 Both go, not just the roster -- a headcount alone still prices the
+##                 shot, because the bonus is per occupant.
 ##   amount        how much wood is left in a forest you last saw an hour ago is a
 ##                 running commentary on somebody else's economy.
 ##   build_fraction  a foundation going up is live. `phase` STAYS, because the view
@@ -245,7 +265,8 @@ static func _entry_for(w: SimWorld, viewer: SimPlayer, e: SimEntity) -> Dictiona
 static func _remembered(e: SimEntity) -> Dictionary:
 	var d := e.to_snapshot()
 	for key in ["hp", "max_hp", "queue", "queue_len", "queue_fraction", "anim",
-			"carry_kind", "carry_amount", "task", "amount", "build_fraction"]:
+			"carry_kind", "carry_amount", "task", "amount", "build_fraction",
+			"garrison", "garrison_count"]:
 		d.erase(key)
 	d["remembered"] = true
 	return d

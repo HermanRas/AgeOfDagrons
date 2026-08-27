@@ -95,8 +95,13 @@ func setup(cfg: MatchConfig) -> void:
 	# and -- for any shot at the low end of the range -- landed and despawned inside a
 	# single tick, so it never appeared in a snapshot at all. Every test passed and
 	# nothing was ever drawn.
+	# GarrisonSystem (4.8) sits with Gather and Build because it is the same kind of
+	# thing: a unit that walked somewhere and acts on arrival. It is BEFORE
+	# CombatSystem on purpose -- an archer admitted this tick is already adding its
+	# damage to the tower's shot on this tick, which is the difference between "the
+	# reinforcements arrived" and "the reinforcements arrived a moment ago".
 	_systems = [CommandSystem.new(), PathSystem.new(), TaskSystem.new(),
-			GatherSystem.new(), BuildSystem.new(),
+			GatherSystem.new(), BuildSystem.new(), GarrisonSystem.new(),
 			# WildlifeSystem BEFORE CombatSystem, so a wolf that picks a target this
 			# tick bites on this tick. It only ever writes the same task an
 			# AttackCommand would, which is why nothing in combat knows it exists.
@@ -228,6 +233,11 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 		b.vision_range = d.los
 		b.provides_pop = d.provides_pop
 		b.garrison_cap = d.garrison_cap
+		b.attack_damage = d.attack_damage
+		b.attack_type = d.attack_type
+		b.attack_range = d.attack_range
+		b.attack_cooldown_ticks = d.attack_cooldown_ticks
+		b.attack_projectile = d.attack_projectile
 		b.build_total = d.build_time_ticks
 		# A field carries a crop; every other building carries nothing and these
 		# stay at their zero defaults.
@@ -278,6 +288,93 @@ func set_gate_locked(b: SimBuilding, locked: bool) -> void:
 	if blocks:
 		_evict_from_footprint(rect)
 	_occupancy_changed(rect)
+
+
+## Put `u` inside `b` (PLAN.md 4.8). True if it went in.
+##
+## THE WHOLE MECHANISM IS `spatial.remove()` WITHOUT `despawn()`, and that is worth
+## saying plainly because it is the first time anything in the project takes an
+## entity off the map without deleting it. The unit stays in `entities` -- so
+## `PopulationSystem`, which recounts from scratch every tick, keeps charging for it,
+## and hiding fifteen units in a castle does not buy fifteen free villagers -- while
+## dropping out of `SpatialHash` makes it invisible to every query that matters:
+## `CombatSystem._reacquire` cannot target it, `WildlifeSystem` cannot pick it as
+## prey, and `GameView.pick()` cannot tap it.
+##
+## THE ROUTE IS CANCELLED AND THE TASK RETIRED. `stop()` rather than `halt()`: a unit
+## that has arrived is done, and leaving GARRISON set would have `GarrisonSystem`
+## re-admitting it every tick for as long as it stood there. It also matters that
+## `paths.cancel` runs -- a queued search whose unit is no longer on the map would be
+## written onto a route nobody can walk.
+##
+## Refused rather than clamped when there is no room, so the caller can say so. Both
+## callers (`GarrisonCommand.validate` and `GarrisonSystem`) ask `has_garrison_room()`
+## first; this asks again because it is the last gate before the state changes and
+## the two callers run several ticks apart -- a fifth unit walking to a tower that
+## filled up while it was walking is the ordinary case, not an edge one.
+func garrison_unit(b: SimBuilding, u: SimUnit) -> bool:
+	if b == null or u == null or not u.alive:
+		return false
+	if u.garrisoned_in != 0 or not b.has_garrison_room():
+		return false
+
+	u.garrisoned_in = b.id
+	b.garrison.append({"id": u.id, "def_id": u.def_id})
+	u.stop()
+	if paths != null:
+		paths.cancel(u.id)
+	# The one line that takes it off the map. After `stop()`, so nothing can queue a
+	# fresh search between the two.
+	spatial.remove(u.id)
+	# Idle rather than whatever it walked in playing. Nothing draws a garrisoned unit,
+	# but it is drawn again the moment it comes out and a soldier that reappears
+	# mid-stride reads as a teleport.
+	u.anim = &"idle"
+	return true
+
+
+## Take `u` out of whatever it is inside and stand it beside the building. True if it
+## came out.
+##
+## PLACED BY `find_free_adjacent`, NOT `_step_aside_tile`, and the two are not
+## interchangeable -- `_step_aside_tile`'s own header draws the distinction. It
+## answers "nearest tile to where this unit already is", which a garrisoned unit does
+## not have: its `pos` is wherever it stood when it walked in, possibly minutes ago
+## and possibly under somebody's house by now. `find_free_adjacent` answers "somewhere
+## to put a unit coming out of this building", which is the same question
+## `ProductionSystem` asks of every unit it trains, and it means a unit always
+## reappears touching the building it was inside.
+##
+## SEVERAL UNITS CAN LAND ON ONE TILE, and that is not a bug here for the same reason
+## it is not one in `ProductionSystem`: units are not written into map occupancy
+## (SimMap's static-footprint rule), so `find_free_adjacent` reports free *terrain*
+## and hands the same tile to each. `SeparationSystem` pushes them apart on the same
+## tick, sorted by id, which is exactly how a barracks emptying its queue already
+## behaves.
+##
+## SEALED IN IS A REAL OUTCOME AND IT REFUSES RATHER THAN TELEPORTING. If the scan
+## finds nowhere legal at all -- a tower whose owner walled it in afterwards -- the
+## unit stays inside and the command does nothing. The alternative, dropping it on an
+## impassable tile, is the entombment `_evict_from_footprint`'s header spent a
+## paragraph on: `AStarGrid2D` will not plan a route out of a solid cell, so the unit
+## would be stuck for the rest of the match with nothing to say why.
+func ungarrison_unit(b: SimBuilding, u: SimUnit) -> bool:
+	if b == null or u == null:
+		return false
+	var index := b.garrison_index(u.id)
+	if index < 0:
+		return false
+
+	var to := map.find_free_adjacent(b.footprint_rect(), u.domain)
+	if to.x < 0:
+		return false
+
+	b.garrison.remove_at(index)
+	u.garrisoned_in = 0
+	u.pos = to * SUBTILE + Vector2i(SUBTILE / 2, SUBTILE / 2)
+	u.task_target_tile = to
+	spatial.insert(u.id, to)
+	return true
 
 
 ## Turn a standing building into a different one WHERE IT STANDS, keeping its id
@@ -339,6 +436,11 @@ func convert_building(b: SimBuilding, new_def_id: StringName,
 	b.vision_range = d.los
 	b.provides_pop = d.provides_pop
 	b.garrison_cap = d.garrison_cap
+	b.attack_damage = d.attack_damage
+	b.attack_type = d.attack_type
+	b.attack_range = d.attack_range
+	b.attack_cooldown_ticks = d.attack_cooldown_ticks
+	b.attack_projectile = d.attack_projectile
 	b.build_total = d.build_time_ticks
 	b.gather_kind = d.gather_kind
 	b.gather_amount = d.gather_amount
@@ -861,7 +963,14 @@ func state_hash() -> int:
 					# out of step would land their blows on different ticks and then
 					# disagree about who died first -- `hp` reports that only once it
 					# has already happened, and by then neither can say when they parted.
-					e.gather_cooldown, e.attack_cooldown])
+					e.gather_cooldown, e.attack_cooldown,
+					# WHICH BUILDING IT IS INSIDE (4.8). This is the one field that takes
+					# a unit off the map without despawning it, so two hosts disagreeing
+					# about it disagree about the population count, about what the
+					# spatial index can find, and about how hard a tower shoots -- and
+					# `pos` cannot report any of that, because a garrisoned unit's `pos`
+					# is deliberately stale and never moves.
+					e.garrisoned_in])
 		elif e is SimBuilding:
 			# BuildSystem (4.4) now advances build_progress at runtime rather than
 			# only at spawn, and ProductionSystem (5.4) advances queue -- two
@@ -881,8 +990,20 @@ func state_hash() -> int:
 			# and diverge in position a tick later, which `pos` reports long after the
 			# cause. `facing` rides along for the reason `SimUnit.facing` does: it is
 			# placement state that nothing recomputes, so a wrong one stays wrong.
+			# WHO IS INSIDE, as a list and not a count (4.8). A count would catch two
+			# hosts that admitted a different NUMBER of units and miss two that admitted
+			# a different SET -- and the set is what prices the tower's shot
+			# (`attack_bonus` is half of each occupant's damage), so two clients holding
+			# the same five slots filled by different units would hash identically while
+			# their towers dealt different damage. Ids and def ids both, in insertion
+			# order, because the eject-by-index command makes the order load-bearing too.
+			var g: Array = []
+			for entry in e.garrison:
+				g.append([entry.get("id", 0), entry.get("def_id", &"")])
+			# The building's own firing cooldown (4.9), for the reason SimUnit's is
+			# hashed: a tick's difference in rate of fire decides who dies first.
 			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left,
-					e.gather_amount, e.facing, e.gate_locked])
+					e.gather_amount, e.facing, e.gate_locked, g, e.attack_cooldown])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

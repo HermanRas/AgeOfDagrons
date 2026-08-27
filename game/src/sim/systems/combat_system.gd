@@ -46,10 +46,133 @@ const MIN_DAMAGE := 1
 const REACQUIRE_RADIUS := 2
 
 
+## How far a building looks for something to shoot at, as a multiplier on its own
+## `attack_range`. 1 -- it shoots what it can reach and nothing further.
+##
+## Named rather than inlined because the temptation is to make it wider than the
+## reach so a tower "notices" an enemy walking up. It must not be: a target chosen
+## outside reach cannot be hit, and the tower would spend every tick holding a target
+## it does nothing about, which is indistinguishable from being broken.
+const BUILDING_SIGHT := 1
+
+
 func process_tick(w: SimWorld) -> void:
 	for entry in w.entities.values():
 		if entry is SimUnit and entry.alive and entry.task == SimUnit.Task.ATTACK:
 			_process(w, entry)
+		elif entry is SimBuilding and entry.alive and entry.attack_damage > 0:
+			_process_building(w, entry)
+
+
+## A TOWER OR CASTLE SHOOTING WHATEVER COMES INTO RANGE (PLAN.md 4.9). New on
+## 2026-08-27; before it, buildings could only ever be targets, and this file's own
+## header said `armor` should be added to BuildingDef "the day buildings should
+## resist arrows" -- that day is still not today, only the other half arrived.
+##
+## **THIS IS AUTO-ACQUIRE, AND THE HEADER'S RULE AGAINST IT DOES NOT APPLY.** That
+## rule is about units: a unit fights what it was ORDERED to fight, because guessing
+## means every villager charging the first enemy that walks past. A building cannot be
+## ordered to attack anything -- there is no command that would name it as the
+## attacker, and no player would ever issue one per tower per fight -- so for a
+## building auto-acquire is not a shortcut past a decision, it is the only way the
+## data on the def can ever mean anything. Nothing here relaxes 4.12's stances, and
+## the two mechanisms share no code.
+##
+## THREE THINGS IT DELIBERATELY DOES NOT DO. It never chases, obviously. It never
+## fires on a foundation's behalf (`is_complete`), because a tower you have not
+## finished paying for should not defend you. And it does not pick BUILDINGS as
+## targets: a building cannot walk into range, so the only way a tower could be
+## shooting one is if somebody built next door, and a tower that opens fire on a
+## newly placed house across the border is a border war nobody declared.
+func _process_building(w: SimWorld, b: SimBuilding) -> void:
+	if b.attack_cooldown > 0:
+		b.attack_cooldown -= 1
+	if not b.is_complete():
+		return
+
+	var target := _nearest_hostile_unit(w, b)
+	if target == null:
+		return
+	if b.attack_cooldown > 0:
+		return
+
+	# THE GARRISON'S CONTRIBUTION IS ADDED HERE, once per shot (4.9). Fifteen archers
+	# in a castle are one heavier arrow every two seconds, not sixteen arrows -- see
+	# `SimBuilding.attack_bonus` for why that is the shape the owner asked for.
+	var damage := b.attack_damage + b.attack_bonus(w)
+	target.take_damage(_damage_after_armour(w, target, damage, b.attack_type), 0)
+	# After the damage and carrying none of it, exactly as a unit's shot is. A tower
+	# firing invisibly would be the "ranged combat resolved with no visible cause"
+	# problem the header describes, and worse here: there is no archer sprite drawing
+	# a bow to explain where the hit came from.
+	if b.attack_projectile != &"":
+		w.spawn_projectile(b.attack_projectile, b.owner_id, b.pos, target.pos)
+	b.attack_cooldown = maxi(1, b.attack_cooldown_ticks)
+
+
+## The nearest hostile UNIT within reach of `b`'s footprint, or null.
+##
+## Deterministic, and it has to be: a strict minimum over (distance, id) walked in
+## the order `entities_in_rect` happens to return, which is NOT sorted -- so the id
+## tie-break is what makes the answer independent of it. Two hosts whose towers shot
+## different targets would kill different units and diverge. Same shape as
+## `_reacquire` above, one field shorter because a building never prefers a unit over
+## a building: it only ever considers units.
+##
+## Queried as a RECT around the footprint rather than a radius from the centre, so
+## the box a castle scans matches the reach `tile_gap` then measures. A radius from
+## `b.tile()` would under-reach on the far side of a 7x7 by three tiles.
+func _nearest_hostile_unit(w: SimWorld, b: SimBuilding) -> SimEntity:
+	var reach := maxi(1, b.attack_range) * BUILDING_SIGHT
+	var rect := b.footprint_rect().grow(reach)
+
+	var best: SimEntity = null
+	var best_gap := 0
+	for e in w.entities_in_rect(rect):
+		if not (e is SimUnit):
+			continue
+		if not _is_at_war_with(w, e as SimUnit, b.owner_id):
+			continue
+		var gap := tile_gap(e.tile(), b.footprint_rect())
+		if gap > reach:
+			continue          # `grow` is a square; the reach test is the real bound
+		if best != null:
+			if gap > best_gap:
+				continue
+			if gap == best_gap and int(e.id) > best.id:
+				continue
+		best = e
+		best_gap = gap
+	return best
+
+
+## Whether a tower should open fire on `u` unasked.
+##
+## **`Diplomacy.is_enemy` IS THE WRONG QUESTION HERE, AND THE PREVIEW CAUGHT IT.** That
+## predicate answers *"may `player_id` attack this"* -- and the answer for a sheep is
+## yes, because hunting is how a deer becomes food (6.1a). Auto-acquire needs the other
+## question, *"who am I at war with"*, which is exactly the distinction
+## `AISystem._nearest_enemy` records having kept its own copy for: routing the AI's
+## target search through `Diplomacy` would march its army off to hunt bears.
+##
+## Using `is_enemy` here had a watch tower shooting the livestock. Worse, a HERDED sheep
+## is still gaia's -- `SimUnit.herded_by` is deliberately separate from `owner_id`
+## (6.5) -- so a player's own flock grazing past their own tower was slaughtered by it,
+## and `preview_garrison` found it by a side effect: the tower spent every shot on an
+## animal two tiles away and never touched the raider five tiles out, which is also how
+## an archer standing outside ended up dead.
+##
+## So: an enemy PLAYER's units always, and a gaia animal only if it is a PREDATOR.
+## `aggro_radius > 0` is the data already saying which animals pick fights (wolf, bear,
+## boar carry one; sheep, cattle and deer are 0), so a bear wandering into a settlement
+## is still shot -- which is what a watch tower is for -- and the flock is not.
+static func _is_at_war_with(w: SimWorld, u: SimUnit, owner_id: int) -> bool:
+	if not u.alive or u.owner_id == owner_id:
+		return false
+	if u.owner_id != 0:
+		return true
+	var d := w.unit_def(u.def_id)
+	return d != null and d.aggro_radius > 0
 
 
 func _process(w: SimWorld, u: SimUnit) -> void:
@@ -225,9 +348,24 @@ static func _rect_of(e: SimEntity) -> Rect2i:
 ## hidden in a system rather than a value in the data where it can be tuned. Add
 ## `armor` to BuildingDef the day buildings should resist arrows.
 static func _damage_against(w: SimWorld, target: SimEntity, def: UnitDef) -> int:
+	return _damage_after_armour(w, target, def.attack_damage, def.attack_type)
+
+
+## The same rule with the attacker's def unpacked into two plain values, so a
+## BUILDING's shot can go through it too (4.9).
+##
+## Split out rather than overloading `_damage_against`, which took a `UnitDef` and
+## could not have taken a `BuildingDef` without either a union type GDScript does not
+## have or a duplicate of the armour lookup. A duplicate is what the `Diplomacy`
+## header is a standing warning about: the same predicate written twice diverges the
+## first time either is corrected. One rule, two callers, and the garrison bonus is
+## added by the caller before it gets here -- armour applies to the total, so a
+## castle's 42 is blunted once rather than once per archer inside it.
+static func _damage_after_armour(w: SimWorld, target: SimEntity, damage: int,
+		attack_type: StringName) -> int:
 	var armour := 0
 	if target is SimUnit:
 		var td := w.unit_def((target as SimUnit).def_id)
 		if td != null:
-			armour = td.armor_pierce if def.attack_type == &"pierce" else td.armor_melee
-	return maxi(MIN_DAMAGE, def.attack_damage - armour)
+			armour = td.armor_pierce if attack_type == &"pierce" else td.armor_melee
+	return maxi(MIN_DAMAGE, damage - armour)

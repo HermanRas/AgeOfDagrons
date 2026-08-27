@@ -981,6 +981,27 @@ func validate() -> void:
 		for kind in b.drop_off:
 			if not GameDefs.RESOURCE_KINDS.has(kind):
 				load_warnings.append("building '%s' drops off unknown kind '%s'" % [id, kind])
+		# GARRISON AND ATTACK (PLAN.md 4.8/4.9), added 2026-08-27. `garrison_cap` had
+		# been in this file's schema since 0.4 and was validated by nothing, which is
+		# how it kept IDEA.md's placeholder numbers for months without anybody noticing
+		# they were placeholders.
+		if b.garrison_cap < 0:
+			load_warnings.append("building '%s' has a negative garrison_cap %d"
+					% [id, b.garrison_cap])
+		# A COOLDOWN OF 0 WOULD FIRE EVERY TICK -- ten times a second, so a guard tower
+		# would deal 80 damage a second instead of 4. `CombatSystem` floors it at 1 so
+		# it cannot divide by nothing, which means the mistake is survivable and
+		# therefore silent; this is what makes it loud.
+		if b.attack_damage > 0 and b.attack_cooldown_ticks <= 0:
+			load_warnings.append("building '%s' has attack damage %d and no cooldown"
+					% [id, b.attack_damage])
+		# A shot with no visible cause. Units may omit a projectile -- every melee one
+		# does -- but a building has no arm to swing, so an attacking building with no
+		# projectile drops health bars with nothing on screen to explain it.
+		if b.attack_damage > 0 and b.attack_projectile == &"":
+			load_warnings.append("building '%s' attacks but names no projectile" % id)
+		elif b.attack_projectile != &"":
+			_require_visual(b.attack_projectile, "building '%s' projectile" % id)
 
 	# A prop naming a visual that does not exist would draw the magenta unknown
 	# beside an otherwise perfect building -- loud, but only once someone looks.
