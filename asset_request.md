@@ -503,7 +503,40 @@ five resolving against clips the actor really declares.
   its own actor file**; both pull a shared `art/variants/quadraped/base_*.xml`, which is
   why a naive read of `bear_brown.xml` reports an animal with no animations at all.
 
-**⏸️ P2 — THE PACKED TREBUCHET IS PARKED, and it is closer than "not done".** It bakes,
+> **OWNER'S CALL, later the same day — BOTH PACKED ENGINES SHIP, imperfect and all:**
+> *"trebuchet and onager packed even if not looking correct or not animated is still
+> better as a placeholder than not working at all."* Unparked, and **`vis.onager_packed`
+> added**, so **both are in tonight's run**. Tonight is now **244 bakes** — 84 base + 160
+> colour; they are picked up as `never staged` and need no special handling.
+>
+> **`vis.onager_packed` came out well and it ANIMATES** — 120 frames, `idle` and `walk`,
+> three crew correctly spaced along the cart, two horses in caparisons, engine struck down
+> as cargo. **So it does not need `speed: 0`** — it is the one siege state that moves and
+> it has a real walk clip.
+>
+> **Why one animates and the other cannot** — structural, not luck, and worth knowing
+> before you wire them. Both are wagons. The onager's packed actor **is** the wagon and
+> declares `Idle`/`Walk`/`Run` on itself. The trebuchet's packed actor is a **pivot** that
+> declares nothing and carries the wagon as a prop, so its clips belong to a nested actor
+> and the subject's clip set comes up empty. Each recipe now warns against copying the
+> other's `[anims]` block.
+>
+> **What you are accepting on the trebuchet**, so it is not a surprise in a screenshot:
+> the wagon, oxen and cargo are right, but **the four crew stack into a vertical column
+> beside the cart** instead of standing around it. At map zoom it reads fine; close up it
+> is a totem pole of soldiers. Still static, too.
+>
+> **`vis.ballista_packed` — the third of your three — is NOT built.** The owner named two.
+> It is the same treatment and I will do it on a word; the ballista is also the one engine
+> with no player colour, so it may be the one you care least about.
+>
+> **Colour on both is UNMEASURED.** The onager's packed actor carries
+> `player_trans_norm_spec`, which is suggestive and is exactly the material that proves
+> nothing either way (§4: the ballista's props are `player_trans` and it still measures
+> 0%). Treat both as `"colours": false` until I probe them.
+
+**⏸️ P2 — THE PACKED TREBUCHET WAS PARKED for half an hour, and this is what the probe
+found.** It bakes,
 and **a packed mangonel turns out to be a wagon drawn by two zebu with the engine struck
 down as cargo** — exactly the unmistakably-different silhouette the request wanted. The
 wagon, the oxen and the cargo are all correct.
@@ -522,10 +555,12 @@ Two things are not:
    zeroad adapter, with the onager as the regression test that it does not break the
    working case.
 
-**It is in `tools/recipes/parked/`, which neither `bake_batch.ps1` nor `stale_recipes.py`
-globs**, so it cannot join tonight by accident. That mattered more than tidiness:
-**both machines share `tools/` through Google Drive**, so a recipe reaches the render box
-whether or not it is committed, and one with no staged atlas counts as work to do.
+It sat in `tools/recipes/parked/` until the owner's call above, and that directory stays
+even though it is empty now — it is a subdirectory, which neither `bake_batch.ps1` nor
+`stale_recipes.py` globs, so it is where a recipe waits without reaching the render box.
+That matters more than tidiness: **both machines share `tools/` through Google Drive**, so
+a recipe reaches the box whether or not it is committed, and one with no staged atlas
+counts as work to do.
 
 **So tonight is 242 bakes: 82 base + 160 colour.** Not the 232 I quoted this morning, and
 the difference is worth understanding rather than just noting: committing the pitch
