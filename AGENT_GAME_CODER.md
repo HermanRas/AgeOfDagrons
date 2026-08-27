@@ -19,7 +19,7 @@ I am the game-code agent. **I own `game/`** — the Godot project: `src/`, `data
 | Not mine | Why |
 |---|---|
 | `tools/` | isobake recipes + bake/stage scripts — the art agent's |
-| `art_work/out/` | baked atlases; build output |
+| `art_work/out/` | baked atlases; build output. **It is not in this repo** — the path is machine-local and declared in `tools/isobake.local.toml`, today `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`. Read it to tell staged art from fresh |
 | the isobake source | its own repo, `Downloads\AOD_game\blender_3d_to_2d_isobake` |
 | `ASSET_MISSING.md` | the art agent's tracker |
 
@@ -49,16 +49,28 @@ answer their questions there rather than only in chat.
    the reversal is noted rather than argued; treat it as settled. It also carries a
    "standing hazards" section of traps left behind by *fixed* bugs, each of which
    can bite again. Cleaned 2026-08-23 from 424 lines to 170 with nothing open lost.
-5. `game/data/*.json` `_note` blocks — these are long, and they are the real
+5. **[PROGRESS.md](PROGRESS.md)** — the phase table, added 2026-08-23. Status only,
+   no reasoning, and it says so itself: where it disagrees with PLAN.md, PLAN.md
+   wins and PROGRESS.md is the one to fix. `asset_request.md`'s art priority
+   ordering is derived from it, so the art agent reads it too. **It goes stale
+   first** — its header figures (suite size, APK size) and its "the single item
+   most worth doing is the unit-speed pass" line were both overtaken within hours
+   of being written.
+6. `game/data/*.json` `_note` blocks — these are long, and they are the real
    design record for the data. **Read them in full before editing that file.**
    Several encode measurements and decisions that are expensive to re-derive.
 
 **PLAN.md used to be mojibake** (double-encoded UTF-8, so table rows could not be
-matched by an exact-string edit). It is **clean, re-confirmed 2026-08-23** —
-`grep -c 'â€'` finds nothing in PLAN.md or BUGS.md — so ordinary exact-string
-edits work. Re-check before assuming either way; whatever fixed it could recur.
-`.gitignore` is *still* mojibake in its comment banners, so the repo has not been
-swept as a whole and the recurrence risk is real.
+matched by an exact-string edit). It is **clean, re-confirmed 2026-08-27** — that
+grep now finds nothing in *any* `.md` in the repo, and `.gitignore`'s comment
+banners, which this file recorded as still broken, are clean too. So ordinary
+exact-string edits work everywhere. Re-check before assuming either way; whatever
+fixed it could recur.
+
+**A separate thing that looks identical and is not:** PowerShell's `Get-Content`
+decodes these files as ANSI, so *reading PLAN.md through the shell prints mojibake
+for a file that is fine on disk.* Use the Read/Grep tools to judge encoding; a
+`Get-Content` dump is not evidence.
 
 ---
 
@@ -88,7 +100,16 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_walls.tscn      # both wall axes + gate
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
+
+# The facing pair — how a re-baked atlas gets checked (see §7, the 180° item)
+& $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
+& $godot --path game res://dev_preview/preview_combat_facing.tscn  # eight attackers in a ring
 ```
+
+`preview_facing_chart` draws one actor at all 8 sprite directions × 3 clips with no
+simulation involved — just `EntityView` and the atlas. **Column 0 (S) must show a face
+and column 4 (N) a back.** It is the cheapest way to judge an atlas the art side has
+just re-baked, and `--units` takes any id, so nothing needs editing to chart a new one.
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
 art faces. A wall lying across its own footprint has the same footprint, the same
@@ -239,9 +260,11 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**331 atlases staged.** 76 test files, **1232 tests, 199,129 assertions, all
-passing** — measured 2026-08-23, not quoted. The previous figures here (293/71/1163)
-were stale; re-measure rather than trusting this line, it is the first thing to rot.
+**331 atlases staged.** 78 test files, **1268 tests, 201,463 assertions, all
+passing** — measured 2026-08-27, not quoted. The figures before these (1232/76, and
+293/71/1163 before that) were both stale within days; re-measure rather than trusting
+this line, it is the first thing in the file to rot. **The 331 staged atlases are now
+stale too, but as a batch rather than as a count** — see the 180° item below.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -251,16 +274,46 @@ conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware*
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
 and tech-tree wireframes, and settings (§8.2b).
 
-### The one standing order that outranks other tuning
+**Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
+and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
+**a deer is hunted rather than harvested** — it had to become a `SimUnit` to move at
+all, since `MovementSystem` skips nodes — **herding** (walk within 4 tiles of a sheep
+or cow and it takes your orders; the animal stays gaia's and only `SimUnit.herded_by`
+moves, which is what kept `GatherSystem` and `WinConditionSystem` out of it), and
+**fishing**: `res.fish` in shallow water, `ResourceDef.domain` + `SimMap.can_place(rect,
+domain)` splitting sea placement away from `can_place_building`, and
+`building.dock` now `requires_shore`. **Audio landed the same week** (§7.5, below).
 
-**"Every unit feels too fast"** (BUGS.md, owner-reported 2026-08-21 from a real
-two-device phone match) is the most valuable open item and it is **parked
-deliberately**. It is a balancing number, not a defect, and it wants doing as one
-pass over every unit's `speed` in the data — so **nothing gets tuned piecemeal
-before it**, and a nudge to whichever unit is on screen is the wrong move even
-when it looks obviously right. Only the owner can judge it, and the queue behind
-it (walls, chokepoints, three hostile predators, fleeing deer, driven livestock)
-keeps changing what "too fast" means.
+### The speed pass is DONE — and it left two things behind (2026-08-23, `962b1c5`)
+
+**"Every unit feels too fast" is closed.** It was the oldest and most valuable
+open item, parked from 2026-08-21 until the owner could judge it, and they did:
+*"if we reduce the unit speed by 50%…"*. **Every unit's `speed` was halved in one
+pass** — villager 200 → 100 and everything else by the same factor, so the
+relative pacing `units.json` describes is untouched; the four `speed: 0` units
+stayed 0 and odd values rounded away from zero. PLAN.md §15 and PROGRESS.md both
+still list this as the top open item; **they are stale, BUGS.md line 23 is right.**
+
+Two consequences were recorded in BUGS.md rather than smoothed over, and neither
+is a reason to undo it:
+
+1. **It cut the ECONOMY, not just the walking.** A gather trip is walk-out,
+   extract, walk-home, deposit, so halving speed roughly halves resource income,
+   and worse the further the node. **If the game now feels slow rather than
+   calmer, `gather_rate` is the lever, not `speed`.** Owner's call, not ours.
+2. **It broke the AI-vs-AI baseline** by amplifying the already-open "a build step
+   gives up when short of resources" bug until *both* AIs reach their attack step
+   with no army. Seeds 3 and 5 got ~6% longer with the same winners; **seed 4 went
+   from "p2 wins at t7776" to unresolved**, and not because of the 12,000-tick
+   window — it does not resolve at 20,000 either. Seed 4 was the only seed p2 ever
+   won, which is exactly what made that table evidence rather than an artefact of
+   the script favouring player 1. Keep the table; the tick log is in BUGS.md.
+
+**The sound repetition reported in the same breath was NOT caused by speed** and
+would not have been fixed by halving it. While a unit holds a work or attack
+animation the repeat rate is set by the audio throttle and by nothing else — a
+stationary villager chopping does not care how fast she walks. See the audio
+bullet below for the two-limit fix that did answer it.
 
 ### Owner-reported and open (BUGS.md is authoritative)
 
@@ -284,22 +337,57 @@ re-diagnose these from scratch — each already has a diagnosis.
   field. See the `TouchLineEdit` row in §6.
 - **The AI's biggest gap: a build step gives up when short of resources.** p2 abandoned
   a barracks 73 wood short, never built one, and died holding 950 wood — a person waits
-  for the wood, and the timeout should not count affordability. Also open:
-  `MAX_PLACEMENT_RADIUS` 26 → 14 now blocks 6×6 placements, and **nobody has checked
-  what `AISystem`'s standing order 3 still needs to do** now that `CombatSystem`
-  re-targets (which itself reversed PLAN.md 4.13 — see BUGS.md "Reversed decisions").
-  The AI-vs-AI baseline table in BUGS.md exists so a regression is visible; keep it.
+  for the wood, and the timeout should not count affordability. **The speed halving
+  amplified this into the baseline's worst result** (seed 4 no longer resolves), so it
+  has gone from a known flaw to the thing standing between the AI table and being
+  evidence again. Also open: `MAX_PLACEMENT_RADIUS` 26 → 14 now blocks 6×6 placements,
+  and **nobody has checked what `AISystem`'s standing order 3 still needs to do** now
+  that `CombatSystem` re-targets (which itself reversed PLAN.md 4.13 — see BUGS.md
+  "Reversed decisions"). The AI-vs-AI baseline table in BUGS.md exists so a regression
+  is visible; keep it.
 - **No wall corner piece** — 0 A.D. has none either, it puts a `wall_tower` at every
   corner and we already have that art as `building.guard_tower`. What is missing is
   anything that *detects* a corner.
 
+**Three owner requests filed 2026-08-23 and deliberately NOT built** — PLAN.md §13.2
+items 12, 13 and 14. Each was researched before filing, so the entry names where it
+plugs in; read the row rather than re-deriving it:
+
+- **12 — double-tap a unit selects every unit of that type ON SCREEN.** Both halves
+  exist: `DoubleTapDetector` is real, and "on screen" is literally
+  `GameView.units_in_box()` handed the viewport's rect instead of a dragged one
+  ([game_scene.gd:1640](game/src/view/game_scene.gd#L1640)). Only the `def_id` filter is
+  missing. **Do not build it on the ground-tap detector** — that one is entangled with
+  the open double-tap-to-clear bug, so `InputRouter.TAP_SLOP` is arguably a prerequisite
+  here. That is the *opposite* of the call made for 8.8, where a button sidesteps the
+  router; nothing sidesteps this.
+- **13 — an arrow should leave the bow when the fire animation finishes.** Damage is
+  explicitly out of scope. `CombatSystem` spawns on the tick its cooldown hits zero
+  while `EntityView` advances frames at the atlas' declared fps — two clocks, drifting
+  by design. Recommended fix is one line in the *view*: drive the attack clip's rate
+  from `attack_cooldown_ticks`. Rejected: authoring cooldowns from clip lengths, which
+  would make balance a function of the bake.
+- **14 — a finished resource building puts its builders to work on what it collects.**
+  The farm half already does this ([build_system.gd:74](game/src/sim/systems/build_system.gd#L74),
+  since 2026-08-17), and `BuildingDef.drop_off` already declares which kinds each
+  building serves, so "gold or stone" needs no new data. Four traps recorded in the
+  row: it **must be deterministic or it is a desync**; its priority against
+  `_next_foundation` is a real decision (if the resource scan wins, finishing a lumber
+  camp mid-wall-drag pulls that builder off the wall); `_nearest_node` searches the
+  whole map where `_next_foundation` is bounded by `SAME_WORK_RADIUS` (10) and wants the
+  same bound; and `building.town_center` declares all four kinds without being a camp,
+  so keying off "has a `drop_off`" would auto-task builders at every town centre.
+
 ### Known gaps — do not work around these silently
 
-- **Only `red` and `yellow` colour bakes are trustworthy.** 60 others are
-  *stale, not absent* — present, parsing, drawing, and wrong, because three
-  pipeline defects were fixed mid-roster. `GameDataRegistry.stale_colour_atlases()`
-  enumerates them; `missing_colour_atlases()` finds absent ones. Develop against
-  players 2 and 3.
+- **Only `red` and `yellow` colour bakes are trustworthy** — *until the 2026-08-26
+  re-bake is staged*, which repairs this in the same run as the facing fix below.
+  The 60 others are *stale, not absent*: present, parsing, drawing, and wrong,
+  because three pipeline defects were fixed mid-roster.
+  `GameDataRegistry.stale_colour_atlases()` enumerates them;
+  `missing_colour_atlases()` finds absent ones. Develop against players 2 and 3
+  until the staging is done, then **re-run both queries rather than assuming** —
+  they are the check that this actually closed.
 - **Walls are DONE** (PLAN.md 5.8, 2026-08-22) — this entry used to say they had
   no defs, and also that all the pieces were "baked and declared in
   `visuals.json`". Half of that was wrong: they were **staged but never
@@ -338,21 +426,41 @@ re-diagnose these from scratch — each already has a diagnosis.
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
-- **EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS, and this is
-  the art side's, not ours. Do not patch it again.** The zeroad adapter turns every
-  subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it with
-  `yaw_offset_deg = 180.0` and 36 do not. **A game-side compensation was written and
-  reverted inside a day** (2026-08-22 → 23) — `directions_reversed` in `visuals.json`
-  setting a half-turn offset per atlas. It fixed idle and walk; the owner still saw an
-  attacking unit facing the wrong way and called it: *"undo the reverse changes… i dont
-  want to waist any more time on patching a known root cause."* It is out, and the
-  standing instruction is that the fix is a re-bake (PLAN.md §13.2 item 10,
-  `asset_request.md` for the request and the 36-recipe list). If you find yourself
-  reaching for `Iso.sim_facing_to_sprite` or a per-atlas offset, this is the paragraph
-  saying somebody already did and it was not wanted. What the exercise established and
-  is worth keeping: the `unit.knight` chart is 180° out **uniformly across idle, walk
-  and attack**, so one recipe line per actor covers the attack clip too. The sim side
-  is fine — `CombatSystem` sets `facing` toward the target every tick it swings.
+- **EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS — and the
+  re-bake that fixes it is DONE but NOT STAGED (as of 2026-08-27).** This is the one
+  entry in this section that is about to change state, so check it before believing it.
+  Where things actually are:
+  - **The recipe half landed 2026-08-25** (`5737e00`, corrected by `96d2318`): all 82
+    zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160 colour
+    variants were regenerated from them. That is **wider than the 36 the game side
+    asked for** — the owner chose the whole set, so trees, mines, props, foundations
+    and rubble are in it. The seven `terrain` recipes are deliberately excluded
+    (`terrain_cliff` is not: it is a zeroad recipe despite the name).
+  - **242 bakes (82 base + 160 colour) have completed** and sit in the machine-local
+    isobake output — `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`, the path
+    `tools/isobake.local.toml` declares, **not** a directory inside this repo.
+    244 entries, newest 2026-08-26.
+  - **`game/assets/atlases/` has not moved since 2026-08-17.** So the game still draws
+    the backwards art, and *every screenshot taken before staging is evidence about
+    the old bake.* The sequence is the art agent's `tools/stage_atlases.py`, then
+    `--import`, then `preview_facing_chart -- --units unit.swordsman,unit.knight`
+    (column 0 a face, column 4 a back, all three clip rows agreeing), then
+    `preview_combat_facing`, then a real match screenshot — which is the only one that
+    closes it, because the owner reports this from play.
+
+  **Nothing in `game/` changes when it is staged.** The game reads the atlas exactly as
+  the file states it, so a corrected bake is correct the moment it is on disk; there is
+  no flag to remove and nothing to keep in step. That is the whole point of the revert:
+  **a game-side compensation was written and reverted inside a day** (2026-08-22 → 23)
+  — `directions_reversed` in `visuals.json`, a half-turn offset per atlas. It fixed idle
+  and walk; the owner still saw an attacking unit facing the wrong way and called it:
+  *"undo the reverse changes… i dont want to waist any more time on patching a known
+  root cause."* If you find yourself reaching for `Iso.sim_facing_to_sprite` or a
+  per-atlas offset, this is the paragraph saying somebody already did and it was not
+  wanted. What that exercise established and is worth keeping: the `unit.knight` chart
+  is 180° out **uniformly across idle, walk and attack**, so one recipe line per actor
+  covers the attack clip too. The sim side is fine — `CombatSystem` sets `facing`
+  toward the target every tick it swings.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.
@@ -387,10 +495,48 @@ re-diagnose these from scratch — each already has a diagnosis.
     plays nothing; an *undeclared* id calls `push_error` once. Keeping those
     apart is the whole contract, and `GameDataRegistry.silent_sfx_ids()` names
     the first case so nobody has to diagnose it by ear.
+  - **THE REPEAT RATE IS TWO LIMITS, NOT ONE** (added `962b1c5`, and PLAN.md §7.5
+    decision 3 still describes only the first — it predates this). `throttle_ms` is
+    the gap for **one source**, a unit's own cadence, and `MatchAudio` passes the
+    entity id so it has something to key on; `crowd_ms` is the gap for the sound
+    **at all**, however many units are making it. One global number cannot do both
+    jobs: small, it lets a single unit fire eleven times a second; raised to 2000 ms,
+    it reduces a battle of ten swordsmen to one clang every two seconds while ten men
+    visibly swing. The rates now come from `units.json`'s real `cooldown_ticks`.
+  - **Music defaults to 0.5**, on the owner's report that they had to drop it ~80% to
+    hear anything else. A saved value still wins, so anyone who has moved the slider
+    keeps theirs.
   - **`game/assets/audio/` is gitignored build output** like the atlases, and the
     fetch is rate-limited by 0 A.D.'s server (see §3). A clean checkout has no
     audio and the game is expected to run silently — the suite asserts the seam,
     never that bytes are present.
+- **Three gaps PLAN.md §15 records rather than files**, all from the 2026-08-23 naval
+  work and all cheap to trip over: **a dock built inland before that day stays inland**
+  (`requires_shore` gates new placement only, so an old dock trains ships that cannot
+  deliver); **naval combat does not exist at all** — ships float and path, transports
+  have no load/unload, and nothing has ever fought at sea; and **a static destroyed
+  behind the fog stops being sent** rather than leaving AoE's stale ghost, which would
+  need a per-player last-seen copy of every static (§11.4).
+
+### What PLAN.md §15 says is next
+
+Its item 1 is the unit-speed pass, which is **done** — read the rest, which is not:
+
+1. **4.8 garrison**, which unlocks 4.9 and closes the largest hole in walls: 0 A.D.'s
+   medium wall declares eight turret points and ours hold nobody. It is what
+   `garrison_cap` on every building def has been waiting for, and it settles §13.2
+   item 4b (whether `act_enter`/`act_garrison` are one concept or two).
+2. **2.4d Archipelago** (§11.6). The content is nearly free — `PREDATORS` is keyed by
+   map type and read with `.get(type, {})`, so an unlisted type gets no predators
+   without a line of code. The work is that `MapValidator` requires every start to
+   reach every other **by land**, which an archipelago fails by definition, so that
+   claim has to *change* rather than relax.
+3. **8.8, the [X] clear-selection button** — the only item on the list the owner
+   reported from actually playing the build.
+
+Then, in no forced order: 12.2b's real AI decision flow, 9.3 `TechSystem` (where the
+field yield's per-age ladder is standing in for a mill tech), 2.4c the map save format,
+12.1b LAN discovery, 12.3 campaign, and 13.x dragons once the RTS is a game.
 
 ---
 
