@@ -39,6 +39,24 @@
 .PARAMETER NoStage
   Bake and verify, but do not copy atlases into game/assets/atlases.
 
+.PARAMETER PipelineStale
+  Also rebake recipes whose atlas is fine against its RECIPE but was baked by a
+  different isobake commit than the one installed. Off by default, because most
+  pipeline fixes touch a knowable subset and re-rendering the rest burns hours
+  producing identical bytes.
+
+  You need this whenever the reason for the run is a change to isobake rather
+  than to a recipe, and without it such a run does NOTHING: `stale_recipes.py`
+  compares recipe hashes, and a pipeline fix changes no recipe. That is not
+  hypothetical -- the direction-sweep fix of 2026-08-27 mirrored every 8- and
+  5-direction atlas in the project and left all 331 recipe hashes untouched.
+
+.PARAMETER Directions
+  Restrict the run to recipes whose `[render].directions` is in this set, e.g.
+  "5,8". The blast radius of a change to the direction sweep, and the natural
+  partner to -PipelineStale: it keeps the 89 one-direction buildings, which no
+  such change can reach, out of the night.
+
 .PARAMETER WhatIf
   Print the plan -- including exactly which recipes are out of date -- and stop.
 
@@ -55,6 +73,10 @@ param(
     [switch] $Setup,
     [int]    $Parallel = 4,
     [switch] $NoStage,
+    # NOT -Isobake: $Isobake is already this script's path to isobake.exe, and a
+    # param of that name is silently overwritten by it a few lines below.
+    [switch] $PipelineStale,
+    [string] $Directions,
     [switch] $WhatIf
 )
 
@@ -151,9 +173,17 @@ New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 $baseList   = "$RunDir\base.txt"
 $playerList = "$RunDir\player.txt"
 
+# Both lists must be computed with the SAME flags, or a run rebakes a base
+# recipe and leaves its eight colour variants behind at the old code -- which is
+# precisely the non-uniform build id the game side's staleness rule reports.
+$staleArgs = @()
+if ($PipelineStale) { $staleArgs += "--isobake" }
+if ($Directions)    { $staleArgs += @("--directions", $Directions) }
+if ($staleArgs.Count) { Write-Host ("  selecting with: {0}" -f ($staleArgs -join " ")) -ForegroundColor DarkGray }
+
 Push-Location $Repo
-$baseNames   = @(& $Python "tools\stale_recipes.py" --names)
-$playerNames = @(& $Python "tools\stale_recipes.py" --player --names)
+$baseNames   = @(& $Python "tools\stale_recipes.py" --names @staleArgs)
+$playerNames = @(& $Python "tools\stale_recipes.py" --player --names @staleArgs)
 Pop-Location
 
 # .NET, not Set-Content -Encoding utf8: PS 5.1 writes a BOM, and bake_batch reads
@@ -171,6 +201,12 @@ Write-Host ("  lists written to {0}" -f $RunDir) -ForegroundColor DarkGray
 if (($baseNames.Count + $playerNames.Count) -eq 0) {
     Write-Host ""
     Write-Host "nothing is out of date. Done." -ForegroundColor Green
+    if (-not $PipelineStale) {
+        Write-Host "  NOTE: every recipe matches its atlas -- but this says nothing about the" -ForegroundColor Yellow
+        Write-Host "  isobake code that baked them. If you are here because the PIPELINE changed," -ForegroundColor Yellow
+        Write-Host "  re-run with -PipelineStale (and -Directions to bound it), or the night" -ForegroundColor Yellow
+        Write-Host "  does nothing at all." -ForegroundColor Yellow
+    }
     exit 0
 }
 
