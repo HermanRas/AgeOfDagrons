@@ -18,6 +18,41 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Facing — reported 2026-08-27 on the freshly re-baked art
+
+*"Villager mining away from gold, scout attacking away from building."* **Two separate
+faults that looked like one**, which is why the morning's re-bake appeared to fix nothing:
+
+- [x] **The villager was never turned at all — FIXED 2026-08-27, and it was ours.** Until
+      today `facing` was written in exactly **two** places: `MovementSystem` (the way you
+      walk) and `CombatSystem` (the thing you are hitting). Nothing turned a unit toward
+      what it *worked*, so a villager kept whatever direction her last path step left her
+      in and mined over her shoulder for the rest of the match. `GatherSystem` and
+      `BuildSystem` now face the unit at the node or the foundation, at the same point in
+      the tick each of them already checks adjacency — so a villager waiting her turn at a
+      busy seam looks at it too, not only the one extracting this tick.
+
+      **The standing hazard it leaves:** `facing` is part of `state_hash()`, so anything
+      that sets it must be a pure function of sim state on every host. Both new lines are
+      (two positions in, one octant out) — but the next system that wants to turn a unit
+      must clear the same bar, and "it looked right on my screen" is not that bar.
+
+- [ ] **The scout is turned correctly and DRAWN backwards — the atlases are MIRRORED, and
+      this is the art side's.** The sim is right: eight cavalry in a ring around a house
+      are every one of them facing it, and `preview_work_facing` prints the numbers. The
+      picture disagrees because the stored directions are reflected — **front and back are
+      right, left and right are swapped.** A reflection is not a rotation, so no
+      `yaw_offset_deg` was ever going to fix it, and the half-turn added on 2026-08-25 only
+      moved the mirror's axis from E–W (*"faces backwards"*) to N–S (*"left and right
+      swapped"*). PLAN.md §13.2 item 10 and `asset_request.md` [P0] carry the algebra.
+
+      **The standing hazard, and it is the expensive lesson here:** the agreed check was
+      *"column 0 must show a face and column 4 a back"* — **and those are exactly the two
+      columns a mirror about N–S leaves alone.** A verification blind to the fault it is
+      meant to catch will pass forever. Any facing check from now on reads columns **2 and
+      6** as well, and `preview_work_facing` exists so the geometry is stated by the scene
+      rather than judged by eye.
+
 ### Balance — the top of the list
 
 - [x] **Every unit feels too fast — DONE 2026-08-23, every speed halved.** Owner-reported

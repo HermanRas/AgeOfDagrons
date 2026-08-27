@@ -33,6 +33,14 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 		u.stop()
 		return
 
+	# Face the work, for the reason GatherSystem spells out at the same point in its
+	# own tick: a builder hammering with his back to the wall reads as a bug, and
+	# nothing else was ever going to turn him -- MovementSystem stopped caring the
+	# moment he arrived. A building's `pos` is its CENTRE, so this points at the
+	# middle of the footprint rather than at a corner, which is what a person would
+	# face when standing against a long wall.
+	u.facing = SimUnit.facing_toward(b.pos - u.pos)
+
 	if b.add_build_progress(BUILD_RATE):
 		# COMPLETE is set inside add_build_progress().
 		_finished(w, u, b)

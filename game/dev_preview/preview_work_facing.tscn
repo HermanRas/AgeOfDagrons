@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_work_facing.gd" id="1_workfacing"]
+
+[node name="PreviewWorkFacing" type="Node"]
+script = ExtResource("1_workfacing")

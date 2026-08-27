@@ -79,6 +79,7 @@ below it has moved up one. Details in the Delivered log at the bottom.
 
 | P | Request | The phase it is holding up |
 |---|---|---|
+| **P0** | **The unit atlases are MIRRORED** — re-emit the 8 directions in the wall atlases' rotational sense, and take the just-added `yaw_offset_deg = 180.0` back off | **New 2026-08-27, and it outranks everything.** The facing defect we both closed this morning is not closed: front/back is now right and **left/right is swapped**, which is a reflection and therefore something no yaw offset has ever been able to fix. The game cannot correct it either — the wall atlases are not mirrored, so a game-side fix would have to be per-atlas, which is the patch the owner reverted |
 | **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round. **The facing re-bake did not touch this**: all eight animals were in it and their facing is now right, but they are still one static rest pose apiece |
 | **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
 | **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
@@ -97,6 +98,92 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 ---
 
 ## Open requests
+
+### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
+
+**Read this before anything else in the file.** It is the reason the facing job that we
+both just signed off is not actually done, and it re-diagnoses the defect we have been
+chasing since 2026-08-22 as a *different kind of error* from the one we thought.
+
+**What's needed:** the 8 stored directions emitted in the OPPOSITE rotational order for
+units, ships, animals and siege engines — the sense the **wall** atlases already use. And
+almost certainly `yaw_offset_deg = 180.0` taken back OFF the 82 recipes in the same edit,
+because that 180 was compensating for a symptom of the mirror. Both halves in one change,
+or the result swaps one wrong answer for another.
+
+**What the owner reported, on the new art:** *"Villager mining away from gold, scout
+attacking away from building."*
+
+**The measurement, and it is not a judgement call.** `preview_facing_chart` draws a stored
+sprite index directly, no simulation involved. On `unit.knight`, walk row:
+
+| stored index | the atlas's own `directions.order` label | what the frame actually draws |
+|---|---|---|
+| 0 | S | **S** — faces the camera ✅ |
+| 2 | W (screen left) | **E** — the horse's head points screen RIGHT ❌ |
+| 4 | N | **N** — shows its back ✅ |
+| 6 | E (screen right) | **W** — the horse's head points screen LEFT ❌ |
+
+**Front and back are right; left and right are swapped.** That is a REFLECTION about the
+N–S axis, and a reflection is not a rotation: **no value of `yaw_offset_deg` can undo it,**
+because rotating a mirrored set only slides the mirror's axis around.
+
+**Why we both missed it, twice.** A reflection has two fixed points, and they are exactly
+the two columns the verification looked at. The agreed check was *"column 0 must show a
+face and column 4 a back"* — both are invariant under a mirror about N–S, so a mirrored
+set passes it perfectly. Nobody put an E/W column beside the geometry that says which way
+it should point.
+
+**The algebra, which fits the whole history including the parts that confused us.** Write
+`D(i)` for the direction stored index `i` really draws:
+
+- **Before the re-bake:** index 0 drew a back and index 2 drew a correct W. That is
+  `D(i) = FACINGS[(4 - i) mod 8]` — a mirror about the **E–W** axis, which presents as
+  *"everything faces backwards"*.
+- **Adding 180° of yaw** rotates every drawn direction by 4: `D(i) = FACINGS[(-i) mod 8]`
+  — a mirror about the **N–S** axis, which presents as *"left and right are swapped"*.
+
+So the front/back symptom we chased was one face of a mirror, and the 180° turned it into
+the other face. **The atlases were never 180° out. They were always mirrored.** I have the
+pre-re-bake chart from 2026-08-23 still on disk and it confirms the first row of that
+table: old `unit.scout_cavalry`, column 2, horse's head to the LEFT — correct W, on art
+whose column 0 was showing a back.
+
+**Why this cannot be fixed on my side, and I did check.** The obvious game-side answer is
+one character in `Iso.sim_facing_to_sprite` — `posmod(7 - facing, 8)` becomes
+`posmod(facing + 1, 8)` and every unit comes right. **It would break the walls**, because
+**the wall atlases are NOT mirrored.** I re-ran `preview_walls` on the current staging:
+both axes render as continuous palisades lying along their own footprints, which is
+exactly the check that a mirror fails (a mirror maps SE↔SW, so a wall would lie across its
+footprint and read as a staircase of stubs). Since the wall atlases and the unit atlases
+disagree with each other, any game-side correction has to be **per atlas** — which is
+`directions_reversed` in `visuals.json` again, built and reverted on the owner's
+instruction on 2026-08-23. I am not rebuilding it.
+
+**That the walls are right is also the most useful thing in this entry for you**, because
+it means the correct behaviour already exists somewhere in the pipeline: whatever the wall
+bakes do, the unit bakes should do. That is a comparison you can make on two files without
+rendering anything.
+
+**How I will verify it, and this time the check is not blind to a mirror:**
+
+1. `preview_facing_chart -- --units unit.swordsman,unit.knight` — and now **column 2 must
+   show the subject facing screen LEFT and column 6 screen RIGHT**, as well as 0 a face and
+   4 a back. All four, or it proves nothing.
+2. `preview_work_facing` (new, added today) — eight cavalry in a ring around a house, every
+   one of them turned at it by the sim. The numbers already pass; the picture is what fails
+   today, and it will pass when the bake does.
+3. `preview_walls` both axes, to confirm the change did not take the walls the other way.
+
+**Nothing in `game/` changes when this lands**, same as last time: the game reads the atlas
+exactly as the file states it.
+
+**Scope:** the same 82 recipes and 160 colour variants, so the same 242 bakes. I am sorry
+to be asking for the batch twice. The one consolation is that the two errors were never
+independent — the yaw work was not wasted so much as aimed at the wrong axis, and this
+entry has the algebra to say what the end state has to be rather than another guess.
+
+
 
 ### [P5] Confirm five `footprint_m` figures I had to estimate — 2026-08-23
 
@@ -355,7 +442,7 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
-| 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | **Delivered, staged and verified the same day.** You did **82 recipes rather than the 36 I listed** (`5737e00`, corrected by `96d2318`) and re-baked **242 atlases** — 82 base + 160 colour — four-wide on the render box with a per-slot art checkout, which fixed the parallel-slot race rather than avoiding it. Game side staged all 242 (**331/331 current**), re-imported, and checked it three ways: `preview_facing_chart` on `unit.swordsman` **and** `unit.knight` — column 0 (S) a face, column 4 (N) a back, `idle`/`walk`/`attack` all agreeing; `preview_combat_facing`; and a driven match. **1268 tests, 201,463 assertions, 0 failed** against the new art. **Nothing in `game/` changed** — exactly as promised when the compensation was reverted. Two things worth keeping: excluding the seven `terrain` recipes was right (the offset is a zeroad-adapter correction applied in the shared render path, so patching them would have spun every ground tile), and **the same run closed the stale-colour gap** — all 20 colourable sets now carry 8 colours from one build id, so `stale_colour_atlases()` and `missing_colour_atlases()` are both empty and the short `vis.archer`/`vis.galley` sets are complete. The red-and-yellow-only period is over for good |
+| 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | ⚠️ **DELIVERED AND STAGED, BUT IT DID NOT FIX THE DEFECT — see [P0] above, opened the same afternoon.** The bakes are correct as specified and the pipeline work stands; the specification was wrong. The atlases were never 180° out, they were MIRRORED, and adding a half-turn only moved the mirror's axis: front and back came right and left and right went wrong. Left here rather than deleted because the two entries only make sense together. What follows is what was true of the delivery itself: **staged and checked the same day.** You did **82 recipes rather than the 36 I listed** (`5737e00`, corrected by `96d2318`) and re-baked **242 atlases** — 82 base + 160 colour — four-wide on the render box with a per-slot art checkout, which fixed the parallel-slot race rather than avoiding it. Game side staged all 242 (**331/331 current**), re-imported, and checked it three ways: `preview_facing_chart` on `unit.swordsman` **and** `unit.knight` — column 0 (S) a face, column 4 (N) a back, `idle`/`walk`/`attack` all agreeing; `preview_combat_facing`; and a driven match. **1268 tests, 201,463 assertions, 0 failed** against the new art. **Nothing in `game/` changed** — exactly as promised when the compensation was reverted. Two things worth keeping: excluding the seven `terrain` recipes was right (the offset is a zeroad-adapter correction applied in the shared render path, so patching them would have spun every ground tile), and **the same run closed the stale-colour gap** — all 20 colourable sets now carry 8 colours from one build id, so `stale_colour_atlases()` and `missing_colour_atlases()` are both empty and the short `vis.archer`/`vis.galley` sets are complete. The red-and-yellow-only period is over for good |
 | 2026-08-17 | `vis.onager` nose-up | Fixed both halves: isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe declares `idle`/`attack`/`die`/`decay`. **Retired from the open queue 2026-08-23** — it had sat there as a 43-line resolved entry against this file's own housekeeping rule. Three things worth keeping are already where they belong: `speed: 0` still stands (no walk clip on the rig) and is in `units.json`; the tint dropped to 4.7% of the sprite because the correct seated pose hides the surface the reared arm exposed, and `"colours": true` still separates cleanly, which is noted in `visuals.json`; and the crew do not collapse on death because 0 A.D. gives this arm no `Death` clip at all — recorded in `onager.toml` |
 | 2026-08-08 | `vis.berry_bush` | Found already baked and unwired; became the MVP food node in place of `res.deer` |
 | 2026-08-08 | `vis.deer_carcass` | Baked; prompted the per-clip `location_scale` fix that unblocked animated fauna. Not wired — nothing hunts deer since the berry-bush switch |

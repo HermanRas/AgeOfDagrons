@@ -279,3 +279,64 @@ func test_two_worlds_with_units_competing_for_the_same_slot_stay_identical() -> 
 		w.step()
 		other.step()
 		assert_eq(w.state_hash(), other.state_hash(), "diverged on tick %d" % (i + 1))
+
+
+# -- facing (owner, 2026-08-27: "villager mining away from gold") ------------
+
+func test_a_gathering_villager_turns_to_face_the_node() -> void:
+	# Until 2026-08-27 `facing` was written in exactly two places -- MovementSystem
+	# (the way you walk) and CombatSystem (the thing you are hitting) -- so a
+	# villager kept whatever direction her last path step left her in and mined
+	# over her shoulder. The tree is WEST of where she starts, so arriving from the
+	# east and then turning is a real change of direction rather than a coincidence.
+	_order_gather()
+	var ticks := _run_until(func(): return villager.task == SimUnit.Task.GATHER \
+			and not villager.has_waypoint() and not villager.path_pending, 200)
+	assert_true(ticks > 0, "it arrived and started gathering")
+	# ONE MORE TICK, and it is not padding. On the tick the walk ends, GatherSystem
+	# has already run and returned early on `has_waypoint()`; MovementSystem clears
+	# the waypoint afterwards. So the first tick that satisfies the predicate is the
+	# tick BEFORE the first one that can turn her. Asserting without this reads the
+	# state one tick early and fails on a fix that works.
+	w.step()
+	assert_eq(villager.facing, SimUnit.facing_toward(tree.pos - villager.pos),
+			"turned at the node, not left pointing wherever it walked in from")
+
+
+func test_it_faces_the_node_while_waiting_for_a_slot_too() -> void:
+	# The turn is at the ADJACENCY check, ahead of the slot and cooldown gates, so
+	# a villager queueing at a busy seam looks at it as well. Set to one slot and
+	# send two: the loser holds its ground (GatherSystem's own rule) and must still
+	# be facing the tree, or a queue is a row of villagers staring off the map.
+	tree.gather_slots = 1
+	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	var ids: Array[int] = [villager.id, second.id]
+	w.queue_command(GatherCommand.new(1, ids, tree.id))
+	var ticks := _run_until(func(): return not second.has_waypoint() \
+			and not second.path_pending \
+			and (second.tile() - tree.tile()).length() < 2.0, 400)
+	assert_true(ticks > 0, "the second villager reached the tree")
+	w.step()          # see the note in the test above -- the arrival tick is too early
+	assert_eq(second.facing, SimUnit.facing_toward(tree.pos - second.pos),
+			"the one without a slot is facing the tree as well")
+
+
+func test_the_turn_is_identical_on_two_hosts() -> void:
+	# `facing` is part of state_hash(), so a turn computed any way that is not a
+	# pure function of sim state is a desync rather than a cosmetic slip. This is
+	# the same shape as the determinism test at the end of this file, narrowed to
+	# the field the new lines write.
+	var other := SimWorld.new()
+	other.setup(MatchConfig.debug_single_player())
+	other.spawn_building(&"building.town_center", 1, Vector2i(10, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	var other_tree := other.spawn_resource_node(&"res.tree", Vector2i(9, 10), 0)
+	var other_villager := other.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+
+	_order_gather()
+	other.queue_command(GatherCommand.new(1, [other_villager.id], other_tree.id))
+	for i in range(200):
+		w.step()
+		other.step()
+		assert_eq(villager.facing, other_villager.facing,
+				"facing diverged on tick %d" % (i + 1))

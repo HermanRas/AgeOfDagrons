@@ -269,3 +269,22 @@ func test_two_worlds_given_the_same_build_order_stay_identical() -> void:
 		w.step()
 		other.step()
 		assert_eq(w.state_hash(), other.state_hash(), "diverged on tick %d" % (i + 1))
+
+
+# -- facing (the sibling of GatherSystem's, same day, same reason) -----------
+
+func test_a_builder_turns_to_face_what_it_is_building() -> void:
+	# A builder hammering with his back to the wall reads as a bug, and nothing
+	# else was ever going to turn him: MovementSystem stopped caring the moment he
+	# arrived, and until 2026-08-27 no work task wrote `facing` at all.
+	#
+	# Checked against the building's CENTRE rather than its origin, because that is
+	# what the fix aims at -- a person standing against a long wall faces the middle
+	# of it, not the corner tile the footprint happens to be indexed from.
+	_order_build()
+	var ticks := _run_until(func(): return villager.task == SimUnit.Task.BUILD \
+			and not villager.has_waypoint() and not villager.path_pending \
+			and house.build_progress > 0, 500)
+	assert_true(ticks > 0, "it arrived and started building")
+	assert_eq(villager.facing, SimUnit.facing_toward(house.pos - villager.pos),
+			"turned at the foundation rather than keeping its travel facing")

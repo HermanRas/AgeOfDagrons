@@ -78,6 +78,22 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 		u.stop()
 		return
 
+	# TURN AND LOOK AT IT. Reported from play on 2026-08-27 -- "villager mining
+	# away from gold" -- and it was never a bake defect: until now `facing` was set
+	# in exactly two places, MovementSystem (the way you walk) and CombatSystem (the
+	# thing you are hitting), so a villager kept whatever direction her last path
+	# step happened to leave her in and mined over her shoulder for the rest of the
+	# match. Same argument CombatSystem makes for an archer, and the same call the
+	# owner has already made twice for gathering behaviour.
+	#
+	# Set HERE, after the adjacency check and before the slot and cooldown gates, so
+	# a villager waiting her turn at a busy seam is looking at it too -- standing at
+	# the rock is the condition, not extracting from it this particular tick.
+	#
+	# Deterministic, and it has to be: this is sim state that rides `state_hash()`.
+	# It is a pure function of two positions, computed identically on every host.
+	u.facing = SimUnit.facing_toward(node.pos - u.pos)
+
 	var kind := harvest_kind(node)
 
 	# A unit still holding a different kind from an earlier, since-changed order

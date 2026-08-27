@@ -101,15 +101,27 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
 
-# The facing pair — how a re-baked atlas gets checked (see §7, the 180° item)
+# The facing trio — how a re-baked atlas gets checked (see §7, the mirror item)
 & $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
 & $godot --path game res://dev_preview/preview_combat_facing.tscn  # eight attackers in a ring
+& $godot --path game res://dev_preview/preview_work_facing.tscn    # gathering, and hitting a building
 ```
 
 `preview_facing_chart` draws one actor at all 8 sprite directions × 3 clips with no
-simulation involved — just `EntityView` and the atlas. **Column 0 (S) must show a face
-and column 4 (N) a back.** It is the cheapest way to judge an atlas the art side has
-just re-baked, and `--units` takes any id, so nothing needs editing to chart a new one.
+simulation involved — just `EntityView` and the atlas. `--units` takes any id, so nothing
+needs editing to chart a new one.
+
+**READ COLUMNS 2 AND 6, NOT ONLY 0 AND 4.** The agreed check used to be "column 0 (S)
+shows a face, column 4 (N) a back", and that check **cannot detect a mirror** — S and N
+are exactly the two columns a reflection about the N–S axis leaves alone. It passed a
+mirrored roster on 2026-08-27 and cost a re-bake. **Column 2 (W) must face screen LEFT and
+column 6 (E) screen RIGHT**, and all four have to hold.
+
+`preview_work_facing` covers the two cases nothing else did: a ring of villagers mining one
+node, and a ring of cavalry hitting one building. It prints, per unit, the facing the sim
+holds against the one `SimUnit.facing_toward` would pick right now — so **a unit nothing
+ever turned is reported as STALE**, which is a different fault from a unit turned the wrong
+way and wants a different fix.
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
 art faces. A wall lying across its own footprint has the same footprint, the same
@@ -242,6 +254,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |
 | **A visual id is not a filename** | `vis.field_1` is baked as `vis.field_age2`, `vis.field_4` as `vis.farm`. The seam maps ids to paths precisely so ids outlive the art side's naming — and never rename a staged file to match, because `stage_atlases.py` will put it back. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
+| **A verification that cannot see the fault it is for** | The facing check was "column 0 a face, column 4 a back" — **the two columns a mirror about N–S leaves alone**. A mirrored roster passed it twice and a 242-atlas re-bake was spent on the wrong diagnosis. Before trusting any check, ask which failures it is *blind* to; a green check on a fault it cannot express is worse than no check, because it ends the investigation. |
+| **A facing that is drawn wrong is not necessarily set wrong** | Two different faults, two different owners. `preview_work_facing` prints the sim's `facing` beside what `SimUnit.facing_toward` would pick now: **STALE means nothing turned the unit** (a sim gap — until 2026-08-27 only `MovementSystem` and `CombatSystem` ever wrote `facing`, so gathering and building never turned anybody), while numbers that agree with a picture that disagrees is the atlas. Settle which one before writing anything. |
 | **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
 | **Touch does NOT take keyboard focus, so every new text field needs `TouchLineEdit`** | `emulate_mouse_from_touch = false` ([project.godot:35](game/project.godot#L35)) is *required* — `CameraRig` handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch arriving as both pans twice per thumb. Godot still routes raw touches to controls, but the touch path takes no focus and `LineEdit` asks for the keyboard on focus-enter. Measured on 4.7.1: focus after a screen touch = false, after a mouse click = true. Flipping the setting fixes typing by breaking the camera. |
 | **A `Control` laid over the minimap swallows every tap** | The four corner buttons were a `PRESET_FULL_RECT` grid added *over* it and Godot hit-tested them first — minimap click-to-move and double-tap-to-centre were both dead while looking implemented. Check hit-test order before concluding a minimap feature is missing. |
@@ -260,7 +274,7 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**331 atlases staged.** 78 test files, **1268 tests, 201,463 assertions, all
+**331 atlases staged.** 78 test files, **1272 tests, 201,669 assertions, all
 passing** — measured 2026-08-27, not quoted. The figures before these (1232/76, and
 293/71/1163 before that) were both stale within days; re-measure rather than trusting
 this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
@@ -428,10 +442,24 @@ plugs in; read the row rather than re-deriving it:
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
-- ~~**EVERY UNIT, SHIP, ANIMAL AND SIEGE ENGINE IS BAKED 180° BACKWARDS.**~~ **FIXED,
-  STAGED AND VERIFIED 2026-08-27** — the art side re-baked it and the game side staged
-  it; PLAN.md §13.2 item 10 is closed. What happened, because the shape of it is worth
-  keeping:
+- **THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — still open, and the 180° re-bake did
+  not fix it.** Closed on the morning of 2026-08-27 and re-opened the same afternoon when
+  the owner played it: front and back are now right and **left and right are swapped**.
+  That is a reflection about the N–S axis, and **no `yaw_offset_deg` can undo a
+  reflection** — the half-turn just moved the mirror from the E–W axis (which reads as
+  "faces backwards") to the N–S one. Measured on `unit.knight`: stored index 2, labelled
+  W, draws a horse whose head points screen RIGHT; index 6, labelled E, points LEFT.
+  **The game cannot fix it either, and that was checked rather than assumed:** the
+  one-character change to `Iso.sim_facing_to_sprite` (`7 - facing` → `facing + 1`) fixes
+  every unit and **breaks the walls, whose atlases are NOT mirrored** — `preview_walls`
+  renders both axes lying along their footprints, which is exactly the check a mirror
+  fails. Two atlas families that disagree can only be reconciled per-atlas, and per-atlas
+  is the `directions_reversed` patch the owner reverted. So it is the art side's, with a
+  specification this time rather than a guess: emit the 8 directions in the wall bakes'
+  rotational sense and take the 180 back off in the same edit. PLAN.md §13.2 item 10,
+  `asset_request.md` [P0]. **What the re-bake DID close: the stale colour atlases.**
+
+  The rest of this entry is the record of that re-bake, which is still worth reading:
   - **The recipe half landed 2026-08-25** (`5737e00`, corrected by `96d2318`): all 82
     zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160 colour
     variants were regenerated from them — **wider than the 36 asked for**, the owner's
