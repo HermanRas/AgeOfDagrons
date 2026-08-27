@@ -18,13 +18,17 @@ build: 320.6 MB, unchanged — nothing since it has been a code change to the AP
 outright, seven are one or two items short, and **two have not been started: 9 (ages and
 tech) and 13 (dragons)**. Nothing is blocked on a decision.
 
-**The unit-speed balancing pass — which this line named as the single most valuable item
-— is DONE** (2026-08-23, every speed halved; owner-confirmed on 2026-08-27: *"sound and
-speed is much better"*). **The whole roster's facing re-bake is also done and staged**
-(2026-08-27), which closed both the 180° defect and the stale colour atlases. What is next
-is what the speed change left behind: **re-tuning the AI**, which now fails to resolve a
-match it used to win, because halving movement halved the economy and starved an
-already-known build-step bug. See PLAN.md §15 item 1.
+**Three things closed on 2026-08-27, all of which this line used to name as next:** the
+unit-speed pass (2026-08-23, owner-confirmed *"sound and speed is much better"*), the whole
+roster's **facing re-bake**, staged and verified in a match, and **12.2b, the AI**. That last
+one grew from "re-tune it" into a rule engine: five real difficulties driven by resource
+triggers in `data/ai_*.json` instead of a script of timed steps. The owner's summary of why
+it matters — *"the update system support customization and supports random maps, thats the
+big win from this update."*
+
+**What is next is features rather than repair**: 4.8 garrison, 2.4d Archipelago, 8.8's [X]
+button, and then 9.3 `TechSystem`, which moved up because ages now cost resources and the
+tech tree is what the age ladder is *for*.
 
 ---
 
@@ -44,16 +48,17 @@ real work remains · ⛔ not started
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
 | 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport), **8.8 the [X] clear-selection button** |
-| 9 | Ages & tech | ⛔ | **`TechSystem` does not exist.** The biggest genuinely unstarted phase, and several other items quietly depend on it |
+| 9 | Ages & tech | 🟡 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **`TechSystem` still does not exist** — `techs.json` is deliberately empty and the tech-tree page renders whatever is in it. Now the biggest unstarted piece |
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
-| 12 | Multiplayer & AI | 🟡 | **12.1b LAN discovery**, **12.2b AI behaviour**, 12.3 campaign, 12.4 save/load and replays |
+| 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |
 | 13 | Dragons | ⛔ | Not started, by design — "once the RTS is a game" |
+| 14 | **NEEDS UPGRADE** — AI enemy-blindness | ⛔ | Opened 2026-08-27 with 12.2b. A declared ceiling, not a defect: no rule can see the opponent, so an army is a target number and never a response |
 
-**Cross-cutting:** **7.5 audio is not built.** It is the one item that claimed to be built
-and was not — there is no `AudioManager` and no `play_sfx` call site anywhere. The sound-id
-table and `has_sfx()` do exist, so the seam is ready and only the object is missing.
-`PLAN.md` §13.2 item 11.
+**Cross-cutting: 7.5 audio is BUILT** (2026-08-23) — `AudioManager`, `MatchAudio`,
+`data/audio_map.json`, 131 sound ids. This line used to say it was not, which was the one
+item that had claimed to be built and was not. What is left is BYTES: the 0 A.D. fetch is
+rate-limited and incremental, and a clean checkout runs silently by design.
 
 ---
 

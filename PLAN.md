@@ -1990,53 +1990,37 @@ MVP, with the actual next actions at the bottom — and the numbering had been r
 twice, so cross-references inside it were drifting. The shipped list now lives in §12 as
 prose; what is left here is only what has not been done.*
 
-**1. Re-tune the AI for the halved speed** — **up next**, the owner's call on 2026-08-27
-after playtesting the change: *"sound and speed is much better. We may need to revisit the AI
-actions to adjust after the speed fix to get consistent game resolutions or identify why its
-not completing."*
+*This list's item 1 has been the AI twice running and is now **done both times**: the
+unit-speed pass (2026-08-23, `962b1c5`) and then the AI re-tune it damaged, which turned into
+**12.2b's rule engine** on 2026-08-27 rather than the piecemeal lever it was scoped as. The
+owner: *"i am happy with the results"*, and *"the update system support customization and
+supports random maps, thats the big win from this update."* What is left below is features.*
 
-*This row used to be the unit-speed balancing pass. That is **done** — every unit's speed was
-halved on 2026-08-23 (`962b1c5`), which closed the oldest item in `BUGS.md`. What replaced it
-here is the damage it did downstream, and the sequencing is the same argument as before: the
-AI is the thing standing between the baseline table and being evidence again, so it comes
-before the features below it.*
-
-**The symptom is a game that does not finish.** Seeds 3 and 5 still resolve, ~6% slower with
-the same winners; **seed 4 went from "p2 wins at t7776" to unresolved, and not because of the
-12,000-tick window — it does not resolve at 20,000 either.** Seed 4 was the only seed p2 ever
-won, which is precisely what made that table evidence rather than an artefact of the script
-favouring player 1.
-
-**The cause is already diagnosed and is NOT the speed itself.** Halving speed doubled both
-legs of every gather trip, so income is closer to halved than unaffected — and that amplified
-the open "a build step gives up when short of resources" bug until *both* AIs reach their
-attack step with no army. So the first question is whether the fix is the build step (a person
-waits for the wood; the timeout should not count affordability), `gather_rate` (the economy
-lever, the owner's call), or the AI's step budget — and **which one is asked first decides
-whether this is an AI fix or a balance change.** Do not tune them together, or neither will be
-measurable. The AI-vs-AI baseline table in `BUGS.md` is the instrument; re-measure all five
-seeds before and after.
-
-**2. 4.8 garrison**, which unlocks 4.9 and closes the largest remaining hole in walls —
+**1. 4.8 garrison**, which unlocks 4.9 and closes the largest remaining hole in walls —
 0 A.D.'s medium wall declares eight turret points and ours hold nobody. It is also what
 `garrison_cap` on every building def has been waiting for, and it settles §13.2 item 4b
 (whether `act_enter`/`act_garrison` are one concept or two).
 
-**3. 2.4d Archipelago** (§11.6). One island per player, a few sheep, nothing hostile. The
+**2. 2.4d Archipelago** (§11.6). One island per player, a few sheep, nothing hostile. The
 content side is nearly free — `PREDATORS` is keyed by map type and read with `.get(type,
 {})`, so an unlisted type gets no predators without a line of code. The work is that
 `MapValidator` requires every start to reach every other by land, which an archipelago fails
 by definition, so that claim has to *change* rather than relax.
 
-**4. 8.8, the [X] clear-selection button** — small, and the only thing on this list the owner
+**3. 8.8, the [X] clear-selection button** — small, and the only thing on this list the owner
 reported from actually playing the 2026-08-23 build. Double-tap-to-clear misfires on a phone
 and the interim workaround is a two-finger box select over empty ground.
 
-**Then, in no strongly forced order:** 12.2b's real AI decision flow (which item 1 above may
-well turn into, rather than sitting behind it); 9.3
-`TechSystem`, where the field yield's per-age ladder is currently standing in for a mill
-tech; 2.4c the map save format; 12.1b LAN discovery; 12.3 campaign; and 13.x dragons once
-the RTS is a game.
+**4. 9.3 `TechSystem`** — and it moved UP, because ages now cost resources (2026-08-27) and
+that makes the tech tree the next thing the age ladder is *for*. §9 is the biggest genuinely
+unstarted phase: `techs.json` is deliberately empty, the tech-tree page renders whatever is in
+it, every AI profile already declares `techs: true` against nothing, and the field yield's
+per-age ladder is standing in for a mill upgrade that does not exist.
+
+**Then, in no strongly forced order:** 2.4c the map save format; 12.1b LAN discovery; 12.3
+campaign; **Phase 14, the AI's enemy-blindness** (which is a rebuild of 12.2b's condition
+vocabulary, not a bug fix, and wants a game whose balance is settled first); and 13.x dragons
+once the RTS is a game.
 
 ### What is waiting on art, not on code
 

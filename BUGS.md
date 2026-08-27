@@ -242,6 +242,27 @@ the army caps, the AoE age costs and the 12.2b rule sets all in:
       runs before the reservation and rule-order fixes), and three of the four rungs
       order correctly.
 
+      **THE OWNER HAS ACCEPTED THIS RUNG AS IT STANDS** (2026-08-27): *"i think if we add
+      a human into the mix the normal vs hard will work well."* A bot-versus-bot ladder
+      measures build orders against each other, and a human changes what Hard's extra
+      economy is worth. So this is parked rather than tuned — do not move the numbers
+      above without a reason from PLAY.
+
+- [ ] **UNFAIR IS NOT GOOD ENOUGH YET** — owner, 2026-08-27: *"i am not happy with unfair
+      but it needs work so its okay for now."* Accepted for the moment, not settled.
+
+      What it is today: Hard's rule set, plus a head start of 3 villagers and 2 swordsmen,
+      plus a zero reaction delay. It stalemated Hard over 20,000 ticks, which is a level
+      called *unfair* failing to beat the one below it.
+
+      **The head start is the weakest of its three advantages and the villagers are the
+      strongest part of that** — 8 against 5 is a ~60% opening economy lead that compounds,
+      where two swordsmen trade once. But the deeper issue is that Unfair plays the same
+      GAME as Hard, only slightly richer, and "unfair" ought to mean something a fair
+      player cannot do. That is Phase 14 territory (an AI that can see and answer what it
+      is fighting) as much as it is a numbers question, which is why it is parked rather
+      than dialled up.
+
 **What this replaced, kept in one line because the conclusion outlived the numbers:**
 halving unit speed doubled both legs of every gather trip, which cut income roughly in
 half and starved a build step that gave up when short of resources — so both bots reached
