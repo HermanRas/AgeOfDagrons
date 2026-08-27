@@ -99,6 +99,72 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
+### PROJECT OWNER, 2026-08-27 — EXTRA TREES, FOUR POOLS, so the game side can vary flora per map
+
+**Filed by the project owner directly.** The game side picks a pool per map type and rolls
+within it, the way `vis.tree`'s `variants` array already works — so this is a request for
+*more species*, not for a new mechanism.
+
+**I have resolved every name against the checkout.** They are all real, but **only two of
+the fifteen are spelled the way they were written**, so the table below is what to bake
+against. `giga/tree/<x>` maps to `flora/trees/<y>.xml`.
+
+| pool | asked for | actual actor | proposed id | state |
+|---|---|---|---|---|
+| **island** | `cretan_palm_patch` | `palm_cretan_date_patch.xml` | `vis.tree_palm_cretan_patch` | new — **see the PATCH warning** |
+| island | `date_palm` | `palm_date.xml` | `vis.tree_palm_date` | new |
+| island | `medit_fan_palm` | `palm_medit_fan_palm.xml` | `vis.tree_palm_fan` | new |
+| island | `palm_tropic` | `palm_tropical.xml` | `vis.tree_palm_tropical` | new |
+| island | `palm_tropical` | **probably `palm_tropical_tall.xml`** | `vis.tree_palm_tropical_tall` | new — **see the duplicate note** |
+| **forest** | `elm` | `elm.xml` | `vis.tree_elm` | ✅ **ALREADY BAKED AND STAGED** |
+| forest | `euro_beach` | `european_beech.xml` | `vis.tree_beech` | new — spelling: be**e**ch |
+| forest | `euro_birch` | `euro_birch_tree.xml` | `vis.tree_birch` | new |
+| forest | `fir` | `fir_tree.xml` | `vis.tree_fir` | new — `fir_sapling` and `fir_tree_winter` also exist |
+| forest | `oak_new` | `oak_new.xml` | `vis.tree_oak_new` | new — a *different* tree from `vis.tree`, which is `oak.xml` |
+| **river** | `banyan` | `banyan.xml` | `vis.tree_banyan` | new — `banyan_leaves.xml` also exists |
+| river | `bamboo` | `bamboo.xml` | `vis.tree_bamboo` | new — `bamboo_02`, `bamboo_dragon` also exist |
+| river | `cretan_palm_patch`, `date_palm` | — | — | same two as island; bake once, list twice |
+| **desert** | `oak_dead` | `oak_dead.xml` | `vis.tree_oak_dead` | new |
+| desert | `elm_dead` | `elm_dead.xml` | `vis.tree_elm_dead` | new |
+| desert | `dead` | **ambiguous** | — | **already served, probably — see below** |
+
+**So it is 12 new bakes, not 15.**
+
+**Three things I need decided rather than guessed:**
+
+1. **`palm_tropic` and `palm_tropical` are probably one tree listed twice.** 0 A.D. has
+   `palm_tropical` and `palm_tropical_tall`. I have read the pair as those two, because
+   asking for the same actor twice in one pool does nothing. **If you meant one tropical
+   palm, say so and the island pool is four.**
+2. **`dead` is ambiguous and may already be done.** There is an actor literally called
+   `tree_dead.xml`, and separately **we already bake two dead trees** — `vis.tree_dead`
+   (`dead_a_2.xml`) and `vis.tree_dead_branchy` (`dead_a_1.xml`), both staged. With
+   `oak_dead` and `elm_dead` added, the desert pool would be **four** without baking
+   anything called `dead` at all. That is my recommendation.
+3. **`palm_cretan_date_patch` is a PATCH — several palms in one actor**, not one tree. It
+   will be much wider than a single trunk, and a tree claims **one tile** of ground. That
+   is precisely what got `vis.tree_teak` pulled from the forest (P3): art painted across
+   tiles the entity does not own, so the owner tapped a tree's roots and gathered a
+   different tree. **I will measure it and report rather than shipping it if it lands
+   outside the oak-to-toona band** (≤ 250 px wide, ≤ 300 px tall). A patch may be better
+   handled as a decorative prop with no resource on it — the game side's call.
+
+**THIS CLOSES [P3].** That entry asks for a palm to replace the pulled teak and flags
+PLAN.md A.4's blocker — *"needs variant selection in isobake — no deterministic actor
+exists"*. **The blocker is answered by this request**: the owner has named deterministic
+actors, so there is nothing for isobake to choose. Five palms arrive, of which the fan
+palm and the date palm are the most likely to fit one tile.
+
+**Where they plug in (game side):** one `visuals.json` entry each with a measured
+`footprint_m` / `height_m`, then the pool arrays. Nothing else — the variant axis is
+already wired and `variant_of()` reads the list's length.
+
+**Not baked yet.** These are 12 new recipes and each needs a canvas; they are small and
+fast (a tree is `directions = 5`, no clips, seconds each), so they would ride tonight's
+run cheaply if wanted. **Say the word and I will write them before the box comes on** —
+otherwise they are a batch of their own.
+
+
 ### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
 
 > ### ✅✅ CONFIRMED IN A MATCH TOO — all 8 colours, 2026-08-27
