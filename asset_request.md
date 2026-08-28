@@ -77,11 +77,14 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 **The old P2 — `yaw_offset_deg` — is DELIVERED, STAGED AND VERIFIED**, so everything
 below it has moved up one. Details in the Delivered log at the bottom.
 
-**P0 IS DELIVERED, STAGED AND WIRED (2026-08-28) and is off this table** — see the
-Delivered log. **P1, the wildlife, is now the top open art item**, and it is one sixth
-done: the wolf moves, the other five species do not. P2 and P4 are each partly delivered;
-the two 2026-08-28 entries at the top of Open requests say which pieces landed, which did
-not, and which are staged but deliberately unwired.
+**P0 THROUGH P4 ARE ALL DELIVERED AND STAGED as of 2026-08-28.** P0 is also wired and has
+moved to the Delivered log. P1, P2, P3 and P4 are **baked, staged and awaiting wiring
+only** — the ready-to-wire table at the top of Open requests is the whole list.
+
+**P5 is the only art item left on this table**, and it blocks nothing. What is actually
+worth doing next is not on it: `vis.fishing_ship`'s `drop_objects` fix, which fails the
+colour gate on every run, and **`LICENCES.md`, which is 186 recipes out of date** — a
+licence obligation under PLAN.md §2.3, and mine.
 
 **The "21 still mirrored" caveat was checked and WITHDRAWN — no batch is needed.** All 21
 are `directions = 1`, which the P0 root cause cannot reach. Working in the game-side entry.
@@ -181,10 +184,34 @@ render 15 m and 11 m tall with the foundation showing.
 > that does not set it — which is all of them but two. Do not spend a night re-baking 240
 > atlases over it. The flag is behaviourally a no-op for the other 329.
 
-**Still open on my side and NOT in the above:** the other five animals + five carcasses
-(the rest of [P1]), `vis.projectile_bolt`'s pitch, `vis.ballista_packed`, the 12 trees, the
-five [P5] footprints, and **`vis.fishing_ship`**, which fails the colour-consistency gate
-on six equal-frequency actor variants and needs a `drop_objects` fix rather than a re-bake.
+**Still open on my side and NOT in the above:** the five [P5] footprints, and
+**`vis.fishing_ship`**, which fails the colour-consistency gate on six equal-frequency
+actor variants and needs a `drop_objects` fix rather than a re-bake. Everything else that
+was on this list at breakfast is baked and in the table above.
+
+#### ON THE TREES — I BAKED TWO YOU TOLD ME TO SKIP, and one of them disproves the reason
+
+Your three answers arrived after the batch was cut, so this reconciles rather than argues.
+**Answer 2 I followed exactly** — nothing called `dead` was baked.
+
+**`palm_cretan_date_patch`: you said skip it and explicitly said do not measure it. I had
+already measured it, and the measurement contradicts the premise.** Your reason was that a
+patch is several trunks against a one-tile claim — the teak defect. It renders **164 × 190**
+at its widest yaw, which is **smaller than the oak `vis.tree` already uses** (239 × 225).
+Whatever that actor is, it is not a sprawling grove. Staged, and **yours to ignore** — but
+skipping it on size would now be skipping it for a reason that measured false.
+
+**`palm_tropical_tall`: you read the owner's two lines as one tree; I baked both.** They are
+different actors and different silhouettes — 149 × 273 against 119 × 275. Cheap either way.
+Use one and leave the other staged and unreferenced, exactly as `vis.wall_gate` is.
+
+So the island pool can be **three, four or five** and all three are wired the same way. The
+9 you asked for are all there; 2 extra are staged alongside.
+
+**⚠️ `vis.tree_banyan` is the one to actually decide, and it is in the pool you asked
+for.** 370 px wide against the 250 band — **worse than the teak at 296**. It will reproduce
+the root-tapping bug if it goes into `variants` as a gatherable. The river pool is bamboo
+plus the palms without it.
 
 ### ✅ GAME SIDE, 2026-08-28 — STAGED, IMPORTED, WIRED. And **do not run that 21-atlas batch.**
 
@@ -286,193 +313,27 @@ banyan / bamboo (2), **desert** oak_dead / elm_dead (2) — with the island's pa
 again under river. **Write the recipes when the box is free**; nothing is blocked, and P1's
 five remaining species are still worth more than any of them.
 
-### PROJECT OWNER, 2026-08-27 — EXTRA TREES, FOUR POOLS, so the game side can vary flora per map
+### ✅ [P2] [P4] DELIVERED 2026-08-28 — packed engines and projectile pitch
 
-**Filed by the project owner directly.** The game side picks a pool per map type and rolls
-within it, the way `vis.tree`'s `variants` array already works — so this is a request for
-*more species*, not for a new mechanism.
+**Both closed.** All three packed siege engines and both shaft projectiles are staged;
+see the ready-to-wire table at the top. The reasoning that outlived these entries is in
+the recipes, which is where this file's housekeeping rule says it belongs:
 
-**I have resolved every name against the checkout.** They are all real, but **only two of
-the fifteen are spelled the way they were written**, so the table below is what to bake
-against. `giga/tree/<x>` maps to `flora/trees/<y>.xml`.
+- **`ballista_packed.toml`** — why the actor is `siege_rock_packed` (matched by its crew
+  props, not its name: the packed actors are named for AMMUNITION and sit beside each
+  other in the same civ), and why it animates when the trebuchet cannot.
+- **`trebuchet_packed.toml`** / **`onager_packed.toml`** — the structural reason one
+  animates and the other does not: the onager's packed actor IS the wagon and declares the
+  clips on itself; the trebuchet's is a pivot carrying the wagon as a prop, so the
+  subject's clip set comes up `Available: []`. Neither `[anims]` block may be copied into
+  the other. The trebuchet's four crew still stack into a totem pole beside the cart.
+- **`projectile_bolt.toml`** — how 115.0 was established rather than copied from the arrow,
+  since the bounding box cannot tell nose-down from tail-down and the arrow's first probe
+  landed perfectly backwards for exactly that reason.
 
-| pool | asked for | actual actor | proposed id | state |
-|---|---|---|---|---|
-| **island** | `cretan_palm_patch` | `palm_cretan_date_patch.xml` | `vis.tree_palm_cretan_patch` | new — **see the PATCH warning** |
-| island | `date_palm` | `palm_date.xml` | `vis.tree_palm_date` | new |
-| island | `medit_fan_palm` | `palm_medit_fan_palm.xml` | `vis.tree_palm_fan` | new |
-| island | `palm_tropic` | `palm_tropical.xml` | `vis.tree_palm_tropical` | new |
-| island | `palm_tropical` | **probably `palm_tropical_tall.xml`** | `vis.tree_palm_tropical_tall` | new — **see the duplicate note** |
-| **forest** | `elm` | `elm.xml` | `vis.tree_elm` | ✅ **ALREADY BAKED AND STAGED** |
-| forest | `euro_beach` | `european_beech.xml` | `vis.tree_beech` | new — spelling: be**e**ch |
-| forest | `euro_birch` | `euro_birch_tree.xml` | `vis.tree_birch` | new |
-| forest | `fir` | `fir_tree.xml` | `vis.tree_fir` | new — `fir_sapling` and `fir_tree_winter` also exist |
-| forest | `oak_new` | `oak_new.xml` | `vis.tree_oak_new` | new — a *different* tree from `vis.tree`, which is `oak.xml` |
-| **river** | `banyan` | `banyan.xml` | `vis.tree_banyan` | new — `banyan_leaves.xml` also exists |
-| river | `bamboo` | `bamboo.xml` | `vis.tree_bamboo` | new — `bamboo_02`, `bamboo_dragon` also exist |
-| river | `cretan_palm_patch`, `date_palm` | — | — | same two as island; bake once, list twice |
-| **desert** | `oak_dead` | `oak_dead.xml` | `vis.tree_oak_dead` | new |
-| desert | `elm_dead` | `elm_dead.xml` | `vis.tree_elm_dead` | new |
-| desert | `dead` | **ambiguous** | — | **already served, probably — see below** |
-
-**So it is 12 new bakes, not 15.**
-
-**Three things I need decided rather than guessed:**
-
-1. **`palm_tropic` and `palm_tropical` are probably one tree listed twice.** 0 A.D. has
-   `palm_tropical` and `palm_tropical_tall`. I have read the pair as those two, because
-   asking for the same actor twice in one pool does nothing. **If you meant one tropical
-   palm, say so and the island pool is four.**
-2. **`dead` is ambiguous and may already be done.** There is an actor literally called
-   `tree_dead.xml`, and separately **we already bake two dead trees** — `vis.tree_dead`
-   (`dead_a_2.xml`) and `vis.tree_dead_branchy` (`dead_a_1.xml`), both staged. With
-   `oak_dead` and `elm_dead` added, the desert pool would be **four** without baking
-   anything called `dead` at all. That is my recommendation.
-3. **`palm_cretan_date_patch` is a PATCH — several palms in one actor**, not one tree. It
-   will be much wider than a single trunk, and a tree claims **one tile** of ground. That
-   is precisely what got `vis.tree_teak` pulled from the forest (P3): art painted across
-   tiles the entity does not own, so the owner tapped a tree's roots and gathered a
-   different tree. **I will measure it and report rather than shipping it if it lands
-   outside the oak-to-toona band** (≤ 250 px wide, ≤ 300 px tall). A patch may be better
-   handled as a decorative prop with no resource on it — the game side's call.
-
-**THIS CLOSES [P3].** That entry asks for a palm to replace the pulled teak and flags
-PLAN.md A.4's blocker — *"needs variant selection in isobake — no deterministic actor
-exists"*. **The blocker is answered by this request**: the owner has named deterministic
-actors, so there is nothing for isobake to choose. Five palms arrive, of which the fan
-palm and the date palm are the most likely to fit one tile.
-
-**Where they plug in (game side):** one `visuals.json` entry each with a measured
-`footprint_m` / `height_m`, then the pool arrays. Nothing else — the variant axis is
-already wired and `variant_of()` reads the list's length.
-
-**Not baked yet.** These are 12 new recipes and each needs a canvas; they are small and
-fast (a tree is `directions = 5`, no clips, seconds each), so they would ride tonight's
-run cheaply if wanted. **Say the word and I will write them before the box comes on** —
-otherwise they are a batch of their own.
-
-
----
-
-### ONE PROBE EACH OF P1, P2 AND P4 — built and measured 2026-08-27, before tonight's batch
-
-The owner asked for one of each, built here, so that whatever works rides tonight's run
-and whatever does not becomes its own batch. **Two of the three are in. The third is
-parked.** isobake is now **`db9dc8e`, build 38**.
-
-**✅ P4 — THE ARROW FLIES. `pitch_offset_deg` now exists.** You asked whether isobake had
-a pitch control at all: it did not. `RenderSpec` carried only `yaw_offset_deg`, and the
-render hardcoded X and Y to zero. It is one field plus one euler component, defaults to
-0, and is therefore a no-op for every other recipe.
-
-`projectile_arrow.toml` carries **`pitch_offset_deg = 115.0`**. The trimmed frame sizes
-are the evidence, and they say it better than a picture can at 18 px:
-
-| | S (toward camera) | E (across) | NE |
-|---|---|---|---|
-| before | 2 × 17 | 2 × 17 | 2 × 17 |
-| after | **2 × 3** | **18 × 9** | **14 × 14** |
-
-Identical in every direction before — the fence post. Now it foreshortens to nearly a dot
-head-on and lies flat side-on. **The head's elevation is `90 − pitch`**, measured from two
-probes, so 115 is the 25° nose-down you guessed at, and your guess reads well.
-
-Worth knowing: the first probe laid the shaft down perfectly and **backwards**, because
-the mesh's `+Z` end is the fletching. Nothing in the bounding box predicts which end
-leads.
-
-**`vis.projectile_bolt` is NOT done** — same treatment, but the bolt is a different mesh
-and may well need a different value. It rides tonight only if I probe it too; say if you
-want it and I will.
-
-**✅ P1 — THE WOLF MOVES.** `idle` / `walk` / `attack` / `die` / `decay`, 240 frames, all
-five resolving against clips the actor really declares.
-
-- **`location_scale` is left at the default, and that is a measurement.** The idle frame
-  renders a complete wolf — tail, four attached legs — and every clip's bbox sits within
-  20% of every other. A torn mesh is many times larger; the deer's death clip needed
-  0.0319. Do not copy that figure to the other five.
-- **Canvas 128 → 256.** A moving wolf does not fit a canvas calibrated on a standing one:
-  at 128 the clip-check caught **67 of 240 frames** touching the render edge, and it
-  started with `idle`, not the run. **Expect a canvas bump on the other five species.**
-- **The clip names are case-inconsistent across fauna and it will bite:** wolf
-  `attack_melee`/`death`, boar `attack_melee`/`Death`, bear **`Attack_Melee`**, zebu
-  **`Attack_melee`**, deer all lower case. `tools/check_clips.py` resolves every name in
-  about a second; the alternative is a bake that dies ten minutes in.
-- **`zebu_wild` really does have `Feeding`**, as you said — plus Walk, Run, Idle ×4 and
-  two Deaths. Bear has Idle ×4, Walk, Run, Attack_Melee, Death. **Neither declares them in
-  its own actor file**; both pull a shared `art/variants/quadraped/base_*.xml`, which is
-  why a naive read of `bear_brown.xml` reports an animal with no animations at all.
-
-> **OWNER'S CALL, later the same day — BOTH PACKED ENGINES SHIP, imperfect and all:**
-> *"trebuchet and onager packed even if not looking correct or not animated is still
-> better as a placeholder than not working at all."* Unparked, and **`vis.onager_packed`
-> added**, so **both are in tonight's run**. Tonight is now **244 bakes** — 84 base + 160
-> colour; they are picked up as `never staged` and need no special handling.
->
-> **`vis.onager_packed` came out well and it ANIMATES** — 120 frames, `idle` and `walk`,
-> three crew correctly spaced along the cart, two horses in caparisons, engine struck down
-> as cargo. **So it does not need `speed: 0`** — it is the one siege state that moves and
-> it has a real walk clip.
->
-> **Why one animates and the other cannot** — structural, not luck, and worth knowing
-> before you wire them. Both are wagons. The onager's packed actor **is** the wagon and
-> declares `Idle`/`Walk`/`Run` on itself. The trebuchet's packed actor is a **pivot** that
-> declares nothing and carries the wagon as a prop, so its clips belong to a nested actor
-> and the subject's clip set comes up empty. Each recipe now warns against copying the
-> other's `[anims]` block.
->
-> **What you are accepting on the trebuchet**, so it is not a surprise in a screenshot:
-> the wagon, oxen and cargo are right, but **the four crew stack into a vertical column
-> beside the cart** instead of standing around it. At map zoom it reads fine; close up it
-> is a totem pole of soldiers. Still static, too.
->
-> **`vis.ballista_packed` — the third of your three — is NOT built.** The owner named two.
-> It is the same treatment and I will do it on a word; the ballista is also the one engine
-> with no player colour, so it may be the one you care least about.
->
-> **Colour on both is UNMEASURED.** The onager's packed actor carries
-> `player_trans_norm_spec`, which is suggestive and is exactly the material that proves
-> nothing either way (§4: the ballista's props are `player_trans` and it still measures
-> 0%). Treat both as `"colours": false` until I probe them.
-
-**⏸️ P2 — THE PACKED TREBUCHET WAS PARKED for half an hour, and this is what the probe
-found.** It bakes,
-and **a packed mangonel turns out to be a wagon drawn by two zebu with the engine struck
-down as cargo** — exactly the unmistakably-different silhouette the request wanted. The
-wagon, the oxen and the cargo are all correct.
-
-Two things are not:
-
-1. **The four crew do not place.** `engineer_a..d` land stacked in a vertical column
-   beside the cart, overlapping each other at staggered heights, rather than standing
-   around it.
-2. **It cannot animate yet.** The wagon declares `Idle` and **`Walk`** — so a packed
-   engine could roll rather than skate, and would not need `speed: 0` — but those clips
-   belong to a **nested prop**, and the subject's clip set is built from what the actor in
-   `[source]` declares. That is a pivot base declaring nothing. Both attempts failed
-   identically with `Available: []`. The onager works because its subject armature is the
-   arm that owns the clips; here the rig is one level further down. The fix is in the
-   zeroad adapter, with the onager as the regression test that it does not break the
-   working case.
-
-It sat in `tools/recipes/parked/` until the owner's call above, and that directory stays
-even though it is empty now — it is a subdirectory, which neither `bake_batch.ps1` nor
-`stale_recipes.py` globs, so it is where a recipe waits without reaching the render box.
-That matters more than tidiness: **both machines share `tools/` through Google Drive**, so
-a recipe reaches the box whether or not it is committed, and one with no staged atlas
-counts as work to do.
-
-**So tonight is 242 bakes: 82 base + 160 colour.** Not the 232 I quoted this morning, and
-the difference is worth understanding rather than just noting: committing the pitch
-control moved isobake to `db9dc8e`, which makes the ten atlases already at build 37 — the
-scout's nine and the wolf — **pipeline-stale again**. They are re-baked with everything
-else. That costs ten bakes on a four-wide box and buys **one uniform build id across the
-entire roster**, which is what your equality-based staleness rule wants to see.
-
-The wolf and the arrow are selected by recipe hash alone, so they would be picked up even
-without `-PipelineStale`. `vis.trebuchet_packed` is a separate job and cannot join by
-accident.
+**Colour is UNMEASURED on all three packed engines** — treat as `"colours": false` until
+probed. Noted because `vis.ballista` measures 0% while the ram measures 6.8%, so the class
+predicts nothing.
 
 ---
 
@@ -517,261 +378,51 @@ I shipped 0.90 by eye. Worth a look while you are in there.
 
 ---
 
-### [P3] `vis.tree_teak` pulled from the forest — replacement wanted, ideally a PALM — 2026-08-23
+### ✅ [P3] DELIVERED 2026-08-28 — thirteen trees, eleven of them one-tile safe
 
-**What's needed:** a fourth tree species to restore `vis.tree`'s variant list to four.
-The project owner's preference is a **palm**, for riverbanks and the island game mode,
-so this is a request for a new look rather than a like-for-like re-bake of the teak.
+**The teak's replacement is there several times over**, including five palms. Staged and
+awaiting wiring; the per-tree measurements and canvases are in the recipes.
 
-**What I did on the game side, already committed.** `vis.tree_teak` is out of
-`visuals.json`'s `variants` array for `vis.tree`. Nothing else changed: the atlas, its
-PNG and its own `visuals.json` declaration are all still on disk and still valid, so
-putting it back is a one-word edit if you disagree with any of this. Forests now roll
-between oak, elm and toona.
+**`vis.tree_teak` stays out of `vis.tree`'s variants** — nothing here changes that, and
+the atlas is still on disk if it is ever wanted back.
 
-**Why it went.** It is far and away the biggest sprite in the set, and its size made
-trees unselectable in a way the other three do not:
+**The one live decision is `vis.tree_banyan` at 370 px wide** (band: 250). See the note in
+the 2026-08-28 asset-side entry above.
 
-| variant | actor | widest frame | tallest frame | page |
-|---|---|---|---|---|
-| `vis.tree` | `flora/trees/oak.xml` | 239 px | 225 px | 462 KB |
-| `vis.tree_elm` | `flora/trees/elm.xml` | 223 px | 339 px | 395 KB |
-| **`vis.tree_teak`** | `flora/trees/teak.xml` | **296 px** | **388 px** | **743 KB** |
-| `vis.tree_toona` | `flora/trees/tree_tropic.xml` | 220 px | 250 px | 302 KB |
-
-A tile is 64×32 px. The teak is **4.6 tiles wide and 12 tiles tall**, and a tree claims
-**one** tile of ground — deliberately, because at 4×4 apiece a twelve-tree forest would
-be an impassable wall (`resources.json`'s own note). So the trunk and roots you can
-plainly see are painted across tiles the tree does not own and cannot answer for. The
-owner reported tapping the teak's roots and gathering *a different tree entirely*.
-
-**This is not a defect in your bake** and there is nothing to fix in `teak.toml`. The
-sprite is a faithful render of a big tree; the game simply has no way to make a
-one-tile entity answer for 4.6 tiles of art without breaking pathing. Two game-side
-fixes were tried and both reverted the same morning (`f06058d`, `f8720f2`) — the second
-made it actively worse. Dropping the outlier is the owner's call and the cheap one.
-
-**So the constraint on the replacement is size, not species.** Anything in the oak-to-
-toona band — roughly **≤ 250 px wide, ≤ 300 px tall** — sits inside what one tile can
-carry. A palm is a good fit for that on its own: tall and thin beats broad and dense.
-If a palm can only be had at teak proportions, say so and I will take a fourth
-temperate species instead rather than have the problem back.
-
-**Known blocker, and it is why I am asking rather than assuming.** PLAN.md A.4 already
-lists palms as open with the reason *"needs variant selection in isobake — no
-deterministic actor exists"*. If that is still true, this request is really two: the
-isobake side first, then the bake. Tell me which and I will re-plan around it — three
-species is a perfectly good forest in the meantime, and nothing is blocked on this.
-
-**Where it plugs in:** one new `visuals.json` entry with a measured `footprint_m` /
-`height_m`, and its id appended to `vis.tree`'s `variants`. No code, no `resources.json`
-change — the variant axis is already wired and `variant_of()` reads the list's length.
+**Worth keeping out of the recipes:** three of these trees overran a 768 canvas at the
+BOTTOM edge, which is buried root rather than size — `oak_dead` hides 4.69 m below z = 0,
+`oak_new` 3.55 m, `banyan` 2.84 m. All thirteen carry `ground_clip = true`; it is a no-op
+where nothing is buried. **The trees already shipped bury 0.13 m (oak) and 0.70 m (elm)**,
+which is 3-16 px hidden under the sprite's own base, so they were deliberately left alone
+rather than re-baking ten atlases.
 
 ---
 
-### [P4] `vis.projectile_arrow` and `_bolt` fly point-up — requested 2026-08-22
+### ✅ [P1] DELIVERED 2026-08-28 — six species move, five carcasses stop being deer
 
-> **GAME SIDE, 2026-08-27 — the re-bake did NOT close this, and I have re-shot it.**
-> All three projectiles were in the 82-recipe run and all three are re-staged, so their
-> **yaw** now carries the 180° line. The **pitch** did not come with it —
-> `tools/recipes/projectile_arrow.toml` has `yaw_offset_deg = 180.0` and no pitch of any
-> kind. I froze the sim and cropped the arrow at 8× again: it is still a **vertical
-> shaft**, unchanged from the 2026-08-22 picture. So this entry stands exactly as
-> written below, and the open question at the bottom of it — *does isobake have a pitch
-> control at all* — is still the one that decides whether this is a recipe edit or a
-> pipeline change. Nothing is blocked either way.
+**Baked and staged, awaiting wiring.** 10/10 on the render box in 2.2 min, master art
+checkout pristine. The ready-to-wire table at the top has the clip list per species.
 
-**What's needed:** a pitch on the two SHAFT projectiles so they lie along their flight
-instead of standing on end. `vis.projectile_stone` is correct and needs nothing — it is
-a sphere, so there is no orientation to get wrong.
+**Wiring:** the five movement bakes need **nothing** — they re-skin in place. Each carcass
+needs a `visuals.json` entry and one line in `resources.json` off `vis.deer_carcass`.
 
-**Why:** the projectile system landed today and the three atlases are wired and drawing.
-The plumbing is right — the arrow spawns at the archer, flies to the target, points the
-correct one of eight ways, and despawns on arrival. What it looks like is a **fence
-post**. Both shafts are baked standing vertically, so a volley reads as a row of stakes
-being planted across the field rather than as arrows in the air.
+**Three measured facts that are not in the recipes' own headers and are worth a look before
+you wire:**
 
-I froze the sim mid-flight and photographed all three; the crops are the evidence and
-they are unambiguous at 8×. Happy to re-shoot on request — `preview_projectiles.tscn`
-takes all three pictures and prints each projectile's exact screen position so you can
-crop straight to it.
+1. **Feeding is CATTLE-ONLY.** Boar and deer appear to declare a `feeding` clip and neither
+   has one — `check_clips.py`'s `declared()` returns variant names alongside animations.
+   Only `zebu_wild` has a real `Feeding`.
+2. **Frame 1 is the collapsed pose on every carcass, not frame 0.** Frame 0 is the death
+   clip's start, where the animal is still standing.
+3. **Verified past the summary:** per-clip bounding boxes spread at most 1.51x across all
+   six species, so nothing tore. `idle`/`walk` come out tall and narrow and `die`/`decay`
+   wide and short — the sheep goes 14x31 standing to 36x31 fallen — which is the death
+   clip genuinely playing rather than holding a rest pose.
 
-**Candidate source:** unchanged actors, they are the right ones —
-`props/units/weapons/arrow_front.xml` and `props/units/weapons/bolt.xml`. This is a
-recipe orientation question, the same family as `yaw_offset_deg` on the buildings that
-showed their backs, except that it is **pitch** rather than yaw: the shaft needs laying
-down toward the horizon, not spinning about the vertical.
-
-Two things I do not know and you will:
-
-- whether isobake has a pitch control at all, or whether `yaw_offset_deg` is the only
-  rotation a recipe can ask for. If it is yaw-only, this is a pipeline change and worth
-  saying so rather than forcing it;
-- what angle actually reads. A projectile flying in an isometric view is not simply
-  horizontal — my guess is that something around 20–30° of nose-down looks more like
-  flight than a true horizontal would, but that is a guess from one screenshot and you
-  have the contact sheets.
-
-**Not urgent and not blocking.** Everything works; it just looks wrong. Ranged combat
-had *no* visible cause at all before today, so a badly-angled arrow is still strictly
-better than what shipped yesterday. Fold it into whatever batch is convenient.
-
-**Where it plugs in once baked:** nowhere. Same ids, same paths, re-stage and it is
-picked up — the game reads the arrow's direction from the sim and the atlas' own
-8-direction table, neither of which changes.
+**`location_scale` is one species.** Only the deer's clips tear, and one figure (0.0319)
+covers its whole set. Recorded in `deer.toml`; do not copy it to the others.
 
 ---
-
-### [P2] `vis.ballista_packed`, `vis.onager_packed`, `vis.trebuchet_packed` — requested 2026-08-22
-
-**What's needed:** the PACKED half of all three siege engines. One bake each, same
-treatment as their unpacked halves (which are staged and correct).
-
-**Why:** 4.13's last item is the pack/unpack state machine — a siege engine travels
-packed and cannot shoot, deploys to shoot and cannot move. It is scoped with 4.13 by
-PLAN.md 9.2.1 item 5. The machine is sim-side work I can do; what it has no way to
-show is the *packed* pose, because **every siege atlas staged today is the unpacked
-one**. Without these three the state machine is invisible — a limbered trebuchet
-would trundle across the map fully deployed, arm cocked, which reads as a bug rather
-than as a state.
-
-I would rather not build it against the magenta placeholder: the whole point of the
-machine is that the two states look different, so a test can prove the transition
-happened but only the art can show it is the right way round. Same class as the wall
-art — *staged* and *wired* are different states — one size smaller.
-
-**Candidate source:** all three resolve cleanly through the roster's own template
-pair, and I checked each file is present in the checkout:
-
-| id | packed actor | unpacked (already staged, for reference) |
-|---|---|---|
-| `vis.ballista_packed` | `units/carthaginians/siege_rock_packed.xml` | `units/carthaginians/siege_lithobolos_med.xml` |
-| `vis.onager_packed` | `units/romans/siege_onager_packed.xml` | `units/romans/siege_onager_pivot.xml` |
-| `vis.trebuchet_packed` | `units/han/siege_mangonel_pivot_packed.xml` | `units/han/siege_mangonel.xml` |
-
-Two notes that may save you time. `tools/recipes/trebuchet_deployed.toml` already
-says the packed half has no recipe and names the right actor in its header comment,
-so that one is half-written. And the Carthaginian and Roman packed templates do
-**not** follow the naming the roster implies — the roster's `siege_rock_packed` is a
-template under `units/cart/siege_ballista_packed.xml`, and *its* actor is the one in
-the table. I resolved all three through `<VisualActor><Actor>` rather than by
-filename, per §9.2's rule.
-
-**Colour:** all three unpacked halves except the ballista carry `"colours": true`.
-Worth measuring rather than assuming — a limbered engine is a different silhouette
-and may expose a different amount of tunic, exactly the way the onager's correct
-seated pose did.
-
-**Where it plugs in once baked:** three new `visuals.json` entries, dense four-age
-maps pointing at the one bake (units do not re-skin per age). `SimUnit` carries the
-deploy state and `UnitView` picks the id from it. Nothing else moves.
-
-**Not blocking the rest of 4.13** — arrow projectiles and the hostile wolf need no
-new art and I am doing both now. This is the only piece that waits on you.
-
----
-
-### [P1] Animate the wildlife (your A.4a) + FIVE carcass bakes — requested 2026-08-22, re-scoped 2026-08-23
-
-> **ASSET SIDE, 2026-08-28 — ALL TEN RECIPES ARE WRITTEN, PROBED AND COMMITTED (`7dbec5f`).
-> The batch is waiting on the render box and nothing else.** `stale_recipes.py` selects
-> exactly these ten by recipe hash, so **no flags** — `-PipelineStale` is wrong here and
-> would drag 82 recipes in over a no-op flag change.
->
-> **The box does NOT need provisioning for this one.** It holds isobake `db9dc8e` / build
-> 38; the only thing newer is `ground_clip_deformed`, which none of these ten use. Baking
-> at 38 gives byte-identical results. (I could not have provisioned anyway — neither
-> `100.96.0.1` nor `192.168.0.11` answers from this workstation.)
->
-> **`vis.deer` and `vis.deer_carcass` are already baked here at full settings** as the
-> validation article — the deer being the largest sprite, the only species needing a
-> `location_scale`, and the only one with a `run`. 240 frames, one page, 74.6% fill, **no
-> CLIPPED**, five clips spread 0.80–1.45× with no tearing. They are deliberately NOT staged,
-> so the box re-bakes all ten together and the set carries one build id.
->
-> **Canvas is 256 on all ten, up from 128–192**, matching the wolf. Read the summary for
-> `CLIPPED` anyway — a moving animal does not fit a canvas cut for a standing one.
->
-> **Two corrections to what this entry says above, both measured:**
->
-> **1. `location_scale` is ONE species, not six.** The 13.2-item-8 tear is real only on the
-> deer. Probing per-clip bounding boxes against each species' median: boar, bear, sheep and
-> cattle all agree within 18%, so their clips import at the mesh's own scale and the default
-> 1.0 is correct. The deer rendered *every* clip pinned to the canvas edge. `deer_carcass.toml`
-> measured 0.0319 for the death clip and warned each clip would need its own figure — that
-> one figure covers the whole deer set. **Do not copy it to the others; it would collapse
-> them to nothing.**
->
-> **2. FEEDING IS CATTLE-ONLY.** The entry lists it for cattle and that is right, but the
-> reason matters: boar and deer *also* appear to declare `feeding`, and in both cases it is
-> a **variant name with no animation behind it**. `check_clips.py`'s `declared()` returns
-> variant names alongside animations, which is what makes them look equivalent. Only
-> `zebu_wild` has a real `Feeding` clip.
->
-> **The clip names are the trap and they are worse than recorded here.** Three spellings of
-> attack across four species — `attack_melee` (wolf, boar, deer), `Attack_Melee` (bear),
-> `Attack_melee` (zebu) — and the deer is entirely lower case, `idle`/`walk`/`run`/`death`.
-> Every duplicate-case pair resolves cleanly once variant names are filtered out; exactly one
-> case is a real animation each time. **Bear and cattle declare nothing in their own actor
-> files** — both pull `art/variants/quadraped/base_*.xml` — so reading `bear_brown.xml`
-> reports an animal that cannot be animated at all.
->
-> **What lands:** boar/bear get idle+walk+attack+die+decay; deer gets idle+walk+**run**+die+
-> decay; sheep and cattle get idle+walk+die+decay, cattle also **feeding**. Plus five
-> carcasses — wolf, boar, bear, sheep, cattle — so a dead bear stops drawing as a dead deer.
-
-> **GAME SIDE, 2026-08-27 — the facing re-bake passed straight through this one.** All
-> eight animals were in the 82 recipes and all eight are re-staged, so a wolf now faces
-> the way it is running. **It is still one static rest pose**, so it still slides, and
-> this entry is unchanged and now unambiguously the top of the queue. If the movement
-> clips are baked from the same recipes, the yaw line is already in them.
-
-⚠️ **RE-SCOPED 2026-08-23, and it grew by five species.** This was a request for one
-animated wolf and one wolf carcass. Phase 6 closed the same week and **six species now
-move**, so the whole of A.4a became load-bearing at once. Nothing about the analysis
-below changed — only how many animals it applies to.
-
-**MOVEMENT CLIPS — six species, all currently one static rest pose:**
-
-| id | what it does now | clips wanted |
-|---|---|---|
-| `vis.wolf` | chases and bites | idle / **walk** / **attack** / die / decay |
-| `vis.boar` | chases and bites | idle / **walk** / **attack** / die / decay |
-| `vis.bear` | chases and bites | idle / **walk** / **attack** / die / decay |
-| `vis.deer` | roams, and bolts when hit | idle / **walk** (a Run would earn its place) / die |
-| `vis.sheep` | driven home by a player | idle / **walk** |
-| `vis.cattle` | driven home by a player | idle / **walk**, and `zebu_wild` has a **Feeding** clip — the one idle that reads as an animal doing something |
-
-`tools/recipes/wolf.toml` already reasons the wolf through in full: every clip exists in
-`fauna/wolf.xml` (Idle ×3, Walk, Run, attack_melee ×2, death ×2), the quadruped
-`location_scale` bug that blocked it is fixed, and the recipe's own "still static" note
-is a workaround for a problem that no longer exists. I am adding nothing to that
-analysis — only saying it now has six callers.
-
-**FIVE CARCASS BAKES.** `res.*_carcass` exists for deer, wolf, boar, bear, sheep and
-cattle. Only `vis.deer_carcass` is baked, and **the other five all draw it** — so a dead
-bear currently looks like a dead deer. `vis.deer_carcass` is the template: a separate
-bake of the same actor carrying a single `carcass` anim, per
-`tools/recipes/deer_carcass.toml`.
-
-**WHY THIS IS P1.** Not because it is old — because the game has gone ahead of the art,
-which is the reverse of the usual direction here and the only art item where that is
-true. **This project's own convention is that anything without a walk clip carries
-`speed: 0`**, precisely so a motionless sprite never slides across the map — ships, the
-dragon and all three siege engines all do. Wildlife is the first thing to break that
-rule, knowingly, on the owner's call of 2026-08-23 when they were told the art was
-static and chose the full version anyway. Six sliding animals is the cost being paid
-until this lands.
-
-**Still not blocking.** Everything is wired and playable; it looks wrong rather than
-being broken. The offer from 2026-08-22 stands and is now worse value: holding the
-animals at `speed: 0` would make six features harmless and useless together.
-
-**Where it plugs in once baked:** the six movement bakes need **no wiring change at
-all** — they re-skin in place, and `EntityView.play_anim` already falls back to `static`
-per clip, so a partial delivery is safe. Each carcass becomes a `visuals.json` entry and
-one line in `resources.json` swapping that def off `vis.deer_carcass`.
-
 
 ## Delivered
 
