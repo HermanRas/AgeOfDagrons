@@ -14,6 +14,19 @@
 ## caught before by a wrong one: an archer (arrow), a ballista (bolt) and a trebuchet
 ## (stone).
 ##
+## FOUR NOW, and the fourth is a BUILDING (project owner, 2026-08-28: *"watch tower is
+## not showing 5x rocks when attacking + X x arrows for each archer in garrison"*). A
+## tower is the case the three unit shooters cannot stand in for, twice over: its shot is
+## a volley rather than a single projectile, and it needs no order at all -- it
+## auto-acquires, so there is no `AttackCommand` to watch land. It also has no archer
+## sprite drawing a bow, which is why the volley mattered enough to report: one arrow
+## every two seconds off a stone tower reads as a tower doing nothing.
+##
+## AND A FIFTH PICTURE PER SHOOTER THAT IS NOT OF A PROJECTILE AT ALL -- the litter it
+## leaves (`SpentProjectiles`). Same reasoning as the rest of this file: a decal that only
+## exists to be looked at cannot be judged by a green suite, and the tests for it assert
+## bookkeeping (how many, for how long) rather than that anything reached a screen.
+##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_projectiles.tscn
 ##       -- writes user://projectile_*.png and quits.
@@ -24,13 +37,23 @@ const SHOT_DIR := "user://"
 const SETTLE_FRAMES := 30
 const STEP_FRAMES := 10
 
+## How long to let the volley land and settle before photographing the ground, in
+## frames. `SpentProjectiles.LIFETIME` is 4 s and the fade is the last 1.5, so this wants
+## to be comfortably inside the first half or the picture is of arrows going transparent.
+const LITTER_FRAMES := 45
+
 ## Shooter, its projectile, and how far away to stand its victim. The range is inside
 ## each unit's own `attack.range` so it fires without walking, which matters because
 ## the siege engines carry `speed: 0` and cannot close at all.
+##
+## `building` swaps the whole set-up: no order is issued and `garrison` archers go inside,
+## which is what makes the volley count something other than five.
 const SHOOTERS := [
 	{"unit": &"unit.archer", "visual": &"vis.projectile_arrow", "gap": 4},
 	{"unit": &"unit.ballista", "visual": &"vis.projectile_bolt", "gap": 8},
 	{"unit": &"unit.trebuchet", "visual": &"vis.projectile_stone", "gap": 11},
+	{"unit": &"building.watch_tower", "visual": &"vis.projectile_stone", "gap": 5,
+			"building": true, "garrison": 3},
 ]
 
 var _game: Node = null
@@ -59,7 +82,7 @@ func _ready() -> void:
 ## first run of this could not tell the arrow apart from the bow the archer was
 ## holding. `SimClock.stop()` makes it a still life instead: catch the arrow mid-flight,
 ## stop the world, let the view settle, then photograph a frame that cannot have moved.
-enum { SET_UP, ORDER, CATCH, SHOOT, CLEAR }
+enum { SET_UP, ORDER, CATCH, SHOOT, LITTER, CLEAR }
 
 func _process(_delta: float) -> void:
 	if _interactive:
@@ -82,6 +105,10 @@ func _process(_delta: float) -> void:
 			_frames = 0
 		return
 
+	# LITTER runs the world for a while rather than a single step, so the shots it is
+	# waiting on can actually land.
+	if _phase == LITTER and _frames < LITTER_FRAMES:
+		return
 	if _frames < STEP_FRAMES:
 		return
 	_frames = 0
@@ -96,8 +123,15 @@ func _process(_delta: float) -> void:
 		SHOOT:
 			# The world has been stopped for a few frames now, so this frame and the
 			# one the texture actually holds are the same picture.
-			_shoot("projectile_%s"
-					% String(SHOOTERS[_shooter_index]["unit"]).trim_prefix("unit."))
+			_shoot("projectile_%s" % _name_of(SHOOTERS[_shooter_index]))
+			# Let it land: the arrow is frozen mid-flight right now, and what comes next
+			# is a picture of where it ends up.
+			SimClock.start()
+			_phase = LITTER
+		LITTER:
+			SimClock.stop()
+			_report_litter()
+			_shoot("projectile_%s_spent" % _name_of(SHOOTERS[_shooter_index]))
 			_phase = CLEAR
 		CLEAR:
 			SimClock.start()
@@ -106,14 +140,30 @@ func _process(_delta: float) -> void:
 			_phase = SET_UP
 
 
+func _name_of(spec: Dictionary) -> String:
+	return String(spec["unit"]).trim_prefix("unit.").trim_prefix("building.")
+
+
+## What is lying on the ground, and where. Printed for exactly the reason every other
+## number in this file is: a decal is a handful of pixels at 1:1, so "I cannot see one"
+## and "there is not one" are indistinguishable in a screenshot without a count beside it.
+func _report_litter() -> void:
+	var layer: SpentProjectiles = _game._view.spent
+	print("  spent on the ground: %d (they fade after %.0f s)"
+			% [layer.count(), SpentProjectiles.LIFETIME])
+	if layer.count() == 0:
+		push_warning("preview_projectiles: nothing landed -- no decals were left")
+
+
 ## Stand a shooter and a victim on clear ground, in view, at a range the shooter can
 ## actually fire from.
 func _set_up(spec: Dictionary) -> void:
 	var world: SimWorld = Net.host().world
 	_add_an_opponent(world)
-	_at = _clear_ground(world, int(spec["gap"]) + 3)
+	_at = _clear_ground(world, int(spec["gap"]) + 6)
 
-	var shooter := world.spawn_unit(spec["unit"], Net.local_player_id(), _at)
+	var shooter: SimEntity = _place_tower(world, spec) if spec.get("building", false) \
+			else world.spawn_unit(spec["unit"], Net.local_player_id(), _at)
 	var victim := world.spawn_unit(&"unit.militia", _enemy_id(),
 			_at + Vector2i(int(spec["gap"]), 0))
 	if shooter == null or victim == null:
@@ -131,6 +181,32 @@ func _set_up(spec: Dictionary) -> void:
 	_game._camera.centre_on(Iso.tile_centre_to_world(
 			_at + Vector2i(int(spec["gap"]) / 2, 0)))
 	_game._camera.zoom = Vector2(CameraRig.MAX_ZOOM, CameraRig.MAX_ZOOM)
+
+
+## A finished tower with archers inside it, which is a different shape of set-up from a
+## unit in three ways worth naming.
+##
+## COMPLETE, because `CombatSystem._process_building` will not fire on a foundation's
+## behalf -- a tower you have not finished paying for does not defend you. Garrisoned
+## through `SimWorld.garrison_unit` rather than by appending to `b.garrison` by hand, so
+## the archers actually leave the map: units standing around the tower would be in the
+## picture and would also be shot at. And it needs no `AttackCommand` at all, which is
+## what `_order_the_shot` skips: nothing can order a building to attack, so auto-acquire
+## is the only way its data ever means anything.
+func _place_tower(world: SimWorld, spec: Dictionary) -> SimEntity:
+	var tower := world.spawn_building(spec["unit"], Net.local_player_id(), _at,
+			SimBuilding.Phase.COMPLETE, true)
+	if tower == null:
+		return null
+	for i in range(int(spec.get("garrison", 0))):
+		var a := world.spawn_unit(&"unit.archer", Net.local_player_id(),
+				_at + Vector2i(0, 4 + i))
+		if a != null:
+			world.garrison_unit(tower, a)
+	print("  %s garrisoned with %d archer(s): volley %d + %d"
+			% [spec["unit"], tower.garrison.size(), tower.attack_volley,
+			tower.garrison_projectiles(world).size()])
+	return tower
 
 
 ## Everything the shot needs that is not a unit: a second player to be hostile to, and
@@ -195,6 +271,12 @@ func _home_tile(world: SimWorld) -> Vector2i:
 func _order_the_shot() -> void:
 	if _shooter_id == 0:
 		return
+	# A BUILDING CANNOT BE ORDERED TO ATTACK -- there is no command that would name one
+	# as the attacker, which is exactly why `CombatSystem` lets buildings auto-acquire
+	# where it refuses it for units. Sending one here would be rejected and would look,
+	# from the log, like the tower failing to fire.
+	if bool(SHOOTERS[_shooter_index].get("building", false)):
+		return
 	Net.submit_command(AttackCommand.new(Net.local_player_id(), [_shooter_id], _victim_id))
 
 
@@ -211,19 +293,29 @@ func _catch_it_in_the_air(spec: Dictionary) -> bool:
 		return false
 	var world: SimWorld = host.world
 	var flying: SimProjectile = null
+	var airborne := 0
 	var ids := world.entities.keys()
 	ids.sort()
 	for id in ids:
 		var e = world.entities[id]
 		if e is SimProjectile and (e as SimProjectile).elapsed_ticks >= 1:
-			flying = e
-			break
+			airborne += 1
+			if flying == null:
+				flying = e
 	if flying == null:
 		return false
 
 	SimClock.stop()
 
-	var name: String = String(spec["unit"]).trim_prefix("unit.")
+	var name := _name_of(spec)
+	# THE COUNT, for the volley. Five stones drawn on top of each other are one stone as
+	# far as a screenshot is concerned, so the number beside the picture is what says
+	# whether the fan is working or whether they are all on one line.
+	var want := 1
+	if bool(spec.get("building", false)):
+		want = int(spec.get("garrison", 0)) + \
+				GameDataRegistry.building(spec["unit"]).attack_volley
+	print("  %s: %d in the air (expected about %d)" % [name, airborne, want])
 	# THE NUMBERS, so a picture with no visible arrow can be told apart from a picture
 	# taken at the wrong moment -- including where on the screen to look for it.
 	var at: Vector2 = _game._view.get_global_transform_with_canvas() \
@@ -251,11 +343,18 @@ func _clear_the_field() -> void:
 	var doomed: Array[int] = []
 	for id in world.entities:
 		var e = world.entities[id]
-		if e is SimProjectile or int(id) == _shooter_id or int(id) == _victim_id:
+		# `garrisoned_in` catches the tower's archers, which are off the map and would
+		# otherwise survive into the next shooter's picture as an invisible garrison.
+		if e is SimProjectile or int(id) == _shooter_id or int(id) == _victim_id \
+				or (e is SimUnit and (e as SimUnit).garrisoned_in == _shooter_id):
 			doomed.append(int(id))
 	doomed.sort()
 	for id in doomed:
 		world.despawn(id)
+	# Otherwise the last shooter's litter is lying in the next one's picture -- and
+	# despawning the projectiles above would ADD to it, since a despawn is exactly what
+	# leaves a decal.
+	_game._view.spent.clear()
 	_shooter_id = 0
 	_victim_id = 0
 

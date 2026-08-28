@@ -10,11 +10,12 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	# Each of GameView's three layers is a separate orphan in a headless test, since
+	# Each of GameView's four layers is a separate orphan in a headless test, since
 	# _ready() never runs to parent them -- see test_game_view.after_each.
 	view.pool.free()
 	view.terrain.free()
 	view.fog.free()
+	view.spent.free()
 	view.free()
 
 

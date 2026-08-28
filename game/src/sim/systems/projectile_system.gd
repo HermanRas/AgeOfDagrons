@@ -16,18 +16,32 @@ class_name ProjectileSystem
 extends SimSystem
 
 
+## ONE TICK OF ARRIVAL BEFORE IT GOES (2026-08-28), which is a one-word change with two
+## jobs. `advance()` clamps `pos` to `target_pos` on the tick a shot lands, and despawning
+## on that same tick threw that position away before any snapshot carried it -- so every
+## arrow in the game visibly vanished about one and a half tiles SHORT of what it was
+## fired at, which is the distance `SimProjectile.SPEED` covers in a tick. Nobody had
+## reported it because an arrow is on screen for two ticks and it is hard to see what a
+## sprite failed to do.
+##
+## It is also what makes the project owner's spent-arrow decals possible at all
+## (`SpentProjectiles`): the view learns where a shot ended from the last snapshot that
+## carried it, so that snapshot has to be the one where it arrived.
+##
+## `elapsed_ticks > total_ticks` rather than `has_landed()`, therefore -- landed stays
+## "it is there", and this is "it has been there for a tick".
 func process_tick(w: SimWorld) -> void:
 	# Collected before despawning: `despawn()` mutates `entities`, which cannot be done
 	# while iterating it. Sorted, because despawn order reaches `removed_this_tick` and
 	# two clients disagreeing about it is a difference in the wire format for nothing.
-	var landed: Array[int] = []
+	var spent: Array[int] = []
 	for e in w.entities.values():
 		if not (e is SimProjectile):
 			continue
 		var p: SimProjectile = e
 		p.advance()
-		if p.has_landed():
-			landed.append(p.id)
-	landed.sort()
-	for id in landed:
+		if p.elapsed_ticks > p.total_ticks:
+			spent.append(p.id)
+	spent.sort()
+	for id in spent:
 		w.despawn(id)

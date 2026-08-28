@@ -281,6 +281,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A facing that is drawn wrong is not necessarily set wrong** | Two different faults, two different owners. `preview_work_facing` prints the sim's `facing` beside what `SimUnit.facing_toward` would pick now: **STALE means nothing turned the unit** (a sim gap — until 2026-08-27 only `MovementSystem` and `CombatSystem` ever wrote `facing`, so gathering and building never turned anybody), while numbers that agree with a picture that disagrees is the atlas. Settle which one before writing anything. |
 | **A CLIP ONLY ONE SPECIES HAS, sent by the sim for all of them** | The sim may not ask which clips were baked, so `AnimationSystem` sends `run` for every bolting animal and `feeding` for every settled one — and only the deer has a run, only the cattle a feed. **The generic fallback chain is `static` → `idle`, and for `run` that is the WRONG answer**: five of the six would stand perfectly still while sliding at flee speed, which is worse than the walk they played before the clip existed. `AtlasEntry._ANIM_ALIAS` (`run` → `walk`, `feeding` → `idle`) is tried ahead of that chain. **The test for whether an alias belongs there: it must fall back to a clip every subject HAS** — a rewording of the request, not a second guess at it. |
 | **The projection inversion RETURNS A NEGATIVE HEIGHT for anything lying down** | visuals.json's documented `height = (anchor.y - rect.w / 4) / 19.596` assumes the sprite's top is the subject's top. A carcass lies below its own anchor, so four of the five 2026-08-28 bakes derive a negative height and `vis.deer_carcass` derives 2.47 m — taller than the standing deer. **No choice of frame fixes it; the failure is structural.** The five ship as the deer carcass's own proportions scaled off each animal's measured live figures, and `asset_request.md` [P5] carries the ask for real ones. |
+| **TWO LISTS BOTH MEAN "GONE" AND ONLY ONE OF THEM IS A DESPAWN** | `GameView` drops an entity two ways: `snap.removed` (an explicit despawn) and the forget pass (anything `updated` did not mention, i.e. it walked into the fog). They were run forget-first, so a despawned entity had its facts erased by the forget pass before the `removed` loop saw it — and anything wanting to act *on* a despawn had nothing left to read. That is what `SpentProjectiles` needs and what `MatchAudio`'s header records as unresolvable from `updated` alone. **`removed` now runs first**, and the distinction is real: an arrow that flies into the fog leaves no litter, because you did not see it land. |
+| **A SYSTEM THAT ACTS ON THE TICK A STATE IS REACHED, BEFORE ANY SNAPSHOT CARRIES IT** | `ProjectileSystem` despawned a shot on the very tick `advance()` clamped its position to the target — so the arrival position never reached a client and **every arrow in the game vanished a tile and a half short of what it was fired at**, `SPEED` being 384 of a 256 sub-tile. Nobody reported it in six days: an arrow is on screen for two ticks, and *a sprite failing to appear somewhere* is far harder to see than one appearing wrongly. The fix is one word (`elapsed_ticks > total_ticks`) and the general form is worth keeping: **if the last thing an entity does is the thing you want drawn, it has to survive one snapshot after doing it.** |
 | **A staged tree is not a declared tree, and this file has claimed otherwise** | `vis.tree_cherry`, `_cypress`, `_cypress_tall`, `_snow_pine`, `_dead` and `_dead_branchy` are staged and referenced by nothing — an earlier session told the art side that the two dead ones were "staged and wired today" and they were not. They predate the per-map pools and carry no pool assignment, so they were left out of them deliberately rather than missed. Same class as the walls in §7: **only a def or a pool reaching for an id proves it is wired.** |
 | **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
 | **Touch does NOT take keyboard focus, so every new text field needs `TouchLineEdit`** | `emulate_mouse_from_touch = false` ([project.godot:35](game/project.godot#L35)) is *required* — `CameraRig` handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch arriving as both pans twice per thumb. Godot still routes raw touches to controls, but the touch path takes no focus and `LineEdit` asks for the keyboard on focus-enter. Measured on 4.7.1: focus after a screen touch = false, after a mouse click = true. Flipping the setting fixes typing by breaking the camera. |
@@ -300,8 +302,8 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 82 test files, **1452 tests, 204,176 assertions, all passing** —
-measured 2026-08-28 after the SECOND art delivery of that day was wired, not quoted.
+**361 atlases staged.** 83 test files, **1474 tests, 204,234 assertions, all passing** —
+measured 2026-08-28 after the second playtest round was closed, not quoted.
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1417/82, 1395/82, 1353/80, 1272/78, 1232/76, 293/71/1163)
 was stale within days — the 342 in the line this replaced lasted about six hours.
@@ -396,7 +398,31 @@ worth knowing:
   button marked [X] on a panel means the player is finished with the selection, so leaving
   the villager selected with the ghost gone would read as a half press.
 
-**THE SECOND 2026-08-28 DELIVERY ([P1]–[P4]), WIRED THE SAME DAY.** 361 atlases staged.
+**THE SECOND PLAYTEST ROUND OF 2026-08-28 — three findings, all three closed.** BUGS.md
+has them in full; what is worth carrying here is that **none of the three was a wrong
+number**. The tower's damage was right and invisible, the wolf's damage was right and
+inescapable, and the arrow's flight was right and left nothing behind.
+
+- **TOWERS VOLLEY NOW.** `attack.volley` (5 for both towers and the castle) plus one more
+  projectile per garrisoned archer, **drawn with that archer's own** — a crossbowman in a
+  guard tower throws a bolt. The watch tower throws stones; its garrison still shoots
+  arrows, because the arrows come from the archers. **The damage is untouched and that is
+  what makes it safe**: a projectile carries no damage, so twenty arrows out of a full
+  castle are the one 42-damage hit `attack_bonus` already priced. There is a test pinning
+  that, because the day a projectile carries a hit the volley silently becomes five
+  attacks.
+- **A SETTLEMENT DRIVES PREDATORS OFF** — `WildlifeSystem.SETTLEMENT_RADIUS` 15, measured
+  from the footprint. The owner's diagnosis is the one to keep: a wolf deals 20 to a 30 hp
+  villager who deals 3, so she loses in two bites and needs ten to win — which is *fine*,
+  and what was missing was the OUT. `_hunt` re-acquires the moment `CombatSystem` drops
+  the task, so a wolf chased a fleeing villager into the town centre and kept eating. The
+  retreat **rides `flee_ticks`**, which already means "do not think, you are running", and
+  that buys the ignore-`_hunt`, the `run` clip and the relocate for one line each.
+- **SPENT SHOTS LIE ON THE GROUND** for four seconds (`SpentProjectiles`), and **none of
+  it is in the sim** — see the two §6 rows it produced, both of which are about telling a
+  despawn apart from a fog loss and about surviving one snapshot after arriving.
+
+**THE SECOND 2026-08-28 ART DELIVERY ([P1]–[P4]), WIRED THE SAME DAY.** 361 atlases staged.
 Most of it was one-line data, and the two places it was not are the ones worth reading:
 
 - **TREE SPECIES ARE NOW PER MAP TYPE**, which is the project owner's own assignment —

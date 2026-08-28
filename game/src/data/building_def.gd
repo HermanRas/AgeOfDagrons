@@ -73,6 +73,25 @@ var attack_cooldown_ticks: int = 0
 ## three name one.
 var attack_projectile: StringName = &""
 
+## HOW MANY OF THEM ONE SHOT DRAWS (project owner, 2026-08-28: *"watch tower is not
+## showing 5x rocks when attacking + X x arrows for each archer in garrison"*).
+##
+## **PURELY COSMETIC, AND THAT IS WHY IT IS SAFE.** A projectile carries no damage --
+## `SimProjectile`'s header is explicit that the blow lands the instant it is fired --
+## so five stones and one stone do the same thing to the target. This changes what the
+## player can SEE about a tower that is working, which for a building with no archer
+## sprite to draw a bow was the whole problem: a tower shooting once every two seconds
+## read as a tower doing nothing.
+##
+## The GARRISON's arrows are counted separately and are not this number: one per
+## garrisoned archer, each drawn with **that unit's own** `attack_projectile`, so a
+## crossbowman in a tower throws a bolt without anybody listing which units shoot what
+## twice. `SimBuilding.garrison_projectiles()` is that list.
+##
+## 1 for everything that does not say otherwise, including the 28 buildings with no
+## attack at all, so this can never turn a house into a battery.
+var attack_volley: int = 1
+
 var trains: Array[StringName] = []
 ## Resource kinds a villager may return a load to here.
 var drop_off: Array[StringName] = []
@@ -252,6 +271,9 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.attack_range = int(atk.get("range", 0))
 	b.attack_cooldown_ticks = int(atk.get("cooldown_ticks", 0))
 	b.attack_projectile = StringName(atk.get("projectile", ""))
+	# maxi(1, ...) rather than the raw number: a 0 here would be a tower that damages
+	# what it shoots and draws nothing, which is the exact defect this field is for.
+	b.attack_volley = maxi(1, int(atk.get("volley", 1)))
 
 	var g: Dictionary = d.get("gather", {})
 	b.gather_kind = StringName(g.get("kind", ""))

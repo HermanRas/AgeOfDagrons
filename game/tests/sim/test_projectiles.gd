@@ -150,7 +150,17 @@ func test_it_starts_at_the_shooter_and_ends_at_the_target() -> void:
 			"aimed at the target")
 
 
-func test_it_despawns_when_it_lands() -> void:
+## IT IS SEEN ARRIVING BEFORE IT GOES, and that extra tick is a fix rather than a
+## tolerance (2026-08-28). This used to assert `gone_after == total`, which meant the
+## despawn happened on the very tick `advance()` clamped `pos` to `target_pos` -- so that
+## position never reached a snapshot and **every arrow in the game vanished about a tile
+## and a half short of what it was fired at**, `SPEED` being 384 of a 256 sub-tile. It
+## went unreported for the reason such things do: an arrow is on screen for two ticks, and
+## a sprite failing to appear somewhere is much harder to notice than one appearing wrongly.
+##
+## It is also what `SpentProjectiles` reads. The view learns where a shot ended from the
+## last snapshot that carried it, so that snapshot has to be the one where it arrived.
+func test_it_is_seen_arriving_and_despawns_the_tick_after() -> void:
 	var arrow := _loose()
 	assert_not_null(arrow)
 	var id := arrow.id
@@ -160,13 +170,17 @@ func test_it_despawns_when_it_lands() -> void:
 	assert_eq(arrow.elapsed_ticks, 0, "not advanced on the tick it was created")
 
 	var gone_after := -1
+	var seen_at_target := false
 	for i in range(total + 4):
 		w.step()
+		if w.get_entity(id) != null and arrow.pos == arrow.target_pos:
+			seen_at_target = true
 		if w.get_entity(id) == null:
 			gone_after = i + 1
 			break
+	assert_true(seen_at_target, "it existed, at its target, for one whole tick")
 	assert_true(gone_after > 0, "the arrow landed and was despawned")
-	assert_eq(gone_after, total, "on the tick its flight was up, not later")
+	assert_eq(gone_after, total + 1, "the tick after it arrived, not the one it arrived on")
 
 
 func test_a_longer_shot_is_longer_in_the_air() -> void:
@@ -204,6 +218,124 @@ func test_a_shot_shorter_than_a_tile_still_points_somewhere_sensible() -> void:
 	var south := w.spawn_projectile(&"vis.projectile_arrow", 1, Vector2i(1000, 1000),
 			Vector2i(1000, 1100))
 	assert_ne(north.facing, south.facing, "a short shot still has a direction")
+
+
+# ── the tower volley (project owner, 2026-08-28) ────────────────────────────
+
+## A guard tower of player 1's with a raider of player 2's standing in reach, and
+## `garrison` archers inside it. Far from the shooting range's own pair so neither
+## interferes.
+var _raider: SimUnit = null
+
+
+func _a_manned_tower(def_id: StringName, garrison: int) -> SimBuilding:
+	var tower := w.spawn_building(def_id, 1, Vector2i(40, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	for i in range(garrison):
+		var a := w.spawn_unit(&"unit.archer", 1, Vector2i(40 + i, 45))
+		tower.garrison.append({"id": a.id, "def_id": a.def_id})
+	_raider = w.spawn_unit(&"unit.militia", 2, Vector2i(43, 40))
+	return tower
+
+
+## Step until the tower shoots, and hand back everything that was in the air on the
+## tick it did. Collected on the SAME tick: `ProjectileSystem` runs before
+## `CombatSystem`, so a volley loosed this tick is untouched until the next one.
+func _volley_of(def_id: StringName, garrison: int) -> Array[SimProjectile]:
+	_a_manned_tower(def_id, garrison)
+	for i in range(200):
+		w.step()
+		var flying := _projectiles()
+		if not flying.is_empty():
+			return flying
+	return []
+
+
+func test_a_watch_tower_throws_five_stones() -> void:
+	# The report: "watch tower is not showing 5x rocks when attacking". It was showing
+	# one arrow.
+	var volley := _volley_of(&"building.watch_tower", 0)
+	assert_eq(volley.size(), 5)
+	for p in volley:
+		assert_eq(p.def_id, &"vis.projectile_stone", "a tower throws rocks now")
+
+
+func test_a_guard_tower_looses_five_arrows() -> void:
+	var volley := _volley_of(&"building.guard_tower", 0)
+	assert_eq(volley.size(), 5)
+	for p in volley:
+		assert_eq(p.def_id, &"vis.projectile_arrow")
+
+
+func test_each_garrisoned_archer_adds_one_of_its_own() -> void:
+	# "+ X x arrows for each archer in garrison in it when attacking". The watch tower
+	# is the interesting case: its own five are STONES and the garrison's three are
+	# ARROWS, because the arrows come from the archers.
+	var volley := _volley_of(&"building.watch_tower", 3)
+	assert_eq(volley.size(), 8, "five of its own and one per archer")
+	var stones := 0
+	var arrows := 0
+	for p in volley:
+		if p.def_id == &"vis.projectile_stone":
+			stones += 1
+		elif p.def_id == &"vis.projectile_arrow":
+			arrows += 1
+	assert_eq(stones, 5)
+	assert_eq(arrows, 3)
+
+
+func test_a_garrisoned_swordsman_adds_nothing_to_look_at() -> void:
+	# The same `attack_range > 0` line `attack_bonus` draws, so the picture and the
+	# damage can never disagree about who counts as an archer.
+	var tower := w.spawn_building(&"building.guard_tower", 1, Vector2i(40, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	var sword := w.spawn_unit(&"unit.swordsman", 1, Vector2i(41, 45))
+	tower.garrison.append({"id": sword.id, "def_id": sword.def_id})
+	assert_eq(tower.garrison_projectiles(w).size(), 0, "a swordsman shoots nothing")
+	assert_eq(tower.attack_bonus(w), 0, "and adds nothing, which is the same rule")
+
+
+func test_the_volley_is_cosmetic_and_the_damage_is_unchanged() -> void:
+	# THE POINT OF THE WHOLE FEATURE BEING SAFE. Five stones and one stone do the same
+	# thing to the target, because a projectile carries no damage. If this ever fails,
+	# the volley has become five attacks and every number in buildings.json is wrong.
+	var tower := _a_manned_tower(&"building.watch_tower", 0)
+	# The DECLARED number, which is the ceiling: the militia carries pierce armour, so
+	# what actually lands is a little less. Printing both is the `preview_garrison`
+	# lesson -- one number alone reads as the arithmetic being wrong.
+	var expected := tower.attack_damage
+	var hp := _raider.hp
+	for i in range(200):
+		w.step()
+		if _raider.hp < hp:
+			break
+	assert_true(_raider.hp < hp, "it was shot at all")
+	assert_true(hp - _raider.hp <= expected,
+			"one shot's worth of damage, not five: lost %d against %d declared"
+					% [hp - _raider.hp, expected])
+
+
+func test_the_volley_fans_out_rather_than_stacking_on_one_line() -> void:
+	# Five projectiles from one point to one point are one projectile as far as the
+	# screen is concerned, which is the state this was meant to leave.
+	var volley := _volley_of(&"building.guard_tower", 0)
+	assert_eq(volley.size(), 5)
+	var origins: Array[Vector2i] = []
+	for p in volley:
+		assert_false(origins.has(p.origin_pos), "each shot leaves from its own place")
+		origins.append(p.origin_pos)
+	# And parallel: every one covers the same displacement, so they travel together
+	# instead of converging on a single sub-tile like a magnet.
+	var span := volley[0].target_pos - volley[0].origin_pos
+	for p in volley:
+		assert_eq(p.target_pos - p.origin_pos, span, "the fan is parallel")
+
+
+func test_a_building_with_no_volley_declared_still_looses_exactly_one() -> void:
+	# The default that keeps 28 buildings out of this entirely.
+	var d: BuildingDef = GameDataRegistry.building(&"building.house")
+	assert_eq(d.attack_volley, 1, "declared nowhere, defaulted here")
+	assert_eq(d.attack_damage, 0, "and it does not shoot at all")
 
 
 # ── it stays out of everything else's way ───────────────────────────────────

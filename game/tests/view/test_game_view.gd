@@ -19,6 +19,7 @@ func after_each() -> void:
 	view.pool.free()
 	view.terrain.free()
 	view.fog.free()
+	view.spent.free()
 	view.free()
 
 

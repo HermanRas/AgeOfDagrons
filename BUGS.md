@@ -18,6 +18,96 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-08-28 (second round) — three findings, ALL THREE FIXED the same day
+
+*Two of them are about what the player can SEE, and the third is about what they can DO.
+Worth noticing together: none of the three was a wrong number. The tower's damage was
+right and invisible, the wolf's damage was right and inescapable, and the arrow's flight
+was right and left nothing behind.*
+
+- [x] **"watch tower is not showing 5x rocks when attacking + X x arrows for each archer
+      in garrison in it when attacking. guard towers are not showing 5x arrows + X x
+      arrows for each archer in garrison in it when attacking."** ✅ `attack.volley` in
+      buildings.json — 5 for both towers and the castle — plus **one more per garrisoned
+      archer, drawn with that archer's own projectile**, so a crossbowman in a guard tower
+      throws a bolt and nobody maintains a list of which unit shoots what twice. The watch
+      tower now throws `vis.projectile_stone` rather than arrows; **its garrison still
+      shoots arrows, because the arrows come from the archers.**
+
+      **THE DAMAGE IS UNTOUCHED AND THAT IS WHAT MAKES IT SAFE.** A projectile carries no
+      damage — the blow lands the instant it is fired — so twenty arrows out of a full
+      castle are the one 42-damage hit `attack_bonus` already priced, drawn twenty times.
+      Every number in buildings.json's table still stands. There is a test asserting
+      exactly this, because the day somebody makes a projectile carry a hit, the volley
+      silently becomes five attacks.
+
+      *Judged from `preview_projectiles`, which grew a fourth shooter for it: a garrisoned
+      watch tower, 5 stones + 3 arrows, photographed mid-flight and again where they land.
+      A tower needed adding because it is the case no unit can stand in for — its shot is
+      a volley, and **nothing can order a building to attack**, so there is no command to
+      watch land.*
+
+- [x] **"wolf is very very strong against early villagers… if a wolf, bear, boar gets
+      within 15 tiles of a building it should retreat to a random spot opposite direction
+      from the building and reset agro, so early game the player can manually run
+      villagers back town to save them, at this stage 1 wolf eats 4 villagers before they
+      get to kill it, decimating the player early game."** ✅ `WildlifeSystem`
+      `SETTLEMENT_RADIUS` 15, measured from the **footprint** so a castle's sanctuary is
+      15 tiles beyond its 7×7. A predator inside it stops, forgets its target, and walks
+      to a point `15 + 5` tiles out on **its own side** of the building, with a
+      deterministic ±0.9 rad of spread so a pack does not retrace one ray.
+
+      **THE ARITHMETIC WAS NEVER THE PROBLEM.** A wolf deals 20 to a 30 hp villager who
+      deals 3 back: she loses in two bites and needs ten to win. That is *fine* — it is
+      what makes a wolf frightening — but there was no OUT, because `_hunt` re-acquires
+      the moment `CombatSystem` drops the task, so a wolf chased a fleeing villager into
+      the town centre and kept eating. The fix is ground rather than a rule about
+      villagers: **the predator leaves, whoever it was chasing**, which a player can also
+      *see* happen.
+
+      Three behaviours were reused rather than added, and the retreat rides `flee_ticks`
+      to get all of them for one line each: it already means "do not think, you are
+      running", so the animal ignores `_hunt` for the journey, plays the `run` clip, and
+      on expiry relocates `roam_home` to where it ended up — so the wolf takes up
+      residence outside instead of drifting back to the clearing it was driven from.
+
+      **Three consequences worth knowing.** A tower will now rarely shoot a bear, since
+      the bear leaves before it gets close. `test_a_wolf_does_not_gnaw_buildings` still
+      passes but for a new reason — the wolf is not gnawing because it is leaving. And
+      **the AI-vs-AI baseline table below is measured against predators that did not do
+      this**: an AI's villagers work inside their own settlement, so this takes a source
+      of attrition off both sides. Nothing in the table is invalidated, but the next
+      change measured against it should re-run the five seeds first rather than compare
+      across this line.
+
+- [x] **"in AOE arrows linger on the ground after hitting for a few seconds, can we
+      simulate our arrows and rocks and bolts to work in the same way"** ✅
+      `SpentProjectiles`, a decal layer between the ground and the entities: 4 s, fading
+      over the last 1.5, darkened, scattered a few pixels so a volley reads as litter
+      rather than a stack, capped at 240.
+
+      **NONE OF IT IS IN THE SIM, deliberately.** A spent arrow has no hit points, blocks
+      nothing and can be tapped by nobody — putting it on the wire would send a hundred
+      fog-filtered, hash-folded entities during a siege to draw marks on the grass, and
+      would make "when does it vanish" something two hosts can disagree about. The view
+      infers it from `removed`, the same way `MatchAudio` infers sound from snapshot
+      diffs.
+
+      **The ambiguity `MatchAudio`'s header warns about is resolved here rather than
+      lived with**: an entity absent from `updated` may have died or may have walked into
+      the fog, but `removed` is only ever an explicit despawn — so an arrow that flies
+      into the fog leaves no litter, which is right, because you did not see it land.
+      That did cost a reordering: `GameView` used to run its forget pass *before*
+      `removed`, which erased the facts of a despawned entity first and threw the
+      distinction away every time.
+
+      **It also uncovered a real bug in flight.** `ProjectileSystem` despawned a shot on
+      the very tick `advance()` clamped it to its target, so that position never reached
+      a snapshot and **every arrow in the game vanished about a tile and a half short of
+      what it was fired at**. Unreported for the obvious reason: an arrow is on screen for
+      two ticks, and a sprite failing to appear somewhere is far harder to notice than one
+      appearing wrongly.
+
 ### Playtest, 2026-08-28 — four findings, ALL FOUR FIXED the same day
 
 *Kept in full rather than collapsed, because three of them were **dead code** — a check

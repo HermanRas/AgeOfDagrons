@@ -238,6 +238,7 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 		b.attack_range = d.attack_range
 		b.attack_cooldown_ticks = d.attack_cooldown_ticks
 		b.attack_projectile = d.attack_projectile
+		b.attack_volley = d.attack_volley
 		b.build_total = d.build_time_ticks
 		# A field carries a crop; every other building carries nothing and these
 		# stay at their zero defaults.
@@ -476,6 +477,7 @@ func convert_building(b: SimBuilding, new_def_id: StringName,
 	b.attack_range = d.attack_range
 	b.attack_cooldown_ticks = d.attack_cooldown_ticks
 	b.attack_projectile = d.attack_projectile
+	b.attack_volley = d.attack_volley
 	b.build_total = d.build_time_ticks
 	b.gather_kind = d.gather_kind
 	b.gather_amount = d.gather_amount

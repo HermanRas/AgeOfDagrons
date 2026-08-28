@@ -43,6 +43,52 @@ const FLEE_DISTANCE := 7
 const ROAM_INTERVAL_TICKS := 90
 
 
+## HOW CLOSE A PREDATOR MAY COME TO A BUILDING BEFORE IT TURNS AND LEAVES, in tiles
+## (project owner, 2026-08-28: *"if a wolf, bear, boar gets within 15 tiles of a building
+## it should retreat to a random spot opposite direction from the building and reset
+## agro, so early game the player can manually run villagers back town to save them"*).
+##
+## **THIS IS A BALANCE FIX WEARING A BEHAVIOUR FIX'S CLOTHES, and the report says why:
+## "at this stage 1 wolf eats 4 villagers before they get to kill it".** A wolf is 20
+## damage against a 30 hp villager who deals 3, so a villager loses that fight in two
+## bites and takes ten to win it. Nothing was wrong with the numbers; what was missing
+## was the OUT. In every RTS the answer to a wolf is to run home, and there was no home
+## to run to -- `_hunt` re-acquires the moment `CombatSystem` drops the task, so a wolf
+## chased a fleeing villager into the town centre and kept eating.
+##
+## So the settlement is the sanctuary, and it is expressed as ground rather than as a
+## rule about the villager: the predator leaves, whoever it was chasing. That also makes
+## it legible from outside -- a player can see the wolf turn around, which they could not
+## if this were a hidden modifier on the chase.
+##
+## 15 TILES IS A LONG WAY, and deliberately so at this radius: a town centre is 4x4 and
+## `MapGenerator.START_CLEARANCE` is 6, so 15 covers the whole opening base and a good
+## margin of the ground its villagers work. Measured from the FOOTPRINT, so a castle's
+## sanctuary is 15 tiles beyond its 7x7 rather than 15 from its middle.
+const SETTLEMENT_RADIUS := 15
+
+## How far PAST the sanctuary edge it walks, so arriving does not immediately trip the
+## check again and leave the animal shuffling on the boundary forever.
+const RETREAT_CLEARANCE := 5
+
+## How long the retreat runs before the animal settles and looks around. Longer than
+## `FLEE_TICKS` because it is a longer journey -- up to `SETTLEMENT_RADIUS +
+## RETREAT_CLEARANCE` tiles rather than 7 -- and the retreat is only over when it has
+## actually got somewhere.
+const RETREAT_TICKS := 80
+
+## How far off dead-opposite the retreat may aim, in radians. The owner asked for a
+## RANDOM spot opposite the building, and the randomness earns its place: a pack that all
+## ran along the same ray would re-converge and arrive as a wall, and a wolf driven off
+## twice from the same corner would retrace exactly the same line both times.
+const RETREAT_SPREAD_RAD := 0.9
+
+## How many angles a retreat tries before giving up for this think. `_walk_to` refuses a
+## tile that is out of bounds or in the sea, and a coastal settlement pushes half the arc
+## into the water.
+const RETREAT_ATTEMPTS := 4
+
+
 func process_tick(w: SimWorld) -> void:
 	# Sorted, because every decision below has to be identical on every machine running
 	# this sim -- the same reason `AISystem` and `CombatSystem._reacquire` sort. Two
@@ -90,6 +136,12 @@ func _tick_animal(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
 	if w.tick % THINK_INTERVAL_TICKS != 0:
 		return
 
+	# BEFORE `_hunt`, and that ordering is the whole fix. `_hunt` leaves an animal that
+	# is already in a fight alone -- deliberately, so it does not oscillate between two
+	# villagers -- so a check placed after it would never be reached by the wolf that
+	# matters, the one already eating somebody in your town.
+	if _check_settlement_retreat(w, u, def):
+		return
 	if def.aggro_radius > 0 and _hunt(w, u, def):
 		return
 	_roam(w, u, def)
@@ -124,6 +176,96 @@ func _check_flee(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
 	u.flee_ticks = FLEE_TICKS
 	_walk_to(w, u, u.tile() + _scaled(away, FLEE_DISTANCE))
 	return true
+
+
+## Turn a predator around and send it out of the settlement it has wandered into. True
+## when it did, in which case this tick is over: the animal is retreating and is not
+## picking a fight on the way.
+##
+## PREDATORS ONLY (`aggro_radius > 0`), which is the same test `CombatSystem._is_at_war_with`
+## uses to decide which animals a tower shoots. A deer grazing beside your granary is not a
+## problem anybody has, and driving the herds off the map would take the food with them.
+##
+## **IT CLEARS THE TASK RATHER THAN JUST WALKING AWAY** -- `u.stop()` is the "reset agro"
+## half of the request, and without it `CombatSystem` would keep the wolf's target and
+## `_close_in` would walk it straight back. The retreat then rides `flee_ticks`, which
+## already means "do not think, you are busy running": it makes the animal ignore
+## `_hunt` for the whole journey, plays the `run` clip through `AnimationSystem`, and on
+## expiry relocates `roam_home` to wherever it ended up -- so the wolf takes up residence
+## outside rather than drifting back to the clearing it was driven out of. Three
+## behaviours reused for one line each; none of them needed a flag saying which kind of
+## running this is.
+func _check_settlement_retreat(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
+	if def.aggro_radius <= 0:
+		return false
+	var home := _nearest_settlement(w, u)
+	if home == Vector2i(-1, -1):
+		return false
+
+	u.stop()
+	u.flee_ticks = RETREAT_TICKS
+
+	var away := Vector2(u.tile() - home)
+	# Standing dead on the centre of a building is not reachable, but a tie in integer
+	# tiles is: a diagonal is as good a way out as any other and beats normalising (0, 0).
+	if away == Vector2.ZERO:
+		away = Vector2.ONE
+	away = away.normalized()
+	var reach := float(SETTLEMENT_RADIUS + RETREAT_CLEARANCE)
+
+	# Deterministic by construction rather than by a shared generator -- the same
+	# argument `_roam` spells out: the order animals think in is "however many happened
+	# to be alive", so a seeded rng would shift on one machine the moment a deer died a
+	# tick earlier on it.
+	var h := _hash(u.id * 2246822519 + w.tick)
+	for attempt in range(RETREAT_ATTEMPTS):
+		var spread := (float((h >> (attempt * 5)) % 1000) / 1000.0 - 0.5) * RETREAT_SPREAD_RAD
+		var dir := away.rotated(spread)
+		var dest := home + Vector2i(dir * reach)
+		if _walk_to(w, u, dest):
+			u.roam_home = dest
+			return true
+	# Nowhere to go -- pinned against the map edge or the sea. It still stopped and
+	# still will not hunt for `RETREAT_TICKS`, which is the half of this that matters.
+	return true
+
+
+## The nearest tile of a player's building within `SETTLEMENT_RADIUS`, or (-1, -1).
+##
+## ANY player's and any phase's. A foundation is a claim on ground with villagers
+## standing on it, which is exactly the situation this protects, and "whose building"
+## cannot matter to an animal -- `Diplomacy` is not consulted anywhere here for the same
+## reason a wolf does not take sides.
+##
+## Gaia's own structures are excluded by `owner_id == 0`, which today means nothing at
+## all: there are none. It is there so that the day a map carries ruins or a neutral
+## market, they do not silently become wolf sanctuaries.
+##
+## Lowest id breaks a tie, as everywhere else in this file -- determinism, not fairness.
+func _nearest_settlement(w: SimWorld, u: SimUnit) -> Vector2i:
+	var here := u.tile()
+	var span := SETTLEMENT_RADIUS * 2 + 1
+	var rect := Rect2i(here - Vector2i(SETTLEMENT_RADIUS, SETTLEMENT_RADIUS),
+			Vector2i(span, span))
+
+	var best := Vector2i(-1, -1)
+	var best_gap := 1 << 30
+	var best_id := 0
+	for e in w.entities_in_rect(rect):
+		if not (e is SimBuilding) or not e.alive or e.owner_id == 0:
+			continue
+		var b: SimBuilding = e
+		# From the FOOTPRINT, so a castle's sanctuary is measured from its wall and not
+		# from a point three tiles inside it. Same call the towers use to decide reach.
+		var gap := CombatSystem.tile_gap(here, b.footprint_rect())
+		if gap > SETTLEMENT_RADIUS:
+			continue          # the rect is square; the radius is meant to be too
+		if best_id != 0 and (gap > best_gap or (gap == best_gap and int(b.id) > best_id)):
+			continue
+		best_gap = gap
+		best_id = int(b.id)
+		best = b.tile()
+	return best
 
 
 ## Pick a fight if there is one within reach. True if it did, or is already in one.
@@ -170,13 +312,17 @@ func _roam(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
 ## Send it walking, if the tile is somewhere it could actually stand. An animal that
 ## asked for a route into the sea would sit with `path_pending` raised and never roam
 ## again, since `_roam` skips anything already waiting on a path.
-func _walk_to(w: SimWorld, u: SimUnit, tile: Vector2i) -> void:
+##
+## Returns whether it took, which `_check_settlement_retreat` uses to try another angle:
+## a settlement on a shoreline puts half the arc out of a wolf's reach.
+func _walk_to(w: SimWorld, u: SimUnit, tile: Vector2i) -> bool:
 	if w.paths == null:
-		return
+		return false
 	if not w.map.in_bounds(tile) or not w.map.is_passable(tile, u.domain):
-		return
+		return false
 	u.set_task_move(tile)
 	w.paths.request(u.id, tile)
+	return true
 
 
 ## Where the nearest thing worth running from is standing, or (-1, -1).

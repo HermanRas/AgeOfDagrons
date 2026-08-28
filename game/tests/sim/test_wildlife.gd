@@ -132,6 +132,120 @@ func test_a_wolf_keeps_the_target_it_has_rather_than_re_choosing() -> void:
 	assert_eq(wolf.task_target_id, first.id, "still on the one it chose")
 
 
+# ── a settlement drives predators off (project owner, 2026-08-28) ──────────
+#
+# "if a wolf, bear, boar gets within 15 tiles of a building it should retreat to a
+# random spot opposite direction from the building and reset agro, so early game the
+# player can manually run villagers back town to save them, at this stage 1 wolf eats
+# 4 villagers before they get to kill it."
+#
+# The numbers behind that: a wolf deals 20 to a 30 hp villager who deals 3 back. The
+# fight is unwinnable one-to-one and always was; what was missing was the OUT.
+
+func test_a_wolf_that_wanders_into_a_settlement_turns_around() -> void:
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	w.spawn_building(&"building.town_center", 1, Vector2i(48, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+
+	_assert_not_hunting(wolf, "the villager beside it is not on the menu here")
+	assert_true(wolf.flee_ticks > 0, "it is leaving")
+
+
+func test_it_leaves_ON_THE_OPPOSITE_SIDE_rather_than_anywhere() -> void:
+	# "a random spot opposite direction from the building". Retreating toward the town
+	# would satisfy "it stopped attacking" and be worse than doing nothing.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	var tc := w.spawn_building(&"building.town_center", 1, Vector2i(48, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+
+	var away := wolf.tile() - tc.tile()
+	var heading := wolf.roam_home - tc.tile()
+	assert_true(heading.length() > away.length(), "further out than it started")
+	assert_true(Vector2(heading).dot(Vector2(away)) > 0.0,
+			"and on the wolf's side of the town, not through it")
+
+
+func test_the_retreat_clears_the_target_and_not_just_the_path() -> void:
+	# "reset agro". Without the stop, CombatSystem keeps the wolf's target and
+	# `_close_in` walks it straight back to the villager it was told to leave.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.task_target_id, villager.id, "it had one to begin with")
+
+	w.spawn_building(&"building.town_center", 1, Vector2i(48, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_ne(wolf.task_target_id, villager.id, "the wolf has forgotten her")
+
+
+func test_a_villager_who_runs_home_survives_and_that_is_the_whole_point() -> void:
+	# The report, as a test. She is bitten out in the field and stops being bitten once
+	# she is standing in the town -- which is what "the player can manually run villagers
+	# back to town to save them" means.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	# Stopped on the FIRST bite rather than after a fixed run: a wolf deals 20 to a
+	# 30 hp villager, so two of them kill her and a test that let that happen would
+	# then be comparing 0 against 0 and passing for the wrong reason.
+	for i in range(60):
+		w.step()
+		if villager.hp < villager.max_hp:
+			break
+	assert_true(villager.hp < villager.max_hp, "the wolf got its teeth in first")
+	assert_true(villager.alive, "and she is still standing, which the rest needs")
+
+	w.spawn_building(&"building.town_center", 1, Vector2i(45, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 2)
+	var safe := villager.hp
+	assert_true(wolf.flee_ticks > 0, "the wolf is leaving")
+	_run(60)
+	assert_eq(villager.hp, safe, "not bitten again once the town was there")
+
+
+func test_a_deer_is_not_driven_off_by_a_farm() -> void:
+	# Predators only (`aggro_radius > 0`), the same line the towers use to decide which
+	# animals they shoot. Emptying the map of herds around every settlement would take
+	# the food with them, and a deer grazing by a granary is nobody's problem.
+	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(40, 40))
+	w.spawn_building(&"building.house", 1, Vector2i(42, 40), SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(deer.flee_ticks, 0, "nothing frightened it")
+
+
+func test_gaia_owns_no_sanctuary() -> void:
+	# `owner_id == 0` is excluded so that the day a map carries ruins or a neutral
+	# market, they do not silently become places wolves refuse to go.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	w.spawn_building(&"building.house", 0, Vector2i(43, 40), SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.task_target_id, villager.id, "a gaia hut protects nobody")
+
+
+func test_a_building_far_enough_away_changes_nothing() -> void:
+	# The radius is a real bound. A settlement on the far side of the map must not
+	# pacify the whole wilderness.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(41, 40))
+	# A HOUSE AND NOT A TOWN CENTRE, and the distance is measured off its far edge.
+	# The first draft put a town centre at radius + 4 and the wolf retreated anyway,
+	# because the radius is measured from the FOOTPRINT and a town centre is eight
+	# tiles of it -- so "four tiles clear" was really four tiles inside. The bound is
+	# real; the fixture was wrong about where the building ended.
+	var far := w.spawn_building(&"building.house", 1,
+			Vector2i(40 - WildlifeSystem.SETTLEMENT_RADIUS - 6, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	assert_true(CombatSystem.tile_gap(wolf.tile(), far.footprint_rect())
+			> WildlifeSystem.SETTLEMENT_RADIUS, "the fixture really is out of range")
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.task_target_id, villager.id, "still hunting, out in the wild")
+
+
 # ── roaming and fleeing (6.1b) ─────────────────────────────────────────────
 
 func test_a_predator_with_nothing_to_hunt_wanders() -> void:

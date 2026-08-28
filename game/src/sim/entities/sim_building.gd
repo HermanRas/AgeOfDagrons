@@ -140,6 +140,8 @@ var attack_type: StringName = &"melee"
 var attack_range: int = 0
 var attack_cooldown_ticks: int = 0
 var attack_projectile: StringName = &""
+## How many of `attack_projectile` one shot draws. Cosmetic -- see `BuildingDef`.
+var attack_volley: int = 1
 
 ## WHERE ANYTHING LEAVING THIS BUILDING SHOULD WALK TO (project owner, 2026-08-27), or
 ## `NO_WAYPOINT` for "stand where you came out". A rally point.
@@ -228,6 +230,35 @@ func attack_bonus(w: SimWorld) -> int:
 			continue
 		bonus += ud.attack_damage / 2
 	return bonus
+
+
+## One projectile visual id per garrisoned ARCHER, in garrison order (project owner,
+## 2026-08-28: *"+ X x arrows for each archer in garrison in it when attacking"*).
+##
+## THE SEEING HALF OF `attack_bonus`, and deliberately a second function rather than a
+## count folded into it. That one answers "how much harder does this shot hit" and is
+## a single sum; this answers "what does the player see leave the tower", which is a
+## list because **each archer fires its OWN projectile** -- a crossbowman in a guard
+## tower throws a bolt, and no list of which unit shoots what has to be maintained
+## twice. The two agree on who counts as an archer (`attack_range > 0`, the owner's own
+## dividing line) by asking the same question of the same field.
+##
+## **The damage model does not change and must not.** These are cosmetic:
+## `SimProjectile` carries no damage, so fifteen arrows out of a castle land the one
+## heavier blow `attack_bonus` already priced. Fifteen archers are still not fifteen
+## attackers -- they are now fifteen arrows drawing one attack, which is what the owner
+## was looking at when they reported it missing.
+##
+## Same order and the same lookup as `attack_bonus`: `garrison` order, off the entry's
+## own `def_id` rather than the live entity, through `w.unit_def`.
+func garrison_projectiles(w: SimWorld) -> Array[StringName]:
+	var out: Array[StringName] = []
+	for entry in garrison:
+		var ud := w.unit_def(entry["def_id"])
+		if ud == null or ud.attack_range <= 0 or ud.attack_projectile == &"":
+			continue
+		out.append(ud.attack_projectile)
+	return out
 
 
 ## Where `unit_id` sits in the garrison, or -1. Used by the eject path, which is

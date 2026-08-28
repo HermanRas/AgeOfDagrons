@@ -55,6 +55,15 @@ const REACQUIRE_RADIUS := 2
 ## it does nothing about, which is indistinguishable from being broken.
 const BUILDING_SIGHT := 1
 
+## How far apart two projectiles of one volley fly, in sub-tile units. 96 of a 256
+## sub-tile, so a five-stone volley from a watch tower is spread about 1.5 tiles across
+## -- wide enough to read as five at the zoom the game is played at, narrow enough that
+## the outermost stone still plainly belongs to the same shot.
+##
+## The fan is measured in HALF steps (see `_loose_volley`), so this is the gap between
+## neighbours and not the width of the whole thing.
+const VOLLEY_SPREAD := 96
+
 
 func process_tick(w: SimWorld) -> void:
 	for entry in w.entities.values():
@@ -105,9 +114,50 @@ func _process_building(w: SimWorld, b: SimBuilding) -> void:
 	# firing invisibly would be the "ranged combat resolved with no visible cause"
 	# problem the header describes, and worse here: there is no archer sprite drawing
 	# a bow to explain where the hit came from.
-	if b.attack_projectile != &"":
-		w.spawn_projectile(b.attack_projectile, b.owner_id, b.pos, target.pos)
+	_loose_volley(w, b, target.pos)
 	b.attack_cooldown = maxi(1, b.attack_cooldown_ticks)
+
+
+## Everything one shot DRAWS: `attack_volley` of the building's own projectile, plus one
+## per garrisoned archer of that archer's own (project owner, 2026-08-28 -- *"watch tower
+## is not showing 5x rocks when attacking + X x arrows for each archer in garrison"*).
+##
+## **NOT A DAMAGE CHANGE, and the separation is the point.** The blow above already
+## landed, once, and already includes `attack_bonus`. `SimProjectile` carries no damage,
+## so this is the shot being visible rather than the shot being bigger -- fifteen archers
+## in a castle are still one heavier arrow every two seconds, now drawn as fifteen.
+##
+## FANNED, because five projectiles from one point to one point are one projectile. Each
+## is offset perpendicular to the line of flight by a fixed step, symmetrically about the
+## middle -- so an odd volley has a shot straight down the middle and an even one
+## straddles it. The offset moves BOTH ends by the same amount rather than spreading the
+## arrival: arrows converging on a single sub-tile look like they are being sucked in,
+## and arrows spreading from one origin look like they were fired by one very confused
+## archer. A parallel fan reads as a volley.
+##
+## Integer throughout, and the perpendicular is scaled by a Chebyshev norm rather than a
+## real one -- `maxi(absi(x), absi(y))`, the same cheap measure `SimProjectile.flight_ticks`
+## uses. It rides in `state_hash()` through the projectiles it spawns, so a float here
+## would be free to round differently on an ARM phone than on an x86 host.
+func _loose_volley(w: SimWorld, b: SimBuilding, at: Vector2i) -> void:
+	var shots: Array[StringName] = []
+	if b.attack_projectile != &"":
+		for i in range(maxi(1, b.attack_volley)):
+			shots.append(b.attack_projectile)
+	shots.append_array(b.garrison_projectiles(w))
+	if shots.is_empty():
+		return
+
+	var d := at - b.pos
+	var norm := maxi(1, maxi(absi(d.x), absi(d.y)))
+	# Perpendicular to the flight line, one VOLLEY_SPREAD long.
+	var across := Vector2i(-d.y * VOLLEY_SPREAD / norm, d.x * VOLLEY_SPREAD / norm)
+	for i in range(shots.size()):
+		# Symmetric about the middle: -(n-1)/2 .. +(n-1)/2 in halves, doubled so it
+		# stays in integers. `2 * i - (n - 1)` is that, scaled by VOLLEY_SPREAD / 2.
+		var step := 2 * i - (shots.size() - 1)
+		var offset := across * step / 2
+		w.spawn_projectile(shots[i], b.owner_id, b.pos + offset, at + offset)
 
 
 ## The nearest hostile UNIT within reach of `b`'s footprint, or null.

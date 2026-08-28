@@ -38,6 +38,11 @@ var pool: EntityViewPool = EntityViewPool.new()
 var terrain: TerrainLayer = TerrainLayer.new()
 var fog: FogOverlay = FogOverlay.new()
 
+## Where shots have landed, for a few seconds each (project owner, 2026-08-28). Pure
+## decoration and pure view: see `SpentProjectiles`, which explains why litter that
+## nothing can touch has no business being an entity.
+var spent: SpentProjectiles = SpentProjectiles.new()
+
 ## The fog this client works out for itself (12.1f), instead of being sent it every tick.
 ## Null until `build_terrain()` gives it a board -- a snapshot with no board draws unfogged,
 ## which is what an empty grid has always meant.
@@ -94,6 +99,13 @@ func _ready() -> void:
 	# Terrain first: it is a sibling of the entity pool, not a parent, so draw
 	# order between the two is tree order and the ground is always underneath.
 	add_child(terrain)
+
+	# BETWEEN the ground and the entities, and NOT y-sorted. A spent arrow is a mark on
+	# the dirt: it belongs over the grass and under everything standing on it, including
+	# the villager who walks across it. Sorting it among the entities would have arrows
+	# drawing over the feet of anyone standing further up the screen, which reads as an
+	# arrow stuck in them rather than one lying beyond them.
+	add_child(spent)
 
 	# Y-sort the entities among themselves (PLAN.md 3.1). The engine keys off each
 	# child's position.y, which is why apply_snapshot() positions a view at its
@@ -416,14 +428,23 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# will start to mean "unchanged" and this needs a per-entity signal instead -- one
 	# that says "you have lost sight of X" only for entities the client already knew
 	# about, and never enumerates the rest.
+	# THE EXPLICIT DESPAWNS GO FIRST, AND THE ORDER IS LOAD-BEARING as of 2026-08-28.
+	# A despawned entity is also absent from `updated`, so the forget pass below would
+	# reach it too -- and having already dropped its facts and released its view, there
+	# would be nothing left here to tell "it landed" from "it walked into the fog". The
+	# two lists really do mean different things (see `SpentProjectiles`) and only this
+	# one is a despawn; running it second threw that distinction away every time.
+	for id in snap.get("removed", []):
+		# Before the release, which is the only moment the sprite's own position and
+		# facing are still available.
+		_leave_spent(int(id))
+		pool.release(int(id))
+		_facts.erase(int(id))
+
 	for known in _facts.keys():
 		if not seen.has(known):
 			pool.release(int(known))
 			_facts.erase(known)
-
-	for id in snap.get("removed", []):
-		pool.release(int(id))
-		_facts.erase(int(id))
 
 	# A selection holding a unit that has just died -- or fully despawned --
 	# would build an order naming an entity the sim rejects, and the player
@@ -1234,6 +1255,31 @@ func _building_anim(entry: Dictionary) -> StringName:
 		return AtlasEntry.STATIC_ANIM
 	var def: BuildingDef = GameDataRegistry.building(StringName(entry.get("def_id", &"")))
 	return AtlasEntry.OPEN_ANIM if def != null and def.is_gate else AtlasEntry.STATIC_ANIM
+
+
+## Leave a mark on the ground where a despawned EFFECT ended, or do nothing.
+##
+## Effects and nothing else: `is_effect` is a positive test against the three def tables
+## (see `_facts`), so this covers the projectiles and would cover whatever else the sim
+## invents that is there to be looked at rather than played with. A unit dying leaves a
+## corpse the sim itself keeps for a while, and a building leaves rubble; neither wants a
+## decal and neither is an effect.
+##
+## READ OFF THE VIEW rather than off `_facts`, deliberately. The view holds the exact
+## world position the sprite reached and the SPRITE facing it was drawn at -- already
+## converted by `Iso.sim_facing_to_sprite` -- where `_facts` holds a tile, which would put
+## every arrow in a tile's centre, and a sim facing, which would need converting a second
+## time somewhere else.
+func _leave_spent(id: int) -> void:
+	var f: Dictionary = _facts.get(id, {})
+	if f.is_empty() or not bool(f.get("is_effect", false)):
+		return
+	var view := pool.get_view(id)
+	if view == null:
+		return
+	# The entity id as the scatter seed: unique per shot, so the eight arrows of one
+	# volley do not come to rest on the same pixel.
+	spent.add(view.visual_id, view.position, view.facing, id)
 
 
 func _visual_id_of(entry: Dictionary) -> StringName:
