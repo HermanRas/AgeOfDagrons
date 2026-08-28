@@ -669,14 +669,25 @@
     "three, so these are three separate ladders rather than one ladder's rungs.",
     "",
     "  tier         age 1     age 2     age 3     age 4      roster line",
-    "  wood         germ      germ      brit      brit       'wall Lumber'",
+    "  wood         germ      germ      germ      germ       'wall Lumber'",
     "  stone        achae     achae     achae     achae      'wall Stone'",
     "  reinforced   rome      rome      rome      rome       'wall reinforced'",
+    "",
+    "THE WOOD ROW USED TO READ germ germ brit brit and the project owner flattened",
+    "it on 2026-08-28: 'the wood wall remains the same across ages 1&2, use only",
+    "(age2) wood walls & gate for both'. The two bakes are not a re-skin of one wall,",
+    "they are two different walls -- the germ palisade is dark planks with pointed",
+    "posts, the brit one is a lower wall on a stone footing with playercolour",
+    "banners -- so advancing an age silently replaced walls the player had already",
+    "built with a different structure. The brit bakes stay staged and unused, exactly",
+    "like the Athenian set below.",
     "",
     "Ages below a tier's `age_required` still name an atlas because the skin map is",
     "DENSE BY CONTRACT (PLAN.md 2.7.1) and `_validate_skins()` fails the suite on a",
     "gap -- they simply point at the earliest bake, and the building gate is what",
-    "stops anyone seeing them there.",
+    "stops anyone seeing them there. That is now also why the wood tier repeats one",
+    "path four times rather than dropping the map: the contract is dense, and a tier",
+    "that does not change with the age says so by repeating itself.",
     "",
     "EIGHT DIRECTIONS, unlike every other building. Wall segments are the first",
     "building in the project with `directions: 8` -- SimBuilding's header says",
@@ -684,8 +695,15 @@
     "are the exception that gave SimBuilding a `facing` field. A wall has to run",
     "along whichever axis it was dragged on, so the art was baked rotated and the",
     "sim stores which rotation. Only two of the eight are reachable today, because",
-    "the footprint system is axis-aligned; the other six are what a diagonal wall",
-    "would need.",
+    "the footprint system is axis-aligned; four more are their 180-degree twins and",
+    "draw the same symmetric wall, and the last two are the true diagonals.",
+    "",
+    "WHICH TWO, MEASURED RATHER THAN ASSUMED: the sprite baked as SW is the wall",
+    "lying along tile axis X and SE is the one lying along axis Y -- a wall faces",
+    "ACROSS its own length, not along it. Every wall, gate, foundation and rubble",
+    "atlas here agrees, old bakes and new. `WallPlan.FACING_FOR_AXIS` carries the",
+    "numbers and the measurement; `test_wall_facing` re-measures the staged pixels",
+    "every run, so a rebake that turns a wall cannot land quietly again.",
     "",
     "THE ATHENIAN BAKES ARE UNUSED. `vis.wall_short/medium/long/gate` (no age",
     "suffix) predate the age ladder and are not in any tier above -- the roster does",
@@ -715,8 +733,8 @@
     "ages": {
       "1": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
       "2": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json"
+      "3": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -731,8 +749,8 @@
     "ages": {
       "1": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
       "2": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json"
+      "3": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -747,8 +765,8 @@
     "ages": {
       "1": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
       "2": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json"
+      "3": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -763,8 +781,8 @@
     "ages": {
       "1": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
       "2": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json"
+      "3": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json"
     },
     "placeholder": {
       "shape": "box",

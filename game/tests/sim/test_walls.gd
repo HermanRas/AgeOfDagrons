@@ -606,11 +606,18 @@ func test_a_locked_gate_is_in_the_state_hash() -> void:
 func test_a_wall_segment_facing_is_in_the_state_hash() -> void:
 	# Placement state that nothing recomputes: a wrong one stays wrong, and it is
 	# what the view derives the transposed footprint from.
+	#
+	# BOTH FACINGS NAMED SYMBOLICALLY, and the fixture used to spawn at a literal 0.
+	# That was the axis-Y facing under the old (wrong) `FACING_FOR_AXIS`, so correcting
+	# the constant on 2026-08-28 turned this into "set the facing to the one it already
+	# has, and assert the hash changed". A test that hard-codes one side of the very
+	# table it is checking is a test that fails for the wrong reason.
 	var seg := world.spawn_building(&"building.wall_wood_long", 1, CLEAR,
-			SimBuilding.Phase.COMPLETE, true, Vector2i(9, WallPlan.DEPTH), 0)
+			SimBuilding.Phase.COMPLETE, true, Vector2i(9, WallPlan.DEPTH),
+			WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_X])
 	var before := world.state_hash()
 	seg.facing = WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y]
-	assert_ne(world.state_hash(), before)
+	assert_ne(world.state_hash(), before, "turning a segment onto the other axis is a different world")
 
 
 func test_two_worlds_given_the_same_drag_stay_identical() -> void:

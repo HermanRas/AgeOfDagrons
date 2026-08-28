@@ -69,13 +69,6 @@ var variant_pool: StringName = &""
 
 var _last_tick: int = -1
 
-## How solid a wall is the instant it is dragged, before anybody has built any of it.
-##
-## Low enough to read as "not there yet" against the grass, high enough that the SHAPE
-## of the run is unmistakable -- which is the thing the foundation art failed to convey
-## and the whole reason this exists. It ramps to 1.0 with `build_fraction`.
-const WALL_RISING_ALPHA := 0.4
-
 ## What GAIA gets: no age skin and no player tint. Owner 0 is nobody, and
 ## colours.json's note is explicit that the tint must key off who owns a thing
 ## rather than off whether its art carries a playercolor mask -- 0 A.D.'s sheep
@@ -307,14 +300,6 @@ func apply_snapshot(snap: Dictionary) -> void:
 			view.set_corpse_fade(clampf(
 					float(entry["rubble_ticks_left"]) / float(SimBuilding.RUBBLE_FADE_TICKS),
 					0.0, 1.0))
-		elif _is_rising_wall(entry):
-			# A WALL BEING BUILT MATERIALISES. It draws its finished art (see
-			# `_visual_id_of`) from `WALL_RISING_ALPHA` up to solid as the builders work,
-			# so the run is legible as a wall from the moment it is dragged and the
-			# player can watch it come in. `build_fraction` is already on the wire for
-			# the HUD's own progress readout, so this costs nothing.
-			view.set_corpse_fade(WALL_RISING_ALPHA + (1.0 - WALL_RISING_ALPHA)
-					* clampf(float(entry.get("build_fraction", 0.0)), 0.0, 1.0))
 		else:
 			view.set_corpse_fade(1.0)
 		if entry.has("anim"):
@@ -1297,40 +1282,26 @@ func _leave_spent(id: int) -> void:
 	spent.add(view.visual_id, view.position, view.facing, id)
 
 
-## A WALL SEGMENT THAT HAS BEEN DRAGGED BUT NOT YET BUILT (project owner, 2026-08-28:
-## *"wall drag to build is very broken"*, with a screenshot of exactly this).
+## A WALL UNDER CONSTRUCTION SHOWS ITS FOUNDATION, like every other building
+## (project owner, 2026-08-28: *"leave it the way it was with foundations, the problem
+## was never the construction phase"*).
 ##
-## The drag itself was never broken -- `WallPlan` lays a contiguous run and
-## `preview_walls` prints it segment by segment -- but a wall FOUNDATION is 0 A.D.'s
-## construction site: a few stone piles, some posts and a stack of logs, scattered over
-## nine tiles. Three of them in a row read as debris rather than as a wall, which is
-## indistinguishable from the drag having gone wrong. **`preview_walls` had known that
-## since it was written and worked around it**: its step 4 finishes every wall before
-## photographing it, precisely because foundations were "impossible to tell a
-## correctly-oriented wall from a broken one" -- so the preview was blind to the state
-## the player spends the whole build in. That workaround is now a `--foundations` flag.
+## This briefly drew the finished wall at 0.4 alpha instead, on a misreading of *"wall
+## drag to build is very broken"*: a nine-tile foundation is 0 A.D.'s construction site
+## and three in a row do read as debris, so it looked like a sufficient explanation for
+## the report. It was not the report. The wall was being laid NINETY DEGREES ACROSS THE
+## DRAG (`WallPlan.FACING_FOR_AXIS`), foundations included, and dimming the wrong wall
+## would have hidden the evidence rather than fixed it -- the owner had to send a third
+## screenshot, of the selection ring sitting square across the finished art, to say so.
 ##
-## Gates map to no tier and so are not covered, which is right: a gate is an upgrade of
-## a finished wall and is never a foundation.
-func _is_rising_wall(entry: Dictionary) -> bool:
-	if int(entry.get("phase", -1)) != SimBuilding.Phase.FOUNDATION:
-		return false
-	return GameDataRegistry.wall_tier(StringName(entry.get("def_id", &""))) != null
-
-
+## Kept as a comment because the mistake is the useful part: a screenshot of a broken
+## thing has more than one thing wrong with it, and the presentational explanation is
+## the tempting one because it is the one that needs no measurement.
 func _visual_id_of(entry: Dictionary) -> StringName:
 	var def_id := StringName(entry.get("def_id", ""))
 	# `phase` is present only for buildings and `size_class` only for resource
 	# nodes (their own to_snapshot); -1 in either case means "no preference".
-	#
-	# A RISING WALL DRAWS THE WALL IT WILL BE, faintly (see `_is_rising_wall`), so the
-	# player can see the shape they dragged while it is being built. Asking for the
-	# COMPLETE phase's visual is the whole of it -- the alpha is set beside the corpse
-	# and rubble fades, which already own "this building is not fully there".
-	var phase := int(entry.get("phase", -1))
-	if _is_rising_wall(entry):
-		phase = SimBuilding.Phase.COMPLETE
-	var vis := GameDataRegistry.visual_for(def_id, phase,
+	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)),
 			int(entry.get("size_class", -1)))
 	# Interchangeable looks (visuals.json `variants`) -- four field plots and, since
 	# 2026-08-28, a tree species set per map type. Unconditional and free for

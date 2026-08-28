@@ -15,8 +15,9 @@
 ## AXIS-ALIGNED ONLY. A segment's footprint is a box -- [9, 2] east-west, [2, 9]
 ## north-south -- and a box rotated 45 degrees does not tile a square grid, so a
 ## drag snaps to whichever axis it mostly ran along. The wall art is baked at eight
-## directions and only two of them are reachable today; the other six are what a
-## diagonal wall would need, and it would need a footprint model this does not have.
+## directions and only two of them are reachable today: four are the 180-degree twins
+## of the two (a wall is symmetric, so they draw the same picture) and the last two are
+## the true diagonals, which would need a footprint model this does not have.
 class_name WallPlan
 extends RefCounted
 
@@ -26,16 +27,39 @@ const AXIS_Y := 1
 
 ## The SIM facing (SimBuilding.facing's convention) for a wall lying along each axis.
 ##
-## Derived from `Iso.FACING_TILE_DIRS` rather than guessed: the tile direction (1, 0)
-## is sprite facing 7 and (0, 1) is sprite facing 1, and `Iso.sim_facing_to_sprite`
-## is `7 - facing`, so the sim numbers are 0 and 6. Written out as a constant because
-## the sim may not name an `Iso` -- that is a view class -- and this is the one place
-## the two conventions have to agree about a building.
+## **A WALL FACES ACROSS ITS OWN LENGTH, NOT ALONG IT**, and getting that backwards is
+## what the project owner reported on 2026-08-28: *"i am dragging NE to SW, the walls
+## look like NW to SE."* These numbers were derived from `Iso.FACING_TILE_DIRS` by
+## reading the tile direction as the direction the wall RUNS -- tile (1, 0) is sprite
+## facing 7, so axis X was given sim facing 0 -- and the art means the opposite. A
+## segment baked at sprite facing SE is a wall lying along tile axis Y; SW is the one
+## lying along axis X. Ninety degrees out, which on a symmetric wall is exactly the
+## error nothing else in the game can feel: same footprint, same origin, same hash.
 ##
-## **VERIFY THESE BY LOOKING.** A building's baked yaw has been wrong-by-180 before
-## (the art side's `yaw_offset_deg` note), and no test can tell a wall lying along
-## the drag from one lying across it. `preview_walls` photographs both axes.
-const FACING_FOR_AXIS := [0, 6]
+## MEASURED OFF THE STAGED ATLASES, not guessed a second time. Regressing the mean
+## opaque-pixel y against x over each direction's frame gives the slope the sprite
+## leans at, and one screen tile is (32, 16) px, so a wall along tile axis X leans
+## +0.5 and one along axis Y leans -0.5:
+##
+##                     S     SW      W     NW      N     NE      E     SE
+##   wall_long       0.00  +0.45   0.00  -0.45   0.00  +0.45   0.00  -0.45
+##   wall_gate       0.00  +0.43   0.00  -0.42   0.00  +0.42   0.00  -0.43
+##   foundation_9x3 -0.02  +0.38   0.18  -0.42  -0.01  +0.39   0.20  -0.42
+##
+## All twelve wall and gate atlases agree, and so do the foundations and the rubble --
+## so the foundations in that report were being laid across the run too, and the
+## "unreadable construction site" they were blamed on was the same ninety degrees.
+## S/N and W/E are the two DIAGONAL walls (412x166 and 64x336 for the long piece), and
+## no axis-aligned footprint can ever ask for them. SW/NE and NW/SE are 180 apart and
+## a wall is symmetric, so either of each pair would do; the low one is taken.
+##
+## Written out as a constant because the sim may not name an `Iso` -- that is a view
+## class -- and this is the one place the two conventions have to agree about a
+## building. `test_wall_facing` re-measures the atlases and fails if a rebake moves
+## them, which is the check that was missing when this was first written: it said
+## "verify these by looking", `preview_walls` photographed both axes, and looking is
+## what did not happen for six days.
+const FACING_FOR_AXIS := [6, 0]
 
 ## How short a run may be: one short segment. A drag of one tile still means "put a
 ## wall here", so it rounds UP to this rather than placing nothing.

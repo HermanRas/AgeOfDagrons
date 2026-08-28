@@ -60,8 +60,10 @@ func test_the_footprint_is_transposed_for_a_vertical_wall() -> void:
 
 func test_the_two_axes_get_different_facings() -> void:
 	# A wall drawn at the same facing whichever way it was dragged is a wall lying
-	# across half its own footprint. The NUMBERS are verified by looking (see
-	# WallPlan.FACING_FOR_AXIS); what a test can hold is that they differ.
+	# across half its own footprint. This holds only that the two DIFFER, which is as
+	# much as a sim test can see; that each is the right one of the eight is measured
+	# off the staged pixels by `test_wall_facing`, and it had to be, because both were
+	# wrong for six days while this passed.
 	var across := WallPlan.plan(Vector2i(0, 0), Vector2i(8, 0), LENGTHS)
 	var down := WallPlan.plan(Vector2i(0, 0), Vector2i(0, 8), LENGTHS)
 	assert_ne(int(across["segments"][0]["facing"]), int(down["segments"][0]["facing"]))

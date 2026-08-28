@@ -1,11 +1,14 @@
 ## Dev check for walls (PLAN.md 5.8): drag them in the real game and photograph them.
 ##
-## THE THING NO TEST CAN JUDGE IS WHICH WAY THE ART FACES. `test_wall_plan` asserts
-## that the two axes get different facings, and it cannot assert that either of them
-## is the RIGHT one -- a wall lying across its own footprint has the same footprint,
-## the same origin and the same hash as one lying along it. The art side has already
-## been caught by a building baked 180 degrees out (`yaw_offset_deg`), so both axes
-## get a screenshot and somebody looks.
+## WHICH WAY THE ART FACES IS NOW A TEST, and this preview is no longer the only
+## thing standing behind it. `test_wall_facing` measures the lean of the staged pixels
+## and fails if a wall's sprite runs across the axis its footprint lies on -- which is
+## exactly what was happening, for six days, while this file's header said the check
+## could not be automated and left it to whoever looked at the pictures.
+##
+## Keep taking them anyway. A measurement says the run leans the right way; it does
+## not say the segments meet, that the gate lines up with the wall it replaced, or
+## that the whole thing reads as a wall. That still wants an eye.
 ##
 ## What else it covers, in the same run because a wall is cheap to place: that a drag
 ## lays several segments and mixes their lengths, that a run refuses the ground it
@@ -42,7 +45,13 @@ var _interactive := false
 ## anything that goes wrong before the wall is up.
 ##
 ## The project owner reported the drag as "very broken" on 2026-08-28 with a screenshot
-## of exactly this state, so "unreadable" was the finding rather than the obstacle.
+## of exactly this state, so "unreadable" was the finding rather than the obstacle --
+## and the foundations were being laid ninety degrees across the run, like everything
+## else, which is a large part of why they read as scattered debris.
+##
+## THE GATE STEPS WARN UNDER THIS FLAG AND THAT IS CORRECT: a gate is an upgrade of a
+## FINISHED long segment, so with nothing finished the upgrade button is greyed out and
+## the panel has no gate action. Read those two warnings as the flag working.
 var _foundations := false
 
 
@@ -99,7 +108,7 @@ func _process(_delta: float) -> void:
 			_finish_the_walls()
 			_zoom_to(_across, 24, 0)
 		5:
-			_report_run("east-west", _across, 0)
+			_report_run("east-west", _across, WallPlan.AXIS_X)
 			_shoot("wall_across")
 		6:
 			# THE OTHER AXIS, which is the whole reason this preview exists.
@@ -108,7 +117,7 @@ func _process(_delta: float) -> void:
 			_finish_the_walls()
 			_zoom_to(_down, 0, 24)
 		8:
-			_report_run("north-south", _down, 6)
+			_report_run("north-south", _down, WallPlan.AXIS_Y)
 			_shoot("wall_down")
 		9:
 			# A run into ground it cannot have. The segments that fit are placed and
@@ -376,11 +385,18 @@ func _report_ghost() -> void:
 		push_warning("preview_walls: no cost readout under the drag")
 
 
-## What one run came out as. SCOPED TO ITS OWN FACING, because by the time the second
+## What one run came out as. SCOPED TO ITS OWN AXIS, because by the time the second
 ## run is photographed the first one is still standing -- the first version of this
 ## counted every wall on the map and reported "one run came out with 2 facings", which
 ## was a bug in the report and not in the wall.
-func _report_run(label: String, origin: Vector2i, facing: int) -> void:
+##
+## TAKES THE AXIS, NOT THE FACING NUMBER, and it used to take the number: 0 and 6, both
+## written out. Correcting `FACING_FOR_AXIS` on 2026-08-28 swapped what those two mean,
+## so this reported "the east-west drag placed nothing" over a screenshot of a perfectly
+## good east-west wall. A dev tool that hard-codes the table it exists to check is a
+## tool that will report the fix as the bug.
+func _report_run(label: String, origin: Vector2i, axis: int) -> void:
+	var facing: int = WallPlan.FACING_FOR_AXIS[axis]
 	var world: SimWorld = Net.host().world
 	var pieces: Array[String] = []
 	var lengths := {}
