@@ -87,10 +87,22 @@ def load_recipes() -> tuple[list[dict], list[Problem]]:
     The BOM strip is not hypothetical: PowerShell's `Set-Content -Encoding utf8`
     writes UTF-8 *with* a BOM on Windows PowerShell 5.1, tomllib rejects it, and
     this is a Windows-first project (PLAN.md 1.2).
+
+    `recipes/player/` IS INCLUDED, EXPLICITLY, and the glob is deliberately not
+    made recursive. That subdirectory holds the 168 generated per-player-colour
+    recipes, and it exists precisely so `bake_batch.ps1`'s non-recursive glob
+    does not sweep them into every ordinary batch. Every consumer therefore has
+    to opt in by name -- and this one did not, so all 168 staged colour atlases
+    audited as "staged for packing but no recipe declares it -- unknown
+    provenance". That is the SAME bug `stage_atlases.py` had on 2026-08-16,
+    where no colour atlas could ever stage, in the same shape for the same
+    reason. The game side spotted the pattern here; fixed 2026-08-28.
+
+    `recipes/probe/` stays out: throwaway diagnostics that ship nothing.
     """
     out: list[dict] = []
     problems: list[Problem] = []
-    for path in sorted(RECIPES.glob("*.toml")):
+    for path in sorted(RECIPES.glob("*.toml")) + sorted((RECIPES / "player").glob("*.toml")):
         try:
             text = path.read_text(encoding="utf-8-sig")
             data = tomllib.loads(text)
