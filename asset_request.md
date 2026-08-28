@@ -77,9 +77,14 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 **The old P2 — `yaw_offset_deg` — is DELIVERED, STAGED AND VERIFIED**, so everything
 below it has moved up one. Details in the Delivered log at the bottom.
 
+**P0 is now delivered too (2026-08-28), so P1 — the wildlife — is the top open art item,
+and it is half done: the wolf moves, the other five species do not.** P2 and P4 are each
+partly delivered as well; the ready-to-wire entry at the top of Open requests says exactly
+which pieces landed and which did not.
+
 | P | Request | The phase it is holding up |
 |---|---|---|
-| **P0** | **The unit atlases are MIRRORED** — re-emit the 8 directions in the wall atlases' rotational sense, and take the just-added `yaw_offset_deg = 180.0` back off | **New 2026-08-27, and it outranks everything.** The facing defect we both closed this morning is not closed: front/back is now right and **left/right is swapped**, which is a reflection and therefore something no yaw offset has ever been able to fix. The game cannot correct it either — the wall atlases are not mirrored, so a game-side fix would have to be per-atlas, which is the patch the owner reverted |
+| ~~**P0**~~ | ~~The unit atlases are MIRRORED~~ | ✅ **DELIVERED AND STAGED 2026-08-28.** Fixed in the pipeline (isobake `e6fc052`: the compass step's sign), not in any recipe — `yaw_offset_deg = 180.0` correctly STAYED ON. 252 atlases now at build 38. **Two caveats, both in the ready-to-wire entry below:** 21 atlases sat out the run and are still mirrored, `vis.town_center` among them; and the four-column check is the only one that can see a mirror |
 | **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round. **The facing re-bake did not touch this**: all eight animals were in it and their facing is now right, but they are still one static rest pose apiece |
 | **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
 | **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
@@ -98,6 +103,71 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 ---
 
 ## Open requests
+
+### ✅ ASSET SIDE, 2026-08-28 — EVERYTHING BELOW IS STAGED AND READY TO WIRE. 342/342.
+
+**`game/assets/atlases` is complete and current — read it as usual, nothing new to fetch.**
+The two output trees the owner pointed at (`art_work/out` and `art_work/out2`) have been
+merged and staged; `out2` was the render box's second batch and is now redundant.
+
+**P0 IS DELIVERED.** The reflection fix is staged across the roster — 252 atlases at
+`db9dc8e71cd9` / build 38. Verify with the four-column check on a chiral unit, not two.
+**Read the "still mirrored" note at the bottom of this entry before you do**, because 21
+atlases did not come with it.
+
+| id | clips | notes |
+|---|---|---|
+| **`vis.waypoint_flag`** + 8 colours | `idle` — 12 frames | **`"colours": true`** — 75.4% of the sprite tints, the strongest in the project. All 8 staged |
+| `vis.wall_gate` | `static` (= CLOSED) + `open` | age 1, athenians |
+| `vis.wall_wood_gate_age2` | `static` + `open` | age 2, germans |
+| `vis.wall_wood_gate_age3` | `static` + `open` | **re-pointed to romans `siege_wall_gate`**, per the resolved entry below |
+| `vis.wall_stone_gate_age3` | `static` + `open` | achaemenids |
+| `vis.wall_reinforced_gate_age4` | `static` + `open` | romans |
+| `vis.wall_wood_short/medium/long/tower_age3` | `static` | the rest of the age-3 tier, **now Roman siege works** rather than Briton |
+| **`vis.wolf`** | `idle` `walk` `attack` `die` `decay` — 240 frames | **first of [P1]**; the other five species are still one static pose |
+| `vis.onager_packed` | `idle` `walk` — 120 frames | it ANIMATES, so **no `speed: 0`**. Colour UNMEASURED — treat as `"colours": false` |
+| `vis.trebuchet_packed` | `static` | still static, crew still a totem pole. Colour UNMEASURED — `"colours": false` |
+| `vis.projectile_arrow` | `static` | pitch landed (`pitch_offset_deg = 115.0`); it foreshortens to a dot head-on. **`vis.projectile_bolt` is NOT done** |
+
+**On the gates specifically — your proposed shape is what shipped.** One atlas per gate,
+`closed` and `open` as clips, no new ids and no new `visuals.json` entries. **`static` IS
+the closed pose, deliberately**: a gate at rest is closed, so a gate whose locked flag you
+have not wired yet draws exactly what it draws today and nothing breaks on the way in.
+Only two clips, not four — `opening`/`closing` are ~12 frames each and at 8 directions
+would have cost about fourteen extra pages per gate for half a second of swing.
+
+**Two of the five failed on the render box last night and are fixed here rather than by
+re-running anything.** `vis.wall_stone_gate_age3` and `vis.wall_reinforced_gate_age4` are
+the only atlases in your staging at **`878eb40e4d3b` / build 39**, and that is expected,
+not drift. Adding the second anim flipped `recipe.is_static` false, which arms isobake's
+`ground_clip` guard against armature-deformed meshes — and those two gates are 49% and 40%
+authored below ground and skin all of it, so the guard refused the clip on precisely the
+two subjects that needed it. Safe to override because `origin`, the joint the buried skirt
+hangs off, is identity and constant in both poses; only the doors move. Without it they
+render 15 m and 11 m tall with the foundation showing.
+
+> **⚠️ 21 STAGED ATLASES ARE STILL MIRRORED, and they are not in the 252.** They sat out
+> the re-bake and remain at build 36 (one at 34), all `directions = 8`:
+>
+> `vis.farm`, `vis.field_age2/3/4`, nine `vis.foundation_*`, seven `vis.rubble_*`,
+> and **`vis.town_center`**.
+>
+> Most are ground pieces with no handedness, so the reflection is invisible on them the way
+> it was on the walls — an achiral subject cannot fail a chirality test. **`vis.town_center`
+> is the one I would actually look at**, and it is the oldest of the set. Say the word and
+> they are a short batch; I did not sweep them in unasked because they are cheap and I would
+> rather you saw the list.
+
+> **NOTE FOR WHOEVER SIZES THE NEXT RENDER-BOX RUN:** `stale_recipes.py --isobake` now
+> reports **82 recipes pipeline-stale**, and that is a FALSE ALARM. isobake moved 38 → 39
+> today to add `ground_clip_deformed`, an opt-in flag that changes nothing for any recipe
+> that does not set it — which is all of them but two. Do not spend a night re-baking 240
+> atlases over it. The flag is behaviourally a no-op for the other 329.
+
+**Still open on my side and NOT in the above:** the other five animals + five carcasses
+(the rest of [P1]), `vis.projectile_bolt`'s pitch, `vis.ballista_packed`, the 12 trees, the
+five [P5] footprints, and **`vis.fishing_ship`**, which fails the colour-consistency gate
+on six equal-frequency actor variants and needs a `drop_objects` fix rather than a re-bake.
 
 ### PROJECT OWNER, 2026-08-27 — GATES NEED AN OPEN AND A CLOSED STATE
 
