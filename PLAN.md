@@ -1884,9 +1884,9 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.1 | Terrain tile set from 0 A.D. ground textures — grass, dirt, sand, shallow + deep water, rock, forest floor, plus `vis.cliff`. All 64×32 exact, no fitting | ✅ **and closed 2026-08-23.** The "remaining" here was transition and shoreline edges, and they are no longer art at all: `TerrainLayer` generates all 47 transitions per terrain from the one diamond each already ships (3.1), and the shoreline is a sand band the generator paints. Deliberate — the owner's call was that more sprites make theme packs harder |
 | A.2 | Town centre + house, each with foundation and rubble. Foundations and generic rubble keyed by **footprint size** so the rest of the roster reuses them. No damaged tier — 0 A.D. has none, and health is the dot | ✅ |
 | A.3 | Villager: 11 animations × **8** directions = 960 frames (8 not 5 — she holds an axe in one hand, so mirroring would swap it) | ✅ — one rebake owed (§13.2 item 9) |
-| A.4 | Resource nodes: gold, stone, berry bush, deer + carcass, boar, sheep, wolf, fish, six extra tree species | Largely ✅. Open: tree **size-class variants** and palms (both need variant selection in isobake — no deterministic actor exists), and `vis.farm`, blocked on a 64-instance prop scatter the importer collapses to one |
-| A.4a | **Animate the wildlife — now the single most visible gap in the game.** Every fauna atlas is one static rest pose, and as of 2026-08-23 **six species move**: wolf, boar and bear chase and bite, deer roam and bolt, sheep and cattle are driven home by hand. All six slide. This project's own convention is that anything without a walk clip carries `speed: 0` precisely so nothing slides (ships, dragon, all three siege engines) — wildlife is the first thing to break it, knowingly, on the owner's call. Wolf needs the richest set and the only attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something | **Highest-value art item.** Cost is the **per-clip measurement**, not the bake: `location_scale` is not a global constant (the deer death clip measured 0.0319) |
-| A.4b | ✅ **Closed 2026-08-23** — this said `res.cattle` and `res.bear` had no art at all. Both are baked, staged and now declared; every fauna atlas the game names exists. What replaced it is a **carcass** gap: only `vis.deer_carcass` is baked, and five defs draw it (`res.deer_carcass` plus wolf / boar / bear / sheep). A dead deer where a dead bear should be is the wrong animal, and it beats the magenta unknown, but four bakes are owed. `asset_request.md` | Five carcass bakes owed |
+| A.4 | Resource nodes: gold, stone, berry bush, deer + carcass, boar, sheep, wolf, fish, six extra tree species | ✅ except `vis.farm`. **The palms landed 2026-08-28**, and not as isobake variant selection: twelve new tree species were baked as separate ids and the GAME side picks between them, so the "no deterministic actor exists" problem was answered on the other side of the seam. `visuals.json` gained `variant_pools` — a per-map-type list keyed off the same tile seed the existing `variants` axis uses — and five palms now serve Island and River. Tree **size-class variants** stay open for the reason they always were. `vis.farm` is still blocked on a 64-instance prop scatter the importer collapses to one |
+| A.4a | **Animate the wildlife — now the single most visible gap in the game.** Every fauna atlas is one static rest pose, and as of 2026-08-23 **six species move**: wolf, boar and bear chase and bite, deer roam and bolt, sheep and cattle are driven home by hand. All six slide. This project's own convention is that anything without a walk clip carries `speed: 0` precisely so nothing slides (ships, dragon, all three siege engines) — wildlife is the first thing to break it, knowingly, on the owner's call. Wolf needs the richest set and the only attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something | ✅ **Delivered 2026-08-28.** All six species now carry `walk`, plus `attack` on the three that bite, `run` on the deer and `feeding` on the cattle. Nothing slides any more. Two clips arrived on one species and not its siblings, so `AtlasEntry._ANIM_ALIAS` rewords the request rather than guessing — `run` falls back to `walk` and `feeding` to `idle`, both synonyms rather than second guesses. **One defect open:** `vis.deer` and `vis.deer_carcass` are distorted per direction — 52 px wide head-on where a sheep is 14, and within one standing clip its height runs 41 px to 83. It is the one species carrying a hand-probed `location_scale` and the five beside it in the same batch are clean |
+| A.4b | ✅ **Closed 2026-08-23** — this said `res.cattle` and `res.bear` had no art at all. Both are baked, staged and now declared; every fauna atlas the game names exists. What replaced it is a **carcass** gap: only `vis.deer_carcass` is baked, and five defs draw it (`res.deer_carcass` plus wolf / boar / bear / sheep). A dead deer where a dead bear should be is the wrong animal, and it beats the magenta unknown, but four bakes are owed. `asset_request.md` | ✅ **Closed again 2026-08-28.** All six carcasses are baked, staged and declared; every animal dies as itself. What is owed now is **measurement, not art**: the projection inversion returns NEGATIVE heights for a carcass — structural, and no choice of frame fixes it, because a body lying flat has no vertical extent to invert — so all five new `footprint_m`/`height_m` figures are the deer carcass's proportions scaled onto each animal's measured live figure. Filed as [P5] |
 | A.5 | UI chrome from the itch.io dragon packs | Largely in use |
 | A.6 | **Player colour — prerequisite, not polish** (§2.7 consequence 3). Bake untinted, emit the source alpha as a mask page, tint in a `canvas_item` shader. **Blend mode decided:** neither obvious option works — *multiply* (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the lightness ladder; *luminance-preserving hue transfer* destroys the ladder outright, since every colour inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the **base** level with the texture contributing only its **local deviation**: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, `k ≈ 0.8` scaled by remaining headroom so a light colour does not clip flat. **The mask needs its own greyscale page** (~+12% atlas bytes) — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | **Must land before A.8** |
 | A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | ✅ **Done 2026-08-23, with two deliberate departures from "whole".** (1) **Five variations per sound group, not all of them** — `lumbering` ships 22 chop samples and `gathering` 66; the ear is listening for "not the same twice" and five is past that, so taking every one spent the audio pack's 50–100 MB budget (§3.2) on chopping noises. `--max-variations` raises it and re-fetches only the difference. (2) **8 of 62 music tracks**, chosen against the age ladder — the other 54 are 219 MB nothing selects. **And a hazard worth knowing:** the .ogg files in the 0 A.D. checkout are git-LFS *pointers*, that repo's index carries ~30k staged deletions so `git lfs pull` exits 0 having done nothing, and the host is behind an Anubis bot wall that a `git-lfs` User-Agent passes. `tools/stage_audio.py` goes round all three and **writes nothing into the art checkout** |
@@ -1895,7 +1895,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.10 | **Building roster, age by age** — ~70 bakes. **The first batch is five buildings, not seventy**: age 1 unlocks only town centre, house, mill, mining camp and lumber camp, which is a complete playable settlement. Age 2 adds eight. Two free savings: composite props are the same gaia assets in all four ages, so bake once and reuse; the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2 (both Celtic, so similar) — it saves ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of the age axis. **Measure all four skins before declaring a footprint** — it is the max across ages and cannot be read off the age-1 bake | In progress |
 | A.11 | **Walls and gates** — ~16 pieces across three tiers. Unblocked from the footprint side (all pieces share one footprint, all towers another, across every civ) | See the two findings below |
 
-**Two art findings that cost real time and would cost it again.**
+**Three art findings that cost real time and would cost it again.**
 
 **The rotary mill's grinder assembly is mis-anchored** — wrong position, wrong rotation, wrong
 scale, all from one cause. `structures/britons/special.xml` attaches `rotary_mill_grinder.xml` at
@@ -1925,6 +1925,23 @@ mirror-image boxes"* is true of a **line** and false of a **wall** — rotating 
 the screen bounding box (wide-and-short at S, narrow-and-tall at W), so a wall canvas must clear
 **width from the S view and height from the W view**. Ten recipes passed anyway, on generous
 sizing rather than on the reasoning holding.
+
+**A wall faces ACROSS its own length, not along it — and the game assumed the opposite for a
+week.** Baking 8 directions is only half the contract; the other half is knowing which of the 8 a
+given run wants, and `WallPlan.FACING_FOR_AXIS` was derived from `Iso.FACING_TILE_DIRS` on the
+reading that a wall runs *in* the direction it is baked facing. It does not. Measured off the
+staged pixels (regress mean opaque-pixel y against x over each frame; one screen tile is (32, 16)
+px, so an axis-X wall must lean +0.5 and an axis-Y wall −0.5), the sprite baked **SW is the wall
+lying along tile axis X and SE is the one lying along axis Y**. Every wall, gate, foundation and
+rubble atlas agrees, bakes from before and after the gate batch alike, so this was never a rebake
+regression — the code had never agreed with any staged art. It took **ninety degrees of visible
+error and three screenshots** to find, because nothing else can feel it: a wall lying across its
+own footprint has the same footprint, the same origin and the same `state_hash` as one lying along
+it, and the frame sizes are identical too. `tests/view/test_wall_facing.gd` now re-measures the
+staged pixels every run. **The general lesson, and it generalises past walls:** an art convention
+that only a human eye can check is a convention that will be wrong for as long as nobody looks —
+`WallPlan`'s header said "VERIFY THESE BY LOOKING" and `preview_walls` took the photographs, and
+that was not enough. Atlas frames are pixels; measure them.
 
 **Still unbaked:** the composite props — 3× `wood_lumber` (lumber camp), 3× `stone_pile_granite`
 (mining camp) — need a `[source.extras]` feature in isobake to compose props onto a building. The
@@ -2029,11 +2046,30 @@ close was `garrison_cap`, declared on all 31 buildings since 0.4 and read by not
 every rung now has to fight through one. Winners all held; `easy v normal` went from
 t11366 to t18351. BUGS.md carries the new table.*
 
+*Nothing on the numbered list moved 2026-08-27/28 and a great deal else did, which is worth
+saying plainly: two days went on the art deliveries and on what the owner found by PLAYING.
+Wired: twelve trees behind `variant_pools`, six carcasses, the wildlife walk clips, and the
+packed engines' last blocker. Fixed from playtest reports: tower volleys (a garrisoned archer
+now adds an arrow to the salvo), predators retreating from a settlement so early villagers can
+be run home, spent projectiles lingering on the ground, villagers walking back to where the
+town centre stood after it falls, a Forest map you can actually walk through, and — over two
+attempts and three screenshots — **every wall being drawn ninety degrees across the run it was
+dragged on**. Two of those were mine to have caught: the forest hung the owner's session
+because I measured bandwidth and shipped without running the suite, and the wall report I
+explained away as a presentation problem was a real geometry bug. The counterweight is in §12A's
+third wall finding.*
+
 **1. 2.4d Archipelago** (§11.6). One island per player, a few sheep, nothing hostile. The
 content side is nearly free — `PREDATORS` is keyed by map type and read with `.get(type,
 {})`, so an unlisted type gets no predators without a line of code. The work is that
 `MapValidator` requires every start to reach every other by land, which an archipelago fails
 by definition, so that claim has to *change* rather than relax.
+
+*It also has a hole the other two do not, and it belongs here rather than in the gaps list
+below: transports have no load/unload and nothing has ever fought at sea, so **an archipelago
+is a map on which no player can reach another** and therefore no win condition can fire. The
+map type is buildable without naval combat; a MATCH on it is not. Either load/unload comes
+first or the type ships knowingly as a sandbox.*
 
 *~~2. 8.8, the [X] clear-selection button.~~ **Built 2026-08-28.** It was the only thing on
 this list the owner reported from actually playing a build, and it turned out to be a layout
@@ -2048,17 +2084,18 @@ it, every AI profile already declares `techs: true` against nothing, and the fie
 per-age ladder is standing in for a mill upgrade that does not exist.
 
 **3. 4.13's pack/unpack state machine — and it moved because the ART LANDED, 2026-08-28.**
-This was the last open item in 4.13 and it has been waiting on one thing since 2026-08-22:
+This was the last open item in 4.13 and it had been waiting on one thing since 2026-08-22:
 every siege atlas staged was the *unpacked* pose, so the machine had no way to show its two
 states apart and building it against a magenta placeholder would have proved the transition
-happened without proving it was the right way round. `vis.onager_packed` and
-`vis.trebuchet_packed` are now staged. **They are deliberately NOT declared in
-`visuals.json`** — an id referenced by nothing reads a year later as art that failed to
-land — so the declaration goes in with the machine, in one commit. Three things already
-known: the onager's packed actor **animates** (`idle`/`walk`, 120 frames) so it must not get
-`speed: 0`, the trebuchet's is static with its crew stacked in a column, and colour is
-UNMEASURED on both, so both start `"colours": false`. `vis.ballista_packed` is not baked and
-is the cheapest of the three to be missing — it is the one engine with no player colour.
+happened without proving it was the right way round. **All THREE packed atlases are now
+staged** — `vis.onager_packed`, `vis.trebuchet_packed` and `vis.ballista_packed`, which this
+item said was unbaked. **They are deliberately NOT declared in `visuals.json`** — an id
+referenced by nothing reads a year later as art that failed to land — so the declaration goes
+in with the machine, in one commit. Three things already known: the onager's packed actor
+**animates** (`idle`/`walk`, 120 frames) so it must not get `speed: 0`, the trebuchet's does
+too as of `c64ccef` (its wagon was rebaked one level down so the ox-cart rig wins the pick,
+at the cost of its four engineers), and colour is UNMEASURED on all three, so all start
+`"colours": false`. **Nothing is waiting on art here any more.**
 
 **Then, in no strongly forced order:** 2.4c the map save format; 12.1b LAN discovery; 12.3
 campaign; **Phase 14, the AI's enemy-blindness** (which is a rebuild of 12.2b's condition
@@ -2067,11 +2104,16 @@ once the RTS is a game.
 
 ### What is waiting on art, not on code
 
-- **`vis.wolf` and five siblings need walk clips** (§12A A.4a) — and this is now the most
-  visible defect in the game rather than a nicety. Six species move as of 2026-08-23 and
-  every one of them slides, because every fauna atlas is a single static rest pose.
-- **Four carcass bakes** (§12A A.4b). Five defs draw `vis.deer_carcass`; a dead deer where a
-  dead bear should be is the wrong animal.
+*Refreshed 2026-08-28, and it got much shorter: four of the five items below had landed since
+this list was written and nobody had crossed them off, so the list read as a wall of blockers
+when only one thing was actually blocked. **Everything the code side is waiting for now fits in
+two lines**, and neither of them stops the next feature.*
+
+- ~~**`vis.wolf` and five siblings need walk clips**~~ (§12A A.4a) — **DELIVERED 2026-08-28.**
+  All six species carry `walk`, plus `attack` on the three that bite, `run` on the deer and
+  `feeding` on the cattle. Nothing slides.
+- ~~**Four carcass bakes**~~ (§12A A.4b) — **DELIVERED 2026-08-28.** All six are baked and
+  declared; every animal dies as itself.
 - ~~**The 36-recipe `yaw_offset_deg` re-bake**~~ (§13.2 item 10) — **DELIVERED AND STAGED
   2026-08-27.** The art side did 82 recipes rather than the 36 asked for, re-baked 242 atlases
   (82 base + 160 colour), and the game side staged all 242 and re-imported. Verified with
@@ -2079,10 +2121,17 @@ once the RTS is a game.
   column 4 (N) a back, and `idle`/`walk`/`attack` agree. **Nothing in `game/` changed**, which
   was the whole point of reverting the compensation — a corrected bake is correct the moment
   it is staged.
-- **A replacement for `vis.tree_teak`**, ideally a palm for riverbanks and Archipelago. The
-  teak was pulled from the forest rotation on 2026-08-23 for being 4.6 tiles wide and 12
-  tall on a one-tile footprint, which made trees unselectable.
-- **Five estimated `footprint_m` figures** to confirm with `isobake inspect`. Low priority;
+- ~~**A replacement for `vis.tree_teak`**, ideally a palm for riverbanks and Archipelago~~ —
+  **DELIVERED 2026-08-28, twelve species rather than one.** Wired through `variant_pools`, so
+  Forest gets beech/birch/fir/oak, Island and River get the five palms, and Desert gets the two
+  dead trees. **One was rejected on the same grounds the teak was:** `vis.tree_banyan` — the
+  owner tested it in a live grove with villagers and confirmed the tap problem, so it is
+  excluded and stays staged.
+- **`vis.deer` and `vis.deer_carcass` are distorted per direction** (§12A A.4a) — the one thing
+  still owed that anybody can see. 52 px wide head-on where a sheep is 14, and 41→83 px of
+  height inside one standing clip.
+- **Ten estimated `footprint_m` figures** — five animals and five carcasses, up from five,
+  because a carcass cannot be measured by the usual inversion at all (§12A A.4b). Low priority;
   they feed the selection ring and the occlusion band, not gameplay.
 
 ### Known gaps worth writing down rather than filing
