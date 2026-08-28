@@ -89,9 +89,9 @@ are `directions = 1`, which the P0 root cause cannot reach. Working in the game-
 | P | Request | The phase it is holding up |
 |---|---|---|
 | ~~**P1**~~ | ~~Animate the wildlife + five carcass bakes~~ | ✅ **BAKED AND STAGED 2026-08-28**, 10/10 in 2.2 min on the render box, master checkout pristine. Six species move and every carcass is its own animal, so a dead bear stops drawing as a dead deer. **Awaiting wiring only** — the five movement bakes need none, the five carcasses need a `visuals.json` entry and one line each in `resources.json`. Details in the ready-to-wire entry at the top of Open requests |
-| **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
-| **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
-| **P4** | Arrow and bolt pitch | **Confirmed still open on 2026-08-27** — the re-bake gave the projectiles their yaw line but not a pitch, and a fresh 8× crop shows the arrow standing vertically in flight exactly as before. Cosmetic; 4.13 is otherwise done |
+| ~~**P2**~~ | ~~Packed siege states~~ | ✅ **CLOSED 2026-08-28.** `vis.ballista_packed` was the last of the three and it animates — 120 frames, `idle`/`walk`. **4.13's last open item is done** |
+| ~~**P3**~~ | ~~A `vis.tree_teak` replacement, ideally a **palm**~~ | ✅ **DELIVERED 2026-08-28.** 13 baked, **11 usable as gatherables** — five palms among them, so the teak's replacement is there several times over. `vis.tree_banyan` is over the band and flagged; `vis.tree_elm_dead` ships. Awaiting wiring |
+| ~~**P4**~~ | ~~Arrow and bolt pitch~~ | ✅ **CLOSED 2026-08-28.** The arrow landed 2026-08-27; `vis.projectile_bolt` now carries the same 115.0, established by measuring where the shaft's mass sits rather than by copying the figure across |
 | **P5** | Confirm five `footprint_m` figures | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
@@ -135,6 +135,10 @@ atlases did not come with it.
 | **`vis.deer`** | `idle` `walk` **`run`** `die` `decay` — 240 frames | [P1]. It bolts when hit, so the run earns its place |
 | **`vis.sheep`** | `idle` `walk` `die` `decay` — 180 frames | [P1] |
 | **`vis.cattle`** | `idle` `walk` **`feeding`** `die` `decay` — 240 frames | [P1]. **Cattle is the ONLY animal that can have feeding** — boar and deer appear to declare it but it is a variant name with no animation behind it |
+| **`vis.ballista_packed`** | `idle` `walk` — 120 frames | [P2] **closes it — all three packed engines exist.** It ANIMATES, so **no `speed: 0`**, same as the onager. Colour unmeasured; `vis.ballista` itself is the one engine measuring 0% tint, so expect `"colours": false` |
+| **`vis.projectile_bolt`** | `static` | [P4] **closes it.** Now pitched (115.0, the arrow's value, measured not copied). Side-on went 6×30 → **31×14** |
+| **11 new trees** — `vis.tree_palm_date`, `_palm_fan`, `_palm_cretan_patch`, `_palm_tropical`, `_palm_tropical_tall`, `vis.tree_beech`, `_birch`, `_fir`, `_oak_new`, `_bamboo`, `_oak_dead`, `_elm_dead` | `static` | [P3]. All fit the one-tile band. One `visuals.json` entry each, then the pool arrays |
+| ⚠️ **`vis.tree_banyan`** | `static` | [P3] **BAKED BUT DO NOT PUT IT IN `vis.tree`'s `variants`.** 370 px wide against the 250 band — **worse than the teak (296) you pulled**. Good as decoration with no resource on it. Your call |
 | **`vis.wolf_carcass`**, **`_boar`**, **`_bear`**, **`_sheep`**, **`_cattle`** | `carcass` — 10 frames | [P1]. **Frame 1 is the collapsed pose, not frame 0** — frame 0 is the death clip's start, the animal still standing. Each needs a `visuals.json` entry and one line in `resources.json` off `vis.deer_carcass` |
 
 **On the gates specifically — your proposed shape is what shipped.** One atlas per gate,
