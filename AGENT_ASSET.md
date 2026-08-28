@@ -259,6 +259,33 @@ four `yaw_offset_deg` probes were spent on it before the cause was found. **When
 composite actor renders in a pose the source engine never shows, suspect the
 armature pick before the rotation.**
 
+**THE `prop_anchor_count` TIE-BREAK IS DEFEATED BY IDENTICAL CREW, because the
+importer gives all of their kit to ONE of them.** Found 2026-08-28 on
+`siege_mangonel_pivot_packed`, and it is the same trap one turn further on. Four
+Han engineers import as `Biped`, `Biped.001..003` — but every head and helmet
+anchors to `Biped` alone, so that single object owns **24 props** and beats the
+wagon rig's 10. The clip then lands on a soldier and the wagon holds its bind
+pose. Ranking by props owned is still the right rule; it just assumes each rig
+owns its own props, and four copies of one crew actor break that assumption.
+
+**Two things to take from it.** The mis-anchoring is visible in `inspect`'s
+per-object transform table — four `dude_head`s at *identical* world coordinates
+is the tell, and it means three crew are bare-headed with a pile of heads on the
+fourth. And **the count in the note is the diagnosis**: `picked 'Biped' (102
+bones, 24 props anchored to it)` says both what went wrong and why. Bake one
+static frame at `directions = 1` to get that note whenever an animated bake dies
+before printing it.
+
+**`Available: []` IS NOT EVIDENCE THAT AN ACTOR DECLARES NO ANIMATIONS.** It is
+`render_impl.py` reporting an empty clip DICT, and there are two ways to empty
+it: the declaration lookup failed (`file is None`), or the clip loaded and then
+**did not drive the picked armature**. The second prints its own note and is by
+far the more likely on a composite actor. `trebuchet_packed.toml` recorded the
+first for a fortnight — with `file =` already set, which rules that branch out —
+and costed the fix as "teach the adapter to merge a nested prop's animations", a
+real feature, when the actual fix was one line of `[source].actor`. **Read the
+notes above the error, not the error.**
+
 **A recipe's clip names resolve against the actor in `[source]`, and on a nested
 actor that is the wrong actor.** The onager is two actors: the pivot base the
 recipe names declares no animations at all, while the arm mounted at `weapon`
@@ -465,6 +492,31 @@ with WinError 5. Delete contents, not the directory.
 > together. **`out` here is authoritative only for what was baked here.** Use `--only`,
 > and treat the staged directory as the source of truth until someone carries the box's
 > `out` across.
+
+> ### ✅ ALL THREE PACKED SIEGE ENGINES ANIMATE — 2026-08-28
+>
+> `vis.onager_packed` and `vis.ballista_packed` already did; `vis.trebuchet_packed` was
+> the last static one and now carries `idle` (12f @ 8) and `walk` (12f @ 15) over 5
+> directions, staged at build 39 off a clean commit. **These are the only siege assets
+> with a real `walk`** — the game side wires all siege at `speed: 0`, which is right for
+> the deployed halves and wrong for these.
+>
+> **The fix was one line of `[source].actor`, not the pipeline change the recipe
+> predicted.** Root cause and the general lesson are in §4 under `prop_anchor_count`; the
+> asset-specific reasoning is in `tools/recipes/trebuchet_packed.toml`, which is worth
+> reading before touching any packed engine. Short form: the Han actor wraps its wagon in
+> a pivot that also carries four crew, the crew steal the subject-armature pick, and
+> baking the wagon one level down makes it structurally identical to the two that already
+> worked.
+>
+> **It cost the trebuchet's four crew**, which hang off the pivot and so are not imported
+> at all — project owner's call, taking an animated ox-cart over four frozen soldiers.
+> The other two packed engines keep their crew. Verified beyond the summary: walk differs
+> 2.6–3.3% of pixels between half-cycle frames with trim changes in 3 of 5 directions,
+> which is in family with the onager's 3.7–8.8%.
+>
+> **`vis.trebuchet_packed` is the one atlas in `out` on this workstation that is CURRENT**
+> — it was baked here. Everything else in §5's warning above still applies.
 
 > ### ⏳ SUPERSEDED — the prep notes for the run above, kept for the recipe
 >

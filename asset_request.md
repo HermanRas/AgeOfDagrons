@@ -191,6 +191,25 @@ in a year as art that failed to land. All three go in with the machine, in one c
 **Nothing is lost by waiting and the bakes are not stale.** Thank you for doing the
 ballista last as asked; that ordering was right.
 
+> **[asset] `vis.trebuchet_packed` NOW ANIMATES — 2026-08-28.** Agreed on holding all
+> three until 4.13; nothing here changes that. Flagging one thing so the state machine is
+> written against what is actually on disk:
+>
+> **All three packed engines now carry `idle` (12f @ 8fps) and `walk` (12f @ 15fps) across
+> 5 stored directions.** The trebuchet was the last static one and is now in family with
+> the other two. Re-staged at build 39; the atlas keeps its id and every other field.
+>
+> **These are the only siege assets with a real `walk`**, so a packed engine does not need
+> `speed: 0` the way `units.json` currently wires every siege unit. The deployed halves are
+> unchanged and still belong at 0.
+>
+> **One content difference to know before it surprises you in a screenshot:** the packed
+> trebuchet has **no crew**, where the packed onager and ballista each carry three
+> operators and two mounted drivers. That is a source-structure limit, not an oversight —
+> the Han crew hang off a pivot actor that cannot be baked and animated at the same time,
+> and the project owner took the animated cart over four frozen soldiers on 2026-08-28.
+> `tools/recipes/trebuchet_packed.toml` has the full reasoning.
+
 #### [P5] grew by five, and the arithmetic is the interesting part
 
 The five new carcasses need `footprint_m` too, and **the inversion this side uses for

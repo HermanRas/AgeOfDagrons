@@ -1,22 +1,3 @@
-# SHIPPED KNOWINGLY IMPERFECT, on the project owner's call of 2026-08-27:
-# "trebuchet and onager packed even if not looking correct or not animated is
-# still better as a placeholder than not working at all." Without it a limbered
-# trebuchet trundles across the map fully deployed, arm cocked, which reads as a
-# bug rather than as a state.
-#
-# It was parked for half an hour after the probe found two real defects. Both
-# still stand and NEITHER is cosmetic drift that will fix itself:
-#
-#   1. THE FOUR CREW DO NOT PLACE. `engineer_a..d` land stacked in a vertical
-#      column beside the cart, overlapping each other at staggered heights,
-#      instead of standing around it. The wagon, the oxen and the cargo are all
-#      correct, so the silhouette reads -- but look closely and there is a
-#      totem pole of soldiers next to it.
-#   2. IT CANNOT ANIMATE -- see the [anims] note below.
-#
-# Do not read a later "looks fine" as either being fixed; check the crew
-# explicitly, because at map zoom the column is easy to miss.
-#
 # Trebuchet (PACKED state) -- the travelling half of the pack/unpack state
 # machine, PLAN.md 9.2.1 item 5, scoped with 4.13. asset_request.md P2.
 #
@@ -24,53 +5,88 @@
 # in two poses:
 #
 #   units/han/siege_mangonel_unpacked -> units/han/siege_mangonel.xml
-#   units/han/siege_mangonel_packed   -> units/han/siege_mangonel_pivot_packed.xml   <- THIS FILE
+#   units/han/siege_mangonel_packed   -> units/han/siege_mangonel_pivot_packed.xml
 #
-# A PACKED MANGONEL IS A WAGON, which is the whole point of the request: the two
-# states must be tellable apart at a glance. This is a four-wheeled cart drawn by
-# two zebu with the engine struck down as cargo and four crew walking alongside --
-# not the deployed engine with its arm lowered.
+# ...AND THIS RECIPE DELIBERATELY DOES NOT USE THAT SECOND ACTOR. It bakes the
+# wagon the pivot carries, one level down. Read the next section before
+# "correcting" [source] back to the pivot.
 #
-# NESTED-ACTOR STRUCTURE, and it is the onager's exactly (AGENT_ASSET.md §4).
-# The actor in [source] is a PIVOT BASE: an unrigged mesh
-# (structural/han_mangonel_packed_pivot.dae) that declares NO animations at all
-# and carries everything else as props --
+# ---------------------------------------------------------------------------
+# WHY THE WAGON AND NOT THE PIVOT (2026-08-28)
 #
-#   whagon      units/han/siege_mangonel_packed.xml   <- the wagon, and the rig
-#   engineer_a..d  props/units/han/mangonel_infantry_*.xml
+# This shipped STATIC from 2026-08-27, and the reason recorded here at the time
+# was wrong in a way that would have cost the next session a day. It said the
+# pivot declares no animations, so the subject's clip set comes up empty, and
+# the fix was "teach the zeroad adapter to merge a nested prop's animations into
+# the subject's clip set -- a real change". Both halves of that are false:
 #
-# -- and the wagon in turn carries the mangonel at `cargo` and a zebu at each of
-# `horse_l` / `horse_r`.
+#   - The missing DECLARATION was never the blocker. `file = "..."` bypasses the
+#     lookup entirely, which is what onager.toml does, and this recipe did too.
+#   - The bake got past that and failed one step LATER, at zeroad.py's
+#     "yielded no action that drives this armature". `Available: []` is the
+#     downstream symptom of an empty clip dict, not evidence about declarations.
 #
-# So `clip = "Idle"` WOULD RESOLVE TO NOTHING AND ABORT THE BAKE: clip names
-# resolve against the actor named in [source], and this one declares none. The
-# clips are on the nested wagon. Naming the FILE bypasses the lookup, which is
-# the same workaround onager.toml uses and for the same reason.
+# The real cause is AGENT_ASSET.md §4's subject-armature trap, recurring in a
+# form the 2026-08-17 fix does not catch. The bake's own note:
 #
-# Know the consequence before copying this: `file` also becomes the clip's
-# IDENTITY, so two anims naming one file share a single clip. That is survivable
-# here only because idle and walk name different files -- 0 A.D. points Walk and
-# Run at the same `_move.dae`, so a `run` added later would silently be `walk`.
+#     picked 'Biped' (102 bones, 24 props anchored to it)
+#
+# against the wagon's `FourWheelRam` (14 bones, 10 props). The subject pick
+# ranks by props anchored TO each rig, and the Pyrogenesis importer anchors ALL
+# FOUR crew members' heads and helmets to the SAME `Biped` object -- 4 crew x 6
+# props = 24 -- so one soldier outvotes the wagon. The clip then lands on him,
+# the wagon holds its bind pose, and nothing moves.
+#
+# That mis-anchoring is also the OTHER defect the old header reported, described
+# there as the four crew "stacked in a vertical column". It is not the bodies:
+# `prop_engineer_a..d` place correctly at four distinct points beside the cart.
+# It is the heads -- three crew bare-headed with four heads and four helmets
+# piled on the fourth, all at (3.52, -3.45, 3.69).
+#
+# WHY NOT FIX THE PICK. Two reasons, and the second is the deciding one:
+#   1. It is the rig pick every composite actor shares, and it has been got
+#      wrong twice already (§4). Not something to change for one asset.
+#   2. Even with the right subject it would not help much here. The crew become
+#      riders, and the Han `mangonel_infantry_*` clips are the ones Blender's
+#      COLLADA importer refuses outright -- the defect that forces
+#      `drive_riders = false` on trebuchet_deployed.toml. So the crew would be
+#      kept only to stand frozen while the cart rolls out from under them, and
+#      the two zebu would freeze with them.
+#
+# Baking the wagon instead makes this actor STRUCTURALLY IDENTICAL to the two
+# packed engines that already work: in onager_packed and ballista_packed the
+# wagon IS the root actor, so `FourWheelRam` is unanchored and wins the pick
+# outright. Verified 2026-08-28 -- subject `FourWheelRam`, both clips attach,
+# and "driving 2 of 2 nested-prop armature(s)", so the OXEN WALK too.
+#
+# WHAT IT COSTS: the four `engineer_a..d` crew, which hang off the pivot rather
+# than the wagon and so are not imported at all. Project owner's call of
+# 2026-08-28, taking a clean animated ox-cart over four frozen (and mostly
+# headless) soldiers. This is therefore the one packed engine with no crew;
+# the onager's and ballista's crew ride on their wagons and are unaffected.
+#
+# Frame sizes confirm nothing else changed: side-on 168x107 against the old
+# pivot bake's 167x107, at the same 22.627 px/m. Only the end-on views narrow
+# (79 -> 52 px), which is exactly the crew's width leaving.
+# ---------------------------------------------------------------------------
 id      = "vis.trebuchet_packed"
 adapter = "zeroad"
 
 [source]
-actor = "units/han/siege_mangonel_pivot_packed.xml"
-# NO `drive_riders = false` HERE, unlike the deployed half, and the difference is
-# structural rather than a preference. On the deployed engine the rig belongs to
-# the SUBJECT and the crew are riders, so switching riders off costs only the
-# crew's motion. Here the rig belongs to a nested prop -- the wagon -- so the
-# clips this recipe needs ARE rider clips, and switching them off leaves nothing
-# to play. Probed 2026-08-27: with `drive_riders = false` the bake aborts with
-#   animation 'idle' wants clip '...', which this source does not have. Available: []
-# which is an empty list because the root pivot declares nothing and the wagon's
-# own animations were never imported.
+# The wagon, NOT units/han/siege_mangonel_pivot_packed.xml. See above.
+# It declares Idle/Walk/Run on itself and carries the struck-down mangonel at
+# `cargo` plus a zebu at each of `horse_l` / `horse_r`.
+actor = "units/han/siege_mangonel_packed.xml"
+# NO `drive_riders = false`. The two zebu ARE the riders here and their clips
+# load fine; switching riders off would freeze them for no gain. The unloadable
+# `mangonel_infantry_*` clips that force that flag on trebuchet_deployed.toml
+# are reached through the PIVOT's props, so they are out of this bake entirely.
 
 [render]
-# 512 is the deployed half's calibrated figure, carried over as the starting
-# guess per the interpolate-then-trust-the-clip-check rule. A packed engine is
-# LOWER but LONGER than a deployed one -- a cart plus a pair of draught animals
-# nose to tail -- so length is what will decide this, not height.
+# 512 carried from the siblings. The wagon alone is smaller than the old
+# pivot-rooted subject (1.894 m vs 2.411 m tall), so this is generous rather
+# than tight: 34.0% page fill and no CLIPPED. Kept at 512 for consistency with
+# onager_packed.toml and ballista_packed.toml rather than trimmed.
 canvas = [512, 512]
 supersample = 2
 directions = 5
@@ -82,31 +98,23 @@ samples = 24
 # per-source correction and both halves share a source convention.
 yaw_offset_deg = 180.0
 
-# STATIC, AND NOT BECAUSE IT HAS TO STAY THAT WAY -- probed 2026-08-27 and
-# parked deliberately, because the silhouette is what P2 asked for and the
-# animation is a pipeline question that should not hold it up.
-#
-# The wagon HAS the clips. `units/han/siege_mangonel_packed.xml` declares Idle
-# (x3, all pointing at one file) and Walk/Run (both pointing at another), so a
-# packed engine could roll its wheels rather than skate. Two attempts, both
-# failing identically with `Available: []`:
-#
-#   1. file only, drive_riders = false  -> riders are never imported, and the
-#      wagon IS a rider here, so there was nothing to play.
-#   2. clip + file, drive_riders default -> the animation .dae LOADS (the log
-#      names it as an input file) and the subject's clip set is still empty.
-#
-# So it is not the recipe. The clip set is built from the animations the actor in
-# [source] DECLARES, and this pivot declares none; the onager works because its
-# subject armature is the arm that owns the clips, while here the rig belongs to
-# a prop one level further down. Fixing it means teaching the zeroad adapter to
-# merge a nested prop's animations into the subject's clip set when the subject's
-# own actor declares none -- a real change, with the onager as the regression
-# test that it does not break the working case.
-#
-# Until then this bakes as one rest-pose frame per direction, which still tells a
-# packed engine from a deployed one at a glance, and the game already wires every
-# siege engine at `speed: 0`.
+# Plain clip names, resolved against the actor in [source] -- which now declares
+# them itself, so the `file =` workaround this recipe used to need is gone.
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+# A packed siege engine is the one siege state that MOVES, so like the other two
+# packed engines this has a real walk clip and need not be wired at `speed: 0`.
+# 0 A.D. points Walk and Run at the same `_move.dae`, so a `run` added later
+# would be the same animation at a different rate.
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
@@ -114,4 +122,4 @@ licence = "CC-BY-SA 3.0"
 licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
 author = "Wildfire Games"
 author_url = "http://www.wildfiregames.com/"
-actor = "art/actors/units/han/siege_mangonel_pivot_packed.xml"
+actor = "art/actors/units/han/siege_mangonel_packed.xml"
