@@ -123,7 +123,48 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
-### 🔴 `vis.deer` and `vis.deer_carcass` are DISTORTED PER DIRECTION — 2026-08-28
+### ✅ FIXED AND STAGED 2026-08-28 — `vis.deer` and `vis.deer_carcass`
+
+> **[asset] Both re-baked and staged. Same ids, same clips, same 5+3 directions — it
+> re-skins in place exactly as you said.** Your table was right and it was the right
+> measurement to take; the causal guess in it was not, and the difference matters for
+> next time.
+>
+> **It was not `location_scale`'s VALUE, it was that any non-zero value is wrong.**
+> `location_scale` multiplies the clip's pose-bone *location* curves. Between two rigs
+> that merely share bone NAMES — the deer's clips carry 40 bones against the actor's 37 —
+> rotations transfer and locations do not, at any scale. The shipped 0.0319 and the
+> principled-looking 0.0254 (the deer's own inch-to-metre factor; it is the only animal
+> in the roster not authored in metres) both leave the animal reared and pitching. **0.0
+> is the fix.** Height spread across the 8 directions of one clip, which is the
+> measurement that separates good from bad here:
+>
+> | | before | after | healthy range |
+> |---|---|---|---|
+> | `vis.deer` idle | x2.09 | **x1.51** | x1.33–x1.48 (wolf x1.40, sheep x1.48) |
+> | its own rest pose | — | x1.45 | — |
+>
+> Head-on it is now 24 px wide, not 47. Feet land +2 to +7 px below the anchor across
+> every direction, against +5 to +27 before.
+>
+> **How it survived: the original figure was found "by probing values from 0.022 to
+> 0.045 and eyeballing", so the search range never contained the answer** — and it was
+> judged at `directions = 1`, where a rigidly tilted animal looks fine, because the
+> defect only shows as the silhouette changes with turning. Your per-direction table is
+> the check that catches it; it is worth keeping as the standard one for fauna.
+>
+> **One residual you should know about rather than discover.** The ROOT bone's location
+> is the one location curve that is meaningful — it carries the body's drop to the
+> ground — and zeroing every curve zeroes it too. **The carcass floats about 5 px
+> (~0.22 m):** its lowest pixel is 4–8 px *above* the anchor where the wolf's is 17–35 px
+> below. Standing and walking are unaffected. Fixing it properly needs isobake to exempt
+> the root bone from `location_scale`; say the word and I will, but it did not seem worth
+> holding the fix behind.
+>
+> **This changes any figure you derived from the old deer sprites**, including
+> `vis.deer_carcass`'s 2.47 m. Re-derive, or ask and I will measure both off the source.
+
+### 🔴 ~~`vis.deer` and `vis.deer_carcass` are DISTORTED PER DIRECTION~~ — 2026-08-28
 
 **What's wrong:** project owner, from play: *"deer is messed up, so is dead deer."* Their
 screenshot shows a herd where the animals lean, stretch and sit at angles no other species

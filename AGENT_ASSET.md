@@ -286,6 +286,44 @@ and costed the fix as "teach the adapter to merge a nested prop's animations", a
 real feature, when the actual fix was one line of `[source].actor`. **Read the
 notes above the error, not the error.**
 
+**`location_scale` HAS EXACTLY TWO CORRECT VALUES: 1.0 AND 0.0.** It multiplies a
+clip's pose-bone *location* curves, and it was introduced believing the deer's
+clips imported at a different scale from its mesh, so that some measured factor
+would undo the difference. **There is no such factor.** Between two rigs that
+merely share bone NAMES — the deer's clips carry 40 bones against its actor's 37
+— **rotations transfer and locations do not**, because a pose-bone location is a
+local offset that only means the same thing on a skeleton with the same rest
+proportions. Scaling garbage leaves garbage. Where the clip rig *is* the actor's
+rig (every other animal), locations transfer untouched and the default 1.0 is
+right; where it is not, 0.0 is right. `vis.deer` shipped reared and pitching for
+a fortnight on 0.0319.
+
+**Its one real cost, so budget for it:** the ROOT bone's location IS meaningful —
+it carries a death clip's drop to the ground — and 0.0 zeroes that too, leaving
+the corpse floating ~5 px (0.22 m). Standing and walking are unaffected. Exempting
+the root from the scale is the proper fix and is not written yet.
+
+**Three process lessons, and they are the transferable part.**
+
+- **A fitted constant is only as good as its search range.** 0.0319 was found "by
+  probing values from 0.022 to 0.045 and eyeballing the render". The answer was
+  0. The range returned its least-bad point and that was mistaken for a minimum.
+- **The residual WAS the defect.** `deer_carcass.toml` recorded a leftover tear
+  that "does not track with the scale value" and read that as exoneration — it is
+  the opposite, and it is the single strongest clue that the parameter is not the
+  mechanism. **A residual that ignores your knob means you are turning the wrong
+  knob.**
+- **`directions = 1` CANNOT SEE A RIGID TILT**, the same blindness §4 records for
+  the reflection. A tilted animal looks plausible from one angle and gives itself
+  away only by changing silhouette as it turns. **The check that works on fauna is
+  the spread of trimmed frame HEIGHT across the 8 directions of one clip** — a
+  standing quadruped barely changes height as it turns, and every healthy species
+  sits at x1.33–x1.48. The broken deer read x2.09; fixed it reads x1.51, and its
+  own rest pose (a clip-free bake, which is the cheapest possible control) x1.45.
+  **Bake the rest pose first whenever an animated asset looks wrong** — it
+  separates "the mesh/scale/rotation is broken" from "the transfer is broken" in
+  one 12-second probe.
+
 **A recipe's clip names resolve against the actor in `[source]`, and on a nested
 actor that is the wrong actor.** The onager is two actors: the pivot base the
 recipe names declares no animations at all, while the arm mounted at `weapon`
@@ -517,6 +555,22 @@ with WinError 5. Delete contents, not the directory.
 >
 > **`vis.trebuchet_packed` is the one atlas in `out` on this workstation that is CURRENT**
 > — it was baked here. Everything else in §5's warning above still applies.
+
+> ### ✅ THE DEER IS FIXED — 2026-08-28
+>
+> Owner from play: *"deer is messed up, so is dead deer."* Both `vis.deer` and
+> `vis.deer_carcass` re-baked and staged. **`location_scale` is 0.0 on every deer clip,
+> and that is the fix rather than a disabling** — see §4, which now carries the general
+> rule and the three process lessons. Idle height spread across the 8 directions went
+> x2.09 → x1.51 against a healthy range of x1.33–x1.48; head-on width 47 px → 24 px.
+>
+> **Known residual: the carcass floats ~5 px (0.22 m)**, because zeroing every location
+> curve also zeroes the root's, which is what drops a dying body to the ground. Flagged
+> to the game side in `asset_request.md`. The proper fix — exempt the root bone from
+> `location_scale` — is the next thing to write in isobake if anyone wants it.
+>
+> **`vis.deer` and `vis.deer_carcass` join `vis.trebuchet_packed` as CURRENT in this
+> workstation's `out`.** Nothing else here is.
 
 > ### ⏳ SUPERSEDED — the prep notes for the run above, kept for the recipe
 >

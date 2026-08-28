@@ -4,18 +4,45 @@
 #
 # ANIMATED 2026-08-28 (asset_request.md P1 / A.4a).
 #
-# THIS IS THE SPECIES THE QUADRUPED TRANSFER BUG IS REAL ON, and it is the
-# only one of the six. PLAN.md 13.2 item 8: the clip .dae files import their
-# rigged figure at a wildly different scale from the actor's own mesh, so a
-# transferred pose's bone-location curves overshoot ~31x and the mesh tears.
+# ---------------------------------------------------------------------------
+# `location_scale` IS 0.0 ON EVERY CLIP, AND THAT IS THE FIX, NOT A DISABLING.
+# Corrected 2026-08-28 after the owner reported "deer is messed up, so is dead
+# deer" from play. Do not put a small non-zero number back here.
 #
-# MEASURED 2026-08-28, and it extends what deer_carcass.toml knew. That file
-# measured 0.0319 for the `death` clip alone and warned that each clip would
-# need its own figure. Probed at directions = 1, uncorrected, EVERY deer clip
-# rendered pinned to the canvas edge; with 0.0319 on all four they come back
-# to 63-70 px and agree within 1.36x. So one figure covers the whole deer
-# clip set. It is still specific to THIS species -- the other five measured
-# clean and need no correction at all.
+# THE CLIP'S BONE-LOCATION CURVES ARE MEANINGLESS ON THIS RIG AT ANY SCALE.
+# What transfers between two skeletons that share bone NAMES is ROTATION; a
+# pose-bone location is a local offset that only means the same thing on a rig
+# with the same rest proportions. The deer's clips carry a 40-bone rig against
+# the actor's 37 (`isobake inspect` says 36 shared, "transfers by bone name --
+# no retarget needed", which is true of the rotations and false of the
+# locations). So there is no correct multiplier: 0 is.
+#
+# HOW THE OLD NUMBER SURVIVED A FORTNIGHT. deer_carcass.toml records finding
+# 0.0319 "by probing values from 0.022 to 0.045 and eyeballing the render".
+# THE SEARCH RANGE NEVER CONTAINED THE ANSWER, so it returned the least-bad
+# point in it and the residual was written off as "a skinning-weight seam".
+# It also justified the figure by a size measurement taken at `directions = 1`
+# -- and the defect is invisible from one direction, because a rigidly tilted
+# animal only gives itself away by changing silhouette as it turns.
+#
+# THE MEASUREMENT THAT ACTUALLY SEPARATES GOOD FROM BAD is the spread of
+# trimmed frame HEIGHT across the 8 screen directions of one clip. A standing
+# quadruped barely changes height as it turns; every healthy species sits at
+# x1.33-x1.48 (wolf x1.40, sheep x1.48, bear x1.33, cattle x1.44) and so does
+# this deer's own REST pose at x1.45. The shipped 0.0319 gave x2.09 -- the
+# animal reared up and pitched further with every direction index. 0.0254, the
+# file's own inch-to-metre factor and the obvious "principled" candidate, gave
+# x2.00 and is also wrong. 0.0 gives x1.50-x1.52 on idle, walk and death.
+#
+# THE ONE RESIDUAL, stated plainly because it will not fix itself: the ROOT
+# bone's location is the one location curve that IS meaningful -- it carries
+# the body's drop to the ground in `death` -- and zeroing every curve zeroes
+# that too. The corpse therefore floats about 5 px (~0.22 m): its lowest pixel
+# sits 4-8 px ABOVE the anchor where the wolf's sits 17-35 px below. Standing
+# and walking are unaffected (+4 to +8, against the rest pose's +2 to +9).
+# Fixing it properly means teaching isobake to exempt the root bone from
+# `location_scale`, which is a real change and not worth holding this behind.
+# ---------------------------------------------------------------------------
 #
 # CLIP SPELLING: the deer is entirely LOWER CASE -- `idle`, `walk`, `run`,
 # `death`. Its capitalised `Idle` is a variant name, not an animation.
@@ -49,28 +76,28 @@ clip = "idle"
 frames = 12
 fps = 8
 loop = true
-location_scale = 0.0319
+location_scale = 0.0
 
 [anims.walk]
 clip = "walk"
 frames = 12
 fps = 15
 loop = true
-location_scale = 0.0319
+location_scale = 0.0
 
 [anims.run]
 clip = "run"
 frames = 12
 fps = 18
 loop = true
-location_scale = 0.0319
+location_scale = 0.0
 
 [anims.die]
 clip = "death"
 frames = 10
 fps = 12
 loop = false
-location_scale = 0.0319
+location_scale = 0.0
 
 # Pinned to the clip's final pose: without it decay samples position 0.0,
 # which is the death clip's FIRST frame -- the animal still standing -- so
@@ -80,7 +107,7 @@ clip = "death"
 frames = 2
 fps = 1
 loop = false
-location_scale = 0.0319
+location_scale = 0.0
 start = 1.0
 
 [attribution]

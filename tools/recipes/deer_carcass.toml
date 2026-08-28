@@ -1,28 +1,34 @@
 # Deer carcass, requested by agent 1 in asset_request.md 2026-08-08 -- the
-# depleted-state visual for `res.deer` (PLAN.md 6.1a/6.2). `vis.deer` itself
-# ships static (see deer.toml) because of PLAN.md 13.2 item 8: 0 A.D.'s
-# quadruped clip .dae files import their own rigged figure through Blender's
-# stock COLLADA importer at a wildly different scale than the actor's own
-# mesh (through the pinned Pyrogenesis importer) -- both declare the same
-# `<unit>` but the two import paths honour it differently, so a transferred
-# pose's bone-location curves overshoot ~31x and the mesh tears.
+# depleted-state visual for `res.deer` (PLAN.md 6.1a/6.2).
 #
-# Fixed here, not worked around: isobake gained `anims.<name>.location_scale`
-# (recipe.py, zeroad.py) to multiply a clip's pose-bone *location* curves by a
-# measured correction factor after transfer -- exactly the fix item 8 named
-# but never implemented. Measured empirically against this specific clip
-# (0.0319, close to item 8's own 3.70/116 = 0.0319 ratio from the sibling walk
-# clip) by probing values from 0.022 to 0.045 and eyeballing the render; values
-# above ~0.032 start re-opening a gap at the neck seam. A small tear at the
-# neck/antler seam remains even at the best value found -- reads as a pose/
-# skinning-weight seam at this angle, not a location-curve scale error (it
-# does not track with the scale value), and is accepted as placeholder-quality
-# per the request's own "readability over anatomical accuracy" guidance
-# (same bar as vis.fish's tuna-over-true-fish-mesh substitution).
+# ---------------------------------------------------------------------------
+# CORRECTED 2026-08-28: `location_scale` is 0.0, not 0.0319. The owner reported
+# "deer is messed up, so is dead deer" from play. deer.toml carries the full
+# reasoning and the measurements -- read it before touching this figure.
 #
-# This unblocks any future quadruped clip on this same source path (boar,
-# sheep, wolf, cavalry mounts) -- each would need its own measured
-# location_scale, this is not a global constant.
+# THIS FILE IS WHERE 0.0319 CAME FROM, and its own account of how records the
+# mistake exactly: the value was found "by probing values from 0.022 to 0.045
+# and eyeballing the render". **The search range never contained the answer**,
+# so it returned the least-bad point in the range, and the residual it left --
+# described here for a fortnight as "a small tear at the neck/antler seam ...
+# reads as a pose/skinning-weight seam, not a location-curve scale error" --
+# was the defect itself, not a separate one. The note that it "does not track
+# with the scale value" was the clue and was read as exoneration.
+#
+# The old header's mechanism was wrong too, and it is worth saying so because
+# it sounds authoritative: it claimed the mesh and clip "declare the same
+# <unit> but the two import paths honour it differently". They do both declare
+# `<unit meter="0.0254">` (deer is the only animal in the roster authored in
+# inches; wolf and boar are metres). But applying that very factor, 0.0254, was
+# probed on 2026-08-28 and is ALSO wrong -- it barely moves the distortion. A
+# clip's non-root pose-bone LOCATIONS simply do not transfer between two rigs;
+# only rotations do. There is no correct multiplier.
+#
+# Nothing here "unblocks future quadruped clips" either -- the other five
+# species need no correction at all, because their clips share their mesh's
+# rig. Do not go looking for a per-species figure; look at whether the clip
+# rig matches the actor's.
+# ---------------------------------------------------------------------------
 id      = "vis.deer_carcass"
 adapter = "zeroad"
 
@@ -60,7 +66,7 @@ clip = "death"
 frames = 2
 fps = 1
 loop = false
-location_scale = 0.0319
+location_scale = 0.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
