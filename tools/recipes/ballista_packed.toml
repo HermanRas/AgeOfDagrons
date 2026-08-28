@@ -1,0 +1,56 @@
+# Packed ballista -- the third and last packed siege state (asset_request.md P2).
+#
+# ACTOR MATCHED BY CONTENT, NOT BY NAME. vis.ballista is the Carthaginian
+# lithobolos (units/carthaginians/siege_lithobolos_med.xml), and the packed
+# actors are named by ammunition rather than by engine -- `siege_rock_packed`
+# and `siege_spear_packed` sit side by side in the same civ. The rock one is
+# right, and the proof is its crew: it props `lithobolos_med_infantry_a/b/c`,
+# the SAME three operators the deployed lithobolos carries. The spear wagon
+# props `oxybeles_infantry_*`, a different engine's crew.
+#
+# IT SHOULD ANIMATE, for the reason onager_packed does and trebuchet_packed
+# does not: this actor IS the wagon and declares Idle/Walk/Run on itself, so
+# the subject's own clip set has them. The trebuchet's packed actor is a pivot
+# that declares nothing and carries the wagon as a prop, which is why its clips
+# resolve to `Available: []`. Do not copy trebuchet_packed.toml's [anims] here,
+# and do not copy this one's into that.
+#
+# So NO `speed: 0` on this one -- like the onager, it is a packed state that
+# genuinely rolls.
+id      = "vis.ballista_packed"
+adapter = "zeroad"
+
+[source]
+actor = "units/carthaginians/siege_rock_packed.xml"
+
+[render]
+# 512 to match onager_packed.toml and trebuchet_packed.toml: a four-wheel wagon
+# with two draught animals and three crew is a much longer subject than the
+# 384 the deployed ballista uses.
+canvas = [512, 512]
+supersample = 4
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+yaw_offset_deg = 180.0
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/units/carthaginians/siege_rock_packed.xml"

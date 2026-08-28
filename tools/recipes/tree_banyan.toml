@@ -1,0 +1,66 @@
+# Tree Banyan -- river pool (asset_request.md P3, requested by the project owner 2026-08-27).
+#
+# Static: no armature, no animation, like every other tree.
+#
+# *** OVER THE ONE-TILE BAND: 354 px wide against a 250 px limit. ***
+#
+# This is the TEAK PROBLEM again and it is WORSE than the teak was -- that one
+# was 296 wide and got pulled from vis.tree's variants on 2026-08-23 because
+# the owner tapped its roots and gathered a different tree. A banyan spreads,
+# with aerial roots, so its art covers ground the entity does not own.
+#
+# BAKED ANYWAY, DELIBERATELY, so the decision can be made from the asset rather
+# than from another probe -- but it should NOT go into vis.tree's `variants`
+# array as a gatherable. It is a good decorative prop with no resource on it.
+# Flagged for the game side in asset_request.md; theirs to call.
+#
+# MEASURED 2026-08-28 by a directions = 1 probe into a 768 canvas:
+# the sprite is 354 x 245 px AT THE S YAW. The one-tile band is 250 x 300 (see
+# tree_teak.toml and P3). Canvas below is that measurement plus margin.
+#
+# 768, not the 512 that measurement implied: a directions = 1 probe renders the
+# S yaw ONLY, and this tree is wider from the EAST. 512 came back CLIPPED on
+# `static/E/0`. For an asymmetric subject the widest yaw is not necessarily the
+# one you measured -- same trap as the onager's tint, measured at one direction
+# and wrong across five.
+id      = "vis.tree_banyan"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/banyan.xml"
+
+[render]
+canvas = [768, 768]
+supersample = 2
+# GROUND CLIP ON, across all thirteen of these. 0 A.D. authors tree roots
+# below z = 0 for the terrain to hide, and a baked sprite has no terrain,
+# so the root mass hangs below the anchor the game positions by. Measured
+# 2026-08-28: the banyan buries 2.84 m, oak_new 3.55 m and oak_dead 4.69 m,
+# and all three overran a 768 canvas at the BOTTOM edge until this was set
+# -- which is what exposed it. It is a no-op on the ones that bury nothing.
+#
+# The trees ALREADY SHIPPED do not need it and are deliberately left alone:
+# oak (vis.tree) measures 0.13 m buried and elm 0.70 m, which is 3-16 px,
+# hidden under the sprite's own base. Not worth re-baking ten atlases for.
+#
+# Safe here with no armature question: a tree is static, so isobake's
+# 'cut at rest, then posed' guard never applies (see wall_stone_gate_age3).
+ground_clip = true
+# Trees are roughly radially symmetric but not exactly -- 5 stored
+# directions give free variety without the render cost of 8.
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip.
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/banyan.xml"

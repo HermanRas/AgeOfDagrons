@@ -1,0 +1,54 @@
+# Tree Oak New -- forest pool (asset_request.md P3, requested by the project owner 2026-08-27).
+#
+# Static: no armature, no animation, like every other tree.
+#
+# A DIFFERENT TREE from vis.tree, which is oak.xml. This is oak_new.xml.
+# 206 x 230 -- inside the band but the widest of the eleven that fit, so if a
+# forest ever reads as crowded this is the first one to look at.
+#
+# It carries 3.55 m of ROOT below z = 0 -- see the ground_clip note below.
+#
+# MEASURED 2026-08-28 by a directions = 1 probe into a 768 canvas:
+# the sprite is 206 x 230 px. The one-tile band is 250 x 300 (see
+# tree_teak.toml and P3). Canvas below is that measurement plus margin.
+id      = "vis.tree_oak_new"
+adapter = "zeroad"
+
+[source]
+actor = "flora/trees/oak_new.xml"
+
+[render]
+canvas = [320, 320]
+supersample = 2
+# GROUND CLIP ON, across all thirteen of these. 0 A.D. authors tree roots
+# below z = 0 for the terrain to hide, and a baked sprite has no terrain,
+# so the root mass hangs below the anchor the game positions by. Measured
+# 2026-08-28: the banyan buries 2.84 m, oak_new 3.55 m and oak_dead 4.69 m,
+# and all three overran a 768 canvas at the BOTTOM edge until this was set
+# -- which is what exposed it. It is a no-op on the ones that bury nothing.
+#
+# The trees ALREADY SHIPPED do not need it and are deliberately left alone:
+# oak (vis.tree) measures 0.13 m buried and elm 0.70 m, which is 3-16 px,
+# hidden under the sprite's own base. Not worth re-baking ten atlases for.
+#
+# Safe here with no armature question: a tree is static, so isobake's
+# 'cut at rest, then posed' guard never applies (see wall_stone_gate_age3).
+ground_clip = true
+# Trees are roughly radially symmetric but not exactly -- 5 stored
+# directions give free variety without the render cost of 8.
+directions = 5
+frame_origin_at = 0.08
+engine = "eevee"
+samples = 32
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip.
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/flora/trees/oak_new.xml"

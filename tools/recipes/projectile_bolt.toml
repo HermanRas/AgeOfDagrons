@@ -8,7 +8,10 @@ actor = "props/units/weapons/bolt.xml"
 
 [render]
 # `isobake inspect` measures 0.315 x 0.332 x 2.927 m raw.
-canvas = [128, 128]
+#
+# 192, up from 128: pitching the shaft over swings it further from the origin
+# than standing it on end did, and 128 came back CLIPPED on the probe.
+canvas = [192, 192]
 supersample = 4
 directions = 5
 frame_origin_at = 0.5
@@ -17,6 +20,23 @@ samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
 # atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
 yaw_offset_deg = 180.0
+# THE BOLT FLEW LIKE A FENCE POST until 2026-08-28 (asset_request.md P4): it
+# measured 5x30 head-on and 6x30 side-on, the SAME tall shaft in every
+# direction, because nothing ever pitched it over.
+#
+# 115.0 is the arrow's value and it is correct here too -- but that was
+# established by measurement, not by copying, because the two are different
+# meshes and projectile_arrow.toml records that its first probe laid the shaft
+# down perfectly and BACKWARDS. Nothing in a bounding box says which end leads:
+# 115 and 295 both lie the bolt flat and both give an identical 31x15 side-on.
+#
+# What tells them apart is where the opaque MASS sits along the shaft. Heading
+# east (screen right) the heavy fletched end must TRAIL, so the centroid sits
+# left of centre. Measured on the staged arrow, which is known good: 43.3%.
+#   pitch 115 -> 45.4%  (trails -- matches the arrow)
+#   pitch 295 -> 52.7%  (the heavy end LEADS -- backwards)
+# Head-on foreshortening agrees: 115 gives 5x21 against 295's 5x29.
+pitch_offset_deg = 115.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
