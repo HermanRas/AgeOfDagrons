@@ -260,6 +260,51 @@ func footprint_rect() -> Rect2i:
 	return SimMap.footprint_rect(origin_tile(), footprint)
 
 
+## THE EIGHT PLACES A WORKER CAN DELIVER A LOAD: the four corners and the middle of
+## each side, one tile outside the footprint (project owner, 2026-08-28: *"gathering
+## dropoff only in front of building, add all 4 corners and middel of each side if we
+## can"*).
+##
+## **It was not "the front" — it was ONE TILE**, and that is worth being precise about
+## because the symptom looked like a facing rule. `GatherSystem._start_return` asked to
+## path to `bld.tile()`, which is the building's CENTRE and therefore solid, so
+## `PathService.goal_for` substituted `_nearest_walkable` — a fixed ring sweep that is
+## deterministic by design and hands **every villager on the map the same tile**. Ten
+## workers queued on one corner of the town centre and shuffled around each other
+## there, which is also what made the shove bug above bite so hard.
+##
+## Returned in a FIXED ORDER, and the caller takes the nearest with ties going to the
+## earlier entry. Order is N, E, S, W then the corners, so a straight-on approach beats
+## a diagonal at equal distance -- a villager coming from due north walks to the middle
+## of the north side rather than to a corner it happens to tie with. The order is
+## load-bearing for determinism, not for taste: two clients picking different tiles for
+## one villager is a desync (PLAN.md 7.1).
+##
+## Passability is NOT checked here -- the caller has the map and this has only the rect.
+## Units are not in map occupancy either way (that is `SimMap`'s static-footprint rule),
+## so these spread workers by where they come FROM rather than by who is standing there.
+static func drop_off_points(rect: Rect2i) -> Array[Vector2i]:
+	var left := rect.position.x - 1
+	var right := rect.end.x
+	var top := rect.position.y - 1
+	var bottom := rect.end.y
+	# Integer midpoints of the spans the footprint covers. A 1-wide building puts its
+	# midpoint on its only column, which is correct and simply makes two of the eight
+	# coincide -- the caller's nearest-wins is indifferent to a duplicate.
+	var mid_x := rect.position.x + rect.size.x / 2
+	var mid_y := rect.position.y + rect.size.y / 2
+	return [
+		Vector2i(mid_x, top),      # N
+		Vector2i(right, mid_y),    # E
+		Vector2i(mid_x, bottom),   # S
+		Vector2i(left, mid_y),     # W
+		Vector2i(left, top),       # NW
+		Vector2i(right, top),      # NE
+		Vector2i(right, bottom),   # SE
+		Vector2i(left, bottom),    # SW
+	] as Array[Vector2i]
+
+
 ## Sub-tile centre of the footprint whose top-left tile is `origin`. Static
 ## because SimWorld needs it to position a building before one exists.
 static func centre_of(origin: Vector2i, p_footprint: Vector2i) -> Vector2i:

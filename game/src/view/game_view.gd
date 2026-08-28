@@ -219,8 +219,18 @@ func apply_snapshot(snap: Dictionary) -> void:
 		# the building's east or south extent, the two directions that project
 		# down-screen, is pulled in front. Everything behind sorts naturally, is
 		# genuinely hidden, and gets an outline instead (see _refresh_occlusion).
+		# UNITS ONLY, ASKED OF THE REGISTRY. This said `not entry.has("footprint")` and
+		# had been dead since 12.1f took `footprint` off the wire -- the same defect, in
+		# the same file, that the occluder loop above was fixed for and whose comment
+		# says exactly this. Every entry looked like a unit, so every BUILDING was asking
+		# `_in_front_of_any` about itself.
+		#
+		# It stayed harmless only because of the bug immediately below it: a building's
+		# own tile is inside its own rect, and the unreachable `has_point` branch meant
+		# that answered false. Fixing that made three sort tests fail at once, which is
+		# how this one surfaced -- two dead guards had been cancelling out.
 		var tile := Vector2i(sub_pos / SimWorld.SUBTILE)
-		if not entry.has("footprint") and _in_front_of_any(tile, building_rects):
+		if GameDataRegistry.unit(def_id) != null and _in_front_of_any(tile, building_rects):
 			sort_offset.y += _ADJACENT_TO_BUILDING_BONUS
 		# A CHANGE OF SORT OFFSET IS A DISCONTINUITY, NOT A MOVEMENT, and gliding
 		# across one throws the sprite off the screen.
@@ -1100,10 +1110,26 @@ func _pick_lift_of(entry: Dictionary) -> Vector2:
 ## literal sense.
 func _in_front_of_any(tile: Vector2i, rects: Array[Rect2i]) -> bool:
 	for r in rects:
-		if not Occlusion.is_in_front(tile, r):
-			continue
+		# STANDING ON IT COUNTS, AND THIS LINE USED TO BE UNREACHABLE. It sat below the
+		# `is_in_front` guard, and `is_in_front` is `tile.x >= r.end.x or tile.y >=
+		# r.end.y` -- which is false for every tile INSIDE the rect. So the one case it
+		# was written for was the one case it could never answer.
+		#
+		# It only shows on a building a unit can stand inside, which means a WALKABLE
+		# one: a field, or an open gate. The project owner found it as *"wolf renders
+		# behind the field i am unable to target it for attack"* (2026-08-28) -- and the
+		# targeting half is downstream of the drawing half, because `pick()` already
+		# prefers units and answers by tile. A wolf you cannot see is a wolf you cannot
+		# aim at.
+		#
+		# `Occlusion.hides()` deliberately returns false for the same case, so the wolf
+		# did not even get an outline: standing inside a footprint is not being hidden
+		# BY it. That stays right -- the fix is to draw the unit in front, which is what
+		# standing on top of something looks like.
 		if r.has_point(tile):
 			return true
+		if not Occlusion.is_in_front(tile, r):
+			continue
 		var in_x_span := tile.x >= r.position.x and tile.x < r.end.x
 		var in_y_span := tile.y >= r.position.y and tile.y < r.end.y
 		if in_x_span and (tile.y == r.position.y - 1 or tile.y == r.end.y):

@@ -73,9 +73,13 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 		u.stop()
 		return
 	if not _adjacent_to_rect(u.tile(), harvest_rect(node)):
-		# The substituted walk-up tile should always be adjacent (4.1); if it is
-		# not, the order cannot be honoured rather than gathering through a wall.
-		u.stop()
+		# The substituted walk-up tile should always be adjacent (4.1) -- but a unit
+		# that HAS arrived can still be pushed off the ring afterwards, which is the
+		# owner's 2026-08-28 report of villagers going idle around a busy rock. Walk
+		# back first; only a unit genuinely somewhere else is retired, and that is
+		# still the case this check was written for (gathering through a wall).
+		if not rejoin_work(w, u, harvest_rect(node), u.task_target_tile):
+			u.stop()
 		return
 
 	# TURN AND LOOK AT IT. Reported from play on 2026-08-27 -- "villager mining
@@ -165,7 +169,10 @@ func _process_return(w: SimWorld, u: SimUnit) -> void:
 		u.stop()
 		return
 	if not _adjacent_to_rect(u.tile(), bld.footprint_rect()):
-		u.stop()
+		# Same shove, and worse here: a villager retired on the doorstep is holding a
+		# full load that never gets banked. Walk back and deliver it.
+		if not rejoin_work(w, u, bld.footprint_rect(), u.task_target_tile):
+			u.stop()
 		return
 
 	var player := w.player_for(u.owner_id)
@@ -249,9 +256,39 @@ func _start_return(w: SimWorld, u: SimUnit) -> void:
 	if bld == null:
 		u.stop()          # nowhere to take the load; better idle than stuck walking
 		return
-	u.set_task_return(bld.id, bld.tile())
+	var spot := _drop_off_spot(w, u, bld)
+	u.set_task_return(bld.id, spot)
 	if w.paths != null:
-		w.paths.request(u.id, bld.tile())
+		w.paths.request(u.id, spot)
+
+
+## WHICH SIDE OF THE DROP-OFF TO WALK TO -- the nearest of the eight `drop_off_points`
+## (project owner, 2026-08-28). Before this the goal was `bld.tile()`, the building's
+## solid centre, which `PathService` substituted with one fixed tile for everybody; see
+## `SimBuilding.drop_off_points` for why that presented as "only in front of building".
+##
+## Nearest by squared distance with ties going to the earlier point, over the fixed
+## order that function returns -- the same determinism convention `nearest_drop_off()`
+## and `_retarget_near()` keep, and needed for the same reason: two clients sending one
+## villager to different corners is a desync.
+##
+## Falls back to the building's own tile when none of the eight can be stood on, which
+## is exactly the old behaviour -- a drop-off walled in on all sides still gets the
+## substitute-tile treatment rather than the load being stranded.
+func _drop_off_spot(w: SimWorld, u: SimUnit, bld: SimBuilding) -> Vector2i:
+	if w.map == null:
+		return bld.tile()
+	var from := u.tile()
+	var best := Vector2i(-1, -1)
+	var best_d := -1
+	for p in SimBuilding.drop_off_points(bld.footprint_rect()):
+		if not w.map.is_passable(p, u.domain):
+			continue
+		var d := (p - from).length_squared()
+		if best_d < 0 or d < best_d:
+			best = p
+			best_d = d
+	return best if best_d >= 0 else bld.tile()
 
 
 # ── what counts as something to harvest ─────────────────────────────────────

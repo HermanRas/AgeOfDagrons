@@ -340,3 +340,133 @@ func test_the_turn_is_identical_on_two_hosts() -> void:
 		other.step()
 		assert_eq(villager.facing, other_villager.facing,
 				"facing diverged on tick %d" % (i + 1))
+
+
+# ── the drop-off has eight doors, not one (project owner, 2026-08-28) ────────
+
+func test_the_drop_off_offers_four_corners_and_four_side_middles() -> void:
+	var points := SimBuilding.drop_off_points(Rect2i(10, 10, 4, 4))
+	assert_eq(points.size(), 8)
+	# Every one is exactly one tile outside the footprint: Chebyshev 1 from the rect,
+	# which is also what `_process_return`'s arrival check demands.
+	for p in points:
+		assert_eq(CombatSystem.tile_gap(p, Rect2i(10, 10, 4, 4)), 1, str(p))
+	# The four corners and the four side middles, named.
+	for expected in [Vector2i(12, 9), Vector2i(14, 12), Vector2i(12, 14), Vector2i(9, 12),
+			Vector2i(9, 9), Vector2i(14, 9), Vector2i(14, 14), Vector2i(9, 14)]:
+		assert_true(points.has(expected), "%s is offered" % expected)
+
+
+func test_a_one_tile_building_still_answers_with_its_eight_neighbours() -> void:
+	# The midpoint of a 1-wide span lands on the only column, so two of the eight
+	# coincide with corners. Nearest-wins is indifferent to a duplicate, and the
+	# alternative -- special-casing small footprints -- would be a second rule.
+	var points := SimBuilding.drop_off_points(Rect2i(5, 5, 1, 1))
+	assert_eq(points.size(), 8)
+	for p in points:
+		assert_eq(CombatSystem.tile_gap(p, Rect2i(5, 5, 1, 1)), 1, str(p))
+
+
+func test_villagers_coming_from_opposite_sides_deliver_to_opposite_sides() -> void:
+	# THE BUG ITSELF. Every returning villager used to be sent to `bld.tile()` -- the
+	# solid centre -- so `PathService.goal_for` substituted ONE fixed tile for all of
+	# them, which is what "dropoff only in front of building" was. Two villagers
+	# approaching from north and south must now pick different doors.
+	var north := w.spawn_unit(&"unit.villager", 1, Vector2i(11, 5))
+	var south := w.spawn_unit(&"unit.villager", 1, Vector2i(11, 17))
+	for u in [north, south]:
+		u.carry_kind = &"wood"
+		u.carry_amount = 10
+
+	var sys := GatherSystem.new()
+	sys._start_return(w, north)
+	sys._start_return(w, south)
+
+	assert_eq(north.task, SimUnit.Task.RETURN)
+	assert_eq(south.task, SimUnit.Task.RETURN)
+	assert_ne(north.task_target_tile, south.task_target_tile,
+			"two villagers from opposite sides must not queue on one tile")
+	assert_true(north.task_target_tile.y < south.task_target_tile.y,
+			"and each takes the side it came from")
+
+
+# ── a shoved worker walks back instead of going idle (owner, 2026-08-28) ─────
+
+func test_a_gatherer_pushed_off_the_ring_walks_back_rather_than_going_idle() -> void:
+	# THE REPORT: "villager push each other out of the way, when they are pushed too
+	# far from build site for mining rock or tree for chopping it stops their work and
+	# leaves them idle." `SeparationSystem` CAN carry a unit across a tile boundary --
+	# MAX_PUSH is 120 of a 256 sub-tile, which only stays inside the tile from its
+	# centre -- and the adjacency check then read that as "the order cannot be honoured".
+	_order_gather()
+	var ticks := _run_until(func() -> bool: return villager.task == SimUnit.Task.GATHER \
+			and not villager.path_pending, 200)
+	assert_true(ticks > 0, "the villager reached the tree")
+
+	# Shove it two tiles clear, the way a crowd would.
+	var away := villager.tile() + Vector2i(2, 2)
+	villager.pos = away * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE, SimWorld.SUBTILE) / 2
+	w.spatial.move(villager.id, away)
+
+	w.step()
+	assert_ne(villager.task, SimUnit.Task.IDLE, "it does not down tools")
+	assert_eq(villager.task, SimUnit.Task.GATHER, "it is still on the same job")
+
+	# And it actually gets back to work rather than standing there re-deciding.
+	var back := _run_until(func() -> bool: return villager.task == SimUnit.Task.GATHER \
+			and not villager.path_pending and villager.gather_cooldown > 0, 200)
+	assert_true(back > 0, "it resumed gathering")
+
+
+func test_a_gatherer_carried_right_across_the_map_still_retires() -> void:
+	# The bound matters as much as the rescue: `rejoin_work` is for a SHOVE, and
+	# anything past SAME_WORK_RADIUS was moved by something else. Without the bound a
+	# unit teleported anywhere would walk back across the map on an order nobody gave.
+	_order_gather()
+	assert_true(_run_until(func() -> bool: return villager.task == SimUnit.Task.GATHER \
+			and not villager.path_pending, 200) > 0)
+
+	var far := villager.tile() + Vector2i(SimSystem.SAME_WORK_RADIUS + 5, 0)
+	villager.pos = far * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE, SimWorld.SUBTILE) / 2
+	w.spatial.move(villager.id, far)
+	# AND THE PATH GOES WITH IT, which is what a shove looks like: a unit that has
+	# ARRIVED holds no route. Leaving the old one in place made the first version of
+	# this test measure nothing at all -- `_process_gather` returns at its very first
+	# line while `has_waypoint()` is true, so the villager quietly walked back and the
+	# distance check was never reached.
+	villager.path = PackedVector2Array()
+	villager.path_index = 0
+	villager.path_pending = false
+
+	var idled := _run_until(func() -> bool: return villager.task == SimUnit.Task.IDLE, 10)
+	assert_true(idled > 0, "too far to be a shove -- it retires")
+
+
+func test_a_returning_villager_pushed_off_the_doorstep_still_banks_its_load() -> void:
+	# Worse than the gather case: a villager retired on the doorstep is holding a full
+	# load that never reaches the stockpile.
+	#
+	# THE RETURN IS SET UP DIRECTLY rather than waited for. With this fixture's tree
+	# next door to the town centre the whole journey now takes no ticks at all -- the
+	# villager is already standing on a drop-off point -- so RETURN is entered and left
+	# inside one `step()` and cannot be caught by polling for it.
+	var sys := GatherSystem.new()
+	villager.carry_kind = &"wood"
+	villager.carry_amount = 10
+	sys._start_return(w, villager)
+	assert_eq(villager.task, SimUnit.Task.RETURN)
+
+	# Shoved two tiles clear of the doorstep, holding the load.
+	var away := villager.tile() + Vector2i(0, 3)
+	villager.pos = away * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE, SimWorld.SUBTILE) / 2
+	w.spatial.move(villager.id, away)
+	villager.path_pending = false
+	villager.path = PackedVector2Array()
+
+	sys._process_return(w, villager)
+	assert_ne(villager.task, SimUnit.Task.IDLE, "it does not drop the job on the doorstep")
+	assert_eq(villager.carry_amount, 10, "and has not banked from out there either")
+
+	var banked := _run_until(func() -> bool: return villager.carry_amount == 0, 200)
+	assert_true(banked > 0, "the load was delivered")
+	assert_true(w.player_for(1).stock.get(&"wood", 0) >= 10, "and banked")

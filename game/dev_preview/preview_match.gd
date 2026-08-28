@@ -573,6 +573,10 @@ var _market_kind: StringName = &""
 var _market_before := 0
 var _market_gold_before := 0
 
+## The wolf `_stand_up_a_farm` drops onto a crop, kept so `_report_field_crops` can
+## measure it against the field it is standing on (2026-08-28).
+var _wolf_on_the_field: SimUnit = null
+
 
 func _report_market_trade() -> void:
 	var world: SimWorld = Net.host().world
@@ -994,10 +998,28 @@ func _stand_up_a_farm() -> void:
 		push_warning("preview_match: no room for the mill at %s" % FARM_MILL)
 		return
 
+	var fields: Array[SimBuilding] = []
 	for offset in [Vector2i(-6, -6), Vector2i(-6, 0), Vector2i(5, -6), Vector2i(5, 0)]:
-		if world.spawn_building(&"building.field", Net.local_player_id(),
-				FARM_MILL + offset, SimBuilding.Phase.COMPLETE) == null:
+		var f := world.spawn_building(&"building.field", Net.local_player_id(),
+				FARM_MILL + offset, SimBuilding.Phase.COMPLETE)
+		if f == null:
 			push_warning("preview_match: no room for a field at %s" % (FARM_MILL + offset))
+		else:
+			fields.append(f)
+
+	# A WOLF STANDING ON THE CROP (project owner, 2026-08-28: *"wolf renders behind the
+	# field i am unable to target it for attack"*). A field is the only building a unit
+	# routinely stands INSIDE, because it is walkable -- and `_in_front_of_any` had the
+	# case written and unreachable, so the wolf got neither the sort lift nor an
+	# outline and simply vanished under the wheat.
+	#
+	# On the LAST field, which is on the far side of the mill from the one
+	# `_farm_the_first_field` sends everybody to: a predator dropped among five
+	# villagers turns this step into a battle and the crop shot into a fight scene.
+	if not fields.is_empty():
+		_wolf_on_the_field = world.spawn_unit(&"unit.wolf", 0, fields[-1].tile())
+		if _wolf_on_the_field == null:
+			push_warning("preview_match: no room for the wolf on the field")
 
 	_game._camera.centre_on(Iso.tile_centre_to_world(FARM_MILL))
 
@@ -1091,6 +1113,55 @@ func _somebody_is_farming() -> bool:
 ## Which crop each plot drew. The picture shows four fields; only this says whether
 ## they are four DIFFERENT ones, and a screenshot of four identical plots looks
 ## exactly like variants that are not wired.
+## DOES THE WOLF DRAW OVER THE CROP IT IS STANDING ON, measured rather than looked at.
+##
+## The project owner's report was *"wolf renders behind the field i am unable to target
+## it for attack"*, and a picture is a poor witness here: at map zoom a wolf half hidden
+## in wheat and a wolf correctly on top of it are a few pixels apart, and the wheat is
+## the same colour as the wolf. Godot Y-sorts by `position.y`, so the comparison IS the
+## bug -- greater y draws later, i.e. in front.
+##
+## Prints both sort positions and the wolf's `draw_offset`, because the lift and the
+## offset must cancel: the node is moved down-screen by `_ADJACENT_TO_BUILDING_BONUS`
+## to win the sort and the art is moved back up by the same amount, so a wolf that
+## draws in the right PLACE and the wrong ORDER is a different fault from one drawn a
+## screen and a half away (`GameView` records that second one from 2026-08-20).
+func _report_the_wolf_on_the_crop() -> void:
+	if _wolf_on_the_field == null:
+		return
+	var view: GameView = _game._view
+	var wolf := view.pool.get_view(_wolf_on_the_field.id)
+	if wolf == null:
+		push_warning("preview_match: the wolf on the crop has no view")
+		return
+
+	var tile: Vector2i = view.facts_for(_wolf_on_the_field.id).get("tile", Vector2i.ZERO)
+	var ids: Array = view.all_facts().keys()
+	ids.sort()
+	for id in ids:
+		var f: Dictionary = view.facts_for(int(id))
+		if StringName(f.get("def_id", &"")) != &"building.field":
+			continue
+		var rect := Rect2i(f["tile"] - f["footprint"] / 2, f["footprint"])
+		if not rect.has_point(tile):
+			continue
+		var field := view.pool.get_view(int(id))
+		if field == null:
+			continue
+		print("  wolf at %s stands on the field at %s: wolf sort y %.1f, field sort y %.1f"
+				% [tile, rect, wolf.position.y, field.position.y])
+		print("    wolf draw offset %s (cancels the sort lift)" % wolf.draw_offset)
+		if wolf.position.y <= field.position.y:
+			push_warning("preview_match: the wolf sorts BEHIND the crop it is standing on")
+		# Drawn where it stands, not where it sorts.
+		var drawn := wolf.position + wolf.draw_offset
+		if absf(drawn.y - Iso.tile_centre_to_world(tile).y) > 1.0:
+			push_warning("preview_match: the wolf is drawn %.0f px from the tile it is on"
+					% absf(drawn.y - Iso.tile_centre_to_world(tile).y))
+		return
+	print("  the wolf is not standing on a field -- nothing to compare")
+
+
 func _report_field_crops() -> void:
 	var view: GameView = _game._view
 	var ids: Array = view.all_facts().keys()
@@ -1109,6 +1180,7 @@ func _report_field_crops() -> void:
 		if not seen.has(String(v.visual_id)):
 			seen.append(String(v.visual_id))
 	print("  %d distinct crop(s) across %d plots" % [seen.size(), plots])
+	_report_the_wolf_on_the_crop()
 
 	# Where the farmers actually ended up, which the picture cannot tell you: five
 	# on one corner and five spread over the crop look similar at this zoom.

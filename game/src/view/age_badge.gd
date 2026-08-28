@@ -39,6 +39,16 @@ extends Button
 
 signal advance_requested(next_age: int)
 
+## The badge was pressed and it is NOT going to ask for anything -- `&"advancing"`
+## while a research is already running, `&"maxed"` at the top of the ladder.
+##
+## It exists because a button that silently does nothing is the whole of the project
+## owner's 2026-08-28 report, *"age up, does not tell you why its failing when
+## clicked"*. Swallowing the press was right; swallowing it in silence was not. The
+## REASON travels rather than the sentence, so the wording stays in `GameScene` with
+## every other message the player reads, and this stays a widget that decides nothing.
+signal advance_unavailable(reason: StringName)
+
 ## Sized to sit inside the age header's title row beside the pause button, which
 ## is 48 px -- not as a free-floating badge. The first version of this WAS free
 ## floating, at the top right, and landed straight on top of the resource
@@ -194,7 +204,10 @@ func _draw() -> void:
 ## half, and they must agree.
 func _on_pressed() -> void:
 	if advancing:
+		advance_unavailable.emit(&"advancing")
 		return
 	var next := next_age()
-	if next != 0:
-		advance_requested.emit(next)
+	if next == 0:
+		advance_unavailable.emit(&"maxed")
+		return
+	advance_requested.emit(next)

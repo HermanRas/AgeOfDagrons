@@ -77,6 +77,42 @@ func test_the_badge_never_asks_for_an_age_the_command_would_refuse() -> void:
 				"the badge offers age %d and the sim accepts it" % next)
 
 
+# ── a swallowed press says why (project owner, 2026-08-28) ──────────────────
+
+func _refusals() -> Array:
+	var seen: Array = []
+	badge.advance_unavailable.connect(func(reason: StringName) -> void: seen.append(reason))
+	return seen
+
+
+func test_pressing_at_the_last_age_says_so_instead_of_going_dead() -> void:
+	# "MAX" is drawn under the numeral and does not read as an answer to a press.
+	# The report was "age up, does not tell you why its failing when clicked".
+	var seen := _refusals()
+	badge.age = GameDataRegistry.age_count()
+	badge._on_pressed()
+	assert_eq(seen, [&"maxed"])
+
+
+func test_pressing_mid_research_says_so_too() -> void:
+	var seen := _refusals()
+	badge.advancing = true
+	badge._on_pressed()
+	assert_eq(seen, [&"advancing"])
+
+
+func test_a_press_that_is_honoured_reports_no_refusal() -> void:
+	# The two signals are exclusive, or a successful press would toast at the player
+	# for no reason.
+	var seen := _refusals()
+	var asked: Array[int] = []
+	badge.advance_requested.connect(func(next: int) -> void: asked.append(next))
+	badge.age = 1
+	badge._on_pressed()
+	assert_eq(asked, [2] as Array[int])
+	assert_true(seen.is_empty())
+
+
 # -- the advance ring --------------------------------------------------------
 
 func test_progress_is_clamped_to_a_fraction() -> void:

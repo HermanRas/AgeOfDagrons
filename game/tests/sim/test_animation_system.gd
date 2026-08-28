@@ -104,8 +104,17 @@ func test_gathering_food_plays_work_hunt() -> void:
 	assert_eq(v.anim, &"work_hunt")
 
 
+## THE TREE IS FAR FROM THE TOWN CENTRE ON PURPOSE, since 2026-08-28. It used to be
+## at (9, 10), which is touching the 4x4 town centre at (10, 10) -- and once
+## `GatherSystem` learned to deliver to the NEAREST of eight drop-off points rather
+## than to one substituted tile, a villager chopping there was already standing on a
+## drop-off point. The walk home became zero-length, `has_waypoint()` never became
+## true, and this test could not observe the state it names. That is the fix working:
+## the old code walked the villager to a fixed tile and back for nothing. Moved out to
+## (30, 30) so there is a real journey to carry a load along, which is what this test
+## is actually about.
 func test_carrying_a_load_home_plays_walk_carry_matching_the_kind() -> void:
-	var tree := w.spawn_resource_node(&"res.tree", Vector2i(9, 10))
+	var tree := w.spawn_resource_node(&"res.tree", Vector2i(30, 30))
 	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
 	w.queue_command(GatherCommand.new(1, [v.id], tree.id))
 	var ticks := _run_until(func(): return v.task == SimUnit.Task.RETURN and v.has_waypoint())

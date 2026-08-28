@@ -18,6 +18,81 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-08-28 — four findings, ALL FOUR FIXED the same day
+
+*Kept in full rather than collapsed, because three of them were **dead code** — a check
+written for a case it could never reach — and that is a class worth being able to
+recognise again. Two of the three were cancelling each other out.*
+
+- [x] **"Gathering dropoff only in front of building, add all 4 corners and middel of
+      each side if we can."** ✅ **It was not "the front" — it was ONE TILE**, and the
+      distinction matters because the symptom looked like a facing or a side rule.
+      `GatherSystem._start_return` asked to path to `bld.tile()`, which is the building's
+      **centre** and therefore solid, so `PathService.goal_for` substituted
+      `_nearest_walkable` — a fixed ring sweep, deterministic by design, which handed
+      **every villager on the map the same tile**. Now `SimBuilding.drop_off_points()`
+      offers the owner's eight (four corners, four side middles, one tile out) and
+      `_drop_off_spot` takes the nearest, ties to the earlier point, over a fixed order
+      because two clients picking different corners for one villager is a desync.
+
+      **A side effect worth knowing: a villager working right beside its drop-off now
+      makes no journey at all.** It is already standing on a drop-off point, so it banks
+      from where it stands. That is strictly better than the old walk-to-a-fixed-tile-and-
+      back, and it broke a test that had been asserting the journey
+      (`test_animation_system`'s carry clip, whose tree was one tile from the town
+      centre). The tree moved; the behaviour stayed.
+
+- [x] **"Villager push each other out of the way, when they are pushed too far from build
+      site for mining rock or tree for chopping it stops their work and leaves them
+      idle."** ✅ Three systems read "not adjacent to my work" as "this order cannot be
+      honoured" and retired the unit: `BuildSystem._process`,
+      `GatherSystem._process_gather` and `_process_return`. Fair when the only way to lose
+      adjacency was a stale walk-up tile.
+
+      **`SeparationSystem`'s own comment says it cannot happen, and it is wrong.**
+      `MAX_PUSH` is 120 against a 256 sub-tile, and the note argues 120 "can never carry a
+      unit out of the tile MovementSystem just placed it in" because it is inside half a
+      tile. True only from the tile's *centre*: from sub-position 250 a +120 push lands at
+      370, the next tile along. The code under that comment already calls
+      `spatial.move()` when the tile changes. `SimSystem.rejoin_work` now walks the worker
+      back, bounded by `SAME_WORK_RADIUS` so a genuine displacement still retires, and
+      self-limiting because an unreachable goal comes back as an empty route.
+
+- [x] **"Age up, does not tell you why its failing when clicked."** ✅ The invisible case
+      was **cost**: `AdvanceAgeCommand.validate()` refuses silently, and a dropped command
+      is indistinguishable from a dead button — the exact failure mode
+      `_on_train_requested` was given a polite half for. `_on_age_advance_requested` now
+      names the **shortfall** ("Need 120 food and 30 gold to reach the Imperial Age")
+      rather than the rule. `AgeBadge` also gained `advance_unavailable`, so its two
+      silently-swallowed presses (already advancing, last age) say so too — both states
+      are drawn on the badge and neither reads as an answer to a press.
+
+- [x] **"Wolf renders behind the field i am unable to target it for attack."** ✅ **Two
+      dead guards that had been cancelling out**, which is why this one is worth reading
+      twice.
+
+      `GameView._in_front_of_any` contained `if r.has_point(tile): return true` — standing
+      on it counts — below a guard that made it unreachable: `Occlusion.is_in_front` is
+      `tile.x >= r.end.x or tile.y >= r.end.y`, false for **every tile inside the rect**.
+      So the one case it was written for was the one case it could never answer. It shows
+      only on a building a unit can stand inside, i.e. a walkable one — a field, or an
+      open gate. `Occlusion.hides()` returns false for the same case *correctly*, so the
+      wolf got no sort lift **and** no outline and simply vanished under the wheat.
+      **Targeting was downstream of drawing**: `pick()` already prefers units and answers
+      by tile, so a wolf you cannot see is a wolf you cannot aim at.
+
+      **Fixing it immediately failed three unrelated sort tests**, and that is the second
+      dead guard: the caller read `not entry.has("footprint")` to mean "is a unit", and
+      **12.1f took `footprint` off the wire**. Every entry looked like a unit, so every
+      *building* was asking `_in_front_of_any` about itself — harmless only because a
+      building's own tile is inside its own rect and the unreachable branch answered
+      false. The occluder loop twenty lines above had already been fixed for exactly this
+      and its comment says so; the sort guard was missed. It asks the registry now.
+
+      **The standing hazard:** a guard that infers an entity's KIND from which fields a
+      snapshot happens to carry is wrong the moment the wire format is optimised, and
+      12.1f did that once already. Ask `GameDataRegistry`.
+
 ### Facing — reported 2026-08-27 on the freshly re-baked art
 
 *"Villager mining away from gold, scout attacking away from building."* **Two separate

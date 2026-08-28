@@ -467,6 +467,7 @@ func _build_hud() -> void:
 	# rather than shortened.
 	_age_badge = AgeBadge.new()
 	_age_badge.advance_requested.connect(_on_age_advance_requested)
+	_age_badge.advance_unavailable.connect(_on_age_advance_unavailable)
 	age_top_row.add_child(_age_badge)
 
 	# The idle count, beside the age badge -- what is left of the mockup's
@@ -1577,8 +1578,59 @@ func _on_debug_destroy_requested(target_id: int) -> void:
 ## Goes through the ordinary command path rather than reaching into the world, so
 ## the ring fills from the next snapshot's `player_state` like everything else --
 ## there is no local clock to drift from the sim's.
-func _on_age_advance_requested(_next_age: int) -> void:
+## THE POLITE HALF OF THE AGE LADDER (project owner, 2026-08-28: *"age up, does not
+## tell you why its failing when clicked"*). `AdvanceAgeCommand.validate()` is the
+## enforcing half and it refuses SILENTLY -- a command that fails validation is simply
+## dropped -- so before this the badge went dead with no explanation the moment you
+## were short of resources. Exactly the failure mode `_on_train_requested` was given
+## this same treatment for, and the same reason a full town centre and a broken button
+## look identical.
+##
+## Asks the host the same question the server will, through `Net.host()` -- the
+## documented solo-only exception `_preview_placement` and `_on_train_requested`
+## already use. A second copy of the affordability rule here would disagree with the
+## server the first time either changed. A remote client has no host to ask, so it
+## submits and takes the silence; sending the refusal back is a multiplayer job.
+func _on_age_advance_requested(next_age: int) -> void:
+	var world: SimWorld = Net.host().world if Net.host() != null else null
+	var player: SimPlayer = world.player_for(Net.local_player_id()) if world != null else null
+	var def: AgeDef = GameDataRegistry.age(next_age)
+	if player != null and def != null and not player.can_afford(def.cost):
+		# NAMES WHAT IS SHORT, not just that something is. "Not enough resources" leaves
+		# the player counting five stockpiles by eye; the population toast beside this
+		# one sets the standard by naming the fix rather than the rule.
+		_toast.show_message("Need %s to reach the %s" % [
+				_shortfall_text(player, def.cost), def.name if def.name != "" else "next age"])
+		return
 	Net.submit_command(AdvanceAgeCommand.new(Net.local_player_id()))
+
+
+## The two silent presses `AgeBadge` swallows on its own. Both are drawn on the badge
+## already -- "MAX" and "..." under the numeral -- and neither reads as an answer to a
+## press, which is what the owner's report was about.
+func _on_age_advance_unavailable(reason: StringName) -> void:
+	match reason:
+		&"advancing":
+			_toast.show_message("Already advancing -- the ring shows how far")
+		&"maxed":
+			_toast.show_message("This is the last age")
+
+
+## What is MISSING from `cost`, as "120 food, 30 gold" -- never what it costs. Ordered
+## by `ResourceHUD.DISPLAY_ORDER` so the list reads in the same order as the counters
+## the player is about to look at.
+func _shortfall_text(player: SimPlayer, cost: Dictionary) -> String:
+	var parts: Array[String] = []
+	for kind in ResourceHUD.DISPLAY_ORDER:
+		var short := int(cost.get(kind, 0)) - int(player.stock.get(kind, 0))
+		if short > 0:
+			# A resource kind is bare in the data -- `&"wood"`, not `&"res.wood"`, which
+			# is the RESOURCE NODE namespace. No prefix to strip.
+			parts.append("%d %s" % [short, kind])
+	# Belt to the caller's brace: this is only reached when `can_afford` said no, so
+	# something is always short -- but a cost naming a kind DISPLAY_ORDER does not
+	# would otherwise produce "Need  to reach...".
+	return " and ".join(parts) if not parts.is_empty() else "more resources"
 
 
 ## Blips (PLAN.md 8.2a). Separate from _refresh_hud() -- that one drains once

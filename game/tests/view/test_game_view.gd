@@ -697,6 +697,52 @@ func test_progress_for_an_unknown_player_is_zero_rather_than_a_divide_by_zero() 
 	assert_false(view.is_advancing(99))
 
 
+# ── a unit standing ON a building draws in front of it (owner, 2026-08-28) ───
+
+func test_a_unit_inside_a_footprint_counts_as_in_front_of_it() -> void:
+	# THE REPORT: "wolf renders behind the field i am unable to target it for attack."
+	# `_in_front_of_any` HAD this case written -- `if r.has_point(tile): return true` --
+	# and it sat below a guard that made it unreachable: `Occlusion.is_in_front` is
+	# `tile.x >= r.end.x or tile.y >= r.end.y`, false for every tile inside the rect.
+	var field := Rect2i(10, 10, 5, 5)
+	assert_false(Occlusion.is_in_front(Vector2i(12, 12), field),
+			"the guard that was swallowing it")
+	assert_true(view._in_front_of_any(Vector2i(12, 12), [field] as Array[Rect2i]),
+			"standing on it is in front of it")
+
+
+func test_every_tile_of_a_walkable_footprint_draws_in_front() -> void:
+	# Not just the middle: a wolf anywhere on the crop must be visible, and the north
+	# edge is the corner the old `is_in_front` rule was most wrong about.
+	var field := Rect2i(10, 10, 5, 5)
+	for y in range(10, 15):
+		for x in range(10, 15):
+			assert_true(view._in_front_of_any(Vector2i(x, y), [field] as Array[Rect2i]),
+					"(%d, %d) is on the field" % [x, y])
+
+
+func test_a_unit_genuinely_behind_a_building_is_still_behind_it() -> void:
+	# The roof-standing bug this guard was protecting against (2026-08-16). Touching
+	# the north edge is adjacent and is BEHIND, and must stay that way -- the fix is
+	# only about being inside the rect, not about relaxing the direction rule.
+	var house := Rect2i(10, 10, 4, 4)
+	assert_false(view._in_front_of_any(Vector2i(11, 9), [house] as Array[Rect2i]),
+			"one tile north of it is behind it")
+	assert_false(view._in_front_of_any(Vector2i(9, 11), [house] as Array[Rect2i]),
+			"one tile west of it is behind it")
+	assert_true(view._in_front_of_any(Vector2i(11, 14), [house] as Array[Rect2i]),
+			"one tile south of it is in front")
+
+
+func test_a_unit_on_a_field_is_not_reported_as_hidden_by_it() -> void:
+	# `Occlusion.hides` already returns false for a tile inside the rect, and that
+	# stays right: standing inside a footprint is not being hidden BY it. It is only
+	# correct now that the unit is actually drawn in front -- before, the two rules
+	# agreed the wolf was neither in front nor hidden, so it got no lift AND no
+	# outline, which is why it vanished rather than being rimmed.
+	assert_false(Occlusion.hides(Rect2i(10, 10, 5, 5), Vector2i(12, 12)))
+
+
 # ── which clip a building draws (gates gained an `open` pose 2026-08-28) ──────
 
 ## `building.wall_wood_gate` and NOT `building.wall_gate`, which is not a def at all --

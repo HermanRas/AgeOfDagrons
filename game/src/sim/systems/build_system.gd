@@ -30,7 +30,13 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 		u.stop()
 		return
 	if not _adjacent_to_rect(u.tile(), b.footprint_rect()):
-		u.stop()
+		# SHOVED OFF THE SITE IS NOT THE SAME AS SENT AWAY (2026-08-28). This used to
+		# retire the builder outright; a crowd around one foundation pushes its members
+		# across tile boundaries and every one of them stopped building. See
+		# `SimSystem.rejoin_work`, which walks it back and only gives up when the unit
+		# is genuinely somewhere else.
+		if not rejoin_work(w, u, b.footprint_rect(), u.task_target_tile):
+			u.stop()
 		return
 
 	# Face the work, for the reason GatherSystem spells out at the same point in its
