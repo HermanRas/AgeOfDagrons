@@ -2047,6 +2047,19 @@ unstarted phase: `techs.json` is deliberately empty, the tech-tree page renders 
 it, every AI profile already declares `techs: true` against nothing, and the field yield's
 per-age ladder is standing in for a mill upgrade that does not exist.
 
+**3. 4.13's pack/unpack state machine — and it moved because the ART LANDED, 2026-08-28.**
+This was the last open item in 4.13 and it has been waiting on one thing since 2026-08-22:
+every siege atlas staged was the *unpacked* pose, so the machine had no way to show its two
+states apart and building it against a magenta placeholder would have proved the transition
+happened without proving it was the right way round. `vis.onager_packed` and
+`vis.trebuchet_packed` are now staged. **They are deliberately NOT declared in
+`visuals.json`** — an id referenced by nothing reads a year later as art that failed to
+land — so the declaration goes in with the machine, in one commit. Three things already
+known: the onager's packed actor **animates** (`idle`/`walk`, 120 frames) so it must not get
+`speed: 0`, the trebuchet's is static with its crew stacked in a column, and colour is
+UNMEASURED on both, so both start `"colours": false`. `vis.ballista_packed` is not baked and
+is the cheapest of the three to be missing — it is the one engine with no player colour.
+
 **Then, in no strongly forced order:** 2.4c the map save format; 12.1b LAN discovery; 12.3
 campaign; **Phase 14, the AI's enemy-blindness** (which is a rebuild of 12.2b's condition
 vocabulary, not a bug fix, and wants a game whose balance is settled first); and 13.x dragons

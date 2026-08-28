@@ -7,8 +7,10 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-27.** Suite: **1268 tests, 201,463 assertions, 0 failures**. Android
-build: 320.6 MB, unchanged — nothing since it has been a code change to the APK.
+**Updated 2026-08-28.** Suite: **1417 tests, 202,627 assertions, 0 failures**. **342
+atlases staged.** Android build: 320.6 MB **as of 2026-08-27 and now certainly stale** —
+the 2026-08-28 art delivery added eleven atlases including eight tinted flags, and nobody
+has rebuilt since. Re-measure before quoting it.
 
 ---
 
@@ -26,9 +28,13 @@ triggers in `data/ai_*.json` instead of a script of timed steps. The owner's sum
 it matters — *"the update system support customization and supports random maps, thats the
 big win from this update."*
 
-**What is next is features rather than repair**: 2.4d Archipelago, and then 9.3
-`TechSystem`, which moved up because ages now cost resources and the tech tree is what the
-age ladder is *for*. **8.8's [X] button was built 2026-08-28.**
+**What is next is features rather than repair**: 2.4d Archipelago, 9.3 `TechSystem` (moved
+up because ages now cost resources and the tech tree is what the age ladder is *for*), and
+**4.13's pack/unpack state machine, which moved up because its art landed** on 2026-08-28
+after blocking it since 2026-08-22.
+
+**Two things closed 2026-08-28:** 8.8's [X] clear-selection button, and the art delivery —
+**gates open and close**, and the rally-point flag is baked art instead of a placeholder.
 
 **4.8 garrison and 4.9 landed 2026-08-27.** Towers and the castle hold units (5/5/15,
 nothing else — walls ruled out by the owner), garrisoned units heal 1 hp per 5 ticks and
