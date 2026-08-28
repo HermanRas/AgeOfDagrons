@@ -85,10 +85,31 @@ fps = 15
 loop = true
 location_scale = 0.0
 
+# RUN IS THE WALK CLIP PLAYED FASTER, AND THAT IS DELIBERATE.
+# `quadraped/deer_run_01.dae` is the one deer clip that does not transfer to
+# this rig at all, and unlike the location-curve problem above it cannot be
+# corrected by any recipe setting. Substituted 2026-08-28 after the owner
+# flagged `run__N__0002` -- the forelegs come out as straight rods thrown
+# sideways, most visible from N and S and nearly invisible side-on, where the
+# splayed limb points at the camera and hides behind the body.
+#
+# THE TEST THAT NAMED IT, and it is the one to reuse: render ONE time sample
+# (`frames = 1`, so `sample_positions()` puts every direction at clip position
+# 0.0) across all five stored directions. Those five MUST be one rigid pose
+# seen from five angles. `vis.wolf` passes it perfectly and is the control.
+# The deer's idle, walk and death pass it too. Only `run` fails -- at position
+# 0.0 it renders a mangled animal at S, a clean side view at SE and E, and a
+# rearing one with a rod through it at NE and N. A pose that changes with the
+# camera is not a pose problem the recipe can reach.
+#
+# Do not read this as "the deer cannot run". The walk clip transfers cleanly
+# and at 22 fps reads as a trot, which is what a fleeing deer needs to look
+# like; the alternative was shipping the rods. The `run` ANIM still exists in
+# the atlas under its own name, so `AnimationSystem` needs no change.
 [anims.run]
-clip = "run"
+clip = "walk"
 frames = 12
-fps = 18
+fps = 22
 loop = true
 location_scale = 0.0
 

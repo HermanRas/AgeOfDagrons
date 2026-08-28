@@ -163,6 +163,26 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 >
 > **This changes any figure you derived from the old deer sprites**, including
 > `vis.deer_carcass`'s 2.47 m. Re-derive, or ask and I will measure both off the source.
+>
+> ---
+>
+> **SECOND PASS, same day — `run` is now the WALK clip at 22 fps.** The owner checked the
+> first fix against `run__N__0002` and the run was still wrong: the forelegs came out as
+> straight rods thrown sideways. Nearly invisible side-on, because a splayed limb points
+> at the camera and hides behind the body — which is why it survived the checks above.
+>
+> **`quadraped/deer_run_01.dae` does not transfer to this rig at all**, and no recipe
+> setting reaches it. The test that named it is worth having: render **one** time sample
+> (`frames = 1`, so every direction is at clip position 0.0) across all five stored
+> directions. Those five must be one rigid pose seen from five angles. `vis.wolf` passes
+> it perfectly and is the control; the deer's idle, walk and death pass it; **only `run`
+> fails** — mangled at S, clean at SE and E, rearing with a rod through it at NE and N.
+> A pose that changes with the camera is not something a recipe can correct.
+>
+> **Nothing to re-wire.** The `run` anim still exists in the atlas under its own name, so
+> `AnimationSystem` sending it while `flee_ticks` counts down works exactly as before —
+> a fleeing deer now trots faster rather than galloping. Say so if you would rather have
+> no `run` at all and I will drop it.
 
 ### 🔴 ~~`vis.deer` and `vis.deer_carcass` are DISTORTED PER DIRECTION~~ — 2026-08-28
 

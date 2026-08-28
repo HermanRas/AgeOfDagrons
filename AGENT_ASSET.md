@@ -324,6 +324,28 @@ the root from the scale is the proper fix and is not written yet.
   separates "the mesh/scale/rotation is broken" from "the transfer is broken" in
   one 12-second probe.
 
+**THE ONE-POSE, FIVE-DIRECTION TEST, AND IT IS PER CLIP.** The height-spread check
+above catches a whole asset that is broken. It does **not** catch one bad clip in
+an otherwise good set, and it does not catch a limb thrown out sideways at all —
+a splayed limb points at the camera side-on and hides behind the body, so the
+silhouette barely changes and only front and rear views show it. `vis.deer` passed
+every check above with its `run` forelegs coming out as straight rods.
+
+**Render `frames = 1`** — `sample_positions()` puts a lone frame at position 0.0,
+so every direction renders the SAME clip position — **across all five stored
+directions. Those five must be one rigid pose seen from five angles.** Read them
+side by side at 4x; the failure is obvious and needs no measurement. Run a species
+you trust as the control in the same batch: `vis.wolf` passes perfectly, which is
+what tells you the test itself is sound. On the deer, idle, walk and death pass and
+**only `run` fails** — mangled at S, clean at SE and E, rearing with a rod through
+it at NE and N.
+
+**A pose that changes with the camera is not a pose problem a recipe can reach**,
+so do not go looking for a setting. Substitute another clip (deer `run` is now
+`walk` at 22 fps, keeping the anim NAME so the game needs no change) and move on.
+The cost is one bake per clip set and it is the only check that would have caught
+this before the owner did, twice.
+
 **A recipe's clip names resolve against the actor in `[source]`, and on a nested
 actor that is the wrong actor.** The onager is two actors: the pivot base the
 recipe names declares no animations at all, while the arm mounted at `weapon`
