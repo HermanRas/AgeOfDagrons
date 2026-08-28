@@ -366,6 +366,31 @@ placeholder"*, so no bake is waiting on it). Four things worth knowing:
   `destroy`. **The next verb added to `_building_actions` drops a real command** — that
   slot is spent.
 
+**8.8'S [X] CLEAR-SELECTION BUTTON, 2026-08-28.** `ClearSelectionButton` — a drawn disc
+at the top-left of `SelectionPanel`, emitting `clear_requested` into
+`GameScene._on_clear_pressed`. It closes the oldest open owner-reported bug without
+touching the thing that caused it: the double-tap gesture and desktop's right-click both
+stay, and this is a third route to the same verb that a thumb cannot miss. Three things
+worth knowing:
+
+- **ITS SIZE WAS DERIVED, NOT CHOSEN, AND THE HUD'S LEFT EDGE NOW HAS ZERO SLACK.** The
+  control-group stack runs to y 364 (`12 + 5×64 + 4×8`) and the selection panel is
+  bottom-anchored with a ceiling of 244 (`20 margin + 72 portrait + 4 + 2 grid rows`,
+  two rows being `MAX_ACTIONS` 8 in four columns) — so on the 648 px canvas there are
+  **exactly 40 px** between them, and `SIZE` is 40 with the row's separation pinned at 0.
+  The `aspect = "expand"` stretch keeps 648 as the vertical base on a phone too, so this
+  is the real budget on hardware, not a desktop artefact.
+- **Overflowing it fails SILENTLY, which is why there is a test.** The control-group stack
+  is added to the HUD *after* the panel, so Godot hit-tests it first: a button pushed under
+  the fifth slot keeps drawing and stops taking taps in the overlap. That is the minimap
+  corner-button trap in §6 exactly. `test_the_tallest_panel_still_clears_the_control_group_stack`
+  fills **both** grids to their caps rather than measuring whatever def has the most verbs
+  today — a fixture producing seven actions would measure one grid row and pass.
+- **One press exits a placement first, where right-click takes two.** Right-click is a
+  general "not that" and resolving one thing per press suits a key that is always there; a
+  button marked [X] on a panel means the player is finished with the selection, so leaving
+  the villager selected with the ghost gone would read as a half press.
+
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
 **a deer is hunted rather than harvested** — it had to become a `SimUnit` to move at
@@ -413,13 +438,12 @@ bullet below for the two-limit fix that did answer it.
 Listed here so this file does not read as though the game were finished. Do not
 re-diagnose these from scratch — each already has a diagnosis.
 
-- **Double-tap to clear the selection is unreliable on the phone**, and the call is
-  **not** to keep tuning the gesture: the fix chosen is an **[X] button** at the top
-  of `SelectionPanel`, visible only while something is selected (PLAN.md 8.8). The
-  root cause is `InputRouter.TAP_SLOP`/`TAP_TIME_MS` — a thumb wobbles where a mouse
-  does not, so a second tap the router scores as a small drag never reaches the
-  detector — and improving the router is a separate job. **The gesture stays.**
-  Desktop was never affected: right-click clears.
+- ~~**Double-tap to clear the selection is unreliable on the phone.**~~ **ANSWERED
+  2026-08-28 by the [X] button** (PLAN.md 8.8) — see the §7 entry below. The gesture
+  itself was never fixed and deliberately still is not: the root is
+  `InputRouter.TAP_SLOP`/`TAP_TIME_MS` and improving the router is a separate job.
+  **The gesture stays**, desktop keeps right-click, and there is now a third route
+  that a thumb cannot miss. Awaiting the owner's device confirmation.
 - **A forfeit is announced as an elimination.** The snapshot carries the fact of a
   defeat but no *reason*, so a resign and a disconnect both read "All opponents
   eliminated". Needs a reason field beside `winner_id` and a decision about how many

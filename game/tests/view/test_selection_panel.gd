@@ -370,6 +370,97 @@ func test_the_panel_portrait_takes_the_owners_skin() -> void:
 	assert_eq(panel._portrait.skin_age, 3)
 	assert_eq(panel._portrait.skin_colour, 5)
 
+# -- the [X] that drops the selection (PLAN.md 8.8) ---------------------------
+
+## Counted into an ARRAY, not an int. A GDScript lambda captures by VALUE, so
+## `var n := 0` incremented inside one stays 0 outside it and the assertion fails
+## while the button works perfectly -- which is exactly what the first version of
+## this test reported. Every other signal test in this file appends to an array for
+## the same reason.
+func test_pressing_the_x_asks_for_the_selection_to_be_cleared() -> void:
+	var cleared: Array = []
+	panel.clear_requested.connect(func() -> void: cleared.append(true))
+	panel.show_entity(_villager_facts(1))
+
+	panel._clear_button.pressed.emit()
+	assert_eq(cleared.size(), 1)
+
+
+func test_the_x_reports_nothing_as_an_order() -> void:
+	# It is view state, not a verb: a listener on `action_requested` must not see
+	# it, or GameScene's match on that signal would have to learn to ignore one id.
+	var fired: Array = []
+	panel.action_requested.connect(func(id: StringName) -> void: fired.append(id))
+	panel.show_entity(_villager_facts(1))
+
+	panel._clear_button.pressed.emit()
+	assert_eq(fired, [])
+
+
+func test_the_x_goes_away_with_the_panel() -> void:
+	# 8.8's "visible only while something is selected", and it costs no code: it is
+	# a CHILD of the panel, the panel hides itself, and a hidden Control takes no
+	# input. Asserted as parentage rather than as `visible`, because the button's own
+	# flag never changes -- a copy held anywhere else would be the bug this catches.
+	assert_true(panel.is_ancestor_of(panel._clear_button),
+			"the [X] hangs off the panel, so the panel hiding is what hides it")
+	panel.show_entity(_villager_facts(1))
+	assert_true(panel.visible)
+	panel.show_nothing()
+	assert_false(panel.visible)
+
+
+func test_the_x_is_offered_on_an_enemys_panel_too() -> void:
+	# `is_mine = false` blanks the whole action column -- deliberately, since those
+	# are orders. Dismissing a panel is not an order, and an enemy building's panel
+	# is the one a player most wants gone.
+	var cleared: Array = []
+	panel.clear_requested.connect(func() -> void: cleared.append(true))
+	panel.show_entity(_town_center_facts(9), 1, false)
+
+	assert_eq(_visible(panel._action_slots), 0, "no verbs on somebody else's building")
+	assert_true(panel.visible)
+	panel._clear_button.pressed.emit()
+	assert_eq(cleared.size(), 1)
+
+
+## THE LEFT EDGE IS FULLY SPENT AND THIS IS THE ARITHMETIC THAT SAYS SO.
+##
+## Control groups occupy 12 + 5*64 + 4*8 = down to y 364 on the 648 px canvas the
+## project targets, and the selection panel is bottom-anchored and grows upward. A
+## panel taller than 648 - 364 = 284 puts its top-left button UNDER the fifth group
+## slot, which is added to the HUD later and so is hit-tested first: the overlapping
+## strip would go silently dead rather than visibly wrong.
+##
+## Both grids are filled to their CAPS rather than measured off whatever def
+## happens to have the most verbs today. A fixture that produced seven actions
+## would measure one grid row and pass while the eighth still overflowed -- the
+## "fixture agreeing with the bug" trap this project has been bitten by twice.
+## MAX_ACTIONS and MAX_DETAILS are what bound the panel, so they are what is asked.
+##
+## The margin between the result and the ceiling is zero by design, so this is not
+## a slack assertion: it fails the moment anyone adds height above the portrait row,
+## which is exactly when somebody needs to be told.
+func test_the_tallest_panel_still_clears_the_control_group_stack() -> void:
+	var groups_bottom := 12.0 + SimPlayer.CONTROL_GROUP_COUNT * ControlGroupSlot.SIZE \
+			+ (SimPlayer.CONTROL_GROUP_COUNT - 1) * 8.0
+	var canvas_height := 648.0
+
+	panel.show_entity(_town_center_facts(3), 1, true, [], 4)
+	var actions: Array[HudAction] = []
+	for i in range(SelectionActions.MAX_ACTIONS):
+		actions.append(HudAction.new(StringName("slot%d" % i), "Slot"))
+	var details: Array[HudAction] = []
+	for i in range(SelectionActions.MAX_DETAILS):
+		details.append(HudAction.new(StringName("detail%d" % i), "Detail"))
+	panel._fill(panel._action_slots, actions)
+	panel._fill(panel._detail_slots, details)
+	var tall := panel.get_combined_minimum_size().y
+
+	assert_true(tall <= canvas_height - groups_bottom,
+			"the panel is %.0f px tall and only %.0f are free below the control groups"
+					% [tall, canvas_height - groups_bottom])
+
 
 func test_every_slot_is_skinned_before_its_action_is_set() -> void:
 	# set_action() is what crops the portrait, so a slot skinned afterwards would

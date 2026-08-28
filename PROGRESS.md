@@ -26,9 +26,9 @@ triggers in `data/ai_*.json` instead of a script of timed steps. The owner's sum
 it matters — *"the update system support customization and supports random maps, thats the
 big win from this update."*
 
-**What is next is features rather than repair**: 2.4d Archipelago, 8.8's [X] button, and
-then 9.3 `TechSystem`, which moved up because ages now cost resources and the tech tree is
-what the age ladder is *for*.
+**What is next is features rather than repair**: 2.4d Archipelago, and then 9.3
+`TechSystem`, which moved up because ages now cost resources and the tech tree is what the
+age ladder is *for*. **8.8's [X] button was built 2026-08-28.**
 
 **4.8 garrison and 4.9 landed 2026-08-27.** Towers and the castle hold units (5/5/15,
 nothing else — walls ruled out by the owner), garrisoned units heal 1 hp per 5 ticks and
@@ -58,7 +58,7 @@ real work remains · ⛔ not started
 | 5 | Buildings | 🟡 | **5.7 more buildings — art-paced, not code-paced**. 5.3 upgrades half-built: the wall→gate upgrade is the first real one |
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
-| 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport), **8.8 the [X] clear-selection button** |
+| 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport). 8.8's [X] clear-selection button landed 2026-08-28 |
 | 9 | Ages & tech | 🟡 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **`TechSystem` still does not exist** — `techs.json` is deliberately empty and the tech-tree page renders whatever is in it. Now the biggest unstarted piece |
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
@@ -86,10 +86,10 @@ per medium wall stay unused by decision rather than by omission.*
 every other **by land**, which an archipelago fails by definition, so that claim has to
 change rather than relax.
 
-**2. 8.8, the [X] button.** Small, and the only item the owner reported from playing the
-current build.
+*~~2. 8.8, the [X] button.~~ Built 2026-08-28 — `ClearSelectionButton`, 40 px, which is the
+exact height left between the control-group stack and the selection panel's ceiling.*
 
-**3. 9.3 `TechSystem`.** The biggest genuinely unstarted phase, and it moved up because
+**2. 9.3 `TechSystem`.** The biggest genuinely unstarted phase, and it moved up because
 ages now cost resources — which makes the tech tree what the age ladder is *for*.
 
 ---

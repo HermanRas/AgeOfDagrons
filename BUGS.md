@@ -85,9 +85,11 @@ faults that looked like one**, which is why the morning's re-bake appeared to fi
 
 ### Input and HUD
 
-- [ ] **Double-tap to clear the selection does not work reliably on the phone.**
-      Owner-reported 2026-08-23. Documented and **not** to be fixed as-is — the call is to
-      replace the gesture with a button rather than keep tuning it.
+- [x] **Double-tap to clear the selection does not work reliably on the phone.**
+      Owner-reported 2026-08-23, **answered 2026-08-28 with the [X] button** (PLAN.md 8.8).
+      The gesture was never fixed and deliberately still is not — the root is
+      `InputRouter`'s tap/pan discrimination, which is its own job. What shipped is a second,
+      reliable route to the same verb. **Awaiting the owner's device confirmation.**
 
       The behaviour is deliberate: single tap on empty ground moves, double tap lets go
       ([game_scene.gd:927](game/src/view/game_scene.gd#L927)). The move goes out on the
@@ -109,6 +111,21 @@ faults that looked like one**, which is why the morning's re-bake appeared to fi
       Clearing is a discoverable action on a touch screen where a gesture is not; it costs
       desktop nothing; and it does not wait on the router improving, which is the real root
       and a separate job. **The gesture stays.** PLAN.md 8.8.
+
+      **What building it actually turned out to be** (2026-08-28): not a UI question, a
+      layout one. The HUD's left edge is fully committed — the control-group stack runs to
+      y 364 and the selection panel, bottom-anchored and growing upward, tops out at 244 —
+      leaving **exactly 40 px** on the 648 px canvas. So `ClearSelectionButton.SIZE` was
+      *derived*, not chosen, and there is no headroom left: any extra height above the
+      portrait row slides the button under the fifth group slot, which is added to the HUD
+      later and so wins the hit test, leaving a strip of the button silently dead. That is
+      the minimap's corner-button trap again, and it is asserted in
+      `test_the_tallest_panel_still_clears_the_control_group_stack`.
+
+      One press also **exits a placement first**, where right-click takes two. Right-click is
+      a general "not that" and resolving one thing per press suits a key that is always
+      there; a button marked [X] on a panel is a player saying they are finished with the
+      selection, and leaving the villager selected with the ghost gone reads as a half press.
 
 - [ ] **The soft keyboard covers the address field.** A consequence of there finally being
       a keyboard rather than a regression. The game is landscape (`orientation=4`) and a

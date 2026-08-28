@@ -51,12 +51,21 @@ signal place_requested(def_id: StringName)
 ## has no combat to bring hp to 0 any other way.
 signal debug_destroy_requested(target_id: int)
 
+## The [X] at the top-left was pressed (PLAN.md 8.8) -- drop the selection.
+##
+## Its own signal rather than `action_requested(&"clear")`, because that one is
+## documented as "a verb with a real command behind it" and this one sends nothing
+## to the server: clearing a selection is local view state, the same as the
+## right-click and double-tap routes it stands beside.
+signal clear_requested
+
 const _ACTION_COLUMNS := 4
 const _DETAIL_COLUMNS := 4
 const _SLOT_SIZE := 72.0
 const _HEALTH_BAR_SIZE := Vector2(176.0, 30.0)
 const _DIVIDER_COLOR := Color(0.937, 0.769, 0.290)
 
+var _clear_button: ClearSelectionButton
 var _portrait: EntityPortraitView
 var _title: Label
 var _health_label: Label
@@ -108,8 +117,19 @@ func _init() -> void:
 		margin.add_theme_constant_override("margin_%s" % side, 10)
 	add_child(margin)
 
+	# A VBox above the two columns, holding one thing: the [X] (8.8). SEPARATION 0
+	# IS LOAD-BEARING -- see ClearSelectionButton.SIZE for the 40 px budget this row
+	# has between the control-group stack above and the panel's own ceiling below.
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 0)
+	margin.add_child(stack)
+
+	_clear_button = ClearSelectionButton.new()
+	_clear_button.pressed.connect(_on_clear_pressed)
+	stack.add_child(_clear_button)
+
 	var columns := HBoxContainer.new()
-	margin.add_child(columns)
+	stack.add_child(columns)
 
 	var actions_column := VBoxContainer.new()
 	columns.add_child(actions_column)
@@ -301,6 +321,15 @@ func _fill(slots: Array[ActionSlot], entries: Array[HudAction]) -> void:
 		slots[i].portrait_age = _age
 		slots[i].portrait_colour = _colour
 		slots[i].set_action(entries[i] if i < entries.size() else null)
+
+
+## The [X]. Needs no "is anything selected" guard of its own: the whole panel is
+## hidden by `show_nothing()`, and a hidden Control takes no input -- which is also
+## the whole of 8.8's "visible only while something is selected". Not gated on
+## `is_mine` either, deliberately: an enemy building's panel is exactly the one a
+## player most wants to dismiss, and dismissing it commands nothing.
+func _on_clear_pressed() -> void:
+	clear_requested.emit()
 
 
 func _on_action_pressed(action: HudAction) -> void:

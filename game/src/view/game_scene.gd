@@ -306,6 +306,7 @@ func _build_hud() -> void:
 	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
 	_panel.place_requested.connect(_enter_placement)
 	_panel.action_requested.connect(_on_action_requested)
+	_panel.clear_requested.connect(_on_clear_pressed)
 	hud.add_child(_panel)
 
 	# Flush into the top-right corner, per the mockup -- it used to sit 64 px down,
@@ -987,6 +988,30 @@ func _on_context_cancel() -> void:
 	if _placing_def_id != &"":
 		_exit_placement()
 		return
+	_clear_selection()
+
+
+## The selection panel's [X] (PLAN.md 8.8) -- the touch answer to a double-tap that
+## does not survive a thumb (BUGS.md 2026-08-23).
+##
+## It is the SAME VERB as right-click, so it is guarded the same way and it backs out
+## of a placement the same way. Two differences from `_on_context_cancel`, both
+## deliberate:
+##
+##   It clears in ONE press rather than two. Right-click is a general "not that" and
+##   resolving one thing per press is right for a key that is always available; this
+##   button says [X] on a panel, is only there while that panel is, and a player who
+##   presses it has finished with the selection -- leaving the villager selected and
+##   the ghost gone would look like a press that half worked.
+##
+##   `_exit_placement` still runs first. Placement belongs to the selection that
+##   opened it, so clearing without it would leave a locked camera and a live
+##   `_placing_def_id` with nothing selected to build it.
+func _on_clear_pressed() -> void:
+	if _orders_refused():
+		return
+	if _placing_def_id != &"":
+		_exit_placement()
 	_clear_selection()
 
 

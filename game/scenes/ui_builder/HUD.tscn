@@ -204,5 +204,5 @@ grow_vertical = 2
 
 [node name="SelectionPanel" parent="." unique_id=181093145 instance=ExtResource("7_o7l18")]
 layout_mode = 1
-offset_top = -244.0
+offset_top = -284.0
 offset_bottom = 0.0

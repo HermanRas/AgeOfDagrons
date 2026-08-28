@@ -6,6 +6,18 @@
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_clear"]
+bg_color = Color(0.17, 0.11, 0.08, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.898039, 0.721569, 0.258824, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+
 [sub_resource type="AtlasTexture" id="AtlasTexture_uydp3"]
 
 [node name="SelectionPanel" type="PanelContainer" unique_id=181093145]
@@ -13,7 +25,7 @@ custom_minimum_size = Vector2(320, 0)
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -194.0
+offset_top = -234.0
 offset_right = 746.0
 offset_bottom = -3.0
 grow_vertical = 0
@@ -34,27 +46,52 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer" unique_id=1017632583]
+[node name="Stack" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="ClearButton" type="Panel" parent="MarginContainer/Stack"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_clear")
+
+[node name="Cross" type="Label" parent="MarginContainer/Stack/ClearButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.898039, 0.721569, 0.258824, 1)
+theme_override_font_sizes/font_size = 20
+text = "✕"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/Stack" unique_id=1017632583]
 layout_mode = 2
 
-[node name="SelectedActions" type="VBoxContainer" parent="MarginContainer/HBoxContainer" unique_id=289536862]
+[node name="SelectedActions" type="VBoxContainer" parent="MarginContainer/Stack/HBoxContainer" unique_id=289536862]
 layout_mode = 2
 
-[node name="SingleSelectDetails" type="HBoxContainer" parent="MarginContainer/HBoxContainer/SelectedActions" unique_id=1730351041]
+[node name="SingleSelectDetails" type="HBoxContainer" parent="MarginContainer/Stack/HBoxContainer/SelectedActions" unique_id=1730351041]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Portrait" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails" unique_id=113123596]
+[node name="Portrait" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails" unique_id=113123596]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Portrait" unique_id=243970256]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Portrait" unique_id=243970256]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Portrait" unique_id=769431667]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Portrait" unique_id=769431667]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -63,31 +100,31 @@ texture = ExtResource("1_yjdty")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Stats" type="VBoxContainer" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails" unique_id=1563486894]
+[node name="Stats" type="VBoxContainer" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails" unique_id=1563486894]
 custom_maximum_size = Vector2(-1, 70)
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats" unique_id=1401802082]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats" unique_id=1401802082]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HBoxContainer" unique_id=934747147]
+[node name="Title" type="Label" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HBoxContainer" unique_id=934747147]
 custom_minimum_size = Vector2(0, 15)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 14
 text = "Villager"
 
-[node name="Health" type="Label" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HBoxContainer" unique_id=662933391]
+[node name="Health" type="Label" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HBoxContainer" unique_id=662933391]
 custom_minimum_size = Vector2(0, 15)
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "15 / 30"
 
-[node name="HealthBar" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats" unique_id=1895436996]
+[node name="HealthBar" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats" unique_id=1895436996]
 custom_minimum_size = Vector2(176, 30)
 layout_mode = 2
 
-[node name="Empty" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HealthBar" unique_id=63576372]
+[node name="Empty" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HealthBar" unique_id=63576372]
 modulate = Color(0.35, 0.32, 0.3, 1)
 texture_filter = 1
 layout_mode = 1
@@ -98,7 +135,7 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("2_2eh3x")
 
-[node name="Fill" type="TextureProgressBar" parent="MarginContainer/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HealthBar" unique_id=1012004917]
+[node name="Fill" type="TextureProgressBar" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/SingleSelectDetails/Stats/HealthBar" unique_id=1012004917]
 texture_filter = 1
 layout_mode = 1
 anchors_preset = 15
@@ -109,23 +146,23 @@ grow_vertical = 2
 value = 50.0
 texture_progress = ExtResource("2_2eh3x")
 
-[node name="ActionsList" type="GridContainer" parent="MarginContainer/HBoxContainer/SelectedActions" unique_id=1767433366]
+[node name="ActionsList" type="GridContainer" parent="MarginContainer/Stack/HBoxContainer/SelectedActions" unique_id=1767433366]
 layout_mode = 2
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 columns = 4
 
-[node name="action1" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=2117374162]
+[node name="action1" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=2117374162]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=340610163]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=340610163]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=1290200044]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=1290200044]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -134,22 +171,22 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="TrainButton" type="Button" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=856345110]
+[node name="TrainButton" type="Button" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action1" unique_id=856345110]
 visible = false
 layout_mode = 0
 text = "Train Villager"
 
-[node name="action2" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=1832357122]
+[node name="action2" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=1832357122]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=2017671849]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=2017671849]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=1711451926]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=1711451926]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -158,22 +195,22 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="CancelButton" type="Button" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=1811011472]
+[node name="CancelButton" type="Button" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action2" unique_id=1811011472]
 visible = false
 layout_mode = 0
 text = "Cancel"
 
-[node name="action3" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=271693727]
+[node name="action3" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=271693727]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=1197701365]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=1197701365]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=1139512457]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=1139512457]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -182,7 +219,7 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="DestroyButton" type="Button" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=240682742]
+[node name="DestroyButton" type="Button" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action3" unique_id=240682742]
 visible = false
 layout_mode = 0
 offset_left = -152.0
@@ -191,17 +228,17 @@ offset_right = 120.0
 offset_bottom = 141.0
 text = "Destroy (debug)"
 
-[node name="action4" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=2063990230]
+[node name="action4" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=2063990230]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action4" unique_id=1630572407]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action4" unique_id=1630572407]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action4" unique_id=908351276]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action4" unique_id=908351276]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -210,17 +247,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="action5" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=842227372]
+[node name="action5" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=842227372]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action5" unique_id=1987615527]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action5" unique_id=1987615527]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action5" unique_id=1664252344]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action5" unique_id=1664252344]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -229,17 +266,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="action6" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=106751779]
+[node name="action6" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=106751779]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action6" unique_id=1981402690]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action6" unique_id=1981402690]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action6" unique_id=428898124]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action6" unique_id=428898124]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -248,17 +285,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="action7" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=764523043]
+[node name="action7" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=764523043]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action7" unique_id=657563701]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action7" unique_id=657563701]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action7" unique_id=686539614]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action7" unique_id=686539614]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -267,17 +304,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="action8" type="Control" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList" unique_id=885730065]
+[node name="action8" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList" unique_id=885730065]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action8" unique_id=336330308]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action8" unique_id=336330308]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedActions/ActionsList/action8" unique_id=355488190]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedActions/ActionsList/action8" unique_id=355488190]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -286,26 +323,26 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Devider" type="ColorRect" parent="MarginContainer/HBoxContainer" unique_id=251777889]
+[node name="Devider" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer" unique_id=251777889]
 custom_minimum_size = Vector2(2, 0)
 layout_mode = 2
 color = Color(0.9372549, 0.76862746, 0.2901961, 1)
 
-[node name="SelectedDetails" type="GridContainer" parent="MarginContainer/HBoxContainer" unique_id=1137948412]
+[node name="SelectedDetails" type="GridContainer" parent="MarginContainer/Stack/HBoxContainer" unique_id=1137948412]
 layout_mode = 2
 columns = 4
 
-[node name="Unit1" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=162173193]
+[node name="Unit1" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=162173193]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit1" unique_id=1648338081]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit1" unique_id=1648338081]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit1" unique_id=1207344793]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit1" unique_id=1207344793]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -314,17 +351,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit2" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=837110735]
+[node name="Unit2" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=837110735]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit2" unique_id=1087292040]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit2" unique_id=1087292040]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit2" unique_id=610292374]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit2" unique_id=610292374]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -333,17 +370,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit3" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=1930695982]
+[node name="Unit3" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=1930695982]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit3" unique_id=1080397750]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit3" unique_id=1080397750]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit3" unique_id=737396000]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit3" unique_id=737396000]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -352,17 +389,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit4" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=978032022]
+[node name="Unit4" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=978032022]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit4" unique_id=524668245]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit4" unique_id=524668245]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit4" unique_id=247676897]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit4" unique_id=247676897]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -371,17 +408,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit5" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=16182364]
+[node name="Unit5" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=16182364]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit5" unique_id=80896962]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit5" unique_id=80896962]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit5" unique_id=1757977785]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit5" unique_id=1757977785]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -390,17 +427,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit6" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=762753084]
+[node name="Unit6" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=762753084]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit6" unique_id=1689944542]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit6" unique_id=1689944542]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit6" unique_id=934721863]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit6" unique_id=934721863]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -409,17 +446,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit7" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=1578468161]
+[node name="Unit7" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=1578468161]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit7" unique_id=1563537563]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit7" unique_id=1563537563]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit7" unique_id=1247968686]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit7" unique_id=1247968686]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -428,17 +465,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit8" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=859648704]
+[node name="Unit8" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=859648704]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit8" unique_id=1290779133]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit8" unique_id=1290779133]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit8" unique_id=874511519]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit8" unique_id=874511519]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -447,17 +484,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit9" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=2038135662]
+[node name="Unit9" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=2038135662]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit9" unique_id=251631155]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit9" unique_id=251631155]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit9" unique_id=289847006]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit9" unique_id=289847006]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -466,17 +503,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit10" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=2038898213]
+[node name="Unit10" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=2038898213]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit10" unique_id=837021433]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit10" unique_id=837021433]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit10" unique_id=1742140391]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit10" unique_id=1742140391]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -485,17 +522,17 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit11" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=813811896]
+[node name="Unit11" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=813811896]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Empty" type="ColorRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit11" unique_id=583686867]
+[node name="Empty" type="ColorRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit11" unique_id=583686867]
 layout_mode = 0
 offset_right = 72.0
 offset_bottom = 72.0
 color = Color(0.25, 0.22, 0.18, 0.6)
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit11" unique_id=139898581]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit11" unique_id=139898581]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -504,11 +541,11 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Unit12" type="Control" parent="MarginContainer/HBoxContainer/SelectedDetails" unique_id=2100171025]
+[node name="Unit12" type="Control" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails" unique_id=2100171025]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 
-[node name="Frame" type="TextureRect" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit12" unique_id=413540345]
+[node name="Frame" type="TextureRect" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit12" unique_id=413540345]
 texture_filter = 1
 layout_mode = 0
 offset_right = 72.0
@@ -517,7 +554,7 @@ texture = ExtResource("3_2eh3x")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="UnitOverFlowCount" type="Label" parent="MarginContainer/HBoxContainer/SelectedDetails/Unit12" unique_id=1927847646]
+[node name="UnitOverFlowCount" type="Label" parent="MarginContainer/Stack/HBoxContainer/SelectedDetails/Unit12" unique_id=1927847646]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5

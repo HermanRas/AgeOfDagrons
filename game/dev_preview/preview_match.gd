@@ -323,6 +323,23 @@ func _advance_script() -> void:
 			# rather than finding it already up.
 			_game._pause_menu._on_resume_pressed()
 		54:
+			# THE [X] THAT DROPS THE SELECTION (8.8), on a town centre because that is the
+			# tallest panel this map can produce and the button's whole design constraint is
+			# vertical: it has exactly 40 px between the control-group stack and the panel's
+			# own ceiling, and a button pushed under that stack keeps DRAWING and stops
+			# taking taps. Only a live rect can tell those apart.
+			_select_a_town_centre()
+		55:
+			_report_the_clear_button()
+			_shoot("match_clear_button")
+		56:
+			_press_the_clear_button()
+		57:
+			# Shot a step later, like every other press here: the panel repaints off the
+			# next snapshot, so photographing the same frame would show it still open.
+			_report_the_clear_button()
+			_shoot("match_cleared")
+		58:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -332,7 +349,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		55:
+		59:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -837,6 +854,44 @@ func _stand_up_the_dropsites() -> void:
 func _clear_selection() -> void:
 	_game._view.select([] as Array[int])
 	_game._refresh_panel()
+
+
+## Press the [X], through the real Button rather than by calling `_clear_selection()`.
+## The same reasoning as `_press_cancel_build`: an unconnected button leaves a touch
+## player exactly as stuck as they were, and calling the handler proves the handler.
+func _press_the_clear_button() -> void:
+	var button: Button = _game._panel._clear_button
+	if button == null or not _game._panel.visible:
+		push_warning("preview_match: no selection panel to clear")
+		return
+	button.pressed.emit()
+
+
+## THE ONE MEASUREMENT THIS BUTTON NEEDS, and it cannot be taken headlessly.
+##
+## `ClearSelectionButton.SIZE` is 40 because that is exactly what is left between the
+## control-group stack (which ends at y 364) and the selection panel's ceiling on a
+## 648 px canvas. The failure mode if that is ever wrong is silent: the stack is added
+## to the HUD after the panel, so Godot hit-tests it first, and the overlapping strip
+## of the [X] goes on drawing while refusing taps -- the minimap corner-button trap.
+## A screenshot cannot show that and a headless test cannot see the real viewport, so
+## the two rects are printed and compared here.
+func _report_the_clear_button() -> void:
+	var panel: SelectionPanel = _game._panel
+	print("clear button: panel %s visible %s" % [panel.get_global_rect(), panel.visible])
+	if not panel.visible:
+		print("  selection cleared -- panel is down")
+		return
+
+	var x_rect: Rect2 = panel._clear_button.get_global_rect()
+	var groups_rect: Rect2 = _game._groups_hud.get_global_rect()
+	print("  [X] at %s, control groups end at y %.0f" % [x_rect, groups_rect.end.y])
+	if x_rect.intersects(groups_rect):
+		push_warning("preview_match: the [X] is under the control-group stack, "
+				+ "which is hit-tested first -- part of it will be silently dead")
+	var screen := get_viewport().get_visible_rect().size.y
+	if x_rect.position.y < 0.0 or x_rect.end.y > screen:
+		push_warning("preview_match: the [X] is off the screen")
 
 
 ## Where the build grid's slots actually ARE, and whether a tap at each one
