@@ -103,6 +103,12 @@ python tools\gen_player_colour_recipes.py     # regenerate colour variants
 python tools\fix_decay_start.py               # idempotent: pin decay to final pose
 python tools\check_colour_consistency.py [--pixels] [--staged]   # BEFORE staging, see §4
 python tools\stage_atlases.py [--dry-run]     # copy atlases into the game
+python tools\stage_atlases.py --only "vis.wall_stone_gate_age3,vis.wolf"
+#   ^ scope the stage. STAGING CANNOT TELL WHICH SIDE IS NEWER -- it copies on
+#     any byte difference, so when `out` is only partly current (a batch baked
+#     AND staged on the render box reaches this machine through Drive as staged
+#     files, while its `out` does not) a bare run copies stale atlases over the
+#     fresh ones and silently undoes the batch. Name what you rebaked.
 
 # AFTER EVERY BATCH — see §4
 wsl -e bash -c "tr -d '\r' < tools/restore_art_sources.sh | bash -s -- --apply"
@@ -337,6 +343,32 @@ it. The ceiling is RAM — a full Blender scene per slot. On the RENDER BOX 4 is
 safe at any width because each slot gets its own art shard, which removes the
 shared state the race needs rather than scheduling around it.
 
+**ADDING A SECOND ANIM CAN BREAK A RECIPE THAT HAS NOTHING TO DO WITH ANIMATION.**
+`recipe.is_static` is `set(anims) == {"static"}` — one anim named `static`, and
+nothing else. It gates more than clip assignment: `ground_clip` refuses
+armature-deformed meshes only when the recipe is NOT static, because the cut
+happens at rest and the frames render posed. So a recipe that has clipped
+happily for a year starts FAILing the moment you give it a second pose, and the
+error talks about armatures and ground planes rather than about the anim you
+just added. `wall_stone_gate_age3` and `wall_reinforced_gate_age4` both failed
+on the render box this way; they reproduce in 12 s locally at `directions = 1`.
+
+The escape hatch is `render.ground_clip_deformed` (isobake `878eb40`), for a
+mechanism whose body is bolted down and whose clips only swing a part.
+**It asserts something isobake does not check**, so earn it: read the animation's
+channels and confirm the joint carrying the below-ground geometry is constant in
+EVERY clip the recipe names. For the gates, `origin` is identity and constant in
+both `gate_closed` and `gate_open`, and only `door_*`/`lock_*` differ.
+
+Two things worth stealing from how that was settled. **The buried fraction is
+readable straight from the COLLADA** — min/max vertex Z, no bake — and it
+predicted the clipped height to within 3 cm (49.1% of `achae_wall_gate.dae` is
+below zero; 14.99 m → 7.66 m). And **"below the anchor" is not "below ground"**:
+in an isometric projection, ground-level geometry in front of the origin lands
+below the anchor row, so a screen-space test for "does the pose disturb the
+buried region" answers a different question than the one asked. Both gates sit
+~85 px below the anchor after a perfectly good clip.
+
 **Canvas sizing**: interpolate from the nearest calibrated recipe plus margin and
 trust the clip-check (`CLIPPED` in the summary). Do not compute it by hand.
 
@@ -354,9 +386,36 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-27
+## 5. State as of 2026-08-28
 
-> ### ⏳ AN OVERNIGHT RUN IS PREPPED AND NOT YET LAUNCHED — 232 bakes
+> ### ✅ THE OVERNIGHT RUN LANDED, AND A SECOND BATCH FOLLOWED IT
+>
+> The reflection fix is baked across the project — 244 bakes, 2.1 h, master
+> checkout pristine. Every unit, animal, ship, siege engine and wall.
+>
+> **`art_work/out` AND `game/assets/atlases` ARE OUT OF STEP ON THIS
+> WORKSTATION, AND STAGED IS THE NEWER OF THE TWO.** A second batch ran on the
+> box at 22:15 (22 bakes: the waypoint flag and its 8 colours, five gates, the
+> Roman age-3 walls, the wolf, the arrow, two packed engines) and **staged
+> itself there**. `game/assets/atlases` rides Google Drive, so that staging
+> arrived here; `art_work/out` does not ride Drive, so the bake output did not.
+> `out` was then refilled from a memory stick carrying the FIRST run.
+>
+> The result is an inversion the tooling does not expect. As of this writing
+> `out` holds Briton walls and single-pose gates while staged holds the Roman
+> re-point and both poses, and `vis.waypoint_flag` is staged but absent from
+> `out` entirely. **Do not run a bare `stage_atlases.py` until `out` is whole**
+> — it copies on any byte difference and cannot tell which side is newer, so it
+> would quietly undo the batch. Use `--only` (added 2026-08-28) meanwhile.
+>
+> `stale_recipes.py` reads the STAGED atlas, so it reports all of this as up to
+> date and will not warn you. It is right about what the game can see and blind
+> to what `out` holds.
+>
+> **To settle it:** bring the second batch's `out` across from the box, then a
+> bare `stage_atlases.py` is correct again and should report 342/342.
+
+> ### ⏳ SUPERSEDED — the prep notes for the run above, kept for the recipe
 >
 > **The render box was OFF when this was written.** Everything else is ready and
 > verified; the run is waiting on the machine, not on a decision.
