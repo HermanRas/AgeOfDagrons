@@ -669,18 +669,25 @@
     "three, so these are three separate ladders rather than one ladder's rungs.",
     "",
     "  tier         age 1     age 2     age 3     age 4      roster line",
-    "  wood         germ      germ      germ      germ       'wall Lumber'",
+    "  wood         brit      brit      brit      brit       'wall Lumber'",
     "  stone        achae     achae     achae     achae      'wall Stone'",
     "  reinforced   rome      rome      rome      rome       'wall reinforced'",
     "",
     "THE WOOD ROW USED TO READ germ germ brit brit and the project owner flattened",
-    "it on 2026-08-28: 'the wood wall remains the same across ages 1&2, use only",
-    "(age2) wood walls & gate for both'. The two bakes are not a re-skin of one wall,",
-    "they are two different walls -- the germ palisade is dark planks with pointed",
-    "posts, the brit one is a lower wall on a stone footing with playercolour",
-    "banners -- so advancing an age silently replaced walls the player had already",
-    "built with a different structure. The brit bakes stay staged and unused, exactly",
-    "like the Athenian set below.",
+    "it on 2026-08-28. The two bakes are not a re-skin of one wall, they are two",
+    "different walls -- the germ palisade (`_age2`) is dark planks with pointed posts",
+    "and a roofed gatehouse, the brit one (`_age3`) is a lower wall on a stone footing",
+    "with playercolour banners -- so advancing an age silently replaced walls the",
+    "player had already built with a different structure.",
+    "",
+    "THE BRIT WALL IS THE ONE THEY WANTED, and the file suffix is why it took two",
+    "goes: the owner asked for 'only (age2) wood walls & gate for both', meaning the",
+    "wall they had been looking at in age 2 -- which was the brit one, because the",
+    "row above still put brit at age 3 and they had advanced. So `_age2` in that",
+    "sentence is a game age and `_age2` in a filename is the 0 A.D. phase the mesh",
+    "came from, and the two do not have to name the same wall. They now do: the wood",
+    "tier is brit at every age. The germ bakes stay staged and unused, like the",
+    "Athenian set below.",
     "",
     "Ages below a tier's `age_required` still name an atlas because the skin map is",
     "DENSE BY CONTRACT (PLAN.md 2.7.1) and `_validate_skins()` fails the suite on a",
@@ -729,12 +736,12 @@
   ],
 
   "vis.wall_wood_short": {
-    "atlas": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
+    "atlas": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
     "ages": {
-      "1": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
-      "2": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_short_age2.atlas.json"
+      "1": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_short_age3.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -745,12 +752,12 @@
   },
 
   "vis.wall_wood_medium": {
-    "atlas": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
+    "atlas": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
     "ages": {
-      "1": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
-      "2": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_medium_age2.atlas.json"
+      "1": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_medium_age3.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -761,12 +768,12 @@
   },
 
   "vis.wall_wood_long": {
-    "atlas": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
+    "atlas": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
     "ages": {
-      "1": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
-      "2": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_long_age2.atlas.json"
+      "1": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_long_age3.atlas.json"
     },
     "placeholder": {
       "shape": "box",
@@ -777,12 +784,12 @@
   },
 
   "vis.wall_wood_gate": {
-    "atlas": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
+    "atlas": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
     "ages": {
-      "1": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
-      "2": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
-      "3": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json",
-      "4": "res://assets/atlases/vis.wall_wood_gate_age2.atlas.json"
+      "1": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
+      "2": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
+      "3": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json",
+      "4": "res://assets/atlases/vis.wall_wood_gate_age3.atlas.json"
     },
     "placeholder": {
       "shape": "box",
