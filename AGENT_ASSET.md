@@ -369,6 +369,38 @@ below the anchor row, so a screen-space test for "does the pose disturb the
 buried region" answers a different question than the one asked. Both gates sit
 ~85 px below the anchor after a perfectly good clip.
 
+**THE EIGHT COLOURS OF A UNIT ARE ONLY THE SAME UNIT IF THEY SHARE A `variant_seed`.**
+0 A.D. actors carry `<group>`s of interchangeable `<variant>`s — an archer has groups of 14
+and 15 heads and helmets — and the importer picks one per group with `random.randint`.
+isobake seeds that RNG from the RECIPE ID so a rebake reproduces itself (`zeroad.py
+_import_actor`). Correct for a base recipe. **Catastrophic for a colour variant, because
+every colour recipe has a different id by construction**, so all eight rolled their own kit
+— and the base was a ninth independent roll. **14 of the 21 colourable units are affected.**
+
+`gen_player_colour_recipes.py` now emits `variant_seed = "<base id>"` into all 168, so this
+should not recur; a new instance means a hand-written recipe or a generator regression.
+
+**Two things about how this hid for a fortnight are worth more than the fix.**
+
+**It was misdiagnosed TWICE, both times as something more interesting.** First as the
+parallel-slot race, then as isobake lacking variant pinning, with `drop_objects` written
+into `check_colour_consistency.py` as the workaround — **a function that does not exist in
+isobake**. Following that note would have meant building a feature to solve a problem that
+was one line of seeding. The tell that it was neither: a race does not reproduce, and this
+reproduced to the pixel on a sharded 244-bake run. **What settled it was baking ONE actor
+six times changing only the seed** — `vis.fishing_ship`/`.blue`/`.orange` give 6498 opaque
+px, `.red`/`.white`/`.green` give 6551, which is exactly the split the staged atlases showed.
+Change one variable, not the diagnosis.
+
+**Only `vis.fishing_ship` ever reported it, and that is a property of the CHECK, not of the
+defect.** `check_colour_consistency` compares opaque pixel counts, and two helmets can have
+identical pixel counts — so 13 units quietly gave each player different kit while the gate
+read green. The fishing ship was visible only because three of its six variants attach fish
+props, which changes the count by 0.84%. **The check that can see it is each unit's eight
+colours against its own BASE bake**, which is what §4's "the base is not the reference" rule
+had discouraged for a different and once-valid reason. After the fix all 21 units match their
+base to the pixel.
+
 **`directions.table` IS ALWAYS 8 ENTRIES AND TELLS YOU NOTHING ABOUT `directions`.** It is
 the 8 screen facings, each naming a stored frame plus a flip — which is precisely how 1 or
 5 stored directions cover all 8. So `len(atlas["directions"]["table"])` is a constant by
@@ -424,6 +456,15 @@ with WinError 5. Delete contents, not the directory.
 >
 > **To settle it:** bring the second batch's `out` across from the box, then a
 > bare `stage_atlases.py` is correct again and should report 342/342.
+>
+> **STILL TRUE ON THE EVENING OF 2026-08-28, AND WORSE — DO NOT RUN A BARE STAGE HERE.**
+> The 160-bake colour run also stayed on the box and staged itself from there, so
+> `game/assets/atlases` is current at **361/361** while this workstation's `out` holds
+> YESTERDAY's atlases for all 160 colours, plus the pre-box static boar, bear, sheep and
+> cattle. A bare `stage_atlases.py` on the workstation would undo the colour run and P1
+> together. **`out` here is authoritative only for what was baked here.** Use `--only`,
+> and treat the staged directory as the source of truth until someone carries the box's
+> `out` across.
 
 > ### ⏳ SUPERSEDED — the prep notes for the run above, kept for the recipe
 >

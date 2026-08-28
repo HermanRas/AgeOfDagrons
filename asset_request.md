@@ -81,10 +81,27 @@ below it has moved up one. Details in the Delivered log at the bottom.
 to the Delivered log; the game-side entry below records what wiring them actually took and
 the two things it deliberately did not do.
 
-**P5 is the only art item left on this table**, and it blocks nothing. What is actually
-worth doing next is not on it: `vis.fishing_ship`'s `drop_objects` fix, which fails the
-colour gate on every run, and **`LICENCES.md`, which is 186 recipes out of date** — a
-licence obligation under PLAN.md §2.3, and mine.
+**P5 is the only art item left on this table**, and it blocks nothing.
+
+**Both of the things that were "actually next" are now done.** `LICENCES.md` is regenerated
+— 364 licence problems down to 14, and the 14 are the itch.io UI `.png` files, which need
+the owner's licence and author or a decision to leave them out. And **`vis.fishing_ship`
+passes**, which took a re-diagnosis rather than the `drop_objects` fix that was written down:
+
+> **IT WAS THE RNG SEED, AND IT WAS NEVER ONLY THE FISHING SHIP.** isobake seeds the
+> importer's variant RNG from the recipe id so a rebake reproduces itself — right for a base
+> recipe, wrong for a colour variant, because the eight colours have eight different ids by
+> construction. So each rolled its own variant out of the actor's `<group>`s. **14 of the 21
+> colourable units were affected**; the archer has groups of 14 and 15 heads and helmets.
+>
+> Only the fishing ship ever reported it, because `check_colour_consistency` compares pixel
+> counts and two helmets can have identical counts — the ship showed only because three of
+> its six variants attach fish props. **The other 13 were quietly giving each player
+> different kit while the gate read green.**
+>
+> `gen_player_colour_recipes.py` now pins `variant_seed` to the base id. All 168 rebaked.
+> **All 21 units now match their own base bake to the pixel**, which is the check that can
+> actually see this and which the old "the base is not the reference" rule discouraged.
 
 **The "21 still mirrored" caveat was checked and WITHDRAWN — no batch is needed.** All 21
 are `directions = 1`, which the P0 root cause cannot reach.
