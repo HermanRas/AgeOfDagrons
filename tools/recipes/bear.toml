@@ -1,45 +1,81 @@
-# Bear -- `res.bear`, gaia food 300 (PLAN.md 9.2). NEW 2026-08-15: like the
-# cattle, this was in the roster from the start and never had a recipe, so the
-# entity had no art at all.
+# Brown bear -- aggressive wildlife, so it needs an ATTACK clip.
 #
-# Resolved through its template, which also settles which of the three bears:
+# ANIMATED 2026-08-28 (asset_request.md P1 / A.4a), same story as boar.toml.
 #
-#   simulation/templates/gaia/fauna_bear_brown.xml
-#     -> <VisualActor><Actor>fauna/bear_brown.xml</Actor>
+# BEAR_BROWN.XML DECLARES NO ANIMATIONS OF ITS OWN, and reading it will tell
+# you this animal has none. They come from `art/variants/quadraped/
+# base_bear.xml`, which the actor pulls in by <variant file=...>. Resolve
+# through the variant chain -- tools/check_clips.py does -- or you will
+# conclude the bear cannot be animated. The zebu is the same shape.
 #
-# 0 A.D. ships black, brown and polar bears; the roster's `gaia/fauna_bear` is
-# not itself a template name, and `fauna_bear_brown` is the temperate-biome one
-# that matches the rest of our wildlife (deer, boar, wolf, sheep).
+# CLIP SPELLING: `Attack_Melee`, BOTH halves capitalised, which is unique to
+# the bear -- the wolf and boar use `attack_melee` and the zebu
+# `Attack_melee`. Copying a neighbour's [anims] block fails here.
 id      = "vis.bear"
 adapter = "zeroad"
 
 [source]
 actor = "fauna/bear_brown.xml"
-# Its clips come from shared variant files (`quadraped/base_bear.xml` and
-# `base_bear_death.xml`) rather than being declared inline -- the same shape as
-# the cattle, and the path isobake has always resolved.
 
 [render]
-# Unmeasured. The deer/sheep/wolf trio all sit comfortably in 128x128 at roughly
-# 2 m tall; a brown bear is the largest predator in the set and reads bulkier
-# than tall, so this starts one step up and slightly wide. Read the clip report
-# on the first bake rather than trusting the interpolation.
-canvas = [160, 144]
+# 256, up from 160x144. Calibrated on a STANDING animal, this canvas does not hold
+# a moving one: the wolf clipped 67 of 240 frames at 128 and it started with
+# `idle`, not the run. Matched to wolf.toml, which is proven at 240 frames.
+# The 2026-08-28 probe renders this species 46 px wide, so there is room to
+# spare -- but read the batch summary for CLIPPED rather than trusting that,
+# because a 2-frame probe samples the ends of a clip and not its extremes.
+canvas = [256, 256]
 supersample = 4
-# 5 stored, mirrored to 8 -- consistent with every other gaia animal. A bear
-# carries nothing on one side, so mirroring is safe.
 directions = 5
 frame_origin_at = 0.15
 engine = "eevee"
 samples = 24
-
-# STATIC, consistent with the rest of the wildlife, and now by choice rather
-# than by blocker -- PLAN.md 13.2 item 8's quadruped animation-transfer bug is
-# fixed. Animating it is A.4a work and needs a per-clip measured
-# `location_scale`; see sheep.toml for the procedure.
 # The zeroad adapter renders every subject 180 deg from the direction the
-# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip, so removing
+# it would put the animal back to showing its rump.
 yaw_offset_deg = 180.0
+
+# `location_scale` is deliberately ABSENT from every clip below, and that is a
+# measurement rather than an omission. Probed 2026-08-28: all 4 clips render
+# within 10% of each other, so the clip .dae files import at the same scale
+# as the mesh and the default 1.0 is right. A torn mesh is many times larger --
+# see deer.toml, which is the species where this genuinely goes wrong. Do NOT
+# copy deer's 0.0319 here; it would collapse the animation to nothing.
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "Attack_Melee"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+# Pinned to the clip's final pose: without it decay samples position 0.0,
+# which is the death clip's FIRST frame -- the animal still standing -- so
+# the corpse stands up for a frame before falling over again.
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

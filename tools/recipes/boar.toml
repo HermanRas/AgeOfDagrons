@@ -1,12 +1,16 @@
-# Boar, from 0 A.D.'s fauna boar -- aggressive wildlife (ASSET_MISSING.md
-# 2.3).
+# Boar -- aggressive wildlife, so it needs an ATTACK clip and not just
+# idle/walk/die.
 #
-# STATIC, same reasoning as deer.toml: it's a quadruped with its own armature
-# (28 bones), and PLAN.md 13.2 item 8 already measured that 0 A.D.'s
-# quadruped animation clips do not transfer onto their own mesh (skeleton
-# ~31x size mismatch between the clip file and the mesh file). Not
-# re-diagnosed here -- this recipe just doesn't attach a clip, so the bug
-# never triggers.
+# ANIMATED 2026-08-28 (asset_request.md P1 / A.4a). It was static because
+# PLAN.md 13.2 item 8's quadruped transfer bug made clips tear; per-clip
+# `location_scale` fixed that bug, and this recipe kept the workaround --
+# attaching no clip at all -- long after it stopped being needed. Probing
+# showed the boar never needed a correction in the first place.
+#
+# CLIP SPELLING: `attack_melee` lower case but `Death` capitalised, in the
+# same actor. The boar also declares a lower-case `death` and a `feeding`,
+# and NEITHER is an animation -- both are variant names. Four species spell
+# attack four different ways; run tools/check_clips.py after any edit.
 id      = "vis.boar"
 adapter = "zeroad"
 
@@ -14,17 +18,64 @@ adapter = "zeroad"
 actor = "fauna/boar.xml"
 
 [render]
-# `isobake inspect` measures 1.175 x 3.639 x 1.986 m raw -- almost exactly
-# deer.xml's size (2.02 m), so deer.toml's canvas is a safe starting point.
-canvas = [128, 128]
+# 256, up from 128. Calibrated on a STANDING animal, this canvas does not hold
+# a moving one: the wolf clipped 67 of 240 frames at 128 and it started with
+# `idle`, not the run. Matched to wolf.toml, which is proven at 240 frames.
+# The 2026-08-28 probe renders this species 35 px wide, so there is room to
+# spare -- but read the batch summary for CLIPPED rather than trusting that,
+# because a 2-frame probe samples the ends of a clip and not its extremes.
+canvas = [256, 256]
 supersample = 4
 directions = 5
 frame_origin_at = 0.15
 engine = "eevee"
 samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
-# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip, so removing
+# it would put the animal back to showing its rump.
 yaw_offset_deg = 180.0
+
+# `location_scale` is deliberately ABSENT from every clip below, and that is a
+# measurement rather than an omission. Probed 2026-08-28: all 4 clips render
+# within 5% of each other, so the clip .dae files import at the same scale
+# as the mesh and the default 1.0 is right. A torn mesh is many times larger --
+# see deer.toml, which is the species where this genuinely goes wrong. Do NOT
+# copy deer's 0.0319 here; it would collapse the animation to nothing.
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.attack]
+clip = "attack_melee"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+# Pinned to the clip's final pose: without it decay samples position 0.0,
+# which is the death clip's FIRST frame -- the animal still standing -- so
+# the corpse stands up for a frame before falling over again.
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

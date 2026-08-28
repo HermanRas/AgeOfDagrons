@@ -1,35 +1,16 @@
-# Sheep, gaia food (ASSET_MISSING.md 2.3).
+# Sheep -- driven home by a player rather than hunted, so idle and walk are
+# the clips that matter. It has no attack and wants none.
 #
-# Re-pointed 2026-08-15 from `fauna/sheep1.xml` to `fauna/sheep3.xml`, and this
-# FIXES A REAL BUG for free. ASSET_MISSING 2.3 and 4.x both record that
-# vis.sheep picks up the player-colour tint -- "even the sheep picks it up" --
-# and worried about gaia wildlife wearing a faction colour. The cause was simply
-# the wrong actor. 0 A.D.'s own gaia sheep is not sheep1:
+# ANIMATED 2026-08-28 (asset_request.md P1 / A.4a).
 #
-#   simulation/templates/gaia/fauna_sheep.xml
-#     -> <VisualActor><Actor>fauna/sheep3.xml</Actor>
+# SUPERSEDES THIS FILE'S OWN location_scale PROCEDURE. The note that used to
+# sit here derived an ESTIMATE from the actor's 4.040 raw units and told the
+# next person to probe around it. Probing says the sheep needs no correction
+# at all: its three clips agree within 18%. The estimate was never wrong, it
+# was just answering a question this species does not ask.
 #
-# and sheep3's only material is `animal_sheep_no_player_color_a.dds` -- the
-# authors made a de-player-coloured sheep for exactly this reason. Confirmed
-# with `isobake inspect`: sheep1 reports a `playercolor` alpha role, sheep3
-# reports one material and none. So the A.6 shader does not need a gaia
-# exception for sheep after all.
-#
-# Same mesh and same measurements (1.072 x 3.011 x 2.020 m), so the canvas and
-# every other setting carry over untouched.
-#
-# STILL STATIC, but no longer because it has to be. PLAN.md 13.2 item 8's
-# quadruped animation-transfer bug is FIXED (per-clip `location_scale`), so this
-# is now scheduled work rather than a blocker -- see A.4a. sheep3 declares, via
-# its own actor: Idle (sheep_idle_01, sheep_idle_02), Walk (sheep_walk), Run
-# (sheep_run), Death (sheep_death). Our vocabulary (2.5) wants idle / walk /
-# die / decay off those four.
-#
-# To animate: each clip needs its OWN measured `location_scale` (it is not a
-# global constant -- deer_carcass.toml's death clip measured 0.0319). Estimate
-# it as (actor mesh height in raw units) / (clip figure height in raw units) --
-# here the actor is 4.040 raw units -- then probe around that value and look at
-# the render, exactly as deer_carcass.toml documents.
+# CLIP SPELLING: `Death` capitalised. The lower-case `death` the actor also
+# declares is a variant name, not an animation.
 id      = "vis.sheep"
 adapter = "zeroad"
 
@@ -37,17 +18,58 @@ adapter = "zeroad"
 actor = "fauna/sheep3.xml"
 
 [render]
-# `isobake inspect` measures 1.072 x 3.011 x 2.020 m raw -- essentially
-# identical to deer.xml's size, so deer.toml's canvas is a safe start.
-canvas = [128, 128]
+# 256, up from 128. Calibrated on a STANDING animal, this canvas does not hold
+# a moving one: the wolf clipped 67 of 240 frames at 128 and it started with
+# `idle`, not the run. Matched to wolf.toml, which is proven at 240 frames.
+# The 2026-08-28 probe renders this species 33 px wide, so there is room to
+# spare -- but read the batch summary for CLIPPED rather than trusting that,
+# because a 2-frame probe samples the ends of a clip and not its extremes.
+canvas = [256, 256]
 supersample = 4
 directions = 5
 frame_origin_at = 0.15
 engine = "eevee"
 samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
-# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip, so removing
+# it would put the animal back to showing its rump.
 yaw_offset_deg = 180.0
+
+# `location_scale` is deliberately ABSENT from every clip below, and that is a
+# measurement rather than an omission. Probed 2026-08-28: all 3 clips render
+# within 18% of each other, so the clip .dae files import at the same scale
+# as the mesh and the default 1.0 is right. A torn mesh is many times larger --
+# see deer.toml, which is the species where this genuinely goes wrong. Do NOT
+# copy deer's 0.0319 here; it would collapse the animation to nothing.
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+# Pinned to the clip's final pose: without it decay samples position 0.0,
+# which is the death clip's FIRST frame -- the animal still standing -- so
+# the corpse stands up for a frame before falling over again.
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

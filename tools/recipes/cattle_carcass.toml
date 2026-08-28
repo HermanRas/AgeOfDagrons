@@ -1,0 +1,46 @@
+# Cattle carcass -- the depleted-state visual for res.cattle_carcass.
+#
+# ONE OF FIVE ADDED 2026-08-28 (asset_request.md P1). Before these, only
+# vis.deer_carcass existed and the other five resource defs all drew it, so a
+# dead bear looked like a dead deer. Modelled on deer_carcass.toml.
+#
+# NO location_scale, and that is measured. deer_carcass.toml needs 0.0319
+# because the DEER's clips tear; probing all six species on 2026-08-28 showed
+# this one's clips import at the mesh's own scale. Do not copy the deer's
+# figure across -- it would collapse the corpse to nothing.
+id      = "vis.cattle_carcass"
+adapter = "zeroad"
+
+[source]
+actor = "fauna/zebu_wild.xml"
+
+[render]
+# 256 to match the animated bake of the same species: a collapsed quadruped
+# is wider and flatter than the standing pose the old canvas was cut for.
+canvas = [256, 256]
+supersample = 4
+# 5 stored, mirrored to 8, like every other resource-node visual. Mirroring
+# flips which side it fell on, which is accepted -- it still reads as a body.
+directions = 5
+frame_origin_at = 0.15
+engine = "eevee"
+samples = 24
+yaw_offset_deg = 180.0
+
+[anims.carcass]
+clip = "Death"
+# frames = 2, not 1: sample_positions() puts a lone frame at position 0.0,
+# which is the death clip's start -- the animal still standing. Two frames is
+# the cheapest way to also land index 1 on position 1.0, the collapsed pose.
+# Only frame 1 matters.
+frames = 2
+fps = 1
+loop = false
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/zebu_wild.xml"

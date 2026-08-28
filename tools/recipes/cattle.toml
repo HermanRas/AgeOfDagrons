@@ -1,53 +1,87 @@
-# Cattle -- `res.cattle`, gaia food 500, the largest food node in the roster
-# (PLAN.md 9.2). NEW 2026-08-15: this is the first recipe for it; the roster has
-# always listed `gaia/fauna_cattle_zebu` but nothing was ever baked, so the
-# entity had no art at all rather than placeholder art.
+# Cattle (zebu) -- driven home by a player, like the sheep.
 #
-# The actor is NOT `fauna/cow.xml`, which is the obvious guess and the wrong one.
-# Resolved through the template, the way every roster line should be:
+# ANIMATED 2026-08-28 (asset_request.md P1 / A.4a).
 #
-#   simulation/templates/gaia/fauna_cattle_zebu.xml
-#     -> <VisualActor><Actor>fauna/zebu_wild.xml</Actor>
+# FEEDING IS THE POINT OF THIS ONE. The zebu is the ONLY animal in the roster
+# with a real `Feeding` clip -- the one idle that reads as an animal doing
+# something rather than standing still. The boar and the deer also declare a
+# `feeding`, and in both cases it is a VARIANT NAME with no animation behind
+# it; the game side asked for feeding on the strength of that listing, so it
+# is worth saying plainly that cattle is the only place it can be delivered.
 #
-# `_wild` matters: 0 A.D. ships wild and trainable/domesticated variants of every
-# herd animal (fauna_cattle_zebu vs fauna_cattle_zebu_trainable), and ours is a
-# gaia resource node standing on the map, not a corral animal.
+# No attack clip. `Attack_melee` exists on the actor, but a herd animal being
+# walked home is not a combatant here.
+#
+# LIKE THE BEAR, zebu_wild.xml declares no animations itself -- they come
+# from `art/variants/quadraped/base_bovidae_wild.xml`.
+#
+# CLIP SPELLING: `Attack_melee` -- capital A, lower m -- which is a third
+# spelling again, and `Death` over the variant-name `death`.
 id      = "vis.cattle"
 adapter = "zeroad"
 
 [source]
 actor = "fauna/zebu_wild.xml"
-# zebu_wild pulls its clips from a shared variant file rather than declaring
-# them inline (`quadraped/base_bovidae_wild.xml`), which is the path isobake has
-# always resolved -- so the clips are reachable when this is animated.
 
 [render]
-# Not yet measured with `isobake inspect` on zebu_wild itself. The sibling
-# fauna/cow.xml measures 1.732 x 5.643 x 3.375 m on the same bovid skeleton --
-# noticeably bigger than the deer/sheep/wolf trio that share the 128x128 canvas,
-# so this starts one size up. Read the clip report on the first bake; a canvas
-# that is too small is reported rather than silently cropped.
-canvas = [192, 160]
+# 256, up from 192x160. Calibrated on a STANDING animal, this canvas does not hold
+# a moving one: the wolf clipped 67 of 240 frames at 128 and it started with
+# `idle`, not the run. Matched to wolf.toml, which is proven at 240 frames.
+# The 2026-08-28 probe renders this species 54 px wide, so there is room to
+# spare -- but read the batch summary for CLIPPED rather than trusting that,
+# because a 2-frame probe samples the ends of a clip and not its extremes.
+canvas = [256, 256]
 supersample = 4
-# 5 stored, mirrored to 8 -- same as every other gaia animal (deer, boar, sheep,
-# wolf). A grazing bovid is bilaterally symmetric and carries nothing on one
-# side, so mirroring is safe here in a way it is not for an armed unit.
 directions = 5
 frame_origin_at = 0.15
 engine = "eevee"
 samples = 24
-
-# STATIC for now, consistent with the rest of the wildlife. The quadruped
-# animation-transfer blocker (PLAN.md 13.2 item 8) is fixed, so animating this
-# is scheduled work (A.4a) rather than something the pipeline prevents.
-# base_bovidae_wild.xml declares Idle (x4), Walk, Run, Feeding, Attack_melee and
-# Death (x2) -- Feeding is worth knowing about, since a grazing cow is the one
-# idle animation in the set that reads as an animal doing something.
-#
-# Each clip needs its own measured `location_scale`; see sheep.toml.
 # The zeroad adapter renders every subject 180 deg from the direction the
-# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip, so removing
+# it would put the animal back to showing its rump.
 yaw_offset_deg = 180.0
+
+# `location_scale` is deliberately ABSENT from every clip below, and that is a
+# measurement rather than an omission. Probed 2026-08-28: all 5 clips render
+# within 6% of each other, so the clip .dae files import at the same scale
+# as the mesh and the default 1.0 is right. A torn mesh is many times larger --
+# see deer.toml, which is the species where this genuinely goes wrong. Do NOT
+# copy deer's 0.0319 here; it would collapse the animation to nothing.
+
+[anims.idle]
+clip = "Idle"
+frames = 12
+fps = 8
+loop = true
+
+[anims.walk]
+clip = "Walk"
+frames = 12
+fps = 15
+loop = true
+
+[anims.feeding]
+clip = "Feeding"
+frames = 12
+fps = 10
+loop = true
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+
+# Pinned to the clip's final pose: without it decay samples position 0.0,
+# which is the death clip's FIRST frame -- the animal still standing -- so
+# the corpse stands up for a frame before falling over again.
+[anims.decay]
+clip = "Death"
+frames = 2
+fps = 1
+loop = false
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"

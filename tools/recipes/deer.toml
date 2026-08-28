@@ -1,40 +1,87 @@
-# Deer, from 0 A.D.'s fauna deer -- our huntable food node (PLAN.md 6.1a).
+# Deer -- roams, and bolts when hit, so it earns a RUN as well as a walk.
+# It is prey and never attacks, so no attack clip despite the actor having
+# one.
 #
-# STATIC, deliberately, and not what this asset ultimately wants. The actor
-# declares idle/walk/run/death clips and they all transfer by bone name (36 of
-# 37 bones, 97%), but the animation files and the mesh file describe the same
-# skeleton at wildly different sizes, so the location curves are ~30x too large
-# and the mesh tears into spikes. Diagnosis and evidence: PLAN.md 13.2 item 8.
+# ANIMATED 2026-08-28 (asset_request.md P1 / A.4a).
 #
-# A standing stag covers what MVP actually needs -- 6.1a is "deer as a huntable
-# food node", and roaming/fleeing is 6.1b, post-MVP -- so this is not a stopgap
-# for anything on the MVP path except the carcass (see ASSET_MISSING.md 1.1).
+# THIS IS THE SPECIES THE QUADRUPED TRANSFER BUG IS REAL ON, and it is the
+# only one of the six. PLAN.md 13.2 item 8: the clip .dae files import their
+# rigged figure at a wildly different scale from the actor's own mesh, so a
+# transferred pose's bone-location curves overshoot ~31x and the mesh tears.
+#
+# MEASURED 2026-08-28, and it extends what deer_carcass.toml knew. That file
+# measured 0.0319 for the `death` clip alone and warned that each clip would
+# need its own figure. Probed at directions = 1, uncorrected, EVERY deer clip
+# rendered pinned to the canvas edge; with 0.0319 on all four they come back
+# to 63-70 px and agree within 1.36x. So one figure covers the whole deer
+# clip set. It is still specific to THIS species -- the other five measured
+# clean and need no correction at all.
+#
+# CLIP SPELLING: the deer is entirely LOWER CASE -- `idle`, `walk`, `run`,
+# `death`. Its capitalised `Idle` is a variant name, not an animation.
 id      = "vis.deer"
 adapter = "zeroad"
 
 [source]
 actor = "fauna/deer.xml"
-# The importer takes the first variant of each group, so this is the male:
-# antlers on `prop_antler`, and the stag silhouette reads far better at sprite
-# size than a doe's. The antlers are base-actor props, attached permanently by
-# the importer, so they need none of the villager's per-clip prop machinery.
 
 [render]
-# Measured off an unclipped probe render: the standing stag trims to 61 x 74,
-# reaching 63 px above the anchor and 11 below. Small -- 2.02 m of deer against
-# the villager's ~1.9 -- so the canvas is mostly margin for the antlers.
-canvas = [128, 128]
+# 256, up from 128. Calibrated on a STANDING animal, this canvas does not hold
+# a moving one: the wolf clipped 67 of 240 frames at 128 and it started with
+# `idle`, not the run. Matched to wolf.toml, which is proven at 240 frames.
+# The 2026-08-28 probe renders this species 70 px wide, so there is room to
+# spare -- but read the batch summary for CLIPPED rather than trusting that,
+# because a 2-frame probe samples the ends of a clip and not its extremes.
+canvas = [256, 256]
 supersample = 4
-# 5 stored, mirrored to 8. The villager needs 8 only because she holds an axe
-# in one hand; a deer carries nothing and its antlers are symmetric, so there is
-# no handedness for a mirror to get wrong (PLAN.md 2.5).
 directions = 5
 frame_origin_at = 0.15
 engine = "eevee"
 samples = 24
 # The zeroad adapter renders every subject 180 deg from the direction the
-# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+# atlas then labels it; this cancels it. It STAYS ON after the 2026-08-27
+# reflection fix -- index 0 is a fixed point of that sign flip, so removing
+# it would put the animal back to showing its rump.
 yaw_offset_deg = 180.0
+
+[anims.idle]
+clip = "idle"
+frames = 12
+fps = 8
+loop = true
+location_scale = 0.0319
+
+[anims.walk]
+clip = "walk"
+frames = 12
+fps = 15
+loop = true
+location_scale = 0.0319
+
+[anims.run]
+clip = "run"
+frames = 12
+fps = 18
+loop = true
+location_scale = 0.0319
+
+[anims.die]
+clip = "death"
+frames = 10
+fps = 12
+loop = false
+location_scale = 0.0319
+
+# Pinned to the clip's final pose: without it decay samples position 0.0,
+# which is the death clip's FIRST frame -- the animal still standing -- so
+# the corpse stands up for a frame before falling over again.
+[anims.decay]
+clip = "death"
+frames = 2
+fps = 1
+loop = false
+location_scale = 0.0319
+start = 1.0
 
 [attribution]
 source = "0 A.D. (Wildfire Games)"
