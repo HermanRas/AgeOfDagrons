@@ -1802,5 +1802,8 @@ func _refresh_waypoint_flag() -> void:
 	# Index -> Color through the registry, the same two-step `_refresh_panel` above makes:
 	# `SimPlayer.colour` is an INDEX into colours.json (its own note says why the palette
 	# is data and not a Color), and `GameDataRegistry.colour` wraps rather than failing.
+	# The INDEX goes through as well as the Color, since the flag became baked art on
+	# 2026-08-28: the diamond wants a Color and the sprite wants the index that picks
+	# one of the eight bakes, and only the index can produce both.
 	var index := int(_view.skin_for(Net.local_player_id()).get("colour", -1))
-	_waypoint_flag.show_on(tile, GameDataRegistry.colour(index))
+	_waypoint_flag.show_on(tile, GameDataRegistry.colour(index), index)

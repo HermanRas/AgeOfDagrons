@@ -398,6 +398,22 @@ func _build_identity(path: String) -> String:
 	return str(commit) if commit != null else "build:%d" % int(build)
 
 
+## Whether `visual_id` ships a PER-PLAYER BAKE for each palette entry -- the
+## `"colours": true` flag (PLAN.md 2.7.1), which is what makes `atlas_for` append a
+## colour slug to the path it chose. False for an undeclared id, and false is the
+## right answer there: an unknown visual has no bakes of any kind.
+##
+## One place answers this because three already asked it separately, and because a
+## caller that wants to know is asking a real question about the seam rather than
+## about a JSON key -- a unit's eight tints and a building's single untinted bake are
+## a design distinction, not a spelling.
+func declares_colours(visual_id: StringName) -> bool:
+	if not _loaded:
+		load_all()
+	var decl: Variant = _visuals.get(visual_id)
+	return decl is Dictionary and bool(decl.get("colours", false))
+
+
 ## Each entry: {"visual": StringName, "colour": int, "slug": StringName}.
 func missing_colour_atlases() -> Array[Dictionary]:
 	if not _loaded:

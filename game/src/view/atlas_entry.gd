@@ -21,6 +21,18 @@ const FACINGS := ["S", "SW", "W", "NW", "N", "NE", "E", "SE"]
 
 const STATIC_ANIM := &"static"
 
+## The open-gate pose (PLAN.md 5.8, art delivered 2026-08-28). Named here beside
+## `STATIC_ANIM` because those two are the whole clip vocabulary a BUILDING has --
+## a unit's clip names come off the sim's task instead.
+##
+## **`static` IS THE CLOSED POSE, deliberately, and that is the art side's design.**
+## A gate at rest is shut, so an atlas that never got an `open` clip draws exactly
+## what it drew before this existed, and `resolve_anim` falls back for it without
+## anybody wiring a special case. Only two clips were baked of the four 0 A.D.
+## ships: `opening`/`closing` are ~12 frames each at 8 directions, about fourteen
+## extra pages per gate for half a second of swing.
+const OPEN_ANIM := &"open"
+
 var id: StringName = &""
 var is_placeholder := true
 

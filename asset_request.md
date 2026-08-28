@@ -77,14 +77,17 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 **The old P2 — `yaw_offset_deg` — is DELIVERED, STAGED AND VERIFIED**, so everything
 below it has moved up one. Details in the Delivered log at the bottom.
 
-**P0 is now delivered too (2026-08-28), so P1 — the wildlife — is the top open art item,
-and it is half done: the wolf moves, the other five species do not.** P2 and P4 are each
-partly delivered as well; the ready-to-wire entry at the top of Open requests says exactly
-which pieces landed and which did not.
+**P0 IS DELIVERED, STAGED AND WIRED (2026-08-28) and is off this table** — see the
+Delivered log. **P1, the wildlife, is now the top open art item**, and it is one sixth
+done: the wolf moves, the other five species do not. P2 and P4 are each partly delivered;
+the two 2026-08-28 entries at the top of Open requests say which pieces landed, which did
+not, and which are staged but deliberately unwired.
+
+**The "21 still mirrored" caveat was checked and WITHDRAWN — no batch is needed.** All 21
+are `directions = 1`, which the P0 root cause cannot reach. Working in the game-side entry.
 
 | P | Request | The phase it is holding up |
 |---|---|---|
-| ~~**P0**~~ | ~~The unit atlases are MIRRORED~~ | ✅ **DELIVERED AND STAGED 2026-08-28.** Fixed in the pipeline (isobake `e6fc052`: the compass step's sign), not in any recipe — `yaw_offset_deg = 180.0` correctly STAYED ON. 252 atlases now at build 38. **Two caveats, both in the ready-to-wire entry below:** 21 atlases sat out the run and are still mirrored, `vis.town_center` among them; and the four-column check is the only one that can see a mirror |
 | **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round. **The facing re-bake did not touch this**: all eight animals were in it and their facing is now right, but they are still one static rest pose apiece |
 | **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
 | **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
@@ -169,84 +172,105 @@ render 15 m and 11 m tall with the foundation showing.
 five [P5] footprints, and **`vis.fishing_ship`**, which fails the colour-consistency gate
 on six equal-frequency actor variants and needs a `drop_objects` fix rather than a re-bake.
 
-### PROJECT OWNER, 2026-08-27 — GATES NEED AN OPEN AND A CLOSED STATE
+### ✅ GAME SIDE, 2026-08-28 — STAGED, IMPORTED, WIRED. And **do not run that 21-atlas batch.**
 
-**Filed by the project owner.** Wire it to the gate's **locked status**: a locked gate
-draws closed, an unlocked one draws open.
+342/342 read clean here. **The gates and the flag are wired and in the game**; the wolf and
+the arrow needed nothing, exactly as you said. One thing in your delivery note is wrong and
+it is the expensive kind of wrong, so it is first.
 
-**Checked, and the answer is better than "does it exist" — 0 A.D. ships all four states
-and we are already baking the right actors.** Each gate actor declares:
+#### ⛔ THE 21 "STILL MIRRORED" ATLASES ARE NOT MIRRORED. They are `directions = 1`.
+
+Your warning says they *"remain at build 36 (one at 34), all `directions = 8`"*. They are
+all **`stored = 1`, `order = ["S"]`, one frame**. I read the direction block out of every
+one of the 21 rather than inferring it:
 
 ```
-gate_closed    gate_opening    gate_open    gate_closing
+vis.town_center         stored=1  order=S  frames=1   (build 34)
+vis.farm                stored=1  order=S  frames=1
+vis.field_age2/3/4      stored=1  order=S  frames=1
+nine vis.foundation_*   stored=1  order=S  frames=1
+seven vis.rubble_*      stored=1  order=S  frames=1
 ```
 
-**Four of our five gate recipes can have this today, with no re-pointing:**
+**By your own root cause they cannot be affected.** `yaw_deg()` returns
+`ORDER.index(d) * step + yaw_offset_deg`; at `stored = 1` there is exactly one direction,
+its index is 0, the `i` term is 0, and negating the step changes nothing. That is the same
+argument you used to exclude the 89 buildings from the 242 — *"`yaw_deg` returns the offset
+alone at index 0, so no sign can reach them"* — and these 21 are buildings and ground
+pieces of precisely that kind. **`vis.town_center` at build 34 is old, not wrong**, and it
+is the one you offered to look at.
 
-| id | actor | clips | age |
-|---|---|---|---|
-| `vis.wall_gate` | athenians `wall_gate_door.xml` | ✅ all four | 1 |
-| `vis.wall_wood_gate_age2` | germans `wooden_wall_gate.xml` | ✅ all four | 2 |
-| `vis.wall_stone_gate_age3` | achaemenids `wall_gate.xml` | ✅ all four | 3 |
-| `vis.wall_reinforced_gate_age4` | romans `wall_gate.xml` | ✅ all four | 4 |
-| **`vis.wall_wood_gate_age3`** | britons `wall_gate.xml` | ❌ **none at all** | 3 |
+So there is no short batch here and nothing to sweep. **A night of machine time saved, and
+the reason I checked is your own note from yesterday**: before trusting a check, ask what it
+is blind to. This one was reading a build stamp and reporting a chirality claim, and those
+are different facts.
 
-**All five bake STATIC today.** Nothing is broken — the states were simply never asked
-for. The recipes need an `[anims]` block, which is the same shape as any other.
+**If you want a real one to spend that batch on**, `stale_recipes.py --isobake`'s 82 false
+alarms are also not it — your no-op note is right and I am not asking for those either.
 
-**The one that cannot: the age-3 wooden gate.** The Briton actor has no animations of any
-kind — it has `garrisoned`/`ungarrisoned` variants and that is all.
+#### What I wired
 
-> **RESOLVED BY THE OWNER, same day: the whole age-3 wood tier moves to the ROMAN SIEGE
-> WALLS.** Not just the gate — all five pieces, so the tier stays one civ:
->
-> | recipe | was | becomes | mesh |
-> |---|---|---|---|
-> | `wall_wood_short_age3` | `britons/wall_short` | `romans/siege_wall_short` | `siege_small_wood.dae` |
-> | `wall_wood_medium_age3` | `britons/wall_medium` | `romans/siege_wall_medium` | `siege_medium_wood.dae` |
-> | `wall_wood_long_age3` | `britons/wall_long` | `romans/siege_wall_long` | `siege_large_wood.dae` |
-> | `wall_wood_tower_age3` | `britons/wall_tower` | `romans/siege_wall_tower` | `siege_walltwr_wood.dae` |
-> | **`wall_wood_gate_age3`** | `britons/wall_gate` | **`romans/siege_wall_gate`** | `siege_gate_wood.dae` — ✅ **all four clips** |
->
-> **It solves the problem rather than working around it**, and the tier arguably fits
-> better: every mesh in the set is `*_wood` siege works, so an age-3 *wooden* wall is
-> literally that, and age 2 stays a German palisade so the two ages remain distinct.
->
-> **A trap for whoever bakes it: the two civs put the clips in OPPOSITE places.** The
-> Athenian gate keeps them on `wall_gate_door.xml` and props the structure onto it; the
-> Roman keeps them on `siege_wall_gate.xml` while its `siege_wall_gate_door.xml` has
-> none. Picking the `_door` file by analogy gets a static gate.
->
-> **Three things I will confirm by baking rather than assume:** the canvases (all five
-> age-3 figures are copies of the age-2 German ones, and this is different geometry, so
-> expect a `CLIPPED` or two); whether `siege_wall_long`'s `scaf_9x3_wall` scaffolding and
-> `destruction_dust_small` particle import into a normal bake, since they belong to
-> construction/destroyed variant groups; and whether the `siege_walls_*_banners` props
-> carry player colour, which no wall does today and which would be a change either way.
->
-> `Age & Unit Planning.md` and `PLAN.md`'s roster table are updated. **The recipes are
-> not** — all five are in the batch running now, and editing a recipe a slot has not
-> reached would change what it bakes.
+| what | where it landed |
+|---|---|
+| **Gates, `open` + `static`** | `AtlasEntry.OPEN_ANIM`, chosen in `GameView._building_anim()` from `gate_locked` + the def's `is_gate`. **Your proposed shape shipped unchanged** — one atlas per gate, no new ids, no new `visuals.json` entries, and `static` carrying the closed pose is what let it be a five-line change |
+| **`vis.waypoint_flag` + 8 colours** | Declared with `"colours": true`; `WaypointFlag` now draws an `EntityView` over the tile diamond instead of a procedural pole. It waves — 12 frames at 8 fps |
+| **`vis.wolf`** | Nothing to do, as promised. It re-skinned in place and plays `walk` off the same task the placeholder pose ignored |
+| **`vis.projectile_arrow`** | Nothing to do. Re-staged and it foreshortens |
 
-**How I would ship it, for the game side to confirm:** **one atlas per gate with `closed`
-and `open` as clips**, not two visual ids. `EntityView.play_anim` already falls back to
-`static` per clip, so a gate whose atlas lacks `open` degrades to its rest pose instead of
-vanishing — which is exactly what the Briton one needs. Picking a clip by locked status is
-then the same code path as picking `walk` over `idle`.
+#### Three things you should know back
 
-I would bake **all four clips** rather than two. `closed` and `open` are held poses and
-cost one frame each; `opening` and `closing` are ~12 frames and give you the swing for
-free if you ever want it. **Use two and ignore the others** — an unused clip costs page
-space, not complexity.
+**1. `vis.wall_gate` is STAGED AND UNWIRED, and that is correct — do not chase it.** We have
+**three** gate defs, not five: `building.wall_wood_gate` (age 2), `wall_stone_gate` (3),
+`wall_reinforced_gate` (4). Age 1 has no gate at all, because the wood gate is
+`age_required: 2` and the age-1 tier is palisade with no door. So the athenian
+`vis.wall_gate` you baked has no def pointing at it and the wood gate's dense skin map
+sends ages 1 and 2 both to `vis.wall_wood_gate_age2`. It costs a page and nothing else. I
+have left it staged rather than asking you to drop the recipe, because an age-1 gate is a
+plausible thing for the owner to want later and the bake is done.
 
-**Cannot be baked this minute:** the batch running now has all five gate recipes in it, so
-editing them mid-run would change a recipe a slot has not reached yet. It is five small
-recipes and a short re-bake once the box is free.
+**2. Your re-point to the Roman siege works came through and I checked BOTH halves of the
+skin map.** `vis.wall_wood_gate` is the only gate whose four ages are not one file — 1–2
+German, 3–4 Roman — so a test that looked at `def.visual` alone would have read one file
+and missed the other. It walks all four ages of all three gates now: 12 resolutions, every
+one carrying `open` and `static`.
 
-**Where it plugs in once baked (game side):** no new `visuals.json` entries and no new
-ids — the same five atlases gain clips. `SimWall`/whatever carries the locked flag picks
-`closed` or `open`, the way `UnitView` picks a unit's clip. **I will ping you here when the
-bake lands** rather than assume you are watching.
+**3. THE PACKED ENGINES ARE NOT WIRED, and declaring them would have been worse than not.**
+`vis.onager_packed` and `vis.trebuchet_packed` are staged and I have deliberately left them
+out of `visuals.json`. The pack/unpack state machine is 4.13's last open item and **does not
+exist** — `SimUnit` carries no deploy state — so an id declared today would be referenced by
+nothing, resolve for nobody, and read in a year as art that failed to land. They go in with
+the machine, in one commit, and the owner's *"better as a placeholder than not working at
+all"* is exactly why they will be worth having then. **Nothing is lost by waiting and the
+bakes are not stale.**
+
+#### Answers to what you asked
+
+- **`vis.projectile_bolt` pitch — yes please.** It is the last thing standing in P4 and the
+  bolt is the one a ballista fires, so it is on screen as often as the arrow.
+- **`vis.ballista_packed` — low value, do it last.** It only matters once the state machine
+  exists, and it is the one engine with no player colour, so it is the cheapest of the three
+  to be missing.
+- **A base-ahead-of-its-colours check — yes, and I will write it here rather than ask you
+  to.** `stale_colour_atlases()` deliberately compares the eight against each other and
+  ignores the base, which you correctly called a blind spot: eight colours agreeing at 36
+  under a base at 37 look healthy. That is a game-side query in `game_data.gd` beside the
+  other two, and it is mine.
+- **Trees, your three questions:**
+  1. **One tropical palm, not two.** Read `palm_tropic`/`palm_tropical` as the single
+     `palm_tropical.xml`. **The island pool is four.**
+  2. **Agreed — bake nothing called `dead`.** `oak_dead` + `elm_dead` beside the two we
+     already have makes a four-species desert pool, and `vis.tree_dead` /
+     `vis.tree_dead_branchy` are staged and wired today.
+  3. **Skip `palm_cretan_date_patch` entirely.** Do not measure it — a patch is several
+     trunks and a tree owns **one tile**, which is the exact defect that got the teak
+     pulled, and a decorative prop with no resource on it needs a whole placement concept
+     the game does not have. **That makes it 10 new bakes, not 12.**
+
+So the tree batch is: **island** date / fan / tropical palm (3, and the fan and date are the
+two most likely to fit a tile), **forest** beech / birch / fir / oak_new (4), **river**
+banyan / bamboo (2), **desert** oak_dead / elm_dead (2) — with the island's palms listed
+again under river. **Write the recipes when the box is free**; nothing is blocked, and P1's
+five remaining species are still worth more than any of them.
 
 ### PROJECT OWNER, 2026-08-27 — EXTRA TREES, FOUR POOLS, so the game side can vary flora per map
 
@@ -313,358 +337,6 @@ fast (a tree is `directions = 5`, no clips, seconds each), so they would ride to
 run cheaply if wanted. **Say the word and I will write them before the box comes on** —
 otherwise they are a batch of their own.
 
-
-### [P0] THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — and a yaw offset can never fix that — 2026-08-27
-
-> ### ✅✅ CONFIRMED IN A MATCH TOO — all 8 colours, 2026-08-27
->
-> The eight `vis.scout_cavalry.<colour>` bakes landed at `e6fc0526ed97` / 37 and are
-> staged, so the caveat below is now closed: **the colour path carries the fix as well as
-> the base.** `preview_work_facing`'s ring of eight cavalry around a house — which is the
-> owner's original *"scout attacking away from building"* — reads correctly: **the scouts
-> west of the house face right, the ones east of it face left**, both of which were
-> backwards this morning. The owner confirms it independently from play: *"scout is
-> working 100%, we have fixed the rootcause."* Driven match runs clean, no placeholders.
-> **1275 tests, 201,674 assertions, 0 failed.**
->
-> **The overnight batch is cleared to run, and the scope is the 171 `stored = 8` atlases.**
-> Everything below still stands for the other 170.
->
-> ---
->
-> ### ✅ SAMPLE VERIFIED — GAME SIDE, 2026-08-27. Ship the overnight batch.
->
-> `vis.scout_cavalry` at **`e6fc0526ed97` / build 37** (up from `e257ae83d53f` / 36),
-> staged, imported and charted. **All four columns, which is the check that can actually
-> see a mirror:**
->
-> | column | must draw | draws |
-> |---|---|---|
-> | 0 S | face-on | rider's face and shield, horse's head toward the camera ✅ |
-> | 2 W | heading screen LEFT | horse's head LEFT, rump right ✅ **(was backwards)** |
-> | 4 N | from behind | rider's back, horse's hindquarters and tail ✅ |
-> | 6 E | heading screen RIGHT | horse's head RIGHT, rider's sword forward-right ✅ |
->
-> `idle`, `walk` and `attack` all agree. **The 180 was right to keep** — column 0 is still
-> a face, which is what it buys.
->
-> **ONE THING TO CARRY INTO THE BATCH, and it is not a problem with the fix.** The chart
-> reads the **base** bake, and the base is now ahead of its own colours:
->
-> ```
-> vis.scout_cavalry              e6fc0526ed97/37   <- fixed
-> vis.scout_cavalry.<all eight>  e257ae83d53f/36   <- still mirrored
-> ```
->
-> A match draws the **colour** atlas for every owned unit, so **the game still renders a
-> mirrored scout** and will until the colour variants are re-baked. Expect that in the
-> morning and do not read it as the fix having failed — check the build stamp, which the
-> chart now prints on the page.
->
-> **A blind spot worth knowing while the batch runs:** `stale_colour_atlases()` cannot see
-> this. It compares the eight colours *against each other* and deliberately ignores the
-> base, so eight colours that agree at build 36 look healthy even with a base at 37. That
-> is the third check in one day to be blind to the fault in front of it. I can add a
-> base-ahead-of-its-colours check if you want one; say so here and it is a small job.
->
-> ---
->
-> **ASSET AGENT FOUND IT IN THE SOURCE, AND TWO THINGS I ASKED FOR ARE WRONG. Read this
-> block before the request below it.** `directions.py` documents `ORDER_8` as clockwise
-> from screen-down (S, SW, W, NW, …) and then turns the subject by `index * 45°` about
-> +Z, which is **counter-clockwise** — so the render walks the compass the opposite way
-> to the labels it writes. One sign, in the shared render path. That is the same defect
-> I measured off the knight, named from the code instead of inferred from four columns.
->
-> **1. THE 180 STAYS ON. My request to remove it was wrong.** Index 0 is a *fixed point*
-> of the sign flip, so the `yaw_offset_deg = 180.0` on the 82 recipes is what makes
-> column 0 draw a face today; taking it off would put every unit back to showing its
-> back. **So there are no recipe changes at all** — the 242 recipes are already correct
-> as they stand and the whole fix is inside isobake. I had the algebra right and the
-> conclusion backwards: I read "mirror + 180" as two errors to undo, when the 180 is
-> half of the correction.
->
-> **2. THE WALLS ARE NOT A COUNTER-EXAMPLE, and my "the wall atlases are NOT mirrored"
-> claim below is FALSE.** They are `directions.stored = 8` like everything else and go
-> through the same reversed sweep. I checked the file rather than the picture this time,
-> and the reason `preview_walls` passes is that the swap is invisible on that art:
->
-> | pair a mirror swaps | frame sizes | differ as-is | differ when one is flipped |
-> |---|---|---|---|
-> | W ↔ E | 64×336 both | 73.5% | 75% |
-> | SW ↔ SE | 336×300 both | 76.3% | **40.5%** |
-> | NW ↔ NE | 336×300 both | 76.7% | **41.3%** |
->
-> Each swapped pair has the **same silhouette**, so exchanging them changes *which face
-> of the palisade is lit*, never the direction the wall lies. `preview_walls` asks
-> "does it lie along its footprint", and that question cannot see this. So walls will
-> **change slightly** when the fix lands rather than staying byte-identical, and re-running
-> `preview_walls` afterwards is right — not to prove they are unchanged, but to prove the
-> change is the harmless one.
->
-> **3. Which makes the scope bigger than either of us said.** Every atlas with
-> `directions.stored = 8` is affected. Of the 331 staged today:
->
-> | stored | count | what they are |
-> |---|---|---|
-> | 8 | **171** | units, ships, animals, siege, **walls, gates, wall foundations and rubble** |
-> | 5 | 71 | trees, mines, props, bushes — swept wrong too, but they have no front, so nothing shows |
-> | 1 | 89 | buildings — one direction, nothing to reverse |
->
-> **171, not the 82 + 160 of last time.** Worth knowing before the overnight batch is
-> sized, and worth saying that the 71 five-direction ones are only cosmetically moot: if
-> the sign flip also disturbs how five stored yaws mirror into eight facings, they are
-> wrong in a way nobody will ever see — I would not spend machine time on them for this.
->
-> **Everything below this block still stands except the "take the 180 off" half and the
-> claim about walls.** I have left it as written rather than quietly editing it, because
-> the reasoning is how we got here and the two corrections are worth more beside it than
-> in place of it.
-
-> **ASSET SIDE — your points 1 and 2 are exactly right and I had reached both
-> independently. YOUR POINT 3 IS WRONG, AND IT IS THE EXPENSIVE ONE: the 71 must be
-> re-baked. `stored = 5` is where every ANIMAL lives.**
->
-> Your counts are right and our two numbers reconcile — you counted staged atlases, I
-> counted base recipes (43 at 8 + 39 at 5 + 89 at 1 = 171 recipes; your 171 + 71 + 89 =
-> 331 atlases, the difference being the 160 colour variants). **It is the row LABELS that
-> are wrong.** Animals and siege engines are not in your 171; they are in the 71:
->
-> ```
-> directions = 5, all 39 base recipes:
->   ANIMALS      bear boar cattle deer fish sheep wolf deer_carcass
->   SIEGE        ballista onager siege_ram trebuchet_deployed
->   VEHICLES     trade_cart
->   PROJECTILES  projectile_arrow projectile_bolt projectile_stone
->   no front     19 trees / mines / props / bushes / terrain_cliff
-> ```
->
-> The four colourable ones — `onager`, `siege_ram`, `trade_cart`, `trebuchet_deployed` —
-> are the 4 × 8 = 32 that make your 71 and my 39 agree.
->
-> **"They have no front, so nothing shows" is true of 19 of those 39 and false of the
-> other 20.** A 5-direction subject stores `S, SE, E, NE, N` and mirrors the rest, so the
-> reversal swaps E↔W and SE↔SW just as visibly as on a unit — lateral symmetry is what
-> lets five frames cover eight facings, and it does nothing to hide a reflection.
->
-> **Measured on the art you have staged right now, no bake needed.** I cropped `vis.wolf`
-> `static` **E** straight out of the staged page (build 36, frame 2, rect [0,74,39,26]):
-> **the wolf's head points screen LEFT.** E is head-RIGHT. Every animal in the shipped
-> build is facing the wrong way on the diagonals and the E/W poles.
->
-> **And the same crop from a build-37 re-bake: head points screen RIGHT.** ✅ Same frame
-> index, same rect, so it is a true before-and-after. The 5-direction path routes through
-> `ORDER_5` and the mirror table rather than the plain sweep, so I probed it rather than
-> assuming the one sign covered it. It does.
->
-> **This lands squarely on your P1.** You have six species sliding *and* facing wrong; the
-> facing half is fixed by the batch you are about to size, and skipping the 71 would leave
-> every animal mirrored while the units came right.
->
-> **So the scope is: all 82 base recipes (43 at `directions = 8` + 39 at `directions = 5`)
-> plus their 160 colour variants = 242 bakes.** Same set as the last run, which is a
-> pleasant accident and not a coincidence — the 89 buildings are `directions = 1`, and
-> `yaw_deg` returns the offset alone at index 0, so no sign can reach them. Nothing that
-> was excluded last time needs including now.
->
-> **Two probes are baked at build 37 and BOTH ARE NOW STAGED, the wolf against what I
-> said a moment ago.** I wrote that I would keep the wolf out of the roster; then staging
-> the scout colours swept it in, because `stage_atlases.py` copies everything in
-> `art_work/out` and has no per-id filter. My error, and correcting it here rather than
-> leaving the file wrong. **It cannot be undone locally either** — `game/assets/atlases`
-> is gitignored build output and the probe overwrote the build-36 wolf in `out/`, so the
-> old wolf art exists only on the render box now. No loss: the new one is correct where
-> the old one was mirrored. **Ten atlases are at build 37 in your staging: the nine scout
-> files and `vis.wolf`.**
-
-> **ASSET SIDE, 2026-08-27 — THE OWNER ASKED FOR ALL EIGHT SCOUT COLOURS, AND THEY ARE
-> BAKED, CHECKED AND STAGED.** 8/8 `ok` in 53.5 min at `-Parallel 1`, every one
-> 384 frames / 1 page / 72.1% fill.
->
-> - **`check_colour_consistency.py --pixels` reports `ok  vis.scout_cavalry  8 colour
->   bake(s)`** — equal opaque pixel counts across all eight, so no slot dropped geometry.
->   Run before staging, per the rule that exists because three `vis.archer` colours once
->   shipped 5–6% short.
-> - **Facing spot-checked on a COLOUR rather than assumed from the base:**
->   `vis.scout_cavalry.red` `idle` **W** draws the horse's head screen LEFT and **E**
->   screen RIGHT, with the tint landing on shield and cloth. The generated recipes carry
->   the fix through.
-> - **The scout set is now uniformly build 37** — base and all eight colours, one commit
->   id — so `stale_colour_atlases()` and `missing_colour_atlases()` should both be quiet
->   for it again.
-> - The art checkout came through with **0 modified `.dae`**, so no restore was needed.
->
-> **What you will see in-game, and it is the actual test:** the scout is the only
-> correctly-facing unit on the map. Put one beside a swordsman under the same order and
-> they should turn **opposite ways on the diagonals**. A scout that agrees with its
-> neighbours means the fix did not take.
->
-> **Unrelated, found by the same check and NOT mine to fix quietly:** `vis.fishing_ship`
-> blue and orange now report **SHORT, 0.84%, "the pages disagree"** — 48,970 px against
-> 49,384. AGENT_ASSET.md §4 records that pair as a WARN with *identical* pages, so either
-> the pages changed in the render-box re-bake or the check now measures something it did
-> not. It predates today's work and nothing else is short — `vis.archer` and `vis.galley`,
-> the two that were genuinely damaged, both read `ok` now, so the render-box run did
-> repair them. Flagging rather than acting.
-
-
-**Read this before anything else in the file.** It is the reason the facing job that we
-both just signed off is not actually done, and it re-diagnoses the defect we have been
-chasing since 2026-08-22 as a *different kind of error* from the one we thought.
-
-**What's needed:** the 8 stored directions emitted in the OPPOSITE rotational order for
-units, ships, animals and siege engines — the sense the **wall** atlases already use. And
-almost certainly `yaw_offset_deg = 180.0` taken back OFF the 82 recipes in the same edit,
-because that 180 was compensating for a symptom of the mirror. Both halves in one change,
-or the result swaps one wrong answer for another.
-
-**What the owner reported, on the new art:** *"Villager mining away from gold, scout
-attacking away from building."*
-
-**The measurement, and it is not a judgement call.** `preview_facing_chart` draws a stored
-sprite index directly, no simulation involved. On `unit.knight`, walk row:
-
-| stored index | the atlas's own `directions.order` label | what the frame actually draws |
-|---|---|---|
-| 0 | S | **S** — faces the camera ✅ |
-| 2 | W (screen left) | **E** — the horse's head points screen RIGHT ❌ |
-| 4 | N | **N** — shows its back ✅ |
-| 6 | E (screen right) | **W** — the horse's head points screen LEFT ❌ |
-
-**Front and back are right; left and right are swapped.** That is a REFLECTION about the
-N–S axis, and a reflection is not a rotation: **no value of `yaw_offset_deg` can undo it,**
-because rotating a mirrored set only slides the mirror's axis around.
-
-**Why we both missed it, twice.** A reflection has two fixed points, and they are exactly
-the two columns the verification looked at. The agreed check was *"column 0 must show a
-face and column 4 a back"* — both are invariant under a mirror about N–S, so a mirrored
-set passes it perfectly. Nobody put an E/W column beside the geometry that says which way
-it should point.
-
-**The algebra, which fits the whole history including the parts that confused us.** Write
-`D(i)` for the direction stored index `i` really draws:
-
-- **Before the re-bake:** index 0 drew a back and index 2 drew a correct W. That is
-  `D(i) = FACINGS[(4 - i) mod 8]` — a mirror about the **E–W** axis, which presents as
-  *"everything faces backwards"*.
-- **Adding 180° of yaw** rotates every drawn direction by 4: `D(i) = FACINGS[(-i) mod 8]`
-  — a mirror about the **N–S** axis, which presents as *"left and right are swapped"*.
-
-So the front/back symptom we chased was one face of a mirror, and the 180° turned it into
-the other face. **The atlases were never 180° out. They were always mirrored.** I have the
-pre-re-bake chart from 2026-08-23 still on disk and it confirms the first row of that
-table: old `unit.scout_cavalry`, column 2, horse's head to the LEFT — correct W, on art
-whose column 0 was showing a back.
-
-**Why this cannot be fixed on my side, and I did check.** The obvious game-side answer is
-one character in `Iso.sim_facing_to_sprite` — `posmod(7 - facing, 8)` becomes
-`posmod(facing + 1, 8)` and every unit comes right. **It would break the walls**, because
-**the wall atlases are NOT mirrored.** I re-ran `preview_walls` on the current staging:
-both axes render as continuous palisades lying along their own footprints, which is
-exactly the check that a mirror fails (a mirror maps SE↔SW, so a wall would lie across its
-footprint and read as a staircase of stubs). Since the wall atlases and the unit atlases
-disagree with each other, any game-side correction has to be **per atlas** — which is
-`directions_reversed` in `visuals.json` again, built and reverted on the owner's
-instruction on 2026-08-23. I am not rebuilding it.
-
-**That the walls are right is also the most useful thing in this entry for you**, because
-it means the correct behaviour already exists somewhere in the pipeline: whatever the wall
-bakes do, the unit bakes should do. That is a comparison you can make on two files without
-rendering anything.
-
-**How I will verify it, and this time the check is not blind to a mirror:**
-
-1. `preview_facing_chart -- --units unit.swordsman,unit.knight` — and now **column 2 must
-   show the subject facing screen LEFT and column 6 screen RIGHT**, as well as 0 a face and
-   4 a back. All four, or it proves nothing.
-2. `preview_work_facing` (new, added today) — eight cavalry in a ring around a house, every
-   one of them turned at it by the sim. The numbers already pass; the picture is what fails
-   today, and it will pass when the bake does.
-3. `preview_walls` both axes, to confirm the change did not take the walls the other way.
-
-**Nothing in `game/` changes when this lands**, same as last time: the game reads the atlas
-exactly as the file states it.
-
-**Scope:** the same 82 recipes and 160 colour variants, so the same 242 bakes. I am sorry
-to be asking for the batch twice. The one consolation is that the two errors were never
-independent — the yaw work was not wasted so much as aimed at the wrong axis, and this
-entry has the algebra to say what the end state has to be rather than another guess.
-
-
-
-> **ASSET SIDE, 2026-08-27 — CONFIRMED, ROOT-CAUSED AND FIXED IN THE PIPELINE. One
-> probe is baked and staged for you to test. But HALF YOUR SPEC IS WRONG: do NOT take
-> `yaw_offset_deg = 180.0` off anything, and do not touch a single recipe.**
->
-> **Your diagnosis was right and the algebra was right.** It is a reflection. Here is
-> the line it lives on — `isobake/directions.py`, `yaw_deg()`:
->
-> ```python
-> return (ORDER_8.index(direction) * DEGREES_PER_STEP + yaw_offset_deg) % 360.0
-> ```
->
-> `ORDER_8` is `("S","SW","W","NW","N","NE","E","SE")` and its own comment says
-> **clockwise from screen-down**. But a positive yaw about **+Z turns the object
-> counter-clockwise**, and a camera looking down at the ground plane preserves that
-> handedness — so `+i * 45` walked the compass the **opposite way to the labels it was
-> writing into the atlas**. Index 2 was labelled W and rendered E. That is your table,
-> derived from the source rather than from the pictures.
->
-> Fixed by negating the step: isobake **`e6fc052`, build 37**. One sign, one call site.
->
-> **DO NOT REMOVE THE 180, AND THIS IS THE IMPORTANT PART.** `yaw_offset_deg` is a
-> **constant**, so it is untouched by a sign flip on the `i` term — and **index 0 is a
-> fixed point of that flip**. The 180 is exactly what makes column 0 draw a face today.
-> Reversing the order *and* removing it would land all 82 recipes 180° out again, which
-> is the state you were in before yesterday. Both halves of your spec were not
-> independent: the first is the fix, the second would undo it.
->
-> **No recipe changes at all.** The 242 recipes are already correct as they stand. This
-> was never in the recipes.
->
-> **THE PROBE, baked and STAGED — `vis.scout_cavalry` is on disk now, isobake build 37,
-> `dirty=false`.** I checked all four columns rather than the two a mirror is blind to:
->
-> | stored index | label | what the frame draws |
-> |---|---|---|
-> | 0 | S | rider facing the camera ✅ |
-> | 2 | W | **horse's head to screen LEFT** ✅ |
-> | 4 | N | rump and tail, showing its back ✅ |
-> | 6 | E | **horse's head to screen RIGHT** ✅ |
->
-> It is one atlas against a roster still baked the old way, so it is a test article, not
-> a delivery. **`stale_colour_atlases()` will now correctly report `vis.scout_cavalry`** —
-> its base is build 37 and its eight colours are still build 36. That is your uniformity
-> rule working, not a regression.
->
-> **THE WALLS ARE REVERSED TOO, and this corrects the one thing in your entry I would
-> not build on.** `wall_long.toml` is `directions = 8`, and `vis.wall_long.atlas.json`
-> declares a direction block **byte for byte identical** to `vis.knight`'s — same order,
-> all 8 stored, `flip_x` false throughout. There is no per-atlas divergence anywhere in
-> the data, and only one call site computes yaw. The walls pass `preview_walls` because a
-> palisade lying along its own axis **maps onto itself under this reflection** — it is
-> the same blindness as "column 0 a face, column 4 a back", one shape larger. An achiral
-> subject cannot fail a chirality test.
->
-> So, honestly: **a uniform game-side remap would in fact have worked**, because
-> everything is reversed by the same amount and your reason for ruling it out was a false
-> premise. I am still fixing it in the pipeline, for two reasons that outlive this bug —
-> an atlas's `directions.order` should be *true* rather than true-once-corrected, and a
-> game-side remap would become wrong for every correctly-baked atlas from build 37 on.
-> The owner's call against per-atlas correction points the same way.
->
-> **What you should expect when the batch lands:** walls **unchanged** in `preview_walls`.
-> Not "unchanged because I skipped them" — they are in the 82 and they will be re-baked;
-> they are simply invariant. If a wall *changes*, something is wrong and I want to know.
->
-> **Scope, counted off the recipes:** 43 at `directions = 8` + 39 at `directions = 5` =
-> **82 base + 160 colour = 242 bakes**, the same set as last time. **The 89 buildings are
-> `directions = 1` and are NOT affected** — `house`, `barracks`, `town_center` and the
-> rest render once, `yaw_deg` returns the offset alone, and the sign cannot reach them.
-> Their `yaw_offset_deg` keeps doing exactly what it did.
->
-> **Not launched yet** — the owner wants the scout tested first. Say the word and it is
-> one render-box run.
 
 ---
 
@@ -1047,6 +719,9 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-08-28 | **[P0] THE UNIT ATLASES WERE MIRRORED, NOT ROTATED** | ✅ **CLOSED. Fixed in the pipeline, and no recipe changed.** isobake `e6fc052` negated the compass step in `directions.py:yaw_deg()` — `ORDER_8` is documented clockwise from screen-down and `+i * 45°` about +Z walks it counter-clockwise, so the render swept the opposite way to the labels it wrote. 252 atlases at build 38, staged, 342/342 current. **The two corrections that made it cheap are both worth keeping:** `yaw_offset_deg = 180.0` STAYED ON (index 0 is a fixed point of the sign flip, so the half-turn is half the correction, not a second error — I asked for its removal and was wrong), and the walls were mirrored all along rather than being the counter-example I claimed, invisible only because each swapped pair has the same silhouette. **The check that can see it is all four columns**: 0 a face, **2 facing screen LEFT, 6 screen RIGHT**, 4 a back. Two and four are exactly the columns a reflection about N–S leaves alone, which is why a mirrored roster passed twice and cost a 242-atlas re-bake aimed at the wrong axis. **`vis.town_center` and 20 ground pieces sat out the run and that is FINE** — they are `directions = 1`, where the `i` term is 0 and no sign can reach them |
+| 2026-08-28 | **Gates need an open and a closed state** (project owner) | ✅ **DELIVERED AND WIRED.** Five gate atlases carry `open` + `static`; the game picks between them in `GameView._building_anim()` off `gate_locked` and the def's `is_gate`. **The art side's shape shipped unchanged and it is why this was five lines**: one atlas per gate rather than two ids, and **`static` IS the closed pose** — a gate at rest is shut, so an atlas that never got an `open` clip draws what it always drew and `resolve_anim` falls back without a special case. Only two of 0 A.D.'s four states were baked; `opening`/`closing` are ~12 frames at 8 directions for half a second of swing. The age-3 wood tier moved to the **Roman siege works** wholesale (the Briton actor has no clips at all), so `vis.wall_wood_gate`'s skin map is the one gate whose four ages are not one file — 1–2 German, 3–4 Roman — and the test walks all four ages of all three gate defs for that reason. **There are three gate defs, not five**: age 1 has no gate, so the athenian `vis.wall_gate` is staged and unreferenced by design |
+| 2026-08-28 | **`vis.waypoint_flag` + 8 colours** | ✅ **DELIVERED AND WIRED**, and it retired a placeholder that was shipped on purpose. The owner's *"use shape placeholder"* (2026-08-27) got rally points playable the same day without waiting on a bake, and the swap was the contained job `waypoint_flag.gd`'s header promised: one `visuals.json` entry with `"colours": true` and an `EntityView` in place of the procedural pole. **The tile diamond stayed** — a sprite says a flag is near here, and only the diamond says *which tile*, which is the entire content of a rally point. 12 frames at 8 fps, so it waves; `footprint_m`/`height_m` are measured off the frame (15 x 67 px at 22.627 px/m = 0.66 x 2.96 m), and 2.96 lands within 4 cm of the 3.0 m pole the placeholder drew by eye |
 | 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | ⚠️ **DELIVERED AND STAGED, BUT IT DID NOT FIX THE DEFECT — see [P0] above, opened the same afternoon.** The bakes are correct as specified and the pipeline work stands; the specification was wrong. The atlases were never 180° out, they were MIRRORED, and adding a half-turn only moved the mirror's axis: front and back came right and left and right went wrong. Left here rather than deleted because the two entries only make sense together. What follows is what was true of the delivery itself: **staged and checked the same day.** You did **82 recipes rather than the 36 I listed** (`5737e00`, corrected by `96d2318`) and re-baked **242 atlases** — 82 base + 160 colour — four-wide on the render box with a per-slot art checkout, which fixed the parallel-slot race rather than avoiding it. Game side staged all 242 (**331/331 current**), re-imported, and checked it three ways: `preview_facing_chart` on `unit.swordsman` **and** `unit.knight` — column 0 (S) a face, column 4 (N) a back, `idle`/`walk`/`attack` all agreeing; `preview_combat_facing`; and a driven match. **1268 tests, 201,463 assertions, 0 failed** against the new art. **Nothing in `game/` changed** — exactly as promised when the compensation was reverted. Two things worth keeping: excluding the seven `terrain` recipes was right (the offset is a zeroad-adapter correction applied in the shared render path, so patching them would have spun every ground tile), and **the same run closed the stale-colour gap** — all 20 colourable sets now carry 8 colours from one build id, so `stale_colour_atlases()` and `missing_colour_atlases()` are both empty and the short `vis.archer`/`vis.galley` sets are complete. The red-and-yellow-only period is over for good |
 | 2026-08-17 | `vis.onager` nose-up | Fixed both halves: isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe declares `idle`/`attack`/`die`/`decay`. **Retired from the open queue 2026-08-23** — it had sat there as a 43-line resolved entry against this file's own housekeeping rule. Three things worth keeping are already where they belong: `speed: 0` still stands (no walk clip on the rig) and is in `units.json`; the tint dropped to 4.7% of the sprite because the correct seated pose hides the surface the reared arm exposed, and `"colours": true` still separates cleanly, which is noted in `visuals.json`; and the crew do not collapse on death because 0 A.D. gives this arm no `Death` clip at all — recorded in `onager.toml` |
 | 2026-08-08 | `vis.berry_bush` | Found already baked and unwired; became the MVP food node in place of `res.deer` |

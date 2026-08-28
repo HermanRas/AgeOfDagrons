@@ -230,10 +230,39 @@ func test_a_flag_outside_the_tree_still_takes_its_visible_state() -> void:
 	flag.free()
 
 
-func test_the_pole_is_measured_in_metres_and_not_pixels() -> void:
-	# So it is foreshortened by the camera elevation exactly as a sprite's height is,
-	# and stays right if that elevation ever changes.
-	assert_true(WaypointFlag.POLE_METRES > 2.178,
-			"taller than the villager, who measures 2.178 m")
-	assert_true(WaypointFlag.POLE_METRES < Iso.METRES_PER_TILE * 3.0,
+## Replaced `test_the_pole_is_measured_in_metres_and_not_pixels` when the placeholder
+## became baked art (2026-08-28). The old test asserted the procedural pole's height was
+## between a villager and a building; the sprite carries its own height now, so the same
+## property is asserted where it moved to — `visuals.json`, measured off the frame.
+func test_the_flag_is_taller_than_a_villager_and_shorter_than_a_house() -> void:
+	var ph := GameDataRegistry.placeholder_for(WaypointFlag.VISUAL_ID)
+	assert_true(ph.height_m > 2.178, "taller than the villager, who measures 2.178 m")
+	assert_true(ph.height_m < Iso.METRES_PER_TILE * 3.0,
 			"and not so tall it reads as a building")
+
+
+func test_the_flag_resolves_real_art_rather_than_the_magenta_placeholder() -> void:
+	# The trap the old header warned about: pointing at an id before it is DECLARED
+	# resolves to the loud magenta unknown-id placeholder, which is worse than the
+	# procedural marker this replaced. A missing atlas FILE is fine and falls back to
+	# the declared gold mast — an undeclared ID is the failure, and that is what this
+	# separates. `atlas_for` is total, so the check is on `is_placeholder` plus the
+	# declaration, never on null.
+	assert_true(GameDataRegistry.visual_ids().has(WaypointFlag.VISUAL_ID),
+			"vis.waypoint_flag is declared in visuals.json")
+	assert_ne(GameDataRegistry.placeholder_for(WaypointFlag.VISUAL_ID).color,
+			PlaceholderSpec.UNKNOWN_COLOR,
+			"and carries a real placeholder, so a clean checkout draws a mast not magenta")
+	assert_true(GameDataRegistry.declares_colours(WaypointFlag.VISUAL_ID),
+			"and colours: true, or seven players get player 1's flag")
+
+
+func test_the_sprite_takes_the_palette_index_and_the_diamond_takes_the_colour() -> void:
+	# The two halves need different things and only the index can produce both -- no
+	# Color can be turned back into a bake. A flag that took only the Color would draw
+	# the untinted atlas under a correctly coloured diamond.
+	var flag := WaypointFlag.new()
+	flag.show_on(Vector2i(3, 4), Color.BLUE, 5)
+	assert_eq(flag.current_colour(), Color.BLUE)
+	assert_eq(flag._sprite.skin_colour, 5)
+	flag.free()

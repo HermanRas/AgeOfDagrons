@@ -280,7 +280,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 			#
 			# Through the SAME conversion a unit uses, so there is still exactly one
 			# place that knows the sim and sprite tables run opposite ways.
-			view.play_anim(AtlasEntry.STATIC_ANIM,
+			view.play_anim(_building_anim(entry),
 					Iso.sim_facing_to_sprite(int(entry.get("facing", 0))))
 
 		_facts[id] = {
@@ -1170,6 +1170,30 @@ func _names(raw: Variant) -> Array[StringName]:
 		for v in raw:
 			out.append(StringName(v))
 	return out
+
+
+## Which clip a BUILDING draws: `static` for all 31 of them, and `open` for a gate
+## that is standing open (PLAN.md 5.8, art delivered 2026-08-28 -- the project owner
+## asked for it on 2026-08-27, wired to the locked flag).
+##
+## **`is_gate` is read off the DEF, not off the wire, and that is deliberate.**
+## `gate_locked` already rides every building entry and defaults false, so
+## `not gate_locked` alone would ask every house in the game for an `open` clip;
+## `def_id` is on the wire already and the registry answers the rest. 12.1f spent a
+## pass removing per-entity field names from the snapshot and a second gate flag
+## would put one back to say something two facts already say.
+##
+## **COMPLETE only.** A gate under construction resolves to a `vis.foundation_*`
+## atlas, which has no `open` clip -- `resolve_anim` would fall back and draw the
+## right thing anyway, but a half-built gate is not open, it is a building site, and
+## saying so here beats relying on the fallback to mean it.
+func _building_anim(entry: Dictionary) -> StringName:
+	if int(entry.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		return AtlasEntry.STATIC_ANIM
+	if bool(entry.get("gate_locked", false)):
+		return AtlasEntry.STATIC_ANIM
+	var def: BuildingDef = GameDataRegistry.building(StringName(entry.get("def_id", &"")))
+	return AtlasEntry.OPEN_ANIM if def != null and def.is_gate else AtlasEntry.STATIC_ANIM
 
 
 func _visual_id_of(entry: Dictionary) -> StringName:

@@ -294,12 +294,10 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**331 atlases staged.** 82 test files, **1395 tests, 202,513 assertions, all
-passing** — measured 2026-08-27 after 4.8/4.9 and rally points, not quoted. The figures
-before these (1353/80, 1272/78, 1232/76, and 293/71/1163) were each stale within days;
-re-measure rather than trusting this line, it is the first thing in the file to rot. **242 of those 331 were re-staged on
-2026-08-27** from the facing re-bake; the other 89 (buildings, walls, terrain) were already
-correct and are untouched since 2026-08-17.
+**342 atlases staged.** 82 test files, **1417 tests, 202,627 assertions, all passing** —
+measured 2026-08-28 after the art delivery was wired, not quoted. **RE-MEASURE RATHER THAN
+TRUSTING THIS LINE**; it is the first thing in the file to rot, and every previous figure
+here (1395/82, 1353/80, 1272/78, 1232/76, 293/71/1163) was stale within days.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -391,6 +389,35 @@ worth knowing:
   button marked [X] on a panel means the player is finished with the selection, so leaving
   the villager selected with the ghost gone would read as a half press.
 
+**THE 2026-08-28 ART DELIVERY, WIRED THE SAME DAY.** 342 atlases staged, and three of the
+four pieces needed game-side work:
+
+- **GATES HAVE AN OPEN POSE** (owner, 2026-08-27). `AtlasEntry.OPEN_ANIM`, chosen in
+  `GameView._building_anim()`. **`static` IS the closed pose** — the art side's design, and
+  the reason this was five lines: a gate at rest is shut, so an atlas with no `open` clip
+  draws what it always drew and `resolve_anim` falls back with no special case. Two traps
+  worth knowing: **`gate_locked` rides EVERY building entry and defaults false**, so
+  `not gate_locked` alone asks every house in the game for a clip it has not got —
+  `is_gate` comes off the DEF (`def_id` is on the wire, and 12.1f spent a pass *removing*
+  per-entity fields). And **`vis.wall_wood_gate` is the one gate whose four ages are not
+  one file** — 1–2 German palisade, 3–4 Roman siege works, after the art side re-pointed
+  the age-3 tier — so a check that reads `def.visual` alone sees one file and misses the
+  other. There are **three gate defs, not five**: age 1 has no gate, so `vis.wall_gate` is
+  staged and referenced by nothing, deliberately.
+- **THE WAYPOINT FLAG IS BAKED ART NOW** and the procedural pole is gone. One
+  `visuals.json` entry with `"colours": true` buys all eight tints; `WaypointFlag` draws
+  an `EntityView` and **keeps the tile diamond**, because a sprite says a flag is near here
+  and only the diamond says *which tile*. It drives its own frame clock — it is not in
+  `EntityViewPool`, so without `_process` calling `advance()` it would sit on frame 0 and
+  look exactly like a static bake.
+- **The wolf and the arrow needed nothing at all** — re-skinned in place, which is what
+  `EntityView.play_anim`'s per-clip fallback is for. The wolf is 1 of the 6 species in
+  [P1]; the other five are still one static pose apiece and still slide.
+- **`vis.onager_packed` / `vis.trebuchet_packed` are staged and DELIBERATELY NOT DECLARED.**
+  4.13's pack/unpack state machine does not exist — `SimUnit` carries no deploy state — so
+  a declared id would be referenced by nothing and read later as art that failed to land.
+  They go in with the machine, in one commit.
+
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
 **a deer is hunted rather than harvested** — it had to become a `SimUnit` to move at
@@ -439,11 +466,8 @@ Listed here so this file does not read as though the game were finished. Do not
 re-diagnose these from scratch — each already has a diagnosis.
 
 - ~~**Double-tap to clear the selection is unreliable on the phone.**~~ **ANSWERED
-  2026-08-28 by the [X] button** (PLAN.md 8.8) — see the §7 entry below. The gesture
-  itself was never fixed and deliberately still is not: the root is
-  `InputRouter.TAP_SLOP`/`TAP_TIME_MS` and improving the router is a separate job.
-  **The gesture stays**, desktop keeps right-click, and there is now a third route
-  that a thumb cannot miss. Awaiting the owner's device confirmation.
+  2026-08-28 by the [X] button**, §7. `InputRouter.TAP_SLOP`/`TAP_TIME_MS` is still the
+  root and is still a separate job. Awaiting the owner's device confirmation.
 - **A forfeit is announced as an elimination.** The snapshot carries the fact of a
   defeat but no *reason*, so a resign and a disconnect both read "All opponents
   eliminated". Needs a reason field beside `winner_id` and a decision about how many
@@ -497,14 +521,15 @@ plugs in; read the row rather than re-deriving it:
 
 ### Known gaps — do not work around these silently
 
-- ~~**Only `red` and `yellow` colour bakes are trustworthy.**~~ **CLOSED 2026-08-27.**
-  For months 60 colour atlases were *stale, not absent* — present, parsing, drawing,
-  and wrong, because three pipeline defects were fixed mid-roster. The facing re-bake
-  regenerated all 160 colour variants from the corrected recipes, and after staging
-  **all 20 colourable sets carry 8 colours from one build identity**, which is exactly
-  the predicate `stale_colour_atlases()` tests. Both that and `missing_colour_atlases()`
-  are empty. **Develop against any player now**, and keep the two queries — they are how
-  this gets caught next time, and a mid-roster pipeline fix is not a rare event.
+- ~~**Only `red` and `yellow` colour bakes are trustworthy.**~~ **CLOSED 2026-08-27** —
+  **develop against any player.** What is worth keeping is the failure shape: for months
+  60 colour atlases were *stale, not absent* — present, parsing, drawing, and wrong,
+  because pipeline defects were fixed mid-roster. `stale_colour_atlases()` and
+  `missing_colour_atlases()` are the queries that catch it and both are empty; a
+  mid-roster pipeline fix is not a rare event, so keep them. **Their known blind spot:
+  `stale_colour_atlases()` compares the eight colours against each other and ignores the
+  base**, so eight agreeing at build 36 look healthy under a base at 37. A
+  base-ahead-of-its-colours check is game-side work that has not been written.
 - **Walls are DONE** (PLAN.md 5.8, 2026-08-22) — this entry used to say they had
   no defs, and also that all the pieces were "baked and declared in
   `visuals.json`". Half of that was wrong: they were **staged but never
@@ -545,71 +570,33 @@ plugs in; read the row rather than re-deriving it:
   because per-player passability needs a pathfinding grid per player. There is no
   wall-tower def and none is needed: `building.guard_tower` already *is* the wall
   turret, baked from achaemenid/roman `wall_tower`.
-- **THE UNIT ATLASES ARE MIRRORED, NOT ROTATED — still open, and the 180° re-bake did
-  not fix it.** Closed on the morning of 2026-08-27 and re-opened the same afternoon when
-  the owner played it: front and back are now right and **left and right are swapped**.
-  That is a reflection about the N–S axis, and **no `yaw_offset_deg` can undo a
-  reflection** — the half-turn just moved the mirror from the E–W axis (which reads as
-  "faces backwards") to the N–S one. Measured on `unit.knight`: stored index 2, labelled
-  W, draws a horse whose head points screen RIGHT; index 6, labelled E, points LEFT.
-  **Root-caused in isobake's source the same day** (the art agent, from the code rather
-  than from pictures): `directions.py` documents `ORDER_8` as clockwise from screen-down
-  and then turns the subject by `index * 45°` about +Z, which is counter-clockwise. **One
-  sign in the shared render path**, so the render walks the compass the opposite way to
-  the labels it writes.
+- ~~**THE UNIT ATLASES ARE MIRRORED, NOT ROTATED.**~~ **CLOSED 2026-08-28**, in the
+  pipeline and not in any recipe: isobake `e6fc052` negated the compass step in
+  `directions.py:yaw_deg()`. `ORDER_8` is documented clockwise from screen-down and
+  `+i * 45°` about +Z walks it counter-clockwise, so the render swept the opposite way to
+  the labels it was writing. 252 atlases at build 38, staged and verified. **Nothing in
+  `game/` changed**, which was the whole point of the 2026-08-22 revert.
 
-  Two things that follow, and I had both of them wrong first:
-  - **The 180° STAYS ON.** Index 0 is a *fixed point* of the sign flip, so the
-    `yaw_offset_deg = 180.0` added on 2026-08-25 is half the correction, not a second
-    error. I asked for it to be removed; that would put every unit back to showing its
-    back. **No recipe changes at all** — the fix is entirely inside isobake.
-  - **The walls ARE mirrored, and are not the counter-example I claimed.** They are
-    `stored = 8` like everything else. `preview_walls` passes because the swap is
-    *invisible on that art*, not absent: each swapped pair has the same silhouette
-    (W↔E both 64×336; SW↔SE both 336×300, 40% different flipped against 76% as-is), so
-    exchanging them changes which face of the palisade is lit and never the direction it
-    lies. **That check cannot see this fault** — the second time in one day a green check
-    turned out to be blind to the thing it was being trusted for.
-  - So **scope is 171 of the 331 staged atlases**, not 82 + 160: everything `stored = 8`,
-    walls and gates and wall foundations and rubble included. The 71 `stored = 5` ones
-    (trees, mines, props) are swept wrong too and have no front, so nothing shows.
+  Three things outlived it and are the reason this entry is still here at all:
 
-  PLAN.md §13.2 item 10, `asset_request.md` [P0]. **What the re-bake DID close: the
-  stale colour atlases.**
+  - **A reflection is not a rotation, so no `yaw_offset_deg` could ever have fixed it** —
+    a half-turn only slides the mirror's axis from E–W (reads as "faces backwards") to
+    N–S (reads as "left and right swapped"). The 180° on the 82 recipes **stayed on** and
+    is half the correction, because index 0 is a fixed point of the sign flip. I asked
+    for its removal twice and was wrong both times.
+  - **The walls were mirrored all along**, and `preview_walls` passing was not evidence
+    they were not: each swapped pair has the same silhouette, so the swap changes which
+    face of the palisade is lit and never the direction it lies. An achiral subject
+    cannot fail a chirality test.
+  - **`directions = 1` atlases cannot be reached by any of this**, and that is worth
+    knowing because it was nearly forgotten: `yaw_deg` returns the offset alone at index
+    0. The 89 buildings were correctly excluded from the 242, and when 21 ground pieces
+    were later reported as "still mirrored, all `directions = 8`" they turned out to be
+    `stored = 1` to a file — a batch that was proposed and did not need running.
 
-  The rest of this entry is the record of that re-bake, which is still worth reading:
-  - **The recipe half landed 2026-08-25** (`5737e00`, corrected by `96d2318`): all 82
-    zeroad recipes that lacked `yaw_offset_deg` now carry 180.0, and the 160 colour
-    variants were regenerated from them — **wider than the 36 asked for**, the owner's
-    call, so trees, mines, props, foundations and rubble came too. The seven `terrain`
-    recipes are deliberately excluded, because the offset is a *zeroad-adapter*
-    correction applied in the shared render path and patching them would have spun
-    every ground tile half a turn (`terrain_cliff` IS in it — a zeroad recipe despite
-    the name).
-  - **242 bakes staged, 331/331 current**, then `--import`, then the checks:
-    `preview_facing_chart -- --units unit.swordsman,unit.knight` (column 0 a face,
-    column 4 a back, `idle`/`walk`/`attack` agreeing), `preview_combat_facing`, and a
-    driven match. Suite green against the new art.
-  - **The staged art and the bake output are different places and only one of them is
-    a repo.** The bakes were in `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`,
-    the path `tools/isobake.local.toml` declares. When that directory holds *only* the
-    latest batch, `stage_atlases.py` reports the rest as "not baked yet" and exits 1 —
-    **that is not a failure and nothing is lost**: it copies, it never deletes without
-    `--clean`, so the ids it cannot see keep the staged copy they already had.
-
-  **Nothing in `game/` changed when it was staged.** The game reads the atlas exactly as
-  the file states it, so a corrected bake is correct the moment it is on disk; there was
-  no flag to remove and nothing to keep in step. That was the whole point of the revert:
-  **a game-side compensation was written and reverted inside a day** (2026-08-22 → 23)
-  — `directions_reversed` in `visuals.json`, a half-turn offset per atlas. It fixed idle
-  and walk; the owner still saw an attacking unit facing the wrong way and called it:
-  *"undo the reverse changes… i dont want to waist any more time on patching a known
-  root cause."* If you find yourself reaching for `Iso.sim_facing_to_sprite` or a
-  per-atlas offset, this is the paragraph saying somebody already did and it was not
-  wanted. What that exercise established and is worth keeping: the `unit.knight` chart
-  is 180° out **uniformly across idle, walk and attack**, so one recipe line per actor
-  covers the attack clip too. The sim side is fine — `CombatSystem` sets `facing`
-  toward the target every tick it swings.
+  The check that can see this fault is in §3 and is **all four columns**. Two of them
+  cannot see it, which is the §6 row about verifications that are blind to what they are
+  for; this is where that row came from.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
 - **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.
@@ -685,21 +672,25 @@ plugs in; read the row rather than re-deriving it:
    2026-08-27 after buildings gained an attack, since the AI builds towers. Every winner
    held; `easy v normal` went t11366 → t18351. The new table is in BUGS.md, and it is the
    baseline any AI change is measured against.)*
-2. ~~**4.8 garrison**~~ — **DONE 2026-08-27, with 4.9.** It settled §13.2 item 4b (one
-   concept; `act_leave` left as the spare for boarding a transport) and it did **not**
-   close the wall hole it was billed as closing: the owner ruled walls out of garrison, so
-   0 A.D.'s eight turret points per medium wall stay unused by decision. See §7.
 2. **2.4d Archipelago** (§11.6). The content is nearly free — `PREDATORS` is keyed by
    map type and read with `.get(type, {})`, so an unlisted type gets no predators
    without a line of code. The work is that `MapValidator` requires every start to
    reach every other **by land**, which an archipelago fails by definition, so that
    claim has to *change* rather than relax.
-3. **8.8, the [X] clear-selection button** — the only item on the list the owner
-   reported from actually playing the build.
+3. **9.3 `TechSystem`** — the biggest genuinely unstarted phase, and it moved up because
+   ages now cost resources (2026-08-27), which makes the tech tree what the age ladder is
+   *for*. `techs.json` is deliberately empty, the tech-tree page already renders whatever
+   is in it, every AI profile declares `techs: true` against nothing, and the field
+   yield's per-age ladder is standing in for a mill upgrade that does not exist.
 
-Then, in no forced order: 12.2b's real AI decision flow, 9.3 `TechSystem` (where the
-field yield's per-age ladder is standing in for a mill tech), 2.4c the map save format,
-12.1b LAN discovery, 12.3 campaign, and 13.x dragons once the RTS is a game.
+**Closed off this list rather than deleted, because each says something about how the
+list moves:** 4.8 garrison and 4.9 (2026-08-27) did **not** close the wall hole they were
+billed as closing — the owner ruled walls out — and 8.8's [X] button (2026-08-28) turned
+out to be a layout problem rather than a UI one.
+
+Then, in no forced order: 12.2b's real AI decision flow, 4.13's pack/unpack state machine
+(the art is staged and waiting — see §7), 2.4c the map save format, 12.1b LAN discovery,
+12.3 campaign, and 13.x dragons once the RTS is a game.
 
 ---
 

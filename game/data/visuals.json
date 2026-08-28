@@ -1589,5 +1589,35 @@
       "height_m": 0.35,
       "color": "#8d8781"
     }
+  },
+
+  "_note_waypoint_flag": [
+    "A MARKER, NOT AN ENTITY -- the only id in this file that no def points at.",
+    "Nothing spawns it: `WaypointFlag` is one node GameScene owns and moves to",
+    "whichever of your buildings is selected, so it never reaches _visual_id_of()",
+    "and `atlas_for` is called by hand. Declared here anyway because that is the",
+    "seam's whole contract -- filenames live in this file and nowhere else -- and",
+    "because `colours: true` is what buys the eight tints for one boolean.",
+    "",
+    "footprint_m and height_m are MEASURED off the atlas rather than guessed: the",
+    "frame is 15 x 67 px at 22.627 px/m, so 0.66 x 0.66 x 2.96 m. That height is",
+    "within 4 cm of the 3.0 m pole the procedural placeholder drew, which is the",
+    "one number in this entry worth keeping if the art is ever re-cut -- 3 m is",
+    "above a villager's head (2.178) and below a house's eaves, and that band is",
+    "why the marker reads against both.",
+    "",
+    "The placeholder is a MAST, not a diamond, deliberately: WaypointFlag draws",
+    "the tile diamond itself and always has, so a placeholder diamond here would",
+    "double it up and say nothing about the pole being missing."
+  ],
+  "vis.waypoint_flag": {
+    "atlas": "res://assets/atlases/vis.waypoint_flag.atlas.json",
+    "colours": true,
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [0.66, 0.66],
+      "height_m": 2.96,
+      "color": "#e5b842"
+    }
   }
 }

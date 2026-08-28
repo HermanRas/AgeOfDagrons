@@ -695,3 +695,83 @@ func test_a_player_who_is_not_advancing_reports_no_progress() -> void:
 func test_progress_for_an_unknown_player_is_zero_rather_than_a_divide_by_zero() -> void:
 	assert_almost_eq(view.age_progress_of(99), 0.0, 0.001)
 	assert_false(view.is_advancing(99))
+
+
+# ── which clip a building draws (gates gained an `open` pose 2026-08-28) ──────
+
+## `building.wall_wood_gate` and NOT `building.wall_gate`, which is not a def at all --
+## `vis.wall_gate` is the age-1 ATLAS and nothing points at it, because the wood gate is
+## `age_required: 2` and age 1 has no gate. The first version of this fixture used the
+## visual id by mistake, `building()` returned null, and the test correctly reported
+## static: a def id and a visual id are two namespaces (`game_data.gd:visual_for`) and
+## this is what conflating them looks like.
+func _gate_entry(locked: bool, phase: int = SimBuilding.Phase.COMPLETE) -> Dictionary:
+	return {"id": 1, "def_id": &"building.wall_wood_gate", "owner_id": 1,
+			"phase": phase, "gate_locked": locked, "facing": 0}
+
+
+func test_an_open_gate_draws_its_open_clip() -> void:
+	assert_eq(view._building_anim(_gate_entry(false)), AtlasEntry.OPEN_ANIM)
+
+
+func test_a_locked_gate_draws_static_which_IS_the_closed_pose() -> void:
+	# The art side's design, and the reason no atlas needed a `closed` clip: a gate at
+	# rest is shut, so an atlas with only `static` draws the right thing untouched.
+	assert_eq(view._building_anim(_gate_entry(true)), AtlasEntry.STATIC_ANIM)
+
+
+func test_an_ordinary_building_never_asks_for_an_open_clip() -> void:
+	# THE TRAP THIS EXISTS FOR. `gate_locked` rides EVERY building entry and defaults
+	# false, so a check of `not gate_locked` alone would ask every house, tower and town
+	# centre in the game for a clip none of them has. `is_gate` off the def is what
+	# separates them, and nothing else on the wire can.
+	for def_id in [&"building.house", &"building.town_center", &"building.wall_long"]:
+		var entry := _gate_entry(false)
+		entry["def_id"] = def_id
+		assert_eq(view._building_anim(entry), AtlasEntry.STATIC_ANIM, String(def_id))
+
+
+func test_a_gate_under_construction_is_a_building_site_not_an_open_gate() -> void:
+	# It resolves to a `vis.foundation_*` atlas, which has no `open` clip, so
+	# `resolve_anim` would fall back and draw the right thing regardless -- this pins
+	# the intent rather than leaning on that.
+	for phase in [SimBuilding.Phase.FOUNDATION, SimBuilding.Phase.UNDER_CONSTRUCTION]:
+		assert_eq(view._building_anim(_gate_entry(false, phase)), AtlasEntry.STATIC_ANIM)
+
+
+func test_an_unknown_def_falls_back_rather_than_erroring() -> void:
+	# A remembered entity or a def renamed in one file and not the other. `building()`
+	# returns null and the seam's rule is that nothing blocks on missing data.
+	var entry := _gate_entry(false)
+	entry["def_id"] = &"building.does_not_exist"
+	assert_eq(view._building_anim(entry), AtlasEntry.STATIC_ANIM)
+
+
+func test_every_gate_def_actually_has_the_clip_its_atlas_is_asked_for() -> void:
+	# Ties the DATA to the ART: `is_gate` in buildings.json against an `open` clip in
+	# the staged atlas. Skipped entirely when the art pack is not mounted, because a
+	# clean checkout has no atlases at all (they are gitignored build output) and
+	# every id would resolve to a placeholder.
+	# EVERY AGE, not just the base atlas. The wood gate is the reason: its skin map
+	# points ages 1-2 at the German palisade gate and 3-4 at the Roman siege one, so a
+	# check of `def.visual` alone would look at one of the two files and miss the other
+	# entirely. Buildings carry the age (PLAN.md 2.7.1), and a gate is a building.
+	var gates := 0
+	var checked := 0
+	for def_id in GameDataRegistry.building_ids():
+		var def: BuildingDef = GameDataRegistry.building(def_id)
+		if def == null or not def.is_gate:
+			continue
+		gates += 1
+		for age in [1, 2, 3, 4]:
+			var entry: AtlasEntry = GameDataRegistry.atlas_for(def.visual, age)
+			if entry.is_placeholder:
+				continue
+			checked += 1
+			assert_true(entry.has_anim(AtlasEntry.OPEN_ANIM),
+					"%s age %d (%s) has an open clip" % [def_id, age, def.visual])
+			assert_true(entry.has_anim(AtlasEntry.STATIC_ANIM),
+					"%s age %d keeps static as its closed pose" % [def_id, age])
+	assert_eq(gates, 3, "three gate defs -- one per wall tier above age 1")
+	if checked > 0:
+		assert_eq(checked, 12, "and all four ages of each were reached")
