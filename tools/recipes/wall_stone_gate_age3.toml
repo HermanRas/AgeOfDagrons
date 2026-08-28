@@ -28,6 +28,22 @@ supersample = 4
 directions = 8
 frame_origin_at = 0.15
 ground_clip = true
+# THIS GATE IS 49% BURIED AND ALL OF IT IS SKINNED, so the ordinary ground_clip
+# refuses it: the cut happens at rest and the frames render posed, which on a
+# character would expose the cut. Measured 2026-08-28, after the render box
+# FAILed this recipe the moment `open` was added below (adding a second anim
+# flips recipe.is_static false, which is what switches the guard on -- the
+# recipe baked fine while `static` was its only anim):
+#
+#   achae_wall_gate.dae      49.1% of the mesh sits below z = 0
+#   without the clip         subject height 14.99 m, and the frame CLIPS the canvas
+#   gate_closed / gate_open  animate door_left, door_right, lock_left, lock_right
+#   the `origin` joint       identity, and CONSTANT across both clips
+#
+# The buried skirt hangs off `origin`, which never moves, so no pose can expose
+# the cut. That is what ground_clip_deformed asserts. Re-check the channels if
+# this recipe ever names a clip other than these two.
+ground_clip_deformed = true
 engine = "eevee"
 samples = 32
 yaw_offset_deg = 180.0

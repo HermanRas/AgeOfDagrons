@@ -28,6 +28,19 @@ APK. Re-run this after any rebake.
     python tools/stage_atlases.py            # copy, skipping unchanged files
     python tools/stage_atlases.py --clean     # empty the destination first
     python tools/stage_atlases.py --dry-run   # report what would happen
+    python tools/stage_atlases.py --only wall_stone_gate,wall_reinforced_gate
+
+`--only` exists because STAGED IS NOT ALWAYS OLDER THAN `out`, and a full run
+assumes it is. Staging copies whenever the bytes differ; it has no idea which
+side is newer. On 2026-08-28 the render box baked a batch and staged it, and
+`game/assets/atlases` reached this workstation through Google Drive while the
+bake output did not -- so staged held the new gates and walls while `out` still
+held the previous run. A full stage would have copied the OLD atlases over the
+new ones and quietly undone the batch: three gates back to a single closed pose,
+two walls back to the Briton actor they were re-pointed away from.
+
+So when `out` is only partly current, name what you actually rebaked. A plain
+run is right again once `out` is whole.
 """
 
 from __future__ import annotations
@@ -113,6 +126,10 @@ def main() -> int:
                         help="delete the destination directory first")
     parser.add_argument("--dry-run", action="store_true",
                         help="report without copying")
+    parser.add_argument("--only", metavar="LIST",
+                        help="comma-separated substrings; stage only the asset "
+                             "ids that match one of them. Use when `out` is "
+                             "only partly current -- see the module docstring")
     args = parser.parse_args()
 
     root = out_root()
@@ -128,6 +145,20 @@ def main() -> int:
     if not ids:
         print("error: no recipes found", file=sys.stderr)
         return 1
+
+    if args.only:
+        wanted = [s.strip() for s in args.only.split(",") if s.strip()]
+        ids = [i for i in ids if any(w in i for w in wanted)]
+        if not ids:
+            print(f"error: --only {args.only!r} matched none of the "
+                  f"declared recipe ids", file=sys.stderr)
+            return 1
+        print(f"--only {args.only}: staging {len(ids)} of the declared atlases")
+        # --clean would delete every atlas the filter excludes, which is the
+        # opposite of what a scoped stage is for.
+        if args.clean:
+            print("error: --clean cannot be combined with --only", file=sys.stderr)
+            return 1
 
     if args.clean and DEST.exists() and not args.dry_run:
         shutil.rmtree(DEST)
@@ -168,6 +199,14 @@ def main() -> int:
             print(f"    - {m}")
         print("\n  RESULT: INCOMPLETE -- the game falls back to placeholders for these")
         return 1
+
+    if args.only:
+        # Not an all-clear: this says nothing about the atlases the filter
+        # excluded, and the whole point of --only is that some of them are
+        # in a state a full run would get wrong.
+        print(f"  RESULT: OK for the {len(ids)} atlas(es) --only selected; "
+              f"the rest were not examined")
+        return 0
 
     print("  RESULT: OK -- every declared atlas is staged")
     return 0
