@@ -88,7 +88,7 @@ are `directions = 1`, which the P0 root cause cannot reach. Working in the game-
 
 | P | Request | The phase it is holding up |
 |---|---|---|
-| **P1** | **Animate the wildlife** + **five carcass bakes** | **Phase 6 closed on 2026-08-23 with six species moving and every one of them sliding.** This is no longer a nicety — it is the most visible defect in the shipped build, and it is the only art item where the *game* has already gone ahead of the art rather than the other way round. **The facing re-bake did not touch this**: all eight animals were in it and their facing is now right, but they are still one static rest pose apiece |
+| ~~**P1**~~ | ~~Animate the wildlife + five carcass bakes~~ | ✅ **BAKED AND STAGED 2026-08-28**, 10/10 in 2.2 min on the render box, master checkout pristine. Six species move and every carcass is its own animal, so a dead bear stops drawing as a dead deer. **Awaiting wiring only** — the five movement bakes need none, the five carcasses need a `visuals.json` entry and one line each in `resources.json`. Details in the ready-to-wire entry at the top of Open requests |
 | **P2** | Packed siege states | Closes the **last open item in 4.13**. Cheap to wire once baked |
 | **P3** | A `vis.tree_teak` replacement, ideally a **palm** | Rose in priority: it is wanted for **2.4d Archipelago**, which is third on the code list. Riverbanks want it either way |
 | **P4** | Arrow and bolt pitch | **Confirmed still open on 2026-08-27** — the re-bake gave the projectiles their yaw line but not a pitch, and a fresh 8× crop shows the arrow standing vertically in flight exactly as before. Cosmetic; 4.13 is otherwise done |
@@ -131,6 +131,11 @@ atlases did not come with it.
 | `vis.onager_packed` | `idle` `walk` — 120 frames | it ANIMATES, so **no `speed: 0`**. Colour UNMEASURED — treat as `"colours": false` |
 | `vis.trebuchet_packed` | `static` | still static, crew still a totem pole. Colour UNMEASURED — `"colours": false` |
 | `vis.projectile_arrow` | `static` | pitch landed (`pitch_offset_deg = 115.0`); it foreshortens to a dot head-on. **`vis.projectile_bolt` is NOT done** |
+| **`vis.boar`**, **`vis.bear`** | `idle` `walk` `attack` `die` `decay` — 240 frames | [P1]. **No wiring change at all** — they re-skin in place |
+| **`vis.deer`** | `idle` `walk` **`run`** `die` `decay` — 240 frames | [P1]. It bolts when hit, so the run earns its place |
+| **`vis.sheep`** | `idle` `walk` `die` `decay` — 180 frames | [P1] |
+| **`vis.cattle`** | `idle` `walk` **`feeding`** `die` `decay` — 240 frames | [P1]. **Cattle is the ONLY animal that can have feeding** — boar and deer appear to declare it but it is a variant name with no animation behind it |
+| **`vis.wolf_carcass`**, **`_boar`**, **`_bear`**, **`_sheep`**, **`_cattle`** | `carcass` — 10 frames | [P1]. **Frame 1 is the collapsed pose, not frame 0** — frame 0 is the death clip's start, the animal still standing. Each needs a `visuals.json` entry and one line in `resources.json` off `vis.deer_carcass` |
 
 **On the gates specifically — your proposed shape is what shipped.** One atlas per gate,
 `closed` and `open` as clips, no new ids and no new `visuals.json` entries. **`static` IS
@@ -149,17 +154,22 @@ two subjects that needed it. Safe to override because `origin`, the joint the bu
 hangs off, is identity and constant in both poses; only the doors move. Without it they
 render 15 m and 11 m tall with the foundation showing.
 
-> **⚠️ 21 STAGED ATLASES ARE STILL MIRRORED, and they are not in the 252.** They sat out
-> the re-bake and remain at build 36 (one at 34), all `directions = 8`:
+> **~~⚠️ 21 STAGED ATLASES ARE STILL MIRRORED~~ — WITHDRAWN, I WAS WRONG. The game side
+> caught it and they are right: all 21 are `directions = 1`, which the P0 sign flip cannot
+> reach. Nothing needs re-baking.**
 >
-> `vis.farm`, `vis.field_age2/3/4`, nine `vis.foundation_*`, seven `vis.rubble_*`,
-> and **`vis.town_center`**.
+> They are `vis.farm`, `vis.field_age2/3/4`, nine `vis.foundation_*`, seven `vis.rubble_*`
+> and `vis.town_center`, and they really are at build 36 (one at 34) — but that is because
+> a one-direction recipe was never in the batch's scope, not because it was missed.
 >
-> Most are ground pieces with no handedness, so the reflection is invisible on them the way
-> it was on the walls — an achiral subject cannot fail a chirality test. **`vis.town_center`
-> is the one I would actually look at**, and it is the oldest of the set. Say the word and
-> they are a short batch; I did not sweep them in unasked because they are cheap and I would
-> rather you saw the list.
+> **How I got it wrong, because the method is the reusable part.** I read the stored
+> direction count as `len(atlas["directions"]["table"])`. **That table ALWAYS has 8
+> entries** — it is the 8 screen facings, each naming a stored frame plus a flip, which is
+> exactly how 1 and 5 stored directions cover all 8. So the field I measured is a constant
+> by design and can never distinguish 1 from 5 from 8. **Read `[render].directions` in the
+> recipe**, or count DISTINCT frame indices in the table. Same shape of mistake as the
+> screen-space test in the gate entry above: a number that looked like evidence and was
+> structurally incapable of being any.
 
 > **NOTE FOR WHOEVER SIZES THE NEXT RENDER-BOX RUN:** `stale_recipes.py --isobake` now
 > reports **82 recipes pipeline-stale**, and that is a FALSE ALARM. isobake moved 38 → 39

@@ -369,6 +369,16 @@ below the anchor row, so a screen-space test for "does the pose disturb the
 buried region" answers a different question than the one asked. Both gates sit
 ~85 px below the anchor after a perfectly good clip.
 
+**`directions.table` IS ALWAYS 8 ENTRIES AND TELLS YOU NOTHING ABOUT `directions`.** It is
+the 8 screen facings, each naming a stored frame plus a flip — which is precisely how 1 or
+5 stored directions cover all 8. So `len(atlas["directions"]["table"])` is a constant by
+design, and reading it as the stored count says "8" for every atlas in the project. It cost
+a false alarm on 2026-08-28: 21 one-direction atlases reported as unfixed 8-direction art,
+in a file the game side then had to correct. **Read `[render].directions` from the recipe,
+or count DISTINCT frame indices in the table.** The general lesson is the one the gate
+entry above teaches too — before quoting a number as evidence, check it is capable of
+varying with the thing you are claiming.
+
 **Canvas sizing**: interpolate from the nearest calibrated recipe plus margin and
 trust the clip-check (`CLIPPED` in the summary). Do not compute it by hand.
 
