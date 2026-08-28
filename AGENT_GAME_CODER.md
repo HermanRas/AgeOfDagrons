@@ -279,6 +279,9 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A comment that says a bound cannot be exceeded, when it bounds a DELTA and not a RESULT** | `SeparationSystem.MAX_PUSH` is 120 of a 256 sub-tile and its note argues a push "can never carry a unit out of the tile MovementSystem just placed it in". True only from the tile's centre: from sub-position 250 a +120 push crosses the boundary, and the code under that comment already calls `spatial.move()` when it does. Three systems trusted the comment and retired any worker that lost adjacency, which is the owner's 2026-08-28 "pushed villagers go idle". |
 | **A verification that cannot see the fault it is for** | The facing check was "column 0 a face, column 4 a back" — **the two columns a mirror about N–S leaves alone**. A mirrored roster passed it twice and a 242-atlas re-bake was spent on the wrong diagnosis. Before trusting any check, ask which failures it is *blind* to; a green check on a fault it cannot express is worse than no check, because it ends the investigation. |
 | **A facing that is drawn wrong is not necessarily set wrong** | Two different faults, two different owners. `preview_work_facing` prints the sim's `facing` beside what `SimUnit.facing_toward` would pick now: **STALE means nothing turned the unit** (a sim gap — until 2026-08-27 only `MovementSystem` and `CombatSystem` ever wrote `facing`, so gathering and building never turned anybody), while numbers that agree with a picture that disagrees is the atlas. Settle which one before writing anything. |
+| **A CLIP ONLY ONE SPECIES HAS, sent by the sim for all of them** | The sim may not ask which clips were baked, so `AnimationSystem` sends `run` for every bolting animal and `feeding` for every settled one — and only the deer has a run, only the cattle a feed. **The generic fallback chain is `static` → `idle`, and for `run` that is the WRONG answer**: five of the six would stand perfectly still while sliding at flee speed, which is worse than the walk they played before the clip existed. `AtlasEntry._ANIM_ALIAS` (`run` → `walk`, `feeding` → `idle`) is tried ahead of that chain. **The test for whether an alias belongs there: it must fall back to a clip every subject HAS** — a rewording of the request, not a second guess at it. |
+| **The projection inversion RETURNS A NEGATIVE HEIGHT for anything lying down** | visuals.json's documented `height = (anchor.y - rect.w / 4) / 19.596` assumes the sprite's top is the subject's top. A carcass lies below its own anchor, so four of the five 2026-08-28 bakes derive a negative height and `vis.deer_carcass` derives 2.47 m — taller than the standing deer. **No choice of frame fixes it; the failure is structural.** The five ship as the deer carcass's own proportions scaled off each animal's measured live figures, and `asset_request.md` [P5] carries the ask for real ones. |
+| **A staged tree is not a declared tree, and this file has claimed otherwise** | `vis.tree_cherry`, `_cypress`, `_cypress_tall`, `_snow_pine`, `_dead` and `_dead_branchy` are staged and referenced by nothing — an earlier session told the art side that the two dead ones were "staged and wired today" and they were not. They predate the per-map pools and carry no pool assignment, so they were left out of them deliberately rather than missed. Same class as the walls in §7: **only a def or a pool reaching for an id proves it is wired.** |
 | **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
 | **Touch does NOT take keyboard focus, so every new text field needs `TouchLineEdit`** | `emulate_mouse_from_touch = false` ([project.godot:35](game/project.godot#L35)) is *required* — `CameraRig` handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch arriving as both pans twice per thumb. Godot still routes raw touches to controls, but the touch path takes no focus and `LineEdit` asks for the keyboard on focus-enter. Measured on 4.7.1: focus after a screen touch = false, after a mouse click = true. Flipping the setting fixes typing by breaking the camera. |
 | **A `Control` laid over the minimap swallows every tap** | The four corner buttons were a `PRESET_FULL_RECT` grid added *over* it and Godot hit-tested them first — minimap click-to-move and double-tap-to-centre were both dead while looking implemented. Check hit-test order before concluding a minimap feature is missing. |
@@ -297,10 +300,11 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**342 atlases staged.** 82 test files, **1417 tests, 202,627 assertions, all passing** —
-measured 2026-08-28 after the art delivery was wired, not quoted. **RE-MEASURE RATHER THAN
-TRUSTING THIS LINE**; it is the first thing in the file to rot, and every previous figure
-here (1395/82, 1353/80, 1272/78, 1232/76, 293/71/1163) was stale within days.
+**361 atlases staged.** 82 test files, **1452 tests, 204,176 assertions, all passing** —
+measured 2026-08-28 after the SECOND art delivery of that day was wired, not quoted.
+**RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
+and every previous figure here (1417/82, 1395/82, 1353/80, 1272/78, 1232/76, 293/71/1163)
+was stale within days — the 342 in the line this replaced lasted about six hours.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -392,8 +396,36 @@ worth knowing:
   button marked [X] on a panel means the player is finished with the selection, so leaving
   the villager selected with the ghost gone would read as a half press.
 
-**THE 2026-08-28 ART DELIVERY, WIRED THE SAME DAY.** 342 atlases staged, and three of the
-four pieces needed game-side work:
+**THE SECOND 2026-08-28 DELIVERY ([P1]–[P4]), WIRED THE SAME DAY.** 361 atlases staged.
+Most of it was one-line data, and the two places it was not are the ones worth reading:
+
+- **TREE SPECIES ARE NOW PER MAP TYPE**, which is the project owner's own assignment —
+  recorded on **line 1 of each `tools/recipes/tree_*.toml`** ("`-- forest pool`"), not
+  derived from how a tree looks, and not to be re-derived. `visuals.json` grew
+  `variant_pools` beside `variants`: island five palms, forest beech/birch/fir/oak_new,
+  river bamboo+palm_date, desert oak_dead+elm_dead. Four things worth knowing:
+  **`MapGenerator.pool_name()` is the one place the spelling is decided** and
+  `pool_names()` is what `_validate_variant_pools` checks against, so a pool keyed
+  "islands" fails the suite instead of silently drawing the general mix forever — the
+  failure a data-driven lookup gives you for free is *no* failure at all. **The pool comes
+  from `md.meta.type`, NOT `cfg.map_type`**: the latter records what the lobby asked for
+  and what it usually asked for is Random, which resolves inside the generator. **An empty
+  pool is a real and common state** — the fixed debug map, every preview, every test — and
+  falls back to the oak/elm/toona `variants`, which is why those stay declared there.
+  **Nothing rides the wire**: the tile seed was already a pure function of position, so the
+  pool only decides which list it indexes into, and two clients still agree for free.
+- **A CLIP ONLY ONE SPECIES HAS** — see the §6 row. `run` (deer only) and `feeding`
+  (cattle only) are sent by `AnimationSystem` for every animal, and `AtlasEntry._ANIM_ALIAS`
+  resolves them for the five that have neither. The alternative was a sim asking which
+  clips got baked, which it may not do.
+- **The five carcasses stopped being deer**: five `visuals.json` entries and five one-line
+  changes in `resources.json`. Each atlas is one `carcass` clip of **two** frames at 1 fps
+  and does not loop — frame 0 is the animal still standing, frame 1 the body — so a fresh
+  corpse falls once and holds. **`vis.tree_banyan` is declared and in NO pool**, awaiting
+  the owner's judgement from `dev_preview/preview_banyan.tscn`.
+
+**THE FIRST 2026-08-28 ART DELIVERY, WIRED THE SAME DAY.** 342 atlases staged, and three of
+the four pieces needed game-side work:
 
 - **GATES HAVE AN OPEN POSE** (owner, 2026-08-27). `AtlasEntry.OPEN_ANIM`, chosen in
   `GameView._building_anim()`. **`static` IS the closed pose** — the art side's design, and
@@ -414,12 +446,13 @@ four pieces needed game-side work:
   `EntityViewPool`, so without `_process` calling `advance()` it would sit on frame 0 and
   look exactly like a static bake.
 - **The wolf and the arrow needed nothing at all** — re-skinned in place, which is what
-  `EntityView.play_anim`'s per-clip fallback is for. The wolf is 1 of the 6 species in
-  [P1]; the other five are still one static pose apiece and still slide.
-- **`vis.onager_packed` / `vis.trebuchet_packed` are staged and DELIBERATELY NOT DECLARED.**
-  4.13's pack/unpack state machine does not exist — `SimUnit` carries no deploy state — so
-  a declared id would be referenced by nothing and read later as art that failed to land.
-  They go in with the machine, in one commit.
+  `EntityView.play_anim`'s per-clip fallback is for. The wolf was 1 of the 6 species in
+  [P1]; the other five landed in the second delivery above and animate too.
+- **ALL THREE PACKED ENGINES are staged and DELIBERATELY NOT DECLARED** —
+  `vis.onager_packed`, `vis.trebuchet_packed` and, since the second delivery,
+  `vis.ballista_packed`. 4.13's pack/unpack state machine does not exist — `SimUnit`
+  carries no deploy state — so a declared id would be referenced by nothing and read later
+  as art that failed to land. They go in with the machine, in one commit.
 
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),

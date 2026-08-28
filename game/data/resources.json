@@ -129,12 +129,19 @@
     "bear is a prize worth losing a villager over. gather_slots rises with the animal",
     "for the same reason: three people can work a bear and only one a wolf.",
     "",
-    "ALL THREE DRAW vis.deer_carcass, temporarily. Only the deer's carcass is baked;",
-    "vis.wolf_carcass is requested and vis.boar_carcass and vis.bear_carcass are not",
-    "yet. A dead deer where a dead bear should be reads as the wrong animal -- but",
-    "pointing at an undeclared id would draw the magenta unknown AND fail the",
-    "no-load-warnings test, so the wrong animal is the better of the two. One line",
-    "each when the bakes land.",
+    "EVERY CARCASS IS ITS OWN ANIMAL AS OF 2026-08-28, which is the [P1] delivery",
+    "landing. All five of these used to name vis.deer_carcass, deliberately: an",
+    "undeclared id draws the magenta unknown AND fails the no-load-warnings test, so",
+    "the wrong animal was the better of the two while only the deer's was baked. Five",
+    "one-line changes, exactly as that note predicted.",
+    "",
+    "Worth knowing before touching the art: each carcass atlas holds ONE clip, named",
+    "`carcass`, of TWO frames at 1 fps -- frame 0 is the death clip's start, where the",
+    "animal is still standing, and frame 1 is the collapsed pose. So a fresh carcass",
+    "spends its first second upright and then lies down and holds, which is the fall",
+    "and not a glitch. Nothing here selects a frame; EntityView plays the clip and",
+    "AtlasEntry.resolve_anim falls back to it whatever anim is asked for, since it is",
+    "the only one in the file.",
     "",
     "STILL NOT WIRED: the fish, and it is a feature rather than a wiring gap.",
     "`spawn_resource_node` calls `can_place_building`, which hard-codes Domain.LAND and",
@@ -177,21 +184,21 @@
 
   "res.wolf_carcass": {
     "kind": "food",
-    "visual": "vis.deer_carcass",
+    "visual": "vis.wolf_carcass",
     "amounts": [30, 30, 30],
     "gather_slots": 1
   },
 
   "res.boar_carcass": {
     "kind": "food",
-    "visual": "vis.deer_carcass",
+    "visual": "vis.boar_carcass",
     "amounts": [150, 150, 150],
     "gather_slots": 2
   },
 
   "res.bear_carcass": {
     "kind": "food",
-    "visual": "vis.deer_carcass",
+    "visual": "vis.bear_carcass",
     "amounts": [300, 300, 300],
     "gather_slots": 3
   },
@@ -214,14 +221,14 @@
 
   "res.sheep_carcass": {
     "kind": "food",
-    "visual": "vis.deer_carcass",
+    "visual": "vis.sheep_carcass",
     "amounts": [100, 100, 100],
     "gather_slots": 1
   },
 
   "res.cattle_carcass": {
     "kind": "food",
-    "visual": "vis.deer_carcass",
+    "visual": "vis.cattle_carcass",
     "amounts": [500, 500, 500],
     "gather_slots": 2
   }

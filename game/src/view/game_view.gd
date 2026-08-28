@@ -48,6 +48,20 @@ var client_fog: ClientFog = null
 var local_player_id: int = 0
 var selection: Selection = Selection.new()
 
+## Which of visuals.json's `variant_pools` this map draws from -- palms on an island,
+## dead wood in the desert. Set by `GameScene` from the map's own `meta.type`, through
+## `MapGenerator.pool_name()`.
+##
+## EMPTY IS A REAL AND COMMON STATE, not a missing setup step: the fixed debug map has
+## no `MapData` and every preview and test stands this view up directly. `variant_of()`
+## answers those with the general `variants` mix, so nothing has to check.
+##
+## It is a VIEW fact and it never rides the wire. Every client already knows which map
+## it is on, and the tile seed underneath is a pure function of position, so two clients
+## agree on which tree stands where without a byte being sent -- the same argument
+## `_variant_seed` makes for the seed itself.
+var variant_pool: StringName = &""
+
 var _last_tick: int = -1
 
 ## What GAIA gets: no age skin and no player tint. Owner 0 is nobody, and
@@ -1228,10 +1242,11 @@ func _visual_id_of(entry: Dictionary) -> StringName:
 	# nodes (their own to_snapshot); -1 in either case means "no preference".
 	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)),
 			int(entry.get("size_class", -1)))
-	# Interchangeable looks (visuals.json `variants`) -- four field plots today.
-	# Unconditional and free for everything else: an id with no variants returns
-	# itself, so this needs no list of which visuals have them.
-	return GameDataRegistry.variant_of(vis, _variant_seed(entry))
+	# Interchangeable looks (visuals.json `variants`) -- four field plots and, since
+	# 2026-08-28, a tree species set per map type. Unconditional and free for
+	# everything else: an id with no variants returns itself, so this needs no list
+	# of which visuals have them and no list of which ones have pools.
+	return GameDataRegistry.variant_of(vis, _variant_seed(entry), variant_pool)
 
 
 ## Which of an entity's interchangeable looks it gets, as a seed for

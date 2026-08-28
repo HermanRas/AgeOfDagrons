@@ -121,6 +121,40 @@ func test_placeholders_are_sized_from_measured_metres_not_left_at_defaults() -> 
 			"a villager must be shorter than a stag -- the whole point of item 9")
 
 
+## Every animal's carcass draws that animal (asset_request.md [P1], 2026-08-28).
+##
+## The five used to point at `vis.deer_carcass` deliberately -- only the deer's was
+## baked, and an undeclared id draws the magenta unknown AND fails the load-warning
+## test above, so the wrong animal was the better of two. Now that they exist, the
+## thing worth guarding is not that the field is filled in but that it is filled in
+## with FIVE DIFFERENT FILES: five ids pointing at one atlas would render exactly like
+## the state this replaced and nothing would report it.
+func test_every_carcass_draws_its_own_animal() -> void:
+	var seen: Array[StringName] = []
+	for animal in ["wolf", "boar", "bear", "sheep", "cattle", "deer"]:
+		var rd: ResourceDef = reg.resource_def(StringName("res.%s_carcass" % animal))
+		assert_not_null(rd, "res.%s_carcass is declared" % animal)
+		assert_eq(rd.visual, StringName("vis.%s_carcass" % animal),
+				"the %s's carcass is a %s" % [animal, animal])
+		var entry: AtlasEntry = reg.atlas_for(rd.visual)
+		assert_false(entry.is_placeholder, "%s is staged" % rd.visual)
+		assert_false(seen.has(entry.id), "%s is its own atlas, not a shared one" % entry.id)
+		seen.append(entry.id)
+
+
+func test_a_carcass_holds_the_collapsed_pose_rather_than_looping_back_upright() -> void:
+	# Each carcass atlas is ONE clip of TWO frames at 1 fps: frame 0 is the death
+	# clip's start, where the animal is still standing, and frame 1 is the body. The
+	# clip must not loop, or a corpse would stand up once a second forever -- which is
+	# the exact defect isobake's `AnimSpec.start` fix was for (AGENT_ASSET.md 5).
+	var entry: AtlasEntry = reg.atlas_for(&"vis.bear_carcass")
+	assert_false(entry.is_placeholder)
+	assert_eq(entry.frame_count(&"carcass"), 2)
+	assert_false(entry.loops(&"carcass"), "it falls once and stays down")
+	assert_eq(entry.resolve_anim(&"idle"), &"carcass",
+			"whatever a node asks for, there is only the one clip")
+
+
 func test_declared_sound_ids_are_distinguishable_from_undeclared_ones() -> void:
 	# Every stream is null in MVP (AudioManager is a no-op, PLAN.md 7.5), so the
 	# only thing audio.json can be wrong about right now is its vocabulary.

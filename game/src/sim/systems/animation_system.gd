@@ -47,6 +47,14 @@ func process_tick(w: SimWorld) -> void:
 
 func _anim_for(w: SimWorld, u: SimUnit) -> StringName:
 	if u.has_waypoint():
+		# BOLTING (6.1b), and only while actually moving -- an animal whose burst has
+		# carried it to the end of its route stands and looks around for the rest of
+		# `flee_ticks`, which is a stand and not a run. Sent for any fleeing animal,
+		# not only the deer: `AtlasEntry._ANIM_ALIAS` turns `run` back into `walk` for
+		# the five species that were never given one, so the sim does not have to know
+		# which clips got baked -- the same rule the `attack` branch below documents.
+		if u.flee_ticks > 0:
+			return &"run"
 		return _CARRY_ANIM.get(u.carry_kind, &"walk") if u.carry_amount > 0 else &"walk"
 
 	# Still walking there, or the search for a route has not come back yet
@@ -73,5 +81,21 @@ func _anim_for(w: SimWorld, u: SimUnit) -> StringName:
 		# ground instead of vanishing. Deciding here whether the art exists would
 		# put a question about atlases inside the sim, which may not ask one.
 		return &"attack"
+
+	# A SETTLED ANIMAL GRAZES. Only the cattle has a `feeding` clip -- boar and deer
+	# look like they declare one and it is a variant name with no animation behind it
+	# -- so this changes the cow and nothing else, through the same alias that covers
+	# `run`. Worth sending anyway rather than special-casing the one species: the sim
+	# may not ask which clips exist, and the next animal to be given a feed needs no
+	# code at all.
+	#
+	# Gated on gaia FIRST so the def lookup costs nothing for the units there are
+	# thousands of; `is_wildlife` then separates an animal from any other gaia unit a
+	# later phase invents. Not gated on `flee_ticks`: an animal counting one down while
+	# standing still has stopped running, and standing there eating is what it does.
+	if u.owner_id == 0:
+		var def := w.unit_def(u.def_id)
+		if def != null and def.is_wildlife:
+			return &"feeding"
 
 	return &"idle"

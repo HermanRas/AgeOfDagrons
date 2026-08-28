@@ -319,6 +319,32 @@ static func type_name(type: Type) -> String:
 		_: return "Random"
 
 
+## This map type as a VARIANT POOL name (visuals.json `variant_pools`), which is how
+## the project owner's per-map tree assignment reaches the view -- palms on an island,
+## dead wood in the desert -- without either side learning the other's vocabulary.
+##
+## RANDOM answers "" rather than "random", and that is the useful part: a pool name
+## nothing declares falls back to the plain `variants` list, so the fixed debug map and
+## every preview and test draw the oak/elm/toona mix instead of resolving to a biome
+## they were never given. `meta.type` is always a resolved type by the time anything
+## asks, so the empty case is the "nobody told me" case and not a real map.
+##
+## Lowercased `type_name` rather than a second table: one spelling, decided here.
+static func pool_name(type: Type) -> StringName:
+	return &"" if type == Type.RANDOM else StringName(type_name(type).to_lower())
+
+
+## Every pool name a real map can present. `GameDataRegistry._validate_variants` checks
+## visuals.json against this, so a pool keyed "islands" or "jungle" fails the suite at
+## load rather than silently never being chosen -- the failure a data-driven lookup
+## gives you for free is no failure at all.
+static func pool_names() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for t in [Type.ISLAND, Type.RIVER, Type.DESERT, Type.FOREST]:
+		out.append(pool_name(t))
+	return out
+
+
 # ── terrain ─────────────────────────────────────────────────────────────────
 
 static func _noise(rng: RandomNumberGenerator, frequency: float) -> FastNoiseLite:

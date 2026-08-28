@@ -69,6 +69,111 @@ func test_a_negative_seed_does_not_index_off_the_front() -> void:
 		assert_true(String(id).begins_with("vis.field_"), "%s is a real plot" % id)
 
 
+# ── variant pools: one species set per map type (2026-08-28) ────────────────
+
+## The project owner's assignment, recorded on line 1 of each recipe in
+## tools/recipes/tree_*.toml. Pinned here rather than read back out of visuals.json,
+## because a test that asks the data what the data says cannot fail.
+const POOLS := {
+	&"island": ["vis.tree_palm_cretan_patch", "vis.tree_palm_date", "vis.tree_palm_fan",
+		"vis.tree_palm_tropical", "vis.tree_palm_tropical_tall"],
+	&"forest": ["vis.tree_beech", "vis.tree_birch", "vis.tree_fir", "vis.tree_oak_new"],
+	&"river": ["vis.tree_bamboo", "vis.tree_palm_date"],
+	&"desert": ["vis.tree_elm_dead", "vis.tree_oak_dead"],
+}
+
+
+func test_each_map_type_draws_its_own_assigned_species() -> void:
+	for pool in POOLS:
+		var seen: Array[String] = []
+		for seed in range(64):
+			var id := String(reg.variant_of(&"vis.tree", seed, pool) as StringName)
+			if not seen.has(id):
+				seen.append(id)
+		seen.sort()
+		assert_eq(seen, POOLS[pool], "the %s pool" % pool)
+
+
+func test_a_view_that_names_no_pool_gets_the_general_mix() -> void:
+	# The fixed debug map, every preview and every test stand a view up without ever
+	# being told a map type. They must draw SOMETHING sensible rather than resolving to
+	# a biome nobody picked for them -- which is why oak/elm/toona stay in `variants`
+	# instead of being folded into the forest pool.
+	for seed in range(32):
+		var id := String(reg.variant_of(&"vis.tree", seed) as StringName)
+		assert_true(["vis.tree", "vis.tree_elm", "vis.tree_toona"].has(id),
+				"%s is one of the general three" % id)
+
+
+func test_an_unknown_pool_falls_back_rather_than_drawing_nothing() -> void:
+	# `variant_of` is total the same way `atlas_for` is. A pool nobody declares must
+	# not resolve to the base id -- on a tree that would be the oak on every tile of an
+	# archipelago, which reads as a wiring bug rather than as a missing pool.
+	for seed in range(16):
+		var id := String(reg.variant_of(&"vis.tree", seed, &"tundra") as StringName)
+		assert_true(["vis.tree", "vis.tree_elm", "vis.tree_toona"].has(id),
+				"%s came from the general list" % id)
+
+
+func test_every_pooled_species_is_declared_and_staged() -> void:
+	for pool in POOLS:
+		for id in POOLS[pool]:
+			var vid := StringName(id)
+			assert_not_null(reg.placeholder_for(vid), "%s is declared" % vid)
+			assert_true(reg.has_atlas(vid), "%s has a staged atlas behind it" % vid)
+
+
+func test_the_banyan_is_declared_and_in_no_pool() -> void:
+	# It is baked, flagged and awaiting the owner's judgement (asset_request.md [P3]):
+	# 336-370 px wide against a 250 band, worse than the teak that was pulled for
+	# exactly that. DECLARED, so dev_preview/preview_banyan.tscn can draw it and the
+	# decision can be made from the asset; in no pool, so nothing gathers it yet.
+	assert_true(reg.has_atlas(&"vis.tree_banyan"), "declared and staged")
+	for pool in POOLS:
+		assert_false(POOLS[pool].has("vis.tree_banyan"), "not in the %s pool" % pool)
+	for pool in MapGenerator.pool_names():
+		for seed in range(64):
+			assert_ne(reg.variant_of(&"vis.tree", seed, pool), &"vis.tree_banyan",
+					"no seed reaches it on a %s map" % pool)
+
+
+func test_the_teak_stays_out_of_every_pool_too() -> void:
+	# Pulled 2026-08-23 and it must not come back through the new axis. This is the
+	# one thing the pools could quietly undo: the teak is a perfectly good forest tree
+	# to anyone reading the list without the history.
+	for pool in MapGenerator.pool_names():
+		for seed in range(64):
+			assert_ne(reg.variant_of(&"vis.tree", seed, pool), &"vis.tree_teak",
+					"no seed reaches the teak on a %s map" % pool)
+
+
+func test_a_pool_choice_is_stable_for_a_given_seed() -> void:
+	# Same argument as the tile seed itself: every client picks the same tree without
+	# the choice being sent, so the function has to be pure.
+	for pool in MapGenerator.pool_names():
+		for seed in [0, 3, 17, -5, 900]:
+			assert_eq(reg.variant_of(&"vis.tree", seed, pool),
+					reg.variant_of(&"vis.tree", seed, pool))
+
+
+func test_variant_count_answers_per_pool() -> void:
+	assert_eq(reg.variant_count(&"vis.tree", &"island"), 5)
+	assert_eq(reg.variant_count(&"vis.tree", &"desert"), 2)
+	assert_eq(reg.variant_count(&"vis.tree"), 3, "the general mix, unchanged")
+	assert_eq(reg.variant_count(&"vis.villager", &"island"), 1,
+			"an entry with no pools ignores one it is handed")
+
+
+func test_pool_names_are_the_map_types_and_nothing_else() -> void:
+	# The two halves of the seam agreeing. `MapGenerator.pool_name()` is what GameScene
+	# passes down and what _validate_variant_pools checks against; a rename on either
+	# side that missed the other would silently draw the general mix forever.
+	var names := MapGenerator.pool_names()
+	assert_eq(names.size(), POOLS.size())
+	for pool in POOLS:
+		assert_true(names.has(pool), "%s is a real map type" % pool)
+
+
 func test_the_variant_ids_do_not_have_to_match_their_filenames() -> void:
 	# vis.field_1 is baked as vis.field_age2 and vis.field_4 as vis.farm, because
 	# the art side named them before either of us knew they were variants. The

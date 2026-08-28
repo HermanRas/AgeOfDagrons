@@ -33,6 +33,25 @@ const STATIC_ANIM := &"static"
 ## extra pages per gate for half a second of swing.
 const OPEN_ANIM := &"open"
 
+## Clip -> the clip that MEANS THE SAME THING to an atlas that lacks it, tried before
+## the generic fallbacks below. Both entries are the 2026-08-28 wildlife delivery, and
+## both exist because one species got a clip its five siblings did not:
+##
+##   `run`     the deer bolts, and only the deer was given a run. Without this a
+##             fleeing sheep resolves to `idle` -- STANDING STILL WHILE SLIDING across
+##             the map at flee speed, which is worse than the walk it played before
+##             anything asked for a run.
+##   `feeding` only the cattle has one; 0 A.D.'s boar and deer look like they declare
+##             it and the name is a variant with no animation behind it.
+##
+## Note both fall back to a clip every animal HAS, which is the whole test for whether
+## an alias belongs here: it is a rewording of a request, not a second guess at it. A
+## clip with no such synonym stays out and takes the generic chain.
+const _ANIM_ALIAS := {
+	&"run": &"walk",
+	&"feeding": &"idle",
+}
+
 var id: StringName = &""
 var is_placeholder := true
 
@@ -127,6 +146,11 @@ func resolve_anim(name: StringName) -> StringName:
 		return name
 	if anims.has(name):
 		return name
+	# A synonym the atlas does have, before the generic fallbacks: a running animal
+	# with no `run` should walk, not stand. See `_ANIM_ALIAS`.
+	var alias: StringName = _ANIM_ALIAS.get(name, &"")
+	if not alias.is_empty() and anims.has(alias):
+		return alias
 	if anims.has(STATIC_ANIM):
 		return STATIC_ANIM
 	if anims.has(&"idle"):

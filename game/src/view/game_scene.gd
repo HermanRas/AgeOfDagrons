@@ -705,6 +705,12 @@ func _start_match() -> void:
 		# it carries no occupancy and is never ticked, so it is not a second simulation:
 		# what is standing on the ground comes from snapshot facts (`PlacementAdvice`).
 		_client_map = _build_client_map(md)
+		# Which tree species this map draws (visuals.json `variant_pools`). From the
+		# map's OWN `meta.type` rather than from `cfg.map_type`, which records what the
+		# lobby asked for -- and what it usually asked for is Random, which resolves
+		# inside the generator and would leave every random match with no pool at all.
+		_view.variant_pool = MapGenerator.pool_name(
+				int(md.meta.get("type", cfg.map_type)) as MapGenerator.Type)
 		_view.build_terrain(md.size, md.terrain)
 		_minimap.build_terrain(md.size, md.terrain)
 		_camera.setup(md.size)

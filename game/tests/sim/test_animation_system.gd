@@ -134,6 +134,62 @@ func test_building_plays_work_build() -> void:
 	assert_eq(v.anim, &"work_build")
 
 
+# ── animals (the 2026-08-28 wildlife bakes) ─────────────────────────────────
+
+func test_a_settled_animal_grazes_rather_than_idling() -> void:
+	# `feeding` only EXISTS on the cattle -- 0 A.D.'s boar and deer look like they
+	# declare one and the name is a variant with no animation behind it -- and the sim
+	# may not ask which clips were baked. So it sends `feeding` for every settled
+	# animal and `AtlasEntry._ANIM_ALIAS` turns it back into `idle` for the five that
+	# have none. Same rule the `attack` branch already documents for the villager.
+	var cow := w.spawn_unit(&"unit.cattle", 0, Vector2i(30, 30))
+	w.step()
+	assert_eq(cow.anim, &"feeding")
+
+
+func test_a_players_own_idle_unit_never_grazes() -> void:
+	# The gate is gaia-plus-wildlife, and the gaia half is what keeps the cost off the
+	# units there are thousands of. A villager standing still is idle, not feeding.
+	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+	w.step()
+	assert_eq(v.anim, &"idle")
+
+
+## A deer that has been shot once and is bolting.
+##
+## THE STEP BEFORE THE DAMAGE IS LOAD-BEARING and cost this test its first run.
+## `WildlifeSystem._check_flee` watches hp for a DROP rather than being told who hit
+## what (it is handed a number and no attacker), so it needs a previous reading to
+## compare against -- and `last_hp` starts at the -1 sentinel. Damage dealt before the
+## animal has ever been looked at is the first reading, not a drop, and nothing bolts.
+func _shot_deer() -> SimUnit:
+	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(30, 30))
+	w.step()
+	deer.take_damage(1, 0)
+	return deer
+
+
+func test_a_bolting_animal_runs() -> void:
+	# 6.1b: hurt an animal that flees and it bolts for FLEE_TICKS. Only the deer was
+	# baked a run, which is why the sim sends one for all of them and the view resolves.
+	var deer := _shot_deer()
+	var ticks := _run_until(func(): return deer.flee_ticks > 0 and deer.has_waypoint())
+	assert_true(ticks > 0, "it started a bolt and set off")
+	assert_eq(deer.anim, &"run")
+
+
+func test_an_animal_that_has_finished_its_bolt_stands_rather_than_running_on_the_spot() -> void:
+	# `run` is gated on has_waypoint, not on flee_ticks: a burst that reaches the end
+	# of its route leaves the animal standing with the counter still going down, and a
+	# run clip playing under a stationary sprite is the classic sliding-feet artefact
+	# in reverse.
+	var deer := _shot_deer()
+	var ticks := _run_until(func(): return deer.flee_ticks > 0 and not deer.has_waypoint() \
+			and not deer.path_pending, 200)
+	assert_true(ticks > 0, "the bolt reached the end of its route with the counter still running")
+	assert_ne(deer.anim, &"run", "arrived, so it is standing")
+
+
 # ── death still wins (4.7) ──────────────────────────────────────────────────
 
 func test_a_dying_unit_is_left_alone_by_animationsystem() -> void:

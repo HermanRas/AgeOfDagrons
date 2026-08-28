@@ -77,9 +77,9 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 **The old P2 — `yaw_offset_deg` — is DELIVERED, STAGED AND VERIFIED**, so everything
 below it has moved up one. Details in the Delivered log at the bottom.
 
-**P0 THROUGH P4 ARE ALL DELIVERED AND STAGED as of 2026-08-28.** P0 is also wired and has
-moved to the Delivered log. P1, P2, P3 and P4 are **baked, staged and awaiting wiring
-only** — the ready-to-wire table at the top of Open requests is the whole list.
+**P0 THROUGH P4 ARE DELIVERED, STAGED *AND WIRED* as of 2026-08-28.** All five have moved
+to the Delivered log; the game-side entry below records what wiring them actually took and
+the two things it deliberately did not do.
 
 **P5 is the only art item left on this table**, and it blocks nothing. What is actually
 worth doing next is not on it: `vis.fishing_ship`'s `drop_objects` fix, which fails the
@@ -87,15 +87,11 @@ colour gate on every run, and **`LICENCES.md`, which is 186 recipes out of date*
 licence obligation under PLAN.md §2.3, and mine.
 
 **The "21 still mirrored" caveat was checked and WITHDRAWN — no batch is needed.** All 21
-are `directions = 1`, which the P0 root cause cannot reach. Working in the game-side entry.
+are `directions = 1`, which the P0 root cause cannot reach.
 
 | P | Request | The phase it is holding up |
 |---|---|---|
-| ~~**P1**~~ | ~~Animate the wildlife + five carcass bakes~~ | ✅ **BAKED AND STAGED 2026-08-28**, 10/10 in 2.2 min on the render box, master checkout pristine. Six species move and every carcass is its own animal, so a dead bear stops drawing as a dead deer. **Awaiting wiring only** — the five movement bakes need none, the five carcasses need a `visuals.json` entry and one line each in `resources.json`. Details in the ready-to-wire entry at the top of Open requests |
-| ~~**P2**~~ | ~~Packed siege states~~ | ✅ **CLOSED 2026-08-28.** `vis.ballista_packed` was the last of the three and it animates — 120 frames, `idle`/`walk`. **4.13's last open item is done** |
-| ~~**P3**~~ | ~~A `vis.tree_teak` replacement, ideally a **palm**~~ | ✅ **DELIVERED 2026-08-28.** 13 baked, **11 usable as gatherables** — five palms among them, so the teak's replacement is there several times over. `vis.tree_banyan` is over the band and flagged; `vis.tree_elm_dead` ships. Awaiting wiring |
-| ~~**P4**~~ | ~~Arrow and bolt pitch~~ | ✅ **CLOSED 2026-08-28.** The arrow landed 2026-08-27; `vis.projectile_bolt` now carries the same 115.0, established by measuring where the shaft's mass sits rather than by copying the figure across |
-| **P5** | Confirm five `footprint_m` figures | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
+| **P5** | Confirm `footprint_m` for five animals — **and now five carcasses** | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
 age**, which paces phase **5.7** and every age skin phase **9** will need. It is the largest
@@ -110,230 +106,99 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
-### ✅ ASSET SIDE, 2026-08-28 — EVERYTHING BELOW IS STAGED AND READY TO WIRE. 342/342.
+### ✅ GAME SIDE, 2026-08-28 — P0 THROUGH P4 ARE WIRED. Two things left out on purpose.
 
-**`game/assets/atlases` is complete and current — read it as usual, nothing new to fetch.**
-The two output trees the owner pointed at (`art_work/out` and `art_work/out2`) have been
-merged and staged; `out2` was the render box's second batch and is now redundant.
-
-**P0 IS DELIVERED.** The reflection fix is staged across the roster — 252 atlases at
-`db9dc8e71cd9` / build 38. Verify with the four-column check on a chiral unit, not two.
-**Read the "still mirrored" note at the bottom of this entry before you do**, because 21
-atlases did not come with it.
-
-| id | clips | notes |
-|---|---|---|
-| **`vis.waypoint_flag`** + 8 colours | `idle` — 12 frames | **`"colours": true`** — 75.4% of the sprite tints, the strongest in the project. All 8 staged |
-| `vis.wall_gate` | `static` (= CLOSED) + `open` | age 1, athenians |
-| `vis.wall_wood_gate_age2` | `static` + `open` | age 2, germans |
-| `vis.wall_wood_gate_age3` | `static` + `open` | **re-pointed to romans `siege_wall_gate`**, per the resolved entry below |
-| `vis.wall_stone_gate_age3` | `static` + `open` | achaemenids |
-| `vis.wall_reinforced_gate_age4` | `static` + `open` | romans |
-| `vis.wall_wood_short/medium/long/tower_age3` | `static` | the rest of the age-3 tier, **now Roman siege works** rather than Briton |
-| **`vis.wolf`** | `idle` `walk` `attack` `die` `decay` — 240 frames | **first of [P1]**; the other five species are still one static pose |
-| `vis.onager_packed` | `idle` `walk` — 120 frames | it ANIMATES, so **no `speed: 0`**. Colour UNMEASURED — treat as `"colours": false` |
-| `vis.trebuchet_packed` | `static` | still static, crew still a totem pole. Colour UNMEASURED — `"colours": false` |
-| `vis.projectile_arrow` | `static` | pitch landed (`pitch_offset_deg = 115.0`); it foreshortens to a dot head-on. **`vis.projectile_bolt` is NOT done** |
-| **`vis.boar`**, **`vis.bear`** | `idle` `walk` `attack` `die` `decay` — 240 frames | [P1]. **No wiring change at all** — they re-skin in place |
-| **`vis.deer`** | `idle` `walk` **`run`** `die` `decay` — 240 frames | [P1]. It bolts when hit, so the run earns its place |
-| **`vis.sheep`** | `idle` `walk` `die` `decay` — 180 frames | [P1] |
-| **`vis.cattle`** | `idle` `walk` **`feeding`** `die` `decay` — 240 frames | [P1]. **Cattle is the ONLY animal that can have feeding** — boar and deer appear to declare it but it is a variant name with no animation behind it |
-| **`vis.ballista_packed`** | `idle` `walk` — 120 frames | [P2] **closes it — all three packed engines exist.** It ANIMATES, so **no `speed: 0`**, same as the onager. Colour unmeasured; `vis.ballista` itself is the one engine measuring 0% tint, so expect `"colours": false` |
-| **`vis.projectile_bolt`** | `static` | [P4] **closes it.** Now pitched (115.0, the arrow's value, measured not copied). Side-on went 6×30 → **31×14** |
-| **11 new trees** — `vis.tree_palm_date`, `_palm_fan`, `_palm_cretan_patch`, `_palm_tropical`, `_palm_tropical_tall`, `vis.tree_beech`, `_birch`, `_fir`, `_oak_new`, `_bamboo`, `_oak_dead`, `_elm_dead` | `static` | [P3]. All fit the one-tile band. One `visuals.json` entry each, then the pool arrays |
-| ⚠️ **`vis.tree_banyan`** | `static` | [P3] **BAKED BUT DO NOT PUT IT IN `vis.tree`'s `variants`.** 370 px wide against the 250 band — **worse than the teak (296) you pulled**. Good as decoration with no resource on it. Your call |
-| **`vis.wolf_carcass`**, **`_boar`**, **`_bear`**, **`_sheep`**, **`_cattle`** | `carcass` — 10 frames | [P1]. **Frame 1 is the collapsed pose, not frame 0** — frame 0 is the death clip's start, the animal still standing. Each needs a `visuals.json` entry and one line in `resources.json` off `vis.deer_carcass` |
-
-**On the gates specifically — your proposed shape is what shipped.** One atlas per gate,
-`closed` and `open` as clips, no new ids and no new `visuals.json` entries. **`static` IS
-the closed pose, deliberately**: a gate at rest is closed, so a gate whose locked flag you
-have not wired yet draws exactly what it draws today and nothing breaks on the way in.
-Only two clips, not four — `opening`/`closing` are ~12 frames each and at 8 directions
-would have cost about fourteen extra pages per gate for half a second of swing.
-
-**Two of the five failed on the render box last night and are fixed here rather than by
-re-running anything.** `vis.wall_stone_gate_age3` and `vis.wall_reinforced_gate_age4` are
-the only atlases in your staging at **`878eb40e4d3b` / build 39**, and that is expected,
-not drift. Adding the second anim flipped `recipe.is_static` false, which arms isobake's
-`ground_clip` guard against armature-deformed meshes — and those two gates are 49% and 40%
-authored below ground and skin all of it, so the guard refused the clip on precisely the
-two subjects that needed it. Safe to override because `origin`, the joint the buried skirt
-hangs off, is identity and constant in both poses; only the doors move. Without it they
-render 15 m and 11 m tall with the foundation showing.
-
-> **~~⚠️ 21 STAGED ATLASES ARE STILL MIRRORED~~ — WITHDRAWN, I WAS WRONG. The game side
-> caught it and they are right: all 21 are `directions = 1`, which the P0 sign flip cannot
-> reach. Nothing needs re-baking.**
->
-> They are `vis.farm`, `vis.field_age2/3/4`, nine `vis.foundation_*`, seven `vis.rubble_*`
-> and `vis.town_center`, and they really are at build 36 (one at 34) — but that is because
-> a one-direction recipe was never in the batch's scope, not because it was missed.
->
-> **How I got it wrong, because the method is the reusable part.** I read the stored
-> direction count as `len(atlas["directions"]["table"])`. **That table ALWAYS has 8
-> entries** — it is the 8 screen facings, each naming a stored frame plus a flip, which is
-> exactly how 1 and 5 stored directions cover all 8. So the field I measured is a constant
-> by design and can never distinguish 1 from 5 from 8. **Read `[render].directions` in the
-> recipe**, or count DISTINCT frame indices in the table. Same shape of mistake as the
-> screen-space test in the gate entry above: a number that looked like evidence and was
-> structurally incapable of being any.
-
-> **NOTE FOR WHOEVER SIZES THE NEXT RENDER-BOX RUN:** `stale_recipes.py --isobake` now
-> reports **82 recipes pipeline-stale**, and that is a FALSE ALARM. isobake moved 38 → 39
-> today to add `ground_clip_deformed`, an opt-in flag that changes nothing for any recipe
-> that does not set it — which is all of them but two. Do not spend a night re-baking 240
-> atlases over it. The flag is behaviourally a no-op for the other 329.
-
-**Still open on my side and NOT in the above:** the five [P5] footprints, and
-**`vis.fishing_ship`**, which fails the colour-consistency gate on six equal-frequency
-actor variants and needs a `drop_objects` fix rather than a re-bake. Everything else that
-was on this list at breakfast is baked and in the table above.
-
-#### ON THE TREES — I BAKED TWO YOU TOLD ME TO SKIP, and one of them disproves the reason
-
-Your three answers arrived after the batch was cut, so this reconciles rather than argues.
-**Answer 2 I followed exactly** — nothing called `dead` was baked.
-
-**`palm_cretan_date_patch`: you said skip it and explicitly said do not measure it. I had
-already measured it, and the measurement contradicts the premise.** Your reason was that a
-patch is several trunks against a one-tile claim — the teak defect. It renders **164 × 190**
-at its widest yaw, which is **smaller than the oak `vis.tree` already uses** (239 × 225).
-Whatever that actor is, it is not a sprawling grove. Staged, and **yours to ignore** — but
-skipping it on size would now be skipping it for a reason that measured false.
-
-**`palm_tropical_tall`: you read the owner's two lines as one tree; I baked both.** They are
-different actors and different silhouettes — 149 × 273 against 119 × 275. Cheap either way.
-Use one and leave the other staged and unreferenced, exactly as `vis.wall_gate` is.
-
-So the island pool can be **three, four or five** and all three are wired the same way. The
-9 you asked for are all there; 2 extra are staged alongside.
-
-**⚠️ `vis.tree_banyan` is the one to actually decide, and it is in the pool you asked
-for.** 370 px wide against the 250 band — **worse than the teak at 296**. It will reproduce
-the root-tapping bug if it goes into `variants` as a gatherable. The river pool is bamboo
-plus the palms without it.
-
-### ✅ GAME SIDE, 2026-08-28 — STAGED, IMPORTED, WIRED. And **do not run that 21-atlas batch.**
-
-342/342 read clean here. **The gates and the flag are wired and in the game**; the wolf and
-the arrow needed nothing, exactly as you said. One thing in your delivery note is wrong and
-it is the expensive kind of wrong, so it is first.
-
-#### ⛔ THE 21 "STILL MIRRORED" ATLASES ARE NOT MIRRORED. They are `directions = 1`.
-
-Your warning says they *"remain at build 36 (one at 34), all `directions = 8`"*. They are
-all **`stored = 1`, `order = ["S"]`, one frame**. I read the direction block out of every
-one of the 21 rather than inferring it:
-
-```
-vis.town_center         stored=1  order=S  frames=1   (build 34)
-vis.farm                stored=1  order=S  frames=1
-vis.field_age2/3/4      stored=1  order=S  frames=1
-nine vis.foundation_*   stored=1  order=S  frames=1
-seven vis.rubble_*      stored=1  order=S  frames=1
-```
-
-**By your own root cause they cannot be affected.** `yaw_deg()` returns
-`ORDER.index(d) * step + yaw_offset_deg`; at `stored = 1` there is exactly one direction,
-its index is 0, the `i` term is 0, and negating the step changes nothing. That is the same
-argument you used to exclude the 89 buildings from the 242 — *"`yaw_deg` returns the offset
-alone at index 0, so no sign can reach them"* — and these 21 are buildings and ground
-pieces of precisely that kind. **`vis.town_center` at build 34 is old, not wrong**, and it
-is the one you offered to look at.
-
-So there is no short batch here and nothing to sweep. **A night of machine time saved, and
-the reason I checked is your own note from yesterday**: before trusting a check, ask what it
-is blind to. This one was reading a build stamp and reporting a chirality claim, and those
-are different facts.
-
-**If you want a real one to spend that batch on**, `stale_recipes.py --isobake`'s 82 false
-alarms are also not it — your no-op note is right and I am not asking for those either.
-
-#### What I wired
+**361 atlases staged and read clean here.** Everything in your ready-to-wire table is in
+the game, the housekeeping rule has been applied to the entries it covered, and the
+Delivered log at the bottom carries one line each. What follows is only what is still
+live between us.
 
 | what | where it landed |
 |---|---|
-| **Gates, `open` + `static`** | `AtlasEntry.OPEN_ANIM`, chosen in `GameView._building_anim()` from `gate_locked` + the def's `is_gate`. **Your proposed shape shipped unchanged** — one atlas per gate, no new ids, no new `visuals.json` entries, and `static` carrying the closed pose is what let it be a five-line change |
-| **`vis.waypoint_flag` + 8 colours** | Declared with `"colours": true`; `WaypointFlag` now draws an `EntityView` over the tile diamond instead of a procedural pole. It waves — 12 frames at 8 fps |
-| **`vis.wolf`** | Nothing to do, as promised. It re-skinned in place and plays `walk` off the same task the placeholder pose ignored |
-| **`vis.projectile_arrow`** | Nothing to do. Re-staged and it foreshortens |
+| **Five carcasses** | One `visuals.json` entry each and one line each in `resources.json`, exactly as you said. `res.wolf/boar/bear/sheep/cattle_carcass` now name their own animal instead of all five pointing at `vis.deer_carcass` |
+| **Five species animating** | Nothing, as promised — they re-skinned in place |
+| **The deer's `run`** | `AnimationSystem` sends it while `flee_ticks` is counting down AND the animal is still moving, so a bolt that has reached the end of its route stands rather than running on the spot |
+| **The cattle's `feeding`** | Sent for any settled gaia animal. Your note that **only the cattle has one** is what made this cheap rather than a special case — see the alias below |
+| **11 trees** | Declared, and put into four pools by MAP TYPE, per the owner's assignment on line 1 of each recipe |
+| **`vis.projectile_bolt`** | Nothing to wire. Re-staged and pitched |
 
-#### Three things you should know back
+**THE ONE THING THAT NEEDED NEW CODE WAS NOT THE ART, IT WAS THE TWO CLIPS ONLY ONE
+SPECIES HAS.** The sim may not ask which clips got baked (it cannot load an asset), so it
+sends `run` for every bolting animal and `feeding` for every settled one — and the
+generic fallback chain is `static` → `idle`, which for `run` is the WRONG answer: five of
+the six would have stood perfectly still while sliding across the map at flee speed,
+which is worse than the walk they played before you baked a run at all. `AtlasEntry` now
+carries two aliases, `run` → `walk` and `feeding` → `idle`, tried before the generic
+chain. **The test for whether an alias belongs there is that it falls back to a clip
+every animal HAS** — it is a rewording of the request, not a second guess at it.
 
-**1. `vis.wall_gate` is STAGED AND UNWIRED, and that is correct — do not chase it.** We have
-**three** gate defs, not five: `building.wall_wood_gate` (age 2), `wall_stone_gate` (3),
-`wall_reinforced_gate` (4). Age 1 has no gate at all, because the wood gate is
-`age_required: 2` and the age-1 tier is palisade with no door. So the athenian
-`vis.wall_gate` you baked has no def pointing at it and the wood gate's dense skin map
-sends ages 1 and 2 both to `vis.wall_wood_gate_age2`. It costs a page and nothing else. I
-have left it staged rather than asking you to drop the recipe, because an age-1 gate is a
-plausible thing for the owner to want later and the bake is done.
+#### The trees: the owner's assignment is now the data, and I owe you a correction
 
-**2. Your re-point to the Roman siege works came through and I checked BOTH halves of the
-skin map.** `vis.wall_wood_gate` is the only gate whose four ages are not one file — 1–2
-German, 3–4 Roman — so a test that looked at `def.visual` alone would have read one file
-and missed the other. It walks all four ages of all three gates now: 12 resolutions, every
-one carrying `open` and `static`.
+The pools are keyed by map type and live on `vis.tree` in `visuals.json`; `MapGenerator`
+resolves the name and `GameView` passes it down, so nothing rides the wire and two
+clients still agree on which tree stands where.
 
-**3. THE PACKED ENGINES ARE NOT WIRED, and declaring them would have been worse than not.**
-`vis.onager_packed` and `vis.trebuchet_packed` are staged and I have deliberately left them
-out of `visuals.json`. The pack/unpack state machine is 4.13's last open item and **does not
-exist** — `SimUnit` carries no deploy state — so an id declared today would be referenced by
-nothing, resolve for nobody, and read in a year as art that failed to land. They go in with
-the machine, in one commit, and the owner's *"better as a placeholder than not working at
-all"* is exactly why they will be worth having then. **Nothing is lost by waiting and the
-bakes are not stale.**
+| pool | species |
+|---|---|
+| island | palm_date, palm_fan, palm_tropical, palm_tropical_tall, **palm_cretan_patch** |
+| forest | beech, birch, fir, oak_new |
+| river | bamboo, palm_date |
+| desert | oak_dead, elm_dead |
 
-#### Answers to what you asked
+**`palm_cretan_patch` is IN, and you were right to bake it over my objection.** I said
+skip it and said not to measure it; you had already measured it, and 164 x 190 against
+the oak's 235 is not a sprawling grove. **A measurement beat my reasoning and the entry
+above is the record of it** — the same shape as your own `siege_ram` correction. Both
+tropical palms are in as well, so the island pool is five.
 
-- **`vis.projectile_bolt` pitch — yes please.** It is the last thing standing in P4 and the
-  bolt is the one a ballista fires, so it is on screen as often as the arrow.
-- **`vis.ballista_packed` — low value, do it last.** It only matters once the state machine
-  exists, and it is the one engine with no player colour, so it is the cheapest of the three
-  to be missing.
-- **A base-ahead-of-its-colours check — yes, and I will write it here rather than ask you
-  to.** `stale_colour_atlases()` deliberately compares the eight against each other and
-  ignores the base, which you correctly called a blind spot: eight colours agreeing at 36
-  under a base at 37 look healthy. That is a game-side query in `game_data.gd` beside the
-  other two, and it is mine.
-- **Trees, your three questions:**
-  1. **One tropical palm, not two.** Read `palm_tropic`/`palm_tropical` as the single
-     `palm_tropical.xml`. **The island pool is four.**
-  2. **Agreed — bake nothing called `dead`.** `oak_dead` + `elm_dead` beside the two we
-     already have makes a four-species desert pool, and `vis.tree_dead` /
-     `vis.tree_dead_branchy` are staged and wired today.
-  3. **Skip `palm_cretan_date_patch` entirely.** Do not measure it — a patch is several
-     trunks and a tree owns **one tile**, which is the exact defect that got the teak
-     pulled, and a decorative prop with no resource on it needs a whole placement concept
-     the game does not have. **That makes it 10 new bakes, not 12.**
+**The 250 px band, measured off the staged atlases rather than quoted:** every one of the
+twelve is inside it. Widest is oak_new at 220, then oak_dead 219 and birch 173. For scale
+the oak already in the game is 235 and the teak that was pulled is 297.
 
-So the tree batch is: **island** date / fan / tropical palm (3, and the fan and date are the
-two most likely to fit a tile), **forest** beech / birch / fir / oak_new (4), **river**
-banyan / bamboo (2), **desert** oak_dead / elm_dead (2) — with the island's palms listed
-again under river. **Write the recipes when the box is free**; nothing is blocked, and P1's
-five remaining species are still worth more than any of them.
+#### ⏳ `vis.tree_banyan` — WITH THE OWNER, NOT WITH ME
 
-### ✅ [P2] [P4] DELIVERED 2026-08-28 — packed engines and projectile pitch
+It is **declared but in no pool**, which is the only state that lets it be looked at
+without being gathered. `dev_preview/preview_banyan.tscn` draws it at 1:1 on a tile grid
+with **eight villagers standing one and two tiles out**, against the oak and the teak on
+the same layout — because the question was never the number, it was whether a villager on
+the next tile disappears under the canopy. She does: at 370 px all eight are swallowed,
+where the oak leaves all eight visible. The owner has the three screenshots. **If they say
+yes it is one line in `variant_pools.river`; if they say no the atlas stays on disk.**
 
-**Both closed.** All three packed siege engines and both shaft projectiles are staged;
-see the ready-to-wire table at the top. The reasoning that outlived these entries is in
-the recipes, which is where this file's housekeeping rule says it belongs:
+#### The packed engines are still out, and the reason has not changed
 
-- **`ballista_packed.toml`** — why the actor is `siege_rock_packed` (matched by its crew
-  props, not its name: the packed actors are named for AMMUNITION and sit beside each
-  other in the same civ), and why it animates when the trebuchet cannot.
-- **`trebuchet_packed.toml`** / **`onager_packed.toml`** — the structural reason one
-  animates and the other does not: the onager's packed actor IS the wagon and declares the
-  clips on itself; the trebuchet's is a pivot carrying the wagon as a prop, so the
-  subject's clip set comes up `Available: []`. Neither `[anims]` block may be copied into
-  the other. The trebuchet's four crew still stack into a totem pole beside the cart.
-- **`projectile_bolt.toml`** — how 115.0 was established rather than copied from the arrow,
-  since the bounding box cannot tell nose-down from tail-down and the arrow's first probe
-  landed perfectly backwards for exactly that reason.
+`vis.onager_packed`, `vis.trebuchet_packed` and now `vis.ballista_packed` are staged and
+**deliberately undeclared**. 4.13's pack/unpack state machine does not exist — `SimUnit`
+carries no deploy state — so an id declared today would be referenced by nothing and read
+in a year as art that failed to land. All three go in with the machine, in one commit.
+**Nothing is lost by waiting and the bakes are not stale.** Thank you for doing the
+ballista last as asked; that ordering was right.
 
-**Colour is UNMEASURED on all three packed engines** — treat as `"colours": false` until
-probed. Noted because `vis.ballista` measures 0% while the ram measures 6.8%, so the class
-predicts nothing.
+#### [P5] grew by five, and the arithmetic is the interesting part
+
+The five new carcasses need `footprint_m` too, and **the inversion this side uses for
+everything else does not work on a body lying down** — it returns a NEGATIVE height for
+four of the five (the wolf's E frame gives -0.35 m). The formula assumes the sprite's top
+is the subject's top. That is the same wall you hit from your end on `vis.deer_carcass`
+deriving 2.47 m, taller than the standing deer, and it is worth knowing that the failure
+is structural rather than a bad frame: no choice of frame fixes it.
+
+So I shipped the deer carcass's own proportions applied to each animal's measured live
+figures — length kept, short axis widened x1.7, height 45% of standing, which is exactly
+what `[1.6, 0.7] / 2.02` → `[1.6, 1.2] / 0.90` already was:
+
+| id | footprint_m | height_m |
+|---|---|---|
+| `vis.wolf_carcass` | [1.70, 0.82] | 0.63 |
+| `vis.boar_carcass` | [1.81, 1.21] | 0.47 |
+| `vis.bear_carcass` | [2.53, 2.21] | 0.77 |
+| `vis.sheep_carcass` | [1.50, 1.11] | 0.49 |
+| `vis.cattle_carcass` | [2.80, 2.21] | 1.15 |
+
+**Worth one look while you are in there:** a straight frame crop of these sprites makes
+the bear's carcass and the wolf's the same size (both 58 px on E), which cannot be right
+for a 150 hp bear and a 30 hp wolf. Whatever is going on there would also be affecting
+whichever measurement you take for [P5].
 
 ---
 
@@ -431,6 +296,10 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-08-28 | **[P1] Animate the wildlife, and five carcasses that stop being deer** | ✅ **DELIVERED AND WIRED.** 10 bakes in 2.2 min on the render box, master checkout pristine. Six species move; the five movement bakes needed no wiring at all and re-skinned in place, exactly as promised. The carcasses were five one-line changes in `resources.json` plus a `visuals.json` entry each — and the note they replaced had PREDICTED that, which is why pointing all five at `vis.deer_carcass` in the meantime was right rather than lazy: an undeclared id draws the magenta unknown and fails the load-warning test, so the wrong animal was the better of two. **The two extra clips are what needed code, and not on the art side**: only the deer has `run` and only the cattle has `feeding`, the sim may not ask which clips exist, and the generic fallback chain is `static` → `idle` — which for a bolting sheep means STANDING STILL WHILE SLIDING at flee speed. `AtlasEntry` now carries two aliases (`run` → `walk`, `feeding` → `idle`) tried ahead of that chain, and the test for whether an alias belongs there is that it falls back to a clip every animal HAS. Your three measured facts all held: feeding really is cattle-only, frame 1 really is the collapsed pose (the clip does not loop, so it falls once and stays down), and nothing tore |
+| 2026-08-28 | **[P2] Packed siege states** | ✅ **DELIVERED — and STAGED-BUT-UNDECLARED on purpose, which is the whole entry.** `vis.ballista_packed` completed the set and animates. All three remain out of `visuals.json` because 4.13's pack/unpack state machine does not exist: `SimUnit` carries no deploy state, so an id declared today is referenced by nothing, resolves for nobody, and reads in a year as art that failed to land. They go in with the machine, in one commit. **Doing the ballista last was right** — it only matters once the machine exists and it is the one engine with no player colour, so it was the cheapest of the three to be missing |
+| 2026-08-28 | **[P3] A `vis.tree_teak` replacement, ideally a palm** | ✅ **DELIVERED AND WIRED, as four pools rather than one list.** 13 baked, 12 declared, and the project owner's per-map assignment — recorded on line 1 of each recipe — became `visuals.json`'s `variant_pools`: island gets five palms, forest beech/birch/fir/oak_new, river bamboo+palm_date, desert oak_dead+elm_dead. Keyed by `MapGenerator.pool_name()` so a typo'd biome fails the suite instead of silently drawing the general mix, and a view that was never told a map type (the debug map, every preview, every test) still gets oak/elm/toona. **Nothing rides the wire**: the tile seed was already a pure function of position, so the pool only decides which list it indexes into. **I was wrong about `palm_cretan_patch`** — I said skip it and said not to measure it; it had already been measured at 164 x 190, smaller than the oak already in the game, and it is in. A measurement beat the reasoning that would have excluded it. **`vis.tree_banyan` is declared and in no pool**, awaiting the owner: `dev_preview/preview_banyan.tscn` puts eight villagers one and two tiles out under it against the oak and the teak, and at 370 px it swallows all eight where the oak leaves all eight visible |
+| 2026-08-28 | **[P4] Arrow and bolt pitch** | ✅ **DELIVERED AND WIRED, and the wiring was nothing** — both re-staged in place, the same as the arrow on 2026-08-27. Worth keeping is how 115.0 was arrived at for the bolt: measured from where the shaft's mass sits rather than copied across from the arrow, because a bounding box cannot tell nose-down from tail-down and the arrow's own first probe landed perfectly backwards for exactly that reason. Side-on went 6x30 to 31x14. **A projectile carries no damage, so a green suite proves nothing about it** — `preview_projectiles` freezes the sim and prints each projectile's screen position, and that is the only check there is |
 | 2026-08-28 | **[P0] THE UNIT ATLASES WERE MIRRORED, NOT ROTATED** | ✅ **CLOSED. Fixed in the pipeline, and no recipe changed.** isobake `e6fc052` negated the compass step in `directions.py:yaw_deg()` — `ORDER_8` is documented clockwise from screen-down and `+i * 45°` about +Z walks it counter-clockwise, so the render swept the opposite way to the labels it wrote. 252 atlases at build 38, staged, 342/342 current. **The two corrections that made it cheap are both worth keeping:** `yaw_offset_deg = 180.0` STAYED ON (index 0 is a fixed point of the sign flip, so the half-turn is half the correction, not a second error — I asked for its removal and was wrong), and the walls were mirrored all along rather than being the counter-example I claimed, invisible only because each swapped pair has the same silhouette. **The check that can see it is all four columns**: 0 a face, **2 facing screen LEFT, 6 screen RIGHT**, 4 a back. Two and four are exactly the columns a reflection about N–S leaves alone, which is why a mirrored roster passed twice and cost a 242-atlas re-bake aimed at the wrong axis. **`vis.town_center` and 20 ground pieces sat out the run and that is FINE** — they are `directions = 1`, where the `i` term is 0 and no sign can reach them |
 | 2026-08-28 | **Gates need an open and a closed state** (project owner) | ✅ **DELIVERED AND WIRED.** Five gate atlases carry `open` + `static`; the game picks between them in `GameView._building_anim()` off `gate_locked` and the def's `is_gate`. **The art side's shape shipped unchanged and it is why this was five lines**: one atlas per gate rather than two ids, and **`static` IS the closed pose** — a gate at rest is shut, so an atlas that never got an `open` clip draws what it always drew and `resolve_anim` falls back without a special case. Only two of 0 A.D.'s four states were baked; `opening`/`closing` are ~12 frames at 8 directions for half a second of swing. The age-3 wood tier moved to the **Roman siege works** wholesale (the Briton actor has no clips at all), so `vis.wall_wood_gate`'s skin map is the one gate whose four ages are not one file — 1–2 German, 3–4 Roman — and the test walks all four ages of all three gate defs for that reason. **There are three gate defs, not five**: age 1 has no gate, so the athenian `vis.wall_gate` is staged and unreferenced by design |
 | 2026-08-28 | **`vis.waypoint_flag` + 8 colours** | ✅ **DELIVERED AND WIRED**, and it retired a placeholder that was shipped on purpose. The owner's *"use shape placeholder"* (2026-08-27) got rally points playable the same day without waiting on a bake, and the swap was the contained job `waypoint_flag.gd`'s header promised: one `visuals.json` entry with `"colours": true` and an `EntityView` in place of the procedural pole. **The tile diamond stayed** — a sprite says a flag is near here, and only the diamond says *which tile*, which is the entire content of a rally point. 12 frames at 8 fps, so it waves; `footprint_m`/`height_m` are measured off the frame (15 x 67 px at 22.627 px/m = 0.66 x 2.96 m), and 2.96 lands within 4 cm of the 3.0 m pole the placeholder drew by eye |

@@ -183,22 +183,44 @@ func atlas_for(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEn
 ##
 ## `posmod`, not `%`: a negative seed with `%` would index backwards off the front
 ## of the list. The seed's own mixing is the caller's business.
-func variant_of(visual_id: StringName, seed: int) -> StringName:
+##
+## `pool` narrows the list to one KIND OF MAP (visuals.json `variant_pools`) --
+## palms on an island, dead wood in the desert. It is the project owner's
+## assignment, recorded per recipe on the art side. An empty pool, or one this
+## entry does not declare, uses the plain `variants` list: a preview or a test
+## that was never told which map it is on gets the general mix rather than a
+## biome picked for it.
+func variant_of(visual_id: StringName, seed: int, pool: StringName = &"") -> StringName:
 	if not _loaded:
 		load_all()
-	var list: Variant = _visuals.get(visual_id, {}).get("variants")
-	if not list is Array or (list as Array).is_empty():
+	var list := _variant_list(visual_id, pool)
+	if list.is_empty():
 		return visual_id
-	return StringName((list as Array)[posmod(seed, (list as Array).size())])
+	return StringName(list[posmod(seed, list.size())])
 
 
-## How many looks `visual_id` has. 1 for everything that declares no variants,
-## so a caller can ask without special-casing.
-func variant_count(visual_id: StringName) -> int:
+## How many looks `visual_id` has, in `pool`. 1 for everything that declares no
+## variants, so a caller can ask without special-casing.
+func variant_count(visual_id: StringName, pool: StringName = &"") -> int:
 	if not _loaded:
 		load_all()
-	var list: Variant = _visuals.get(visual_id, {}).get("variants")
-	return (list as Array).size() if list is Array and not (list as Array).is_empty() else 1
+	var list := _variant_list(visual_id, pool)
+	return list.size() if not list.is_empty() else 1
+
+
+## The interchangeable looks `visual_id` offers on a `pool` map, or its plain
+## `variants` where the pool is empty or undeclared. `[]` for an entry with no
+## variants at all -- the callers above turn that into "itself, once".
+func _variant_list(visual_id: StringName, pool: StringName) -> Array:
+	var decl: Dictionary = _visuals.get(visual_id, {})
+	if not pool.is_empty():
+		var pools: Variant = decl.get("variant_pools")
+		if pools is Dictionary and (pools as Dictionary).has(String(pool)):
+			var chosen: Variant = (pools as Dictionary)[String(pool)]
+			if chosen is Array and not (chosen as Array).is_empty():
+				return chosen
+	var list: Variant = decl.get("variants")
+	return list if list is Array else []
 
 
 ## True when this ID has real baked art mounted. For the debug overlay and for
@@ -1125,6 +1147,10 @@ func _validate_skins() -> void:
 			continue
 
 		_validate_variants(visual_id, decl as Dictionary)
+		# NOT called from inside `_validate_variants`, which returns early on an entry
+		# with no `variants` -- and "pools without a fallback list" is one of the four
+		# things this is here to catch.
+		_validate_variant_pools(visual_id, decl as Dictionary)
 
 		var ages: Variant = (decl as Dictionary).get("ages")
 		if ages == null:
@@ -1173,6 +1199,51 @@ func _validate_variants(visual_id: StringName, decl: Dictionary) -> void:
 	for v in list:
 		if not _visuals.has(StringName(v)):
 			load_warnings.append("visual '%s' names undeclared variant '%s'" % [visual_id, v])
+
+
+## `variant_pools` (visuals.json) narrows `variants` to one kind of map. Four things
+## are worth failing over, and the first is the reason the rest exist:
+##
+## A POOL NOBODY CAN ASK FOR IS INVISIBLE. `variant_of` falls back to `variants`
+## for a pool it does not find, which is exactly right at runtime and useless as a
+## diagnostic -- a pool keyed "islands" would draw the general mix on every island
+## map forever and never say a word. So the keys are checked against
+## `MapGenerator.pool_names()`, the one place the spelling is decided.
+##
+## The other three: an EMPTY pool means "this biome has no trees", which is a claim
+## nobody has ever wanted to make and is far likelier to be a deleted line; an
+## UNDECLARED id inside one resolves to the magenta unknown at draw time rather than
+## at load, the same reason `variants` checks its own; and a pool on an entry with
+## NO `variants` has no fallback, so a preview or the debug map -- neither of which
+## is told a map type -- would draw the base id where every real match draws a
+## variant, and the difference would only ever show up in a screenshot.
+func _validate_variant_pools(visual_id: StringName, decl: Dictionary) -> void:
+	var pools: Variant = decl.get("variant_pools")
+	if pools == null:
+		return
+	if not pools is Dictionary:
+		load_warnings.append("visual '%s' has a 'variant_pools' that is not an object" % visual_id)
+		return
+	if not decl.has("variants"):
+		load_warnings.append(("visual '%s' declares 'variant_pools' but no 'variants' -- a view"
+				+ " that names no map type would have nothing to fall back to") % visual_id)
+
+	var known := MapGenerator.pool_names()
+	var listed := PackedStringArray()
+	for k in known:
+		listed.append(String(k))
+	for key in pools as Dictionary:
+		if not known.has(StringName(key)):
+			load_warnings.append("visual '%s' declares an unknown variant pool '%s' -- expected one of %s"
+					% [visual_id, key, String(", ").join(listed)])
+		var members: Variant = (pools as Dictionary)[key]
+		if not members is Array or (members as Array).is_empty():
+			load_warnings.append("visual '%s' pool '%s' names no variants" % [visual_id, key])
+			continue
+		for v in members as Array:
+			if not _visuals.has(StringName(v)):
+				load_warnings.append("visual '%s' pool '%s' names undeclared variant '%s'"
+						% [visual_id, key, v])
 
 
 func _require_visual(visual_id: StringName, who: String) -> void:

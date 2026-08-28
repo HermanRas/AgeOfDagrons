@@ -370,6 +370,48 @@ func test_anything_without_variants_is_unaffected() -> void:
 	assert_eq(view.pool.get_view(1).visual_id, &"vis.villager")
 
 
+func _tree_snapshot(id: int, tile: Vector2i) -> Dictionary:
+	return _snapshot_of(id, "res.tree", tile, {"size_class": 1})
+
+
+func test_a_view_told_which_map_it_is_on_draws_that_biomes_trees() -> void:
+	# The owner's per-map assignment reaching the screen (2026-08-28). Trees are the
+	# only user, and the pool is a VIEW fact: nothing about this rides the wire, and
+	# the tile seed underneath is unchanged.
+	view.variant_pool = &"desert"
+	view.apply_snapshot(_tree_snapshot(1, Vector2i(10, 10)))
+	var chosen := String(view.pool.get_view(1).visual_id)
+	assert_true(["vis.tree_oak_dead", "vis.tree_elm_dead"].has(chosen),
+			"%s is desert wood" % chosen)
+
+
+func test_a_view_that_was_never_told_draws_the_general_mix() -> void:
+	# The fixed debug map has no MapData to read a type off, and every preview and
+	# test stands this view up directly. That case has to draw a tree, not the base id
+	# and not a biome nobody chose.
+	view.apply_snapshot(_tree_snapshot(1, Vector2i(10, 10)))
+	var chosen := String(view.pool.get_view(1).visual_id)
+	assert_true(["vis.tree", "vis.tree_elm", "vis.tree_toona"].has(chosen),
+			"%s is one of the general three" % chosen)
+
+
+func test_the_pool_changes_the_species_and_not_the_seed() -> void:
+	# Two maps, one tile: the CHOICE inside each list must be the same index, because
+	# the seed is a pure function of position and the pool only decides which list it
+	# indexes into. Pinning this is what stops a future pool implementation quietly
+	# introducing a second source of randomness -- which would be a desync the moment
+	# two clients disagreed.
+	var tile := Vector2i(13, 7)
+	view.variant_pool = &"forest"
+	view.apply_snapshot(_tree_snapshot(1, tile))
+	var forest := String(view.pool.get_view(1).visual_id)
+	view.variant_pool = &"island"
+	view.apply_snapshot(_tree_snapshot(2, tile))
+	var island := String(view.pool.get_view(2).visual_id)
+	assert_true(forest.begins_with("vis.tree_"), "%s is a forest species" % forest)
+	assert_true(island.begins_with("vis.tree_palm"), "%s is an island species" % island)
+
+
 # ── idle villagers (7.1, the age header's badge) ───────────────────────────
 
 func test_the_idle_count_is_villagers_only_and_only_the_owners() -> void:

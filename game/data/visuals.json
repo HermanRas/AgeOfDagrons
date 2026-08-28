@@ -158,6 +158,53 @@
     "vis.villager lesson above describes, and it had been wrong since the plots were",
     "last re-pointed.",
     "",
+    "VARIANT POOLS (2026-08-28), a refinement of `variants` and not a fourth axis:",
+    "",
+    "  \"variant_pools\": { \"island\": [ids], \"forest\": [...], \"river\": [...],",
+    "                     \"desert\": [...] }",
+    "",
+    "A pool is a `variants` list that only applies on one KIND OF MAP. The keys are",
+    "MapGenerator's own type names lowercased -- MapGenerator.pool_name() is the one",
+    "place that spelling is decided, and pool_names() is what _validate_variants",
+    "checks against, so a typo'd biome fails the suite instead of silently never",
+    "resolving. GameView carries the resolved pool (map meta `type`) and passes it to",
+    "variant_of(); a view that has not been told one -- the fixed debug map, every",
+    "preview, every test -- falls back to the plain `variants` list, which is why oak",
+    "/ elm / toona stay declared there rather than being folded into `forest`.",
+    "",
+    "WHICH SPECIES GO IN WHICH POOL IS THE PROJECT OWNER'S ASSIGNMENT, recorded on",
+    "line 1 of each recipe in tools/recipes/tree_*.toml ('-- forest pool', and",
+    "palm_date's '-- island+river pool', which is why one id appears in two lists).",
+    "Do not re-derive it from how a tree looks. vis.tree_banyan is deliberately in NO",
+    "pool: it is declared so it can be drawn and judged, and it projects 336-370 px",
+    "wide against the 250 band -- worse than the teak that was pulled from `variants`",
+    "on 2026-08-23 for exactly that, a canopy covering ground the entity does not own.",
+    "It goes in the river pool only if the owner says so after seeing it.",
+    "",
+    "THE THIRTEEN NEW TREES were derived by the inversion above, from the N FRAME.",
+    "N and not the widest, and not S: the four trees already here were measured that",
+    "way and it reproduces all eight of their declared figures exactly (7.25/8.03,",
+    "5.53/13.08, 8.53/13.54, 6.16/9.42). A tree is near enough radially symmetric",
+    "that the choice is arbitrary, but a MIXED convention would show up as one",
+    "species reading a metre wider than its neighbour for no reason -- which is the",
+    "same trap the oak's re-derivation note above records.",
+    "",
+    "THE FIVE CARCASSES ARE THE ONE PLACE THAT INVERSION DOES NOT WORK, and it fails",
+    "loudly enough to be worth writing down: run on a collapsed body it returns a",
+    "NEGATIVE height for four of the five (the wolf's E frame gives -0.35 m). The",
+    "formula assumes the sprite's top is the subject's top, and a carcass lies below",
+    "its own anchor. The art side hit the same wall from their end -- deer_carcass",
+    "derives 2.47 m, taller than the standing deer -- and shipped 0.90 by eye.",
+    "",
+    "So the five are the DEER CARCASS'S OWN PROPORTIONS applied to each animal's",
+    "measured live figures: length kept, the short axis widened x1.7, height 45% of",
+    "standing -- which is what [1.6, 0.7] / 2.02 -> [1.6, 1.2] / 0.90 already was.",
+    "An animal lying down covers the ground it stood on, and a bear's body is bigger",
+    "than a wolf's, which a straight frame-crop measurement of these sprites does not",
+    "agree with (both crop to 58 px). They affect the selection ring and",
+    "Occlusion.column_pad_for's outline band, and nothing else. asset_request.md's",
+    "[P5] carries the ask for real measurements.",
+    "",
     "THERE IS NO FACING FLAG HERE, and one was tried and taken out again on",
     "2026-08-22. `directions_reversed` set a half-turn offset on the 31 entries whose",
     "recipes lack `yaw_offset_deg = 180.0` -- every unit, ship, animal and siege",
@@ -1067,6 +1114,13 @@
   "vis.tree": {
     "atlas": "res://assets/atlases/vis.tree.atlas.json",
     "variants": ["vis.tree", "vis.tree_elm", "vis.tree_toona"],
+    "variant_pools": {
+      "island": ["vis.tree_palm_date", "vis.tree_palm_fan", "vis.tree_palm_tropical",
+        "vis.tree_palm_tropical_tall", "vis.tree_palm_cretan_patch"],
+      "forest": ["vis.tree_beech", "vis.tree_birch", "vis.tree_fir", "vis.tree_oak_new"],
+      "river": ["vis.tree_bamboo", "vis.tree_palm_date"],
+      "desert": ["vis.tree_oak_dead", "vis.tree_elm_dead"]
+    },
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [7.25, 7.25],
@@ -1102,6 +1156,136 @@
       "footprint_m": [6.16, 6.16],
       "height_m": 9.42,
       "color": "#46753a"
+    }
+  },
+
+  "vis.tree_palm_date": {
+    "atlas": "res://assets/atlases/vis.tree_palm_date.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [4.38, 4.38],
+      "height_m": 10.27,
+      "color": "#7d9440"
+    }
+  },
+
+  "vis.tree_palm_fan": {
+    "atlas": "res://assets/atlases/vis.tree_palm_fan.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [3.53, 3.53],
+      "height_m": 8.08,
+      "color": "#6f8c3c"
+    }
+  },
+
+  "vis.tree_palm_tropical": {
+    "atlas": "res://assets/atlases/vis.tree_palm_tropical.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [4.41, 4.41],
+      "height_m": 11.13,
+      "color": "#4f7f3a"
+    }
+  },
+
+  "vis.tree_palm_tropical_tall": {
+    "atlas": "res://assets/atlases/vis.tree_palm_tropical_tall.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [3.69, 3.69],
+      "height_m": 12.13,
+      "color": "#558440"
+    }
+  },
+
+  "vis.tree_palm_cretan_patch": {
+    "atlas": "res://assets/atlases/vis.tree_palm_cretan_patch.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [4.50, 4.50],
+      "height_m": 7.43,
+      "color": "#6a8a3e"
+    }
+  },
+
+  "vis.tree_beech": {
+    "atlas": "res://assets/atlases/vis.tree_beech.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [3.66, 3.66],
+      "height_m": 9.09,
+      "color": "#4f7a35"
+    }
+  },
+
+  "vis.tree_birch": {
+    "atlas": "res://assets/atlases/vis.tree_birch.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [5.25, 5.25],
+      "height_m": 8.39,
+      "color": "#6f9440"
+    }
+  },
+
+  "vis.tree_fir": {
+    "atlas": "res://assets/atlases/vis.tree_fir.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.62, 2.62],
+      "height_m": 7.73,
+      "color": "#2f5a34"
+    }
+  },
+
+  "vis.tree_oak_new": {
+    "atlas": "res://assets/atlases/vis.tree_oak_new.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [6.88, 6.88],
+      "height_m": 7.78,
+      "color": "#3f6b34"
+    }
+  },
+
+  "vis.tree_bamboo": {
+    "atlas": "res://assets/atlases/vis.tree_bamboo.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.94, 2.94],
+      "height_m": 8.21,
+      "color": "#7aa03c"
+    }
+  },
+
+  "vis.tree_oak_dead": {
+    "atlas": "res://assets/atlases/vis.tree_oak_dead.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [6.66, 6.66],
+      "height_m": 8.73,
+      "color": "#6b5a45"
+    }
+  },
+
+  "vis.tree_elm_dead": {
+    "atlas": "res://assets/atlases/vis.tree_elm_dead.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [5.34, 5.34],
+      "height_m": 13.08,
+      "color": "#6f6152"
+    }
+  },
+
+  "vis.tree_banyan": {
+    "atlas": "res://assets/atlases/vis.tree_banyan.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [10.50, 10.50],
+      "height_m": 6.56,
+      "color": "#3a6b3a"
     }
   },
 
@@ -1156,6 +1340,56 @@
       "footprint_m": [1.60, 1.20],
       "height_m": 0.90,
       "color": "#7a5a3c"
+    }
+  },
+
+  "vis.wolf_carcass": {
+    "atlas": "res://assets/atlases/vis.wolf_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.70, 0.82],
+      "height_m": 0.63,
+      "color": "#6b6255"
+    }
+  },
+
+  "vis.boar_carcass": {
+    "atlas": "res://assets/atlases/vis.boar_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.81, 1.21],
+      "height_m": 0.47,
+      "color": "#4a3b30"
+    }
+  },
+
+  "vis.bear_carcass": {
+    "atlas": "res://assets/atlases/vis.bear_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.53, 2.21],
+      "height_m": 0.77,
+      "color": "#5b4433"
+    }
+  },
+
+  "vis.sheep_carcass": {
+    "atlas": "res://assets/atlases/vis.sheep_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.50, 1.11],
+      "height_m": 0.49,
+      "color": "#e3ddd0"
+    }
+  },
+
+  "vis.cattle_carcass": {
+    "atlas": "res://assets/atlases/vis.cattle_carcass.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [2.80, 2.21],
+      "height_m": 1.15,
+      "color": "#6b5442"
     }
   },
 

@@ -126,6 +126,49 @@ func test_a_missing_anim_falls_back_rather_than_drawing_nothing() -> void:
 			"a static prop asked to walk stays static")
 
 
+func test_a_running_animal_with_no_run_clip_walks_rather_than_standing() -> void:
+	# THE ONE FALLBACK THAT HAD TO BE ADDED RATHER THAN INHERITED (2026-08-28). The
+	# generic chain is static -> idle, and for `run` idle is the WRONG answer: the sim
+	# sends `run` for any bolting animal, and only the deer was baked one, so the other
+	# five would have stood perfectly still while sliding across the map at flee speed.
+	# Worse than the walk they played before anything asked for a run.
+	var e := _multi_anim()
+	assert_false(e.has_anim(&"run"), "the fixture has idle and walk, no run")
+	assert_eq(e.resolve_anim(&"run"), &"walk", "a run is a walk to an atlas without one")
+	assert_false(e.frame_at(&"run", 0, 0).is_empty(), "and it draws")
+
+
+func test_a_grazing_animal_with_no_feeding_clip_idles() -> void:
+	# The other half of the same delivery: only the cattle has `feeding`. This one
+	# lands on `idle` either way, through the alias rather than by luck -- which is
+	# what keeps it right for an atlas that has `static` and no `idle`.
+	var e := _multi_anim()
+	assert_eq(e.resolve_anim(&"feeding"), &"idle")
+
+
+func test_the_aliases_never_beat_a_clip_the_atlas_actually_has() -> void:
+	# A synonym is a fallback, not a substitution. An atlas WITH a run must play it.
+	var frames: Array = []
+	for i in range(24):
+		frames.append({"page": 0, "rect": [i, 0, 10, 20], "anchor": [5.0, 19.0]})
+	var table: Array = []
+	for i in range(8):
+		table.append({"dir": AtlasEntry.FACINGS[i], "stored_index": i, "flip_x": false})
+	var e := AtlasEntry.from_atlas_dict(&"test.deer", {
+		"pages": ["p0.png"],
+		"pixels_per_metre": Iso.PIXELS_PER_METRE,
+		"directions": {"stored": 8, "mirror_for_8": false, "table": table},
+		"anims": {
+			"walk": {"fps": 15.0, "loop": true, "frames": 1, "first": 0},
+			"run": {"fps": 18.0, "loop": true, "frames": 1, "first": 8},
+			"idle": {"fps": 8.0, "loop": true, "frames": 1, "first": 16},
+		},
+		"frames": frames,
+	}, "res://tests/fixtures")
+	assert_eq(e.resolve_anim(&"run"), &"run")
+	assert_almost_eq(e.fps(&"run"), 18.0, 0.01, "and at its own rate, not the walk's")
+
+
 func test_a_placeholder_entry_reports_one_inert_frame() -> void:
 	var e := AtlasEntry.from_placeholder(&"vis.x", PlaceholderSpec.unknown())
 	assert_true(e.is_placeholder)

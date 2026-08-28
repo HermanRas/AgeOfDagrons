@@ -17,6 +17,26 @@ func _entities_of(data: MapData, def_id: StringName) -> Array:
 	return out
 
 
+# ── the map tells the view which trees to draw (2026-08-28) ─────────────────
+
+func test_every_map_a_player_can_ask_for_names_a_tree_pool() -> void:
+	# The seam between the map and the art: `meta.type` -> `pool_name` ->
+	# visuals.json `variant_pools`. THE FAILURE THIS CATCHES IS A FUTURE ONE -- 2.4d
+	# Archipelago is next on PLAN.md 15's list, and a new map type added without a
+	# tree pool draws the general oak/elm/toona mix on every tile of it and says
+	# nothing. Random is included because it is what the lobby defaults to.
+	for type in [MapGenerator.Type.RANDOM, MapGenerator.Type.ISLAND,
+			MapGenerator.Type.RIVER, MapGenerator.Type.DESERT, MapGenerator.Type.FOREST]:
+		var data := _generate(5, type)
+		var resolved := int(data.meta.get("type", -1)) as MapGenerator.Type
+		var pool := MapGenerator.pool_name(resolved)
+		assert_false(pool.is_empty(),
+				"%s resolves to a real type, never Random" % MapGenerator.type_name(type))
+		assert_true(MapGenerator.pool_names().has(pool), "%s is a declared pool" % pool)
+		assert_true(GameDataRegistry.variant_count(&"vis.tree", pool) >= 2,
+				"the %s pool offers more than one species" % pool)
+
+
 # ── size is by area, not by side (fix 1) ────────────────────────────────────
 
 func test_map_size_grows_with_area_not_with_side() -> void:
