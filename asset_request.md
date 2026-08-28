@@ -659,6 +659,53 @@ new art and I am doing both now. This is the only piece that waits on you.
 
 ### [P1] Animate the wildlife (your A.4a) + FIVE carcass bakes — requested 2026-08-22, re-scoped 2026-08-23
 
+> **ASSET SIDE, 2026-08-28 — ALL TEN RECIPES ARE WRITTEN, PROBED AND COMMITTED (`7dbec5f`).
+> The batch is waiting on the render box and nothing else.** `stale_recipes.py` selects
+> exactly these ten by recipe hash, so **no flags** — `-PipelineStale` is wrong here and
+> would drag 82 recipes in over a no-op flag change.
+>
+> **The box does NOT need provisioning for this one.** It holds isobake `db9dc8e` / build
+> 38; the only thing newer is `ground_clip_deformed`, which none of these ten use. Baking
+> at 38 gives byte-identical results. (I could not have provisioned anyway — neither
+> `100.96.0.1` nor `192.168.0.11` answers from this workstation.)
+>
+> **`vis.deer` and `vis.deer_carcass` are already baked here at full settings** as the
+> validation article — the deer being the largest sprite, the only species needing a
+> `location_scale`, and the only one with a `run`. 240 frames, one page, 74.6% fill, **no
+> CLIPPED**, five clips spread 0.80–1.45× with no tearing. They are deliberately NOT staged,
+> so the box re-bakes all ten together and the set carries one build id.
+>
+> **Canvas is 256 on all ten, up from 128–192**, matching the wolf. Read the summary for
+> `CLIPPED` anyway — a moving animal does not fit a canvas cut for a standing one.
+>
+> **Two corrections to what this entry says above, both measured:**
+>
+> **1. `location_scale` is ONE species, not six.** The 13.2-item-8 tear is real only on the
+> deer. Probing per-clip bounding boxes against each species' median: boar, bear, sheep and
+> cattle all agree within 18%, so their clips import at the mesh's own scale and the default
+> 1.0 is correct. The deer rendered *every* clip pinned to the canvas edge. `deer_carcass.toml`
+> measured 0.0319 for the death clip and warned each clip would need its own figure — that
+> one figure covers the whole deer set. **Do not copy it to the others; it would collapse
+> them to nothing.**
+>
+> **2. FEEDING IS CATTLE-ONLY.** The entry lists it for cattle and that is right, but the
+> reason matters: boar and deer *also* appear to declare `feeding`, and in both cases it is
+> a **variant name with no animation behind it**. `check_clips.py`'s `declared()` returns
+> variant names alongside animations, which is what makes them look equivalent. Only
+> `zebu_wild` has a real `Feeding` clip.
+>
+> **The clip names are the trap and they are worse than recorded here.** Three spellings of
+> attack across four species — `attack_melee` (wolf, boar, deer), `Attack_Melee` (bear),
+> `Attack_melee` (zebu) — and the deer is entirely lower case, `idle`/`walk`/`run`/`death`.
+> Every duplicate-case pair resolves cleanly once variant names are filtered out; exactly one
+> case is a real animation each time. **Bear and cattle declare nothing in their own actor
+> files** — both pull `art/variants/quadraped/base_*.xml` — so reading `bear_brown.xml`
+> reports an animal that cannot be animated at all.
+>
+> **What lands:** boar/bear get idle+walk+attack+die+decay; deer gets idle+walk+**run**+die+
+> decay; sheep and cattle get idle+walk+die+decay, cattle also **feeding**. Plus five
+> carcasses — wolf, boar, bear, sheep, cattle — so a dead bear stops drawing as a dead deer.
+
 > **GAME SIDE, 2026-08-27 — the facing re-bake passed straight through this one.** All
 > eight animals were in the 82 recipes and all eight are re-staged, so a wolf now faces
 > the way it is running. **It is still one static rest pose**, so it still slides, and
