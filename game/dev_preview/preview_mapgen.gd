@@ -31,6 +31,12 @@ func _ready() -> void:
 		[MapGenerator.Type.ISLAND, 2], [MapGenerator.Type.RIVER, 2],
 		[MapGenerator.Type.DESERT, 2], [MapGenerator.Type.FOREST, 2],
 		[MapGenerator.Type.FOREST, 4], [MapGenerator.Type.ISLAND, 8],
+		# THE BIGGEST BOARD THE GAME OFFERS, and the forest is the type that scales
+		# worst on it: eight players is 192x192, four times the area of the 2p map, and
+		# 2026-08-28's density work was measured on 2p alone. A cost that is fine at
+		# 96x96 and ruinous at 192x192 is exactly the shape of thing a preview that
+		# stops at 4p cannot see.
+		[MapGenerator.Type.FOREST, 8],
 	]
 	for job in jobs:
 		var type: MapGenerator.Type = job[0]

@@ -166,7 +166,13 @@ func _process_return(w: SimWorld, u: SimUnit) -> void:
 
 	var bld := w.get_entity(u.task_target_id) as SimBuilding
 	if bld == null or not bld.alive or not bld.is_complete():
-		u.stop()
+		# THE DROP-OFF HAS BEEN DESTROYED UNDER A LOADED VILLAGER. This used to retire
+		# her where she stood, which is what the project owner watched at the end of a
+		# round: a town centre falls and its villagers "bug out, trying to complete their
+		# task but not doing anything". `_start_return` looks for another drop-off first
+		# and only then sends her home to where she last banked, so she does something
+		# legible either way rather than stopping mid-stride holding a full load.
+		_start_return(w, u)
 		return
 	if not _adjacent_to_rect(u.tile(), bld.footprint_rect()):
 		# Same shove, and worse here: a villager retired on the doorstep is holding a
@@ -179,6 +185,10 @@ func _process_return(w: SimWorld, u: SimUnit) -> void:
 	if player != null and u.carry_amount > 0:
 		player.add_resource(u.carry_kind, u.carry_amount)
 	u.carry_amount = 0
+	# WHERE HOME IS, remembered on the unit at the one moment it is certainly true.
+	# Read only when every drop-off is gone, which is exactly when the world can no
+	# longer be asked -- see `SimUnit.deposit_tile` and `_start_return`.
+	u.deposit_tile = bld.tile()
 
 	# Back to the same node if there is anything left in it; otherwise look for
 	# another of the same kind where that one stood, and only then give up. The
@@ -254,12 +264,43 @@ func _retarget_near(w: SimWorld, u: SimUnit, kind: StringName, exclude_id: int) 
 func _start_return(w: SimWorld, u: SimUnit) -> void:
 	var bld := w.nearest_drop_off(u.owner_id, u.carry_kind, u.tile())
 	if bld == null:
-		u.stop()          # nowhere to take the load; better idle than stuck walking
+		_go_home(w, u)
 		return
 	var spot := _drop_off_spot(w, u, bld)
 	u.set_task_return(bld.id, spot)
 	if w.paths != null:
 		w.paths.request(u.id, spot)
+
+
+## NOWHERE LEFT TO TAKE THE LOAD: walk back to where this unit last banked one (project
+## owner, 2026-08-28, watching an AI lose its town centre at the end of a round).
+##
+## **THE OLD BEHAVIOUR WAS `u.stop()` AND IT LOOKED LIKE A BUG BECAUSE IT BEHAVED LIKE
+## ONE.** A villager filled up, found nowhere to deposit, and was retired on the spot --
+## and the AI's standing order (`AISystem._keep_busy`) hands every idle villager a fresh
+## `GatherCommand` a few ticks later. She walks back to the tree, is already full, is
+## retired again, and does that forever: *"trying to complete their task but not doing
+## anything."* Stopping is a perfectly correct answer to "where do I put this" and a
+## terrible answer to "what do I do now".
+##
+## Walking home is legible instead of correct-and-inert -- the player sees the survivors
+## gather at the ruins of what they lost, which is what the report asked for. It does not
+## by itself break the loop above; the AI half of that is `_keep_busy` refusing to order
+## a gather it cannot bank.
+##
+## `set_task_move`, not a new task kind. This is an ordinary walk that happens to end
+## somewhere sentimental: it retires to IDLE on arrival like any other, so nothing
+## downstream learns a state, and a player who selects the villager and orders her
+## anywhere else simply overrides it.
+func _go_home(w: SimWorld, u: SimUnit) -> void:
+	if u.deposit_tile == Vector2i(-1, -1) or w.paths == null:
+		u.stop()          # never banked anywhere; there is no home to go back to
+		return
+	if u.tile() == u.deposit_tile:
+		u.stop()          # already standing on it
+		return
+	u.set_task_move(u.deposit_tile)
+	w.paths.request(u.id, u.deposit_tile)
 
 
 ## WHICH SIDE OF THE DROP-OFF TO WALK TO -- the nearest of the eight `drop_off_points`

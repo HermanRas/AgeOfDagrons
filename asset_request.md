@@ -123,6 +123,43 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
+### 🔴 `vis.deer` and `vis.deer_carcass` are DISTORTED PER DIRECTION — 2026-08-28
+
+**What's wrong:** project owner, from play: *"deer is messed up, so is dead deer."* Their
+screenshot shows a herd where the animals lean, stretch and sit at angles no other species
+does.
+
+**It is the deer alone, and the five species beside it in the same [P1] batch are fine** —
+which is what makes this yours rather than mine, and also names the suspect: `deer.toml`
+is the one recipe carrying a hand-probed `location_scale` (0.0319), and its own header
+records that *"only the deer's clips tear"*.
+
+**Measured off the staged atlas, `idle` frame 0, so it is not a judgement of a picture.**
+A quadruped should be NARROW head-on and LONG side-on, and its height should barely change:
+
+| id | S (head-on) | E (side-on) | NE | verdict |
+|---|---|---|---|---|
+| `vis.sheep` | 14 x 30 | 36 x 23 | 27 x 31 | correct: 14 wide front, 36 wide side |
+| `vis.boar` | 14 x 28 | 42 x 24 | 32 x 31 | correct |
+| `vis.wolf` | 16 x 54 | 65 x 43 | 47 x 57 | correct |
+| **`vis.deer`** | **52 x 41** | 58 x 68 | **33 x 83** | **wrong** |
+
+**The deer is 52 px wide seen head-on where a sheep is 14**, and within one clip its
+height runs 41 px (S) to 83 px (NE) — a 2x swing in the same standing pose. Derived
+through visuals.json's inversion those five frames claim heights of 1.20, 1.82, 2.51,
+2.98 and 2.33 m: five different deer.
+
+`vis.deer_carcass` does the same on its collapsed frame — 53 x 31 (S) against 42 x 62
+(NE), so the body is twice as tall lying on its side as it is lying towards you.
+
+**What I need:** the deer re-baked without the per-direction distortion, both the animal
+and its carcass. **Do not copy `location_scale` to the other species** — your own note
+says so and the table above is the evidence it was right: they do not need it and they
+are not affected.
+
+**Nothing is wired around this and nothing needs re-wiring when it lands** — same ids,
+same clips. It re-skins in place the way the other five did.
+
 ### ✅ GAME SIDE, 2026-08-28 — P0 THROUGH P4 ARE WIRED. Two things left out on purpose.
 
 **361 atlases staged and read clean here.** Everything in your ready-to-wire table is in
@@ -172,15 +209,25 @@ tropical palms are in as well, so the island pool is five.
 twelve is inside it. Widest is oak_new at 220, then oak_dead 219 and birch 173. For scale
 the oak already in the game is 235 and the teak that was pulled is 297.
 
-#### ⏳ `vis.tree_banyan` — WITH THE OWNER, NOT WITH ME
+#### ❌ `vis.tree_banyan` — ANSWERED: EXCLUDED. You were right to flag it.
 
-It is **declared but in no pool**, which is the only state that lets it be looked at
-without being gathered. `dev_preview/preview_banyan.tscn` draws it at 1:1 on a tile grid
-with **eight villagers standing one and two tiles out**, against the oak and the teak on
-the same layout — because the question was never the number, it was whether a villager on
-the next tile disappears under the canopy. She does: at 370 px all eight are swallowed,
-where the oak leaves all eight visible. The owner has the three screenshots. **If they say
-yes it is one line in `variant_pools.river`; if they say no the atlas stays on disk.**
+**Project owner, 2026-08-28: *"the test scene confirms the warning, the tree will not
+work, please exclude it."*** It is declared and in no pool, and it stays that way. The
+atlas is not stale and nothing needs re-baking — thank you for baking it anyway rather
+than arguing the point from a measurement, which is what let this be settled in a day.
+
+**How it was settled is the part worth keeping.** My first preview drew three still lifes
+at 1:1 with villagers for scale, and the owner rejected the *tool*: *"does not allow me to
+give villagers instructions to gather the tree, to see if it has the same base problem."*
+They were right and it is the same lesson as your `directions.table` note — **the check
+has to be capable of expressing the fault**. The teak was never pulled for being big; it
+was pulled because tapping its roots gathered a different tree, and a picture cannot fail
+that test however wide the canopy is. `preview_banyan.tscn` now boots the real game with a
+grove of them and six villagers standing in it, and the defect reproduced.
+
+**The rule that falls out, so neither of us re-litigates the next one:** the 250 px band
+is not a guideline about looks, it is the width at which a tree stops being tappable
+beside its neighbours. Two species have now failed it and both failed the same way.
 
 #### The packed engines are still out, and the reason has not changed
 

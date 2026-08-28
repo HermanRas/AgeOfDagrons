@@ -124,10 +124,12 @@ func test_every_pooled_species_is_declared_and_staged() -> void:
 
 
 func test_the_banyan_is_declared_and_in_no_pool() -> void:
-	# It is baked, flagged and awaiting the owner's judgement (asset_request.md [P3]):
-	# 336-370 px wide against a 250 band, worse than the teak that was pulled for
-	# exactly that. DECLARED, so dev_preview/preview_banyan.tscn can draw it and the
-	# decision can be made from the asset; in no pool, so nothing gathers it yet.
+	# JUDGED AND EXCLUDED, 2026-08-28: "the test scene confirms the warning, the tree
+	# will not work, please exclude it". The owner reproduced the teak's actual defect
+	# with it in `preview_banyan` -- a playable grove, not a picture -- so this is a
+	# settled decision and not a pending question. It stays DECLARED so the preview can
+	# still draw it and judge the next candidate; a pool is the only thing that would
+	# put it on a map.
 	assert_true(reg.has_atlas(&"vis.tree_banyan"), "declared and staged")
 	for pool in POOLS:
 		assert_false(POOLS[pool].has("vis.tree_banyan"), "not in the %s pool" % pool)

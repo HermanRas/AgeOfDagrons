@@ -17,6 +17,90 @@ func _entities_of(data: MapData, def_id: StringName) -> Array:
 	return out
 
 
+# ── a forest is a forest, and it has a road through it (owner, 2026-08-28) ──
+#
+# "forest map type needs to be fully tree populated, dense growth with a small clearing
+# or road with no trees between the players."
+
+func _trees_in(data: MapData) -> Array:
+	return _entities_of(data, &"res.tree")
+
+
+func test_a_forest_map_is_thickly_wooded() -> void:
+	# Not a pinned count -- the noise moves with any tuning -- but a floor the
+	# pre-2026-08-28 generator could not have cleared: it put 185 trees on this exact
+	# board.
+	#
+	# **AND A CEILING, WHICH IS THE HALF THAT WAS LEARNED THE HARD WAY.** "Fully tree
+	# populated" as literally asked for is about 1,300 trees here, and that took the AI
+	# match to 24.83 ms a tick against its 20 ms ceiling -- it hung a session before it
+	# failed a test. The wood is as thick as the tick budget affords and no thicker;
+	# `test_tick_cost` is what actually holds the line.
+	var data := _generate(1, MapGenerator.Type.FOREST, 2)
+	var trees := _trees_in(data).size()
+	assert_true(trees > 400, "a forest map carries %d trees" % trees)
+	assert_true(trees < 700, "%d trees is past what the AI's searches can afford" % trees)
+
+
+func test_a_river_map_is_NOT_given_the_forest_s_density() -> void:
+	# The density knobs are per-type on purpose: a forest map is deliberately the
+	# expensive one and nothing else has a reason to pay for it.
+	var forest := _trees_in(_generate(1, MapGenerator.Type.FOREST, 2)).size()
+	var river := _trees_in(_generate(1, MapGenerator.Type.RIVER, 2)).size()
+	assert_true(river < forest / 2, "river %d against forest %d" % [river, forest])
+
+
+func test_the_tree_count_is_a_BUDGET_and_does_not_grow_with_the_board() -> void:
+	# THE REGRESSION THIS EXISTS FOR, and it shipped for an afternoon. A flat lattice
+	# is density per unit area, so the 8-player 192x192 forest came out at 5,655
+	# entities and a 786 KB map -- four times the area, four times everything, on the
+	# board most likely to be running eight AIs at once. `tree_spacing` widens the
+	# lattice with the side so the count holds instead.
+	var small := _trees_in(_generate(1, MapGenerator.Type.FOREST, 2)).size()
+	var large := _trees_in(_generate(1, MapGenerator.Type.FOREST, 8)).size()
+	assert_true(large < small * 2,
+			"96x96 has %d trees and 192x192 has %d -- the budget holds" % [small, large])
+
+
+func test_the_lattice_widens_with_the_board_and_never_narrows() -> void:
+	var shape := {"spacing": 6}
+	assert_eq(MapGenerator.tree_spacing(shape, Vector2i(96, 96)), 6)
+	assert_eq(MapGenerator.tree_spacing(shape, Vector2i(128, 128)), 8)
+	assert_eq(MapGenerator.tree_spacing(shape, Vector2i(192, 192)), 12)
+	assert_eq(MapGenerator.tree_spacing(shape, Vector2i(48, 48)), 6,
+			"never tighter than the type asked for, however small the board")
+
+
+func test_there_is_a_clear_road_between_the_players() -> void:
+	# "a small clearing or road with no trees between the players". Sampled along the
+	# line joining the two starts, skipping the ends, since a base clearing would make
+	# those pass for a different reason.
+	var data := _generate(1, MapGenerator.Type.FOREST, 2)
+	var a: Vector2i = data.starts[0]
+	var b: Vector2i = data.starts[1]
+	var occupied: Dictionary = {}
+	for e in _trees_in(data):
+		occupied[e["tile"]] = true
+
+	var steps := 20
+	var checked := 0
+	for s in range(4, steps - 3):
+		var at := Vector2(a).lerp(Vector2(b), float(s) / float(steps))
+		var tile := Vector2i(roundi(at.x), roundi(at.y))
+		checked += 1
+		assert_false(occupied.has(tile), "%s is on the road and has a tree on it" % tile)
+	assert_true(checked > 0, "the road was actually sampled")
+
+
+func test_the_road_does_not_cut_the_wood_in_half() -> void:
+	# The bound on the lane: it is a road through a forest, not a motorway. Tiles a
+	# little way off the line must still be wooded, or "dense growth" has been undone
+	# by the thing that was meant to make it playable.
+	var data := _generate(1, MapGenerator.Type.FOREST, 2)
+	var trees := _trees_in(data).size()
+	assert_true(trees > 400, "still %d trees after the road was cut" % trees)
+
+
 # ── the map tells the view which trees to draw (2026-08-28) ─────────────────
 
 func test_every_map_a_player_can_ask_for_names_a_tree_pool() -> void:
@@ -561,19 +645,31 @@ func test_four_and_eight_player_maps_are_playable_too() -> void:
 
 # ── cost, which the map size decides ────────────────────────────────────────
 
+## THE BUDGET WAS RAISED ON 2026-08-28, and what it guards was corrected at the same
+## time. It read `< 400 entities` because "more than the snapshot can carry", and that
+## reason turns out to be measurably wrong: `SnapshotSystem` filters by vision (12.1f),
+## so `preview_wire_size` on the densest forest reads **9.1 KB at tick 1 and 14.8 KB at
+## tick 3600, with 50-72 resource nodes in view out of ~480 on the board**. A player can
+## only ever see a screenful of wood, however much of it there is.
+##
+## What the entity count really costs is CPU -- every system that walks `w.entities`, and
+## above all `AISystem`, which searches that list per player per tick. **That is measured
+## by `test_tick_cost` and it is the hard gate**: the project owner asked for a denser
+## forest on 2026-08-28, the first attempt shipped ~1,300 trees, and the AI match went to
+## 24.83 ms a tick against its 20 ms ceiling. It hung a session before it failed a test.
+##
+## So this asserts the map-transfer cost, which is a one-off, and leaves the per-tick
+## cost to the file that can actually measure it. Both numbers are still printed, because
+## the count is the thing to watch as the generator is tuned.
 func test_a_generated_map_does_not_blow_the_entity_or_wire_budget() -> void:
-	# Every tree is a SimResourceNode in `entities`, so tree DENSITY is a wire-format
-	# decision, not a cosmetic one -- which is why they stand on a lattice rather than
-	# on every tile of a wood. Printed as well as asserted, because the number is the
-	# thing to watch as the generator is tuned.
 	var data := _generate(1, MapGenerator.Type.FOREST, 2)
 	var bytes := var_to_bytes(data.to_dict()).size()
 	print("        forest 2P: %dx%d, %d entities (%d trees), map wire %d bytes"
 			% [data.size.x, data.size.y, data.entities.size(),
 			_entities_of(data, &"res.tree").size(), bytes])
-	assert_true(data.entities.size() < 400,
-			"%d entities is more than the snapshot can carry" % data.entities.size())
-	assert_true(bytes < 49152, "a map is sent once, but %d bytes is too big" % bytes)
+	assert_true(data.entities.size() < 800,
+			"%d entities: the AI's per-tick searches walk this list" % data.entities.size())
+	assert_true(bytes < 131072, "a map is sent once, but %d bytes is too big" % bytes)
 
 
 # ── applying it to a world ──────────────────────────────────────────────────

@@ -32,6 +32,25 @@ var _frames := 0
 var _step := 0
 var _interactive := false
 
+## `--foundations`: photograph the run BEFORE anybody builds it.
+##
+## THE ONE STATE THIS PREVIEW HAS NEVER LOOKED AT, and it turns out to be the state a
+## player spends the most time looking at: a wall is a foundation from the moment it is
+## dragged until the builders have walked over and finished it. Step 4's own comment
+## says the first run of this preview shot foundations, found them unreadable, and
+## started finishing the walls first -- which quietly made the whole preview blind to
+## anything that goes wrong before the wall is up.
+##
+## The project owner reported the drag as "very broken" on 2026-08-28 with a screenshot
+## of exactly this state, so "unreadable" was the finding rather than the obstacle.
+var _foundations := false
+
+
+## Appended to every screenshot name so a `--foundations` run cannot overwrite the
+## finished-wall pictures, which are what the facing check reads.
+func _suffix() -> String:
+	return "_foundations" if _foundations else ""
+
 ## Where the east-west and north-south runs went, so the reports can find them again.
 var _across := Vector2i.ZERO
 var _down := Vector2i.ZERO
@@ -43,6 +62,7 @@ var _gate_wall_origin := Vector2i.ZERO
 
 func _ready() -> void:
 	_interactive = OS.get_cmdline_user_args().has("--interactive")
+	_foundations = OS.get_cmdline_user_args().has("--foundations")
 	_game = load("res://scenes/game/Game.tscn").instantiate()
 	add_child(_game)
 
@@ -175,6 +195,8 @@ func _screen_of(tile: Vector2i) -> Vector2:
 ## finished art, not `BuildSystem` -- which steps 16-17 of `preview_match` already
 ## prove end to end.
 func _finish_the_walls() -> void:
+	if _foundations:
+		return          # `--foundations`: leave the run exactly as the drag left it
 	var world: SimWorld = Net.host().world
 	for e in world.entities.values():
 		if not (e is SimBuilding) or not String(e.def_id).begins_with("building.wall_"):
@@ -427,6 +449,6 @@ func _report_gate(state: String) -> void:
 
 
 func _shoot(name: String) -> void:
-	var path := SHOT_DIR + name + ".png"
+	var path := SHOT_DIR + name + _suffix() + ".png"
 	get_viewport().get_texture().get_image().save_png(path)
 	print("wrote ", ProjectSettings.globalize_path(path))

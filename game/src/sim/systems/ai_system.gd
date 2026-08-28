@@ -431,7 +431,19 @@ func _keep_busy(w: SimWorld, p: SimPlayer, attack: bool) -> void:
 			continue
 		# Poorest kind first, ties broken by a fixed order, so it is deterministic and
 		# self-balancing: whatever ran out is what gets worked next.
-		var node := _nearest_node(w, _poorest_kind(p), id)
+		#
+		# **BANKABLE poorest, since 2026-08-28.** A gather order for a kind this player
+		# has no drop-off for cannot complete: the villager walks to the tree, fills up,
+		# finds nowhere to put it and retires -- and this same standing order sends her
+		# straight back a few ticks later. That is the loop the project owner watched
+		# after destroying a town centre at the end of a round, *"trying to complete
+		# their task but not doing anything"*, and it is this end of it. The sim end is
+		# `GatherSystem._go_home`, which at least walks her somewhere.
+		#
+		# A person does not keep chopping wood they cannot store either. When NOTHING is
+		# bankable -- every drop-off gone, which in practice means this player has lost
+		# -- no order is issued and the villagers stand where `_go_home` left them.
+		var node := _nearest_node(w, _bankable_kind(w, p, id), id)
 		if node != 0:
 			w.queue_command(GatherCommand.new(p.id, [id] as Array[int], node))
 
@@ -468,16 +480,45 @@ func _idle_military(w: SimWorld, p: SimPlayer) -> Array[int]:
 
 ## Which resource the player has least of. Walked in a FIXED order so an exact tie
 ## resolves the same way on every machine.
-static func _poorest_kind(p: SimPlayer) -> StringName:
+## The poorest kind this player can actually BANK, or `&""` when it can bank none.
+##
+## Poorest first, filtered by whether a drop-off exists --
+## so an AI whose mill has burned down but whose town centre stands simply carries on,
+## and one that has lost everything issues no gather orders at all rather than sending
+## villagers on errands that cannot finish. `_nearest_node` answers 0 for `&""`, which is
+## what makes the caller need no extra branch.
+##
+## From the villager's OWN tile, so this asks "can this unit bank it" rather than "does
+## the player own one somewhere" -- the same question `GatherSystem._start_return` asks
+## a moment later, through the same function, so the two cannot disagree about it.
+func _bankable_kind(w: SimWorld, p: SimPlayer, unit_id: int) -> StringName:
+	var from = w.entities.get(unit_id)
+	var at: Vector2i = from.tile() if from != null else Vector2i.ZERO
+	for kind in _kinds_poorest_first(p):
+		if w.nearest_drop_off(p.id, kind, at) != null:
+			return kind
+	return &""
+
+
+## Every resource kind, poorest first.
+##
+## THE TIE-BREAK IS THE FIXED ORDER AND IT HAD TO BE. This replaced `_poorest_kind`,
+## which walked [food, wood, gold, stone] taking a STRICT minimum, so the earliest of
+## equals won -- and equal stocks are the normal case at the start of a match, not an
+## edge one.
+## Breaking ties alphabetically instead would have re-ordered the opening of every AI
+## profile and quietly invalidated the BUGS.md baseline table. `sort_custom` is not
+## documented as stable, so the index is in the comparator rather than left to luck.
+static func _kinds_poorest_first(p: SimPlayer) -> Array[StringName]:
 	var kinds: Array[StringName] = [&"food", &"wood", &"gold", &"stone"]
-	var poorest := kinds[0]
-	var least := 1 << 40
-	for kind in kinds:
-		var amount := int(p.stock.get(kind, 0))
-		if amount < least:
-			least = amount
-			poorest = kind
-	return poorest
+	var order := {&"food": 0, &"wood": 1, &"gold": 2, &"stone": 3}
+	kinds.sort_custom(func(a: StringName, b: StringName) -> bool:
+		var pa := int(p.stock.get(a, 0))
+		var pb := int(p.stock.get(b, 0))
+		if pa != pb:
+			return pa < pb
+		return int(order[a]) < int(order[b]))
+	return kinds
 
 
 func _note(w: SimWorld, line: String) -> void:

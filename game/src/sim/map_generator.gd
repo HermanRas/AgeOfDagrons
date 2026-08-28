@@ -79,10 +79,16 @@ const VEIN_MAX_STEPS := 400
 ## walking to. A real delta encoding is what would buy the dense version.
 const TREE_CLUMP_SPACING := 8
 
-## One copse, as tile offsets from its anchor. A loose blob about 3x3 rather than a
-## solid square, so the sprites overlap into a canopy with gaps of light in it.
+## One copse, as tile offsets from its anchor. A loose blob rather than a solid square,
+## so the sprites overlap into a canopy with gaps of light in it.
+##
+## THE FIRST FIVE ARE THE ORIGINAL SHAPE and every map type except the forest still
+## takes exactly those, in that order -- the four after them are the forest's extra
+## density (see `SHAPE`) and were appended rather than interleaved so that changing how
+## thick a wood is cannot quietly move the copses on a river map.
 const TREE_CLUMP_SHAPE := [
 	Vector2i(0, 0), Vector2i(2, 0), Vector2i(1, 2), Vector2i(3, 2), Vector2i(0, 3),
+	Vector2i(4, 0), Vector2i(2, 4), Vector2i(4, 3), Vector2i(1, 4),
 ]
 
 ## Trees placed around every start regardless of map type, in a loose ring this far out.
@@ -191,12 +197,59 @@ const MAX_ATTEMPTS := 8
 ## 25-35 tiles, i.e. `freq` about 0.03. Small features with a high threshold (the first
 ## attempt, 0.018/0.12) gives confetti; large features with any threshold gives a wash;
 ## the middle gives woods.
+##
+## `spacing` and `clump` are the DENSITY knobs and only the forest sets them (project
+## owner, 2026-08-28: *"forest map type needs to be fully tree populated, dense growth
+## with a small clearing or road with no trees between the players"*). `spacing` is the
+## lattice the copses are anchored on and `clump` is how many of `TREE_CLUMP_SHAPE`'s
+## offsets each one uses; everything else takes the defaults, which are the numbers every
+## other map type has always had.
+##
+## Measured on seed 1, 2 players, 96x96: **185 trees before this and 482 after**, with
+## the MAP's own wire size going 47.6 KB -> 86.8 KB. A forest map is deliberately the
+## expensive one; a river map has no reason to pay for it, which is why these are
+## per-type.
+##
+## **THE FIRST ATTEMPT WAS `clump: 9` AND IT HUNG A SESSION.** That put ~1,300 trees on
+## this board, and the thing it broke was not the one the note above predicts:
+##
+##   - the SNAPSHOT was fine and always would have been. `TREE_CLUMP_SPACING`'s note
+##     quotes 209 KB as unaffordable, and that figure is the MAP, sent once, not the
+##     snapshot sent ten times a second. `preview_wire_size` read **9.1 KB at tick 1 and
+##     14.8 KB at tick 3600 with 50-72 nodes in view**, because `SnapshotSystem` filters
+##     by vision (12.1f): a player can only ever see a screenful of wood.
+##   - **CPU was the wall.** `AISystem` searches the whole entity list per player per
+##     tick -- nearest node, nearest enemy, who is idle -- so quadrupling the list
+##     quadrupled that. `test_tick_cost` measured **24.83 ms a tick against its 20 ms
+##     ceiling** for a 2-player AI match, and the project owner hit it as a hang before
+##     the suite reported it as a number.
+##
+## So the wood is as thick as the tick budget affords and no thicker. **If a denser
+## forest is wanted, the lever is `AISystem`'s linear searches** -- a spatial query for
+## "nearest node of kind K" would take the dominant term out and let this go back up.
+## Density is not the thing standing in the way; a per-tick full scan is.
 const SHAPE := {
-	Type.FOREST: {"freq": 0.035, "wood": 0.08, "lake": 0.52},
+	Type.FOREST: {"freq": 0.035, "wood": -0.30, "lake": 0.52, "spacing": 6, "clump": 3},
 	Type.RIVER: {"freq": 0.030, "wood": 0.28, "lake": 1.0},
 	Type.ISLAND: {"freq": 0.040, "wood": 0.10, "lake": 1.0},
 	Type.DESERT: {"freq": 0.030, "wood": 0.05, "lake": 1.0},
 }
+
+## How wide the LANE between two players is kept clear of trees, in tiles either side of
+## the line joining them (project owner: *"a small clearing or road with no trees between
+## the players"*).
+##
+## FOREST ONLY, and it is the other half of making the wood thick: at `wood: -0.30` most
+## of the board is trees, so without this two players on a 96-tile map are separated by
+## sixty tiles of solid canopy and the first contact of the game is a lumberjacking
+## expedition. It clears the WOOD MASK and not the terrain -- the ground under a lane is
+## ordinary grass that was never going to be anything else, so nothing about
+## passability, building or the validator changes.
+##
+## 3 either side is 7 tiles wide with the centre line: two units abreast plus room to
+## path around each other, and narrow enough to read as a road through a wood rather
+## than as a field with trees at the edges.
+const LANE_HALF_WIDTH := 3
 
 
 ## Side length in tiles for `players`, by AREA per player. See the class header.
@@ -298,7 +351,15 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	for i in range(count):
 		_place_base(data, claimed, i + 1, data.starts[i], resolved, rng)
 
-	_place_trees(data, wood, claimed)
+	# THE LANE GOES IN BEFORE THE TREES, not by removing them afterwards. Clearing the
+	# mask means the copses are never anchored in the road at all, so a lane cannot come
+	# out as a corridor with half-clumps hanging into it.
+	if resolved == Type.FOREST:
+		_clear_lanes(data, wood)
+
+	var shape: Dictionary = SHAPE[resolved]
+	_place_trees(data, wood, claimed, tree_spacing(shape, data.size),
+			int(shape.get("clump", 5)))
 
 	data.meta["type"] = int(resolved)
 	# BOTH counts recorded. `players` is how many start here; `size_players` is how many
@@ -937,6 +998,70 @@ static func _place_vein(data: MapData, claimed: Dictionary, centre: Vector2i,
 			claimed_here += 1
 
 
+## The copse lattice for a board of this size: the type's own `spacing`, widened so that
+## a BIGGER MAP GETS ROUGHLY THE SAME NUMBER OF TREES rather than proportionally more.
+##
+## **THE TREE COUNT IS A BUDGET, AND IT IS SHARED BY EVERY PLAYER ON THE BOARD.** Density
+## per unit area is the obvious way to write this and it is wrong at the top end: the
+## 2026-08-28 density work was measured at 2 players and shipped for an afternoon with a
+## flat spacing, which put **5,655 entities and a 786 KB map** on the 8-player 192x192
+## forest -- four times the area, four times everything, on the map most likely to be
+## running eight AIs at once. Scaling the lattice with the square root of the area holds
+## it near 1,300 trees on every board: 6 at 96x96, 8 at 128x128, 12 at 192x192.
+##
+## What that trades away is honest and worth stating: **a big forest map is thinner than
+## a small one**. The alternative is a map whose cost is unbounded in the one direction
+## the player controls, and the wood still reads as closed canopy at 12 -- the copses are
+## 5 tiles across and the sprites are wider than their tiles.
+##
+## Scaled by the SIDE rather than the area, which is the same thing said in integers: a
+## board twice as wide has four times the area, so doubling the lattice pitch holds the
+## count. Reference is the smallest board the game offers, `side_for(MIN_PLAYERS)` = 96,
+## which is what the density was tuned against.
+##
+## Integer throughout and a pure function of the size, so two hosts generating the same
+## map cannot disagree about it.
+static func tree_spacing(shape: Dictionary, size: Vector2i) -> int:
+	var base := int(shape.get("spacing", TREE_CLUMP_SPACING))
+	var reference := maxi(1, side_for(MIN_PLAYERS))
+	return maxi(base, base * maxi(size.x, size.y) / reference)
+
+
+## A ROAD BETWEEN EVERY PAIR OF NEIGHBOURING STARTS, cleared out of the wood mask
+## (project owner, 2026-08-28). Forest only -- see `LANE_HALF_WIDTH`.
+##
+## AROUND THE RING AND NOT BETWEEN ALL PAIRS. `_start_positions` spreads starts evenly
+## around a ring, so joining each to the next closes a loop that reaches everybody: eight
+## players cost eight lanes rather than twenty-eight, and the map does not end up as a
+## spider's web with more road than wood in it. Two players are a special case of the
+## same loop -- start 0 to start 1 and back, which is one road drawn twice.
+##
+## Bresenham-free: it walks the line in floating steps and stamps a square either side,
+## which is enough for a corridor whose edges are meant to look chewed rather than
+## surveyed. The float never reaches sim state -- this writes into a mask that decides
+## where trees are placed at GENERATION time, and the map that comes out is bytes
+## (2.4c's rule: the content is authoritative, not how it came to be).
+static func _clear_lanes(data: MapData, wood: PackedByteArray) -> void:
+	var starts := data.starts
+	if starts.size() < 2:
+		return
+	for i in range(starts.size()):
+		var a := starts[i]
+		var b := starts[(i + 1) % starts.size()]
+		if a == b:
+			continue
+		var span := maxi(1, int(Vector2(b - a).length()))
+		for s in range(span + 1):
+			var at := Vector2(a).lerp(Vector2(b), float(s) / float(span))
+			var centre := Vector2i(roundi(at.x), roundi(at.y))
+			for dy in range(-LANE_HALF_WIDTH, LANE_HALF_WIDTH + 1):
+				for dx in range(-LANE_HALF_WIDTH, LANE_HALF_WIDTH + 1):
+					var t := centre + Vector2i(dx, dy)
+					var index := data.index_of(t)
+					if index >= 0:
+						wood[index] = 0
+
+
 ## Copses on anchors over the wood mask, skipping anything already claimed.
 ##
 ## Everything random here comes from a HASH OF THE ANCHOR rather than from the rng --
@@ -945,12 +1070,14 @@ static func _place_vein(data: MapData, claimed: Dictionary, centre: Vector2i,
 ## (PLAN.md 7.1) and a tree keeps its size if this loop is ever reordered. It is also
 ## what breaks the lattice up: without the jitter the anchors are visibly on a grid.
 static func _place_trees(data: MapData, wood: PackedByteArray,
-		claimed: Dictionary) -> void:
+		claimed: Dictionary, spacing := TREE_CLUMP_SPACING,
+		clump := 5) -> void:
 	var rd: ResourceDef = GameDataRegistry.resource_def(&"res.tree")
 	var classes := maxi(1, rd.amounts.size() if rd != null else 1)
+	var shape_count := clampi(clump, 1, TREE_CLUMP_SHAPE.size())
 
-	for ay in range(0, data.size.y, TREE_CLUMP_SPACING):
-		for ax in range(0, data.size.x, TREE_CLUMP_SPACING):
+	for ay in range(0, data.size.y, spacing):
+		for ax in range(0, data.size.x, spacing):
 			var anchor := Vector2i(ax, ay)
 			var i := data.index_of(anchor)
 			if i < 0 or wood[i] == 0:
@@ -960,10 +1087,10 @@ static func _place_trees(data: MapData, wood: PackedByteArray,
 			# Jitter by up to +/-2 tiles, so no two copses sit on the same grid.
 			var jittered := anchor + Vector2i(h % 5 - 2, (h / 5) % 5 - 2)
 			# Rotate which tiles of the shape are used, so the copses are not clones.
-			var rotate := (h / 25) % TREE_CLUMP_SHAPE.size()
+			var rotate := (h / 25) % shape_count
 
-			for n in range(TREE_CLUMP_SHAPE.size()):
-				var offset: Vector2i = TREE_CLUMP_SHAPE[(n + rotate) % TREE_CLUMP_SHAPE.size()]
+			for n in range(shape_count):
+				var offset: Vector2i = TREE_CLUMP_SHAPE[(n + rotate) % shape_count]
 				var t: Vector2i = jittered + offset
 				var ti := data.index_of(t)
 				# Still inside the wood: a clump that straddles a clearing edge stops

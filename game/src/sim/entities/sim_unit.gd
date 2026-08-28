@@ -35,6 +35,22 @@ var gather_node_id: int = 0
 ## look for the next tree (GatherSystem's re-scan, project owner 2026-08-16).
 ## `task_target_tile` cannot serve: during RETURN it is the drop-off building.
 var gather_node_tile: Vector2i = Vector2i.ZERO
+## WHERE THIS UNIT LAST BANKED A LOAD, or `(-1, -1)` if it never has (project owner,
+## 2026-08-28: *"when the ai towncentre [is destroyed] have the villagers run back to
+## its location"*).
+##
+## It is the town centre's tile for any villager who has been delivering to one, and it
+## is the ANSWER TO A QUESTION THE WORLD CAN NO LONGER BE ASKED: once the drop-off is
+## destroyed there is nothing left to look up, and its rubble clears itself away sixty
+## seconds later (`SimBuilding.RUBBLE_TOTAL_TICKS`), so the ruins are not a durable
+## anchor either. A tile remembered on the unit outlives both.
+##
+## Written on a successful deposit and never cleared. A villager who has changed drop-off
+## three times remembers the third, which is the one worth walking back to.
+##
+## `(-1, -1)` and not `(0, 0)`: tile (0, 0) is a real tile on every map, the same reason
+## `roam_home` uses that sentinel.
+var deposit_tile: Vector2i = Vector2i(-1, -1)
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 

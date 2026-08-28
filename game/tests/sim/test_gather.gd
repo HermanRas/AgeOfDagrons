@@ -390,6 +390,108 @@ func test_villagers_coming_from_opposite_sides_deliver_to_opposite_sides() -> vo
 			"and each takes the side it came from")
 
 
+# ── the drop-off is destroyed under a loaded villager (owner, 2026-08-28) ───
+#
+# "at the end of a round, i destroyed the towncentre, the ai villagers where bugging
+# out, trying to complete their task but not doing anything. when the ai towncentre
+# [is destroyed] have the villagers run back to its location."
+
+## Gather until the first load has been banked, so `deposit_tile` is set the way a real
+## villager sets it -- by actually delivering somewhere, not by a fixture writing the
+## field. That is the whole mechanism under test.
+func _deliver_one_load() -> void:
+	_order_gather()
+	var ticks := _run_until(func(): return w.players[0].stock.get(&"wood", 0) > 0, 1000)
+	assert_true(ticks > 0, "the first load landed")
+
+
+func test_a_villager_remembers_where_she_banked() -> void:
+	_deliver_one_load()
+	assert_eq(villager.deposit_tile, tc.tile(),
+			"the town centre's tile, learned by delivering to it")
+
+
+func test_a_villager_who_never_banked_anywhere_remembers_nothing() -> void:
+	# The sentinel has to be a tile no map has, since (0, 0) is a real one.
+	assert_eq(villager.deposit_tile, Vector2i(-1, -1))
+
+
+func test_a_loaded_villager_walks_home_when_the_drop_off_is_destroyed() -> void:
+	_deliver_one_load()
+	var home := villager.deposit_tile
+	# Load her up and take the town centre away, which is the moment being tested.
+	villager.carry_kind = &"wood"
+	villager.carry_amount = 10
+	w.queue_command(DebugDestroyCommand.new(1, tc.id))
+	w.step()
+
+	var sys := GatherSystem.new()
+	sys._start_return(w, villager)
+	assert_eq(villager.task, SimUnit.Task.MOVE,
+			"walking somewhere rather than downing tools where she stands")
+	assert_eq(villager.task_target_tile, home, "back to where the town centre was")
+
+
+func test_she_still_prefers_a_SURVIVING_drop_off_to_the_ruins() -> void:
+	# Walking home is the last resort, not the first. A player who loses a town centre
+	# but still owns a mill must have her deliver to the mill.
+	_deliver_one_load()
+	var mill := w.spawn_building(&"building.mill", 1, Vector2i(24, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	villager.carry_kind = &"food"
+	villager.carry_amount = 10
+	w.queue_command(DebugDestroyCommand.new(1, tc.id))
+	w.step()
+
+	var sys := GatherSystem.new()
+	sys._start_return(w, villager)
+	assert_eq(villager.task, SimUnit.Task.RETURN, "a real delivery, not a walk home")
+	assert_eq(villager.task_target_id, mill.id)
+
+
+func test_a_villager_already_standing_on_the_ruins_stops_rather_than_pathing_to_herself() -> void:
+	_deliver_one_load()
+	villager.carry_kind = &"wood"
+	villager.carry_amount = 10
+	w.queue_command(DebugDestroyCommand.new(1, tc.id))
+	w.step()
+	# Stand her exactly where the town centre was.
+	var home := villager.deposit_tile
+	villager.pos = home * SimWorld.SUBTILE + Vector2i(SimWorld.SUBTILE, SimWorld.SUBTILE) / 2
+
+	var sys := GatherSystem.new()
+	sys._start_return(w, villager)
+	assert_eq(villager.task, SimUnit.Task.IDLE, "she is home; there is nowhere to walk")
+
+
+func test_the_AI_stops_ordering_gathers_it_cannot_bank() -> void:
+	# THE OTHER HALF OF THE LOOP, and the half that made it look like a bug. Walking
+	# home is legible, but `AISystem._keep_busy` hands every idle villager a fresh
+	# GatherCommand a few ticks later -- so she walks back to the tree, is already
+	# full, is retired again, forever. A person does not keep chopping wood they
+	# cannot store.
+	var ai := AISystem.new()
+	var p := w.players[0]
+	assert_ne(ai._bankable_kind(w, p, villager.id), &"",
+			"with a town centre standing, something is bankable")
+
+	w.queue_command(DebugDestroyCommand.new(1, tc.id))
+	w.step()
+	assert_eq(ai._bankable_kind(w, p, villager.id), &"",
+			"with every drop-off gone, nothing is -- and no order is issued")
+
+
+func test_losing_one_drop_off_of_several_changes_nothing() -> void:
+	# The bound. An AI whose mill burns down but whose town centre stands carries on.
+	var ai := AISystem.new()
+	var p := w.players[0]
+	var mill := w.spawn_building(&"building.mill", 1, Vector2i(24, 10),
+			SimBuilding.Phase.COMPLETE, true)
+	w.queue_command(DebugDestroyCommand.new(1, mill.id))
+	w.step()
+	assert_ne(ai._bankable_kind(w, p, villager.id), &"", "the town centre still takes it")
+
+
 # ── a shoved worker walks back instead of going idle (owner, 2026-08-28) ─────
 
 func test_a_gatherer_pushed_off_the_ring_walks_back_rather_than_going_idle() -> void:

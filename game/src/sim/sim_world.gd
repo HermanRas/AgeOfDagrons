@@ -1007,7 +1007,13 @@ func state_hash() -> int:
 					# spatial index can find, and about how hard a tower shoots -- and
 					# `pos` cannot report any of that, because a garrisoned unit's `pos`
 					# is deliberately stale and never moves.
-					e.garrisoned_in])
+					e.garrisoned_in,
+					# WHERE IT WOULD WALK IF EVERY DROP-OFF WERE GONE (2026-08-28). Only
+					# read once a player has lost all of them, so a disagreement here is
+					# silent for a whole match and then sends two hosts' villagers to two
+					# different corners of the map at the moment the game is being
+					# decided. Cheap to fold in, and `pos` reports it far too late.
+					e.deposit_tile.x, e.deposit_tile.y])
 		elif e is SimBuilding:
 			# BuildSystem (4.4) now advances build_progress at runtime rather than
 			# only at spawn, and ProductionSystem (5.4) advances queue -- two
