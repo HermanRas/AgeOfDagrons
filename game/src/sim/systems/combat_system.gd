@@ -260,6 +260,17 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 
 	if u.attack_cooldown > 0:
 		return
+	# A PACKED SIEGE ENGINE HOLDS ITS FIRE (4.13). It is in range, it is facing the
+	# right way and it is on the order -- it simply has its arm folded onto a wagon.
+	# `SiegeSystem` saw the same arrival a moment ago and started setting it up; this is
+	# the few seconds in between, and it is the entire cost of having moved.
+	#
+	# Deliberately AFTER the cooldown tick-down and after the facing, so a trebuchet
+	# spends its reload while deploying instead of paying both in series, and so it is
+	# already pointed at the target when it comes up. True for every non-siege unit, so
+	# nothing else in the roster notices.
+	if not u.can_fire():
+		return
 	target.take_damage(_damage_against(w, target, def), 0)
 	# THE ARROW IS LOOSED AFTER THE DAMAGE, and it carries none of it (4.13). The blow
 	# has already landed; this is only what shows where it came from. `SimProjectile`'s

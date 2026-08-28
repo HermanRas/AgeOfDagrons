@@ -108,7 +108,11 @@ func setup(cfg: MatchConfig) -> void:
 			# HerdSystem beside WildlifeSystem and before the commands act, so a sheep
 			# claimed this tick can be ordered on the next one.
 			ProjectileSystem.new(), WildlifeSystem.new(), HerdSystem.new(),
-			CombatSystem.new(),
+			# SiegeSystem BEFORE CombatSystem and before MovementSystem, so an engine
+			# whose crew finish setting it up on this tick fires on this tick and one
+			# that finishes folding walks on this tick (4.13). It also derives `speed`,
+			# which is why it has to be upstream of the walker rather than beside it.
+			SiegeSystem.new(), CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
@@ -172,6 +176,13 @@ func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
 		u.speed = d.speed
 		u.pop_cost = d.pop_cost
 		u.domain = SimMap.from_domain_name(d.domain)
+		# A SIEGE ENGINE COMES OUT OF THE WORKSHOP PACKED (4.13), because the first
+		# thing it has to do is leave -- `ProductionSystem` sends it to the rally point
+		# and a deployed one would stand in the doorway for `pack_ticks` first. `speed`
+		# above is the deployed figure (0 for all three); `SiegeSystem` derives the real
+		# one on the very next tick, which is before anything can ask it to walk.
+		u.packs = d.packs()
+		u.packed = u.packs
 	else:
 		u.hp = int(_FALLBACK_UNIT["hp"])
 		u.max_hp = u.hp
@@ -1013,7 +1024,16 @@ func state_hash() -> int:
 					# silent for a whole match and then sends two hosts' villagers to two
 					# different corners of the map at the moment the game is being
 					# decided. Cheap to fold in, and `pos` reports it far too late.
-					e.deposit_tile.x, e.deposit_tile.y])
+					e.deposit_tile.x, e.deposit_tile.y,
+					# PACKED OR DEPLOYED, AND HOW LONG UNTIL IT COUNTS (4.13). Two hosts
+					# disagreeing about either have a siege engine that can shoot on one
+					# and cannot on the other -- and the engine that shoots is the one
+					# thing on the board that out-ranges a castle, so the divergence
+					# decides the siege. `pos` cannot report it: a deployed engine and a
+					# packed one standing on the same tile have the same position, and a
+					# transition is four to eight seconds of both hosts agreeing about
+					# every other field while one is counting down and the other is not.
+					e.packed, e.pack_ticks_left])
 		elif e is SimBuilding:
 			# BuildSystem (4.4) now advances build_progress at runtime rather than
 			# only at spawn, and ProductionSystem (5.4) advances queue -- two

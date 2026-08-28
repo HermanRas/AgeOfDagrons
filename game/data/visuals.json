@@ -1697,6 +1697,61 @@
     }
   },
 
+  "_note_siege_packed": [
+    "THE THREE ENGINES HAVE A SECOND ACTOR EACH, and it is the wagon they travel on",
+    "(PLAN.md 4.13, 9.2.1). Declared 2026-08-28 together with `SiegeSystem`, never",
+    "before it: these ids were staged on 2026-08-27 and deliberately left undeclared,",
+    "because an id referenced by nothing reads a year later as art that failed to land.",
+    "",
+    "CLIP SETS ARE DISJOINT AND THAT IS THE FEATURE. Packed carries idle + walk and no",
+    "attack; deployed carries idle + attack and no walk. Neither can do the other's job",
+    "and neither has a fold-up clip, so the transition is `pack_ticks` of the new art",
+    "standing still -- `AnimationSystem` sends `idle` for it rather than letting the",
+    "atlas fall back, which would have played a walk cycle over a stationary engine.",
+    "",
+    "NO COLOUR BAKES, so a tinted onager turns plain the moment it packs. The deployed",
+    "onager and trebuchet each carry 8 colour atlases and their packed twins carry none,",
+    "so `colours` is absent here rather than false-by-oversight. Filed in",
+    "asset_request.md; it is 16 bakes and it is cosmetic, not blocking.",
+    "",
+    "PLACEHOLDER FIGURES ARE THE N FRAME, the same derivation as everything else here",
+    "(fx = fy = rect.w / 32, height = (anchor.y - rect.w / 4) / 19.596). Worth knowing:",
+    "`vis.ballista` and `vis.onager` above no longer reproduce from their own current",
+    "atlases -- they were derived before the 2026-08-27 yaw re-bake and are now off by",
+    "about 0.1 m and 0.3 m. Harmless, since a placeholder only draws when the pack is",
+    "missing, and recorded so the next person to check does not think they found a bug."
+  ],
+
+  "vis.ballista_packed": {
+    "atlas": "res://assets/atlases/vis.ballista_packed.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.50, 2.50],
+      "height_m": 3.79,
+      "color": "#8a7a5c"
+    }
+  },
+
+  "vis.onager_packed": {
+    "atlas": "res://assets/atlases/vis.onager_packed.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.50, 2.50],
+      "height_m": 3.81,
+      "color": "#7d6f52"
+    }
+  },
+
+  "vis.trebuchet_packed": {
+    "atlas": "res://assets/atlases/vis.trebuchet_packed.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [1.63, 1.63],
+      "height_m": 3.25,
+      "color": "#7d6f52"
+    }
+  },
+
   "vis.trade_cart": {
     "atlas": "res://assets/atlases/vis.trade_cart.atlas.json",
     "colours": true,

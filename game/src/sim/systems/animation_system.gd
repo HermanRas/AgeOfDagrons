@@ -46,6 +46,18 @@ func process_tick(w: SimWorld) -> void:
 
 
 func _anim_for(w: SimWorld, u: SimUnit) -> StringName:
+	# A SIEGE ENGINE MID-TRANSITION STANDS STILL (4.13), and it has to be said here
+	# rather than left to the atlas fallback. Its two actors carry disjoint clip sets --
+	# the packed one has `idle`/`walk` and no `attack`, the deployed one `idle`/`attack`
+	# and no `walk` -- so each state's WRONG clip resolves to `idle` on its own and the
+	# picture is right by luck. What is not right by luck is the moment in between: an
+	# engine that has been ordered away is holding a route it cannot yet walk, and
+	# `has_waypoint()` below would play a walk cycle over something standing perfectly
+	# still. That is the "standing still while sliding" defect from `_ANIM_ALIAS`, in
+	# reverse, and it is exactly as visible.
+	if not u.can_move() and not u.can_fire():
+		return &"idle"
+
 	if u.has_waypoint():
 		# BOLTING (6.1b), and only while actually moving -- an animal whose burst has
 		# carried it to the end of its route stands and looks around for the rest of

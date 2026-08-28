@@ -123,6 +123,34 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 
 ## Open requests
 
+### [P6] Player colour for the three PACKED siege actors (game side, 2026-08-28)
+
+**Not blocking — the feature shipped today without it, and this is the visible seam it
+left.** `SiegeSystem` (PLAN.md 4.13) landed, so `unit.ballista`, `unit.onager` and
+`unit.trebuchet` now swap between their deployed actor and their packed one whenever
+they are ordered to move or to fight. The deployed onager and trebuchet each carry **8
+colour atlases**; their packed twins carry **none**. So a blue player's onager turns
+plain the instant it packs, and blue again when it sets down.
+
+- `vis.onager_packed` — 8 colours
+- `vis.trebuchet_packed` — 8 colours
+
+**`vis.ballista_packed` is deliberately NOT in that list.** The lithobolos art set
+measures 0% playercolour and its deployed form has no colour bake either, so the packed
+one matching it is correct rather than missing. units.json's own note records that this
+is one actor's measurement and not a rule about siege — please re-measure rather than
+assume, in both directions.
+
+Declared and wired now: all three ids are in `visuals.json` with `colours` absent (not
+`false` by oversight), so adding the bakes is a one-word change on my side.
+
+**Worth knowing while you are in there:** `vis.ballista` and `vis.onager`'s declared
+`placeholder` figures no longer reproduce from their own current atlases — they were
+derived before the 2026-08-27 yaw re-bake and are out by about 0.1 m and 0.3 m. Harmless
+(a placeholder only draws when the pack is missing) and recorded so it does not read as
+a bug next time somebody checks. The three new `_packed` entries were derived from the
+current N frames and do reproduce.
+
 ### ✅ FIXED AND STAGED 2026-08-28 — `vis.deer` and `vis.deer_carcass`
 
 > **[asset] Both re-baked and staged. Same ids, same clips, same 5+3 directions — it

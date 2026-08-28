@@ -54,6 +54,35 @@ var deposit_tile: Vector2i = Vector2i(-1, -1)
 var attack_cooldown: int = 0
 var anim: StringName = &"idle"
 
+## SIEGE ONLY (PLAN.md 4.13, 9.2.1) -- `SiegeSystem` writes all three and nothing else
+## does. Here rather than on a subclass for the reason the wildlife block above gives:
+## a trebuchet and a knight differ in DATA (`UnitDef.packs`), and splitting the class
+## would make every system that walks units care which kind it had.
+##
+## Whether this unit HAS two states, copied off the def at spawn exactly as `pop_cost`
+## and `domain` are -- so `can_move()` and `can_fire()` are answerable without a
+## registry lookup, which `MovementSystem` and `AnimationSystem` would otherwise do for
+## every unit on the map every tick.
+var packs: bool = false
+
+## WHICH OF THE TWO IT IS RIGHT NOW: packed is the travelling wagon, unpacked is the
+## engine set up to shoot. It flips the INSTANT a transition starts rather than when
+## the timer runs out, and that is deliberate -- the art changes immediately so the
+## player can see what the thing is becoming, while `pack_ticks_left` is what says it
+## cannot do the new job yet. Neither field means two things.
+##
+## A siege engine is TRAINED PACKED, because the first thing it must do is leave the
+## workshop and walk to a rally point.
+var packed: bool = false
+
+## Ticks until the state it is already showing becomes usable, or 0 for settled. While
+## this is non-zero the unit can neither walk nor shoot: it is the cost of changing its
+## mind, and it is the only thing stopping a trebuchet from being a mobile turret.
+##
+## There is no separate "which way am I transitioning" field, because there is no such
+## question -- `packed` already says which state is being entered.
+var pack_ticks_left: int = 0
+
 ## WILDLIFE ONLY (PLAN.md 6.1b), all three driven by `WildlifeSystem` and read by
 ## nothing else. They are here rather than on a subclass because a wolf and a villager
 ## differ in DATA -- `UnitDef.is_wildlife` -- and splitting the class would make every
@@ -130,6 +159,32 @@ var path_pending: bool = false
 ## `SimEntity.is_mobile`.
 func is_mobile() -> bool:
 	return true
+
+
+## Whether this unit may take a step this tick (PLAN.md 4.13).
+##
+## TRUE FOR EVERYTHING THAT DOES NOT PACK, which is every unit in the game but three,
+## so this is not a gate the rest of the roster pays for. `MovementSystem` is not asked
+## to check it: `SiegeSystem` drives `speed` off exactly this, so a deployed engine has
+## speed 0 and the walker needs no special case at all.
+func can_move() -> bool:
+	return not packs or (packed and pack_ticks_left == 0)
+
+
+## Whether this unit may land a blow this tick. The mirror of `can_move()`, and the two
+## are never both true for a siege engine -- which is the whole feature.
+func can_fire() -> bool:
+	return not packs or (not packed and pack_ticks_left == 0)
+
+
+## Begin folding up (`want_packed`) or setting up. Idempotent: asking for the state it
+## is already in and settled in does nothing, so a system may call this every tick
+## without restarting the timer under itself.
+func begin_packing(want_packed: bool, ticks: int) -> void:
+	if packed == want_packed:
+		return
+	packed = want_packed
+	pack_ticks_left = maxi(0, ticks)
 
 
 func set_task_move(t: Vector2i) -> void:
@@ -347,4 +402,15 @@ func to_snapshot() -> Dictionary:
 	# nothing happens and nothing says why. Only sent when non-zero.
 	if herded_by != 0:
 		d["herded_by"] = herded_by
+	# WHICH SIEGE ART TO DRAW (4.13). Sent only when true, exactly as `herded_by` is
+	# sent only when non-zero, and for the same reason it is safe to: the client reads
+	# `entry.get("packed", false)` and absence is a correct reading of the default. The
+	# alternative -- one more int on every unit on the wire, always 0 -- is what 12.1f
+	# spent the whole snapshot audit removing.
+	#
+	# `pack_ticks_left` deliberately does NOT ride along. Nothing on the client needs it:
+	# the art has already changed, and a progress bar over a trebuchet is a readout of a
+	# thing the player can see happening.
+	if packed:
+		d["packed"] = true
 	return d

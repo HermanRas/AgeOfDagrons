@@ -548,11 +548,16 @@ func placeholder_for(visual_id: StringName) -> PlaceholderSpec:
 ## gets the kind's plain visual -- what a portrait or a menu icon wants, and what
 ## every caller that predates the size classes keeps getting.
 ##
-## Two optional arguments for two entity kinds rather than one general "state"
-## argument: a phase and a size class are not the same question, and a single
-## parameter meaning different things per branch would be a trap for whoever passed
-## the wrong one.
-func visual_for(def_id: StringName, phase: int = -1, size_class: int = -1) -> StringName:
+## `packed` is the third of these, for the three SIEGE ENGINES, which ship as a
+## packed/unpacked actor pair (4.13). False for everything else and free for it: a unit
+## that declares no packed art returns its one visual whatever is asked.
+##
+## Three optional arguments for three entity kinds rather than one general "state"
+## argument: a phase, a size class and a folded-up wagon are not the same question, and
+## a single parameter meaning different things per branch would be a trap for whoever
+## passed the wrong one.
+func visual_for(def_id: StringName, phase: int = -1, size_class: int = -1,
+		packed: bool = false) -> StringName:
 	if not _loaded:
 		load_all()
 
@@ -562,7 +567,7 @@ func visual_for(def_id: StringName, phase: int = -1, size_class: int = -1) -> St
 
 	var u: UnitDef = _units.get(def_id)
 	if u != null:
-		return u.visual
+		return u.packed_visual if packed and u.packs() else u.visual
 
 	var r: ResourceDef = _resources.get(def_id)
 	if r != null:
@@ -998,6 +1003,15 @@ func validate() -> void:
 	for id in _units:
 		var u: UnitDef = _units[id]
 		_require_visual(u.visual, "unit '%s'" % id)
+		# THE PACKED ACTOR, for the three siege engines (4.13). Only checked when one is
+		# declared, because `packed_visual` is the switch for whether a unit packs at all
+		# -- requiring one of every unit would demand a folded-up villager. A typo here
+		# is a siege engine that turns magenta the instant it is ordered to move, which
+		# is loud but only once somebody trains one.
+		if u.packs():
+			_require_visual(u.packed_visual, "unit '%s' packed" % id)
+			if u.packed_speed <= 0:
+				load_warnings.append("unit '%s' packs but cannot travel packed" % id)
 		_require_kinds(u.cost, "unit '%s' cost" % id)
 		_require_kinds(u.carry_cap, "unit '%s' carry_cap" % id)
 		_require_kinds(u.gather_rate, "unit '%s' gather_rate" % id)

@@ -1299,10 +1299,12 @@ func _leave_spent(id: int) -> void:
 ## the tempting one because it is the one that needs no measurement.
 func _visual_id_of(entry: Dictionary) -> StringName:
 	var def_id := StringName(entry.get("def_id", ""))
-	# `phase` is present only for buildings and `size_class` only for resource
-	# nodes (their own to_snapshot); -1 in either case means "no preference".
+	# `phase` is present only for buildings, `size_class` only for resource nodes and
+	# `packed` only for a siege engine that currently is (their own to_snapshot); -1 or
+	# absent in each case means "no preference". The three are per entity kind and never
+	# both apply -- see `visual_for`'s header.
 	var vis := GameDataRegistry.visual_for(def_id, int(entry.get("phase", -1)),
-			int(entry.get("size_class", -1)))
+			int(entry.get("size_class", -1)), bool(entry.get("packed", false)))
 	# Interchangeable looks (visuals.json `variants`) -- four field plots and, since
 	# 2026-08-28, a tree species set per map type. Unconditional and free for
 	# everything else: an id with no variants returns itself, so this needs no list

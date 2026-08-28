@@ -107,6 +107,33 @@ var flees: bool = false
 ## moves is `SimUnit.herded_by`, and `MoveCommand` is the only thing that reads it.
 var is_herdable: bool = false
 
+## SIEGE ENGINES TRAVEL PACKED AND FIGHT DEPLOYED (PLAN.md 4.13, 9.2.1). Three units
+## carry this and nothing else does: ballista, onager, trebuchet, each of which 0 A.D.
+## ships as a `_packed`/`_unpacked` actor PAIR rather than as one model.
+##
+## `packed_visual` is the switch, exactly as `attack_projectile` is for a shot: a unit
+## with no packed art does not pack, and no rule infers one from `speed` or from being
+## siege. `unit.siege_ram` is the case that proves it -- it is a siege engine, it walks
+## at 63, and it has one actor, so it never packs and needs no exception written for it.
+##
+## `speed` ABOVE IS THE DEPLOYED SPEED, which is 0 for all three, and this is the
+## travelling one. That reading was already true before packing existed: the three had
+## `speed: 0` because a deployed engine does not move, and the art convention (§12A A.4a)
+## is that anything with no walk clip carries 0 so nothing slides. The packed actors are
+## the walk clips, so the second number is now real.
+var packed_visual: StringName = &""
+var packed_speed: int = 0
+## Ticks to fold up or set up, the same figure both ways. 0 A.D. gives no separate
+## timings and a crew that can stow an engine in three seconds can raise it in three;
+## two numbers here would be two numbers to balance for a difference nobody can see.
+var pack_ticks: int = 0
+
+
+## Whether this unit has two states at all. Reads better at the call sites than
+## `packed_visual != &""` and keeps the "absence is the switch" rule in one place.
+func packs() -> bool:
+	return packed_visual != &""
+
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var u := UnitDef.new()
@@ -133,6 +160,13 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var armor: Dictionary = d.get("armor", {})
 	u.armor_melee = int(armor.get("melee", 0))
 	u.armor_pierce = int(armor.get("pierce", 0))
+
+	var packing: Variant = d.get("packing")
+	if packing is Dictionary:
+		var pk: Dictionary = packing
+		u.packed_visual = StringName(pk.get("visual", ""))
+		u.packed_speed = int(pk.get("speed", 0))
+		u.pack_ticks = int(pk.get("ticks", 0))
 
 	u.carry_cap = GameDefs.int_map(d.get("carry_cap", {}))
 	u.gather_rate = GameDefs.int_map(d.get("gather_rate", {}))
