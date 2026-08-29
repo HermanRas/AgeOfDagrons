@@ -7,7 +7,7 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated 2026-08-17.
+Last updated 2026-08-29.
 
 ---
 
@@ -346,6 +346,15 @@ so do not go looking for a setting. Substitute another clip (deer `run` is now
 The cost is one bake per clip set and it is the only check that would have caught
 this before the owner did, twice.
 
+**ESTABLISH THE NOISE FLOOR BEFORE CHOOSING A THRESHOLD, whenever you compare
+rendered frames.** EEVEE samples, so two frames that MUST be identical still
+differ — by ~44 in a channel at 24 samples. A decay check once used a threshold of
+2 and reported false mismatches across the roster; the tell was that `decay0` and
+`decay1`, the same sampled position, differed by the same amount as everything
+else. Render one pair that cannot legitimately differ, measure that, and put your
+threshold above it. `tools/` has no standing helper for this — it is three lines
+of PIL each time and the floor moves with `samples`.
+
 **A recipe's clip names resolve against the actor in `[source]`, and on a nested
 actor that is the wrong actor.** The onager is two actors: the pivot base the
 recipe names declares no animations at all, while the arm mounted at `weapon`
@@ -515,291 +524,121 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-28
+## 5. State as of 2026-08-29
 
-> ### ✅ THE OVERNIGHT RUN LANDED, AND A SECOND BATCH FOLLOWED IT
+> ### ⚠️ `art_work/out` AND `game/assets/atlases` ARE OUT OF STEP HERE, AND STAGED IS THE NEWER
 >
-> The reflection fix is baked across the project — 244 bakes, 2.1 h, master
-> checkout pristine. Every unit, animal, ship, siege engine and wall.
+> **DO NOT RUN A BARE `stage_atlases.py` ON THIS WORKSTATION.** It copies on any
+> byte difference and **cannot tell which side is newer**, so it would push stale
+> local bakes over good staged art and silently undo a batch. Use `--only` and
+> name what you rebaked.
 >
-> **`art_work/out` AND `game/assets/atlases` ARE OUT OF STEP ON THIS
-> WORKSTATION, AND STAGED IS THE NEWER OF THE TWO.** A second batch ran on the
-> box at 22:15 (22 bakes: the waypoint flag and its 8 colours, five gates, the
-> Roman age-3 walls, the wolf, the arrow, two packed engines) and **staged
-> itself there**. `game/assets/atlases` rides Google Drive, so that staging
-> arrived here; `art_work/out` does not ride Drive, so the bake output did not.
-> `out` was then refilled from a memory stick carrying the FIRST run.
+> **Why the inversion exists, because the tooling does not expect it:** the render
+> box bakes AND stages, `game/assets/atlases` rides Google Drive so its staging
+> arrives here, and `art_work/out` does not ride Drive so the bake output never
+> does. Two box runs (244 reflection bakes, then 160 colour) landed that way. This
+> workstation's `out` therefore holds yesterday's atlases for all 160 colours and
+> the pre-box static fauna.
 >
-> The result is an inversion the tooling does not expect. As of this writing
-> `out` holds Briton walls and single-pose gates while staged holds the Roman
-> re-point and both poses, and `vis.waypoint_flag` is staged but absent from
-> `out` entirely. **Do not run a bare `stage_atlases.py` until `out` is whole**
-> — it copies on any byte difference and cannot tell which side is newer, so it
-> would quietly undo the batch. Use `--only` (added 2026-08-28) meanwhile.
+> **`out` here is authoritative only for what was baked here.** As of 2026-08-29
+> that is `vis.trebuchet_packed`, `vis.deer` and `vis.deer_carcass`, and nothing
+> else. Treat the staged directory as the source of truth until someone carries the
+> box's `out` across; then a bare stage is correct again and should report 361/361.
 >
-> `stale_recipes.py` reads the STAGED atlas, so it reports all of this as up to
-> date and will not warn you. It is right about what the game can see and blind
-> to what `out` holds.
->
-> **To settle it:** bring the second batch's `out` across from the box, then a
-> bare `stage_atlases.py` is correct again and should report 342/342.
->
-> **STILL TRUE ON THE EVENING OF 2026-08-28, AND WORSE — DO NOT RUN A BARE STAGE HERE.**
-> The 160-bake colour run also stayed on the box and staged itself from there, so
-> `game/assets/atlases` is current at **361/361** while this workstation's `out` holds
-> YESTERDAY's atlases for all 160 colours, plus the pre-box static boar, bear, sheep and
-> cattle. A bare `stage_atlases.py` on the workstation would undo the colour run and P1
-> together. **`out` here is authoritative only for what was baked here.** Use `--only`,
-> and treat the staged directory as the source of truth until someone carries the box's
-> `out` across.
+> **`stale_recipes.py` will not warn you** — it reads the STAGED atlas, so it
+> reports all of this as up to date. It is right about what the game can see and
+> blind to what `out` holds.
 
-> ### ✅ ALL THREE PACKED SIEGE ENGINES ANIMATE — 2026-08-28
->
-> `vis.onager_packed` and `vis.ballista_packed` already did; `vis.trebuchet_packed` was
-> the last static one and now carries `idle` (12f @ 8) and `walk` (12f @ 15) over 5
-> directions, staged at build 39 off a clean commit. **These are the only siege assets
-> with a real `walk`** — the game side wires all siege at `speed: 0`, which is right for
-> the deployed halves and wrong for these.
->
-> **The fix was one line of `[source].actor`, not the pipeline change the recipe
-> predicted.** Root cause and the general lesson are in §4 under `prop_anchor_count`; the
-> asset-specific reasoning is in `tools/recipes/trebuchet_packed.toml`, which is worth
-> reading before touching any packed engine. Short form: the Han actor wraps its wagon in
-> a pivot that also carries four crew, the crew steal the subject-armature pick, and
-> baking the wagon one level down makes it structurally identical to the two that already
-> worked.
->
-> **It cost the trebuchet's four crew**, which hang off the pivot and so are not imported
-> at all — project owner's call, taking an animated ox-cart over four frozen soldiers.
-> The other two packed engines keep their crew. Verified beyond the summary: walk differs
-> 2.6–3.3% of pixels between half-cycle frames with trim changes in 3 of 5 directions,
-> which is in family with the onager's 3.7–8.8%.
->
-> **`vis.trebuchet_packed` is the one atlas in `out` on this workstation that is CURRENT**
-> — it was baked here. Everything else in §5's warning above still applies.
+> **The render-box run recipe lives in [tools/render_box_prep.md](tools/render_box_prep.md)**
+> — env paths, shards, and what each skipped step breaks. The two flags that job
+> needs are in §4 under "A PIPELINE FIX CHANGES NO RECIPE".
 
-> ### ✅ THE DEER IS FIXED — 2026-08-28
->
-> Owner from play: *"deer is messed up, so is dead deer."* Both `vis.deer` and
-> `vis.deer_carcass` re-baked and staged. **`location_scale` is 0.0 on every deer clip,
-> and that is the fix rather than a disabling** — see §4, which now carries the general
-> rule and the three process lessons. Idle height spread across the 8 directions went
-> x2.09 → x1.51 against a healthy range of x1.33–x1.48; head-on width 47 px → 24 px.
->
-> **Known residual: the carcass floats ~5 px (0.22 m)**, because zeroing every location
-> curve also zeroes the root's, which is what drops a dying body to the ground. Flagged
-> to the game side in `asset_request.md`. The proper fix — exempt the root bone from
-> `location_scale` — is the next thing to write in isobake if anyone wants it.
->
-> **`vis.deer` and `vis.deer_carcass` join `vis.trebuchet_packed` as CURRENT in this
-> workstation's `out`.** Nothing else here is.
-
-> ### ⏳ SUPERSEDED — the prep notes for the run above, kept for the recipe
->
-> **The render box was OFF when this was written.** Everything else is ready and
-> verified; the run is waiting on the machine, not on a decision.
->
-> **Why:** isobake `e6fc052` (build 37) fixes a REFLECTION that mirrored every 8-
-> and 5-direction atlas in the project. See §4, "The compass ran backwards". Two
-> probes are baked, staged and confirmed correct — `vis.scout_cavalry` with all
-> eight colours, and `vis.wolf`.
->
-> **Full prep — env paths, shards, and what each skipped step breaks:**
-> [tools/render_box_prep.md](tools/render_box_prep.md). The short form:
->
-> ```powershell
-> # 1. ON THE WORKSTATION, once the box is on. Pushes isobake e6fc052 to it.
-> powershell -File tools\provision_render_box.ps1 -WhatIf     # check the target
-> powershell -File tools\provision_render_box.ps1
->
-> # 2. ON THE RENDER BOX, from the synced repo.
-> powershell -File tools\render_box_bake.ps1 -PipelineStale -Directions "5,8" -WhatIf
-> powershell -File tools\render_box_bake.ps1 -PipelineStale -Directions "5,8"
-> ```
->
-> **`-PipelineStale` IS NOT OPTIONAL AND THE RUN SILENTLY DOES NOTHING WITHOUT
-> IT.** `stale_recipes.py` compares recipe bytes, and this fix changed no recipe —
-> without the flag the box prints "nothing is out of date" and idles until morning.
-> `-Directions "5,8"` keeps the 89 one-direction buildings, which the fix cannot
-> reach, out of the night. Together they select **80 base + 152 colour = 232**;
-> the scout and wolf are already at `e6fc052` and drop out on their own.
->
-> **STEP 1 IS THE ONE THAT WILL BITE.** The box still holds isobake **build 36**.
-> Bake before provisioning and it re-mirrors all 232 with the old code, reports
-> `ok` for every one of them, and the only sign is the stamp. Worse, the box
-> computes "current commit" from *its own* isobake: at build 36 it would either
-> select nothing, or select the two probes and bake them BACKWARDS.
->
-> **The repo reaches the box through Google Drive, the toolchain does not.**
-> `tools/stale_recipes.py` and `tools/render_box_bake.ps1` both changed today
-> (`7685fa0`) — let Drive settle on the box before launching, or it runs the old
-> selection logic, which is the do-nothing case again.
->
-> **Verify after, not just the summary** — a summary full of `ok` is exactly what
-> the coloured-faces batch produced. `check_colour_consistency.py --pixels` before
-> staging, then `preview_facing_chart` columns 0/2/4/6 on a chiral unit. The game
-> side re-runs `preview_walls` to confirm the walls changed *harmlessly* rather
-> than not at all.
-
-- **171 base recipes**, **160 generated colour recipes** (20 units × 8).
+- **193 base recipes**, **168 generated colour recipes** (21 units × 8).
 - **Nothing is running** on the workstation.
-- **10 atlases are at build 37 and the other 321 are not**, which is deliberate
-  and temporary: `vis.scout_cavalry` + its 8 colours, and `vis.wolf`. Everything
-  else is still mirrored until the run above lands.
-- **Staging is complete and current: `331/331, RESULT: OK`.** All eight colours
-  are correct for all 20 colourable units; the game agent is no longer restricted
-  to red and yellow.
+- **Staging is complete and current: 361 atlases.** All eight colours are correct
+  for all 21 colourable units — `check_colour_consistency.py --staged` reports
+  **0 of 21 with pages that disagree and 0 where only the import counts did**.
 - `vis.ballista` is base-only because **its own** crew textures measure a 0% mask
   — *not* because siege engines are a class that cannot tint. The ram does, at
   6.8%; see §4. Every other unit has its eight. **Re-measured 2026-08-16 after
   the crew got their heads and helmets back: still 0.00%** (21,761 opaque pixels,
   0 moving >64, largest channel gap 14 — under the noise floor). The rescued kit
   carries no mask either, so `"colours": false` is confirmed rather than assumed.
-- **Both siege engines animate.** `vis.ballista` since 2026-08-16 and
-  `vis.onager` since 2026-08-17 — `idle`/`attack`/`die`/`decay`, 140 frames each.
-  Each was static for a different wrong reason and the second outlived the fix for
-  the first: the ballista's was a tool/bake disagreement about which armature the
-  bake drives, the onager's was that its clip had nowhere correct to land (§4,
-  "The subject armature of a subject with no rig").
-- **Build identity is live.** Staged population, counted off disk 2026-08-17:
+- **All four siege engines animate**, deployed and packed. Each was static for a
+  different wrong reason and each fix outlived the last: the ballista's was a
+  tool/bake disagreement about which armature the bake drives, the onager's was
+  that its clip had nowhere correct to land, the packed trebuchet's was the crew
+  stealing the subject-armature pick. All three lessons are in §4.
+- **Build identity is live.** Staged population, counted off disk 2026-08-29:
 
   ```
-  (no keys)               298 atlases   predates the stamp
-  780431d781f7  build 34   13 atlases   the fields, the farm, the ORE set   DIRTY
-  e257ae83d53f  build 36    9 atlases   vis.onager + its 8 colours
-  8aa37b04f718  build 33    2 atlases   vis.ballista                        DIRTY
-  531a4bce4f14  build 28    2 atlases   the two food props
+  878eb40e4d3b  build 39  197 atlases   the current pipeline
+  db9dc8e71cd9  build 38   76 atlases   the reflection re-bake
+  (no keys)                67 atlases   predates the stamp
+  e257ae83d53f  build 36   20 atlases
+  780431d781f7  build 34    1 atlas     DIRTY
   ```
 
   Each unit's own set is internally uniform, which is what the game side's
-  staleness rule keys on, so it should still read 0 stale.
+  staleness rule keys on, so it reads 0 stale. **Compare by uniformity, not
+  ordering** — "these eight do not all carry the same identity" works on a wholly
+  unstamped set where "older than the newest sibling" does not, and
+  `isobake_build` is monotonic only while history stays linear.
 
-  **Commit isobake BEFORE the bake you intend to stage.** 15 of the 26 stamped
-  atlases say `dirty=True`, which means the code that made them is not recoverable
-  from any commit — the stamp records that honestly and that is the whole point,
-  but it is a hole, not a badge. I stopped a colour batch mid-flight on 2026-08-17
-  to commit and rebake for exactly this reason; it cost 20 minutes and the nine
-  onager atlases now name a real commit. Do the same.
-- Verified beyond the batch summary, because a summary full of "ok" is exactly
-  what the coloured-faces batch produced: 0 pixels move >64 between each unit's
-  last `die` frame and first `decay` frame across 13 units × 8 colours, and the
-  newly-tinted units all separate cleanly (closest pair ΔRGB 40–67).
+  **Commit isobake BEFORE the bake you intend to stage.** Exactly one staged atlas
+  now says `dirty=True`, down from 15, which means the code that made it is not
+  recoverable from any commit. The stamp records that honestly and that is the
+  whole point, but it is a hole, not a badge. I stopped a colour batch mid-flight
+  on 2026-08-17 to commit and rebake for exactly this reason; it cost 20 minutes.
+  Do the same.
 
-> **Verification lesson worth keeping:** the first pass at that decay check
-> reported false mismatches because the threshold was 2, which is *below* EEVEE's
-> sampling noise (~44 in a channel at 24 samples). The tell was that `decay0` and
-> `decay1` — the same sampled position — differed by the same amount. When
-> comparing rendered frames, establish the noise floor from two frames that must
-> be identical before choosing a threshold.
+  **Do not backfill the 67 unstamped ones.** The pass is cheap but there is no true
+  value to write: today's build would assert code that did not run, and would erase
+  the only honest signal on disk. Absence already *is* the sentinel.
 
-### Recently fixed in isobake (repo `blender_3d_to_2d_isobake`, HEAD `e257ae8`, build 36)
+### isobake: repo `blender_3d_to_2d_isobake`, HEAD `878eb40`, build 39, clean
 
-Newest first; the numbering is historical, not a ranking.
+Its history is a list of silent defects, and every lesson worth re-reading is
+already in §4 rather than here. What that history is FOR is calibration: **six
+separate bugs in this pipeline reported `ok` for every frame they ruined**, so a
+green batch summary is evidence of nothing. The reflection, the coloured faces,
+the variant seed, two wrong armature picks and the deer's location curves all
+shipped past it.
 
-- **2026-08-17 — the all-anchored `subject_armature` tie-break ranked by bone
-  count**, so a subject whose own mesh is unrigged and which carries several rigged
-  props at the same depth — the onager, whose base plane holds an arm and three
-  crew — handed the recipe's clip to a crew member. Ranks by props owned now, in
-  both branches. §4 has the full lesson. This is what stood between `vis.onager`
-  and an animated bake.
+The one-line index, so a symptom can be matched to a known shape:
 
-0. **`inspect` reported the wrong armature**, and **nested props of nested props
-   were never anchored** — both landed 2026-08-16 and both are covered in §4.
-   Between them they turned `vis.ballista` from a static, headless-crewed sprite
-   into an animated one (idle/attack/die/decay, 140 frames) whose three
-   operators have heads. `vis.onager` gains the same crew heads.
-
-1. The tint was a MULTIPLY — white a no-op, dark colours crushed. Now mixes
-   toward the colour, preserving texture shading with headroom scaling.
-2. The importer builds its own player-colour chain with 0 A.D.'s **red
-   hardcoded** and wires it into Base Color; isobake skipped those materials, so
-   every `player_trans` surface baked red. Now walks back to the texture.
-3. Alpha role was read per **actor** and applied per **material** — which put
-   player-coloured faces on villagers, and hid colour entirely on composite
-   actors (horse hides rider, hull hides sail). Now decided per material.
-4. `AnimSpec.start` — `decay` reuses `Death`, and sampling from 0.0 made its
-   first frame the unit still standing. Every corpse stood up for a frame.
-5. `_subject_armature` ranked rigs by bone count and picked a duplicate inflated
-   to 202 bones by Blender datablock reuse. Now ranks by props anchored **to** it.
+| what it looked like | what it was |
+|---|---|
+| units facing the wrong way, unfixable by rotation | the compass ran backwards — a REFLECTION |
+| villagers with player-coloured faces | alpha role read per actor, applied per material |
+| every `player_trans` surface baked red | the importer hardcodes 0 A.D.'s red |
+| white a no-op, dark colours crushed | the tint was a MULTIPLY |
+| each player's archer wearing different kit | variant RNG seeded from the recipe id |
+| a corpse standing up for one frame | `decay` sampled `Death` from position 0.0 |
+| a siege engine frozen in its bind pose | the clip landed on a crew member's rig |
+| a deer reared and pitching | pose-bone locations transferred between unlike rigs |
 
 ### Known open items
 
-- **Canvas sizes are now under-provisioned wherever crew got their heads back.**
-  `_rescue_orphaned_props` makes a sprite BIGGER, and a canvas calibrated against
-  a headless bake can no longer hold it: `vis.onager` clipped on S/SE/E at its
-  old 384 and went to 512. `vis.ballista` at 384 was fine (46.4% fill). **Every
-  other composite actor with nested crew is unverified** — the clip-check will
-  catch it at bake time, so the rule is simply to read the batch summary rather
-  than assume, and to expect a canvas bump or two on the next full rebake. The
-  staged atlases predate the fix and are internally consistent, so nothing is
-  broken today.
-- **Seven staged colour atlases are missing geometry**, from the parallel-slot race
-  in the 3-wide colour batch of 2026-08-16. `python tools/check_colour_consistency.py
-  --pixels` names them, and the project owner chose on 2026-08-17 to leave them
-  rather than spend the machine time; the repair is a rebake at `-Parallel 1` and a
-  re-run of that command.
-
-  ```
-  vis.archer   orange 5.62%  violet 6.39%  white 4.92%   short
-  vis.galley   cyan 0.79%  orange 0.82%  white 0.86%  yellow 1.49%
-  ```
-
-  `vis.fishing_ship` (blue, orange) is WARN not SHORT: two objects fewer, pages
-  identical — a 0-bone armature shell and a coincident duplicate mesh, invisible.
-  Leave it. The other 17 units are clean, and the nine onager atlases were baked
-  under this rule and verified against it.
+- **The root bone is exempt from nothing, and `location_scale = 0.0` therefore
+  drops a death clip's fall.** The deer's carcass floats ~5 px (0.22 m) — its
+  lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px below.
+  §4 has the mechanism. **The fix is to exempt the root bone from
+  `location_scale`**, which is a small, well-defined isobake change and the only
+  open pipeline item. It affects one asset today; it would affect any future
+  species whose clips come from an unlike rig.
+- **`vis.deer`'s `run` clip is a substitution, not a bake.** `deer_run_01.dae`
+  does not transfer to this rig at all, so `run` is the walk clip at 22 fps under
+  its own anim name. If anyone ever writes a real retarget step, this is the asset
+  that would get its gallop back. §4 has the test that found it.
 - **`swordsman`/`elite_swordsman`** actors declare a mesh in two groups and the
   importer imports both. Worked around per recipe with `drop_objects`; a general
   fix belongs in the importer's variant resolution. The owner has seen the
   current output in-game and is content to leave it — do not re-open unprompted.
-
-### Done since
-
-- **Build identity in the atlas `generator` block** — `isobake_commit`,
-  `isobake_build` (a `git rev-list --count`, so it orders without a clock) and
-  `isobake_dirty`. Landed as isobake `531a4bc`, amended by `99a33cc` so that all
-  three keys are **always present and null when git could not answer**. That
-  gives three states, and the middle one is the point:
-
-  ```
-  keys absent    built before 531a4bc      <- the 323 staged before it
-  keys null      current code, git failed  <- provenance broke; should never happen
-  real values    a known commit            <- the 2 food props, build 28
-  ```
-
-  Without it, a bake where git was missing from the Blender subprocess's `PATH`
-  would have been indistinguishable from genuinely older art, and the consumer
-  reads "no keys" as "old". `99a33cc` also stopped `isobake_dirty` reporting a
-  tree **clean** when `git status` itself had failed.
-
-  **Do not backfill the 323**, and I refused it on 2026-08-16 when the game side
-  offered to take it: the pass is cheap (JSON rewrite, seconds) but there is no
-  true value to write. Today's build would assert code that did not run, and
-  would erase the only honest signal on disk — the two food props really are
-  build 28. Absence already *is* the sentinel.
-
-  **Tell the consumer to compare by uniformity, not ordering:** "these eight do
-  not all carry the same identity" works today with a wholly unstamped set,
-  where "older than the newest sibling" does not. Prefer commit *equality* to
-  `isobake_build` ordering where possible — the count is monotonic only while
-  history stays linear.
-- **`vis.siege_ram` colour** — I had it wrong, see the measurement note in §4.
-  It tints at 6.8% and is fine.
-- **`vis.field` / `vis.farm` prop points** — fixed 2026-08-17 and both delivered.
-  The mechanism was not the Pyrogenesis importer at all, which is what the open
-  item here used to claim: 0 A.D. writes `<matrix sid="parentinverse">` ahead of the
-  real `<translate>`, and **Blender's own COLLADA importer** keeps the leading
-  matrix, so all 65 patch points collapsed onto the origin. isobake places the
-  empties itself now, from the COLLADA.
-- **`vis.onager` animation** — 2026-08-17, and it closes out the "both siege
-  engines are static" story entirely. See §4 and `tools/recipes/onager.toml`.
-- **The bone-less mesh defect was never real for the siege engines.**
-  `m_armor_tunic_short.dae` does import with a 0-bone armature. Both siege engines
-  were said to as well, and that was a misreading of `inspect` reporting a crew
-  shell (§4): the lithobolos has a 36-bone rig and the onager arm an 8-bone one,
-  and both animate. **Do not cite this as a reason to bake anything static without
-  re-measuring** — it is the false premise that kept two engines frozen, one of
-  them for a year.
+- **Canvas sizes are calibrated, not computed, so expect a bump after any fix
+  that makes a sprite BIGGER.** `_rescue_orphaned_props` did exactly that and
+  `vis.onager` went 384 → 512. The clip-check catches it at bake time, so the rule
+  is only to read the batch summary for `CLIPPED` rather than assume.
 
 ## 6. Two things the game side cannot see — tell them
 
