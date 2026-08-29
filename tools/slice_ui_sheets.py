@@ -155,6 +155,37 @@ ICON_PX = 100
 MASTER_PX = 256
 PAD_FRAC = 0.06          # breathing room around the content bbox
 
+# ── icons drawn with a deliberate GLOW ──────────────────────────────────────
+#
+# A GLOW ON BLACK CANNOT BE KEYED BY A FLOOD FILL, and the reason is not a bug
+# in the fill: a glow IS partial transparency, and compositing it over black
+# already destroyed the information that says so. The fill can only answer
+# "background or not", so it keeps the whole falloff as opaque and the icon
+# ships with a black disc around it. That is what `abil_heal` was reported for.
+#
+# TWO AUTOMATIC DISCRIMINATORS WERE TRIED AND BOTH FAILED ON MEASUREMENT, which
+# is why this is a hand-written list and not a heuristic:
+#
+#   luma        the halo runs p25/p50 = 20/29 and `act_repair`'s black anvil
+#               runs 38/45. Any ramp that feathers the glow makes the anvil
+#               half transparent.
+#   edge energy the halo is featureless (p90 = 5.2) where the anvil has facets
+#               and an outline (p90 = 35.3) -- but the anvil's FLATTEST pixels
+#               (p10 = 1.0) are flatter than the glow's (p10 = 2.6), so a
+#               per-pixel cut punches holes in the anvil instead.
+#
+# The list wins because it uses information the image does not carry:
+# ART_PROMPT.md SPECIFIED which cells get a glow, so this is read off the
+# prompt rather than guessed from the pixels. Add an id here if a cell is
+# regenerated with a bloom; the ramp is safe only where the icon has no large
+# dark subject, which is true of every glow the prompts asked for (a gold
+# cross, a gold chevron, a gold frame).
+GLOW_ICONS = {
+    "abil_heal",        # "a soft warm white glow blooming behind it"
+    "age_advance",      # "a bright starburst behind its point"
+}
+GLOW_CAP_OFFSET = 90     # luma above threshold at which the glow is fully opaque
+
 
 def luma(rgb: np.ndarray) -> np.ndarray:
     """Max channel, not a weighted luminance.
@@ -217,6 +248,72 @@ def grow_within(seed: np.ndarray, allowed: np.ndarray, limit: int = 4096) -> np.
             return cur
         cur = grown
     return cur
+
+
+def dilate(mask: np.ndarray, n: int = 1) -> np.ndarray:
+    cur = mask
+    for _ in range(n):
+        g = cur.copy()
+        g[1:, :] |= cur[:-1, :]
+        g[:-1, :] |= cur[1:, :]
+        g[:, 1:] |= cur[:, :-1]
+        g[:, :-1] |= cur[:, 1:]
+        cur = g
+    return cur
+
+
+def own_components(fg: np.ndarray, cell: tuple[int, int, int, int],
+                   reach: int = 128) -> np.ndarray:
+    """Every blob BELONGING to one cell, by centroid.
+
+    THE TIER PIPS ARE A SEPARATE CONNECTED COMPONENT AND THAT IS WHAT BROKE
+    `tech_bracer`. ART_PROMPT.md asked for "small gold pips in the lower right",
+    and Gemini drew several of them detached from the glyph. Growing outward
+    from the cell centre therefore found the bracer and not its three pips, so
+    the bounding box came out at 77% of the cell where its siblings are 90-99%,
+    and the square crop taken around that undersized box sliced the pips in half
+    -- which reads as the icon being cut off, because it is.
+
+    The same defect from the other side is the edge artefact on
+    `tech_blast_furnace`: a NEIGHBOUR's pips fall inside this icon's crop
+    rectangle. Cropping a rectangle keeps whatever is in it.
+
+    So ownership is decided per blob, by which cell its centroid lands in, and
+    the alpha is masked to the blobs this cell owns. A detached pip inside the
+    cell is kept; a neighbour's pip overlapping the crop is dropped. Both
+    symptoms are the one bug: the bounding box was being treated as the icon.
+    """
+    y0, x0, y1, x1 = cell
+    h, w = fg.shape
+
+    win = np.zeros_like(fg)
+    win[max(0, y0 - reach):min(h, y1 + reach),
+        max(0, x0 - reach):min(w, x1 + reach)] = True
+    allowed = fg & win
+
+    core = np.zeros_like(fg)
+    ch, cw = y1 - y0, x1 - x0
+    core[y0 + int(ch * 0.2):y0 + int(ch * 0.8),
+         x0 + int(cw * 0.2):x0 + int(cw * 0.8)] = True
+
+    own = grow_within(core & allowed, allowed)
+
+    # Anything else inside the CELL is a detached blob; keep it if its centre
+    # of mass is in this cell, drop it if it belongs to a neighbour.
+    cell_mask = np.zeros_like(fg)
+    cell_mask[y0:y1, x0:x1] = True
+    left = allowed & cell_mask & ~own
+
+    while left.any():
+        ys, xs = np.nonzero(left)
+        seed = np.zeros_like(fg)
+        seed[ys[0], xs[0]] = True
+        comp = grow_within(seed, allowed)
+        cy, cx = np.nonzero(comp)
+        if y0 <= cy.mean() < y1 and x0 <= cx.mean() < x1:
+            own |= comp
+        left &= ~comp
+    return own
 
 
 def box_blur3(a: np.ndarray) -> np.ndarray:
@@ -298,13 +395,8 @@ def slice_grid(src: Path, rows: int, cols: int, ids: list[str], out: Path,
 
     for i, ident in enumerate(ids):
         r, c = divmod(i, cols)
-        # Seed from the middle 60% of the cell, so a neighbour that overlaps the
-        # cell edge cannot become the seed for this one.
         y0, x0 = r * ch, c * cw
-        seed = np.zeros_like(fg)
-        seed[y0 + int(ch * 0.2):y0 + int(ch * 0.8),
-             x0 + int(cw * 0.2):x0 + int(cw * 0.8)] = True
-        grown = grow_within(seed & fg, fg)
+        grown = own_components(fg, (y0, x0, y0 + ch, x0 + cw))
         box = content_bbox(grown)
         if box is None:
             report.append({"id": ident, "sheet": src.stem, "status": "EMPTY"})
@@ -315,8 +407,40 @@ def slice_grid(src: Path, rows: int, cols: int, ids: list[str], out: Path,
         # neighbour -- `tile_frame_selected`'s glow is the case that does it.
         bled = bw > cw * 1.45 or bh > ch * 1.45
 
+        # MASK TO WHAT THIS CELL OWNS, so a neighbour's blob inside the crop
+        # rectangle is dropped rather than cropped. Dilated by 2 first, or the
+        # masking would shear off the anti-aliased rim that `box_blur3` just
+        # built and put a hard jagged edge back on every icon.
+        keep = dilate(grown, 2)
+        piece_alpha = alpha * keep
+
+        piece_rgb = keyed_rgb
+        if ident in GLOW_ICONS:
+            # Recover the alpha a glow always had. The falloff was composited
+            # over black, so its luminance IS its coverage -- ramping alpha with
+            # luma turns the retained black disc back into a bloom that fades
+            # out. `minimum` so the bright core keeps the fill's opaque alpha
+            # and only the dim surround is softened.
+            lum = luma(rgb)
+            cap = float(thresh + GLOW_CAP_OFFSET)
+            ramp = np.clip((lum - thresh) / max(1.0, cap - thresh), 0.0, 1.0)
+            piece_alpha = np.minimum(piece_alpha, ramp.astype(np.float32))
+            # AND UN-PREMULTIPLY AGAINST THE NEW ALPHA, not the fill's. Without
+            # this the halo keeps the dim colour it had when it was opaque and
+            # is then multiplied down again at draw time -- a luma-29 pixel at
+            # alpha 0.19 renders at 5, so the bloom all but disappears. Dividing
+            # recovers the bright warm colour the glow actually is.
+            piece_rgb = np.clip(
+                rgb.astype(np.float32) / np.maximum(piece_alpha, 1e-3)[..., None],
+                0, 255)
+
+        # A NEW IMAGE PER PIECE, never a rebind of `full`. The mask is specific
+        # to this cell, so writing it back over the shared image would carry
+        # cell 1's mask into cell 2 and blank most of the sheet.
+        piece_full = to_image(piece_rgb, piece_alpha)
+
         if as_icon:
-            crop = crop_padded(full, square_pad(box, w, h, PAD_FRAC))
+            crop = crop_padded(piece_full, square_pad(box, w, h, PAD_FRAC))
             crop.resize((MASTER_PX, MASTER_PX), Image.LANCZOS).save(
                 out / "masters" / f"{ident}.png")
             piece = crop.resize((ICON_PX, ICON_PX), Image.LANCZOS)
@@ -324,8 +448,8 @@ def slice_grid(src: Path, rows: int, cols: int, ids: list[str], out: Path,
         else:
             pad_x = int(round(bw * PAD_FRAC * 0.5))
             pad_y = int(round(bh * PAD_FRAC * 0.5))
-            piece = crop_padded(full, (box[0] - pad_x, box[1] - pad_y,
-                                       box[2] + pad_x, box[3] + pad_y))
+            piece = crop_padded(piece_full, (box[0] - pad_x, box[1] - pad_y,
+                                             box[2] + pad_x, box[3] + pad_y))
             piece.save(out / "chrome" / f"{ident}.png")
 
         pieces.append(piece)

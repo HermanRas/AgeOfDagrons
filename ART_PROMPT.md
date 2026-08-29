@@ -1098,6 +1098,65 @@ archway. The background is not "the dark pixels", it is "the dark pixels
 intact; verify it in `sliced/review/sheet_a_command_verbs.png`, which composites
 every icon over a checkerboard for exactly this reason.
 
+## Five icon bugs the owner found, and what they were
+
+Reported 2026-08-30: edge artefacts on `abil_heal`, `age_1`, `net_join` and
+`tech_blast_furnace`; `tech_bracer` cut off. **Two root causes, both mine, and
+neither was in the slicing code the way I expected.**
+
+### The bounding box was being treated as the icon
+
+`grow_within` finds the blob at the centre of a cell. The crop then took a
+**rectangle** around it — and a rectangle keeps whatever is inside it.
+
+**THE TIER PIPS ARE A SEPARATE CONNECTED COMPONENT**, which this file caused: it
+asked for "small gold pips in the lower right", and Gemini drew several detached
+from the glyph. So `tech_bracer`'s bbox found the bracer and not its three pips,
+came out at **77% of its cell against its siblings' 90–99%**, and the square crop
+around that undersized box sliced the pips in half — which reads exactly like the
+icon being cut off, because it is. The same defect from the other side put a
+*neighbour's* pips inside `tech_blast_furnace`'s crop.
+
+Fixed by deciding ownership **per blob, by centroid**, and masking alpha to the
+blobs a cell owns. A detached pip inside the cell is kept; a neighbour's pip
+overlapping the crop is dropped. `tech_bracer` went 77% → 84%,
+`tech_blast_furnace` 85% → 92%.
+
+### A glow on black cannot be keyed, and this file asked for one
+
+`abil_heal` was specified with "a soft warm white glow blooming behind it". **A
+glow IS partial transparency**, and compositing it over black already destroyed
+the information that says so. A flood fill can only answer background-or-not, so
+it kept the entire falloff as opaque and the icon shipped with a black disc.
+
+**Two automatic discriminators were tried and both failed on measurement**, which
+is why the fix is an explicit list rather than a heuristic:
+
+| discriminator | glow halo | `act_repair`'s black anvil | verdict |
+|---|---|---|---|
+| luma p25 / p50 | 20 / 29 | 38 / 45 | overlaps — a ramp that feathers the glow makes the anvil half transparent |
+| edge energy p10 / p90 | 2.6 / 5.2 | 1.0 / 35.3 | the anvil's *flattest* pixels are flatter than the glow's — a per-pixel cut punches holes in it |
+
+The list wins because it uses information the image does not carry: **this file
+specified which cells get a glow.** `GLOW_ICONS` in the slicer is read off the
+prompts. For those, alpha ramps with luminance **and the colour is
+un-premultiplied against the new alpha** — without that second half a luma-29
+pixel at alpha 0.19 renders at 5 and the bloom vanishes instead of blooming.
+
+### A checkerboard is the wrong background for judging this art
+
+It caused two false alarms. `tech_blast_furnace`'s chimney smoke and `abil_heal`'s
+bloom are dark, soft-edged art whose alpha is genuinely ambiguous — against grey
+squares they read as blobs, against the dark brown field they are drawn on they
+are nearly invisible. **The checkerboard's job is finding holes punched in
+artwork; it is actively misleading about anything dark and soft.**
+
+`tools/preview_icons_in_tile.py` is the check that settles it — every icon
+composited into `tile_frame` at `ActionSlot`'s real geometry, 52 px inside a
+72 px tile, at 3× for inspection with a 1× strip alongside so an icon that reads
+at 3× and turns to mush at 1× is caught. **Review there, not on the
+checkerboard.**
+
 ## Measured nine-patch margins
 
 Off the art, not off this file's original guesses. Full table in
