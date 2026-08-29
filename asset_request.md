@@ -24,7 +24,7 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | P | Request | The phase it is holding up |
 |---|---|---|
 | **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
-| **P8** | **THE WHOLE UI ART SET** — 20 icons exist, 5 are stand-ins, 38 are missing, ~25 upcoming buttons have no feature yet, and **all the chrome is being replaced too** | **Nothing, and that is the point.** Filed for the owner's UI overhaul so it is baked ONCE. **The itch.io chrome goes** (owner, 2026-08-30), which makes the art committable and retires the download-two-packs-by-hand step. Largest entry in this file and the least urgent |
+| **P8** | ✅ **THE WHOLE UI ART SET — ART IS DELIVERED, 2026-08-30. AWAITING WIRING, AND IT IS THE CODER AGENT'S.** 130 pieces in `assets/UI_Gen/sliced/`: 103 icons, 22 chrome, 5 full-canvas panels | **Nothing was ever blocked on it — but the handover is now, and it is the biggest single change to `game/` in this file's history.** Read the ✅ block under [P8] before touching anything: it names the **one line of code** (`ActionSlot._FRAME_PATH`), the **15 `TEXTURE_FILTER_NEAREST` sites that are now wrong**, the measured **nine-patch margins**, the **fonts**, and the **one-commit licence retirement**. Splash screen is prompted but not yet generated |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
@@ -52,11 +52,25 @@ pack stays one sprite per terrain. Do not bake transition tiles.
 with it.** This note used to ask what to do about the itch.io UI art `.gitignore` keeps out
 of the repo, and quoted `licence_audit.py` reporting **14 undeclared UI `.png` files**. The
 answer is [P8] §4: **all of it is being replaced**, so the undeclared files stop existing
-rather than getting a licence. Two corrections to the old text while it goes: `LICENCES.md`
-already carries rows for every one of them (464–468 for the owner's Gemini-generated icons,
-503–510 for the Kibyra copies), and **there is no Python on this workstation** — no
-`python`, no `py` launcher — so that audit cannot be run here at all and the figure was
-never re-measured. **Re-run it on a machine with Python before quoting any number.**
+rather than getting a licence. `LICENCES.md` already carries rows for every one of them
+(464–468 for the owner's Gemini-generated icons, 503–510 for the Kibyra copies).
+
+> **[asset] "There is no Python on this workstation" is WRONG, and the 14 is now measured
+> rather than quoted, 2026-08-30.** There is no `python` and no `py` launcher **on PATH** —
+> that part was right — but the isobake venv is a full Python with PIL and numpy, and it
+> runs the audit fine:
+>
+> ```powershell
+> C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe tools\licence_audit.py
+> ```
+>
+> It reports **361 recipes, 44 shipped asset files, 14 problems** — so the figure stands,
+> and **all 14 are exactly the Kibyra files [P8] §4a is replacing** (`hud/*`, `menu/*`,
+> `control_groups/group_slot_ring`). That confirms §4a's prediction by measurement rather
+> than by argument: landing the new art makes this audit go green **by construction**, with
+> no rows to write. It also means the audit is a real gate the coder agent can run before
+> and after the swap, on this machine, today. Everything I built for the UI slice used that
+> same interpreter; nothing in `tools/` needs a Python on PATH.
 
 ---
 
