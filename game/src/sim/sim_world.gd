@@ -112,7 +112,16 @@ func setup(cfg: MatchConfig) -> void:
 			# whose crew finish setting it up on this tick fires on this tick and one
 			# that finishes folding walks on this tick (4.13). It also derives `speed`,
 			# which is why it has to be upstream of the walker rather than beside it.
-			SiegeSystem.new(), CombatSystem.new(),
+			# StanceSystem BEFORE CombatSystem, and directly before it, for the reason
+			# WildlifeSystem is: it only ever writes the same `Task.ATTACK` an
+			# AttackCommand would, so a unit that decides to fight on this tick closes
+			# in on this tick and nothing in combat knows the order was its own idea.
+			# AbilitySystem sits with them because a monk or a dragon walks somewhere
+			# and acts on arrival, exactly as Gather, Build and Garrison do -- and
+			# before CombatSystem, so a unit healed this tick is at its new hp before
+			# anything is allowed to hit it again.
+			SiegeSystem.new(), StanceSystem.new(), AbilitySystem.new(),
+			CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
@@ -183,6 +192,10 @@ func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
 		# one on the very next tick, which is before anything can ask it to walk.
 		u.packs = d.packs()
 		u.packed = u.packs
+		# WHAT IT WILL START ON ITS OWN (4.12). Copied at spawn like everything else in
+		# this block, so `StanceSystem` never asks the registry, and so a def retuned
+		# mid-match cannot change what a unit already on the map does.
+		u.stance = SimUnit.default_stance_for(d)
 		# WHAT IT CAN CARRY (2.4d). Copied off the def at spawn exactly as `pop_cost`
 		# and a building's own `garrison_cap` are, so the garrison paths are a scan over
 		# entities and never a registry lookup. 0 for every unit but the transport.

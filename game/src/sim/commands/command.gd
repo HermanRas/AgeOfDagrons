@@ -61,6 +61,10 @@ static func from_dict(d: Dictionary) -> Command:
 			return DebugSetAgeCommand.from_dict(d)
 		"set_control_group":
 			return SetControlGroupCommand.from_dict(d)
+		"set_stance":
+			return SetStanceCommand.from_dict(d)
+		"ability":
+			return AbilityCommand.from_dict(d)
 		_:
 			push_error("Command.from_dict: unknown type %s" % d.get("type"))
 			return null

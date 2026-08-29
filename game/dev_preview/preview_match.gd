@@ -154,6 +154,16 @@ func _advance_script() -> void:
 			_wait_until(_a_house_is_going_up)
 		17:
 			_shoot("match_building")
+			# THE MARCH RIDES THIS STEP because it is the last one with no wait of its
+			# own, and it needs one (2026-08-29). `DEBUG_ENEMY_SQUAD` moved twenty tiles
+			# out -- MapGen's header carries the owner's report that moved it -- which
+			# puts it behind the FOG, so step 18 had nothing to tap and warned "nobody to
+			# fight". That was the fog working, not the tap being broken.
+			#
+			# After the screenshot, so `match_building` still photographs the house going
+			# up with its builders on it rather than walking away from it.
+			_march_on_the_enemy_squad()
+			_wait_until(_an_enemy_is_visible)
 		18:
 			# Combat (4.13), through the tap path rather than a hand-built command:
 			# what is being checked is that tapping an enemy with an army in hand
@@ -163,6 +173,11 @@ func _advance_script() -> void:
 			# Villagers, because the town centre is the only trainer on the debug
 			# map and villagers are all it makes. A peasant mob at damage 3 apiece
 			# is a slow way to kill an archer and a perfectly real one.
+			#
+			# THE ARCHER FIGHTS BACK NOW (4.12), which it did not when this step was
+			# written: it is DEFENSIVE by default, so the peasant mob is a real trade
+			# rather than free damage, and some of them die. That is the mechanic
+			# working -- the project owner ruled on it the day it landed.
 			_select_all_villagers()
 			_tap_an_enemy()
 			_wait_until(_an_enemy_is_dead)
@@ -782,6 +797,64 @@ func _tap_an_enemy() -> void:
 		return
 	var world := Iso.tile_centre_to_world(target["tile"] as Vector2i)
 	_game._on_tapped(view.get_global_transform_with_canvas() * world)
+
+
+## Walk the villagers out to the enemy squad, so the player can SEE it before step 18
+## tries to tap it (2026-08-29).
+##
+## **NEEDED BECAUSE THE SQUAD MOVED, AND THE FOG IS WHY.** `DEBUG_ENEMY_SQUAD` used to
+## sit three tiles off the town centre wall, inside the opening vision circle, so
+## `_an_enemy()` found it in the client's facts on tick 1. It is twenty tiles out now
+## (see MapGen's header for the owner's report that moved it), which is well outside
+## every starting unit's `los` — so the client is not told it exists and the tap had
+## nothing to aim at. It reported as `nobody to fight`, which is exactly what a fogged
+## enemy SHOULD look like from here.
+##
+## THE DESTINATION COMES FROM THE HOST'S WORLD, which is the documented solo-only
+## exception `_preview_placement` and `_on_train_requested` already take: the client
+## cannot know where to march when the whole point is that it cannot see. What is under
+## test in step 18 is the TAP, not the scouting, so handing the walk a fogged answer is
+## a fixture doing its job rather than a shortcut past one.
+##
+## ⚠️ **THE STANDOFF MUST BE INSIDE THE VILLAGER'S OWN `los`, WHICH IS 4.** The first
+## attempt used 6, reasoning that arriving outside the archer's `GUARD_RADIUS` would let
+## the tap name an unengaged target rather than re-ordering a fight already under way.
+## That is a nice property and it is unreachable: a villager who stops six tiles away
+## **cannot see six tiles**, so the enemy never entered the client's facts and
+## `_tap_an_enemy` warned "nobody to fight" from a squad the villagers were standing next
+## to. The wait before it passed on a flicker -- somebody caught a glimpse in passing --
+## which is worse than failing, because it moved the failure one step downstream.
+##
+## 2, so they arrive with it plainly lit. The archer opens fire as they close, and the
+## tap then re-orders the same fight -- which still tests what this step is for:
+## `GameView.tap_action()` has to DECIDE that a tap on an enemy means attack, and it makes
+## that decision whether or not a fight is already running.
+const _MARCH_STANDOFF := 2
+
+
+func _march_on_the_enemy_squad() -> void:
+	var world: SimWorld = Net.host().world if Net.host() != null else null
+	if world == null:
+		push_warning("preview_match: no host to ask where the enemy is")
+		return
+	var ids: Array = world.entities.keys()
+	ids.sort()
+	for id in ids:
+		var e = world.entities[id]
+		if not (e is SimUnit) or not e.alive:
+			continue
+		if e.owner_id == 0 or e.owner_id == Net.local_player_id():
+			continue
+		_select_all_villagers()
+		Net.submit_command(MoveCommand.new(Net.local_player_id(),
+				(_game._view as GameView).movable_selection(),
+				e.tile() - Vector2i(_MARCH_STANDOFF, _MARCH_STANDOFF)))
+		return
+	push_warning("preview_match: the host has no enemy either")
+
+
+func _an_enemy_is_visible() -> bool:
+	return not _an_enemy().is_empty()
 
 
 ## The first entity belonging to somebody who is neither us nor gaia.

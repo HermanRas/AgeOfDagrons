@@ -41,6 +41,18 @@ var badge: String = ""
 ## tracks which action is expanded and re-asks for its details.
 var expands: bool = false
 
+## WHICH ONE OF A SET IS CURRENTLY IN FORCE -- the stance a unit is on, the formation
+## its moves are using (4.12, 4.14). Drawn as a ring by `ActionSlot`.
+##
+## A THIRD STATE, and it had to be: `enabled` already means two things a player must be
+## able to tell apart from this one ("not built yet" and "nothing to act on"), and both
+## draw greyed. A stance the unit is already on is neither -- it is live, pressable, and
+## the answer to "which of these four am I looking at". Reusing `enabled = false` for it
+## would have made the current stance the one slot that looks broken.
+##
+## Ignored by every action that is not one of a set, which is nearly all of them.
+var selected: bool = false
+
 ## Free-form rider the caller needs back: the `def_id` a train/build action
 ## names, the entity id a portrait stands for. Never interpreted here.
 var payload: Variant = null

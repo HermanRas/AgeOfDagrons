@@ -76,6 +76,15 @@ var _idle_cycle_id: int = 0
 ## handling. Set by the build buttons, cleared by a successful placement or
 ## the Cancel Build button.
 var _placing_def_id: StringName = &""
+
+## Whether the next world tap AIMS the selected unit's special ability (PLAN.md 4.10)
+## rather than being read as an ordinary order.
+##
+## Shaped after `_placing_def_id` above and cleared the same way -- one tap, armed or
+## not, never both. It carries no ability id: the ability is whatever the one selected
+## unit has, re-read at the moment of firing (`_selected_ability_def`), so a selection
+## that changed while the mode was armed cannot fire the previous unit's ability.
+var _ability_pending: bool = false
 var _ghost: PlacementGhost
 ## The flag on the selected building's rally point, or hidden. ONE node reused rather
 ## than one per building: only the selected building's flag is ever drawn, so there is
@@ -930,6 +939,14 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 	var movable := _view.movable_selection()
 	var owner := Net.local_player_id()
 
+	# AN ARMED ABILITY EATS THIS TAP (4.10), before `tap_action` gets to read it as a
+	# move or an attack. Checked after the placement guard above and before everything
+	# else, which is the same slot in the same order for the same reason: a targeting
+	# mode is the whole meaning of the tap while it is on.
+	if _ability_pending:
+		_fire_ability(picked, tile)
+		return
+
 	match _view.tap_action(picked, owner, not movable.is_empty()):
 		GameView.TapAction.SELECT:
 			_view.select([picked] as Array[int])
@@ -967,7 +984,11 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 			if from_touch and _ground_tap.register_tap(Time.get_ticks_msec()):
 				_clear_selection()
 				return
-			Net.submit_command(MoveCommand.new(owner, movable, tile))
+			# The formation rides out ON the order and is not stored anywhere in the sim
+			# (4.14). `Formation.NONE` -- the usual case -- is exactly the behaviour this
+			# line had before formations existed.
+			Net.submit_command(MoveCommand.new(owner, movable, tile, 0,
+					_panel.active_formation))
 			_flash.play(ActionFlash.Kind.MOVE, Iso.tile_centre_to_world(tile))
 		GameView.TapAction.WAYPOINT:
 			# The rally point for the ONE selected building (4.8's follow-up).
@@ -1023,6 +1044,13 @@ func _on_clear_pressed() -> void:
 
 
 func _clear_selection() -> void:
+	# AN ARMED ABILITY GOES WITH THE SELECTION (4.10). It is aimed by whichever unit is
+	# selected, so a mode outliving its caster is a mode that fires nothing and swallows
+	# the next tap -- `_fire_ability` would find no def and return silently, which is a
+	# tap the player made and the game ignored. Cleared here rather than only in
+	# `_on_clear_pressed`, because this is the function every route to an empty selection
+	# goes through: the [X], the double tap, and a unit that died.
+	_ability_pending = false
 	_view.select([] as Array[int])
 	_refresh_panel()
 
@@ -1472,6 +1500,17 @@ func _display_name(def_id: StringName) -> String:
 ## no target to wait for.
 func _on_action_requested(action_id: StringName) -> void:
 	var movable := _view.movable_selection()
+	# The two parameterised verbs, checked before the match because GDScript's `match`
+	# has no prefix arm. Both arrive from the DETAIL grid rather than the action column
+	# -- see `SelectionPanel._on_detail_pressed`'s fall-through.
+	var id := String(action_id)
+	if id.begins_with("stance:"):
+		_set_selected_stance(movable, int(id.trim_prefix("stance:")))
+		return
+	if id.begins_with("formation:"):
+		_pick_formation(StringName(id.trim_prefix("formation:")))
+		return
+
 	match action_id:
 		&"stop":
 			# STOP MEANS TWO THINGS AND WHICH ONE DEPENDS ON THE SELECTION (project
@@ -1502,10 +1541,116 @@ func _on_action_requested(action_id: StringName) -> void:
 			# already attacks it, so a second targeting mode would be a parallel
 			# way to issue an order the map already accepts.
 			_toast.show_message("Tap an enemy to attack")
+		&"ability":
+			_arm_ability()
 		&"gate":
 			_toggle_selected_gate()
 		&"upgrade":
 			_upgrade_selected_building()
+
+
+## Set the whole movable selection's stance (PLAN.md 4.12).
+##
+## Sent for the WHOLE selection, not for the primary alone: `SetStanceCommand` carries
+## many ids because nobody sets a stance one soldier at a time, and the panel offers the
+## verb on a group for the same reason.
+##
+## Members that cannot fight are left in rather than filtered out here. The command
+## accepts them, `StanceSystem` never acquires for them, and filtering would mean this
+## side re-deriving a rule the sim already owns -- the duplication `Diplomacy`'s header
+## is a standing warning about.
+func _set_selected_stance(movable: Array[int], stance: int) -> void:
+	if movable.is_empty():
+		return
+	Net.submit_command(SetStanceCommand.new(Net.local_player_id(), movable, stance))
+	_toast.show_message("Stance: %s" % SelectionActions.STANCE_LABELS.get(stance, "?"))
+
+
+## Choose (or clear) the formation this player's move orders use (PLAN.md 4.14).
+##
+## A TOGGLE, because pressing the ringed one is the only way back to a plain move order.
+## Nothing is sent: a formation is a property of the ORDER and rides out on the next
+## `MoveCommand`, so this writes one client-side field and re-rings a slot.
+##
+## IT DOES NOT MOVE ANYBODY. Picking a shape while an army stands around is a statement
+## about the next order, not an order itself -- forming up on the spot would be a move
+## the player did not ask for, and the units are already where they are.
+func _pick_formation(shape: StringName) -> void:
+	var next := Formation.NONE if _panel.active_formation == shape else shape
+	_panel.active_formation = next
+	if next == Formation.NONE:
+		_toast.show_message("Formation off")
+	else:
+		_toast.show_message("%s -- tap where to move" % String(next).capitalize())
+
+
+## Arm the ability's targeting mode (PLAN.md 4.10). The NEXT world tap uses it.
+##
+## A MODE, unlike Move, Harvest and Attack, which answer with a hint because tapping the
+## world already issues those orders. There is no tap that means "heal that" or "burn
+## there" -- both would otherwise read as a move order -- so this is the placement
+## gesture's shape rather than the hint's: press, then aim.
+##
+## Armed for the PRIMARY selection only. An ability costs a cooldown and is aimed, so two
+## monks told to heal one soldier is one wasted monk -- `AbilityCommand` carries a single
+## unit id for that reason and this is the other half of it.
+func _arm_ability() -> void:
+	var def := _selected_ability_def()
+	if def == null:
+		return
+	_ability_pending = true
+	if def.ability_target == &"friendly":
+		_toast.show_message("Tap one of your units to %s" % def.ability_name.to_lower())
+	else:
+		_toast.show_message("Tap where to %s" % def.ability_name.to_lower())
+
+
+## Aim the armed ability at what the player just tapped (PLAN.md 4.10).
+##
+## THE MODE IS DISARMED WHATEVER HAPPENS, including on a tap that turns out to be an
+## illegal target. A targeting mode that survives a bad tap is a mode the player cannot
+## tell they are still in -- the next tap would then heal somebody instead of moving, and
+## nothing on screen would have said so. Getting out of it costs one more tap, which is
+## the same bargain a refused placement makes.
+##
+## `friendly` demands a tapped ENTITY and `ground` demands a TILE, and the two are
+## refused rather than substituted: a heal aimed at bare ground and a breath aimed at a
+## unit are both the player having missed, and firing something adjacent to what they
+## meant would spend the cooldown on it.
+func _fire_ability(picked: int, tile: Vector2i) -> void:
+	_ability_pending = false
+	var def := _selected_ability_def()
+	if def == null:
+		return
+	var unit_id := _view.movable_selection()[0]
+	var owner := Net.local_player_id()
+
+	if def.ability_target == &"friendly":
+		var facts := _view.facts_for(picked)
+		if picked == 0 or facts.is_empty() or int(facts.get("owner_id", 0)) != owner \
+				or GameDataRegistry.unit(facts.get("def_id", &"")) == null:
+			_toast.show_message("Tap one of your own units")
+			return
+		Net.submit_command(AbilityCommand.new(owner, unit_id, picked, Vector2i.ZERO))
+		_flash.play(ActionFlash.Kind.GATHER, Iso.tile_centre_to_world(facts["tile"]))
+		return
+
+	Net.submit_command(AbilityCommand.new(owner, unit_id, 0, tile))
+	_flash.play(ActionFlash.Kind.ATTACK, Iso.tile_centre_to_world(tile))
+
+
+## The def of the single selected unit's ability, or null if the selection is not one
+## unit of yours that has one. The gate for both arming and firing, so the two can never
+## disagree about what is selected.
+func _selected_ability_def() -> UnitDef:
+	var movable := _view.movable_selection()
+	if movable.size() != 1:
+		return null
+	var facts := _view.facts_for(movable[0])
+	if facts.is_empty():
+		return null
+	var ud: UnitDef = GameDataRegistry.unit(facts.get("def_id", &""))
+	return ud if ud != null and ud.has_ability() else null
 
 
 ## The polite half of the population cap (PLAN.md 4.11). `TrainCommand.validate()`

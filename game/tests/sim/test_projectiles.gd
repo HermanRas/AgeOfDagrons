@@ -29,8 +29,16 @@ static func _a_shooting_range() -> SimWorld:
 		p.id = 2
 		p.colour = 1
 		world.players.append(p)
-	world.spawn_unit(&"unit.archer", 1, Vector2i(10, 10))
-	world.spawn_unit(&"unit.militia", 2, Vector2i(13, 10))
+	# BOTH PASSIVE, added 2026-08-29 with stances (4.12). This file's whole premise is
+	# that an arrow flies because an `AttackCommand` was issued -- and the two stand
+	# three tiles apart, which is inside a DEFENSIVE unit's guard radius, so on the
+	# default stance the pair now fights on its own before any test says a word. That
+	# reported as SIX arrows in a five-arrow volley and as a fan that was not parallel,
+	# because the militia had closed the distance while the tower was aiming.
+	var shooter := world.spawn_unit(&"unit.archer", 1, Vector2i(10, 10))
+	var quarry := world.spawn_unit(&"unit.militia", 2, Vector2i(13, 10))
+	shooter.stance = SimUnit.Stance.PASSIVE
+	quarry.stance = SimUnit.Stance.PASSIVE
 	return world
 
 
@@ -231,10 +239,17 @@ var _raider: SimUnit = null
 func _a_manned_tower(def_id: StringName, garrison: int) -> SimBuilding:
 	var tower := w.spawn_building(def_id, 1, Vector2i(40, 40),
 			SimBuilding.Phase.COMPLETE, true)
+	# PASSIVE for the same reason `_a_shooting_range` is (4.12): these tests count what
+	# the TOWER loosed, and an archer that shot one of its own would be counted in the
+	# volley and would break the parallel-fan check. The archers here are only half
+	# garrisoned -- appended to `tower.garrison` but never taken off the map -- so they
+	# are still standing five tiles from the raider and can see it perfectly well.
 	for i in range(garrison):
 		var a := w.spawn_unit(&"unit.archer", 1, Vector2i(40 + i, 45))
+		a.stance = SimUnit.Stance.PASSIVE
 		tower.garrison.append({"id": a.id, "def_id": a.def_id})
 	_raider = w.spawn_unit(&"unit.militia", 2, Vector2i(43, 40))
+	_raider.stance = SimUnit.Stance.PASSIVE
 	return tower
 
 

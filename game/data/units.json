@@ -113,7 +113,51 @@
     "this note claimed it did and was wrong twice over. The siege ram tints (8",
     "distinct pages) and so does the onager. Only the lithobolos art set measures",
     "0%, re-confirmed after its crew were given their heads back. One actor, one",
-    "measurement, no rule. See visuals.json."
+    "measurement, no rule. See visuals.json.",
+    "",
+    "----------------------------------------------------------------------",
+    "`ability` IS PLAN.md 4.10, ADDED 2026-08-29, and TWO UNITS CARRY ONE: the",
+    "monk heals and the dragon breathes fire. Both were already promised --",
+    "IDEA.md 4.6 says a unit is 'healed by a friendly healing unit' and 13.1",
+    "gives the dragon 'a fire breath attack that deals area damage' -- so this",
+    "is those two sentences arriving, not new design.",
+    "",
+    "`id` IS THE SWITCH and `effect` IS THE BEHAVIOUR, and the split is load",
+    "bearing. `amount` cannot mean 'hp restored' for one and 'damage dealt' for",
+    "the other unless something says which, and if that something were the id",
+    "then every new ability would be a new arm in AbilitySystem instead of an",
+    "entry here. There are exactly two effects, `heal` and `damage`, and adding",
+    "a third monk-like unit needs no code at all.",
+    "",
+    "THE MONK HAD NO VERB AT ALL BEFORE THIS. It costs 100 gold, carries damage",
+    "0 and no gather_rate, so it could be trained and then walked around and",
+    "nothing else -- the only unit in the roster in that state. Heal is what it",
+    "is for. 6 hp every 20 ticks is 3 hp a second, so a 40 hp militia is back on",
+    "its feet in about thirteen seconds, and the monk keeps working until the",
+    "target is full rather than needing a press per tick (AbilitySystem's",
+    "`_is_finished_with`). Range 4 matches the archer's, so a monk stands about",
+    "where a bowman would and is just as easy to ride down.",
+    "",
+    "THE DRAGON'S BREATH IS THE ONE AREA EFFECT IN THE GAME. 40 damage over a",
+    "Chebyshev radius of 2 -- a 5x5 -- on a 15 second cooldown. 40 kills a",
+    "villager (30) or a militia (40) outright and badly hurts everything else,",
+    "which is what a 500 food / 800 gold unit at age 4 should do to a mass of",
+    "cheap infantry; the cooldown is what stops it doing so continuously. It",
+    "cannot burn its own army (AbilitySystem tests the caster's own war",
+    "predicate) and it cannot burn a flock of sheep, for 4.9's reason.",
+    "",
+    "`damage_type` is MELEE and the choice is arbitrary in the way a two-value",
+    "enum forces: armour comes in melee and pierce, fire is neither, and pierce",
+    "armour is what soldiers wear against arrows. Melee is the less wrong of the",
+    "two. It is a starting value like everything else here.",
+    "",
+    "----------------------------------------------------------------------",
+    "STANCES (PLAN.md 4.12) ARE NOT IN THIS FILE, deliberately. A unit's default",
+    "is DERIVED -- `SimUnit.default_stance_for` puts every worker, every packing",
+    "siege engine and everything with damage 0 on PASSIVE, and everyone else on",
+    "DEFENSIVE -- so there is no per-unit stance field to get out of step with",
+    "the numbers above. A villager becomes passive by having a gather_rate, which",
+    "is the same fact `is_worker()` already reads."
   ],
 
   "unit.villager": {
@@ -297,6 +341,11 @@
 
     "carry_cap": {},
     "gather_rate": {},
+
+    "ability": {
+      "id": "heal", "name": "Heal", "effect": "heal", "target": "friendly",
+      "range": 4, "radius": 0, "amount": 6, "cooldown_ticks": 20
+    },
 
     "trainable_at": ["building.monastery"],
     "age_required": 3
@@ -786,6 +835,12 @@
 
     "carry_cap": {},
     "gather_rate": {},
+
+    "ability": {
+      "id": "fire_breath", "name": "Fire Breath", "effect": "damage", "target": "ground",
+      "range": 5, "radius": 2, "amount": 40, "damage_type": "melee",
+      "cooldown_ticks": 150
+    },
 
     "trainable_at": ["building.castle"],
     "age_required": 4

@@ -7,18 +7,23 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-28.** Suite: **1417 tests, 202,627 assertions, 0 failures**. **342
-atlases staged.** Android build: 320.6 MB **as of 2026-08-27 and now certainly stale** —
-the 2026-08-28 art delivery added eleven atlases including eight tinted flags, and nobody
-has rebuilt since. Re-measure before quoting it.
+**Updated 2026-08-29.** Suite: **1621 tests, 207,652 assertions, 0 failures** — measured,
+not quoted. **361 atlases staged.** Android build: 320.6 MB **as of 2026-08-27 and
+certainly stale** — two art deliveries and a phase have landed since and nobody has
+rebuilt. Re-measure before quoting it.
+
+⚠️ **`test_tick_cost` is the one thing in this suite that can fail for reasons that are
+not the code.** It reported an 8-player tick at 49.81 ms against its budget on a loaded
+workstation and passed comfortably on the same commit forty minutes later, in a run that
+took 350 s against the previous one's 594 s. Re-run it alone before believing it.
 
 ---
 
 ## The one-line answer
 
-**The MVP is achieved and the game is played on a phone.** Four phases are finished
-outright, seven are one or two items short, and **two have not been started: 9 (ages and
-tech) and 13 (dragons)**. Nothing is blocked on a decision.
+**The MVP is achieved and the game is played on a phone.** Five phases are finished
+outright, six are one or two items short, and **two have not been started: 9 (ages and
+tech) and 13 (dragons)**. Nothing is blocked on a decision; **13 is blocked on art**.
 
 **Three things closed on 2026-08-27, all of which this line used to name as next:** the
 unit-speed pass (2026-08-23, owner-confirmed *"sound and speed is much better"*), the whole
@@ -28,10 +33,21 @@ triggers in `data/ai_*.json` instead of a script of timed steps. The owner's sum
 it matters — *"the update system support customization and supports random maps, thats the
 big win from this update."*
 
-**What is next is features rather than repair**: 2.4d Archipelago, 9.3 `TechSystem` (moved
-up because ages now cost resources and the tech tree is what the age ladder is *for*), and
-**4.13's pack/unpack state machine, which moved up because its art landed** on 2026-08-28
-after blocking it since 2026-08-22.
+**PHASE 4 CLOSED 2026-08-29** — the owner's instruction was to close out its open steps, and
+all three did: **4.10 special abilities** (the monk heals, the dragon breathes fire over a
+5×5, both promised in IDEA.md long before they existed), **4.12 stances** (four; a soldier
+now defends itself and walks back to where it was standing, a villager does not), and
+**4.14 formations** (line, grid, vee, box — the four the selection panel has offered as
+greyed placeholders since 4.3). **4.13 closed the day before** with `SiegeSystem`.
+
+**The dragon went to the art side the same day.** `vis.dragon` has exactly one clip,
+`static` — it cannot walk, attack or die — so **phase 13 is blocked on art, not on code**.
+`asset_request.md` [P7].
+
+**What is next is Phase 5, buildings**, then 9.3 `TechSystem` (moved up because ages now
+cost resources and the tech tree is what the age ladder is *for*). 2.4d Archipelago closed
+2026-08-29 together with transports, which had to ship with it — an archipelago nobody can
+cross is a map on which no player can reach another.
 
 **Two things closed 2026-08-28:** 8.8's [X] clear-selection button, and the art delivery —
 **gates open and close**, and the rally-point flag is baked art instead of a placeholder.
@@ -60,8 +76,8 @@ real work remains · ⛔ not started
 | 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet |
 | 2 | Map | 🟢 | **2.4c save map**; **2.4d Archipelago** (new, specified) |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
-| 4 | Units | 🟡 | **4.8/4.9 done 2026-08-27** — garrison, and buildings that shoot. Left: 4.10 abilities, 4.12 stances, 4.14 formations. 4.13 needs only the siege pack/unpack machine |
-| 5 | Buildings | 🟡 | **5.7 more buildings — art-paced, not code-paced**. 5.3 upgrades half-built: the wall→gate upgrade is the first real one |
+| 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |
+| 5 | Buildings | 🟡 | **UP NEXT.** **5.7 more buildings — art-paced, not code-paced** (23 buildings, ~70 bakes; art side's A.10). **5.3 upgrades is the code half and is half-built**: `upgrades_to` + `UpgradeBuildingCommand` + `convert_building` all ship the wall→gate upgrade. Missing is what a non-gate upgrade needs — a cost, a time, and whether an upgrade is per-building or a player-wide tech (which is 9.3's question too) |
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
 | 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport). 8.8's [X] clear-selection button landed 2026-08-28 |
@@ -69,7 +85,7 @@ real work remains · ⛔ not started
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
 | 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |
-| 13 | Dragons | ⛔ | Not started, by design — "once the RTS is a game" |
+| 13 | Dragons | ⛔ | Not started — and as of 2026-08-29 **blocked on art rather than on sequencing**: `vis.dragon` carries one clip, `static`, so the unit cannot walk, attack or die. `asset_request.md` [P7]. The unit itself is real and trainable at the castle from age 4, and 4.10 gave it its fire breath |
 | 14 | **NEEDS UPGRADE** — AI enemy-blindness | ⛔ | Opened 2026-08-27 with 12.2b. A declared ceiling, not a defect: no rule can see the opponent, so an army is a target number and never a response |
 
 **Cross-cutting: 7.5 audio is BUILT** (2026-08-23) — `AudioManager`, `MatchAudio`,

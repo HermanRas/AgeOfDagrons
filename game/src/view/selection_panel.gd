@@ -91,6 +91,23 @@ var _active_action: StringName = &""
 ## start at page 1, never at whatever page was left open last time.
 var _detail_page: int = 0
 
+## The formation the player's move orders are currently using, or `&""` for none
+## (PLAN.md 4.14). WRITTEN BY `GameScene`, which owns it, and read here only to ring the
+## matching slot -- a formation lives on the ORDER (`MoveCommand.formation`) and never on
+## a unit, so unlike everything else this panel draws there is nothing in the snapshot to
+## read it from.
+##
+## NOT cleared when the selection changes, deliberately. It is a preference about how
+## this player gives orders, not a fact about whatever is selected; clearing it would
+## mean picking Line again after every tap on a different soldier.
+var active_formation: StringName = &"":
+	set(value):
+		if active_formation == value:
+			return
+		active_formation = value
+		if visible:
+			_refresh_details()
+
 ## Last shown inputs, kept so re-expanding an action can rebuild the detail
 ## grid without GameScene having to re-send a snapshot it may not have yet.
 var _facts: Dictionary = {}
@@ -292,7 +309,7 @@ func _refresh_health(facts: Dictionary) -> void:
 ## the page, since only an empty list means "nothing to show".
 func _refresh_details() -> void:
 	var details := SelectionActions.details_for(
-			_active_action, _facts, _selected_count, _all_def_ids, _age)
+			_active_action, _facts, _selected_count, _all_def_ids, _age, active_formation)
 	_fill(_detail_slots, SelectionActions.page_of(details, _detail_page))
 	_details_grid.visible = not details.is_empty()
 	_divider.visible = not details.is_empty()
@@ -302,7 +319,7 @@ func _refresh_details() -> void:
 ## anything that wants to show a page indicator later.
 func detail_page_count() -> int:
 	return SelectionActions.page_count(SelectionActions.details_for(
-			_active_action, _facts, _selected_count, _all_def_ids, _age).size())
+			_active_action, _facts, _selected_count, _all_def_ids, _age, active_formation).size())
 
 
 func current_detail_page() -> int:
@@ -391,6 +408,18 @@ func _on_detail_pressed(action: HudAction) -> void:
 		var which := id.trim_prefix("ungarrison:")
 		ungarrison_requested.emit(_building_id,
 				UngarrisonCommand.ALL if which == "all" else int(which))
+		return
+
+	# ANYTHING THIS PANEL DOES NOT ITSELF INTERPRET GOES OUT AS AN ACTION (4.12, 4.14).
+	# `stance:<n>` and `formation:<shape>` are orders that happen to be issued from the
+	# detail grid rather than the action column, and `GameScene._on_action_requested`
+	# already switches on ids -- so they need a route out of here, not a second signal.
+	#
+	# The four prefixes above return early rather than falling through, because each
+	# carries state this panel owns (`_building_id`) that GameScene would otherwise have
+	# to re-derive. `member:` and `overflow` from a group roster reach here too and are
+	# harmlessly unmatched at the other end; they are portraits, not verbs.
+	action_requested.emit(action.id)
 
 
 ## The authored name from units.json / buildings.json, falling back to a tidied

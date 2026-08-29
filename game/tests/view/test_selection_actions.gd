@@ -28,6 +28,18 @@ func _town_center_facts(id: int = 5, queue_len: int = 0) -> Dictionary:
 			"queue": queue}
 
 
+## A unit of the local player's, for the stance and ability rows (4.12, 4.10). `stance`
+## and `ability_cooldown` are part of the fixture rather than optional extras, for the
+## reason `_town_center_facts` records about `queue`: `GameView._facts` really does carry
+## both on every unit, and a fixture that omitted them would test the defaults instead of
+## the wire.
+func _unit_facts(def_id: StringName, stance: int = SimUnit.Stance.DEFENSIVE,
+		ability_cooldown: int = 0, id: int = 3) -> Dictionary:
+	return {"id": id, "def_id": def_id, "owner_id": 1, "hp": 30, "max_hp": 30,
+			"alive": true, "task": 0, "queue_len": 0, "queue_fraction": 0.0,
+			"stance": stance, "ability_cooldown": ability_cooldown}
+
+
 func _building_facts(def_id: StringName, id: int = 6) -> Dictionary:
 	return {"id": id, "def_id": def_id, "owner_id": 1, "hp": 1000, "max_hp": 1000,
 			"alive": true, "queue_len": 0, "queue_fraction": 0.0}
@@ -67,6 +79,96 @@ func test_a_villager_offers_move_stop_build_and_harvest() -> void:
 	assert_true(ids.has(&"harvest"))
 
 
+# ── stance and ability (4.12, 4.10) ─────────────────────────────────────────
+
+func test_a_fighter_offers_a_stance_and_a_trade_cart_does_not() -> void:
+	# The same `attack_damage > 0` test the Attack verb uses, so the two can never
+	# disagree about who is worth offering a fight to. A stance on something that cannot
+	# land a blow is a control that changes nothing -- `StanceSystem` refuses to acquire
+	# for it, so the order would be retired on the tick it was given.
+	assert_true(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.militia"))).has(&"stance"))
+	assert_true(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.villager"))).has(&"stance"),
+			"the villager carries damage 3 and hiding indoors is not always an option")
+	assert_false(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.trade_cart"))).has(&"stance"))
+	assert_false(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.monk"))).has(&"stance"),
+			"a monk cannot fight, so a stance would be a control that does nothing")
+
+
+func test_the_stance_row_says_which_one_is_set_without_being_opened() -> void:
+	var row := SelectionActions.for_selection(_unit_facts(&"unit.militia",
+			SimUnit.Stance.STAND_GROUND))
+	assert_eq(_by_id(row, &"stance").badge, "Hold",
+			"abbreviated because a badge is corner text on a 72 px tile")
+
+
+func test_stance_expands_into_the_four_with_the_live_one_ringed() -> void:
+	var facts := _unit_facts(&"unit.militia", SimUnit.Stance.AGGRESSIVE)
+	var details := SelectionActions.details_for(&"stance", facts)
+	assert_eq(details.size(), 4)
+	var ringed := 0
+	for d in details:
+		if d.selected:
+			ringed += 1
+			assert_eq(d.id, &"stance:%d" % SimUnit.Stance.AGGRESSIVE)
+		assert_true(d.enabled,
+				"including the current one -- `enabled = false` already means two other "
+				+ "things, both of which draw greyed")
+	assert_eq(ringed, 1, "read off the SNAPSHOT, so it says what the unit is doing")
+
+
+func test_the_stance_ids_carry_the_enum_value_and_not_a_name() -> void:
+	# The value goes on the wire as an int and `SetStanceCommand` validates the range, so
+	# the panel must not be the place that decides what 2 means.
+	var details := SelectionActions.details_for(&"stance", _unit_facts(&"unit.militia"))
+	assert_eq(details[0].id, &"stance:0")
+	assert_eq(details[3].id, &"stance:3")
+
+
+func test_only_the_monk_and_the_dragon_offer_an_ability() -> void:
+	assert_true(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.monk"))).has(&"ability"))
+	assert_true(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.dragon"))).has(&"ability"))
+	assert_false(_ids(SelectionActions.for_selection(
+			_unit_facts(&"unit.villager"))).has(&"ability"))
+
+
+func test_the_ability_slot_is_labelled_with_the_ability_and_not_the_word_ability() -> void:
+	# The reason a train button says "Archer": the player is being asked to spend a
+	# cooldown and needs to know on what.
+	var row := SelectionActions.for_selection(_unit_facts(&"unit.monk"))
+	assert_eq(_by_id(row, &"ability").label, "Heal")
+	var dragon := SelectionActions.for_selection(_unit_facts(&"unit.dragon"))
+	assert_eq(_by_id(dragon, &"ability").label, "Fire Breath")
+
+
+func test_the_ability_slot_greys_while_it_is_cooling_and_counts_down_in_seconds() -> void:
+	# IDEA.md 4.10's own wording: "greyed out and unclickable".
+	var ready := SelectionActions.for_selection(_unit_facts(&"unit.dragon"))
+	assert_true(_by_id(ready, &"ability").enabled)
+
+	var cooling := SelectionActions.for_selection(
+			_unit_facts(&"unit.dragon", SimUnit.Stance.DEFENSIVE, 91))
+	var slot := _by_id(cooling, &"ability")
+	assert_false(slot.enabled)
+	assert_eq(slot.badge, "10s",
+			"ticks are a sim unit and 91 of them means nothing to a player; it rounds "
+			+ "UP so a cooldown with any time left never reads 0")
+
+
+func test_a_units_row_never_outgrows_its_eight_slots() -> void:
+	# Two verbs were added on 2026-08-29 and `_capped` slices silently, so this sweeps
+	# the whole roster rather than checking whichever unit has the most today.
+	for id in GameDataRegistry.unit_ids():
+		var row := SelectionActions.for_selection(_unit_facts(id))
+		assert_true(row.size() <= SelectionActions.MAX_ACTIONS,
+				"%s asks for %d of %d slots" % [id, row.size(), SelectionActions.MAX_ACTIONS])
+
+
 func test_a_building_offers_its_trainable_units_and_destroy() -> void:
 	var actions := SelectionActions.for_selection(_town_center_facts())
 	var ids := _ids(actions)
@@ -78,7 +180,11 @@ func test_a_building_offers_its_trainable_units_and_destroy() -> void:
 func test_a_group_offers_only_what_every_member_can_do() -> void:
 	var ids := _ids(SelectionActions.for_selection(
 			_villager_facts(), 3, true, [&"unit.villager", &"unit.villager", &"unit.villager"]))
-	assert_eq(ids, [&"move", &"stop", &"attack", &"destroy"])
+	# STANCE JOINED THE GROUP ROW ON 2026-08-29 (4.12), and the group is where it is
+	# actually used -- nobody sets a stance one soldier at a time, which is why
+	# `SetStanceCommand` carries many ids. Members that cannot fight ignore it, exactly
+	# as a trade cart in the group ignores Attack.
+	assert_eq(ids, [&"move", &"stop", &"attack", &"stance", &"destroy"])
 	assert_false(ids.has(&"build"),
 			"build is a villager verb, not one a mixed group can be told as a whole")
 
@@ -170,11 +276,35 @@ func test_build_expands_into_placeable_buildings() -> void:
 		assert_true(String(d.id).begins_with("place:"))
 
 
-func test_move_expands_into_formations_which_are_all_disabled() -> void:
+func test_move_expands_into_formations_and_they_are_live() -> void:
+	# Disabled placeholders from 4.3 until 2026-08-29, when `Formation` made them real.
 	var details := SelectionActions.details_for(&"move", _villager_facts())
 	assert_eq(details.size(), SelectionActions.FORMATIONS.size())
 	for d in details:
-		assert_false(d.enabled, "no formation system exists in the sim yet")
+		assert_true(d.enabled, "4.14 landed")
+		assert_false(d.selected, "and none is chosen until the player picks one")
+
+
+func test_the_chosen_formation_is_ringed_rather_than_greyed() -> void:
+	# `enabled = false` already means "not built yet" and "nothing to act on", both of
+	# which draw greyed -- so the current choice needed a third state or it would be the
+	# one slot that looks broken. It also stays PRESSABLE, because pressing it again is
+	# the only way back to a plain move order.
+	var details := SelectionActions.details_for(&"move", _villager_facts(), 1, [], 1,
+			Formation.VEE)
+	var ringed := 0
+	for d in details:
+		if d.selected:
+			ringed += 1
+			assert_eq(d.id, &"formation:vee")
+			assert_true(d.enabled, "pressing it again turns the formation off")
+	assert_eq(ringed, 1)
+
+
+func test_the_panel_and_the_sim_agree_on_which_formations_exist() -> void:
+	# The same object, not a copy: a menu offering a shape the server refuses is a button
+	# that silently does nothing, and `MoveCommand.validate` refuses an unknown one.
+	assert_eq(SelectionActions.FORMATIONS, Formation.SHAPES)
 
 
 func test_a_building_with_nothing_expanded_shows_its_production_queue() -> void:

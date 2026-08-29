@@ -23,8 +23,17 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 
 | P | Request | The phase it is holding up |
 |---|---|---|
+| **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
+
+**Re-derived 2026-08-29 (second pass), and P7 is new.** Phase 4 closed the same day
+(4.10 abilities, 4.12 stances, 4.14 formations), which moves **Phase 5 — buildings** to
+the front of the queue and makes **A.10, the building roster age by age**, the thing the
+next phase actually waits on. That is already running in the background below, and this
+is the note saying it stopped being background work: **5.7 is 23 buildings and its own
+line says "low code effort, ~70 bakes behind it".** P7 is queued ahead of P5 and P6 by
+importance and behind A.10 by urgency.
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
 age**, which paces phase **5.7** and every age skin phase **9** will need. It is the largest
@@ -173,6 +182,58 @@ frames and do reproduce.
 > the class generalisation does not hold in either direction — and a packed engine is a
 > different actor from its deployed half, with different props. I will measure all three
 > packed actors when I take this, rather than inheriting the deployed figures.
+
+### [P7] `vis.dragon` — a dragon that can move, fight and die (game side, 2026-08-29)
+
+**Measured off the staged atlas, not assumed:** `vis.dragon.atlas.json` carries exactly one
+clip — `static`, 1 frame, `fps 1`, `loop false` — across 8 stored directions, 8 frames in
+total. So the dragon is a **statue**. `units.json` has said why since the roster landed
+(*"has no armature in the source at all and cannot move until someone rigs it"*), and its
+`speed: 0` is that, not a balance number.
+
+**What's needed, in the order it unblocks things:**
+
+| clip | why |
+|---|---|
+| `walk` | the whole of it. Without one the unit cannot be given a speed, so a trained dragon stands in the castle doorway forever |
+| `attack` | it declares damage 30, range 3, cooldown 30 and lands every blow with no animation at all |
+| `die` + `decay` | `DeathSystem` gives every unit a 70 s corpse and a 10 s fade; the dragon holds its idle pose through both |
+| `idle` | it has `static`, which reads as a model rather than a creature at 600 hp |
+
+**And one new clip that did not exist before today:** something for **fire breath**.
+`AbilitySystem` (4.10, shipped 2026-08-29) gives `unit.dragon` an `ability` — 40 damage
+over a 5×5, 15 s cooldown — and there is nothing to draw for it. **Anything readable will
+do and it does not have to be fire**: `AtlasEntry`'s per-clip fallback means an atlas
+without the clip simply plays what it has, so this ships un-animated today and improves in
+place the moment a clip called `attack_special` (or whatever you name it — tell me and I
+will point at it) exists. It is the lowest-priority line in this table.
+
+**Why now:** the owner asked for the dragon to be queued while phase 4 was closing, and
+it is the one asset in the project that gates a whole phase — **PLAN.md 13, dragons**, is
+unstartable while the unit cannot move. It is not blocking anything today: the dragon is
+trainable at the castle from age 4, the ability works, and the sprite simply does not
+animate.
+
+**Candidate source:** `attribution.actor` on the staged atlas says
+`art/actors/fauna/dragon.xml`, which is **bespoke art rather than 0 A.D.'s** — so unlike
+every other request in this file's history there may be no upstream actor with clips to
+resolve to, and rigging may be real modelling work rather than a recipe change. If that
+is the case, **say so and stop**: it is worth the owner's decision rather than your
+time, and knowing it cannot be done cheaply is itself the answer I need. `visuals.json`
+also records that it carries **no playercolour mask at all**, so no colour variants are
+wanted and `"colours"` stays absent.
+
+**Where it plugs in once baked:** `units.json` gets a real `speed` (the knight's 88 is the
+obvious reference for a flier, and it already carries `domain: "air"`, which `SimMap` does
+not yet have a grid for — that is game-side work and mine). Everything else is automatic:
+`AnimationSystem` already sends `walk`, `attack`, `die` and `decay` for every unit and
+`vis.dragon` currently falls back on all four.
+
+**One thing to check before quoting a figure:** `visuals.json` gives it
+`footprint_m [6.53, 6.53]` and `height_m 2.69`, which are wider than they are tall for a
+winged creature and were derived by the projection inversion your own §4 records as
+structurally wrong for anything not standing upright. Please re-measure rather than
+inheriting them.
 
 ---
 

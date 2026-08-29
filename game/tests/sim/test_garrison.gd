@@ -483,6 +483,11 @@ func test_a_foundation_neither_garrisons_nor_shoots() -> void:
 	var tower := w.spawn_building(&"building.watch_tower", 1, Vector2i(20, 20),
 			SimBuilding.Phase.FOUNDATION)
 	var archer := w.spawn_unit(&"unit.archer", 1, Vector2i(24, 21))
+	# PASSIVE, added 2026-08-29 with stances (4.12). The second half of this test asks
+	# whether the FOUNDATION defends you, and on the default stance the archer standing
+	# beside it does -- so the raider lost 8 hp and the assertion caught its own fixture
+	# rather than the tower. The archer is here only for the garrison refusals above.
+	archer.stance = SimUnit.Stance.PASSIVE
 
 	assert_false(tower.has_garrison_room(), "a foundation is a hole in the ground")
 	assert_false(w.garrison_unit(tower, archer))

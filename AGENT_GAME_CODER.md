@@ -273,6 +273,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |
 | **A visual id is not a filename** | `vis.field_1` is baked as `vis.field_age2`, `vis.field_4` as `vis.farm`. The seam maps ids to paths precisely so ids outlive the art side's naming — and never rename a staged file to match, because `stage_atlases.py` will put it back. |
 | **`Diplomacy.is_enemy` is "MAY I attack that", NOT "am I at war with that"** | The two differ on gaia, and anything that acquires a target **unasked** needs the second question. A sheep *may* be attacked — hunting is how a deer becomes food — so 4.9's tower auto-acquire shipped shooting the livestock, including a player's own herd (a herded sheep is still gaia's; `herded_by` is separate from `owner_id` by design). It presented as a tower that did not work: nearest-target-wins spent every shot on an animal two tiles away and never reached the raider five out. `CombatSystem._is_at_war_with` is the predicate now, and **`AISystem._nearest_enemy` has kept its own copy for exactly this reason all along** — its comment says so and it was right. |
+| **A FIXTURE THAT PUTS TWO HOSTILE UNITS NEAR EACH OTHER AND EXPECTS NOTHING TO HAPPEN** | Was safe for the whole life of the project and stopped being safe on 2026-08-29, when 4.12 gave military units a DEFENSIVE default. Six tests broke, and **not one of them was about stances**: `test_projectiles`' shooting range is an archer three tiles from an enemy militia, so the pair started fighting on its own and a five-arrow tower volley counted six — and the fan stopped being parallel, because the militia had closed the distance while the tower aimed. `test_garrison`'s "a foundation does not defend you" was answered by the archer standing next to the foundation. **The fix is to say what the fixture means** (`u.stance = SimUnit.Stance.PASSIVE`), never to reach for the default. Worth remembering as a class: a test whose premise is "nobody acts unless I say so" is resting on an absence, and absences get filled in. |
+| **AN AGGRESSIVE STANCE THAT SEES LESS THAN A DEFENSIVE ONE** | `unit.militia` declares `los: 4` against `StanceSystem.GUARD_RADIUS`'s 5, so reading `def.los` straight for AGGRESSIVE made the stance a player picks to start MORE fights start fewer — on six of the roster's units, not a corner case. `_sight_of` floors it at `GUARD_RADIUS`. The general form: **when one setting is meant to be strictly stronger than another, the ordering is the rule and the numbers are inputs** — assert the ordering, not the numbers. It was caught by a test written to pin exactly that, on its first run, and only because the assertion was a comparison rather than a literal. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
 | **A GUARD THAT INFERS AN ENTITY'S KIND FROM WHICH SNAPSHOT FIELDS IT CARRIES** | Wrong the moment the wire format is optimised, and 12.1f already did that once — it took `footprint` off the wire, so `not entry.has("footprint")` (meaning "is a unit") became true for **everything**. It bit `GameView` twice in the same file: the occluder loop was fixed for it in 4.13 and its comment says so, and the sort-bonus guard twenty lines below was missed until 2026-08-28. **Ask `GameDataRegistry`** — `unit(def_id) != null`, the way `_facts`'s own `is_unit` does. |
 | **TWO DEAD GUARDS CAN CANCEL OUT, so fixing one breaks what looked unrelated** | `_in_front_of_any` had `if r.has_point(tile): return true` sitting below a check that was false for every tile inside the rect — unreachable. Making it reachable instantly failed three sort tests, because the caller's kind-guard was *also* dead and every building had been asking the function about itself; a building's own tile is inside its own rect, so the unreachable branch was the only thing keeping that harmless. **When a one-line fix breaks distant tests, look for a second dead guard rather than reverting** — the tests were right and both bugs were real. |
@@ -302,11 +304,20 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 83 test files, **1474 tests, 204,234 assertions, all passing** —
-measured 2026-08-28 after the second playtest round was closed, not quoted.
+**361 atlases staged.** 86 test files, **1621 tests, 207,652 assertions, all passing** —
+measured 2026-08-29 after phase 4 closed, not quoted.
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
-and every previous figure here (1417/82, 1395/82, 1353/80, 1272/78, 1232/76, 293/71/1163)
-was stale within days — the 342 in the line this replaced lasted about six hours.
+and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
+293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
+
+⚠️ **`test_tick_cost` CAN FAIL FOR REASONS THAT ARE NOT THE CODE, and it did on
+2026-08-29.** A baseline run of untouched code reported the 8-player tick at 49.81 ms and
+the 2-player at 20.33 ms, both over budget, in a suite that took **594 s**; the same
+commit passed both forty minutes later in **350 s**. §6's row says wall-clock timings are
+worthless on this workstation and points at `test_tick_cost` as the trustworthy
+instrument — that is still true of what it MEASURES, and it is not true of when it is
+measured. **Re-run it alone before believing a regression**, and never take a baseline
+while another Godot run is still finishing.
 
 **Working end to end:** age skins (Briton → Gaulish → Iberian/Achaemenid →
 Roman), per-player colour selection from eight baked atlases, age-gated train and
@@ -315,6 +326,46 @@ timed age-advance, fog of war, an enforced population cap, conquest win
 conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
 and tech-tree wireframes, and settings (§8.2b).
+
+**PHASE 4 CLOSED 2026-08-29** — 4.10 abilities, 4.12 stances and 4.14 formations, on the owner's
+instruction to close out its open steps. All three had been UI placeholders since 4.3, and that
+is most of why they were affordable: the shapes and the slots were already decided, and 4.12 was a
+decision `CombatSystem`'s header had written down twice while refusing to act on it. Six things
+worth knowing before touching any of them:
+
+- **`StanceSystem` DECIDES AND `CombatSystem` STILL ONLY RESOLVES.** A unit that acquires for
+  itself is handed over as an ordinary `Task.ATTACK`, so there is no second combat path and a
+  self-started fight is indistinguishable from an ordered one once it has started. That split is
+  the whole reason 4.12 is ~150 lines rather than a parallel machine.
+- **ONLY AN IDLE UNIT ACQUIRES, so there is STILL NO RETALIATION.** A unit gathering, walking or
+  building never reconsiders, whatever its stance — which guarantees no stance can countermand a
+  player's order, and is also the half a player is most likely to expect and not get. Noticing
+  being hit needs an attacker plumbed through `take_damage`, which `WildlifeSystem` records
+  refusing to do.
+- **THE DEFAULT STANCE IS DERIVED FROM THREE EXISTING FIELDS AND NOT AUTHORED.** `units.json` has
+  no stance in it. `SimUnit.default_stance_for` puts a worker (`is_worker()`), a packing siege
+  engine (`packs()`) and anything at `attack_damage <= 0` on PASSIVE, and everyone else on
+  DEFENSIVE. **So editing any of those three fields changes what a class of unit does when left
+  alone**, and nothing but `test_stances.gd` would report it.
+- **`guard_post` DOES TWO JOBS**: the tile a defender owes a return to, AND the flag saying the
+  current fight was its own idea. That is why `set_task_attack` grew `keep_post` — **false for
+  every order, true for every continuation** (`_close_in`, `_reacquire`). Get that backwards and
+  either an ordered assault gets recalled by a leash it never opted into, or a defender wanders
+  off after the first re-acquire.
+- **A FORMATION IS A PROPERTY OF THE ORDER.** Nothing on `SimUnit`, nothing on the wire — one
+  optional field on `MoveCommand`, and `SelectionPanel.active_formation` is a client preference
+  like the selection itself. `Formation` is pure integer arithmetic and `SelectionActions.FORMATIONS`
+  **is** `Formation.SHAPES` rather than a second list.
+- **`ability_target_tile` IS THE AIM AND `task_target_tile` IS NOT.** `set_path` rewrites the
+  latter to wherever the route could actually end (4.1), so a dragon that stopped two tiles short
+  would breathe fire on its own feet. Two fields, and the second exists only for that.
+
+**AND THE DRAGON WENT TO THE ART SIDE THE SAME DAY** (`asset_request.md` [P7]). Measured, not
+assumed: `vis.dragon.atlas.json` carries exactly one clip — `static`, one frame, eight directions
+— so it cannot walk, attack, die or decay, and **PLAN.md 13 is blocked on art rather than on
+sequencing**. `units.json` has said why since the roster landed (no armature in the source), and
+its `speed: 0` is that rather than a balance number. It is also bespoke art rather than 0 A.D.'s,
+so rigging it may be real modelling work; the request says to stop and report if so.
 
 **4.8 GARRISON AND 4.9 CLOSED 2026-08-27.** Tap your own tower or castle with units in hand
 and they walk in; `garrison_cap` finally means something after being declared on all 31
@@ -474,11 +525,14 @@ the four pieces needed game-side work:
 - **The wolf and the arrow needed nothing at all** — re-skinned in place, which is what
   `EntityView.play_anim`'s per-clip fallback is for. The wolf was 1 of the 6 species in
   [P1]; the other five landed in the second delivery above and animate too.
-- **ALL THREE PACKED ENGINES are staged and DELIBERATELY NOT DECLARED** —
-  `vis.onager_packed`, `vis.trebuchet_packed` and, since the second delivery,
-  `vis.ballista_packed`. 4.13's pack/unpack state machine does not exist — `SimUnit`
-  carries no deploy state — so a declared id would be referenced by nothing and read later
-  as art that failed to land. They go in with the machine, in one commit.
+- ~~**ALL THREE PACKED ENGINES are staged and DELIBERATELY NOT DECLARED.**~~ **STALE, and
+  it was already stale when this file was last swept.** `SiegeSystem` landed 2026-08-28
+  (`935cc8a`), all three `vis.*_packed` ids are declared in `visuals.json`, and 4.13 is
+  closed. Kept as a correction rather than deleted, because the prediction it made was
+  right and is worth reusing: the ids went in **with the machine, in one commit**, exactly
+  as this said they would. What is still open is cosmetic and is with the art side — the
+  packed onager and trebuchet have no colour bakes, so a blue player's engine turns plain
+  while it rolls (`asset_request.md` [P6]).
 
 **Phase 6 closed 2026-08-23** and this list never said so: wildlife roams
 and **flees** (`WildlifeSystem`, hp-watched rather than plumbed through an attacker),
@@ -661,9 +715,16 @@ plugs in; read the row rather than re-deriving it:
   for; this is where that row came from.
 - **`elite_swordsman` renders two overlapping bodies during death.** Known,
   diagnosed, importer-level. Do not try to fix it in the game layer.
-- **Ships, dragon, ballista, onager and trebuchet are static** — no walk clip.
-  Trebuchet, ballista, onager and dragon carry `speed: 0` deliberately, so a
-  motionless sprite never slides across the map.
+- **Ships and the DRAGON are static** — no walk clip. This entry used to name the three
+  siege engines too and no longer can: their **packed** actors carry `idle` and `walk`
+  since 2026-08-28, which is what made 4.13 possible, and `UnitDef.packing` is the second
+  speed. A deployed engine still carries `speed: 0` and still should.
+  **The dragon is the one left, and it is the worst case**: `vis.dragon.atlas.json` has
+  exactly ONE clip — `static`, one frame, eight directions — so it cannot walk, attack,
+  die or decay, and `speed: 0` on it means "there is no armature in the source", not
+  "slow". **It blocks PLAN.md 13 outright** and went to the art side on 2026-08-29 as
+  `asset_request.md` [P7]. Everything else about the unit is real: trainable at the
+  castle from age 4, 600 hp, and since 4.10 it has a fire breath.
 - **Chat and the tech-tree page are wireframes** (PLAN.md §8.2b) and say so on
   screen. The tech tree's *renderer* is real and walks `techs.json`, which is
   deliberately empty until 9.3; chat has no transport at all, and its SEND/CLEAR
@@ -718,6 +779,23 @@ plugs in; read the row rather than re-deriving it:
 
 ### What PLAN.md §15 says is next
 
+0. **PHASE 5, BUILDINGS — the owner's call on 2026-08-29, immediately after phase 4 closed.**
+   Two open rows and they are very different jobs. **5.7, the full roster**, is 23 buildings
+   and its own line has always said "low code effort, ~70 bakes behind it" — so it is paced by
+   the art side's A.10 and not by anything here. **5.3, building upgrades, is the code half and
+   is already half-built**: `BuildingDef.upgrades_to`, `UpgradeBuildingCommand` and
+   `SimWorld.convert_building` have shipped a real upgrade since 5.8 — the wall-to-gate
+   conversion, which mutates in place and keeps the entity id rather than respawning, because a
+   respawn would empty the panel the player just pressed. What is missing is everything a
+   non-gate upgrade needs: a **cost** (the gate inherits the wall's), a **time** (it is
+   instantaneous), and a decision about whether an upgrade is a per-building action or a
+   player-wide tech — **which is 9.3's question**, and is the reason the two are worth
+   sequencing together rather than in the order this list happens to number them.
+
+*The three items below predate 2026-08-29. Item 1 is stale in one direction (the AI table was
+re-measured on 2026-08-27 and every winner held) and item 2 is DONE — 2.4d Archipelago shipped
+2026-08-29 with transports, which had to go with it.*
+
 1. **RE-TUNE THE AI FOR THE HALVED SPEED — up next, the owner's call on 2026-08-27**
    after playing the change: *"sound and speed is much better. We may need to revisit the
    AI actions to adjust after the speed fix to get consistent game resolutions or identify
@@ -734,11 +812,12 @@ plugs in; read the row rather than re-deriving it:
    2026-08-27 after buildings gained an attack, since the AI builds towers. Every winner
    held; `easy v normal` went t11366 → t18351. The new table is in BUGS.md, and it is the
    baseline any AI change is measured against.)*
-2. **2.4d Archipelago** (§11.6). The content is nearly free — `PREDATORS` is keyed by
-   map type and read with `.get(type, {})`, so an unlisted type gets no predators
-   without a line of code. The work is that `MapValidator` requires every start to
-   reach every other **by land**, which an archipelago fails by definition, so that
-   claim has to *change* rather than relax.
+2. ~~**2.4d Archipelago** (§11.6).~~ **DONE 2026-08-29** (`6d277da`, `bb15cbc`), and it did not
+   ship alone: transports had no load/unload, so **an archipelago was a map on which no player
+   could reach another** and no win condition could fire. The two went together rather than the
+   map type going out as a sandbox. The connectivity claim did *change* rather than relax, as
+   predicted. **What is still missing is naval COMBAT** — a loaded transport crosses unopposed,
+   which is what an archipelago will ask for next and is not what makes it playable.
 3. **9.3 `TechSystem`** — the biggest genuinely unstarted phase, and it moved up because
    ages now cost resources (2026-08-27), which makes the tech tree what the age ladder is
    *for*. `techs.json` is deliberately empty, the tech-tree page already renders whatever
@@ -750,9 +829,14 @@ list moves:** 4.8 garrison and 4.9 (2026-08-27) did **not** close the wall hole 
 billed as closing — the owner ruled walls out — and 8.8's [X] button (2026-08-28) turned
 out to be a layout problem rather than a UI one.
 
-Then, in no forced order: 12.2b's real AI decision flow, 4.13's pack/unpack state machine
-(the art is staged and waiting — see §7), 2.4c the map save format, 12.1b LAN discovery,
-12.3 campaign, and 13.x dragons once the RTS is a game.
+Then, in no forced order: 2.4c the map save format, 12.1b LAN discovery, 12.3 campaign, naval
+combat, Phase 14's AI enemy-blindness, and **13.x dragons — which is now blocked on ART rather
+than on sequencing**: `vis.dragon` carries one clip, `static`, so the unit cannot walk, attack
+or die. `asset_request.md` [P7].
+
+*This paragraph used to list 12.2b's AI decision flow and 4.13's pack/unpack machine. Both
+shipped (2026-08-27 and 2026-08-28) and this line did not notice for two days, which is the
+same rot the suite figures above carry a warning about. Check `git log` against it.*
 
 ---
 

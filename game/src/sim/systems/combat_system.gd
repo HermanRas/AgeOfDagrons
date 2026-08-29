@@ -14,11 +14,17 @@
 ##
 ## WHAT THIS PHASE DELIBERATELY DOES NOT DO:
 ##
-## - **No auto-acquire and no retaliation.** A unit fights what it was ORDERED to
-##   fight and nothing else; being shot at does not make it turn around. That is
-##   stances (4.12), and guessing at it here would mean every villager in the
-##   game charging the first enemy that walked past, since a villager carries
-##   damage 3.
+## - **No auto-acquire OF ITS OWN, and still no retaliation.** This line used to end
+##   "that is stances (4.12)", and 4.12 arrived on 2026-08-29 -- so read the split
+##   carefully, because it is the same one that kept the promise cheap. `StanceSystem`
+##   decides whether an IDLE unit starts a fight and hands it over as an ordinary
+##   `Task.ATTACK`; everything in this file still only ever resolves a fight somebody
+##   asked for. The villager the old text warned about is still safe, by data rather
+##   than by omission: `SimUnit.default_stance_for` puts every worker on PASSIVE.
+##   **Retaliation is genuinely still absent** -- a unit already busy gathering or
+##   walking does not turn on whatever is hitting it, whatever its stance, because
+##   noticing that would mean plumbing an attacker through `take_damage` and
+##   `WildlifeSystem` records why it refused to (it watches hp instead).
 ## - **Projectiles are COSMETIC, and arrived on 2026-08-22.** A ranged hit still lands
 ##   the instant it is fired -- this line used to say "no projectiles" and predicted
 ##   that "nothing about the damage model below changes when it arrives", which is
@@ -349,7 +355,10 @@ func _reacquire(w: SimWorld, u: SimUnit) -> bool:
 	if best_id == 0:
 		return false
 	var next_tile: Vector2i = w.get_entity(best_id).tile()
-	u.set_task_attack(best_id, next_tile)
+	# `keep_post`: this is the same fight carrying on, so a DEFENSIVE unit that killed
+	# one raider and turned on the next still owes its guard post a return (4.12).
+	# Without it, finishing off a pair would silently release the leash.
+	u.set_task_attack(best_id, next_tile, true)
 	w.paths.request(u.id, next_tile)
 	return true
 
@@ -366,13 +375,30 @@ func _reacquire(w: SimWorld, u: SimUnit) -> bool:
 ## in legs rather than smoothly. Chasing still converges, because each leg starts
 ## from where the target actually was; it just looks stepped when the quarry is
 ## faster than the pursuer, which is the case that is meant to get away.
+## STAND_GROUND IS ENFORCED HERE AND NOWHERE ELSE (4.12), which is why it costs three
+## lines rather than a system: the stance is entirely "never take a step to fight", and
+## this function is the only place a fight ever takes one. A unit holding the line whose
+## target walks out of reach stands down rather than following it -- which is the stance
+## behaving correctly and not a failure to chase.
+##
+## It applies to an ORDERED attack too, deliberately. A player who has set a unit to hold
+## its ground and then tells it to attack something across the map has asked for two
+## contradictory things, and the stance is the standing instruction; the way to send that
+## unit anywhere is to move it, or to take it off Stand Ground.
 func _close_in(w: SimWorld, u: SimUnit, target: SimEntity) -> void:
+	if u.stance == SimUnit.Stance.STAND_GROUND:
+		u.stop()
+		return
 	if u.path_pending or u.has_waypoint():
 		return          # already on the way
 	if w.paths == null:
 		u.stop()
 		return
-	u.set_task_attack(u.task_target_id, target.tile())
+	# `keep_post`: re-planning toward a target that has moved is the same fight, not a
+	# new order, so a DEFENSIVE unit keeps the post it owes a return to (4.12). This is
+	# the call site that made `keep_post` necessary -- it fires every time a chase's
+	# route runs out, so without it a leash would be released within a few tiles.
+	u.set_task_attack(u.task_target_id, target.tile(), true)
 	w.paths.request(u.id, target.tile())
 
 

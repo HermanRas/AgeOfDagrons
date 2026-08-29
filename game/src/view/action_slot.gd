@@ -18,6 +18,17 @@ const SIZE := 72.0
 const EMPTY_COLOR := Color(0.25, 0.22, 0.18, 0.6)
 const DISABLED_ALPHA := 0.4
 
+## The ring around the one slot of a set that is currently in force -- the stance a unit
+## is on, the formation its moves use (`HudAction.selected`).
+##
+## A BORDER RATHER THAN A FILL OR A TINT, and the choice is forced by what is already in
+## the tile. A fill would sit under or over the icon, and every other visual state here is
+## already spent: `modulate`'s alpha says enabled, the top strip says cost, the bottom
+## strip says name and the corner says badge. The frame's own edge is the last unused
+## surface, and a thick gold line on it reads at 72 px on a phone.
+const SELECTED_BORDER := 3
+const SELECTED_COLOR := Color(1.0, 0.84, 0.42)
+
 ## The name strip over a cropped portrait. Inset to clear the frame art's gold
 ## border, though by less than the icon is (10): the strip is opaque, so it hides
 ## the border it overlaps rather than clashing with it, and those few pixels are
@@ -60,6 +71,7 @@ var _caption: Label
 var _cost_bg: ColorRect
 var _cost: Label
 var _badge: Label
+var _ring: Panel
 
 
 func _init() -> void:
@@ -208,6 +220,23 @@ func _init() -> void:
 	_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_badge)
 
+	# LAST, so it draws over the caption and cost strips rather than under them: those
+	# are opaque bars running the full width of the tile, and a ring hidden behind two
+	# of its own four sides is not a ring. A transparent-centred border, which is why it
+	# can sit on top of everything without hiding the thing it is marking -- the same
+	# trick `ControlGroupSlot`'s ring uses, and the reason this one is NOT the panel
+	# frame above (that one is filled, and on top it would hide the whole slot).
+	var ring_box := StyleBoxFlat.new()
+	ring_box.bg_color = Color(0, 0, 0, 0)
+	ring_box.set_border_width_all(SELECTED_BORDER)
+	ring_box.border_color = SELECTED_COLOR
+	_ring = Panel.new()
+	_ring.add_theme_stylebox_override("panel", ring_box)
+	_ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ring.visible = false
+	add_child(_ring)
+
 	pressed.connect(_on_pressed)
 
 
@@ -222,6 +251,9 @@ func set_action(p_action: HudAction) -> void:
 		return
 
 	visible = true
+	# Set before the early returns below, all three of which are "how do I draw the
+	# middle of the tile" and none of which should decide whether the ring shows.
+	_ring.visible = p_action.selected
 	disabled = not p_action.enabled
 	# Greyed rather than hidden: a not-yet-implemented action still shows where
 	# it WILL be, see HudAction's own header.

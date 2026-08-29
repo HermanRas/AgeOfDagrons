@@ -18,6 +18,43 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-08-29 — one finding, FIXED the same day, and the ruling matters more than the fix
+
+- [x] **"game is stuck, villagers died" → "the villagers walk past the knight/scout to
+      build the house, the scout kills most of them"** (project owner, minutes after 4.12
+      shipped). ✅ **Fixed in the TEST MAP, not in the sim, and that was the owner's call:**
+      *"game mechanics is working correctly no change needed, just move the enemy a little
+      bit away in the test map."*
+
+      **What happened.** Stances gave military units a DEFENSIVE default, so a unit
+      acquires anything hostile within `StanceSystem.GUARD_RADIUS` (5) of where it stands.
+      `MapGen.DEBUG_ENEMY_SQUAD` had sat at (12, 0) and (14, 0) since it was written —
+      **three tiles from the starting villagers**, who ring the town centre one tile off
+      its wall. That placement was correct for as long as nothing attacked unasked, and
+      became a firing squad the moment something did. `preview_match` reproduced it
+      headlessly and finished with a population of **2 of 10**.
+
+      **Two things were moved.** The squad went to (20, 18) — twenty tiles out, into the
+      one quadrant of the debug map with no villager traffic, since gold, berries, stone,
+      wood and the pasture between them cover every other direction. And the archer and
+      knight were **separated from two tiles apart to twelve**: with a radius of 5 each
+      covers the other, so anything close enough to trade blows with the archer is close
+      enough to be ridden down by the knight, and the pair was not two enemies but one
+      fight the opening cannot take. `MapGen`'s header carries both arguments.
+
+      ⚠️ **The ruling to keep: the mechanic was right and the CONTENT was wrong.** This
+      is the third finding in a row (see the two rounds below) where nothing was a wrong
+      number. What made it look like a bug was a fixture written under an assumption that
+      had quietly stopped holding — the same shape as the six *tests* that broke the same
+      day, all of which put two hostile units near each other and expected nothing to
+      happen. **A placement is a claim about behaviour, and 4.12 changed the behaviour.**
+
+      *One consequence, recorded because it is not obviously an improvement:* the squad
+      is now **behind the fog**, so `preview_match` had to march the villagers out to find
+      it before it could tap one. Its standoff must be inside the villager's own `los` of
+      **4** — the first attempt used 6 and the villagers stood next to an enemy they could
+      not see, which reported as "nobody to fight".
+
 ### Playtest, 2026-08-28 (second round) — three findings, ALL THREE FIXED the same day
 
 *Two of them are about what the player can SEE, and the third is about what they can DO.

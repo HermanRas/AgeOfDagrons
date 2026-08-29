@@ -4,9 +4,48 @@
 class_name SimUnit
 extends SimEntity
 
-enum Task { IDLE, MOVE, GATHER, RETURN, BUILD, ATTACK, GARRISON, STAND_GROUND, FLEE }
+enum Task { IDLE, MOVE, GATHER, RETURN, BUILD, ATTACK, GARRISON, STAND_GROUND, FLEE, ABILITY }
+
+## WHEN THIS UNIT PICKS A FIGHT NOBODY ORDERED (PLAN.md 4.12).
+##
+## `CombatSystem`'s header has refused auto-acquire since 4.13 and named this phase as
+## where it would come from, so this enum is that decision arriving rather than a
+## relaxation of it: a unit still fights what it was ORDERED to fight, and the four
+## values below are the player saying, per unit, what else it may start.
+##
+##   AGGRESSIVE   anything hostile inside its own line of sight, chased without a leash.
+##   DEFENSIVE    anything hostile within `StanceSystem.GUARD_RADIUS` of the spot it was
+##                standing on, chased only that far, then it walks BACK to that spot.
+##   STAND_GROUND anything that comes inside its own attack range. Never takes a step,
+##                which is the whole of it -- see `CombatSystem._close_in`.
+##   PASSIVE      nothing. Today's behaviour, and still the default for anyone whose job
+##                is not fighting (`UnitDef.default_stance`).
+##
+## ORDER IS LOAD-BEARING the same way `colours.json`'s is: it rides the wire as an int
+## and `SetStanceCommand` validates against the range, so inserting a value in the
+## middle would re-point every unit already carrying one. Append only.
+enum Stance { AGGRESSIVE, DEFENSIVE, STAND_GROUND, PASSIVE }
+
+## The post a DEFENSIVE unit fights from and returns to, or `NO_POST` for a unit that is
+## not currently holding one. Shaped after `roam_home` and for the same reason: tile
+## (0, 0) is real on every map, so 0 cannot be the sentinel.
+const NO_POST := Vector2i(-1, -1)
 
 var task: Task = Task.IDLE
+
+## What this unit may start on its own (4.12). Set at spawn from `UnitDef.default_stance`
+## and changed only by `SetStanceCommand`.
+var stance: int = Stance.PASSIVE
+
+## WHERE IT WAS STANDING WHEN IT DECIDED TO FIGHT, and the flag that says the current
+## ATTACK is its own idea rather than an order.
+##
+## That double duty is deliberate and it is what keeps the feature to one field: a
+## player's attack order clears it (every `set_task_*` below does, unconditionally), so
+## a unit sent across the map to kill something is never yanked back by the leash, while
+## one that acquired for itself carries the tile it owes a return to. `StanceSystem` is
+## the only writer.
+var guard_post: Vector2i = NO_POST
 var task_target_id: int = 0
 var task_target_tile: Vector2i = Vector2i.ZERO
 var path: PackedVector2Array = PackedVector2Array()
@@ -52,6 +91,22 @@ var gather_node_tile: Vector2i = Vector2i.ZERO
 ## `roam_home` uses that sentinel.
 var deposit_tile: Vector2i = Vector2i(-1, -1)
 var attack_cooldown: int = 0
+
+## Ticks until this unit's special ability may be used again, or 0 for ready
+## (PLAN.md 4.10). Separate from `attack_cooldown` on purpose: a monk healing does not
+## stop a monk defending itself, and a dragon's breath is not its bite.
+##
+## Counted down by `AbilitySystem` for every unit that HAS an ability, including while
+## walking, exactly as `attack_cooldown` is -- so closing the distance is not paid twice.
+var ability_cooldown: int = 0
+
+## What an `ABILITY` task is aimed at when the ability targets GROUND rather than an
+## entity (the dragon's breath). `task_target_id` carries the entity for the other kind
+## and `task_target_tile` is where the unit is WALKING, which after `set_path` is the
+## nearest tile it could actually reach -- so neither of those can serve as the aim
+## point, and a breath weapon that landed where the dragon stopped would miss.
+var ability_target_tile: Vector2i = Vector2i.ZERO
+
 var anim: StringName = &"idle"
 
 ## SIEGE ONLY (PLAN.md 4.13, 9.2.1) -- `SiegeSystem` writes all three and nothing else
@@ -200,6 +255,7 @@ func begin_packing(want_packed: bool, ticks: int) -> void:
 func set_task_move(t: Vector2i) -> void:
 	task = Task.MOVE
 	task_target_tile = t
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
@@ -214,6 +270,7 @@ func set_task_gather(node_id: int, tile: Vector2i) -> void:
 	gather_node_id = node_id
 	gather_node_tile = tile
 	task_target_tile = tile
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
@@ -226,6 +283,7 @@ func set_task_return(building_id: int, tile: Vector2i) -> void:
 	task = Task.RETURN
 	task_target_id = building_id
 	task_target_tile = tile
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
@@ -236,6 +294,7 @@ func set_task_build(building_id: int, tile: Vector2i) -> void:
 	task = Task.BUILD
 	task_target_id = building_id
 	task_target_tile = tile
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
@@ -245,13 +304,51 @@ func set_task_build(building_id: int, tile: Vector2i) -> void:
 ## target is NOW -- a moving one is re-planned toward by CombatSystem once this
 ## route runs out, rather than re-pathed every tick, which is what keeps a chase
 ## inside PathService's per-tick budget (4.2).
-func set_task_attack(target_id: int, tile: Vector2i) -> void:
+##
+## `keep_post` IS FALSE FOR EVERY ORDER AND TRUE FOR EVERY CONTINUATION (4.12), which is
+## the whole of how the leash tells those two apart. An `AttackCommand` arrives with the
+## default and drops the guard post, so a soldier sent across the map is never dragged
+## back; `CombatSystem._close_in` and `_reacquire` are the same fight carrying on and
+## pass true, so a defender chasing its target does not forget where it came from.
+func set_task_attack(target_id: int, tile: Vector2i, keep_post: bool = false) -> void:
 	task = Task.ATTACK
 	task_target_id = target_id
 	task_target_tile = tile
+	if not keep_post:
+		guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
+
+
+## Walk into range of an ability's target and use it on arrival (PLAN.md 4.10).
+##
+## `aim` is kept apart from `task_target_tile` for the reason `ability_target_tile`
+## records: the latter is rewritten by `set_path` to wherever the route could actually
+## end, and a dragon that stopped two tiles short would otherwise breathe fire there.
+## For a targeted ability `target_id` is the entity; for a ground ability it is 0.
+func set_task_ability(target_id: int, aim: Vector2i) -> void:
+	task = Task.ABILITY
+	task_target_id = target_id
+	task_target_tile = aim
+	ability_target_tile = aim
+	guard_post = NO_POST
+	path = PackedVector2Array()
+	path_index = 0
+	path_pending = true
+
+
+## Walk back to the post this unit left to fight from, KEEPING the post (4.12).
+##
+## `set_task_move` clears `guard_post` -- it is a player order everywhere else it is
+## called from -- so the post is put back afterwards and stays set for the whole walk
+## home. That is what lets the return leg tell itself apart from an ordinary move, and
+## it is why `StanceSystem` can clear the post on arrival rather than having to remember
+## which units are walking back.
+func return_to_post() -> void:
+	var post := guard_post
+	set_task_move(post)
+	guard_post = post
 
 
 ## Walk toward a friendly building and step inside it on arrival (PLAN.md 4.8).
@@ -265,6 +362,7 @@ func set_task_garrison(building_id: int, tile: Vector2i) -> void:
 	task = Task.GARRISON
 	task_target_id = building_id
 	task_target_tile = tile
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = true
@@ -292,9 +390,45 @@ func halt() -> void:
 ## (which drops any request whose unit is not on a travel task) would have thrown
 ## the route away and left the unit standing where it was ordered from, in GARRISON,
 ## forever. That is the same failure the header of `SimUnit.replan()` describes.
+##
+## ABILITY JOINED IT ON 2026-08-29 for exactly the reason the paragraph above gives for
+## GARRISON: a monk ordered to heal somebody across the square has to walk there first,
+## and a travel task PathService does not recognise has its route thrown away and leaves
+## the unit standing in that task forever.
 func is_travel_task() -> bool:
 	return task == Task.MOVE or task == Task.GATHER or task == Task.RETURN \
-			or task == Task.BUILD or task == Task.ATTACK or task == Task.GARRISON
+			or task == Task.BUILD or task == Task.ATTACK or task == Task.GARRISON \
+			or task == Task.ABILITY
+
+
+## WHAT A UNIT IS BORN WITH (4.12, project owner 2026-08-29: a soldier standing idle
+## should "fight back, chase a little"). Read once by `SimWorld.spawn_unit`.
+##
+## DEFENSIVE for a fighter and PASSIVE for everyone else, and the three exclusions are
+## each a case where the default would be actively wrong rather than merely idle:
+##
+##   a worker      halving the roster's speed already showed how expensive a villager's
+##                 walk is. One that downs tools to chase a scout has abandoned an
+##                 economy, and she loses -- 3 damage against 30 hp is ten bites for a
+##                 kill and two to die (the wolf finding of 2026-08-28).
+##   an engine     `packs()`. 4.13's whole design is that changing state is expensive:
+##                 3, 5 and 8 seconds at both ends. A trebuchet that deployed every time
+##                 a scout rode past would spend the match folding and unfolding, which
+##                 is worse than the mobile turret the pack timer exists to prevent.
+##   no attack     `attack_damage <= 0` -- the monk, the trade cart, the transport. A
+##                 stance would send them to stand next to something they cannot hurt;
+##                 `CombatSystem._process` retires that order the tick it sees it.
+##
+## Wildlife is not tested for and does not need to be: it is gaia's, `StanceSystem` skips
+## owner 0 outright, and `WildlifeSystem` owns every fight an animal picks through
+## `aggro_radius`. Two mechanisms answering "does this thing attack unasked" would be the
+## `Diplomacy` header's warning arriving again.
+static func default_stance_for(d: UnitDef) -> int:
+	if d == null:
+		return Stance.PASSIVE
+	if d.is_worker() or d.packs() or d.attack_damage <= 0:
+		return Stance.PASSIVE
+	return Stance.DEFENSIVE
 
 
 ## The 8-way facing a delta points along. Shared by MovementSystem (which faces a
@@ -361,6 +495,11 @@ func stop() -> void:
 	task_target_id = 0
 	gather_node_id = 0
 	gather_node_tile = Vector2i.ZERO
+	# THE POST GOES WITH THE ORDER (4.12). A unit told to stop is standing down where it
+	# is, so wherever it came from is no longer owed a return -- and `StanceSystem` will
+	# take this tile as its new post the moment it acquires again. Not doing this would
+	# make Stop a verb that leaves a unit walking, which is the one thing it is for.
+	guard_post = NO_POST
 	path = PackedVector2Array()
 	path_index = 0
 	path_pending = false
@@ -405,6 +544,20 @@ func to_snapshot() -> Dictionary:
 	d["anim"] = anim
 	d["facing"] = facing
 	d["corpse_ticks_left"] = corpse_ticks_left
+	# STANCE RIDES ON EVERY UNIT, UNCONDITIONALLY, and that is the shape-safe choice
+	# rather than the expensive one. 12.1f's rule is about fields carried by SOME units
+	# and not others -- those split the roster into two shape tables and cost more than
+	# they save. One more int on every unit keeps the single shape `task` and `facing`
+	# already share, and the panel cannot show which of four stances is set without it.
+	#
+	# NOT filtered per owner, unlike a building's rally point. A stance is not an
+	# intention hidden on a tile three screens away: it is what that soldier visibly
+	# does when you walk past it, which is a fact about a unit you can already see.
+	d["stance"] = int(stance)
+	# ONLY WHILE COOLING (4.10), because absence is a correct reading of "ready" and the
+	# overwhelming majority of units have no ability at all. Same call `packed` makes.
+	if ability_cooldown > 0:
+		d["ability_cooldown"] = ability_cooldown
 	# ON THE WIRE, unlike every other wildlife field, because the CLIENT has to know:
 	# `GameView.movable_selection` uses it to decide whether tapping the ground with a
 	# sheep selected is an order or nothing at all. Without it the client would offer

@@ -195,17 +195,62 @@ const DEBUG_WOLF := [Vector2i(-16, 14)]
 ## above age 1 -- archer 2, knight 3 -- and that is fine here: `age_required`
 ## gates the TRAIN menu, not what may exist on a map (PLAN.md 2.7.1).
 ##
-## PLACED FOR THE SCREEN, like the resource clusters. Iso sends (dx - dy) to
-## screen x and (dx + dy) to screen y, and the camera opens centred on the town
-## centre's own middle -- which is `origin + (5, 5)`, half its 10x10 footprint.
-## Relative to that middle these two sit at (7, -5) and (9, -5), i.e. 384 px and
-## 448 px to the right and a little below, on a 1152 px frame whose right half is
-## 576 px wide. Comfortably on screen at the default zoom, two tiles clear of the
-## town centre's edge, and below the berry-bush row rather than tangled in it.
-## Stepping only dx between the two staggers them, exactly as DEBUG_FOOD does.
+## ⚠️ **PLACED NOT TO BE SEEN, LIKE THE WOLF — moved 2026-08-29 and the move is the
+## point.** These used to sit at (12, 0) and (14, 0), two tiles off the town centre's
+## right wall, chosen so both were comfortably in the opening frame. That was correct
+## for as long as they were scenery: before 4.12 nothing attacked unasked, so an enemy
+## knight three tiles from your front door was a punching bag waiting to be tapped.
+##
+## Stances (4.12) made them live, and the project owner reported the result within
+## minutes: *"the villagers walk past the knight/scout to build the house, the scout
+## kills most of them."* `preview_match` reproduced it headlessly and finished the run
+## with a population of **2 of 10**. A DEFENSIVE unit acquires anything hostile within
+## `StanceSystem.GUARD_RADIUS` (5) of where it stands, the five starting villagers ring
+## the town centre one tile off its wall, and (12, 0) is three tiles from the nearest of
+## them — so the squad opened fire before the player had finished reading the screen.
+##
+## **The mechanics were not changed; this was** (project owner, same day: *"game
+## mechanics is working correctly no change needed, just move the enemy a little bit
+## away in the test map"*). DEBUG_WOLF's header already had the whole argument written
+## down for an aggro radius of 6 — *"anything inside about ten tiles would have it eating
+## the opening"* — and the squad simply was not measured against it, because when it was
+## placed it had no radius at all.
+##
+## **DOWN-RIGHT, WHICH IS THE ONE QUADRANT WITH NO VILLAGER TRAFFIC.** That is what
+## decided the direction rather than the distance, and it took ruling the others out:
+## right and up-right is DEBUG_GOLD (12, 8) → (15, 4) → (18, 0) with DEBUG_FOOD's berry
+## row at (17, 7..10), so anything pushed further east sits on top of the miners; left is
+## DEBUG_STONE; down-left is DEBUG_WOOD_CLUSTER and the wolf; up is the pasture. **A
+## villager works in every direction but this one.** Nearest working tile is a berry
+## bush at (17, 10), seven tiles off — clear of the radius with margin.
+##
+## Twenty tiles from the villager ring, which is twice DEBUG_WOLF's ten and deliberate:
+## the wolf is one animal that bites, and this is an archer and a knight that kill.
+##
+## **It costs the opening frame and that is an accepted trade on this map**, the same one
+## DEBUG_GOLD, DEBUG_WOOD_CLUSTER and DEBUG_STONE all record making — at 32 px per tile
+## of (dx - dy) the town centre alone spans 640 px of 1152, and clearance outranks
+## composition. Finding them is now a pan, which is the correct verb for going to look
+## for an enemy. **`preview_match` is unaffected**: `_tap_an_enemy` converts a TILE to a
+## world point and taps that, so it never needed them on screen.
+##
+## **AND THE TWO ARE TWELVE TILES APART RATHER THAN TWO, which is the second half of the
+## same fix.** They used to be staggered by dx for screen composition, back when neither
+## would move unless tapped. Now each covers the other: a `GUARD_RADIUS` of 5 means
+## anything close enough to trade blows with the archer is close enough to be ridden down
+## by the knight, so the pair is not two enemies, it is one fight nothing short of an army
+## can take. `preview_match`'s step 18 is the case that proved it -- five villagers at 3
+## damage can kill a 30 hp archer and cannot survive a knight, so with them adjacent the
+## marchers died, vision died with them, and the enemy dropped back into the fog before
+## the tap could name one.
+##
+## Twelve, because the villagers fighting the archer stand within about two tiles of it
+## and the knight must not reach them: 12 leaves 5 clear of the radius either side. So the
+## archer is a fight the opening can win and the knight is one it cannot, which is a
+## better sandbox than two of the same answer.
 const DEBUG_ENEMY_SQUAD := [
-	[&"unit.archer", Vector2i(12, 0)],
-	[&"unit.knight", Vector2i(14, 0)],
+	[&"unit.archer", Vector2i(20, 18)],
+	[&"unit.knight", Vector2i(20, 30)],
 ]
 
 ## Starting stock (PLAN.md 9: numbers are starting values to be tuned by

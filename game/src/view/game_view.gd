@@ -359,6 +359,16 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# resource node entry, where it defaults to IDLE and is never read since
 			# _is_own_living_villager() has already filtered those out by is_unit.
 			"task": int(entry.get("task", SimUnit.Task.IDLE)),
+			# WHAT IT STARTS ON ITS OWN (4.12), sent on every unit every tick. The
+			# default here is PASSIVE and it is doing real work rather than being a
+			# formality: a building or a resource node has no stance, and PASSIVE is the
+			# reading that makes `SelectionActions` show nothing surprising for one.
+			"stance": int(entry.get("stance", SimUnit.Stance.PASSIVE)),
+			# Ticks left before the special ability may be used again (4.10). Sent only
+			# while it is running, so 0 -- ready -- is the default for a unit with an
+			# ability and the permanent state of everything without one. The action
+			# slot greys itself off exactly this.
+			"ability_cooldown": int(entry.get("ability_cooldown", 0)),
 			# Present only on buildings (SimBuilding.to_snapshot); 0 elsewhere, which
 			# reads correctly as "nothing queued" rather than needing its own guard.
 			"queue_len": int(entry.get("queue_len", 0)),

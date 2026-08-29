@@ -129,6 +129,38 @@ var is_herdable: bool = false
 ## one mechanism, and calling this `capacity` would have been two words for it.
 var garrison_cap: int = 0
 
+## SPECIAL ABILITIES (PLAN.md 4.10, IDEA.md 4.10). Two units carry one today: the monk
+## heals and the dragon breathes fire.
+##
+## `ability_id` IS THE SWITCH, exactly as `attack_projectile` and `packed_visual` are --
+## no `ability` block, no ability, and no rule infers one from anything else. It is the
+## identity (button icon, and a sound id later); what the ability DOES is `ability_effect`
+## and nothing reads the id to find out.
+##
+## THE ID AND THE EFFECT ARE KEPT APART DELIBERATELY. One `amount` field cannot mean
+## "hp restored" for a monk and "damage dealt" for a dragon unless something says which,
+## and keying that off the id would make every new ability a new arm in `AbilitySystem`
+## rather than a JSON entry. `effect` is that something, and it has two values.
+var ability_id: StringName = &""
+var ability_name: String = ""
+## `heal` or `damage`. What `AbilitySystem` switches on, and the only field it does.
+var ability_effect: StringName = &""
+## `friendly` (aimed at one of your own units) or `ground` (aimed at a tile). This is
+## what the CLIENT reads to decide what the next tap after pressing the button means,
+## and what `AbilityCommand.validate` refuses on the server -- both, for §4's reason.
+var ability_target: StringName = &""
+## How close the user must get before it fires, in tiles. Measured the same way an
+## attack's reach is (`CombatSystem.tile_gap`), so it is a Chebyshev gap to a footprint.
+var ability_range: int = 0
+## Chebyshev radius of the effect in tiles: 0 for a single target, 2 for a breath that
+## catches a 5x5. A radius is what makes the dragon's ability worth a cooldown.
+var ability_radius: int = 0
+## Hp restored, or damage dealt, as `ability_effect` decides.
+var ability_amount: int = 0
+## Which armour blunts it, for a `damage` ability. Ignored by `heal`.
+var ability_damage_type: StringName = &"melee"
+var ability_cooldown_ticks: int = 0
+
 var packed_visual: StringName = &""
 var packed_speed: int = 0
 ## Ticks to fold up or set up, the same figure both ways. 0 A.D. gives no separate
@@ -141,6 +173,12 @@ var pack_ticks: int = 0
 ## `packed_visual != &""` and keeps the "absence is the switch" rule in one place.
 func packs() -> bool:
 	return packed_visual != &""
+
+
+## Whether this unit has a special ability at all (4.10). The mirror of `packs()`, and
+## the same "absence is the switch" rule kept in one place.
+func has_ability() -> bool:
+	return ability_id != &""
 
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
@@ -170,6 +208,19 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.armor_pierce = int(armor.get("pierce", 0))
 
 	u.garrison_cap = int(d.get("garrison_cap", 0))
+
+	var ability: Variant = d.get("ability")
+	if ability is Dictionary:
+		var ab: Dictionary = ability
+		u.ability_id = StringName(ab.get("id", ""))
+		u.ability_name = str(ab.get("name", String(u.ability_id)))
+		u.ability_effect = StringName(ab.get("effect", ""))
+		u.ability_target = StringName(ab.get("target", ""))
+		u.ability_range = int(ab.get("range", 0))
+		u.ability_radius = int(ab.get("radius", 0))
+		u.ability_amount = int(ab.get("amount", 0))
+		u.ability_damage_type = StringName(ab.get("damage_type", "melee"))
+		u.ability_cooldown_ticks = int(ab.get("cooldown_ticks", 0))
 
 	var packing: Variant = d.get("packing")
 	if packing is Dictionary:

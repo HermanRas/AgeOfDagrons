@@ -172,28 +172,55 @@ func test_the_enemy_squad_takes_its_stats_from_units_json() -> void:
 		assert_true(d.attack_damage > 0, "%s is a soldier" % u.def_id)
 
 
-func test_the_enemy_squad_stands_to_the_right_of_the_town_centre() -> void:
-	# The whole point of where they are: the camera opens on the town centre, and
-	# these have to be in shot. Iso sends (dx - dy) to screen x and (dx + dy) to
-	# screen y, so "to the right, on roughly the same band" is that first
-	# difference being positive and the second one small. Asserted in tile terms
-	# rather than through Iso, which the sim layer may not name (PLAN.md 4).
+func test_the_enemy_squad_cannot_reach_the_opening() -> void:
+	# REWRITTEN 2026-08-29, and what it used to assert is the point. It read "to the
+	# right of the town centre, on roughly its own horizontal band", because the squad
+	# was placed to be IN SHOT when the camera opens -- correct while the two were
+	# scenery, since before 4.12 nothing attacked unasked.
+	#
+	# Stances made them live and the project owner reported it within minutes: "the
+	# villagers walk past the knight/scout to build the house, the scout kills most of
+	# them". The old test passed throughout, because being on screen was never the
+	# property that mattered -- it was just the one that had been written down.
+	#
+	# So this now pins the property that DOES matter, and it is measured against
+	# `StanceSystem.GUARD_RADIUS` rather than a literal, so retuning the radius moves the
+	# requirement with it instead of leaving this quietly wrong.
 	var s := _skirmish()
-	var tc: SimBuilding = null
+	var villagers: Array[Vector2i] = []
 	for e in s.entities.values():
-		if e is SimBuilding:
-			tc = e
-	assert_not_null(tc)
+		if e is SimUnit and e.owner_id == 1:
+			villagers.append((e as SimUnit).tile())
+	assert_true(villagers.size() >= MapGen.STARTING_VILLAGERS,
+			"sanity: the opening this is protecting really is there")
+
+	var enemies: Array[Vector2i] = []
 	for e in s.entities.values():
 		if e.owner_id != 2:
 			continue
-		var rel: Vector2i = (e as SimUnit).tile() - tc.tile()
-		assert_true(rel.x - rel.y >= 12,
-				"%s is to the right of the town centre, clear of its 10x10 footprint" % e.def_id)
-		assert_true(absi(rel.x + rel.y) <= 4,
-				"%s is on the town centre's own horizontal band" % e.def_id)
-		assert_true(s.map.is_terrain_passable((e as SimUnit).tile()),
-				"%s stands on walkable ground" % e.def_id)
+		var at: Vector2i = (e as SimUnit).tile()
+		enemies.append(at)
+		assert_true(s.map.is_terrain_passable(at), "%s stands on walkable ground" % e.def_id)
+		for v in villagers:
+			assert_true(_gap(at, v) > StanceSystem.GUARD_RADIUS,
+					"%s is %d tiles from a starting villager and would open fire on the "
+					% [e.def_id, _gap(at, v)]
+					+ "opening -- the whole of the 2026-08-29 report")
+
+	# AND THEY MUST NOT COVER EACH OTHER, which is the half that is easy to miss. Two
+	# enemies inside one radius are not two enemies: anything close enough to fight the
+	# archer is close enough to be ridden down by the knight, so the pair becomes one
+	# fight the opening cannot take, and `preview_match`'s peasant mob died to it.
+	assert_eq(enemies.size(), 2, "an archer and a knight")
+	assert_true(_gap(enemies[0], enemies[1]) > StanceSystem.GUARD_RADIUS * 2,
+			"the two are %d apart; each has a radius of %d, so they need more than "
+			% [_gap(enemies[0], enemies[1]), StanceSystem.GUARD_RADIUS]
+			+ "twice it between them or fighting one means fighting both")
+
+
+## Chebyshev gap in tiles -- the measure `StanceSystem` acquires by.
+static func _gap(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
 
 func test_the_skirmish_leaves_the_first_players_start_exactly_as_it_was() -> void:

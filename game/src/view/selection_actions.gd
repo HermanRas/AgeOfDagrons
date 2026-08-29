@@ -8,11 +8,17 @@
 ## `GameView.tap_action()` already draws between deciding and doing.
 ##
 ## Reality check, kept current: move, stop, gather, build, train,
-## cancel-production, attack, upgrade, gate, GARRISON and destroy all have commands
-## behind them (`src/sim/commands/`). **Repair and formations do not**, and
-## `SimUnit.Task` still declares STAND_GROUND and FLEE with no verb here. Those are
-## emitted as `enabled = false` placeholders so the panel reads finished; see
-## `HudAction`'s header for why that beats omitting them.
+## cancel-production, attack, upgrade, gate, garrison, STANCE, FORMATIONS, ABILITY and
+## destroy all have commands behind them (`src/sim/commands/`). **Repair is the last one
+## that does not**, and it is the only `enabled = false` placeholder left in this file --
+## see `HudAction`'s header for why a greyed slot beats an omitted one.
+##
+## Formations were placeholders here from 4.3 until 2026-08-29 and are now live
+## (`Formation`); stance and ability arrived with them (4.12, 4.10). `SimUnit.Task` still
+## declares FLEE with no verb, and correctly so -- fleeing is something `WildlifeSystem`
+## does TO an animal, not something a player orders. STAND_GROUND is no longer a task at
+## all: it turned out to be a stance, which is what this file's old note was really
+## observing when it listed it as a task with no verb.
 ##
 ## This list said garrison was unimplemented until 2026-08-27, when 4.8 landed. Note
 ## which side of it is here: the GARRISON order itself is issued by a TAP on the
@@ -43,6 +49,11 @@ const ICONS := {
 	&"build": "act_build.png",
 	&"harvest": "res_wood.png",
 	&"repair": "act_guard.png",
+	# STANCE SHARES REPAIR'S ICON and is the better claim on it: `act_guard.png` is a
+	# shield, which is a picture of "hold this ground" and only ever stood in for "mend
+	# this". Sharing one file is what the three entries above already do, and nothing
+	# reads an icon path to decide what an action means.
+	&"stance": "act_guard.png",
 	&"upgrade": "hud_techtree.png",
 	&"destroy": "act_destroy.png",
 	&"garrison": "act_garrison.png",
@@ -62,9 +73,25 @@ const ICONS := {
 const PAGE_PREV := &"page:prev"
 const PAGE_NEXT := &"page:next"
 
-## Formation/stance choices a military unit's Move action expands into
-## (UI_Design.md). No formation exists in the sim, so all four are disabled.
-const FORMATIONS: Array[StringName] = [&"line", &"grid", &"vee", &"box"]
+## Formation choices a military unit's Move action expands into (UI_Design.md). LIVE
+## since 2026-08-29 -- `Formation` is what turns one of these into a destination per unit,
+## and this list is deliberately its `SHAPES` rather than a second copy, so the menu and
+## the sim cannot come to disagree about which four exist.
+const FORMATIONS: Array[StringName] = Formation.SHAPES
+
+## The four stances, in the order `SimUnit.Stance` declares them (PLAN.md 4.12). Taken
+## from the enum rather than written out, for the reason above: the value goes on the
+## wire as an int and the panel must not be the place that decides what 2 means.
+##
+## The labels are the player-facing words and are NOT derived from the enum names --
+## "Stand Ground" carries a space, and `String(&"STAND_GROUND").capitalize()` gives
+## "Stand ground", which is a different verb in the genre than the one meant.
+const STANCE_LABELS := {
+	SimUnit.Stance.AGGRESSIVE: "Aggressive",
+	SimUnit.Stance.DEFENSIVE: "Defensive",
+	SimUnit.Stance.STAND_GROUND: "Stand Ground",
+	SimUnit.Stance.PASSIVE: "Passive",
+}
 
 
 ## The action column for the current selection.
@@ -93,8 +120,28 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 		# Attack is enabled without checking every member: AttackCommand accepts a
 		# mixed selection and tasks whoever in it can actually fight, so a group
 		# with one trade cart in it is not a group that may not be sent to war.
+		#
+		# MOVE EXPANDS HERE AND FORMATIONS ARE WHY (4.14). On a single unit it expands
+		# only for a military one, because a lone soldier in a "line" is a soldier; a
+		# GROUP is the case formations exist for, and it is the case a player reaches
+		# for them in. `Formation.destinations` returns the anchor tile for a
+		# single-unit order whatever shape was asked, so the two agree.
+		var group_move := _act(&"move")
+		group_move.expands = true
+		# STANCE ON THE WHOLE SELECTION, which is how it is set in practice -- nobody
+		# sets a stance one soldier at a time. `SetStanceCommand` carries many ids for
+		# exactly this, and members that cannot fight simply ignore it, the same way a
+		# trade cart in the group ignores Attack above.
+		#
+		# The badge and the ring read the PRIMARY's stance, which is the same
+		# simplification every other fact in this branch makes -- `facts` is one
+		# entity's. A mixed-stance group shows the primary's until the next press makes
+		# them agree, and the press is what a player is opening the menu to do.
+		var group_stance := _act(&"stance")
+		group_stance.expands = true
+		group_stance.badge = _stance_badge(int(facts.get("stance", SimUnit.Stance.PASSIVE)))
 		return _capped([
-			_act(&"move"), _act(&"stop"), _act(&"attack"), _act(&"destroy"),
+			group_move, _act(&"stop"), _act(&"attack"), group_stance, _act(&"destroy"),
 		])
 
 	if GameDataRegistry.building(def_id) != null:
@@ -108,8 +155,15 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 ## Called with `action_id = &""` for "nothing expanded", which is when the grid
 ## shows the selection's own default detail -- a building's production queue,
 ## or a group's roster.
+##
+## `active_formation` is the client's current formation choice and is APPENDED rather
+## than slotted in beside `facts`, so every existing caller and test keeps working by
+## passing nothing. It is the only argument here that is not server truth, and it is the
+## only one that could not be: 4.14 keeps the formation on the ORDER, so there is nothing
+## about it in the snapshot to read.
 static func details_for(action_id: StringName, facts: Dictionary,
-		selected_count: int = 1, all_def_ids: Array = [], age: int = 1) -> Array[HudAction]:
+		selected_count: int = 1, all_def_ids: Array = [], age: int = 1,
+		active_formation: StringName = &"") -> Array[HudAction]:
 	if facts.is_empty():
 		return []
 
@@ -126,7 +180,9 @@ static func details_for(action_id: StringName, facts: Dictionary,
 	if action_id == &"garrison":
 		return _garrison_details(facts)
 	if action_id == &"move":
-		return _capped_details(_formation_details())
+		return _capped_details(_formation_details(active_formation))
+	if action_id == &"stance":
+		return _capped_details(_stance_details(facts))
 
 	# Nothing expanded: the grid falls back to whatever the selection itself
 	# has to show.
@@ -301,6 +357,43 @@ static func _unit_actions(def_id: StringName, facts: Dictionary = {}) -> Array[H
 		# and would otherwise be offered formations it has no business in.
 		(out[0] as HudAction).expands = true
 
+	# WHAT IT DOES WHEN NOBODY IS WATCHING (PLAN.md 4.12). Offered to anything that can
+	# actually fight, which is the same `attack_damage > 0` test the Attack verb above
+	# uses -- so the villager gets one (she carries damage 3 and hiding indoors is not
+	# always an option) and the monk, the trade cart and the transport do not. A stance
+	# on a unit that cannot land a blow would be a control that changes nothing:
+	# `StanceSystem` refuses to acquire for them, deliberately and for `CombatSystem`'s
+	# reason -- the order would be retired on the tick it was given.
+	if ud.attack_damage > 0:
+		var st := _act(&"stance")
+		st.expands = true                # offers the four, with the live one ringed
+		# The badge is the current stance in one word, so the row says which it is
+		# without being opened. "Stand Ground" is abbreviated because the badge is
+		# corner text on a 72 px tile and the full label does not fit.
+		st.badge = _stance_badge(int(facts.get("stance", SimUnit.Stance.PASSIVE)))
+		out.append(st)
+
+	# ITS ONE SPECIAL ABILITY (PLAN.md 4.10) -- the monk's heal, the dragon's breath, and
+	# nothing else in the roster. Labelled with the ability's OWN name rather than
+	# "Ability", for the reason a train button says "Archer": the player is being asked
+	# to spend a cooldown and needs to know on what.
+	#
+	# DISABLED WHILE COOLING, which is IDEA.md 4.10's own wording ("greyed out and
+	# unclickable"). `ability_cooldown` is only on the wire while it is running, so
+	# absence reads as ready -- and `AbilityCommand.validate` refuses it again anyway,
+	# because a greyed slot is a courtesy and the server is the trust boundary.
+	if ud.has_ability():
+		var cooling := int(facts.get("ability_cooldown", 0))
+		var ab := HudAction.new(&"ability",
+				ud.ability_name if not ud.ability_name.is_empty() else "Ability",
+				ICONS.get(ud.ability_id, ""), cooling <= 0)
+		# Seconds rather than ticks: ticks are a sim unit and 150 of them means nothing
+		# to a player. SimClock runs at 10 a second, and it rounds UP so a cooldown with
+		# any time left never reads "0".
+		if cooling > 0:
+			ab.badge = "%ds" % ((cooling + 9) / 10)
+		out.append(ab)
+
 	# WHO IS ABOARD, AND A WAY OFF (2.4d) -- the transport ship and nothing else, since
 	# `garrison_cap` is 0 on every other unit. **The same block as `_building_actions`'s,
 	# deliberately not shared**: it is six lines, and factoring it out would need a
@@ -370,14 +463,68 @@ static func _buildable_details(age: int = 1) -> Array[HudAction]:
 	return out
 
 
-## Formation choices for a military unit's Move (UI_Design.md). No formation
-## system exists, so every one is a disabled placeholder, and none has icon art
-## -- they read by label alone.
-static func _formation_details() -> Array[HudAction]:
+## Formation choices for a military unit's Move (UI_Design.md, PLAN.md 4.14). LIVE since
+## 2026-08-29; this was four disabled placeholders from 4.3 until then.
+##
+## None has icon art and none is getting any: a formation is a SHAPE, and the label is
+## already the picture -- "Vee" says what a wedge is more directly than a 52 px glyph of
+## one would at the tile size the grid draws.
+##
+## `active` is the client's own current choice, not a fact off the wire. A formation is a
+## property of the ORDER (`MoveCommand.formation`) and nothing stores it on a unit, so
+## there is nowhere in the snapshot for this to come from -- `GameScene` holds it exactly
+## as it holds the selection. Empty means "no formation", which is a real state and the
+## default: it is what a move order has always done.
+##
+## THE ACTIVE ONE STAYS PRESSABLE and is ringed rather than greyed. Pressing it again is
+## how a player turns the formation OFF, which is the only way back to a plain move order
+## once one has been chosen.
+static func _formation_details(active: StringName = &"") -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	for f in FORMATIONS:
-		out.append(HudAction.new(&"formation:%s" % f, String(f).capitalize(), "", false))
+		var a := HudAction.new(&"formation:%s" % f, String(f).capitalize(), "", true)
+		a.selected = (f == active)
+		out.append(a)
 	return out
+
+
+## The four stances, with the one this unit is currently on ringed (PLAN.md 4.12).
+##
+## Read off `facts["stance"]`, which is SERVER truth -- `SimUnit` sends it on every unit
+## every tick. So the ring says what the unit is actually doing rather than what was last
+## pressed, and a stance set by another client, or refused by `validate`, shows correctly
+## on the next snapshot without the panel tracking anything.
+##
+## THE CURRENT ONE IS NOT DISABLED, and that is deliberate: `enabled = false` already
+## means "not built" and "nothing to act on", both of which draw greyed, and a stance the
+## unit is already on is neither. `HudAction.selected` is the third state, and its header
+## records why it had to be one.
+##
+## Ordered by the enum, so the four never move under a player's thumb -- the same reason
+## `_buildable_details` re-sorts rather than taking `building_ids()` order.
+static func _stance_details(facts: Dictionary) -> Array[HudAction]:
+	var current := int(facts.get("stance", SimUnit.Stance.PASSIVE))
+	var out: Array[HudAction] = []
+	for value in [SimUnit.Stance.AGGRESSIVE, SimUnit.Stance.DEFENSIVE,
+			SimUnit.Stance.STAND_GROUND, SimUnit.Stance.PASSIVE]:
+		var a := HudAction.new(&"stance:%d" % value, STANCE_LABELS[value], "", true)
+		a.selected = (value == current)
+		out.append(a)
+	return out
+
+
+## One word for the action row's badge. "Hold" rather than "Stand Ground" because the
+## badge is corner text on a 72 px tile; the full wording is on the detail slot, which is
+## where the player is choosing rather than checking.
+static func _stance_badge(stance: int) -> String:
+	match stance:
+		SimUnit.Stance.AGGRESSIVE:
+			return "Aggr"
+		SimUnit.Stance.DEFENSIVE:
+			return "Def"
+		SimUnit.Stance.STAND_GROUND:
+			return "Hold"
+	return "Pass"
 
 
 ## A building's production queue, one slot per queued unit (5.4). Tapping one
