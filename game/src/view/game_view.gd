@@ -229,6 +229,11 @@ func apply_snapshot(snap: Dictionary) -> void:
 		var footprint := _footprint_of(entry)
 		var sort_offset := Iso.footprint_sort_offset(footprint)
 		view.ground_m = _ring_ground_m(entry, footprint)
+		# A BUILDING'S SELECTION RING TRACES ITS FOOTPRINT (owner, 2026-08-29). Asked
+		# of the registry here rather than inferred in the view, which holds a VISUAL
+		# id and has no way to tell a house from a deer.
+		view.ring_square = GameDataRegistry.building(
+				StringName(entry.get("def_id", &""))) != null
 		# A single sort point per building (3.1, the building's own front
 		# corner) only compares fairly against a unit standing right at that
 		# corner. A worker beside the MIDDLE of a large building's long south
@@ -1091,24 +1096,30 @@ func _sub_pos(entry: Dictionary) -> Vector2i:
 
 
 ## How big to draw the selection ring, in metres, or `Vector2.ZERO` for "ask the
-## visual's own placeholder" -- which is the answer for everything but one case.
+## visual's own placeholder".
 ##
-## The case is a NORTH-SOUTH WALL. `visuals.json` sizes a wall's placeholder to the
-## footprint its ART was authored at, always east-west (`vis.wall_wood_gate` is
-## [18, 4] metres), and `_footprint_of` transposes the real footprint to [4, 18] when
-## the piece lies the other way. Everything else in the view already reads the
-## transposed figure; the ring read the placeholder, so a selected north-south gate
-## drew a fat ellipse sprawling eighteen metres east across open grass.
+## EVERY BUILDING IS SIZED FROM ITS FOOTPRINT, and the placeholder answers for
+## everything else. The two halves of that split are two different questions, and
+## which one is right depends on what the ring is drawn AS:
 ##
-## DELIBERATELY NARROW -- only where the actual footprint disagrees with the def's
-## authored one. Sizing every ring from the footprint instead would have been the
-## tidier-looking change and a worse one: a villager claims one tile and her ring is
-## drawn from a measured 0.6 m, so it would have doubled, and every building's ring
-## would have moved off its measured mesh onto its gameplay box. This fixes the
-## entities that are wrong and touches none of the ones that are right.
+##   - A UNIT, a tree, an animal: an ellipse around a thing standing at a point. The
+##     right size is the ground the ART covers, which is what the placeholder
+##     records (`vis.villager` is a measured 0.6 m). Its gameplay footprint is one
+##     whole tile and a ring that size would be three times too big.
+##   - A BUILDING: the footprint square itself (`EntityView.ring_square`), which is
+##     an exact rect and must be the SIM's rect -- the tiles it stands on, refuses to
+##     be built over, and was shown as a placement ghost on. Drawing the mesh's
+##     measured extent instead would put the outline a metre inside the tiles the
+##     building actually holds, which is precisely the mismatch a traced square is
+##     for showing.
+##
+## Until 2026-08-29 this returned the footprint for ONE building case -- a
+## NORTH-SOUTH WALL, whose art is baked east-west (`vis.wall_wood_gate` is authored
+## [18, 4] metres) while `_footprint_of` transposes the real footprint to [4, 18], so
+## a selected north-south gate drew a fat ellipse sprawling eighteen metres east
+## across open grass. That case is now simply the general rule.
 func _ring_ground_m(entry: Dictionary, footprint: Vector2i) -> Vector2:
-	var bd := GameDataRegistry.building(StringName(entry.get("def_id", &"")))
-	if bd == null or footprint == bd.footprint:
+	if GameDataRegistry.building(StringName(entry.get("def_id", &""))) == null:
 		return Vector2.ZERO
 	return Vector2(footprint) * Iso.METRES_PER_TILE
 

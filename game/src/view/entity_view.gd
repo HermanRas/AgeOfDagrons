@@ -283,6 +283,8 @@ func _advance_anim(delta: float) -> void:
 ## sprite's pixel bounds. The declared figure is the measured ground the thing
 ## occupies; the sprite is mostly air above it, so a bounds-sized ring round a 10 m
 ## tree would be a circle six tiles wide.
+##
+## A BUILDING GETS THE SQUARE INSTEAD -- see `ring_square`.
 const RING_COLOR := Color(0.35, 1.0, 0.45, 0.9)
 const RING_WIDTH := 2.0
 const RING_SEGMENTS := 24
@@ -291,19 +293,14 @@ const RING_SEGMENTS := 24
 const RING_MIN_METRES := 1.2
 
 ## The ground this entity actually claims, when that differs from what its VISUAL
-## declares. `Vector2.ZERO` means "they agree", which is every entity but one.
+## declares. `Vector2.ZERO` means "ask the visual", which is every entity that is
+## not a building.
 ##
-## The exception is a NORTH-SOUTH WALL (PLAN.md 5.8). A wall's art is baked along the
-## x axis and `visuals.json` sizes its placeholder to match -- `vis.wall_wood_gate` is
-## authored [18, 4] metres -- but a wall dragged north-south claims the transpose of
-## that, [4, 18]. The ring is the only thing that reads the placeholder for its SHAPE
-## rather than as a fallback sprite, so it was the only thing that got it wrong: a
-## selected north-south gate drew a fat ellipse sprawling eighteen metres east into
-## open grass. Found by looking at `preview_walls`' own screenshot, 2026-08-22.
-##
-## Set by `GameView` from `_footprint_of`, which already derives the transpose from
-## `facing` for hit-testing and occlusion -- so this is one more consumer of a fact
-## the view had already worked out, not a new derivation that could disagree with it.
+## Set by `GameView._ring_ground_m` from `_footprint_of`, which already derives a
+## north-south wall's transposed rect from `facing` for hit-testing and occlusion --
+## so this is one more consumer of a fact the view had worked out, not a new
+## derivation that could disagree with it. Why buildings are measured this way and
+## nothing else is, is written up there.
 var ground_m: Vector2 = Vector2.ZERO:
 	set(value):
 		if ground_m == value:
@@ -312,22 +309,73 @@ var ground_m: Vector2 = Vector2.ZERO:
 		queue_redraw()
 
 
+## Trace the FOOTPRINT SQUARE rather than draw an ellipse inside it. True for
+## buildings and false for everything else; `GameView` sets it, because whether a
+## def is a building is a registry question and this node holds a visual id.
+##
+## The project owner, 2026-08-29: "the green circle when selecting units don't look
+## good on buildings. replace the green circle with one tracing the footprint
+## square." A circle is right for a villager, who occupies a vague 0.6 m of ground
+## and could be anywhere in it; it is wrong for a house, whose footprint is an exact
+## rect the sim refuses to build over and which the placement ghost has always drawn
+## as a diamond. Selecting the finished house and seeing an ellipse where the ghost
+## had shown a box was the two halves of the same fact disagreeing.
+##
+## Drawn UNROTATED, because a footprint is axis-aligned in tile space even for a
+## wall -- `GameView._footprint_of` transposes the rect for a north-south piece
+## rather than turning it.
+var ring_square: bool = false:
+	set(value):
+		if ring_square == value:
+			return
+		ring_square = value
+		queue_redraw()
+
+
 func _draw_selection_ring() -> void:
 	var footprint_m := ground_m
 	if footprint_m == Vector2.ZERO:
 		footprint_m = GameDataRegistry.placeholder_for(visual_id).footprint_m
-	var extent := Vector2(
-		maxf(footprint_m.x, RING_MIN_METRES) * 0.5,
-		maxf(footprint_m.y, RING_MIN_METRES) * 0.5)
 
+	var points := ring_points(footprint_m, ring_square)
+	# Added here rather than passed in, so `ring_points` stays pure geometry and the
+	# shift is applied exactly once. Skipped for everything 1x1, where it is zero.
+	if draw_offset != Vector2.ZERO:
+		for i in range(points.size()):
+			points[i] += draw_offset
+	draw_polyline(points, RING_COLOR, RING_WIDTH, true)
+
+
+## The ring's outline in this node's local space, before `draw_offset`. Both shapes
+## come back CLOSED -- last point equal to first -- because `draw_polyline` does not
+## close a loop for you and a ring with a gap in it is what forgetting that looks
+## like.
+##
+## A static rather than part of `_draw` so the geometry can be asserted headless. It
+## is the only thing about a selection ring worth testing and the only part a
+## screenshot could not tell you was wrong.
+static func ring_points(footprint_m: Vector2, square: bool) -> PackedVector2Array:
+	var size := Vector2(
+		maxf(footprint_m.x, RING_MIN_METRES),
+		maxf(footprint_m.y, RING_MIN_METRES))
+
+	if square:
+		# The same four corners `PlacementGhost` draws, which is the point: the box
+		# the player was shown while placing is the box they get back when they select
+		# what they placed. `PlaceholderRenderer.footprint_points` was made public for
+		# this caller before there was one -- its header says so.
+		var corners := PlaceholderRenderer.footprint_points(size)
+		corners.append(corners[0])
+		return corners
+
+	var extent := size * 0.5
 	var points := PackedVector2Array()
 	for i in range(RING_SEGMENTS + 1):
 		var a := TAU * float(i) / float(RING_SEGMENTS)
 		# Built in METRE space and projected, so the ring lies flat on the ground
 		# plane and comes out as the right isometric ellipse for free.
-		points.append(draw_offset + Iso.metres_to_world(
-				Vector2(cos(a) * extent.x, sin(a) * extent.y)))
-	draw_polyline(points, RING_COLOR, RING_WIDTH, true)
+		points.append(Iso.metres_to_world(Vector2(cos(a) * extent.x, sin(a) * extent.y)))
+	return points
 
 
 ## Small dot above the sprite, coloured by HealthDot's thresholds (4.6). Hidden

@@ -158,5 +158,8 @@ Committed as planning so the intent survives; none of it is built.
 - An open gate is open to everyone, besiegers included. Per-player passability needs a
   pathfinding grid per player.
 - A static destroyed behind the fog stops being sent rather than leaving a stale ghost.
+- **Routes are planned as though the map held no units.** A walker no longer shoves a
+  standing unit aside — it steps around it — but it still *walks over* it, because units
+  are not in the pathing grid and putting them there is not cheap (BUGS.md, 2026-08-29).
 - Terrain blending draws one neighbour per tile, so where three terrains meet the third
   join stays crisp.

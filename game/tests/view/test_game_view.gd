@@ -864,3 +864,57 @@ func test_every_gate_def_actually_has_the_clip_its_atlas_is_asked_for() -> void:
 	assert_eq(gates, 3, "three gate defs -- one per wall tier above age 1")
 	if checked > 0:
 		assert_eq(checked, 12, "and all four ages of each were reached")
+
+
+# ── the selection ring's shape and size (owner report, 2026-08-29) ──────────
+
+## "the green circle when selecting units don't look good on buildings. replace the
+## green circle with one tracing the footprint square."
+func test_a_building_gets_a_square_ring_sized_from_its_footprint() -> void:
+	view.apply_snapshot(_snapshot_of(1, "building.house", Vector2i(10, 10),
+			{"phase": SimBuilding.Phase.COMPLETE}))
+	var v := view.pool.get_view(1)
+	assert_true(v.ring_square, "traced, not an ellipse")
+
+	var def: BuildingDef = GameDataRegistry.building(&"building.house")
+	assert_eq(v.ground_m, Vector2(def.footprint) * Iso.METRES_PER_TILE,
+			"the SIM's rect -- the tiles it stands on and refuses to be built over")
+
+
+func test_a_unit_keeps_the_round_ring_and_its_measured_size() -> void:
+	# The other half of the split, and the reason it is a split: a villager occupies a
+	# vague measured 0.6 m of ground, not the whole tile she is standing on, and a ring
+	# the size of the tile would be three times too big.
+	view.apply_snapshot(_snapshot_of(2, "unit.villager", Vector2i(4, 6)))
+	var v := view.pool.get_view(2)
+	assert_false(v.ring_square)
+	assert_eq(v.ground_m, Vector2.ZERO, "which means: ask the visual's own placeholder")
+
+
+func test_a_foundation_is_already_traced_at_the_size_it_will_finish_at() -> void:
+	# A foundation holds the finished building's ground from the moment it is placed --
+	# it is the same footprint the placement ghost was drawn at a tick earlier.
+	view.apply_snapshot(_snapshot_of(3, "building.house", Vector2i(20, 20),
+			{"phase": SimBuilding.Phase.FOUNDATION}))
+	var v := view.pool.get_view(3)
+	assert_true(v.ring_square)
+	assert_eq(v.ground_m,
+			Vector2(GameDataRegistry.building(&"building.house").footprint) * Iso.METRES_PER_TILE)
+
+
+func test_a_north_south_wall_is_traced_on_its_transposed_footprint() -> void:
+	# The case that used to be the ONLY one sized from the footprint (2026-08-22): a
+	# wall's art is baked east-west, so a piece dragged the other way claims the
+	# transpose of what `visuals.json` declares, and a ring built from the placeholder
+	# sprawled the long way across open grass.
+	var def_id := &"building.wall_wood_long"
+	var def: BuildingDef = GameDataRegistry.building(def_id)
+	assert_ne(def.footprint.x, def.footprint.y, "a wall segment is a long thin rect")
+
+	view.apply_snapshot(_snapshot_of(4, String(def_id), Vector2i(30, 30),
+			{"phase": SimBuilding.Phase.COMPLETE,
+			"facing": WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y]}))
+	var v := view.pool.get_view(4)
+	assert_eq(v.ground_m,
+			Vector2(def.footprint.y, def.footprint.x) * Iso.METRES_PER_TILE,
+			"turned with the drag, not left at the axis the art was baked on")

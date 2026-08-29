@@ -130,3 +130,51 @@ func test_set_dead_marks_the_view_dead() -> void:
 func test_set_corpse_fade_drives_modulate_alpha() -> void:
 	view.set_corpse_fade(0.25)
 	assert_almost_eq(view.modulate.a, 0.25, 0.001)
+
+
+# ── the selection ring (4.3), and its square for buildings ──────────────────
+
+## Both shapes are drawn with `draw_polyline`, which does not close a loop for you.
+## A ring with a gap in it is what forgetting that looks like, and it is invisible in
+## a screenshot at phone zoom.
+func test_both_ring_shapes_come_back_closed() -> void:
+	for square in [false, true]:
+		var pts := EntityView.ring_points(Vector2(4.0, 4.0), square)
+		assert_eq(pts[0], pts[pts.size() - 1], "square=%s closes on itself" % square)
+
+
+func test_a_square_ring_is_the_four_corners_of_the_footprint() -> void:
+	# Not "four points somewhere near the right size" -- the SAME four points
+	# PlacementGhost draws, so what the player was shown while placing is what they
+	# get back when they select what they placed.
+	var pts := EntityView.ring_points(Vector2(6.0, 4.0), true)
+	assert_eq(pts.size(), 5, "four corners and the closing repeat")
+	var expected := PlaceholderRenderer.footprint_points(Vector2(6.0, 4.0))
+	for i in range(4):
+		assert_eq(pts[i], expected[i], "corner %d" % i)
+
+
+func test_a_round_ring_is_inscribed_in_the_square_one() -> void:
+	# Which is why the square had to replace it on buildings rather than be drawn
+	# alongside: the ellipse sits INSIDE the footprint, so a house's ring stopped
+	# short of the ground the house actually holds on all four sides.
+	var footprint := Vector2(8.0, 8.0)
+	var corner := EntityView.ring_points(footprint, true)[1].length()
+	for p in EntityView.ring_points(footprint, false):
+		assert_true(p.length() <= corner + 0.001,
+				"every point of the ellipse is within the square's corner reach")
+
+
+func test_a_tiny_footprint_is_floored_to_a_ring_that_can_be_seen() -> void:
+	# A villager's measured footprint is 0.6 m. The floor applies to both shapes --
+	# it applied only to the ellipse when the ellipse was the only shape.
+	var tiny := EntityView.ring_points(Vector2(0.1, 0.1), true)
+	var floored := EntityView.ring_points(
+			Vector2(EntityView.RING_MIN_METRES, EntityView.RING_MIN_METRES), true)
+	assert_eq(tiny, floored, "sized up to the minimum rather than drawn at 0.1 m")
+
+
+func test_ring_square_defaults_off_so_only_a_building_gets_one() -> void:
+	# GameView turns it on, and only for a def the registry calls a building. A view
+	# holds a VISUAL id and could not work that out for itself.
+	assert_false(view.ring_square)

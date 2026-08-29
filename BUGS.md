@@ -18,6 +18,64 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-08-29 (second round) — two findings, one fixed whole and one fixed by half
+
+- [x] **"the green circle when selecting units don't look good on buildings. replace the
+      green circle with one tracing the footprint square."** ✅ `EntityView.ring_square`,
+      set by `GameView` for anything the registry calls a building. The corners are
+      literally `PlaceholderRenderer.footprint_points` — the same four `PlacementGhost`
+      draws — so the box the player was shown while placing is the box they get back when
+      they select what they placed. That function's header has said *"public because the
+      selection ring will want the same outline later"* since 0.2b.
+
+      **The sizing changed with it, and that is the half worth knowing.** A ring had always
+      been drawn from the VISUAL's measured extent — `vis.villager` is an authored 0.6 m —
+      and buildings now read the SIM's footprint instead. The two are not the same rect: an
+      age-4 town centre's mesh overhangs its 8×8 gameplay box, so the traced square cuts
+      across the art rather than containing it. **That is correct and is the point of
+      tracing** — the square is the ground the building holds, refuses to be built over and
+      was ghosted on. A ring drawn to the mesh would be a prettier lie.
+
+      Units keep the ellipse, and must: a villager occupies a vague 0.6 m of a tile, not
+      the tile, and a ring the size of her footprint would be three times too big.
+
+      *One case folded in rather than kept special:* a north-south wall was already sized
+      from its footprint (the 2026-08-22 fix, since its art is baked east-west) and that
+      branch is now simply the general rule.
+
+- [ ] **"units path find through each other, pushing each other out of the way."**
+      ⚠️ **Half fixed. The pushing is answered; the pathing is not, and cannot be cheaply.**
+
+      **What was fixed:** `SeparationSystem` split every push evenly, so a soldier crossing
+      the base barged a line of gatherers off their nodes on the way through and left them
+      there. A unit that is standing still is no longer moved by one that is walking — the
+      walker owes the whole correction, because it is the one that chose to be there — and
+      the walker's correction is turned SIDEWAYS across its own heading, so it steps around
+      rather than bouncing back down the line it is about to re-walk. Two walkers still
+      split evenly; **so do two standers, and that one is load-bearing** — a barracks
+      emptying its queue puts several units on one tile and nothing else would ever part
+      them (`SimWorld.find_free_adjacent` says so in its own header).
+
+      ⚠️ **THE TRAP, and it cost three deadlocked tests before it was found: a positional
+      correction has to be small next to a tick's movement, or it is not a nudge, it is a
+      throw.** `MAX_PUSH` is 120 sub-units and a villager covers ~26 in a tick, so an
+      uncapped sidestep outweighed the step `MovementSystem` had just taken by five to one.
+      The unit was thrown clear, spent several ticks walking back to the line it was thrown
+      off, and got thrown again — forward progress **zero**, for as long as the order stood.
+      Capping the correction at the mover's own `speed` is what makes it steering instead
+      of a collision. Anything else that writes to `pos` outside `MovementSystem` owes the
+      same comparison.
+
+      **What is NOT fixed:** a route is still planned as though the map were empty. Units
+      are not in the pathing grid and putting them there is not a small change —
+      `AStarGrid2D` holds solidity IN THE GRID rather than in the query (`PathService`'s own
+      note), so avoidance would mean re-weighting up to 200 cells every tick and would make
+      a route depend on where everyone happened to be standing when it was solved. Real
+      local avoidance is PLAN.md 4.2's *"steering"*, which `SeparationSystem`'s header has
+      always admitted is short of RVO. **Left open rather than half-attempted**: the visible
+      symptom the owner reported — being shoved — is gone, and walking *over* somebody
+      still looks wrong.
+
 ### Playtest, 2026-08-29 — one finding, FIXED the same day, and the ruling matters more than the fix
 
 - [x] **"game is stuck, villagers died" → "the villagers walk past the knight/scout to
