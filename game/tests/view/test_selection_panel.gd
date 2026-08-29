@@ -548,3 +548,83 @@ func test_an_emptied_slot_leaves_no_caption_behind() -> void:
 	for slot in panel._action_slots:
 		if slot.visible and slot.action != null and not slot.action.icon.is_empty():
 			assert_false(slot._caption.visible, "%s carries no stale caption" % slot.action.id)
+
+# ── the tile frame, [P8] 2026-08-30 ─────────────────────────────────────────
+
+
+func _slot_for(configure: Callable) -> ActionSlot:
+	var slot := ActionSlot.new()
+	var a := HudAction.new(&"move", "Move", "act_move.png", true)
+	configure.call(a)
+	slot.set_action(a)
+	return slot
+
+
+func _frame_texture_path(slot: ActionSlot) -> String:
+	for child in slot.get_children():
+		if child is TextureRect and (child as TextureRect).texture != null \
+				and (child as TextureRect).texture.resource_path.contains("tile_frame"):
+			return (child as TextureRect).texture.resource_path
+	return ""
+
+
+func test_a_plain_action_draws_the_plain_frame() -> void:
+	var slot := _slot_for(func(_a: HudAction) -> void: pass)
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_PATH)
+	slot.free()
+
+
+func test_the_one_in_force_draws_the_lit_frame_rather_than_a_hand_drawn_ring() -> void:
+	var slot := _slot_for(func(a: HudAction) -> void: a.selected = true)
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_SELECTED_PATH)
+	slot.free()
+
+
+func test_an_unavailable_action_draws_the_stone_frame() -> void:
+	var slot := _slot_for(func(a: HudAction) -> void: a.enabled = false)
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_DISABLED_PATH)
+	slot.free()
+
+
+func test_a_researched_tech_is_lit_rather_than_stone() -> void:
+	# `selected = true, enabled = false` is the one state where the two collide, and
+	# it is what a bought technology is. It is a thing you OWN, not a broken button --
+	# so the lit frame wins and `modulate` alone says it is not pressable.
+	var slot := _slot_for(func(a: HudAction) -> void:
+		a.selected = true
+		a.enabled = false)
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_SELECTED_PATH)
+	assert_true(slot.modulate.a < 1.0, "and it is still visibly not pressable")
+	slot.free()
+
+
+func test_a_slot_reused_from_selected_to_plain_puts_the_frame_back() -> void:
+	# Slots are rebuilt in place rather than freed, so every state has to be
+	# reversible -- a frame that latched lit would mark the wrong stance forever.
+	var slot := ActionSlot.new()
+	var lit := HudAction.new(&"stance:0", "Aggressive", "stance_aggressive.png", true)
+	lit.selected = true
+	slot.set_action(lit)
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_SELECTED_PATH)
+	slot.set_action(HudAction.new(&"stance:3", "Passive", "stance_passive.png", true))
+	assert_eq(_frame_texture_path(slot), ActionSlot._FRAME_PATH)
+	slot.free()
+
+
+func test_a_captioned_icon_tile_shows_the_word_as_well() -> void:
+	# The default is that an icon replaces the word. `captioned` is the exception, and
+	# these two assertions are the pair -- either alone would pass on a flag nothing
+	# reads.
+	var plain := _slot_for(func(_a: HudAction) -> void: pass)
+	var named := _slot_for(func(a: HudAction) -> void: a.captioned = true)
+	assert_eq(_caption_text(plain), "", "a verb tile prints a picture of the word")
+	assert_eq(_caption_text(named), "Move")
+	plain.free()
+	named.free()
+
+
+## Reaches for the private `_caption`, deliberately. The alternative is picking a
+## Label out of `get_children()` by its font size, which would silently start
+## matching a different one the day a strip is restyled.
+func _caption_text(slot: ActionSlot) -> String:
+	return slot._caption.text if slot._caption.visible else ""

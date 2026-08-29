@@ -26,6 +26,11 @@ const DISABLED_ALPHA := 0.4
 ## already spent: `modulate`'s alpha says enabled, the top strip says cost, the bottom
 ## strip says name and the corner says badge. The frame's own edge is the last unused
 ## surface, and a thick gold line on it reads at 72 px on a phone.
+##
+## DRAWN BY HAND ONLY WHEN THE FRAME ART IS MISSING, since [P8] (2026-08-30). The set
+## ships a lit `tile_frame_selected`, which is the same decision made in paint rather
+## than in a StyleBox and is a better ring than a flat line. This stays as the fallback,
+## because "no art" is a state this file has always drawn something for.
 const SELECTED_BORDER := 3
 const SELECTED_COLOR := Color(1.0, 0.84, 0.42)
 
@@ -42,7 +47,23 @@ const CAPTION_TEXT := Color(0.96, 0.90, 0.75)
 const CAPTION_BADGE_GAP := 26.0
 
 const _ICON_DIR := "res://assets/ui/icons/"
-const _FRAME_PATH := "res://assets/ui/hud/panel_background.png"
+
+## The tile's own chrome, in its three states ([P8], 2026-08-30).
+##
+## THIS USED TO BE `hud/panel_background.png` -- ONE FILE, AND THE WRONG ONE. It was a
+## general-purpose HUD panel pressed into service as a tile frame, and because every
+## icon in the old set carried a gold frame drawn INTO it, every action tile in the
+## running game was double-framed: a plate inside a plate, with about 30 px of the 52
+## left for the picture. The overhaul settled it (owner, 2026-08-30) -- the frame is
+## chrome, the icon is a bare glyph, and the glyph gets the whole inset.
+##
+## THREE FILES RATHER THAN ONE TINTED ONE, and that is what makes them worth having:
+## `selected` is lit from behind and `disabled` is drained to grey stone, neither of
+## which is a colour multiply of the other. It also means the state costs nothing at
+## draw time -- one texture assignment, no shader, no second overlay node.
+const _FRAME_PATH := "res://assets/ui/chrome/tile_frame.png"
+const _FRAME_SELECTED_PATH := "res://assets/ui/chrome/tile_frame_selected.png"
+const _FRAME_DISABLED_PATH := "res://assets/ui/chrome/tile_frame_disabled.png"
 
 ## Emitted instead of the bare `pressed` so a listener gets the action back
 ## without having to remember which slot index held what.
@@ -64,6 +85,7 @@ var action: HudAction = null
 var portrait_age: int = 0
 var portrait_colour: int = -1
 
+var _frame: TextureRect
 var _icon_rect: TextureRect
 var _label: Label
 var _caption_bg: ColorRect
@@ -94,22 +116,34 @@ func _init() -> void:
 	add_child(bg)
 
 	# The frame goes UNDER the icon, unlike ControlGroupSlot's ring which is a
-	# transparent-centred overlay: `panel_background.png` is a filled panel, so
+	# transparent-centred overlay: `tile_frame.png` has a filled dark centre, so
 	# drawn on top it simply hides whatever the slot is meant to show.
+	#
+	# NOT NINE-PATCHED, and it does not want to be: this tile is SIZE x SIZE and
+	# nothing else, so there is one scale factor and a plain STRETCH_SCALE is exact.
+	# A NinePatchRect would also be wrong art-wise -- the corners carry dragons that
+	# meet in the middle of each edge, and `tools/measure_ninepatch.py` reports NO
+	# CLEAN RUN on two of the three states for exactly that reason.
 	if ResourceLoader.exists(_FRAME_PATH):
-		var frame := TextureRect.new()
-		frame.texture = load(_FRAME_PATH)
-		frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		frame.stretch_mode = TextureRect.STRETCH_SCALE
-		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(frame)
+		_frame = TextureRect.new()
+		_frame.texture = load(_FRAME_PATH)
+		# LINEAR: the source is 256 px of smooth painted metal drawn at 72, so NEAREST
+		# -- correct for every pixel-art asset this file was written against -- turns
+		# the moulding into stair-steps. See the sweep of 2026-08-30.
+		_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_frame.stretch_mode = TextureRect.STRETCH_SCALE
+		_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_frame)
 
 	_icon_rect = TextureRect.new()
 	_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# LINEAR. The icon is 100 px drawn at 52 and the portrait fallback is a crop out
+	# of a baked atlas at whatever scale the entity happens to be -- neither is ever
+	# at 1:1, and NEAREST at those ratios is what made the old tiles crunchy.
+	_icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Inset so the icon sits inside the frame's gold border rather than over it,
 	# the same reasoning as ControlGroupSlot.ICON_INSET.
@@ -253,7 +287,7 @@ func set_action(p_action: HudAction) -> void:
 	visible = true
 	# Set before the early returns below, all three of which are "how do I draw the
 	# middle of the tile" and none of which should decide whether the ring shows.
-	_ring.visible = p_action.selected
+	_apply_frame(p_action)
 	disabled = not p_action.enabled
 	# Greyed rather than hidden: a not-yet-implemented action still shows where
 	# it WILL be, see HudAction's own header.
@@ -301,6 +335,32 @@ func set_action(p_action: HudAction) -> void:
 	_icon_rect.visible = false
 	_label.text = p_action.label
 	_set_caption("")
+
+
+## Point the frame at the state this action is in, and fall back to the drawn ring
+## when there is no frame art at all.
+##
+## SELECTED BEATS DISABLED, and the one place they collide says why: a researched
+## technology is `selected = true, enabled = false` (9.3), and it is not a broken
+## button -- it is a thing you own. The lit frame says so; `modulate` still drains it,
+## which is what stops it reading as pressable.
+##
+## THE HAND-DRAWN RING IS NOT REDUNDANT and is not removed. `_ring` covers the case
+## where `_FRAME_PATH` did not load, which is the same "leave it out rather than fake
+## it" convention every optional asset load in this codebase follows -- and with no
+## frame art there is nothing else in the tile marking which of four is in force.
+func _apply_frame(p_action: HudAction) -> void:
+	if _frame == null:
+		_ring.visible = p_action.selected
+		return
+	_ring.visible = false
+	var path := _FRAME_PATH
+	if p_action.selected:
+		path = _FRAME_SELECTED_PATH
+	elif not p_action.enabled:
+		path = _FRAME_DISABLED_PATH
+	if ResourceLoader.exists(path):
+		_frame.texture = load(path)
 
 
 ## Single letters for the four resources, in `ResourceHUD.DISPLAY_ORDER`.
