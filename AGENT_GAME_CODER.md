@@ -18,7 +18,7 @@ I am the game-code agent. **I own `game/`** — the Godot project: `src/`, `data
 
 | Not mine | Why |
 |---|---|
-| `tools/` | isobake recipes + bake/stage scripts — the art agent's |
+| `tools/` | isobake recipes + bake/stage scripts — the art agent's. **Three files in it are MINE and that is by agreement, not by drift**: `stage_audio.py` and `licence_audit.py` (settled in `asset_request.md`, 2026-08-23 — *"leave it exactly where it is, and keep owning it"*, on the principle that ownership follows who can maintain a thing), and `prepare_ui_chrome.py` (added 2026-08-30, same arrangement: it decides what size a WIDGET wants, which is a layout question). Everything else there I read and never edit |
 | `art_work/out/` | baked atlases; build output. **It is not in this repo** — the path is machine-local and declared in `tools/isobake.local.toml`, today `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`. Read it to tell staged art from fresh |
 | the isobake source | its own repo, `Downloads\AOD_game\blender_3d_to_2d_isobake` |
 | `ASSET_MISSING.md` | the art agent's tracker |
@@ -42,8 +42,12 @@ answer their questions there rather than only in chat.
    wanted; the actor to bake is one hop inside the file's `<VisualActor><Actor>`.
 2. **[PLAN.md](PLAN.md)** — architecture and phase order. §1 locked decisions,
    §2.7/§2.7.1 the age+faction skin model, §9 the data schema.
-3. **[IDEA.md](IDEA.md)** — what we're building. **[UI_Design.md](UI_Design.md)**
-   — how it looks, plus the `.jpg` mockups beside it.
+3. **[IDEA.md](IDEA.md)** — what we're building. ⚠️ **`UI_Design.md` AND ITS SIX
+   MOCKUPS ARE DELETED** (owner, 2026-08-30: *"they are all out dated now"*), and this
+   file listed them as authoritative until then. They are in git; **43 citations across
+   23 files now point at nothing** and are to be read as history, the way `ASSET_MISSING
+   §n` is. There is no replacement document — the UI is what the code and the art say it
+   is. `ART_PROMPT.md` is the nearest thing, and it is a prompt sheet, not a design.
 4. **[BUGS.md](BUGS.md)** — the owner's playtest findings, and **the authority on
    behaviour they want**. Where a finding reverses an earlier deliberate decision
    the reversal is noted rather than argued; treat it as settled. It also carries a
@@ -295,6 +299,9 @@ carry `age_required`, which is a *gate*, not a skin.
 | **`JSON.stringify` encodes a `PackedByteArray` as a STRING** — `"[1, 2, 250]"`, verified on 4.7.1 | It bit `MapData.from_dict()`, which now reads bytes, JSON's string, or a plain list. Relevant to 2.4c's saved sidecar and 12.4's save/load — the next two places sim data goes through JSON. Everything else there was already defended with `int()` because JSON numbers come back as floats; `terrain` was the one field that looked like it needed no conversion. |
 | **Wall-clock timings are worthless on this workstation** | The same seed ran 41.3 s and 161.0 s; the suite swung 34 s to 110 s across four runs of identical code. Trust `test_tick_cost`, which reports per-system milliseconds. Do not conclude anything from how long a run took. |
 | **The 0 A.D. checkout's media files are git-LFS POINTERS, not content** | Every `.ogg`/`.dae`/`.png`/`.pmd` on disk is a ~130-byte pointer. Worse, that repo's **index is emptied** (30,114 staged deletions) and its `.gitattributes`/`.lfsconfig` are gone from the working tree, so `git lfs pull` exits 0 having done nothing. Do **not** repair it — it is the art agent's tree and memory records that git operations there have destroyed art. The route that works is documented in `tools/stage_audio.py`: read the oid out of the pointer, fetch through the LFS batch API, write the bytes into `game/` and never into the checkout. |
+| **A NinePatchRect's BORDER IS DRAWN AT 1:1** | The `patch_margin` is in SOURCE pixels and does not scale with the rect, so a 1024 px plate with a measured 46 px border puts a 46 px border on a 152 px panel and clips the content behind its own frame. **Shrinking the margin makes it worse** — the margin says where the border ENDS, so the leftover bevel joins the stretched centre and smears across the panel. The only lever is the SOURCE SIZE; `tools/prepare_ui_chrome.py` is what turns "the border should draw at 12 px" into an output size. See §7's UI-overhaul block. |
+| **SWAPPING ONE FRAME FOR ANOTHER CAN INVERT THE DRAW ORDER** | A frame with a TRANSPARENT middle is drawn on top of what it frames; a frame with a FILLED recess must be drawn under, or it covers the picture entirely. Both replaced frames flipped on 2026-08-30 and a filename says nothing about which kind you have. Found by `preview_match` — a selected town centre with an empty brown square where its portrait goes — not by any test. |
+| **`draw_texture_rect_region` HAS NO KEEP-ASPECT MODE** | It fills the rect it is given, so a non-square crop in a square slot is stretched. `EntityPortrait.fit` is the arithmetic and lives beside the crop helper, because two hand-drawn slots made the identical mistake independently. A `TextureRect` with `STRETCH_KEEP_ASPECT_CENTERED` does not have the problem, which is why the action tiles never showed it. |
 | **`gitea.wildfiregames.com` is behind an Anubis proof-of-work bot wall** | A plain HTTP client gets an HTML "Making sure you're not a bot!" challenge instead of JSON, which is easy to misread as a broken endpoint. A **`git-lfs/...` User-Agent is allowed through** — that one header is the whole difference. |
 
 ---
@@ -307,8 +314,9 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 87 test files, **1680 tests, 208,317 assertions, all passing** —
-measured 2026-08-29 after 9.3/9.4 landed, not quoted.
+**361 atlases staged.** 87 test files, **1697 tests, all passing** — measured 2026-08-30
+after the UI overhaul's sixth commit, not quoted. (The assertion count was 208,317 at
+1680 tests on 2026-08-29 and has not been re-read since.)
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
 293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
@@ -329,6 +337,124 @@ timed age-advance, fog of war, an enforced population cap, conquest win
 conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, a real
 tech tree, a chat wireframe, and settings (§8.2b).
+
+### THE UI OVERHAUL — SIX COMMITS IN, 2026-08-30, AND IT IS NOT FINISHED
+
+`asset_request.md` [P8] delivered 130 pieces of project-owned UI art plus two OFL font
+families, and this is the game-side landing of it. **It is the largest single change to
+`game/` in the project's history** and it is paused mid-way on the owner's instruction,
+so read this whole block before touching any of it.
+
+⚠️ **THE FIRST THING TO DO IS DEAL WITH THE UNCOMMITTED WORKING TREE.** Five files are
+modified and **have not had the suite run against them**:
+
+| file | what changed |
+|---|---|
+| `boot_screen.gd`, `hud_panel.gd`, `resource_hud.gd`, `game_scene.gd` | the last four `TEXTURE_FILTER_NEAREST` → `LINEAR` |
+| `game_scene.gd` | draws `chrome/frame_minimap.png` into `minimap_area` |
+| `minimap.gd` | stops drawing its own approximated double-gold border |
+
+Run the suite, run `preview_match`, **look at the minimap**, then commit or revert.
+Do not build on top of it. Remember §6's row: two agents share this tree.
+
+**WHAT IS DONE, six commits (`9b0ae14`..`4f66980`), each one green when it landed:**
+
+1. **The art landed as files.** `sliced/icons/` → `assets/ui/icons/` (103 at 100×100),
+   `sliced/chrome/` → `assets/ui/chrome/` (27, a NEW and tracked directory), fonts →
+   `assets/ui/fonts/` with both `OFL-*.txt` beside them.
+2. **The icons are wired.** `SelectionActions.ICONS` went 12 entries → 46 plus
+   `STANCE_ICONS`, and it is nearly all data — `_research_details` had asked
+   `ICONS.get(t.id, "")` since 9.3 and finally got an answer. **All five stand-ins are
+   retired** and `act_guard.png` is deleted.
+3. **The action tile stopped being double-framed.** `ActionSlot._FRAME_PATH` →
+   `chrome/tile_frame.png`, in three states.
+4. **The in-match chrome** — panel plate, portrait frame, group ring, health bar, toast.
+5. **The typeface**, which the game had never had at all.
+6. **The menus** — nine painted word-buttons → one themed plate plus a label.
+
+**WHAT IS LEFT, in the order I would do it:**
+
+- **THE UNCOMMITTED FIVE FILES ABOVE.** Verify and land them first.
+- **THE SPLASH SCREEN.** `assets/UI_Gen/splash_screen_{a,b,c}.jpg` are generated and
+  **untracked**; `c` is the only landscape one and is the one to use. It becomes
+  `game/assets/ui/boot_splash.png` (`BootScreen._SPLASH_PATH` already points there, so
+  this is a file swap, not a code change). **`Splash_h.jpg` at the repo root stays until
+  the new one is in-game** — it is what `README.md` shows — and is deleted in the same
+  commit, not before.
+- **THE LICENCE RETIREMENT, WHICH IS THE POINT OF THE WHOLE EXERCISE.** Nothing under
+  `game/assets/ui/{hud,menu,control_groups}/` is loaded by any running screen any more,
+  so in ONE commit: delete those three directories, drop their three `.gitignore`
+  entries and the `assets/UI_Sprites/*` block, delete `assets/UI_Sprites/README.md`,
+  and collapse `game/assets/LICENCES.md` rows **503–510** into one project-asset row
+  (rows 464–468 need rewording too — they describe the OLD icon set). Two rows are
+  ADDED, one per OFL font family. **`licence_audit.py` is the gate and it can be run on
+  this machine**: it reported 14 undeclared UI files before the swap and those 14 are
+  exactly the Kibyra files being deleted, so it should go green **by construction**. Run
+  it before and after.
+- **The unused chrome.** `badge_round`, `checkbox_*`, `radio_*`, `tab_plate`,
+  `field_input`, `bar_fill_progress`, `banner_age` and the four `arrow_*` are committed
+  and referenced by nothing. That is deliberate for the arrows (see `ICONS`' header) and
+  simply not-yet-done for the rest — `field_input` wants `TouchLineEdit`,
+  `bar_fill_progress` wants the production queue, `banner_age` wants the age-advance
+  notice. **`badge_round` is the interesting one**: [P8] says `res_*` stay circular and
+  get it, but `ResourceHUD` draws at 24 px and a ring around a 24 px glyph leaves
+  nothing. Either the icon grows or the ring does not happen; I did not decide.
+- **`ART_PROMPT.md`'s upcoming set** (§5 of [P8]) is drawn and committed for features
+  that do not exist — voice chat, the server browser, the lobby, save/load, replay.
+  None of it can be wired and none of it should hold anything up.
+
+**FIVE THINGS THIS PASS LEARNED THAT ARE NOT OBVIOUS FROM THE DIFF:**
+
+- ⚠️ **GODOT DRAWS A NinePatchRect's BORDER AT 1:1.** The margin is in SOURCE pixels and
+  does not scale with the rect, so `panel_hud`'s measured 46 px border put 92 of the
+  resource panel's 152 pixels inside its own frame and clipped every counter.
+  **Shrinking the margin is worse than leaving it** — the margin says where the border
+  *ends*, so 12 against a painted 46 leaves 34 px of bevel inside the stretched region,
+  smeared across the panel. The only lever that moves the drawn border is the SOURCE
+  SIZE, which is why `tools/prepare_ui_chrome.py` exists: it rewrites `sliced/chrome/`
+  into `game/assets/ui/chrome/` at the size that makes each painted border come out at
+  the thickness its widget wants, and prints the per-side margins the `.gd` constants
+  then hold. **`game/assets/ui/chrome/` is DERIVED, not a copy** — re-run the tool, do
+  not re-copy the masters.
+- ⚠️ **SWAPPING ONE FRAME FOR ANOTHER CAN INVERT THE DRAW ORDER, and a filename cannot
+  tell you.** Kibyra's avatar frame and slot ring were transparent through the middle
+  and were drawn ON TOP; every replacement in this set is a plate with a filled dark
+  recess and must be drawn UNDER. Drawn last they cover the picture completely — which
+  is exactly what the first `preview_match` after the swap showed, a selected town
+  centre with an empty brown square where its portrait goes. **The question to ask of
+  any replacement frame is whether its middle is transparent.**
+- **A BADGE IS SIZED FOR "84%" AND A PREREQUISITE IS A NAME.** Giving every technology
+  an icon gave it a caption, the caption and the badge share the bottom edge, and the
+  blacksmith's locked ladder printed each tech's name and its prerequisite's name on top
+  of each other. `HudAction.requirement` draws in the COST strip instead, which is free
+  by construction: a tech you cannot buy yet is shown no price.
+- **`draw_texture_rect_region` HAS NO KEEP-ASPECT MODE**, and both hand-drawn portrait
+  slots painted a ~40×70 idle frame into a square. The owner caught it from a screenshot
+  ("villager select icon is stretched"). `EntityPortrait.fit` is the arithmetic, and it
+  lives beside the crop helper both slots already share so a third hand-drawn slot
+  cannot make it again. **The action tiles never had the bug** because they wrap the
+  crop in an `AtlasTexture` and get `STRETCH_KEEP_ASPECT_CENTERED` from the engine.
+- **TWO MEASUREMENTS IN THE MENUS WERE WORKAROUNDS, NOT PADDING**, and both are gone:
+  `PauseMenu._VOLUME_TOP` was 80 because the old plate had a dragon across its top and
+  the first slider drew behind it, and `MainMenu`'s bottom margin was 72 because that
+  art carried transparent padding so its visible border sat ~36 px inside its own rect.
+  Both old comments are KEPT beside the new numbers, because the traps are real and come
+  back the day anything goes back to a stretched bitmap.
+
+⚠️ **THE GAME IS CALLED "AGE OF DRAGON", SINGULAR.** `README.md`'s `<h1>` and IDEA.md
+line 1 both say so; `config/name="AgeOfDragons"` is the Godot app name and the userdata
+folder, and PLAN.md's "Age of Dragons" is the name of AGE IV. **I asked the owner about
+the three splash candidates on the premise that their painted title was misspelled, and
+it is not** — so their answer ("use C, set the title in engine") was given against a
+reason that does not exist. `splash_screen_c`'s title is part of its composition and an
+engine label over it would be worse; **use C as it is unless the owner says otherwise**,
+and put this correction to them when the splash is landed.
+
+**THE ui_builder MOCKUPS ARE REPOINTED, NOT UPDATED.** Seven `.tscn` under
+`scenes/ui_builder/` referenced the old art and now reference the new, so nothing
+dangles — but their LAYOUT is the pre-overhaul HUD and is now out of step with the
+running game. Nothing instantiates them. Whether they survive is the owner's call, the
+same call that retired `UI_Design.md`.
 
 **THE TECH TREE IS WIRED, 2026-08-29 (9.3 + 9.4)** — on the owner's instruction, and it went in
 ahead of Phase 5, which is still open. Five things to know before touching it:
