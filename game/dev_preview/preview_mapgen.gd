@@ -37,6 +37,14 @@ func _ready() -> void:
 		# 96x96 and ruinous at 192x192 is exactly the shape of thing a preview that
 		# stops at 4p cannot see.
 		[MapGenerator.Type.FOREST, 8],
+		# THE ARCHIPELAGO AT BOTH ENDS (2.4d), because its whole geometry is derived
+		# rather than tuned: the ring radius is what the board allows once an island and
+		# a sea margin come off, and the island radius is capped by the gap between
+		# neighbours. Those two pull opposite ways as the player count rises, so 2 and 8
+		# are the cases where either could win. What the picture has to show is water
+		# between every pair of islands -- an archipelago whose islands have merged is a
+		# land map that took the long way round, and it validates perfectly.
+		[MapGenerator.Type.ARCHIPELAGO, 2], [MapGenerator.Type.ARCHIPELAGO, 8],
 	]
 	for job in jobs:
 		var type: MapGenerator.Type = job[0]

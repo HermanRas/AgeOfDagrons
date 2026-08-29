@@ -1153,6 +1153,8 @@
     "variant_pools": {
       "island": ["vis.tree_palm_date", "vis.tree_palm_fan", "vis.tree_palm_tropical",
         "vis.tree_palm_tropical_tall", "vis.tree_palm_cretan_patch"],
+      "archipelago": ["vis.tree_palm_date", "vis.tree_palm_fan", "vis.tree_palm_tropical",
+        "vis.tree_palm_tropical_tall", "vis.tree_palm_cretan_patch"],
       "forest": ["vis.tree_beech", "vis.tree_birch", "vis.tree_fir", "vis.tree_oak_new"],
       "river": ["vis.tree_bamboo", "vis.tree_palm_date"],
       "desert": ["vis.tree_oak_dead", "vis.tree_elm_dead"]

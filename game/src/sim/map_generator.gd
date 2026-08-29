@@ -31,9 +31,14 @@
 class_name MapGenerator
 extends RefCounted
 
-## RANDOM resolves to one of the four at generation time, so the skirmish screen can
-## offer it as a choice (1.6) without the caller having to roll it.
-enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST }
+## RANDOM resolves to one of the real types at generation time, so the skirmish screen
+## can offer it as a choice (1.6) without the caller having to roll it.
+##
+## **APPENDED, ALWAYS.** `MatchConfig.map_type` is stored as an int and a saved map
+## records it (2.4c), so inserting a type in the middle would silently turn every
+## recorded Desert into a Forest. ARCHIPELAGO went on the end for that reason and the
+## next one will too.
+enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST, ARCHIPELAGO }
 
 const MIN_PLAYERS := 2
 const MAX_PLAYERS := 8
@@ -233,6 +238,49 @@ const SHAPE := {
 	Type.RIVER: {"freq": 0.030, "wood": 0.28, "lake": 1.0},
 	Type.ISLAND: {"freq": 0.040, "wood": 0.10, "lake": 1.0},
 	Type.DESERT: {"freq": 0.030, "wood": 0.05, "lake": 1.0},
+	# The archipelago paints its own islands and never consults `wood` or `freq` for the
+	# terrain -- only `_place_trees` reads this, and only for `spacing`/`clump`. The
+	# entries are here because `SHAPE[resolved]` is unconditional and a type missing from
+	# this table would crash rather than default; the tree numbers are the standard ones.
+	Type.ARCHIPELAGO: {"freq": 0.040, "wood": 0.10, "lake": 1.0},
+}
+
+## ARCHIPELAGO (2.4d, PLAN.md 11.6): one island per player, a few sheep, nothing that
+## bites. A quiet opening and a naval midgame -- you cannot be attacked until somebody
+## crosses, so the pressure is economic and the first fight is a landing.
+##
+## **THE ISLAND RADIUS IS SET BY THE VALIDATOR, NOT BY TASTE.** `MapValidator.MIN_NEARBY`
+## wants 4 wood, 1 gold, 1 stone and 1 food within a walk of the start, and `_place_base`
+## puts them at `VEIN_DISTANCE` 9 and `START_WOOD_MIN/MAX` 11-17 -- so an island whose
+## land stops before 18 tiles cannot pass its own opening, whatever it looks like. 18 is
+## that floor and nothing above it buys anything: bigger islands are a land map with a
+## moat, which is the failure mode this type has.
+const ISLAND_RADIUS := 18
+
+## How far the land stops short of the map edge, so an island reads as an island rather
+## than as the map running out. Also the gap the ring radius is derived against.
+const SEA_MARGIN := 5
+
+## How ragged a coastline is, as a fraction of the radius. LOWER THAN `_paint_island`'s
+## 0.35 on purpose: that one carves a single landmass and can afford a wild edge, and
+## here 0.35 grows each island's effective radius to 1.35x, which on a two-player 96-tile
+## board is the difference between ten tiles of sea between neighbours and none at all.
+## An archipelago whose islands have merged is a land map that took the long way round.
+const ISLAND_RAGGED := 0.20
+
+## PER-TYPE CONTENT, for the things `_place_base` would otherwise give every map equally.
+## Absent keys take the constants above, so this stays a list of DIFFERENCES rather than
+## a second copy of the defaults -- and a new type that wants the standard opening adds
+## nothing here at all.
+##
+## The archipelago's three, and each is a consequence of the island rather than a taste:
+## a herd of seven deer on a one-base island is most of an opening's food standing still,
+## so there are none; sheep drop to one herd for the same reason ("a few", the owner's
+## word); and fish go UP because the sea is the point and it is the one type where a dock
+## is not a luxury. Predators need no entry -- `PREDATORS` is read with `.get(type, {})`,
+## so an unlisted type gets nothing that bites for free, which is exactly the requirement.
+const CONTENT := {
+	Type.ARCHIPELAGO: {"sheep_herds": 1, "deer_herds": 0, "fish": 9},
 }
 
 ## How wide the LANE between two players is kept clear of trees, in tiles either side of
@@ -306,7 +354,8 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 
 	var resolved := type
 	if resolved == Type.RANDOM:
-		resolved = [Type.ISLAND, Type.RIVER, Type.DESERT, Type.FOREST][rng.randi_range(0, 3)]
+		var choices := real_types()
+		resolved = choices[rng.randi_range(0, choices.size() - 1)]
 
 	# Sized for one count, populated for another. See `generate`.
 	var side := side_for(size_count)
@@ -319,17 +368,27 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	var wood := PackedByteArray()
 	wood.resize(side * side)
 
-	match resolved:
-		Type.ISLAND:
-			_paint_island(data, wood, rng)
-		Type.RIVER:
-			_paint_river(data, wood, rng)
-		Type.DESERT:
-			_paint_desert(data, wood, rng)
-		_:
-			_paint_forest(data, wood, rng)
-
-	data.starts = _start_positions(data, resolved, count, rng)
+	# AN ARCHIPELAGO IS PAINTED AROUND ITS STARTS AND EVERY OTHER TYPE IS PAINTED FIRST,
+	# and the order is forced rather than chosen. Every other painter lays a landscape and
+	# then `_start_positions` finds somewhere on it to stand; an archipelago has no
+	# landscape until it knows where the islands go, because the islands ARE the starts.
+	# So this is the one type whose terrain is a function of its start ring instead of the
+	# other way round.
+	if resolved == Type.ARCHIPELAGO:
+		data.fill_terrain(SimMap.Terrain.WATER_DEEP)
+		data.starts = _archipelago_start_positions(data, count, rng)
+		_paint_archipelago(data, wood, rng, data.starts, count)
+	else:
+		match resolved:
+			Type.ISLAND:
+				_paint_island(data, wood, rng)
+			Type.RIVER:
+				_paint_river(data, wood, rng)
+			Type.DESERT:
+				_paint_desert(data, wood, rng)
+			_:
+				_paint_forest(data, wood, rng)
+		data.starts = _start_positions(data, resolved, count, rng)
 
 	# Clear every base BEFORE placing anything, so one player's clearing cannot wipe
 	# out the town centre of a neighbour whose start landed close by.
@@ -377,6 +436,7 @@ static func type_name(type: Type) -> String:
 		Type.RIVER: return "River"
 		Type.DESERT: return "Desert"
 		Type.FOREST: return "Forest"
+		Type.ARCHIPELAGO: return "Archipelago"
 		_: return "Random"
 
 
@@ -401,9 +461,21 @@ static func pool_name(type: Type) -> StringName:
 ## gives you for free is no failure at all.
 static func pool_names() -> Array[StringName]:
 	var out: Array[StringName] = []
-	for t in [Type.ISLAND, Type.RIVER, Type.DESERT, Type.FOREST]:
+	for t in real_types():
 		out.append(pool_name(t))
 	return out
+
+
+## Every type RANDOM may roll and the picker may offer -- which is every value of `Type`
+## except RANDOM itself.
+##
+## ONE LIST, THREE CALLERS, and the reason is a bug this file shipped with: `generate()`
+## used to index `[ISLAND, RIVER, DESERT, FOREST]` by hand, `pool_names()` wrote the same
+## four out again, and `skirmish_screen` wrote them a third time. Adding a fifth type
+## therefore had three places to remember and no failure if you missed one -- RANDOM would
+## simply never roll it, silently, forever.
+static func real_types() -> Array[Type]:
+	return [Type.ISLAND, Type.RIVER, Type.DESERT, Type.FOREST, Type.ARCHIPELAGO]
 
 
 # ── terrain ─────────────────────────────────────────────────────────────────
@@ -440,6 +512,88 @@ static func _paint_island(data: MapData, wood: PackedByteArray,
 			data.set_terrain(t, SimMap.Terrain.SAND if land < 0.30 else SimMap.Terrain.GRASS)
 			if land > 0.34 and trees.get_noise_2d(x, y) > 0.15:
 				wood[data.index_of(t)] = 1
+
+
+## ONE ISLAND PER START, in an open sea (2.4d, PLAN.md 11.6).
+##
+## Each island is the same radial mask `_paint_island` uses for its single landmass --
+## a noisy circle with a shallow rim -- stamped once per start instead of once per map.
+## Written with `maxf` rather than by overwriting, so where two islands did come close
+## the higher land wins and the coast between them stays a coast; a plain second pass
+## would let the later island's deep water erase the earlier one's beach.
+##
+## THE RING IS DERIVED FROM THE ISLAND, NOT TUNED. `_archipelago_start_positions` puts
+## the starts as far out as the map allows once an island and a sea margin are subtracted
+## -- so separation is whatever is left over, and it grows with the board rather than
+## needing a factor per player count. It comes out at roughly 10 tiles of open water
+## between neighbours at 2 players and 16 at 8, because the map grows by area while the
+## ring grows by radius.
+static func _paint_archipelago(data: MapData, wood: PackedByteArray,
+		rng: RandomNumberGenerator, starts: Array[Vector2i], count: int) -> void:
+	var radius := float(_island_radius(data, count))
+	var shape := _noise(rng, 0.025)
+	var trees := _noise(rng, 0.05)
+	# One noise field for every island rather than one each, so two neighbours never
+	# happen to bulge toward each other in the same way -- and so this stays a pure
+	# function of the seed however many players there are.
+	var reach := int(ceil(radius * (1.0 + ISLAND_RAGGED))) + 2
+
+	for centre in starts:
+		for y in range(centre.y - reach, centre.y + reach + 1):
+			for x in range(centre.x - reach, centre.x + reach + 1):
+				var t := Vector2i(x, y)
+				var i := data.index_of(t)
+				if i < 0:
+					continue
+				var dist := Vector2(t - centre).length()
+				var land := (1.0 - dist / radius) + shape.get_noise_2d(x, y) * ISLAND_RAGGED
+				if land <= 0.18:
+					# A shallow rim, so the shoreline reads as a beach rather than a
+					# cliff into deep water -- and so a dock has somewhere to go, which
+					# on this map type is the difference between playable and sealed in.
+					if land > 0.02 and data.terrain[i] == SimMap.Terrain.WATER_DEEP:
+						data.set_terrain(t, SimMap.Terrain.WATER_SHALLOW)
+					continue
+				data.set_terrain(t, SimMap.Terrain.SAND if land < 0.30 else SimMap.Terrain.GRASS)
+				if land > 0.34 and trees.get_noise_2d(x, y) > 0.15:
+					wood[i] = 1
+
+
+## How big each island is, capped so two neighbours cannot merge into one landmass.
+##
+## `ISLAND_RADIUS` is the floor a start needs to be playable at all, and the cap is half
+## the gap between neighbouring starts less a margin -- which only bites if a future
+## player count or side formula brings the ring in. It is here rather than asserted
+## because a slightly small island fails the validator loudly, and a merged pair fails
+## nothing at all: it just quietly stops being an archipelago.
+static func _island_radius(data: MapData, count: int) -> int:
+	var ring := _archipelago_ring_radius(data)
+	var gap := 2.0 * ring * sin(PI / float(maxi(2, count)))
+	return mini(ISLAND_RADIUS, maxi(8, int(gap * 0.5) - SEA_MARGIN))
+
+
+## As far out as the board allows once an island and its sea margin are taken off.
+static func _archipelago_ring_radius(data: MapData) -> float:
+	return maxf(1.0, float(data.size.x) * 0.5 - float(ISLAND_RADIUS) - float(SEA_MARGIN))
+
+
+## Starts evenly around that ring, with a random rotation -- the same arrangement
+## `_start_positions` uses, on its own radius.
+##
+## NOT ROUTED THROUGH `_start_positions`, and not `_clamp_start`ed either. Clamping is
+## what keeps a start's base on the map, and here the ring is already inside the map by
+## construction; clamping an archipelago start would drag an island off its own ring and
+## toward a neighbour, which is the one thing the radius is derived to prevent.
+static func _archipelago_start_positions(data: MapData, count: int,
+		rng: RandomNumberGenerator) -> Array[Vector2i]:
+	var centre := Vector2(data.size) * 0.5
+	var radius := _archipelago_ring_radius(data)
+	var offset := rng.randf_range(0.0, TAU)
+	var out: Array[Vector2i] = []
+	for i in range(count):
+		var angle := offset + float(i) * TAU / float(count)
+		out.append(Vector2i(centre + Vector2(cos(angle), sin(angle)) * radius))
+	return out
 
 
 ## A CONTINUOUS river with 1-3 NARROW land bridges.
@@ -761,16 +915,23 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	# gaia UNIT that comes at you (4.13), which is why it goes through a different
 	# placer -- `_place_scatter` asks the resource table and a unit is not in it.
 	# Sheep are units since 6.5 -- a thing you walk home has to be able to walk.
-	_place_unit_herds(data, claimed, centre, &"unit.sheep", SHEEP_HERDS, SHEEP_PER_HERD,
+	#
+	# COUNTS COME THROUGH `_content`, which answers the constant unless the type says
+	# otherwise (see CONTENT). A herd count of ZERO has to be a legal answer and is: the
+	# archipelago has no deer, because seven of them on a one-base island is most of an
+	# opening's food standing still.
+	_place_unit_herds(data, claimed, centre, &"unit.sheep",
+			_content(type, &"sheep_herds", SHEEP_HERDS), SHEEP_PER_HERD,
 			SHEEP_MIN, SHEEP_MAX, rng)
 	# DEER ARE UNITS since 6.1b -- they wander and bolt, which nodes cannot -- so the
 	# herd goes through the gaia-unit placer. The shape of the herd is unchanged.
-	_place_unit_herds(data, claimed, centre, &"unit.deer", DEER_HERDS, DEER_PER_HERD,
+	_place_unit_herds(data, claimed, centre, &"unit.deer",
+			_content(type, &"deer_herds", DEER_HERDS), DEER_PER_HERD,
 			DEER_MIN, DEER_MAX, rng)
 	# Fish, wherever there is shallow water in reach. Every map type gets the call and
 	# the ones with no water near this start simply place none.
-	_place_water_scatter(data, claimed, centre, &"res.fish", FISH_COUNT,
-			FISH_MIN, FISH_MAX, rng)
+	_place_water_scatter(data, claimed, centre, &"res.fish",
+			_content(type, &"fish", FISH_COUNT), FISH_MIN, FISH_MAX, rng)
 
 	# THE MAP TYPE PICKS THE PREDATOR -- see PREDATORS. One species per map, so a
 	# player learns one animal's behaviour per match rather than three at once.
@@ -778,6 +939,12 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	if not predator.is_empty():
 		_place_gaia_units(data, claimed, centre, predator["def"], int(predator["count"]),
 				int(predator["min"]), int(predator["max"]), rng)
+
+
+## One per-type content number, or `fallback` for the types that take the standard
+## opening. See `CONTENT` for why this is a table of differences.
+static func _content(type: Type, key: StringName, fallback: int) -> int:
+	return int((CONTENT.get(type, {}) as Dictionary).get(key, fallback))
 
 
 ## Tiles at exactly Chebyshev `radius` from `centre`, clockwise from the north-west

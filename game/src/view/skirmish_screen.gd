@@ -288,8 +288,13 @@ func _build_map_column() -> Control:
 	_type_picker = OptionButton.new()
 	# RANDOM first and selected, per 1.6: a random map is the default, and picking a
 	# type is the deliberate act.
-	for type in [MapGenerator.Type.RANDOM, MapGenerator.Type.ISLAND,
-			MapGenerator.Type.RIVER, MapGenerator.Type.DESERT, MapGenerator.Type.FOREST]:
+	# FROM `real_types()` rather than written out again. This list used to name the four
+	# by hand, `MapGenerator.generate` indexed a second copy and `pool_names()` held a
+	# third -- so adding a fifth type had three places to remember and no failure if you
+	# missed one: the map would simply never be offered, silently.
+	_type_picker.add_item(MapGenerator.type_name(MapGenerator.Type.RANDOM),
+			int(MapGenerator.Type.RANDOM))
+	for type in MapGenerator.real_types():
 		_type_picker.add_item(MapGenerator.type_name(type), int(type))
 	_type_picker.item_selected.connect(_on_type_selected)
 	type_row.add_child(_type_picker)

@@ -77,6 +77,13 @@ func test_a_negative_seed_does_not_index_off_the_front() -> void:
 const POOLS := {
 	&"island": ["vis.tree_palm_cretan_patch", "vis.tree_palm_date", "vis.tree_palm_fan",
 		"vis.tree_palm_tropical", "vis.tree_palm_tropical_tall"],
+	# ARCHIPELAGO TAKES THE ISLAND'S PALMS, written out rather than aliased. The owner's
+	# assignment is per map type and this is a second tropical type, so the same five are
+	# the right answer -- but they are the right answer by agreement and not by
+	# construction, and an alias would quietly move the archipelago the day somebody
+	# retuned the island. Two lists that happen to match today.
+	&"archipelago": ["vis.tree_palm_cretan_patch", "vis.tree_palm_date", "vis.tree_palm_fan",
+		"vis.tree_palm_tropical", "vis.tree_palm_tropical_tall"],
 	&"forest": ["vis.tree_beech", "vis.tree_birch", "vis.tree_fir", "vis.tree_oak_new"],
 	&"river": ["vis.tree_bamboo", "vis.tree_palm_date"],
 	&"desert": ["vis.tree_elm_dead", "vis.tree_oak_dead"],
