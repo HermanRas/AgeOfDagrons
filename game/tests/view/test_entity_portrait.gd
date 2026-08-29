@@ -64,3 +64,44 @@ func test_a_building_portrait_takes_the_age_skin() -> void:
 	assert_false(age4.is_empty())
 	assert_ne(age1["rect"], age4["rect"],
 			"the Briton and Roman civic centres are not the same crop")
+
+# ── EntityPortrait.fit, 2026-08-30 ──────────────────────────────────────────
+#
+# Reported by the project owner off a screenshot: "villager select icon is
+# stretched". A baked idle frame is taller than it is wide and both hand-drawn
+# slots painted it into a square.
+
+
+func test_a_tall_crop_keeps_its_proportions_and_centres_horizontally() -> void:
+	var crop := {"rect": Rect2(0, 0, 40, 70)}
+	var fitted := EntityPortrait.fit(crop, Rect2(0, 0, 58, 58))
+	assert_almost_eq(fitted.size.y, 58.0, 0.01, "the long axis fills the box")
+	assert_almost_eq(fitted.size.x, 58.0 * 40.0 / 70.0, 0.01, "and the short one follows")
+	assert_almost_eq(fitted.position.x, (58.0 - fitted.size.x) * 0.5, 0.01)
+	assert_almost_eq(fitted.position.y, 0.0, 0.01)
+
+
+func test_a_wide_crop_fills_the_width_instead() -> void:
+	var fitted := EntityPortrait.fit({"rect": Rect2(0, 0, 120, 40)}, Rect2(0, 0, 58, 58))
+	assert_almost_eq(fitted.size.x, 58.0, 0.01)
+	assert_almost_eq(fitted.size.y, 58.0 / 3.0, 0.01)
+	assert_almost_eq(fitted.position.y, (58.0 - fitted.size.y) * 0.5, 0.01)
+
+
+func test_the_fit_is_offset_by_the_boxs_own_position() -> void:
+	# Both callers pass an INSET rect, not one at the origin, so a fit that ignored
+	# `box.position` would draw every portrait in the widget's top-left corner.
+	var fitted := EntityPortrait.fit({"rect": Rect2(0, 0, 50, 50)}, Rect2(7, 11, 58, 58))
+	assert_almost_eq(fitted.position.x, 7.0, 0.01)
+	assert_almost_eq(fitted.position.y, 11.0, 0.01)
+
+
+func test_a_square_crop_is_left_exactly_where_it_was() -> void:
+	var box := Rect2(7, 7, 58, 58)
+	assert_true(EntityPortrait.fit({"rect": Rect2(0, 0, 64, 64)}, box).is_equal_approx(box))
+
+
+func test_an_empty_crop_returns_the_box_rather_than_dividing_by_zero() -> void:
+	var box := Rect2(0, 0, 58, 58)
+	assert_true(EntityPortrait.fit({}, box).is_equal_approx(box))
+	assert_true(EntityPortrait.fit({"rect": Rect2(0, 0, 0, 40)}, box).is_equal_approx(box))

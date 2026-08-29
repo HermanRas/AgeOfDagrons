@@ -400,7 +400,9 @@ func _build_hud() -> void:
 
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_toast.position = Vector2(-160.0, 409.0)
+	# Half its own width, so it stays centred when the banner's proportions decide the
+	# width rather than a literal here. This was -160 against a hardcoded 320.
+	_toast.position = Vector2(-NoticeToast.SIZE.x * 0.5, 409.0)
 	hud.add_child(_toast)
 
 	# In the gap BETWEEN the build grid and the minimap, which is the only part of the

@@ -73,6 +73,24 @@ var captioned: bool = false
 ## names, the entity id a portrait stands for. Never interpreted here.
 var payload: Variant = null
 
+## WHAT YOU MUST ALREADY OWN before this can be pressed -- the display name of the
+## prerequisite a technology is missing, or "" (9.3, moved here 2026-08-30).
+##
+## THIS WAS THE `badge` AND THE BADGE IS THE WRONG EDGE FOR IT. A badge is corner text
+## at the bottom right of a 72 px tile, sized for "84%" and "0/12"; a prerequisite is a
+## NAME, and "Leather Armour" is five times that wide. It fitted while a research tile
+## drew a bare label centred in the middle of the tile, and stopped fitting the moment
+## [P8] gave every technology an icon and a caption -- the caption and the badge are
+## both along the bottom, so the blacksmith's locked ladder printed each tech's name
+## and its prerequisite's name on top of each other. `preview_match` showed it on the
+## first run after the icons landed.
+##
+## DRAWN IN THE COST STRIP, along the top, which is free by construction on exactly the
+## tiles that need this: `_research_details` sets a cost OR a requirement and never
+## both, because a tech you cannot buy yet is not shown a price. The two are the same
+## claim anyway -- this is what it costs you, in something other than resources.
+var requirement: String = ""
+
 ## What pressing this costs, as `{kind: amount}` -- empty for anything free
 ## (project owner, 2026-08-22: "add resource cost per building & unit, per type of
 ## resource").

@@ -48,41 +48,36 @@ const DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
 ## connected) is what lets a test exercise it without adding it to a SceneTree,
 ## the same way GameView's pool/terrain are field initializers rather than
 ## `_ready()`-only setup.
-## The box the ui_builder mockup authors this panel at
-## (`scenes/ui_builder/widgets/ResourceHud.tscn`), and it has to be FIXED rather
-## than left to size itself to its rows.
+## The box this panel occupies. Still FIXED rather than sized to its rows, but for a
+## much duller reason than it used to be: five rows of a 24 px icon and a 16 pt number
+## want a predictable column, and the minimap below it is a fixed size too.
 ##
-## The background is drawn KEEP_ASPECT_COVERED, so the art's own proportions are
-## preserved and the box crops it. Where the crop falls therefore depends on the
-## box's aspect: the art is 160x192 (0.833), the mockup's box is 152x196 (0.776)
-## and scales it to fill the HEIGHT, but a box left to auto-size came out
-## 152x~179 (0.849) and filled the WIDTH instead. Different crop, so the frame's
-## gold border landed somewhere else relative to the rows -- which is why the
-## running HUD and the mockup did not match, and why the last row read as
-## clipped. Nothing about the margins was wrong; the box was.
+## THE LONG NOTE THAT USED TO BE HERE IS OBSOLETE AND IS WORTH KNOWING ABOUT. It
+## explained that the background was drawn KEEP_ASPECT_COVERED so the art's own
+## proportions survived, and that the panel's aspect therefore decided WHERE the crop
+## fell -- 152x196 (0.776) against art at 160x192 (0.833) filled the height, while an
+## auto-sized 152x179 filled the width and put the gold border somewhere else relative
+## to the rows. All of that was true of a fixed bitmap stretched to fit. The plate is a
+## NINE-PATCH now (`HudStyle.PANEL_MARGIN`): its border is 46 px of a 1024 px source at
+## every size, there is no crop and no aspect to preserve, and the panel could be
+## resized freely without the frame moving. Kept as a note because the same class of
+## bug will come back the day anything here goes back to a scaled bitmap.
 const PANEL_SIZE := Vector2(152.0, 196.0)
 
 
 func _init() -> void:
 	custom_minimum_size = PANEL_SIZE
-	var bg := HudStyle.add_panel_background(self)
-	# Tuned in the ui_builder HUD mockup against the dragon-frame art: the frame's
-	# gold border is thicker along the top and left than the plain 10px margin
-	# HudStyle's default fit assumed, and KEEP_ASPECT_COVERED (vs. the shared
-	# STRETCH_SCALE default) keeps the border's own proportions correct.
-	if bg != null:
-		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	HudStyle.add_panel_background(self)
 
-	# All four match the mockup exactly. An earlier pass raised the bottom margin
-	# to 28 to stop the villager row reading as clipped -- that treated the
-	# symptom, and by diverging from the mockup it made the two drift further
-	# apart. PANEL_SIZE above is the actual fix; these are back to the authored
-	# values and should stay in step with the .tscn.
+	# INSIDE THE PLATE'S OWN BORDER. These were 22/10/35/8 -- asymmetric, because the
+	# old art's gold edge was thicker along the top and left and the numbers were eyed
+	# against it in the mockup. The nine-patch border is even on all four sides, so the
+	# margins are even too, and they are derived from it rather than tuned: the plate's
+	# 46 px border on a 1024 px source draws at about 7 px on a 152 px panel, and 12
+	# clears it with room for the icons not to touch the moulding.
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 35)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_%s" % side, 12)
 	add_child(margin)
 
 	var column := VBoxContainer.new()

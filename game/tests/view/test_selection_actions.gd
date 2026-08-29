@@ -837,7 +837,13 @@ func test_a_tech_whose_prerequisite_is_missing_names_it() -> void:
 	var iron := _by_id(details, &"research:tech.iron_casting")
 	assert_not_null(iron, "it is listed")
 	assert_false(iron.enabled)
-	assert_eq(iron.badge, "Forging")
+	# THE TOP STRIP, NOT THE BADGE, since 2026-08-30 -- a badge is corner text sized
+	# for "84%" and shares the bottom edge with the caption an icon tile now carries,
+	# so two names printed over each other on every locked tile in the ladder.
+	assert_eq(iron.requirement, "Forging")
+	assert_eq(iron.badge, "", "or it would print over its own caption")
+	assert_true(iron.cost.is_empty(),
+			"and the strip is free precisely because a locked tech is shown no price")
 
 	var ready := _by_id(SelectionActions.details_for(&"research",
 			_finished(&"building.blacksmith"), 1, [], 3, &"", _held([&"tech.forging"])),

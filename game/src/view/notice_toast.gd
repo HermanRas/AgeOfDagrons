@@ -11,7 +11,25 @@ extends Control
 
 const DISPLAY_SECONDS := 2.5
 const FADE_SECONDS := 0.5
-const _BANNER_PATH := "res://assets/ui/hud/toast_banner.png"
+const _BANNER_PATH := "res://assets/ui/chrome/banner_alert.png"
+
+## 320x96, which is the banner's OWN 1024x308 aspect rather than a box chosen first.
+##
+## It was 320x56 against Kibyra's 184x80 dialogue box drawn KEEP_ASPECT_CENTERED, so
+## the art letterboxed inside the toast and the real banner was narrower than the rect
+## that carried it. The replacement is a fixed composition -- a gold dragon's head at
+## each end of a braided run -- and it is drawn WHOLE and to its own proportions,
+## because scaling it to a different aspect stretches a dragon's face.
+##
+## GameScene positions this at x = -WIDTH / 2 from CENTER_TOP; changing the width here
+## means changing that offset there.
+const SIZE := Vector2(320.0, 96.0)
+
+## The dark field between the two dragons, as fractions of the banner. Measured off
+## the art: the heads occupy roughly the outer sixth at each end and the braided
+## moulding takes a tenth top and bottom. Text outside this prints over gold.
+const _TEXT_INSET_X := 0.18
+const _TEXT_INSET_Y := 0.14
 
 var _label: Label
 
@@ -37,23 +55,37 @@ var _show_token: int = 0
 ##
 ## Anything added here later needs the same treatment.
 func _init() -> void:
-	custom_minimum_size = Vector2(320.0, 56.0)
+	custom_minimum_size = SIZE
+	size = SIZE
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	modulate.a = 0.0
 
 	if ResourceLoader.exists(_BANNER_PATH):
 		var banner := TextureRect.new()
 		banner.texture = load(_BANNER_PATH)
-		banner.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		banner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		banner.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		# STRETCH_SCALE, not KEEP_ASPECT_CENTERED. The rect above IS the art's aspect,
+		# so there is nothing to letterbox -- and `EXPAND_IGNORE_SIZE` is required or
+		# the 1024 px source becomes this Control's minimum size, which is the same
+		# trap `ResourceHUD._add_badge` records paying for.
+		banner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		banner.stretch_mode = TextureRect.STRETCH_SCALE
 		banner.set_anchors_preset(Control.PRESET_FULL_RECT)
 		banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(banner)
 
 	_label = Label.new()
 	_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Inside the dark field. A notice is one short line by construction, but "Not
+	# enough resources" at the default font size is already 150 px, so the trim is
+	# what keeps a longer one off the dragons rather than a nicety.
+	_label.offset_left = SIZE.x * _TEXT_INSET_X
+	_label.offset_right = -SIZE.x * _TEXT_INSET_X
+	_label.offset_top = SIZE.y * _TEXT_INSET_Y
+	_label.offset_bottom = -SIZE.y * _TEXT_INSET_Y
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.add_theme_color_override("font_color", Color("#F5DDA0"))
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)

@@ -493,8 +493,9 @@ static func _techs_here(building_id: StringName, age: int) -> Array[TechDef]:
 ##
 ## A TECH WHOSE PREREQUISITE IS MISSING IS SHOWN, DISABLED, and that is deliberately
 ## different from the age rule above. "Research Forging first" is something the player
-## can act on now, in this menu, on this building; "come back in an age" is not. The
-## badge names what it needs, since a greyed tile with no reason on it reads as broken.
+## can act on now, in this menu, on this building; "come back in an age" is not.
+## `requirement` names what it needs, since a greyed tile with no reason on it reads as
+## broken.
 ##
 ## ICONS AND CAPTIONS BOTH, since [P8] landed the 27 (2026-08-30). This drew labels
 ## alone from 9.3 until then, on the owner's instruction (*"we can use blank action
@@ -528,7 +529,12 @@ static func _research_details(facts: Dictionary, age: int,
 				a.cost = t.cost
 			else:
 				a.enabled = false
-				a.badge = missing
+				# THE TOP STRIP, NOT THE BADGE. It was the badge until 2026-08-30 and
+				# that was fine while a research tile was a bare centred label; the
+				# moment [P8] gave every tech an icon and a caption, the caption and
+				# the badge shared the bottom edge and the blacksmith's locked ladder
+				# printed two names over each other. See `HudAction.requirement`.
+				a.requirement = missing
 		out.append(a)
 	return out
 

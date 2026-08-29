@@ -4,12 +4,11 @@
 ## `InputRouter`'s tap detection provides by hand for the world-space case --
 ## with a fully custom `_draw()` standing in for the theme's default look.
 ##
-## The ring frame is Kibyra art (see game/assets/LICENCES.md); the icon inside
-## it is cropped straight from the entity's own baked battle sprite rather
-## than separate portrait art, which does not exist yet (ASSET_MISSING.md
-## 1.5). Not truly circle-clipped -- the icon is drawn inset enough that its
-## square corners mostly tuck under the ring's own border, a placeholder
-## compromise in the same spirit as everywhere else art is not final yet.
+## The ring is the project's own art since 2026-08-30 (it was Kibyra's until then);
+## the icon inside it is cropped straight from the entity's own baked battle sprite
+## rather than separate portrait art, which does not exist. Not truly circle-clipped
+## -- the icon is drawn inset enough that its square corners tuck inside the ring's
+## own border, which is a compromise and reads as none.
 class_name ControlGroupSlot
 extends Button
 
@@ -20,7 +19,14 @@ const ICON_INSET := 0.22
 const EMPTY_COLOR := Color(0.25, 0.22, 0.18, 0.6)
 const COUNT_BG := Color(0.1, 0.08, 0.05, 0.85)
 
-const _RING_PATH := "res://assets/ui/control_groups/group_slot_ring.png"
+## The project's own dragon ring since 2026-08-30, replacing Kibyra's
+## `rounded-bar-transparent.png`.
+##
+## SAME PICTURE, OPPOSITE DRAW ORDER. Kibyra's was transparent through the middle and
+## went on TOP; this one has a filled dark recess and goes UNDER, or it covers the very
+## thing the slot exists to show. `EntityPortraitView` hit the identical inversion the
+## same day and its `_draw` carries the general form.
+const _RING_PATH := "res://assets/ui/chrome/group_slot_ring.png"
 
 var slot: int = 0
 var icon_def_id: StringName = &""
@@ -78,15 +84,22 @@ func _draw() -> void:
 	var inset := Vector2(SIZE, SIZE) * ICON_INSET
 	var icon_rect := Rect2(inset, Vector2(SIZE, SIZE) - inset * 2.0)
 
+	if _ring != null:
+		draw_texture_rect(_ring, Rect2(Vector2.ZERO, Vector2(SIZE, SIZE)), false)
+
 	var icon := EntityPortrait.frame_for(icon_def_id, skin_age, skin_colour) \
 			if icon_def_id != &"" else {}
 	if icon.is_empty():
-		draw_circle(centre, SIZE * 0.5 - inset.x, EMPTY_COLOR)
+		# The ring's own recess IS the empty circle 10.4 asks for. The painted disc
+		# is only needed when there is no ring art to supply one.
+		if _ring == null:
+			draw_circle(centre, SIZE * 0.5 - inset.x, EMPTY_COLOR)
 	else:
-		draw_texture_rect_region(icon["texture"], icon_rect, icon["rect"])
-
-	if _ring != null:
-		draw_texture_rect(_ring, Rect2(Vector2.ZERO, Vector2(SIZE, SIZE)), false)
+		# Fitted rather than filled, the same as `EntityPortraitView` and for the same
+		# reason -- this one simply never looked as wrong, because ICON_INSET is 0.22
+		# and the square it stretches into is small enough to hide it.
+		draw_texture_rect_region(icon["texture"],
+				EntityPortrait.fit(icon, icon_rect), icon["rect"])
 
 	if count > 1:
 		var label := str(count)

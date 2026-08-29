@@ -44,7 +44,25 @@ const CAPTION_BG := Color(0.0, 0.0, 0.0, 0.62)
 const CAPTION_TEXT := Color(0.96, 0.90, 0.75)
 ## Room left at the right end when a badge ("84%") shares the bottom edge, so
 ## the two do not print over each other.
+##
+## THE ONLY REASON 26 IS ENOUGH is that a badge is short by contract -- "84%", "0/12",
+## "5s", "...". It stopped being true for one badge on 2026-08-30, when a research
+## tile gained a caption and its prerequisite badge ("Leather Armour") printed straight
+## through it. That moved to `HudAction.requirement` and the top strip rather than this
+## number growing, because no gap can fit two names on a 72 px tile.
 const CAPTION_BADGE_GAP := 26.0
+
+## `HudAction.requirement`, printed where a cost would go. Muted stone rather than
+## gold: gold in that strip has meant "this is the price" since 2026-08-22, and a
+## prerequisite is not a price.
+##
+## NO LOCK GLYPH IN FRONT OF IT, which was tried and pulled the same hour. There is no
+## font loaded that has one -- the game draws in Godot's built-in default -- so it
+## would have rendered as a tofu box, and the strip is about 60 px at font size 9,
+## which is four characters that "Leather Armour" cannot spare. What actually
+## disambiguates it is that the tile carries BOTH: the requirement along the top and
+## the technology's own name in the caption along the bottom.
+const REQUIREMENT_COLOR := Color(0.72, 0.66, 0.56)
 
 const _ICON_DIR := "res://assets/ui/icons/"
 
@@ -293,7 +311,7 @@ func set_action(p_action: HudAction) -> void:
 	# it WILL be, see HudAction's own header.
 	modulate = Color(1.0, 1.0, 1.0, 1.0 if p_action.enabled else DISABLED_ALPHA)
 	_badge.text = p_action.badge
-	_set_cost(p_action.cost)
+	_set_cost(p_action.cost, p_action.requirement)
 
 	var icon_path := _ICON_DIR + p_action.icon
 	if not p_action.icon.is_empty() and ResourceLoader.exists(icon_path):
@@ -381,10 +399,19 @@ const _COST_LETTERS := {&"stone": "S", &"gold": "G", &"wood": "W", &"food": "F"}
 ## in the game lists its kinds the same way round and in the same order as the counter
 ## the player reads them off. Dictionary order here would be JSON authoring order,
 ## which differs entry to entry.
-func _set_cost(cost: Dictionary) -> void:
+##
+## `requirement` SHARES THIS STRIP and is a fallback, not a second row: a tech you
+## cannot buy yet is shown no price, so the two are never both set and there is nothing
+## to lay out. It prints in a different colour, because "60F 20G" is something you
+## spend and "Iron Casting" is something you go and get -- and it is prefixed with a
+## lock rather than left bare, so a two-word name in the cost strip does not read as an
+## exotic currency.
+func _set_cost(cost: Dictionary, requirement: String = "") -> void:
 	if cost.is_empty():
-		_cost.visible = false
-		_cost_bg.visible = false
+		_cost.text = requirement
+		_cost.add_theme_color_override("font_color", REQUIREMENT_COLOR)
+		_cost.visible = not requirement.is_empty()
+		_cost_bg.visible = _cost.visible
 		return
 	var parts: Array[String] = []
 	for kind in ResourceHUD.DISPLAY_ORDER:
@@ -392,6 +419,7 @@ func _set_cost(cost: Dictionary) -> void:
 			parts.append("%s%s" % [_short_amount(int(cost[kind])),
 					_COST_LETTERS.get(kind, "?")])
 	_cost.text = " ".join(parts)
+	_cost.add_theme_color_override("font_color", HudStyle.GOLD)
 	_cost.visible = not parts.is_empty()
 	_cost_bg.visible = _cost.visible
 
