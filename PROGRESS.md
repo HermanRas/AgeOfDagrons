@@ -7,8 +7,9 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-29**, tagged **v1.5**. Suite: **1680 tests, 208,317 assertions, 0
-failures** — measured, not quoted. **361 atlases staged.** Android build: 320.6 MB **as of
+**Updated 2026-08-29**, tagged **v0.9.0 — the first BETA tag**, per IDEA.md's scheme
+(v0.1.0–0.8.9 alpha, v0.9.0–0.9.9 beta, v1.0.0 release). Suite: **1680 tests, 208,317
+assertions, 0 failures** — measured, not quoted. **361 atlases staged.** Android build: 320.6 MB **as of
 2026-08-27 and certainly stale** — two art deliveries and three phases have landed since and
 nobody has rebuilt. Re-measure before quoting it.
 
