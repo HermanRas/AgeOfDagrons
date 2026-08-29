@@ -98,7 +98,10 @@ panel per canvas also gives the border enough pixels to survive being sliced.
 
 **Two widget sheets**, because the widgets genuinely are small and independent.
 
-Total: **14 prompts**.
+**One title card**, `splash_screen`, added 2026-08-30 to replace `Splash_h.jpg`.
+It is the only prompt in this file that asks for text, and its section says why.
+
+Total: **15 prompts** — 14 generated and sliced on 2026-08-30, plus the splash.
 
 ### What is deliberately NOT in here
 
@@ -1011,6 +1014,122 @@ The 7 bars, top to bottom:
 
 ---
 
+## splash_screen
+
+**One full 1024 × 1024 canvas. `assets/UI_Gen/splash_screen.png`.**
+
+Replaces the repo-root **`Splash_h.jpg`** (1024 × 572), which becomes
+`game/assets/ui/boot_splash.png`. **Delete `Splash_h.jpg` only once the coder
+agent has the new one in-game**, not before — it is the splash that ships today.
+
+**Composed square, cropped to 16:9.** `BootScreen` uses
+`STRETCH_KEEP_ASPECT_CENTERED` over a `#0E0A06` ground, so any aspect *works* and
+is letterboxed — but the game is landscape (`handheld/orientation=4`) and the art
+it replaces is 1.79:1. Asking for a full 1024 canvas rather than a centred band
+costs nothing and gains everything: the crop is 1024 px wide either way, and a
+square master survives a future portrait or tall-tablet layout. **The essential
+content must sit inside the centre 16:9 band (y 224–800); everything outside it
+is extendable background that we crop away.**
+
+**Leave the lower band clear.** The owner asked for "splash screen / loading
+screen" — `BootScreen` is a 2-second hold with tap-to-skip and has no progress
+bar today, but asset packs (0.3) will want one, and a "tap to continue" line has
+nowhere to go on the current art. One clear strip costs nothing now and is
+impossible to add later.
+
+### ⚠️ This is the one prompt that asks for TEXT, and text is Gemini's worst failure
+
+Every other prompt in this file forbids it. A title card is the exception, because
+a bevelled gold title with fire behind it is beyond what a font can do — but
+**Gemini misspells, doubles letters, and invents glyphs**, and it does it more the
+more words you give it. So:
+
+- **Check the spelling letter by letter** before accepting a render. "AGE OF
+  DRAGON" is three words and it will still get them wrong sometimes.
+- **If three attempts fail, use the text-free variant below** and set the type in
+  engine with **Cinzel Decorative**, which was chosen for titles on 2026-08-30 and
+  is sitting in `assets/UI_Gen/fonts/` unused. That route is strictly more robust
+  and loses only the fire treatment on the letterforms.
+
+```
+A landscape title card for a medieval-fantasy real-time strategy game, filling
+the entire 1024x1024 canvas.
+
+CRITICAL COMPOSITION RULE: every important element - the dragon, the castle, the
+title, the shields - must sit within the horizontal centre band of the image,
+between 22% and 78% of the height. The areas above and below that band are
+plain extended background only, because they will be cropped away. Nothing that
+matters may touch the top or bottom edge of the canvas.
+
+THE SCENE, from back to front:
+A weathered parchment field, warm cream and tan, framed by a border of dark
+mortared castle stone that runs around all four edges of the canvas. Fine gold
+filigree traces the inner edge of the stone border, with a small gold corner
+flourish at each corner.
+
+Centred on the parchment, a grey stone castle with four round towers and conical
+red-tiled roofs, a portcullis gate, and small pennants flying. Coiled around and
+behind the castle, a large ornate GOLDEN DRAGON, serpentine, with outspread
+feathered-scale wings framing the castle on both sides, its head in profile on
+the left breathing a plume of orange fire that curls across the lower right of
+the castle. Embers and sparks drift through the scene.
+
+Flanking the castle at mid height, two heraldic shields: on the left a red shield
+bearing a gold rampant lion, on the right a blue shield bearing a silver crescent
+moon over crossed swords. Both shields have polished gold rims.
+
+Across the upper part of the scene, a furled gold-edged parchment ribbon banner.
+Below the castle, a second smaller gold-edged parchment banner bearing a small
+blue shield with a gold cross.
+
+THE TEXT, and it must be spelled EXACTLY as written here:
+- On the upper ribbon banner, in small gold capitals: A RENAISSANCE OF FIRE
+- Across the centre, as the main title, very large bold gold capitals with a
+  strong bevelled three-dimensional edge, a bright specular highlight and a
+  faint fire glow behind the letters: AGE OF DRAGON
+- Along the lower area, in small gold capitals: A REAL-TIME STRATEGY EPIC
+Use no other text anywhere. Do not add a subtitle, a studio name, a version
+number, a date or any decorative lettering.
+
+LEAVE THE LOWER STRIP CLEAR: the bottom 12% of the centre band must be plain
+parchment with no artwork, no text and no ornament, so a loading bar can be drawn
+over it later.
+
+STYLE: richly rendered semi-realistic painted game art. Smooth gradients, warm
+cinematic lighting, bevelled three-dimensional depth on the gold, subtle ambient
+occlusion, crisp anti-aliased edges, rich specular sheen on metal. NOT pixel art.
+NOT flat vector. NOT cel-shaded outline art.
+
+PALETTE: burnished gold, highlight #F2D06B through mid #E5B842 to shadow #8A6A1E;
+warm parchment cream #F0E2C0; deep chocolate brown #2B1D14; slate grey castle
+stone; ember orange and deep red #7A1F1F for the fire.
+```
+
+### The text-free variant, if the title will not come out
+
+Identical prompt with the TEXT block replaced by this, then set the three lines in
+engine over the empty banners using Cinzel Decorative:
+
+```
+NO TEXT ANYWHERE IN THE IMAGE. No title, no letters, no numbers, no lettering of
+any kind. The upper ribbon banner and the lower banner are both COMPLETELY EMPTY
+- blank parchment with gold edges, waiting for type to be placed on them later.
+Leave a clear horizontal space across the centre of the scene, between the two
+shields and above the lower banner, empty of artwork, where a title will be set.
+```
+
+### Slicing it
+
+Not a sheet, so `slice_ui_sheets.py` does not touch it. Crop and convert by hand:
+
+```powershell
+<venv>\python.exe -c "from PIL import Image; im=Image.open('assets/UI_Gen/splash_screen.png'); im.crop((0,224,1024,800)).save('assets/UI_Gen/sliced/chrome/boot_splash.png')"
+```
+
+That yields **1024 × 576**, four pixels taller than the art it replaces and the
+same aspect. No alpha — a splash is opaque, and `BootScreen` puts `#0E0A06`
+behind it anyway.
+
 ## After the sheets come back
 
 **What to check before slicing**, in the order the failures actually happen:
@@ -1206,6 +1325,25 @@ The art is cut and keyed. Landing it is game-side work behind the fence:
 - **In one commit with the licence retirement**, per §4a above — `.gitignore`,
   `assets/UI_Sprites/README.md` and `LICENCES.md` rows 503–510 all move together,
   or a fresh clone gets a HUD with no panels.
+
+### ⚠️ `TEXTURE_FILTER_NEAREST` IS SET IN 15 PLACES AND IS NOW WRONG
+
+Every one of these was correct for the pixel art it was written against, and every
+one of them will make the replacement art look crunchy and aliased the moment it is
+drawn at any size but 1:1 — which is most of them, since `ActionSlot` draws a
+100 px icon at 52 px and `BootScreen` scales the splash to fill a phone.
+
+```
+action_slot.gd:102,112   boot_screen.gd:26      game_scene.gd:564
+health_bar_view.gd:40,48 hud_panel.gd:257       hud_style.gd:28
+main_menu.gd:170         map_preview.gd:39      notice_toast.gd:47
+pause_menu.gd:76,147     resource_hud.gd:151    result_screen.gd:167
+```
+
+**`map_preview.gd` is the one to think about rather than sweep**: a minimap
+preview of discrete tiles may genuinely want nearest. The other fourteen are
+photographic-style art being scaled and want `TEXTURE_FILTER_LINEAR`. This is
+listed rather than changed because every file in it is behind the fence.
 
 ## The fonts — chosen 2026-08-30, and they are the easy half of §4b
 

@@ -274,6 +274,24 @@ being replaced works today.
 > `sliced/icons/` → `game/assets/ui/icons/`, `sliced/chrome/` → `hud/`, `menu/`,
 > `control_groups/`.
 >
+> ⚠️ **`TEXTURE_FILTER_NEAREST` IS SET IN 15 PLACES AND IS NOW WRONG.** Every one was
+> correct for the pixel art it was written against; all of them make smooth painted art
+> crunchy the moment it is scaled, which is most of the time — `ActionSlot` draws a 100 px
+> icon at 52 px and `BootScreen` scales the splash to fill a phone. `action_slot.gd:102,112`
+> · `boot_screen.gd:26` · `game_scene.gd:564` · `health_bar_view.gd:40,48` ·
+> `hud_panel.gd:257` · `hud_style.gd:28` · `main_menu.gd:170` · `map_preview.gd:39` ·
+> `notice_toast.gd:47` · `pause_menu.gd:76,147` · `resource_hud.gd:151` ·
+> `result_screen.gd:167`. **`map_preview.gd` is the one to think about rather than sweep** —
+> a preview of discrete tiles may genuinely want nearest. The other fourteen want LINEAR.
+>
+> **A SPLASH SCREEN IS QUEUED BUT NOT YET GENERATED** (owner, 2026-08-30). ART_PROMPT.md's
+> `## splash_screen` section is written; the owner generates it, then it becomes
+> `game/assets/ui/boot_splash.png` at 1024×576. **`Splash_h.jpg` at the repo root stays
+> until you have the new one in-game** — it is what ships today. Delete it in the commit
+> that lands the replacement, not before. It is the only prompt in the file that asks for
+> rendered text, so if the title comes back misspelled there is a text-free variant and the
+> type gets set in engine with Cinzel Decorative.
+>
 > **Do it in ONE commit with the licence retirement** — `.gitignore`,
 > `assets/UI_Sprites/README.md` and `LICENCES.md` rows 503–510 move together with the art,
 > or a fresh clone gets a HUD with no panels and a README saying the packs are not needed.
