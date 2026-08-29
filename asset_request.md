@@ -260,6 +260,50 @@ Six sections; §4 is the decision, §5 is the part with nothing behind it in cod
 LABEL or a hand-drawn shape — legible and ugly rather than broken — and the chrome that is
 being replaced works today.
 
+> **[asset] BATCHED INTO 14 GEMINI PROMPTS — see [ART_PROMPT.md](ART_PROMPT.md), 2026-08-30.**
+> The owner is generating the set with Gemini at 1024×1024 and we slice it here. Seven icon
+> sheets at 4×4/256 px (**105 glyphs**, which covers your 38 missing, the 5 stand-ins, all 20
+> existing and the ~25 upcoming), five full-canvas panel/banner pieces, two widget sheets.
+> Counts were re-derived off `techs.json`, `Formation.SHAPES`, `SimUnit.Stance` and
+> `units.json` rather than off this entry; they agree.
+>
+> **Two decisions in it reach your side, and neither is mine to make alone.**
+>
+> **ICONS BECOME BARE GLYPHS; THE TILE FRAME BECOMES ONE ASSET.** Every current icon carries
+> its own gold dragon frame *and* `ActionSlot` draws `panel_background.png` behind it, so
+> every action tile in the running game is **double-framed** today. The owner settled it
+> (2026-08-30): the frame is chrome. That gives a glyph the full 52 px instead of ~30, and
+> makes `HudAction.selected` / disabled a frame swap rather than 315 icons. **It needs
+> `ActionSlot._FRAME_PATH` to point at the new `tile_frame` rather than at the panel
+> texture** — one line, but yours.
+>
+> **`res_*` STAY CIRCULAR AND `act_*` STAY SQUARE.** That distinction is load-bearing in the
+> existing set (green circles vs gold squares) and I have kept it, moved into the chrome:
+> resources get `badge_round`, actions get `tile_frame`. `ResourceHUD` draws at 24 px, so
+> whatever wraps them has to survive that.
+>
+> **Answering §5 and §1 where the art forces an answer.** The nine `menu/*_button.png` differ
+> only in the printed word, so **one stretchable plate plus a label replaces all nine** and
+> `inventory-button.png` stops existing. `hud_score` and `act_leave` are drawn — cheap, and it
+> keeps 13.2 item 4b open rather than closing it by omission. `replay_pause` and `hud_pause`
+> are deliberately one picture.
+>
+> **Two things I did NOT draw, both on your own recorded reasoning.** The detail grid's `<`
+> and `>` stay characters — `SelectionActions`'s header is right that a caret reads as
+> navigation at 72 px where a glyph does not, and the arrows on `sheet_widgets` are for
+> scrollbars and dropdowns only. And no font: Gemini does not produce a `.ttf`, so §4b is
+> still open and still touches every screen.
+>
+> ⚠️ **`UI_Design.md` and its six mockups are DELETED** (owner, 2026-08-30: *"they are all out
+> dated now"*). They are in git. **43 citations across 23 files now point at nothing** —
+> 6 in `selection_actions.gd`, 3 in `minimap.gd`, 2 each in `resource_hud.gd` and
+> `selection_panel.gd`, plus PLAN/PROGRESS/IDEA/README. Read them as history, the way
+> `ASSET_MISSING §n` is read. Two carried real content worth not losing: `minimap.gd`'s
+> "ornate diamond frame it approximates" is now `frame_minimap` in ART_PROMPT.md, and the
+> chat mockup was the **only** record of the per-player mic/speaker voice-chat row — that is
+> now recorded in ART_PROMPT.md `sheet_f`, with the note that the art is cheap and the
+> feature is not.
+
 #### 1. What exists today, and where it came from
 
 Two sources, and the difference matters for an overhaul:
