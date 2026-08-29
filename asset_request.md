@@ -24,7 +24,7 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | P | Request | The phase it is holding up |
 |---|---|---|
 | **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
-| **P8** | **27 technology icons** — one per tech in `techs.json` | **PLAN.md 9.3, shipped 2026-08-29 with none of them.** Nothing is blocked and the feature is playable: a research tile draws its label. Backlog, on the owner's instruction |
+| **P8** | **THE WHOLE UI ICON SET, inventoried** — 20 exist, 5 are stand-ins, **38 are missing**, and the panels around them are third-party | **Nothing, and that is the point.** Filed for the owner's UI overhaul (2026-08-29) so the set can be baked ONCE rather than 27 tech icons landing beside 20 icons in a different style. **§4 of it is a DECISION for the owner, not a task**: bespoke icons either match Kibyra's chrome or the chrome goes too |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
@@ -33,9 +33,11 @@ phase 4 (abilities, stances, formations), 2.4d Archipelago, and **9.3/9.4 the te
 and the shape of the queue did not change with any of them: **A.10, the building roster age
 by age, is still the only art job the next code phase actually waits on**, because 5.7 is 23
 buildings and its own line says "low code effort, ~70 bakes behind it". P7 is queued ahead of
-P5, P6 and P8 by importance and behind A.10 by urgency. **P8 is the newest and the least
-urgent of the four** — it was filed as backlog by the owner in the same breath as the
-feature it belongs to.
+P5, P6 and P8 by importance and behind A.10 by urgency. **P8 grew the same day it was
+filed** — it went in as 27 technology icons and came back out as the whole UI icon set,
+because the owner is overhauling the UI and 27 icons in a new style beside 20 in the old
+one is the mismatch that overhaul is for. It is still the least urgent of the four and is
+now the largest.
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
 age**, which paces phase **5.7** and every age skin **9.6** will need. It is the largest art
@@ -46,11 +48,15 @@ edges. Those were an open art item (A.1) until 2026-08-23 and are now **generate
 time** from the one diamond each terrain already ships — the owner's call, so that a theme
 pack stays one sprite per terrain. Do not bake transition tiles.
 
-**One thing waiting on the OWNER, not on either agent:** `licence_audit.py` reports **14
-undeclared UI `.png` files** under `game/assets/ui/` — the itch.io pack art, which
-`.gitignore` deliberately keeps out. They need a licence and author, or a decision to
-leave them out. Everything else in that audit is green; `LICENCES.md` was regenerated
-2026-08-28 and took it from 364 problems to those 14.
+**One thing waiting on the OWNER, not on either agent — and the figure in it can no longer
+be checked from this machine.** This note used to state as fact that `licence_audit.py`
+reports **14 undeclared UI `.png` files**. Two corrections, 2026-08-29: **`LICENCES.md` now
+carries rows for all of them** (464–468 for the owner's Gemini-generated icons, 503–510 for
+the Kibyra itch.io copies), so the count is probably lower or zero; and **there is no Python
+on this workstation** — no `python`, no `py` launcher — so the audit cannot be run here at
+all and neither figure is measured. **Re-run it on a machine that has Python before quoting
+a number.** What genuinely waits on the owner is unchanged and is §4 of [P8]: whether the
+third-party chrome stays.
 
 ---
 
@@ -237,19 +243,68 @@ winged creature and were derived by the projection inversion your own §4 record
 structurally wrong for anything not standing upright. Please re-measure rather than
 inheriting them.
 
-### [P8] Technology icons — 27 of them, and none of them is urgent (game side, 2026-08-29)
+### [P8] THE WHOLE UI ICON SET, inventoried so it can be baked ONCE (game side, 2026-08-29)
 
-**Backlog, and it is filed as backlog on the owner's own instruction:** *"we can use
-blank action tiles with only lables filled and log art needed in asset_request.md as a
-back log."* Phase 9.3 shipped that way the same day — the tech tree is wired, 27
-technologies are researchable at seven buildings, and **every one of them draws its
-name on an unadorned tile**. Nothing is blocked, nothing is magenta, and no code
-changes when the art lands: `SelectionActions.ICONS` is a plain id → filename map and
-`ActionSlot` prefers an icon file over a label the moment there is one.
+**This entry was "27 technology icons" for a day and is now the whole set**, because the
+owner is doing a UI overhaul and asked the right question: *"i am going to do a huge ui
+overhall and want everything to look good and match — for that to work we need everything
+baked once."* Twenty-seven tech icons in one style beside twenty existing icons in another
+is exactly the mismatch that asks for. **So this is an inventory, not a request for 38
+pictures**: what exists, where each piece came from, what is a stand-in, and what is
+missing. Take it whole or take none of it.
 
-**What's needed:** one 52 px icon per technology, in the style of the existing
-`assets/ui/icons/act_*.png` set. The ids are the keys of `game/data/techs.json` and
-the names are its `name` fields:
+**Nothing here is blocking.** Every gap below currently draws a LABEL or a hand-drawn
+shape, which is legible and ugly rather than broken.
+
+#### 1. What exists today, and where it came from
+
+Two sources, and the difference matters for an overhaul:
+
+| what | files | size | source |
+|---|---|---|---|
+| Action icons | `act_move`, `act_stop`, `act_build`, `act_attack`, `act_guard`, `act_destroy`, `act_garrison`, `act_enter`, `act_exit`, `act_leave` | 100×100 | **AI-generated by the project owner (Google Gemini)** — cut from `assets/Icons/Icons_sheet_500x500.png`, whose empty slots are where more would come from |
+| Resource icons | `res_food`, `res_wood`, `res_gold`, `res_stone`, `res_villagers` | 100×100 | same |
+| HUD corner buttons | `hud_chat`, `hud_trade`, `hud_techtree`, `hud_settings`, `hud_score` | 100×100 | same |
+| Panels, bars, frames | `hud/panel_background` 160×192, `hud/health_bar` 176×46, `hud/portrait_frame` 80×80, `hud/toast_banner` 184×80, `control_groups/group_slot_ring` 69×85 | — | **Kibyra, itch.io** — see §3 |
+| Menu buttons | `menu/{play,multiplayer,settings,credits,quit,resume,main_menu,back,inventory}_button` 94×31, `menu/pause_icon` 64×64 | — | **Kibyra, itch.io** |
+| Splash and menu frame | `boot_splash`, `main_menu_panel` | — | AI-generated by the owner (Gemini) |
+
+**Three of those ship and are referenced by NOTHING**, so an overhaul should decide about
+them rather than faithfully reproduce them: **`hud_score.png`** (no score screen exists),
+**`menu/inventory-button.png`** (no inventory), and **`act_leave.png`** (only `act_enter`
+and `act_exit` are wired; PLAN.md §13.2 item 4b already asks whether enter/garrison and
+exit/leave are two pairs covering one concept each — this is the moment to answer it).
+
+#### 2. The five STAND-INS: art that exists, is wired, and is the wrong picture
+
+These are the ones that make the HUD look unfinished today, and they cost nothing to fix
+because the slots are already there. `SelectionActions.ICONS` names each as a deliberate
+compromise:
+
+| action | draws | what it should be |
+|---|---|---|
+| **Harvest** | `res_wood.png` | a gather VERB, not a picture of wood — it is the same tile whether you are sent to a tree, a mine or a berry bush |
+| **Repair** | `act_guard.png` | mend, not protect. A shield is not a hammer |
+| **Stance** | `act_guard.png` | **shares Repair's file.** A shield is the better claim on it, so Repair is the one to move |
+| **Upgrade** | `hud_techtree.png` | the tech-tree HUD glyph standing in for "turn this building into a better one" |
+| **Research** | `hud_techtree.png` | **shares Upgrade's file** (9.3, 2026-08-29). Two different verbs on one picture |
+
+#### 3. Missing entirely — 38 icons, and every one of them draws a word today
+
+| # | what | ids |
+|---|---|---|
+| 27 | **Technologies** | the keys of `game/data/techs.json` |
+| 4 | **Formations** | `line`, `grid`, `vee`, `box` |
+| 4 | **Stances** | Aggressive, Defensive, Stand Ground, Passive |
+| 2 | **Special abilities** | `heal` (the monk), `fire_breath` (the dragon) — keyed by `UnitDef.ability_id` |
+| 1 | **Clear selection [X]** | `ClearSelectionButton` draws a gold ring and two strokes by hand, and its header says why: *"there is no close/X icon in `assets/ui/icons/`"* |
+
+**The 27 technologies are four ladders of three plus fifteen singles**, and the ladders are
+the only part that needs thinking about. The blacksmith's twelve are four lines — melee
+attack, ranged attack, melee armour, ranged armour — and at age 4 **all twelve are on
+screen at once in a 4×3 grid, one line per column**. A player has to tell the LINE apart at
+a glance and the tier second, so one motif per line with a tier mark beats twelve unrelated
+pictures. The rest, by the building that sells them:
 
 | building | technologies |
 |---|---|
@@ -257,23 +312,55 @@ the names are its `name` fields:
 | Mill | Horse Collar, Heavy Plough, Crop Rotation |
 | Lumber Camp | Double-Bit Axe, Bow Saw |
 | Mining Camp | Gold Mining, Stone Mining, Gold Shaft Mining, Stone Shaft Mining |
-| Blacksmith | Forging, Iron Casting, Blast Furnace, Fletching, Bodkin Arrow, Bracer, Scale Mail, Chain Mail, Plate Mail, Padded Armour, Leather Armour, Ring Armour |
+| Blacksmith | Forging, Iron Casting, Blast Furnace · Fletching, Bodkin Arrow, Bracer · Scale Mail, Chain Mail, Plate Mail · Padded Armour, Leather Armour, Ring Armour |
 | University | Ballistics, Chemistry |
 | Monastery | Sanctity, Fervour |
 
-**FOUR LADDERS OF THREE ARE THE ONLY PART THAT NEEDS THINKING ABOUT.** The blacksmith's
-twelve are four lines of three tiers — melee attack, ranged attack, melee armour,
-ranged armour — and at age 4 all twelve are on screen at once in a 4x3 grid, one line
-per column. **A player has to tell the LINE apart at a glance and the tier second**, so
-one motif per line with a tier mark on it beats twelve unrelated pictures. That is how
-AoE II draws them and it is why its blacksmith is readable at a thumb's distance.
+**Two things deliberately DO NOT want icons**, so they are not in the count. The detail
+grid's page arrows are `<` and `>` — at 72 px a caret reads as navigation in a way no glyph
+in the pack does. And the train, place, queue, garrison and group-roster tiles crop the
+**entity's own baked sprite**, which is better than any icon could be and is why a research
+tile carries no `payload`: a technology has no sprite to crop.
 
-**Where it plugs in once baked:** an entry each in `SelectionActions.ICONS`, keyed by
-the tech id. That is the whole of it — `_research_details` already asks
-`ICONS.get(t.id, "")` in the shape every other action does, and today gets "".
+#### 4. THE itch.io CONSTRAINT, which is the part that decides how big this job is
 
-**Do not start this ahead of A.10.** The buildings roster paces phase 5 and this paces
-nothing; it is here so it is written down, not so it is done next.
+The panels, bars, frames and menu buttons in §1 are **Kibyra's**, from
+`https://kibyra.itch.io/ui-fonts-dragon-huds-pack` and
+`https://kibyra.itch.io/free-medieval-fantasy-ui-pack`, and `assets/UI_Sprites/README.md`
+records the terms: **personal and commercial use allowed, redistribution of the original
+files NOT allowed.** So they are gitignored, each developer re-downloads them, and shipping
+them compiled inside an APK is fine while committing them is not.
+
+**What that means for an overhaul, and it is a decision rather than a task:** bespoke icons
+have to sit inside Kibyra's chrome and match its weight, palette and bevel, *or* the chrome
+goes too. The second is a much larger job and would also let the art be committed. **The
+owner's call, not mine** — but the two halves cannot be decided separately, which is the
+whole reason this entry lists the chrome alongside the icons.
+
+The exact copies in use, so nothing is guessed at: `panel_background` ←
+`panels/panel-with-background.png`; `health_bar` ← `line-bars/line-bar-health.png`;
+`portrait_frame` ← `rounded-bars/avatar-frame.png`; `toast_banner` ←
+`dialogue-box/dialogue-box-transparent.png`; `group_slot_ring` ←
+`rounded-bars/rounded-bar-transparent.png`; the menu buttons ← `buttons/*.png`; `pause_icon`
+← `icons/pause-icon.png`. `game/assets/LICENCES.md` rows 503–510 carry the same list.
+
+#### 5. Where it plugs in once baked
+
+**All of it is data.** `SelectionActions.ICONS` is a plain `id → filename` map read at
+100×100 and drawn at 52 px inside a 72 px tile; `ActionSlot` prefers an icon file over a
+label the moment there is one, and prefers it over the payload portrait too. So:
+
+- an action or stance or formation icon is **one line in `ICONS`**;
+- a tech icon is **one line in `ICONS` keyed by the tech id** — `_research_details` already
+  asks `ICONS.get(t.id, "")` and today gets `""`;
+- an ability icon is **one line keyed by `ability_id`** — same, already asked for;
+- the [X] is the only one that needs code, and only to stop drawing itself.
+
+**Format:** 100×100 RGBA PNG in `game/assets/ui/icons/`, matching the existing 20. They are
+scaled down, never up, so bigger source is fine and smaller is not.
+
+**Do not start this ahead of A.10.** The building roster paces phase 5 and this paces
+nothing.
 
 ---
 
