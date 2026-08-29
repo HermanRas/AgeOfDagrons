@@ -128,3 +128,6 @@ ehthumbs.db
 *.swp
 *~
 .claude/settings.json
+
+# Derived UI slices -- regenerate with tools/slice_ui_sheets.py, do not commit
+assets/UI_Gen/sliced/

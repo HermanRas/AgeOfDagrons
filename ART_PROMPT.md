@@ -108,8 +108,9 @@ Total: **14 prompts**.
   written down.
 - **Train / place / queue / roster tiles.** Those crop the entity's own baked sprite,
   which beats any icon.
-- **A font.** [P8] §4b is right that the typeface is unchosen and touches every
-  screen, but Gemini does not produce a `.ttf` and it is a separate decision.
+- **A font.** Gemini does not produce a `.ttf`. [P8] §4b was right that the typeface
+  was unchosen and touches every screen — **the owner has since chosen, 2026-08-30**;
+  see the fonts section at the end of this file.
 
 ---
 
@@ -1042,3 +1043,135 @@ longer needed.
 That retires the download-two-packs-by-hand step, gives a clean checkout a working
 HUD for the first time, and makes `licence_audit.py`'s undeclared-UI-files complaint
 disappear by construction rather than by declaration.
+
+---
+
+# GENERATED AND SLICED — 2026-08-30
+
+All 14 sheets came back and all 14 are in. **130 pieces cut, 0 flagged.**
+
+```powershell
+<venv>\python.exe tools\slice_ui_sheets.py      # -> assets/UI_Gen/sliced/
+<venv>\python.exe tools\measure_ninepatch.py    # -> sliced/ninepatch.json
+<venv>\python.exe tools\preview_ninepatch.py    # -> sliced/review/ninepatch_*.png
+```
+
+The Gemini masters in `assets/UI_Gen/*.jpg` are **committed** — they cannot be
+regenerated identically. `sliced/` is derived and gitignored.
+
+## The `.jpg` question, settled
+
+The sheets came back JPEG rather than PNG. **It does not matter here, and the
+reason is worth keeping** so it is not re-litigated: JPEG's failure mode is
+ringing at hard edges between flat colours — that is pixel art, and this is not.
+Smooth gradients on a flat ground are the case it handles best. Measured border
+noise is **≤ 6/255 on twelve of the fourteen sheets**, and every icon is
+downsampled 256 → 100 on the way out, which averages what ringing there is below
+visibility.
+
+The one real rule: **no second JPEG round trip.** Everything the slicer writes is
+PNG and the masters are kept.
+
+`sheet_a_command_verbs` is the exception worth knowing about — it came back on a
+uniform `#111111` ground (border p99.5 = 18) where the others are true black
+(p99.5 = 2). That is Gemini, not JPEG, and it is why the key threshold is derived
+per sheet instead of fixed.
+
+## Three things the plan got wrong, found by doing it
+
+**The lattice does not survive contact.** Gemini does not centre cells on a strict
+256 px grid and does not keep art inside them — `sheet_widgets` cell 1's dragon
+runs off the top of the canvas. A blind `crop(c*256, r*256)` decapitates three of
+the four tile frames. The lattice now only **assigns** a piece to a slot; the crop
+is the piece's own content bbox grown out of that slot.
+
+**`sheet_bars` is not a lattice at all.** Seven bars of unequal height with unequal
+gaps, and the empty band at the bottom put `h // 7`'s last row inside it — so
+`field_input` came back EMPTY and four neighbours BLED. It is cut by row
+projection now, which needs no guess about bar heights.
+
+**A threshold key punches holes in the artwork.** Half these icons contain large
+genuinely dark regions — `act_repair`'s black anvil, `act_garrison`'s shadowed
+archway. The background is not "the dark pixels", it is "the dark pixels
+**reachable from the border**", so it comes out by flood fill. The anvil survives
+intact; verify it in `sliced/review/sheet_a_command_verbs.png`, which composites
+every icon over a checkerboard for exactly this reason.
+
+## Measured nine-patch margins
+
+Off the art, not off this file's original guesses. Full table in
+`sliced/ninepatch.json`.
+
+| piece | size | margin (L/R/T/B) | use |
+|---|---|---|---|
+| `panel_hud` | 1024² | 46/46/46/46 → **use 64** | stretch, **verified clean at every size** |
+| `panel_ornate` | 1024² | 183/241/178/92 → **use 256** | **tile the edges, do not stretch** |
+| `portrait_frame` | 254² | 53/53/52/53 → **use 56** | stretch |
+| `tile_frame` | 256×262 | 110/52/126/51 → **use 128** | stretch |
+| buttons, bars, `field_input` | ~1010×110 | 23–35 → **use 40** | stretch horizontally only |
+| `banner_age` | 1003×344 | 235/229 → **use 240** | stretch horizontally only |
+| `banner_alert` | 1024×308 | period 37 → **use 200** | **tile horizontally** |
+| `frame_minimap` | 1014² | — | fixed size, no margins |
+
+**⚠️ `panel_ornate`'s bead-and-reel run must be TILED, not stretched**
+(`StyleBoxTexture`, `axis_stretch_horizontal/vertical = AXIS_STRETCH_MODE_TILE`).
+`preview_ninepatch.py` renders it at 620 × 620, where the 512 px middle is
+*compressed* 4.7× and the round beads squash into flat vertical ribbing. It is
+obvious in `sliced/review/ninepatch_panel_ornate.png` and invisible in any table —
+which is the point of that script existing. `panel_hud` has no repeating element
+and stretches perfectly, which is why it is the one that belongs behind dense HUD
+grids.
+
+**How the margin numbers were arrived at matters more than the numbers.** Two
+earlier versions of `measure_ninepatch.py` produced confident, symmetric, wrong
+answers. The first averaged each column over the full height and put
+`panel_ornate`'s left margin at **75 px** — its dragons reach ~250 px in, but a
+column through one also crosses 700 px of flat field, which dilutes it below any
+cut. The second took p99.5 of the same difference *including alpha*, and the
+alpha edge's 0 → 255 step drove the noise floor to 255 and collapsed every margin
+to zero. The working version compares each column to the one **one period away**,
+on RGB only — because these edges are periodic rather than uniform, which is the
+same fact that makes them need tiling. **The render test is the ground truth; the
+table is a hypothesis.**
+
+## What is left, and it is not mine
+
+The art is cut and keyed. Landing it is game-side work behind the fence:
+
+- **`ActionSlot._FRAME_PATH` must point at `tile_frame.png`**, not at
+  `panel_background.png`. Until it does, the new bare glyphs draw on the old
+  Kibyra plate and the double-frame is merely inverted rather than fixed.
+- The 100 × 100 icons in `sliced/icons/` drop into `game/assets/ui/icons/`.
+- `sliced/chrome/` replaces `hud/`, `menu/` and `control_groups/`.
+- **In one commit with the licence retirement**, per §4a above — `.gitignore`,
+  `assets/UI_Sprites/README.md` and `LICENCES.md` rows 503–510 all move together,
+  or a fresh clone gets a HUD with no panels.
+
+## The fonts — chosen 2026-08-30, and they are the easy half of §4b
+
+The owner dropped two families into `assets/UI_Gen/`, extracted to
+`assets/UI_Gen/fonts/`:
+
+| role | family | files |
+|---|---|---|
+| titles | **Cinzel Decorative** | Regular, Bold, Black |
+| body / general | **MedievalSharp** | Regular |
+
+**Both are SIL Open Font License 1.1**, verified by reading the `OFL.txt` in each
+archive rather than by recognising the names. That matters more than it sounds:
+OFL is *redistributable*, which is exactly what Kibyra's terms were not, so the
+fonts commit with the art and a clean checkout gets them. `LICENCES.md` needs one
+row per family and **the `OFL.txt` files must ship alongside the `.ttf`s** — the
+licence requires its own text be included, and it is the one condition here that
+is easy to drop by accident.
+
+The other OFL condition worth knowing: both carry a **Reserved Font Name**
+(`MedievalSharp`, `Cinzel`). Shipping them unmodified is fine; shipping a
+*modified* build still called by that name is not. Nothing in this project
+modifies a font, so this is a note rather than a task.
+
+**Still game-side, and still §4b's real content**: nothing loads a font today —
+there is no `.ttf` under `game/` and every label draws in Godot's built-in
+default. A `Theme` with these two set as the default and title fonts is the
+change, and it touches every screen at once, which is why it wants doing in the
+same pass as the chrome rather than after it.

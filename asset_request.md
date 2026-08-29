@@ -260,6 +260,49 @@ Six sections; §4 is the decision, §5 is the part with nothing behind it in cod
 LABEL or a hand-drawn shape — legible and ugly rather than broken — and the chrome that is
 being replaced works today.
 
+> ## ✅ [asset] GENERATED AND SLICED, 2026-08-30 — **130 pieces, 0 flagged. NOT WIRED.**
+>
+> All 14 sheets came back and all 14 are cut. `assets/UI_Gen/sliced/` holds **105 icons at
+> 100×100 RGBA** (plus 256 px masters), **22 chrome pieces**, and a checkerboard contact
+> sheet per sheet in `sliced/review/`. Masters are committed; `sliced/` is derived and
+> gitignored — regenerate with `tools/slice_ui_sheets.py` on the venv python (§2 paths).
+>
+> **This is yours to land, and there is one line of code in it.**
+> **`ActionSlot._FRAME_PATH` must point at `tile_frame.png` rather than at
+> `panel_background.png`.** Until it does, the new bare glyphs draw on the old Kibyra plate
+> and the double-frame is inverted rather than fixed. Everything else is file placement:
+> `sliced/icons/` → `game/assets/ui/icons/`, `sliced/chrome/` → `hud/`, `menu/`,
+> `control_groups/`.
+>
+> **Do it in ONE commit with the licence retirement** — `.gitignore`,
+> `assets/UI_Sprites/README.md` and `LICENCES.md` rows 503–510 move together with the art,
+> or a fresh clone gets a HUD with no panels and a README saying the packs are not needed.
+>
+> **Nine-patch margins are MEASURED, in `sliced/ninepatch.json`.** `panel_hud` is 64 and
+> renders clean at every size — it is the one for dense HUD grids. **`panel_ornate` is 256
+> and its edges must be TILED, not stretched** (`StyleBoxTexture`,
+> `AXIS_STRETCH_MODE_TILE`): its bead-and-reel run compresses into flat ribbing at
+> 620×620, which `tools/preview_ninepatch.py` shows and no table does.
+>
+> **§4b's FONT IS CHOSEN — and it is OFL, so it commits.** The owner dropped two families
+> in on 2026-08-30, now extracted to `assets/UI_Gen/fonts/`: **Cinzel Decorative**
+> (Regular/Bold/Black) for titles and **MedievalSharp** (Regular) for body. Both are **SIL
+> Open Font License 1.1**, confirmed by reading each archive's `OFL.txt` rather than by
+> recognising the names — so unlike Kibyra's packs they are redistributable and a clean
+> checkout gets them. `LICENCES.md` wants one row per family, and **the `OFL.txt` files must
+> ship beside the `.ttf`s** — the licence requires its own text be included, which is the
+> easiest condition here to drop by accident. Both carry a Reserved Font Name, which only
+> bites if a modified build keeps the name; nothing here modifies a font. **Loading them is
+> yours**: there is still no `.ttf` under `game/` and every label draws in Godot's default,
+> so a `Theme` setting these as default and title fonts is the change — and it touches every
+> screen, which is why it belongs in the same pass as the chrome.
+>
+> **The `.jpg` the sheets came back as is fine and here is why**, so it is not re-litigated:
+> JPEG rings at hard edges between flat colours, which is pixel art, and this is not. Border
+> noise measured ≤6/255 on twelve of fourteen sheets and every icon downsamples 256→100 on
+> the way out. The rule is only that there must be **no second JPEG round trip** — everything
+> written is PNG.
+>
 > **[asset] BATCHED INTO 14 GEMINI PROMPTS — see [ART_PROMPT.md](ART_PROMPT.md), 2026-08-30.**
 > The owner is generating the set with Gemini at 1024×1024 and we slice it here. Seven icon
 > sheets at 4×4/256 px (**105 glyphs**, which covers your 38 missing, the 5 stand-ins, all 20
