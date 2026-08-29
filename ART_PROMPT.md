@@ -44,7 +44,7 @@ on the same instruction.
 **Icons are BARE GLYPHS. The frame is chrome.** Today every icon carries its own gold
 dragon frame *and* `ActionSlot` draws `panel_background.png` behind it — so every
 action tile in the running game is double-framed. In the new set the dragon tile
-frame is **one reusable asset** (`sheet_widgets`, cells 1–3), and the 105 glyphs sit
+frame is **one reusable asset** (`sheet_widgets`, cells 1–3), and the 103 glyphs sit
 inside it. That is exactly what the reference image is: an empty frame waiting for a
 glyph.
 
@@ -75,7 +75,8 @@ HUD already draws with. The other five are new and are ours to set.
 
 ## The batching, and why these groupings
 
-**Seven icon sheets, 4 × 4 at 256 px, 15 usable cells each = 105 glyphs.** Sheets are
+**Seven icon sheets, 4 × 4 at 256 px, 15 usable cells each = 103 glyphs** — 15 on six
+of them and 13 on `sheet_e_economy_techs`, whose last two cells are reserved. Sheets are
 grouped by *when a player sees them together*, not alphabetically — every icon on one
 sheet is generated in one pass, so a sheet is the unit of style consistency, and the
 icons that must match are the ones that share a screen.
@@ -865,7 +866,7 @@ ABSOLUTELY NO TEXT of any kind.
 **15 pieces, 4 × 4 at 256 px. `assets/UI_Gen/sheet_widgets.png`.**
 
 The small chrome. **Cell 1 is the single most important asset in this whole file** —
-it is the tile frame every one of the 105 glyphs is drawn inside, and it is what the
+it is the tile frame every one of the 103 glyphs is drawn inside, and it is what the
 reference image shows.
 
 | cell | id | notes |

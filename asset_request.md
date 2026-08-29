@@ -262,7 +262,7 @@ being replaced works today.
 
 > ## ✅ [asset] GENERATED AND SLICED, 2026-08-30 — **130 pieces, 0 flagged. NOT WIRED.**
 >
-> All 14 sheets came back and all 14 are cut. `assets/UI_Gen/sliced/` holds **105 icons at
+> All 14 sheets came back and all 14 are cut. `assets/UI_Gen/sliced/` holds **103 icons at
 > 100×100 RGBA** (plus 256 px masters), **22 chrome pieces**, and a checkerboard contact
 > sheet per sheet in `sliced/review/`. Masters are committed; `sliced/` is derived and
 > gitignored — regenerate with `tools/slice_ui_sheets.py` on the venv python (§2 paths).
@@ -305,7 +305,7 @@ being replaced works today.
 >
 > **[asset] BATCHED INTO 14 GEMINI PROMPTS — see [ART_PROMPT.md](ART_PROMPT.md), 2026-08-30.**
 > The owner is generating the set with Gemini at 1024×1024 and we slice it here. Seven icon
-> sheets at 4×4/256 px (**105 glyphs**, which covers your 38 missing, the 5 stand-ins, all 20
+> sheets at 4×4/256 px (**103 glyphs**, which covers your 38 missing, the 5 stand-ins, all 20
 > existing and the ~25 upcoming), five full-canvas panel/banner pieces, two widget sheets.
 > Counts were re-derived off `techs.json`, `Formation.SHAPES`, `SimUnit.Stance` and
 > `units.json` rather than off this entry; they agree.
