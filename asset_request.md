@@ -28,17 +28,18 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
-**Re-derived 2026-08-29 (second pass), and P7 is new.** Phase 4 closed the same day
-(4.10 abilities, 4.12 stances, 4.14 formations), which moves **Phase 5 — buildings** to
-the front of the queue and makes **A.10, the building roster age by age**, the thing the
-next phase actually waits on. That is already running in the background below, and this
-is the note saying it stopped being background work: **5.7 is 23 buildings and its own
-line says "low code effort, ~70 bakes behind it".** P7 is queued ahead of P5 and P6 by
-importance and behind A.10 by urgency.
+**Re-derived 2026-08-29 (third pass), and P8 is new.** Three code phases closed that day —
+phase 4 (abilities, stances, formations), 2.4d Archipelago, and **9.3/9.4 the tech tree** —
+and the shape of the queue did not change with any of them: **A.10, the building roster age
+by age, is still the only art job the next code phase actually waits on**, because 5.7 is 23
+buildings and its own line says "low code effort, ~70 bakes behind it". P7 is queued ahead of
+P5, P6 and P8 by importance and behind A.10 by urgency. **P8 is the newest and the least
+urgent of the four** — it was filed as backlog by the owner in the same breath as the
+feature it belongs to.
 
 **Running in the background and not in this queue:** **A.10, the building roster age by
-age**, which paces phase **5.7** and every age skin phase **9** will need. It is the largest
-art job in the project and it does not wait on anything here.
+age**, which paces phase **5.7** and every age skin **9.6** will need. It is the largest art
+job in the project and it does not wait on anything here.
 
 **What is NOT wanted, so it does not get baked on spec:** terrain transition and shoreline
 edges. Those were an open art item (A.1) until 2026-08-23 and are now **generated at load

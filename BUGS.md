@@ -297,21 +297,27 @@ faults that looked like one**, which is why the morning's re-bake appeared to fi
       (two positions in, one octant out) — but the next system that wants to turn a unit
       must clear the same bar, and "it looked right on my screen" is not that bar.
 
-- [ ] **The scout is turned correctly and DRAWN backwards — the atlases are MIRRORED, and
-      this is the art side's.** The sim is right: eight cavalry in a ring around a house
-      are every one of them facing it, and `preview_work_facing` prints the numbers. The
-      picture disagrees because the stored directions are reflected — **front and back are
-      right, left and right are swapped.** A reflection is not a rotation, so no
-      `yaw_offset_deg` was ever going to fix it, and the half-turn added on 2026-08-25 only
-      moved the mirror's axis from E–W (*"faces backwards"*) to N–S (*"left and right
-      swapped"*). PLAN.md §13.2 item 10 and `asset_request.md` [P0] carry the algebra.
+- [x] **The scout was turned correctly and DRAWN backwards — the atlases were MIRRORED.**
+      ✅ **FIXED on the art side and CONFIRMED BY MEASUREMENT 2026-08-29.** The pipeline fix
+      was `isobake e6fc052`, which negated the compass step in `directions.py:yaw_deg()` —
+      the render swept the opposite way to the labels it wrote — and 242 atlases were
+      re-baked with it (`asset_request.md`'s Delivered log, [P0]).
 
-      **The standing hazard, and it is the expensive lesson here:** the agreed check was
-      *"column 0 must show a face and column 4 a back"* — **and those are exactly the two
-      columns a mirror about N–S leaves alone.** A verification blind to the fault it is
-      meant to catch will pass forever. Any facing check from now on reads columns **2 and
-      6** as well, and `preview_work_facing` exists so the geometry is stated by the scene
-      rather than judged by eye.
+      **How it was confirmed rather than assumed**, since this bug survived two rounds of
+      being declared fixed: `preview_work_facing` puts eight cavalry in a ring around a
+      house and reports all eight turned at it, and `workfacing_siege.png` was then read at
+      the two columns that matter. The rider WEST of the house looks right; the rider EAST
+      of it looks left. **Both are looking at the house**, which a mirror about N–S makes
+      impossible — it is the one thing that swaps exactly those two.
+
+      ⚠️ **THE STANDING HAZARD OUTLIVES THE BUG, and it is the expensive lesson here:** the
+      agreed check was *"column 0 must show a face and column 4 a back"* — **and those are
+      exactly the two columns a mirror about N–S leaves alone.** A verification blind to the
+      fault it is meant to catch will pass forever, and this one passed twice while a
+      242-atlas re-bake was spent on the wrong diagnosis. **Any facing check reads columns
+      2 and 6 as well.** `test_wall_facing` is the automated half (it measures the staged
+      pixels and fails a rebake that turns a wall); `preview_work_facing` is the half that
+      needs an eye, and it states the geometry rather than leaving it to be judged.
 
 ### Balance — the top of the list
 
@@ -417,19 +423,14 @@ faults that looked like one**, which is why the morning's re-bake appeared to fi
       disconnected, wiped out. Cosmetic, but it tells the winner something untrue about how
       they won.
 
-- [ ] **Every unit faces the wrong way — art side, and there is no game-side half.**
-      isobake's zeroad adapter turns every subject 180° from the direction the atlas labels
-      it; 81 of 171 recipes cancel it and the rest do not. **A game-side compensation was
-      built and reverted inside a day, on the owner's word both times** — the second time
-      with a screenshot: *"undo the reverse changes… i dont want to waist any more time on
-      patching a known root cause."* Nothing in `game/` compensates, so nothing has to be
-      un-applied when the bakes land.
-
-      Kept because it makes the recipe fix a one-liner: the `unit.knight` chart is 180° out
-      **uniformly across idle, walk and attack**, so rider and horse turn together and no
-      clip needs its own treatment. The sim is not implicated — `CombatSystem` sets `facing`
-      toward the target on every swing. Full request and the 36-recipe list are
-      `asset_request.md` [P2]; tracked as PLAN.md §13.2 item 10.
+*A second facing entry lived here until 2026-08-29 — "every unit faces the wrong way, and
+there is no game-side half" — describing the same defect as the Facing section above from
+the 180°-rotation diagnosis that turned out to be wrong. It is deleted rather than closed:
+it was one bug reported twice, it is fixed, and the two things worth keeping from it are
+already elsewhere. **The owner's rule about patching art defects in the game** is in
+`AGENT_GAME_CODER.md`'s gotcha table (`"i dont want to waist any more time on patching a
+known root cause"`, built and reverted inside a day, both times on their word). **The
+diagnosis lesson** is the standing hazard under the Facing section.*
 
 - [ ] **No wall corner piece**, and 0 A.D. has none either — it puts a `wall_tower` at
       every corner, which is art we already have (`building.guard_tower` is baked from

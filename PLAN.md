@@ -1548,7 +1548,7 @@ below does not move.
 |---|---|---|
 | top-left | **Chat** (8.6) | **Wireframe.** The player tabs are the real players with their real colours off the snapshot, so the row is the right width; the messages are samples and the page says so. SEND and CLEAR are **disabled** — a wireframe whose buttons worked *locally* would be worse than one whose buttons do not, because a message appearing on your own screen and nowhere else is a bug report waiting to happen. **The real thing** is a reliable RPC pair on `Net` rebroadcast by the host (the `_recv_command` trick that makes `ResignCommand` unforgeable), **not** a `Command` — chat changes no sim state, so putting it through the tick would give it a 100 ms floor and put text in `state_hash()`. What is actually open is a design question: all-players or per-team |
 | top-right | **Market** (8.7) | **Working.** Below |
-| bottom-left | **Tech tree** (9.4) | **Wireframe, and a real renderer with no data.** It walks `GameDataRegistry.tech_ids()` and lays each tech out in its age's column with its prerequisites named, so the day 9.3 fills `techs.json` in this page fills in with it. `techs.json` is deliberately empty, so today it draws a placeholder lattice and says which it is. **Read-only by design, not by shortcut**: researching happens at the building that offers it, the way training does, so there is nothing to press and no command behind it. Two states only — reached ages lit, later ages locked. `RESEARCHED` is in the legend and never assigned, because `SimPlayer` has no researched-tech field and a field the HUD reads that nothing writes is exactly the hole 4.11's population counter was |
+| bottom-left | **Tech tree** (9.4) | **Working since 2026-08-29**, and it filled itself in: the renderer was written a phase ahead of the data, so 9.3 declaring 27 technologies was the whole of what this page needed. Four age columns scrolling both ways, each node naming its technology, **the building that sells it** and its prerequisite — which is what makes it the owner's *"visual guide letting you know what buildings hold what upgrades"* rather than a list of names. **Read-only by design, not by shortcut**: researching happens at the building that offers it, the way training does, so there is nothing to press and no command behind it — and therefore nothing this page can disagree with the server about. All three states are real now; `RESEARCHED` was in the legend and never assigned for as long as `SimPlayer.researched` was a field the HUD read and nothing wrote, which is the hole 4.11's population counter was in. The placeholder lattice survives for an EMPTY `techs.json` only, so an age with no technologies of its own draws nothing rather than promising four |
 | bottom-right | **Settings** (8.5) | The pause menu, moved here |
 
 ##### 8.7 The market
@@ -1629,7 +1629,7 @@ Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 | 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
 | 12.1b | LAN discovery and reconnect. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
-| 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played.<br><br>**The spec now exists: `AI_Player_difficulty.md`**, committed 2026-08-23. It is the owner's, and it settles what each tier does rather than leaving it to be invented later — five tiers, separated along four axes that are all data or existing systems rather than new cleverness: **when it attacks** (never / 10 min / 7 min / once its economy is up), **how far it ages up** (2 / 2 / 3 / 4 / 4), **how many towers it may build** (0 / 1 / 5 / unlimited + castles), and **what it starts with** (Unfair opens with 8 villagers, 2 swordsmen and a scout).<br><br>Two things to know before building it. **It is partly gated on phase 9:** every tier from Easy up says "can use tech tree upgrades", and `TechSystem` does not exist — so those tiers are implementable *minus* their tech behaviour, and the age caps are the part that works today. And **Passive is already real**, so the spec's cheapest win is `Normal`, which differs from the shipped Easy only in an attack timer, an age cap and a tower count | |
+| 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played.<br><br>**The spec now exists: `AI_Player_difficulty.md`**, committed 2026-08-23. It is the owner's, and it settles what each tier does rather than leaving it to be invented later — five tiers, separated along four axes that are all data or existing systems rather than new cleverness: **when it attacks** (never / 10 min / 7 min / once its economy is up), **how far it ages up** (2 / 2 / 3 / 4 / 4), **how many towers it may build** (0 / 1 / 5 / unlimited + castles), and **what it starts with** (Unfair opens with 8 villagers, 2 swordsmen and a scout).<br><br>Two things to know before building it. **The phase-9 gate LIFTED on 2026-08-29:** every tier from Easy up says "can use tech tree upgrades", and 9.3 built them — 27 technologies and a `ResearchCommand` waiting to be emitted. So a tier's tech behaviour is now a rule to write rather than a system to build, and ⚠️ **the first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching. And **Passive is already real**, so the spec's cheapest win is `Normal`, which differs from the shipped Easy only in an attack timer, an age cap and a tower count | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 | |
 | 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
 
@@ -2014,7 +2014,7 @@ nothing in the logs marking where. **Do not touch `isobake/` while a batch is in
 | 7b | **Villager `work_mine` dress distortion** — a dress vertex weighted 100% to `hand_L` drags a fold when the mining pose diverges from the citizen's native ones. Fix is re-weighting or clamping the vertex group at import. Cosmetic, accepted, batched with the post-MVP art pass | post-MVP art pass |
 | 9 | ⏸️ **Villager height, DEFERRED by the owner 2026-08-08.** She measures 2.178 m — taller than a stag, the wrong way round — and the fix is one line (`height_m` on the recipe) plus a 960-frame rebake. A `height_m = 1.93` attempt was reverted: the existing bake is confirmed good on device and a working pre-MVP asset is not worth disturbing. **The rebake becomes free** when §9.2.1's re-point to the Briton actor forces one anyway | polish |
 | 4b | ✅ **CLOSED with 4.8 (2026-08-27): they are ONE concept, and both halves are now spoken for.** The question was whether `act_enter`/`act_garrison` and `act_exit`/`act_leave` are two distinct actions (board a transport vs garrison a building) or one with spare art. One. Garrison uses `act_garrison` for the building's action slot and `act_exit` for the roster's Empty button; the gate already borrowed `act_enter`/`act_exit` for its two states in 5.8. **`act_leave` is the only one of the four still unused and it stays as the spare** rather than being reclaimed — `unit.transport_ship` is in the roster and boarding one is the obvious second consumer. Nothing to bake, nothing to delete |
-| 10 | ⏸️ **ROOT-CAUSED IN ISOBAKE'S SOURCE, 2026-08-27: `directions.py` documents `ORDER_8` as clockwise from screen-down and then turns the subject by `index * 45°` about +Z, which is counter-clockwise.** One sign in the shared render path, so **the render walks the compass the opposite way to the labels it writes** and every `directions.stored = 8` atlas ever produced is reversed. **No recipe changes at all:** index 0 is a fixed point of the sign flip, so the `yaw_offset_deg = 180.0` added on 2026-08-25 is *half the correction* and must stay — removing it would put every unit back to showing its back, which is what the game side's first request wrongly asked for. **Scope is 171 of the 331 staged atlases, not the 82 + 160 units:** walls, gates, wall foundations and rubble are all `stored = 8` and all reversed. They passed `preview_walls` because the swap is invisible on that art rather than absent — each swapped pair has the same silhouette (W↔E both 64×336; SW↔SE both 336×300 and 40% different when one is flipped against 76% as-is), so exchanging them changes which face of the palisade is lit, never the direction it lies. The 71 `stored = 5` atlases (trees, mines, props) are swept wrong too and have no front, so nothing shows. Re-run `preview_walls` after the re-bake to confirm the change is the harmless one. *The re-diagnosis that led here, kept because the measurement is how it was found:* **THE ATLASES ARE MIRRORED, NOT ROTATED.** Closed on the morning of 2026-08-27 and re-opened that afternoon when the owner played the new build: *"Villager mining away from gold, scout attacking away from building."* **`preview_facing_chart` on `unit.knight` now shows column 0 a face and column 4 a back — and column 2, labelled W, drawing a horse that faces screen RIGHT.** Front and back right, left and right swapped, which is a REFLECTION about the N–S axis. **No `yaw_offset_deg` can undo a reflection**, so the whole campaign was aimed at the wrong kind of error; the half-turn merely moved the mirror from the E–W axis (which reads as "faces backwards") to the N–S axis (which reads as "left and right swapped"). The pre-re-bake chart from 2026-08-23 is still on disk and confirms it: old `scout_cavalry` column 2 drew a *correct* W while column 0 drew a back. **It cannot be fixed game-side either, and that was checked rather than assumed:** the one-character change to `Iso.sim_facing_to_sprite` (`posmod(7 - facing, 8)` → `posmod(facing + 1, 8)`) fixes every unit and **breaks the walls, because the wall atlases are NOT mirrored** — `preview_walls` renders both axes lying correctly along their footprints, which is precisely the check a mirror fails. Two atlas families that disagree with each other can only be reconciled per-atlas, and per-atlas is `directions_reversed` in `visuals.json`, built and reverted on the owner's instruction. So it goes back to the art side with a specification instead of a guess: **emit the 8 directions in the same rotational sense the wall bakes already use, and take the 180 back off in the same edit.** `asset_request.md` [P0] carries the algebra and the new verification (columns 2 and 6 as well as 0 and 4 — the old check was blind to a mirror by construction). *What follows is the record of the delivery that was made against the wrong specification:* The art side did **82 recipes rather than the 36 asked for** (`5737e00`, corrected by `96d2318`; the seven `terrain` recipes deliberately excluded, `terrain_cliff` included since it is a zeroad recipe despite the name) and re-baked **242 atlases** — 82 base plus 160 colour — on a dedicated render box, four-wide with a per-slot art checkout so the parallel-slot race that made anything above `-Parallel 1` unsafe for colour variants is fixed rather than avoided. The game side staged all 242 (331/331 now current), re-imported, and charted `unit.swordsman` and `unit.knight`: **column 0 (S) draws a face, column 4 (N) a back, and `idle`/`walk`/`attack` agree.** `preview_combat_facing` shows the ring of attackers facing inward. **Nothing in `game/` changed** — no flag to remove, nothing to keep in step, which is exactly what taking the compensation out bought. The same run repaired the stale colour bakes (see A.8). *What follows is the original entry, kept because the reasoning is why there was no game-side half:* isobake's zeroad adapter turns every subject 180° from the direction the atlas labels it; 81 of 171 recipes cancel it and the rest — every unit, ship, animal, siege engine, and the wall foundations and rubble — are baked backwards, which is why an archer shoots over her own shoulder. **A game-side compensation was built and reverted inside a day** (2026-08-22 → 23): `directions_reversed` in `visuals.json` set a half-turn offset per atlas, it fixed idle and walk, and the owner still saw an attacking unit facing wrong — *"undo the reverse changes… i dont want to waist any more time on patching a known root cause."* Reverted commit-for-commit; nothing in `game/` compensates and nothing has to be un-applied when the bakes land, which is the whole gain. What the exercise did establish is worth keeping: the `unit.knight` chart is 180° out **uniformly across idle, walk and attack**, so rider and horse turn together and one recipe line per actor covers the attack clip too. The request, the 36-recipe list and the verification plan are in `asset_request.md`; `preview_facing_chart` now takes `-- --units …` so any actor can be charted without editing it. Waits on the owner's heavy rig (i9 / 64 GB / NVMe, ~12 Blenders in parallel) | art side; before A.8 colour bakes |
+| 10 | ✅ **CLOSED 2026-08-29 — THE ATLASES WERE MIRRORED, NOT ROTATED, and it took two deliveries and a wrong specification to find that out.** Root cause was one sign in isobake's shared render path: `directions.py` documents `ORDER_8` as clockwise from screen-down and then turned the subject by `index * 45°` about +Z, which is counter-clockwise — **so the render walked the compass the opposite way to the labels it wrote**, and every `directions.stored = 8` atlas ever produced was reversed. Fixed in the pipeline as `isobake e6fc052`, with **no recipe changes at all**. *Four things survive the bug and are why this row is kept:* **(1) `yaw_offset_deg = 180.0` MUST STAY.** Index 0 is a fixed point of the sign flip, so the half-turn added on 2026-08-25 is *half* the correction; removing it puts every unit back to showing its back, which is what the game side's first request wrongly asked for. **(2) THE VERIFICATION WAS BLIND TO THE FAULT BY CONSTRUCTION.** The agreed check was "column 0 draws a face, column 4 a back" — and those are exactly the two columns a mirror about N–S leaves alone. It passed twice, and 242 atlases were re-baked against a `yaw_offset_deg` theory that could never have worked, because **no rotation undoes a reflection.** Any facing check reads columns **2 and 6** as well. `test_wall_facing` is the automated half; `preview_work_facing` is the half that wants an eye, and BUGS.md records how the close was confirmed — the riders east and west of a house both look at it, which a N–S mirror makes impossible. **(3) SCOPE WAS 171 ATLASES, NOT THE 82 UNITS.** Walls, gates, wall foundations and rubble are `stored = 8` and were reversed too. They passed `preview_walls` because the swap is *invisible on that art* rather than absent — each swapped pair has the same silhouette — so a green check on symmetric art says nothing about asymmetric art. **(4) NOTHING IN `game/` COMPENSATES, and that is the owner's standing rule.** A `directions_reversed` flag in `visuals.json` was built and reverted inside a day, twice: *"undo the reverse changes… i dont want to waist any more time on patching a known root cause."* A corrected bake was correct the moment it was staged, with no flag to remove and nothing to keep in step | ✅ done |
 
 **Retired open items**, kept as one-liners because they were expensive to answer: the render
 pipeline produces usable sprites (0.9); actor→entity mapping is complete for all 23 buildings, 22
@@ -2109,14 +2109,14 @@ problem rather than a UI one: the HUD's left edge had exactly 40 px of unspent h
 the control-group stack and the selection panel's own ceiling, so the button's size was
 decided by arithmetic rather than chosen. The gesture and right-click both stay.*
 
-*Nothing on the numbered list moved on 2026-08-29 either, and again a great deal else did:
-**PHASE 4 CLOSED**. 4.10 abilities, 4.12 stances and 4.14 formations all shipped, on the project
-owner's instruction to "close out the open steps" — see the Phase 4 table for each. The three had
-sat open since 4.3 as UI placeholders, which turned out to be the reason they were cheap: the
-formations menu had named its four shapes for months, and 4.12 was a decision `CombatSystem`'s
-header had already written down twice. **The dragon went to the art side the same day**
-(`asset_request.md` [P7]) — it has exactly one clip, `static`, so it is a statue, and PLAN.md 13
-cannot start until that changes.*
+*2026-08-29 moved a great deal and moved it OUT OF ORDER, which is the honest way to record
+it. **PHASE 4 CLOSED** — 4.10 abilities, 4.12 stances and 4.14 formations, on the owner's
+instruction to "close out the open steps". All three had sat open since 4.3 as UI placeholders,
+which turned out to be why they were cheap: the formations menu had named its four shapes for
+months, and 4.12 was a decision `CombatSystem`'s header had written down twice. **The dragon went
+to the art side the same day** (`asset_request.md` [P7]) — one clip, `static`, so PLAN.md 13
+cannot start until that changes. **Then item 2 below shipped ahead of item 1**, on a second
+instruction the same day: the tech tree is wired (9.3 + 9.4) while Phase 5 is still open.*
 
 **1. PHASE 5, BUILDINGS — up next, the owner's call on 2026-08-29.** Two rows are open and they
 are very different jobs. **5.7, the full roster**, is 23 buildings and its own line has said "low
@@ -2177,38 +2177,42 @@ once the RTS is a game.
 
 ### What is waiting on art, not on code
 
-*Refreshed 2026-08-28, and it got much shorter: four of the five items below had landed since
-this list was written and nobody had crossed them off, so the list read as a wall of blockers
-when only one thing was actually blocked. **Everything the code side is waiting for now fits in
-two lines**, and neither of them stops the next feature.*
+*Swept again 2026-08-29 and it is now the SHORT version of `asset_request.md`, which is the
+authoritative queue — a second full list is a second thing to keep in step, and it did not
+get kept: the six delivered items that used to be spelled out here at length were all crossed
+off on 2026-08-28 and none of them said so. They are one line each below.*
 
-- ~~**`vis.wolf` and five siblings need walk clips**~~ (§12A A.4a) — **DELIVERED 2026-08-28.**
-  All six species carry `walk`, plus `attack` on the three that bite, `run` on the deer and
-  `feeding` on the cattle. Nothing slides.
-- ~~**Four carcass bakes**~~ (§12A A.4b) — **DELIVERED 2026-08-28.** All six are baked and
-  declared; every animal dies as itself.
-- ~~**The 36-recipe `yaw_offset_deg` re-bake**~~ (§13.2 item 10) — **DELIVERED AND STAGED
-  2026-08-27.** The art side did 82 recipes rather than the 36 asked for, re-baked 242 atlases
-  (82 base + 160 colour), and the game side staged all 242 and re-imported. Verified with
-  `preview_facing_chart` on `unit.swordsman` and `unit.knight`: column 0 (S) draws a face,
-  column 4 (N) a back, and `idle`/`walk`/`attack` agree. **Nothing in `game/` changed**, which
-  was the whole point of reverting the compensation — a corrected bake is correct the moment
-  it is staged.
-- ~~**A replacement for `vis.tree_teak`**, ideally a palm for riverbanks and Archipelago~~ —
-  **DELIVERED 2026-08-28, twelve species rather than one.** Wired through `variant_pools`, so
-  Forest gets beech/birch/fir/oak, Island and River get the five palms, and Desert gets the two
-  dead trees. **One was rejected on the same grounds the teak was:** `vis.tree_banyan` — the
-  owner tested it in a live grove with villagers and confirmed the tap problem, so it is
-  excluded and stays staged.
-- ~~**`vis.deer` and `vis.deer_carcass` are distorted per direction**~~ (§12A A.4a) — **FIXED
-  AND STAGED 2026-08-28**, hours after it was filed. 24 px wide head-on now, against 52.
-- **Player colour for the two packed siege actors** ([P6], filed 2026-08-28 with 4.13) — a blue
-  player's onager turns plain while it is rolling and blue again when it sets down, because the
-  deployed actors carry 8 colour atlases each and their packed twins carry none. 16 bakes, and
-  the only thing 4.13 left behind.
-- **Ten estimated `footprint_m` figures** — five animals and five carcasses, up from five,
-  because a carcass cannot be measured by the usual inversion at all (§12A A.4b). Low priority;
-  they feed the selection ring and the occlusion band, not gameplay.
+**Delivered, and every one of them wired:** the six wildlife walk clips and their `attack`,
+`run` and `feeding` companions (A.4a); six carcasses, so every animal dies as itself; the
+`vis.tree_teak` replacement, which came back as **twelve species** wired through
+`variant_pools` (`vis.tree_banyan` was rejected on the teak's own grounds — the owner tested
+it in a live grove and confirmed the tap problem); the deer's per-direction distortion; the
+arrow and bolt pitch; and the packed siege actors. All 2026-08-28. **Nothing in `game/`
+changed for any of them** — a corrected bake is correct the moment it is staged, which is the
+whole point of never compensating for a bake defect in the game.
+
+**~~The facing re-bake~~ (§13.2 item 10) — CLOSED 2026-08-29, and it took two goes and a
+wrong diagnosis.** The first delivery (2026-08-27) re-baked 242 atlases against a
+`yaw_offset_deg` specification that was **wrong**: the atlases were never 180° out, they were
+MIRRORED, and a half-turn only moved the mirror's axis. The pipeline fix was `isobake
+e6fc052`; the confirmation is in BUGS.md, and so is the lesson — **the agreed check read
+columns 0 and 4, which are exactly the two a mirror about N–S leaves alone.** It passed
+twice while the bug was there.
+
+Still outstanding, in `asset_request.md`'s own priority order:
+
+- **[P7] `vis.dragon` cannot move** — one clip, `static`. **The only art gap that blocks a
+  phase**: 13.x is unstartable while the unit is a statue. It trains, fights and breathes
+  fire today, so nothing is blocked now.
+- **A.10, the building roster age by age** — running in the background rather than queued.
+  It paces **5.7** (23 buildings, ~70 bakes) and every age skin **9.6** will want.
+- **[P8] 27 technology icons** — backlog by the owner's instruction, filed with 9.3. Every
+  research tile draws its name; the wiring when they land is data, not code.
+- **[P5] Ten estimated `footprint_m` figures** — five animals and five carcasses, because a
+  carcass cannot be measured by the usual inversion at all (§12A A.4b). They feed the
+  selection ring and the occlusion band, not gameplay.
+- **[P6] Player colour on two packed siege actors** — a blue player's onager turns plain while
+  it is rolling. 16 bakes, and the only thing 4.13 left behind.
 
 ### Known gaps worth writing down rather than filing
 

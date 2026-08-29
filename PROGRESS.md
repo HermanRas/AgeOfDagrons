@@ -7,10 +7,10 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-29.** Suite: **1680 tests, 208,317 assertions, 0 failures** — measured,
-not quoted. **361 atlases staged.** Android build: 320.6 MB **as of 2026-08-27 and
-certainly stale** — two art deliveries and a phase have landed since and nobody has
-rebuilt. Re-measure before quoting it.
+**Updated 2026-08-29**, tagged **v1.5**. Suite: **1680 tests, 208,317 assertions, 0
+failures** — measured, not quoted. **361 atlases staged.** Android build: 320.6 MB **as of
+2026-08-27 and certainly stale** — two art deliveries and three phases have landed since and
+nobody has rebuilt. Re-measure before quoting it.
 
 ⚠️ **`test_tick_cost` is the one thing in this suite that can fail for reasons that are
 not the code.** It reported an 8-player tick at 49.81 ms against its budget on a loaded
@@ -21,9 +21,11 @@ took 350 s against the previous one's 594 s. Re-run it alone before believing it
 
 ## The one-line answer
 
-**The MVP is achieved and the game is played on a phone.** Five phases are finished
-outright, seven are one or two items short, and **one has not been started: 13
-(dragons)**. Nothing is blocked on a decision; **13 is blocked on art**.
+**The MVP is achieved and the game is played on a phone.** Of the fifteen phases, **four
+are finished outright** (4 units, 6 resources, 7 the resource HUD, 10 control groups),
+**seven are one or two items short**, **two are substantially built** (5 buildings, 12
+multiplayer/AI), and **two have not been started**: 13 dragons, which is **blocked on art**,
+and 14, which is a declared ceiling rather than a phase. Nothing is blocked on a decision.
 
 **Three things closed on 2026-08-27, all of which this line used to name as next:** the
 unit-speed pass (2026-08-23, owner-confirmed *"sound and speed is much better"*), the whole
@@ -87,7 +89,7 @@ real work remains · ⛔ not started
 |---|---|---|---|
 | 0 | Foundation | 🟢 | **0.3 `AssetPacks`** — manifest, download, verify, mount, plus a download screen |
 | 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet |
-| 2 | Map | 🟢 | **2.4c save map**; **2.4d Archipelago** (new, specified) |
+| 2 | Map | 🟢 | **2.4c save map**, and nothing else — 2.4d Archipelago closed 2026-08-29 |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
 | 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |
 | 5 | Buildings | 🟡 | **UP NEXT.** **5.7 more buildings — art-paced, not code-paced** (23 buildings, ~70 bakes; art side's A.10). **5.3 upgrades is the code half and is half-built**: `upgrades_to` + `UpgradeBuildingCommand` + `convert_building` all ship the wall→gate upgrade. Missing is a COST and a TIME for a non-gate upgrade — and nothing else, since **9.3 answered the third question**: an upgrade is the per-building mechanism and a technology is the player-wide one, so they stay two things. The queue 9.3 taught to hold a research is where the time goes |
@@ -110,37 +112,42 @@ rate-limited and incremental, and a clean checkout runs silently by design.
 
 ## What is actually next
 
-*The two items that used to head this list are both closed. **The unit-speed pass** was
-done 2026-08-23 and the owner confirmed it on 2026-08-27 — *"sound and speed is much
-better"*. **4.8 garrison** was done 2026-08-27, and it did not close the wall hole it was
-billed as closing: the owner ruled walls out of garrison, so 0 A.D.'s eight turret points
-per medium wall stay unused by decision rather than by omission.*
+*Swept 2026-08-29. **Everything this list held has shipped** — the unit-speed pass, 4.8
+garrison, 8.8's [X] button, 2.4d Archipelago and 9.3/9.4 the tech tree — so the whole list
+was replaced rather than ticked off. `PLAN.md` §15 is the authoritative version of this and
+carries the reasoning; what follows is its first three lines.*
 
-**1. 2.4d Archipelago.** One island per player, a few sheep, nothing hostile. Specified in
-`PLAN.md` §11.6, including the one hard part: `MapValidator` requires every start to reach
-every other **by land**, which an archipelago fails by definition, so that claim has to
-change rather than relax.
+**1. Phase 5, buildings** — the owner's call, and two very different jobs. **5.7, the full
+roster**, is 23 buildings and ~70 bakes: art-paced, waiting on A.10. **5.3, upgrades**, is
+the code half and is half-built — it needs a cost and a time for a non-gate upgrade, and
+nothing else now that 9.3 has settled that an upgrade and a technology are two mechanisms.
 
-*~~2. 8.8, the [X] button.~~ Built 2026-08-28 — `ClearSelectionButton`, 40 px, which is the
-exact height left between the control-group stack and the selection panel's ceiling.*
+**2. The AI has no rule that researches.** `techs: true` has been declared in every
+`ai_profile` since 12.2b against nothing, and 9.3 did not change that — it made it matter.
+Note that the first rule that researches invalidates every row of BUGS.md's ladder table.
 
-**2. 9.3 `TechSystem`.** The biggest genuinely unstarted phase, and it moved up because
-ages now cost resources — which makes the tech tree what the age ladder is *for*.
+**3. Then, in no forced order:** 2.4c the map save format, 12.1b LAN discovery, 12.3
+campaign, phase 14's AI enemy-blindness, and 13.x dragons once the art lands.
 
 ---
 
 ## Blocked on art, not on code
 
-Ordered by how visible the gap is in play. All in `asset_request.md`.
+`asset_request.md` is the authoritative queue and its own priority table is derived from
+this file — so this is the short version, not a second list to keep in step.
+
+**Swept 2026-08-29.** Four of the five rows this table used to hold had been delivered on
+2026-08-28 and none had been crossed off — the wildlife animations, the six carcasses, the
+palm that replaced `vis.tree_teak`, and the mirrored-atlas fix that the `yaw_offset_deg` row
+was really about. It read as a wall of blockers when one thing was blocked.
 
 | Priority | Item | Why it matters now |
 |---|---|---|
-| **1** | **Animate the wildlife** (A.4a) | **Six species move and every one slides.** Phase 6 closed with wolves, boar, bears, deer, sheep and cattle all walking, and every fauna atlas is a single static rest pose. The most visible defect in the game |
-| **2** | 36-recipe `yaw_offset_deg` re-bake (§13.2 item 10) | Every unit faces backwards. A game-side patch was built and reverted on the owner's word — this is the root fix |
-| **3** | Five carcass bakes | Five defs draw `vis.deer_carcass`; a dead bear looks like a dead deer |
-| **4** | A `vis.tree_teak` replacement, ideally a palm | Pulled from the forest rotation for being unselectable. Also wanted for Archipelago |
-| **5** | Building roster by age (A.10) | Paces phase 5.7 and phase 9's age skins |
-| — | Five estimated `footprint_m` figures | Confirm with `isobake inspect`. Affects the selection ring and outline band, not gameplay |
+| **P7** | **`vis.dragon` cannot move** — it has one clip, `static` | **The only art gap that blocks a whole phase.** PLAN.md 13 is unstartable while the dragon is a statue. Nothing is blocked today: it trains, fights and breathes fire |
+| **A.10** | Building roster by age | Paces **5.7** (23 buildings, ~70 bakes) and phase 9.6's age skins. Running in the background on the art side and not in the request queue |
+| **P8** | 27 technology icons | Backlog by the owner's instruction. Every research tile draws its name instead; no code changes when they land |
+| **P5** | Ten estimated `footprint_m` figures — five animals and five carcasses | Confirm with `isobake inspect`. Affects the selection ring and outline band, not gameplay |
+| **P6** | Player colour on two packed siege actors | A blue player's onager turns plain while it is rolling. Cosmetic, and only while moving |
 
 ---
 
@@ -150,8 +157,10 @@ Committed as planning so the intent survives; none of it is built.
 
 - **`AI_Player_difficulty.md`** — the per-difficulty behaviour spec for **12.2b**. The
   difficulty *list* ships and the opponents behind it do not: Normal, Hard and Unfair are
-  all Easy wearing three names and the screen says so. Note the spec leans on tech-tree
-  upgrades, so it is **partly gated on phase 9**.
+  all Easy wearing three names and the screen says so. It used to be *"partly gated on phase
+  9"* because the spec leans on tech-tree upgrades; **that gate lifted on 2026-08-29** — the
+  technologies exist and `ResearchCommand` is there to be emitted. What is missing is a rule
+  that emits one.
 - **`UI_Design_Lobby.png`** — the hosting lobby, and it is ahead of the systems: it shows
   **faction** and **team** columns, a **game type** (Conquest / Regicide) and a **victory
   condition** picker, a map-size choice and in-lobby chat. One civilisation is a locked v1
