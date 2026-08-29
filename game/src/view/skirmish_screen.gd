@@ -262,7 +262,7 @@ func _build_join_row() -> Control:
 func _heading(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 28)
+	UiFont.title(label, 28)
 	label.add_theme_color_override("font_color", HudStyle.GOLD)
 	return label
 

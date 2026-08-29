@@ -113,7 +113,10 @@ func _init() -> void:
 		add_theme_stylebox_override(state, empty)
 
 	_numeral = Label.new()
-	_numeral.add_theme_font_size_override("font_size", 18)
+	# THE BEST FIT FOR CINZEL DECORATIVE IN THE WHOLE GAME, and it is not a
+	# coincidence: this label holds a Roman numeral, and Cinzel is drawn from Roman
+	# capitalis inscriptions. I, II, III, IV in a display face at 18 px.
+	UiFont.title(_numeral, 18)
 	_numeral.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_numeral.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_numeral.size = Vector2(SIZE, SIZE)

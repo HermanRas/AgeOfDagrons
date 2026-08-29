@@ -94,7 +94,9 @@ func _init() -> void:
 
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.add_theme_font_size_override("font_size", _TITLE_FONT_SIZE)
+	# HEAVY, and this is the one place in the game that asks for it: the verdict at 40
+	# px is the largest and most final word a match ever prints.
+	UiFont.title(_title, _TITLE_FONT_SIZE, true)
 	_title.add_theme_color_override("font_color", HudStyle.GOLD)
 	column.add_child(_title)
 

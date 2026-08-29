@@ -188,7 +188,7 @@ func _build_settings_overlay() -> CanvasLayer:
 
 	var title := Label.new()
 	title.text = "SOUND"
-	title.add_theme_font_size_override("font_size", 20)
+	UiFont.title(title, 20)
 	box.add_child(title)
 
 	_volume = VolumePanel.new(content_width)

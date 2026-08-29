@@ -102,7 +102,7 @@ func _init() -> void:
 
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
+	UiFont.title(_title, TITLE_FONT_SIZE)
 	_title.add_theme_color_override("font_color", HudStyle.GOLD)
 	column.add_child(_title)
 
