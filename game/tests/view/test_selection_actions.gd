@@ -873,3 +873,79 @@ func test_the_blacksmiths_full_ladder_still_fits_one_page() -> void:
 			_finished(&"building.blacksmith"), 1, [], 4)
 	assert_eq(SelectionActions.page_count(details.size()), 1)
 	assert_eq(details.size(), SelectionActions.MAX_DETAILS)
+
+# ── the [P8] icon set, 2026-08-30 ───────────────────────────────────────────
+#
+# THE ONE FAILURE THESE CATCH IS A FILENAME, and it is the failure this whole
+# mechanism is built to be blind to: `ActionSlot` prefers an icon file over a
+# label and falls back silently when `ResourceLoader.exists()` says no, which is
+# what let five stand-ins and twenty-seven missing techs ship looking finished.
+# A typo'd entry in `ICONS` does not error, does not warn and does not draw --
+# the tile just goes back to printing a word, and the only way to see it is to
+# open that building in that age.
+
+
+func test_every_icon_in_the_map_is_a_file_that_exists() -> void:
+	for key in SelectionActions.ICONS:
+		var path: String = "res://assets/ui/icons/%s" % SelectionActions.ICONS[key]
+		assert_true(ResourceLoader.exists(path),
+				"ICONS[%s] points at a file that is not there: %s" % [key, path])
+	assert_true(ResourceLoader.exists("res://assets/ui/icons/%s"
+			% SelectionActions.TECH_FALLBACK_ICON))
+	for value in SelectionActions.STANCE_ICONS:
+		var path: String = "res://assets/ui/icons/%s" % SelectionActions.STANCE_ICONS[value]
+		assert_true(ResourceLoader.exists(path),
+				"STANCE_ICONS[%d] points at a file that is not there: %s" % [value, path])
+
+
+func test_every_technology_has_an_icon_of_its_own() -> void:
+	# The fallback exists so a 28th tech draws a scroll rather than a paragraph, and
+	# this is what stops it becoming the answer for all of them.
+	for id in GameDataRegistry.tech_ids():
+		assert_true(SelectionActions.ICONS.has(id),
+				"no icon for technology %s -- it would draw the generic scroll" % id)
+
+
+func test_no_two_actions_share_one_icon_file() -> void:
+	# The five stand-ins of asset_request.md [P8] 2 were exactly this: harvest drew
+	# res_wood, repair and stance SHARED act_guard, upgrade and research SHARED
+	# hud_techtree. Sharing is legal and invisible, so it needs saying out loud when
+	# it is meant -- the gate pair below is the only place it still is.
+	var seen := {}
+	for key in SelectionActions.ICONS:
+		var file: String = SelectionActions.ICONS[key]
+		assert_false(seen.has(file),
+				"%s and %s both draw %s" % [seen.get(file, &""), key, file])
+		seen[file] = key
+
+
+func test_a_formation_tile_carries_both_the_diagram_and_the_word() -> void:
+	var details := SelectionActions.details_for(&"move", _militia_facts(), 1, [], 1, &"vee")
+	assert_eq(details.size(), 4)
+	for a in details:
+		assert_false(a.icon.is_empty(), "%s has no diagram" % a.id)
+		assert_true(a.captioned, "%s would draw a picture with no word on it" % a.id)
+	assert_true(_by_id(details, &"formation:vee").selected)
+
+
+func test_a_stance_tile_carries_both_the_glyph_and_the_word() -> void:
+	# Two of the four are shields and two are blades. Without the caption a player
+	# picking Stand Ground is choosing between two similar pictures at 52 px.
+	var facts := _militia_facts()
+	facts["stance"] = SimUnit.Stance.DEFENSIVE
+	var details := SelectionActions.details_for(&"stance", facts)
+	assert_eq(details.size(), 4)
+	for a in details:
+		assert_false(a.icon.is_empty(), "%s has no glyph" % a.id)
+		assert_true(a.captioned, "%s would draw a picture with no word on it" % a.id)
+
+
+func test_the_gate_pair_is_the_only_deliberate_sharing_left() -> void:
+	# enter/exit are the gate's two states AND a garrison's two directions, which is
+	# PLAN.md 13.2 item 4b answered rather than a compromise. They are separate keys
+	# pointing at separate files, so this is about the two CONSUMERS agreeing.
+	var locked := _finished(&"building.wall_stone_gate")
+	locked["gate_locked"] = true
+	var open_it := _by_id(SelectionActions.for_selection(locked, 1, true, [], 4), &"gate")
+	assert_eq(open_it.icon, SelectionActions.ICONS[&"exit"])
+	assert_eq(open_it.label, "Open Gate")

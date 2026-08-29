@@ -33,37 +33,110 @@ extends RefCounted
 const MAX_ACTIONS := 8
 const MAX_DETAILS := 12
 
-## Icon filenames in `res://assets/ui/icons/`. Four of these are deliberately
-## the NEAREST existing icon rather than art of their own, logged in
-## ASSET_MISSING.md 1.5 for a proper bake later:
-##   harvest -> res_wood.png    (a resource, not a gather verb)
-##   repair  -> act_guard.png   (protect, not mend)
-##   upgrade -> hud_techtree.png (the tech-tree HUD button)
-## Formations and the two page arrows have no near-enough icon at all and fall
-## back to their label, which for the arrows is the whole point -- "<" and ">"
-## read as navigation at 72 px in a way no icon in the pack does.
+## Icon filenames in `res://assets/ui/icons/`, keyed by whatever names the action --
+## a verb, a technology id, an `UnitDef.ability_id`.
+##
+## THE FIVE STAND-INS ARE GONE (asset_request.md [P8], 2026-08-30). Harvest drew
+## `res_wood.png`, a picture of wood rather than a gather verb; Repair and Stance
+## SHARED `act_guard.png`, a shield standing in for a hammer; Upgrade and Research
+## shared `hud_techtree.png`, the HUD button standing in for two different verbs. Each
+## has its own drawing now, and no two entries below point at one file. That is worth
+## saying explicitly, because five of the twelve entries this list used to have were
+## deliberate compromises and the next reader would otherwise have to work out which.
+##
+## A GATE STILL SHARES THE ENTER/EXIT PAIR, and that one is not a compromise: a gate
+## opening and a soldier walking out through a door are the same picture of the same
+## idea, which is the question PLAN.md 13.2 item 4b asks and this is the answer.
+##
+## THE TWO PAGE ARROWS STILL HAVE NO ENTRY, deliberately, and `arrow_left`/`arrow_right`
+## in `chrome/` are not them. "<" and ">" read as navigation at 72 px in a way a gold
+## triangle in the same style as every other tile does not -- it would read as a verb.
+## The chrome arrows are for scrollbars and dropdowns.
 const ICONS := {
 	&"move": "act_move.png",
 	&"stop": "act_stop.png",
 	&"attack": "act_attack.png",
 	&"build": "act_build.png",
-	&"harvest": "res_wood.png",
-	&"repair": "act_guard.png",
-	# STANCE SHARES REPAIR'S ICON and is the better claim on it: `act_guard.png` is a
-	# shield, which is a picture of "hold this ground" and only ever stood in for "mend
-	# this". Sharing one file is what the three entries above already do, and nothing
-	# reads an icon path to decide what an action means.
-	&"stance": "act_guard.png",
-	&"upgrade": "hud_techtree.png",
+	&"harvest": "act_harvest.png",
+	&"repair": "act_repair.png",
+	&"stance": "act_stance.png",
+	&"upgrade": "act_upgrade.png",
+	&"research": "act_research.png",
 	&"destroy": "act_destroy.png",
 	&"garrison": "act_garrison.png",
-	# A GATE'S TWO STATES SHARE THE ENTER/EXIT PAIR, which is the nearest thing the
-	# pack has to a door -- and it is the same "nearest existing icon" call the three
-	# above make. It also puts PLAN.md 13.2 item 4b to some use: that open item asks
-	# whether act_enter/act_garrison and act_exit/act_leave are two pairs covering one
-	# concept each, and a gate is a second real consumer of one half of them.
 	&"enter": "act_enter.png",
 	&"exit": "act_exit.png",
+
+	# ── the two abilities, keyed by `UnitDef.ability_id` ─────────────────────
+	# Not by unit: `_unit_actions` asks `ICONS.get(ud.ability_id, "")`, so a second
+	# unit given the monk's heal draws the monk's icon for free.
+	&"heal": "abil_heal.png",
+	&"fire_breath": "abil_fire_breath.png",
+
+	# ── the four formations, keyed by `Formation.SHAPES` ─────────────────────
+	# These are literal dot diagrams of the shape, which is the one case where the
+	# glyph beats the word outright -- a picture of four dots in a row IS "line".
+	&"line": "form_line.png",
+	&"grid": "form_grid.png",
+	&"vee": "form_vee.png",
+	&"box": "form_box.png",
+
+	# ── the 27 technologies, keyed by `techs.json`'s own ids ─────────────────
+	# `_research_details` has asked `ICONS.get(t.id, "")` since 9.3 and got "" every
+	# time; this is the data it was waiting for and there is no code in it.
+	#
+	# THE BLACKSMITH'S TWELVE ARE FOUR LADDERS OF THREE and are drawn as such -- one
+	# motif per line (sword, arrow, mail, padding) with the tier in the drawing --
+	# because at age 4 all twelve are on screen at once in a 4x3 grid, one line per
+	# column, and a player has to tell the LINE apart at a glance and the tier second.
+	&"tech.wheelbarrow": "tech_wheelbarrow.png",
+	&"tech.hand_cart": "tech_hand_cart.png",
+	&"tech.horse_collar": "tech_horse_collar.png",
+	&"tech.heavy_plough": "tech_heavy_plough.png",
+	&"tech.crop_rotation": "tech_crop_rotation.png",
+	&"tech.double_bit_axe": "tech_double_bit_axe.png",
+	&"tech.bow_saw": "tech_bow_saw.png",
+	&"tech.gold_mining": "tech_gold_mining.png",
+	&"tech.stone_mining": "tech_stone_mining.png",
+	&"tech.gold_shaft_mining": "tech_gold_shaft_mining.png",
+	&"tech.stone_shaft_mining": "tech_stone_shaft_mining.png",
+	&"tech.forging": "tech_forging.png",
+	&"tech.iron_casting": "tech_iron_casting.png",
+	&"tech.blast_furnace": "tech_blast_furnace.png",
+	&"tech.fletching": "tech_fletching.png",
+	&"tech.bodkin_arrow": "tech_bodkin_arrow.png",
+	&"tech.bracer": "tech_bracer.png",
+	&"tech.scale_mail": "tech_scale_mail.png",
+	&"tech.chain_mail": "tech_chain_mail.png",
+	&"tech.plate_mail": "tech_plate_mail.png",
+	&"tech.padded_armour": "tech_padded_armour.png",
+	&"tech.leather_armour": "tech_leather_armour.png",
+	&"tech.ring_armour": "tech_ring_armour.png",
+	&"tech.ballistics": "tech_ballistics.png",
+	&"tech.chemistry": "tech_chemistry.png",
+	&"tech.sanctity": "tech_sanctity.png",
+	&"tech.fervour": "tech_fervour.png",
+}
+
+## The fallback a technology with no icon of its own draws (`tech_generic.png`, a
+## scroll). Every one of the 27 is named above, so nothing reaches this today -- it is
+## here so that the 28th is a tile with a scroll on it rather than a tile with a
+## paragraph of wrapped text, which is what an unmapped tech drew before [P8].
+##
+## `TechMods.validate()` would not catch a missing icon and should not: an icon is not
+## an effect, and a tech that draws the generic scroll works perfectly.
+const TECH_FALLBACK_ICON := "tech_generic.png"
+
+## One per `SimUnit.Stance`, keyed by the enum value the wire carries.
+##
+## A SEPARATE MAP RATHER THAN ENTRIES IN `ICONS`, because a stance is keyed by an INT
+## and everything in `ICONS` is keyed by a StringName. Mixing the two would make
+## `ICONS.get(x, "")` a lookup whose key type depends on the caller.
+const STANCE_ICONS := {
+	SimUnit.Stance.AGGRESSIVE: "stance_aggressive.png",
+	SimUnit.Stance.DEFENSIVE: "stance_defensive.png",
+	SimUnit.Stance.STAND_GROUND: "stance_stand_ground.png",
+	SimUnit.Stance.PASSIVE: "stance_passive.png",
 }
 
 ## The two page-navigation slots. They are real HudActions in the grid rather
@@ -343,12 +416,12 @@ static func _upgrade_action(bd: BuildingDef, age: int, facts: Dictionary) -> Hud
 	var to: BuildingDef = GameDataRegistry.building(bd.upgrades_to)
 	if to == null or to.age_required > age:
 		return _act(&"upgrade", false)
-	# NO ICON, deliberately, where the disabled placeholder above keeps one. `ICONS`
-	# maps upgrade to `hud_techtree.png`, which its own note admits is the nearest
-	# thing in the pack rather than art for this -- and `ActionSlot` prefers an icon
-	# file over the payload portrait, so passing it would draw a tech-tree glyph on
-	# top of a perfectly good picture of the gate. Left blank, the slot crops the
-	# gate's own sprite exactly as the train and place cells do.
+	# NO ICON, deliberately, where the disabled placeholder above keeps one -- and this
+	# is STILL right now that `&"upgrade"` has real art rather than the tech-tree glyph
+	# it used to borrow. `ActionSlot` prefers an icon file over the payload portrait, so
+	# passing one would draw a chevron over a perfectly good picture of the gate you are
+	# about to get. Left blank, the slot crops the gate's own sprite exactly as the
+	# train and place cells do, and the tile says WHICH gate rather than "upgrade".
 	var a := HudAction.new(&"upgrade",
 			to.name if not to.name.is_empty() else String(to.id), "", true)
 	a.payload = to.id
@@ -383,7 +456,10 @@ static func _research_action(bd: BuildingDef, age: int, facts: Dictionary,
 		if bool(researched.get(t.id, false)):
 			done += 1
 
-	var a := HudAction.new(&"research", "Research", ICONS.get(&"upgrade", ""), true)
+	# ITS OWN ICON SINCE [P8]. This asked for `&"upgrade"`'s until 2026-08-30, because
+	# the two verbs shared `hud_techtree.png` and asking for the other one made that
+	# visible; they are two drawings now and each asks for its own.
+	var a := HudAction.new(&"research", "Research", ICONS.get(&"research", ""), true)
 	a.expands = true
 	a.badge = "%d/%d" % [done, offered.size()]
 	return a
@@ -420,22 +496,26 @@ static func _techs_here(building_id: StringName, age: int) -> Array[TechDef]:
 ## can act on now, in this menu, on this building; "come back in an age" is not. The
 ## badge names what it needs, since a greyed tile with no reason on it reads as broken.
 ##
-## NO ICONS, on the owner's instruction (2026-08-29): *"we can use blank action tiles
-## with only lables filled and log art needed"*. `ActionSlot` draws the label when
-## there is no icon and no payload portrait, which for a technology is the only thing
-## that would identify it anyway. The art is queued as `asset_request.md` [P8].
+## ICONS AND CAPTIONS BOTH, since [P8] landed the 27 (2026-08-30). This drew labels
+## alone from 9.3 until then, on the owner's instruction (*"we can use blank action
+## tiles with only lables filled and log art needed"*), and the prediction that made
+## was right: the wiring turned out to be 27 lines of data in `ICONS` and none of code
+## here, because this line already asked.
+##
+## CAPTIONED, unlike a verb tile. A technology is a member of a set of near-identical
+## pictures in the strongest sense the game has -- the blacksmith's twelve are four
+## ladders of three, drawn as four motifs with the tier in the drawing, so two tiles a
+## column apart differ by a detail. The player is spending 200 gold on the difference.
 static func _research_details(facts: Dictionary, age: int,
 		researched: Dictionary) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var queued: Array = facts.get("queue", [])
 
 	for t in _techs_here(facts.get("def_id", &""), age):
-		# `ICONS` HAS NO ENTRY FOR ANY TECH TODAY and this asks anyway, so the day
-		# `asset_request.md` [P8] lands the wiring is 27 lines of data and none of code.
-		# The same shape the ability row uses to key off `ud.ability_id`.
 		var a := HudAction.new(&"research:%s" % t.id,
 				t.name if not t.name.is_empty() else String(t.id),
-				ICONS.get(t.id, ""))
+				ICONS.get(t.id, TECH_FALLBACK_ICON))
+		a.captioned = true
 		if bool(researched.get(t.id, false)):
 			a.selected = true
 			a.enabled = false
@@ -602,9 +682,16 @@ static func _buildable_details(age: int = 1) -> Array[HudAction]:
 ## Formation choices for a military unit's Move (UI_Design.md, PLAN.md 4.14). LIVE since
 ## 2026-08-29; this was four disabled placeholders from 4.3 until then.
 ##
-## None has icon art and none is getting any: a formation is a SHAPE, and the label is
-## already the picture -- "Vee" says what a wedge is more directly than a 52 px glyph of
-## one would at the tile size the grid draws.
+## THIS FILE SAID THEY WOULD NEVER HAVE ICONS and it was wrong about what the icon would
+## be. The argument was that a formation is a SHAPE and "Vee" says what a wedge is more
+## directly than a glyph of one would -- which assumed a glyph, an object standing for
+## the idea. [P8] drew the shape ITSELF: four gold dots in a row, nine in a square, a
+## wedge, a hollow box. A picture of four dots in a row is not a symbol for "line", it
+## is a line, and it survives 52 px in a way no object would.
+##
+## CAPTIONED ANYWAY, so the word is still there. The four diagrams are unambiguous
+## against each other and the caption costs the bottom strip of a tile that has no
+## portrait under it.
 ##
 ## `active` is the client's own current choice, not a fact off the wire. A formation is a
 ## property of the ORDER (`MoveCommand.formation`) and nothing stores it on a unit, so
@@ -618,7 +705,9 @@ static func _buildable_details(age: int = 1) -> Array[HudAction]:
 static func _formation_details(active: StringName = &"") -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	for f in FORMATIONS:
-		var a := HudAction.new(&"formation:%s" % f, String(f).capitalize(), "", true)
+		var a := HudAction.new(&"formation:%s" % f, String(f).capitalize(),
+				ICONS.get(f, ""), true)
+		a.captioned = true
 		a.selected = (f == active)
 		out.append(a)
 	return out
@@ -643,7 +732,13 @@ static func _stance_details(facts: Dictionary) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	for value in [SimUnit.Stance.AGGRESSIVE, SimUnit.Stance.DEFENSIVE,
 			SimUnit.Stance.STAND_GROUND, SimUnit.Stance.PASSIVE]:
-		var a := HudAction.new(&"stance:%d" % value, STANCE_LABELS[value], "", true)
+		var a := HudAction.new(&"stance:%d" % value, STANCE_LABELS[value],
+				STANCE_ICONS.get(value, ""), true)
+		# CAPTIONED, AND HERE IT IS LOAD BEARING rather than a courtesy. The four are a
+		# flaming sword, a sword-and-shield, a planted spear and a plain shield -- two
+		# shields and two blades, at 52 px. The glyph says "this row is about how the
+		# unit fights"; only the word says which of the four it is.
+		a.captioned = true
 		a.selected = (value == current)
 		out.append(a)
 	return out

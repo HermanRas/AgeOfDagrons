@@ -53,6 +53,22 @@ var expands: bool = false
 ## Ignored by every action that is not one of a set, which is nearly all of them.
 var selected: bool = false
 
+## DRAW THE LABEL OVER THE ICON, not instead of it (2026-08-30, with the [P8] art).
+##
+## `ActionSlot`'s default is that an icon REPLACES the word, and its header gives the
+## reason: an icon file means a verb -- Move, Stop, Destroy -- whose picture already is
+## the word, so printing "Move" across it costs a fifth of the tile for nothing.
+##
+## That argument fails for one shape of action: a member of a SET of four near-identical
+## pictures. The four stances are a flaming sword, a sword-and-shield, a planted spear
+## and a plain shield; at the 52 px the grid draws them, telling Defensive from Stand
+## Ground is a guess. It is the same case the portrait caption already exists for -- the
+## picture says what KIND of thing this is and the caption says which one -- so it uses
+## the same strip rather than a second mechanism.
+##
+## Off by default, so every verb in the game is unchanged.
+var captioned: bool = false
+
 ## Free-form rider the caller needs back: the `def_id` a train/build action
 ## names, the entity id a portrait stands for. Never interpreted here.
 var payload: Variant = null

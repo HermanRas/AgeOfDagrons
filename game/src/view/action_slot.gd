@@ -266,11 +266,14 @@ func set_action(p_action: HudAction) -> void:
 		_icon_rect.texture = load(icon_path)
 		_icon_rect.visible = true
 		_label.text = ""
-		# NOT captioned. An icon file means a verb -- Move, Stop, Destroy -- whose
-		# icon is already a picture OF the word, so printing "Move" across it adds
-		# nothing and costs a fifth of the tile. The caption exists for portraits,
-		# where the picture is of a thing and the thing needs naming.
-		_set_caption("")
+		# NOT captioned, unless the action asks. An icon file means a verb -- Move,
+		# Stop, Destroy -- whose icon is already a picture OF the word, so printing
+		# "Move" across it adds nothing and costs a fifth of the tile. The caption
+		# exists for portraits, where the picture is of a thing and the thing needs
+		# naming -- and for `HudAction.captioned`, which is the same case arriving
+		# from the other direction: one of four near-identical pictures, where the
+		# glyph says what kind of choice this is and only the word says which.
+		_set_caption(p_action.label if p_action.captioned else "")
 		return
 
 	# No icon file: crop the entity's own baked sprite, the same standing-in-for
