@@ -7,7 +7,7 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-29.** Suite: **1621 tests, 207,652 assertions, 0 failures** — measured,
+**Updated 2026-08-29.** Suite: **1680 tests, 208,317 assertions, 0 failures** — measured,
 not quoted. **361 atlases staged.** Android build: 320.6 MB **as of 2026-08-27 and
 certainly stale** — two art deliveries and a phase have landed since and nobody has
 rebuilt. Re-measure before quoting it.
@@ -22,8 +22,8 @@ took 350 s against the previous one's 594 s. Re-run it alone before believing it
 ## The one-line answer
 
 **The MVP is achieved and the game is played on a phone.** Five phases are finished
-outright, six are one or two items short, and **two have not been started: 9 (ages and
-tech) and 13 (dragons)**. Nothing is blocked on a decision; **13 is blocked on art**.
+outright, seven are one or two items short, and **one has not been started: 13
+(dragons)**. Nothing is blocked on a decision; **13 is blocked on art**.
 
 **Three things closed on 2026-08-27, all of which this line used to name as next:** the
 unit-speed pass (2026-08-23, owner-confirmed *"sound and speed is much better"*), the whole
@@ -44,10 +44,23 @@ greyed placeholders since 4.3). **4.13 closed the day before** with `SiegeSystem
 `static` — it cannot walk, attack or die — so **phase 13 is blocked on art, not on code**.
 `asset_request.md` [P7].
 
-**What is next is Phase 5, buildings**, then 9.3 `TechSystem` (moved up because ages now
-cost resources and the tech tree is what the age ladder is *for*). 2.4d Archipelago closed
-2026-08-29 together with transports, which had to ship with it — an archipelago nobody can
-cross is a map on which no player can reach another.
+**THE TECH TREE IS WIRED, 2026-08-29** — 9.3 and 9.4, on the owner's instruction, and it went
+in ahead of Phase 5. **27 technologies at seven buildings**, bought from an action tile on the
+building that holds them; the tech-tree page behind the minimap is the guide to what is where
+and issues no command at all, which is the owner's own ruling and what that page has claimed
+about itself since it was written. A research rides the building's existing **production
+queue**, so the timer, the progress bar, the cancel and the refund were all already there —
+which is why PLAN's promised `TechSystem` turned into `TechMods`, a static modifier resolver.
+**The icons are backlog** (`asset_request.md` [P8]): every tile draws its name.
+
+⚠️ **The AI does not research.** `techs: true` has been in every `ai_profile` since 12.2b
+against nothing, and it still is. Both sides of the AI ladder are equally untouched, so its
+table below stands — but a human buying Blast Furnace now fights an army that never will.
+
+**What is next is Phase 5, buildings**, whose 5.3 open question is now answered: an upgrade is
+the per-building mechanism and a technology is the player-wide one, so 5.3 needs a cost and a
+time and nothing else. 2.4d Archipelago closed 2026-08-29 together with transports, which had
+to ship with it — an archipelago nobody can cross is a map on which no player can reach another.
 
 **Two things closed 2026-08-28:** 8.8's [X] clear-selection button, and the art delivery —
 **gates open and close**, and the rally-point flag is baked art instead of a placeholder.
@@ -77,11 +90,11 @@ real work remains · ⛔ not started
 | 2 | Map | 🟢 | **2.4c save map**; **2.4d Archipelago** (new, specified) |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
 | 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |
-| 5 | Buildings | 🟡 | **UP NEXT.** **5.7 more buildings — art-paced, not code-paced** (23 buildings, ~70 bakes; art side's A.10). **5.3 upgrades is the code half and is half-built**: `upgrades_to` + `UpgradeBuildingCommand` + `convert_building` all ship the wall→gate upgrade. Missing is what a non-gate upgrade needs — a cost, a time, and whether an upgrade is per-building or a player-wide tech (which is 9.3's question too) |
+| 5 | Buildings | 🟡 | **UP NEXT.** **5.7 more buildings — art-paced, not code-paced** (23 buildings, ~70 bakes; art side's A.10). **5.3 upgrades is the code half and is half-built**: `upgrades_to` + `UpgradeBuildingCommand` + `convert_building` all ship the wall→gate upgrade. Missing is a COST and a TIME for a non-gate upgrade — and nothing else, since **9.3 answered the third question**: an upgrade is the per-building mechanism and a technology is the player-wide one, so they stay two things. The queue 9.3 taught to hold a research is where the time goes |
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
 | 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport). 8.8's [X] clear-selection button landed 2026-08-28 |
-| 9 | Ages & tech | 🟡 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **`TechSystem` still does not exist** — `techs.json` is deliberately empty and the tech-tree page renders whatever is in it. Now the biggest unstarted piece |
+| 9 | Ages & tech | 🟢 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **9.3 and 9.4 landed 2026-08-29**: 27 technologies at seven buildings, researched from an action tile on the building, with the tech-tree page as the read-only guide to what is where. What is left is **9.5 civilisations** and **9.6 the age re-skin**, both art-paced. ⚠️ **The AI researches nothing** — `techs: true` in every profile against no rule that emits a `ResearchCommand` |
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
 | 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |

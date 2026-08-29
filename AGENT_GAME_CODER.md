@@ -280,6 +280,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **TWO DEAD GUARDS CAN CANCEL OUT, so fixing one breaks what looked unrelated** | `_in_front_of_any` had `if r.has_point(tile): return true` sitting below a check that was false for every tile inside the rect — unreachable. Making it reachable instantly failed three sort tests, because the caller's kind-guard was *also* dead and every building had been asking the function about itself; a building's own tile is inside its own rect, so the unreachable branch was the only thing keeping that harmless. **When a one-line fix breaks distant tests, look for a second dead guard rather than reverting** — the tests were right and both bugs were real. |
 | **A comment that says a bound cannot be exceeded, when it bounds a DELTA and not a RESULT** | `SeparationSystem.MAX_PUSH` is 120 of a 256 sub-tile and its note argues a push "can never carry a unit out of the tile MovementSystem just placed it in". True only from the tile's centre: from sub-position 250 a +120 push crosses the boundary, and the code under that comment already calls `spatial.move()` when it does. Three systems trusted the comment and retired any worker that lost adjacency, which is the owner's 2026-08-28 "pushed villagers go idle". |
 | **A POSITIONAL CORRECTION THAT IS LARGER THAN A TICK'S MOVEMENT IS NOT A NUDGE, IT IS A THROW** | `SeparationSystem.MAX_PUSH` is 120 sub-units and a villager covers **~26** in a tick, so the correction outweighs the step `MovementSystem` just took by five to one. Making the walker take the whole push (2026-08-29, so a passer-by stops shoving standing gatherers) deadlocked three tests instantly: the unit was thrown clear, spent several ticks walking back to the line it was thrown off, and got thrown again — **forward progress zero, for as long as the order stood**, and it looks like a hang rather than like a push. Capping at the mover's own `speed` is what makes it steering. **Anything that writes `pos` outside `MovementSystem` owes the same comparison**, and the number to compare against is `UnitDef.speed`, which was halved across the roster on 2026-08-23. |
+| **A PERCENTAGE MODIFIER ON A BASE RATE OF 1 IS A MODIFIER OF ZERO** | `TechMods.scaled(1, 25)` is `1 * 125 / 100` = **1**. An "Architecture, +25% build speed" tech was written, given a cost and a research time, and removed the same hour: `BuildSystem.BUILD_RATE` is 1 progress per builder per tick, so a percentage has nothing to round to below +100%. **Ask what the BASE is before choosing between a flat bonus and a percentage** — the gather rates are per 100 ticks and take a percentage happily; anything expressed per tick does not. Rounding up would have been worse than doing nothing, since it makes the tech worth +100% on a single villager. |
 | **A FOOTPRINT AND A MEASURED EXTENT ARE TWO DIFFERENT RECTS AND BOTH ARE RIGHT** | The sim's footprint is the tiles a building holds and refuses to be built over; the visual's `footprint_m` is the ground its MESH covers, measured off the bake. They disagree by metres — an age-4 town centre overhangs its 8×8 — and which one a feature wants depends on what it is claiming. The selection ring needs both at once: a building's square traces the SIM's rect (2026-08-29, owner's ask), a unit's ellipse is drawn from the VISUAL's, and swapping either would be visibly wrong in the opposite direction. `GameView._ring_ground_m` is where that split is written down. |
 | **A verification that cannot see the fault it is for** | The facing check was "column 0 a face, column 4 a back" — **the two columns a mirror about N–S leaves alone**. A mirrored roster passed it twice and a 242-atlas re-bake was spent on the wrong diagnosis. Before trusting any check, ask which failures it is *blind* to; a green check on a fault it cannot express is worse than no check, because it ends the investigation. |
 | **A facing that is drawn wrong is not necessarily set wrong** | Two different faults, two different owners. `preview_work_facing` prints the sim's `facing` beside what `SimUnit.facing_toward` would pick now: **STALE means nothing turned the unit** (a sim gap — until 2026-08-27 only `MovementSystem` and `CombatSystem` ever wrote `facing`, so gathering and building never turned anybody), while numbers that agree with a picture that disagrees is the atlas. Settle which one before writing anything. |
@@ -306,8 +307,8 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 86 test files, **1621 tests, 207,652 assertions, all passing** —
-measured 2026-08-29 after phase 4 closed, not quoted.
+**361 atlases staged.** 87 test files, **1680 tests, 208,317 assertions, all passing** —
+measured 2026-08-29 after 9.3/9.4 landed, not quoted.
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
 293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
@@ -326,8 +327,37 @@ Roman), per-player colour selection from eight baked atlases, age-gated train an
 build menus, a paged build grid, captioned portraits, production queue, a real
 timed age-advance, fog of war, an enforced population cap, conquest win
 conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware**
-(PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, chat
-and tech-tree wireframes, and settings (§8.2b).
+(PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, a real
+tech tree, a chat wireframe, and settings (§8.2b).
+
+**THE TECH TREE IS WIRED, 2026-08-29 (9.3 + 9.4)** — on the owner's instruction, and it went in
+ahead of Phase 5, which is still open. Five things to know before touching it:
+
+- **`TechSystem` DOES NOT EXIST AND SHOULD NOT.** PLAN.md promised one for "research timers,
+  stat modifiers". The timers turned out to belong to the production queue -- a research is an
+  entry on it and `ProductionSystem` has counted those down since 5.4 -- so a second system
+  ticking the same counter would be two owners of it. What was left is the modifiers, and those
+  are a pure function of which techs a player holds. `TechMods` is a **static resolver** in the
+  shape of `Formation`, `WallPlan` and `Diplomacy`, and the systems table in PLAN says so now.
+- **AN EFFECT KEY IS `stat.scope`, AND EVERY STAT NAMES A PER-USE LOOKUP.** That is not a style
+  choice, it is the whole design: it means no tech ever has to reach back and rewrite units that
+  already exist. The four stats deliberately NOT offered -- `unit_hp`, `building_hp`, `speed`,
+  `los` -- and the fifth that was tried and pulled -- `build_rate` -- each have a different
+  reason recorded in `techs.json`. **Read those before adding an effect**; `build_rate` in
+  particular was written, committed to a tech and removed the same hour, because
+  `BuildSystem.BUILD_RATE` is 1 per builder per tick and a percentage has nothing to round to
+  below +100%.
+- **`TechMods.KNOWN_EFFECTS` IS A CLOSED LIST AND `validate()` CHECKS IT.** An effect nobody
+  reads is a tech that silently does nothing, which is indistinguishable from a tech nobody has
+  got round to. Same for a mistyped `researched_at` (no button anywhere) and a mistyped
+  `requires` (unbuyable forever). All three now fail the suite.
+- **COMBAT TECHS SKIP WORKERS AND ARMOUR TECHS DO NOT**, resolved in `TechMods.for_unit` versus
+  `for_all` rather than declared per tech. A villager's `attack_type` is melee, so an unscoped
+  Blast Furnace takes her from 3 damage to 7 and makes twenty villagers an army.
+- ⚠️ **THE AI RESEARCHES NOTHING.** `techs: true` has been in every `ai_profile` since 12.2b
+  against nothing, and it still is -- `ResearchCommand` exists and no rule emits one. The AI
+  ladder's table in BUGS.md is not invalidated (neither side researches), and **the first rule
+  that does research invalidates every row of it**.
 
 **PHASE 4 CLOSED 2026-08-29** — 4.10 abilities, 4.12 stances and 4.14 formations, on the owner's
 instruction to close out its open steps. All three had been UI placeholders since 4.3, and that
@@ -727,10 +757,10 @@ plugs in; read the row rather than re-deriving it:
   "slow". **It blocks PLAN.md 13 outright** and went to the art side on 2026-08-29 as
   `asset_request.md` [P7]. Everything else about the unit is real: trainable at the
   castle from age 4, 600 hp, and since 4.10 it has a fire breath.
-- **Chat and the tech-tree page are wireframes** (PLAN.md §8.2b) and say so on
-  screen. The tech tree's *renderer* is real and walks `techs.json`, which is
-  deliberately empty until 9.3; chat has no transport at all, and its SEND/CLEAR
-  buttons are disabled rather than made to work locally.
+- **Chat is a wireframe** (PLAN.md §8.2b) and says so on screen: no transport at all,
+  and its SEND/CLEAR buttons are disabled rather than made to work locally. **The
+  tech-tree page stopped being one on 2026-08-29** — its renderer was always real and
+  9.3 gave it 27 technologies to render.
 - **HUD portraits, minimap and control groups** are wired for colour; nothing
   else tints, because colour is in the pixels — **there is no tint shader and
   must not be one.**
@@ -789,10 +819,13 @@ plugs in; read the row rather than re-deriving it:
    `SimWorld.convert_building` have shipped a real upgrade since 5.8 — the wall-to-gate
    conversion, which mutates in place and keeps the entity id rather than respawning, because a
    respawn would empty the panel the player just pressed. What is missing is everything a
-   non-gate upgrade needs: a **cost** (the gate inherits the wall's), a **time** (it is
-   instantaneous), and a decision about whether an upgrade is a per-building action or a
-   player-wide tech — **which is 9.3's question**, and is the reason the two are worth
-   sequencing together rather than in the order this list happens to number them.
+   non-gate upgrade needs: a **cost** (the gate inherits the wall's) and a **time** (it is
+   instantaneous). The third thing it needed — a decision about whether an upgrade is a
+   per-building action or a player-wide tech — **is answered.** 9.3 shipped first, on the owner's
+   ruling that *"upgrades are action tiles on buildings"*, so the two are two mechanisms: an
+   upgrade changes ONE building and stays `UpgradeBuildingCommand`; a technology is the
+   player-wide thing bought at one. And the queue 9.3 taught to hold a research is the obvious
+   place to put an upgrade's time.
 
 *The three items below predate 2026-08-29. Item 1 is stale in one direction (the AI table was
 re-measured on 2026-08-27 and every winner held) and item 2 is DONE — 2.4d Archipelago shipped
@@ -820,11 +853,9 @@ re-measured on 2026-08-27 and every winner held) and item 2 is DONE — 2.4d Arc
    map type going out as a sandbox. The connectivity claim did *change* rather than relax, as
    predicted. **What is still missing is naval COMBAT** — a loaded transport crosses unopposed,
    which is what an archipelago will ask for next and is not what makes it playable.
-3. **9.3 `TechSystem`** — the biggest genuinely unstarted phase, and it moved up because
-   ages now cost resources (2026-08-27), which makes the tech tree what the age ladder is
-   *for*. `techs.json` is deliberately empty, the tech-tree page already renders whatever
-   is in it, every AI profile declares `techs: true` against nothing, and the field
-   yield's per-age ladder is standing in for a mill upgrade that does not exist.
+3. ~~**9.3 `TechSystem`**~~ — **BUILT 2026-08-29**, ahead of item 0, on the owner's instruction.
+   See §7's opening block. What it did NOT close: the AI still researches nothing, and the
+   `TechSystem` this item named turned out not to want to be a system at all.
 
 **Closed off this list rather than deleted, because each says something about how the
 list moves:** 4.8 garrison and 4.9 (2026-08-27) did **not** close the wall hole they were

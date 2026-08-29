@@ -104,6 +104,17 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# same snapshot every other per-player fact does rather than a
 			# separate channel.
 			"control_groups": p.control_groups,
+			# WHAT THIS PLAYER HAS RESEARCHED (9.3), sorted ids. Read by the action
+			# panel, to ring a tech that is already bought and drop one whose
+			# prerequisite is not, and by the tech-tree page for its third state --
+			# which that page's header records as the one thing it could not honestly
+			# draw while nothing wrote this field.
+			#
+			# SENT TO EVERYBODY, not filtered to the owner. It is not a secret: an
+			# opponent's upgrades are visible the moment their units land a blow, and
+			# every RTS in the genre shows them. Filtering it would also break the
+			# single `player_state` shape for no gain.
+			"researched": p.researched_ids(),
 			# PLAN.md 11.1. Per-player rather than derivable from `winner_id` below:
 			# in a match of three or more, a player is knocked out while the match
 			# goes on, and this is the only thing that says so.

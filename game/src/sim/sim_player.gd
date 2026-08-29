@@ -67,7 +67,29 @@ var advancing_to: int = 0
 var advance_ticks: int = 0
 var advance_total_ticks: int = 0
 
+## Which technologies this player holds (PLAN.md 9.3): tech id -> true. Used as a
+## SET rather than a list, because every reader asks "have I got this one" and none
+## of them cares in what order they were bought.
+##
+## Declared since 0.4 and written by nothing until 2026-08-29, which is the hole
+## 4.11's population counter was in before it was enforced -- a field the HUD reads
+## and nothing fills. `SimWorld.grant_tech` is the only writer.
+##
+## IRREVERSIBLE. Nothing removes a tech, which is what lets `tech_mods` below be a
+## running total rather than something that has to be recomputed against a shrinking
+## set. If a tech ever becomes losable, `TechMods.sum` already rebuilds whole.
 var researched: Dictionary = {}
+
+## `researched` resolved into "stat.scope" -> int, by `TechMods.sum`. DERIVED STATE,
+## kept because it is read on the hot path -- once per blow struck, once per gather
+## take, once per builder per tick -- and re-summing 27 techs at each of those would
+## put a dictionary walk inside `CombatSystem`.
+##
+## Deliberately NOT in `state_hash()`: `researched` is, and this is a pure function
+## of it. Hashing both would report one divergence twice and hashing only this one
+## would report a wrong SUM without saying which tech two hosts disagreed about.
+var tech_mods: Dictionary = {}
+
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 var defeated: bool = false
 
@@ -105,6 +127,26 @@ func refund(cost: Dictionary) -> void:
 
 func add_resource(kind: StringName, amount: int) -> void:
 	stock[kind] = int(stock.get(kind, 0)) + amount
+
+
+func has_tech(tech_id: StringName) -> bool:
+	return bool(researched.get(tech_id, false))
+
+
+## The techs this player holds, sorted, as plain Strings.
+##
+## `Array[String]` and NOT `Array[StringName]`, and that is not a style choice:
+## `Array[StringName].sort()` orders by StringName IDENTITY rather than by content,
+## which is arbitrary and not stable between runs (AGENT_GAME_CODER.md §6, and
+## `test_game_data` pins it). Both callers -- the snapshot and `state_hash()` -- need
+## a stable order, and one of them would desync without it.
+func researched_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id in researched:
+		if bool(researched[id]):
+			out.append(String(id))
+	out.sort()
+	return out
 
 
 func is_advancing() -> bool:

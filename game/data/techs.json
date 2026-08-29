@@ -1,10 +1,300 @@
 {
   "_note": [
-    "PLAN.md 9. Deliberately EMPTY, not absent.",
+    "PLAN.md 9.3. FILLED IN 2026-08-29, on the project owner's instruction to wire",
+    "up the tech tree. This file was deliberately empty from 0.4 until then, and the",
+    "note it replaced was right that the day it landed would be 'a data change plus a",
+    "system, not a schema change' -- TechDef was written for this and did not move.",
     "",
-    "TechSystem is phase 9.3 and no tech is in MVP scope (PLAN.md 10). The file",
-    "exists so GameDataRegistry loads the complete set of data files from day one:",
-    "a missing file and an empty one are different states, and only one of them is",
-    "a bug. When 9.3 lands it is a data change plus a system, not a schema change."
-  ]
+    "WHERE A TECH IS RESEARCHED, AND WHERE IT IS SHOWN, ARE TWO DIFFERENT PLACES.",
+    "The owner's ruling: 'upgrades are action tiles on buildings, tech tree on mini",
+    "map is only a visual guide letting you know what buildings hold what upgrades.'",
+    "So `researched_at` is the button's home and the tech-tree page is a reference",
+    "with nothing to press -- which is what TechTreePanel has said about itself since",
+    "it was written.",
+    "",
+    "AN EFFECT KEY IS `stat.scope`, and every one of the seven stats below names a",
+    "lookup the sim ALREADY makes per use. That is the whole rule and it is what",
+    "keeps a tech from needing retroactive surgery on units that already exist:",
+    "",
+    "  attack_damage.melee    flat, added to a unit's attack_damage (CombatSystem)",
+    "  attack_damage.pierce   flat, same, for units whose attack_type is pierce",
+    "  armor_melee.all        flat, subtracted from an incoming melee blow",
+    "  armor_pierce.all       flat, same, for pierce",
+    "  attack_range.pierce    flat tiles, widening a ranged unit's reach",
+    "  gather_rate.<kind>     PERCENT, on the rate per 100 ticks (GatherSystem)",
+    "  carry_cap.all          flat, on how much a worker can hold",
+    "  ability_amount.<heal|damage>  flat, on what an ability heals or hits for",
+    "",
+    "FOUR STATS ARE DELIBERATELY ABSENT and each is absent for its own reason, which",
+    "is worth reading before adding a tech that wants one:",
+    "",
+    "  unit_hp, building_hp, speed -- all copied onto the entity at spawn, so a tech",
+    "    would either miss everything already built or need a pass that rewrites live",
+    "    entities and decides what happens to their current hp.",
+    "  los -- since 12.1f the CLIENT computes its own fog from `vision_range`, so a",
+    "    sight tech has to reach two implementations that must never disagree.",
+    "  build_rate -- BuildSystem.BUILD_RATE is 1 progress per builder per tick, and a",
+    "    percentage has nothing to round to below +100%: 1 * 125 / 100 is 1. A build",
+    "    tech wants that counter running at a finer granularity first, which changes",
+    "    what `build_time_ticks` means in every building in buildings.json.",
+    "",
+    "COMBAT TECHS SKIP WORKERS, resolved in TechMods rather than declared here. A",
+    "villager's attack_type is melee, so an unscoped +4 would take her from 3 damage",
+    "to 7 and make twenty villagers an army. AoE does not arm the peasants either.",
+    "",
+    "THE MILL LADDER AND THE FIELD LADDER BOTH APPLY. `buildings.json` gives a field",
+    "gather_yield_per_age 25/28/32, which PLAN.md has described since it was written",
+    "as 'standing in for a mill tech until 9.3 lands'. It is not replaced: the age",
+    "ladder is the base and horse collar multiplies it, exactly as it multiplies",
+    "hand-gathered food. Both go through GatherSystem.harvest_rate, which is the one",
+    "place either number is read.",
+    "",
+    "NUMBERS ARE AoE II's SHAPE, NOT ITS ARITHMETIC. Three tiers of +1/+1/+2 on the",
+    "attack lines and 15-20% on the gather lines are starting values, tuned by",
+    "playtest like every other number in this directory.",
+    "",
+    "ICONS: there are none, deliberately. The owner asked for 'blank action tiles",
+    "with only labels filled' and the art is queued as asset_request.md [P8]. An",
+    "action with no icon and no payload draws its label, which for a tech is the",
+    "only thing that would identify it anyway."
+  ],
+
+  "tech.wheelbarrow": {
+    "name": "Wheelbarrow",
+    "researched_at": ["building.town_center"],
+    "age_required": 2,
+    "cost": { "food": 175, "wood": 50 },
+    "research_time_ticks": 375,
+    "effects": { "carry_cap.all": 3 }
+  },
+  "tech.hand_cart": {
+    "name": "Hand Cart",
+    "researched_at": ["building.town_center"],
+    "age_required": 3,
+    "requires": ["tech.wheelbarrow"],
+    "cost": { "food": 300, "wood": 200 },
+    "research_time_ticks": 550,
+    "effects": { "carry_cap.all": 5 }
+  },
+
+  "tech.horse_collar": {
+    "name": "Horse Collar",
+    "researched_at": ["building.mill"],
+    "age_required": 2,
+    "cost": { "food": 75, "wood": 75 },
+    "research_time_ticks": 200,
+    "effects": { "gather_rate.food": 15 }
+  },
+  "tech.heavy_plough": {
+    "name": "Heavy Plough",
+    "researched_at": ["building.mill"],
+    "age_required": 3,
+    "requires": ["tech.horse_collar"],
+    "cost": { "food": 125, "wood": 125 },
+    "research_time_ticks": 400,
+    "effects": { "gather_rate.food": 15 }
+  },
+  "tech.crop_rotation": {
+    "name": "Crop Rotation",
+    "researched_at": ["building.mill"],
+    "age_required": 4,
+    "requires": ["tech.heavy_plough"],
+    "cost": { "food": 250, "wood": 250 },
+    "research_time_ticks": 700,
+    "effects": { "gather_rate.food": 20 }
+  },
+
+  "tech.double_bit_axe": {
+    "name": "Double-Bit Axe",
+    "researched_at": ["building.lumber_camp"],
+    "age_required": 2,
+    "cost": { "food": 100, "wood": 50 },
+    "research_time_ticks": 250,
+    "effects": { "gather_rate.wood": 15 }
+  },
+  "tech.bow_saw": {
+    "name": "Bow Saw",
+    "researched_at": ["building.lumber_camp"],
+    "age_required": 3,
+    "requires": ["tech.double_bit_axe"],
+    "cost": { "food": 150, "wood": 100 },
+    "research_time_ticks": 500,
+    "effects": { "gather_rate.wood": 20 }
+  },
+
+  "tech.gold_mining": {
+    "name": "Gold Mining",
+    "researched_at": ["building.mining_camp"],
+    "age_required": 2,
+    "cost": { "food": 100, "wood": 75 },
+    "research_time_ticks": 300,
+    "effects": { "gather_rate.gold": 15 }
+  },
+  "tech.stone_mining": {
+    "name": "Stone Mining",
+    "researched_at": ["building.mining_camp"],
+    "age_required": 2,
+    "cost": { "food": 100, "wood": 75 },
+    "research_time_ticks": 300,
+    "effects": { "gather_rate.stone": 15 }
+  },
+  "tech.gold_shaft_mining": {
+    "name": "Gold Shaft Mining",
+    "researched_at": ["building.mining_camp"],
+    "age_required": 3,
+    "requires": ["tech.gold_mining"],
+    "cost": { "food": 200, "wood": 150 },
+    "research_time_ticks": 500,
+    "effects": { "gather_rate.gold": 15 }
+  },
+  "tech.stone_shaft_mining": {
+    "name": "Stone Shaft Mining",
+    "researched_at": ["building.mining_camp"],
+    "age_required": 3,
+    "requires": ["tech.stone_mining"],
+    "cost": { "food": 200, "wood": 150 },
+    "research_time_ticks": 500,
+    "effects": { "gather_rate.stone": 15 }
+  },
+
+  "tech.forging": {
+    "name": "Forging",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 2,
+    "cost": { "food": 150 },
+    "research_time_ticks": 300,
+    "effects": { "attack_damage.melee": 1 }
+  },
+  "tech.iron_casting": {
+    "name": "Iron Casting",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 3,
+    "requires": ["tech.forging"],
+    "cost": { "food": 220, "gold": 120 },
+    "research_time_ticks": 450,
+    "effects": { "attack_damage.melee": 1 }
+  },
+  "tech.blast_furnace": {
+    "name": "Blast Furnace",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 4,
+    "requires": ["tech.iron_casting"],
+    "cost": { "food": 275, "gold": 225 },
+    "research_time_ticks": 600,
+    "effects": { "attack_damage.melee": 2 }
+  },
+  "tech.fletching": {
+    "name": "Fletching",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 2,
+    "cost": { "food": 100, "gold": 50 },
+    "research_time_ticks": 300,
+    "effects": { "attack_damage.pierce": 1 }
+  },
+  "tech.bodkin_arrow": {
+    "name": "Bodkin Arrow",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 3,
+    "requires": ["tech.fletching"],
+    "cost": { "food": 200, "gold": 100 },
+    "research_time_ticks": 450,
+    "effects": { "attack_damage.pierce": 1 }
+  },
+  "tech.bracer": {
+    "name": "Bracer",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 4,
+    "requires": ["tech.bodkin_arrow"],
+    "cost": { "food": 300, "gold": 200 },
+    "research_time_ticks": 600,
+    "effects": { "attack_damage.pierce": 1 }
+  },
+  "tech.scale_mail": {
+    "name": "Scale Mail",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 2,
+    "cost": { "food": 100 },
+    "research_time_ticks": 300,
+    "effects": { "armor_melee.all": 1 }
+  },
+  "tech.chain_mail": {
+    "name": "Chain Mail",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 3,
+    "requires": ["tech.scale_mail"],
+    "cost": { "food": 200, "gold": 100 },
+    "research_time_ticks": 450,
+    "effects": { "armor_melee.all": 1 }
+  },
+  "tech.plate_mail": {
+    "name": "Plate Mail",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 4,
+    "requires": ["tech.chain_mail"],
+    "cost": { "food": 300, "gold": 150 },
+    "research_time_ticks": 600,
+    "effects": { "armor_melee.all": 2 }
+  },
+  "tech.padded_armour": {
+    "name": "Padded Armour",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 2,
+    "cost": { "food": 100 },
+    "research_time_ticks": 300,
+    "effects": { "armor_pierce.all": 1 }
+  },
+  "tech.leather_armour": {
+    "name": "Leather Armour",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 3,
+    "requires": ["tech.padded_armour"],
+    "cost": { "food": 150, "gold": 150 },
+    "research_time_ticks": 450,
+    "effects": { "armor_pierce.all": 1 }
+  },
+  "tech.ring_armour": {
+    "name": "Ring Armour",
+    "researched_at": ["building.blacksmith"],
+    "age_required": 4,
+    "requires": ["tech.leather_armour"],
+    "cost": { "food": 250, "gold": 250 },
+    "research_time_ticks": 600,
+    "effects": { "armor_pierce.all": 2 }
+  },
+
+  "tech.ballistics": {
+    "name": "Ballistics",
+    "researched_at": ["building.university"],
+    "age_required": 3,
+    "cost": { "wood": 300, "gold": 175 },
+    "research_time_ticks": 600,
+    "effects": { "attack_range.pierce": 1 }
+  },
+  "tech.chemistry": {
+    "name": "Chemistry",
+    "researched_at": ["building.university"],
+    "age_required": 4,
+    "requires": ["tech.ballistics"],
+    "cost": { "wood": 300, "gold": 200 },
+    "research_time_ticks": 700,
+    "effects": { "attack_damage.pierce": 1 }
+  },
+
+  "tech.sanctity": {
+    "name": "Sanctity",
+    "researched_at": ["building.monastery"],
+    "age_required": 3,
+    "cost": { "gold": 120 },
+    "research_time_ticks": 400,
+    "effects": { "ability_amount.heal": 3 }
+  },
+  "tech.fervour": {
+    "name": "Fervour",
+    "researched_at": ["building.monastery"],
+    "age_required": 4,
+    "requires": ["tech.sanctity"],
+    "cost": { "gold": 140 },
+    "research_time_ticks": 500,
+    "effects": { "ability_amount.heal": 4 }
+  }
 }

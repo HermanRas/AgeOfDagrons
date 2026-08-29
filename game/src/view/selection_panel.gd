@@ -35,6 +35,14 @@ signal train_requested(building_id: int, unit_def_id: StringName)
 ## Cancel the production entry at `index` (always 0 today -- the front entry).
 signal cancel_requested(building_id: int, index: int)
 
+## A building was asked to research `tech_id` (PLAN.md 9.3).
+##
+## Its own signal rather than a bare `action_requested(&"research:...")`, and for
+## `train_requested`'s reason: the order names a BUILDING, and `_building_id` is state
+## this panel already holds and `GameScene` would otherwise have to re-derive from the
+## selection. The two verbs are the same shape and go out the same way.
+signal research_requested(building_id: int, tech_id: StringName)
+
 ## Turn a garrison out of `building_id` (PLAN.md 4.8) -- the occupant in slot
 ## `index`, or **everybody** when `index` is `UngarrisonCommand.ALL` (-1).
 ##
@@ -119,6 +127,10 @@ var _all_def_ids: Array = []
 var _age: int = 1
 ## The selection owner's palette index, tinting every cropped portrait here.
 var _colour: int = -1
+## The selection owner's technologies, `tech id -> true` (PLAN.md 9.3). Kept with the
+## other inputs for their reason: re-expanding Research must rebuild against the same
+## set it was opened with rather than an empty one.
+var _researched: Dictionary = {}
 
 
 func _init() -> void:
@@ -242,8 +254,13 @@ func show_nothing() -> void:
 ## every cropped portrait on the panel. The owner's, deliberately, not the local
 ## player's: a selected enemy unit is exactly the case where the player cannot
 ## see whose it is any other way. -1 leaves portraits untinted.
+## `researched` is that owner's technology set (`GameView.researched_of`), which
+## decides which Research slots are ringed, which are priced and which name a
+## prerequisite. Optional, and an empty set is the honest answer for a caller with no
+## snapshot: it draws every tech as available, which is what a fresh match is.
 func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = true,
-		all_def_ids: Array = [], age: int = 1, colour: int = -1) -> void:
+		all_def_ids: Array = [], age: int = 1, colour: int = -1,
+		researched: Dictionary = {}) -> void:
 	if facts.is_empty():
 		show_nothing()
 		return
@@ -262,6 +279,7 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 	_all_def_ids = all_def_ids
 	_age = age
 	_colour = colour
+	_researched = researched
 	_selected_id = next_id
 	_building_id = next_id
 
@@ -274,8 +292,8 @@ func show_entity(facts: Dictionary, selected_count: int = 1, is_mine: bool = tru
 	_portrait.set_skin(age, colour)
 	_refresh_health(facts)
 
-	_fill(_action_slots,
-			SelectionActions.for_selection(facts, selected_count, is_mine, all_def_ids, age))
+	_fill(_action_slots, SelectionActions.for_selection(
+			facts, selected_count, is_mine, all_def_ids, age, researched))
 	_refresh_details()
 
 
@@ -308,18 +326,24 @@ func _refresh_health(facts: Dictionary) -> void:
 ## buildings in 12 slots. Visibility is decided on the full list rather than on
 ## the page, since only an empty list means "nothing to show".
 func _refresh_details() -> void:
-	var details := SelectionActions.details_for(
-			_active_action, _facts, _selected_count, _all_def_ids, _age, active_formation)
+	var details := _details()
 	_fill(_detail_slots, SelectionActions.page_of(details, _detail_page))
 	_details_grid.visible = not details.is_empty()
 	_divider.visible = not details.is_empty()
 
 
+## The whole open detail list, before paging. One function so `_refresh_details` and
+## `detail_page_count` cannot come to pass different arguments -- which they had
+## already started to, as one copy of a six-argument call.
+func _details() -> Array[HudAction]:
+	return SelectionActions.details_for(_active_action, _facts, _selected_count,
+			_all_def_ids, _age, active_formation, _researched)
+
+
 ## How many pages the currently open detail list spans. For tests and for
 ## anything that wants to show a page indicator later.
 func detail_page_count() -> int:
-	return SelectionActions.page_count(SelectionActions.details_for(
-			_active_action, _facts, _selected_count, _all_def_ids, _age, active_formation).size())
+	return SelectionActions.page_count(_details().size())
 
 
 func current_detail_page() -> int:
@@ -399,6 +423,12 @@ func _on_detail_pressed(action: HudAction) -> void:
 		return
 	if id.begins_with("cancel:") and _building_id != 0:
 		cancel_requested.emit(_building_id, int(id.trim_prefix("cancel:")))
+		return
+	# `research:<tech id>` (9.3), the detail-grid twin of the action column's
+	# `train:<unit id>` -- see `research_requested` for why it is a signal of its own
+	# rather than a fall-through.
+	if id.begins_with("research:") and _building_id != 0:
+		research_requested.emit(_building_id, StringName(id.trim_prefix("research:")))
 		return
 	# `ungarrison:all` and `ungarrison:<index>` (4.8). "all" is checked as a STRING
 	# rather than relying on `int("all")` returning 0 -- which it does, and which would

@@ -105,8 +105,14 @@ const STANCE_LABELS := {
 ## the units its owner has reached the age for, and a villager only the buildings
 ## they may place. Defaults to 1 so a caller that has no age yet still gets the
 ## age-1 menu rather than an empty one.
+## `researched` is the selection owner's technology set -- `tech id -> true`, off
+## `player_state["researched"]` by way of `GameView.researched_of`. APPENDED rather
+## than slotted in beside `age`, so every existing caller and test keeps working by
+## passing nothing; an empty set is what a player who has researched nothing has, and
+## it is the right answer for a caller that has no snapshot yet.
 static func for_selection(facts: Dictionary, selected_count: int = 1,
-		is_mine: bool = true, all_def_ids: Array = [], age: int = 1) -> Array[HudAction]:
+		is_mine: bool = true, all_def_ids: Array = [], age: int = 1,
+		researched: Dictionary = {}) -> Array[HudAction]:
 	if facts.is_empty() or not is_mine:
 		return []
 
@@ -145,7 +151,7 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 		])
 
 	if GameDataRegistry.building(def_id) != null:
-		return _capped(_building_actions(def_id, age, facts))
+		return _capped(_building_actions(def_id, age, facts, researched))
 	return _capped(_unit_actions(def_id, facts))
 
 
@@ -163,7 +169,8 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 ## about it in the snapshot to read.
 static func details_for(action_id: StringName, facts: Dictionary,
 		selected_count: int = 1, all_def_ids: Array = [], age: int = 1,
-		active_formation: StringName = &"") -> Array[HudAction]:
+		active_formation: StringName = &"",
+		researched: Dictionary = {}) -> Array[HudAction]:
 	if facts.is_empty():
 		return []
 
@@ -179,6 +186,12 @@ static func details_for(action_id: StringName, facts: Dictionary,
 	# the town centre falling off the end of the build list.
 	if action_id == &"garrison":
 		return _garrison_details(facts)
+	# THE THIRD LIST THAT CAN OUTGROW THE GRID, and the reason it is uncapped: the
+	# blacksmith offers twelve technologies at age 4, which is exactly MAX_DETAILS --
+	# so the day a thirteenth is added anywhere, a capped list would drop it silently
+	# and `page_of` already knows what to do instead.
+	if action_id == &"research":
+		return _research_details(facts, age, researched)
 	if action_id == &"move":
 		return _capped_details(_formation_details(active_formation))
 	if action_id == &"stance":
@@ -204,7 +217,7 @@ static func details_for(action_id: StringName, facts: Dictionary,
 ## tech tree (9.4) is where that belongs. It also keeps the row inside its 8
 ## slots: a castle trains four things and an age-4 dock four more.
 static func _building_actions(def_id: StringName, age: int = 1,
-		facts: Dictionary = {}) -> Array[HudAction]:
+		facts: Dictionary = {}, researched: Dictionary = {}) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var bd: BuildingDef = GameDataRegistry.building(def_id)
 	if bd == null:
@@ -256,6 +269,19 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		out.append(a)
 
 	out.append(_upgrade_action(bd, age, facts))
+
+	# WHAT THIS BUILDING TEACHES (PLAN.md 9.3), and it is ONE slot rather than one per
+	# technology -- the blacksmith offers twelve and the action column has eight in
+	# total. `expands`, so the row itself only says "there is research here" and the
+	# choosing happens in the detail grid, exactly as Build and Garrison do.
+	#
+	# OFFERED ONLY BY A BUILDING THAT ACTUALLY HAS TECHS, which is seven of the
+	# thirty-one, so the other twenty-four rows are unchanged and none of them is
+	# pushed past `_capped`'s slice. That mattered: the castle already emits nine with
+	# a rally point set, and it has no techs precisely so it still emits nine.
+	var research := _research_action(bd, age, facts, researched)
+	if research != null:
+		out.append(research)
 
 	# STOP CLEARS THE RALLY POINT (project owner, 2026-08-27: *"resuse stop action
 	# button to clear waypoint with building selected"*), and it is offered ONLY when
@@ -327,6 +353,116 @@ static func _upgrade_action(bd: BuildingDef, age: int, facts: Dictionary) -> Hud
 			to.name if not to.name.is_empty() else String(to.id), "", true)
 	a.payload = to.id
 	return a
+
+
+## The Research slot for a building that offers technologies, or `null` for one that
+## does not (PLAN.md 9.3).
+##
+## `null` RATHER THAN A DISABLED PLACEHOLDER, which is the opposite of what Repair
+## does two lines below it and is the same call the Gate and Garrison buttons make: a
+## disabled slot means "this verb exists and you cannot use it right now", and a house
+## does not have research in the way a house does have repair. Twenty-four of the
+## thirty-one buildings return null here and their rows are byte-identical to before.
+##
+## ONLY WHEN COMPLETE, like the gate and the garrison. `ResearchCommand.validate`
+## refuses a foundation, and a button that does nothing is worse than no button.
+##
+## The badge counts what is BOUGHT against what is offered AT THIS AGE, so it reads
+## 0/4 at the blacksmith in age 2 and 8/12 in age 4 -- which says both "there is more
+## here" and "you have been here before" without the row being opened.
+static func _research_action(bd: BuildingDef, age: int, facts: Dictionary,
+		researched: Dictionary) -> HudAction:
+	if int(facts.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		return null
+	var offered := _techs_here(bd.id, age)
+	if offered.is_empty():
+		return null
+
+	var done := 0
+	for t in offered:
+		if bool(researched.get(t.id, false)):
+			done += 1
+
+	var a := HudAction.new(&"research", "Research", ICONS.get(&"upgrade", ""), true)
+	a.expands = true
+	a.badge = "%d/%d" % [done, offered.size()]
+	return a
+
+
+## The technologies this building offers that the owner's age has reached, in the
+## registry's menu order (age, then display name).
+##
+## ABOVE-AGE TECHS ARE OMITTED, not shown disabled -- the same rule `_building_actions`
+## applies to the train row and `_buildable_details` to the build list, and for the
+## same reason recorded there: a greyed Blast Furnace in age 2 is a promise about a
+## future age, and the tech tree (9.4) is where promises about future ages belong.
+static func _techs_here(building_id: StringName, age: int) -> Array[TechDef]:
+	var out: Array[TechDef] = []
+	for id in GameDataRegistry.techs_at(building_id):
+		var t: TechDef = GameDataRegistry.tech(id)
+		if t != null and t.age_required <= age:
+			out.append(t)
+	return out
+
+
+## One slot per technology, in three states (PLAN.md 9.3).
+##
+##   RESEARCHED  ringed and not pressable. `HudAction.selected` is the third state
+##               `enabled` could not express, and a bought tech is exactly what it was
+##               added for at 4.12 -- there is nothing to press and it is not "not
+##               built either".
+##   IN THE QUEUE  disabled with a "..." badge. Read off `facts["queue"]`, which is
+##               server truth, so a research another client started shows here too.
+##   AVAILABLE   pressable, priced along the top of the tile like a train slot.
+##
+## A TECH WHOSE PREREQUISITE IS MISSING IS SHOWN, DISABLED, and that is deliberately
+## different from the age rule above. "Research Forging first" is something the player
+## can act on now, in this menu, on this building; "come back in an age" is not. The
+## badge names what it needs, since a greyed tile with no reason on it reads as broken.
+##
+## NO ICONS, on the owner's instruction (2026-08-29): *"we can use blank action tiles
+## with only lables filled and log art needed"*. `ActionSlot` draws the label when
+## there is no icon and no payload portrait, which for a technology is the only thing
+## that would identify it anyway. The art is queued as `asset_request.md` [P8].
+static func _research_details(facts: Dictionary, age: int,
+		researched: Dictionary) -> Array[HudAction]:
+	var out: Array[HudAction] = []
+	var queued: Array = facts.get("queue", [])
+
+	for t in _techs_here(facts.get("def_id", &""), age):
+		# `ICONS` HAS NO ENTRY FOR ANY TECH TODAY and this asks anyway, so the day
+		# `asset_request.md` [P8] lands the wiring is 27 lines of data and none of code.
+		# The same shape the ability row uses to key off `ud.ability_id`.
+		var a := HudAction.new(&"research:%s" % t.id,
+				t.name if not t.name.is_empty() else String(t.id),
+				ICONS.get(t.id, ""))
+		if bool(researched.get(t.id, false)):
+			a.selected = true
+			a.enabled = false
+		elif queued.has(String(t.id)):
+			a.enabled = false
+			a.badge = "..."
+		else:
+			var missing := _missing_prerequisite(t, researched)
+			if missing.is_empty():
+				a.cost = t.cost
+			else:
+				a.enabled = false
+				a.badge = missing
+		out.append(a)
+	return out
+
+
+## The display name of the first prerequisite this player has not bought, or "" when
+## the tech is ready to research. First rather than all: the badge is corner text on a
+## 72 px tile, and every tech in the roster has at most one.
+static func _missing_prerequisite(t: TechDef, researched: Dictionary) -> String:
+	for id in t.requires:
+		if bool(researched.get(id, false)):
+			continue
+		var req: TechDef = GameDataRegistry.tech(id)
+		return req.name if req != null and not req.name.is_empty() else String(id)
+	return ""
 
 
 ## A unit's own verbs. Harvest and Build are gated on the def actually being a
@@ -527,19 +663,33 @@ static func _stance_badge(stance: int) -> String:
 	return "Pass"
 
 
-## A building's production queue, one slot per queued unit (5.4). Tapping one
-## cancels it, which `CancelProductionCommand` already supports.
+## A building's production queue, one slot per entry (5.4). Tapping one cancels it,
+## which `CancelProductionCommand` already supports -- for a research as much as for a
+## unit, since it refunds the entry's own recorded `cost` and never asks what kind it
+## was.
+##
+## A RESEARCH IN THE QUEUE IS A UNIT ID THAT RESOLVES TO NOTHING, and it used to draw
+## as the word "Queued" (5.4's own note records that failure with the def ids that
+## fixed it). `payload` is left EMPTY for a technology on purpose: `ActionSlot` crops
+## the payload's portrait from a baked sprite, and a tech has none -- so it draws its
+## label, which is what the owner asked for at 9.3 anyway.
 static func _queue_details(facts: Dictionary) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var queue: Array = facts.get("queue", [])
 	var queue_len := int(facts.get("queue_len", queue.size()))
 
 	for i in range(queue_len):
-		var unit_def_id: StringName = queue[i] if i < queue.size() else &""
-		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
-		var a := HudAction.new(&"cancel:%d" % i,
-				ud.name if ud != null and not ud.name.is_empty() else "Queued")
-		a.payload = unit_def_id
+		var def_id: StringName = queue[i] if i < queue.size() else &""
+		var ud: UnitDef = GameDataRegistry.unit(def_id)
+		var td: TechDef = GameDataRegistry.tech(def_id)
+		var label := "Queued"
+		if ud != null and not ud.name.is_empty():
+			label = ud.name
+		elif td != null and not td.name.is_empty():
+			label = td.name
+		var a := HudAction.new(&"cancel:%d" % i, label)
+		if ud != null:
+			a.payload = def_id
 		# The front entry is the one actually building; show its progress.
 		if i == 0:
 			a.badge = "%d%%" % roundi(float(facts.get("queue_fraction", 0.0)) * 100.0)

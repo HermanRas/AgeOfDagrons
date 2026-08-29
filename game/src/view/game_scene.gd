@@ -310,6 +310,7 @@ func _build_hud() -> void:
 	# rows the selected entity's panel shows.
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_panel.train_requested.connect(_on_train_requested)
+	_panel.research_requested.connect(_on_research_requested)
 	_panel.cancel_requested.connect(_on_cancel_requested)
 	_panel.ungarrison_requested.connect(_on_ungarrison_requested)
 	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
@@ -659,6 +660,9 @@ func _feed_pages(snap: Dictionary) -> void:
 	if _tech_tree.is_open():
 		var mine: Dictionary = player_state.get(me, {})
 		_tech_tree.set_age(int(mine.get("age", 0)))
+		# The VIEWER's own set, not the selection's -- this page is a reference about
+		# what you have, and there is nothing on it to press (9.3, 9.4).
+		_tech_tree.set_researched(_view.researched_of(me))
 	# ADVISORY, and computed from the client's own view rather than asked of the host:
 	# your own buildings are always sent whatever the fog says, so this is reliable
 	# for the one owner it is asked about -- and both market commands re-check it
@@ -1677,6 +1681,31 @@ func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 	Net.submit_command(TrainCommand.new(Net.local_player_id(), building_id, unit_def_id))
 
 
+## Start a technology at the building offering it (PLAN.md 9.3).
+##
+## THE POLITE HALF IS AFFORDABILITY, which is the same one `_on_train_requested` and
+## `_on_age_advance_requested` were both given and for the identical reason: a command
+## that fails `validate()` is dropped in silence, so the tile would go dead with
+## nothing said. The panel already handles the other two ways this can be refused --
+## a researched tech is ringed and a gated one names its prerequisite -- so cost is
+## the only refusal a player can walk into blind.
+##
+## The shortfall is NAMED rather than the rule, following the age badge: "Need 120
+## gold" tells you what to go and get where "You cannot afford that" does not.
+func _on_research_requested(building_id: int, tech_id: StringName) -> void:
+	var t: TechDef = GameDataRegistry.tech(tech_id)
+	if t == null:
+		return
+	var world: SimWorld = Net.host().world if Net.host() != null else null
+	var player: SimPlayer = world.player_for(Net.local_player_id()) if world != null else null
+	if player != null and not player.can_afford(t.cost):
+		_toast.show_message("Need %s to research %s"
+				% [_shortfall_text(player, t.cost), t.name])
+		return
+	Net.submit_command(ResearchCommand.new(Net.local_player_id(), building_id, tech_id))
+	_toast.show_message("Researching %s" % t.name)
+
+
 func _on_cancel_requested(building_id: int, index: int) -> void:
 	Net.submit_command(CancelProductionCommand.new(Net.local_player_id(), building_id, index))
 
@@ -1968,7 +1997,8 @@ func _refresh_panel() -> void:
 		# both the moment the two differ.
 		var owner_id := int(facts.get("owner_id", 0))
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids,
-				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)))
+				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)),
+				_view.researched_of(owner_id))
 	_refresh_waypoint_flag()
 
 

@@ -180,13 +180,28 @@ func waypoint_set() -> bool:
 ## different ticks and then disagree about who died first.
 var attack_cooldown: int = 0
 
-## Training queue (5.4). Each entry is {def_id, progress, total, ready, cost}.
-## `cost` is snapshotted at enqueue time rather than re-read from UnitDef later,
-## so a cancel always refunds exactly what was paid, even though nothing in MVP
-## (no techs, no age discounts) would currently make the two disagree. Only the
-## FRONT entry ever progresses -- one production line per building, same as
-## every RTS this is modelled on -- so entries behind it need no state of their
-## own until they reach the front.
+## Production queue (5.4, and RESEARCH since 9.3). Each entry is
+## {kind, def_id, progress, total, ready, cost}.
+##
+## `cost` is snapshotted at enqueue time rather than re-read from the def later, so a
+## cancel always refunds exactly what was paid. Only the FRONT entry ever progresses
+## -- one production line per building, same as every RTS this is modelled on -- so
+## entries behind it need no state of their own until they reach the front.
+##
+## **RESEARCH SHARES THIS QUEUE RATHER THAN GETTING ITS OWN** (9.3). A research is a
+## thing a building spends time on and can be cancelled halfway, which is this queue's
+## whole job, and sharing it means the progress bar, the cancel slot, the refund and
+## the wire format all already work. It also makes research and training compete for
+## the one production line, which is the genre-standard rule and is what a player
+## expects -- though in practice only the town centre can do both, since none of the
+## other six tech buildings trains anything.
+##
+## `kind` is `KIND_UNIT` or `KIND_TECH` and is stated EXPLICITLY rather than sniffed
+## off the `unit.`/`tech.` prefix or by asking which registry answers. Inferring an
+## entry's kind from the shape of its data is the trap AGENT_GAME_CODER.md's table
+## records `GameView` falling into twice.
+const KIND_UNIT := &"unit"
+const KIND_TECH := &"tech"
 var queue: Array[Dictionary] = []
 
 
@@ -451,13 +466,37 @@ func to_snapshot() -> Dictionary:
 
 ## Adds a training order to the back of the queue.
 func enqueue_training(def_id: StringName, build_time_ticks: int, cost: Dictionary) -> void:
+	_enqueue(KIND_UNIT, def_id, build_time_ticks, cost)
+
+
+## Adds a RESEARCH to the back of the same queue (9.3). Identical bookkeeping, and
+## deliberately so -- see `queue`'s header for why research is not a second field.
+func enqueue_research(tech_id: StringName, research_time_ticks: int, cost: Dictionary) -> void:
+	_enqueue(KIND_TECH, tech_id, research_time_ticks, cost)
+
+
+func _enqueue(kind: StringName, def_id: StringName, ticks: int, cost: Dictionary) -> void:
 	queue.append({
+		"kind": kind,
 		"def_id": def_id,
 		"progress": 0,
-		"total": maxi(1, build_time_ticks),
+		"total": maxi(1, ticks),
 		"ready": false,
 		"cost": cost,
 	})
+
+
+## Whether this building is already researching `tech_id`, anywhere in its queue.
+##
+## Asked by `ResearchCommand.validate` so a double-tap does not buy the same tech
+## twice — the second copy would complete, find it already researched, and be a
+## refundless waste of a player's gold. `researched` on the player answers the
+## finished half; this answers the in-flight half, and both are needed.
+func is_researching(tech_id: StringName) -> bool:
+	for entry in queue:
+		if entry.get("kind", KIND_UNIT) == KIND_TECH and entry.get("def_id", &"") == tech_id:
+			return true
+	return false
 
 
 ## Removes and returns the entry at `index`, or {} if out of range. The caller

@@ -355,6 +355,27 @@ func _advance_script() -> void:
 			_report_the_clear_button()
 			_shoot("match_cleared")
 		58:
+			# RESEARCH (PLAN.md 9.3). The blacksmith is not on the debug map, so it is
+			# stood up the same way the market is -- through the host world, the
+			# documented solo-only exception. Age 4 by now, so all twelve of its
+			# technologies are unlocked and the grid is full.
+			_stand_up_a_blacksmith()
+		59:
+			_select_the_blacksmith()
+			_open_research()
+		60:
+			_report_research()
+			_shoot("match_research")
+		61:
+			# Through the detail slot's own press, not a hand-built ResearchCommand:
+			# what is in doubt is the whole chain -- a tile with no icon and only a
+			# label draws and takes a tap, `SelectionPanel` turns it into
+			# `research_requested`, `GameScene` into a command, and the queue moves.
+			_research_the_first_thing()
+		62:
+			_report_research_queue()
+			_shoot("match_researching")
+		63:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -364,7 +385,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		59:
+		64:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -926,6 +947,102 @@ func _stand_up_the_dropsites() -> void:
 	var mid: BuildingDef = GameDataRegistry.building(DROPSITE_SITES[1][0])
 	_game._camera.centre_on(Iso.tile_centre_to_world(
 			(DROPSITE_SITES[1][1] as Vector2i) + mid.footprint / 2))
+
+
+# ── research (PLAN.md 9.3) ──────────────────────────────────────────────────
+
+## Away from the town centre and the dropsites, on ground this map leaves open.
+const BLACKSMITH_SITE := Vector2i(6, 3)
+
+var _blacksmith_id: int = 0
+
+
+## A finished blacksmith, so the Research row has something to hang off. Stood up
+## through the host world for `_stand_up_a_market`'s reason and with the same
+## solo-only caveat: this is not a client operation and is not pretending to be one.
+func _stand_up_a_blacksmith() -> void:
+	var world: SimWorld = Net.host().world
+	var me := Net.local_player_id()
+	var b := world.spawn_building(&"building.blacksmith", me, BLACKSMITH_SITE,
+			SimBuilding.Phase.COMPLETE, true)
+	if b == null:
+		push_warning("preview_match: no room for a blacksmith at %s" % BLACKSMITH_SITE)
+		return
+	_blacksmith_id = b.id
+	# And something to pay with, or every tile is correctly greyed for lack of funds
+	# and the picture says nothing about the row.
+	var p := world.player_for(me)
+	for kind in [&"food", &"wood", &"stone", &"gold"]:
+		p.stock[kind] = maxi(int(p.stock.get(kind, 0)), 3000)
+	var def: BuildingDef = GameDataRegistry.building(&"building.blacksmith")
+	_game._camera.centre_on(Iso.tile_centre_to_world(BLACKSMITH_SITE + def.footprint / 2))
+
+
+func _select_the_blacksmith() -> void:
+	if _blacksmith_id == 0:
+		return
+	_game._view.select([_blacksmith_id] as Array[int])
+	_game._refresh_panel()
+
+
+## Open the Research row, through the real action slot. It EXPANDS rather than
+## ordering anything, so this is a view toggle and the order comes from the grid.
+func _open_research() -> void:
+	var panel: SelectionPanel = _game._panel
+	for slot in panel._action_slots:
+		if slot.visible and slot.action != null and slot.action.id == &"research":
+			panel._on_action_pressed(slot.action)
+			return
+	push_warning("preview_match: the blacksmith offers no Research row")
+
+
+## WHAT THE GRID ACTUALLY DREW, printed because a screenshot of twelve unlabelled
+## tiles cannot be told from a screenshot of twelve empty ones. The owner asked for
+## "blank action tiles with only labels filled" (2026-08-29) and the label is
+## therefore the whole content of a tile -- so it is the thing to check.
+func _report_research() -> void:
+	var panel: SelectionPanel = _game._panel
+	var shown: Array[String] = []
+	var blank := 0
+	for slot in panel._detail_slots:
+		if not slot.visible or slot.action == null:
+			continue
+		shown.append("%s%s" % [slot.action.label,
+				"" if slot.action.enabled else " (locked)"])
+		if slot.action.label.strip_edges().is_empty():
+			blank += 1
+	print("  research: %d tiles -- %s" % [shown.size(), ", ".join(shown)])
+	if shown.is_empty():
+		push_warning("preview_match: the research grid is empty")
+	if blank > 0:
+		push_warning("preview_match: %d research tiles have no label and no icon, "
+				% blank + "so they are invisible")
+
+
+## Press the first tile that is actually available.
+func _research_the_first_thing() -> void:
+	var panel: SelectionPanel = _game._panel
+	for slot in panel._detail_slots:
+		if slot.visible and slot.action != null and slot.action.enabled \
+				and String(slot.action.id).begins_with("research:"):
+			panel._on_detail_pressed(slot.action)
+			return
+	push_warning("preview_match: nothing on the research grid could be pressed")
+
+
+func _report_research_queue() -> void:
+	var world: SimWorld = Net.host().world
+	var b := world.get_entity(_blacksmith_id) as SimBuilding
+	if b == null:
+		push_warning("preview_match: the blacksmith is gone")
+		return
+	var queued: Array[String] = []
+	for entry in b.queue:
+		queued.append("%s %s %d/%d" % [entry["kind"], entry["def_id"],
+				entry["progress"], entry["total"]])
+	print("  research queue: %s" % ("(empty)" if queued.is_empty() else ", ".join(queued)))
+	if queued.is_empty():
+		push_warning("preview_match: the press never reached the simulation")
 
 
 func _clear_selection() -> void:

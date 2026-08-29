@@ -87,6 +87,12 @@ var _player_skins: Dictionary = {}
 ## knowledge of what it can afford; see `_read_player_skins`.
 var _player_stock: Dictionary = {}
 
+## owner_id -> {tech id: true}, from that same block (PLAN.md 9.3). What the action
+## panel rings, prices or greys, and what the tech-tree page finally has a third state
+## from -- its own header records that it could not honestly draw RESEARCHED while
+## nothing wrote this.
+var _player_techs: Dictionary = {}
+
 ## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
 ## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
 ## answer questions about an entity that the *view* nodes do not carry -- who owns
@@ -510,6 +516,16 @@ func age_of(owner_id: int) -> int:
 	return maxi(1, int(skin_for(owner_id).get("age", 1)))
 
 
+## What a player has researched, as `tech id -> true` (PLAN.md 9.3). Empty for a
+## player not in the last snapshot, which is also what a player who has researched
+## nothing has -- and the two want the same answer everywhere this is read.
+##
+## A copy, for `stock_of`'s reason: the panel holds this across refreshes and must not
+## be handed something that mutates under it on the next snapshot.
+func researched_of(owner_id: int) -> Dictionary:
+	return (_player_techs.get(owner_id, {}) as Dictionary).duplicate()
+
+
 ## How far through an age advance a player is, 0.0 to 1.0, or 0.0 when they are
 ## not advancing. The ONE place the sim's int ticks become a float -- the ring is
 ## drawn from this and nothing else reads it, which is what keeps the fraction on
@@ -552,6 +568,15 @@ func _read_player_skins(snap: Dictionary) -> void:
 		# all because a CLIENT has no `SimWorld` to ask what it can afford, and the
 		# placement ghost has to answer that question (PLAN.md 12.1b).
 		_player_stock[int(pid)] = (ps.get("stock", {}) as Dictionary).duplicate()
+		# TECHNOLOGIES, AS A SET (9.3). The wire carries a sorted LIST -- which is what
+		# `state_hash` wants -- and every reader here asks "have they got this one", so
+		# it is turned once here rather than searched linearly per tile of the research
+		# grid. Kept apart from the skin for `_player_stock`'s reason: the skin is the
+		# two axes that pick an atlas, and this is neither of them.
+		var held: Dictionary = {}
+		for tech_id in (ps.get("researched", []) as Array):
+			held[StringName(tech_id)] = true
+		_player_techs[int(pid)] = held
 
 
 ## What a player holds, as the last snapshot reported it. Empty for a player not in it.

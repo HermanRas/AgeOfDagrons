@@ -470,7 +470,7 @@ Systems run in this fixed order by `SimWorld.step()`:
 | `VisionSystem` | Recompute per-player fog | ✅ |
 | `WinConditionSystem` | Evaluate the active mode's victory rule | ✅ |
 | `AISystem` | Drive AI players (emits Commands like any player) | ✅ 12.2a |
-| `TechSystem` | Research timers, stat modifiers | **not built — 9.3** |
+| ~~`TechSystem`~~ → `TechMods` | Research timers, stat modifiers | ✅ 9.3, **and it is not a `SimSystem`.** The timers turned out to be the production queue's — a research is an entry on it and `ProductionSystem` has counted those down since 5.4, so a second system ticking the same counter would be two owners of it. What was left is the modifiers, which are a pure function of which techs a player holds, so `TechMods` is a static resolver in the shape of `Formation` and `WallPlan` rather than a per-tick pass with nothing to do on 99.9% of ticks |
 
 The State column means *built unless it says otherwise*. It used to carry a bare phase number for
 both `TechSystem` and `AISystem`, which read as "scheduled" for one and was wrong for the other.
@@ -488,11 +488,12 @@ drift with nothing on screen to explain it.
 
 **Commands are the only way state changes.** Every one validates ownership server-side; a
 `validate()` that fails drops the command silently, so anything the UI offers must be gated the
-same way the command is. **All 23 built:** move, stop, gather, build, place-building, place-wall,
+same way the command is. **All 24 built:** move, stop, gather, build, place-building, place-wall,
 upgrade-building, toggle-gate, train, cancel-production, attack, advance-age, set-control-group,
 tribute, market-exchange, resign, debug-destroy, debug-set-age, garrison, ungarrison, set-waypoint,
-**set-stance** and **ability**. **Later:** research, and nothing else — 9.3's `TechSystem` is the
-only verb on this list still unwritten.
+set-stance, ability and **research**. **Later: nothing.** Research was the last name on the "later"
+list and it shipped with 9.3 on 2026-08-29; the vocabulary is complete for the MVP as specified,
+and the next verb added will be a new feature rather than a hole being filled.
 
 *This paragraph has now twice listed as "later" something already shipped elsewhere in this
 document — trade and resign once, then garrison — so it is worth recording what the sweep of
@@ -1595,8 +1596,8 @@ than on an x86 host, so the tax is `10` percent and not `0.1`.
 | # | Item | Tag |
 |---|---|---|
 | 9.1/9.2 | ✅ `AgeBadge` — the numeral in a gold circle, with advance progress as the **ring around the badge** rather than a separate bar. Progress rides the snapshot as **int ticks**; the view does the division, so the sim carries no floats | |
-| 9.3 | `TechSystem`: research timers, stat modifiers, gating. **The field yield's per-age ladder is standing in for a mill tech until this lands** | |
-| 9.4 | Tech tree screen — **the page exists as a wireframe** behind the minimap's bottom-left corner (§8.2b), and the renderer is real: it walks `techs.json` and will populate the day 9.3 fills it in. Read-only by design — research happens at the building | |
+| 9.3 | ✅ **DONE 2026-08-29.** 27 technologies at seven buildings, on the owner's ruling that *"upgrades are action tiles on buildings"*. **A research is an entry on the building's own production queue** — so the timer, the progress bar, the cancel slot and the refund all already existed, and `TechSystem` became `TechMods`, a static modifier resolver (see the systems table). An effect key is `stat.scope` and **every stat names a lookup the sim already makes PER USE**, which is what means no tech ever has to reach back and rewrite units that exist: attack damage, attack range, both armours, gather rate, carry cap and ability amount. `unit_hp`, `building_hp`, `speed`, `los` and `build_rate` are deliberately absent and `techs.json` records a different reason for each. **The field's per-age ladder was NOT replaced** — it is the base and Horse Collar multiplies it, through the one function that reads either | |
+| 9.4 | ✅ **DONE 2026-08-29** — it stopped being a wireframe when 9.3 filled `techs.json` in, which is what its renderer was written ahead of the data for. Four age columns, scrolling both ways, each node naming its technology, **the building that sells it** and its prerequisite. Read-only by design and by the owner's ruling: *"tech tree on mini map is only a visual guide letting you know what buildings hold what upgrades"* — research happens at the building, so this page issues no command and can never disagree with the server. Its third state, RESEARCHED, was drawn by the legend and never assigned while `SimPlayer.researched` was a field nothing wrote; `player_state` carries it now | |
 | 9.5 | Additional civilisations — the **re-skin tier** is pure content (a `visuals.json` skin set plus a name table, no sim change, partially shippable). Unique units and per-civ bonuses are the expensive tier and want a separate decision | |
 | 9.6 | Age re-skin: visuals resolve through the owner's current age. Pure view work — `SimPlayer.age` already reaches the client | |
 
@@ -1876,7 +1877,7 @@ flow (4.13), roaming and fleeing (6.1b), herding (6.5), fishing (6.5).
 | ~~4.8 Garrison → 4.9 defensive bonus~~ | — | — | ✅ **DONE 2026-08-27.** It was billed as the largest hole in walls and it was not: the owner ruled walls out of garrison, so 0 A.D.'s eight turret points per medium wall stay unused by decision. It did close `garrison_cap` (declared on all 31 buildings since 0.4, read by nothing) and it gave buildings an **attack**, which nothing had |
 | 2.4d Archipelago | Medium | Medium | New map type; the validator's connectivity claim has to change rather than relax. §11.6 |
 | 12.2b AI decision flow | High | Medium-high | The difficulty *list* ships and the opponents behind it do not — Normal/Hard/Unfair are Easy wearing three names and say so on screen. Parked until the balancing pass has been played, because tuning an AI against unbalanced speeds tunes it against the wrong game |
-| 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | `TechSystem` is unbuilt; the field yield's per-age ladder stands in for a mill tech |
+| 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | 2.4c Save map | Medium | Low-medium | §11.3 |
 | 12.1b LAN discovery | Medium | Low | Typing an IP was the friction point on hardware |
@@ -2126,13 +2127,27 @@ have shipped a real upgrade since 5.8 — the wall-to-gate conversion, which mut
 keeps the entity id rather than respawning. What is missing is everything an upgrade that is not a
 gate needs: a COST (the gate inherits the wall's), a TIME (it is instantaneous), and a decision
 about whether an upgrade is a per-building action or a player-wide tech, which is the same
-question 9.3 asks and is the reason the two are worth sequencing together.
+question 9.3 asks and is the reason the two are worth sequencing together. **9.3 shipped first
+and answered it** — see the note under item 2: they are two mechanisms and an upgrade is the
+per-building one. A cost and a time are what is left.
 
-**2. 9.3 `TechSystem`** — and it moved UP, because ages now cost resources (2026-08-27) and
-that makes the tech tree the next thing the age ladder is *for*. §9 is the biggest genuinely
-unstarted phase: `techs.json` is deliberately empty, the tech-tree page renders whatever is in
-it, every AI profile already declares `techs: true` against nothing, and the field yield's
-per-age ladder is standing in for a mill upgrade that does not exist.
+*~~**2. 9.3 `TechSystem`.**~~ **BUILT 2026-08-29**, on the owner's instruction to "wire up tech
+tree 9" — and it went in ahead of Phase 5 above, which is still open. See the 9.3 and 9.4 rows.
+Two things it left behind rather than closed:*
+
+  - **THE AI DOES NOT RESEARCH.** Every `ai_profile` has declared `techs: true` against nothing
+    since 12.2b, and it still does: `ResearchCommand` exists and no rule emits one. That is the
+    same shape as the hole 4.11's population counter was in — a field read by something that
+    nothing writes — and it is now a *balance* hole as well, because a human who buys Blast
+    Furnace is fighting an army that never will. **The AI ladder's tick table in BUGS.md was
+    measured before this and is not invalidated by it** (neither side researches), but the first
+    rule that does research invalidates every row.
+  - **5.3, building upgrades, is still open and its open question is now ANSWERED.** §15's item 1
+    asked "per-building action or player-wide tech", and the owner's ruling settles it: an upgrade
+    is an action tile on a building, and a *technology* is the player-wide thing bought there.
+    They are two mechanisms, not one — the wall-to-gate conversion changes one building and stays
+    `UpgradeBuildingCommand`. What 5.3 still needs is a COST and a TIME for a non-gate upgrade,
+    and the queue that 9.3 just taught to hold a research is the obvious place to put the time.
 
 *~~3. 4.13's pack/unpack state machine.~~ **Built 2026-08-28** — see the Phase 4 table's 4.13
 row. All three engines travel packed and fight deployed, automatically, on an order rather than

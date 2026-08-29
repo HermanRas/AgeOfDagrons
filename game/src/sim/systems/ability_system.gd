@@ -107,9 +107,22 @@ func _fire(w: SimWorld, u: SimUnit, def: UnitDef, target: SimEntity, aim: Vector
 	match def.ability_effect:
 		&"heal":
 			if target != null:
-				target.hp = mini(target.max_hp, target.hp + def.ability_amount)
+				target.hp = mini(target.max_hp, target.hp + _amount(w, u, def))
 		&"damage":
 			_burn(w, u, def, aim)
+
+
+## What this ability is worth, after its owner's technologies (PLAN.md 9.3 -- Sanctity
+## and Fervour are `ability_amount.heal`).
+##
+## SCOPED BY THE ABILITY'S OWN `ability_effect`, not by the unit. A monastery tech that
+## said `ability_amount.all` would also make the dragon's fire breath hotter, which is
+## not what "Sanctity" means and not what the player paid for -- and the effect name is
+## already the right axis, because it is what tells a heal from a blast everywhere else
+## in this file.
+static func _amount(w: SimWorld, u: SimUnit, def: UnitDef) -> int:
+	return def.ability_amount + TechMods.of(w.mods_of(u.owner_id), &"ability_amount",
+			def.ability_effect)
 
 
 ## Everything hostile within `ability_radius` of `aim` takes `ability_amount`, blunted by
@@ -140,7 +153,7 @@ func _burn(w: SimWorld, u: SimUnit, def: UnitDef, aim: Vector2i) -> void:
 		var e := w.get_entity(id)
 		if e == null or not e.alive:
 			continue
-		e.take_damage(CombatSystem._damage_after_armour(w, e, def.ability_amount,
+		e.take_damage(CombatSystem._damage_after_armour(w, e, _amount(w, u, def),
 				def.ability_damage_type), 0)
 
 

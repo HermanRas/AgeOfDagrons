@@ -76,6 +76,10 @@ var _buildings: Dictionary = {}                   # StringName -> BuildingDef
 var _wall_tier_of: Dictionary = {}
 var _resources: Dictionary = {}                   # StringName -> ResourceDef
 var _techs: Dictionary = {}                       # StringName -> TechDef
+## Building id -> the techs it offers, in menu order. Derived from the defs on first
+## use by `techs_at()`, and cleared with them on reload -- the same lifecycle
+## `_wall_tier_of` above has, for the same reason.
+var _techs_at: Dictionary = {}
 var _ai_profiles: Dictionary = {}                 # StringName -> AIProfile (12.2b)
 var _factions: Dictionary = {}                    # StringName -> Dictionary (raw, 9.5).
                                                   # One entry, `faction.default`: v1 is one
@@ -127,6 +131,7 @@ func load_all(force := false) -> void:
 	_wall_tier_of.clear()          # derived from _buildings; see wall_tier()
 	_resources = _read_defs(RESOURCES_PATH, ResourceDef.from_dict)
 	_techs = _read_defs(TECHS_PATH, TechDef.from_dict)
+	_techs_at.clear()              # derived from _techs; see techs_at()
 	_factions = _read_json(FACTIONS_PATH)
 	_market = _read_json(MARKET_PATH)
 	_read_ages()
@@ -854,12 +859,50 @@ func resource_ids() -> Array[StringName]:
 	return _sorted_keys(_resources)
 
 
-## Every declared tech, sorted. EMPTY TODAY and that is the correct answer, not a
-## failure: `techs.json` is deliberately empty until 9.3 (its own note says so).
-## Exists so the tech-tree page can render the real set the day there is one,
-## rather than being written twice.
+## Every declared tech. **Sorted by IDENTITY, which is arbitrary** -- see
+## `_sorted_keys`, and `building_ids()` above has the same caveat. Any caller putting
+## these in front of a player re-sorts by something a person can predict;
+## `SelectionActions._research_details` and `TechTreePanel` both do.
 func tech_ids() -> Array[StringName]:
 	return _sorted_keys(_techs)
+
+
+## The techs offered by one building, sorted by (age unlocked, then display name).
+##
+## THE REVERSE OF `TechDef.researched_at`, derived rather than declared, so a tech
+## moved from the blacksmith to the university is one edit in `techs.json` and the
+## action row follows. Building it here rather than in the panel is the same call
+## `wall_tier()` made: it is a fact about the data files, and two consumers deriving
+## it separately is how they come to disagree.
+##
+## Sorted in DISPLAY order rather than id order, because the only consumers are menus
+## and a menu whose buttons move between runs is worse than one in a dull order --
+## `tech_ids()` above cannot be trusted for that and says so.
+##
+## Cached on first use and cleared by `load_all()`, exactly as `_wall_tier_of` is.
+func techs_at(building_id: StringName) -> Array[StringName]:
+	if not _loaded:
+		load_all()
+	if _techs_at.is_empty():
+		for id in _techs:
+			var t: TechDef = _techs[id]
+			for b in t.researched_at:
+				if not _techs_at.has(b):
+					_techs_at[b] = ([] as Array[StringName])
+				(_techs_at[b] as Array[StringName]).append(id)
+		for b in _techs_at:
+			(_techs_at[b] as Array[StringName]).sort_custom(_tech_menu_order)
+	return _techs_at.get(building_id, [] as Array[StringName])
+
+
+func _tech_menu_order(a: StringName, b: StringName) -> bool:
+	var ta: TechDef = _techs[a]
+	var tb: TechDef = _techs[b]
+	if ta.age_required != tb.age_required:
+		return ta.age_required < tb.age_required
+	if ta.name != tb.name:
+		return ta.name < tb.name
+	return String(a) < String(b)
 
 
 func faction_ids() -> Array[StringName]:
@@ -1054,6 +1097,44 @@ func validate() -> void:
 			load_warnings.append("building '%s' attacks but names no projectile" % id)
 		elif b.attack_projectile != &"":
 			_require_visual(b.attack_projectile, "building '%s' projectile" % id)
+
+	# TECHNOLOGIES (PLAN.md 9.3), and every check here catches a tech that is SILENTLY
+	# DEAD rather than one that crashes. That is the whole reason they are worth
+	# writing: a tech with a mistyped `researched_at` has no button anywhere in the
+	# game, a mistyped `requires` can never be bought, and a mistyped effect key adds
+	# to a bucket nothing reads -- all three look exactly like a tech nobody has got
+	# round to, and none of them fails anything.
+	for id in _techs:
+		var t: TechDef = _techs[id]
+		_require_kinds(t.cost, "tech '%s' cost" % id)
+		if t.researched_at.is_empty():
+			load_warnings.append("tech '%s' is researched at no building" % id)
+		for b in t.researched_at:
+			if not _buildings.has(b):
+				load_warnings.append("tech '%s' is researched at unknown building '%s'"
+						% [id, b])
+			elif (_buildings[b] as BuildingDef).age_required > t.age_required:
+				# The building arrives AFTER the tech does, so the tech is unreachable
+				# for the ages in between and there is nothing on screen to say why.
+				load_warnings.append(
+					"tech '%s' unlocks at age %d but '%s' does not exist until age %d"
+							% [id, t.age_required, b, (_buildings[b] as BuildingDef).age_required])
+		for req in t.requires:
+			if not _techs.has(req):
+				load_warnings.append("tech '%s' requires unknown tech '%s'" % [id, req])
+			elif (_techs[req] as TechDef).age_required > t.age_required:
+				load_warnings.append(
+					"tech '%s' unlocks at age %d but requires '%s' from age %d"
+							% [id, t.age_required, req, (_techs[req] as TechDef).age_required])
+		if t.research_time_ticks <= 0:
+			load_warnings.append("tech '%s' researches instantly" % id)
+		if t.effects.is_empty():
+			load_warnings.append("tech '%s' declares no effects" % id)
+		for key in t.effects:
+			if not TechMods.KNOWN_EFFECTS.has(StringName(key)):
+				load_warnings.append(
+					"tech '%s' declares effect '%s', which nothing in the sim reads"
+							% [id, key])
 
 	# A prop naming a visual that does not exist would draw the magenta unknown
 	# beside an otherwise perfect building -- loud, but only once someone looks.

@@ -1022,6 +1022,40 @@ func resource_def(def_id: StringName) -> ResourceDef:
 	return GameDataRegistry.resource_def(def_id) if GameDataRegistry != null else null
 
 
+func tech_def(def_id: StringName) -> TechDef:
+	return GameDataRegistry.tech(def_id) if GameDataRegistry != null else null
+
+
+## Give `player_id` a technology and re-derive what it does (PLAN.md 9.3).
+##
+## THE ONLY WRITER of `SimPlayer.researched`, so the set and the modifier table
+## summed from it cannot drift apart -- which they would the first time somebody
+## added a tech somewhere else and forgot the second line. Called by
+## `ProductionSystem` when a research finishes, and by tests and the debug path
+## directly.
+##
+## Idempotent, and that matters more than it looks: `ResearchCommand.validate`
+## already refuses a tech a player holds or is researching, but validation happens
+## when the command lands and completion happens up to a minute later, so two
+## buildings that both slipped a copy through would otherwise double the effect.
+## Re-granting simply re-sums the same set.
+func grant_tech(player_id: int, tech_id: StringName) -> void:
+	var p := player_for(player_id)
+	if p == null or tech_id == &"" or tech_def(tech_id) == null:
+		return
+	p.researched[tech_id] = true
+	p.tech_mods = TechMods.sum(p.researched)
+
+
+## The modifier table for whoever owns `e`, or an empty one for gaia and for an
+## entity whose owner has gone. Every hot-path caller goes through this rather than
+## reaching for `player_for(...).tech_mods`, which is null-unsafe on exactly the
+## entities -- wildlife, trees, a defeated player's rubble -- that no tech applies to.
+func mods_of(owner_id: int) -> Dictionary:
+	var p := player_for(owner_id)
+	return p.tech_mods if p != null else {}
+
+
 ## Desync/regression detection (PLAN.md 7.7 layer 3): the same MatchConfig +
 ## command log run twice must hash identically. Dictionary iteration order in
 ## `entities` isn't guaranteed, so entity ids are sorted before folding them
@@ -1149,9 +1183,16 @@ func state_hash() -> int:
 		# hosts that disagreed about who can see what would disagree about the wire
 		# contents while every entity in the world still matched, and the fog is the
 		# one piece of per-player state that is never echoed back to be checked.
+		# WHAT THIS PLAYER HAS RESEARCHED (9.3), sorted, as Strings. It changes what
+		# every blow of theirs is worth and what every villager of theirs gathers, so
+		# two hosts that disagreed about one tech would diverge in hp and stock a few
+		# ticks later with nothing to say why. `tech_mods` is NOT folded in beside it:
+		# it is a pure function of this list, so hashing both would report one
+		# divergence twice and hashing only the total would say the sums differ without
+		# saying which tech they differ about.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
 				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated,
-				p.vision])
+				p.researched_ids(), p.vision])
 
 	# The outcome itself, which is the single most important thing in the hash to get
 	# right: two clients that disagree about who won have diverged about the only

@@ -374,12 +374,58 @@ func test_ages_are_one_indexed_to_match_sim_player() -> void:
 	assert_null(reg.age(reg.age_count() + 1), "past the last age is null")
 
 
-func test_techs_are_empty_but_the_file_loads() -> void:
-	# An absent file and an empty one are different states and only one is a bug;
-	# this pins that techs.json is the empty kind, not the missing kind.
-	assert_eq(reg.tech(&"tech.anything"), null)
+func test_the_technology_roster_is_present() -> void:
+	# WAS `test_techs_are_empty_but_the_file_loads`, and it asserted the file was the
+	# empty kind rather than the missing kind. 9.3 filled it in on 2026-08-29, so the
+	# question changed: an unknown id must still answer null, and a real one must not.
+	assert_eq(reg.tech(&"tech.anything"), null, "an unknown id is still null, not a stub")
 	assert_false("; ".join(reg.load_warnings).contains("techs.json"),
-			"techs.json loads cleanly rather than reporting as missing")
+			"techs.json loads cleanly")
+	assert_true(reg.tech_ids().size() >= 20,
+			"the roster is populated -- %d technologies" % reg.tech_ids().size())
+
+	var forging: TechDef = reg.tech(&"tech.forging")
+	assert_not_null(forging)
+	assert_eq(forging.name, "Forging")
+	assert_true(forging.researched_at.has(&"building.blacksmith"))
+	assert_true(forging.research_time_ticks > 0)
+
+
+func test_techs_at_is_the_reverse_of_researched_at() -> void:
+	# The menu reads this and the command reads `researched_at`; two indexes of one
+	# fact is how they come to disagree, so this pins that the derived one is derived.
+	for building_id in reg.building_ids():
+		for tech_id in reg.techs_at(building_id):
+			assert_true((reg.tech(tech_id) as TechDef).researched_at.has(building_id),
+					"%s appears in %s's menu and says so itself" % [tech_id, building_id])
+
+
+func test_a_buildings_tech_menu_is_ordered_by_age_then_name() -> void:
+	# `tech_ids()` sorts by StringName IDENTITY, which is arbitrary and not stable
+	# between runs. A menu whose buttons move is what this ordering exists to stop.
+	var previous_age := 0
+	var previous_name := ""
+	for tech_id in reg.techs_at(&"building.blacksmith"):
+		var t: TechDef = reg.tech(tech_id)
+		if t.age_required == previous_age:
+			assert_true(t.name >= previous_name,
+					"%s follows %s alphabetically within its age" % [t.name, previous_name])
+		else:
+			assert_true(t.age_required > previous_age, "ages ascend")
+		previous_age = t.age_required
+		previous_name = t.name
+	assert_true(previous_age > 0, "the blacksmith actually offers something")
+
+
+func test_no_building_is_asked_to_teach_more_than_the_detail_grid_holds() -> void:
+	# The action panel pages a longer list correctly, but twelve is where the
+	# blacksmith sits today and this is what makes crossing it a decision rather than
+	# a surprise.
+	for building_id in reg.building_ids():
+		assert_true(reg.techs_at(building_id).size() <= SelectionActions.MAX_DETAILS,
+				"%s offers %d technologies against a %d-slot grid"
+						% [building_id, reg.techs_at(building_id).size(),
+						SelectionActions.MAX_DETAILS])
 
 
 func test_the_player_colour_palette_covers_every_player_slot() -> void:

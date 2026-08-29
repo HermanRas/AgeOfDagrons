@@ -155,15 +155,56 @@ func test_the_tech_tree_says_it_has_no_data_yet() -> void:
 
 
 func test_ages_you_have_not_reached_are_locked() -> void:
-	# The only state the page can honestly know: `SimPlayer` has no researched-tech
-	# field, so a node is available if its age has been reached and locked otherwise.
-	# A third state faked out of nothing would be the hole 4.11's counter used to be.
+	# Age 2 rather than age 1, because 9.3's roster has nothing in age 1 -- there is
+	# nothing to research before you have a blacksmith -- and an empty column has no
+	# node to be lit or dim.
 	var tree := TechTreePanel.new()
-	tree.set_age(1)
-	var first: Control = tree._columns.get_child(0)
+	tree.set_age(2)
+	var second: Control = tree._columns.get_child(1)
 	var last: Control = tree._columns.get_child(GameDataRegistry.age_count() - 1)
-	assert_true(_has_lit_node(first), "age 1 is reachable")
+	assert_true(_has_lit_node(second), "age 2 is reachable")
 	assert_false(_has_lit_node(last), "the last age is not")
+	tree.free()
+
+
+func test_an_age_with_no_technologies_draws_no_placeholders() -> void:
+	# The lattice is all-or-nothing as of 9.3. It used to fill any empty column, which
+	# was right while every column was empty and became a promise of an age-1 tier that
+	# is never coming the moment one was not.
+	var tree := TechTreePanel.new()
+	tree.set_age(4)
+	if not GameDataRegistry.tech_ids().is_empty():
+		assert_eq(_node_count(tree._columns.get_child(0)), 0,
+				"age 1 has no technologies and shows none")
+		assert_true(_node_count(tree._columns.get_child(1)) > 0, "age 2 does")
+	tree.free()
+
+
+func test_a_researched_technology_is_drawn_as_researched() -> void:
+	# The third state, which this page's header spent a paragraph explaining it could
+	# not honestly draw while `SimPlayer.researched` was a field nothing wrote.
+	var tree := TechTreePanel.new()
+	tree.set_age(4)
+	var before := _node_count_by_border(tree, HudStyle.GOLD)
+	tree.set_researched({&"tech.forging": true})
+	assert_eq(_node_count_by_border(tree, HudStyle.GOLD), before + 1,
+			"exactly one more node is drawn in full gold")
+	tree.free()
+
+
+func test_a_node_names_the_building_it_is_bought_at() -> void:
+	# The owner's ruling of 2026-08-29: the page is "only a visual guide letting you
+	# know what buildings hold what upgrades". Without this line it is a list of names
+	# with nothing to do about any of them.
+	var tree := TechTreePanel.new()
+	tree.set_age(2)
+	var said := ""
+	for column in tree._columns.get_children():
+		for node in column.get_children():
+			if node is PanelContainer:
+				said += _text_of(node) + "\n"
+	assert_true(said.contains("Blacksmith"),
+			"Forging says where it is bought -- got: %s" % said)
 	tree.free()
 
 
@@ -174,3 +215,35 @@ func _has_lit_node(column: Control) -> bool:
 		if child is PanelContainer and is_equal_approx(child.modulate.a, 1.0):
 			return true
 	return false
+
+
+func _node_count(column: Control) -> int:
+	var n := 0
+	for child in column.get_children():
+		if child is PanelContainer:
+			n += 1
+	return n
+
+
+## Nodes whose border is the FULL gold, which `_node` uses for RESEARCHED alone --
+## available draws it at 0.8 alpha and locked at 0.25.
+func _node_count_by_border(tree: TechTreePanel, colour: Color) -> int:
+	var n := 0
+	for column in tree._columns.get_children():
+		for node in column.get_children():
+			if not (node is PanelContainer):
+				continue
+			var style := (node as PanelContainer).get_theme_stylebox("panel") as StyleBoxFlat
+			if style != null and style.border_color == colour:
+				n += 1
+	return n
+
+
+func _text_of(node: Control) -> String:
+	var out := ""
+	for child in node.get_children():
+		if child is Label:
+			out += (child as Label).text + " "
+		elif child is Control:
+			out += _text_of(child as Control)
+	return out

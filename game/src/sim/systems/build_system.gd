@@ -47,6 +47,10 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# face when standing against a long wall.
 	u.facing = SimUnit.facing_toward(b.pos - u.pos)
 
+	# NO BUILD-SPEED TECH GOES HERE, and `techs.json` records why: `BUILD_RATE` is 1
+	# progress per builder per tick, so a percentage modifier has nothing to round to
+	# below +100%. A build tech wants this counter to run at a finer granularity first,
+	# and that is a change to what `build_total` means.
 	if b.add_build_progress(BUILD_RATE):
 		# COMPLETE is set inside add_build_progress().
 		_finished(w, u, b)

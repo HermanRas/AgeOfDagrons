@@ -746,3 +746,130 @@ func test_page_one_holds_the_buildings_a_player_has_had_longest() -> void:
 			&"building.lumber_camp", &"building.mining_camp"]:
 		assert_true(first_page.has(building_id),
 				"%s is an age-1 building and stays on page 1" % building_id)
+
+
+# ── research (PLAN.md 9.3) ──────────────────────────────────────────────────
+
+## A FINISHED building of the local player's. `phase` is the part that matters and is
+## the part the older fixtures above deliberately leave out -- Gate, Garrison, Upgrade
+## and now Research all refuse anything that is not COMPLETE.
+func _finished(def_id: StringName, queue: Array = [], id: int = 7) -> Dictionary:
+	return {"id": id, "def_id": def_id, "owner_id": 1, "hp": 1000, "max_hp": 1000,
+			"alive": true, "phase": SimBuilding.Phase.COMPLETE,
+			"queue_len": queue.size(), "queue_fraction": 0.0, "queue": queue}
+
+
+func _held(ids: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for id in ids:
+		out[id] = true
+	return out
+
+
+func test_only_a_building_that_teaches_something_offers_research() -> void:
+	# Twenty-four of the thirty-one get no slot at all rather than a disabled one --
+	# a house does not have research the way a house does have repair.
+	var smith := SelectionActions.for_selection(_finished(&"building.blacksmith"), 1, true, [], 2)
+	assert_true(_ids(smith).has(&"research"))
+
+	var house := SelectionActions.for_selection(_finished(&"building.house"), 1, true, [], 4)
+	assert_false(_ids(house).has(&"research"),
+			"and it is absent, not greyed -- absent is what keeps every other row unchanged")
+
+
+func test_the_castle_still_fits_its_eight_slots() -> void:
+	# The trap this file's own source warns about: `_capped` slices at MAX_ACTIONS and
+	# the castle already emits eight. It has no techs precisely so it still emits eight.
+	var castle := _finished(&"building.castle")
+	var actions := SelectionActions.for_selection(castle, 1, true, [], 4)
+	assert_false(_ids(actions).has(&"research"))
+	assert_true(actions.size() <= SelectionActions.MAX_ACTIONS)
+
+
+func test_a_foundation_teaches_nothing_yet() -> void:
+	var raw := _finished(&"building.blacksmith")
+	raw["phase"] = SimBuilding.Phase.FOUNDATION
+	assert_false(_ids(SelectionActions.for_selection(raw, 1, true, [], 2)).has(&"research"))
+
+
+func test_the_research_badge_counts_what_is_bought_against_what_is_offered() -> void:
+	var smith := _finished(&"building.blacksmith")
+	var fresh := _by_id(SelectionActions.for_selection(smith, 1, true, [], 2), &"research")
+	assert_eq(fresh.badge, "0/4", "four blacksmith technologies unlock in age 2")
+
+	var some := _by_id(SelectionActions.for_selection(smith, 1, true, [], 2,
+			_held([&"tech.forging"])), &"research")
+	assert_eq(some.badge, "1/4")
+
+
+func test_the_research_row_expands_rather_than_ordering_anything() -> void:
+	# One slot for twelve technologies. It has to expand or the blacksmith would want
+	# twelve of the action column's eight.
+	var a := _by_id(SelectionActions.for_selection(
+			_finished(&"building.blacksmith"), 1, true, [], 4), &"research")
+	assert_true(a.expands)
+	assert_true(a.enabled)
+
+
+func test_the_detail_grid_lists_only_the_techs_this_age_has_reached() -> void:
+	var smith := _finished(&"building.blacksmith")
+	var age2 := SelectionActions.details_for(&"research", smith, 1, [], 2)
+	var age4 := SelectionActions.details_for(&"research", smith, 1, [], 4)
+	assert_eq(age2.size(), 4, "one tier")
+	assert_eq(age4.size(), 12, "all three")
+	assert_false(_ids(age2).has(&"research:tech.blast_furnace"),
+			"an age-4 tech is omitted, not greyed -- the tech tree is where promises live")
+
+
+func test_a_researched_tech_is_ringed_and_not_pressable() -> void:
+	var details := SelectionActions.details_for(&"research", _finished(&"building.blacksmith"),
+			1, [], 2, &"", _held([&"tech.forging"]))
+	var forging := _by_id(details, &"research:tech.forging")
+	assert_true(forging.selected, "ringed, which is the third state `enabled` could not say")
+	assert_false(forging.enabled, "there is nothing left to press")
+
+
+func test_a_tech_whose_prerequisite_is_missing_names_it() -> void:
+	# Shown disabled rather than omitted, unlike the age gate: "research Forging first"
+	# is something the player can act on now, on this building, in this menu.
+	var details := SelectionActions.details_for(&"research", _finished(&"building.blacksmith"),
+			1, [], 3)
+	var iron := _by_id(details, &"research:tech.iron_casting")
+	assert_not_null(iron, "it is listed")
+	assert_false(iron.enabled)
+	assert_eq(iron.badge, "Forging")
+
+	var ready := _by_id(SelectionActions.details_for(&"research",
+			_finished(&"building.blacksmith"), 1, [], 3, &"", _held([&"tech.forging"])),
+			&"research:tech.iron_casting")
+	assert_true(ready.enabled, "and it lights up the moment the prerequisite lands")
+	assert_false(ready.cost.is_empty(), "priced, like a train slot")
+
+
+func test_a_tech_already_in_the_queue_is_not_offered_again() -> void:
+	var smith := _finished(&"building.blacksmith", ["tech.forging"])
+	var forging := _by_id(SelectionActions.details_for(&"research", smith, 1, [], 2),
+			&"research:tech.forging")
+	assert_false(forging.enabled)
+	assert_eq(forging.badge, "...")
+
+
+func test_a_queued_research_draws_its_own_name_rather_than_the_word_Queued() -> void:
+	# 5.4's defect, arriving through the other door: the queue carries def ids and
+	# `GameDataRegistry.unit()` answers null for a tech id.
+	var smith := _finished(&"building.blacksmith", ["tech.forging"])
+	var queue := SelectionActions.details_for(&"", smith, 1, [], 2)
+	assert_eq(queue.size(), 1)
+	assert_eq(queue[0].label, "Forging")
+	assert_eq(queue[0].id, &"cancel:0", "and tapping it still cancels")
+	assert_true(queue[0].payload == null or queue[0].payload == &"",
+			"no payload -- ActionSlot would try to crop a portrait a tech has not got")
+
+
+func test_the_blacksmiths_full_ladder_still_fits_one_page() -> void:
+	# Twelve is exactly MAX_DETAILS. Asserted so the day a thirteenth is added, this
+	# says so rather than the thirteenth silently not being there.
+	var details := SelectionActions.details_for(&"research",
+			_finished(&"building.blacksmith"), 1, [], 4)
+	assert_eq(SelectionActions.page_count(details.size()), 1)
+	assert_eq(details.size(), SelectionActions.MAX_DETAILS)

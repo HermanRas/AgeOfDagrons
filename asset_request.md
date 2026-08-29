@@ -24,6 +24,7 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | P | Request | The phase it is holding up |
 |---|---|---|
 | **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
+| **P8** | **27 technology icons** — one per tech in `techs.json` | **PLAN.md 9.3, shipped 2026-08-29 with none of them.** Nothing is blocked and the feature is playable: a research tile draws its label. Backlog, on the owner's instruction |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
@@ -234,6 +235,44 @@ not yet have a grid for — that is game-side work and mine). Everything else is
 winged creature and were derived by the projection inversion your own §4 records as
 structurally wrong for anything not standing upright. Please re-measure rather than
 inheriting them.
+
+### [P8] Technology icons — 27 of them, and none of them is urgent (game side, 2026-08-29)
+
+**Backlog, and it is filed as backlog on the owner's own instruction:** *"we can use
+blank action tiles with only lables filled and log art needed in asset_request.md as a
+back log."* Phase 9.3 shipped that way the same day — the tech tree is wired, 27
+technologies are researchable at seven buildings, and **every one of them draws its
+name on an unadorned tile**. Nothing is blocked, nothing is magenta, and no code
+changes when the art lands: `SelectionActions.ICONS` is a plain id → filename map and
+`ActionSlot` prefers an icon file over a label the moment there is one.
+
+**What's needed:** one 52 px icon per technology, in the style of the existing
+`assets/ui/icons/act_*.png` set. The ids are the keys of `game/data/techs.json` and
+the names are its `name` fields:
+
+| building | technologies |
+|---|---|
+| Town Centre | Wheelbarrow, Hand Cart |
+| Mill | Horse Collar, Heavy Plough, Crop Rotation |
+| Lumber Camp | Double-Bit Axe, Bow Saw |
+| Mining Camp | Gold Mining, Stone Mining, Gold Shaft Mining, Stone Shaft Mining |
+| Blacksmith | Forging, Iron Casting, Blast Furnace, Fletching, Bodkin Arrow, Bracer, Scale Mail, Chain Mail, Plate Mail, Padded Armour, Leather Armour, Ring Armour |
+| University | Ballistics, Chemistry |
+| Monastery | Sanctity, Fervour |
+
+**FOUR LADDERS OF THREE ARE THE ONLY PART THAT NEEDS THINKING ABOUT.** The blacksmith's
+twelve are four lines of three tiers — melee attack, ranged attack, melee armour,
+ranged armour — and at age 4 all twelve are on screen at once in a 4x3 grid, one line
+per column. **A player has to tell the LINE apart at a glance and the tier second**, so
+one motif per line with a tier mark on it beats twelve unrelated pictures. That is how
+AoE II draws them and it is why its blacksmith is readable at a thumb's distance.
+
+**Where it plugs in once baked:** an entry each in `SelectionActions.ICONS`, keyed by
+the tech id. That is the whole of it — `_research_details` already asks
+`ICONS.get(t.id, "")` in the shape every other action does, and today gets "".
+
+**Do not start this ahead of A.10.** The buildings roster paces phase 5 and this paces
+nothing; it is here so it is written down, not so it is done next.
 
 ---
 

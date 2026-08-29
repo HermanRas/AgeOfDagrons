@@ -251,7 +251,7 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 			u.stop()
 		return
 
-	if not _within_reach(u, target, def.attack_range):
+	if not _within_reach(u, target, reach_of(w, u, def)):
 		_close_in(w, u, target)
 		return
 
@@ -277,7 +277,7 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# nothing else in the roster notices.
 	if not u.can_fire():
 		return
-	target.take_damage(_damage_against(w, target, def), 0)
+	target.take_damage(_damage_against(w, u, target, def), 0)
 	# THE ARROW IS LOOSED AFTER THE DAMAGE, and it carries none of it (4.13). The blow
 	# has already landed; this is only what shows where it came from. `SimProjectile`'s
 	# header has the argument for keeping those two apart, and the consequence: the
@@ -422,6 +422,21 @@ static func _within_reach(u: SimUnit, target: SimEntity, attack_range: int) -> b
 	return tile_gap(u.tile(), _rect_of(target)) <= maxi(1, attack_range)
 
 
+## How far `u` can actually reach, which is its def's range plus whatever its owner has
+## researched (PLAN.md 9.3 -- Ballistics is `attack_range.pierce`).
+##
+## PUBLIC AND CALLED RATHER THAN INLINED, because `SiegeSystem` asks the same question
+## when it decides an engine is close enough to set up. Two places reading `attack_range`
+## and only one of them adding the tech is a siege engine that deploys a tile short of
+## where it can shoot from -- the class of bug `Diplomacy`'s header is a standing warning
+## about, arriving through a number instead of a predicate.
+static func reach_of(w: SimWorld, u: SimUnit, def: UnitDef) -> int:
+	if def == null:
+		return 0
+	return def.attack_range + TechMods.for_unit(w.mods_of(u.owner_id), def,
+			&"attack_range")
+
+
 static func _rect_of(e: SimEntity) -> Rect2i:
 	if e is SimBuilding:
 		return (e as SimBuilding).footprint_rect()
@@ -434,8 +449,20 @@ static func _rect_of(e: SimEntity) -> Rect2i:
 ## is nothing to subtract, and inventing a default here would be a balance number
 ## hidden in a system rather than a value in the data where it can be tuned. Add
 ## `armor` to BuildingDef the day buildings should resist arrows.
-static func _damage_against(w: SimWorld, target: SimEntity, def: UnitDef) -> int:
-	return _damage_after_armour(w, target, def.attack_damage, def.attack_type)
+## THE ATTACKER'S OWN UPGRADES ARE ADDED HERE (9.3), before armour, so a Blast Furnace
+## swing is blunted by the defender's Plate Mail exactly as the base swing is -- which
+## is what makes the two ladders trade against each other rather than one always winning.
+##
+## Units only. A tower's shot goes through `_damage_after_armour` below and picks up no
+## smithing bonus, which is AoE's rule and also the honest one here: the blacksmith
+## upgrades are about blades and bows, and `SimBuilding.attack_damage` is copied off the
+## def at spawn, so a building bonus would have wanted a retroactivity pass this
+## deliberately does not have.
+static func _damage_against(w: SimWorld, attacker: SimUnit, target: SimEntity,
+		def: UnitDef) -> int:
+	var damage := def.attack_damage + TechMods.for_unit(
+			w.mods_of(attacker.owner_id), def, &"attack_damage")
+	return _damage_after_armour(w, target, damage, def.attack_type)
 
 
 ## The same rule with the attacker's def unpacked into two plain values, so a
@@ -448,6 +475,17 @@ static func _damage_against(w: SimWorld, target: SimEntity, def: UnitDef) -> int
 ## first time either is corrected. One rule, two callers, and the garrison bonus is
 ## added by the caller before it gets here -- armour applies to the total, so a
 ## castle's 42 is blunted once rather than once per archer inside it.
+##
+## THE DEFENDER'S ARMOUR UPGRADES ARE ADDED HERE (9.3), which puts them on every blow
+## in the game from one place: a unit's swing, a tower's volley and a dragon's breath
+## all come through this one function, and Scale Mail has to blunt all three. It is
+## also why the armour half went here rather than beside the attack half above --
+## `AbilitySystem` calls this and does not call that.
+##
+## Armour applies to UNITS and workers are not excluded from it, unlike the attack
+## bonus: `TechMods.for_all` is the "everyone your player owns" scope, and Padded
+## Armour protecting the villagers is both what a player expects and what stops a
+## smithing race making raids on an economy strictly better over time.
 static func _damage_after_armour(w: SimWorld, target: SimEntity, damage: int,
 		attack_type: StringName) -> int:
 	var armour := 0
@@ -455,4 +493,6 @@ static func _damage_after_armour(w: SimWorld, target: SimEntity, damage: int,
 		var td := w.unit_def((target as SimUnit).def_id)
 		if td != null:
 			armour = td.armor_pierce if attack_type == &"pierce" else td.armor_melee
+			armour += TechMods.for_all(w.mods_of(target.owner_id),
+					&"armor_pierce" if attack_type == &"pierce" else &"armor_melee")
 	return maxi(MIN_DAMAGE, damage - armour)

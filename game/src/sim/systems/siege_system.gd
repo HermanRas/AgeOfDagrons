@@ -82,6 +82,10 @@ func _decide(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
 	# is the tick this sees.
 	if u.task == SimUnit.Task.ATTACK:
 		var target := w.get_entity(u.task_target_id)
+		# `reach_of` and not `def.attack_range`: Ballistics (9.3) widens a ranged unit's
+		# reach, and an engine that deployed at its unupgraded range would set up a tile
+		# short of where it can actually shoot from -- then walk the last tile, fold,
+		# and unfold again.
 		if target != null and target.alive \
-				and CombatSystem._within_reach(u, target, def.attack_range):
+				and CombatSystem._within_reach(u, target, CombatSystem.reach_of(w, u, def)):
 			u.begin_packing(false, def.pack_ticks)

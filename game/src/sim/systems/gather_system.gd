@@ -126,7 +126,13 @@ func _process_gather(w: SimWorld, u: SimUnit) -> void:
 		u.gather_cooldown -= 1
 		return
 
+	# THE WHEELBARROW (9.3) is a flat addition to every kind at once, which is what
+	# `carry_cap.all` means: a bigger barrow does not care what is in it. Applied only
+	# where the def already declares a cap for this kind, so a tech cannot hand a
+	# soldier a stone allowance he had none of.
 	var cap := int(def.carry_cap.get(kind, 0)) if def != null else 0
+	if cap > 0:
+		cap += TechMods.for_all(w.mods_of(u.owner_id), &"carry_cap")
 	u.carry_kind = kind
 	# Never past the carry cap. With one unit per take this always landed exactly on
 	# it; a field takes seven or eight at a time, and a villager walking home with 13
@@ -473,16 +479,30 @@ static func _ring_tile(ring: Rect2i, i: int, n: int) -> Vector2i:
 ## would be a second place for the same number to live, and this already reaches
 ## for `w.unit_def()` in the same breath. The crop is copied because it is the half
 ## that changes.
+## THE GATHERING TECHS ARE APPLIED HERE (9.3) and only here, which is the point of
+## this function having been the single place either rate is read. Horse Collar is
+## `gather_rate.food` and it multiplies BOTH branches: a field's per-age yield and a
+## villager's hand-gathered food are the same resource arriving at the same player, and
+## a mill upgrade that improved only one of them would be a rule nobody could guess.
+##
+## The bonus is the WORKER'S owner's for a node and the FIELD'S owner's for a crop, and
+## those are the same player in every case that exists -- `GatherSystem` refuses to farm
+## somebody else's field. Written as `e.owner_id` in the field branch and `u.owner_id`
+## in the other because each reads the entity the rate itself belongs to.
 static func harvest_rate(w: SimWorld, e: SimEntity, u: SimUnit, kind: StringName) -> int:
 	if e is SimBuilding:
 		var bd: BuildingDef = w.building_def((e as SimBuilding).def_id)
 		if bd == null:
 			return 0
 		var owner := w.player_for(e.owner_id)
-		return bd.gather_yield_for_age(owner.age if owner != null else 1)
+		return TechMods.scaled(bd.gather_yield_for_age(owner.age if owner != null else 1),
+				TechMods.of(w.mods_of(e.owner_id), &"gather_rate", kind))
 
 	var def := w.unit_def(u.def_id)
-	return int(def.gather_rate.get(kind, 0)) if def != null else 0
+	if def == null:
+		return 0
+	return TechMods.scaled(int(def.gather_rate.get(kind, 0)),
+			TechMods.of(w.mods_of(u.owner_id), &"gather_rate", kind))
 
 
 ## How `rate` per 100 ticks is actually paid out: (units per take, ticks between

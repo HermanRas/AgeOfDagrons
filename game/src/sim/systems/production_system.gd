@@ -1,11 +1,18 @@
-## Advances each building's training queue and spawns whatever finishes
-## (PLAN.md 5.4). Only the FRONT entry progresses -- SimBuilding.queue's own
-## invariant -- so this only ever has to look at index 0.
+## Advances each building's production queue and delivers whatever finishes
+## (PLAN.md 5.4, and RESEARCH since 9.3). Only the FRONT entry progresses --
+## SimBuilding.queue's own invariant -- so this only ever has to look at index 0.
 ##
 ## A finished order is not popped until it actually spawns. A packed town
 ## centre with nowhere free to stand must not simply discard the villager who
 ## was paid for; `find_free_adjacent` is retried every tick until room opens up,
 ## exactly like a real RTS backing up production behind a full rally point.
+##
+## **A RESEARCH IS THE SAME COUNTER WITH A DIFFERENT DELIVERY** (9.3). It shares this
+## queue rather than getting a system of its own, which is why PLAN.md's promised
+## `TechSystem` is a static resolver (`TechMods`) instead: the timers were already
+## here, and two systems ticking one counter is two owners of it. The only thing that
+## differs is what happens on the tick the counter runs out -- a unit needs somewhere
+## to stand and can wait for it, a tech needs neither and never fails.
 class_name ProductionSystem
 extends SimSystem
 
@@ -27,6 +34,14 @@ func process_tick(w: SimWorld) -> void:
 				front["ready"] = true
 			else:
 				continue
+
+		# A FINISHED RESEARCH LANDS IMMEDIATELY AND CANNOT FAIL. It needs no tile, so
+		# there is no retry path and no way for it to sit `ready` forever -- which is
+		# what the whole rest of this function is about for a unit.
+		if front.get("kind", SimBuilding.KIND_UNIT) == SimBuilding.KIND_TECH:
+			w.grant_tech(b.owner_id, StringName(front.get("def_id", &"")))
+			b.queue.pop_front()
+			continue
 
 		# THE UNIT'S OWN DOMAIN, not LAND. This hard-coded LAND, so a dock launched its
 		# fishing ships onto the beach -- reported 2026-08-23 as "boats spawn and sail
