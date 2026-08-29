@@ -15,7 +15,7 @@ func process_tick(w: SimWorld) -> void:
 		if e is SimUnit:
 			if _process_wildlife(w, e as SimUnit, to_despawn, carcasses):
 				continue
-			_process_unit(e as SimUnit, to_despawn)
+			_process_unit(w, e as SimUnit, to_despawn)
 		elif e is SimBuilding:
 			_process_building(w, e as SimBuilding, to_despawn)
 
@@ -71,7 +71,9 @@ func _process_wildlife(w: SimWorld, u: SimUnit, to_despawn: Array[int],
 ## starting at -1 is what tells a fresh death (set it up) from one already under
 ## way (just count it down); `alive` itself only ever goes false once and cannot
 ## carry that distinction.
-func _process_unit(u: SimUnit, to_despawn: Array[int]) -> void:
+## Takes the world since 2026-08-29, for the one thing a dying unit can now have to do
+## to OTHER entities: a transport sinking with people aboard (2.4d).
+func _process_unit(w: SimWorld, u: SimUnit, to_despawn: Array[int]) -> void:
 	if u.alive:
 		return
 
@@ -92,6 +94,18 @@ func _process_unit(u: SimUnit, to_despawn: Array[int]) -> void:
 		# already drops a request whose unit has died rather than writing a route
 		# onto it.
 		u.stop()
+		# A SINKING TRANSPORT TAKES ITS CARGO DOWN WITH IT (2.4d), the same rule a
+		# falling tower follows and for the same reason: the alternative is six
+		# spearmen alive inside a boat that no longer exists, unreachable and
+		# un-selectable for the rest of the match.
+		#
+		# `_kill_garrison` puts each one OUT first so its corpse has somewhere to be --
+		# and out of a boat in open water there IS nowhere, so `ungarrison_unit`
+		# refuses, the entry is dropped by hand and the soldier drowns where it stood.
+		# That is exactly the branch that function already had for a tower walled in by
+		# its own owner, reached here by the ordinary case rather than by an edge one.
+		if not u.garrison.is_empty():
+			_kill_garrison(w, u)
 		u.corpse_ticks_left = SimUnit.CORPSE_TOTAL_TICKS
 		return
 
@@ -171,7 +185,7 @@ func _process_building(w: SimWorld, b: SimBuilding, to_despawn: Array[int]) -> v
 ## unreachable and un-selectable for the rest of the match. It stays where it is,
 ## which is a corpse at a stale tile: the wrong body in the wrong place beats a unit
 ## the player owns and can never find.
-func _kill_garrison(w: SimWorld, b: SimBuilding) -> void:
+func _kill_garrison(w: SimWorld, b: SimEntity) -> void:
 	# Backwards, because `ungarrison_unit` removes the entry it is handed and a
 	# forward walk over a shrinking array skips every other occupant.
 	for i in range(b.garrison.size() - 1, -1, -1):

@@ -24,6 +24,10 @@ extends Command
 ## -1 means "all of them", which is what the panel's Ungarrison button sends.
 const ALL := -1
 
+## The CARRIER's id, which since 2026-08-29 may be a transport ship as well as a
+## building (2.4d). The field keeps its name: renaming it would rewrite the wire format
+## (`to_dict`/`from_dict`) and every replay recorded against it, to say something the
+## header can say instead.
 var building_id: int = 0
 var index: int = ALL
 
@@ -63,7 +67,7 @@ static func from_dict(d: Dictionary) -> UngarrisonCommand:
 ## `SimWorld.ungarrison_unit` refuses individually and a walled-in tower simply keeps
 ## whoever it cannot let out.
 func validate(w: SimWorld) -> bool:
-	var b := w.get_entity(building_id) as SimBuilding
+	var b := w.get_entity(building_id)
 	if b == null or not b.alive or b.owner_id != player_id:
 		return false
 	if b.garrison.is_empty():
@@ -81,7 +85,7 @@ func validate(w: SimWorld) -> bool:
 ## nothing depends on and which is deterministic either way -- the point of naming it
 ## is that it is a fixed order rather than an incidental one.
 func apply(w: SimWorld) -> void:
-	var b := w.get_entity(building_id) as SimBuilding
+	var b := w.get_entity(building_id)
 	if b == null:
 		return
 

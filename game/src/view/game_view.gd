@@ -371,8 +371,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# WHO IS GARRISONED (4.8). `garrison_count` is what the Ungarrison button's
 			# badge reads, and it survives the fog strip's removal of the roster -- a
 			# remembered enemy tower reports neither, which reads as an empty one.
-			# 0 on units and resource nodes, which is correct rather than merely
-			# harmless: nothing can be garrisoned inside a unit.
+			# 0 on resource nodes and on every unit but the TRANSPORT SHIP, which since
+			# 2026-08-29 sends both (2.4d) -- so a boat's cargo reaches the badge and the
+			# portraits through the same two fields a castle's does, and `GarrisonUI`
+			# never learns that a carrier can float.
 			"garrison_count": int(entry.get("garrison_count", 0)),
 			# The occupants' def ids, so each garrison slot can crop that unit's own
 			# portrait -- the same reason `queue` above carries them, and through the
@@ -767,6 +769,16 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 
 	if int(f["owner_id"]) == owner:
 		if bool(f["is_unit"]):
+			# YOUR OWN TRANSPORT WITH ROOM IN IT IS A THING TO BOARD (2.4d), and it is
+			# the first time tapping one of your own UNITS has ever been an order rather
+			# than a reselect. Same shape and same guard as the tower below -- room is
+			# checked, not merely capacity, because a refused command is invisible.
+			#
+			# It cannot fire on the boat itself: `_has_garrison_room` reads the cap off
+			# the def, and `GarrisonCommand.validate` refuses a passenger that is itself
+			# a carrier, so tapping a transport with a transport selected reselects.
+			if has_movable_selection and _has_garrison_room(f):
+				return TapAction.GARRISON
 			return TapAction.SELECT
 		if has_movable_selection and int(f["phase"]) != SimBuilding.Phase.COMPLETE:
 			return TapAction.BUILD
@@ -823,22 +835,32 @@ func _is_gatherable_building(f: Dictionary) -> bool:
 	return bd != null and bd.is_gatherable()
 
 
-## Whether these facts describe a COMPLETE building with a free garrison slot
-## (PLAN.md 4.8). False for 28 of the 31 buildings, because `garrison_cap` is 0 on
-## all of them -- which is how "walls hold nobody" and "a house is not a shelter"
-## reach the tap without either being named here.
+## Whether these facts describe something with a free garrison slot (PLAN.md 4.8) --
+## a COMPLETE building, or since 2026-08-29 a TRANSPORT SHIP (2.4d). False for 28 of the
+## 31 buildings and for every unit but the transport, because `garrison_cap` is 0 on all
+## of them: that is how "walls hold nobody", "a house is not a shelter" and "a knight is
+## not a ferry" reach the tap without any of them being named here.
 ##
 ## THE CAP COMES FROM THE DEF AND THE COUNT FROM THE WIRE, which is the same division
 ## `_is_gatherable_building` above draws: the snapshot carries what is true right now
 ## and the registry answers what a thing is capable of. Sending the cap as well would
-## be one more int per building per tick to say something the client already has.
+## be one more int per entity per tick to say something the client already has.
 func _has_garrison_room(f: Dictionary) -> bool:
-	if int(f.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+	var def_id := StringName(f.get("def_id", &""))
+	var cap := 0
+	if bool(f.get("is_unit", false)):
+		var ud: UnitDef = GameDataRegistry.unit(def_id)
+		cap = ud.garrison_cap if ud != null else 0
+	else:
+		# A FOUNDATION IS A HOLE IN THE GROUND, which is the building's own extra rule
+		# and mirrors `SimBuilding.has_garrison_room`. A unit has no phase to check.
+		if int(f.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+			return false
+		var bd: BuildingDef = GameDataRegistry.building(def_id)
+		cap = bd.garrison_cap if bd != null else 0
+	if cap <= 0:
 		return false
-	var bd: BuildingDef = GameDataRegistry.building(StringName(f.get("def_id", &"")))
-	if bd == null or bd.garrison_cap <= 0:
-		return false
-	return int(f.get("garrison_count", 0)) < bd.garrison_cap
+	return int(f.get("garrison_count", 0)) < cap
 
 
 ## The building whose rally point a ground tap should set, or 0 for none.

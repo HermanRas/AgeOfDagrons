@@ -13,9 +13,72 @@ var max_hp: int = 0
 var alive: bool = true
 var vision_range: int = 0
 
+## How many units this entity can hold, and who is in it (PLAN.md 4.8).
+##
+## **HERE RATHER THAN ON `SimBuilding`, AS OF 2026-08-29 AND THE TRANSPORT SHIP.** These
+## lived on the building for two days and had to move the moment a second kind of thing
+## could carry units, because everything that reads them -- `GarrisonCommand`,
+## `UngarrisonCommand`, `GarrisonSystem`, `SimWorld.garrison_unit` and
+## `DeathSystem._kill_garrison` -- is asking "what is inside this" and not "what kind of
+## thing is this". Duplicating the pair onto `SimUnit` would have duplicated all five.
+##
+## `SimUnit.garrisoned_in` was ALREADY an entity id rather than a building id and its
+## header already described exactly what a boat needs: still in `entities` so population
+## keeps charging, out of `SpatialHash` so nothing can find it, and skipped by
+## `SnapshotSystem` so the client releases the sprite. That is why this generalised in
+## one sitting -- the hard half was written for towers and is domain-agnostic.
+##
+## The cost is two fields on every `SimResourceNode`, which is a `cap` of 0 and an empty
+## array on five hundred trees. Memory only: `to_snapshot` is per subclass and a node
+## never sends either.
+var garrison_cap: int = 0
+
+## Who is inside, in the order they entered. Each entry is `{id, def_id}` -- see
+## `SimBuilding`'s note on why the def id is copied rather than looked up.
+var garrison: Array[Dictionary] = []
+
 
 func tile() -> Vector2i:
 	return pos / SimWorld.SUBTILE
+
+
+## The tiles this entity stands on. One for a unit, a node or an arrow; a footprint for
+## a building, which overrides.
+##
+## What the garrison paths and adjacency checks measure against, so that "walk up to the
+## thing and get in" is one implementation whether the thing is a 7x7 castle or a boat.
+func occupied_rect() -> Rect2i:
+	return Rect2i(tile(), Vector2i.ONE)
+
+
+## Room for one more (PLAN.md 4.8). False for everything with `garrison_cap` 0, which is
+## 28 of the 31 buildings and every unit but the transport -- so this single test covers
+## "walls hold nobody", "a house is not a shelter" and "a knight is not a ferry" without
+## any of them being spelled out anywhere.
+##
+## Subclasses ADD to it rather than replace it: a building must also be finished, and a
+## carrier must not itself be inside something.
+func has_garrison_room() -> bool:
+	return alive and garrison.size() < garrison_cap
+
+
+## Where `unit_id` sits in the garrison, or -1. Used by the eject path, which is given a
+## unit and needs the slot, and by the tests.
+func garrison_index(unit_id: int) -> int:
+	for i in range(garrison.size()):
+		if int(garrison[i]["id"]) == unit_id:
+			return i
+	return -1
+
+
+## Every id inside, for callers that want to walk the occupants rather than price them.
+## Sorted is not needed and not offered: `garrison` is already in a deterministic order
+## and every caller either sums (which commutes) or indexes.
+func garrison_ids() -> Array[int]:
+	var out: Array[int] = []
+	for entry in garrison:
+		out.append(int(entry["id"]))
+	return out
 
 
 func take_damage(amount: int, _attack_type: int) -> void:

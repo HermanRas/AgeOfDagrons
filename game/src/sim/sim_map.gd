@@ -274,9 +274,22 @@ func can_place(rect: Rect2i, domain: int) -> bool:
 ## it looks: two clients spawning a unit must pick the same tile or the
 ## simulations diverge (PLAN.md 7.1), so this must never depend on iteration
 ## order of anything unordered.
-func find_free_adjacent(rect: Rect2i, domain: int = Domain.LAND) -> Vector2i:
-	var max_ring := maxi(size.x, size.y)
-	for ring in range(1, max_ring + 1):
+##
+## **`max_ring` BOUNDS HOW FAR IT WILL LOOK, and 0 keeps the old behaviour of the whole
+## map.** That default is right for a building, which stands on the ground its occupants
+## are going onto: the ring widens past a crowd of units and finds a tile a few steps
+## away. It is catastrophic for a TRANSPORT SHIP (2.4d), which is why this argument
+## exists -- a boat in mid-ocean has no land at any ring near it, so an unbounded search
+## walks outward until it finds a beach somewhere else on the map and TELEPORTS THE
+## LANDING PARTY THERE. Caught by `test_transport`, which expected the unload to be
+## refused and watched the army arrive on a coast it had never sailed to.
+##
+## So an amphibious landing passes 1: you come off onto ground you are moored against,
+## or you stay aboard.
+func find_free_adjacent(rect: Rect2i, domain: int = Domain.LAND,
+		max_ring: int = 0) -> Vector2i:
+	var limit := maxi(size.x, size.y) if max_ring <= 0 else max_ring
+	for ring in range(1, limit + 1):
 		var outer := rect.grow(ring)
 		for x in range(outer.position.x, outer.end.x):
 			var top := Vector2i(x, outer.position.y)

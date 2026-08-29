@@ -121,6 +121,14 @@ var is_herdable: bool = false
 ## `speed: 0` because a deployed engine does not move, and the art convention (§12A A.4a)
 ## is that anything with no walk clip carries 0 so nothing slides. The packed actors are
 ## the walk clips, so the second number is now real.
+## How many units this one can CARRY (PLAN.md 4.8's garrison, 2.4d's transport).
+##
+## The transport ship and nothing else. Named exactly as `BuildingDef.garrison_cap` is,
+## reads out of the same JSON key, and is copied onto `SimEntity.garrison_cap` at spawn
+## the same way -- because a boat holding six spearmen and a castle holding fifteen are
+## one mechanism, and calling this `capacity` would have been two words for it.
+var garrison_cap: int = 0
+
 var packed_visual: StringName = &""
 var packed_speed: int = 0
 ## Ticks to fold up or set up, the same figure both ways. 0 A.D. gives no separate
@@ -160,6 +168,8 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	var armor: Dictionary = d.get("armor", {})
 	u.armor_melee = int(armor.get("melee", 0))
 	u.armor_pierce = int(armor.get("pierce", 0))
+
+	u.garrison_cap = int(d.get("garrison_cap", 0))
 
 	var packing: Variant = d.get("packing")
 	if packing is Dictionary:

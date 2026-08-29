@@ -99,7 +99,7 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 
 	if GameDataRegistry.building(def_id) != null:
 		return _capped(_building_actions(def_id, age, facts))
-	return _capped(_unit_actions(def_id))
+	return _capped(_unit_actions(def_id, facts))
 
 
 ## What tapping an `expands` action fills the detail grid with; `[]` for an
@@ -277,7 +277,7 @@ static func _upgrade_action(bd: BuildingDef, age: int, facts: Dictionary) -> Hud
 ## gatherer -- MVP's only unit is the villager, so this is the closest thing to
 ## a "is a worker" flag until one exists; a soldier def with no `gather_rate`
 ## correctly gets neither.
-static func _unit_actions(def_id: StringName) -> Array[HudAction]:
+static func _unit_actions(def_id: StringName, facts: Dictionary = {}) -> Array[HudAction]:
 	var ud: UnitDef = GameDataRegistry.unit(def_id)
 	# Enabled by whether this unit HAS an attack, which is damage and nothing
 	# else (4.13). That deliberately includes the villager -- she carries damage 3
@@ -300,6 +300,20 @@ static func _unit_actions(def_id: StringName) -> Array[HudAction]:
 		# villager carries attack.damage 3 to defend itself (data/units.json)
 		# and would otherwise be offered formations it has no business in.
 		(out[0] as HudAction).expands = true
+
+	# WHO IS ABOARD, AND A WAY OFF (2.4d) -- the transport ship and nothing else, since
+	# `garrison_cap` is 0 on every other unit. **The same block as `_building_actions`'s,
+	# deliberately not shared**: it is six lines, and factoring it out would need a
+	# parameter for the phase test that only one caller has. What matters is that it
+	# emits the identical `&"garrison"` action, so `details_for` lists the occupants and
+	# `SelectionPanel` ejects them through the code path a castle already uses.
+	if ud.garrison_cap > 0:
+		var aboard := int(facts.get("garrison_count", 0))
+		var g := HudAction.new(&"garrison", "Unload", ICONS.get(&"garrison", ""), aboard > 0)
+		g.badge = "%d/%d" % [aboard, ud.garrison_cap]
+		g.expands = true
+		out.append(g)
+
 	out.append(_act(&"destroy"))
 	return out
 

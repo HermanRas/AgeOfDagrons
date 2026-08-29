@@ -72,15 +72,25 @@ func validate(w: SimWorld) -> bool:
 	if unit_ids.is_empty():
 		return false
 
-	var b := w.get_entity(target_id) as SimBuilding
-	if b == null or not b.alive or b.owner_id != player_id:
+	# A CARRIER, WHICH SINCE 2026-08-29 MAY BE A SHIP (2.4d). `has_garrison_room()` is
+	# the one test, and it is the entity's own: a building adds "and it is finished", a
+	# unit adds "and it is not itself inside something", and a `garrison_cap` of 0
+	# refuses everything else -- every wall, every house, the town centre, and every unit
+	# but the transport. Fullness is deliberately NOT part of it; see below.
+	var b := w.get_entity(target_id)
+	if b == null or not b.alive or b.owner_id != player_id or b.garrison_cap <= 0:
 		return false
-	if not b.is_complete() or b.garrison_cap <= 0:
+	if b is SimBuilding and not (b as SimBuilding).is_complete():
 		return false
 
 	for id in unit_ids:
 		var e := w.get_entity(id)
 		if e == null or not e.alive or e.owner_id != player_id or not (e is SimUnit):
+			return false
+		# A CARRIER IS NOT CARGO. Nothing carries ships, so ordering a transport into a
+		# transport has to be refused somewhere, and refusing it here means the recursion
+		# is impossible rather than merely unusual.
+		if id == target_id or (e as SimUnit).garrison_cap > 0:
 			return false
 		# Already inside something. Its `pos` is stale and it is out of the spatial
 		# index, so a route planned for it would be planned from nowhere -- and a unit
@@ -91,7 +101,7 @@ func validate(w: SimWorld) -> bool:
 
 
 func apply(w: SimWorld) -> void:
-	var b := w.get_entity(target_id) as SimBuilding
+	var b := w.get_entity(target_id)
 	if b == null:
 		return
 	# The building's own tile is inside its footprint and therefore occupied ground;

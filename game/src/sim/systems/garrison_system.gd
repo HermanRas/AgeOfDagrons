@@ -47,7 +47,7 @@ func process_tick(w: SimWorld) -> void:
 		if entry is SimUnit and entry.alive and entry.task == SimUnit.Task.GARRISON:
 			_admit(w, entry)
 
-	# SECOND, over the buildings, so a unit admitted above starts healing on the tick
+	# SECOND, over the carriers, so a unit admitted above starts healing on the tick
 	# it goes in rather than the next one.
 	#
 	# ONE MODULO OVER THE WORLD CLOCK rather than a per-unit counter, which is both
@@ -58,13 +58,18 @@ func process_tick(w: SimWorld) -> void:
 	# second of favour that nothing can perceive.
 	var healing := w.tick % HEAL_TICKS == 0
 	for entry in w.entities.values():
-		if not (entry is SimBuilding):
-			continue
-		var b: SimBuilding = entry
+		var b: SimEntity = entry
 		if b.garrison.is_empty():
 			continue
 		_prune(w, b)
-		if healing:
+		# **A BOAT DOES NOT HEAL ITS CARGO, and that is a decision rather than an
+		# oversight.** Healing is what a BUILDING affords -- a tower is a place to
+		# shelter and recover, which is what makes retreating into one a real choice.
+		# A transport is a way of crossing water; a wounded army arriving on the far
+		# shore as wounded as it left is the whole tension of a naval attack, and a
+		# ferry that also functioned as a hospital would make sailing back and forth
+		# the cheapest repair in the game.
+		if healing and b is SimBuilding:
 			_heal(w, b)
 
 
@@ -81,11 +86,16 @@ func _admit(w: SimWorld, u: SimUnit) -> void:
 	if u.path_pending or u.has_waypoint():
 		return
 
-	var b := w.get_entity(u.task_target_id) as SimBuilding
-	if b == null or not b.alive or not b.is_complete() or b.owner_id != u.owner_id:
+	# THE CARRIER, WHICH MAY BE A SHIP (2.4d). `has_garrison_room()` below carries the
+	# per-kind rules -- a building must be finished, a carrier must not be cargo itself
+	# -- so nothing here branches on what it is. A boat that has SAILED AWAY while its
+	# passengers walked is handled by the reach test that follows, exactly as a tower
+	# that was destroyed is handled by `alive`.
+	var b := w.get_entity(u.task_target_id)
+	if b == null or not b.alive or b.owner_id != u.owner_id:
 		u.stop()
 		return
-	if CombatSystem.tile_gap(u.tile(), b.footprint_rect()) > ENTRY_REACH:
+	if CombatSystem.tile_gap(u.tile(), b.occupied_rect()) > ENTRY_REACH:
 		# Never got there -- the route ran out short, which `set_path` reports by
 		# rewriting `task_target_tile` to wherever it really ended (4.1). Standing down
 		# is the same answer BuildSystem gives a builder that did not reach its site.
@@ -102,7 +112,7 @@ func _admit(w: SimWorld, u: SimUnit) -> void:
 ## are to hand: a garrisoned unit heals toward what it was built with, and a damaged
 ## tower does not repair itself by having archers in it. Repair is still the disabled
 ## placeholder it has always been (`SelectionActions`).
-func _heal(w: SimWorld, b: SimBuilding) -> void:
+func _heal(w: SimWorld, b: SimEntity) -> void:
 	for entry in b.garrison:
 		var u := w.get_entity(int(entry["id"])) as SimUnit
 		if u == null or not u.alive:
@@ -120,7 +130,7 @@ func _heal(w: SimWorld, b: SimBuilding) -> void:
 ## would go on adding damage to the tower's shot forever with no unit anywhere to
 ## explain it. One scan over a list that is empty for 28 of 31 buildings is a cheap
 ## way to make that class of bug impossible rather than merely unlikely.
-func _prune(w: SimWorld, b: SimBuilding) -> void:
+func _prune(w: SimWorld, b: SimEntity) -> void:
 	for i in range(b.garrison.size() - 1, -1, -1):
 		var u := w.get_entity(int(b.garrison[i]["id"])) as SimUnit
 		if u == null or not u.alive:

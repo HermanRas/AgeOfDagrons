@@ -109,8 +109,12 @@ func is_spent() -> bool:
 	return gather_amount <= 0
 
 var provides_pop: int = 0
-var garrison_cap: int = 0
 
+## `garrison_cap` and `garrison` MOVED UP TO `SimEntity` on 2026-08-29, when the
+## transport ship became the second thing that can carry units -- see that class for
+## why. What is kept here is the note on their SHAPE, because it is a wire decision
+## that still binds anything that touches them:
+##
 ## Who is inside, in the order they entered (PLAN.md 4.8). Each entry is
 ## `{id, def_id}`.
 ##
@@ -129,7 +133,6 @@ var garrison_cap: int = 0
 ## two hosts that admitted the same units in a different order are caught here
 ## rather than several seconds later when a player ejects "the first one" and gets
 ## different units on the two machines.
-var garrison: Array[Dictionary] = []
 
 ## What this building shoots with, copied off its def at spawn exactly as
 ## `provides_pop` and `garrison_cap` are -- so the building-attack loop is a scan
@@ -187,15 +190,12 @@ var attack_cooldown: int = 0
 var queue: Array[Dictionary] = []
 
 
-## Room for one more (PLAN.md 4.8). False for everything with `garrison_cap` 0,
-## which is 28 of the 31 buildings, so this single test covers "walls hold nobody"
-## and "a house is not a shelter" without either being spelled out anywhere.
-##
-## PHASE IS PART OF IT: a foundation is a hole in the ground. Without the check a
-## player could garrison a tower they had not paid to finish, and the building would
-## then be shooting at `attack_damage` before it existed.
+## PHASE IS THE BUILDING'S OWN ADDITION to `SimEntity.has_garrison_room()`: a
+## foundation is a hole in the ground. Without the check a player could garrison a tower
+## they had not paid to finish, and the building would then be shooting at
+## `attack_damage` before it existed.
 func has_garrison_room() -> bool:
-	return is_complete() and alive and garrison.size() < garrison_cap
+	return is_complete() and super()
 
 
 ## Extra damage per shot from the archers inside (PLAN.md 4.9, project owner
@@ -261,23 +261,8 @@ func garrison_projectiles(w: SimWorld) -> Array[StringName]:
 	return out
 
 
-## Where `unit_id` sits in the garrison, or -1. Used by the eject path, which is
-## given a unit and needs the slot, and by the tests.
-func garrison_index(unit_id: int) -> int:
-	for i in range(garrison.size()):
-		if int(garrison[i]["id"]) == unit_id:
-			return i
-	return -1
-
-
-## Every id inside, for the callers that want to walk the occupants rather than
-## price them. Sorted is not needed and not offered: `garrison` is already in a
-## deterministic order and every caller either sums (which commutes) or indexes.
-func garrison_ids() -> Array[int]:
-	var out: Array[int] = []
-	for entry in garrison:
-		out.append(int(entry["id"]))
-	return out
+## `garrison_index` and `garrison_ids` are `SimEntity`'s, unchanged -- they were never
+## about buildings.
 
 
 ## The top-left tile of the footprint. Derived from `pos` rather than stored, so
@@ -289,6 +274,14 @@ func origin_tile() -> Vector2i:
 
 func footprint_rect() -> Rect2i:
 	return SimMap.footprint_rect(origin_tile(), footprint)
+
+
+## A building occupies its whole footprint, where everything else occupies one tile.
+## Kept as a separate name from `footprint_rect()` because the base class cannot offer
+## that one -- a unit has no footprint -- and the garrison paths want the general
+## question. See `SimEntity.occupied_rect`.
+func occupied_rect() -> Rect2i:
+	return footprint_rect()
 
 
 ## THE EIGHT PLACES A WORKER CAN DELIVER A LOAD: the four corners and the middle of

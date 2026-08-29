@@ -1184,13 +1184,32 @@ Fish should go **up**, since the sea is the point.
 RANDOM branch, which indexes `[ISLAND, RIVER, DESERT, FOREST]` by hand and silently will
 not roll a fifth type; `type_name()`; and the picker list at `skirmish_screen.gd:291`.
 
-**What it exposes that no current map does.** Every naval path in the game is untested by
-play: transport ships have no load/unload, `unit.galley` and `unit.galleon` have attacks
-but nothing has ever fought at sea, and a landing is a transport reaching a shore it can
-unload onto. None of that is required for the map type to *work* — you can play an
-archipelago as four peaceful economies and a fishing fleet — but the moment somebody wants
-to attack, transports become the blocker, and they are not written. Worth knowing before
-this is built rather than after.
+**What it exposed that no current map did — and the half of it that is now written.** Every
+naval path in the game was untested by play. **Transport load/unload landed WITH the map
+type on 2026-08-29**, because an archipelago nobody can cross is four peaceful economies and
+no win condition: `unit.transport_ship` carries six, boarding is a tap on your own boat, and
+unloading is the same Ungarrison button a castle has.
+
+**It is a second reader of 4.8's garrison rather than a second feature**, and that was
+knowable in advance — `SimUnit.garrisoned_in` already held an ENTITY id, already took a unit
+off the map without despawning it, already kept population charging for it, and already
+refused to place somebody where there was nowhere legal to stand. `garrison_cap` and
+`garrison` moved from `SimBuilding` up to `SimEntity`, and the five things that read them
+(both commands, `GarrisonSystem`, `SimWorld.garrison_unit`, `DeathSystem._kill_garrison`)
+turned out to be asking "what is inside this" and never "what kind of thing is this".
+
+**Two rules a building never had to state.** A carrier may not be cargo, refused in
+`GarrisonCommand.validate` so the recursion is impossible rather than merely unusual. And a
+landing needs a shore — which is `find_free_adjacent` searching in the PASSENGER's domain,
+so infantry come off onto land or do not come off at all. That second one had a trap in it:
+the search widens ring by ring **to the whole map**, which is right for a building standing
+on the ground its occupants are going onto and catastrophic for a boat, because a transport
+in mid-ocean finds a beach somewhere else entirely and teleports the landing party onto it.
+It takes a `max_ring` now, and an amphibious landing passes 1.
+
+**Still not written: naval COMBAT.** `unit.galley` and `unit.galleon` have attacks and
+nothing has ever fought at sea, so a loaded transport crosses unopposed. That is the next
+thing an archipelago will ask for, and it is not what makes the map playable.
 
 #### 11.4 Fog of war (2.5) — done 2026-08-17
 
@@ -2065,11 +2084,11 @@ content side is nearly free — `PREDATORS` is keyed by map type and read with `
 `MapValidator` requires every start to reach every other by land, which an archipelago fails
 by definition, so that claim has to *change* rather than relax.
 
-*It also has a hole the other two do not, and it belongs here rather than in the gaps list
-below: transports have no load/unload and nothing has ever fought at sea, so **an archipelago
-is a map on which no player can reach another** and therefore no win condition can fire. The
-map type is buildable without naval combat; a MATCH on it is not. Either load/unload comes
-first or the type ships knowingly as a sandbox.*
+*It also had a hole the other two do not: transports had no load/unload, so **an archipelago
+was a map on which no player could reach another** and no win condition could fire. **Both
+shipped together on 2026-08-29** rather than the type going out as a sandbox — see 11.6.
+What is still missing is naval COMBAT: a loaded transport crosses unopposed, which is what
+an archipelago will ask for next and not what makes it playable.*
 
 *~~2. 8.8, the [X] clear-selection button.~~ **Built 2026-08-28.** It was the only thing on
 this list the owner reported from actually playing a build, and it turned out to be a layout

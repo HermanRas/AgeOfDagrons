@@ -161,6 +161,16 @@ func is_mobile() -> bool:
 	return true
 
 
+## A CARRIER MUST NOT ITSELF BE CARGO, which is this class's own addition to
+## `SimEntity.has_garrison_room()` (PLAN.md 4.8, 2.4d). Only the transport ship has a
+## cap at all, so in practice this asks whether a boat is inside something -- which it
+## cannot be today, since nothing carries ships. It is here because the alternative is a
+## rule nobody wrote: a carrier whose own `pos` is stale and which is out of the spatial
+## index cannot be walked up to, so units ordered aboard would walk to nowhere forever.
+func has_garrison_room() -> bool:
+	return garrisoned_in == 0 and super()
+
+
 ## Whether this unit may take a step this tick (PLAN.md 4.13).
 ##
 ## TRUE FOR EVERYTHING THAT DOES NOT PACK, which is every unit in the game but three,
@@ -413,4 +423,19 @@ func to_snapshot() -> Dictionary:
 	# thing the player can see happening.
 	if packed:
 		d["packed"] = true
+	# WHO IS ABOARD (2.4d), in exactly the shape `SimBuilding` sends -- a count for the
+	# badge and def ids for the portraits, never entity ids, because a garrisoned unit is
+	# not in the snapshot for the client to look one up and `UngarrisonCommand` therefore
+	# names a SLOT. `GarrisonUI` reads both without learning that a boat exists.
+	#
+	# ONLY FOR A CARRIER, which is the transport and nothing else. `herded_by` and
+	# `packed` above set the precedent: 12.1f's rule against splitting the wire shape is
+	# about fields that vary per INSTANCE, and this varies per def -- every transport
+	# sends it and nothing else ever does.
+	if garrison_cap > 0:
+		d["garrison_count"] = garrison.size()
+		var inside: Array[String] = []
+		for entry in garrison:
+			inside.append(String(entry["def_id"]))
+		d["garrison"] = inside
 	return d

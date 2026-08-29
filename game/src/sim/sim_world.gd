@@ -183,6 +183,10 @@ func spawn_unit(def_id: StringName, owner: int, pos: Vector2i) -> SimUnit:
 		# one on the very next tick, which is before anything can ask it to walk.
 		u.packs = d.packs()
 		u.packed = u.packs
+		# WHAT IT CAN CARRY (2.4d). Copied off the def at spawn exactly as `pop_cost`
+		# and a building's own `garrison_cap` are, so the garrison paths are a scan over
+		# entities and never a registry lookup. 0 for every unit but the transport.
+		u.garrison_cap = d.garrison_cap
 	else:
 		u.hp = int(_FALLBACK_UNIT["hp"])
 		u.max_hp = u.hp
@@ -324,7 +328,13 @@ func set_gate_locked(b: SimBuilding, locked: bool) -> void:
 ## first; this asks again because it is the last gate before the state changes and
 ## the two callers run several ticks apart -- a fifth unit walking to a tower that
 ## filled up while it was walking is the ordinary case, not an edge one.
-func garrison_unit(b: SimBuilding, u: SimUnit) -> bool:
+##
+## `b` IS A `SimEntity` SINCE 2026-08-29, not a `SimBuilding`: a transport ship carries
+## land units by exactly this mechanism (2.4d). Nothing in the body had to change, which
+## is the evidence the generalisation was already there -- `garrisoned_in` has held an
+## entity id since 4.8 and every line below asks about the carrier's garrison rather
+## than about its being a building.
+func garrison_unit(b: SimEntity, u: SimUnit) -> bool:
 	if b == null or u == null or not u.alive:
 		return false
 	if u.garrisoned_in != 0 or not b.has_garrison_room():
@@ -375,14 +385,29 @@ func garrison_unit(b: SimBuilding, u: SimUnit) -> bool:
 ## somewhere to be. Walking a unit toward a flag on the tick it dies would queue a route
 ## search for a corpse -- harmless, since `PathService` drops requests for the dead, and
 ## still a lie about what happened.
-func ungarrison_unit(b: SimBuilding, u: SimUnit, send := true) -> bool:
+##
+## **UNLOADING A BOAT IS THIS FUNCTION UNCHANGED, and the reason is `u.domain`.** The
+## free tile is looked for in the PASSENGER's domain, not the carrier's, so infantry
+## coming off a transport are placed on land and a transport moored in open ocean simply
+## refuses -- there is no legal land tile beside it, `find_free_adjacent` says so, and
+## the soldiers stay aboard rather than drowning. That is the whole of "you may only
+## land on a shore", and it was already written for the case of a tower walled in by its
+## own owner.
+func ungarrison_unit(b: SimEntity, u: SimUnit, send := true) -> bool:
 	if b == null or u == null:
 		return false
 	var index := b.garrison_index(u.id)
 	if index < 0:
 		return false
 
-	var to := map.find_free_adjacent(b.footprint_rect(), u.domain)
+	# TOUCHING, FOR A CARRIER THAT MOVES. A building's occupants may be put down a few
+	# rings out -- the ground around it is the ground they were going onto anyway, and
+	# widening past a crowd is what makes a busy castle able to empty at all. A BOAT
+	# must not: an unbounded search from mid-ocean finds a beach somewhere else on the
+	# map and lands the army there, which `test_transport` caught by watching an unload
+	# it expected to be refused arrive on a coast it had never sailed to.
+	var reach := 1 if b is SimUnit else 0        # 0 is "as far as it takes"
+	var to := map.find_free_adjacent(b.occupied_rect(), u.domain, reach)
 	if to.x < 0:
 		return false
 
@@ -394,8 +419,10 @@ func ungarrison_unit(b: SimBuilding, u: SimUnit, send := true) -> bool:
 	# PLACED FIRST, THEN SENT. The route has to be planned from where the unit actually
 	# is, and until the two lines above it was nowhere -- out of the spatial index with
 	# a `pos` from whenever it walked in.
-	if send:
-		send_to_waypoint(b, u)
+	# ONLY A BUILDING HAS A RALLY POINT (4.8b), so unloading a boat sends nobody
+	# anywhere: they stand on the beach they were put on, which is what a landing is.
+	if send and b is SimBuilding:
+		send_to_waypoint(b as SimBuilding, u)
 	return true
 
 
