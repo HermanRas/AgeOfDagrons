@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://xh00lqd26tyj"]
 
-[ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="1_bg"]
-[ext_resource type="Texture2D" uid="uid://dolvc88tkrg4h" path="res://assets/ui/icons/res_stone.png" id="2_stone"]
-[ext_resource type="Texture2D" uid="uid://dtr24dqyn05en" path="res://assets/ui/icons/res_gold.png" id="3_gold"]
-[ext_resource type="Texture2D" uid="uid://caexh0cpbb0t8" path="res://assets/ui/icons/res_wood.png" id="4_wood"]
-[ext_resource type="Texture2D" uid="uid://b48emgfsus774" path="res://assets/ui/icons/res_food.png" id="5_food"]
-[ext_resource type="Texture2D" uid="uid://c21hseaf4dbgk" path="res://assets/ui/icons/res_villagers.png" id="6_vill"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/panel_hud.png" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/res_stone.png" id="2_stone"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/res_gold.png" id="3_gold"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/res_wood.png" id="4_wood"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/res_food.png" id="5_food"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/res_villagers.png" id="6_vill"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
 

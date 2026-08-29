@@ -643,7 +643,7 @@ func _report_settings() -> void:
 func _resign_the_match() -> void:
 	var pause: PauseMenu = _game._pause_menu
 	pause.open()
-	var button: TextureButton = pause._resign_button
+	var button: Button = pause._resign_button
 	if button == null:
 		push_warning("preview_match: no resign button to press")
 		return

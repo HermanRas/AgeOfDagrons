@@ -1,5 +1,9 @@
-## PLAN.md 8.1a/8.1b: the HP bar fill, independent of whether the art pack
-## happens to be staged (game/assets/ui/hud/ is gitignored, per-developer art).
+## PLAN.md 8.1a/8.1b: the HP bar fill, independent of whether the art is there.
+##
+## THE "IF" USED TO BE REAL: the bar was Kibyra art under a gitignored directory, so a
+## fresh checkout genuinely had none and this file said so. The groove and fill commit
+## since 2026-08-30. The independence is kept anyway, because what it is really pinning
+## is that `fraction` is state and not a picture.
 extends TestCase
 
 var bar: HealthBarView

@@ -1,9 +1,9 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="1_bg"]
-[ext_resource type="Texture2D" uid="uid://ccj6prkulecvu" path="res://assets/ui/menu/resume_button.png" id="2_resume"]
-[ext_resource type="Texture2D" uid="uid://cjii83ixlkbno" path="res://assets/ui/menu/main_menu_button.png" id="3_mainmenu"]
-[ext_resource type="Texture2D" uid="uid://yxi6ldbpb2xe" path="res://assets/ui/menu/quit_button.png" id="4_quit"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/panel_hud.png" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_normal.png" id="2_resume"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_normal.png" id="3_mainmenu"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_pressed.png" id="4_quit"]
 
 [node name="PauseMenu" type="Control"]
 custom_minimum_size = Vector2(1152, 648)

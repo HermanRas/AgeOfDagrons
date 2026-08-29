@@ -1,0 +1,53 @@
+[gd_resource type="Theme" load_steps=9 format=3]
+
+[ext_resource type="FontFile" path="res://assets/ui/fonts/MedievalSharp-Regular.ttf" id="1_body"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_normal.png" id="2_normal"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_pressed.png" id="3_pressed"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/button_disabled.png" id="4_disabled"]
+
+[sub_resource type="StyleBoxTexture" id="SBT_normal"]
+texture = ExtResource("2_normal")
+texture_margin_left = 14.0
+texture_margin_top = 8.0
+texture_margin_right = 14.0
+texture_margin_bottom = 8.0
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxTexture" id="SBT_pressed"]
+texture = ExtResource("3_pressed")
+texture_margin_left = 14.0
+texture_margin_top = 8.0
+texture_margin_right = 14.0
+texture_margin_bottom = 8.0
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxTexture" id="SBT_disabled"]
+texture = ExtResource("4_disabled")
+texture_margin_left = 14.0
+texture_margin_top = 8.0
+texture_margin_right = 14.0
+texture_margin_bottom = 8.0
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxEmpty" id="SBE_focus"]
+
+[resource]
+default_font = ExtResource("1_body")
+Button/colors/font_color = Color(0.96, 0.9, 0.75, 1)
+Button/colors/font_disabled_color = Color(0.55, 0.5, 0.44, 1)
+Button/colors/font_hover_color = Color(1, 0.95, 0.82, 1)
+Button/colors/font_pressed_color = Color(1, 0.87, 0.5, 1)
+Button/styles/disabled = SubResource("SBT_disabled")
+Button/styles/focus = SubResource("SBE_focus")
+Button/styles/hover = SubResource("SBT_normal")
+Button/styles/normal = SubResource("SBT_normal")
+Button/styles/pressed = SubResource("SBT_pressed")

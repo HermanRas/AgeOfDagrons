@@ -16,15 +16,17 @@ class_name PauseMenu
 extends Control
 
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
-const _PANEL_BG_PATH := "res://assets/ui/hud/panel_background.png"
+const _PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 const _BUTTON_SIZE := Vector2(240.0, 76.0)
 
-## WHERE THE VOLUME BLOCK STARTS, and it is 80 rather than the ~26 the buttons
-## get away with, for a reason a screenshot found: `panel_background.png` has a
-## large dragon ornament across its top, and the first slider was drawn BEHIND
-## it with its label above the panel's own top edge. The buttons never showed this
-## because the first one starts lower down.
-const _VOLUME_TOP := 80.0
+## WHERE THE VOLUME BLOCK STARTS. 32 since 2026-08-30, down from 80 -- and the 80 is
+## worth recording because it was not padding, it was a workaround. Kibyra's
+## `panel_background.png` carried a large dragon ornament across its top and the first
+## slider drew BEHIND it with its label above the panel's own edge; the buttons never
+## showed it because the first one starts lower down. `chrome/panel_hud.png` is a plain
+## nine-patch with a 12 px border and no ornament, so the workaround is gone and this is
+## simply a gutter.
+const _VOLUME_TOP := 32.0
 
 ## Horizontal inset for the volume block, 12 px tighter each side than the
 ## buttons. The buttons are textures with padding baked into the art, so a
@@ -42,7 +44,7 @@ signal resumed()
 ## It was 320 and had 24 px spare, which is exactly what PLAN.md 13.2 item 11 meant
 ## by the SETTINGS page having nowhere to put a slider.
 var _panel_size := Vector2(300.0, _buttons_top() + 3.0 * _BUTTON_SIZE.y + 2.0 * 14.0 + 24.0)
-var _resign_button: TextureButton
+var _resign_button: Button
 ## Shared with the front door's SETTINGS button rather than built twice here --
 ## see `VolumePanel`.
 var _volume: VolumePanel
@@ -71,10 +73,13 @@ func _init() -> void:
 	add_child(panel_root)
 
 	if ResourceLoader.exists(_PANEL_BG_PATH):
-		var bg := TextureRect.new()
+		var bg := NinePatchRect.new()
 		bg.texture = load(_PANEL_BG_PATH)
-		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		bg.stretch_mode = TextureRect.STRETCH_SCALE
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		bg.patch_margin_left = HudStyle.PANEL_MARGIN
+		bg.patch_margin_right = HudStyle.PANEL_MARGIN
+		bg.patch_margin_top = HudStyle.PANEL_MARGIN
+		bg.patch_margin_bottom = HudStyle.PANEL_MARGIN
 		bg.size = _panel_size
 		panel_root.add_child(bg)
 
@@ -91,13 +96,19 @@ func _init() -> void:
 	buttons.position = Vector2((_panel_size.x - _BUTTON_SIZE.x) * 0.5, _buttons_top())
 	panel_root.add_child(buttons)
 
-	buttons.add_child(_menu_button("resume_button.png", _on_resume_pressed))
+	buttons.add_child(_menu_button("RESUME", _on_resume_pressed))
 	# Held rather than added anonymously, so a preview can press the REAL button. What this
 	# one does changed completely in 12.1e -- it used to leave the match, it now concedes
 	# one -- and calling the handler directly would prove the handler and not the wiring.
-	_resign_button = _menu_button("main_menu_button.png", _on_resign_pressed)
+	#
+	# ITS LABEL WAS `main_menu_button.png` AND SAID "MAIN MENU", which was a lie about what
+	# pressing it does and had been since 12.1e: it concedes the match and STAYS, and the
+	# way back to the menu is on the defeat screen that follows. The word was painted into
+	# a third-party file nobody was going to re-render; a `Button` with text costs nothing
+	# to correct, which is most of the argument for this whole change.
+	_resign_button = _menu_button("RESIGN", _on_resign_pressed)
 	buttons.add_child(_resign_button)
-	buttons.add_child(_menu_button("quit_button.png", func() -> void: get_tree().quit()))
+	buttons.add_child(_menu_button("QUIT", func() -> void: get_tree().quit()))
 
 
 func open() -> void:
@@ -137,14 +148,20 @@ func _on_resign_pressed() -> void:
 	Net.submit_command(ResignCommand.new(Net.local_player_id()))
 
 
-func _menu_button(texture_file: String, on_pressed: Callable) -> TextureButton:
-	var btn := TextureButton.new()
-	var path := "res://assets/ui/menu/%s" % texture_file
-	if ResourceLoader.exists(path):
-		btn.texture_normal = load(path)
-	btn.ignore_texture_size = true
-	btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+## A menu button. TAKES THE WORD, where it used to take a FILENAME.
+##
+## The three files it named -- resume/main_menu/quit_button.png -- differed from each
+## other only in which word was printed on them, and from `assets/ui/menu/`'s other six
+## in the same way. One plate in three states now lives in `assets/ui/aod_theme.tres`
+## and reaches every Button in the project, so this function has nothing to load: the
+## look comes from the theme and the word comes from the argument.
+##
+## No `texture_filter` line either, and that is the point of the theme rather than an
+## omission -- the plate is a nine-patch StyleBoxTexture and the engine filters it.
+func _menu_button(label: String, on_pressed: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = label
+	btn.add_theme_font_size_override("font_size", 22)
 	btn.custom_minimum_size = _BUTTON_SIZE
 	btn.pressed.connect(on_pressed)
 	return btn

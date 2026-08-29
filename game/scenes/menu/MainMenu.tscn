@@ -1,13 +1,7 @@
 [gd_scene format=3 uid="uid://cwffvn3psa2eh"]
 
 [ext_resource type="Script" uid="uid://ctpet3o30cfnm" path="res://src/view/main_menu.gd" id="1_e1dod"]
-[ext_resource type="Texture2D" uid="uid://b6i67m0owvwi6" path="res://assets/ui/main_menu_panel.png" id="2_bvc5d"]
-[ext_resource type="Texture2D" uid="uid://cfkr0lq0kayvp" path="res://assets/ui/menu/play_button.png" id="3_ekkse"]
-[ext_resource type="Texture2D" uid="uid://cluf8511fqlqr" path="res://assets/ui/menu/multiplayer_button.png" id="4_84lro"]
-[ext_resource type="Texture2D" uid="uid://dl5f3ep4l72oi" path="res://assets/ui/menu/settings_button.png" id="5_u1wty"]
-[ext_resource type="Texture2D" uid="uid://fafn7agjbscf" path="res://assets/ui/menu/credits_button.png" id="6_u2yxo"]
-[ext_resource type="Texture2D" uid="uid://ccj6prkulecvu" path="res://assets/ui/menu/resume_button.png" id="7_bvc5d"]
-[ext_resource type="Texture2D" uid="uid://yxi6ldbpb2xe" path="res://assets/ui/menu/quit_button.png" id="7_riglq"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/panel_ornate.png" id="2_bvc5d"]
 [ext_resource type="Script" uid="uid://dks1gh3d2jbbq" path="res://src/view/notice_toast.gd" id="8_f3x3n"]
 
 [node name="MainMenu" type="Control" unique_id=773842893]
@@ -36,14 +30,17 @@ offset_top = -317.0
 offset_right = 320.0
 offset_bottom = 317.0
 
-[node name="Frame" type="TextureRect" parent="PanelRoot" unique_id=1279907388]
-texture_filter = 1
+[node name="Frame" type="NinePatchRect" parent="PanelRoot" unique_id=1279907388]
+texture_filter = 2
 custom_minimum_size = Vector2(640, 634)
 layout_mode = 0
 offset_right = 640.0
 offset_bottom = 634.0
 texture = ExtResource("2_bvc5d")
-stretch_mode = 4
+patch_margin_left = 47
+patch_margin_top = 46
+patch_margin_right = 62
+patch_margin_bottom = 24
 
 [node name="Title" type="Label" parent="PanelRoot" unique_id=1387849730]
 layout_mode = 0
@@ -68,68 +65,56 @@ theme_override_constants/separation = 40
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="PlayButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=945022230]
+[node name="PlayButton" type="Button" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=945022230]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("3_ekkse")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "PLAY"
 
-[node name="MultiplayerButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=490170093]
+[node name="MultiplayerButton" type="Button" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=490170093]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("4_84lro")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "MULTIPLAYER"
 
-[node name="SettingsButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=1765604188]
+[node name="SettingsButton" type="Button" parent="PanelRoot/Buttons/ButtonsLeft" unique_id=1765604188]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("5_u1wty")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "SETTINGS"
 
 [node name="ButtonsRight" type="VBoxContainer" parent="PanelRoot/Buttons" unique_id=134763762]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CreditsButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsRight" unique_id=963485278]
+[node name="CreditsButton" type="Button" parent="PanelRoot/Buttons/ButtonsRight" unique_id=963485278]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("6_u2yxo")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "CREDITS"
 
-[node name="HowToButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsRight" unique_id=1335543127]
+[node name="HowToButton" type="Button" parent="PanelRoot/Buttons/ButtonsRight" unique_id=1335543127]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("7_bvc5d")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "HOW TO"
 
-[node name="QuitButton" type="TextureButton" parent="PanelRoot/Buttons/ButtonsRight" unique_id=768887615]
+[node name="QuitButton" type="Button" parent="PanelRoot/Buttons/ButtonsRight" unique_id=768887615]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(220, 70)
 layout_mode = 2
-texture_normal = ExtResource("7_riglq")
-ignore_texture_size = true
-stretch_mode = 5
+theme_override_font_sizes/font_size = 22
+text = "QUIT"
 
 [node name="Toast" type="Control" parent="." unique_id=1744723026]
 unique_name_in_owner = true
 modulate = Color(1, 1, 1, 0)
-custom_minimum_size = Vector2(320, 56)
+custom_minimum_size = Vector2(320, 96)
 anchors_preset = 0
 anchor_left = 0.5
 anchor_top = 1.0

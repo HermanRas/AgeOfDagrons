@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c37iolhvyfqog"]
 
-[ext_resource type="Texture2D" uid="uid://cxjg00uu3u1tv" path="res://assets/ui/icons/hud_chat.png" id="1_chat"]
-[ext_resource type="Texture2D" uid="uid://miakqe86luow" path="res://assets/ui/icons/hud_trade.png" id="2_trade"]
-[ext_resource type="Texture2D" uid="uid://bimki6avn6p17" path="res://assets/ui/icons/hud_techtree.png" id="3_tech"]
-[ext_resource type="Texture2D" uid="uid://c3e8vclnvrxcp" path="res://assets/ui/icons/hud_settings.png" id="4_settings"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud_chat.png" id="1_chat"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud_trade.png" id="2_trade"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud_techtree.png" id="3_tech"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud_settings.png" id="4_settings"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_outer"]
 bg_color = Color(0, 0, 0, 0)

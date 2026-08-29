@@ -1,7 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://src/view/campaign_screen.gd" id="1_camp0"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/back_button.png" id="2_camp1"]
 
 [node name="Campaign" type="Control"]
 layout_mode = 3
@@ -42,17 +41,15 @@ Nothing about it is built yet. Until it is, the game is played from [b]MULTIPLAY
 [color=#E5B842]Tracked as PLAN.md 12.3.[/color]"
 fit_content = true
 
-[node name="BackButton" type="TextureButton" parent="."]
+[node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(180, 58)
 layout_mode = 0
+theme_override_font_sizes/font_size = 22
+text = "BACK"
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
 offset_top = -78.0
 offset_right = 24.0
 offset_bottom = -78.0
-texture_normal = ExtResource("2_camp1")
-ignore_texture_size = true
-stretch_mode = 5

@@ -4,9 +4,9 @@
 [ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/ControlGroupsHud.tscn" id="2_groups"]
 [ext_resource type="PackedScene" uid="uid://c37iolhvyfqog" path="res://scenes/ui_builder/widgets/Minimap.tscn" id="3_minimap"]
 [ext_resource type="PackedScene" path="res://scenes/ui_builder/widgets/NoticeToast.tscn" id="4_toast"]
-[ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="5_panelbg"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/panel_hud.png" id="5_panelbg"]
 [ext_resource type="PackedScene" uid="uid://dttnb8qobd7ny" path="res://scenes/ui_builder/widgets/selection_panel.tscn" id="7_o7l18"]
-[ext_resource type="Texture2D" uid="uid://cepn74bamo361" path="res://assets/ui/menu/pause_icon.png" id="8_pause"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud_pause.png" id="8_pause"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
 

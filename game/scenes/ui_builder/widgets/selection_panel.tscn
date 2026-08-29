@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://dttnb8qobd7ny"]
 
-[ext_resource type="Texture2D" uid="uid://doau0aqlyw6u6" path="res://assets/ui/hud/portrait_frame.png" id="1_yjdty"]
-[ext_resource type="Texture2D" uid="uid://bayn678g7xfe5" path="res://assets/ui/hud/health_bar.png" id="2_2eh3x"]
-[ext_resource type="Texture2D" uid="uid://iut5cqsufqun" path="res://assets/ui/hud/panel_background.png" id="3_2eh3x"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/portrait_frame.png" id="1_yjdty"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/bar_groove.png" id="2_2eh3x"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/panel_hud.png" id="3_2eh3x"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_panel"]
 

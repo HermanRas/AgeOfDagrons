@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Texture2D" uid="uid://75fxfdpul2dd" path="res://assets/ui/hud/toast_banner.png" id="1_banner"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/banner_alert.png" id="1_banner"]
 
 [node name="NoticeToast" type="Control"]
 custom_minimum_size = Vector2(320, 56)

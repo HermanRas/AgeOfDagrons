@@ -113,8 +113,8 @@ func _init() -> void:
 
 	# No Resume. See the header: the match is over, and a button that returned the
 	# player to a decided match would be a lie about what the sim will do next.
-	column.add_child(_menu_button("main_menu_button.png", _on_main_menu_pressed))
-	column.add_child(_menu_button("quit_button.png", func() -> void: get_tree().quit()))
+	column.add_child(_menu_button("MAIN MENU", _on_main_menu_pressed))
+	column.add_child(_menu_button("QUIT", func() -> void: get_tree().quit()))
 
 
 ## Show the outcome. Idempotent: the first call wins and later ones are ignored,
@@ -159,19 +159,18 @@ func _on_main_menu_pressed() -> void:
 	get_tree().change_scene_to_file(_MAIN_MENU_SCENE)
 
 
-func _menu_button(texture_file: String, on_pressed: Callable) -> TextureButton:
-	var btn := TextureButton.new()
-	var path := "res://assets/ui/menu/%s" % texture_file
-	if ResourceLoader.exists(path):
-		btn.texture_normal = load(path)
-	btn.ignore_texture_size = true
-	btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+## Takes the WORD, where it used to take a filename -- see `PauseMenu._menu_button`,
+## which made the identical change for the identical reason on the same day.
+func _menu_button(label: String, on_pressed: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = label
+	btn.add_theme_font_size_override("font_size", 22)
 	btn.custom_minimum_size = _BUTTON_SIZE
-	# SHRINK_CENTER, or the VBox would stretch each button to the column's full width
-	# -- which is the subtitle's width, not the button art's, and 94x31 art pulled
-	# wider than it is tall by a different factor per row reads as two different
-	# buttons.
+	# SHRINK_CENTER, or the VBox stretches each button to the column's full width --
+	# which is the SUBTITLE's width, not the button's. That used to read as two
+	# differently-shaped buttons because the art was 94x31 and got pulled wider by a
+	# different factor per row; with a nine-patch plate it would merely be two very
+	# wide buttons, which is still not what a two-item column wants.
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.pressed.connect(on_pressed)
 	return btn

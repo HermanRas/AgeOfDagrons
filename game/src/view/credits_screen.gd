@@ -15,7 +15,7 @@ extends Control
 
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 
-@onready var _back_button: TextureButton = %BackButton
+@onready var _back_button: Button = %BackButton
 
 
 func _ready() -> void:

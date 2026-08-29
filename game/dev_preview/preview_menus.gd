@@ -75,7 +75,7 @@ func _show(path: String) -> void:
 ## opens the lobby" without following either.
 func _report_menu_wiring() -> void:
 	for name in ["PlayButton", "MultiplayerButton", "CreditsButton"]:
-		var button: TextureButton = _current.get_node_or_null("%" + name)
+		var button: Button = _current.get_node_or_null("%" + name)
 		if button == null:
 			push_warning("preview_menus: no %s on the main menu" % name)
 			continue
@@ -84,8 +84,8 @@ func _report_menu_wiring() -> void:
 		if targets.is_empty():
 			push_warning("preview_menus: %s is wired to nothing" % name)
 
-	var play: TextureButton = _current.get_node_or_null("%PlayButton")
-	var multi: TextureButton = _current.get_node_or_null("%MultiplayerButton")
+	var play: Button = _current.get_node_or_null("%PlayButton")
+	var multi: Button = _current.get_node_or_null("%MultiplayerButton")
 	if play != null and multi != null:
 		var play_targets := _handlers(play)
 		var multi_targets := _handlers(multi)
@@ -117,7 +117,7 @@ func _handlers(button: BaseButton) -> Array[String]:
 ## Press the REAL settings button, not its handler -- the point is the wiring as
 ## much as the layout, and calling the handler would prove only the handler.
 func _press_settings() -> void:
-	var button: TextureButton = _current.get_node_or_null("%SettingsButton")
+	var button: Button = _current.get_node_or_null("%SettingsButton")
 	if button == null:
 		push_warning("preview_menus: no SettingsButton on the main menu")
 		return
@@ -142,7 +142,7 @@ func _report_settings() -> void:
 
 
 func _report_campaign() -> void:
-	var back: TextureButton = _current.get_node_or_null("%BackButton")
+	var back: Button = _current.get_node_or_null("%BackButton")
 	print("  campaign: back button %s, rect %s"
 			% [back != null, back.get_global_rect() if back != null else "-"])
 	if back == null:

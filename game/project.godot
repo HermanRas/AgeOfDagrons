@@ -33,7 +33,9 @@ window/handheld/orientation=4
 
 [gui]
 
-; Why a .ttf and not a Theme: src/view/ui_font.gd. Godot eats comments here.
+; Both settings on purpose; the reasoning is in src/view/ui_font.gd, because
+; Godot eats comments in this file on save.
+theme/custom="res://assets/ui/aod_theme.tres"
 theme/custom_font="res://assets/ui/fonts/MedievalSharp-Regular.ttf"
 
 [physics]

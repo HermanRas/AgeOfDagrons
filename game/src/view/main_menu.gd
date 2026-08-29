@@ -35,15 +35,32 @@ const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
 const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
 const _CAMPAIGN_SCENE := "res://scenes/menu/Campaign.tscn"
 ## The same panel art `PauseMenu` uses, so the two SETTINGS pages match.
-const _PANEL_BG_PATH := "res://assets/ui/hud/panel_background.png"
+const _PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 
-@onready var _play_button: TextureButton = %PlayButton
-@onready var _multiplayer_button: TextureButton = %MultiplayerButton
-@onready var _settings_button: TextureButton = %SettingsButton
-@onready var _credits_button: TextureButton = %CreditsButton
-@onready var _how_to_button: TextureButton = %HowToButton
-@onready var _quit_button: TextureButton = %QuitButton
+## THE SIX BUTTONS ARE `Button`s WITH TEXT, and were six `TextureButton`s with the word
+## painted into the art until 2026-08-30. Nine files in `assets/ui/menu/` differed only
+## in which word was on them, which meant a new menu entry cost a piece of art, a
+## renamed one cost a re-render, and there was no pressed or disabled state at all
+## because nobody was going to draw twenty-seven files.
+##
+## One plate in three states lives in `assets/ui/aod_theme.tres` and reaches every
+## Button in the project, so this scene carries no button art of its own and the
+## SETTINGS overlay's CLOSE button -- built in code, below -- matches the front door
+## without asking to.
+
+@onready var _play_button: Button = %PlayButton
+@onready var _multiplayer_button: Button = %MultiplayerButton
+@onready var _settings_button: Button = %SettingsButton
+@onready var _credits_button: Button = %CreditsButton
+@onready var _how_to_button: Button = %HowToButton
+@onready var _quit_button: Button = %QuitButton
 @onready var _toast: NoticeToast = %Toast
+## The game's name, authored in the .tscn because that is where the layout is. The
+## FACE is set here rather than there for the reason `_build_settings_overlay`'s header
+## gives about `.tscn` files: Godot rewrites their properties when the project is open,
+## and a theme override is exactly the sort of property that drifts. It is also the one
+## label in the game most obviously a NAME, which is what `UiFont.title` is for.
+@onready var _title: Label = $PanelRoot/Title
 
 ## The SETTINGS overlay, built on first press and kept. See `_on_settings_pressed`.
 var _settings_overlay: CanvasLayer = null
@@ -51,6 +68,7 @@ var _volume: VolumePanel = null
 
 
 func _ready() -> void:
+	UiFont.title(_title, 40, true)
 	_play_button.pressed.connect(_on_play_pressed)
 	# THE SKIRMISH AND LOBBY SCREEN, which is one screen because a skirmish and a lobby
 	# differ only in what fills a player slot (1.6): all-local slots plays at once, and
@@ -134,14 +152,16 @@ func _build_settings_overlay() -> CanvasLayer:
 	const _TITLE_H := 24.0
 	const _SEP := 16.0
 	const _CLOSE_H := 44.0
-	const _CONTENT_TOP := 80.0      # clears the frame art's dragon ornament
-	# 72, not the ~34 that would merely stay inside the RECT.
-	# `panel_background.png` carries transparent padding, so its visible gold
-	# border sits roughly 36 px inside the rect it is stretched into -- measured
-	# off a screenshot where CLOSE was comfortably within the rect and sitting
-	# right on top of the border. What content has to clear is the border, not
-	# the rectangle.
-	const _BOTTOM_MARGIN := 72.0
+	const _CONTENT_TOP := 28.0
+	# 28, DOWN FROM 72, AND THE OLD NUMBER'S REASONING IS WORTH KEEPING because the
+	# trap it describes is real and this art simply does not have it. Kibyra's
+	# `panel_background.png` carried transparent padding, so its visible gold border
+	# sat roughly 36 px inside the rect it was stretched into: content that stayed
+	# inside the RECT still landed on top of the border, and the number had to be
+	# measured off a screenshot rather than reasoned about. `chrome/panel_hud.png` is
+	# a nine-patch with a 12 px border and no padding, so what content must clear is
+	# 12 -- and 28 leaves a comfortable gutter inside it at every panel size.
+	const _BOTTOM_MARGIN := 28.0
 	var content_height := (_TITLE_H + _SEP + VolumePanel.height()
 			+ _SEP + _CLOSE_H)
 	var panel_size := Vector2(
@@ -165,16 +185,21 @@ func _build_settings_overlay() -> CanvasLayer:
 	overlay.add_child(panel)
 
 	if ResourceLoader.exists(_PANEL_BG_PATH):
-		var bg := TextureRect.new()
+		var bg := NinePatchRect.new()
 		bg.texture = load(_PANEL_BG_PATH)
-		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		bg.stretch_mode = TextureRect.STRETCH_SCALE
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		bg.patch_margin_left = HudStyle.PANEL_MARGIN
+		bg.patch_margin_right = HudStyle.PANEL_MARGIN
+		bg.patch_margin_top = HudStyle.PANEL_MARGIN
+		bg.patch_margin_bottom = HudStyle.PANEL_MARGIN
 		bg.size = panel_size
 		panel.add_child(bg)
 	else:
-		# The pack art is gitignored (game/assets/LICENCES.md), so a fresh
-		# checkout has no panel texture. Without this the sliders would be back
-		# on top of the menu, which is the bug this whole comment is about.
+		# The panel art was gitignored third-party until 2026-08-30 and a fresh
+		# checkout genuinely had none. It commits now, so this branch has stopped
+		# being a routine state -- it is kept because it is one line and because
+		# without it the sliders draw straight onto the menu, which is the bug this
+		# whole comment is about.
 		var solid := ColorRect.new()
 		solid.color = Color(0.12, 0.10, 0.08, 0.98)
 		solid.size = panel_size

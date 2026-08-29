@@ -1,7 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://src/view/credits_screen.gd" id="1_slkql"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/back_button.png" id="2_agf0e"]
 
 [node name="Credits" type="Control" unique_id=1167602961]
 layout_mode = 3
@@ -61,17 +60,15 @@ isobake (this project's 3D-to-2D sprite pipeline), blender_pyrogenesis_importer,
 Full provenance: CREDITS.md and game/assets/LICENCES.md in the project repository."
 fit_content = true
 
-[node name="BackButton" type="TextureButton" parent="." unique_id=1671098924]
+[node name="BackButton" type="Button" parent="." unique_id=1671098924]
 unique_name_in_owner = true
-texture_filter = 1
 custom_minimum_size = Vector2(180, 58)
 layout_mode = 0
+theme_override_font_sizes/font_size = 22
+text = "BACK"
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
 offset_top = -78.0
 offset_right = 24.0
 offset_bottom = -78.0
-texture_normal = ExtResource("2_agf0e")
-ignore_texture_size = true
-stretch_mode = 5

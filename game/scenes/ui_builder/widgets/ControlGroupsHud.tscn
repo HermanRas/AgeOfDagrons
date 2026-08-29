@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Texture2D" uid="uid://bu48xokbj8iby" path="res://assets/ui/control_groups/group_slot_ring.png" id="1_ring"]
+[ext_resource type="Texture2D" path="res://assets/ui/chrome/group_slot_ring.png" id="1_ring"]
 
 [node name="ControlGroupsHud" type="VBoxContainer"]
 offset_right = 64.0
