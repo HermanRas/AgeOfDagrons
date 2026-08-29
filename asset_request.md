@@ -24,7 +24,7 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | P | Request | The phase it is holding up |
 |---|---|---|
 | **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
-| **P8** | **THE WHOLE UI ICON SET, inventoried** — 20 exist, 5 are stand-ins, **38 are missing**, and the panels around them are third-party | **Nothing, and that is the point.** Filed for the owner's UI overhaul (2026-08-29) so the set can be baked ONCE rather than 27 tech icons landing beside 20 icons in a different style. **§4 of it is a DECISION for the owner, not a task**: bespoke icons either match Kibyra's chrome or the chrome goes too |
+| **P8** | **THE WHOLE UI ART SET** — 20 icons exist, 5 are stand-ins, 38 are missing, ~25 upcoming buttons have no feature yet, and **all the chrome is being replaced too** | **Nothing, and that is the point.** Filed for the owner's UI overhaul so it is baked ONCE. **The itch.io chrome goes** (owner, 2026-08-30), which makes the art committable and retires the download-two-packs-by-hand step. Largest entry in this file and the least urgent |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
@@ -48,15 +48,15 @@ edges. Those were an open art item (A.1) until 2026-08-23 and are now **generate
 time** from the one diamond each terrain already ships — the owner's call, so that a theme
 pack stays one sprite per terrain. Do not bake transition tiles.
 
-**One thing waiting on the OWNER, not on either agent — and the figure in it can no longer
-be checked from this machine.** This note used to state as fact that `licence_audit.py`
-reports **14 undeclared UI `.png` files**. Two corrections, 2026-08-29: **`LICENCES.md` now
-carries rows for all of them** (464–468 for the owner's Gemini-generated icons, 503–510 for
-the Kibyra itch.io copies), so the count is probably lower or zero; and **there is no Python
-on this workstation** — no `python`, no `py` launcher — so the audit cannot be run here at
-all and neither figure is measured. **Re-run it on a machine that has Python before quoting
-a number.** What genuinely waits on the owner is unchanged and is §4 of [P8]: whether the
-third-party chrome stays.
+**~~One thing waiting on the OWNER~~ — DECIDED 2026-08-30, and the licence question dissolves
+with it.** This note used to ask what to do about the itch.io UI art `.gitignore` keeps out
+of the repo, and quoted `licence_audit.py` reporting **14 undeclared UI `.png` files**. The
+answer is [P8] §4: **all of it is being replaced**, so the undeclared files stop existing
+rather than getting a licence. Two corrections to the old text while it goes: `LICENCES.md`
+already carries rows for every one of them (464–468 for the owner's Gemini-generated icons,
+503–510 for the Kibyra copies), and **there is no Python on this workstation** — no
+`python`, no `py` launcher — so that audit cannot be run here at all and the figure was
+never re-measured. **Re-run it on a machine with Python before quoting any number.**
 
 ---
 
@@ -243,18 +243,22 @@ winged creature and were derived by the projection inversion your own §4 record
 structurally wrong for anything not standing upright. Please re-measure rather than
 inheriting them.
 
-### [P8] THE WHOLE UI ICON SET, inventoried so it can be baked ONCE (game side, 2026-08-29)
+### [P8] THE WHOLE UI ART SET — every panel, button and icon, replaced once (game side, 2026-08-29, widened 2026-08-30)
 
-**This entry was "27 technology icons" for a day and is now the whole set**, because the
-owner is doing a UI overhaul and asked the right question: *"i am going to do a huge ui
-overhall and want everything to look good and match — for that to work we need everything
-baked once."* Twenty-seven tech icons in one style beside twenty existing icons in another
-is exactly the mismatch that asks for. **So this is an inventory, not a request for 38
-pictures**: what exists, where each piece came from, what is a stand-in, and what is
-missing. Take it whole or take none of it.
+**This entry was "27 technology icons" for a day, then the icon inventory, and is now the
+whole UI**, because the owner is doing an overhaul and settled the question it was asking:
+*"i am going to do a huge ui overhall and want everything to look good and match — for that
+to work we need everything baked once"*, then *"we will be replacing all art including
+Kibyra's."* Twenty-seven tech icons in a new style beside twenty in an old one, inside
+third-party chrome in a third, is exactly the mismatch that asks for.
 
-**Nothing here is blocking.** Every gap below currently draws a LABEL or a hand-drawn
-shape, which is legible and ugly rather than broken.
+**So this is an INVENTORY, not a shopping list.** What exists, where each piece came from,
+which are stand-ins, which are missing, and which are for features that do not exist yet.
+Six sections; §4 is the decision, §5 is the part with nothing behind it in code.
+
+**Nothing here is blocking, and nothing here is urgent.** Every gap below currently draws a
+LABEL or a hand-drawn shape — legible and ugly rather than broken — and the chrome that is
+being replaced works today.
 
 #### 1. What exists today, and where it came from
 
@@ -322,29 +326,88 @@ in the pack does. And the train, place, queue, garrison and group-roster tiles c
 **entity's own baked sprite**, which is better than any icon could be and is why a research
 tile carries no `payload`: a technology has no sprite to crop.
 
-#### 4. THE itch.io CONSTRAINT, which is the part that decides how big this job is
+#### 4. THE CHROME GOES TOO — decided by the owner, 2026-08-30
 
-The panels, bars, frames and menu buttons in §1 are **Kibyra's**, from
-`https://kibyra.itch.io/ui-fonts-dragon-huds-pack` and
-`https://kibyra.itch.io/free-medieval-fantasy-ui-pack`, and `assets/UI_Sprites/README.md`
-records the terms: **personal and commercial use allowed, redistribution of the original
-files NOT allowed.** So they are gitignored, each developer re-downloads them, and shipping
-them compiled inside an APK is fine while committing them is not.
+This section asked whether bespoke icons should sit inside Kibyra's chrome or replace it.
+**Answered: replace it.** *"we will be replacing all art including Kibyra's."* Their own
+`notes.md` names the shape — *"custom panels for main menu and action panel and alerts /
+notifications."*
 
-**What that means for an overhaul, and it is a decision rather than a task:** bespoke icons
-have to sit inside Kibyra's chrome and match its weight, palette and bevel, *or* the chrome
-goes too. The second is a much larger job and would also let the art be committed. **The
-owner's call, not mine** — but the two halves cannot be decided separately, which is the
-whole reason this entry lists the chrome alongside the icons.
+**So this is a full UI art set, not an icon set**, and three things follow that are worth
+knowing before a pixel is drawn:
 
-The exact copies in use, so nothing is guessed at: `panel_background` ←
+**(a) THE ART BECOMES COMMITTABLE, and that is the biggest single win.** Kibyra's terms —
+personal and commercial use allowed, **redistribution of the originals not allowed** — are
+why `game/assets/ui/` is gitignored, why `assets/UI_Sprites/README.md` tells each developer
+to download two packs by hand, and why a clean checkout does not have a HUD. Project-owned
+art has none of that: it commits, it clones, `UI_Sprites/README.md` becomes history, and
+`LICENCES.md` rows 503–510 collapse into one project-asset row. **It also makes
+`licence_audit.py`'s complaint about undeclared UI files disappear by construction**, which
+is the open owner item at the top of this file.
+
+⚠️ **None of that is true until the replacement art actually exists.** The packs are still
+required to run the game today — a clean checkout has no HUD without them — so
+`UI_Sprites/README.md`, the `.gitignore` entries and the `LICENCES.md` rows all stay exactly
+as they are until there is something to swap in. **Retire them in the same commit that
+lands the art, not before**, or the next person to clone this repo gets a game with no
+panels and a README that says the packs are no longer needed.
+
+**(b) THE FONT IS PART OF "EVERYTHING MATCHES" AND IS NOT WIRED AT ALL.** Kibyra's *UI
+Fonts* pack is in the download list and **the game ships no font file** — there is no
+`.ttf` or `.otf` anywhere under `game/`, and every label draws in Godot's built-in default.
+So the typeface is still an open choice rather than something being replaced, and it is the
+one part of the overhaul that touches every screen at once.
+
+**(c) NINE-PATCH GEOMETRY IS WHERE A REPLACEMENT PANEL GOES WRONG.**
+`panel_background.png` is 160×192 and is drawn at a dozen different sizes, and the code
+already carries two hard-won notes about it: it **carries transparent padding**, so its
+visible gold edge sits inside its own rect (`main_menu.gd`), and `HudPanel` deliberately
+does **not** use it at full-page size because a filled panel at that scale reads as a
+smear — the pages hand-roll a flat fill with a double gold border instead, and their header
+says the texture goes back in the moment art exists at that shape. **A replacement wants to
+be authored as a nine-patch with its stretch margins stated**, and a full-page variant is a
+second asset rather than the same one scaled.
+
+For reference while replacing them, the exact copies in use today: `panel_background` ←
 `panels/panel-with-background.png`; `health_bar` ← `line-bars/line-bar-health.png`;
 `portrait_frame` ← `rounded-bars/avatar-frame.png`; `toast_banner` ←
 `dialogue-box/dialogue-box-transparent.png`; `group_slot_ring` ←
 `rounded-bars/rounded-bar-transparent.png`; the menu buttons ← `buttons/*.png`; `pause_icon`
 ← `icons/pause-icon.png`. `game/assets/LICENCES.md` rows 503–510 carry the same list.
 
-#### 5. Where it plugs in once baked
+#### 5. UPCOMING — buttons for features that are planned and not built
+
+**Filed on the owner's instruction so one bake covers them** (2026-08-30): *"please add
+upcoming button needs as well, like microphone and speaker for voice chat still planned
+later."* Every row here is art for a feature that **does not exist in the code yet**, so
+none of it can be wired on delivery and none of it should hold the set up. It is here so
+the overhaul draws them in the same pass and the same style, rather than a mismatched
+handful arriving one phase at a time — which is precisely the problem this whole entry was
+opened to avoid.
+
+| # | buttons | for | status of the feature |
+|---|---|---|---|
+| 2–3 | **Microphone**, **speaker**, and a **muted** variant of each | **Voice chat** | **Owner-named 2026-08-30 and recorded here first** — it is in no phase, in no PLAN section, and has no transport. See the note below |
+| 2 | **Send**, **clear** | Text chat (8.6) | The buttons EXIST and are deliberately **disabled**: a wireframe whose buttons worked locally would put a message on your own screen and nowhere else |
+| 4 | **Refresh**, **join**, **host**, **filter** | Server browser (12.1b, `UI_Design_Hosting.png`) | LAN discovery is unbuilt; typing an IP is today's route and was the friction point on hardware |
+| 5 | **Faction**, **team**, **game type**, **victory condition**, **map size** | Lobby (`UI_Design_Lobby.png`) | The mockup is ahead of the systems: one civilisation is a locked v1 decision, teams do not exist, and Regicide is declared inert |
+| 3 | **Save**, **load**, **delete** | Save/load (12.4) | Unbuilt. Replay record/play exists only as a test fixture |
+| 3 | **Play**, **pause**, **step** | Replay playback (12.4) | Same |
+| 2 | **Download**, **retry** | Asset packs (0.3) | Manifest, download, verify, mount and a download screen — none of it built |
+| 1 | **Score / statistics** | An end-of-match or in-match score screen | **`hud_score.png` already exists and is referenced by nothing** (§1). It is evidence somebody planned this screen; it has never been built |
+| 2 | **Regicide**, **Trophy** | Victory modes (11.2) | Declared and inert. Only Conquest works |
+| 2 | **Load**, **unload** | Naval transport | The ship and its garrison work; there is no load/unload UI and no naval combat |
+| 1 | **Alerts / notifications** | The owner's own `notes.md` | Not a phase. `NoticeToast` exists and draws on `toast_banner.png` |
+
+**On voice chat specifically, because this file is now its only record.** It is not in
+IDEA.md, not in PLAN.md and not in PROGRESS.md — I searched all three before writing this
+row. The art is cheap and the feature is not: it needs a capture device, a codec, a
+real-time transport that is **not** the command channel (voice must never ride the tick, or
+it inherits the 100 ms floor and lands in `state_hash()`), and a permissions prompt on
+Android. **Drawing the buttons commits nobody to building it**, which is the whole reason
+they belong in this pass rather than in a phase.
+
+#### 6. Where it plugs in once baked
 
 **All of it is data.** `SelectionActions.ICONS` is a plain `id → filename` map read at
 100×100 and drawn at 52 px inside a 72 px tile; `ActionSlot` prefers an icon file over a
