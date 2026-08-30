@@ -254,7 +254,9 @@ static func resource_icon(kind: StringName, px: float = 20.0) -> TextureRect:
 		return null
 	var icon := TextureRect.new()
 	icon.texture = texture
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# LINEAR, like every other icon site since 2026-08-30: these are the same 100 px
+	# painted es_*.png files the resource counter draws, at a page's own scale.
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	# Without this the icon pack's own 100x100 becomes the minimum size regardless
 	# of what is asked for below -- the bug that ballooned `ResourceHUD` to 532 px

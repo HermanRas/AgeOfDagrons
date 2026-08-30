@@ -23,7 +23,10 @@ func _ready() -> void:
 
 	var art := TextureRect.new()
 	art.texture = load(_SPLASH_PATH)
-	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# LINEAR. This is the one site where NEAREST was worst: the splash is scaled to
+	# FILL a phone, so it is magnified rather than reduced, and nearest-neighbour
+	# magnification of a painted plate is visible stair-stepping on every edge.
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	art.set_anchors_preset(Control.PRESET_FULL_RECT)
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE

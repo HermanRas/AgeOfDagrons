@@ -345,6 +345,27 @@ func _build_hud() -> void:
 	minimap_area.position = Vector2(-Minimap.AREA_SIZE - 12.0, -Minimap.AREA_SIZE - 12.0)
 	hud.add_child(minimap_area)
 
+	# THE ORNATE DIAMOND FRAME, and it is drawn HERE rather than by `Minimap` itself.
+	# That widget rotates its whole Control 45 degrees so it can draw terrain and
+	# blips in plain unrotated coordinates; the frame art is already a diamond inside
+	# a square, so a child of the minimap would come out at 45 degrees to the map it
+	# frames. This area is the unrotated 200x200 the diamond sits in, which is the
+	# frame's own shape.
+	#
+	# ITS FOUR CORNER BOSSES ARE WHERE THE FOUR CORNER BUTTONS GO, which is not luck:
+	# the art was drawn from `UI_Design.jpg`'s frame, and that mockup is where the
+	# chat/trade/tech-tree/settings arrangement came from in the first place. Added
+	# FIRST so both the minimap and the buttons draw on top of it.
+	if ResourceLoader.exists(_MINIMAP_FRAME_PATH):
+		var frame := TextureRect.new()
+		frame.texture = load(_MINIMAP_FRAME_PATH)
+		frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		frame.stretch_mode = TextureRect.STRETCH_SCALE
+		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		minimap_area.add_child(frame)
+
 	_minimap = Minimap.new()
 	_minimap.position = Vector2(Minimap.AREA_SIZE - Minimap.SIZE, Minimap.AREA_SIZE - Minimap.SIZE) * 0.5
 	_minimap.tapped.connect(_on_minimap_tapped)
@@ -369,6 +390,17 @@ func _build_hud() -> void:
 	var minimap_buttons := GridContainer.new()
 	minimap_buttons.columns = 3
 	minimap_buttons.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# INSET INTO THE FRAME'S BOSSES. The four buttons used to sit hard in the area's
+	# own corners, which was right when there was nothing behind them. The frame art
+	# puts a round recess at about 0.15 of its size in from each corner and those are
+	# where the buttons belong -- otherwise the chat glyph sits half on a boss and half
+	# on the moulding beside it, which is exactly what the first screenshot showed.
+	# Derived rather than typed so it follows `Minimap.AREA_SIZE`.
+	var boss_inset := Minimap.AREA_SIZE * _MINIMAP_BOSS_CENTRE - CORNER_BUTTON_SIZE * 0.5
+	minimap_buttons.offset_left = boss_inset
+	minimap_buttons.offset_top = boss_inset
+	minimap_buttons.offset_right = -boss_inset
+	minimap_buttons.offset_bottom = -boss_inset
 	# AND IT MUST NOT EAT THE MINIMAP'S INPUT. This grid covers the WHOLE area,
 	# the flex spacers cover its middle, and it is added after the minimap, so
 	# Godot hit-tests it first and every tap on the diamond died here -- the
@@ -547,6 +579,21 @@ func _build_hud() -> void:
 ## see the shrink flags in `_corner_button` for why that second half matters.
 const CORNER_BUTTON_SIZE := 32.0
 
+## The ornate diamond around the minimap ([P8], 2026-08-30). `Minimap`'s own header
+## used to record that no such art existed and that it approximated the frame with a
+## double gold `draw_rect`; it exists now, and that approximation is gone.
+const _MINIMAP_FRAME_PATH := "res://assets/ui/chrome/frame_minimap.png"
+
+## Where the frame art puts the centre of a corner boss, as a fraction of its own size.
+##
+## MEASURED off the four dark recesses in `frame_minimap.png` and then AVERAGED, which
+## is the honest part: they are at 0.153, 0.180, 0.176 and 0.166 from their nearest
+## edges, because the art is hand-drawn and two of the four are partly overlapped by a
+## dragon. One number for all four is a ~2 px compromise on a 240 px area, against four
+## numbers that would each need re-measuring whenever the art is regenerated. The discs
+## are ~50 px across at `Minimap.AREA_SIZE`, so a 32 px button has room either way.
+const _MINIMAP_BOSS_CENTRE := 0.166
+
 
 ## One corner button (chat/trade/tech-tree/settings); shared by the two rows
 ## `_build_hud()` assembles around the minimap.
@@ -563,7 +610,8 @@ func _corner_button(spec: Array, to_top: bool, to_left: bool) -> TextureButton:
 		corner_btn.texture_normal = load(icon_path)
 	corner_btn.ignore_texture_size = true
 	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# LINEAR: 100 px of painted glyph drawn at CORNER_BUTTON_SIZE, which is 32.
+	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	corner_btn.custom_minimum_size = Vector2(CORNER_BUTTON_SIZE, CORNER_BUTTON_SIZE)
 	# SHRUNK INTO ITS CORNER, not left to fill its grid cell. A container child
 	# defaults to filling, and the grid covers the whole 200x200 minimap area -- so

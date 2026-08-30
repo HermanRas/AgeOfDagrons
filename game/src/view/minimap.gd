@@ -3,11 +3,20 @@
 ## Centre (3.4). No camera-viewport rectangle -- dropped per UI_Design.md, the
 ## diamond reads better without one.
 ##
-## No dedicated minimap frame exists in the Kibyra pack (ASSET_MISSING.md
-## 1.5) -- UI_Design.jpg's ornate diamond frame is approximated by drawing an
-## ordinary square (double gold rectangle border, `HudStyle.GOLD`) and rotating
-## the whole control 45 degrees in `_init()`, rather than a fallback "left
-## missing" rectangle.
+## THE ORNATE DIAMOND FRAME IS REAL ART NOW ([P8], 2026-08-30) and it is NOT DRAWN
+## HERE. This file used to record that no such piece existed and that it approximated
+## one with a double gold `draw_rect`; `chrome/frame_minimap.png` is that frame, and
+## `GameScene._build_hud` draws it into the unrotated 200x200 area this widget sits in.
+##
+## THE REASON IT CANNOT LIVE IN THIS FILE is the same trick that makes the rest of the
+## file simple: this Control is rotated 45 degrees so terrain, blips and fog can be
+## drawn in plain unrotated coordinates and carried into the diamond by Godot's canvas
+## transform. The frame art is ALREADY a diamond inside a square, so drawing it here
+## would turn it 45 degrees further and produce a square frame around a square map.
+##
+## What is still drawn here is the thin gold edge immediately around the map itself,
+## which is a different line from the frame -- it is what separates terrain from the
+## black field the frame's own diamond encloses.
 ##
 ## Terrain is baked into a small `Image` once per `build_terrain()` call --
 ## the same placeholder-colour trick `TerrainLayer._placeholder_texture()`
@@ -16,19 +25,45 @@
 class_name Minimap
 extends Control
 
-## The square itself, before the 45-degree rotation `_init()` applies to turn
-## it into UI_Design.jpg's diamond frame. `AREA_SIZE` is the footprint
-## GameScene reserves for it (the rotated bounding box plus a little room for
-## the diamond's tips), used to centre this square inside that footprint.
-const SIZE := 150.0
-const AREA_SIZE := 200.0
+## The footprint `GameScene` reserves for the minimap and everything around it: the
+## ornate frame fills exactly this, and the four corner buttons sit in the four bosses
+## the frame's own art puts near its corners.
+##
+## 240 SINCE 2026-08-30, up from 200, and the extra 40 px is what stops the map being
+## shrunk to pay for the frame. See `SIZE`.
+const AREA_SIZE := 240.0
+
+## How far the frame's clear aperture reaches from the centre, as a fraction of the
+## frame's drawn size. MEASURED off `chrome/frame_minimap.png` rather than eyed: the
+## largest diamond about the centre containing no gold is 178 px of a 512 px image.
+##
+## THE MEASUREMENT IS THE WHOLE POINT OF THIS CONSTANT. The first version of the frame
+## swap left `SIZE` at 150 against a 200 px area, which put the map's diamond 18 % wider
+## than the hole it was supposed to sit in -- so the map covered the frame's braided
+## diamond bar entirely and left two dragons apparently floating in the corners. It
+## looked like a z-order bug and was arithmetic.
+const APERTURE_RATIO := 0.3477
+
+## The square this control draws, before the 45-degree rotation `_init()` applies to
+## turn it into a diamond.
+##
+## DERIVED, NOT CHOSEN, and that is deliberate: a rotated square of side S has a
+## half-diagonal of S / sqrt(2), and it fits the aperture exactly when that equals
+## `AREA_SIZE * APERTURE_RATIO`. Two hand-picked numbers that had to agree is precisely
+## how the map came to overflow its frame; now changing the area moves the map with it.
+const SIZE := AREA_SIZE * APERTURE_RATIO * 1.41421356
 const OWN_COLOR := Color(0.35, 1.0, 0.45)
 const OTHER_COLOR := Color(1.0, 0.35, 0.3)
 const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
 const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
-const _FRAME_OUTER_WIDTH := 4.0
+## The hairline around the map itself.
+##
+## With `SIZE` derived from the aperture it lands directly under the frame's own bar
+## and is nearly invisible, which is correct -- what it is really for is the case where
+## `chrome/frame_minimap.png` does not load, where without it the map has no edge at
+## all. `_FRAME_OUTER_WIDTH` (4.0) and `_FRAME_INSET` (4.0) sat beside this and were
+## the other half of the hand-drawn double border; they went with it on 2026-08-30.
 const _FRAME_INNER_WIDTH := 1.5
-const _FRAME_INSET := 4.0
 
 ## Tap moves the camera there (3.8); double tap centres on the player's own
 ## Town Centre (3.4) instead -- `GameScene` resolves the latter since finding
@@ -182,13 +217,17 @@ func _draw() -> void:
 	if _fog_tex != null:
 		draw_texture_rect(_fog_tex, rect, false)
 
-	# A double line rather than one stroke, echoing the gold-on-dark edge every
-	# other panel gets from `panel_background.png`'s own border art -- there is
-	# no equivalent texture for the minimap (see this file's header), so the
-	# nearest a plain `draw_rect` gets to that look is an outer band with a
-	# thinner inner line set apart from it.
-	draw_rect(rect, FRAME_COLOR, false, _FRAME_OUTER_WIDTH)
-	draw_rect(rect.grow(-_FRAME_INSET), FRAME_COLOR, false, _FRAME_INNER_WIDTH)
+	# ONE LINE NOW, NOT TWO. The double stroke was standing in for a frame that did
+	# not exist -- an outer band with a thinner inner line set apart from it was the
+	# nearest a plain `draw_rect` got to the gold-on-dark edge the art gives
+	# everything else. `chrome/frame_minimap.png` is that edge, drawn by `GameScene`
+	# around this control, and a second gold rectangle inside a gold dragon frame is
+	# one gold rectangle too many.
+	#
+	# The single stroke stays because it is doing a job the frame cannot: the frame's
+	# diamond encloses a black field larger than the map, and this is what says where
+	# the MAP ends inside it.
+	draw_rect(rect, FRAME_COLOR, false, _FRAME_INNER_WIDTH)
 
 
 ## A single tap is deferred by `DoubleTapDetector.DOUBLE_TAP_MS` before it

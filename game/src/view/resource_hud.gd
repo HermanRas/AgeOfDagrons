@@ -143,7 +143,10 @@ func _add_badge(column: VBoxContainer, icon_file: String) -> Label:
 	if ResourceLoader.exists(icon_path):
 		var icon := TextureRect.new()
 		icon.texture = load(icon_path)
-		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# LINEAR. A 100 px icon drawn at 24 is the most aggressive downscale in the
+		# HUD, and NEAREST at 0.24 throws away three pixels in four -- which for a
+		# painted glyph is not crispness, it is aliasing.
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		# Without this, TextureRect's default EXPAND_KEEP_SIZE makes its real
 		# minimum size the texture's own pixels (the icon pack ships at

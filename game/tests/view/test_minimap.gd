@@ -81,3 +81,29 @@ func test_a_lone_tap_resolves_to_nothing_without_a_tree_to_defer_on() -> void:
 	map._gui_input(_touch(Vector2(10, 10), true))
 	map._gui_input(_touch(Vector2(10, 10), false))
 	assert_true(singles.is_empty())
+
+
+# ── the ornate frame, [P8] 2026-08-30 ───────────────────────────────────────
+
+
+func test_the_map_diamond_fits_inside_the_frames_aperture() -> void:
+	# THE BUG THIS PINS SHIPPED AND WAS FOUND BY EYE. `SIZE` was 150 against a 200 px
+	# area, which put the map's diamond 18% wider than the hole in the frame it sits
+	# in -- so the map covered the braided diamond bar completely and left two dragons
+	# apparently floating in the corners. Nothing errored, nothing warned, and it
+	# looked like a z-order problem rather than arithmetic.
+	var half_diagonal := Minimap.SIZE / sqrt(2.0)
+	var aperture := Minimap.AREA_SIZE * Minimap.APERTURE_RATIO
+	assert_true(half_diagonal <= aperture + 0.5,
+			"the map's diamond reaches %.1f px from centre and the frame's hole is %.1f"
+			% [half_diagonal, aperture])
+
+
+func test_the_map_actually_fills_that_aperture() -> void:
+	# The other half, and it is why `SIZE` is derived rather than merely bounded: a map
+	# comfortably INSIDE the hole is a map that gave away screen for nothing, and the
+	# frame would draw a black ring around it.
+	var half_diagonal := Minimap.SIZE / sqrt(2.0)
+	var aperture := Minimap.AREA_SIZE * Minimap.APERTURE_RATIO
+	assert_true(half_diagonal >= aperture - 0.5,
+			"the map leaves %.1f px of black inside the frame" % [aperture - half_diagonal])
