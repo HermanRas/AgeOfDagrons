@@ -204,3 +204,62 @@ func test_the_resources_read_in_the_order_the_hud_lists_them() -> void:
 	var sorted := hud_positions.duplicate()
 	sorted.sort()
 	assert_eq(hud_positions, sorted, "got %s" % [order])
+
+
+# ── how wide the page is ────────────────────────────────────────────────────
+
+func test_the_page_asks_for_no_more_width_than_its_widest_row_needs() -> void:
+	# "bring in the right side just past the last button" (project owner, 2026-08-30).
+	# The widest row is a tribute row, and every cell in it has a fixed minimum.
+	var kinds := panel._tribute_kinds().size()
+	assert_true(kinds > 0, "market.json declares something tributable")
+
+	var row := MarketPanel._CHIP + MarketPanel._ROW_SEP \
+			+ MarketPanel._ROW_LABEL_MIN.x + MarketPanel._ROW_SEP \
+			+ kinds * MarketPanel._TRIBUTE_BUTTON_MIN.x + (kinds - 1) * MarketPanel._ROW_SEP
+	assert_eq(panel.max_page_width,
+			row + 2.0 * HudPanel.CONTENT_MARGIN + MarketPanel._SCROLLBAR_ALLOWANCE,
+			"the cap is the widest row plus the frame's margins, and nothing else")
+
+
+## The frame's width, for a page laid out `available` wide. The frame is anchored to
+## both edges, so its width is what the two offsets leave between them.
+##
+## Driven through `_apply_page_width` rather than by assigning `panel.size`, and the
+## function's own header records why: a `PRESET_FULL_RECT` Control cannot be given a
+## size, and outside a tree the assignment raises no `NOTIFICATION_RESIZED` at all.
+func _frame_width(available: float) -> float:
+	panel._apply_page_width(available)
+	return (available + panel._frame.offset_right) - panel._frame.offset_left
+
+
+func test_a_wide_window_pulls_the_right_edge_in_and_a_narrow_one_does_not() -> void:
+	# The cap is a CAP: past it the page stops growing, and below it the screen margin
+	# wins so a narrow screen lays out exactly as it did before the cap existed.
+	var cap: float = panel.max_page_width
+	var wide := cap + 4.0 * HudPanel.MARGIN_H
+
+	assert_eq(_frame_width(wide), cap, "capped on a wide window")
+	assert_eq(panel._frame.offset_left, HudPanel.MARGIN_H,
+			"and the left edge never moves -- only the right one comes in")
+
+	var narrow := HudPanel.MARGIN_H * 2.0 + 200.0
+	assert_eq(_frame_width(narrow), 200.0,
+			"too narrow for the cap, so the margin decides and nothing is clipped")
+
+
+func test_a_page_with_no_cap_fills_the_width_it_is_given() -> void:
+	# The default, and what chat and the tech tree stay on.
+	panel.max_page_width = 0.0
+	assert_eq(_frame_width(2000.0), 2000.0 - 2.0 * HudPanel.MARGIN_H)
+
+
+func test_the_other_pages_are_not_capped() -> void:
+	# Chat and the tech tree lay out content that uses whatever width it is given --
+	# the tech tree literally scrolls sideways -- so a cap there would be a loss.
+	var chat := ChatPanel.new()
+	var tree := TechTreePanel.new()
+	assert_eq(chat.max_page_width, 0.0)
+	assert_eq(tree.max_page_width, 0.0)
+	chat.free()
+	tree.free()

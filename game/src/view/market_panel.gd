@@ -40,6 +40,18 @@ const _ROW_LABEL_MIN := Vector2(150.0, 0.0)
 const _TRADE_BUTTON_MIN := Vector2(104.0, 36.0)
 const _TRIBUTE_BUTTON_MIN := Vector2(132.0, 36.0)
 const _CHIP := 16.0
+const _RESOURCE_ICON := 20.0
+
+## The gap between the cells of a tribute or exchange row. A named constant since
+## 2026-08-30 rather than the literal 8 it was in both places, because `_page_width()`
+## has to count these and a gap that drifted would size the page wrong rather than
+## visibly wrong.
+const _ROW_SEP := 8
+
+## Room for the scroll bar the body grows when the tribute list is long. Small and
+## deliberate: without it the last tribute button is the thing the bar overlaps,
+## which is the one control this whole width is measured from.
+const _SCROLLBAR_ALLOWANCE := 16.0
 
 var _tribute_box: VBoxContainer
 var _exchange_box: VBoxContainer
@@ -87,6 +99,32 @@ func _init() -> void:
 
 	add_close_button()
 	_build_exchange_rows()
+	max_page_width = _page_width()
+
+
+## How wide this page has any use for, content plus the frame's own margins.
+##
+## MEASURED FROM THE ROWS RATHER THAN CHOSEN (project owner, 2026-08-30: *"bring in the
+## right side just past the last button"*). Every cell in both kinds of row has a fixed
+## minimum and none of them expands, so the widest row's width is arithmetic and not a
+## guess -- and a number typed here instead would be a guess that stopped being right the
+## first time a button's minimum changed.
+##
+## The TRIBUTE row is the wide one and its width depends on DATA: it draws one button per
+## kind `market.json` allows to be tributed. So this is asked at build time rather than
+## being a `const`, and a fifth tradeable resource widens the page instead of falling off
+## the end of it.
+##
+## The two paragraphs above the rows wrap into whatever is left, which is the rest of what
+## was asked for -- they were single lines running the full width of a desktop window
+## before, and a line that long is hard to read back to the start of.
+func _page_width() -> float:
+	var kinds := maxi(_tribute_kinds().size(), 1)
+	var tribute := _CHIP + _ROW_SEP + _ROW_LABEL_MIN.x + _ROW_SEP \
+			+ kinds * _TRIBUTE_BUTTON_MIN.x + (kinds - 1) * _ROW_SEP
+	var exchange := _RESOURCE_ICON + _ROW_SEP + _ROW_LABEL_MIN.x + _ROW_SEP \
+			+ 2.0 * _TRADE_BUTTON_MIN.x + _ROW_SEP
+	return maxf(tribute, exchange) + 2.0 * HudPanel.CONTENT_MARGIN + _SCROLLBAR_ALLOWANCE
 
 
 # ── state ───────────────────────────────────────────────────────────────────
@@ -162,7 +200,7 @@ func _build_tribute_rows(player_state: Dictionary, local_id: int) -> void:
 
 func _tribute_row(to_player_id: int, colour_index: int) -> Control:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", _ROW_SEP)
 
 	row.add_child(HudPanel.colour_chip(colour_index, _CHIP))
 
@@ -222,9 +260,9 @@ func _build_exchange_rows() -> void:
 
 func _exchange_row(kind: StringName) -> Control:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", _ROW_SEP)
 
-	var icon := HudPanel.resource_icon(kind)
+	var icon := HudPanel.resource_icon(kind, _RESOURCE_ICON)
 	if icon != null:
 		row.add_child(icon)
 

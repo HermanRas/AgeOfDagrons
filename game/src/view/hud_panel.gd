@@ -45,6 +45,11 @@ signal closed()
 const MARGIN_H := 120.0
 const MARGIN_V := 36.0
 
+## The inset `page_style()` keeps between the gold border and the content. Named
+## rather than left as a literal inside the style box, because `max_page_width` is
+## measured in CONTENT and has to add this back to get a frame width.
+const CONTENT_MARGIN := 24.0
+
 const TITLE_FONT_SIZE := 26
 const _BUTTON_MIN := Vector2(180.0, 44.0)
 
@@ -53,6 +58,29 @@ const _BUTTON_MIN := Vector2(180.0, 44.0)
 ## wants a grid, and imposing a VBox here would have both fighting it.
 var body: Control
 
+## Cap the frame's width, in pixels, pulling its RIGHT edge in and leaving the left
+## where the margin puts it. 0 -- the default -- fills the page, which is what the
+## chat and tech-tree pages want: both lay out content that uses whatever it is given.
+##
+## THE MARKET DOES NOT (project owner, 2026-08-30: *"the market ui is over sized bring
+## in the right side just past the last button"*). Its widest row is a fixed count of
+## fixed-width buttons, so past that width it grows nothing but empty brown -- and on a
+## wide desktop window that is most of the page, because `window/stretch/aspect` is
+## `expand` and the viewport grows with the window.
+##
+## A CAP RATHER THAN A WIDTH, and `_apply_page_width` is where that matters: on a
+## screen too narrow to give the page its cap, the margin wins and the layout is
+## exactly what it was before this existed. A page can never come out WIDER than the
+## default, and never narrower than the screen allows.
+##
+## The title recentres itself for free: it is centred inside the frame's own column,
+## not on the screen.
+var max_page_width := 0.0:
+	set(value):
+		max_page_width = value
+		_apply_page_width(size.x)
+
+var _frame: PanelContainer
 var _title: Label
 var _footer: HBoxContainer
 var _close_button: Button
@@ -87,18 +115,18 @@ func _init() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
-	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", page_style())
-	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	frame.offset_left = MARGIN_H
-	frame.offset_right = -MARGIN_H
-	frame.offset_top = MARGIN_V
-	frame.offset_bottom = -MARGIN_V
-	add_child(frame)
+	_frame = PanelContainer.new()
+	_frame.add_theme_stylebox_override("panel", page_style())
+	_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_frame.offset_left = MARGIN_H
+	_frame.offset_right = -MARGIN_H
+	_frame.offset_top = MARGIN_V
+	_frame.offset_bottom = -MARGIN_V
+	add_child(_frame)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
-	frame.add_child(column)
+	_frame.add_child(column)
 
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -115,6 +143,35 @@ func _init() -> void:
 	_footer.add_theme_constant_override("separation", 12)
 	_footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_child(_footer)
+
+
+## Re-apply the width cap whenever this page's own size changes.
+##
+## A NOTIFICATION RATHER THAN A ONE-OFF IN `_init`, because the cap is expressed against
+## the page's width and a page built by `.new()` has none until a tree lays it out -- and
+## then it gets a new one every time the window is resized. Applied at `_init` alone, the
+## market would have come out full width in the running game and correct nowhere.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_apply_page_width(size.x)
+
+
+## Put the frame's right edge where `max_page_width` says, given a page `available` wide.
+##
+## TAKES THE WIDTH RATHER THAN READING `size`, and that is for the test rather than for
+## the caller -- there is only ever one caller. A `Control` anchored `PRESET_FULL_RECT`
+## cannot be given a size directly: Godot warns *"nodes with non-equal opposite anchors
+## will have their size overridden"* and, outside a tree, assigning `size` does not even
+## raise `NOTIFICATION_RESIZED`. So a test driving this through `size` asserts nothing
+## about the arithmetic, which is how the first version of this shipped wrong.
+func _apply_page_width(available: float) -> void:
+	if _frame == null:
+		return
+	# The margin is the floor. `maxf` is what makes this a CAP rather than a width: a
+	# screen too narrow to grant it lays out exactly as it did before this existed,
+	# rather than pushing the frame off the right edge.
+	_frame.offset_right = -MARGIN_H if max_page_width <= 0.0 \
+			else -maxf(MARGIN_H, available - MARGIN_H - max_page_width)
 
 
 ## The page's fill and border. A DOUBLE gold edge -- an outer band with a thinner
@@ -134,7 +191,7 @@ static func page_style() -> StyleBoxFlat:
 	style.border_color = HudStyle.GOLD
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(6)
-	style.set_content_margin_all(24)
+	style.set_content_margin_all(CONTENT_MARGIN)
 	return style
 
 
