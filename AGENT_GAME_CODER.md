@@ -406,6 +406,7 @@ measurement of one thing**, and I shipped it anyway.
   nudges the repeat to a whole bead.
 - **`_MINIMAP_BOSS_CENTRE` is 0.109**, from labelling the dark blobs and keeping the
   round one in each quadrant. The four now agree left-to-right, as mirrored art should.
+  ~~and that is the fix~~ — **it was still wrong, and the second review below says how.**
 - **ONE PREPARED SIZE CANNOT SERVE TWO DRAW SIZES**, which is the 1:1 border trap's
   second consequence and needed a new mechanism rather than a new number.
   `prepare_ui_chrome.py` grew `EXTRA_SIZES`, and `panel_ornate_small` is the resource
@@ -422,6 +423,55 @@ measurement of one thing**, and I shipped it anyway.
   `LONG_SIZE` is the same ASPECT as `SIZE` and larger, never taller — the banner is a
   fixed composition with a dragon at each end, and a taller box stretches a face. There
   is a test pinning that. **Nothing calls it yet**; 12.3 is unbuilt.
+
+**THE OWNER'S SECOND REVIEW — THREE FIXES AND ONE NOTED, 2026-08-30:**
+
+⚠️ **AVERAGING FOUR DISAGREEING SAMPLES IS NOT HOW YOU RESOLVE THEM — IT IS HOW YOU HIDE
+THEM.** The first review's boss-centre fix found the right thing and then threw it away:
+having measured four discs individually, it took their MEAN. The minimap art is cleanly
+mirrored left-to-right, but its bottom bosses are genuinely bigger and further in than
+its top ones — 87 px against 75 on a 512 px frame — so **no single inset can put all
+four buttons on their recesses**, and 0.109 left the bottom pair ~3 px low and splayed
+outwards. That is the tech-tree glyph overhanging its rim in the owner's screenshot.
+`_MINIMAP_BOSS_CENTRES` is now four `Vector2`s and each button is placed on its own disc.
+The `GridContainer` went with it, and **two hazards went away rather than being worked
+around**: it spanned the whole area, so every piece of it needed `MOUSE_FILTER_IGNORE`
+or it ate the minimap's taps, and its middle column began as `VSeparator`s that drew a
+line down the map. Four 32 px buttons touching nothing have neither problem to have.
+
+- **CANCEL BUILD is two action tiles by one, bottom-aligned to `SelectionPanel.EDGE_PAD`.**
+  It was 280×80 at a literal `-512`, which put its right edge **20 px inside the minimap
+  area** — and a typed offset could not know that, because the minimap's left edge is
+  `_MINIMAP_MARGIN + Minimap.AREA_SIZE` and neither number was written down there. Every
+  figure in `_CANCEL_RECT` is now derived. Owner's ask was to *"match the size of the unit
+  action icons row so left and right side of screen line up"*, so it is a whole number of
+  `ActionSlot.SIZE` rather than a size that merely looks similar. `SelectionPanel._SLOT_SIZE`
+  was deleted on the way past: a second copy of `ActionSlot.SIZE`, referenced by nothing.
+- ⚠️ **A NINE-PATCH MARGIN AND A PAINTED MOULDING ARE NOT THE SAME THING**, and
+  `ResourceHUD` had been padding to the wrong one. `PANEL_ORNATE_MARGIN` is 30 because
+  that is what clears the corner DRAGON; the bead moulding along the edges is 9 px of a
+  102 px plate. Content inset at `margin + 4` was therefore clearing a dragon that is not
+  there along the middle of a side, and the other 25 px was a gutter nobody chose. Owner:
+  *"half the padding inside resource panel"*.
+- **HALVING THAT PADDING ALONE WOULD HAVE MADE IT LOOK WORSE**, which is the part worth
+  keeping. The rows are left-aligned in a fixed-width box, so the slack is all on the
+  right: at 152 wide it was 50 px and a 17 px inset would have grown it to 67. The panel
+  narrowed by the same 34 px it stopped padding. Then **a floor that had never bound
+  started binding** — `PANEL_SIZE.y` was 196 against a natural 204, so the plate had been
+  hugging its rows by accident, and at 167 the 196 reappeared as an empty band under the
+  population row. `PANEL_SIZE` is now `PANEL_WIDTH` and the height comes from the content.
+- 📝 **THE AGE PANEL NEEDS A REDESIGN AND IS NOT STARTED.** Owner, verbatim: *"i dont like
+  the age panel but dont know how to fix it, just note that it needs to be updated."* No
+  change was made. What is concretely wrong with it, from the render, so whoever picks it
+  up is not starting from "the owner dislikes it": it is the **only chrome left on screen
+  using the plain `panel_hud` plate with square corner studs**, beside an ornate resource
+  panel and a dragon minimap frame, so it reads as a different family; its two badges are
+  **unrelated to each other and to the palette** — a grey ring captioned MAX and a crimson
+  ring captioned Idle, in a HUD that is otherwise gold on dark brown — and they differ in
+  diameter and caption treatment; and the plate is **deliberately asymmetric**
+  (`offset_left -83`, `offset_right 97`), a 14 px shift left from when the pause button
+  still lived in it, which nothing now justifies. `banner_age` is committed and unused and
+  may be the intended plate. **This is a design decision, not a bug — do not guess at it.**
 
 ⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
 face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new
