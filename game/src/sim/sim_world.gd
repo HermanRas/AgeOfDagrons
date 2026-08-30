@@ -146,6 +146,15 @@ func setup(cfg: MatchConfig) -> void:
 		# config from before difficulty existed still produces the AI it always did.
 		p.ai_level = int(cfg.ai_levels[i]) if i < cfg.ai_levels.size() \
 				else SimPlayer.AILevel.EASY
+		# WHICH AGE EVERYBODY OPENS IN (the lobby's selector, 2026-08-30). One number for
+		# every player, so this is the same line for all of them -- see
+		# `MatchConfig.starting_age` for why it is not per slot.
+		#
+		# CLAMPED HERE rather than trusted. It arrives off the wire on a joined client,
+		# and an age past the end of the ladder would put every sprite on a skin that
+		# does not exist and `AgeSystem` on an advance with no target.
+		p.age = clampi(cfg.starting_age, 1,
+				GameDataRegistry.age_count() if GameDataRegistry != null else 4)
 		players.append(p)
 
 

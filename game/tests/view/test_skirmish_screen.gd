@@ -680,3 +680,51 @@ func test_a_config_with_no_map_falls_back_rather_than_crashing() -> void:
 	var cfg := screen.build_config()
 	assert_eq(cfg.map_size, MatchConfig.DEBUG_MAP_SIZE)
 	assert_null(cfg.map_data)
+
+
+# ── the starting age (project owner, 2026-08-30) ────────────────────────────
+
+func test_the_lobby_offers_every_age_and_opens_on_the_first() -> void:
+	assert_eq(screen._age_picker.item_count, GameDataRegistry.age_count(),
+			"one item per age in ages.json, asked of the data rather than restated")
+	assert_eq(screen.build_config().starting_age, 1,
+			"age 1 by default -- the ladder from the bottom, which is every match "
+			+ "played before this setting existed")
+
+
+func test_the_starting_age_reaches_the_config() -> void:
+	# The screen's entire output is the config; a picker that moved nothing would look
+	# identical on screen.
+	screen._on_starting_age_selected(screen._age_picker.get_item_index(3))
+	assert_eq(screen.build_config().starting_age, 3)
+
+
+func test_the_age_items_name_the_age_rather_than_numbering_it() -> void:
+	# ages.json names the lobby as one of the three places with room for prose.
+	assert_true(screen._age_picker.get_item_text(0).contains(GameDataRegistry.age(1).name),
+			"got '%s'" % screen._age_picker.get_item_text(0))
+
+
+func test_changing_the_starting_age_does_not_regenerate_the_map() -> void:
+	# The map is a function of the seed, the type and the two player counts, and none
+	# of those moved. Regenerating would throw away the map somebody just picked.
+	var before := screen.map_data()
+	screen._on_starting_age_selected(screen._age_picker.get_item_index(2))
+	assert_eq(screen.map_data(), before, "same map object, untouched")
+
+
+func test_the_starting_age_survives_the_wire() -> void:
+	# Every client builds its own world from these bytes (2.4a), and `age` is folded
+	# into `state_hash()` -- so two sides disagreeing about it is a desync at tick 1
+	# with no explanation attached.
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.starting_age = 4
+	assert_eq(MatchConfig.from_dict(cfg.to_dict()).starting_age, 4)
+
+
+func test_a_config_from_before_the_selector_reads_as_age_one() -> void:
+	# A host built before this existed sends no `starting_age`, and age 1 is the match
+	# it is actually running -- the same forward-compatibility shape `ai_levels` has.
+	var d := MatchConfig.debug_skirmish().to_dict()
+	d.erase("starting_age")
+	assert_eq(MatchConfig.from_dict(d).starting_age, 1)

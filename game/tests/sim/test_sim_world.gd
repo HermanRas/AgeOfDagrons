@@ -13,6 +13,39 @@ func before_each() -> void:
 	w.setup(MatchConfig.debug_single_player())
 
 
+# ── the lobby's starting age (project owner, 2026-08-30) ────────────────────
+
+func test_every_player_opens_in_age_one_by_default() -> void:
+	for p in w.players:
+		assert_eq(p.age, 1)
+
+
+func test_the_config_can_open_every_player_in_a_later_age() -> void:
+	# ONE age for everybody, which is what the owner asked for -- a per-slot version is
+	# a handicap system and wants designing rather than falling out of a dropdown.
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.starting_age = 3
+	var world := SimWorld.new()
+	world.setup(cfg)
+	for p in world.players:
+		assert_eq(p.age, 3)
+
+
+func test_a_starting_age_past_the_ladder_is_clamped_rather_than_trusted() -> void:
+	# It arrives off the wire on a joined client. An age past the end would put every
+	# sprite on a skin that does not exist and AgeSystem on an advance with no target.
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.starting_age = 99
+	var world := SimWorld.new()
+	world.setup(cfg)
+	assert_eq(world.players[0].age, GameDataRegistry.age_count())
+
+	cfg.starting_age = 0
+	var floored := SimWorld.new()
+	floored.setup(cfg)
+	assert_eq(floored.players[0].age, 1)
+
+
 func test_spawn_unit_lands_on_requested_tile() -> void:
 	var v := w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
 	assert_eq(v.tile(), Vector2i(5, 5))

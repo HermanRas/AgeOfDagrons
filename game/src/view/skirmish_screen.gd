@@ -113,6 +113,10 @@ var _seed: int = 1
 var _type: MapGenerator.Type = MapGenerator.Type.RANDOM
 var _mode: MatchConfig.Mode = MatchConfig.Mode.LAST_MAN_STANDING
 
+## Which age everybody opens in (project owner, 2026-08-30). ONE setting for the whole
+## match, not one per slot -- see `MatchConfig.starting_age` for why.
+var _starting_age: int = 1
+
 ## Sized for the maximum, so raising the slot count never has to grow them mid-change.
 ## Slots past `_slots` are simply not looked at.
 var _roles: Array[Role] = []
@@ -158,6 +162,7 @@ var _lobby_status: Label
 var _reroll_button: Button
 var _count_picker: OptionButton
 var _mode_picker: OptionButton
+var _age_picker: OptionButton
 var _ready_button: Button
 var _slot_box: VBoxContainer
 
@@ -360,6 +365,29 @@ func _build_match_column() -> Control:
 	mode_row.add_child(_mode_picker)
 	column.add_child(mode_row)
 
+	# WHICH AGE EVERYBODY OPENS IN (project owner, 2026-08-30).
+	#
+	# One row rather than one per slot: the owner asked for it "for all players", and it
+	# is the only version that is obviously fair -- an age is a flat multiplier on what
+	# you may build and train, so per-slot ages are a handicap system, which wants
+	# designing rather than falling out of a dropdown.
+	#
+	# LISTED FROM ages.json, numeral and name both, which is what that file says this
+	# kind of place is for: the HUD badge takes the numeral because it has no room for
+	# words, and the lobby is named in `ages.json`'s own note as one of the three places
+	# with room for prose. Every age is selectable -- unlike the victory picker beside
+	# it, there is no half-built one to grey out, because starting in age 3 is the same
+	# machinery as advancing into it.
+	var age_row := HBoxContainer.new()
+	age_row.add_child(_label("Start age"))
+	_age_picker = OptionButton.new()
+	for age in range(1, _age_count() + 1):
+		_age_picker.add_item(_age_label(age), age)
+	_age_picker.select(_age_picker.get_item_index(_starting_age))
+	_age_picker.item_selected.connect(_on_starting_age_selected)
+	age_row.add_child(_age_picker)
+	column.add_child(age_row)
+
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(spacer)
@@ -552,6 +580,7 @@ func build_config() -> MatchConfig:
 	cfg.map_data = _data
 	cfg.map_size = _data.size if _data != null else MatchConfig.DEBUG_MAP_SIZE
 	cfg.mode = _mode
+	cfg.starting_age = _starting_age
 	return cfg
 
 
@@ -628,6 +657,32 @@ func _active_slots() -> Array[int]:
 		if _roles[i] != Role.CLOSED:
 			out.append(i)
 	return out
+
+
+## The starting age changed. NO `regenerate()` -- the map is a function of the seed, the
+## type and the two player counts, and none of those moved. It still publishes, because
+## a joined player has agreed to a match that opens in age 1 and this is a different one.
+func _on_starting_age_selected(index: int) -> void:
+	_starting_age = _age_picker.get_item_id(index)
+	_publish_lobby()
+	_refresh_lobby()
+
+
+## How many ages the ladder has. Asked of the data for `_palette_size`'s reason:
+## `ages.json` is the authority on its own length and a second copy here would drift.
+func _age_count() -> int:
+	if GameDataRegistry == null:
+		return 4
+	return maxi(1, GameDataRegistry.age_count())
+
+
+## "II. Ember" -- the numeral and the name, which is exactly what `ages.json` says a
+## place with room for prose should show.
+func _age_label(age: int) -> String:
+	var def: AgeDef = GameDataRegistry.age(age) if GameDataRegistry != null else null
+	if def == null:
+		return "Age %d" % age
+	return "%s. %s" % [def.numeral, def.name]
 
 
 func _on_type_selected(index: int) -> void:
@@ -904,6 +959,7 @@ func _on_lobby_config_received() -> void:
 	_seed = cfg.seed
 	_type = cfg.map_type
 	_mode = cfg.mode
+	_starting_age = cfg.starting_age
 	_data = cfg.map_data
 
 	# THE SLOT COUNT FIRST, and rebuild the rows to match it, because a host on eight
@@ -951,6 +1007,11 @@ func _on_lobby_config_received() -> void:
 	_seed_box.set_value_no_signal(_seed)
 	_type_picker.select(_type_picker.get_item_index(int(_type)))
 	_mode_picker.select(_mode_picker.get_item_index(int(_mode)))
+	# Guarded, unlike the two above: `starting_age` comes off the wire and a host on a
+	# longer ages.json than this build would name an age with no item to select.
+	var age_item := _age_picker.get_item_index(_starting_age)
+	if age_item >= 0:
+		_age_picker.select(age_item)
 	if _data != null:
 		_preview.show_map(_data)
 
@@ -1008,6 +1069,7 @@ func _refresh_lobby() -> void:
 	_type_picker.disabled = joined
 	_reroll_button.disabled = joined
 	_mode_picker.disabled = joined
+	_age_picker.disabled = joined
 	_count_picker.disabled = joined or _MAX_OFFERED_PLAYERS <= MapGenerator.MIN_PLAYERS
 
 	# THE PREVIEW SHOWS THE HOST'S MAP, ONCE THERE IS ONE. A joined client used to
@@ -1047,10 +1109,14 @@ func _refresh_lobby() -> void:
 			var resolved := cfg.map_type
 			if cfg.map_data != null:
 				resolved = cfg.map_data.meta.get("type", cfg.map_type) as MapGenerator.Type
-			_status.text = "%s, %d x %d — seed %d — %s" % [
+			# The starting age is on this line for the same reason the victory mode is:
+			# it is a term of the invitation, the joining device cannot change it, and
+			# its picker above is greyed out -- so if it is not written here the joiner
+			# is agreeing to a match whose opening age they were never told.
+			_status.text = "%s, %d x %d — seed %d — %s — from %s" % [
 					MapGenerator.type_name(resolved),
 					cfg.map_size.x, cfg.map_size.y, cfg.seed,
-					MatchConfig.mode_name(cfg.mode)]
+					MatchConfig.mode_name(cfg.mode), _age_label(cfg.starting_age)]
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 
 	_join_field.editable = _lobby == Lobby.LOCAL

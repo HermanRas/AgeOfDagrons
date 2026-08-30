@@ -51,6 +51,19 @@ func _process(_delta: float) -> void:
 		5:
 			_report_campaign()
 			_shoot("menu_campaign")
+		6:
+			# THE LOBBY, which had no photograph at all until 2026-08-30 -- it was only
+			# ever covered by `test_skirmish_screen`, which asserts the CONFIG it would
+			# build and can say nothing about whether the controls fit on the page. The
+			# starting-age picker landed that day and added a row to the busiest column
+			# on the screen, which is precisely the change a test like that cannot see.
+			#
+			# Instantiated directly, never navigated to: following a scene change would
+			# replace this preview and take the script with it (see the header).
+			_show("res://scenes/menu/Skirmish.tscn")
+		7:
+			_report_lobby()
+			_shoot("menu_lobby")
 		_:
 			get_tree().quit()
 			return
@@ -147,6 +160,39 @@ func _report_campaign() -> void:
 			% [back != null, back.get_global_rect() if back != null else "-"])
 	if back == null:
 		push_warning("preview_menus: the campaign screen has no way back")
+
+
+## THE LOBBY'S CONTROLS, AND WHETHER THEY ARE ALL ON THE PAGE.
+##
+## The starting-age picker (2026-08-30) went into the match column, which already
+## carried the player count, up to eight slot rows, the victory mode and the buttons --
+## so the thing worth checking is not that the picker works, which a test does, but that
+## adding a row did not push the START button off the bottom at eight slots.
+##
+## Every OptionButton is listed with its rect, and any that falls outside the window is
+## a warning: a control laid out past the edge looks identical to one that is simply not
+## there, which is the failure `_report_settings` already exists to catch.
+func _report_lobby() -> void:
+	# The ROOT of Skirmish.tscn is the screen itself -- `find_children` only walks
+	# descendants, so looking for it would come back empty.
+	var screen := _current as SkirmishScreen
+	if screen == null:
+		push_warning("preview_menus: Skirmish.tscn has no SkirmishScreen on it")
+		return
+	print("  lobby: starting age %d of %d" % [
+			screen.build_config().starting_age, screen._age_picker.item_count])
+	for i in range(screen._age_picker.item_count):
+		print("    age item %d: %s" % [i, screen._age_picker.get_item_text(i)])
+
+	var window := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for node in _current.find_children("*", "OptionButton", true, false):
+		var picker: OptionButton = node
+		var rect := picker.get_global_rect()
+		if not window.encloses(rect):
+			push_warning("preview_menus: a lobby dropdown is off the page: %s" % rect)
+	var start: Button = screen._start_button
+	if not window.encloses(start.get_global_rect()):
+		push_warning("preview_menus: START is off the page at %s" % start.get_global_rect())
 
 
 func _shoot(name: String) -> void:

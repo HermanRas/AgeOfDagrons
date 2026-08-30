@@ -63,6 +63,27 @@ var map_data: MapData = null
 var seed: int = 0
 var map_type: MapGenerator.Type = MapGenerator.Type.RANDOM
 
+## WHICH AGE EVERY PLAYER STARTS IN (project owner, 2026-08-30). 1 is the ladder from
+## the bottom, which is what every match played before this existed and what every
+## debug factory still wants.
+##
+## ONE NUMBER FOR EVERYBODY, not one per slot, and the owner asked for it that way --
+## *"a starting age selector for all players"*. That is also the only version that is
+## obviously fair: an age is a flat multiplier on what you may build and train, so a
+## per-slot version is a handicap system, and a handicap system wants to be designed
+## rather than fall out of a dropdown.
+##
+## IT IS PART OF THE CONFIG FOR `mode` AND `colours`' REASON. Every client builds its
+## own world (2.4a) from these bytes, and two of them starting players in different
+## ages would disagree about what is buildable, what a building's population cap is,
+## and which skin every sprite wears -- and `age` IS folded into `state_hash()`, so
+## this one would be caught, as a desync at tick 1 with no explanation attached.
+##
+## What it does NOT do is give you an age-3 town: `MapGen` still places one town
+## centre and the starting villagers, because starting buildings are the MAP's business
+## and not the age's. It unlocks the ladder, which is what an age is.
+var starting_age: int = 1
+
 ## Which slots are bots, position for position with `player_ids` (PLAN.md 12.2a).
 ## EMPTY means every player is human, which is what every debug factory here wants.
 ## Read by `SimWorld.setup()` into `SimPlayer.is_ai`.
@@ -138,6 +159,7 @@ func to_dict() -> Dictionary:
 		"mode": int(mode),
 		"seed": seed,
 		"map_type": int(map_type),
+		"starting_age": starting_age,
 		# null for the fixed debug map, which is integer code and identical everywhere.
 		"map_data": map_data.to_dict() if map_data != null else null,
 	}
@@ -177,6 +199,10 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	c.mode = int(d.get("mode", Mode.LAST_MAN_STANDING)) as Mode
 	c.seed = int(d.get("seed", 0))
 	c.map_type = int(d.get("map_type", MapGenerator.Type.RANDOM)) as MapGenerator.Type
+	# Absent from a host built before the selector existed, which reads as age 1 -- the
+	# match that host is actually running. Same forward-compatibility shape as
+	# `ai_levels` above, and for the same reason.
+	c.starting_age = int(d.get("starting_age", 1))
 
 	var md = d.get("map_data")
 	if md != null and md is Dictionary:
