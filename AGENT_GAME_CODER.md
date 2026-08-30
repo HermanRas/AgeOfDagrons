@@ -315,7 +315,7 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 87 test files, **1697 tests, all passing** — measured 2026-08-30
+**361 atlases staged.** 88 test files, **1739 tests, all passing** — measured 2026-08-30
 after the UI overhaul's sixth commit, not quoted. (The assertion count was 208,317 at
 1680 tests on 2026-08-29 and has not been re-read since.)
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
@@ -472,6 +472,60 @@ line down the map. Four 32 px buttons touching nothing have neither problem to h
   (`offset_left -83`, `offset_right 97`), a 14 px shift left from when the pause button
   still lived in it, which nothing now justifies. `banner_age` is committed and unused and
   may be the intended plate. **This is a design decision, not a bug — do not guess at it.**
+
+**THE OWNER'S THIRD PASS — FIVE POLISH ITEMS, ALL LANDED, 2026-08-30:**
+
+| | |
+|---|---|
+| the under-attack alarm | `DamageAlert` — a 30 s horn and a 2 s white flash on the minimap |
+| control groups | separation 8 → 2 |
+| the lobby | a starting-age selector for the whole match |
+| the chat page | voice toggles on top, a composer at the bottom, all stubbed |
+| the tech tree | ages top-to-bottom, techs left-to-right, and a description box on a tap |
+
+⚠️ **`HudPanel.note_label` AUTOWRAPS, WHICH MAKES IT A VBox WIDGET.** Dropped into an
+`HBoxContainer` with nothing setting its width, a wrapping Label collapses to its
+narrowest possible box and Godot wraps it to **one character per line** — a 300 px
+column of single letters that then stretches every sibling in the row to match. **It
+shipped into a render twice on the same day**: the tech tree's empty age-1 row (which
+pushed ages 2–4 off the page) and the chat page's "no voice channel" note (which
+stretched three toggles into playing cards and crushed the message log to nothing).
+Neither was visible to a test — both pass every structural assertion. In a row, set
+`custom_minimum_size.x` or `AUTOWRAP_OFF`. The helper's own docstring now says so.
+
+- ⚠️ **A REMEMBERED ENTITY CARRIES NO `hp`**, and that is the whole hazard in
+  `DamageAlert`. `SnapshotSystem` strips the live fields from anything the player can no
+  longer see, so a unit walking into fog arrives with its hp absent — read naively that
+  is a fall to zero, and **every scouting villager would blow the horn**. A missing `hp`
+  is skipped, never defaulted. `MatchAudio`'s header lists the same three consequences of
+  diffing; this is the one that bites harder here than there.
+- **THE HORN AND THE FLASH ARE ON DIFFERENT CLOCKS ON PURPOSE.** 30 s global cooldown on
+  the sound, none at all on the flash. The sound is a summons and one that fires per hit
+  teaches you to ignore it; the flash is what you look at once summoned, so it must show
+  *everything* currently being hit or you see one blip out of six. A tidy-up folding them
+  into one cooldown would pass every structural check and break the feature — there is a
+  test named after exactly that.
+- **`starting_age` IS IN `MatchConfig` FOR `mode` AND `colours`' REASON.** Every client
+  builds its own world (2.4a), and `age` is folded into `state_hash()` — so two sides
+  disagreeing about it is a desync at tick 1 with no explanation attached. `SimWorld.setup`
+  **clamps** rather than trusts: it arrives off the wire, and an age past the ladder puts
+  every sprite on a skin that does not exist. It unlocks the ladder and nothing else —
+  `MapGen` still places one town centre, because starting buildings are the MAP's business.
+- **THE TECH TREE'S NODES SHRANK BECAUSE THE BOX PAID FOR IT.** 120×76 → 104×58: the
+  subtitle naming the building and the prerequisites moved into `TechDetailBox`. A locked
+  node still opens — *"what is Plate Mail and should I plan for it"* is a question about a
+  tech you do not have, and nothing is bought on this page anyway. `techs.json` gained a
+  `description` for all 27, deliberately **prose and not the numbers**: `effects` already
+  carries the arithmetic and the box renders it, so a description saying "+1 melee attack"
+  would be a second copy that can disagree with the data.
+- **A BOX SIZED "ROUGHLY LIKE THIS TEXT" DROPPED THE TEXT.** `TechDetailBox`'s fixed rows
+  — title, state, building, three fact lines, button — come to ~230 px before the
+  description gets a line, so trimming the box to look tidy squeezed the scrolling
+  paragraph to zero and silently removed the one thing it exists to show. Found in the
+  render, not in a test.
+- **Everything in the chat page is disabled, and the microphone raises the stakes.** A
+  mic that appears live and is heard by nobody is worse than a message that goes nowhere.
+  `CheckButton`s rather than buttons so a disabled control still shows its STATE.
 
 ⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
 face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new
