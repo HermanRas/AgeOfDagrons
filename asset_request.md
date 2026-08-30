@@ -6,156 +6,32 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 **Housekeeping (project owner, 2026-08-16): this file stays SHORT.** An entry is deleted the moment it is both delivered and wired, leaving one line in the Delivered log at the bottom. What is above that log is work still outstanding, and nothing else. Anything worth keeping past delivery belongs in the code or data it describes, not here — the full threads are in git if a decision ever needs re-reading.
 
-> **Swept 2026-08-29 (asset side), applying that rule.** P0–P4 and their delivery
-> threads, the tree pools, the banyan decision, the fishing-ship variant-seed thread and
-> the "packed engines are still out" note were all delivered *and* wired, so they are one
-> Delivered line each now. Two things moved rather than vanished: the audio staging
-> fence crossing is answered below, and the LFS / Anubis / `git lfs pull` findings that
-> were written out here are already in `tools/stage_audio.py`'s own header, which is
-> where they belong.
-
 ---
 
-## Priority — re-derived 2026-08-29
+## Priority — re-derived 2026-08-30
 
 Ordered by how much a phase is waiting on it, not by how long it has been queued. See
 `PROGRESS.md` for the phase table this is derived from; if that changes, re-derive this.
 
 | P | Request | The phase it is holding up |
 |---|---|---|
-| **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
-| ~~**P8**~~ | ✅ **CLOSED 2026-08-30 — art delivered, wired in twelve commits, licence retired.** 130 pieces, the fonts, and the splash. The account is under [P5] and in `AGENT_GAME_CODER.md` §7; the original handover survives further down because its warnings turned out to be the map | **Nothing was ever blocked on it.** It was the biggest single change to `game/` in this file's history and it is done |
+| **P7** | **`vis.dragon` cannot move** — and the answer is that it cannot be made to, cheaply | **PLAN.md 13, dragons.** Answered below: this needs a decision from the owner, not more asset-agent time |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
-**Re-derived 2026-08-29 (third pass), and P8 is new.** Three code phases closed that day —
-phase 4 (abilities, stances, formations), 2.4d Archipelago, and **9.3/9.4 the tech tree** —
-and the shape of the queue did not change with any of them: **A.10, the building roster age
-by age, is still the only art job the next code phase actually waits on**, because 5.7 is 23
-buildings and its own line says "low code effort, ~70 bakes behind it". P7 is queued ahead of
-P5, P6 and P8 by importance and behind A.10 by urgency. **P8 grew the same day it was
-filed** — it went in as 27 technology icons and came back out as the whole UI icon set,
-because the owner is overhauling the UI and 27 icons in a new style beside 20 in the old
-one is the mismatch that overhaul is for. It is still the least urgent of the four and is
-now the largest.
-
 **Running in the background and not in this queue:** **A.10, the building roster age by
 age**, which paces phase **5.7** and every age skin **9.6** will need. It is the largest art
-job in the project and it does not wait on anything here.
+job in the project, it does not wait on anything here, and it is the only art job the next
+code phase actually waits on.
 
 **What is NOT wanted, so it does not get baked on spec:** terrain transition and shoreline
 edges. Those were an open art item (A.1) until 2026-08-23 and are now **generated at load
 time** from the one diamond each terrain already ships — the owner's call, so that a theme
 pack stays one sprite per terrain. Do not bake transition tiles.
 
-**~~One thing waiting on the OWNER~~ — DECIDED 2026-08-30, and the licence question dissolves
-with it.** This note used to ask what to do about the itch.io UI art `.gitignore` keeps out
-of the repo, and quoted `licence_audit.py` reporting **14 undeclared UI `.png` files**. The
-answer is [P8] §4: **all of it is being replaced**, so the undeclared files stop existing
-rather than getting a licence. `LICENCES.md` already carries rows for every one of them
-(464–468 for the owner's Gemini-generated icons, 503–510 for the Kibyra copies).
-
-> **[asset] "There is no Python on this workstation" is WRONG, and the 14 is now measured
-> rather than quoted, 2026-08-30.** There is no `python` and no `py` launcher **on PATH** —
-> that part was right — but the isobake venv is a full Python with PIL and numpy, and it
-> runs the audit fine:
->
-> ```powershell
-> C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe tools\licence_audit.py
-> ```
->
-> It reports **361 recipes, 44 shipped asset files, 14 problems** — so the figure stands,
-> and **all 14 are exactly the Kibyra files [P8] §4a is replacing** (`hud/*`, `menu/*`,
-> `control_groups/group_slot_ring`). That confirms §4a's prediction by measurement rather
-> than by argument: landing the new art makes this audit go green **by construction**, with
-> no rows to write. It also means the audit is a real gate the coder agent can run before
-> and after the swap, on this machine, today. Everything I built for the UI slice used that
-> same interpreter; nothing in `tools/` needs a Python on PATH.
-
 ---
 
 ## Open requests
-
-### NOT a request — the audio-staging fence crossing (game side, 2026-08-23) — ANSWERED
-
-They put `tools/stage_audio.py` in `tools/`, which the agent files call the asset side's,
-and edited `tools/licence_audit.py` to exclude `game/assets/audio/` with a matching
-coverage check. They offered to hand it over, move it, or leave it.
-
-> **[asset] Leave it exactly where it is, and keep owning it.** Audio needs no baking, so
-> it shares the directory with my scripts and nothing else — no recipe, no atlas, no
-> art checkout. Ownership should follow who can actually maintain a thing, and that is
-> you for everything inside it. I will call `stage_audio.py` if I ever need it and will
-> not edit it; if I ever need to, I will raise it here first, same as you did.
->
-> The `licence_audit.py` edit is right and I would have made the same one — it is the
-> shape `STAGED_ATLASES` already had, and `unaccounted_audio()` closes the same hole
-> `staged_atlas_ids()` does. Thank you for flagging the audit was red rather than
-> quietly making it green; that is what got `LICENCES.md` regenerated.
-
-### NOT a request — [P8] IS LANDED, and one new script is in `tools/` (game side, 2026-08-30)
-
-**LANDED IN FULL, `9b0ae14`..HEAD.** The three Kibyra directories are deleted, the
-`.gitignore` entries and `UI_Sprites/README.md` with them, and **`licence_audit.py` went
-from 129 problems to PASS** — a clean clone now runs with its chrome intact, which is the
-line this whole entry was opened for. Full account in `AGENT_GAME_CODER.md` §7 under
-**THE UI OVERHAUL**.
-
-> **Two of your handover figures did not survive contact and one of MINE was worse.**
-> `panel_hud` measures 46 rather than the 64 quoted, and `panel_ornate` is 183/241/178/92
-> rather than 256 — but the number that actually broke something was mine: I took
-> `measure_ninepatch.py`'s left margin for `panel_ornate` as a nine-patch margin, and it
-> is not one. That tool finds a STRETCHABLE RUN; a nine-patch margin has to clear the
-> CORNER, and the dragon's neck reaches 70 px further in than the bead band does. The
-> owner spotted the smear on the first look. **The margins that ship are 300 all round and
-> the edges TILE**, which is your own `draw = tile` verdict applied properly.
->
-> **The set is now drawn at TWO sizes for one piece** (`tools/prepare_ui_chrome.py`,
-> `EXTRA_SIZES`): the resource counter takes `panel_ornate` at a tenth scale, because
-> Godot draws a nine-patch border at 1:1 and the menu's 90 px border leaves nothing
-> between the corners of a 152 px panel. Worth knowing if you ever change that art —
-> one master, two outputs, and both come from your `sliced/chrome/`.
->
-> **The health bar uses `field_input` + `button_normal`, not `bar_groove` +
-> `bar_fill_health`** (owner's call). `bar_fill_health`'s rounded caps stand proud of the
-> channel, so a bar at 40 % ends in a dome floating in a slot. Not a complaint about the
-> art — the pair that won is a plate in a recess, and the two you named for the job are
-> still in the set. **`bar_fill_health` and `bar_fill_progress` are both unused today.**
-
-> **I added `tools/prepare_ui_chrome.py`, and I am telling you rather than assuming.** Same
-> shape as `stage_audio.py`, so I have taken your 2026-08-23 ruling as covering it — but it
-> is your directory and this is your chance to say otherwise.
->
-> **What it does and why it had to exist.** Godot draws a `NinePatchRect`'s border **at
-> 1:1**: the margin is in source pixels and does not scale with the rect. So `panel_hud`'s
-> measured 46 px border put 46 px of frame on a 152 px resource panel — 92 of its 152
-> pixels — and clipped every counter behind its own moulding. Shrinking the margin is
-> strictly worse, because the margin says where the border *ends*, so the leftover bevel
-> joins the stretched centre and smears. **The only lever is the source size.** The script
-> reads `sliced/chrome/`, writes `game/assets/ui/chrome/` at whatever size makes each
-> painted border come out at the thickness its widget wants, and prints the per-side
-> margins my `.gd` constants then hold. It is idempotent and has `--check`.
->
-> **It reads your output and never writes to it**, exactly like `stage_atlases.py`'s
-> direction of travel. `game/assets/ui/chrome/` is DERIVED — re-run the tool, do not
-> re-copy the masters.
->
-> **Two of your handover figures did not survive measurement, and I used the measurement.**
-> `tools/measure_ninepatch.py` on the delivered art reports `panel_hud` at **46** on all
-> four sides, not 64; and `panel_ornate` at **183/241/178/92** — lopsided, not 256 — with
-> both called stretchable rather than tiled. The one piece it says repeats is
-> `banner_alert` (period 37), and I draw that one whole rather than patching it, because
-> its composition is a dragon's head at each end of a fixed run. **No criticism intended:**
-> the numbers move when the art is regenerated, which is exactly why you shipped the tool.
->
-> **Two things you drew that I have not used, so you know rather than wonder.**
-> `badge_round` is the real one: [P8] says `res_*` stay circular and get it, and
-> `ResourceHUD` draws them at **24 px**, where a ring leaves almost no glyph. Either the
-> icon grows or the ring does not happen, and I did not want to decide that silently. The
-> four `arrow_*` are unused on your own recorded reasoning — the detail grid's `<` and `>`
-> stay characters. Everything else unused (`checkbox_*`, `radio_*`, `tab_plate`,
-> `field_input`, `bar_fill_progress`, `banner_age`) is waiting on a feature, not on a
-> decision, which is what §5 said would happen and is fine.
 
 ### [P5] Confirm `footprint_m` for five animals and five carcasses — 2026-08-23
 
@@ -221,6 +97,13 @@ take here.
 > properly means teaching isobake to exempt the root bone from `location_scale` — say the
 > word and I will; it did not seem worth holding the deer fix behind.
 
+> **[asset] These now need a re-bake before they can be measured, 2026-08-30.**
+> `art_work/out` was emptied on the owner's instruction once every real bake in it was
+> confirmed staged (9.46 GB reclaimed; see AGENT_ASSET.md §5). `isobake inspect` reads the
+> SOURCE actor and still works, so the ten measurements are still one `inspect` each and
+> nothing here is lost — but anything that wanted to re-read a baked frame now costs a bake
+> first. Taking P5 and P6 together in one sitting is the cheap ordering.
+
 ### [P6] Player colour for the two colourable PACKED siege actors (game side, 2026-08-28)
 
 **Not blocking — the feature shipped without it, and this is the visible seam it left.**
@@ -267,7 +150,8 @@ frames and do reproduce.
 > **Re-measure before baking the 16.** `vis.ballista` measures 0.00% and the ram 6.8%, so
 > the class generalisation does not hold in either direction — and a packed engine is a
 > different actor from its deployed half, with different props. I will measure all three
-> packed actors when I take this, rather than inheriting the deployed figures.
+> packed actors when I take this, rather than inheriting the deployed figures. Colour
+> variants bake at `-Parallel 1` (AGENT_ASSET.md §4), so budget 16 sequential bakes.
 
 ### [P7] `vis.dragon` — a dragon that can move, fight and die (game side, 2026-08-29)
 
@@ -277,43 +161,19 @@ total. So the dragon is a **statue**. `units.json` has said why since the roster
 (*"has no armature in the source at all and cannot move until someone rigs it"*), and its
 `speed: 0` is that, not a balance number.
 
-**What's needed, in the order it unblocks things:**
+**What's needed, in the order it unblocks things:** `walk` (without one the unit cannot be
+given a speed), `attack` (it declares damage 30, range 3, cooldown 30 and lands every blow
+with no animation), `die` + `decay` (`DeathSystem` gives every unit a 70 s corpse and a 10 s
+fade), `idle` (it has `static`, which reads as a model rather than a creature at 600 hp),
+and something for **fire breath** — `AbilitySystem` gives `unit.dragon` a 40-damage 5×5
+ability with nothing to draw. Anything readable will do for that last one; `AtlasEntry`'s
+per-clip fallback means it improves in place the moment a clip exists.
 
-| clip | why |
-|---|---|
-| `walk` | the whole of it. Without one the unit cannot be given a speed, so a trained dragon stands in the castle doorway forever |
-| `attack` | it declares damage 30, range 3, cooldown 30 and lands every blow with no animation at all |
-| `die` + `decay` | `DeathSystem` gives every unit a 70 s corpse and a 10 s fade; the dragon holds its idle pose through both |
-| `idle` | it has `static`, which reads as a model rather than a creature at 600 hp |
-
-**And one new clip that did not exist before today:** something for **fire breath**.
-`AbilitySystem` (4.10, shipped 2026-08-29) gives `unit.dragon` an `ability` — 40 damage
-over a 5×5, 15 s cooldown — and there is nothing to draw for it. **Anything readable will
-do and it does not have to be fire**: `AtlasEntry`'s per-clip fallback means an atlas
-without the clip simply plays what it has, so this ships un-animated today and improves in
-place the moment a clip called `attack_special` (or whatever you name it — tell me and I
-will point at it) exists. It is the lowest-priority line in this table.
-
-**Why now:** the owner asked for the dragon to be queued while phase 4 was closing, and
-it is the one asset in the project that gates a whole phase — **PLAN.md 13, dragons**, is
-unstartable while the unit cannot move. It is not blocking anything today: the dragon is
-trainable at the castle from age 4, the ability works, and the sprite simply does not
-animate.
-
-**Candidate source:** `attribution.actor` on the staged atlas says
-`art/actors/fauna/dragon.xml`, which is **bespoke art rather than 0 A.D.'s** — so unlike
-every other request in this file's history there may be no upstream actor with clips to
+**Candidate source:** `attribution.actor` says `art/actors/fauna/dragon.xml`, which may be
+**bespoke art rather than 0 A.D.'s** — so there may be no upstream actor with clips to
 resolve to, and rigging may be real modelling work rather than a recipe change. If that
 is the case, **say so and stop**: it is worth the owner's decision rather than your
-time, and knowing it cannot be done cheaply is itself the answer I need. `visuals.json`
-also records that it carries **no playercolour mask at all**, so no colour variants are
-wanted and `"colours"` stays absent.
-
-**Where it plugs in once baked:** `units.json` gets a real `speed` (the knight's 88 is the
-obvious reference for a flier, and it already carries `domain: "air"`, which `SimMap` does
-not yet have a grid for — that is game-side work and mine). Everything else is automatic:
-`AnimationSystem` already sends `walk`, `attack`, `die` and `decay` for every unit and
-`vis.dragon` currently falls back on all four.
+time, and knowing it cannot be done cheaply is itself the answer I need.
 
 **One thing to check before quoting a figure:** `visuals.json` gives it
 `footprint_m [6.53, 6.53]` and `height_m 2.69`, which are wider than they are tall for a
@@ -321,292 +181,60 @@ winged creature and were derived by the projection inversion your own §4 record
 structurally wrong for anything not standing upright. Please re-measure rather than
 inheriting them.
 
-### [P8] THE WHOLE UI ART SET — every panel, button and icon, replaced once (game side, 2026-08-29, widened 2026-08-30)
-
-**This entry was "27 technology icons" for a day, then the icon inventory, and is now the
-whole UI**, because the owner is doing an overhaul and settled the question it was asking:
-*"i am going to do a huge ui overhall and want everything to look good and match — for that
-to work we need everything baked once"*, then *"we will be replacing all art including
-Kibyra's."* Twenty-seven tech icons in a new style beside twenty in an old one, inside
-third-party chrome in a third, is exactly the mismatch that asks for.
-
-**So this is an INVENTORY, not a shopping list.** What exists, where each piece came from,
-which are stand-ins, which are missing, and which are for features that do not exist yet.
-Six sections; §4 is the decision, §5 is the part with nothing behind it in code.
-
-**Nothing here is blocking, and nothing here is urgent.** Every gap below currently draws a
-LABEL or a hand-drawn shape — legible and ugly rather than broken — and the chrome that is
-being replaced works today.
-
-> ## ✅ [asset] GENERATED AND SLICED, 2026-08-30 — **130 pieces, 0 flagged. NOT WIRED.**
+> ## ⛔ [asset] ANSWERED 2026-08-30 — **IT CANNOT BE DONE CHEAPLY. STOPPING, as you asked.**
 >
-> All 14 sheets came back and all 14 are cut. `assets/UI_Gen/sliced/` holds **103 icons at
-> 100×100 RGBA** (plus 256 px masters), **22 chrome pieces**, and a checkerboard contact
-> sheet per sheet in `sliced/review/`. Masters are committed; `sliced/` is derived and
-> gitignored — regenerate with `tools/slice_ui_sheets.py` on the venv python (§2 paths).
+> **First, your premise is wrong in a way that helps.** The dragon is **not bespoke art —
+> it is 0 A.D.'s own**, and it is sitting in the checkout at
+> `art/actors/fauna/dragon.xml`. `tools/recipes/dragon.toml` opens by correcting PLAN.md
+> A.9 on exactly this point: A.9 has been scheduled as "bespoke" since 0.9 on an
+> assumption nobody checked.
 >
-> **This is yours to land, and there is one line of code in it.**
-> **`ActionSlot._FRAME_PATH` must point at `tile_frame.png` rather than at
-> `panel_background.png`.** Until it does, the new bare glyphs draw on the old Kibyra plate
-> and the double-frame is inverted rather than fixed. Everything else is file placement:
-> `sliced/icons/` → `game/assets/ui/icons/`, `sliced/chrome/` → `hud/`, `menu/`,
-> `control_groups/`.
+> **Second, the mesh genuinely has no rig, and I verified that against pristine art rather
+> than trusting the recipe comment.** The Pyrogenesis importer rewrites every `.dae` it
+> loads *in place* (§4), so the obvious failure mode here would be reading a bake-damaged
+> stub and calling it upstream truth. It is not damaged — `art/meshes/skeletal/dragon.dae`
+> hashes to `e7aa71ac95c6cda5…`, which **is** the sha256 in HEAD's git-lfs pointer. The
+> file is pristine. What it contains:
 >
-> ⚠️ **`TEXTURE_FILTER_NEAREST` IS SET IN 15 PLACES AND IS NOW WRONG.** Every one was
-> correct for the pixel art it was written against; all of them make smooth painted art
-> crunchy the moment it is scaled, which is most of the time — `ActionSlot` draws a 100 px
-> icon at 52 px and `BootScreen` scales the splash to fill a phone. `action_slot.gd:102,112`
-> · `boot_screen.gd:26` · `game_scene.gd:564` · `health_bar_view.gd:40,48` ·
-> `hud_panel.gd:257` · `hud_style.gd:28` · `main_menu.gd:170` · `map_preview.gd:39` ·
-> `notice_toast.gd:47` · `pause_menu.gd:76,147` · `resource_hud.gd:151` ·
-> `result_screen.gd:167`. **`map_preview.gd` is the one to think about rather than sweep** —
-> a preview of discrete tiles may genuinely want nearest. The other fourteen want LINEAR.
+> ```
+> library_controllers : 0     <skin  : 0     <joints : 0
+> library_animations  : 0     JOINT  : 0     <node   : 1      (454 triangles)
+> ```
 >
-> **A SPLASH SCREEN IS QUEUED BUT NOT YET GENERATED** (owner, 2026-08-30). ART_PROMPT.md's
-> `## splash_screen` section is written; the owner generates it, then it becomes
-> `game/assets/ui/boot_splash.png` at 1024×576. **`Splash_h.jpg` at the repo root stays
-> until you have the new one in-game** — it is what ships today. Delete it in the commit
-> that lands the replacement, not before. It is the only prompt in the file that asks for
-> rendered text, so if the title comes back misspelled there is a text-free variant and the
-> type gets set in engine with Cinzel Decorative.
+> One unrigged node. And nothing to borrow from: there is **no dragon entry in
+> `art/skeletons/`** (78 skeleton definitions, none of them a dragon), **no `*dragon*`
+> under `art/animation/`**, and the actor XML declares two `<group>`s of which neither
+> carries an `<animations>` block. Unlike the deer, there is not even an unlike rig to
+> attempt a transfer from and watch fail.
 >
-> **Do it in ONE commit with the licence retirement** — `.gitignore`,
-> `assets/UI_Sprites/README.md` and `LICENCES.md` rows 503–510 move together with the art,
-> or a fresh clone gets a HUD with no panels and a README saying the packs are not needed.
+> **Third — the Atlas screenshot showing an `Animation: run` dropdown with Play enabled
+> does not contradict any of that, and it is worth saying why.** That combo box offers a
+> fixed list of standard clip names for previewing *any* actor; it is not read from the
+> actor. If it were derived, the dragon's would be **empty**, because the actor declares no
+> animations at all. **You can settle it in five seconds: press Play.** A rigged actor
+> moves; this one will hold the pose in both screenshots. I would rather hand you the check
+> than ask you to take my word for it — §4 is a list of six occasions this pipeline
+> reported healthy while ruining every frame.
 >
-> **Nine-patch margins are MEASURED, in `sliced/ninepatch.json`.** `panel_hud` is 64 and
-> renders clean at every size — it is the one for dense HUD grids. **`panel_ornate` is 256
-> and its edges must be TILED, not stretched** (`StyleBoxTexture`,
-> `AXIS_STRETCH_MODE_TILE`): its bead-and-reel run compresses into flat ribbing at
-> 620×620, which `tools/preview_ninepatch.py` shows and no table does.
+> **So: rigging it is real modelling work and no recipe change reaches it.** That is the
+> answer, and I am stopping rather than spending time on it.
 >
-> **§4b's FONT IS CHOSEN — and it is OFL, so it commits.** The owner dropped two families
-> in on 2026-08-30, now extracted to `assets/UI_Gen/fonts/`: **Cinzel Decorative**
-> (Regular/Bold/Black) for titles and **MedievalSharp** (Regular) for body. Both are **SIL
-> Open Font License 1.1**, confirmed by reading each archive's `OFL.txt` rather than by
-> recognising the names — so unlike Kibyra's packs they are redistributable and a clean
-> checkout gets them. `LICENCES.md` wants one row per family, and **the `OFL.txt` files must
-> ship beside the `.ttf`s** — the licence requires its own text be included, which is the
-> easiest condition here to drop by accident. Both carry a Reserved Font Name, which only
-> bites if a modified build keeps the name; nothing here modifies a font. **Loading them is
-> yours**: there is still no `.ttf` under `game/` and every label draws in Godot's default,
-> so a `Theme` setting these as default and title fonts is the change — and it touches every
-> screen, which is why it belongs in the same pass as the chrome.
+> **What the correction changes, and it is the part worth the owner's attention.** Bespoke
+> art would have meant commissioning or buying. Upstream 0 A.D. art means the mesh is
+> **CC-BY-SA 3.0** — it can be rigged and the rig redistributed, on an attribution row
+> `LICENCES.md` already has the shape for. At **454 triangles** this is a small, low-poly
+> creature, not a film asset. So the job is "someone rigs one small mesh we already own and
+> are licensed to modify", which is bounded and quotable. Whether it is worth doing is the
+> owner's call; the licence is not the obstacle and the modelling is not open-ended.
 >
-> **The `.jpg` the sheets came back as is fine and here is why**, so it is not re-litigated:
-> JPEG rings at hard edges between flat colours, which is pixel art, and this is not. Border
-> noise measured ≤6/255 on twelve of fourteen sheets and every icon downsamples 256→100 on
-> the way out. The rule is only that there must be **no second JPEG round trip** — everything
-> written is PNG.
->
-> **[asset] BATCHED INTO 14 GEMINI PROMPTS — see [ART_PROMPT.md](ART_PROMPT.md), 2026-08-30.**
-> The owner is generating the set with Gemini at 1024×1024 and we slice it here. Seven icon
-> sheets at 4×4/256 px (**103 glyphs**, which covers your 38 missing, the 5 stand-ins, all 20
-> existing and the ~25 upcoming), five full-canvas panel/banner pieces, two widget sheets.
-> Counts were re-derived off `techs.json`, `Formation.SHAPES`, `SimUnit.Stance` and
-> `units.json` rather than off this entry; they agree.
->
-> **Two decisions in it reach your side, and neither is mine to make alone.**
->
-> **ICONS BECOME BARE GLYPHS; THE TILE FRAME BECOMES ONE ASSET.** Every current icon carries
-> its own gold dragon frame *and* `ActionSlot` draws `panel_background.png` behind it, so
-> every action tile in the running game is **double-framed** today. The owner settled it
-> (2026-08-30): the frame is chrome. That gives a glyph the full 52 px instead of ~30, and
-> makes `HudAction.selected` / disabled a frame swap rather than 315 icons. **It needs
-> `ActionSlot._FRAME_PATH` to point at the new `tile_frame` rather than at the panel
-> texture** — one line, but yours.
->
-> **`res_*` STAY CIRCULAR AND `act_*` STAY SQUARE.** That distinction is load-bearing in the
-> existing set (green circles vs gold squares) and I have kept it, moved into the chrome:
-> resources get `badge_round`, actions get `tile_frame`. `ResourceHUD` draws at 24 px, so
-> whatever wraps them has to survive that.
->
-> **Answering §5 and §1 where the art forces an answer.** The nine `menu/*_button.png` differ
-> only in the printed word, so **one stretchable plate plus a label replaces all nine** and
-> `inventory-button.png` stops existing. `hud_score` and `act_leave` are drawn — cheap, and it
-> keeps 13.2 item 4b open rather than closing it by omission. `replay_pause` and `hud_pause`
-> are deliberately one picture.
->
-> **Two things I did NOT draw, both on your own recorded reasoning.** The detail grid's `<`
-> and `>` stay characters — `SelectionActions`'s header is right that a caret reads as
-> navigation at 72 px where a glyph does not, and the arrows on `sheet_widgets` are for
-> scrollbars and dropdowns only. And no font: Gemini does not produce a `.ttf`, so §4b is
-> still open and still touches every screen.
->
-> ⚠️ **`UI_Design.md` and its six mockups are DELETED** (owner, 2026-08-30: *"they are all out
-> dated now"*). They are in git. **43 citations across 23 files now point at nothing** —
-> 6 in `selection_actions.gd`, 3 in `minimap.gd`, 2 each in `resource_hud.gd` and
-> `selection_panel.gd`, plus PLAN/PROGRESS/IDEA/README. Read them as history, the way
-> `ASSET_MISSING §n` is read. Two carried real content worth not losing: `minimap.gd`'s
-> "ornate diamond frame it approximates" is now `frame_minimap` in ART_PROMPT.md, and the
-> chat mockup was the **only** record of the per-player mic/speaker voice-chat row — that is
-> now recorded in ART_PROMPT.md `sheet_f`, with the note that the art is cheap and the
-> feature is not.
-
-#### 1. What exists today, and where it came from
-
-Two sources, and the difference matters for an overhaul:
-
-| what | files | size | source |
-|---|---|---|---|
-| Action icons | `act_move`, `act_stop`, `act_build`, `act_attack`, `act_guard`, `act_destroy`, `act_garrison`, `act_enter`, `act_exit`, `act_leave` | 100×100 | **AI-generated by the project owner (Google Gemini)** — cut from `assets/Icons/Icons_sheet_500x500.png`, whose empty slots are where more would come from |
-| Resource icons | `res_food`, `res_wood`, `res_gold`, `res_stone`, `res_villagers` | 100×100 | same |
-| HUD corner buttons | `hud_chat`, `hud_trade`, `hud_techtree`, `hud_settings`, `hud_score` | 100×100 | same |
-| Panels, bars, frames | `hud/panel_background` 160×192, `hud/health_bar` 176×46, `hud/portrait_frame` 80×80, `hud/toast_banner` 184×80, `control_groups/group_slot_ring` 69×85 | — | **Kibyra, itch.io** — see §3 |
-| Menu buttons | `menu/{play,multiplayer,settings,credits,quit,resume,main_menu,back,inventory}_button` 94×31, `menu/pause_icon` 64×64 | — | **Kibyra, itch.io** |
-| Splash and menu frame | `boot_splash`, `main_menu_panel` | — | AI-generated by the owner (Gemini) |
-
-**Three of those ship and are referenced by NOTHING**, so an overhaul should decide about
-them rather than faithfully reproduce them: **`hud_score.png`** (no score screen exists),
-**`menu/inventory-button.png`** (no inventory), and **`act_leave.png`** (only `act_enter`
-and `act_exit` are wired; PLAN.md §13.2 item 4b already asks whether enter/garrison and
-exit/leave are two pairs covering one concept each — this is the moment to answer it).
-
-#### 2. The five STAND-INS: art that exists, is wired, and is the wrong picture
-
-These are the ones that make the HUD look unfinished today, and they cost nothing to fix
-because the slots are already there. `SelectionActions.ICONS` names each as a deliberate
-compromise:
-
-| action | draws | what it should be |
-|---|---|---|
-| **Harvest** | `res_wood.png` | a gather VERB, not a picture of wood — it is the same tile whether you are sent to a tree, a mine or a berry bush |
-| **Repair** | `act_guard.png` | mend, not protect. A shield is not a hammer |
-| **Stance** | `act_guard.png` | **shares Repair's file.** A shield is the better claim on it, so Repair is the one to move |
-| **Upgrade** | `hud_techtree.png` | the tech-tree HUD glyph standing in for "turn this building into a better one" |
-| **Research** | `hud_techtree.png` | **shares Upgrade's file** (9.3, 2026-08-29). Two different verbs on one picture |
-
-#### 3. Missing entirely — 38 icons, and every one of them draws a word today
-
-| # | what | ids |
-|---|---|---|
-| 27 | **Technologies** | the keys of `game/data/techs.json` |
-| 4 | **Formations** | `line`, `grid`, `vee`, `box` |
-| 4 | **Stances** | Aggressive, Defensive, Stand Ground, Passive |
-| 2 | **Special abilities** | `heal` (the monk), `fire_breath` (the dragon) — keyed by `UnitDef.ability_id` |
-| 1 | **Clear selection [X]** | `ClearSelectionButton` draws a gold ring and two strokes by hand, and its header says why: *"there is no close/X icon in `assets/ui/icons/`"* |
-
-**The 27 technologies are four ladders of three plus fifteen singles**, and the ladders are
-the only part that needs thinking about. The blacksmith's twelve are four lines — melee
-attack, ranged attack, melee armour, ranged armour — and at age 4 **all twelve are on
-screen at once in a 4×3 grid, one line per column**. A player has to tell the LINE apart at
-a glance and the tier second, so one motif per line with a tier mark beats twelve unrelated
-pictures. The rest, by the building that sells them:
-
-| building | technologies |
-|---|---|
-| Town Centre | Wheelbarrow, Hand Cart |
-| Mill | Horse Collar, Heavy Plough, Crop Rotation |
-| Lumber Camp | Double-Bit Axe, Bow Saw |
-| Mining Camp | Gold Mining, Stone Mining, Gold Shaft Mining, Stone Shaft Mining |
-| Blacksmith | Forging, Iron Casting, Blast Furnace · Fletching, Bodkin Arrow, Bracer · Scale Mail, Chain Mail, Plate Mail · Padded Armour, Leather Armour, Ring Armour |
-| University | Ballistics, Chemistry |
-| Monastery | Sanctity, Fervour |
-
-**Two things deliberately DO NOT want icons**, so they are not in the count. The detail
-grid's page arrows are `<` and `>` — at 72 px a caret reads as navigation in a way no glyph
-in the pack does. And the train, place, queue, garrison and group-roster tiles crop the
-**entity's own baked sprite**, which is better than any icon could be and is why a research
-tile carries no `payload`: a technology has no sprite to crop.
-
-#### 4. THE CHROME GOES TOO — decided by the owner, 2026-08-30
-
-This section asked whether bespoke icons should sit inside Kibyra's chrome or replace it.
-**Answered: replace it.** *"we will be replacing all art including Kibyra's."* Their own
-`notes.md` names the shape — *"custom panels for main menu and action panel and alerts /
-notifications."*
-
-**So this is a full UI art set, not an icon set**, and three things follow that are worth
-knowing before a pixel is drawn:
-
-**(a) THE ART BECOMES COMMITTABLE, and that is the biggest single win.** Kibyra's terms —
-personal and commercial use allowed, **redistribution of the originals not allowed** — are
-why `game/assets/ui/` is gitignored, why `assets/UI_Sprites/README.md` tells each developer
-to download two packs by hand, and why a clean checkout does not have a HUD. Project-owned
-art has none of that: it commits, it clones, `UI_Sprites/README.md` becomes history, and
-`LICENCES.md` rows 503–510 collapse into one project-asset row. **It also makes
-`licence_audit.py`'s complaint about undeclared UI files disappear by construction**, which
-is the open owner item at the top of this file.
-
-⚠️ **None of that is true until the replacement art actually exists.** The packs are still
-required to run the game today — a clean checkout has no HUD without them — so
-`UI_Sprites/README.md`, the `.gitignore` entries and the `LICENCES.md` rows all stay exactly
-as they are until there is something to swap in. **Retire them in the same commit that
-lands the art, not before**, or the next person to clone this repo gets a game with no
-panels and a README that says the packs are no longer needed.
-
-**(b) THE FONT IS PART OF "EVERYTHING MATCHES" AND IS NOT WIRED AT ALL.** Kibyra's *UI
-Fonts* pack is in the download list and **the game ships no font file** — there is no
-`.ttf` or `.otf` anywhere under `game/`, and every label draws in Godot's built-in default.
-So the typeface is still an open choice rather than something being replaced, and it is the
-one part of the overhaul that touches every screen at once.
-
-**(c) NINE-PATCH GEOMETRY IS WHERE A REPLACEMENT PANEL GOES WRONG.**
-`panel_background.png` is 160×192 and is drawn at a dozen different sizes, and the code
-already carries two hard-won notes about it: it **carries transparent padding**, so its
-visible gold edge sits inside its own rect (`main_menu.gd`), and `HudPanel` deliberately
-does **not** use it at full-page size because a filled panel at that scale reads as a
-smear — the pages hand-roll a flat fill with a double gold border instead, and their header
-says the texture goes back in the moment art exists at that shape. **A replacement wants to
-be authored as a nine-patch with its stretch margins stated**, and a full-page variant is a
-second asset rather than the same one scaled.
-
-For reference while replacing them, the exact copies in use today: `panel_background` ←
-`panels/panel-with-background.png`; `health_bar` ← `line-bars/line-bar-health.png`;
-`portrait_frame` ← `rounded-bars/avatar-frame.png`; `toast_banner` ←
-`dialogue-box/dialogue-box-transparent.png`; `group_slot_ring` ←
-`rounded-bars/rounded-bar-transparent.png`; the menu buttons ← `buttons/*.png`; `pause_icon`
-← `icons/pause-icon.png`. `game/assets/LICENCES.md` rows 503–510 carry the same list.
-
-#### 5. UPCOMING — buttons for features that are planned and not built
-
-**Filed on the owner's instruction so one bake covers them** (2026-08-30): *"please add
-upcoming button needs as well, like microphone and speaker for voice chat still planned
-later."* Every row here is art for a feature that **does not exist in the code yet**, so
-none of it can be wired on delivery and none of it should hold the set up. It is here so
-the overhaul draws them in the same pass and the same style, rather than a mismatched
-handful arriving one phase at a time — which is precisely the problem this whole entry was
-opened to avoid.
-
-| # | buttons | for | status of the feature |
-|---|---|---|---|
-| 2–3 | **Microphone**, **speaker**, and a **muted** variant of each | **Voice chat** | **Owner-named 2026-08-30 and recorded here first** — it is in no phase, in no PLAN section, and has no transport. See the note below |
-| 2 | **Send**, **clear** | Text chat (8.6) | The buttons EXIST and are deliberately **disabled**: a wireframe whose buttons worked locally would put a message on your own screen and nowhere else |
-| 4 | **Refresh**, **join**, **host**, **filter** | Server browser (12.1b, `UI_Design_Hosting.png`) | LAN discovery is unbuilt; typing an IP is today's route and was the friction point on hardware |
-| 5 | **Faction**, **team**, **game type**, **victory condition**, **map size** | Lobby (`UI_Design_Lobby.png`) | The mockup is ahead of the systems: one civilisation is a locked v1 decision, teams do not exist, and Regicide is declared inert |
-| 3 | **Save**, **load**, **delete** | Save/load (12.4) | Unbuilt. Replay record/play exists only as a test fixture |
-| 3 | **Play**, **pause**, **step** | Replay playback (12.4) | Same |
-| 2 | **Download**, **retry** | Asset packs (0.3) | Manifest, download, verify, mount and a download screen — none of it built |
-| 1 | **Score / statistics** | An end-of-match or in-match score screen | **`hud_score.png` already exists and is referenced by nothing** (§1). It is evidence somebody planned this screen; it has never been built |
-| 2 | **Regicide**, **Trophy** | Victory modes (11.2) | Declared and inert. Only Conquest works |
-| 2 | **Load**, **unload** | Naval transport | The ship and its garrison work; there is no load/unload UI and no naval combat |
-| 1 | **Alerts / notifications** | The owner's own `notes.md` | Not a phase. `NoticeToast` exists and draws on `toast_banner.png` |
-
-**On voice chat specifically, because this file is now its only record.** It is not in
-IDEA.md, not in PLAN.md and not in PROGRESS.md — I searched all three before writing this
-row. The art is cheap and the feature is not: it needs a capture device, a codec, a
-real-time transport that is **not** the command channel (voice must never ride the tick, or
-it inherits the 100 ms floor and lands in `state_hash()`), and a permissions prompt on
-Android. **Drawing the buttons commits nobody to building it**, which is the whole reason
-they belong in this pass rather than in a phase.
-
-#### 6. Where it plugs in once baked
-
-**All of it is data.** `SelectionActions.ICONS` is a plain `id → filename` map read at
-100×100 and drawn at 52 px inside a 72 px tile; `ActionSlot` prefers an icon file over a
-label the moment there is one, and prefers it over the payload portrait too. So:
-
-- an action or stance or formation icon is **one line in `ICONS`**;
-- a tech icon is **one line in `ICONS` keyed by the tech id** — `_research_details` already
-  asks `ICONS.get(t.id, "")` and today gets `""`;
-- an ability icon is **one line keyed by `ability_id`** — same, already asked for;
-- the [X] is the only one that needs code, and only to stop drawing itself.
-
-**Format:** 100×100 RGBA PNG in `game/assets/ui/icons/`, matching the existing 20. They are
-scaled down, never up, so bigger source is fine and smaller is not.
-
-**Do not start this ahead of A.10.** The building roster paces phase 5 and this paces
-nothing.
+> **Your footprint figures, re-measured as asked — and no bake was needed.** `dragon.toml`
+> records the mesh measured at **18.380 x 16.212 x 7.523 raw units → 9.19 x 8.11 x 3.76 m**.
+> So `visuals.json`'s `[6.53, 6.53] / 2.69` is wrong on every axis, and **`height_m` should
+> be 3.76**. The footprint is a judgement rather than a measurement, because 9.19 x 8.11 is
+> the bounding box **with the wings spread** — that is the sprite's extent, not the ground
+> the creature stands on. If the footprint drives the selection ring, the wingspan is
+> probably what you want; if it ever drives collision or pathing, it is far too big. Tell me
+> which and I will give you the number for it.
 
 ---
 
@@ -617,29 +245,30 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
-| 2026-08-28 | **`vis.deer` and `vis.deer_carcass` distorted per direction** | ✅ **DELIVERED AND STAGED; no wiring needed, they re-skinned in place.** Owner from play: *"deer is messed up, so is dead deer."* The game side's per-direction table was the right measurement and named the right suspect; the causal guess in it was wrong, and so was the recipe's. **`location_scale` has no correct non-zero value here** — it multiplies pose-bone *location* curves, and between two rigs that merely share bone names (the deer's clips carry 40 bones against its actor's 37) rotations transfer and locations do not. The shipped 0.0319 and the principled-looking 0.0254 both leave the animal reared and pitching; **0.0 is the fix**. Idle height spread over 8 directions x2.09 → **x1.51** against a healthy x1.33–x1.48; head-on width 47 px → 24 px. **A second pass the same day fixed the `run` clip**, which the owner caught on `run__N__0002` after the first: `quadraped/deer_run_01.dae` does not transfer to this rig at all and no recipe setting reaches it, so `run` is now the walk clip at 22 fps under its own anim name — `AnimationSystem` needed no change. **Residual: the carcass floats ~5 px**, recorded under [P5]. Three process lessons are in AGENT_ASSET.md §4, the most useful being that the original 0.0319 was fitted "by probing values from 0.022 to 0.045", so the search range never contained the answer |
-| 2026-08-28 | **`vis.trebuchet_packed` was the last static packed engine** | ✅ **DELIVERED AND STAGED.** All three packed engines now carry `idle` + `walk`. **The fix was one line of `[source].actor`, not the pipeline change the recipe predicted** — the Han actor wraps its wagon in a pivot that also carries four crew, and the crew steal the subject-armature pick (`picked 'Biped' (102 bones, 24 props anchored to it)` against the wagon's 10, because the importer anchors every crew's head and helmet to the *same* Biped). Baking the wagon one level down makes it structurally identical to the two that already worked, and the two zebu animate as well. Cost the trebuchet's four crew — owner's call, see [P6] |
-| 2026-08-28 | **[P1] Animate the wildlife, and five carcasses that stop being deer** | ✅ **DELIVERED AND WIRED.** 10 bakes in 2.2 min on the render box, master checkout pristine. The five movement bakes needed no wiring and re-skinned in place; the carcasses were five one-line changes in `resources.json` plus a `visuals.json` entry each — and the note they replaced had PREDICTED that, which is why pointing all five at `vis.deer_carcass` in the meantime was right rather than lazy: an undeclared id draws the magenta unknown and fails the load-warning test. **The two extra clips are what needed code, and not on the art side**: only the deer has `run` and only the cattle has `feeding`, the sim may not ask which clips exist, and the generic fallback chain is `static` → `idle` — which for a bolting sheep means STANDING STILL WHILE SLIDING at flee speed. `AtlasEntry` now carries two aliases (`run` → `walk`, `feeding` → `idle`) tried ahead of that chain, and the test for whether an alias belongs there is that it falls back to a clip every animal HAS. Feeding really is cattle-only and frame 1 really is the collapsed pose. **The "nothing tore" verdict was wrong for one species** — the deer did, invisibly to the per-clip bounding-box check, and was fixed on 2026-08-28; see the row above |
-| 2026-08-28 | **[P2] Packed siege states** | ✅ **DELIVERED AND WIRED.** All three were staged-but-undeclared on purpose until 4.13's pack/unpack state machine existed — `SimUnit` carried no deploy state, so an id declared earlier would have been referenced by nothing and read in a year as art that failed to land. `SiegeSystem` landed 2026-08-28 and all three went in together. **Doing the ballista last was right** — it only mattered once the machine existed and it is the one engine with no player colour |
-| 2026-08-28 | **[P3] A `vis.tree_teak` replacement, ideally a palm** | ✅ **DELIVERED AND WIRED, as four pools rather than one list.** 13 baked, 12 declared, and the owner's per-map assignment became `visuals.json`'s `variant_pools`: island gets five palms, forest beech/birch/fir/oak_new, river bamboo+palm_date, desert oak_dead+elm_dead. Keyed by `MapGenerator.pool_name()` so a typo'd biome fails the suite instead of silently drawing the general mix. **Nothing rides the wire** — the tile seed was already a pure function of position. **The game side was wrong about `palm_cretan_patch`** and said so: they said skip it and said not to measure it; it had already been measured at 164 x 190, smaller than the oak already in the game, and it is in. **`vis.tree_banyan` is EXCLUDED** — owner, 2026-08-28: *"the test scene confirms the warning, the tree will not work, please exclude it."* Declared, in no pool, atlas kept on disk. **How that was settled is the part worth keeping**: the first preview drew still lifes at 1:1 and the owner rejected the *tool* — *"does not allow me to give villagers instructions to gather the tree"* — because the teak was never pulled for being big, it was pulled because tapping its roots gathered a different tree, and a picture cannot fail that test however wide the canopy is. **The 250 px band is not a guideline about looks; it is the width at which a tree stops being tappable beside its neighbours.** Two species have now failed it the same way |
-| 2026-08-28 | **[P4] Arrow and bolt pitch** | ✅ **DELIVERED AND WIRED, and the wiring was nothing** — both re-staged in place. Worth keeping is how 115.0 was arrived at for the bolt: measured from where the shaft's mass sits rather than copied across from the arrow, because a bounding box cannot tell nose-down from tail-down and the arrow's own first probe landed perfectly backwards for exactly that reason. Side-on went 6x30 to 31x14. **A projectile carries no damage, so a green suite proves nothing about it** — `preview_projectiles` freezes the sim and prints each projectile's screen position, and that is the only check there is |
-| 2026-08-28 | **[P0] THE UNIT ATLASES WERE MIRRORED, NOT ROTATED** | ✅ **CLOSED. Fixed in the pipeline, and no recipe changed.** isobake `e6fc052` negated the compass step in `directions.py:yaw_deg()` — `ORDER_8` is documented clockwise from screen-down and `+i * 45°` about +Z walks it counter-clockwise, so the render swept the opposite way to the labels it wrote. **The two corrections that made it cheap are both worth keeping:** `yaw_offset_deg = 180.0` STAYED ON (index 0 is a fixed point of the sign flip, so the half-turn is half the correction, not a second error — the game side asked for its removal and was wrong), and the walls were mirrored all along rather than being the counter-example claimed, invisible only because each swapped pair has the same silhouette. **The check that can see it is all four columns**: 0 a face, **2 facing screen LEFT, 6 screen RIGHT**, 4 a back. Two and four are exactly the columns a reflection about N–S leaves alone, which is why a mirrored roster passed twice and cost a re-bake aimed at the wrong axis. **`directions = 1` art sat out the run and that is FINE** — the `i` term is 0 and no sign can reach it |
-| 2026-08-28 | **The eight colours of a unit were eight different units** | ✅ **CLOSED.** isobake seeds the importer's variant RNG from the recipe id so a rebake reproduces itself — right for a base recipe, wrong for a colour variant, because the eight colours have eight different ids by construction, so each rolled its own kit out of the actor's `<group>`s. **14 of the 21 colourable units were affected.** Only `vis.fishing_ship` ever reported it, because `check_colour_consistency` compares pixel counts and two helmets can have identical counts. `gen_player_colour_recipes.py` now pins `variant_seed` to the base id; all 168 rebaked and **all 21 units match their own base bake to the pixel** |
-| 2026-08-28 | **Gates need an open and a closed state** (project owner) | ✅ **DELIVERED AND WIRED.** Five gate atlases carry `open` + `static`; the game picks between them in `GameView._building_anim()` off `gate_locked` and the def's `is_gate`. **The art side's shape shipped unchanged and it is why this was five lines**: one atlas per gate rather than two ids, and **`static` IS the closed pose** — a gate at rest is shut, so an atlas that never got an `open` clip draws what it always drew and `resolve_anim` falls back without a special case. The age-3 wood tier moved to the **Roman siege works** wholesale (the Briton actor has no clips at all), so `vis.wall_wood_gate`'s four ages are not one file — 1–2 German, 3–4 Roman. **There are three gate defs, not five**: age 1 has no gate |
-| 2026-08-28 | **`vis.waypoint_flag` + 8 colours** | ✅ **DELIVERED AND WIRED**, and it retired a placeholder that was shipped on purpose. The owner's *"use shape placeholder"* got rally points playable the same day without waiting on a bake. **The tile diamond stayed** — a sprite says a flag is near here, and only the diamond says *which tile*, which is the entire content of a rally point. 12 frames at 8 fps; `footprint_m`/`height_m` measured off the frame (15 x 67 px at 22.627 px/m = 0.66 x 2.96 m), landing within 4 cm of the 3.0 m pole the placeholder drew by eye |
-| 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | ⚠️ **DELIVERED AND STAGED, BUT IT DID NOT FIX THE DEFECT — see [P0] above, opened the same afternoon.** The bakes are correct as specified and the pipeline work stands; the specification was wrong. The atlases were never 180° out, they were MIRRORED, and adding a half-turn only moved the mirror's axis. Kept alongside [P0] because the two only make sense together. Of the delivery itself: 82 recipes rather than the 36 listed, 242 atlases re-baked four-wide on the render box with a per-slot art checkout, which **fixed the parallel-slot race rather than avoiding it**. 1268 tests, 201,463 assertions, 0 failed. **Nothing in `game/` changed.** Excluding the seven `terrain` recipes was right — the offset is a zeroad-adapter correction applied in the shared render path, so patching them would have spun every ground tile |
-| 2026-08-17 | `vis.onager` nose-up | Fixed both halves: isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped, and the recipe declares `idle`/`attack`/`die`/`decay`. `speed: 0` still stands (no walk clip on the rig); the tint dropped to 4.7% because the correct seated pose hides the surface the reared arm exposed; the crew do not collapse on death because 0 A.D. gives this arm no `Death` clip at all |
-| 2026-08-17 | `vis.ballista` crew + animation | Not a nesting bug: 0 A.D. renames a prop joint `prop_<name>` when something attaches, so the head never found a point spelled `prop-head`. Fixed the whole class. `inspect` had also lied about the armature, so the engine animates after all — idle/attack/die/decay. Colour re-measured with the kit on: still 0.00%, `"colours": false` stands |
-| 2026-08-17 | `vis.field` / `vis.farm` collapsed props | Blender's own COLLADA importer, not Pyrogenesis: 0 A.D. writes `<matrix sid="parentinverse">` before the real `<translate>` and Blender keeps the leading matrix, so all 65 patch points landed on the origin. isobake places the empties itself now |
-| 2026-08-17 | The four field plots | Wired as `variants`, a new third axis in the seam: four interchangeable crops picked from the tile a plot stands on, NOT four ages. Ids deliberately do not match the filenames |
-| 2026-08-17 | The ORE section — 8 bakes | All 8 in 1.5 min, ids exactly as requested. Size classes now pick the SPRITE as well as the amount, which is what the request was for; wood went the other way and became four species through `variants`. The two re-points moved a long way — gold 3x up, stone 3x down. `render.ground_clip` is what unblocked the set; PLAN.md 13.2 item 7 is closed |
-| 2026-08-17 | `vis.stone_mine`, `vis.sheep`, `vis.cattle` | Found staged and referenced by nothing. Stone was a real hole — every building costs it and no map yielded any; now `res.stone` plus three quarries. Sheep and cattle are gathered where they stand, so they needed no hunt machinery |
-| 2026-08-16 | Build identity in the atlas | isobake `531a4bc` stamps `isobake_commit` / `isobake_build` / `isobake_dirty`; `99a33cc` makes all three always present, null when git cannot answer. **Compare by uniformity, not ordering** — "these eight do not all carry the same identity" works on a wholly unstamped set where "older than the newest sibling" does not |
-| 2026-08-16 | Staleness detection | Rewritten game-side to compare build identity for equality across a unit's eight colours instead of modification time. The mtime rule had inverted into 34 false positives |
-| 2026-08-16 | `game/assets/atlases/` stale | Re-staged. Root cause was `stage_atlases.py`'s non-recursive glob missing `tools/recipes/player/`, not a script nobody ran |
-| 2026-08-16 | `vis.town_center` / `vis.house` footprints | Re-measured from the staged atlases after the Briton meshes landed; old Athenian figures and why they went stale recorded in `visuals.json` |
-| 2026-08-16 | `vis.siege_ram` colour | False alarm — measured 8 distinct colour pages. Keeps `"colours": true`. **A measurement on three actors is not a rule about a class** |
-| 2026-08-16 | Camp props | Never an art gap. Four prop atlases were staged and undeclared; now wired and composed at draw time, with the mill's food crates age-gated to 3 and 4 |
+| 2026-08-30 | **[P8] THE WHOLE UI ART SET — every panel, button and icon, replaced once** | ✅ **DELIVERED AND WIRED, `9b0ae14`..`60f8184`.** Filed as 27 tech icons, widened the same day to the entire UI because the owner settled the question it was asking: *"we will be replacing all art including Kibyra's."* Batched into 14 Gemini prompts (`Docs/ART_PROMPT.md`), generated by the owner, sliced here into **130 pieces, 0 flagged** — 103 icons, 22 chrome pieces, plus Cinzel Decorative and MedievalSharp, both **OFL 1.1 confirmed by reading each archive's `OFL.txt`**. **The win was licence, not looks:** Kibyra's terms forbade redistribution, which is why `game/assets/ui/` was gitignored and a clean checkout had no HUD — `licence_audit.py` went **129 problems → PASS** and a fresh clone now runs with its chrome intact. **Three handover figures did not survive contact and the game side was right to use the measurement over the table** (`panel_hud` 46 not 64; `panel_ornate` 183/241/178/92 not 256; and `measure_ninepatch.py` finds a STRETCHABLE RUN, which is not a nine-patch margin — a margin has to clear the corner, and the dragon's neck reaches 70 px past the bead band). What outlived the thread is in `tools/prepare_ui_chrome.py`, `tools/slice_ui_sheets.py` and `AGENT_GAME_CODER.md` §7 |
+| 2026-08-28 | **`vis.deer` and `vis.deer_carcass` distorted per direction** | ✅ **DELIVERED AND STAGED; no wiring needed, they re-skinned in place.** Owner from play: *"deer is messed up, so is dead deer."* **`location_scale` has no correct non-zero value here** — it multiplies pose-bone *location* curves, and between two rigs that merely share bone names (the deer's clips carry 40 bones against its actor's 37) rotations transfer and locations do not. The shipped 0.0319 and the principled-looking 0.0254 both leave the animal reared and pitching; **0.0 is the fix**. Idle height spread over 8 directions x2.09 → **x1.51** against a healthy x1.33–x1.48. **A second pass the same day fixed the `run` clip**: `quadraped/deer_run_01.dae` does not transfer to this rig at all, so `run` is now the walk clip at 22 fps under its own anim name. **Residual: the carcass floats ~5 px**, recorded under [P5]. The most useful lesson is in AGENT_ASSET.md §4 — the original 0.0319 was fitted "by probing values from 0.022 to 0.045", so the search range never contained the answer |
+| 2026-08-28 | **`vis.trebuchet_packed` was the last static packed engine** | ✅ **DELIVERED AND STAGED.** All three packed engines now carry `idle` + `walk`. **The fix was one line of `[source].actor`, not the pipeline change the recipe predicted** — the Han actor wraps its wagon in a pivot that also carries four crew, and the crew steal the subject-armature pick (`picked 'Biped' (102 bones, 24 props anchored to it)` against the wagon's 10). Cost the trebuchet's four crew — owner's call, see [P6] |
+| 2026-08-28 | **[P1] Animate the wildlife, and five carcasses that stop being deer** | ✅ **DELIVERED AND WIRED.** 10 bakes in 2.2 min on the render box. **The two extra clips are what needed code, and not on the art side**: only the deer has `run` and only the cattle has `feeding`, and the generic fallback chain `static` → `idle` means a bolting sheep STANDS STILL WHILE SLIDING at flee speed. `AtlasEntry` now carries two aliases (`run` → `walk`, `feeding` → `idle`), and the test for whether an alias belongs there is that it falls back to a clip every animal HAS |
+| 2026-08-28 | **[P2] Packed siege states** | ✅ **DELIVERED AND WIRED.** All three were staged-but-undeclared on purpose until 4.13's pack/unpack state machine existed — an id declared earlier would have been referenced by nothing and read in a year as art that failed to land |
+| 2026-08-28 | **[P3] A `vis.tree_teak` replacement, ideally a palm** | ✅ **DELIVERED AND WIRED, as four pools rather than one list.** 13 baked, 12 declared, keyed by `MapGenerator.pool_name()` so a typo'd biome fails the suite instead of silently drawing the general mix. **`vis.tree_banyan` is EXCLUDED** (owner: *"the tree will not work, please exclude it"*). **How that was settled is the part worth keeping**: the first preview drew still lifes at 1:1 and the owner rejected the *tool* — the teak was never pulled for being big, it was pulled because tapping its roots gathered a different tree, and a picture cannot fail that test however wide the canopy is. **The 250 px band is the width at which a tree stops being tappable beside its neighbours**, not a guideline about looks |
+| 2026-08-28 | **[P4] Arrow and bolt pitch** | ✅ **DELIVERED AND WIRED, and the wiring was nothing.** 115.0 was measured from where the shaft's mass sits rather than copied across from the arrow, because a bounding box cannot tell nose-down from tail-down — the arrow's own first probe landed perfectly backwards for exactly that reason. **A projectile carries no damage, so a green suite proves nothing about it** |
+| 2026-08-28 | **[P0] THE UNIT ATLASES WERE MIRRORED, NOT ROTATED** | ✅ **CLOSED. Fixed in the pipeline, and no recipe changed.** isobake `e6fc052` negated the compass step in `directions.py:yaw_deg()`. **`yaw_offset_deg = 180.0` STAYED ON** (index 0 is a fixed point of the sign flip, so the half-turn is half the correction — the game side asked for its removal and was wrong). **The check that can see it is all four columns**: 0 a face, **2 facing screen LEFT, 6 screen RIGHT**, 4 a back |
+| 2026-08-28 | **The eight colours of a unit were eight different units** | ✅ **CLOSED.** isobake seeds the importer's variant RNG from the recipe id — right for a base recipe, wrong for a colour variant, because the eight have eight different ids by construction. **14 of 21 colourable units affected.** Only `vis.fishing_ship` ever reported it, because the check compares pixel counts and two helmets can have identical counts. `gen_player_colour_recipes.py` now pins `variant_seed` to the base id |
+| 2026-08-28 | **Gates need an open and a closed state** (project owner) | ✅ **DELIVERED AND WIRED.** **The art side's shape shipped unchanged and it is why this was five lines**: one atlas per gate rather than two ids, and **`static` IS the closed pose** — a gate at rest is shut, so an atlas that never got an `open` clip draws what it always drew. **There are three gate defs, not five**: age 1 has no gate |
+| 2026-08-28 | **`vis.waypoint_flag` + 8 colours** | ✅ **DELIVERED AND WIRED**, retiring a placeholder shipped on purpose. **The tile diamond stayed** — a sprite says a flag is near here, and only the diamond says *which tile*, which is the entire content of a rally point |
+| 2026-08-27 | **`yaw_offset_deg` — EVERY UNIT FACED BACKWARDS** | ⚠️ **DELIVERED AND STAGED, BUT IT DID NOT FIX THE DEFECT — see [P0].** The bakes are correct as specified; the specification was wrong. 242 atlases re-baked four-wide on the render box with a per-slot art checkout, which **fixed the parallel-slot race rather than avoiding it** |
+| 2026-08-17 | `vis.onager` nose-up | isobake `e257ae8` stopped the all-anchored `subject_armature` branch ranking by bone count, so the clip lands on the 8-bone arm rig instead of a 202-bone crew Biped. The tint dropped to 4.7% because the correct seated pose hides the surface the reared arm exposed |
+| 2026-08-17 | `vis.ballista` crew + animation | Not a nesting bug: 0 A.D. renames a prop joint `prop_<name>` when something attaches, so the head never found a point spelled `prop-head`. Fixed the whole class. `inspect` had also lied about the armature, so the engine animates after all |
+| 2026-08-17 | `vis.field` / `vis.farm` collapsed props | Blender's own COLLADA importer, not Pyrogenesis: 0 A.D. writes `<matrix sid="parentinverse">` before the real `<translate>` and Blender keeps the leading matrix, so all 65 patch points landed on the origin |
+| 2026-08-17 | The four field plots | Wired as `variants`, a third axis in the seam: four interchangeable crops picked from the tile a plot stands on, NOT four ages |
+| 2026-08-17 | The ORE section — 8 bakes | Size classes now pick the SPRITE as well as the amount; wood went the other way and became four species through `variants`. `render.ground_clip` is what unblocked the set |
+| 2026-08-17 | `vis.stone_mine`, `vis.sheep`, `vis.cattle` | Found staged and referenced by nothing. Stone was a real hole — every building costs it and no map yielded any |
+| 2026-08-16 | Build identity in the atlas | isobake `531a4bc` stamps `isobake_commit` / `isobake_build` / `isobake_dirty`. **Compare by uniformity, not ordering** — "these eight do not all carry the same identity" works on a wholly unstamped set where "older than the newest sibling" does not |
+| 2026-08-16 | Staleness detection | Rewritten game-side to compare build identity across a unit's eight colours instead of modification time. The mtime rule had inverted into 34 false positives |
+| 2026-08-16 | `game/assets/atlases/` stale | Re-staged. Root cause was `stage_atlases.py`'s non-recursive glob missing `tools/recipes/player/` |
+| 2026-08-16 | `vis.town_center` / `vis.house` footprints | Re-measured from the staged atlases after the Briton meshes landed |
+| 2026-08-16 | `vis.siege_ram` colour | False alarm — measured 8 distinct colour pages. **A measurement on three actors is not a rule about a class** |
+| 2026-08-16 | Camp props | Never an art gap. Four prop atlases were staged and undeclared; now wired and composed at draw time |
 | 2026-08-08 | `vis.berry_bush` | Found already baked and unwired; became the MVP food node in place of `res.deer` |
 
 ---

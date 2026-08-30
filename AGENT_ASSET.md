@@ -7,7 +7,7 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated 2026-08-29.
+Last updated 2026-08-30.
 
 ---
 
@@ -21,7 +21,16 @@ I own the **art pipeline**: 0 A.D. source art in, baked sprite atlases out.
 | `art_work/out/` — bake output | `game/data/*.json` — flag problems, do not edit |
 | `art_source/0ad` — the 0 A.D. checkout | game scenes, sim, tests |
 | the isobake source (its own repo, §2) | `AGENT_GAME_CODER.md` |
-| `asset_request.md` (my replies) | |
+| `asset_request.md` (my replies) | `tools/stage_audio.py`, `tools/prepare_ui_chrome.py`, `tools/licence_audit.py` |
+
+> **Three scripts in `tools/` are the GAME side's, by a ruling I made on 2026-08-23 and
+> extended on 2026-08-30.** They asked whether `stage_audio.py` should move out of my
+> directory; the answer is no. **Ownership follows who can maintain a thing**, and audio
+> needs no baking — no recipe, no atlas, no art checkout — so it shares the directory with
+> my scripts and nothing else. The same reasoning covers `prepare_ui_chrome.py`, which
+> reads my `assets/UI_Gen/sliced/` and writes `game/assets/ui/chrome/`, in
+> `stage_atlases.py`'s direction of travel and never back. I call them; I do not edit them,
+> and I raise it in `asset_request.md` first if I ever need to.
 
 > **There is no standing missing-asset tracker.** `ASSET_MISSING.md` was removed
 > 2026-08-16: it had drifted out of step with PLAN.md §13 that it claimed to
@@ -73,6 +82,16 @@ Paths resolve from `tools/isobake.local.toml` (`paths.out`, `art_source`,
 `pyrogenesis`). **isobake is an editable install** — editing its source changes
 behaviour immediately, so never edit it while a batch runs.
 
+> **"There is no Python on this workstation" is WRONG, and it cost a real detour.** There
+> is no `python` and no `py` launcher **on PATH** — that much is true — but the venv above
+> is a full Python with PIL and numpy, and **every script in `tools/` runs on it**,
+> including the game side's `licence_audit.py`. Nothing in `tools/` needs a Python on PATH.
+> Spell it out in full and it just works:
+>
+> ```powershell
+> C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe tools\licence_audit.py
+> ```
+
 `isobake` must run with **CWD = `tools/`**; it finds `isobake.toml` by walking up
 from the working directory. `bake_batch.ps1` handles this for you.
 
@@ -105,10 +124,12 @@ python tools\check_colour_consistency.py [--pixels] [--staged]   # BEFORE stagin
 python tools\stage_atlases.py [--dry-run]     # copy atlases into the game
 python tools\stage_atlases.py --only "vis.wall_stone_gate_age3,vis.wolf"
 #   ^ scope the stage. STAGING CANNOT TELL WHICH SIDE IS NEWER -- it copies on
-#     any byte difference, so when `out` is only partly current (a batch baked
-#     AND staged on the render box reaches this machine through Drive as staged
-#     files, while its `out` does not) a bare run copies stale atlases over the
-#     fresh ones and silently undoes the batch. Name what you rebaked.
+#     any byte difference, so whenever `out` is only partly current, name what
+#     you actually rebaked rather than running it bare.
+#
+#   NEVER --clean.  It rmtree's game/assets/atlases and refills from `out`,
+#   which is EMPTY on this workstation (see 5). That deletes all 361 staged
+#   atlases and puts nothing back, and there is no second copy. See 5.
 
 # AFTER EVERY BATCH — see §4
 wsl -e bash -c "tr -d '\r' < tools/restore_art_sources.sh | bash -s -- --apply"
@@ -189,7 +210,7 @@ index also carries ~30k staged deletions from the LFS setup: pre-existing,
 harmless, not yours to fix.
 
 **The roster names entity TEMPLATES, not actors.** Every line in
-`Age & Unit Planning.md` is `simulation/templates/<path>.xml`; the actor is one
+`Docs/Age & Unit Planning.md` is `simulation/templates/<path>.xml`; the actor is one
 hop inside, in `<VisualActor><Actor>`. Resolve it, never pattern-match the
 filename. Template civ and actor civ often differ (`units/cart/siege_ram` →
 `structures/iberians/siege_ram.xml`). A filename search finding no
@@ -285,6 +306,36 @@ first for a fortnight — with `file =` already set, which rules that branch out
 and costed the fix as "teach the adapter to merge a nested prop's animations", a
 real feature, when the actual fix was one line of `[source].actor`. **Read the
 notes above the error, not the error.**
+
+**AND THE OPPOSITE ERROR: ATLAS'S `Animation` DROPDOWN IS NOT READ FROM THE ACTOR.** The
+0 A.D. scenario editor offers a fixed list of standard clip names — `run`, `idle`, `walk` —
+for previewing *any* actor, with Play enabled, whether or not the thing selected can move.
+On 2026-08-30 that dropdown reading `run` beside `fauna/dragon.xml` looked like proof the
+dragon animates. It is not evidence either way: if the list were actor-derived the dragon's
+would be **empty**, because its actor declares no `<animations>` at all. **The five-second
+check is to press Play** — a rigged actor moves and this one holds its pose.
+
+**The general shape, and it is the one §4 keeps re-learning:** *before quoting a UI element
+as evidence, check it is capable of varying with the thing you are claiming.* A control that
+shows `run` for every actor in the game says nothing about this actor, exactly as
+`directions.table`'s constant 8 says nothing about `directions`.
+
+**How to settle "can this actor animate at all" in one pass, cheaply and without a bake.**
+Four reads, and they agree or you have found something interesting:
+
+1. **The actor XML** — does any `<variant>` carry an `<animations>` block?
+2. **The mesh COLLADA** — count `library_controllers`, `<skin`, `<joints`, `JOINT`,
+   `library_animations`. A rigged mesh cannot have zero of all five.
+3. **`art/skeletons/`** — is there a skeleton definition for it? There are 78; a creature
+   with none has nothing to retarget onto.
+4. **`art/animation/`** — is there any clip file named for it?
+
+**And verify the mesh is PRISTINE before concluding from it**, because the importer rewrites
+every `.dae` it loads in place, so the obvious way to be wrong here is to read a
+bake-damaged stub and call it upstream truth. `Get-FileHash -Algorithm SHA256` against the
+`oid` in HEAD's git-lfs pointer settles it exactly, needs no network, and does not go
+anywhere near `git checkout`. `fauna/dragon.xml` came back pristine on all four reads and
+on the hash: **0/0/0/0/0, no skeleton, no clips, 454 triangles, one unrigged node.**
 
 **`location_scale` HAS EXACTLY TWO CORRECT VALUES: 1.0 AND 0.0.** It multiplies a
 clip's pose-bone *location* curves, and it was introduced believing the deer's
@@ -524,30 +575,35 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-29
+## 5. State as of 2026-08-30
 
-> ### ⚠️ `art_work/out` AND `game/assets/atlases` ARE OUT OF STEP HERE, AND STAGED IS THE NEWER
+> ### ⚠️ `art_work/out` IS EMPTY. `game/assets/atlases` IS NOW THE ONLY COPY OF THE ART.
 >
-> **DO NOT RUN A BARE `stage_atlases.py` ON THIS WORKSTATION.** It copies on any
-> byte difference and **cannot tell which side is newer**, so it would push stale
-> local bakes over good staged art and silently undo a batch. Use `--only` and
-> name what you rebaked.
+> Cleared on the owner's instruction 2026-08-30, after checking the one condition that
+> made it safe: **every one of the 288 real bakes in `out` was already staged.** The 35
+> directories with no staged counterpart were all throwaway — 32 `vis.probe_*` and the
+> `_batch` / `_inspect` / `_run` logs. **9.46 GB → 1.04 MB**, and the logs were kept
+> deliberately, because §4's "compare a WARN against the same recipe's previous log" needs
+> them and they cost 1 MB.
 >
-> **Why the inversion exists, because the tooling does not expect it:** the render
-> box bakes AND stages, `game/assets/atlases` rides Google Drive so its staging
-> arrives here, and `art_work/out` does not ride Drive so the bake output never
-> does. Two box runs (244 reflection bakes, then 160 colour) landed that way. This
-> workstation's `out` therefore holds yesterday's atlases for all 160 colours and
-> the pre-box static fauna.
+> **THE HAZARD HAS INVERTED, so unlearn the old rule.** It used to be that a bare
+> `stage_atlases.py` was the dangerous command, because `out` held bakes older than staged
+> and staging copies on any byte difference without knowing which side is newer. That is
+> now harmless: `out` is empty, so a bare run copies nothing.
 >
-> **`out` here is authoritative only for what was baked here.** As of 2026-08-29
-> that is `vis.trebuchet_packed`, `vis.deer` and `vis.deer_carcass`, and nothing
-> else. Treat the staged directory as the source of truth until someone carries the
-> box's `out` across; then a bare stage is correct again and should report 361/361.
+> **`stage_atlases.py --clean` is the dangerous command now, and it is unrecoverable.**
+> `--clean` does `shutil.rmtree(DEST)` first and then refills from `out` — which would
+> delete all 361 staged atlases and put nothing back. There is no second copy on this
+> machine. Recovery would be a full rebake of the entire roster, hours of it, or Google
+> Drive version history. **Never pass `--clean` again until `out` is whole.**
 >
-> **`stale_recipes.py` will not warn you** — it reads the STAGED atlas, so it
-> reports all of this as up to date. It is right about what the game can see and
-> blind to what `out` holds.
+> **Nothing is lost that cannot be rebuilt**, which is why this was safe: `out` is derived
+> from committed recipes plus isobake, and `isobake inspect` reads the SOURCE actor, so
+> measuring an actor still needs no bake. Only re-reading a baked FRAME now costs a bake
+> first.
+>
+> **`stale_recipes.py` reads the STAGED atlas, not `out`**, so it is unaffected and still
+> right about what the game can see.
 
 > **The render-box run recipe lives in [tools/render_box_prep.md](tools/render_box_prep.md)**
 > — env paths, shards, and what each skipped step breaks. The two flags that job
@@ -620,6 +676,13 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
+- **`vis.dragon` cannot be animated by this pipeline, and that is now a decision for the
+  owner rather than a task for me.** Its mesh has no rig at all — verified pristine against
+  HEAD's git-lfs `oid`, then read four ways (§4). Rigging it is real modelling work and no
+  recipe change reaches it. **The one thing worth knowing before that decision:** the art is
+  0 A.D.'s own and CC-BY-SA 3.0, not bespoke as PLAN.md A.9 and `asset_request.md` [P7] both
+  assumed, so a rig is redistributable and the mesh is 454 triangles. `tools/recipes/dragon.toml`
+  has led with this correction since 2026-08-25 and it went unread twice.
 - **The root bone is exempt from nothing, and `location_scale = 0.0` therefore
   drops a death clip's fall.** The deer's carcass floats ~5 px (0.22 m) — its
   lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px below.
