@@ -50,6 +50,19 @@ Always `git add` explicit paths — never `-A` — and check what you staged. Fi
 can also collide: this very document was overwritten by the other agent's stub
 between my writing it and committing it. Re-read before you commit.
 
+> ⚠️ **ADDING EXPLICIT PATHS IS NOT ENOUGH. THE INDEX IS SHARED, AND `git commit` TAKES
+> WHATEVER IS IN IT.** On 2026-08-30 I deliberately held back four deletions, said so in
+> the previous commit message, added two files by name, and committed — and the commit
+> carried all four deletions anyway, including the two screenshots `README.md` embeds.
+> Nobody's commit interleaved; the other agent had simply staged them into the index
+> between my two commits, and `git commit -F` does not care who put a change there.
+>
+> **So run `git diff --cached --name-status` IMMEDIATELY BEFORE every commit and read it.**
+> Not after `git add` — between the last `add` and the `commit`, which is the window
+> another agent can write into. Checking at `add` time proves nothing about what you are
+> about to commit. This is the one place where "I staged explicit paths" gives false
+> confidence, and it is cheap to close.
+
 > ⚠️ **`git checkout -- <file>` is a DELETE in this repo, and it has already
 > cost real work.** On 2026-08-17 I reverted `zeroad.py` to undo an edit of my
 > own; the file also held ~190 lines of a previous session's **uncommitted**
