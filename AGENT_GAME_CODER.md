@@ -303,6 +303,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A NinePatchRect's BORDER IS DRAWN AT 1:1** | The `patch_margin` is in SOURCE pixels and does not scale with the rect, so a 1024 px plate with a measured 46 px border puts a 46 px border on a 152 px panel and clips the content behind its own frame. **Shrinking the margin makes it worse** — the margin says where the border ENDS, so the leftover bevel joins the stretched centre and smears across the panel. The only lever is the SOURCE SIZE; `tools/prepare_ui_chrome.py` is what turns "the border should draw at 12 px" into an output size. See §7's UI-overhaul block. |
 | **SWAPPING ONE FRAME FOR ANOTHER CAN INVERT THE DRAW ORDER** | A frame with a TRANSPARENT middle is drawn on top of what it frames; a frame with a FILLED recess must be drawn under, or it covers the picture entirely. Both replaced frames flipped on 2026-08-30 and a filename says nothing about which kind you have. Found by `preview_match` — a selected town centre with an empty brown square where its portrait goes — not by any test. |
 | **`draw_texture_rect_region` HAS NO KEEP-ASPECT MODE** | It fills the rect it is given, so a non-square crop in a square slot is stretched. `EntityPortrait.fit` is the arithmetic and lives beside the crop helper, because two hand-drawn slots made the identical mistake independently. A `TextureRect` with `STRETCH_KEEP_ASPECT_CENTERED` does not have the problem, which is why the action tiles never showed it. |
+| **A `VBoxContainer` OVERFLOWS — it does not clip, scroll or compress past its children's minimum sizes** | So any column whose child count the player controls needs a `ScrollContainer` round it. The lobby offers up to eight player slots; at eight, the GAME SETUP panel alone is taller than a 648 px viewport, and the first render had the map panel and the entire bottom nav strip off the screen with nothing to indicate they existed. **Every structural test passed.** Related: shrinking something INSIDE the overflowing column does not move the fold — the fold is wherever the preceding sibling ends. |
+| **A number nobody compares across time can be wrong for months** | `SimBuilding.add_build_progress` set `hp` from `build_fraction()` and took every new foundation from `max_hp/10` to ~0 on the first tick a villager worked on it. It shipped, unnoticed, until `DamageAlert` started diffing hp between snapshots and blew the under-attack horn on every building placed. **The alarm was right and the sim was wrong.** When a new feature starts reading an old value, expect it to find something. |
 | **A `PRESET_FULL_RECT` CONTROL CANNOT BE GIVEN A SIZE, AND SAYS SO ONLY AT RUNTIME** | Assigning `size` warns *"nodes with non-equal opposite anchors will have their size overridden after `_ready()`"* — and **outside a tree it raises no `NOTIFICATION_RESIZED` at all** (probed on 4.7.1). That makes it a bad lever for a headless test of anything layout-shaped: `test_market_panel` drove the new page-width cap through `panel.size`, the notification never fired, and the test asserted the *default* offsets while reading like it had asserted the cap. It failed loudly here only because the arithmetic was also being asserted. **Give the function the width instead of having it read `size`** — one untested line in the notification handler, verified in a render, beats a test that exercises nothing. Note also that a Control added to a tree has size `(0, 0)` for the rest of that frame, so `_init`/`_ready` are both too early to read it. |
 | **`gitea.wildfiregames.com` is behind an Anubis proof-of-work bot wall** | A plain HTTP client gets an HTML "Making sure you're not a bot!" challenge instead of JSON, which is easy to misread as a broken endpoint. A **`git-lfs/...` User-Agent is allowed through** — that one header is the whole difference. |
 
@@ -316,8 +318,8 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 88 test files, **1754 tests / 208,644 assertions, all passing** —
-measured 2026-08-30 after the fourth round of owner polish, not quoted.
+**361 atlases staged.** 89 test files, **1768 tests / 208,675 assertions, all passing** —
+measured 2026-08-30 after the lobby rework, not quoted.
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
 293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
@@ -575,6 +577,46 @@ Neither was visible to a test — both pass every structural assertion. In a row
   its own cap off the row arithmetic rather than naming a number, and the button count
   comes from `market.json` — a fifth tributable resource widens the page instead of
   falling off it. See §6 for why the test drives `_apply_page_width(width)` and not `size`.
+
+**THE LOBBY REWORK — 2026-08-30** (`68a1c6b`, `5b4cb93`), plus two bugs the fourth pass
+left behind (`cd5596c`, `0c8d446`):
+
+| | |
+|---|---|
+| the lobby | chat left ⅔, GAME SETUP + MAP SETUP right ⅓, a three-column nav strip along the bottom |
+| the chat page | split into `ChatBoard` (the widget) and `ChatPanel` (the chrome), so the lobby holds the same one |
+| the market page | centred, not pinned to the left margin |
+| construction | no longer reads as damage — it was blowing the under-attack horn |
+
+- ⚠️ **CONSTRUCTION WAS TAKING NINE TENTHS OF EVERY NEW FOUNDATION'S HEALTH, invisibly,
+  for as long as the line existed.** `spawn_building` starts a foundation at `max_hp/10`
+  so its dot reads as damaged; `add_build_progress` then set `hp` from
+  `build_fraction()`, which on the first tick of work is a few thousandths — 55/550 down
+  to 2/550. Nothing could see it until `DamageAlert` began diffing hp, and then it
+  correctly reported a fall of 52 as a building being hit. **The general form: a number
+  nobody compares across time can be wrong for months.** The fix is `maxi(hp, ...)` —
+  construction may only ever raise it.
+- ⚠️ **A `VBoxContainer` DOES NOT CLIP OR COMPRESS PAST ITS CHILDREN'S MINIMUMS — IT
+  OVERFLOWS.** Eight slots make the lobby's GAME SETUP panel taller than a 648 px
+  viewport on its own, so the first render put MAP SETUP and the whole nav strip off the
+  bottom of the screen with nothing to say they were there. **Any column whose child
+  count is user-controlled needs a `ScrollContainer`, not a hope.** Every structural test
+  passed; only the render showed it.
+- **AND THE TWO SETUP PANELS STILL DO NOT BOTH FIT.** They want ~700 px at 1152x648 and
+  the column is given ~435. **Shrinking the map picture does not move the fold** — the
+  fold is where GAME SETUP ends, and that is fixed by its five rows — so 190 → 140 → 112
+  changed nothing but how much empty panel sat under the picture. Left scrolling and
+  flagged to the owner rather than guessed at.
+- **A FOLD CAN MOVE A CONSENT LINE OFF THE SCREEN.** The joined client's invitation terms
+  ("Forest, 96 x 96 — seed 4242 — Last Man Standing — from I. Age of Ash") lived only in
+  MAP SETUP, which the rework put in the scrolling column. A joining player was being
+  asked to press READY to terms that were off the bottom. They are now on the nav line
+  beside READY as well.
+- **THE JOIN FIELD MOVED TO THE BOTTOM AND THAT OVERRIDES A MEASURED CONSTRAINT.** A
+  landscape Android keyboard covers roughly the bottom two thirds (BUGS.md), which is why
+  the field was the first row on the page. The owner asked for it in the nav strip. **Needs
+  re-checking on the device**; if the keyboard buries it, the fix is to scroll the page or
+  lift the strip on focus, not to move the field back.
 
 ⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
 face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new
