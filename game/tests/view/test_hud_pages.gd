@@ -78,7 +78,7 @@ func test_the_chat_tabs_are_the_real_players() -> void:
 	# and the row is the width it will really be.
 	var chat := ChatPanel.new()
 	chat.show_players(_player_state(4), 2)
-	assert_eq(chat._tabs.get_child_count(), 4)
+	assert_eq(chat.board._tabs.get_child_count(), 4)
 	chat.free()
 
 
@@ -86,7 +86,7 @@ func test_the_chat_says_which_tab_is_yours() -> void:
 	var chat := ChatPanel.new()
 	chat.show_players(_player_state(3), 2)
 	var labels: Array[String] = []
-	for tab in chat._tabs.get_children():
+	for tab in chat.board._tabs.get_children():
 		for row in tab.get_children():
 			for node in row.get_children():
 				if node is Label:
@@ -101,7 +101,7 @@ func test_the_chat_send_and_clear_are_visibly_unwired() -> void:
 	# do not: a message that appears on your own screen and nowhere else is a bug
 	# report waiting to happen. Disabled says which half is missing.
 	var chat := ChatPanel.new()
-	assert_true(chat._send_button.disabled, "SEND is not wired to anything")
+	assert_true(chat.board._send_button.disabled, "SEND is not wired to anything")
 	assert_true(chat._clear_button.disabled)
 	chat.free()
 
@@ -112,11 +112,11 @@ func test_the_chat_has_voice_toggles_and_they_are_all_dead() -> void:
 	# more than the SEND button is: a player who believes they are being heard and is
 	# not has no way to find that out from this screen.
 	var chat := ChatPanel.new()
-	assert_true(chat.voice_toggles.size() >= 3, "got %s" % [chat.voice_toggles.keys()])
-	for name in chat.voice_toggles:
-		assert_true((chat.voice_toggles[name] as CheckButton).disabled,
+	assert_true(chat.board.voice_toggles.size() >= 3, "got %s" % [chat.board.voice_toggles.keys()])
+	for name in chat.board.voice_toggles:
+		assert_true((chat.board.voice_toggles[name] as CheckButton).disabled,
 				"%s is not wired to anything" % name)
-	assert_false((chat.voice_toggles["Microphone"] as CheckButton).button_pressed,
+	assert_false((chat.board.voice_toggles["Microphone"] as CheckButton).button_pressed,
 			"nobody is joined to a voice channel they did not ask to be heard on")
 	chat.free()
 
@@ -128,9 +128,9 @@ func test_the_chat_composer_is_at_the_bottom_and_unusable() -> void:
 	# will be found not to work on the day it is wired up, which is what the lobby's
 	# join field cost.
 	var chat := ChatPanel.new()
-	assert_true(chat._message_field is TouchLineEdit)
-	assert_false(chat._message_field.editable)
-	assert_true(chat._send_button.disabled)
+	assert_true(chat.board._message_field is TouchLineEdit)
+	assert_false(chat.board._message_field.editable)
+	assert_true(chat.board._send_button.disabled)
 	chat.free()
 
 
@@ -138,7 +138,7 @@ func test_the_chat_admits_it_is_a_wireframe() -> void:
 	var chat := ChatPanel.new()
 	chat.show_players(_player_state(2), 1)
 	var said := ""
-	for child in chat._log.get_children():
+	for child in chat.board._log.get_children():
 		if child is Label:
 			said += (child as Label).text + "\n"
 	assert_true(said.to_lower().contains("sample"),
