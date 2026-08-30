@@ -1,10 +1,18 @@
 ## Credits screen (PLAN.md 1.4). Surfacing this is a licence obligation, not a
-## courtesy -- CREDITS.md §"Adding an entry" requires the 0 A.D./Wildfire
-## Games and Kibyra lines to be reproduced, and `art/LICENSE.txt` requires the
-## CC-BY-SA 3.0 link, "Wildfire Games", and wildfiregames.com verbatim, not
-## abbreviated. That text lives as `%CreditsText`'s `text` property in
-## Credits.tscn now, not hardcoded here -- CREDITS.md itself documents that
-## whoever adds a new credited asset must update both in the same change.
+## courtesy -- `art/LICENSE.txt` requires the CC-BY-SA 3.0 link, "Wildfire
+## Games", and wildfiregames.com verbatim, not abbreviated, and the two OFL
+## faces require their licence texts to ship. That text lives as
+## `%CreditsText`'s `text` property in Credits.tscn now, not hardcoded here --
+## CREDITS.md itself documents that whoever adds a new credited asset must
+## update both in the same change.
+##
+## THE REVERSE ALSO APPLIES, and it happened on 2026-08-30: the Kibyra UI packs
+## were credited here from 2026-08-08, were replaced by project-owned art, and
+## the entry was struck once nothing from them remained in the repository --
+## no file, no load path, no tracked directory. Their terms asked for no
+## attribution in the first place. **Do not strike an entry because the art was
+## replaced; strike it when the art is GONE**, which is a question for
+## `game/assets/LICENCES.md` and `tools/licence_audit.py`, not for memory.
 ##
 ## Layout is authored in Credits.tscn (editable in the Godot editor) rather
 ## than built in code -- this screen is the proof-of-concept for moving UI
