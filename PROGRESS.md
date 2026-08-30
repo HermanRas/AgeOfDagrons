@@ -7,11 +7,12 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 `asset_request.md`. If this file and `PLAN.md` disagree, `PLAN.md` is the one that gets
 read next to the code, so fix this one.
 
-**Updated 2026-08-29**, tagged **v0.9.0 — the first BETA tag**, per IDEA.md's scheme
-(v0.1.0–0.8.9 alpha, v0.9.0–0.9.9 beta, v1.0.0 release). Suite: **1680 tests, 208,317
-assertions, 0 failures** — measured, not quoted. **361 atlases staged.** Android build: 320.6 MB **as of
-2026-08-27 and certainly stale** — two art deliveries and three phases have landed since and
-nobody has rebuilt. Re-measure before quoting it.
+**Updated 2026-08-30**, tagged **v0.9.0 — the first BETA tag**, per IDEA.md's scheme
+(v0.1.0–0.8.9 alpha, v0.9.0–0.9.9 beta, v1.0.0 release). Suite: **1779 tests, 208,740
+assertions, 0 failures** — measured, not quoted. **361 atlases staged**, and 150 UI asset
+files now ship with them (`tools/licence_audit.py`: PASS). Android build: 320.6 MB **as of
+2026-08-27 and certainly stale** — two art deliveries, three phases and the whole UI
+overhaul have landed since and nobody has rebuilt. Re-measure before quoting it.
 
 ⚠️ **`test_tick_cost` is the one thing in this suite that can fail for reasons that are
 not the code.** It reported an 8-player tick at 49.81 ms against its budget on a loaded
@@ -35,6 +36,29 @@ one grew from "re-tune it" into a rule engine: five real difficulties driven by 
 triggers in `data/ai_*.json` instead of a script of timed steps. The owner's summary of why
 it matters — *"the update system support customization and supports random maps, thats the
 big win from this update."*
+
+**THE UI IS THE PROJECT'S OWN, 2026-08-30.** `asset_request.md` [P8] delivered 130 pieces
+of owner-generated UI art and two OFL font families, and the game-side landing of it was
+the largest single change to `game/` in the project's history — chrome, icons, the action
+tiles, the minimap frame, the menu buttons, and **a typeface, which the game had never had
+at all**. The line that matters beyond the pixels: **`game/assets/ui/` is committed in
+full and a clean clone now runs with its chrome intact.** It never did before — the UI was
+third-party itch.io art whose licence forbids redistributing the originals, so three
+directories were gitignored and every developer downloaded two packs by hand.
+`tools/licence_audit.py` went from 129 problems to PASS.
+
+**THE LOBBY WAS REWORKED THE SAME DAY** to the owner's spec — chat down the left two
+thirds, GAME SETUP and MAP SETUP down the right third, a one-row nav strip hugging the
+bottom — and **HOW TO PLAY exists** (1.8): six annotated captures of this game's own HUD,
+one to a page, behind the front-door button that had answered with a "not available yet"
+toast since 1.1. Every front-door button now opens a screen except QUIT. Two bugs the
+overhaul surfaced were fixed with it: **construction was reading as damage** and blowing
+the under-attack horn (`spawn_building` starts a foundation at `max_hp/10` and
+`add_build_progress` then set hp from a build fraction of a few thousandths — a fall of 52
+hp on the first tick of work, wrong since the line was written and invisible until
+something diffed hp across time), and **the boot splash was cropped on every device**
+(a `TextureRect`'s default `expand_mode` makes the texture's own size a minimum, and a
+minimum size beats anchors — the 1376×768 plate drew at 1:1 in a smaller window).
 
 **PHASE 4 CLOSED 2026-08-29** — the owner's instruction was to close out its open steps, and
 all three did: **4.10 special abilities** (the monk heals, the dragon breathes fire over a
@@ -89,7 +113,7 @@ real work remains · ⛔ not started
 | # | Phase | State | What is left |
 |---|---|---|---|
 | 0 | Foundation | 🟢 | **0.3 `AssetPacks`** — manifest, download, verify, mount, plus a download screen |
-| 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet |
+| 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet. **1.5 settings and 1.8 HOW TO PLAY both closed 2026-08-30** — settings as an overlay rather than a screen, HOW TO as a six-page picture guide. The two setup panels in the lobby still do not both fit at 1152×648 and the column scrolls; flagged to the owner rather than guessed at |
 | 2 | Map | 🟢 | **2.4c save map**, and nothing else — 2.4d Archipelago closed 2026-08-29 |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
 | 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |

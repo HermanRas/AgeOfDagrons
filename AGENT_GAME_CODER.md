@@ -100,7 +100,8 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 
 # The other driven previews, all screenshotting
 & $godot --path game res://dev_preview/preview_skirmish.tscn   # lobby + colour picker
-& $godot --path game res://dev_preview/preview_menus.tscn      # front door + campaign
+& $godot --path game res://dev_preview/preview_menus.tscn      # splash, front door, settings,
+                                                               # campaign, HOW TO, lobby
 & $godot --path game res://dev_preview/preview_walls.tscn      # both wall axes + gate
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
@@ -318,8 +319,10 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 89 test files, **1768 tests / 208,675 assertions, all passing** —
-measured 2026-08-30 after the lobby rework, not quoted.
+**361 atlases staged.** 93 test files (`test_*.gd` under `game/tests/`, counted on disk —
+the "89" this line carried was a count of something else), **1779 tests / 208,740
+assertions, all passing** — measured 2026-08-30 after the help screen, not quoted.
+`tools/licence_audit.py`: **PASS, 361 recipes and 150 shipped asset files.**
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
 293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
@@ -617,6 +620,57 @@ left behind (`cd5596c`, `0c8d446`):
   the field was the first row on the page. The owner asked for it in the nav strip. **Needs
   re-checking on the device**; if the keyboard buries it, the fix is to scroll the page or
   lift the strip on focus, not to move the field back.
+
+**THE FIFTH PASS — THE SPLASH, AND HOW TO PLAY, 2026-08-30:**
+
+| | |
+|---|---|
+| the boot splash | fills the screen instead of hanging off the right and bottom edges |
+| HOW TO | `Help.tscn`/`help_screen.gd` — six annotated captures, one to a page (PLAN 1.8) |
+| `preview_menus` | photographs the splash and both ends of the guide, and derives what a stretch mode actually paints |
+
+⚠️ **A MINIMUM SIZE BEATS ANCHORS, AND `TextureRect` GIVES ITSELF ONE BY DEFAULT.** The
+owner reported the splash "cutting off" on a phone. The obvious suspect is
+`stretch_mode`, and it was set to `KEEP_ASPECT_CENTERED`, **which cannot crop anything**
+— it fits inside the rect and letterboxes. What was cropping it was the RECT:
+`EXPAND_KEEP_SIZE` (the default `expand_mode`) makes the texture's own size the
+control's minimum, so `PRESET_FULL_RECT` produced a **1376×768 control pinned to the
+top-left of a 1152×648 viewport** and the plate drew at 1:1 with its right and bottom
+thirds off the window. `EXPAND_IGNORE_SIZE` is the fix; the stretch mode was never the
+bug. **Any `TextureRect` holding art bigger than the box it is dropped into needs
+`EXPAND_IGNORE_SIZE`, and the symptom is a crop that no stretch mode on the list
+produces.** `HelpScreen` sets it for the same reason (its pages run to 1476 px wide) and
+`test_help_screen` asserts it, because the default is not it.
+
+- ⚠️ **A `PRESET_FULL_RECT` CONTROL IS NOT NECESSARILY THE SIZE OF THE WINDOW, and my
+  first instrument assumed it was.** `preview_menus._report_boot` derived the painted
+  region from `stretch_mode` and the viewport size and **reported a perfect fill on the
+  very run whose screenshot showed the strapline sliced in half by the bottom edge.** It
+  now reads the control's real rect first and derives the paint inside that, which
+  catches both failures with one number. The general form is §6's: *an instrument that
+  answers a slightly different question is worse than no instrument, because it is
+  believed.* This is the second time in three days — see `measure_ninepatch.py`.
+- **THE HELP PAGES ARE A PAGER, NOT A SCROLL, AND THE REASON IS THE ART.** Each capture
+  is a full-screen shot of this game with instructions painted over it at a size meant to
+  be read full-screen. `Credits.tscn` scrolls because credits are a column of text; six of
+  these stacked in a `ScrollContainer` on a handset give each one a sixth of the height it
+  was drawn for. One page at a time hands each image the whole window.
+- **BUILT IN CODE, UNLIKE `Credits.tscn` NEXT DOOR.** The page list is DATA — six
+  near-identical `TextureRect` nodes authored by hand in a `.tscn` is six places to forget
+  when a seventh capture lands — and it sidesteps §6's rule that Godot rewrites a
+  `.tscn`'s layout properties whenever the project is open. `Help.tscn` is a three-line
+  shell like `Boot.tscn`.
+- **A TABLE OF FILENAMES STAYS TRUE WHEN THE FILES ARE MISSING.** `HelpScreen.PAGES` is
+  six strings; what makes it a guide is six files under `res://assets/ui/help/`, and a
+  staged asset that never got committed is invisible on the machine that staged it.
+  `test_help_screen` walks the table and asserts `ResourceLoader.exists` on every entry.
+- **THE ONE THING NO SCREEN OWNS: THE ENGINE'S OWN BOOT SPLASH.** `boot_splash/image` in
+  `project.godot` draws before any scene runs and its scaling is the engine's, not
+  ours. What *is* ours is `boot_splash/bg_color`, which defaulted to a light grey that
+  flashed either side of the title card; it is now `boot_screen.gd`'s backdrop. **The
+  comment explaining that did not survive the next `--import`** — §6's row about Godot
+  rewriting `project.godot` and stripping every comment from it, arriving on schedule
+  again. The setting survived; the reasoning lives here.
 
 ⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
 face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new

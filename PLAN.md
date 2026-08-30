@@ -661,10 +661,11 @@ Game.tscn         [MVP]  the match - game_scene.gd
                          (bottom-right), SelectionBox, NoticeToast, PauseMenu,
                          ResultScreen
 Credits.tscn      [MVP]
+Help.tscn                1.8 - HOW TO PLAY, six annotated captures, one to a page
 StressTest.tscn   [MVP]  perf harness
 Skirmish.tscn            1.6 - skirmish settings, and the multiplayer lobby
 DownloadScreen.tscn      3.2
-Settings.tscn            1.5
+Settings.tscn            never built - 1.5 is an overlay on MainMenu instead
 ```
 
 The HUD **must** sit on `CanvasLayer`s or the camera pans it away with the ground. A full-rect
@@ -1014,11 +1015,12 @@ metres · 0.2c `licence_audit.py` + `LICENCES.md` · 0.4 `GameDataRegistry` enti
 |---|---|---|
 | 1.1 | ✅ `MainMenu.tscn`/`main_menu.gd`. Placeholder buttons answer with a `NoticeToast` rather than doing nothing | `[MVP]` |
 | 1.2 | ✅ PLAY → `Game.tscn`; `Boot.tscn` is the main scene | `[MVP]` |
-| 1.3 | ✅ `Boot.tscn`/`boot_screen.gd` — title card, 2 s or tap. Distinct from the engine's own sub-second `boot_splash/image` | `[MVP]` |
+| 1.3 | ✅ `Boot.tscn`/`boot_screen.gd` — title card, 2 s or tap. Distinct from the engine's own sub-second `boot_splash/image`.<br><br>**It was cropped on a phone from the day the new plate landed until 2026-08-30, and the cause was not the stretch mode.** A `TextureRect` defaults to `EXPAND_KEEP_SIZE`, which makes the texture's own size the control's MINIMUM — and a minimum size beats anchors, so `PRESET_FULL_RECT` gave a 1376×768 control pinned to the top-left of a 1152×648 viewport. The plate drew at 1:1 and hung off the right and bottom edges. `expand_mode = EXPAND_IGNORE_SIZE` is the fix; `STRETCH_SCALE` on top of it is the owner's call to fill rather than letterbox. `preview_menus` photographs it and derives the painted region, since no node exposes it | `[MVP]` |
 | 1.4 | ✅ `Credits.tscn` — a `RichTextLabel` mirroring CREDITS.md, hardcoded because CREDITS.md lives outside `res://` | `[MVP]` |
-| 1.5 | Settings screen | |
+| 1.5 | ✅ **DONE 2026-08-23** — settings, as an overlay on the menu rather than a scene of its own: it holds one thing (volume, 8.2b) and a whole screen to get back from is a poor trade for three sliders. Built in code in `main_menu.gd`, not authored into `MainMenu.tscn`, so the editor cannot silently reformat it. `Settings.tscn` in §8 stays unbuilt and this row is why | |
 | 1.6 | ✅ **DONE 2026-08-17** — `SkirmishScreen` (`src/view/skirmish_screen.gd`) + `scenes/menu/Skirmish.tscn`; PLAY now routes through it. See §11.1 | |
 | 1.7 | **Lobby and multiplayer UI — design references, committed 2026-08-23, none of it built.** Three artefacts, and they are ahead of the systems rather than behind them, which is the useful thing about them.<br><br>**`UI_Design_Lobby.png`** — the hosting lobby. What it shows that does not exist: a **Faction** column (one civilisation is a locked v1 decision, §1 — this is 9.5 territory), a **Team** column (there is no team or diplomacy concept at all; `Diplomacy` splits gaia from players and nothing else), a **Game Type** and **Victory Conditions** picker offering Conquest and **Regicide** (declared and inert, 11.2), a **Map Size** choice (size is currently derived from the player count, §11.2's area rule), and **in-lobby chat** (8.6 is a wireframe with no transport). What it confirms as already right: eight slots, per-slot AI difficulty, the map preview, and the four minimap corner buttons.<br><br>**`UI_Design_Hosting.png`** — a **server browser**: filters by map type and game type, a game-**version** filter, and a list of named servers with player counts and Playing/Lobby status. **12.1b LAN discovery is the subset of this that is planned**; the rest implies a master server, server naming and version negotiation, none of which is scoped. Worth reading before 12.1b is designed, so that LAN discovery does not paint itself into a corner this cannot grow out of.<br><br>**`web/player-colour-ladder.html`** — the research behind the eight-colour palette: CIE `L*` spread so four of the eight separate by **lightness** rather than hue, dichromacy safety per pair, and the argument that A.6's tint must not be a multiply (against white it is a no-op and the player looks untinted). Cross-referenced from §9's palette and §12A A.6, which is where the shader decision lives | |
+| 1.8 | ✅ **DONE 2026-08-30 — HOW TO PLAY.** `Help.tscn`/`help_screen.gd`, six annotated captures behind the front door's HOW TO button, which had answered with a "not available yet" toast since 1.1. **The pages carry their own instructions**, painted onto real captures of this game's HUD (`assets/HELP_Gen/` → `game/assets/ui/help/`), so this screen writes no tutorial prose that could drift out of step with the interface — when a control moves, the fix is a new capture.<br><br>**A pager, not a scroll**, which is the one decision worth defending: `Credits.tscn` scrolls because credits are a column of text, and six wide screenshots stacked in a `ScrollContainer` on a handset give each one a sixth of the height it was drawn for. **Built in code rather than authored as a `.tscn`** — the page list is data, and six near-identical `TextureRect` nodes by hand is six places to forget when a seventh capture lands. `test_help_screen` asserts, among the paging, that every page's file is actually staged under `res://`: a `PAGES` table of strings stays true when the images are missing. Order is the reading order, not the delivery order: camera, selection, commands, control groups, panels, ages | |
 
 #### 11.1 Skirmish settings (1.6) — ✅ built 2026-08-17
 
@@ -1737,9 +1739,14 @@ PLAY had nowhere of its own to lead. What it cost was the front door — either 
 same thing, and the campaign this table has always had a row for was reachable from nothing.
 
 PLAY now opens a **campaign placeholder**, and MULTIPLAYER opens the skirmish/lobby screen. A
-real screen rather than a `NoticeToast` — which is what SETTINGS and HOW TO get — because
-those are features with no shape yet and a campaign is a list of missions: this is the frame
-that list appears in, so when 12.3 lands it is a body replacing a placeholder.
+real screen rather than a `NoticeToast` — which is what SETTINGS and HOW TO got at the time —
+because those were features with no shape yet and a campaign is a list of missions: this is
+the frame that list appears in, so when 12.3 lands it is a body replacing a placeholder.
+
+*Both of those have since grown screens of their own — SETTINGS an overlay on 2026-08-23,
+HOW TO the six-page guide of 1.8 on 2026-08-30 — so the campaign placeholder is the last
+front-door destination that is a frame rather than a feature, and QUIT is the only button
+left that opens nothing.*
 
 **The wrinkle, and it is a label rather than a screen.** A solo skirmish is now behind a
 button marked MULTIPLAYER. Nothing is unreachable — all-local slots is a skirmish, an Open
