@@ -132,7 +132,7 @@ null.
 |---|---|---|
 | Units, buildings, terrain, props, dragon | **0 A.D.** (`play0ad.com`) | CC-BY-SA 3.0 |
 | Audio (starting point) | **0 A.D.** | CC-BY-SA 3.0 |
-| UI chrome, fonts | **The project's own**, in `game/assets/ui/` — 103 icons, 27 chrome pieces, MedievalSharp + Cinzel Decorative. Was itch.io packs in `assets/UI_Sprites/` until 2026-08-30 | Project asset; the two typefaces are SIL OFL. Recorded in `LICENCES.md` |
+| UI chrome, fonts | **The project's own**, in `game/assets/ui/` — 103 icons, 27 chrome pieces, New Rocker + Cinzel Decorative. Was itch.io packs in `assets/UI_Sprites/` until 2026-08-30 | Project asset; the two typefaces are SIL OFL. Recorded in `LICENCES.md` |
 
 0 A.D. is a 3D game. Pipeline shape: **actor XML → Blender (pyrogenesis importer) → attach
 animation `.dae` → render N × 45° orthographic → trim/pack → atlas.** Terrain comes from the same

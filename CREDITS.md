@@ -60,11 +60,13 @@ caveat: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
 one. Kept here rather than deleted because credit for work that shipped is not undone by
 the work being replaced later, and because a reader of an old build needs to find it.
 
-### MedievalSharp — body typeface
+### New Rocker — body typeface
 **Used for:** every label in the game (`gui/theme/custom_font`).
-**Author:** Wojciech Kalinowski · **Licence:** [SIL Open Font License 1.1](https://openfontlicense.org/)
+**Author:** Vernon Adams, maintained by Cyreal · **Licence:** [SIL Open Font License 1.1](https://openfontlicense.org/)
 **Note:** Redistributable, unlike the packs above, which is why it is committed. The OFL
-requires its own text to ship with the font: `game/assets/ui/fonts/OFL-MedievalSharp.txt`.
+requires its own text to ship with the font: `game/assets/ui/fonts/OFL-NewRocker.txt`.
+Chosen on how its DIGITS read at HUD sizes, which is the test that matters for an RTS
+and is not the one a specimen sheet answers.
 
 ### Cinzel Decorative — display typeface
 **Used for:** names rather than sentences — titles, menu headings, the age numeral (`UiFont`).

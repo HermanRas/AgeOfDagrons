@@ -15,6 +15,15 @@
 ## purpose. Either alone would give the game its typeface; carrying both means a theme
 ## that fails to load costs the buttons and not the words.
 ##
+## THE BODY FACE IS **NEW ROCKER**, AND IT WAS CHOSEN ON ITS DIGITS. MedievalSharp went
+## in first and lasted a day. The owner's verdict on the first three candidates was that
+## "the numbers on all 3 read hard" -- which is the right test for this game and not the
+## obvious one: an RTS HUD is mostly NUMBERS, and a specimen sheet set in words will
+## happily sell you a face whose 0/6/8 are indistinguishable at 16 px. The second round
+## was judged on `assets/UI_Gen/font_comparison.png`, which leads with `0123456789` and
+## with the strings the HUD actually prints -- `4870`, `6/10`, `2000 / 2000`, `84%`,
+## `50G 100F` -- at the sizes it prints them.
+##
 ## SO WHAT IS HERE IS ONLY THE EXCEPTION -- the display face for things that are a
 ## NAME rather than a sentence. A title, a menu button, the result screen's verdict.
 ## Cinzel Decorative is a Roman capitalis; it is magnificent at 28 px and unreadable at
@@ -31,7 +40,7 @@
 class_name UiFont
 extends RefCounted
 
-const BODY_PATH := "res://assets/ui/fonts/MedievalSharp-Regular.ttf"
+const BODY_PATH := "res://assets/ui/fonts/NewRocker-Regular.ttf"
 const TITLE_PATH := "res://assets/ui/fonts/CinzelDecorative-Bold.ttf"
 const TITLE_HEAVY_PATH := "res://assets/ui/fonts/CinzelDecorative-Black.ttf"
 

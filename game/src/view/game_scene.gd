@@ -586,13 +586,24 @@ const _MINIMAP_FRAME_PATH := "res://assets/ui/chrome/frame_minimap.png"
 
 ## Where the frame art puts the centre of a corner boss, as a fraction of its own size.
 ##
-## MEASURED off the four dark recesses in `frame_minimap.png` and then AVERAGED, which
-## is the honest part: they are at 0.153, 0.180, 0.176 and 0.166 from their nearest
-## edges, because the art is hand-drawn and two of the four are partly overlapped by a
-## dragon. One number for all four is a ~2 px compromise on a 240 px area, against four
-## numbers that would each need re-measuring whenever the art is regenerated. The discs
-## are ~50 px across at `Minimap.AREA_SIZE`, so a 32 px button has room either way.
-const _MINIMAP_BOSS_CENTRE := 0.166
+## MEASURED BY FINDING THE DISCS, and the first attempt at this was wrong -- the project
+## owner reported it as *"buttons on mini map is not on position"* (2026-08-30) and they
+## were about 14 px out. That version took the CENTROID OF EVERY DARK PIXEL in each
+## corner quadrant, which answers a different question: the field between the diamond
+## and the outer square is dark as well, and two of the four bosses are partly
+## overlapped by a dragon, so it returned the middle of a quadrant rather than the
+## middle of a disc, and did so differently in each corner (0.153, 0.180, 0.176, 0.166
+## -- a spread that should have been the tell).
+##
+## Labelling the connected dark regions and keeping the one in each quadrant that is
+## actually ROUND gives four boxes of 69, 69, 80 and 80 px at insets of 0.1035, 0.1035,
+## 0.1143 and 0.1143 -- symmetric left-to-right, as hand-drawn art that was mirrored
+## would be, and the top pair genuinely smaller than the bottom pair. 0.109 is the mean
+## of the four and lands every button inside its recess.
+##
+## THE GENERAL FORM IS WORTH MORE THAN THE NUMBER: a measurement whose four samples
+## disagree by 18 % is not a measurement of one thing.
+const _MINIMAP_BOSS_CENTRE := 0.109
 
 
 ## One corner button (chat/trade/tech-tree/settings); shared by the two rows

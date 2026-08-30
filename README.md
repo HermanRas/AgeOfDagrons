@@ -103,7 +103,7 @@ picture of what it was going to look like. Regenerate them from
 <img src="Screenshot_Menu.jpg" alt="The main menu: an ornate dragon frame around six buttons" width="820">
 
 All of the chrome above is the project's own art. Typefaces are **Cinzel Decorative** for
-names and **MedievalSharp** for everything else, both SIL OFL.
+names and **New Rocker** for everything else, both SIL OFL.
 
 ---
 
@@ -226,6 +226,6 @@ requires.
 
 AOD stands on [0 A.D.](https://play0ad.com) by **Wildfire Games** and the
 [Godot Engine](https://godotengine.org). The UI art is the project's own; the typefaces
-are **MedievalSharp** and **Cinzel Decorative**, both under the SIL Open Font License.
+are **New Rocker** and **Cinzel Decorative**, both under the SIL Open Font License.
 UI chrome came from [Kibyra](https://kibyra.itch.io/) until 2026-08-30 and no longer does.
 Full attribution: [CREDITS.md](CREDITS.md).

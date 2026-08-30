@@ -50,7 +50,7 @@ const CAPTION_TEXT := Color(0.96, 0.90, 0.75)
 ## badge ("Leather Armour") printed straight through it -- that one is fixed properly,
 ## by moving the prerequisite to `HudAction.requirement` and the top strip, because no
 ## gap fits two names on a 72 px tile. But the SHORT badges broke it too: the game had
-## no typeface at all until that day, and MedievalSharp draws "60%" wider than Godot's
+## no typeface at all until that day, and a real one draws "60%" wider than Godot's
 ## built-in default did, so a training villager printed its own name through its own
 ## progress. The general form is that a fixed gap is a guess about a font, and this
 ## file now has a font it did not choose.

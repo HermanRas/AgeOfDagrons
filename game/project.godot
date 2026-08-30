@@ -34,7 +34,7 @@ window/handheld/orientation=4
 [gui]
 
 theme/custom="res://assets/ui/aod_theme.tres"
-theme/custom_font="res://assets/ui/fonts/MedievalSharp-Regular.ttf"
+theme/custom_font="res://assets/ui/fonts/NewRocker-Regular.ttf"
 
 [physics]
 

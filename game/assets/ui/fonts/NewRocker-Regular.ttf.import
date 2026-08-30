@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://bx4xykl47om0x"
-path="res://.godot/imported/MedievalSharp-Regular.ttf-c7453e3f4a3e8fc51f3281e25dcbd50d.fontdata"
+uid="uid://b0xobwxbpg4w6"
+path="res://.godot/imported/NewRocker-Regular.ttf-cbbef02855bce9876044354288241ffb.fontdata"
 
 [deps]
 
-source_file="res://assets/ui/fonts/MedievalSharp-Regular.ttf"
-dest_files=["res://.godot/imported/MedievalSharp-Regular.ttf-c7453e3f4a3e8fc51f3281e25dcbd50d.fontdata"]
+source_file="res://assets/ui/fonts/NewRocker-Regular.ttf"
+dest_files=["res://.godot/imported/NewRocker-Regular.ttf-cbbef02855bce9876044354288241ffb.fontdata"]
 
 [params]
 

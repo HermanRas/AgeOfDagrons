@@ -91,3 +91,62 @@ func test_not_in_a_tree_still_shows_the_message_without_crashing() -> void:
 	toast.show_message("Villager trained")
 	assert_eq(toast.current_text(), "Villager trained")
 	assert_almost_eq(toast.modulate.a, 1.0, 0.001)
+
+
+# ── the paragraph mode, 2026-08-30 ──────────────────────────────────────────
+#
+# The owner's ask: "the current alert box can be reused in single player
+# campaigns for long text". Nothing calls `show_long_message` yet -- 12.3 is
+# unbuilt -- so these are the only exercise it gets.
+
+
+func test_a_long_message_grows_the_banner_and_a_short_one_shrinks_it_back() -> void:
+	var t := NoticeToast.new()
+	assert_false(t.is_long(), "a fresh toast is a notice, not a briefing")
+	t.show_long_message("The dragon stirs beneath the mountain, and the old roads are closed.")
+	assert_true(t.is_long())
+	assert_eq(t.custom_minimum_size, NoticeToast.LONG_SIZE)
+	t.show_message("Not enough resources")
+	assert_false(t.is_long(), "and it must go back, or every later notice is huge")
+	assert_eq(t.custom_minimum_size, NoticeToast.SIZE)
+	t.free()
+
+
+func test_both_sizes_are_the_banner_arts_own_aspect() -> void:
+	# The banner is a fixed composition -- a dragon's head at each end -- so the two
+	# sizes have to be the same shape or the big one stretches a face. This is the
+	# assertion that stops someone making it taller for more lines.
+	var short_aspect := NoticeToast.SIZE.x / NoticeToast.SIZE.y
+	var long_aspect := NoticeToast.LONG_SIZE.x / NoticeToast.LONG_SIZE.y
+	assert_almost_eq(short_aspect, long_aspect, 0.02)
+
+
+func test_a_long_message_holds_for_longer_than_a_short_one() -> void:
+	# Not a timing test -- it asserts the arithmetic, which is what decides whether a
+	# briefing is readable. 2.5 s is right for three words and absurd for sixty.
+	var brief := "x".repeat(300)
+	var hold := maxf(NoticeToast.LONG_MIN_SECONDS,
+			brief.length() * NoticeToast.LONG_SECONDS_PER_CHAR)
+	assert_true(hold > NoticeToast.DISPLAY_SECONDS * 4.0,
+			"300 characters at 15 a second is 20 s, not 2.5")
+	assert_true(NoticeToast.LONG_MIN_SECONDS > NoticeToast.DISPLAY_SECONDS,
+			"even a short briefing outstays a notice")
+
+
+func test_the_text_stays_inside_the_dark_field_at_both_sizes() -> void:
+	# The insets are fractions precisely so this holds without a second set of
+	# numbers. A label at the banner's full width prints over two dragons.
+	var t := NoticeToast.new()
+	for call in [func() -> void: t.show_message("hi"),
+			func() -> void: t.show_long_message("hello there")]:
+		call.call()
+		var label: Label = null
+		for child in t.get_children():
+			if child is Label:
+				label = child
+		assert_not_null(label)
+		assert_true(label.offset_left > 0.0 and label.offset_right < 0.0,
+				"inset on both sides at %s" % t.custom_minimum_size)
+		assert_true(label.offset_left > t.custom_minimum_size.x * 0.15,
+				"and by enough to clear a dragon")
+	t.free()

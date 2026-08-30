@@ -67,17 +67,20 @@ const PANEL_SIZE := Vector2(152.0, 196.0)
 
 func _init() -> void:
 	custom_minimum_size = PANEL_SIZE
-	HudStyle.add_panel_background(self)
+	# THE ORNATE PLATE, on the project owner's call (2026-08-30: *"swap the resources
+	# frame to panel_ornate type"*). It is the one HUD panel that is always on screen
+	# and never scrolls, so it can carry the dragon corners the plain plate does not.
+	HudStyle.add_panel_background(self, true)
 
-	# INSIDE THE PLATE'S OWN BORDER. These were 22/10/35/8 -- asymmetric, because the
-	# old art's gold edge was thicker along the top and left and the numbers were eyed
-	# against it in the mockup. The nine-patch border is even on all four sides, so the
-	# margins are even too, and they are derived from it rather than tuned: the plate's
-	# 46 px border on a 1024 px source draws at about 7 px on a 152 px panel, and 12
-	# clears it with room for the icons not to touch the moulding.
+	# INSIDE THE PLATE'S OWN BORDER, and derived from it rather than tuned. These were
+	# 22/10/35/8 against the Kibyra art, asymmetric because its gold edge was thicker
+	# along the top and left and the numbers were eyed against it in a mockup. The
+	# ornate nine-patch has a 30 px border on all four sides (`PANEL_ORNATE_MARGIN`),
+	# so the margins are even, and 34 clears the moulding by 4.
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 12)
+		margin.add_theme_constant_override("margin_%s" % side,
+				HudStyle.PANEL_ORNATE_MARGIN + 4)
 	add_child(margin)
 
 	var column := VBoxContainer.new()

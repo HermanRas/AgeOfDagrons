@@ -37,10 +37,12 @@ layout_mode = 0
 offset_right = 640.0
 offset_bottom = 634.0
 texture = ExtResource("2_bvc5d")
-patch_margin_left = 47
-patch_margin_top = 46
-patch_margin_right = 62
-patch_margin_bottom = 24
+patch_margin_left = 90
+patch_margin_top = 90
+patch_margin_right = 90
+patch_margin_bottom = 90
+axis_stretch_horizontal = 2
+axis_stretch_vertical = 2
 
 [node name="Title" type="Label" parent="PanelRoot" unique_id=1387849730]
 layout_mode = 0

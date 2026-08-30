@@ -68,10 +68,22 @@ NINE_PATCH: dict[str, tuple[tuple[int, int, int, int], int]] = {
     # so the border has to read at the small end without swallowing it. 12 px
     # clears the resource rows and still looks like moulding on a page.
     "panel_hud": ((46, 46, 46, 46), 12),
-    # The menu plate. Ornate by design and drawn large -- the main menu panel is
-    # over 400 px -- so it carries a much heavier border on purpose, and its
-    # heaviest side is the one with a dragon down it.
-    "panel_ornate": ((183, 241, 178, 92), 62),
+    # THE ONE PIECE `measure_ninepatch.py` GETS WRONG, and it is worth knowing why
+    # rather than just taking the number below on trust. That tool looks for a
+    # STRETCHABLE RUN, and on this frame it finds the bead band and stops at its
+    # outer edge -- 183 px on the left. But a nine-patch margin has to clear the
+    # CORNER, and the corner here is a dragon whose head and neck reach about 250
+    # px in and 300 px down. Margins of 183/241/178/92 put the boundary through
+    # the dragon's neck, so the neck was in the stretched region: the project
+    # owner reported it as "the left side of main menu is stretched, the 9 patch
+    # did not slice correctly" on 2026-08-30, and it was.
+    #
+    # 300 ON ALL FOUR SIDES, measured off the art by eye against the rendered
+    # frame, because the automatic measurement is answering a different question.
+    # The extra margin below the dragons is plain bead band drawn at 1:1 instead
+    # of tiled, which costs nothing and is what makes one number safe for four
+    # sides that are not identical.
+    "panel_ornate": ((300, 300, 300, 300), 90),
     # A button is ~200x40. Its end caps are the border; 14 px leaves room for a
     # word between them.
     "button_normal": ((28, 27, 0, 0), 14),
@@ -86,6 +98,30 @@ NINE_PATCH: dict[str, tuple[tuple[int, int, int, int], int]] = {
     # A tab is ~110x28.
     "tab_plate": ((19, 19, 0, 0), 10),
 }
+
+#: A SECOND OUTPUT FROM ONE MASTER, at a different size. output -> (source, border)
+#:
+#: This exists because Godot draws a nine-patch border at 1:1, which is the trap
+#: this whole script is about -- and one consequence of it is that ONE PREPARED
+#: SIZE CANNOT SERVE TWO DRAW SIZES. `panel_ornate` is drawn at 640 px on the
+#: main menu, where a 90 px dragon reads correctly, and at 152 px on the resource
+#: counter, where that same 90 px border would leave 0 px of panel between the
+#: two corners. So the resource counter gets its own copy of the same artwork,
+#: prepared for its own size.
+#:
+#: The alternative -- scaling a NinePatchRect by putting it inside a scaled
+#: Control -- makes the border blurry and the layout arithmetic a fiction. Two
+#: files off one master is 40 KB and no cleverness.
+EXTRA_SIZES: dict[str, tuple[str, int]] = {
+    "panel_ornate_small": ("panel_ornate", 30),
+}
+
+#: Pieces whose border REPEATS rather than being uniform, and which must
+#: therefore be tiled rather than stretched. `measure_ninepatch.py` reports the
+#: period; a run of beads pulled to three times its length is a run of ellipses.
+#: The consumer sets `NinePatchRect.axis_stretch_horizontal/vertical` to
+#: `AXIS_STRETCH_MODE_TILE`; this set is the record of which need it.
+TILED = {"panel_ornate", "panel_ornate_small"}
 
 # piece -> longest edge in the output, or None to keep the master.
 #
@@ -127,6 +163,12 @@ def main() -> int:
 
     known = set(NINE_PATCH) | set(WHOLE)
     found = {p.stem for p in SRC.glob("*.png")}
+    # An extra size is an OUTPUT, not a master, so it must not be looked for in
+    # the source directory -- but its own source must exist.
+    for out_name, (src_name, _) in EXTRA_SIZES.items():
+        if src_name not in NINE_PATCH:
+            print(f"  !! {out_name}: its source {src_name} has no nine-patch entry")
+            return 1
     for missing in sorted(known - found):
         print(f"  !! {missing}: named here but not in {SRC}")
     for stranger in sorted(found - known):
@@ -137,13 +179,23 @@ def main() -> int:
     print(f"{'piece':24s} {'source':>11s} -> {'output':>11s}  "
           f"{'L':>3s} {'R':>3s} {'T':>3s} {'B':>3s}  note")
     print("-" * 84)
-    for name in sorted(found):
-        src = SRC / f"{name}.png"
+    jobs = [(n, n) for n in sorted(found)]
+    jobs += [(out, src) for out, (src, _) in sorted(EXTRA_SIZES.items())]
+
+    for name, source_name in jobs:
+        src = SRC / f"{source_name}.png"
         im = Image.open(src).convert("RGBA")
         w, h = im.size
 
         margin = ""
-        if name in NINE_PATCH:
+        if name in EXTRA_SIZES:
+            measured, _ = NINE_PATCH[source_name]
+            wanted = EXTRA_SIZES[name][1]
+            scale = wanted / max(measured)
+            out = (max(1, round(w * scale)), max(1, round(h * scale)))
+            margin = " ".join("%3d" % round(m * scale) for m in measured)
+            note = f"nine-patch off {source_name}, x{scale:.3f}"
+        elif name in NINE_PATCH:
             measured, wanted = NINE_PATCH[name]
             scale = wanted / max(measured)
             out = (max(1, round(w * scale)), max(1, round(h * scale)))
@@ -163,6 +215,8 @@ def main() -> int:
                 out = (max(1, round(w * scale)), max(1, round(h * scale)))
                 note = f"whole, x{scale:.3f}"
 
+        if name in TILED:
+            note += ", TILE"
         print(f"{name:24s} {w:5d}x{h:<5d} -> {out[0]:5d}x{out[1]:<5d}  "
               f"{margin if margin else ' ' * 15}  {note}")
         if args.check:
@@ -177,7 +231,7 @@ def main() -> int:
     if args.check:
         print("\n--check: nothing written")
     else:
-        print(f"\nwritten: {len(found)} pieces to {DST}")
+        print(f"\nwritten: {len(jobs)} pieces to {DST}")
         print("Godot must see them: run --import before the suite.")
     return 0
 

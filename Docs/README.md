@@ -622,7 +622,7 @@ What is where:
 |---|---|
 | `game/assets/ui/icons/` | 103 icons at 100×100 RGBA — verbs, resources, technologies, formations, stances |
 | `game/assets/ui/chrome/` | 27 panels, frames, bars, buttons and widgets. **Derived** — see below |
-| `game/assets/ui/fonts/` | MedievalSharp and Cinzel Decorative, both SIL OFL, each beside its own licence text |
+| `game/assets/ui/fonts/` | New Rocker and Cinzel Decorative, both SIL OFL, each beside its own licence text |
 
 `chrome/` is generated, not copied. `tools/prepare_ui_chrome.py` rewrites the master art
 in `assets/UI_Gen/sliced/chrome/` at the size that makes each piece's painted border draw
