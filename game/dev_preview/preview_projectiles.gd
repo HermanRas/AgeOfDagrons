@@ -37,6 +37,20 @@ const SHOT_DIR := "user://"
 const SETTLE_FRAMES := 30
 const STEP_FRAMES := 10
 
+## How long to wait for a shooter to get something in the air, in frames.
+##
+## ⚠️ **IT WAS 240 AND THE TREBUCHET COULD NEVER HAVE BEEN CAUGHT IN IT.** 240 frames at
+## 60 fps is 4 seconds, which is 40 of `SimClock.TICK_HZ`'s ticks -- and a trebuchet
+## travels PACKED (4.13) and spends `packing.ticks` **80** deploying before it may fire at
+## all. So one of the four shooters had been failing every run since siege packing landed
+## on 2026-08-28, saying so in a warning, and photographing an empty field. The ballista's
+## 30 fits under 40 and the onager's 50 would not have either.
+##
+## 900 is 15 seconds, which clears the slowest deploy in the roster with the slowest
+## cooldown after it and costs nothing on a shooter that fires at once -- the poll returns
+## the moment anything is airborne.
+const CATCH_FRAMES := 900
+
 ## How long to let the volley land and settle before photographing the ground, in
 ## frames. `SpentProjectiles.LIFETIME` is 4 s and the fade is the last 1.5, so this wants
 ## to be comfortably inside the first half or the picture is of arrows going transparent.
@@ -48,13 +62,34 @@ const LITTER_FRAMES := 45
 ##
 ## `building` swaps the whole set-up: no order is issued and `garrison` archers go inside,
 ## which is what makes the volley count something other than five.
+## `volley` is the number to expect in the air and is the reason the GALLEY is here at all
+## (project owner, 2026-08-30: *"Galley WarShip does not render arrows, it needs to do
+## batchs of 10"*). It is the second shooter in the set whose whole complaint was that one
+## projectile every few seconds is invisible, and the first that is a UNIT -- so unlike the
+## tower it goes through a real `AttackCommand`.
+##
+## `afloat` paints a channel and puts both boats in it. NOT OPTIONAL AND NOT COSMETIC: the
+## debug map has **zero** water tiles, and a water-domain unit standing on grass gets an
+## empty route back from `PathService`, which retires the attack order before
+## `CombatSystem` ever sees it. The unit goes to IDLE on the first tick with `validate()`
+## having returned true, and the log reads exactly like a volley that does not draw.
 const SHOOTERS := [
 	{"unit": &"unit.archer", "visual": &"vis.projectile_arrow", "gap": 4},
 	{"unit": &"unit.ballista", "visual": &"vis.projectile_bolt", "gap": 8},
 	{"unit": &"unit.trebuchet", "visual": &"vis.projectile_stone", "gap": 11},
 	{"unit": &"building.watch_tower", "visual": &"vis.projectile_stone", "gap": 5,
 			"building": true, "garrison": 3},
+	{"unit": &"unit.galley", "visual": &"vis.projectile_arrow", "gap": 3,
+			"afloat": true, "victim": &"unit.galley"},
 ]
+
+## How wide a channel `afloat` floods, either side of the line the two ships sit on.
+##
+## 4 is nine tiles and still narrower than a galley LOOKS -- `vis.galley` is drawn about
+## fifteen tiles across on a one-tile entity, which is the art's scale and not this
+## file's business. What nine buys is that the hull sits over water rather than over a
+## lawn, so a screenshot of the volley is a screenshot of a sea fight.
+const CHANNEL_HALF_WIDTH := 4
 
 var _game: Node = null
 var _frames := 0
@@ -98,7 +133,7 @@ func _process(_delta: float) -> void:
 		if _catch_it_in_the_air(SHOOTERS[_shooter_index]):
 			_phase = SHOOT
 			_frames = 0
-		elif _frames > 240:
+		elif _frames > CATCH_FRAMES:
 			push_warning("preview_projectiles: %s never got anything in the air"
 					% SHOOTERS[_shooter_index]["unit"])
 			_phase = SHOOT
@@ -161,10 +196,23 @@ func _set_up(spec: Dictionary) -> void:
 	var world: SimWorld = Net.host().world
 	_add_an_opponent(world)
 	_at = _clear_ground(world, int(spec["gap"]) + 6)
+	if bool(spec.get("afloat", false)):
+		_flood(world, int(spec["gap"]) + 6)
 
 	var shooter: SimEntity = _place_tower(world, spec) if spec.get("building", false) \
 			else world.spawn_unit(spec["unit"], Net.local_player_id(), _at)
-	var victim := world.spawn_unit(&"unit.militia", _enemy_id(),
+	# ⚠️ **THE SHOOTER IS PASSIVE TOO, SO THE SHOT THIS FILE PHOTOGRAPHS IS THE ORDERED
+	# ONE.** A military unit's default stance is DEFENSIVE (4.12) and every victim here
+	# stands inside `StanceSystem.GUARD_RADIUS`, so the shooter had been opening fire
+	# during SET_UP -- before `_order_the_shot` said a word -- and `CATCH` was then
+	# photographing the TAIL of that volley a frame or two before it despawned. Invisible
+	# for as long as every shooter loosed a single projectile (one straggler and one shot
+	# look the same); the galley's ten made it obvious, reporting **1 in the air (expected
+	# about 10)** with a warning that nothing was drawing it. A building is left alone --
+	# auto-acquire is the only way a tower ever fires.
+	if shooter is SimUnit:
+		(shooter as SimUnit).stance = SimUnit.Stance.PASSIVE
+	var victim := world.spawn_unit(spec.get("victim", &"unit.militia"), _enemy_id(),
 			_at + Vector2i(int(spec["gap"]), 0))
 	if shooter == null or victim == null:
 		push_warning("preview_projectiles: could not place %s" % spec["unit"])
@@ -175,6 +223,14 @@ func _set_up(spec: Dictionary) -> void:
 	# trebuchet hits for 40 and a militia has 40.
 	victim.max_hp = 4000
 	victim.hp = 4000
+	# ⚠️ **PASSIVE, SO THE COUNT MEANS WHAT IT SAYS** (AGENT_GAME_CODER.md §6's rule about
+	# fixtures that rest on nothing happening). The number this preview prints beside each
+	# picture is "how many did the SHOOTER loose", and a victim on the default DEFENSIVE
+	# stance fights back inside `StanceSystem.GUARD_RADIUS`. It cost a run to notice: the
+	# galley's opposite number is another galley, so the first go reported **20 in the air
+	# (expected about 10)** with nothing wrong at all.
+	if victim is SimUnit:
+		(victim as SimUnit).stance = SimUnit.Stance.PASSIVE
 
 	print("  %s at %s shooting %s at %s"
 			% [spec["unit"], shooter.tile(), victim.def_id, victim.tile()])
@@ -255,6 +311,35 @@ func _clear_ground(world: SimWorld, span: int) -> Vector2i:
 	return anchor
 
 
+## Turn the strip the shot is about to happen on into shallow water, so a SHIP can be
+## ordered to do anything at all.
+##
+## ⚠️ **THE DEBUG MAP HAS NO WATER -- ZERO TILES, measured on the 64x64 board.** A
+## water-domain unit standing on grass is not merely out of place: `PathService` returns
+## an empty route for it, the attack task is retired on the first tick, and the log says
+## the order validated while the ship stands there. The first version of the galley's
+## test spent a run on exactly that and reported it as a volley that would not draw.
+##
+## `PathService.rebuild` is what makes it real. `AStarGrid2D` holds solidity IN THE GRID
+## rather than in the query (`PathService`'s own note), so terrain written behind its back
+## is terrain it does not know about -- the same call `test_transport._make_a_coast` makes
+## for the same reason.
+func _flood(world: SimWorld, span: int) -> void:
+	for dy in range(-CHANNEL_HALF_WIDTH, CHANNEL_HALF_WIDTH + 1):
+		for dx in range(-2, span + 2):
+			var t := _at + Vector2i(dx, dy)
+			if world.map.in_bounds(t):
+				world.map.set_terrain(t, SimMap.Terrain.WATER_SHALLOW)
+	if world.paths != null:
+		world.paths.rebuild(world.map)
+	# The VIEW's terrain is built once at match start from the config's map, so a channel
+	# painted into the sim world afterwards is invisible until the layer is told. Without
+	# this the picture is two boats and ten arrows sailing across a lawn, which is a
+	# perfectly good test of the volley and a confusing thing to hand somebody.
+	_game._view.build_terrain(world.map.size, world.map.terrain)
+	_game._minimap.build_terrain(world.map.size, world.map.terrain)
+
+
 ## The player's town centre, which is the one thing they can definitely see.
 func _home_tile(world: SimWorld) -> Vector2i:
 	var ids := world.entities.keys()
@@ -315,6 +400,12 @@ func _catch_it_in_the_air(spec: Dictionary) -> bool:
 	if bool(spec.get("building", false)):
 		want = int(spec.get("garrison", 0)) + \
 				GameDataRegistry.building(spec["unit"]).attack_volley
+	else:
+		# A UNIT CAN VOLLEY TOO since 2026-08-30 -- `unit.galley` at 10. Read off the def
+		# rather than declared in `SHOOTERS`, so the number beside the picture is the one
+		# the game is playing with and cannot quietly disagree with units.json.
+		var ud: UnitDef = GameDataRegistry.unit(spec["unit"])
+		want = ud.attack_volley if ud != null else 1
 	print("  %s: %d in the air (expected about %d)" % [name, airborne, want])
 	# THE NUMBERS, so a picture with no visible arrow can be told apart from a picture
 	# taken at the wrong moment -- including where on the screen to look for it.

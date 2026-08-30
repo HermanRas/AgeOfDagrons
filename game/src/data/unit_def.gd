@@ -41,6 +41,29 @@ var attack_cooldown_ticks: int = 0
 ## a dragon spitting arrows is worse than a dragon spitting nothing.
 var attack_projectile: StringName = &""
 
+## HOW MANY PROJECTILES ONE SHOT DRAWS (project owner, 2026-08-30: *"Galley WarShip does
+## not render arrows, it needs to do batchs of 10"*). `BuildingDef.attack_volley`'s twin,
+## and it is the same mechanism for the same reason: a ship has no archer sprite drawing
+## a bow, so one arrow every three seconds off a galley -- `cooldown_ticks` 30 at
+## `SimClock.TICK_HZ` 10 -- read as a boat that does not shoot. The arrow WAS being
+## spawned all along; there was simply never more than one of it and it was gone in four
+## ticks.
+##
+## **COSMETIC, and that is what makes it safe to be generous.** `SimProjectile` carries
+## no damage -- the blow lands the instant it is fired -- so ten arrows and one arrow do
+## exactly the same thing to the target, and every number in the table beside it is
+## untouched. There is a test pinning that, because the day a projectile carries a hit,
+## a volley silently becomes ten attacks.
+##
+## ⚠️ **IT IS FREE ON SCREEN AND NOT FREE ON THE WIRE, and buildings.json's note said to
+## price this against 12.1f before any unit took one.** Priced: a projectile is a real
+## entity riding every snapshot for the 2-8 ticks it is airborne, so a galley firing 10
+## every 30 ticks holds ~1.3 in the air on average against the 1 arrow every 10 ticks a
+## land archer already costs. A fleet is what makes it add up -- twenty galleys loosing
+## together are 200 entities for four ticks -- which is why this is on the ONE unit that
+## asked for it rather than a number every ranged unit gets. Defaults to 1.
+var attack_volley: int = 1
+
 var armor_melee: int = 0
 var armor_pierce: int = 0
 
@@ -202,6 +225,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.attack_range = int(atk.get("range", 0))
 	u.attack_cooldown_ticks = int(atk.get("cooldown_ticks", 0))
 	u.attack_projectile = StringName(atk.get("projectile", ""))
+	u.attack_volley = maxi(1, int(atk.get("volley", 1)))
 
 	var armor: Dictionary = d.get("armor", {})
 	u.armor_melee = int(armor.get("melee", 0))

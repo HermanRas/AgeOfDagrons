@@ -151,10 +151,27 @@ func _loose_volley(w: SimWorld, b: SimBuilding, at: Vector2i) -> void:
 		for i in range(maxi(1, b.attack_volley)):
 			shots.append(b.attack_projectile)
 	shots.append_array(b.garrison_projectiles(w))
+	_fan(w, shots, b.owner_id, b.pos, at)
+
+
+## The fan itself, shared by a building's volley and a UNIT's (project owner, 2026-08-30
+## -- the galley). Extracted rather than copied: the arithmetic below is the only thing
+## standing between "ten arrows" and "one arrow drawn ten times", and two copies of it
+## would be two chances for a warship's fan to disagree with a tower's.
+##
+## `from` is a sub-tile position and not an entity, because that is the only thing the
+## two callers have in common -- a `SimBuilding` shoots from its centre and a `SimUnit`
+## from wherever it is standing.
+##
+## Integer throughout, and the perpendicular is scaled by a Chebyshev norm rather than a
+## real one -- `maxi(absi(x), absi(y))`, the same cheap measure `SimProjectile.flight_ticks`
+## uses. It rides in `state_hash()` through the projectiles it spawns, so a float here
+## would be free to round differently on an ARM phone than on an x86 host.
+static func _fan(w: SimWorld, shots: Array[StringName], owner_id: int,
+		from: Vector2i, at: Vector2i) -> void:
 	if shots.is_empty():
 		return
-
-	var d := at - b.pos
+	var d := at - from
 	var norm := maxi(1, maxi(absi(d.x), absi(d.y)))
 	# Perpendicular to the flight line, one VOLLEY_SPREAD long.
 	var across := Vector2i(-d.y * VOLLEY_SPREAD / norm, d.x * VOLLEY_SPREAD / norm)
@@ -163,7 +180,7 @@ func _loose_volley(w: SimWorld, b: SimBuilding, at: Vector2i) -> void:
 		# stays in integers. `2 * i - (n - 1)` is that, scaled by VOLLEY_SPREAD / 2.
 		var step := 2 * i - (shots.size() - 1)
 		var offset := across * step / 2
-		w.spawn_projectile(shots[i], b.owner_id, b.pos + offset, at + offset)
+		w.spawn_projectile(shots[i], owner_id, from + offset, at + offset)
 
 
 ## The nearest hostile UNIT within reach of `b`'s footprint, or null.
@@ -286,8 +303,17 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# Aimed at where the target IS RIGHT NOW, captured here rather than followed --
 	# see `SimProjectile.target_pos`. Nothing is spawned for a unit whose def names no
 	# projectile, which is every melee unit and the dragon.
+	#
+	# A UNIT CAN VOLLEY TOO SINCE 2026-08-30, and one does: `unit.galley` at 10 (project
+	# owner, *"Galley WarShip does not render arrows, it needs to do batchs of 10"*).
+	# Everything else in the roster declares no `volley` and gets 1, which is the single
+	# arrow this line has always spawned. See `UnitDef.attack_volley` for the wire price
+	# and for why the damage above is untouched.
 	if def.attack_projectile != &"":
-		w.spawn_projectile(def.attack_projectile, u.owner_id, u.pos, target.pos)
+		var shots: Array[StringName] = []
+		for i in range(maxi(1, def.attack_volley)):
+			shots.append(def.attack_projectile)
+		_fan(w, shots, u.owner_id, u.pos, target.pos)
 	u.attack_cooldown = maxi(1, def.attack_cooldown_ticks)
 	# Retire on the killing blow rather than noticing next tick. A tick of
 	# swinging at something already dead is a tick of the attack animation

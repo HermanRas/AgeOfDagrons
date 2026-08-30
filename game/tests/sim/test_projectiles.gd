@@ -353,6 +353,126 @@ func test_a_building_with_no_volley_declared_still_looses_exactly_one() -> void:
 	assert_eq(d.attack_damage, 0, "and it does not shoot at all")
 
 
+# ── the galley volley (project owner, 2026-08-30) ───────────────────────────
+#
+# "Galley WarShip does not render arrows, it needs to do batchs of 10." The arrow was
+# never missing: a galley reloads every 30 ticks and a projectile is airborne for 2-8 of
+# them, so at 10 ticks a second the boat drew one arrow every three seconds -- the watch
+# tower's complaint of 2026-08-28, for the identical reason. Neither has an archer sprite
+# drawing a bow to explain where the shot came from.
+
+## ⚠️ **A GALLEY MUST BE PUT ON WATER OR IT CANNOT BE ORDERED TO DO ANYTHING, and the
+## debug map has NO WATER AT ALL** -- 0 tiles of it on the 64x64 board, measured. The
+## first version of these tests stood the boat on grass on the reasoning that
+## `CombatSystem` never consults `domain`, which is true and is not the whole path: the
+## order goes through `PathService`, the route for a water unit standing on land comes
+## back empty, and the task is retired before `CombatSystem` sees it. The unit reported
+## `task = IDLE` on the very first tick with `validate()` having returned true, which
+## reads exactly like a volley that does not draw.
+##
+## So a channel is painted in, the way `test_transport._make_a_coast` does, and
+## `PathService.rebuild` is called after -- `AStarGrid2D` holds solidity IN THE GRID
+## rather than in the query, so terrain written behind its back is terrain it does not
+## know about.
+var _channel := Vector2i.ZERO
+
+
+func _make_a_channel() -> void:
+	for y in range(4, w.map.size.y - 12):
+		for x in range(4, w.map.size.x - 12):
+			if not w.map.can_place_building(
+					SimMap.footprint_rect(Vector2i(x, y), Vector2i(12, 4))):
+				continue
+			for wy in range(y, y + 4):
+				for wx in range(x, x + 12):
+					w.map.set_terrain(Vector2i(wx, wy), SimMap.Terrain.WATER_SHALLOW)
+			_channel = Vector2i(x + 1, y + 1)
+			if w.paths != null:
+				w.paths.rebuild(w.map)
+			return
+	assert_true(false, "no clear 12x4 patch on the debug map to flood")
+
+
+## Two galleys three tiles apart in that channel, and everything player 1's put in the air
+## on the tick it fired. A SHIP shooting a SHIP, which is the only fight a galley can
+## actually be in -- naval combat proper is still unbuilt (PLAN.md 15) and this is a shot,
+## not a sea battle.
+func _galley_volley() -> Array[SimProjectile]:
+	_make_a_channel()
+	var boat := w.spawn_unit(&"unit.galley", 1, _channel)
+	boat.stance = SimUnit.Stance.PASSIVE
+	var quarry := w.spawn_unit(&"unit.galley", 2, _channel + Vector2i(3, 0))
+	quarry.stance = SimUnit.Stance.PASSIVE
+	quarry.max_hp = 4000
+	quarry.hp = 4000
+	w.queue_command(AttackCommand.new(1, [boat.id], quarry.id))
+	for i in range(200):
+		w.step()
+		var flying := _projectiles()
+		if not flying.is_empty():
+			return flying
+	return []
+
+
+func test_a_galley_looses_ten_arrows() -> void:
+	var volley := _galley_volley()
+	assert_eq(volley.size(), 10, "a batch of ten, as asked")
+	for p in volley:
+		assert_eq(p.def_id, &"vis.projectile_arrow")
+
+
+func test_the_galleys_volley_fans_out_the_same_way_a_towers_does() -> void:
+	# ONE piece of arithmetic, shared: `CombatSystem._fan`. Two copies would be two
+	# chances for a warship's volley to converge on a point while a tower's stayed
+	# parallel, and only one of the two would ever be looked at.
+	var volley := _galley_volley()
+	assert_eq(volley.size(), 10, "it fired at all")
+	var origins: Array[Vector2i] = []
+	var span := volley[0].target_pos - volley[0].origin_pos
+	for p in volley:
+		assert_false(origins.has(p.origin_pos), "each arrow leaves from its own place")
+		origins.append(p.origin_pos)
+		assert_eq(p.target_pos - p.origin_pos, span, "the fan is parallel")
+
+
+func test_the_galleys_volley_is_cosmetic_and_its_damage_is_unchanged() -> void:
+	# THE SAME NEGATIVE CLAIM AS THE TOWER'S, and it matters more here: a galley is 6
+	# damage every 30 ticks, so ten arrows each carrying a hit would be a sixty-damage
+	# warship and every naval number would be wrong by a factor of ten.
+	_make_a_channel()
+	var boat := w.spawn_unit(&"unit.galley", 1, _channel)
+	boat.stance = SimUnit.Stance.PASSIVE
+	var quarry := w.spawn_unit(&"unit.galley", 2, _channel + Vector2i(3, 0))
+	quarry.stance = SimUnit.Stance.PASSIVE
+	quarry.max_hp = 4000
+	quarry.hp = 4000
+	var declared := GameDataRegistry.unit(&"unit.galley").attack_damage
+	w.queue_command(AttackCommand.new(1, [boat.id], quarry.id))
+	var hp := quarry.hp
+	for i in range(200):
+		w.step()
+		if quarry.hp < hp:
+			break
+	assert_true(quarry.hp < hp, "it was shot at all")
+	assert_true(hp - quarry.hp <= declared,
+			"one shot's worth, not ten: lost %d against %d declared"
+					% [hp - quarry.hp, declared])
+
+
+func test_every_other_ranged_unit_still_looses_exactly_one() -> void:
+	# The default is what keeps a wire cost off the whole roster. `UnitDef.attack_volley`'s
+	# header prices it: a projectile is a real entity on every snapshot while it flies, so
+	# this is the one unit that asked for it and not a number every archer gets.
+	assert_eq(GameDataRegistry.unit(&"unit.galley").attack_volley, 10)
+	for id in [&"unit.archer", &"unit.crossbowman", &"unit.cavalry_archer",
+			&"unit.ballista", &"unit.onager", &"unit.trebuchet", &"unit.galleon"]:
+		assert_eq(GameDataRegistry.unit(id).attack_volley, 1,
+				"%s declares no volley" % id)
+	var arrow := _loose()
+	assert_not_null(arrow)
+	assert_eq(_projectiles().size(), 1, "and an archer still shoots one arrow")
+
+
 # ── it stays out of everything else's way ───────────────────────────────────
 
 func test_a_projectile_claims_no_ground() -> void:
