@@ -323,7 +323,7 @@ func _build_hud() -> void:
 	# which left a gap the dragon frame was never drawn to fill.
 	_hud = ResourceHUD.new()
 	_hud.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_hud.offset_left = -ResourceHUD.PANEL_SIZE.x
+	_hud.offset_left = -ResourceHUD.PANEL_WIDTH
 	_hud.offset_top = 0.0
 	_hud.offset_right = 0.0
 	_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -342,7 +342,8 @@ func _build_hud() -> void:
 	var minimap_area := Control.new()
 	minimap_area.custom_minimum_size = Vector2(Minimap.AREA_SIZE, Minimap.AREA_SIZE)
 	minimap_area.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	minimap_area.position = Vector2(-Minimap.AREA_SIZE - 12.0, -Minimap.AREA_SIZE - 12.0)
+	minimap_area.position = Vector2(-Minimap.AREA_SIZE - _MINIMAP_MARGIN,
+			-Minimap.AREA_SIZE - _MINIMAP_MARGIN)
 	hud.add_child(minimap_area)
 
 	# THE ORNATE DIAMOND FRAME, and it is drawn HERE rather than by `Minimap` itself.
@@ -377,58 +378,33 @@ func _build_hud() -> void:
 	# all four now open something. SETTINGS took over the pause menu from the
 	# button that used to sit in the age header, which is what retired that one.
 	# Added to minimap_area AFTER the minimap so they sit on top of the rotated
-	# diamond's tips and stay clickable rather than being covered by them; the two
-	# spacers in the middle column push each pair of buttons out to the area's own
-	# corners.
+	# diamond's tips and stay clickable rather than being covered by them.
 	#
-	# THE SPACERS ARE PLAIN CONTROLS, and they used to be `VSeparator`s on the
-	# assumption that those draw nothing. They draw a line -- that is what a
-	# separator is for -- and two of them stacked in the middle column drew a 1 px
-	# line straight down the middle of the minimap (owner-reported 2026-08-21). A
-	# bare `Control` expands the same way and paints nothing, which is what a flex
-	# spacer actually is.
-	var minimap_buttons := GridContainer.new()
-	minimap_buttons.columns = 3
-	minimap_buttons.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# INSET INTO THE FRAME'S BOSSES. The four buttons used to sit hard in the area's
-	# own corners, which was right when there was nothing behind them. The frame art
-	# puts a round recess at about 0.15 of its size in from each corner and those are
-	# where the buttons belong -- otherwise the chat glyph sits half on a boss and half
-	# on the moulding beside it, which is exactly what the first screenshot showed.
-	# Derived rather than typed so it follows `Minimap.AREA_SIZE`.
-	var boss_inset := Minimap.AREA_SIZE * _MINIMAP_BOSS_CENTRE - CORNER_BUTTON_SIZE * 0.5
-	minimap_buttons.offset_left = boss_inset
-	minimap_buttons.offset_top = boss_inset
-	minimap_buttons.offset_right = -boss_inset
-	minimap_buttons.offset_bottom = -boss_inset
-	# AND IT MUST NOT EAT THE MINIMAP'S INPUT. This grid covers the WHOLE area,
-	# the flex spacers cover its middle, and it is added after the minimap, so
-	# Godot hit-tests it first and every tap on the diamond died here -- the
-	# camera never moved and the double-tap-to-centre never fired. IGNORE on the
-	# grid and STOP on each button individually is the arrangement that works:
-	# the four corners take their own taps and everything between them falls
-	# through to the map. Never STOP on the grid.
-	minimap_buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	minimap_area.add_child(minimap_buttons)
-
-	# The pairs are the grid's two rows, so this reads top-left, top-right,
-	# bottom-left, bottom-right -- and SETTINGS lands bottom-right, the corner the
-	# project owner pointed at.
+	# EACH ON ITS OWN MEASURED BOSS (`_MINIMAP_BOSS_CENTRES`), placed absolutely.
+	# This was a 3-column GridContainer spanning the whole area, with a flex spacer
+	# in the middle column pushing each pair out to its corners and one shared inset
+	# for all four. That arrangement could only ever express ONE position, mirrored,
+	# and the art does not have one -- which is why the bottom pair sat low and splayed
+	# outwards however the inset was tuned.
+	#
+	# Two hazards go away with the grid rather than being worked around. It covered the
+	# WHOLE area and was added after the minimap, so Godot hit-tested it first and every
+	# tap on the diamond died there until each piece of it was individually set to
+	# MOUSE_FILTER_IGNORE; and its middle column began as stacked `VSeparator`s, which
+	# draw a line -- that is what a separator is for -- straight down the middle of the
+	# map (owner-reported 2026-08-21). Four 32 px buttons touching nothing between them
+	# have neither problem to have.
 	var corners := [
-		[[&"chat", "hud_chat.png", _on_chat_pressed],
-			[&"trade", "hud_trade.png", _on_market_pressed]],
-		[[&"techtree", "hud_techtree.png", _on_tech_tree_pressed],
-			[&"settings", "hud_settings.png", _on_settings_pressed]],
+		[&"chat", "hud_chat.png", _on_chat_pressed],
+		[&"trade", "hud_trade.png", _on_market_pressed],
+		[&"techtree", "hud_techtree.png", _on_tech_tree_pressed],
+		[&"settings", "hud_settings.png", _on_settings_pressed],
 	]
-	for row in range(corners.size()):
-		var pair: Array = corners[row]
-		minimap_buttons.add_child(_corner_button(pair[0], row == 0, true))
-		var sep := Control.new()
-		sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		minimap_buttons.add_child(sep)
-		minimap_buttons.add_child(_corner_button(pair[1], row == 0, false))
+	for i in range(corners.size()):
+		var corner_btn := _corner_button(corners[i])
+		corner_btn.position = _MINIMAP_BOSS_CENTRES[i] * Minimap.AREA_SIZE \
+				- Vector2.ONE * CORNER_BUTTON_SIZE * 0.5
+		minimap_area.add_child(corner_btn)
 
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -441,25 +417,38 @@ func _build_hud() -> void:
 	# bottom edge free while placing. Bottom centre looked empty and is not: the build
 	# grid opens there, so a cancel button sat straight on top of the menu it belongs to
 	# -- caught by `preview_match`'s screenshot, not by the code.
+	#
+	# SIZED AND ALIGNED TO THE ACTION TILES ON THE OTHER SIDE OF THE SCREEN (project
+	# owner, 2026-08-30: *"cancel build needs to move left, its currently over the mini
+	# map and 50% too big, match the size of the unit action icons row so left and right
+	# side of screen line up"*). It was 280x80 at a fixed -512, which put its right edge
+	# 20 px INSIDE the minimap area -- see `_CANCEL_RECT` for the arithmetic that is now
+	# derived rather than typed.
 	_cancel_build = Button.new()
 	_cancel_build.text = "CANCEL BUILD"
-	_cancel_build.add_theme_font_size_override("font_size", 24)
-	_cancel_build.custom_minimum_size = Vector2(280.0, 80.0)
-	_cancel_build.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_cancel_build.position = Vector2(-512.0, -120.0)
+	_cancel_build.add_theme_font_size_override("font_size", 16)
+	# Two tiles' worth of width is not enough for "CANCEL BUILD" on one line at 16 pt
+	# once the plate's 18 px content margins are taken off, so it breaks over two --
+	# which is why the button is a whole tile TALL rather than the half it would need.
+	_cancel_build.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_place_bottom_right(_cancel_build, _CANCEL_RECT)
 	_cancel_build.visible = false
 	_cancel_build.pressed.connect(_exit_placement)
 	hud.add_child(_cancel_build)
 
-	# Directly above CANCEL BUILD, in the same gap between the build grid and the
-	# minimap -- the only part of the bottom edge free while placing.
+	# Directly above CANCEL BUILD and exactly as wide, in the same gap between the build
+	# grid and the minimap. TWO LINES' WORTH OF BOX, bottom-aligned: a wall drag's
+	# "12 segments, 144 wood" does not fit one line at this width, and a label that grew
+	# downward would push into the button rather than away from it.
 	_placement_readout = Label.new()
-	_placement_readout.add_theme_font_size_override("font_size", 20)
+	_placement_readout.add_theme_font_size_override("font_size", 16)
 	_placement_readout.add_theme_color_override("font_color", HudStyle.GOLD)
 	_placement_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_placement_readout.custom_minimum_size = Vector2(280.0, 0.0)
-	_placement_readout.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_placement_readout.position = Vector2(-512.0, -156.0)
+	_placement_readout.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_placement_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_place_bottom_right(_placement_readout, Rect2(
+			_CANCEL_RECT.position - Vector2(0.0, _READOUT_HEIGHT + 6.0),
+			Vector2(_CANCEL_RECT.size.x, _READOUT_HEIGHT)))
 	_placement_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_placement_readout.visible = false
 	hud.add_child(_placement_readout)
@@ -568,42 +557,88 @@ func _build_hud() -> void:
 	_error_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_error_label.offset_left = 96.0
 	_error_label.offset_top = 92.0
-	_error_label.offset_right = -(ResourceHUD.PANEL_SIZE.x + 24.0)
+	_error_label.offset_right = -(ResourceHUD.PANEL_WIDTH + 24.0)
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_error_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_error_label.visible = false
 	hud.add_child(_error_label)
 
 
-## The size of one minimap corner button, and therefore the whole of its hit area --
-## see the shrink flags in `_corner_button` for why that second half matters.
+## The size of one minimap corner button, and therefore the whole of its hit area.
 const CORNER_BUTTON_SIZE := 32.0
+
+## The minimap area's inset from the bottom-right corner of the screen. Named because
+## CANCEL BUILD is now placed by measuring back from the minimap's outer edge, so the
+## two have to agree.
+const _MINIMAP_MARGIN := 12.0
 
 ## The ornate diamond around the minimap ([P8], 2026-08-30). `Minimap`'s own header
 ## used to record that no such art existed and that it approximated the frame with a
 ## double gold `draw_rect`; it exists now, and that approximation is gone.
 const _MINIMAP_FRAME_PATH := "res://assets/ui/chrome/frame_minimap.png"
 
-## Where the frame art puts the centre of a corner boss, as a fraction of its own size.
+## The centre of each corner boss in the frame art, as a fraction of the frame's own
+## size: top-left, top-right, bottom-left, bottom-right, matching `_MINIMAP_CORNERS`.
 ##
-## MEASURED BY FINDING THE DISCS, and the first attempt at this was wrong -- the project
-## owner reported it as *"buttons on mini map is not on position"* (2026-08-30) and they
-## were about 14 px out. That version took the CENTROID OF EVERY DARK PIXEL in each
-## corner quadrant, which answers a different question: the field between the diamond
-## and the outer square is dark as well, and two of the four bosses are partly
-## overlapped by a dragon, so it returned the middle of a quadrant rather than the
-## middle of a disc, and did so differently in each corner (0.153, 0.180, 0.176, 0.166
-## -- a spread that should have been the tell).
+## FOUR POSITIONS RATHER THAN ONE INSET, AND THAT IS THE WHOLE OF THE SECOND FIX. The
+## project owner reported these off twice. The first version took the centroid of every
+## dark pixel per quadrant, which answers a different question -- the field between the
+## diamond and the outer square is dark too -- and was ~14 px out. The second labelled
+## the connected dark regions, kept the one in each quadrant that is actually ROUND, and
+## then AVERAGED THE FOUR ANSWERS INTO ONE NUMBER (0.109). That last step is what was
+## still wrong, and it threw away the finding: the four discs are not at one inset. The
+## art is cleanly mirrored left-to-right, but its BOTTOM bosses are bigger than its top
+## ones and sit further in -- 87 px against 75 px on a 512 px frame -- so one inset
+## cannot put all four buttons on their recesses, and it put the bottom pair about 3 px
+## low and splayed outwards. That is the tech-tree glyph overhanging its rim in the
+## owner's screenshot.
 ##
-## Labelling the connected dark regions and keeping the one in each quadrant that is
-## actually ROUND gives four boxes of 69, 69, 80 and 80 px at insets of 0.1035, 0.1035,
-## 0.1143 and 0.1143 -- symmetric left-to-right, as hand-drawn art that was mirrored
-## would be, and the top pair genuinely smaller than the bottom pair. 0.109 is the mean
-## of the four and lands every button inside its recess.
+## So each button is placed on its OWN measured disc. The general form is the lesson and
+## it is the same one twice over: four samples that disagree are not one measurement,
+## and averaging them is not how you resolve that -- it is how you hide it.
+const _MINIMAP_BOSS_CENTRES: Array[Vector2] = [
+	Vector2(0.1045, 0.1018), Vector2(0.8955, 0.1018),
+	Vector2(0.1162, 0.8806), Vector2(0.8838, 0.8806),
+]
+
+## Space between CANCEL BUILD's right edge and the minimap area's left edge.
+const _CANCEL_GAP := 24.0
+
+## Room for two lines of placement readout at 16 pt.
+const _READOUT_HEIGHT := 44.0
+
+## CANCEL BUILD's box, as offsets back from the screen's bottom-right corner.
 ##
-## THE GENERAL FORM IS WORTH MORE THAN THE NUMBER: a measurement whose four samples
-## disagree by 18 % is not a measurement of one thing.
-const _MINIMAP_BOSS_CENTRE := 0.109
+## EVERY NUMBER IS DERIVED, because the two that were typed were both wrong (project
+## owner, 2026-08-30). It was 280x80 at a literal -512, which put its right edge at
+## 20 px INSIDE the minimap area -- and a fixed offset could not know that, because the
+## minimap's own left edge is `_MINIMAP_MARGIN + Minimap.AREA_SIZE` and neither of those
+## is written down here.
+##
+## The SIZE is two action tiles by one. The owner asked for it to *"match the size of
+## the unit action icons row so left and right side of screen line up"*, and the tile is
+## the unit that row is built from, so the button is a whole number of them rather than
+## a size that merely looks similar. Its BOTTOM sits on `SelectionPanel.EDGE_PAD`, which
+## is where that row's bottom edge is -- that is the "line up".
+const _CANCEL_RECT := Rect2(
+	-(_MINIMAP_MARGIN + Minimap.AREA_SIZE + _CANCEL_GAP + ActionSlot.SIZE * 2.0),
+	-(SelectionPanel.EDGE_PAD + ActionSlot.SIZE),
+	ActionSlot.SIZE * 2.0, ActionSlot.SIZE)
+
+
+## Put `control` in `rect`, where `rect` is measured back from the screen's bottom-right
+## corner (so its position is negative).
+##
+## OFFSETS, NOT `position`, and this file's own HUD comment says why: `position` on an
+## anchored Control writes offset_left/offset_top and leaves the other two wherever they
+## were, so what you get is a rect whose size is whatever the layout pass decides. Both
+## controls placed through here want a size that is pinned, not inferred.
+static func _place_bottom_right(control: Control, rect: Rect2) -> void:
+	control.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	control.offset_left = rect.position.x
+	control.offset_top = rect.position.y
+	control.offset_right = rect.position.x + rect.size.x
+	control.offset_bottom = rect.position.y + rect.size.y
 
 
 ## One corner button (chat/trade/tech-tree/settings); shared by the two rows
@@ -611,10 +646,10 @@ const _MINIMAP_BOSS_CENTRE := 0.109
 ##
 ## THESE WERE DISABLED PLACEHOLDERS UNTIL 2026-08-21, dimmed and set to
 ## MOUSE_FILTER_IGNORE so they could not block the minimap taps that pass over the
-## rotated diamond's tips. All four have somewhere to go now, so they are STOP --
-## individually, which is the arrangement that keeps the four corners live without
-## the grid between them swallowing the map.
-func _corner_button(spec: Array, to_top: bool, to_left: bool) -> TextureButton:
+## rotated diamond's tips. All four have somewhere to go now, so they are STOP -- and
+## since they are no longer in a container spanning the whole area, STOP now covers
+## 32x32 of boss and nothing else. The caller positions each one on its own recess.
+func _corner_button(spec: Array) -> TextureButton:
 	var corner_btn := TextureButton.new()
 	var icon_path := "res://assets/ui/icons/%s" % String(spec[1])
 	if ResourceLoader.exists(icon_path):
@@ -623,18 +658,11 @@ func _corner_button(spec: Array, to_top: bool, to_left: bool) -> TextureButton:
 	corner_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	# LINEAR: 100 px of painted glyph drawn at CORNER_BUTTON_SIZE, which is 32.
 	corner_btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	# SIZE, not just a minimum. Outside a container nothing else is going to decide it,
+	# and the position the caller sets assumes exactly this box: it centres the button
+	# on a measured disc by subtracting half of this.
 	corner_btn.custom_minimum_size = Vector2(CORNER_BUTTON_SIZE, CORNER_BUTTON_SIZE)
-	# SHRUNK INTO ITS CORNER, not left to fill its grid cell. A container child
-	# defaults to filling, and the grid covers the whole 200x200 minimap area -- so
-	# each of these came out 32 wide and 98 TALL, a full-height strip down the side of
-	# the diamond. That did not matter while they were MOUSE_FILTER_IGNORE
-	# placeholders; the moment they became real buttons it meant a tap on the
-	# diamond's upper-left edge opened the chat page instead of moving the camera,
-	# which is the same class of bug as the grid itself eating every minimap tap.
-	corner_btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if to_top \
-			else Control.SIZE_SHRINK_END
-	corner_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if to_left \
-			else Control.SIZE_SHRINK_END
+	corner_btn.size = Vector2(CORNER_BUTTON_SIZE, CORNER_BUTTON_SIZE)
 	corner_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	# Half-lit until the first snapshot says otherwise. Only TRADE ever comes back
 	# lit-or-not (`_feed_pages`); the other three have no precondition, so they are

@@ -62,25 +62,58 @@ const DISPLAY_ORDER: Array[StringName] = [&"stone", &"gold", &"wood", &"food"]
 ## every size, there is no crop and no aspect to preserve, and the panel could be
 ## resized freely without the frame moving. Kept as a note because the same class of
 ## bug will come back the day anything here goes back to a scaled bitmap.
-const PANEL_SIZE := Vector2(152.0, 196.0)
+##
+## NARROWED FROM 152 TO 118 ALONGSIDE THE PADDING, and the two had to move together.
+## The project owner asked to *"half the padding inside resource panel"* (2026-08-30);
+## halving it ALONE makes the panel look worse, not better, and that is worth writing
+## down. The rows are left-aligned in a fixed-width box, so the empty space is all on
+## the right: at 152 wide with a 34 px inset it was 50 px, and dropping the inset to 17
+## would have grown it to 67. Taking the same 34 px off the panel puts it back at 33 --
+## less padding AND less slack, which is what the request was actually about.
+##
+## THE HEIGHT IS NO LONGER HERE AT ALL, and it is the same story a second time. It was
+## `Vector2(152, 196)`, and 196 looked deliberate but was only ever *below* the five
+## rows' natural height of 204 -- a floor that never bound, so the plate hugged its
+## content by accident. Halving the padding took the content to 167 and the 196 floor
+## started binding, which put a 29 px empty band under the population row: padding the
+## owner had just asked to remove, reappearing at the bottom because a number that had
+## never mattered suddenly did. So the panel now sizes to its rows and there is no
+## figure to drift.
+const PANEL_WIDTH := 118.0
+
+## The inset from the plate's edge to the counters, on all four sides.
+##
+## HALF OF WHAT IT WAS, per the request above, and it still clears the art. This was
+## `PANEL_ORNATE_MARGIN + 4` = 34, derived on the assumption that the nine-patch margin
+## and the painted moulding are the same thing. THEY ARE NOT, and that is the fact this
+## constant exists to record: the margin is 30 because that is what clears the DRAGON in
+## the corner, while the bead moulding along the edges is only 9 px of the 102 px plate.
+## So 34 was clearing a dragon that is not there along the middle of a side, and the
+## other 25 px was a gutter nobody chose.
+##
+## 17 clears the 9 px moulding by 8. The dragons are still 30 px into each corner, and
+## the top and bottom rows pass under them -- which is fine and was checked in a render,
+## not reasoned about: the corner ornaments occupy the corners, and the counters are a
+## column down the middle.
+const CONTENT_PAD := 17
 
 
 func _init() -> void:
-	custom_minimum_size = PANEL_SIZE
+	# WIDTH ONLY. Height comes from the rows -- see `PANEL_WIDTH`.
+	custom_minimum_size = Vector2(PANEL_WIDTH, 0.0)
 	# THE ORNATE PLATE, on the project owner's call (2026-08-30: *"swap the resources
 	# frame to panel_ornate type"*). It is the one HUD panel that is always on screen
 	# and never scrolls, so it can carry the dragon corners the plain plate does not.
 	HudStyle.add_panel_background(self, true)
 
-	# INSIDE THE PLATE'S OWN BORDER, and derived from it rather than tuned. These were
-	# 22/10/35/8 against the Kibyra art, asymmetric because its gold edge was thicker
-	# along the top and left and the numbers were eyed against it in a mockup. The
-	# ornate nine-patch has a 30 px border on all four sides (`PANEL_ORNATE_MARGIN`),
-	# so the margins are even, and 34 clears the moulding by 4.
+	# INSIDE THE PLATE'S MOULDING -- see `CONTENT_PAD` for why that is not the same as
+	# inside its nine-patch margin. These were 22/10/35/8 against the Kibyra art,
+	# asymmetric because its gold edge was thicker along the top and left and the
+	# numbers were eyed against it in a mockup; the ornate plate's edge is even, so
+	# these are too.
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side,
-				HudStyle.PANEL_ORNATE_MARGIN + 4)
+		margin.add_theme_constant_override("margin_%s" % side, CONTENT_PAD)
 	add_child(margin)
 
 	var column := VBoxContainer.new()

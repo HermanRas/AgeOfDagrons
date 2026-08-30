@@ -69,8 +69,21 @@ signal clear_requested
 
 const _ACTION_COLUMNS := 4
 const _DETAIL_COLUMNS := 4
-const _SLOT_SIZE := 72.0
 const _HEALTH_BAR_SIZE := Vector2(176.0, 30.0)
+
+## This panel's inset from the screen edges, and therefore where its bottom row of
+## action tiles stops.
+##
+## PUBLIC since 2026-08-30, when the project owner asked for CANCEL BUILD to *"match
+## the size of the unit action icons row so left and right side of screen line up"*.
+## That button lives on the far side of the screen and is now sized from
+## `ActionSlot.SIZE` and bottom-aligned to this -- a literal 10 over there would line
+## the two sides up today and silently stop the day this changes.
+##
+## `_SLOT_SIZE := 72.0` used to sit beside this and has been deleted: it was a second
+## copy of `ActionSlot.SIZE`, referenced by nothing, and the tile has always taken its
+## size from the slot itself.
+const EDGE_PAD := 10
 const _DIVIDER_COLOR := Color(0.937, 0.769, 0.290)
 
 var _clear_button: ClearSelectionButton
@@ -143,7 +156,7 @@ func _init() -> void:
 
 	var margin := MarginContainer.new()
 	for side in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 10)
+		margin.add_theme_constant_override("margin_%s" % side, EDGE_PAD)
 	add_child(margin)
 
 	# A VBox above the two columns, holding one thing: the [X] (8.8). SEPARATION 0
