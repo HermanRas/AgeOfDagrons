@@ -67,7 +67,15 @@ func _row(text: String, bus: StringName, width: float) -> Control:
 	label.add_theme_font_size_override("font_size", 15)
 	box.add_child(label)
 
-	var slider := HSlider.new()
+	# ⚠️ **A `TouchSlider`, NOT AN `HSlider`** (project owner, 2026-08-30: *"on android
+	# while in game opening settings does not allow me to interact with volume sliders"*).
+	# Godot's `Slider` reads mouse events and nothing else, and `GameScene` turns mouse
+	# emulation OFF for the length of a match so the camera does not pan twice per thumb --
+	# so these three were **completely inert** on the phone from the moment they landed,
+	# and worked perfectly on the front door's copy of this same panel. Measured; see
+	# `TouchSlider`'s header for the table and for why the fix is the control rather than
+	# the project setting.
+	var slider := TouchSlider.new()
 	slider.min_value = 0.0
 	slider.max_value = 1.0
 	slider.step = 0.05
@@ -93,4 +101,4 @@ func _row(text: String, bus: StringName, width: float) -> Control:
 ## rounds or clamps.
 func refresh() -> void:
 	for bus in _sliders:
-		(_sliders[bus] as HSlider).set_value_no_signal(AudioManager.bus_volume(bus))
+		(_sliders[bus] as TouchSlider).set_value_no_signal(AudioManager.bus_volume(bus))
