@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Splash_h.jpg" alt="Age of Dragon — A Renaissance of Fire" width="820">
+  <img src="Splash.jpg" alt="Age of Dragon — A Renaissance of Fire" width="820">
 </p>
 
 <h1 align="center">Age of Dragon</h1>
