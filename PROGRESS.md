@@ -154,8 +154,9 @@ joined client, one only to a finger — and all three had been in the code since
 was written. Solo, on a desktop, with a mouse: `Net.host()` is never null and mouse
 emulation is never off. 1,779 green tests ran past every one of them.
 
-**One thing it left for the owner rather than guessing:** `unit.galleon` still fires one
-arrow where the galley now fires ten, and it is the bigger warship.
+**The one thing it left for the owner rather than guessing came back the same day:**
+`unit.galleon` was at 1 where the galley had gone to 10, and it is the bigger warship —
+*"agreed, lets set it to 15 arrows"*. Both warships volley; nothing else does.
 
 **1. Phase 5, buildings** — the owner's call, and two very different jobs. **5.7, the full
 roster**, is 23 buildings and ~70 bakes: art-paced, waiting on A.10. **5.3, upgrades**, is

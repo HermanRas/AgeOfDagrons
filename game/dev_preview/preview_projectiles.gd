@@ -81,6 +81,13 @@ const SHOOTERS := [
 			"building": true, "garrison": 3},
 	{"unit": &"unit.galley", "visual": &"vis.projectile_arrow", "gap": 3,
 			"afloat": true, "victim": &"unit.galley"},
+	# BOTH WARSHIPS, because the claim being made is a COMPARISON: the galleon throws 15
+	# where the galley throws 10, on the argument that the volley is the only number in
+	# either ship's row a player reads at a glance. Two pictures is the only way to find
+	# out whether five more arrows actually read as a bigger ship, and a test asserting
+	# 15 > 10 cannot answer it.
+	{"unit": &"unit.galleon", "visual": &"vis.projectile_arrow", "gap": 4,
+			"afloat": true, "victim": &"unit.galley"},
 ]
 
 ## How wide a channel `afloat` floods, either side of the line the two ships sit on.

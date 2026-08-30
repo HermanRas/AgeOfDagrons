@@ -58,10 +58,17 @@ var attack_projectile: StringName = &""
 ## ⚠️ **IT IS FREE ON SCREEN AND NOT FREE ON THE WIRE, and buildings.json's note said to
 ## price this against 12.1f before any unit took one.** Priced: a projectile is a real
 ## entity riding every snapshot for the 2-8 ticks it is airborne, so a galley firing 10
-## every 30 ticks holds ~1.3 in the air on average against the 1 arrow every 10 ticks a
-## land archer already costs. A fleet is what makes it add up -- twenty galleys loosing
-## together are 200 entities for four ticks -- which is why this is on the ONE unit that
-## asked for it rather than a number every ranged unit gets. Defaults to 1.
+## every 30 ticks holds ~1.3 in the air on average and a galleon firing 15 holds ~2 --
+## both under the 1 arrow every 10 ticks a land archer already costs. **A FLEET is what
+## makes it add up**, twenty galleons together being ~300 entities for a few ticks, which
+## is why this is on the two WARSHIPS rather than a number every ranged unit gets. The
+## question to ask of the third unit that wants one is how many of them a player can have
+## at once, not what one costs. Defaults to 1.
+##
+## The two are 10 and 15 rather than one figure, because the galleon is the bigger ship at
+## every number that matters -- 220 hp, range 7, 12 damage, 200 wood, against 130 / 5 / 6 /
+## 90 -- and the volley is the only one of those a player reads at a glance. Two ships
+## throwing the same broadside would look like the same ship.
 var attack_volley: int = 1
 
 var armor_melee: int = 0

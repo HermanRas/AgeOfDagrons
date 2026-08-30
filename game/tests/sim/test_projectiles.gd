@@ -459,18 +459,58 @@ func test_the_galleys_volley_is_cosmetic_and_its_damage_is_unchanged() -> void:
 					% [hp - quarry.hp, declared])
 
 
-func test_every_other_ranged_unit_still_looses_exactly_one() -> void:
+func test_only_the_two_warships_volley_and_the_bigger_one_throws_more() -> void:
 	# The default is what keeps a wire cost off the whole roster. `UnitDef.attack_volley`'s
 	# header prices it: a projectile is a real entity on every snapshot while it flies, so
-	# this is the one unit that asked for it and not a number every archer gets.
+	# this is the two ships that asked for it and not a number every archer gets.
 	assert_eq(GameDataRegistry.unit(&"unit.galley").attack_volley, 10)
+	assert_eq(GameDataRegistry.unit(&"unit.galleon").attack_volley, 15)
 	for id in [&"unit.archer", &"unit.crossbowman", &"unit.cavalry_archer",
-			&"unit.ballista", &"unit.onager", &"unit.trebuchet", &"unit.galleon"]:
+			&"unit.ballista", &"unit.onager", &"unit.trebuchet"]:
 		assert_eq(GameDataRegistry.unit(id).attack_volley, 1,
 				"%s declares no volley" % id)
 	var arrow := _loose()
 	assert_not_null(arrow)
 	assert_eq(_projectiles().size(), 1, "and an archer still shoots one arrow")
+
+
+func test_the_bigger_warship_throws_the_bigger_broadside() -> void:
+	# ⚠️ **THE ORDERING IS THE RULE AND THE NUMBERS ARE INPUTS**, which is `_sight_of`'s
+	# lesson from 4.12 applied to a cosmetic knob. The galleon out-ranges, out-hits,
+	# out-lives and out-costs the galley at every number in its row, and the volley is the
+	# only one of those a player reads at a glance -- so two ships throwing the same
+	# broadside would look like the same ship. Asserted as a COMPARISON rather than as 15
+	# against 10, so retuning either one cannot silently invert the ladder.
+	var galley: UnitDef = GameDataRegistry.unit(&"unit.galley")
+	var galleon: UnitDef = GameDataRegistry.unit(&"unit.galleon")
+	assert_true(galleon.attack_volley > galley.attack_volley,
+			"galleon %d against galley %d" % [galleon.attack_volley, galley.attack_volley])
+	assert_true(galleon.attack_damage > galley.attack_damage, "and it hits harder")
+	assert_true(galleon.attack_range > galley.attack_range, "from further away")
+
+
+func test_a_galleon_looses_fifteen_arrows() -> void:
+	# Through the same painted channel, for the same reason -- see `_make_a_channel`.
+	_make_a_channel()
+	var boat := w.spawn_unit(&"unit.galleon", 1, _channel)
+	boat.stance = SimUnit.Stance.PASSIVE
+	var quarry := w.spawn_unit(&"unit.galley", 2, _channel + Vector2i(4, 0))
+	quarry.stance = SimUnit.Stance.PASSIVE
+	quarry.max_hp = 4000
+	quarry.hp = 4000
+	w.queue_command(AttackCommand.new(1, [boat.id], quarry.id))
+	var volley: Array[SimProjectile] = []
+	for i in range(200):
+		w.step()
+		volley = _projectiles()
+		if not volley.is_empty():
+			break
+	assert_eq(volley.size(), 15, "a broadside, as asked")
+	for i in range(30):
+		w.step()
+	assert_true(4000 - quarry.hp <= GameDataRegistry.unit(&"unit.galleon").attack_damage * 2,
+			"and fifteen arrows are still one shot's worth of damage, twice at most: lost %d"
+					% (4000 - quarry.hp))
 
 
 # ── it stays out of everything else's way ───────────────────────────────────

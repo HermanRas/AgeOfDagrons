@@ -140,9 +140,15 @@ mouse — so the branch that is wrong is the branch nobody takes.*
       land archer's one every 10 ticks, and a FLEET is what makes it add up — so it is on
       the one unit that asked and not on every ranged unit.
 
-      **`unit.galleon` is deliberately left at 1** and needs the owner's word: it is the
-      bigger warship at range 7 and 12 damage, so a galley out-drawing it will look wrong
-      the first time the two are side by side.
+      **`unit.galleon` followed the same day at 15** — it was left at 1 pending the owner's
+      word, on the grounds that a galley out-drawing the bigger warship would look wrong
+      the first time the two were side by side, and the answer came back *"agreed, lets set
+      it to 15 arrows"*. The galleon leads at every number in its row (220 hp, range 7, 12
+      damage, 200 wood, against 130 / 5 / 6 / 90) and **the volley is the only one of them a
+      player reads at a glance**, so two ships throwing the same broadside would look like
+      the same ship. The test asserts the ORDERING rather than 15 against 10, so retuning
+      either cannot silently invert it — `_sight_of`'s lesson from 4.12 applied to a
+      cosmetic knob.
 
 - [x] **"On android while in game opening settings does not allow me to interact with
       volume sliders."** ✅ `TouchSlider`, and **"in game" is the whole report** — the front

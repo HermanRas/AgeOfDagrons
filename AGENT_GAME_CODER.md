@@ -378,10 +378,13 @@ two separate reports into one underlying problem. **Count the thing you just cha
   240. **Raising the radius alone makes the islands SMALLER** and that is written down in
   its note: the ring radius subtracts the island from the half-side, so at 26 on the old
   96-tile board the cap lands at 12. The dependency had to be inverted, not re-tuned.
-- **`UnitDef.attack_volley`** — `unit.galley` at 10, and nothing else. The arrow was never
-  missing: one every 30 ticks, airborne for 2–8 of them. `CombatSystem._fan` is shared with
-  the tower's volley so the two cannot fan differently. **`unit.galleon` is deliberately
-  still 1 and wants the owner's word.**
+- **`UnitDef.attack_volley`** — the two WARSHIPS and nothing else: `unit.galley` at 10 and
+  `unit.galleon` at 15 (the second on the owner's word the same day, *"agreed, lets set it
+  to 15 arrows"*). The arrow was never missing: one every 30 ticks, airborne for 2–8 of
+  them. `CombatSystem._fan` is shared with the tower's volley so the two cannot fan
+  differently. **The pair is asserted as an ORDERING, not as 15 against 10** — the galleon
+  leads at every number in its row and the volley is the only one a player reads at a
+  glance, so the rule is "the bigger ship throws more" and the figures are inputs.
 - **A WATER UNIT STANDING ON LAND CANNOT BE ORDERED TO DO ANYTHING and says nothing about
   it** — `validate()` passes, `PathService` has no start node for its domain, the task is
   retired on tick 1. **The debug map has ZERO water tiles**, so any ship fixture paints a
