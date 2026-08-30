@@ -204,6 +204,77 @@ func test_reset_forgets_the_match() -> void:
 			"and entity 7 is a stranger again")
 
 
+# ── against a real match, not a hand-built snapshot ─────────────────────────
+#
+# THE ONE FAULT THIS CLASS SHIPPED WAS NOT IN THIS CLASS, and no fixture above could
+# have caught it. Every `_entity()` here is a number this file chose; the horn that
+# went off on the owner's screen came from hp the SIM chose, and `add_build_progress`
+# was taking a house from 55 to 3 on the first tick anybody worked on it. The only
+# assertion that could see that is one driven by a world.
+
+
+## A house foundation with one villager walking over to raise it. The same fixture
+## `test_build.gd` uses, down to the two tiles.
+##
+## ⚠️ **THE VILLAGER'S START TILE IS LOAD BEARING AND WAS WRONG FIRST.** Spawned at
+## (12, 12) -- diagonally touching the 2x2 footprint -- the build order is accepted,
+## `validate` returns true, and the unit is IDLE again by the end of the first tick with
+## `build_progress` still 0 forty ticks later. Both tests below then passed while
+## exercising nothing, which is the exact failure mode this file's own header warns
+## about elsewhere. From (20, 20) it walks over and starts work on tick 27. **If these
+## ever go quiet, check that the build actually happened before believing them.**
+func _world_with_a_foundation() -> SimWorld:
+	var w := SimWorld.new()
+	w.setup(MatchConfig.debug_single_player())
+	var house := w.spawn_building(&"building.house", ME, Vector2i(10, 10),
+			SimBuilding.Phase.FOUNDATION, true)
+	var villager := w.spawn_unit(&"unit.villager", ME, Vector2i(20, 20))
+	w.queue_command(BuildCommand.new(ME, [villager.id], house.id))
+	return w
+
+
+func test_putting_up_a_building_never_raises_the_alarm() -> void:
+	# "constructing a new building trigger attack sound" (project owner, 2026-08-30).
+	# Driven through real snapshots of a real build, because the fault was hp the sim
+	# reported and not hp this file invented.
+	var w := _world_with_a_foundation()
+	var built := 0
+	for i in range(400):
+		w.step()
+		alert.observe(SnapshotSystem.build(w, ME), ME, i * 100)
+		built = maxi(built, _house_progress(w))
+	assert_true(built > 0,
+			"the villager actually raised it -- see _world_with_a_foundation")
+	assert_eq(_spy.calls, [],
+			"a building going up is not a building being hit")
+
+
+## How far the foundation has got. Asserted on rather than assumed, because a fixture
+## whose villager never starts work makes both of these tests vacuous.
+func _house_progress(w: SimWorld) -> int:
+	for e in w.entities.values():
+		if e is SimBuilding and StringName(e.def_id) == &"building.house":
+			return (e as SimBuilding).build_progress
+	return 0
+
+
+func test_the_foundation_never_flashes_while_it_goes_up() -> void:
+	# The other output, and it is the one a player would actually have seen: a white
+	# blip on the minimap every time they laid a house down.
+	var w := _world_with_a_foundation()
+	var flashed: Array[int] = []
+	var built := 0
+	for i in range(400):
+		w.step()
+		alert.observe(SnapshotSystem.build(w, ME), ME, i * 100)
+		built = maxi(built, _house_progress(w))
+		for id in alert.flashing(i * 100):
+			if not flashed.has(id):
+				flashed.append(id)
+	assert_true(built > 0, "the villager actually raised it")
+	assert_eq(flashed, [] as Array[int], "nothing on the map was reported as hit")
+
+
 class _AlarmSpy:
 	var calls: Array = []
 

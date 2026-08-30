@@ -55,6 +55,37 @@ func test_hp_rises_with_build_progress_instead_of_sitting_at_the_starting_sliver
 			"the health bar and the build bar agree")
 
 
+func test_hp_never_falls_while_a_building_is_going_up() -> void:
+	# THE OTHER HALF OF THE TEST ABOVE, and the half that was missing: making the bar
+	# move made it move DOWN first. A foundation spawns at max_hp/10 and the fraction on
+	# the first build tick is a few thousandths, so a house went 55 -> 3 the moment
+	# somebody started work on it. Invisible until `DamageAlert` began diffing hp, at
+	# which point every building placed blew the under-attack horn (owner, 2026-08-30).
+	_order_build()
+	var lowest := house.hp
+	var fell_from := 0
+	for i in range(500):
+		w.step()
+		if house.hp < lowest:
+			fell_from = lowest
+		lowest = mini(lowest, house.hp)
+		if house.is_complete():
+			break
+	assert_eq(fell_from, 0,
+			"construction took it from %d down to %d -- building is not damage"
+			% [fell_from, lowest])
+	assert_true(house.is_complete(), "and it still finished")
+
+
+func test_a_foundation_keeps_the_sliver_it_was_placed_with() -> void:
+	# The floor is the spawn sliver, not 1: the first few build ticks raise nothing,
+	# because the fraction has not caught up with what the foundation already had.
+	var placed := house.hp
+	assert_true(placed > 1, "a house spawns at a tenth of 550, not at 1")
+	house.add_build_progress(1)
+	assert_eq(house.hp, placed, "one tick's progress is worth less than the sliver")
+
+
 # ── rejection ───────────────────────────────────────────────────────────────
 
 func test_build_command_rejects_an_already_complete_building() -> void:

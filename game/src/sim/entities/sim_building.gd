@@ -363,6 +363,24 @@ static func centre_of(origin: Vector2i, p_footprint: Vector2i) -> Vector2i:
 ## "damaged and static". Forced to exactly max_hp on completion rather than
 ## trusting the fraction's rounding, so a finished building is never left one
 ## hp short of full by an integer-division remainder.
+##
+## ⚠️ **IT MAY ONLY EVER RAISE `hp`, and not doing so cost the game a false "under
+## attack" horn on every building placed** (project owner, 2026-08-30: *"constructing a
+## new building trigger attack sound"*). `spawn_building` starts a foundation at a TENTH
+## of max_hp so its health dot reads as damaged; `build_fraction()` on the first build
+## tick is a few thousandths, so the line below -- written to make the bar MOVE -- took a
+## house from 55/550 down to 3/550. A fall of 52 is exactly what `DamageAlert` exists to
+## notice, and it noticed.
+##
+## The bug was here rather than in the alarm: **construction is not something that can
+## hurt a building**, and this had been quietly taking nine tenths of every new
+## foundation's health for as long as the line has existed. Nothing could see it until
+## something started diffing hp between snapshots.
+##
+## `maxi(hp, ...)` rather than a floor at the spawn sliver, and the two differ for a
+## foundation somebody is SHOOTING: a floor would undo that damage on the next build
+## tick, whereas this lets the builders raise it back only once the fraction climbs past
+## what was lost.
 func add_build_progress(amount: int) -> bool:
 	if phase == Phase.COMPLETE or phase == Phase.DESTROYED:
 		return false
@@ -373,7 +391,7 @@ func add_build_progress(amount: int) -> bool:
 		phase = Phase.COMPLETE
 		hp = max_hp
 		return true
-	hp = maxi(1, int(float(max_hp) * build_fraction()))
+	hp = maxi(hp, maxi(1, int(float(max_hp) * build_fraction())))
 	return false
 
 
