@@ -20,10 +20,24 @@ var _slots: Array[ControlGroupSlot] = []
 var _detectors: Array[DoubleTapDetector] = []
 
 
+## The gap between two slots, which is SMALLER THAN IT LOOKS and that is why it is
+## named here (project owner, 2026-08-30: *"the 5 groups need to be closer together"*).
+##
+## It was 8. The ring art is a circle that fills 240 of its 252 px canvas, so a slot
+## drawn at 64 already carries about 1.5 px of transparent margin on each side -- the
+## gap a player sees is this number PLUS 3, not this number. 2 puts the circles about
+## 5 px apart where they were 11.
+##
+## NOT 0. `ControlGroupSlot._draw` puts the count badge at `SIZE - 8` with a radius of
+## 9, so a stack with counts in it overflows its own box by a pixel at the bottom
+## right; closing the gap entirely would tuck that badge under the next ring.
+const SLOT_SEPARATION := 2
+
+
 ## Built in `_init()`, not `_ready()` -- same reasoning as `ResourceHUD`: a
 ## bare `.new()` should be fully wired for a headless test.
 func _init() -> void:
-	add_theme_constant_override("separation", 8)
+	add_theme_constant_override("separation", SLOT_SEPARATION)
 	for i in range(SimPlayer.CONTROL_GROUP_COUNT):
 		var slot_widget := ControlGroupSlot.new(i)
 		slot_widget.pressed.connect(_on_slot_pressed.bind(i))

@@ -13,6 +13,20 @@ func after_each() -> void:
 	hud.free()
 
 
+func test_the_slots_sit_close_together() -> void:
+	# Project owner, 2026-08-30: "the 5 groups need to be closer together". The gap a
+	# player SEES is this plus about 3 px, because the ring art is a circle that fills
+	# 240 of its 252 px canvas -- so the number that matters is small, and a later
+	# tidy-up raising it back to a "normal" 8 would undo the change silently.
+	assert_true(ControlGroupsHud.SLOT_SEPARATION <= 4,
+			"got %d" % ControlGroupsHud.SLOT_SEPARATION)
+	assert_true(ControlGroupsHud.SLOT_SEPARATION > 0,
+			"not zero: the count badge overflows its slot by a pixel at the bottom "
+			+ "right, and closing the gap entirely tucks it under the next ring")
+	assert_eq(hud.get_theme_constant("separation"), ControlGroupsHud.SLOT_SEPARATION,
+			"the constant is what the container actually uses")
+
+
 func test_control_group_changed_updates_only_the_named_slot() -> void:
 	EventBus.control_group_changed.emit(2, &"unit.villager", 5)
 	assert_eq(hud.slot_state(2), {"icon": &"unit.villager", "count": 5})
