@@ -323,10 +323,9 @@ func test_a_peer_arriving_fills_the_slot_and_frees_the_start() -> void:
 	assert_eq(screen.unfilled_slots(), 0)
 	assert_true(screen.can_start(), "the match is now the one that was set up")
 	assert_false(screen._start_button.disabled)
-	# On the ROW for that chair, not in the transport line -- and no longer by peer id,
-	# which was a number no human cares about.
-	assert_eq((screen._slot_rows[1]["status"] as Label).text, "reviewing...",
-			"the chair shows who is in it")
+	# On the ROW for that chair, not in the transport line.
+	assert_eq((screen._slot_rows[1]["status"] as Label).text, "peer 7777 — reviewing...",
+			"the chair shows who is in it and what they have said")
 
 
 func test_a_slot_with_somebody_in_it_cannot_be_taken_away() -> void:
@@ -560,28 +559,173 @@ func test_a_joiner_is_not_told_its_own_seat_is_a_bot() -> void:
 func test_the_rows_say_which_player_you_are() -> void:
 	# Nothing did before: the only mention was in the transport status line, and the host
 	# named the joiner by peer id.
-	assert_true(_row_name(0).contains("(you)"), "got %s" % _row_name(0))
-	assert_false(_row_name(1).contains("(you)"))
+	#
+	# ON THE LINE UNDER THE NAME since 2026-08-30 (project owner: *"lets move the You &
+	# bot / joined player name text below the player1,player2,player3"*). The name is now
+	# only ever "Player N" -- who you are, whether it is a bot and which peer is sitting
+	# there are three answers to one question and they share one line.
+	assert_eq(_row_name(0), "Player 1", "the name is the name and nothing else")
+	assert_eq(_row_status(0), "you", "got %s" % _row_status(0))
+	assert_false(_row_status(1).contains("you"))
+
+
+# ── the reworked lobby, 2026-08-30 ──────────────────────────────────────────
+#
+# Two columns with chat on the left, the two framed setup panels on the right, and a
+# three-column nav strip along the bottom. What is asserted here is the WIRING and the
+# identity of the parts -- that the chat is the same widget the minimap opens rather
+# than a copy of it, that the tech tree button reaches the real panel, and that the
+# placeholder is visibly a placeholder. The proportions are a render's business.
+
+
+func test_the_lobby_chat_is_the_same_widget_the_minimap_opens() -> void:
+	# "duplicate chat panel from mini map button" -- and duplicate is the one thing not
+	# done. `ChatPanel` is chrome around a `ChatBoard`; this screen holds another. A
+	# second layout would be two things to keep in step and, on the day chat gets a
+	# transport, two places to wire it into.
+	assert_true(screen._chat is ChatBoard)
+	var page := ChatPanel.new()
+	assert_eq(screen._chat.get_script(), page.board.get_script(),
+			"the same class, not a copy of its layout")
+	page.free()
+
+
+func test_the_lobby_chat_tabs_are_the_lobby_roster() -> void:
+	# Built from the SLOT ROWS, because before a match there is no snapshot to build
+	# them from -- and compacted 1..N over the ACTIVE slots exactly as `build_config`
+	# numbers players, or a tab would name somebody who will not be in the match.
+	assert_eq(screen._chat._tabs.get_child_count(), 2, "one human, one bot")
+
+	_pick_count(4)
+	assert_eq(screen._chat._tabs.get_child_count(), 2,
+			"raising the slot count opens no chairs -- the extra two are CLOSED")
+
+	_pick_role(2, SkirmishScreen.Role.HUMAN)
+	assert_eq(screen._chat._tabs.get_child_count(), 3, "and filling one adds a tab")
+
+
+func test_the_lobby_chat_is_still_visibly_a_wireframe() -> void:
+	# The rule travels with the widget: a chat that looked live in the lobby would be
+	# exactly the bug report the disabled SEND button exists to prevent.
+	assert_true(screen._chat._send_button.disabled)
+	assert_false(screen._chat._message_field.editable)
+
+
+func test_the_tech_tree_button_opens_the_real_panel_at_the_starting_age() -> void:
+	# "TechTree (same panel from minimap buttin ingame)". Set to the age the match would
+	# OPEN in, which is the only question this screen can usefully ask of it -- the
+	# starting-age picker is one panel away and this is what it buys you.
+	assert_false(screen._tech_tree.is_open())
+	_pick_age(3)
+	screen._tech_button.pressed.emit()
+	assert_true(screen._tech_tree.is_open())
+	assert_eq(screen._tech_tree._age, 3)
+	assert_true(screen._tech_tree._researched.is_empty(),
+			"nothing is researched in a match that has not started")
+
+
+func test_the_invitation_terms_are_beside_the_ready_button_not_only_beside_the_map() -> void:
+	# They live in MAP SETUP too, next to the map they describe -- and that panel is in a
+	# scrolling column, so on a 648 px screen it is below the fold. A joining player
+	# being asked to agree to terms that are off the bottom of the screen is the one
+	# failure a consent screen may not have, so they are also on the nav line two inches
+	# from READY.
+	Net._lobby_config = _proposal_with_an_open_seat()
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+
+	var terms := screen.lobby_text()
+	assert_true(terms.contains("seed"), "got %s" % terms)
+	assert_true(terms.contains(MatchConfig.mode_name(MatchConfig.Mode.LAST_MAN_STANDING)),
+			"the victory condition is a term of the invitation: %s" % terms)
+	assert_true(terms.contains("READY"), "and it says what to do about them: %s" % terms)
+	assert_eq(screen.status_text().contains("seed"), true,
+			"still beside the map as well")
+
+
+func test_a_joiner_with_no_proposal_is_told_so_on_the_nav_line_too() -> void:
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._refresh_lobby()
+	assert_true(screen.lobby_text().contains("Waiting"), "got %s" % screen.lobby_text())
+
+
+func test_the_server_browser_is_visibly_a_placeholder() -> void:
+	# "server browser (place holder) ... comming up next". A control wired to nothing
+	# must not look like one that works -- the selection panel's roster grid drew, took
+	# taps and played a click sound for the life of the project while doing nothing.
+	assert_true(screen._browser_button.disabled)
+	assert_false(screen._browser_button.tooltip_text.is_empty(),
+			"and says why, since a greyed button with no reason reads as broken")
+
+
+func test_both_setup_panels_wear_the_dragon_frame() -> void:
+	# "GAME SETUP Panel with 9 patch border, the dragon one" and the map panel in "the
+	# same 9 patch panel stile from resources panel" -- which is the same plate:
+	# `ResourceHUD` passes `ornate` too.
+	var framed := 0
+	for panel in _panels_in(screen):
+		for child in panel.get_children():
+			if child is NinePatchRect \
+					and (child as NinePatchRect).texture.resource_path \
+					== HudStyle.PANEL_ORNATE_PATH:
+				framed += 1
+	assert_eq(framed, 2, "game setup and map setup, and nothing else on the page")
+
+
+func test_the_map_picture_has_a_plain_border_of_its_own() -> void:
+	# "add a simple panel_hud.jpg border around the map". The PLAIN plate inside the
+	# ornate one: a second set of dragons nested in the first reads as a mistake.
+	var frame := screen._preview.get_parent().get_parent()
+	assert_true(frame is PanelContainer)
+	var plates := 0
+	for child in frame.get_children():
+		if child is NinePatchRect and (child as NinePatchRect).texture.resource_path \
+				== HudStyle.PANEL_BG_PATH:
+			plates += 1
+	assert_eq(plates, 1)
+
+
+## Every PanelContainer under `node`, depth first.
+func _panels_in(node: Node) -> Array[PanelContainer]:
+	var out: Array[PanelContainer] = []
+	for child in node.get_children():
+		if child is PanelContainer:
+			out.append(child)
+		out.append_array(_panels_in(child))
+	return out
+
+
+func _pick_count(n: int) -> void:
+	var item := screen._count_picker.get_item_index(n)
+	screen._count_picker.select(item)
+	screen._count_picker.item_selected.emit(item)
+
+
+func _pick_age(age: int) -> void:
+	var item := screen._age_picker.get_item_index(age)
+	screen._age_picker.select(item)
+	screen._age_picker.item_selected.emit(item)
 
 
 func test_a_bot_is_never_you() -> void:
-	# Slot 2 is the PlayTest AI by default, and "Player 2 (you) — bot" would be nonsense.
+	# Slot 2 is the PlayTest AI by default, and "Player 2 / you / bot" would be nonsense.
 	assert_eq(_row_status(1), "bot")
-	assert_false(_row_name(1).contains("(you)"))
+	assert_eq(_row_name(1), "Player 2")
 
 
 func test_the_rows_are_the_player_list_on_the_hosts_side() -> void:
 	_open_slot_two()
 	assert_eq(_row_status(1), "waiting for a player")
-	assert_eq(_row_status(0), "this device", "the host is IN the list, not implied by it")
+	assert_eq(_row_status(0), "you", "the host is IN the list, not implied by it")
 
 	_register_peer(7777, 2)
 	screen._on_peer_joined(7777)
-	assert_eq(_row_status(1), "reviewing...", "joined is not the same as agreed")
+	assert_eq(_row_status(1), "peer 7777 — reviewing...",
+			"joined is not the same as agreed")
 
 	Net._lobby_ready[7777] = true
 	screen._refresh_lobby()
-	assert_eq(_row_status(1), "READY")
+	assert_eq(_row_status(1), "peer 7777 — READY")
 
 
 func test_a_joined_player_owns_their_own_colour_and_nobody_elses() -> void:

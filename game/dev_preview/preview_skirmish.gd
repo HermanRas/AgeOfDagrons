@@ -57,53 +57,65 @@ func _process(_delta: float) -> void:
 		3:
 			_pick_slots(2)
 		4:
+			# THE TECH TREE OVER THE LOBBY (project owner, 2026-08-30: *"TechTree (same
+			# panel from minimap buttin ingame)"*). Pressed through the real nav button,
+			# because "the panel opens" proves nothing about whether the button reaches it
+			# -- the failure this project keeps meeting is a control wired to nothing that
+			# draws exactly like one that works.
+			_open_the_tech_tree()
+		5:
+			_report_tech_tree()
+			_shoot("skirmish_tech_tree")
+		6:
+			_screen._tech_tree.close()
+		7:
 			# THE COLOUR PICKER (2026-08-21), which replaced a cycle. Pressed through the
 			# slot row's real Button, because what is in doubt is that a press on that row
 			# opens the grid -- the handler on its own would pass with the button unwired.
 			_open_the_colour_picker()
-		5:
+		8:
 			_report_colour_picker()
 			_shoot("skirmish_colour_picker")
-		6:
+		9:
 			_pick_a_colour()
-		7:
+		10:
 			_report_colours()
 			_shoot("skirmish_colour_picked")
-		8:
+		11:
 			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
 			# is the hosting path and not a simulation of it.
 			_open_a_slot()
-		9:
+		12:
 			_report_lobby()
 			_shoot("skirmish_lobby_waiting")
-		10:
+		13:
 			# A peer arriving. The connection itself is (g)'s ground already proven on two
 			# devices; what is unproven is that this SCREEN shows the chair being taken
 			# and lets START go ahead once it is.
 			_screen._on_peer_joined(7777)
 			_hold(LOBBY_FRAMES)
-		11:
+		14:
 			_report_lobby()
 			_shoot("skirmish_lobby_filled")
-		12:
+		15:
 			# The JOINING device's view of the same screen -- the one state that cannot be
 			# reached from here honestly, since a real one needs a second process dialling
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
 			_join_someone_elses_match()
-		13:
+		16:
 			_shoot("skirmish_lobby_joined")
-		14:
+		17:
 			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
 			# most here is the one where adding multiplayer broke playing alone.
 			_close_the_slot()
-		15:
+		18:
 			_start_the_match()
-		16:
+		19:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -118,6 +130,28 @@ func _process(_delta: float) -> void:
 ## drawn by the time it is photographed.
 func _hold(frames: int) -> void:
 	_resume_at = _frames + frames
+
+
+## Press the nav strip's real TECH TREE button, for `_pick_role`'s reason: calling
+## `_on_tech_tree_pressed` directly would pass just as happily with the button connected
+## to nothing, which is the failure this project keeps finding.
+func _open_the_tech_tree() -> void:
+	_screen._tech_button.pressed.emit()
+
+
+## What the tree came up showing. Printed as well as photographed because the AGE is the
+## whole reason this button is on the lobby and not just a copy of the in-game one: it
+## should be the age the match would OPEN in, so the picker two panels up has somewhere
+## to be checked against.
+func _report_tech_tree() -> void:
+	var tree: TechTreePanel = _screen._tech_tree
+	print("tech tree: open %s, age %d, researched %d"
+			% [tree.is_open(), tree._age, tree._researched.size()])
+	if not tree.is_open():
+		push_warning("preview_skirmish: the TECH TREE button did not open the panel")
+	if tree._age != _screen._starting_age:
+		push_warning("preview_skirmish: tree at age %d, lobby starts at age %d"
+				% [tree._age, _screen._starting_age])
 
 
 func _report_screen() -> void:

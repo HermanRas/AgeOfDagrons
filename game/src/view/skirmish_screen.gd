@@ -87,8 +87,55 @@ signal back_requested()
 
 const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
-const _PREVIEW_SIZE := Vector2(320.0, 320.0)
 const _SEED_MAX := 999999
+
+## THE LOBBY'S PROPORTIONS (project owner, 2026-08-30: *"2 columns, left 2/3rds of the
+## screen CHAT, right 1/3rd of the screen setup's, bottom 20% nav with buttons"*).
+##
+## Stretch ratios rather than pixel sizes or percentages of `size`, so the split holds
+## at every viewport this game is ever laid out at -- `window/stretch/aspect` is
+## `expand`, so the viewport genuinely does change shape between a phone and a desktop
+## window, and a number computed once from `size` would be right on one of them.
+const _CHAT_STRETCH := 2.0
+const _SETUP_STRETCH := 1.0
+const _BODY_STRETCH := 4.0
+const _NAV_STRETCH := 1.0
+
+## Inside a dragon-framed panel, clear of the moulding. Larger than
+## `HudStyle.PANEL_ORNATE_MARGIN` would suggest is needed on the flat edges, and that is
+## the point: the ornament is in the CORNERS, so content set to the edge inset still
+## collides with a dragon at the ends of the first and last rows.
+const _PANEL_INSET := 20
+
+## Inside the plain plate around the map picture. `HudStyle.PANEL_MARGIN` is 12 and this
+## clears it by two, which is all a plain moulding needs.
+const _MAP_FRAME_INSET := 14
+
+## The map picture's height. Width is whatever the setup column gives it: `MapPreview`
+## is a `TextureRect` on `KEEP_ASPECT_CENTERED`, so it fits its box and the diamond
+## stays a diamond. It was a fixed 320x320 square while the map column was half the
+## screen; a third of the screen is narrower than that on a phone.
+##
+## ⚠️ **SHRINKING THIS DOES NOT MOVE THE FOLD**, which is worth knowing before anyone
+## tries it again. The fold is where GAME SETUP ends, and that is fixed by ITS five
+## rows; a smaller picture just leaves more empty panel below the picture. Measured at
+## 1152x648: the two framed panels want about 700 px between them and the setup column
+## is given roughly 435, so the column scrolls (see `_init`) and MAP SETUP is always
+## partly below it. 190 -> 140 -> 112 changed nothing about that, so it is back at a
+## size worth looking at once you have scrolled to it.
+const _PREVIEW_HEIGHT := 150.0
+
+## Both dropdowns on a slot row CLIP rather than sizing to their widest item.
+##
+## `OptionButton` inherits `Button`'s rule that the control is always wide enough for
+## its text, and the widest role here is "AI (Normal) — as Easy" -- which on its own is
+## more than half of what a third of a 1152 px viewport has left after the frame. With
+## `clip_text` the list stays honest about what the placeholders do and the ROW stays
+## inside the panel, which is the trade this screen wants: the list is read when it is
+## open, and it opens at full width.
+const _ROLE_MIN := Vector2(150.0, 0.0)
+const _SWATCH_MIN := Vector2(76.0, 0.0)
+const _PICKER_MIN := Vector2(140.0, 0.0)
 
 ## Slot counts offered, which is the whole 2-8 the generator supports. Was pinned at 2
 ## while nothing else was tested; the generator has validated every type at every count
@@ -165,6 +212,22 @@ var _mode_picker: OptionButton
 var _age_picker: OptionButton
 var _ready_button: Button
 var _slot_box: VBoxContainer
+var _back_button: Button
+
+## THE SAME CHAT WIDGET THE MINIMAP'S CORNER BUTTON OPENS (project owner, 2026-08-30:
+## *"left side of the screen duplicate chat panel from mini map button"*) -- the same
+## `ChatBoard` class, not a second layout that looks like it. Its player tabs are fed
+## from the SLOT ROWS here rather than from a snapshot, because before a match there is
+## no snapshot; `ChatBoard.show_players` takes the shape both callers can produce.
+var _chat: ChatBoard
+
+## The in-game technology tree, opened over the lobby by the nav button (project owner:
+## *"TechTree (same panel from minimap buttin ingame)"*). The same `TechTreePanel`, set
+## to the age the match would OPEN in -- which is the question worth asking here, since
+## the starting-age picker is two panels away and this is what it buys you.
+var _tech_tree: TechTreePanel
+var _tech_button: Button
+var _browser_button: Button
 
 ## The palette grid a colour button opens. ONE instance for the whole screen rather
 ## than one per slot row: the rows are torn down and rebuilt whenever the slot count
@@ -200,15 +263,52 @@ func _init() -> void:
 	# Before any row is built, since a row reads the role and colour it is showing.
 	_seed_slot_defaults()
 
-	page.add_child(_heading("SKIRMISH"))
-	page.add_child(_build_join_row())
+	# WHAT SCREEN THIS IS, said once at the top. Static text: it is the same screen for
+	# a solo skirmish and a hosted match (see the class header), and a title that
+	# changed with the lobby state would be a fourth thing claiming to describe it
+	# alongside the join row, the slot rows and the START button.
+	page.add_child(_heading("MULTIPLAYER — SKIRMISH"))
 
-	var columns := HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 24)
-	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	page.add_child(columns)
-	columns.add_child(_build_map_column())
-	columns.add_child(_build_match_column())
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 16)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.size_flags_stretch_ratio = _BODY_STRETCH
+	page.add_child(body)
+
+	_chat = ChatBoard.new()
+	_chat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat.size_flags_stretch_ratio = _CHAT_STRETCH
+	body.add_child(_chat)
+
+	# ⚠️ THE SETUP COLUMN SCROLLS, AND IT IS NOT OPTIONAL. This screen offers up to eight
+	# slots and each is a two-line block: at eight, the GAME SETUP panel alone is taller
+	# than a 648 px viewport, so MAP SETUP and the whole nav strip were simply off the
+	# bottom of the screen with no indication they existed. A `VBoxContainer` does not
+	# clip or compress past its children's minimum sizes -- it overflows, silently and
+	# off the edge. Found in the render; every structural test passed.
+	var setup_scroll := ScrollContainer.new()
+	setup_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setup_scroll.size_flags_stretch_ratio = _SETUP_STRETCH
+	# Vertical only. Sideways scrolling would let the panels be narrower than the column
+	# and hide a dropdown off to the right, which is the same failure in the other axis.
+	setup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.add_child(setup_scroll)
+
+	var setups := VBoxContainer.new()
+	setups.add_theme_constant_override("separation", 12)
+	setups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setup_scroll.add_child(setups)
+	setups.add_child(_build_game_setup())
+	setups.add_child(_build_map_setup())
+
+	page.add_child(_build_nav())
+
+	# THE TECHNOLOGY TREE, over the whole screen. Added before the colour picker so the
+	# picker still draws on top -- the two are never open together, but "last child
+	# wins" is the only thing keeping either of them visible, and an ordering that is
+	# only correct by accident is one a later insertion breaks silently.
+	_tech_tree = TechTreePanel.new()
+	add_child(_tech_tree)
 
 	# LAST CHILD, so it draws over the page it covers. Added to the screen rather
 	# than to a slot row for the reason `_colour_picker`'s own note gives.
@@ -232,17 +332,39 @@ func _init() -> void:
 
 # ── layout ──────────────────────────────────────────────────────────────────
 
+## THE BOTTOM STRIP, three columns of it (project owner, 2026-08-30). Join on the left,
+## the two side doors in the middle, and the two decisions -- go, or go back -- on the
+## right, which is where a thumb finishes.
+func _build_nav() -> Control:
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation", 16)
+	nav.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	nav.size_flags_stretch_ratio = _NAV_STRETCH
+
+	nav.add_child(_build_join_column())
+	nav.add_child(_build_doors_column())
+	nav.add_child(_build_go_column())
+	return nav
+
+
 ## Joining someone else's match: an address and a button, and nothing more.
 ##
-## AT THE TOP OF THE PAGE ON PURPOSE. A landscape Android keyboard covers roughly the
-## bottom two thirds of the screen, so a field any lower is one you type into blind --
-## measured on the device once there WAS a keyboard to measure (BUGS.md). The top third
-## is the part that stays visible.
+## ⚠️ **IT MOVED TO THE BOTTOM OF THE PAGE AND THAT IS A KNOWN RISK.** It used to be the
+## first row on the screen, for a measured reason: a landscape Android keyboard covers
+## roughly the bottom two thirds, so a field any lower is one you type into blind
+## (BUGS.md). The owner asked for a three-column nav strip along the bottom with join in
+## it, which is a layout decision that overrides a layout constraint -- so this needs
+## RE-CHECKING ON THE DEVICE, and if the keyboard does bury it the fix is to scroll the
+## page or lift the strip while the field has focus, not to move the field back.
 ##
 ## A `TouchLineEdit`, not a `LineEdit`: this project turns off mouse emulation from
 ## touch, so a plain field never takes focus from a finger and never raises a keyboard
 ## at all. That is the bug that blocked this whole screen.
-func _build_join_row() -> Control:
+func _build_join_column() -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.add_child(_label("Join"))
@@ -252,17 +374,75 @@ func _build_join_row() -> Control:
 	_join_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_join_field)
 
-	_join_button = _button("JOIN", _on_join_pressed)
+	_join_button = _nav_button("JOIN", _on_join_pressed)
 	row.add_child(_join_button)
+	column.add_child(row)
 
+	# The transport line -- who is dialling what, and every address this device answers
+	# on. Under the field it belongs to rather than under the whole page, which is where
+	# it used to be and where it read as a caption for the map.
 	_lobby_status = Label.new()
 	_lobby_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 4)
-	column.add_child(row)
+	_lobby_status.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_lobby_status)
 	return column
+
+
+## The two side doors: somewhere to find a host, and something to read while waiting.
+##
+## SERVER BROWSER IS A DISABLED PLACEHOLDER and says so on its face. The owner's note
+## was *"server browser (place holder) ... comming up next"*, and the standing rule on
+## this project is that a control wired to nothing must not look like one that works --
+## the selection panel's roster grid drew, took taps and played a click sound for the
+## whole life of the project while doing nothing at all.
+func _build_doors_column() -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_browser_button = _nav_button("SERVER BROWSER", Callable())
+	_browser_button.disabled = true
+	_browser_button.tooltip_text = "Coming next — nothing behind this yet"
+	column.add_child(_browser_button)
+
+	_tech_button = _nav_button("TECH TREE", _on_tech_tree_pressed)
+	column.add_child(_tech_button)
+	return column
+
+
+## START, READY and Back. The three that leave this screen.
+func _build_go_column() -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_start_button = _nav_button("START", _on_start_pressed)
+	column.add_child(_start_button)
+
+	# The joining player's say. Only visible to them -- a host readies by pressing START,
+	# and two buttons meaning the same thing on one screen would be one too many. It
+	# shares the row rather than taking a fourth column, because exactly one of the two
+	# is ever on screen.
+	_ready_button = _nav_button("READY", _on_ready_pressed)
+	_ready_button.visible = false
+	column.add_child(_ready_button)
+
+	_back_button = _nav_button("BACK", _on_back_pressed)
+	column.add_child(_back_button)
+	return column
+
+
+## Open the tech tree over the lobby, showing what the match's STARTING AGE unlocks.
+##
+## `set_age(_starting_age)` rather than 1: the age picker is in the panel above and this
+## is the only place on the screen that answers "and what does that get me". Nothing is
+## researched yet, which is exactly true of a match that has not begun -- so the tree
+## reads as the whole ladder with the first age lit, which is what it is.
+func _on_tech_tree_pressed() -> void:
+	_tech_tree.set_age(_starting_age)
+	_tech_tree.set_researched({})
+	_tech_tree.open()
+
 
 func _heading(text: String) -> Label:
 	var label := Label.new()
@@ -276,21 +456,93 @@ func _label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_color_override("font_color", HudStyle.GOLD)
-	label.custom_minimum_size = Vector2(110.0, 0.0)
+	# THE FLOOR THE IDENTITY BLOCK WRAPS AGAINST, as well as the width of a setting's
+	# name. `_build_slot_row` stacks a wrapping status label under one of these, and this
+	# minimum is the only thing giving that label a width to wrap into -- see the note
+	# there, and `HudPanel.note_label` for what a wrapping label with no width does.
+	label.custom_minimum_size = Vector2(96.0, 0.0)
 	return label
 
 
-func _build_map_column() -> Control:
+## A heading inside one of the framed panels. Smaller than the page title above it and
+## in the same gold, so the two read as a hierarchy rather than as two titles.
+func _section_heading(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	UiFont.title(label, 20)
+	label.add_theme_color_override("font_color", HudStyle.GOLD)
+	return label
+
+
+## Wrap `content` in the dragon-cornered plate, with `heading` above it (project owner,
+## 2026-08-30: *"GAME SETUP Panel with 9 patch border, the dragon one"*, and the map
+## panel in *"the same 9 patch panel stile from resources panel"* -- which is this one:
+## `ResourceHUD` passes `ornate` too).
+##
+## The content is built first and wrapped after, rather than the frame handing back a
+## box to fill, because the two panels want different vertical behaviour inside the same
+## frame and threading that through a builder is more argument than it is worth.
+func _framed(heading: String, content: Control) -> PanelContainer:
+	var panel := PanelContainer.new()
+	HudStyle.add_panel_background(panel, true)
+
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_%s" % side, _PANEL_INSET)
+	panel.add_child(margin)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	margin.add_child(column)
+	column.add_child(_section_heading(heading))
+	# SHRINK, not expand: these sit in a scrolling column now, so "fill the space" has no
+	# meaning -- there is as much space as the content asks for. Left on EXPAND_FILL the
+	# two panels fight over a height neither of them is being given.
+	content.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	column.add_child(content)
+	return panel
+
+
+## One setting: its name along the left, its control against the right edge (project
+## owner, 2026-08-30: *"text align left - input align right"*).
+##
+## Per ROW rather than a two-column `GridContainer`, and the difference shows on the
+## slot rows: a grid ties every row to one column width, so the widest dropdown in the
+## panel would set the left margin of the "Players" label as well. Shrink-to-end on each
+## control lines the right edges up, which is what was asked for, without coupling the
+## left ones.
+## THE CONTROL TAKES THE SLACK, the label does not. Both give the same right edge, and
+## the first version handed the slack to the LABEL -- which left every dropdown at its
+## bare minimum and clipped "Last Man Standing" to "Last Man Standi" in a panel with
+## ninety spare pixels sitting in the gap beside it. It also lines the controls up on
+## their left edges, which a column of settings wants anyway.
+func _setting_row(text: String, control: Control) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var label := _label(text)
+	label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(label)
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(control)
+	return row
+
+
+func _build_map_setup() -> Control:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
 
 	_preview = MapPreview.new()
-	_preview.custom_minimum_size = _PREVIEW_SIZE
-	column.add_child(_preview)
+	_preview.custom_minimum_size = Vector2(0.0, _PREVIEW_HEIGHT)
+	# A SIMPLE BORDER AROUND THE MAP (project owner: *"add a simple panel_hud.jpg border
+	# around the map"*). The PLAIN plate, deliberately, inside the ornate one: a second
+	# set of dragons nested in the first would read as a mistake, and this frame's job is
+	# only to say where the picture stops.
+	column.add_child(_framed_preview())
 
-	var type_row := HBoxContainer.new()
-	type_row.add_child(_label("Map"))
 	_type_picker = OptionButton.new()
+	_type_picker.custom_minimum_size = _PICKER_MIN
+	_type_picker.clip_text = true
 	# RANDOM first and selected, per 1.6: a random map is the default, and picking a
 	# type is the deliberate act.
 	# FROM `real_types()` rather than written out again. This list used to name the four
@@ -302,38 +554,49 @@ func _build_map_column() -> Control:
 	for type in MapGenerator.real_types():
 		_type_picker.add_item(MapGenerator.type_name(type), int(type))
 	_type_picker.item_selected.connect(_on_type_selected)
-	type_row.add_child(_type_picker)
-	column.add_child(type_row)
+	column.add_child(_setting_row("Map", _type_picker))
 
 	# THE SEED IS VISIBLE AND EDITABLE. Without it "I liked that map" has no answer but
 	# a saved file, and two people cannot compare notes on the same layout.
-	var seed_row := HBoxContainer.new()
-	seed_row.add_child(_label("Seed"))
+	var seed_controls := HBoxContainer.new()
+	seed_controls.add_theme_constant_override("separation", 6)
 	_seed_box = SpinBox.new()
 	_seed_box.min_value = 0
 	_seed_box.max_value = _SEED_MAX
 	_seed_box.value = _seed
 	_seed_box.value_changed.connect(_on_seed_changed)
-	seed_row.add_child(_seed_box)
-	_reroll_button = _button("Re-generate", _on_reroll_pressed)
-	seed_row.add_child(_reroll_button)
-	column.add_child(seed_row)
+	seed_controls.add_child(_seed_box)
+	_reroll_button = _button("Re-roll", _on_reroll_pressed)
+	seed_controls.add_child(_reroll_button)
+	column.add_child(_setting_row("Seed", seed_controls))
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size = Vector2(_PREVIEW_SIZE.x, 40.0)
 	column.add_child(_status)
-	return column
+	return _framed("MAP SETUP", column)
 
 
-func _build_match_column() -> Control:
+## The map picture in the plain plate. A `PanelContainer` rather than a bare
+## `NinePatchRect` so the frame sizes itself to the picture instead of the other way
+## round, which is what `HudStyle.add_panel_background` is built to sit inside.
+func _framed_preview() -> Control:
+	var frame := PanelContainer.new()
+	HudStyle.add_panel_background(frame)
+
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_%s" % side, _MAP_FRAME_INSET)
+	frame.add_child(margin)
+	margin.add_child(_preview)
+	return frame
+
+
+func _build_game_setup() -> Control:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var count_row := HBoxContainer.new()
-	count_row.add_child(_label("Players"))
 	_count_picker = OptionButton.new()
+	_count_picker.custom_minimum_size = _PICKER_MIN
 	for n in range(MapGenerator.MIN_PLAYERS, MapGenerator.MAX_PLAYERS + 1):
 		_count_picker.add_item(str(n), n)
 		if n > _MAX_OFFERED_PLAYERS:
@@ -341,19 +604,18 @@ func _build_match_column() -> Control:
 	_count_picker.select(0)
 	_count_picker.disabled = _MAX_OFFERED_PLAYERS <= MapGenerator.MIN_PLAYERS
 	_count_picker.item_selected.connect(_on_count_selected)
-	count_row.add_child(_count_picker)
-	column.add_child(count_row)
+	column.add_child(_setting_row("Players", _count_picker))
 
 	# The rows live in their own box so changing the slot count can rebuild just them,
 	# without disturbing the count picker above or the victory row below.
 	_slot_box = VBoxContainer.new()
-	_slot_box.add_theme_constant_override("separation", 8)
+	_slot_box.add_theme_constant_override("separation", 10)
 	column.add_child(_slot_box)
 	_rebuild_slot_rows()
 
-	var mode_row := HBoxContainer.new()
-	mode_row.add_child(_label("Victory"))
 	_mode_picker = OptionButton.new()
+	_mode_picker.custom_minimum_size = _PICKER_MIN
+	_mode_picker.clip_text = true
 	# Trophy and King of the Hill are DECLARED and inert (11.2), so they are listed and
 	# disabled -- a mode that silently decided nothing would be worse than one greyed.
 	for mode in [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.TROPHY,
@@ -362,8 +624,7 @@ func _build_match_column() -> Control:
 		if mode != MatchConfig.Mode.LAST_MAN_STANDING:
 			_mode_picker.set_item_disabled(_mode_picker.item_count - 1, true)
 	_mode_picker.select(0)
-	mode_row.add_child(_mode_picker)
-	column.add_child(mode_row)
+	column.add_child(_setting_row("Victory", _mode_picker))
 
 	# WHICH AGE EVERYBODY OPENS IN (project owner, 2026-08-30).
 	#
@@ -378,36 +639,16 @@ func _build_match_column() -> Control:
 	# with room for prose. Every age is selectable -- unlike the victory picker beside
 	# it, there is no half-built one to grey out, because starting in age 3 is the same
 	# machinery as advancing into it.
-	var age_row := HBoxContainer.new()
-	age_row.add_child(_label("Start age"))
 	_age_picker = OptionButton.new()
+	_age_picker.custom_minimum_size = _PICKER_MIN
+	_age_picker.clip_text = true
 	for age in range(1, _age_count() + 1):
 		_age_picker.add_item(_age_label(age), age)
 	_age_picker.select(_age_picker.get_item_index(_starting_age))
 	_age_picker.item_selected.connect(_on_starting_age_selected)
-	age_row.add_child(_age_picker)
-	column.add_child(age_row)
+	column.add_child(_setting_row("Start age", _age_picker))
 
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(spacer)
-
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 12)
-	_start_button = _button("START", _on_start_pressed)
-	_start_button.custom_minimum_size = Vector2(160.0, 48.0)
-	buttons.add_child(_start_button)
-
-	# The joining player's say. Only visible to them -- a host readies by pressing START,
-	# and two buttons meaning the same thing on one screen would be one too many.
-	_ready_button = _button("READY", _on_ready_pressed)
-	_ready_button.custom_minimum_size = Vector2(160.0, 48.0)
-	_ready_button.visible = false
-	buttons.add_child(_ready_button)
-
-	buttons.add_child(_button("Back", _on_back_pressed))
-	column.add_child(buttons)
-	return column
+	return _framed("GAME SETUP", column)
 
 
 ## Default roles and colours for as many slots as could ever be shown.
@@ -451,17 +692,58 @@ func _rebuild_slot_rows() -> void:
 		_slot_box.add_child(_build_slot_row(i))
 
 
+## One chair: who it is on the left, what fills it on the right.
+##
+## THE IDENTITY TEXT SITS UNDER THE NAME (project owner, 2026-08-30: *"lets move the You
+## & bot / joined player name text below the player1,player2,player3"*). It was a 220 px
+## label at the far right of the row, which worked while this panel had half the screen
+## and does not now that it has a third: the name, the swatch, the role dropdown and a
+## sentence do not fit one line at that width. Stacked, the left half is a two-line
+## identity block and the right half is the two controls -- and the sentence gets a whole
+## line to itself, which "waiting for a player" wanted anyway.
 func _build_slot_row(index: int) -> Control:
 	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 0)
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identity.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(identity)
+
 	var name_label := _label("Player %d" % (index + 1))
-	row.add_child(name_label)
+	identity.add_child(name_label)
+
+	# WHO IS ACTUALLY IN THIS CHAIR, on the row for that chair.
+	#
+	# Occupancy used to live in a separate block of text below the whole list, naming
+	# only the Open slots -- so the host had a list of what it was waiting for rather
+	# than a list of players, and the two could disagree with the rows above them. On the
+	# row is the one place it cannot: there is exactly one player list now and both
+	# devices render it from the same fields.
+	# IT WRAPS RATHER THAN CLIPPING, and this is the one place on this screen where that
+	# is safe. `HudPanel.note_label`'s warning is about a wrapping Label in an HBox with
+	# nothing setting its width -- it collapses to one character per line. Here it is in
+	# a VBox whose sibling is `name_label`, which carries an 84 px minimum, so the block
+	# always has a width to wrap into. Clipping was tried first and lost the end of
+	# "empty — room kept on the map" and "peer 7777 — reviewing...", which are the two
+	# statuses that actually say something.
+	var status := HudPanel.note_label("", 13)
+	identity.add_child(status)
 
 	var colour := Button.new()
-	colour.custom_minimum_size = Vector2(96.0, 0.0)
+	colour.custom_minimum_size = _SWATCH_MIN
+	colour.clip_text = true
+	colour.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	colour.pressed.connect(_on_colour_pressed.bind(index))
 	row.add_child(colour)
 
 	var role := OptionButton.new()
+	role.custom_minimum_size = _ROLE_MIN
+	# See `_ROLE_MIN`: the list keeps its honest placeholder labels and the CONTROL
+	# clips, rather than the widest of them setting the width of the panel.
+	role.clip_text = true
+	role.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	role.add_item("Human", int(Role.HUMAN))
 	# THE AI LADDER, easiest first, with the placeholders SAYING SO on screen. Listing
 	# them before they work is deliberate (project owner, 2026-08-22): it shows the
@@ -482,18 +764,6 @@ func _build_slot_row(index: int) -> Control:
 	role.item_selected.connect(_on_role_selected.bind(index))
 	row.add_child(role)
 
-	# WHO IS ACTUALLY IN THIS CHAIR, on the row for that chair.
-	#
-	# Occupancy used to live in a separate block of text below, listing only the Open
-	# slots -- so the host had a list of what it was waiting for rather than a list of
-	# players, and the two could disagree with the rows above them. On the row is the one
-	# place it cannot: there is exactly one player list now and both devices render it
-	# from the same fields.
-	var status := Label.new()
-	status.custom_minimum_size = Vector2(220.0, 0.0)
-	status.add_theme_color_override("font_color", HudStyle.GOLD)
-	row.add_child(status)
-
 	_slot_rows.append({"role": role, "colour": colour, "name": name_label, "status": status})
 	_refresh_colour_button(index)
 	return row
@@ -502,7 +772,17 @@ func _build_slot_row(index: int) -> Control:
 func _button(text: String, on_pressed: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.pressed.connect(on_pressed)
+	if on_pressed.is_valid():
+		b.pressed.connect(on_pressed)
+	return b
+
+
+## A button in the bottom nav strip. Tall enough for a thumb -- 44 px is the floor this
+## project has used since the HUD overhaul, and the nav is the one row on this screen a
+## player presses rather than reads.
+func _nav_button(text: String, on_pressed: Callable) -> Button:
+	var b := _button(text, on_pressed)
+	b.custom_minimum_size = Vector2(0.0, 44.0)
 	return b
 
 
@@ -1094,29 +1374,8 @@ func _refresh_lobby() -> void:
 
 	if joined:
 		var cfg := Net.lobby_config()
-		if cfg == null:
-			_status.text = "Waiting for the host's settings"
-		else:
-			# What the joining player is being asked to agree TO, in words, next to the
-			# map they can now see. The host's screen has these as live controls; here
-			# they are the terms of the invitation.
-			#
-			# The RESOLVED type, not the requested one -- the same thing `regenerate()`
-			# shows the host. `map_type` records what was asked for, so a random pick
-			# reads as "Random" while the map in front of you is plainly a desert; on the
-			# host's own screen that reads as "Desert". Telling the two sides different
-			# things about one map is the last thing a consent screen should do.
-			var resolved := cfg.map_type
-			if cfg.map_data != null:
-				resolved = cfg.map_data.meta.get("type", cfg.map_type) as MapGenerator.Type
-			# The starting age is on this line for the same reason the victory mode is:
-			# it is a term of the invitation, the joining device cannot change it, and
-			# its picker above is greyed out -- so if it is not written here the joiner
-			# is agreeing to a match whose opening age they were never told.
-			_status.text = "%s, %d x %d — seed %d — %s — from %s" % [
-					MapGenerator.type_name(resolved),
-					cfg.map_size.x, cfg.map_size.y, cfg.seed,
-					MatchConfig.mode_name(cfg.mode), _age_label(cfg.starting_age)]
+		_status.text = "Waiting for the host's settings" if cfg == null \
+				else _invitation_terms(cfg)
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 
 	_join_field.editable = _lobby == Lobby.LOCAL
@@ -1124,11 +1383,69 @@ func _refresh_lobby() -> void:
 
 	_refresh_start_button()
 	_refresh_slot_rows()
+	_refresh_chat_players()
 	_refresh_lobby_text()
+
+
+## Put the lobby's roster into the chat board's player tabs.
+##
+## BUILT FROM THE SLOTS, not from a snapshot, because before a match there is no
+## snapshot -- and the shape is the same `player_state` dictionary `SnapshotSystem`
+## sends, so `ChatBoard` needs no second entry point. Only ACTIVE slots and numbered
+## 1..N over them, exactly as `build_config()` compacts them, or a chat tab would name a
+## player who will not be in the match.
+##
+## Called from `_refresh_lobby`, which every path that changes anything ends at, so a
+## colour change or a closed slot moves the tabs with the rows.
+func _refresh_chat_players() -> void:
+	if _chat == null:
+		return
+	var state: Dictionary = {}
+	var local_id := 1
+	var active := _active_slots()
+	for n in range(active.size()):
+		var slot: int = active[n]
+		state[n + 1] = {"colour": _colours[slot], "defeated": false}
+		if slot == _local_slot():
+			local_id = n + 1
+	_chat.show_players(state, local_id)
+
+
+## What the joining player is being asked to agree TO, in one line. The host's screen
+## has these as live controls; here they are the terms of the invitation.
+##
+## The RESOLVED type, not the requested one -- the same thing `regenerate()` shows the
+## host. `map_type` records what was ASKED FOR, so a random pick reads as "Random" while
+## the map in front of you is plainly a desert; on the host's own screen that reads as
+## "Desert". Telling the two sides different things about one map is the last thing a
+## consent screen should do.
+##
+## The starting age is on this line for the same reason the victory mode is: it is a
+## term of the invitation, the joining device cannot change it, and its picker is greyed
+## out -- so if it is not written here the joiner is agreeing to a match whose opening
+## age they were never told.
+func _invitation_terms(cfg: MatchConfig) -> String:
+	var resolved := cfg.map_type
+	if cfg.map_data != null:
+		resolved = cfg.map_data.meta.get("type", cfg.map_type) as MapGenerator.Type
+	return "%s, %d x %d — seed %d — %s — from %s" % [
+			MapGenerator.type_name(resolved), cfg.map_size.x, cfg.map_size.y, cfg.seed,
+			MatchConfig.mode_name(cfg.mode), _age_label(cfg.starting_age)]
 
 
 func _refresh_lobby_text() -> void:
 	match _lobby:
+		Lobby.JOINED:
+			# ⚠️ **THE TERMS HAVE TO BE WHERE THE READY BUTTON IS.** They are also in the
+			# MAP SETUP panel, beside the map they describe -- which was their only home
+			# until 2026-08-30, and the rework put that panel in a scrolling column where
+			# it sits below the fold. A joining player was being asked to agree to a match
+			# whose terms were off the bottom of the screen, which is the one failure a
+			# consent screen may not have. This line is in the nav strip, two inches from
+			# READY, and always visible.
+			var cfg := Net.lobby_config()
+			_lobby_status.text = "Waiting for the host's settings" if cfg == null \
+					else "%s — press READY to agree" % _invitation_terms(cfg)
 		Lobby.HOSTING:
 			# JUST THE TRANSPORT. Who is in which chair is on the chairs now, in
 			# `_refresh_slot_rows` -- this line is only the thing the rows cannot say,
@@ -1162,11 +1479,14 @@ func _refresh_slot_rows() -> void:
 		var name_label: Label = _slot_rows[i]["name"]
 		var status: Label = _slot_rows[i]["status"]
 
-		# "(you)" goes on the NAME, never on the role dropdown. Identity on the identity
-		# label, role in the role picker -- the same separation that got "Open (waiting)"
-		# shortened to "Open". Nothing said which player you were before this.
+		# THE NAME IS JUST THE NAME NOW. "(you)" used to be appended to it; since
+		# 2026-08-30 the identity line under it carries that, along with "bot" and
+		# whichever peer is sitting here -- the owner asked for the three to share one
+		# place, and they are three answers to the same question. Role still lives only
+		# in the role picker, which is the separation that got "Open (waiting)"
+		# shortened to "Open".
 		var mine := i == _local_slot() and _roles[i] != Role.PLAYTEST_AI
-		name_label.text = "Player %d (you)" % (i + 1) if mine else "Player %d" % (i + 1)
+		name_label.text = "Player %d" % (i + 1)
 		status.text = _slot_status(i, mine)
 
 
@@ -1176,7 +1496,13 @@ func _slot_status(index: int, mine: bool) -> String:
 	if _roles[index] == Role.CLOSED:
 		# Says what a closed slot is FOR, since leaving it blank reads as an oversight:
 		# the room is still on the board, there is just nobody in it.
-		return "empty — room kept on the map"
+		#
+		# TWO WORDS, cut down from "empty — room kept on the map" on 2026-08-30. The line
+		# is now an 84 px column under the name and it wraps, so the long version was four
+		# lines per closed slot and an eight-slot lobby was mostly this sentence. The word
+		# "empty" went with it because the dropdown two inches to the right already says
+		# "Closed" -- what it did not say, and this does, is that the ROOM is still there.
+		return "room kept"
 	if _roles[index] == Role.PLAYTEST_AI:
 		return "bot"
 
@@ -1185,7 +1511,7 @@ func _slot_status(index: int, mine: bool) -> String:
 		# NOT know whether a third player has readied -- the host is the only side
 		# counting agreement -- so it says nothing rather than guessing.
 		if mine:
-			return "READY" if _am_ready else "reviewing..."
+			return "you — READY" if _am_ready else "you — reviewing..."
 		return "host" if index == 0 else ""
 
 	if _roles[index] == Role.OPEN:
@@ -1194,9 +1520,11 @@ func _slot_status(index: int, mine: bool) -> String:
 		# READY IS THE PART THAT MATTERS. "Joined" only says a socket connected, and
 		# START is held on agreement, so the host has to see which of the two it is
 		# still waiting for.
-		return "READY" if Net.is_peer_ready(int(_slot_peers[index])) else "reviewing..."
+		return "peer %d — READY" % int(_slot_peers[index]) \
+				if Net.is_peer_ready(int(_slot_peers[index])) \
+				else "peer %d — reviewing..." % int(_slot_peers[index])
 
-	return "this device" if mine else ""
+	return "you" if mine else ""
 
 
 ## Every address this device answers on, so the other one knows what to dial.
