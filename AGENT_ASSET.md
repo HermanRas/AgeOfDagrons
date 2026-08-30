@@ -45,6 +45,23 @@ I own the **art pipeline**: 0 A.D. source art in, baked sprite atlases out.
 `tools/stage_atlases.py`.** It is gitignored build output, so it differs between
 machines and a fresh clone has none of it. The game agent reads it freely.
 
+> ⚠️ **NO 3D MODEL EVER GOES IN THE REPO.** Owner's rule, 2026-08-30, after I committed
+> three `.glb`/`.obj` files under `assets/dragon_rig/`: *"don't do 3d models in the game
+> folder keep it in the source folder."* Meshes are pipeline **input** and belong beside
+> `art_source/0ad`, machine-local and uncommitted. **The repo carries recipes, scripts and
+> documents; the only art that reaches the game is the baked atlas.**
+>
+> The mistake is easy to make because a hand-prepared mesh *feels* like a deliverable in a
+> way the 11 GB 0 A.D. checkout never did — it is small, I generated it, and it was wanted
+> immediately. Size and authorship are not the test. **Ask what CONSUMES it:** if the
+> answer is a bake rather than the game, it is source and it stays out.
+>
+> **When the models leave, the knowledge must not leave with them.** That commit's README
+> carried the scale trap, the density note and the return-path blocker; deleting the
+> directory would have deleted all three. They now live in `tools/dragon_to_glb.py`'s
+> header and in §5 here, which is where §1's own "worth keeping belongs in the code it
+> describes" rule points.
+
 Two agents commit to **one working tree**. `git log` interleaves our commits.
 Always `git add` explicit paths — never `-A` — and check what you staged. Files
 can also collide: this very document was overwritten by the other agent's stub
@@ -86,6 +103,7 @@ isobake CLI     C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\is
 python (venv)   C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe
 Blender 4.5.12  C:\Users\herman.ras\Downloads\AOD_game\tools_env\blender-4.5.12-windows-x64
 0 A.D. art      C:\Users\herman.ras\Downloads\AOD_game\art_source\0ad\binaries\data\mods\public
+dragon rig      C:\Users\herman.ras\Downloads\AOD_game\art_source\dragon_rig
 bake output     C:\Users\herman.ras\Downloads\AOD_game\art_work\out
 isobake source  C:\Users\herman.ras\Downloads\AOD_game\blender_3d_to_2d_isobake   (separate git repo)
 importer        C:\Users\herman.ras\Downloads\AOD_game\tools_env\pyrogenesis_importer_src
@@ -689,13 +707,24 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
-- **`vis.dragon` cannot be animated by this pipeline, and that is now a decision for the
-  owner rather than a task for me.** Its mesh has no rig at all — verified pristine against
-  HEAD's git-lfs `oid`, then read four ways (§4). Rigging it is real modelling work and no
-  recipe change reaches it. **The one thing worth knowing before that decision:** the art is
-  0 A.D.'s own and CC-BY-SA 3.0, not bespoke as PLAN.md A.9 and `asset_request.md` [P7] both
-  assumed, so a rig is redistributable and the mesh is 454 triangles. `tools/recipes/dragon.toml`
-  has led with this correction since 2026-08-25 and it went unread twice.
+- **`vis.dragon` is out for rigging, and the blocker has MOVED from the art to isobake.**
+  The mesh has no rig at all — verified pristine against HEAD's git-lfs `oid`, then read
+  four ways (§4). The art is 0 A.D.'s own and CC-BY-SA 3.0, **not** bespoke as PLAN.md A.9
+  and `asset_request.md` [P7] both assumed, so it can be rigged and the rig redistributed;
+  `tools/recipes/dragon.toml` has led with that correction since 2026-08-25 and it went
+  unread twice. `tools/dragon_to_glb.py` prepares the upload; outputs live in
+  `art_source/dragon_rig`, never in the repo.
+- **`adapters/generic.py` IS THE ONLY THING BETWEEN A RIGGED DRAGON AND AN ATLAS, and it is
+  a stub that raises `NotImplementedError`.** Only `zeroad`, `terrain` and `smoke` are real.
+  Its own docstring scopes the job and it is bounded rather than a rewrite: camera, rotation
+  loop, projection, packing and atlas format are all source-agnostic and already work, so
+  the adapter only has to stand a subject at the origin at the right scale with its clips
+  resolved — enable the bundled importers, remap axes to `directions.CANONICAL_FORWARD`,
+  fit to the recipe's `height_m`, and map action names onto clip names.
+  **`isobake inspect` ALREADY reads glTF and FBX**, so judge a rigged file — armature,
+  actions, bounding box, real-world size — *before* writing the adapter that consumes it.
+  That ordering is the point: it costs nothing and tells you whether the rig is worth the
+  work.
 - **The root bone is exempt from nothing, and `location_scale = 0.0` therefore
   drops a death clip's fall.** The deer's carcass floats ~5 px (0.22 m) — its
   lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px below.
