@@ -7,6 +7,14 @@
 ## does it: the BODY face is `gui/theme/custom_font` in `project.godot`, one line that
 ## reaches every Control in the project without a single call site changing.
 ##
+## THE POINTER IN `project.godot` DID NOT SURVIVE ITS FIRST `--import`, which is §6 of
+## AGENT_GAME_CODER.md arriving exactly on schedule: Godot rewrites that file and strips
+## every comment from it. So there is nothing there to explain the two settings, and
+## this paragraph is the only record that `gui/theme/custom` (the button plates plus a
+## `default_font`) and `gui/theme/custom_font` (the same face again) are BOTH set on
+## purpose. Either alone would give the game its typeface; carrying both means a theme
+## that fails to load costs the buttons and not the words.
+##
 ## SO WHAT IS HERE IS ONLY THE EXCEPTION -- the display face for things that are a
 ## NAME rather than a sentence. A title, a menu button, the result screen's verdict.
 ## Cinzel Decorative is a Roman capitalis; it is magnificent at 28 px and unreadable at
