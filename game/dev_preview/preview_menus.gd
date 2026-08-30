@@ -15,7 +15,9 @@
 ##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_menus.tscn
-##       -- writes user://menu_main.png and user://menu_campaign.png and quits.
+##       -- photographs every screen behind the front door in turn and quits:
+##       menu_boot, menu_main, menu_settings, menu_campaign, menu_help,
+##       menu_help_last and menu_lobby, all under user://.
 extends Node
 
 const SHOT_DIR := "user://"
@@ -33,25 +35,49 @@ func _process(_delta: float) -> void:
 		return
 	match _step:
 		0:
-			_show("res://scenes/menu/MainMenu.tscn")
+			# THE SPLASH, and it is safe to instantiate here only because it is thrown
+			# away again two steps later. `boot_screen.gd` starts a 2 s timer that calls
+			# `change_scene_to_file` -- which would replace the preview's own scene and
+			# take this script with it. Forty frames is well inside that.
+			_show("res://scenes/menu/Boot.tscn")
 		1:
+			_report_boot()
+			_shoot("menu_boot")
+		2:
+			_show("res://scenes/menu/MainMenu.tscn")
+		3:
 			_report_menu_wiring()
 			_shoot("menu_main")
-		2:
+		4:
 			# SETTINGS, which is a real screen since 2026-08-23 -- it used to
 			# answer with a toast saying settings did not exist. Built in code
 			# rather than authored in MainMenu.tscn, so nothing but a photograph
 			# says whether the overlay lands inside the window.
 			_press_settings()
-		3:
+		5:
 			_report_settings()
 			_shoot("menu_settings")
-		4:
+		6:
 			_show("res://scenes/menu/Campaign.tscn")
-		5:
+		7:
 			_report_campaign()
 			_shoot("menu_campaign")
-		6:
+		8:
+			# HOW TO PLAY (1.8), which HOW TO opened for the first time on 2026-08-30.
+			# Six annotated captures at up to 1476 px wide in a window a third of that:
+			# whether the picture fits inside the page is exactly the sort of thing only
+			# a photograph answers.
+			_show("res://scenes/menu/Help.tscn")
+		9:
+			_report_help()
+			_shoot("menu_help")
+		10:
+			# The last page, because it is the one where the picture is tallest relative
+			# to the caption and where NEXT has to have gone grey.
+			(_current as HelpScreen).show_page(HelpScreen.PAGES.size() - 1)
+		11:
+			_shoot("menu_help_last")
+		12:
 			# THE LOBBY, which had no photograph at all until 2026-08-30 -- it was only
 			# ever covered by `test_skirmish_screen`, which asserts the CONFIG it would
 			# build and can say nothing about whether the controls fit on the page. The
@@ -61,7 +87,7 @@ func _process(_delta: float) -> void:
 			# Instantiated directly, never navigated to: following a scene change would
 			# replace this preview and take the script with it (see the header).
 			_show("res://scenes/menu/Skirmish.tscn")
-		7:
+		13:
 			_report_lobby()
 			_shoot("menu_lobby")
 		_:
@@ -152,6 +178,89 @@ func _report_settings() -> void:
 		print("    %s at %s value %.2f" % [slider.name, rect, slider.value])
 		if not window.encloses(rect):
 			push_warning("preview_menus: a volume slider is outside the window: %s" % rect)
+
+
+## THE SPLASH, AND WHETHER IT FILLS THE WINDOW.
+##
+## The owner reported it "cutting off" on 2026-08-30 and the mode it was set to,
+## `KEEP_ASPECT_CENTERED`, cannot cut anything -- it pillarboxes.
+##
+## ⚠️ **TWO SEPARATE THINGS DECIDE WHERE THE PAINT LANDS, and the first version of
+## this function only looked at one of them.** It assumed a `PRESET_FULL_RECT` control
+## is the size of the window and derived the painted region from `stretch_mode` alone.
+## It reported a perfect fill on the very run whose screenshot showed the strapline
+## sliced off by the bottom edge -- because the control was 1376x768 in a 1152x648
+## window, `EXPAND_KEEP_SIZE` having made the texture's own size a MINIMUM that
+## anchors cannot override.
+##
+## So both are printed: the control's real rect, and the region the texture is painted
+## into inside it, which is not a property any node exposes and has to be derived.
+## Smaller than the window is letterboxing, larger is a crop, equal is what the owner
+## asked for.
+func _report_boot() -> void:
+	var art: TextureRect = null
+	for node in _current.find_children("*", "TextureRect", true, false):
+		art = node
+		break
+	if art == null or art.texture == null:
+		push_warning("preview_menus: the boot screen has no art on it")
+		return
+	var window := get_viewport().get_visible_rect().size
+	var plate := art.texture.get_size()
+	var rect := art.get_global_rect()
+	var drawn := rect.size
+	match art.stretch_mode:
+		TextureRect.STRETCH_SCALE:
+			drawn = rect.size
+		TextureRect.STRETCH_KEEP_ASPECT_COVERED:
+			drawn = plate * maxf(rect.size.x / plate.x, rect.size.y / plate.y)
+		_:
+			# Every remaining mode either fits inside the rect or ignores it; the
+			# two KEEP_ASPECT fits are the ones this screen has actually worn.
+			drawn = plate * minf(rect.size.x / plate.x, rect.size.y / plate.y)
+	print("  boot: expand %d stretch %d, plate %s, rect %s, window %s, painted %s"
+			% [art.expand_mode, art.stretch_mode, plate, rect, window, drawn])
+	# The painted region is measured from the control's own top-left, which is where
+	# an oversized control puts it -- so this covers both failures at once.
+	var painted := Rect2(rect.position + (rect.size - drawn) * 0.5, drawn)
+	if painted.position.x > 1.0 or painted.position.y > 1.0 \
+			or painted.end.x < window.x - 1.0 or painted.end.y < window.y - 1.0:
+		push_warning("preview_menus: the splash letterboxes -- painted %s in %s"
+				% [painted, window])
+	if painted.position.x < -1.0 or painted.position.y < -1.0 \
+			or painted.end.x > window.x + 1.0 or painted.end.y > window.y + 1.0:
+		push_warning("preview_menus: the splash is cropped -- painted %s in %s"
+				% [painted, window])
+
+
+## THE HELP PAGER: that every page found its picture, and that the picture is inside
+## the page rather than laid out through it.
+##
+## The pictures are up to 1476x720 and the window is 1152x648, so a `TextureRect` left
+## on the default `EXPAND_KEEP_SIZE` would give the page a minimum size wider than the
+## window and push the nav row off the bottom. `test_help_screen` asserts the property;
+## this asserts the consequence.
+func _report_help() -> void:
+	var screen := _current as HelpScreen
+	if screen == null:
+		push_warning("preview_menus: Help.tscn has no HelpScreen on it")
+		return
+	var window := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for i in range(screen.page_count()):
+		screen.show_page(i)
+		var picture: String = "-" if screen._art.texture == null \
+				else str(screen._art.texture.get_size())
+		print("  help %d/%d  %s  picture %s" % [
+				i + 1, screen.page_count(), screen._caption.text, picture])
+		if screen._art.texture == null:
+			push_warning("preview_menus: help page %d has no picture" % (i + 1))
+	screen.show_page(0)
+	for name in ["_art", "_prev_button", "_next_button", "_back_button", "_counter"]:
+		var control: Control = screen.get(name)
+		var rect := control.get_global_rect()
+		print("    %s at %s" % [name, rect])
+		if not window.encloses(rect):
+			push_warning("preview_menus: help %s is off the page: %s" % [name, rect])
 
 
 func _report_campaign() -> void:

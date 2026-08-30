@@ -25,13 +25,15 @@
 ## player who wants the music down looks here first, and the in-match SETTINGS page is
 ## behind starting a match. It is the same `VolumePanel` that page uses.
 ##
-## HOW TO is still a placeholder for an in-game walkthrough that does not exist, and
-## still answers with a toast rather than doing nothing, so the button does not read as
-## broken.
+## HOW TO IS REAL SINCE 2026-08-30, and was a toast saying the guide did not exist for
+## as long as no guide did. It opens `Help.tscn`, the six annotated captures the owner
+## drew over this game's own HUD -- see `help_screen.gd` for why they are a pager and
+## not a scroll. Every front-door button now leads to a screen except QUIT.
 extends Control
 
 const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
+const _HELP_SCENE := "res://scenes/menu/Help.tscn"
 const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
 const _CAMPAIGN_SCENE := "res://scenes/menu/Campaign.tscn"
 ## The same panel art `PauseMenu` uses, so the two SETTINGS pages match.
@@ -54,6 +56,10 @@ const _PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 @onready var _credits_button: Button = %CreditsButton
 @onready var _how_to_button: Button = %HowToButton
 @onready var _quit_button: Button = %QuitButton
+## NOTHING PRESSES THIS ANY MORE, as of 2026-08-30: HOW TO was the last button that
+## answered with a toast instead of a screen. Kept, with its node in the .tscn, because
+## the front door will want a way to say something in passing again -- and because a
+## toast that has to be re-authored is how a button ends up doing nothing at all.
 @onready var _toast: NoticeToast = %Toast
 ## The game's name, authored in the .tscn because that is where the layout is. The
 ## FACE is set here rather than there for the reason `_build_settings_overlay`'s header
@@ -80,11 +86,7 @@ func _ready() -> void:
 	_multiplayer_button.pressed.connect(_on_multiplayer_pressed)
 	_settings_button.pressed.connect(_on_settings_pressed)
 	_credits_button.pressed.connect(_on_credits_pressed)
-	# Placeholder for a future in-game HUD walkthrough (no such screen exists
-	# yet) -- a toast rather than doing nothing, same convention as
-	# Multiplayer/Settings above.
-	_how_to_button.pressed.connect(
-			func() -> void: _toast.show_message("How-to guide is not available yet"))
+	_how_to_button.pressed.connect(_on_how_to_pressed)
 	_quit_button.pressed.connect(func() -> void: get_tree().quit())
 
 	# The front door's music. `play_music` is a no-op if this track is already
@@ -251,3 +253,7 @@ func _on_multiplayer_pressed() -> void:
 
 func _on_credits_pressed() -> void:
 	get_tree().change_scene_to_file(_CREDITS_SCENE)
+
+
+func _on_how_to_pressed() -> void:
+	get_tree().change_scene_to_file(_HELP_SCENE)
