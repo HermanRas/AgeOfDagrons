@@ -299,6 +299,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **`JSON.stringify` encodes a `PackedByteArray` as a STRING** — `"[1, 2, 250]"`, verified on 4.7.1 | It bit `MapData.from_dict()`, which now reads bytes, JSON's string, or a plain list. Relevant to 2.4c's saved sidecar and 12.4's save/load — the next two places sim data goes through JSON. Everything else there was already defended with `int()` because JSON numbers come back as floats; `terrain` was the one field that looked like it needed no conversion. |
 | **Wall-clock timings are worthless on this workstation** | The same seed ran 41.3 s and 161.0 s; the suite swung 34 s to 110 s across four runs of identical code. Trust `test_tick_cost`, which reports per-system milliseconds. Do not conclude anything from how long a run took. |
 | **The 0 A.D. checkout's media files are git-LFS POINTERS, not content** | Every `.ogg`/`.dae`/`.png`/`.pmd` on disk is a ~130-byte pointer. Worse, that repo's **index is emptied** (30,114 staged deletions) and its `.gitattributes`/`.lfsconfig` are gone from the working tree, so `git lfs pull` exits 0 having done nothing. Do **not** repair it — it is the art agent's tree and memory records that git operations there have destroyed art. The route that works is documented in `tools/stage_audio.py`: read the oid out of the pointer, fetch through the LFS batch API, write the bytes into `game/` and never into the checkout. |
+| **A FONT CANNOT BE IMPORTED WHILE `gui/theme/custom` REFERENCES IT** | Swapping the body face deadlocks `--import`: the project theme loads at startup, names the new `.ttf`, the `.ttf` has no `.import` yet, the load fails and the import never reaches it. The error reads "No loader found for resource". Comment `theme/custom` out of `project.godot`, `--import`, put it back, `--import` again. Same shape as the "a new `class_name` is invisible until `--import`" row, with a cycle in it. |
 | **A NinePatchRect's BORDER IS DRAWN AT 1:1** | The `patch_margin` is in SOURCE pixels and does not scale with the rect, so a 1024 px plate with a measured 46 px border puts a 46 px border on a 152 px panel and clips the content behind its own frame. **Shrinking the margin makes it worse** — the margin says where the border ENDS, so the leftover bevel joins the stretched centre and smears across the panel. The only lever is the SOURCE SIZE; `tools/prepare_ui_chrome.py` is what turns "the border should draw at 12 px" into an output size. See §7's UI-overhaul block. |
 | **SWAPPING ONE FRAME FOR ANOTHER CAN INVERT THE DRAW ORDER** | A frame with a TRANSPARENT middle is drawn on top of what it frames; a frame with a FILLED recess must be drawn under, or it covers the picture entirely. Both replaced frames flipped on 2026-08-30 and a filename says nothing about which kind you have. Found by `preview_match` — a selected town centre with an empty brown square where its portrait goes — not by any test. |
 | **`draw_texture_rect_region` HAS NO KEEP-ASPECT MODE** | It fills the rect it is given, so a non-square crop in a square slot is stretched. `EntityPortrait.fit` is the arithmetic and lives beside the crop helper, because two hand-drawn slots made the identical mistake independently. A `TextureRect` with `STRETCH_KEEP_ASPECT_CENTERED` does not have the problem, which is why the action tiles never showed it. |
@@ -338,70 +339,95 @@ conditions, the PlayTest AI, **two-device LAN multiplayer validated on hardware*
 (PLAN.md §12.1 a–g), and the minimap's four corner pages — a working market, a real
 tech tree, a chat wireframe, and settings (§8.2b).
 
-### THE UI OVERHAUL — SIX COMMITS IN, 2026-08-30, AND IT IS NOT FINISHED
+### THE UI OVERHAUL — DONE, 2026-08-30, in twelve commits
 
 `asset_request.md` [P8] delivered 130 pieces of project-owned UI art plus two OFL font
-families, and this is the game-side landing of it. **It is the largest single change to
-`game/` in the project's history** and it is paused mid-way on the owner's instruction,
-so read this whole block before touching any of it.
+families, and this was the game-side landing of it. **It is the largest single change to
+`game/` in the project's history**, and the one line worth carrying forward is the one it
+was opened for:
 
-⚠️ **THE FIRST THING TO DO IS DEAL WITH THE UNCOMMITTED WORKING TREE.** Five files are
-modified and **have not had the suite run against them**:
+> **`game/assets/ui/` is committed in full, and a clean clone runs with its chrome
+> intact.** For the whole life of the project until this day it did not: the UI was
+> third-party itch.io art whose licence forbids redistributing the originals, so three
+> directories under it were gitignored and every developer had to download two packs by
+> hand before the game had any panels at all. `tools/licence_audit.py` went from **129
+> problems to PASS**, and a good many comments around the codebase still say "the UI art
+> is gitignored". They are wrong now.
 
-| file | what changed |
+**WHAT LANDED, `9b0ae14`..`d0cbc9d`, each commit green when it went in:**
+
+| | |
 |---|---|
-| `boot_screen.gd`, `hud_panel.gd`, `resource_hud.gd`, `game_scene.gd` | the last four `TEXTURE_FILTER_NEAREST` → `LINEAR` |
-| `game_scene.gd` | draws `chrome/frame_minimap.png` into `minimap_area` |
-| `minimap.gd` | stops drawing its own approximated double-gold border |
+| the art as files | 103 icons at 100×100, 27 chrome pieces into a new tracked `assets/ui/chrome/`, both OFL families with their licence texts |
+| icons wired | `SelectionActions.ICONS` 12 entries → 46 plus `STANCE_ICONS`; all five stand-ins retired; `act_guard.png` deleted |
+| the action tile | `_FRAME_PATH` → `chrome/tile_frame.png`, in three states, so tiles stopped being double-framed |
+| in-match chrome | panel plate, portrait frame, group ring, health bar, toast — plus `tools/prepare_ui_chrome.py` |
+| the typeface | which the game had never had at all |
+| the menus | nine painted word-buttons → one themed plate plus a label, killing `assets/ui/menu/` |
+| the minimap | its ornate frame, and the four corner buttons moved into its bosses |
+| the licence retirement | the three directories, the ignore rules, the README, the LICENCES rows, six broken doc links |
+| the title card | `splash_screen_c` as both the boot art and the README banner |
+| **the owner's first review** | six corrections in one pass — see below |
 
-Run the suite, run `preview_match`, **look at the minimap**, then commit or revert.
-Do not build on top of it. Remember §6's row: two agents share this tree.
+**WHAT IS LEFT, and none of it blocks anything:**
 
-**WHAT IS DONE, six commits (`9b0ae14`..`4f66980`), each one green when it landed:**
-
-1. **The art landed as files.** `sliced/icons/` → `assets/ui/icons/` (103 at 100×100),
-   `sliced/chrome/` → `assets/ui/chrome/` (27, a NEW and tracked directory), fonts →
-   `assets/ui/fonts/` with both `OFL-*.txt` beside them.
-2. **The icons are wired.** `SelectionActions.ICONS` went 12 entries → 46 plus
-   `STANCE_ICONS`, and it is nearly all data — `_research_details` had asked
-   `ICONS.get(t.id, "")` since 9.3 and finally got an answer. **All five stand-ins are
-   retired** and `act_guard.png` is deleted.
-3. **The action tile stopped being double-framed.** `ActionSlot._FRAME_PATH` →
-   `chrome/tile_frame.png`, in three states.
-4. **The in-match chrome** — panel plate, portrait frame, group ring, health bar, toast.
-5. **The typeface**, which the game had never had at all.
-6. **The menus** — nine painted word-buttons → one themed plate plus a label.
-
-**WHAT IS LEFT, in the order I would do it:**
-
-- **THE UNCOMMITTED FIVE FILES ABOVE.** Verify and land them first.
-- **THE SPLASH SCREEN.** `assets/UI_Gen/splash_screen_{a,b,c}.jpg` are generated and
-  **untracked**; `c` is the only landscape one and is the one to use. It becomes
-  `game/assets/ui/boot_splash.png` (`BootScreen._SPLASH_PATH` already points there, so
-  this is a file swap, not a code change). **`Splash_h.jpg` at the repo root stays until
-  the new one is in-game** — it is what `README.md` shows — and is deleted in the same
-  commit, not before.
-- **THE LICENCE RETIREMENT, WHICH IS THE POINT OF THE WHOLE EXERCISE.** Nothing under
-  `game/assets/ui/{hud,menu,control_groups}/` is loaded by any running screen any more,
-  so in ONE commit: delete those three directories, drop their three `.gitignore`
-  entries and the `assets/UI_Sprites/*` block, delete `assets/UI_Sprites/README.md`,
-  and collapse `game/assets/LICENCES.md` rows **503–510** into one project-asset row
-  (rows 464–468 need rewording too — they describe the OLD icon set). Two rows are
-  ADDED, one per OFL font family. **`licence_audit.py` is the gate and it can be run on
-  this machine**: it reported 14 undeclared UI files before the swap and those 14 are
-  exactly the Kibyra files being deleted, so it should go green **by construction**. Run
-  it before and after.
 - **The unused chrome.** `badge_round`, `checkbox_*`, `radio_*`, `tab_plate`,
-  `field_input`, `bar_fill_progress`, `banner_age` and the four `arrow_*` are committed
-  and referenced by nothing. That is deliberate for the arrows (see `ICONS`' header) and
-  simply not-yet-done for the rest — `field_input` wants `TouchLineEdit`,
-  `bar_fill_progress` wants the production queue, `banner_age` wants the age-advance
-  notice. **`badge_round` is the interesting one**: [P8] says `res_*` stay circular and
-  get it, but `ResourceHUD` draws at 24 px and a ring around a 24 px glyph leaves
-  nothing. Either the icon grows or the ring does not happen; I did not decide.
+  `bar_fill_health`, `bar_fill_progress`, `banner_age` and the four `arrow_*` are
+  committed and referenced by nothing. Deliberate for the arrows (see `ICONS`' header)
+  and simply not-yet-done for the rest — `bar_fill_progress` wants the production queue,
+  `banner_age` wants the age-advance notice. **`bar_fill_health` is unused because the
+  owner picked something else for the health bar**, which is worth knowing before
+  "fixing" it back: see `HealthBarView`. **`badge_round` is the one that needs a DECISION
+  rather than work**: [P8] says `res_*` stay circular and get it, and `ResourceHUD` draws
+  them at 24 px, where a ring leaves almost no glyph. Either the icon grows or the ring
+  does not happen. Raised in `asset_request.md`.
 - **`ART_PROMPT.md`'s upcoming set** (§5 of [P8]) is drawn and committed for features
-  that do not exist — voice chat, the server browser, the lobby, save/load, replay.
-  None of it can be wired and none of it should hold anything up.
+  that do not exist — voice chat, the server browser, the lobby, save/load, replay. None
+  of it can be wired and none of it should hold anything up.
+- **The `ui_builder` mockups are REPOINTED, NOT UPDATED.** Seven `.tscn` under
+  `scenes/ui_builder/` referenced the old art and now reference the new, so nothing
+  dangles — but their LAYOUT is the pre-overhaul HUD and is out of step with the running
+  game. Nothing instantiates them. Whether they survive is the owner's call, the same
+  call that retired `UI_Design.md`.
+**THE OWNER'S FIRST REVIEW OF THE FINISHED UI — SIX CORRECTIONS, ALL LANDED, and three
+of them were the same mistake:**
+
+⚠️ **A NUMBER MEASURED BY A TOOL THAT WAS ANSWERING A SLIGHTLY DIFFERENT QUESTION.**
+That is the shape of three of the six, and it is worth more than any of the individual
+fixes. `measure_ninepatch.py` looks for a STRETCHABLE RUN; I wanted the CORNER EXTENT,
+and on `panel_ornate` those differ by 70 px, so the margin cut through a dragon's neck
+and the neck was in the stretched region. The boss-centre measurement took the centroid
+of every dark pixel in a corner quadrant when I wanted the centre of a DISC, and the
+four answers disagreed by 18 % — **a measurement whose samples disagree is not a
+measurement of one thing**, and I shipped it anyway.
+
+- **`panel_ornate`'s margins are 300 and its edges TILE.** A bead run stretched to three
+  times its length is a row of ellipses; `AXIS_STRETCH_MODE_TILE_FIT` repeats it and
+  nudges the repeat to a whole bead.
+- **`_MINIMAP_BOSS_CENTRE` is 0.109**, from labelling the dark blobs and keeping the
+  round one in each quadrant. The four now agree left-to-right, as mirrored art should.
+- **ONE PREPARED SIZE CANNOT SERVE TWO DRAW SIZES**, which is the 1:1 border trap's
+  second consequence and needed a new mechanism rather than a new number.
+  `prepare_ui_chrome.py` grew `EXTRA_SIZES`, and `panel_ornate_small` is the resource
+  counter's own copy of the menu's artwork at a tenth scale.
+- **The health bar is `field_input` + `button_normal`**, not the two pieces named for it.
+  Owner's eye, and the reason is shape rather than colour — see `HealthBarView`.
+- **The body face is New Rocker and it was chosen on its DIGITS.** MedievalSharp lasted a
+  day: *"the numbers on all 3 read hard"*. **That is the right test for this game and it
+  is not the obvious one** — an RTS HUD is mostly numbers, and a specimen sheet set in
+  words will sell you a face whose 0, 6 and 8 are one shape at 16 px.
+  `assets/UI_Gen/font_comparison.png` now leads with `0123456789` and with the strings
+  the HUD actually prints. Every rejected face is deleted, source archives included.
+- **`NoticeToast` has a paragraph mode** for campaign text (`show_long_message`).
+  `LONG_SIZE` is the same ASPECT as `SIZE` and larger, never taller — the banner is a
+  fixed composition with a dragon at each end, and a taller box stretches a face. There
+  is a test pinning that. **Nothing calls it yet**; 12.3 is unbuilt.
+
+⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
+face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new
+`.ttf`, the `.ttf` has no `.import` yet, so the load fails and the import never reaches
+it. **Comment `theme/custom` out of `project.godot`, run `--import`, put it back, import
+again.** Nothing says this; the error is "No loader found for resource".
 
 **FIVE THINGS THIS PASS LEARNED THAT ARE NOT OBVIOUS FROM THE DIFF:**
 

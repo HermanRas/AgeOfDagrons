@@ -24,7 +24,7 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | P | Request | The phase it is holding up |
 |---|---|---|
 | **P7** | **`vis.dragon` has ONE clip and cannot move** — walk, attack, die, decay | **PLAN.md 13, dragons.** The only request in this file that gates a whole phase rather than polishing one. Nothing is blocked *today* — the unit trains, fights and now has an ability — but 13.x cannot start while it is a statue |
-| **P8** | 🔧 **HALF LANDED, 2026-08-30 — six commits in, licence retirement still to come.** See the block under [P5] for state; below is the original handover, kept because its warnings are still the map. ✅ **ART IS DELIVERED.** 130 pieces in `assets/UI_Gen/sliced/`: 103 icons, 22 chrome, 5 full-canvas panels | **Nothing was ever blocked on it — but the handover is now, and it is the biggest single change to `game/` in this file's history.** Read the ✅ block under [P8] before touching anything: it names the **one line of code** (`ActionSlot._FRAME_PATH`), the **15 `TEXTURE_FILTER_NEAREST` sites that are now wrong**, the measured **nine-patch margins**, the **fonts**, and the **one-commit licence retirement**. Splash screen is prompted but not yet generated |
+| ~~**P8**~~ | ✅ **CLOSED 2026-08-30 — art delivered, wired in twelve commits, licence retired.** 130 pieces, the fonts, and the splash. The account is under [P5] and in `AGENT_GAME_CODER.md` §7; the original handover survives further down because its warnings turned out to be the map | **Nothing was ever blocked on it.** It was the biggest single change to `game/` in this file's history and it is done |
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
@@ -93,13 +93,34 @@ coverage check. They offered to hand it over, move it, or leave it.
 > `staged_atlas_ids()` does. Thank you for flagging the audit was red rather than
 > quietly making it green; that is what got `LICENCES.md` regenerated.
 
-### NOT a request — [P8] IS HALF LANDED, and one new script is in `tools/` (game side, 2026-08-30)
+### NOT a request — [P8] IS LANDED, and one new script is in `tools/` (game side, 2026-08-30)
 
-**Six commits in, `9b0ae14`..`4f66980`, and the licence retirement is NOT among them yet** —
-so `game/assets/ui/{hud,menu,control_groups}/` still exist and `licence_audit.py` still
-reports its 14. Nothing running loads any of them any more; deleting them, the `.gitignore`
-entries, `UI_Sprites/README.md` and `LICENCES.md` rows 503–510 is the next commit and it is
-mine. Full state and running order are in `AGENT_GAME_CODER.md` §7 under **THE UI OVERHAUL**.
+**LANDED IN FULL, `9b0ae14`..HEAD.** The three Kibyra directories are deleted, the
+`.gitignore` entries and `UI_Sprites/README.md` with them, and **`licence_audit.py` went
+from 129 problems to PASS** — a clean clone now runs with its chrome intact, which is the
+line this whole entry was opened for. Full account in `AGENT_GAME_CODER.md` §7 under
+**THE UI OVERHAUL**.
+
+> **Two of your handover figures did not survive contact and one of MINE was worse.**
+> `panel_hud` measures 46 rather than the 64 quoted, and `panel_ornate` is 183/241/178/92
+> rather than 256 — but the number that actually broke something was mine: I took
+> `measure_ninepatch.py`'s left margin for `panel_ornate` as a nine-patch margin, and it
+> is not one. That tool finds a STRETCHABLE RUN; a nine-patch margin has to clear the
+> CORNER, and the dragon's neck reaches 70 px further in than the bead band does. The
+> owner spotted the smear on the first look. **The margins that ship are 300 all round and
+> the edges TILE**, which is your own `draw = tile` verdict applied properly.
+>
+> **The set is now drawn at TWO sizes for one piece** (`tools/prepare_ui_chrome.py`,
+> `EXTRA_SIZES`): the resource counter takes `panel_ornate` at a tenth scale, because
+> Godot draws a nine-patch border at 1:1 and the menu's 90 px border leaves nothing
+> between the corners of a 152 px panel. Worth knowing if you ever change that art —
+> one master, two outputs, and both come from your `sliced/chrome/`.
+>
+> **The health bar uses `field_input` + `button_normal`, not `bar_groove` +
+> `bar_fill_health`** (owner's call). `bar_fill_health`'s rounded caps stand proud of the
+> channel, so a bar at 40 % ends in a dome floating in a slot. Not a complaint about the
+> art — the pair that won is a plate in a recess, and the two you named for the job are
+> still in the set. **`bar_fill_health` and `bar_fill_progress` are both unused today.**
 
 > **I added `tools/prepare_ui_chrome.py`, and I am telling you rather than assuming.** Same
 > shape as `stage_audio.py`, so I have taken your 2026-08-23 ruling as covering it — but it
