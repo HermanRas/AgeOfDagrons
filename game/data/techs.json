@@ -61,6 +61,7 @@
 
   "tech.wheelbarrow": {
     "name": "Wheelbarrow",
+    "description": "Villagers carry more before they have to walk back. Every gathered resource arrives in fewer trips, so the whole economy speeds up without training a single extra worker.",
     "researched_at": ["building.town_center"],
     "age_required": 2,
     "cost": { "food": 175, "wood": 50 },
@@ -69,6 +70,7 @@
   },
   "tech.hand_cart": {
     "name": "Hand Cart",
+    "description": "A bigger load again, on top of the Wheelbarrow. The further your gatherers are working from a drop-off, the more this is worth.",
     "researched_at": ["building.town_center"],
     "age_required": 3,
     "requires": ["tech.wheelbarrow"],
@@ -79,6 +81,7 @@
 
   "tech.horse_collar": {
     "name": "Horse Collar",
+    "description": "Farms and foragers yield faster. The first of the three food upgrades, and the cheapest economic research in the game.",
     "researched_at": ["building.mill"],
     "age_required": 2,
     "cost": { "food": 75, "wood": 75 },
@@ -87,6 +90,7 @@
   },
   "tech.heavy_plough": {
     "name": "Heavy Plough",
+    "description": "More food from the same land, stacking with Horse Collar. Worth taking before you commit to a large farming town.",
     "researched_at": ["building.mill"],
     "age_required": 3,
     "requires": ["tech.horse_collar"],
@@ -96,6 +100,7 @@
   },
   "tech.crop_rotation": {
     "name": "Crop Rotation",
+    "description": "The last and largest of the food upgrades. With all three researched your farmers gather half again as fast as they started.",
     "researched_at": ["building.mill"],
     "age_required": 4,
     "requires": ["tech.heavy_plough"],
@@ -106,6 +111,7 @@
 
   "tech.double_bit_axe": {
     "name": "Double-Bit Axe",
+    "description": "Lumberjacks chop faster. Wood pays for houses, farms and every siege weapon, so this rarely goes to waste.",
     "researched_at": ["building.lumber_camp"],
     "age_required": 2,
     "cost": { "food": 100, "wood": 50 },
@@ -114,6 +120,7 @@
   },
   "tech.bow_saw": {
     "name": "Bow Saw",
+    "description": "A second, larger increase to wood gathering, on top of Double-Bit Axe.",
     "researched_at": ["building.lumber_camp"],
     "age_required": 3,
     "requires": ["tech.double_bit_axe"],
@@ -124,6 +131,7 @@
 
   "tech.gold_mining": {
     "name": "Gold Mining",
+    "description": "Miners bring in gold faster. Gold buys the units that win fights, so this is usually the first mining research worth having.",
     "researched_at": ["building.mining_camp"],
     "age_required": 2,
     "cost": { "food": 100, "wood": 75 },
@@ -132,6 +140,7 @@
   },
   "tech.stone_mining": {
     "name": "Stone Mining",
+    "description": "Miners bring in stone faster. Stone builds towers, castles and walls.",
     "researched_at": ["building.mining_camp"],
     "age_required": 2,
     "cost": { "food": 100, "wood": 75 },
@@ -140,6 +149,7 @@
   },
   "tech.gold_shaft_mining": {
     "name": "Gold Shaft Mining",
+    "description": "Deeper shafts, more gold, stacking with Gold Mining.",
     "researched_at": ["building.mining_camp"],
     "age_required": 3,
     "requires": ["tech.gold_mining"],
@@ -149,6 +159,7 @@
   },
   "tech.stone_shaft_mining": {
     "name": "Stone Shaft Mining",
+    "description": "Deeper shafts, more stone, stacking with Stone Mining.",
     "researched_at": ["building.mining_camp"],
     "age_required": 3,
     "requires": ["tech.stone_mining"],
@@ -159,6 +170,7 @@
 
   "tech.forging": {
     "name": "Forging",
+    "description": "Melee soldiers hit harder. The first rung of the blacksmith's attack ladder; it does not arm your villagers.",
     "researched_at": ["building.blacksmith"],
     "age_required": 2,
     "cost": { "food": 150 },
@@ -167,6 +179,7 @@
   },
   "tech.iron_casting": {
     "name": "Iron Casting",
+    "description": "Another point of melee damage, on top of Forging.",
     "researched_at": ["building.blacksmith"],
     "age_required": 3,
     "requires": ["tech.forging"],
@@ -176,6 +189,7 @@
   },
   "tech.blast_furnace": {
     "name": "Blast Furnace",
+    "description": "The last melee attack upgrade, and the biggest single step of the three.",
     "researched_at": ["building.blacksmith"],
     "age_required": 4,
     "requires": ["tech.iron_casting"],
@@ -185,6 +199,7 @@
   },
   "tech.fletching": {
     "name": "Fletching",
+    "description": "Archers and other ranged units hit harder. The pierce equivalent of Forging, and it shares the blacksmith with it.",
     "researched_at": ["building.blacksmith"],
     "age_required": 2,
     "cost": { "food": 100, "gold": 50 },
@@ -193,6 +208,7 @@
   },
   "tech.bodkin_arrow": {
     "name": "Bodkin Arrow",
+    "description": "Another point of ranged damage, on top of Fletching.",
     "researched_at": ["building.blacksmith"],
     "age_required": 3,
     "requires": ["tech.fletching"],
@@ -202,6 +218,7 @@
   },
   "tech.bracer": {
     "name": "Bracer",
+    "description": "The last of the ranged attack upgrades.",
     "researched_at": ["building.blacksmith"],
     "age_required": 4,
     "requires": ["tech.bodkin_arrow"],
@@ -211,6 +228,7 @@
   },
   "tech.scale_mail": {
     "name": "Scale Mail",
+    "description": "Every soldier takes less damage from melee attacks. Armour is quietly stronger than attack: it applies to every blow you receive, from everyone.",
     "researched_at": ["building.blacksmith"],
     "age_required": 2,
     "cost": { "food": 100 },
@@ -219,6 +237,7 @@
   },
   "tech.chain_mail": {
     "name": "Chain Mail",
+    "description": "More melee armour, on top of Scale Mail.",
     "researched_at": ["building.blacksmith"],
     "age_required": 3,
     "requires": ["tech.scale_mail"],
@@ -228,6 +247,7 @@
   },
   "tech.plate_mail": {
     "name": "Plate Mail",
+    "description": "The last melee armour upgrade, and worth two of the earlier rungs.",
     "researched_at": ["building.blacksmith"],
     "age_required": 4,
     "requires": ["tech.chain_mail"],
@@ -237,6 +257,7 @@
   },
   "tech.padded_armour": {
     "name": "Padded Armour",
+    "description": "Every soldier takes less damage from arrows and other ranged attacks.",
     "researched_at": ["building.blacksmith"],
     "age_required": 2,
     "cost": { "food": 100 },
@@ -245,6 +266,7 @@
   },
   "tech.leather_armour": {
     "name": "Leather Armour",
+    "description": "More pierce armour, on top of Padded Armour.",
     "researched_at": ["building.blacksmith"],
     "age_required": 3,
     "requires": ["tech.padded_armour"],
@@ -254,6 +276,7 @@
   },
   "tech.ring_armour": {
     "name": "Ring Armour",
+    "description": "The last pierce armour upgrade. Against massed archers this is the single most valuable research in the blacksmith.",
     "researched_at": ["building.blacksmith"],
     "age_required": 4,
     "requires": ["tech.leather_armour"],
@@ -264,6 +287,7 @@
 
   "tech.ballistics": {
     "name": "Ballistics",
+    "description": "Ranged units reach a tile further. Extra range lets archers open fire first and withdraw before a melee line closes.",
     "researched_at": ["building.university"],
     "age_required": 3,
     "cost": { "wood": 300, "gold": 175 },
@@ -272,6 +296,7 @@
   },
   "tech.chemistry": {
     "name": "Chemistry",
+    "description": "Ranged units hit harder, from the university rather than the blacksmith, so it stacks with the whole Fletching ladder.",
     "researched_at": ["building.university"],
     "age_required": 4,
     "requires": ["tech.ballistics"],
@@ -282,6 +307,7 @@
 
   "tech.sanctity": {
     "name": "Sanctity",
+    "description": "Healers restore more health per use. Keeping a wounded army alive is cheaper than replacing it.",
     "researched_at": ["building.monastery"],
     "age_required": 3,
     "cost": { "gold": 120 },
@@ -290,6 +316,7 @@
   },
   "tech.fervour": {
     "name": "Fervour",
+    "description": "Healers restore more again, on top of Sanctity.",
     "researched_at": ["building.monastery"],
     "age_required": 4,
     "requires": ["tech.sanctity"],

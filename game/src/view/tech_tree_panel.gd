@@ -1,49 +1,52 @@
 ## The TECHNOLOGY TREE page behind the minimap's bottom-left corner button
 ## (PLAN.md 9.4).
 ##
-## READ-ONLY, AND THAT IS THE DESIGN RATHER THAN THE SHORTCUT. The project owner's
-## rule: researching happens at the building that offers it, the way training does,
-## and this page is where you go to find out what exists and what it needs. So
-## there is nothing to press here and no command behind it -- which also means the
-## page can never disagree with the server about anything, because it asks for
-## nothing.
+## **ROWS, NOT COLUMNS, SINCE 2026-08-30**, on the project owner's ask: *"it reads left
+## to right scrollable, age1 at the top with last age at the bottom"*. It was four age
+## COLUMNS side by side, which put age 4 off the right of the page and made the ladder
+## read across rather than down. Now each age is a row, the ages stack in order, and the
+## long ages scroll sideways -- age 3 alone has eleven technologies, which no page is
+## wide enough to show at once and which is why "scrollable" was part of the ask rather
+## than an implementation detail.
 ##
-## **NO LONGER A WIREFRAME, 2026-08-29.** `techs.json` filled in with 9.3 and this page
-## fills in with it -- which is what the note replaced here predicted, and the whole
-## reason the renderer was written before the data: it walks
-## `GameDataRegistry.tech_ids()` and lays each tech out in its age's column, with its
-## prerequisites named. The placeholder lattice is still below and still correct: it is
-## what an empty `techs.json` draws, and an empty page shows the owner nothing while
-## they are drawing art against this layout.
+## **IT IS STILL READ-ONLY, AND THAT IS THE DESIGN RATHER THAN THE SHORTCUT.** The
+## project owner's rule: researching happens at the building that offers it, the way
+## training does, and this page is where you go to find out what exists and what it
+## needs. Tapping a node opens a DESCRIPTION, never a purchase -- so the page still asks
+## the server for nothing and still cannot disagree with it about anything.
 ##
-## THREE STATES, and the third one finally exists. RESEARCHED was drawn by the legend
-## and never assigned, because `SimPlayer.researched` was a field the HUD read that
-## nothing wrote -- the same hole 4.11's population counter was in. `SimWorld.grant_tech`
-## writes it now and `player_state` carries it, so a node is RESEARCHED if the viewer
-## holds it, AVAILABLE if its age has been reached, and LOCKED otherwise.
+## THREE STATES: a node is RESEARCHED if the viewer holds it, AVAILABLE if its age has
+## been reached, and LOCKED otherwise. It is the VIEWER's own set, not the selection's:
+## this page is a reference about what you have and what you could have.
 ##
-## It is the VIEWER's own set, not the selection's: this page is a reference about what
-## you have and what you could have, and there is nothing on it to press.
+## The placeholder lattice below is what an empty `techs.json` draws. It is kept because
+## it is still correct -- an empty page shows the owner nothing while they are drawing
+## art against this layout -- and because it costs one branch.
 class_name TechTreePanel
 extends HudPanel
 
 enum State { LOCKED, AVAILABLE, RESEARCHED }
 
-## The lattice drawn when no techs are declared. Four rows so each age column has
-## the same height, which is what makes the grid read as a grid.
-const _PLACEHOLDER_ROWS := 4
+## The lattice drawn when no techs are declared. Four per age so each row has the same
+## length, which is what makes the grid read as a grid.
+const _PLACEHOLDER_COLUMNS := 4
 
-## Widened and heightened for 9.3's real data: a node's subtitle now names the
-## BUILDING that offers it, which is the whole point of the page and does not fit in
-## 74 px beside "Gold Shaft Mining". The columns scroll both ways, so the cost of
-## being wrong here is a scroll rather than clipped text.
-const _NODE_SIZE := Vector2(120.0, 76.0)
+## One node. SMALLER AND SQUATTER than the 120x76 it was, and the detail box is what
+## paid for it: the subtitle used to name the building and the prerequisites on the tile
+## itself, which is why it needed the height. Both moved into the box that opens on a
+## tap, so a node is now a name and a state -- and eleven of them across a row is that
+## much less scrolling.
+const _NODE_SIZE := Vector2(104.0, 58.0)
 
-var _columns: HBoxContainer
+## The fixed-width heading at the left of each age row.
+const _HEADING_WIDTH := 132.0
+
+var _rows: VBoxContainer
 var _legend: Label
+var _detail: TechDetailBox
 
-## Which age the local player has reached, so a column can be drawn as reached or
-## not. 0 before the first snapshot, which draws everything locked.
+## Which age the local player has reached, so a row can be drawn as reached or not.
+## 0 before the first snapshot, which draws everything locked.
 var _age: int = 0
 
 ## Which technologies the viewer has bought (PLAN.md 9.3), `tech id -> true`. Empty
@@ -62,23 +65,34 @@ func _init() -> void:
 	column.set_anchors_preset(Control.PRESET_FULL_RECT)
 	body.add_child(column)
 
-	# The four age columns SCROLL, and as of 9.3 they scroll BOTH WAYS. Sideways was
-	# always the plan; vertical became necessary the moment the data landed, because
-	# the blacksmith alone puts twelve technologies in the tree and age 3's column is
-	# eleven nodes tall -- roughly 750 px against a page that has less. A page that
-	# grew past its own frame is the failure mode `ResourceHUD` records at length, and
-	# it would have been silent here: the overflowing nodes simply would not be drawn.
+	# ONE SCROLL CONTAINER, BOTH WAYS, and the age headings live INSIDE it rather than
+	# in a frozen left column. A frozen column would keep "Age III" on screen while you
+	# scrolled right through its eleven nodes, which is nicer -- and it costs an exact
+	# height agreement between two independent VBoxes, so every row would have to be
+	# pinned to a fixed height and the page would break silently the day a node wrapped
+	# onto a second line. The rows are far enough apart to be told from each other
+	# without the label, and this way nothing has to agree with anything.
+	#
+	# VERTICAL SCROLLING IS NOT OPTIONAL EITHER, even though four rows fit today: a page
+	# that grew past its own frame is the failure mode `ResourceHUD` records at length,
+	# and here it would be silent -- the overflowing age simply would not be drawn.
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(scroll)
 
-	_columns = HBoxContainer.new()
-	_columns.add_theme_constant_override("separation", 18)
-	_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_columns)
+	_rows = VBoxContainer.new()
+	_rows.add_theme_constant_override("separation", 14)
+	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_rows)
 
 	_legend = HudPanel.note_label("")
 	column.add_child(_legend)
+
+	# ADDED TO `body` AFTER the column, so it draws over the tree rather than under it.
+	# A child of the scrolling rows would scroll away with them and be clipped by the
+	# container the moment it was taller than a row.
+	_detail = TechDetailBox.new()
+	body.add_child(_detail)
 
 	add_close_button()
 	rebuild()
@@ -106,11 +120,25 @@ func set_researched(held: Dictionary) -> void:
 	rebuild()
 
 
+## Closes the detail box along with the page, so reopening the tree does not land on
+## whatever node was last read. Overrides `HudPanel.close`.
+func close() -> void:
+	if _detail != null:
+		_detail.hide_detail()
+	super()
+
+
 ## Public so a test and a preview can drive it without a snapshot.
 func rebuild() -> void:
-	for child in _columns.get_children():
-		_columns.remove_child(child)
+	for child in _rows.get_children():
+		_rows.remove_child(child)
 		child.queue_free()
+	# A REBUILD FREES THE NODE THE BOX IS DESCRIBING. It holds a `TechDef` rather than a
+	# Control, so it would survive -- but an open box over a tree that has just changed
+	# state under it is a box that may now be wrong about "available", and the honest
+	# thing is to close it. Rebuilds are rare by construction (see `set_age`).
+	if _detail != null:
+		_detail.hide_detail()
 
 	var by_age := _techs_by_age()
 	var declared := 0
@@ -120,22 +148,22 @@ func rebuild() -> void:
 	var ages := maxi(1, GameDataRegistry.age_count() if GameDataRegistry != null else 4)
 	for age in range(1, ages + 1):
 		# THE PLACEHOLDER LATTICE IS ALL-OR-NOTHING, and that changed with 9.3. It used
-		# to fill any empty column, which was right while every column was empty and
-		# became a lie the moment one was not: age 1 has no technologies by design --
-		# there is nothing to research before you have a blacksmith -- and four "?"
-		# boxes there would promise an age-1 tier that is never coming.
-		_columns.add_child(_age_column(age, by_age.get(age, []), declared == 0))
+		# to fill any empty row, which was right while every row was empty and became a
+		# lie the moment one was not: age 1 has no technologies by design -- there is
+		# nothing to research before you have a blacksmith -- and four "?" boxes there
+		# would promise an age-1 tier that is never coming.
+		_rows.add_child(_age_row(age, by_age.get(age, []), declared == 0))
 
 	if declared == 0:
 		_legend.text = "Wireframe — no technologies are declared yet (techs.json is " \
-				+ "empty until PLAN.md 9.3). The columns and states below are the layout; " \
+				+ "empty until PLAN.md 9.3). The rows and states below are the layout; " \
 				+ "the nodes are placeholders. Research happens at the building that " \
 				+ "offers it, never on this page."
 	else:
-		_legend.text = "%d technologies. " % declared \
-				+ "Research happens at the building named under each one, never here " \
-				+ "-- this page is the guide to what is where. Gold means researched, " \
-				+ "lit means available in your age, dim means a later age."
+		_legend.text = "%d technologies — tap one to read what it does. " % declared \
+				+ "Research happens at the building named in the description, never " \
+				+ "here. Gold means researched, lit means available in your age, dim " \
+				+ "means a later age."
 
 
 ## `age_required` -> the techs that want it. A tech with an age outside the ladder
@@ -166,34 +194,58 @@ func _techs_by_age() -> Dictionary:
 	return out
 
 
-func _age_column(age: int, techs: Array, placeholder: bool = false) -> Control:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+## One age: its heading, then its technologies left to right.
+func _age_row(age: int, techs: Array, placeholder: bool = false) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
 
 	# THE AGE'S NAME, not its numeral. ages.json is explicit that this is one of the
 	# three places with room for prose -- the HUD badge takes the numeral because it
 	# has 648 px of height to spend and this page does not.
 	var age_def: AgeDef = GameDataRegistry.age(age) if GameDataRegistry != null else null
-	var heading := "%s. %s" % [
+	var heading := HudPanel.text_label("%s. %s" % [
 			age_def.numeral if age_def != null else str(age),
-			age_def.name if age_def != null else "Age %d" % age]
-	var header := HudPanel.text_label(heading, 16)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(header)
+			age_def.name if age_def != null else "Age %d" % age], 16)
+	heading.custom_minimum_size = Vector2(_HEADING_WIDTH, _NODE_SIZE.y)
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Wrapping is safe HERE and nowhere else in this row, because the minimum width
+	# above gives it something to wrap inside -- see the empty-row note below for what
+	# an unconstrained autowrapping label in an HBox does.
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# A row the viewer has not reached is dimmed WHOLE, heading included, so the ladder
+	# reads at a glance from across the page rather than node by node.
+	if age > _age:
+		heading.modulate = Color(1.0, 1.0, 1.0, 0.5)
+	row.add_child(heading)
 
 	var reached := age <= _age
 	if placeholder:
-		for i in range(_PLACEHOLDER_ROWS):
-			box.add_child(_node("?", "", State.AVAILABLE if reached else State.LOCKED))
+		for i in range(_PLACEHOLDER_COLUMNS):
+			row.add_child(_node(null, State.AVAILABLE if reached else State.LOCKED))
 	else:
 		for t in techs:
 			var def: TechDef = t
-			box.add_child(_node(def.name, _subtitle_for(def), _state_of(def, reached)))
+			row.add_child(_node(def, _state_of(def, reached)))
+
+	if not placeholder and techs.is_empty():
+		# AGE 1 IS EMPTY BY DESIGN and an empty row reads as a bug. Says so.
+		#
+		# AUTOWRAP OFF, and this is not a detail. `HudPanel.note_label` turns it on --
+		# right for the legend, wrong for anything in an HBox, because a wrapping label
+		# with no minimum width collapses to its narrowest possible box and Godot
+		# obligingly wraps it to ONE CHARACTER PER LINE. That is not a hypothetical: it
+		# is what the first render of this row did, and the resulting 400 px column of
+		# single letters pushed ages 2 to 4 off the bottom of the page.
+		var empty := HudPanel.note_label("nothing to research yet", 13)
+		empty.autowrap_mode = TextServer.AUTOWRAP_OFF
+		empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(empty)
 
 	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(spacer)
-	return box
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(spacer)
+	return row
 
 
 ## RESEARCHED beats everything, then the age gate. A tech the viewer holds is drawn as
@@ -206,60 +258,31 @@ func _state_of(def: TechDef, reached: bool) -> State:
 	return State.AVAILABLE if reached else State.LOCKED
 
 
-## The line under a node's name: WHERE IT IS BOUGHT, and what it needs first.
+## One node. A BUTTON since 2026-08-30, where it used to be a `PanelContainer`.
 ##
-## The building is the point of this whole page. The project owner's ruling of
-## 2026-08-29 — *"tech tree on mini map is only a visual guide letting you know what
-## buildings hold what upgrades"* — is what this line delivers, and without it the page
-## is a list of names with nothing to do about any of them. Research happens at the
-## building, so telling you which building IS the reference.
-func _subtitle_for(def: TechDef) -> String:
-	var parts: Array[String] = []
-	var where := _researched_at_text(def)
-	if not where.is_empty():
-		parts.append(where)
-	var needs := _requires_text(def)
-	if not needs.is_empty():
-		parts.append(needs)
-	return "\n".join(parts)
-
-
-## Where a tech is bought, by the building's display name. Several is legal in the
-## schema and none exists today; joined with "or" rather than a comma, because a list
-## of buildings reads as "all of these" otherwise and it means "any of these".
-func _researched_at_text(def: TechDef) -> String:
-	var names: Array[String] = []
-	for id in def.researched_at:
-		var bd: BuildingDef = GameDataRegistry.building(id)
-		names.append(bd.name if bd != null and not bd.name.is_empty() else String(id))
-	return " or ".join(names)
-
-
-## What a node needs before it, in words. The mockup draws prerequisites as lines
-## between boxes; lines want a `_draw()` over a laid-out grid and this page is not
-## worth that until there are real techs to connect, so the edge is named instead
-## of drawn. It is the same information.
-func _requires_text(def: TechDef) -> String:
-	if def.requires.is_empty():
-		return ""
-	var names: Array[String] = []
-	for id in def.requires:
-		var req: TechDef = GameDataRegistry.tech(id)
-		names.append(req.name if req != null else String(id))
-	return "needs %s" % ", ".join(names)
-
-
-## One node. Styled by state rather than labelled with it: a locked node is dimmed
-## and a reachable one is lit, which is how every tech tree in the genre says this
-## and needs no words at a size this small.
-func _node(text: String, subtitle: String, state: State) -> Control:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = _NODE_SIZE
+## Styled by state rather than labelled with it: a locked node is dimmed and a
+## reachable one is lit, which is how every tech tree in the genre says this and needs
+## no words at a size this small.
+##
+## A LOCKED NODE IS STILL PRESSABLE, deliberately. The description is the reason you
+## would tap a locked one at all -- "what is Plate Mail and is it worth planning for"
+## is a question about a tech you do not have yet, and disabling the node would answer
+## it with silence. Nothing is bought here, so there is nothing to refuse.
+##
+## `def` null draws the placeholder lattice's "?" and does nothing on a tap.
+func _node(def: TechDef, state: State) -> Control:
+	var button := Button.new()
+	button.custom_minimum_size = _NODE_SIZE
+	button.text = def.name if def != null else "?"
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.add_theme_font_size_override("font_size", 13)
+	button.focus_mode = Control.FOCUS_NONE
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
 	style.set_border_width_all(1)
 	style.set_content_margin_all(6)
+	style.set_corner_radius_all(3)
 	match state:
 		State.RESEARCHED:
 			style.border_color = HudStyle.GOLD
@@ -268,19 +291,24 @@ func _node(text: String, subtitle: String, state: State) -> Control:
 			style.border_color = Color(HudStyle.GOLD, 0.8)
 		_:
 			style.border_color = Color(HudStyle.GOLD, 0.25)
-			panel.modulate = Color(1.0, 1.0, 1.0, 0.45)
-	panel.add_theme_stylebox_override("panel", style)
+			button.modulate = Color(1.0, 1.0, 1.0, 0.45)
+	# EVERY STATE, or the theme's own plate shows through on hover and press -- the
+	# `aod_theme.tres` Button style is a painted nine-patch, and one of these nodes
+	# wearing it would read as a completely different control from its neighbours.
+	for name in ["normal", "hover", "pressed", "disabled"]:
+		button.add_theme_stylebox_override(name, style)
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 2)
-	panel.add_child(rows)
+	if def != null:
+		button.pressed.connect(_on_node_pressed.bind(def, state))
+	return button
 
-	var label := HudPanel.text_label(text, 14)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	rows.add_child(label)
-	if not subtitle.is_empty():
-		var sub := HudPanel.note_label(subtitle, 11)
-		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		rows.add_child(sub)
-	return panel
+
+func _on_node_pressed(def: TechDef, state: State) -> void:
+	_detail.show_tech(def, state, _age)
+
+
+## The box currently open, or null. For a test and a preview -- pressing the real
+## button and then asking what it opened is the check worth having here.
+func detail_box() -> TechDetailBox:
+	return _detail

@@ -321,61 +321,72 @@ func _advance_script() -> void:
 			_report_page(_game._tech_tree, "tech tree")
 			_shoot("match_techtree")
 		49:
-			_press_corner(&"chat")
+			# TAP A TECHNOLOGY, so the detail box gets photographed too (project owner,
+			# 2026-08-30). The tree screenshot above is a grid of names and cannot show
+			# the half of the page with the words in it.
+			_open_a_tech_description()
 		50:
+			_report_tech_description()
+			_shoot("match_tech_description")
+		51:
+			# Shut it again, or every later shot has a box over the middle of it.
+			_game._tech_tree.detail_box().hide_detail()
+		52:
+			_press_corner(&"chat")
+		53:
 			_report_page(_game._chat, "chat")
 			_shoot("match_chat")
-		51:
+		54:
 			# SETTINGS, which is where the pause menu went when the age header's pause
 			# button was retired. Closes the chat page on the way, which is the other half
 			# of the rule: one page at a time.
 			_press_corner(&"settings")
-		52:
+		55:
 			_report_settings()
 			_shoot("match_settings")
-		53:
+		56:
 			# Back out of it, so the resign below opens it again the way a player would
 			# rather than finding it already up.
 			_game._pause_menu._on_resume_pressed()
-		54:
+		57:
 			# THE [X] THAT DROPS THE SELECTION (8.8), on a town centre because that is the
 			# tallest panel this map can produce and the button's whole design constraint is
 			# vertical: it has exactly 40 px between the control-group stack and the panel's
 			# own ceiling, and a button pushed under that stack keeps DRAWING and stops
 			# taking taps. Only a live rect can tell those apart.
 			_select_a_town_centre()
-		55:
+		58:
 			_report_the_clear_button()
 			_shoot("match_clear_button")
-		56:
+		59:
 			_press_the_clear_button()
-		57:
+		60:
 			# Shot a step later, like every other press here: the panel repaints off the
 			# next snapshot, so photographing the same frame would show it still open.
 			_report_the_clear_button()
 			_shoot("match_cleared")
-		58:
+		61:
 			# RESEARCH (PLAN.md 9.3). The blacksmith is not on the debug map, so it is
 			# stood up the same way the market is -- through the host world, the
 			# documented solo-only exception. Age 4 by now, so all twelve of its
 			# technologies are unlocked and the grid is full.
 			_stand_up_a_blacksmith()
-		59:
+		62:
 			_select_the_blacksmith()
 			_open_research()
-		60:
+		63:
 			_report_research()
 			_shoot("match_research")
-		61:
+		64:
 			# Through the detail slot's own press, not a hand-built ResearchCommand:
 			# what is in doubt is the whole chain -- a tile with no icon and only a
 			# label draws and takes a tap, `SelectionPanel` turns it into
 			# `research_requested`, `GameScene` into a command, and the queue moves.
 			_research_the_first_thing()
-		62:
+		65:
 			_report_research_queue()
 			_shoot("match_researching")
-		63:
+		66:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -385,7 +396,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		64:
+		67:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -627,6 +638,44 @@ func _report_market_trade() -> void:
 		push_warning("preview_match: the buy never reached the simulation")
 	if gold_after >= _market_gold_before:
 		push_warning("preview_match: the buy was free")
+
+
+## Tap a technology in the tree, through the REAL node button (project owner,
+## 2026-08-30: *"tapping a tech brings up the big text box"*).
+##
+## Presses the button rather than calling `show_tech` for this file's standing reason:
+## a control wired to nothing photographs exactly like a working one, and on this screen
+## that has happened twice.
+##
+## FORGING because it is in age 2 and the preview is at age 4 by now, so the box comes
+## out in its AVAILABLE state with a real description, a real cost and a real effect
+## line -- a locked one would photograph the same layout carrying "Needs the ... Age",
+## which is a less useful picture of the feature.
+func _open_a_tech_description() -> void:
+	var wanted := "Forging"
+	for row in _game._tech_tree._rows.get_children():
+		for node in row.get_children():
+			if node is Button and (node as Button).text == wanted:
+				(node as Button).pressed.emit()
+				return
+	push_warning("preview_match: no %s node to tap in the tech tree" % wanted)
+
+
+## WHAT THE BOX ACTUALLY SAYS, printed because a screenshot of a panel of prose cannot
+## be told from a screenshot of a panel of placeholder prose. The owner asked for text
+## explaining the upgrade; this is the check that there IS any.
+func _report_tech_description() -> void:
+	var box: TechDetailBox = _game._tech_tree.detail_box()
+	print("  tech box: showing %s, tech %s" % [
+			box.is_showing(), box.tech.id if box.tech != null else "<none>"])
+	if not box.is_showing():
+		push_warning("preview_match: tapping a technology opened no description")
+		return
+	print("    %s" % box._blurb.text)
+	for line in TechDetailBox.fact_lines(box.tech):
+		print("    - %s" % line)
+	if box.tech != null and box.tech.description.is_empty():
+		push_warning("preview_match: %s has no description in techs.json" % box.tech.id)
 
 
 func _report_settings() -> void:
