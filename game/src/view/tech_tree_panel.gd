@@ -77,6 +77,23 @@ const _ICON_INSET := 0.17
 ## uneven tiles was the first thing this rewrite produced.
 const _RESEARCHED_BAR_HEIGHT := 3.0
 
+## How much a later age's row is dimmed by (project owner, 2026-08-30: *"tech tree is
+## faded out"*).
+##
+## ⚠️ **AT AGE 1 THAT IS THE WHOLE PAGE**, which is what makes this number matter far
+## more than "dim the rows you have not reached" suggests. Age 1 has no technologies by
+## design, so a player opening the tree for the first time -- in the lobby, or in the
+## first minutes of a match -- sees 27 nodes and four headings and every single one of
+## them is a later age. At the 0.45 and 0.5 these were, the page read as switched off
+## rather than as a ladder, and the icons that [P8] was drawn for were barely legible.
+##
+## The tile is dimmed slightly harder than the heading because the heading is a word and
+## words survive dimming better than a 36 px picture does. Both are now "further away"
+## rather than "unavailable" -- which is the honest claim anyway: nothing on this page
+## can be bought, and every one of these IS coming.
+const _LOCKED_TILE_ALPHA := 0.72
+const _LOCKED_HEADING_ALPHA := 0.8
+
 ## The fixed-width heading at the left of each age row.
 const _HEADING_WIDTH := 132.0
 
@@ -268,7 +285,7 @@ func _age_row(age: int, techs: Array, placeholder: bool = false) -> Control:
 	# A row the viewer has not reached is dimmed WHOLE, heading included, so the ladder
 	# reads at a glance from across the page rather than node by node.
 	if age > _age:
-		heading.modulate = Color(1.0, 1.0, 1.0, 0.5)
+		heading.modulate = Color(1.0, 1.0, 1.0, _LOCKED_HEADING_ALPHA)
 	row.add_child(heading)
 
 	var reached := age <= _age
@@ -374,7 +391,9 @@ func _node(def: TechDef, state: State) -> Control:
 		_:
 			# The whole tile dims, frame and icon included, which is how every tech
 			# tree in the genre says "later age" and needs no words at this size.
-			button.modulate = Color(1.0, 1.0, 1.0, 0.45)
+			# See `_LOCKED_TILE_ALPHA` for why the figure is as gentle as it is: at
+			# age 1 this branch is every node on the page.
+			button.modulate = Color(1.0, 1.0, 1.0, _LOCKED_TILE_ALPHA)
 
 	if def != null:
 		button.pressed.connect(_on_node_pressed.bind(def, state))

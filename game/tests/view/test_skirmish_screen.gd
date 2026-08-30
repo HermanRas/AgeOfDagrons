@@ -634,7 +634,7 @@ func test_the_invitation_terms_are_beside_the_ready_button_not_only_beside_the_m
 	screen._lobby = SkirmishScreen.Lobby.JOINED
 	screen._on_lobby_config_received()
 
-	var terms := screen.lobby_text()
+	var terms := screen.terms_text()
 	assert_true(terms.contains("seed"), "got %s" % terms)
 	assert_true(terms.contains(MatchConfig.mode_name(MatchConfig.Mode.LAST_MAN_STANDING)),
 			"the victory condition is a term of the invitation: %s" % terms)
@@ -646,7 +646,15 @@ func test_the_invitation_terms_are_beside_the_ready_button_not_only_beside_the_m
 func test_a_joiner_with_no_proposal_is_told_so_on_the_nav_line_too() -> void:
 	screen._lobby = SkirmishScreen.Lobby.JOINED
 	screen._refresh_lobby()
-	assert_true(screen.lobby_text().contains("Waiting"), "got %s" % screen.lobby_text())
+	assert_true(screen.terms_text().contains("Waiting"), "got %s" % screen.terms_text())
+
+
+func test_a_host_has_no_terms_line_at_all() -> void:
+	# The footer is buttons and nothing else unless this device is the one being asked
+	# to agree to something -- the owner cut it to one row to get the height back.
+	assert_false(screen._terms_label.visible)
+	_open_slot_two()
+	assert_false(screen._terms_label.visible, "hosting is not being invited")
 
 
 func test_the_server_browser_is_visibly_a_placeholder() -> void:
@@ -658,10 +666,11 @@ func test_the_server_browser_is_visibly_a_placeholder() -> void:
 			"and says why, since a greyed button with no reason reads as broken")
 
 
-func test_both_setup_panels_wear_the_dragon_frame() -> void:
-	# "GAME SETUP Panel with 9 patch border, the dragon one" and the map panel in "the
-	# same 9 patch panel stile from resources panel" -- which is the same plate:
-	# `ResourceHUD` passes `ornate` too.
+func test_all_three_panels_wear_the_dragon_frame() -> void:
+	# "GAME SETUP Panel with 9 patch border, the dragon one", the map panel in "the same
+	# 9 patch panel stile from resources panel" -- the same plate, since `ResourceHUD`
+	# passes `ornate` too -- and, since the owner's second pass, the chat: *"chat pannel
+	# is missing its border, it needs the same border as game and map setup"*.
 	var framed := 0
 	for panel in _panels_in(screen):
 		for child in panel.get_children():
@@ -669,20 +678,36 @@ func test_both_setup_panels_wear_the_dragon_frame() -> void:
 					and (child as NinePatchRect).texture.resource_path \
 					== HudStyle.PANEL_ORNATE_PATH:
 				framed += 1
-	assert_eq(framed, 2, "game setup and map setup, and nothing else on the page")
+	assert_eq(framed, 3, "chat, game setup and map setup, and nothing else on the page")
 
 
-func test_the_map_picture_has_a_plain_border_of_its_own() -> void:
-	# "add a simple panel_hud.jpg border around the map". The PLAIN plate inside the
-	# ornate one: a second set of dragons nested in the first reads as a mistake.
-	var frame := screen._preview.get_parent().get_parent()
-	assert_true(frame is PanelContainer)
-	var plates := 0
-	for child in frame.get_children():
-		if child is NinePatchRect and (child as NinePatchRect).texture.resource_path \
-				== HudStyle.PANEL_BG_PATH:
-			plates += 1
-	assert_eq(plates, 1)
+func test_the_map_picture_wears_a_plain_plate_turned_to_hug_the_diamond() -> void:
+	# "rotate it 45 so it hugs the mini map diamond, not a big square". The PLAIN plate,
+	# deliberately, inside the ornate one: a second set of dragons nested in the first
+	# reads as a mistake.
+	var frame := screen._map_frame
+	assert_not_null(frame, "the plate loaded")
+	assert_eq(frame.texture.resource_path, HudStyle.PANEL_BG_PATH)
+	assert_almost_eq(frame.rotation, PI * 0.25, 0.0001)
+	assert_eq(frame.get_parent(), screen._preview.get_parent(),
+			"it is laid over the picture, not around it -- containers ignore rotation")
+
+
+func test_the_turned_plate_is_sized_from_the_diamonds_own_geometry() -> void:
+	# `to_diamond` inscribes the diamond in a square, touching the edge midpoints, so
+	# the diamond's SIDE is the square's side over root two -- and that, plus the inset,
+	# is exactly what a square frame turned 45° needs to sit on it. Asserted rather than
+	# eyeballed, because a frame that is close but wrong reads as a frame that is right.
+	var box: Control = screen._preview.get_parent()
+	box.size = Vector2(260.0, 180.0)
+	screen._fit_map_frame()
+
+	var expected := 180.0 / sqrt(2.0) + 2.0 * SkirmishScreen._MAP_FRAME_INSET
+	assert_almost_eq(screen._map_frame.size.x, expected, 0.01,
+			"sized off the SHORT side, which is the square the picture is drawn in")
+	assert_almost_eq(screen._map_frame.size.y, expected, 0.01, "and square")
+	assert_almost_eq(screen._map_frame.pivot_offset.x, expected * 0.5, 0.01,
+			"turning about its own middle, or it leaves the picture entirely")
 
 
 ## Every PanelContainer under `node`, depth first.

@@ -11,6 +11,22 @@
 ## the dimmed full-screen chrome around one of these; `SkirmishScreen` puts one in the
 ## left two thirds of the lobby.
 ##
+## ⚠️ **NOTHING IN HERE MAY DICTATE THE WIDTH OF THE PAGE IT IS DROPPED INTO.** A
+## `Button` is by default always wide enough for its own text, and this widget has eight
+## of them plus three `CheckButton`s and a fixed-width note -- about 665 px of minimum.
+## In the full-page chat that was free, since the page is wider than that anyway; in the
+## lobby it made the CHAT column's minimum bigger than the two thirds it was given, which
+## pushed the whole page past the viewport and shoved the footer's BACK button 22 px off
+## the right edge. Measured rather than guessed: `preview_skirmish._report_footer` prints
+## every footer rect and warns on anything past the edge.
+##
+## **THE FIX IS ONE `clip_text`, ON THE ONE CONTROL THAT CAN AFFORD IT** -- the "no voice
+## channel" note, whose `AUTOWRAP_OFF` was making its whole string a minimum. That is 110
+## px against the 46 that needed to go. Clipping the BUTTONS as well was tried first and
+## is what a screenshot immediately showed to be wrong: `clip_text` is unconditional, not
+## "shrink if crowded", so the toggles lost their labels and the quick phrases became
+## "A", "H", "Y", "N" **at a width where every one of them fitted**.
+##
 ## A WIREFRAME, and the project owner asked for it as one: the layout is real so the art
 ## can be drawn against it, and there is no chat transport underneath. What makes it a
 ## wireframe rather than a mock-up is that everything it CAN know, it knows for real --
@@ -166,6 +182,11 @@ func _build_voice_row() -> Control:
 	var note := HudPanel.note_label("no voice channel", 13)
 	note.autowrap_mode = TextServer.AUTOWRAP_OFF
 	note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# AUTOWRAP_OFF makes its minimum width the whole string; `clip_text` takes that back
+	# to nothing, so the note is the first thing to give when the column is narrow. It
+	# is also the least load-bearing thing in the row -- the disabled toggles beside it
+	# already say there is no voice.
+	note.clip_text = true
 	row.add_child(note)
 	return row
 
@@ -183,7 +204,7 @@ func _build_composer_row() -> Control:
 
 	_send_button = Button.new()
 	_send_button.text = "SEND"
-	_send_button.custom_minimum_size = Vector2(110.0, 40.0)
+	_send_button.custom_minimum_size = Vector2(90.0, 34.0)
 	_send_button.disabled = true
 	row.add_child(_send_button)
 

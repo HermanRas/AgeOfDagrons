@@ -96,10 +96,16 @@ const _SEED_MAX := 999999
 ## at every viewport this game is ever laid out at -- `window/stretch/aspect` is
 ## `expand`, so the viewport genuinely does change shape between a phone and a desktop
 ## window, and a number computed once from `size` would be right on one of them.
+##
+## THE VERTICAL SPLIT IS NOT A RATIO AND USED TO BE. The owner's first spec said *"bottom
+## 20% nav with buttons"*, so the strip was given a quarter of the body's stretch -- and
+## once the footer became a single row of half-height buttons it was using about a third
+## of what it had reserved, with the rest sitting empty above the screen edge while the
+## setup column scrolled. It now takes the height it needs and **the two columns take
+## everything else** (*"have the single row that looks really good hug the bottom of the
+## screen, srink the footer and grow the tow main columns down"*).
 const _CHAT_STRETCH := 2.0
 const _SETUP_STRETCH := 1.0
-const _BODY_STRETCH := 4.0
-const _NAV_STRETCH := 1.0
 
 ## Inside a dragon-framed panel, clear of the moulding. Larger than
 ## `HudStyle.PANEL_ORNATE_MARGIN` would suggest is needed on the flat edges, and that is
@@ -133,6 +139,10 @@ const _PREVIEW_HEIGHT := 150.0
 ## `clip_text` the list stays honest about what the placeholders do and the ROW stays
 ## inside the panel, which is the trade this screen wants: the list is read when it is
 ## open, and it opens at full width.
+## A nav-strip button. See `_nav_button` for both numbers: 26 is half the old height and
+## the width is what keeps START from resizing the row when its label grows.
+const _NAV_BUTTON_MIN := Vector2(86.0, 26.0)
+
 const _ROLE_MIN := Vector2(150.0, 0.0)
 const _SWATCH_MIN := Vector2(76.0, 0.0)
 const _PICKER_MIN := Vector2(140.0, 0.0)
@@ -229,6 +239,16 @@ var _tech_tree: TechTreePanel
 var _tech_button: Button
 var _browser_button: Button
 
+## The plate around the map picture, turned 45° to sit on the diamond. Held because its
+## size is recomputed from the box's `resized` -- see `_fit_map_frame`.
+var _map_frame: NinePatchRect
+
+## What a joining player is agreeing to, on the nav strip beside READY. Its own label
+## rather than sharing `_lobby_status`, which moved into the chat frame when the footer
+## was cut to one row: the dial addresses can live over there, the terms of an invitation
+## cannot be two feet from the button that accepts them.
+var _terms_label: Label
+
 ## The palette grid a colour button opens. ONE instance for the whole screen rather
 ## than one per slot row: the rows are torn down and rebuilt whenever the slot count
 ## changes, and a picker owned by a row would be freed underneath the finger that
@@ -269,16 +289,19 @@ func _init() -> void:
 	# alongside the join row, the slot rows and the START button.
 	page.add_child(_heading("MULTIPLAYER — SKIRMISH"))
 
+	# THE ONLY THING ON THE PAGE THAT EXPANDS. The heading takes its line and the nav
+	# strip takes its row; everything left over is the two columns, which is what makes
+	# the footer hug the bottom edge -- see `_CHAT_STRETCH` for the history.
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 16)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.size_flags_stretch_ratio = _BODY_STRETCH
 	page.add_child(body)
 
 	_chat = ChatBoard.new()
-	_chat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_chat.size_flags_stretch_ratio = _CHAT_STRETCH
-	body.add_child(_chat)
+	var chat_panel := _framed("CHAT", _build_chat_column(), true)
+	chat_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chat_panel.size_flags_stretch_ratio = _CHAT_STRETCH
+	body.add_child(chat_panel)
 
 	# ⚠️ THE SETUP COLUMN SCROLLS, AND IT IS NOT OPTIONAL. This screen offers up to eight
 	# slots and each is a two-line block: at eight, the GAME SETUP panel alone is taller
@@ -298,8 +321,11 @@ func _init() -> void:
 	setups.add_theme_constant_override("separation", 12)
 	setups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	setup_scroll.add_child(setups)
-	setups.add_child(_build_game_setup())
+	# MAP FIRST (project owner, 2026-08-30: *"swap map and game setup"*). It also puts the
+	# panel that fits above the fold at the top of a column that scrolls -- see `_init`'s
+	# note on the scroll and `_PREVIEW_HEIGHT` on why the fold is where it is.
 	setups.add_child(_build_map_setup())
+	setups.add_child(_build_game_setup())
 
 	page.add_child(_build_nav())
 
@@ -332,18 +358,34 @@ func _init() -> void:
 
 # ── layout ──────────────────────────────────────────────────────────────────
 
-## THE BOTTOM STRIP, three columns of it (project owner, 2026-08-30). Join on the left,
+## THE BOTTOM STRIP, three groups of it (project owner, 2026-08-30). Join on the left,
 ## the two side doors in the middle, and the two decisions -- go, or go back -- on the
 ## right, which is where a thumb finishes.
+##
+## ONE ROW SINCE THE SECOND PASS (*"please half the size of the buttons so they fit in 1
+## row"*). It was two stacked rows per group, at 44 px each; they are half that now and
+## side by side, which gives the strip back about 60 px -- and the strip is 20% of a page
+## whose right-hand column was already scrolling, so that height is worth having.
+##
+## The one thing left under the row is `_terms_label`, and only on a joined client. See
+## its declaration for why it did not go to the chat box with the dial addresses.
 func _build_nav() -> Control:
-	var nav := HBoxContainer.new()
-	nav.add_theme_constant_override("separation", 16)
-	nav.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	nav.size_flags_stretch_ratio = _NAV_STRETCH
+	# SHRINK_END, not EXPAND_FILL. The strip takes exactly the height of its one row and
+	# the columns above take the rest, which is what puts it against the bottom edge.
+	var nav := VBoxContainer.new()
+	nav.add_theme_constant_override("separation", 6)
+	nav.size_flags_vertical = Control.SIZE_SHRINK_END
 
-	nav.add_child(_build_join_column())
-	nav.add_child(_build_doors_column())
-	nav.add_child(_build_go_column())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	row.add_child(_build_join_column())
+	row.add_child(_build_doors_column())
+	row.add_child(_build_go_column())
+	nav.add_child(row)
+
+	_terms_label = HudPanel.note_label("", 13)
+	_terms_label.visible = false
+	nav.add_child(_terms_label)
 	return nav
 
 
@@ -361,31 +403,29 @@ func _build_nav() -> Control:
 ## touch, so a plain field never takes focus from a finger and never raises a keyboard
 ## at all. That is the bug that blocked this whole screen.
 func _build_join_column() -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	row.add_child(_label("Join"))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# NOT `_label()`, whose 96 px minimum is sized for the settings column. Seven
+	# controls share one row here and every minimum in it is spent twice: the first
+	# one-row footer came out 24 px wider than the page and pushed BACK off the edge.
+	var join_label := Label.new()
+	join_label.text = "Join"
+	join_label.add_theme_color_override("font_color", HudStyle.GOLD)
+	join_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(join_label)
 
 	_join_field = TouchLineEdit.new()
 	_join_field.placeholder_text = "host address, e.g. 192.168.0.12"
+	_join_field.custom_minimum_size = Vector2(90.0, 0.0)
 	_join_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_join_field.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_join_field)
 
 	_join_button = _nav_button("JOIN", _on_join_pressed)
 	row.add_child(_join_button)
-	column.add_child(row)
-
-	# The transport line -- who is dialling what, and every address this device answers
-	# on. Under the field it belongs to rather than under the whole page, which is where
-	# it used to be and where it read as a caption for the map.
-	_lobby_status = Label.new()
-	_lobby_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_lobby_status.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(_lobby_status)
-	return column
+	return row
 
 
 ## The two side doors: somewhere to find a host, and something to read while waiting.
@@ -396,40 +436,47 @@ func _build_join_column() -> Control:
 ## the selection panel's roster grid drew, took taps and played a click sound for the
 ## whole life of the project while doing nothing at all.
 func _build_doors_column() -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	_browser_button = _nav_button("SERVER BROWSER", Callable())
+	# "SERVERS", not "SERVER BROWSER". Six of them share one row now and the longer
+	# label came out as "SERVER BROWSE" -- `clip_text` cuts, it does not shrink, so a
+	# label that does not fit is a label with a letter missing rather than a smaller one.
+	_browser_button = _nav_button("SERVERS", Callable())
 	_browser_button.disabled = true
-	_browser_button.tooltip_text = "Coming next — nothing behind this yet"
-	column.add_child(_browser_button)
+	_browser_button.tooltip_text = "Server browser — coming next, nothing behind this yet"
+	row.add_child(_browser_button)
 
 	_tech_button = _nav_button("TECH TREE", _on_tech_tree_pressed)
-	column.add_child(_tech_button)
-	return column
+	row.add_child(_tech_button)
+	return row
 
 
 ## START, READY and Back. The three that leave this screen.
+##
+## START IS SIZED FOR "START MATCH", which is the longer of the two labels it wears --
+## it says "START" for a plain skirmish and "START MATCH" once a slot is open, because
+## the press means two different things and the second one commits people who are
+## waiting. `_NAV_BUTTON_MIN` holds that width, so the row does not reshuffle under a
+## thumb the moment a slot is opened.
 func _build_go_column() -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	_start_button = _nav_button("START", _on_start_pressed)
-	column.add_child(_start_button)
+	row.add_child(_start_button)
 
 	# The joining player's say. Only visible to them -- a host readies by pressing START,
-	# and two buttons meaning the same thing on one screen would be one too many. It
-	# shares the row rather than taking a fourth column, because exactly one of the two
-	# is ever on screen.
+	# and two buttons meaning the same thing on one screen would be one too many.
 	_ready_button = _nav_button("READY", _on_ready_pressed)
 	_ready_button.visible = false
-	column.add_child(_ready_button)
+	row.add_child(_ready_button)
 
 	_back_button = _nav_button("BACK", _on_back_pressed)
-	column.add_child(_back_button)
-	return column
+	row.add_child(_back_button)
+	return row
 
 
 ## Open the tech tree over the lobby, showing what the match's STARTING AGE unlocks.
@@ -482,7 +529,34 @@ func _section_heading(text: String) -> Label:
 ## The content is built first and wrapped after, rather than the frame handing back a
 ## box to fill, because the two panels want different vertical behaviour inside the same
 ## frame and threading that through a builder is more argument than it is worth.
-func _framed(heading: String, content: Control) -> PanelContainer:
+## The chat frame's insides: the board, and under it the line that says what the session
+## is doing.
+##
+## THE DIAL ADDRESSES LIVE HERE NOW (project owner, 2026-08-30: *"text printing ip is
+## shown in footer, rather put it in chat box. to save sapce"*). They are the one thing
+## on this screen that is genuinely a message about the session rather than a setting, so
+## a chat box is a reasonable place for them -- and the footer got its height back.
+func _build_chat_column() -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+
+	_chat.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_chat)
+
+	_lobby_status = Label.new()
+	_lobby_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_lobby_status.add_theme_font_size_override("font_size", 14)
+	_lobby_status.add_theme_color_override("font_color", HudStyle.GOLD)
+	column.add_child(_lobby_status)
+	return column
+
+
+## Wrap `content` in the dragon-cornered plate, with `heading` above it.
+##
+## `expand` is for a panel that should take the height it is given rather than the height
+## it needs -- the chat, which has a scrolling log in it. The two setup panels want the
+## opposite, because they sit in a scrolling column where "fill the space" has no meaning.
+func _framed(heading: String, content: Control, expand: bool = false) -> PanelContainer:
 	var panel := PanelContainer.new()
 	HudStyle.add_panel_background(panel, true)
 
@@ -495,10 +569,8 @@ func _framed(heading: String, content: Control) -> PanelContainer:
 	column.add_theme_constant_override("separation", 8)
 	margin.add_child(column)
 	column.add_child(_section_heading(heading))
-	# SHRINK, not expand: these sit in a scrolling column now, so "fill the space" has no
-	# meaning -- there is as much space as the content asks for. Left on EXPAND_FILL the
-	# two panels fight over a height neither of them is being given.
-	content.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL if expand \
+			else Control.SIZE_SHRINK_BEGIN
 	column.add_child(content)
 	return panel
 
@@ -576,19 +648,78 @@ func _build_map_setup() -> Control:
 	return _framed("MAP SETUP", column)
 
 
-## The map picture in the plain plate. A `PanelContainer` rather than a bare
-## `NinePatchRect` so the frame sizes itself to the picture instead of the other way
-## round, which is what `HudStyle.add_panel_background` is built to sit inside.
+## The map picture inside a frame TURNED 45° TO HUG IT (project owner, 2026-08-30: *"the
+## mini map border is not what i wanted, i need you to rotate it 45 so it hugs the mini
+## map diamond, not a big square"*).
+##
+## THE GEOMETRY IS EXACT AND WORTH WRITING DOWN. `MapPreview.to_diamond` renders a
+## `w x h` map into a SQUARE image of side `w + h`, with the diamond inscribed so its
+## four points sit on the midpoints of that square's edges. A diamond inscribed that way
+## in a square of side P has a side length of `P / sqrt(2)` -- so a SQUARE frame of that
+## side, rotated 45° about its own centre and centred on the picture, has its edges lying
+## exactly along the diamond's. `_MAP_FRAME_INSET` is then added to push the moulding
+## clear of the terrain rather than through it.
+##
+## LAID OUT BY HAND, in a plain `Control` rather than a container, because **Godot's
+## containers size and place children as though `rotation` were zero** -- a rotated child
+## in a `MarginContainer` is positioned by its unrotated rect and then spun, which puts
+## it somewhere else entirely. So the frame is centre-anchored, its pivot moved to its
+## own middle, and its side recomputed from `resized`.
 func _framed_preview() -> Control:
-	var frame := PanelContainer.new()
-	HudStyle.add_panel_background(frame)
+	var box := Control.new()
+	box.custom_minimum_size = Vector2(0.0, _PREVIEW_HEIGHT)
 
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, _MAP_FRAME_INSET)
-	frame.add_child(margin)
-	margin.add_child(_preview)
-	return frame
+	# ⚠️ **THE PLATE GOES UNDER THE PICTURE, AND IT WAS OVER IT FIRST.** `panel_hud` is a
+	# PANEL: its middle is a filled recess, not a hole. Added after the preview it drew
+	# a turned brown square exactly where the map should be and the map vanished --
+	# `HudStyle.add_panel_background` avoids this with a `move_child(bg, 0)` and this
+	# hand-built frame has to do the same thing for itself. The diamond image's corners
+	# are transparent, so the border shows through them and the plate's fill backs the
+	# picture, which is what it is for.
+	if ResourceLoader.exists(HudStyle.PANEL_BG_PATH):
+		_map_frame = NinePatchRect.new()
+		_map_frame.texture = load(HudStyle.PANEL_BG_PATH)
+		_map_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		_map_frame.patch_margin_left = HudStyle.PANEL_MARGIN
+		_map_frame.patch_margin_right = HudStyle.PANEL_MARGIN
+		_map_frame.patch_margin_top = HudStyle.PANEL_MARGIN
+		_map_frame.patch_margin_bottom = HudStyle.PANEL_MARGIN
+		_map_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_map_frame.rotation = PI * 0.25
+		# CENTRE-ANCHORED so the offsets below are measured from the middle of the box,
+		# which is the one point the rotation leaves fixed.
+		_map_frame.anchor_left = 0.5
+		_map_frame.anchor_right = 0.5
+		_map_frame.anchor_top = 0.5
+		_map_frame.anchor_bottom = 0.5
+		box.add_child(_map_frame)
+
+	_preview.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.add_child(_preview)
+
+	box.resized.connect(_fit_map_frame)
+	_fit_map_frame()
+	return box
+
+
+## Size the turned frame to whatever square the picture is currently drawn in.
+##
+## `MapPreview` keeps the texture's aspect and centres it, so the diamond's bounding
+## square is `min(width, height)` of the box -- not the box itself, which is usually
+## wider than it is tall.
+func _fit_map_frame() -> void:
+	if _map_frame == null:
+		return
+	var box: Control = _map_frame.get_parent()
+	var picture := minf(box.size.x, box.size.y)
+	var side := picture / sqrt(2.0) + 2.0 * _MAP_FRAME_INSET
+	_map_frame.offset_left = -side * 0.5
+	_map_frame.offset_right = side * 0.5
+	_map_frame.offset_top = -side * 0.5
+	_map_frame.offset_bottom = side * 0.5
+	# The pivot follows the size, or the frame spins about its top-left corner and
+	# leaves the picture entirely.
+	_map_frame.pivot_offset = Vector2(side, side) * 0.5
 
 
 func _build_game_setup() -> Control:
@@ -777,12 +908,23 @@ func _button(text: String, on_pressed: Callable) -> Button:
 	return b
 
 
-## A button in the bottom nav strip. Tall enough for a thumb -- 44 px is the floor this
-## project has used since the HUD overhaul, and the nav is the one row on this screen a
-## player presses rather than reads.
+## A button in the bottom nav strip.
+##
+## HALF THE HEIGHT IT WAS (project owner, 2026-08-30: *"please half the size of the
+## buttons so they fit in 1 row"*). 44 was the touch floor this project has used since
+## the HUD overhaul and 22 is below it -- so this sits at 26, which is half the old
+## BUTTON including its separation and still a target a thumb can find. The strip is a
+## lobby, pressed once per match, not a HUD pressed under time pressure.
+##
+## The width minimum is what stops the row reshuffling: START becomes "START MATCH" when
+## a slot is opened, and a row that re-laid itself at that moment would move BACK under
+## a thumb already travelling to it.
 func _nav_button(text: String, on_pressed: Callable) -> Button:
 	var b := _button(text, on_pressed)
-	b.custom_minimum_size = Vector2(0.0, 44.0)
+	b.custom_minimum_size = _NAV_BUTTON_MIN
+	b.clip_text = true
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return b
 
 
@@ -916,6 +1058,12 @@ func lobby_state() -> Lobby:
 
 func lobby_text() -> String:
 	return _lobby_status.text
+
+
+## What a joining player is being asked to agree to, as shown beside READY. Empty on a
+## host, which has nothing to agree to.
+func terms_text() -> String:
+	return _terms_label.text if _terms_label.visible else ""
 
 
 # ── handlers ────────────────────────────────────────────────────────────────
@@ -1434,18 +1582,24 @@ func _invitation_terms(cfg: MatchConfig) -> String:
 
 
 func _refresh_lobby_text() -> void:
+	# ⚠️ **THE TERMS HAVE TO BE WHERE THE READY BUTTON IS.** They are also in the MAP
+	# SETUP panel, beside the map they describe -- which was their only home until
+	# 2026-08-30, and the rework put that panel in a scrolling column where it sits
+	# below the fold. A joining player was being asked to agree to a match whose terms
+	# were off the bottom of the screen, which is the one failure a consent screen may
+	# not have.
+	#
+	# ITS OWN LABEL rather than `_lobby_status`, which moved into the chat frame when
+	# the footer was cut to one row. The dial addresses are fine over there; the terms
+	# of an invitation are not, because they belong beside the button that accepts them.
+	# Hidden entirely otherwise, so a host's footer is buttons and nothing else.
+	_terms_label.visible = _lobby == Lobby.JOINED
+	if _terms_label.visible:
+		var terms_cfg := Net.lobby_config()
+		_terms_label.text = "Waiting for the host's settings" if terms_cfg == null \
+				else "%s — press READY to agree" % _invitation_terms(terms_cfg)
+
 	match _lobby:
-		Lobby.JOINED:
-			# ⚠️ **THE TERMS HAVE TO BE WHERE THE READY BUTTON IS.** They are also in the
-			# MAP SETUP panel, beside the map they describe -- which was their only home
-			# until 2026-08-30, and the rework put that panel in a scrolling column where
-			# it sits below the fold. A joining player was being asked to agree to a match
-			# whose terms were off the bottom of the screen, which is the one failure a
-			# consent screen may not have. This line is in the nav strip, two inches from
-			# READY, and always visible.
-			var cfg := Net.lobby_config()
-			_lobby_status.text = "Waiting for the host's settings" if cfg == null \
-					else "%s — press READY to agree" % _invitation_terms(cfg)
 		Lobby.HOSTING:
 			# JUST THE TRANSPORT. Who is in which chair is on the chairs now, in
 			# `_refresh_slot_rows` -- this line is only the thing the rows cannot say,

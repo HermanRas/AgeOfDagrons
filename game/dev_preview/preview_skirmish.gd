@@ -46,6 +46,7 @@ func _process(_delta: float) -> void:
 			if _frames < SETTLE_FRAMES:
 				return
 			_report_screen()
+			_report_footer()
 			_shoot("skirmish_screen")
 		1:
 			# EIGHT SLOTS, SIX CLOSED: two players on a board with eight players' worth of
@@ -130,6 +131,29 @@ func _process(_delta: float) -> void:
 ## drawn by the time it is photographed.
 func _hold(frames: int) -> void:
 	_resume_at = _frames + frames
+
+
+## WHERE EVERY FOOTER CONTROL ACTUALLY ENDS UP, in screen pixels.
+##
+## The owner asked for one row (*"half the size of the buttons so they fit in 1 row"*),
+## and "fits" is a claim about pixels that a screenshot answers badly: a button whose
+## last few pixels are off the edge looks very nearly like one that is not. This prints
+## the rects and warns on anything past the viewport, so the answer is measured.
+func _report_footer() -> void:
+	var edge := float(get_viewport().get_visible_rect().size.x)
+	var controls: Array = [
+		["join field", _screen._join_field], ["JOIN", _screen._join_button],
+		["browser", _screen._browser_button], ["tech tree", _screen._tech_button],
+		["START", _screen._start_button], ["BACK", _screen._back_button],
+	]
+	for entry in controls:
+		var c: Control = entry[1]
+		var rect := c.get_global_rect()
+		print("  footer %-11s x %.0f..%.0f  y %.0f..%.0f"
+				% [entry[0], rect.position.x, rect.end.x, rect.position.y, rect.end.y])
+		if rect.end.x > edge:
+			push_warning("preview_skirmish: %s runs %.0f px off the right edge"
+					% [entry[0], rect.end.x - edge])
 
 
 ## Press the nav strip's real TECH TREE button, for `_pick_role`'s reason: calling
