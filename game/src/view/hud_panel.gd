@@ -209,6 +209,17 @@ static func text_label(text: String, font_size: int = 16) -> Label:
 ## A dimmer label for the things a page says ABOUT itself -- a wireframe notice, a
 ## precondition that is not met, a price. Distinguished by weight rather than by
 ## another colour, since gold-on-brown is the whole palette.
+##
+## ⚠️ **IT AUTOWRAPS, SO IT BELONGS IN A VBox.** Dropped into an `HBoxContainer` with
+## nothing setting its width, a wrapping Label collapses to its narrowest possible box
+## and Godot obligingly wraps it to ONE CHARACTER PER LINE -- a 300 px vertical column
+## of single letters that then stretches every sibling in the row to match. That is not
+## hypothetical: it shipped into a render twice on 2026-08-30, once in the tech tree's
+## empty age row and once in the chat page's voice bar, and in the second case it
+## squeezed the message log down to nothing.
+##
+## In a row, either give it a `custom_minimum_size.x` or set
+## `autowrap_mode = TextServer.AUTOWRAP_OFF`.
 static func note_label(text: String, font_size: int = 14) -> Label:
 	var label := text_label(text, font_size)
 	label.add_theme_color_override("font_color", Color(HudStyle.GOLD, 0.65))
