@@ -447,7 +447,7 @@ The code is ours, so it stays permissive. The two licences do not merge.
 | Sell a game built on AOD's code | ✅ | Nothing beyond the MIT notice — MIT permits commercial use |
 | Sell a game using AOD's art | ✅ | CC-BY-SA 3.0 permits commercial use, but requires attribution **and** share-alike on the art |
 | Re-skin AOD with your own art | ✅ | Your art, your licence. See [§6](#6-adding-assets-and-re-skinning) |
-| Redistribute the Kibyra UI packs | ❌ | Their licence forbids it — which is why they aren't in this repo |
+| Redistribute the Kibyra UI packs | ❌ | Their licence forbids it. Moot since 2026-08-30 — the game no longer uses any of that art, and none of it is in this repo |
 
 ### 4.3 The required attribution
 
@@ -609,14 +609,29 @@ Toolchain, all hard-pinned (`PLAN.md` §1.3):
 
 ### 6.5 UI art
 
-The UI packs (`UI_Sprites/`) are **not committed** — their licence permits personal and
-commercial use but forbids redistributing the original files, and committing them to a
-public repo would be exactly that. Each developer downloads them; see
-[`UI_Sprites/README.md`](../UI_Sprites/README.md) for links and the expected layout.
+**All of it is committed, and a clean clone runs with its chrome intact.** That was not
+true until 2026-08-30: the UI was third-party itch.io art whose licence forbids
+redistributing the originals, so `game/assets/ui/` was gitignored and every developer had
+to download two packs by hand before the game had any panels at all. Replacing the lot
+with project-owned art is what retired that, and it is the single biggest thing the UI
+overhaul bought.
 
-Shipping that art compiled inside a built APK or `.pck` is normal use and is fine.
+What is where:
 
-Palette and layout spec: [`UI_Design.md`](../UI_Design.md) — `#2B1D14` fill, `#E5B842` gold.
+| Directory | What |
+|---|---|
+| `game/assets/ui/icons/` | 103 icons at 100×100 RGBA — verbs, resources, technologies, formations, stances |
+| `game/assets/ui/chrome/` | 27 panels, frames, bars, buttons and widgets. **Derived** — see below |
+| `game/assets/ui/fonts/` | MedievalSharp and Cinzel Decorative, both SIL OFL, each beside its own licence text |
+
+`chrome/` is generated, not copied. `tools/prepare_ui_chrome.py` rewrites the master art
+in `assets/UI_Gen/sliced/chrome/` at the size that makes each piece's painted border draw
+at the thickness its widget wants — because Godot draws a `NinePatchRect`'s border at 1:1,
+so the source size is the only thing that controls it. Re-run the tool rather than
+re-copying the masters.
+
+Palette: `#2B1D14` fill, `#E5B842` gold (`HudStyle`). There is no layout spec document —
+`UI_Design.md` was retired with the mockups on 2026-08-30 and nothing replaced it.
 
 ### 6.6 Asset packs
 
@@ -646,7 +661,6 @@ Because of §6.1, a total conversion is a content job with no code in it:
 |---|---|
 | [IDEA.md](../IDEA.md) | What we're building — phases 1–13, gameplay design |
 | [PLAN.md](../PLAN.md) | How — architecture, API reference, phase plan, risks. 1300 lines, the authoritative source |
-| [UI_Design.md](../UI_Design.md) | HUD layout spec and palette |
 | [asset_request.md](../asset_request.md) | Art the game side needs, requested per need and answered in place |
 | [CREDITS.md](../CREDITS.md) | Third-party attribution |
 | [LICENSE](../LICENSE) · [LICENSE-ART.md](../LICENSE-ART.md) | The two licences |

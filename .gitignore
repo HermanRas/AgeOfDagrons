@@ -9,20 +9,22 @@ assets/insperation_pictures/*
 !assets/insperation_pictures/.gdignore
 
 # ─────────────────────────────────────────────────────────────
-# Third-party asset packs — DO NOT COMMIT
-# The itch.io UI packs allow personal + commercial use but
-# explicitly forbid redistribution of the original files.
-# Committing them to a public repo would be redistribution.
-# Each developer downloads them via the .url links below.
-# Using the art inside a built game (APK/.pck) is fine.
+# RETIRED 2026-08-30 — the Kibyra itch.io UI packs.
+#
+# This block used to list each pack's directory and NEGATE the README and the
+# two .url links, because a developer had to download the packs by hand or the
+# game had no HUD. asset_request.md [P8] replaced every piece of that art with
+# the project's own, so nothing in the repo points here any more: the README,
+# the .url files and the local copies under game/assets/ui/ are all gone, and
+# game/assets/LICENCES.md's "not shipped" rows for them went with them.
+#
+# THE WHOLE DIRECTORY IS IGNORED NOW RATHER THAN UNIGNORED, and that is the
+# point of the change: the packs are still on developers' disks (mine has ~1500
+# files in there) and lifting the rules would make git offer to commit all of
+# them — which is the redistribution the old rules existed to prevent. So the
+# constraint has not gone away, it has stopped being anybody's problem.
 # ─────────────────────────────────────────────────────────────
-assets/UI_Sprites/*.zip
-assets/UI_Sprites/UI_dragon-huds/
-assets/UI_Sprites/Free_Medieval_Fantasy_UI_Pack/
-assets/UI_Sprites/uı-fonts/
-assets/UI_Sprites/ui-fonts/
-!assets/UI_Sprites/*.url
-!assets/UI_Sprites/README.md
+assets/UI_Sprites/
 
 # HUD icon source sheets (game/assets/LICENCES.md) -- the project owner's own
 # Gemini-generated working sheets, kept locally so the 5x5 sheet's remaining
@@ -78,14 +80,19 @@ game/assets/atlases/
 #     python tools/stage_audio.py
 game/assets/audio/
 
-# Kibyra UI pack art copied locally from assets/UI_Sprites/ for use in the
-# built game (permitted) but not for redistribution of the originals via git
-# (not permitted -- see game/assets/LICENCES.md). Each developer re-copies
-# from their own assets/UI_Sprites/ download; see the source path noted where
-# it is used.
-game/assets/ui/control_groups/
-game/assets/ui/menu/
-game/assets/ui/hud/
+# GONE 2026-08-30, and this is the line the whole UI overhaul was for.
+#
+# `game/assets/ui/{control_groups,menu,hud}/` were Kibyra copies: usable in a
+# built game, not redistributable, therefore gitignored -- which meant a clean
+# clone of this repo produced a game with NO PANELS, and every developer had to
+# download two itch.io packs by hand before they could see the HUD. Those three
+# directories no longer exist. `game/assets/ui/` is committed in full, a fresh
+# clone runs with its chrome intact, and `tools/licence_audit.py` stopped having
+# 14 undeclared files in it.
+#
+# Nothing replaces these lines. They are recorded rather than deleted because
+# "the UI art is gitignored" was true for the whole life of the project until
+# today and is written into a good many comments that have not caught up.
 
 # ─────────────────────────────────────────────────────────────
 # Python tooling

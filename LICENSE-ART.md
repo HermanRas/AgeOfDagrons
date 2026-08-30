@@ -51,7 +51,8 @@ Not everything in or around this repo is covered by the two licences above:
 | Item | Licence | Note |
 |---|---|---|
 | Godot Engine | MIT | Not distributed here; you install it |
-| Kibyra UI packs (`UI_Sprites/`) | Free use, **redistribution forbidden** | Deliberately **not committed** — each developer downloads them. See [`UI_Sprites/README.md`](UI_Sprites/README.md) |
+| ~~Kibyra UI packs~~ | Free use, **redistribution forbidden** | **RETIRED 2026-08-30.** Replaced by project-owned art; nothing in the game loads one, and a clean clone no longer needs a download to have a HUD. See [CREDITS.md](CREDITS.md) |
+| MedievalSharp, Cinzel Decorative (`game/assets/ui/fonts/`) | [SIL OFL 1.1](https://openfontlicense.org/) | **Committed**, which is the difference from the row above — the OFL permits redistribution provided its own text ships with the fonts, and it does |
 | [isobake](https://github.com/HermanRas/blender_3d_to_2d_isobake) | GPL-2.0-or-later | Separate repo, build-time only, ships nothing into the game |
 | `blender_pyrogenesis_importer` | GPL-2.0 | Build-time only |
 

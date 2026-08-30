@@ -52,11 +52,24 @@ else. Recorded because *how* an asset was made is part of its provenance, and be
 purely AI-generated images may not be copyrightable in some jurisdictions. Detail and the
 caveat: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
 
-### Kibyra — UI packs
-**Used for:** UI chrome (panels, buttons, bars, frames, icons) and fonts.
+### Kibyra — UI packs — **NO LONGER USED, retired 2026-08-30**
+**Was used for:** UI chrome (panels, buttons, bars, frames) from 2026-08-08 until 2026-08-30.
 **Source:** https://kibyra.itch.io/ui-fonts-dragon-huds-pack · https://kibyra.itch.io/free-medieval-fantasy-ui-pack
 **Licence:** Free to download; personal and commercial use permitted; redistribution of the original files **not** permitted.
-**Note:** Pack files are not redistributed by this project — see [`UI_Sprites/README.md`](assets/UI_Sprites/README.md).
+**Note:** Every piece has been replaced by project-owned art and nothing in the game loads
+one. Kept here rather than deleted because credit for work that shipped is not undone by
+the work being replaced later, and because a reader of an old build needs to find it.
+
+### MedievalSharp — body typeface
+**Used for:** every label in the game (`gui/theme/custom_font`).
+**Author:** Wojciech Kalinowski · **Licence:** [SIL Open Font License 1.1](https://openfontlicense.org/)
+**Note:** Redistributable, unlike the packs above, which is why it is committed. The OFL
+requires its own text to ship with the font: `game/assets/ui/fonts/OFL-MedievalSharp.txt`.
+
+### Cinzel Decorative — display typeface
+**Used for:** names rather than sentences — titles, menu headings, the age numeral (`UiFont`).
+**Author:** Natanael Gama · **Licence:** [SIL Open Font License 1.1](https://openfontlicense.org/)
+**Note:** Ships with `game/assets/ui/fonts/OFL-CinzelDecorative.txt`, as the OFL requires.
 
 ---
 

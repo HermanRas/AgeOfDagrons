@@ -86,24 +86,24 @@ UI chrome (`#E5B842` on `#2B1D14`), everything sized for a thumb.
 
 ### Main HUD
 
-<img src="UI_Design.jpg" alt="Main gameplay HUD mockup" width="820">
+<img src="Screenshot_HUD.jpg" alt="The in-game HUD: a blacksmith selected, its twelve technologies in the detail grid" width="1100">
 
 Control groups down the left. Age and advancement progress across the top centre.
-Resources top right. Selection and action panels bottom left. Circular minimap bottom
-right with a button in each corner. The layout spec is in [UI_Design.md](UI_Design.md).
+Resources top right. Selection and action panels bottom left. Ornate diamond minimap
+bottom right with a button in each of its four corner bosses.
 
-### Other screens
+**These are screenshots of the running game, not mockups.** They used to be concept art;
+the six `UI_Design*.jpg` files were retired on 2026-08-30 when the UI overhaul made them
+out of date, and a picture of what the game actually looks like is worth more than a
+picture of what it was going to look like. Regenerate them from
+`dev_preview/preview_match.tscn` and `preview_menus.tscn`.
 
-| Tech tree | Trade & market | Chat / voice |
-|---|---|---|
-| <img src="UI_Design_TechTree.jpg" alt="Tech tree screen concept" width="260"> | <img src="UI_Design_Trade-Market.jpg" alt="Trade and market screen concept" width="260"> | <img src="UI_Design_Chat_Voice.jpg" alt="Chat and voice overlay concept" width="260"> |
+### Main menu
 
-<details>
-<summary>Vertical splash art</summary>
+<img src="Screenshot_Menu.jpg" alt="The main menu: an ornate dragon frame around six buttons" width="820">
 
-<img src="Splash_v.jpg" alt="Age of Dragon vertical splash" width="380">
-
-</details>
+All of the chrome above is the project's own art. Typefaces are **Cinzel Decorative** for
+names and **MedievalSharp** for everything else, both SIL OFL.
 
 ---
 
@@ -199,11 +199,9 @@ AgeOfDagrons/
 │   ├── src/autoload/     SimClock, Net
 │   └── tests/            headless test suite — one command, exit 0 or 1
 ├── tools/                offline asset-pipeline recipes (isobake lives in its own repo)
-├── UI_Sprites/           licensed UI packs — links only, you download them
 ├── Docs/                 build, contribute, licence, assets
 ├── IDEA.md               what we're building, phases 1–13
 ├── PLAN.md               how we're building it — architecture, API, risks
-├── UI_Design.md          HUD layout spec and palette
 ├── asset_request.md      art the game side needs, requested per need
 └── CREDITS.md            third-party attribution (a licence obligation, not a courtesy)
 ```
@@ -226,6 +224,8 @@ requires.
 
 ## Credits
 
-AOD stands on [0 A.D.](https://play0ad.com) by **Wildfire Games**, the
-[Godot Engine](https://godotengine.org), and UI art by
-[Kibyra](https://kibyra.itch.io/). Full attribution: [CREDITS.md](CREDITS.md).
+AOD stands on [0 A.D.](https://play0ad.com) by **Wildfire Games** and the
+[Godot Engine](https://godotengine.org). The UI art is the project's own; the typefaces
+are **MedievalSharp** and **Cinzel Decorative**, both under the SIL Open Font License.
+UI chrome came from [Kibyra](https://kibyra.itch.io/) until 2026-08-30 and no longer does.
+Full attribution: [CREDITS.md](CREDITS.md).

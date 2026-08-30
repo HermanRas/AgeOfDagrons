@@ -42,15 +42,20 @@ const CAPTION_HEIGHT := 14.0
 const CAPTION_INSET := 6.0
 const CAPTION_BG := Color(0.0, 0.0, 0.0, 0.62)
 const CAPTION_TEXT := Color(0.96, 0.90, 0.75)
-## Room left at the right end when a badge ("84%") shares the bottom edge, so
-## the two do not print over each other.
+## The least room left at the right end when a badge shares the bottom edge with a
+## caption, and the padding between the two.
 ##
-## THE ONLY REASON 26 IS ENOUGH is that a badge is short by contract -- "84%", "0/12",
-## "5s", "...". It stopped being true for one badge on 2026-08-30, when a research
-## tile gained a caption and its prerequisite badge ("Leather Armour") printed straight
-## through it. That moved to `HudAction.requirement` and the top strip rather than this
-## number growing, because no gap can fit two names on a 72 px tile.
-const CAPTION_BADGE_GAP := 26.0
+## MEASURED PER BADGE NOW, NOT ASSUMED, and 26 was a literal until 2026-08-30. Two
+## things broke it the same day. A research tile gained a caption and its prerequisite
+## badge ("Leather Armour") printed straight through it -- that one is fixed properly,
+## by moving the prerequisite to `HudAction.requirement` and the top strip, because no
+## gap fits two names on a 72 px tile. But the SHORT badges broke it too: the game had
+## no typeface at all until that day, and MedievalSharp draws "60%" wider than Godot's
+## built-in default did, so a training villager printed its own name through its own
+## progress. The general form is that a fixed gap is a guess about a font, and this
+## file now has a font it did not choose.
+const CAPTION_BADGE_MIN_GAP := 20.0
+const CAPTION_BADGE_PAD := 6.0
 
 ## `HudAction.requirement`, printed where a cost would go. Muted stone rather than
 ## gold: gold in that strip has meant "this is the price" since 2026-08-22, and a
@@ -457,9 +462,26 @@ func _set_caption(text: String) -> void:
 		return
 	var right := -CAPTION_INSET
 	if not _badge.text.is_empty():
-		right -= CAPTION_BADGE_GAP
+		right -= maxf(CAPTION_BADGE_MIN_GAP, _badge_width() + CAPTION_BADGE_PAD)
 	_caption.offset_right = right
 	_caption_bg.offset_right = right
+
+
+## How wide the badge's own text actually draws, in this theme, at this size.
+##
+## ASKED OF THE LABEL RATHER THAN OF `ThemeDB`, so it follows whatever font the project
+## is set to -- which is the entire point, since the number this replaced was a guess
+## about a typeface the game did not have when it was written.
+##
+## Returns 0 when there is no font yet, which happens for a slot built outside a
+## SceneTree (every headless test does this). The caller then falls back on
+## `CAPTION_BADGE_MIN_GAP`, which is what the old fixed number was.
+func _badge_width() -> float:
+	var font := _badge.get_theme_font("font")
+	if font == null:
+		return 0.0
+	var size := _badge.get_theme_font_size("font_size")
+	return font.get_string_size(_badge.text, HORIZONTAL_ALIGNMENT_RIGHT, -1, size).x
 
 
 func _on_pressed() -> void:
