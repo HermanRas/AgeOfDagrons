@@ -8,8 +8,8 @@ This is the *status* document. It deliberately holds no reasoning — every "why
 read next to the code, so fix this one.
 
 **Updated 2026-08-30**, tagged **v0.9.0 — the first BETA tag**, per IDEA.md's scheme
-(v0.1.0–0.8.9 alpha, v0.9.0–0.9.9 beta, v1.0.0 release). Suite: **1779 tests, 208,740
-assertions, 0 failures** — measured, not quoted. **361 atlases staged**, and 150 UI asset
+(v0.1.0–0.8.9 alpha, v0.9.0–0.9.9 beta, v1.0.0 release). Suite: **1826 tests, 0 failures**
+— measured after the four-device playtest fixes, not quoted. **361 atlases staged**, and 150 UI asset
 files now ship with them (`tools/licence_audit.py`: PASS). Android build: 320.6 MB **as of
 2026-08-27 and certainly stale** — two art deliveries, three phases and the whole UI
 overhaul have landed since and nobody has rebuilt. Re-measure before quoting it.
@@ -114,17 +114,17 @@ real work remains · ⛔ not started
 |---|---|---|---|
 | 0 | Foundation | 🟢 | **0.3 `AssetPacks`** — manifest, download, verify, mount, plus a download screen |
 | 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet. **1.5 settings and 1.8 HOW TO PLAY both closed 2026-08-30** — settings as an overlay rather than a screen, HOW TO as a six-page picture guide. The two setup panels in the lobby still do not both fit at 1152×648 and the column scrolls; flagged to the owner rather than guessed at |
-| 2 | Map | 🟢 | **2.4c save map**, and nothing else — 2.4d Archipelago closed 2026-08-29 |
+| 2 | Map | 🟢 | **2.4c save map**, and nothing else — 2.4d Archipelago closed 2026-08-29. **Retuned 2026-08-30** on the owner's playtest: wood doubled and sprinkled over open ground, and the archipelago's islands grown from radius 18 to 26 with the BOARD now derived from the island (128 / 160 / 240 at 2 / 4 / 8 players) rather than the island capped by the board |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
 | 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |
 | 5 | Buildings | 🟡 | **UP NEXT.** **5.7 more buildings — art-paced, not code-paced** (23 buildings, ~70 bakes; art side's A.10). **5.3 upgrades is the code half and is half-built**: `upgrades_to` + `UpgradeBuildingCommand` + `convert_building` all ship the wall→gate upgrade. Missing is a COST and a TIME for a non-gate upgrade — and nothing else, since **9.3 answered the third question**: an upgrade is the per-building mechanism and a technology is the player-wide one, so they stay two things. The queue 9.3 taught to hold a research is where the time goes |
 | 6 | Resources & wildlife | ✅ | **Closed 2026-08-23** |
 | 7 | Resource HUD | ✅ | |
-| 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport). 8.8's [X] clear-selection button landed 2026-08-28 |
+| 8 | Main game interface | 🟢 | **8.6 chat** (wireframe only — no transport). 8.8's [X] clear-selection button landed 2026-08-28. **The in-match settings page's volume sliders were inert under a thumb** and are `TouchSlider`s as of 2026-08-30 — a `Slider` reads mouse events only and a match runs with mouse emulation off |
 | 9 | Ages & tech | 🟢 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **9.3 and 9.4 landed 2026-08-29**: 27 technologies at seven buildings, researched from an action tile on the building, with the tech-tree page as the read-only guide to what is where. What is left is **9.5 civilisations** and **9.6 the age re-skin**, both art-paced. ⚠️ **The AI researches nothing** — `techs: true` in every profile against no rule that emits a `ResearchCommand` |
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
-| 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |
+| 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. **First FOUR-DEVICE session 2026-08-30** (two Windows, one Android, one AI) and it found the two things only a joined client can see: every polite refusal in the HUD asked `Net.host().world` and was therefore dead on players 2..8, and a resign or a disconnect told the survivors nothing. Both closed. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |
 | 13 | Dragons | ⛔ | Not started — and as of 2026-08-29 **blocked on art rather than on sequencing**: `vis.dragon` carries one clip, `static`, so the unit cannot walk, attack or die. `asset_request.md` [P7]. The unit itself is real and trainable at the castle from age 4, and 4.10 gave it its fire breath |
 | 14 | **NEEDS UPGRADE** — AI enemy-blindness | ⛔ | Opened 2026-08-27 with 12.2b. A declared ceiling, not a defect: no rule can see the opponent, so an army is a target number and never a response |
 
@@ -141,6 +141,21 @@ rate-limited and incremental, and a clean checkout runs silently by design.
 garrison, 8.8's [X] button, 2.4d Archipelago and 9.3/9.4 the tech tree — so the whole list
 was replaced rather than ticked off. `PLAN.md` §15 is the authoritative version of this and
 carries the reasoning; what follows is its first three lines.*
+
+**0. THE FOUR-DEVICE PLAYTEST OF 2026-08-30 IS CLOSED — six findings, six fixes**, and
+it is at the top of this list only to say that it does not need to be on it. Two Windows
+machines, an Android and an AI: the missing "not enough resources" alerts on players 2 and
+3, the silent forfeit, wood doubled plus a sprinkle over open ground, the archipelago's
+islands and board grown, the galley's ten-arrow volley, and the in-match volume sliders
+that a thumb could not move. BUGS.md has all six in full.
+
+**Three of them were things this development setup cannot see** — two visible only to a
+joined client, one only to a finger — and all three had been in the code since the feature
+was written. Solo, on a desktop, with a mouse: `Net.host()` is never null and mouse
+emulation is never off. 1,779 green tests ran past every one of them.
+
+**One thing it left for the owner rather than guessing:** `unit.galleon` still fires one
+arrow where the galley now fires ten, and it is the bigger warship.
 
 **1. Phase 5, buildings** — the owner's call, and two very different jobs. **5.7, the full
 roster**, is 23 buildings and ~70 bakes: art-paced, waiting on A.10. **5.3, upgrades**, is
@@ -202,6 +217,11 @@ Committed as planning so the intent survives; none of it is built.
 - A dock built inland before 2026-08-23 stays inland — `requires_shore` gates new placement
   only.
 - Naval combat does not exist: transports have no load/unload and nothing has fought at sea.
+  A galley shoots and now looses ten arrows doing it (2026-08-30), which is a picture and
+  not a naval system. **And a water unit standing on LAND cannot be ordered to do anything
+  and says nothing about it** — the route comes back empty, the task is retired on tick 1,
+  and `validate()` had returned true. The debug map has zero water tiles, so any ship
+  fixture paints a channel and calls `PathService.rebuild`.
 - An open gate is open to everyone, besiegers included. Per-player passability needs a
   pathfinding grid per player.
 - A static destroyed behind the fog stops being sent rather than leaving a stale ghost.

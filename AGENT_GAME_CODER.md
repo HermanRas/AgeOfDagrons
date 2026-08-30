@@ -106,6 +106,7 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_ai_match.tscn   # two AIs, full match
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
 & $godot --path game res://dev_preview/preview_garrison.tscn   # 4.8/4.9, six screenshots
+& $godot --path game res://dev_preview/preview_touch_controls.tscn  # can a THUMB use it?
 
 # The facing trio — how a re-baked atlas gets checked (see §7, the mirror item)
 & $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
@@ -128,6 +129,17 @@ node, and a ring of cavalry hitting one building. It prints, per unit, the facin
 holds against the one `SimUnit.facing_toward` would pick right now — so **a unit nothing
 ever turned is reported as STALE**, which is a different fault from a unit turned the wrong
 way and wants a different fix.
+
+⚠️ **`preview_touch_controls` IS THE ONLY THING IN THE REPO THAT EXERCISES A FINGER**, and
+it exists because nothing did: the three volume sliders were completely inert on the phone
+inside a match from the day they landed (owner, 2026-08-30), with every test green and
+every screenshot right. It pushes real `InputEventScreenTouch`/`Drag` at the REAL
+`VolumePanel` through both input routes under both emulation settings, prints a table, and
+**exits non-zero if a control does not answer a finger with emulation off** — which is the
+setting a match runs under. It was verified against the bug it is for rather than assumed
+to catch it: swapping the panel back to a plain `HSlider` makes it report NOTHING on three
+of its four rows. **Run it after adding any control that is not a `BaseButton`** — a button
+answers a raw touch and, in this project, nothing else does.
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
 art faces. A wall lying across its own footprint has the same footprint, the same
@@ -295,6 +307,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A SYSTEM THAT ACTS ON THE TICK A STATE IS REACHED, BEFORE ANY SNAPSHOT CARRIES IT** | `ProjectileSystem` despawned a shot on the very tick `advance()` clamped its position to the target — so the arrival position never reached a client and **every arrow in the game vanished a tile and a half short of what it was fired at**, `SPEED` being 384 of a 256 sub-tile. Nobody reported it in six days: an arrow is on screen for two ticks, and *a sprite failing to appear somewhere* is far harder to see than one appearing wrongly. The fix is one word (`elapsed_ticks > total_ticks`) and the general form is worth keeping: **if the last thing an entity does is the thing you want drawn, it has to survive one snapshot after doing it.** |
 | **A staged tree is not a declared tree, and this file has claimed otherwise** | `vis.tree_cherry`, `_cypress`, `_cypress_tall`, `_snow_pine`, `_dead` and `_dead_branchy` are staged and referenced by nothing — an earlier session told the art side that the two dead ones were "staged and wired today" and they were not. They predate the per-map pools and carry no pool assignment, so they were left out of them deliberately rather than missed. Same class as the walls in §7: **only a def or a pool reaching for an id proves it is wired.** |
 | **Compensating for a bake defect in the game** | Tried once — the 180° facing offset, 2026-08-22 — and reverted the next day on the owner's instruction. The rule they set: an art defect gets fixed in the recipe, and a patch that must be un-applied in step with a delivery is not worth carrying for a partial result. Report it in `asset_request.md` with a picture instead. |
+| **A CONTROL DRIVEN BY MOUSE EVENTS IS INERT UNDER A THUMB INSIDE A MATCH — and `BaseButton` is the exception that hides it** | `emulate_mouse_from_touch` is off for exactly as long as a match lasts (`GameScene` turns it off on entry, `_exit_tree` hands it back), so Godot's `Slider`, which reads `InputEventMouseButton`/`InputEventMouseMotion` and nothing else, does nothing at all. **A button DOES answer a raw touch**, so every HUD control anybody had pressed worked and the three volume sliders — the only non-buttons in the game — were dead from the day they landed (owner, 2026-08-30). Measured on 4.7.1: an `HSlider` at 0.50 tapped at 95% of its track reads **0.50** with emulation off and **0.95** with it on. `TouchSlider` and `TouchLineEdit` are the pattern; **never the project setting**, because a flag toggled per screen has to be un-toggled on every path out and the failure is a silent double-pan for the rest of the match. |
+| **A `Range` OUTSIDE THE TREE MOVES SILENTLY — `value_changed` is not emitted at all** | `Range::Shared::emit_value_changed()` skips every owner whose `is_inside_tree()` is false, so a detached slider's value changes and no listener hears it. Free in the game; a trap in a headless test, because *"the slider did not move"* and *"the signal is not wired"* then look identical. **Assert the VALUE.** Same family as the `PRESET_FULL_RECT` row below — a Control does a surprising amount of nothing until it is in a tree. |
 | **Touch does NOT take keyboard focus, so every new text field needs `TouchLineEdit`** | `emulate_mouse_from_touch = false` ([project.godot:35](game/project.godot#L35)) is *required* — `CameraRig` handles both `InputEventScreenDrag` and `InputEventMouseMotion`, so a touch arriving as both pans twice per thumb. Godot still routes raw touches to controls, but the touch path takes no focus and `LineEdit` asks for the keyboard on focus-enter. Measured on 4.7.1: focus after a screen touch = false, after a mouse click = true. Flipping the setting fixes typing by breaking the camera. |
 | **A `Control` laid over the minimap swallows every tap** | The four corner buttons were a `PRESET_FULL_RECT` grid added *over* it and Godot hit-tested them first — minimap click-to-move and double-tap-to-centre were both dead while looking implemented. Check hit-test order before concluding a minimap feature is missing. |
 | **`JSON.stringify` encodes a `PackedByteArray` as a STRING** — `"[1, 2, 250]"`, verified on 4.7.1 | It bit `MapData.from_dict()`, which now reads bytes, JSON's string, or a plain list. Relevant to 2.4c's saved sidecar and 12.4's save/load — the next two places sim data goes through JSON. Everything else there was already defended with `int()` because JSON numbers come back as floats; `terrain` was the one field that looked like it needed no conversion. |
@@ -308,10 +322,80 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A number nobody compares across time can be wrong for months** | `SimBuilding.add_build_progress` set `hp` from `build_fraction()` and took every new foundation from `max_hp/10` to ~0 on the first tick a villager worked on it. It shipped, unnoticed, until `DamageAlert` started diffing hp between snapshots and blew the under-attack horn on every building placed. **The alarm was right and the sim was wrong.** When a new feature starts reading an old value, expect it to find something. |
 | **A `PRESET_FULL_RECT` CONTROL CANNOT BE GIVEN A SIZE, AND SAYS SO ONLY AT RUNTIME** | Assigning `size` warns *"nodes with non-equal opposite anchors will have their size overridden after `_ready()`"* — and **outside a tree it raises no `NOTIFICATION_RESIZED` at all** (probed on 4.7.1). That makes it a bad lever for a headless test of anything layout-shaped: `test_market_panel` drove the new page-width cap through `panel.size`, the notification never fired, and the test asserted the *default* offsets while reading like it had asserted the cap. It failed loudly here only because the arithmetic was also being asserted. **Give the function the width instead of having it read `size`** — one untested line in the notification handler, verified in a render, beats a test that exercises nothing. Note also that a Control added to a tree has size `(0, 0)` for the rest of that frame, so `_init`/`_ready` are both too early to read it. |
 | **`gitea.wildfiregames.com` is behind an Anubis proof-of-work bot wall** | A plain HTTP client gets an HTML "Making sure you're not a bot!" challenge instead of JSON, which is easy to misread as a broken endpoint. A **`git-lfs/...` User-Agent is allowed through** — that one header is the whole difference. |
+| **A GUARD OF THE SHAPE `if Net.host() != null and <rule>` IS A RULE THAT IS OFF ON EVERY CLIENT** | And it survives review because solo play, where every test and every preview lives, has the local player AS the host — so the wrong branch is the one nobody takes. Three of `GameScene`'s polite refusals shipped that way and were dead for players 2..8 (owner, 2026-08-30). **Whatever a client needs is almost certainly already in `player_state`**: stock, population, age, researched techs, and now `defeat_reason`. `GameView.stock_of` and `_my_stock`/`_has_pop_room` are the client-safe readers. |
+| **A WATER UNIT ON LAND CANNOT BE ORDERED TO DO ANYTHING, and reports nothing** | `validate()` passes, `PathService` returns an empty route because there is no start node for its domain, the task is retired on tick 1, and the log reads "order accepted" while the ship stands still. **The debug map has ZERO water tiles** — measured, 64×64 — so any fixture with a ship paints a channel and then calls `PathService.rebuild`. `AStarGrid2D` holds solidity IN THE GRID, not in the query, so terrain written behind its back does not exist to pathing. `test_transport._make_a_coast` is the pattern. |
+| **A BALANCE NUMBER WRITTEN INTO AN ASSERTION IS A TEST THAT FAILS WHEN THE OWNER ASKS FOR A BALANCE CHANGE** | Doubling `res.tree` broke five tests and **not one was about wood**: two literal `40`s and a tick budget in `test_gather` (generous at four round trips, short at eight) and two in `test_game_data`. Derive from the def — `tree.starting_amount`, `amount_for(size_class_count() - 1)` — and assert the SHAPE (three classes, bigger holds more) rather than the figures. |
+| **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
 
 ## 7. Where things stand
+
+### THE FOUR-DEVICE PLAYTEST — 2026-08-30, six findings, all six closed
+
+**Two Windows machines, an Android handset and an AI**, and the device count is the whole
+story of four of them. Read BUGS.md's 2026-08-30 section for the findings; what belongs
+here is the three lessons that outlive them.
+
+⚠️ **THREE OF THE SIX WERE THINGS THE DEVELOPMENT SETUP CANNOT SEE, and they share one
+shape.** Two were visible only to a joined CLIENT and one only to a FINGER; all three had
+been in the code since the feature was written. Everything here is developed solo, on a
+desktop, with a mouse — so `Net.host()` is never null and `emulate_mouse_from_touch` is
+never the setting a match runs under, and **the branch that is wrong is the branch nobody
+takes**. Neither is exotic; both are one grep away (`Net.host()`, and any control that is
+not a `BaseButton`). The suite cannot help: 1,779 green tests ran past all three.
+
+⚠️ **`if Net.host() != null and <the rule>` IS NOT A GUARD. IT IS A RULE THAT IS OFF ON
+EVERY CLIENT.** Three of `GameScene`'s polite refusals — age advance, train, research —
+were written in that shape and were dead for players 2..8 from the day each was added.
+The owner reported it as *"player 2 and player 3 does not get alert for not enough
+resources"*. **Each one's comment claimed the fix was "a job for the multiplayer phase",
+and all three were wrong when they were written**: `SnapshotSystem` has sent every player
+their own `stock` for as long as `player_state` has existed, which is exactly why the
+**placement ghost was the one refusal that already worked for a joined player**. The rule
+is now the ghost's rule everywhere — `PlacementAdvice.can_afford` over
+`GameView.stock_of`, one path, both sides. It survives because everything is tested and
+played SOLO, where the local player IS the host, so the branch that is wrong is the branch
+nobody takes. **Grep `Net.host()` before writing another.**
+
+⚠️ **A MEASUREMENT ANSWERED A QUESTION NOBODY HAD ASKED, AND IT WAS THE MOST USEFUL THING
+IN THE ROUND.** The owner asked for wood to be doubled and for a sprinkle; a throwaway
+probe that counted wood per map type per player afterwards found the **archipelago at
+1,971 per player** against a desert's 4,025 — on the map whose whole point is a fleet, and
+in the same session the owner reported that map as too small. Neither half of the wood
+pass can reach it (the copse mask is nearly empty on an island; the sprinkle lattice is
+laid over a board that is 92% sea and landed **one** tree). It cost ten minutes and turned
+two separate reports into one underlying problem. **Count the thing you just changed.**
+
+- **`SimPlayer.defeat_reason`** and `GameScene._announce_defeats` closed the owner's
+  *"the server does not notify other players"* and BUGS.md's older *"a forfeit is
+  announced as an elimination"* together — they wanted the same field. `SimPlayer.defeat()`
+  **keeps the first reason**, because `WinConditionSystem` retests every player every tick
+  and would relabel a resignation as an elimination the moment the abandoned base fell. A
+  two-player world cannot catch that: `match_over` latches on the first concession.
+- **The archipelago's board is now derived from its ISLAND** (`archipelago_side`), where
+  the island used to be capped by the board. `ISLAND_RADIUS` 18 → 26, sides 128 / 160 /
+  240. **Raising the radius alone makes the islands SMALLER** and that is written down in
+  its note: the ring radius subtracts the island from the half-side, so at 26 on the old
+  96-tile board the cap lands at 12. The dependency had to be inverted, not re-tuned.
+- **`UnitDef.attack_volley`** — `unit.galley` at 10, and nothing else. The arrow was never
+  missing: one every 30 ticks, airborne for 2–8 of them. `CombatSystem._fan` is shared with
+  the tower's volley so the two cannot fan differently. **`unit.galleon` is deliberately
+  still 1 and wants the owner's word.**
+- **A WATER UNIT STANDING ON LAND CANNOT BE ORDERED TO DO ANYTHING and says nothing about
+  it** — `validate()` passes, `PathService` has no start node for its domain, the task is
+  retired on tick 1. **The debug map has ZERO water tiles**, so any ship fixture paints a
+  channel and calls `PathService.rebuild` (`test_transport._make_a_coast`'s trick).
+- **`TouchSlider`** — the volume sliders were **completely inert** on the phone inside a
+  match, and worked on the front door's copy of the same panel. See the gotcha table; the
+  short version is that a `Slider` reads mouse events only and a match runs with mouse
+  emulation off. Measured with a throwaway probe rather than reasoned about, which is what
+  ruled out the four likelier suspects (hit-test order, target size, the panel's
+  `MOUSE_FILTER`, the ornament that `_VOLUME_TOP` used to work around).
+- **`preview_projectiles` had never once caught the trebuchet**, warning every run since
+  siege packing landed: 240 catch frames is 40 ticks against an 80-tick deploy. And it was
+  photographing the **auto-acquired** volley rather than the ordered one, invisible while
+  every shooter loosed a single projectile. Both fixed; all five shooters land a picture.
 
 **Data is complete for the v1 roster:** 31 building defs (19 non-wall plus the
 twelve wall/gate pieces) with dense four-age skin maps, 28 unit defs (21 military
@@ -319,9 +403,9 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 93 test files (`test_*.gd` under `game/tests/`, counted on disk —
-the "89" this line carried was a count of something else), **1779 tests / 208,740
-assertions, all passing** — measured 2026-08-30 after the help screen, not quoted.
+**361 atlases staged.** 95 test files (`test_*.gd` under `game/tests/`, counted on disk),
+**1826 tests, all passing** — measured 2026-08-30 after the four-device playtest fixes,
+not quoted.
 `tools/licence_audit.py`: **PASS, 361 recipes and 150 shipped asset files.**
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,

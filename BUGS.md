@@ -18,6 +18,196 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-08-30 — FOUR DEVICES, six findings, all six closed
+
+*The first session on **two Windows machines, an Android handset and an AI** — and it is
+the device count that produced four of the six. Two of them (the missing alerts, the
+silent forfeit) are things **only a joined client can see**, and one (the dead volume
+sliders) is a thing only a FINGER can see. All three had been in the code since the
+feature was written, invisible because everything is tested solo, on a desktop, with a
+mouse — so the branch that is wrong is the branch nobody takes.*
+
+- [x] **"Player 2 and player 3 does not get alert for not enough resources when placing a
+      building or trying to age up."** ✅ **Every polite refusal in `GameScene` asked
+      `Net.host().world`, which is NULL on a joined client** — so the guard in front of the
+      toast was simply false for players 2..8, the command went out, `validate()` dropped
+      it in silence, and the button read as broken. Three handlers: age advance, train and
+      research.
+
+      ⚠️ **THE COMMENTS ON ALL THREE SAID THE FIX WAS "a job for the multiplayer phase",
+      AND THEY WERE WRONG WHEN THEY WERE WRITTEN.** `SnapshotSystem` has sent every player
+      their own `stock` for as long as `player_state` has existed, and `GameView` already
+      cached it — which is exactly why the **placement ghost was the one refusal that
+      already worked for a joined player**, and why the owner's report names age-up
+      alongside it: on a client the ghost turned red and said "Not enough resources" while
+      the age badge went dead and said nothing. One path now serves both sides,
+      `PlacementAdvice.can_afford` over `GameView.stock_of`, the way the ghost always did.
+
+      *Two things went in with it.* Train never checked COST at all, on either side, so a
+      press with no gold did nothing and said nothing; it does now. And every one of these
+      messages **names the shortfall** ("Need 120 food and 30 gold") rather than saying
+      "Not enough resources", which was the age badge's standard since 2026-08-28 and had
+      not reached the other four.
+
+      **The general form is worth keeping: a guard of the shape `if <thing only a host
+      has> != null and <the rule>` is not a guard, it is a rule that is off on every
+      client.** Grep for `Net.host()` before writing another.
+
+- [x] **"When a player disconnects or resigns the server does not notify other players."**
+      ✅ Also **BUGS.md's own older "a forfeit is announced as an elimination"**, which is
+      the same gap seen from the other end and is now closed with it.
+
+      `SimPlayer.defeat_reason` (`NONE / ELIMINATED / RESIGNED / DISCONNECTED`) rides
+      `player_state` beside `defeated`, and `Net` labels the `ResignCommand` it queues for
+      a vanished peer as DISCONNECTED. `GameScene._announce_defeats` toasts "Player 3 has
+      resigned" the moment it happens, and the result screen finally tells the truth about
+      how the match ended instead of "All opponents eliminated" about somebody whose phone
+      lost signal.
+
+      ⚠️ **`SimPlayer.defeat()` KEEPS THE FIRST REASON AND THAT IS THE WHOLE REASON IT IS A
+      FUNCTION.** `WinConditionSystem` retests every player every tick and defeats anyone
+      owning nothing, so a player who resigns and then has their abandoned base knocked
+      down would have been relabelled ELIMINATED — the winner told the opposite of what
+      happened, which is this bug arriving through a different door. A two-player world
+      cannot catch it: `match_over` latches on the first concession and the system stops
+      evaluating. The test uses three.
+
+      *Primed, not announced, on the first snapshot* — a defeat is a STATE and not an
+      event, so a client joining a match where somebody has already conceded would open
+      with a toast about something that happened before it arrived. Same trap
+      `MatchAudio`'s header records for hp.
+
+- [x] **"Wood needs a buff, there is not enough by a long shot, by mid age 3 we gathered
+      every tree on the map, lets start by doubling it. We need to light sprinkle trees
+      over the rendered maps."** ✅ Both halves. `res.tree` 40/100/175 → **80/200/350**, and
+      `MapGenerator._sprinkle_trees` puts single trees on a coarse lattice over open
+      ground, off the wood mask entirely.
+
+      **THE SPRINKLE IS THE HALF THAT MATTERED, and the measurement says why.** The copses
+      only ever go where the terrain noise said wood may go, so a desert's open sand and a
+      river's far bank were bare — the desert carried **38** trees after the sprinkle
+      against roughly 16 before, so on the sparse types it did more than the doubling did.
+      Wood per player, measured: island 5,185 → 10,370, desert 4,025 → 8,050, river
+      10,020 → 20,040, forest 54,600 → 109,200.
+
+      ⚠️ **THE CEILING IS `AISystem`'s PER-TICK LINEAR SEARCHES, NOT THE SNAPSHOT** — see
+      `SHAPE`'s note on the `clump: 9` attempt that took the AI match to 24.83 ms a tick
+      and hung a session. **Amount-per-tree is the free lever and trees-per-map is the
+      expensive one**, which is why the doubling did the heavy lifting and the sprinkle is
+      a dozen or two trees a board.
+
+      *One thing it nearly broke:* the sprinkle does not read the wood mask, which is what
+      makes it a sprinkle — and clearing the mask is how the forest's **road** between
+      players is kept clear. `_clear_lanes` now returns the road as a set and the sprinkle
+      avoids it. Only `test_there_is_a_clear_road_between_the_players` would have said so.
+
+- [x] **"The archipelago map type is so small you cannot fit half of the building from age
+      2 on it."** ✅ `ISLAND_RADIUS` 18 → **26**, and the board is now derived from the
+      island instead of the island being capped by the board (`archipelago_side`): 128 at
+      two players, 160 at four, 240 at eight, against `side_for`'s 96 / 128 / 192.
+
+      ⚠️ **RAISING THE RADIUS ALONE MAKES THE ISLANDS SMALLER, and that is the trap.**
+      `_archipelago_ring_radius` subtracts the radius from the half-side, so a bigger
+      island pulls the start ring inward, which shortens the chord between neighbours,
+      which is exactly what `_island_radius` caps against — at 26 on the old 96-tile
+      two-player board the cap lands at **12**. The dependency had to be inverted, not
+      re-tuned. `ISLAND_RADIUS`'s note records the reversal: it used to argue that nothing
+      above the validator's floor bought anything.
+
+      **AND THE WOOD PASS COULD NOT REACH THIS TYPE, which the count caught and nobody had
+      asked about.** The mask is nearly empty on an island and the sprinkle lattice is laid
+      over a board that is 92% sea, so it landed **one** tree on a two-player map: 1,971
+      wood per player at eight players, against a desert's 4,025, on the map whose whole
+      point is a fleet — a galley is 90 wood and a galleon 200. `CONTENT` gained
+      `start_wood` 20 (from 8) out to 22 tiles, through the guaranteed-opening mechanism
+      rather than a fourth lever. Now 5,300 and 4,562 per player.
+
+- [x] **"Galley WarShip does not render arrows, it needs to do batchs of 10."** ✅
+      `UnitDef.attack_volley`, `BuildingDef.attack_volley`'s twin, and `unit.galley` is the
+      one unit in the roster that declares one.
+
+      **THE ARROW WAS NEVER MISSING.** A galley reloads every 30 ticks and a projectile is
+      airborne for 2–8 of them, so at `SimClock.TICK_HZ` 10 the boat drew one arrow every
+      three seconds for about half a second — the watch tower's complaint of 2026-08-28,
+      for the identical reason: neither has an archer sprite drawing a bow to explain where
+      the shot came from, and a ship with no walk clip that also appears not to fire reads
+      as scenery.
+
+      **Cosmetic, so the 6 damage is untouched** — `SimProjectile` carries none. There is a
+      test pinning that, because the day a projectile carries a hit a galley becomes a
+      60-damage warship. `buildings.json`'s note asked for a unit volley to be priced
+      against 12.1f first: one galley holds ~1.3 arrows in the air on average, less than a
+      land archer's one every 10 ticks, and a FLEET is what makes it add up — so it is on
+      the one unit that asked and not on every ranged unit.
+
+      **`unit.galleon` is deliberately left at 1** and needs the owner's word: it is the
+      bigger warship at range 7 and 12 damage, so a galley out-drawing it will look wrong
+      the first time the two are side by side.
+
+- [x] **"On android while in game opening settings does not allow me to interact with
+      volume sliders."** ✅ `TouchSlider`, and **"in game" is the whole report** — the front
+      door's SETTINGS shows the same `VolumePanel` and has always worked.
+
+      **MEASURED RATHER THAN GUESSED**, because "cannot interact" has half a dozen
+      plausible causes and only one of them is this. A throwaway probe pushed real touch
+      events through the viewport at an `HSlider` starting at 0.50, tapping and dragging at
+      95% of its track:
+
+      | route | `emulate_mouse_from_touch` | tap | drag |
+      |---|---|---|---|
+      | real input pipeline | **false** — the in-match case | 0.50 | 0.50 |
+      | real input pipeline | true — the menus | 0.95 | 0.95 |
+      | a mouse click | — | 0.95 | |
+
+      So it is not a hit-test order problem, not a small target, not sluggish: Godot's
+      `Slider` drives its value from `InputEventMouseButton` and `InputEventMouseMotion`
+      and from **nothing else**, and this project sets
+      `emulate_mouse_from_touch = false` — which `GameScene` turns off on entry and hands
+      back in `_exit_tree`, so it is off **for exactly as long as a match lasts**. The
+      three sliders were inert on the phone from the day they landed.
+
+      ⚠️ **THE FIX IS THE CONTROL, NOT THE PROJECT SETTING, and the one-liner is a trap.**
+      Turning emulation back on while the menu is up would fix every control at once and
+      leave a global flag that must be turned off again on every path out of the menu — and
+      the failure when one path misses it is a camera that pans twice for the rest of the
+      match, silently. That is `GameScene._exit_tree`'s own recorded hazard from the other
+      direction.
+
+      `TouchSlider` is `TouchLineEdit`'s twin one control along, and **additive rather than
+      a replacement**: `accept_event()` is deliberately not called, so with emulation on the
+      base class still runs and both set the same value from the same position. Setting a
+      value from a position is idempotent, which is what makes doubling up harmless here
+      where it would not be on a button. The arithmetic is Godot's own from
+      `Slider::gui_input`, grabber width included, so a thumb and a mouse land on the same
+      number rather than on similar ones — measured at 0.95 either way.
+
+      **The general form, and it is why this was invisible for so long: every other control
+      in the game is a `BaseButton`, and a button DOES answer a raw touch.** These three
+      sliders are the only controls in the project that are not, so "touch works on this
+      screen" was true of everything anybody had pressed.
+
+*Three things this round turned up that were nobody's report:*
+
+- ⚠️ **A GALLEY STANDING ON LAND CANNOT BE ORDERED TO ATTACK ANYTHING, and it looks
+  exactly like a volley that will not draw.** `AttackCommand.validate()` returns true, the
+  route comes back empty from `PathService` because a water unit on grass has no start
+  node, the task is retired on the first tick, and `task` reads IDLE with nothing logged.
+  The debug map has **zero** water tiles, so both the test and the preview had to paint a
+  channel (`test_transport._make_a_coast`'s trick, plus `PathService.rebuild` — `AStarGrid2D`
+  holds solidity in the grid, not in the query). Real naval combat is still unbuilt (§15).
+- ⚠️ **`preview_projectiles` HAD NEVER ONCE CAUGHT THE TREBUCHET**, and said so in a
+  warning every run since siege packing landed on 2026-08-28. Its catch budget was 240
+  frames — 40 ticks — and a trebuchet spends `packing.ticks` **80** deploying before it may
+  fire. The onager's 50 would have failed too. `CATCH_FRAMES` is 900 now and all five
+  shooters land a picture.
+- ⚠️ **THAT PREVIEW WAS ALSO PHOTOGRAPHING THE WRONG SHOT.** Every shooter in it is
+  DEFENSIVE by default (4.12) and every victim stands inside `GUARD_RADIUS`, so the volley
+  it caught was the auto-acquired one fired during set-up, a frame or two before it
+  despawned — invisible while every shooter loosed exactly one projectile, and obvious the
+  moment the galley's ten reported **1 in the air (expected about 10)**. Both ends are
+  PASSIVE now. Same class as the six tests that broke on 2026-08-29: *a fixture whose
+  premise is "nobody acts unless I say so" is resting on an absence.*
+
 ### Playtest, 2026-08-29 (second round) — two findings, one fixed whole and one fixed by half
 
 - [x] **"the green circle when selecting units don't look good on buildings. replace the
@@ -414,14 +604,14 @@ faults that looked like one**, which is why the morning's re-bake appeared to fi
 
 ### Presentation
 
-- [ ] **A forfeit is announced as an elimination.** The joiner's process was killed
-      mid-match and the host read **"All opponents eliminated"**. Nobody was eliminated —
-      they left, and a resign says the same thing. It is the existing "match over and you
-      won" message, and the snapshot carries no *reason* for a defeat, only the fact of
-      one. Telling a forfeit from a conquest needs a reason field on `player_state` (or
-      beside `winner_id`) and a decision about how many reasons are worth naming: resigned,
-      disconnected, wiped out. Cosmetic, but it tells the winner something untrue about how
-      they won.
+- [x] ~~**A forfeit is announced as an elimination.**~~ **CLOSED 2026-08-30**, with the
+      owner's *"the server does not notify other players"* — the same gap from the other
+      end, and the two wanted the same field. This entry had already named the fix
+      ("a reason field on `player_state`... resigned, disconnected, wiped out") and that is
+      exactly what `SimPlayer.defeat_reason` is. See the 2026-08-30 round above for the
+      hazard it left: **the FIRST reason is the true one**, because `WinConditionSystem`
+      would otherwise relabel a resignation as an elimination the moment the abandoned base
+      fell.
 
 *A second facing entry lived here until 2026-08-29 — "every unit faces the wrong way, and
 there is no game-side half" — describing the same defect as the Facing section above from
@@ -566,6 +756,37 @@ the failure shape is ever wanted again.
 
 Short, and kept because each can bite again.
 
+- ⚠️ **`if Net.host() != null and <the rule>` IS NOT A GUARD — IT IS A RULE THAT IS OFF ON
+  EVERY CLIENT.** Three of `GameScene`'s polite refusals were written that way and were
+  dead for players 2..8 from the day each was added (owner, 2026-08-30). It survives
+  because everything is tested and played solo, where the local player IS the host, so the
+  branch that is wrong is the branch nobody takes. **Whatever a client needs to answer, it
+  is almost certainly already in `player_state`** — stock, population, age, techs and now
+  the defeat reason all ride it every tick. Grep for `Net.host()` before writing another;
+  the legitimate uses are the documented solo-only exceptions and tools.
+- **A defeat is a STATE, not an event, so anything that reacts to one has to prime.** A
+  client joining (or reconnecting into) a match where somebody has already conceded reads
+  a first snapshot full of `defeated: true` and would announce every one of them as
+  breaking news. `GameScene._announce_defeats` records the opening silently. Same shape as
+  `MatchAudio`'s "the first snapshot must be swallowed" and `DamageAlert`'s missing `hp`.
+- **`SimPlayer.defeat()` keeps the FIRST reason and later ones are ignored**, because
+  `WinConditionSystem` re-tests every player every tick. Set the flag directly and a
+  resignation becomes an elimination the moment the abandoned base falls. A two-player
+  world cannot catch it — `match_over` latches and the system stops evaluating.
+- **A water unit standing on land cannot be ORDERED to do anything, and it reports
+  nothing.** `validate()` passes, `PathService` returns an empty route because there is no
+  start node for its domain, the task is retired on the first tick, and the log says the
+  order was accepted. The debug map has **zero** water tiles, so any fixture involving a
+  ship has to paint a channel and then call `PathService.rebuild` — `AStarGrid2D` holds
+  solidity IN THE GRID rather than in the query, so terrain written behind its back does
+  not exist as far as pathing is concerned.
+- **A tree amount is read by tests that are not about trees.** Doubling `res.tree` on
+  2026-08-30 broke five: three in `test_gather` (two hardcoded `40`, and a 4,000-tick
+  budget that was generous at four round trips and short at eight) and two in
+  `test_game_data`. All five now derive from the data. The general form: **a balance number
+  written into an assertion is a test that fails when the owner asks for a balance
+  change**, and none of the five was making a claim about wood.
+
 - **An empty double-tap on a control-group slot wipes that group.** `CTRL+1`..`5` with
   nothing selected now clears the group deliberately, and mobile's double-tap on a slot
   shares that path. Gate it at the callers if it bites. **Now doubly relevant**, since
@@ -574,6 +795,18 @@ Short, and kept because each can bite again.
   buttons were a `PRESET_FULL_RECT` grid added *over* it, and Godot hit-tested them first:
   minimap click-to-move and double-tap-to-centre were both dead while looking implemented.
   Check hit-test order before concluding a minimap feature is missing.
+- ⚠️ **A CONTROL THAT DRIVES ITSELF FROM MOUSE EVENTS IS INERT ON THE PHONE INSIDE A
+  MATCH, and `BaseButton` is the exception that hides it.** `emulate_mouse_from_touch` is
+  off for exactly as long as a match lasts (`GameScene` turns it off on entry and hands it
+  back in `_exit_tree`), so any control Godot drives from `InputEventMouseButton` /
+  `InputEventMouseMotion` alone does nothing under a thumb. **A button answers a raw
+  touch**, which is why every HUD control anyone had pressed worked and the three volume
+  sliders — the only non-buttons in the game — were dead from the day they landed
+  (owner, 2026-08-30). Measured: an `HSlider` at 0.50, tapped at 95% of its track, reads
+  0.50 with emulation off and 0.95 with it on. **The fix is a touch-aware subclass
+  (`TouchSlider`, `TouchLineEdit`), never the project setting** — a flag toggled per screen
+  has to be un-toggled on every path out, and the failure when one path misses it is a
+  camera that pans twice for the rest of the match.
 - **Touch does not grab keyboard focus in this project, so any new text field needs
   `TouchLineEdit`.** `emulate_mouse_from_touch = false`
   ([project.godot:35](game/project.godot#L35)) is required — `CameraRig` handles both

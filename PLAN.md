@@ -576,6 +576,16 @@ boundary, a `{keys, rows}` shape table per entity shape, so field names are writ
 rather than once per entity. The conversion is in `Net`, not in `build()`, so the simulation still
 produces readable dictionaries and every other reader is untouched.
 
+⚠️ **`player_state` IS WHAT A CLIENT KNOWS, AND IT IS RICHER THAN ANY OF THE CODE READING IT
+ASSUMED.** Per player, every tick, to everybody: `stock`, `pop_used`/`pop_cap`, `age`, `colour`,
+the three age-advance counters, `control_groups`, `researched` and `defeated` — plus
+`defeat_reason` since 2026-08-30. **Three of `GameScene`'s polite refusals nevertheless asked
+`Net.host().world` and were therefore dead on every joined client**, each with a comment saying
+the fix was "a job for the multiplayer phase" (see BUGS.md, 2026-08-30). It was not: the answer
+had been on the wire all along, which is exactly why the placement ghost — the one refusal built
+on `GameView.stock_of` — already worked for players 2..8. **Before deciding a client cannot know
+something, read this list.**
+
 **Not yet a real delta** — everything a
 player may see is sent every tick, so the client currently treats *absence* from `updated` as "I
 can no longer see that". A true delta against the last acknowledged tick must add an explicit
@@ -1185,7 +1195,25 @@ water and carves one landmass in the middle; this needs the inverse — `_start_
 first, then an island per start. Radius is the constraint and it is set by the validator,
 not by taste: `MIN_NEARBY` wants 4 wood, 1 gold, 1 stone and 1 food within 34 tiles of
 walking, plus a 22×22 clearing for the base, so an island materially smaller than about
-30 tiles across cannot pass its own opening. Bigger than that and the sea stops mattering.
+30 tiles across cannot pass its own opening. ~~Bigger than that and the sea stops
+mattering.~~
+
+⚠️ **THAT LAST SENTENCE IS REVERSED, project owner 2026-08-30:** *"the archipelago map
+type is so small you cannot fit half of the building from age 2 on it."* The validator's
+floor is a floor and it is not enough to PLAY on — a disc of radius 18 is ~1,020 tiles, of
+which the base clearing takes ~380 and the guaranteed opening's veins most of the rest,
+against ~600 tiles of age-2 footprint before a single gap between buildings.
+`ISLAND_RADIUS` is **26** (~2,120 tiles) and `MapGenerator.archipelago_side` now derives
+the BOARD from it — 128 / 160 / 240 at 2 / 4 / 8 players, against `side_for`'s 96 / 128 /
+192.
+
+⚠️ **RAISING THE RADIUS ON ITS OWN MAKES THE ISLANDS SMALLER**, which is the thing to know
+before touching either number. `_archipelago_ring_radius` is `side/2 - ISLAND_RADIUS -
+SEA_MARGIN`, so a bigger island pulls the start ring inward, which shortens the chord
+between neighbours, which is exactly what `_island_radius` caps against: at 26 on the old
+96-tile two-player board the cap lands at **12**. The dependency had to be inverted — the
+island is the constant and the side falls out of the same relation solved the other way —
+not re-tuned. `_island_radius`'s cap is kept as a backstop and should never bind again.
 
 **3. Content is per-type, which the code half-supports already.** `PREDATORS` is keyed by
 `Type` and read with `.get(type, {})`, so an unlisted type gets **no predators for free** —
@@ -1193,6 +1221,17 @@ this is the one requirement that needs no code at all. Sheep want a per-type cou
 owner asked for "a few", against the current 2 herds of 3), and deer probably want to be
 absent: a herd of seven on a one-base island is most of an opening's food standing still.
 Fish should go **up**, since the sea is the point.
+
+**AND ITS WOOD, which was the fourth and was found by COUNTING rather than by playing.**
+The 2026-08-30 wood pass (doubled tree amounts plus `_sprinkle_trees`) could not reach
+this type from either end — the copse mask is nearly empty on an island, and the sprinkle
+lattice is laid over a board that is 92% sea, so it placed **one** tree on a two-player
+map. The count came back at **1,971 wood per player at eight players** against a desert's
+4,025, on the map whose whole point is a fleet: a galley is 90 wood, a galleon 200, a town
+centre 275 and a mill 100. `CONTENT` gained `start_wood` 20 (from `START_WOOD_COUNT`'s 8)
+out to 22 tiles, through the guaranteed-opening mechanism rather than a fourth lever, and
+the figures are now 5,300 and 4,562. **The lesson is the method: count what you changed,
+per map type, before believing a balance pass reached everywhere.**
 
 **Also needed, and small:** `Type.ARCHIPELAGO` appended to the enum (appended, so saved
 `MatchConfig.map_type` ints keep meaning what they meant); the literal in `generate()`'s
@@ -1225,6 +1264,17 @@ It takes a `max_ring` now, and an amphibious landing passes 1.
 **Still not written: naval COMBAT.** `unit.galley` and `unit.galleon` have attacks and
 nothing has ever fought at sea, so a loaded transport crosses unopposed. That is the next
 thing an archipelago will ask for, and it is not what makes the map playable.
+
+⚠️ **AND HERE IS WHAT WHOEVER WRITES IT WILL HIT FIRST, found 2026-08-30 while giving the
+galley a volley:** a water unit standing on LAND cannot be ordered to do anything and
+reports nothing about it. `AttackCommand.validate()` returns true, `PathService` hands back
+an empty route because there is no start node in its domain, the task is retired on tick 1,
+and the log says the order was accepted. **The debug map has ZERO water tiles**, measured,
+so every ship fixture in the suite and in `dev_preview` has to paint a channel and then
+call `PathService.rebuild` — `AStarGrid2D` holds solidity IN THE GRID rather than in the
+query, so terrain written behind its back does not exist to pathing.
+`test_transport._make_a_coast` is the pattern; `preview_projectiles._flood` is the second
+copy of it and also repaints the view's terrain layer, which is built once at match start.
 
 #### 11.4 Fog of war (2.5) — done 2026-08-17
 
