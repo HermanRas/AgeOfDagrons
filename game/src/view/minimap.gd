@@ -55,6 +55,13 @@ const SIZE := AREA_SIZE * APERTURE_RATIO * 1.41421356
 const OWN_COLOR := Color(0.35, 1.0, 0.45)
 const OTHER_COLOR := Color(1.0, 0.35, 0.3)
 const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
+
+## What one of ours flashes to when it is being hit (2026-08-30). WHITE, on the owner's
+## ask, and it is the right pick for a reason worth keeping: the map already spends green
+## on us, red on the enemy and a dull khaki on gaia, so any HUE would collide with a
+## meaning the player has already learned. White is the one value left that no blip ever
+## sits at, and it is the furthest from all three at minimap scale, which is two pixels.
+const DAMAGE_FLASH_COLOR := Color.WHITE
 const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
 ## The hairline around the map itself.
 ##
@@ -159,8 +166,21 @@ func _fog_color(state: int) -> Color:
 
 
 ## `facts` is `GameView.all_facts()`-shaped: id -> {tile, owner_id, alive, ...}.
-func update_entities(facts: Dictionary, local_owner: int) -> void:
+##
+## `flashing` is `DamageAlert.flashing()` -- `id -> true` for everything of ours that has
+## been hit in the last two seconds. Those blips are drawn WHITE on alternate phases so
+## the player can see, at a glance, where the fighting is (project owner, 2026-08-30:
+## *"the flashing units / building tell you where multiple units / building are taking
+## damage"*).
+##
+## THE PHASE IS ASKED ONCE, HERE, and passed down rather than recomputed per blip. It is
+## a function of the clock alone, so six hit units pulse TOGETHER and read as one alarm;
+## computing it inside the loop would be the same answer today and the wrong shape the
+## moment anything staggers it.
+func update_entities(facts: Dictionary, local_owner: int,
+		flashing: Dictionary = {}) -> void:
 	_blips.clear()
+	var white := not flashing.is_empty() and DamageAlert.white_phase()
 	for f in facts.values():
 		if not bool(f.get("alive", true)):
 			continue
@@ -175,6 +195,10 @@ func update_entities(facts: Dictionary, local_owner: int) -> void:
 			color = OWN_COLOR
 		elif owner_id != 0:
 			color = OTHER_COLOR
+		# Only ever OUR entities: `DamageAlert` records nobody else's, so this cannot
+		# light up an enemy blip even if the caller passed one in.
+		if white and flashing.has(int(f.get("id", 0))):
+			color = DAMAGE_FLASH_COLOR
 		_blips.append({"tile": f["tile"], "color": color})
 	queue_redraw()
 

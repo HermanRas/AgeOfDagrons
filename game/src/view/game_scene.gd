@@ -174,6 +174,12 @@ var _client_map: SimMap = null
 ## world -- the same reason the HUD signals go out through `EventBus` from here.
 var _audio := MatchAudio.new()
 
+## The under-attack alarm and the minimap's damage flash (project owner, 2026-08-30).
+## Beside `_audio` because it is the same kind of thing -- a snapshot diff that turns
+## facts into feedback -- and separate from it because it has an output that is not a
+## sound. See its own header for why the horn is throttled and the flash is not.
+var _damage := DamageAlert.new()
+
 ## TOUCH EMULATION IS OFF INSIDE THE MATCH AND ON EVERYWHERE ELSE (2026-08-22).
 ##
 ## The project setting is now `true`, and this is the one scene that turns it back off.
@@ -909,6 +915,10 @@ func _on_snapshot(snap: Dictionary) -> void:
 	if _view.client_fog != null:
 		_last_vision = _view.client_fog.cells
 	_last_snapshot = snap
+	# BEFORE `_refresh_minimap`, which draws the flash this decides. The other way round
+	# and every hit would show on the map one tick late -- a tenth of a second, but the
+	# horn and the first white blip would not be on the same frame.
+	_damage.observe(snap, Net.local_player_id())
 	_refresh_panel()
 	_refresh_hud(snap)
 	_refresh_minimap()
@@ -1907,7 +1917,8 @@ func _shortfall_text(player: SimPlayer, cost: Dictionary) -> String:
 ## driven directly since nothing else needs "every entity's facts" broadcast
 ## for its sake.
 func _refresh_minimap() -> void:
-	_minimap.update_entities(_view.all_facts(), Net.local_player_id())
+	_minimap.update_entities(_view.all_facts(), Net.local_player_id(),
+			_damage.flashing())
 	_minimap.set_fog(_last_vision)
 
 

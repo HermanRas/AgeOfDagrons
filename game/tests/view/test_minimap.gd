@@ -107,3 +107,45 @@ func test_the_map_actually_fills_that_aperture() -> void:
 	var aperture := Minimap.AREA_SIZE * Minimap.APERTURE_RATIO
 	assert_true(half_diagonal >= aperture - 0.5,
 			"the map leaves %.1f px of black inside the frame" % [aperture - half_diagonal])
+
+
+# ── the damage flash (project owner, 2026-08-30) ────────────────────────────
+
+func test_a_flashing_entity_is_drawn_white_or_in_its_own_colour_and_nothing_else() -> void:
+	# The half of the under-attack alert that says WHERE. `DamageAlert` decides who is
+	# flashing and on which phase; this asserts the minimap honours it and never
+	# invents a third colour -- which is the failure that would actually ship, since a
+	# blip is two pixels and a wrong one reads as an enemy.
+	var facts := {
+		1: {"id": 1, "tile": Vector2i(2, 2), "owner_id": 1, "alive": true},
+		2: {"id": 2, "tile": Vector2i(4, 4), "owner_id": 1, "alive": true},
+	}
+	map.update_entities(facts, 1, {1: true})
+	for b in map._blips:
+		var c: Color = b["color"]
+		assert_true(c == Minimap.OWN_COLOR or c == Minimap.DAMAGE_FLASH_COLOR,
+				"a blip is its owner colour or the flash, never anything else -- got %s"
+				% [c])
+
+
+func test_nothing_flashing_means_nothing_white() -> void:
+	# The phase is a function of the wall clock, so the WHITE case cannot be asserted
+	# directly without injecting one. This is the direction that can be: an empty
+	# flashing set must leave every blip alone whatever the clock says.
+	var facts := {1: {"id": 1, "tile": Vector2i(2, 2), "owner_id": 1, "alive": true}}
+	map.update_entities(facts, 1, {})
+	assert_eq(map._blips.size(), 1)
+	assert_eq(map._blips[0]["color"], Minimap.OWN_COLOR)
+
+
+func test_an_entity_nobody_reported_is_never_flashed() -> void:
+	# `DamageAlert` only ever records the local player's own entities, so an enemy blip
+	# cannot light up -- but the minimap should not depend on that being true upstream.
+	var facts := {
+		1: {"id": 1, "tile": Vector2i(2, 2), "owner_id": 2, "alive": true},
+		2: {"id": 2, "tile": Vector2i(3, 3), "owner_id": 1, "alive": true},
+	}
+	map.update_entities(facts, 1, {2: true})
+	for b in map._blips:
+		if b["tile"] == Vector2i(2, 2):
+			assert_eq(b["color"], Minimap.OTHER_COLOR, "the enemy stays red")
