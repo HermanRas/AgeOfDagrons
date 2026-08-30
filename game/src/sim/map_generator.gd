@@ -84,6 +84,41 @@ const VEIN_MAX_STEPS := 400
 ## walking to. A real delta encoding is what would buy the dense version.
 const TREE_CLUMP_SPACING := 8
 
+## A LIGHT SCATTER OF SINGLE TREES OVER THE WHOLE BOARD, off the wood mask entirely
+## (project owner, 2026-08-30: *"we need to light sprinkle trees over the rendered
+## maps"*, in the same breath as doubling `res.tree`'s amounts).
+##
+## **THE COPSES ANSWER TO THE MASK AND THIS ANSWERS TO NOTHING**, which is the point of
+## it being a separate pass. `_place_trees` only ever puts wood where the terrain noise
+## already said wood may go, so a desert's open sand, a river map's far bank and every
+## stretch of grass between two woods came out completely bare -- and a player who had
+## worked out the last copse on their half of the map had no wood left anywhere they
+## could see. A tree every so often over open ground is both the buffer and the reason
+## the ground reads as landscape rather than as a billiard table.
+##
+## **ONE TREE PER ANCHOR, NOT A CLUMP.** A clump out here would be a wood, and a wood
+## that the mask did not put there undoes the shape the noise was tuned for -- SHAPE's
+## own note is three paragraphs about getting distinct woods with lanes between them.
+## Singles read as scattered growth and cannot merge into anything.
+##
+## SPACING IS SCALED BY `tree_spacing` LIKE EVERY OTHER LATTICE HERE, so the count is
+## flat across board sizes rather than growing with the area: 16 on a 96x96 board is 36
+## anchors, of which the water, the clearings and the woods take a good share. That is
+## a few per cent on top of a forest map's ~1,300 trees and roughly a fifth on top of a
+## desert's, which is the direction that matters -- the sparse maps are the ones that ran
+## out. **The ceiling is `AISystem`'s per-tick linear searches and not the snapshot**;
+## see `SHAPE`'s note on the `clump: 9` attempt that hung a session at ~1,300 trees.
+const SPRINKLE_SPACING := 16
+
+## How far a sprinkled tree keeps clear of a start, BEYOND `_clear_base`'s own radius.
+##
+## `_clear_base` zeroes the wood MASK over its clearing, which is what keeps copses out
+## of a base -- and this pass does not read the mask, so without an explicit distance it
+## would drop trees inside the town centre's footprint and across the ring the starting
+## villagers stand on. The extra tiles past the clearing are so the first house does not
+## have to be sited around an oak.
+const SPRINKLE_START_CLEARANCE := 8
+
 ## One copse, as tile offsets from its anchor. A loose blob rather than a solid square,
 ## so the sprites overlap into a canopy with gaps of light in it.
 ##
@@ -249,13 +284,32 @@ const SHAPE := {
 ## bites. A quiet opening and a naval midgame -- you cannot be attacked until somebody
 ## crosses, so the pressure is economic and the first fight is a landing.
 ##
-## **THE ISLAND RADIUS IS SET BY THE VALIDATOR, NOT BY TASTE.** `MapValidator.MIN_NEARBY`
-## wants 4 wood, 1 gold, 1 stone and 1 food within a walk of the start, and `_place_base`
-## puts them at `VEIN_DISTANCE` 9 and `START_WOOD_MIN/MAX` 11-17 -- so an island whose
-## land stops before 18 tiles cannot pass its own opening, whatever it looks like. 18 is
-## that floor and nothing above it buys anything: bigger islands are a land map with a
-## moat, which is the failure mode this type has.
-const ISLAND_RADIUS := 18
+## **THE ISLAND RADIUS WAS SET BY THE VALIDATOR AND IS NOW SET BY WHAT FITS ON IT.**
+##
+## It shipped at 18, which is the FLOOR: `MapValidator.MIN_NEARBY` wants 4 wood, 1 gold, 1
+## stone and 1 food within a walk of the start, and `_place_base` puts them at
+## `VEIN_DISTANCE` 9 and `START_WOOD_MIN/MAX` 11-17, so an island whose land stops before
+## 18 tiles cannot pass its own opening whatever it looks like. The note here then argued
+## that nothing above the floor bought anything, because *"bigger islands are a land map
+## with a moat"*.
+##
+## ⚠️ **THAT ARGUMENT IS REVERSED, project owner 2026-08-30:** *"the archipelago map type
+## is so small you cannot fit half of the building from age 2 on it."* They are right and
+## it is arithmetic rather than taste. A disc of radius 18 is ~1,020 tiles; the base
+## clearing alone is ~380 of them, the guaranteed opening claims 35 stone tiles, 12 gold,
+## 8 trees and a berry ring, and what is left has to hold a market (8x8), a barracks
+## (6x6), an archery range (7x6), fields at 6x6 each and eight houses. It does not.
+## Radius 26 is ~2,120 tiles, which is roughly double the ground and a little over the
+## 2.4a note's *"64x64 is generous for one player"*.
+##
+## **THE MAP NOW GROWS TO FIT THE ISLAND, WHERE THE ISLAND USED TO SHRINK TO FIT THE
+## MAP** -- see `archipelago_side`. Raising this number ALONE would have made the islands
+## SMALLER, which is the trap worth recording: `_archipelago_ring_radius` subtracts this
+## from the half-side, so a bigger island pulls the start ring inward, which shortens the
+## chord between neighbours, which is exactly what `_island_radius` caps against. At 26 on
+## the old 96-tile two-player board the cap lands at 12. The dependency had to be turned
+## round, not re-tuned.
+const ISLAND_RADIUS := 26
 
 ## How far the land stops short of the map edge, so an island reads as an island rather
 ## than as the map running out. Also the gap the ring radius is derived against.
@@ -279,8 +333,28 @@ const ISLAND_RAGGED := 0.20
 ## word); and fish go UP because the sea is the point and it is the one type where a dock
 ## is not a luxury. Predators need no entry -- `PREDATORS` is read with `.get(type, {})`,
 ## so an unlisted type gets nothing that bites for free, which is exactly the requirement.
+##
+## ⚠️ **AND ITS WOOD, which is the fourth and was MEASURED rather than judged.** The
+## 2026-08-30 wood pass (`resources.json`'s note) doubled every tree and added
+## `_sprinkle_trees`, and a count of what each type actually holds afterwards put the
+## archipelago last by a wide margin: **1,971 wood per player at eight players**, against
+## 4,025 on a desert and 54,600 on a forest. A town centre is 275 of that and a mill 100,
+## so a player on the map whose whole point is a NAVY -- a galley is 90 wood and a
+## galleon 200 -- could not pay for both a second base and a fleet.
+##
+## Neither half of that pass could reach this type. The mask is what the copses read and
+## an island's is nearly empty; the sprinkle lattice is laid over the whole BOARD, and 92%
+## of this one is sea, so it landed **one** tree on a two-player map. So the wood comes
+## through the guaranteed opening instead, which is the mechanism this file already trusts
+## for exactly this situation -- see `START_WOOD_COUNT`'s note on what leaving a start's
+## resources to the noise cost the first time.
+##
+## 20 rather than 8, out to 22 tiles rather than 17: the band has to widen with the count
+## or twenty trees ring the town centre like a hedge, and `ISLAND_RADIUS` 26 is what says
+## 22 is still on dry land.
 const CONTENT := {
-	Type.ARCHIPELAGO: {"sheep_herds": 1, "deer_herds": 0, "fish": 9},
+	Type.ARCHIPELAGO: {"sheep_herds": 1, "deer_herds": 0, "fish": 9,
+			"start_wood": 20, "start_wood_max": 22},
 }
 
 ## How wide the LANE between two players is kept clear of trees, in tiles either side of
@@ -305,6 +379,48 @@ static func side_for(players: int) -> int:
 	var count := clampi(players, MIN_PLAYERS, MAX_PLAYERS)
 	var ideal := float(BASE_SIDE) * sqrt(float(count))
 	return int(ceil(ideal / float(SIDE_MULTIPLE))) * SIDE_MULTIPLE
+
+
+## Side length for one map TYPE, which is `side_for` for everything but the archipelago.
+##
+## Kept as a separate function rather than folded into `side_for`, because `side_for` is
+## the answer to *"how much room do N players want"* and is asked by the lobby, by the
+## tests and by `spacing_for`'s reference board. This is the answer to *"how big must the
+## board be for the map I am about to paint"*, which only the generator asks.
+static func side_for_type(type: Type, players: int) -> int:
+	return archipelago_side(players) if type == Type.ARCHIPELAGO else side_for(players)
+
+
+## AN ARCHIPELAGO IS SIZED BY ITS ISLANDS, not by the area-per-player rule (2026-08-30).
+##
+## Every other map type is land you divide up, so `side_for`'s *"one debug map's worth of
+## room each"* is the right question. An archipelago is not: most of its board is sea, so
+## a board sized as though it were land gives each player a fraction of a player's ground
+## -- which is the project owner's *"you cannot fit half of the building from age 2 on
+## it"*, and it is why `ISLAND_RADIUS`'s note now records a reversal.
+##
+## **THE GEOMETRY, RUN BACKWARDS.** `_island_radius` derives an island from the board by
+## capping it at half the chord between neighbouring starts, less a sea margin. This
+## solves the same relation for the board instead: the chord must hold two island radii
+## and two margins, `chord = 2 * ring * sin(PI / n)`, and the board must hold the ring
+## plus one more island and margin on the far side. So the island is the constant and the
+## side is what falls out -- 128 at two players, 160 at four, 224 at eight, against
+## `side_for`'s 96 / 128 / 192.
+##
+## The `+ 1.0` is a tile of slack against the integer truncation in `_island_radius`,
+## which is the thing that would otherwise turn a rounding hair into an island one tile
+## short of what this promised. Rounding UP to `SIDE_MULTIPLE` usually supplies plenty on
+## its own; at eight players the exact answer lands on a multiple and there is none.
+##
+## Floored at `side_for`, so this can only ever grow a board. An archipelago is at worst
+## as roomy as the land map for the same player count, never tighter.
+static func archipelago_side(players: int) -> int:
+	var n := clampi(players, MIN_PLAYERS, MAX_PLAYERS)
+	var island := float(ISLAND_RADIUS + SEA_MARGIN)
+	var ring := island / sin(PI / float(n))
+	var half := ring + island + 1.0
+	var side := int(ceil(2.0 * half / float(SIDE_MULTIPLE))) * SIDE_MULTIPLE
+	return maxi(side_for(n), side)
 
 
 ## A validated map. `meta.problems` is empty on success; if it is not, every attempt
@@ -357,8 +473,10 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 		var choices := real_types()
 		resolved = choices[rng.randi_range(0, choices.size() - 1)]
 
-	# Sized for one count, populated for another. See `generate`.
-	var side := side_for(size_count)
+	# Sized for one count, populated for another. See `generate`. BY TYPE since
+	# 2026-08-30: an archipelago is sized by what has to fit on its islands rather than by
+	# area per player -- `archipelago_side`.
+	var side := side_for_type(resolved, size_count)
 	var data := MapData.create(Vector2i(side, side))
 
 	# 1 where a tree MAY stand. Kept beside the terrain rather than painted into it as
@@ -413,12 +531,20 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	# THE LANE GOES IN BEFORE THE TREES, not by removing them afterwards. Clearing the
 	# mask means the copses are never anchored in the road at all, so a lane cannot come
 	# out as a corridor with half-clumps hanging into it.
+	var road: Dictionary = {}
 	if resolved == Type.FOREST:
-		_clear_lanes(data, wood)
+		road = _clear_lanes(data, wood)
 
 	var shape: Dictionary = SHAPE[resolved]
 	_place_trees(data, wood, claimed, tree_spacing(shape, data.size),
 			int(shape.get("clump", 5)))
+
+	# AFTER the copses, and last of everything (2026-08-30). It ignores the wood mask, so
+	# it has to run when every other placer has staked its ground: `claimed` is what keeps
+	# a sprinkled tree off a vein, a herd, a berry ring and a copse alike, and it is only
+	# complete now. Running it earlier would also let it steal tiles the guaranteed
+	# opening needs, which is the one thing on this map that may not be crowded out.
+	_sprinkle_trees(data, claimed, spacing_for(SPRINKLE_SPACING, data.size), road)
 
 	data.meta["type"] = int(resolved)
 	# BOTH counts recorded. `players` is how many start here; `size_players` is how many
@@ -561,11 +687,17 @@ static func _paint_archipelago(data: MapData, wood: PackedByteArray,
 
 ## How big each island is, capped so two neighbours cannot merge into one landmass.
 ##
-## `ISLAND_RADIUS` is the floor a start needs to be playable at all, and the cap is half
-## the gap between neighbouring starts less a margin -- which only bites if a future
-## player count or side formula brings the ring in. It is here rather than asserted
-## because a slightly small island fails the validator loudly, and a merged pair fails
-## nothing at all: it just quietly stops being an archipelago.
+## `ISLAND_RADIUS` is what a start needs to be playable, and the cap is half the gap
+## between neighbouring starts less a margin. It is here rather than asserted because a
+## slightly small island fails the validator loudly, and a merged pair fails nothing at
+## all: it just quietly stops being an archipelago.
+##
+## **AS OF 2026-08-30 THE CAP SHOULD NEVER BIND, and it is kept anyway.** `archipelago_side`
+## now solves this same relation for the board, so the ring is wide enough by construction
+## and `ISLAND_RADIUS` wins every time. What is left is a backstop against the two ways
+## that could stop being true -- a caller that hands `_paint_archipelago` a board it did
+## not size, and a future `MAX_PLAYERS` or `SIDE_MULTIPLE`. A cap that has become
+## unreachable is the cheapest thing in this file to keep.
 static func _island_radius(data: MapData, count: int) -> int:
 	var ring := _archipelago_ring_radius(data)
 	var gap := 2.0 * ring * sin(PI / float(maxi(2, count)))
@@ -908,8 +1040,11 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 	_place_vein(data, claimed, centre, &"res.gold_mine", GOLD_TILES, rng)
 	_place_scatter(data, claimed, centre, &"res.berry_bush", START_FOOD_COUNT,
 			START_WOOD_MIN, START_WOOD_MAX, rng)
-	_place_scatter(data, claimed, centre, &"res.tree", START_WOOD_COUNT,
-			START_WOOD_MIN, START_WOOD_MAX, rng)
+	# WOOD IS PER TYPE since 2026-08-30, for the archipelago's sake -- see `CONTENT`.
+	# Everything else takes the constants and generates exactly the opening it always did.
+	_place_scatter(data, claimed, centre, &"res.tree",
+			_content(type, &"start_wood", START_WOOD_COUNT),
+			START_WOOD_MIN, _content(type, &"start_wood_max", START_WOOD_MAX), rng)
 
 	# Wildlife. Sheep and deer are nodes harvested where they stand; the wolf is a
 	# gaia UNIT that comes at you (4.13), which is why it goes through a different
@@ -1189,7 +1324,15 @@ static func _place_vein(data: MapData, claimed: Dictionary, centre: Vector2i,
 ## Integer throughout and a pure function of the size, so two hosts generating the same
 ## map cannot disagree about it.
 static func tree_spacing(shape: Dictionary, size: Vector2i) -> int:
-	var base := int(shape.get("spacing", TREE_CLUMP_SPACING))
+	return spacing_for(int(shape.get("spacing", TREE_CLUMP_SPACING)), size)
+
+
+## The scaling above with the shape lookup taken off the front, so the SPRINKLE lattice
+## (2026-08-30) widens on a big board by the same rule the copse lattice does. Split out
+## rather than given a second copy: the whole argument in `tree_spacing`'s header is that
+## a lattice must scale with the SIDE or the count is unbounded in the one direction the
+## player controls, and that argument applies to any lattice, not to copses in particular.
+static func spacing_for(base: int, size: Vector2i) -> int:
 	var reference := maxi(1, side_for(MIN_PLAYERS))
 	return maxi(base, base * maxi(size.x, size.y) / reference)
 
@@ -1208,10 +1351,19 @@ static func tree_spacing(shape: Dictionary, size: Vector2i) -> int:
 ## surveyed. The float never reaches sim state -- this writes into a mask that decides
 ## where trees are placed at GENERATION time, and the map that comes out is bytes
 ## (2.4c's rule: the content is authoritative, not how it came to be).
-static func _clear_lanes(data: MapData, wood: PackedByteArray) -> void:
+## RETURNS THE ROAD, as a set of tiles, and that is not bookkeeping for its own sake.
+##
+## Clearing the wood MASK is enough to keep copses off the road, because `_place_trees`
+## reads the mask. `_sprinkle_trees` (2026-08-30) deliberately does NOT read it -- that is
+## the whole of what makes it a sprinkle over open ground -- so it would have put single
+## trees straight down the middle of the one corridor this function exists to keep clear,
+## and `test_there_is_a_clear_road_between_the_players` is the only thing that would have
+## said so. The set is what the sprinkle avoids.
+static func _clear_lanes(data: MapData, wood: PackedByteArray) -> Dictionary:
+	var road: Dictionary = {}
 	var starts := data.starts
 	if starts.size() < 2:
-		return
+		return road
 	for i in range(starts.size()):
 		var a := starts[i]
 		var b := starts[(i + 1) % starts.size()]
@@ -1227,6 +1379,8 @@ static func _clear_lanes(data: MapData, wood: PackedByteArray) -> void:
 					var index := data.index_of(t)
 					if index >= 0:
 						wood[index] = 0
+						road[t] = true
+	return road
 
 
 ## Copses on anchors over the wood mask, skipping anything already claimed.
@@ -1269,3 +1423,55 @@ static func _place_trees(data: MapData, wood: PackedByteArray,
 				claimed[t] = true
 				data.add_entity(&"res.tree", 0, t,
 						absi(t.x * 40503 ^ t.y * 12289) % classes)
+
+
+## SINGLE TREES OVER OPEN GROUND, off the wood mask entirely. See `SPRINKLE_SPACING` for
+## why this is a second pass rather than a looser threshold on the first.
+##
+## Deterministic the same way `_place_trees` is, and for the same reason: everything
+## random here is a HASH OF THE ANCHOR rather than a draw from the rng, so the result is
+## a pure function of the board and cannot depend on the order tiles are visited (PLAN.md
+## 7.1). It also means adding this pass does not shift the rng stream, so **every existing
+## seed still generates the terrain, veins, herds and copses it always did** -- the
+## sprinkle is added on top rather than displacing what was there.
+##
+## The size class uses the SAME hash as a copse tree (`t.x * 40503 ^ t.y * 12289`), so a
+## sprinkled tree and a wood tree standing on the same tile would be the same tree. That
+## is deliberate: the two passes differ in WHERE they place, never in what.
+static func _sprinkle_trees(data: MapData, claimed: Dictionary,
+		spacing := SPRINKLE_SPACING, road: Dictionary = {}) -> void:
+	var rd: ResourceDef = GameDataRegistry.resource_def(&"res.tree")
+	var classes := maxi(1, rd.amounts.size() if rd != null else 1)
+	var keep_out := _base_half_extent() + START_CLEARANCE + SPRINKLE_START_CLEARANCE
+
+	for ay in range(0, data.size.y, spacing):
+		for ax in range(0, data.size.x, spacing):
+			var h := absi(ax * 83492791 ^ ay * 29996224)
+			# Jitter by up to +/-4 tiles, wider than a copse's +/-2 because a lone tree on
+			# a visible lattice is an orchard even more plainly than a clump is -- there is
+			# no blob shape to disguise the grid.
+			var t := Vector2i(ax + h % 9 - 4, ay + (h / 9) % 9 - 4)
+			if data.index_of(t) < 0 or claimed.has(t):
+				continue
+			# THE FOREST'S ROAD, which this pass cannot see any other way: `_clear_lanes`
+			# keeps copses off it by clearing the wood MASK, and reading that mask is
+			# exactly what a sprinkle over open ground must not do. Empty on every other
+			# type, which have no lanes to respect.
+			if road.has(t):
+				continue
+			if not data.is_ground_passable(t):
+				continue
+			# CLEAR OF EVERY BASE, not just of what is standing in one. `claimed` holds the
+			# town centre's tiles and the starting units', and nothing else in the
+			# clearing -- so without this a tree lands in the gap between the wall and the
+			# villagers, where the player's first house wants to go.
+			var too_near := false
+			for centre in data.starts:
+				if Vector2(t - centre).length() <= float(keep_out):
+					too_near = true
+					break
+			if too_near:
+				continue
+			claimed[t] = true
+			data.add_entity(&"res.tree", 0, t,
+					absi(t.x * 40503 ^ t.y * 12289) % classes)

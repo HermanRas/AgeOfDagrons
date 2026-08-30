@@ -62,6 +62,69 @@ func test_the_tree_count_is_a_BUDGET_and_does_not_grow_with_the_board() -> void:
 			"96x96 has %d trees and 192x192 has %d -- the budget holds" % [small, large])
 
 
+# ── a light sprinkle over open ground (owner, 2026-08-30) ───────────────────
+#
+# "Wood needs a buff, there is not enough by a long shot ... we need to light sprinkle
+# trees over the rendered maps." The copses answer to the wood mask, so a desert's open
+# sand, a river's far bank and every stretch of grass between two woods came out
+# completely bare -- and the sparse types are exactly the ones that ran out.
+
+func test_the_sparse_map_types_carry_trees_away_from_their_woods() -> void:
+	# A DESERT is the case: its wood mask is a fringe around each oasis and nothing else,
+	# so before this pass most of the board could not hold a tree at all. Measured as
+	# trees far from every other tree, which is what a sprinkle is and a copse is not.
+	var data := _generate(1, MapGenerator.Type.DESERT, 2)
+	var trees := _trees_in(data)
+	var tiles: Array[Vector2i] = []
+	for e in trees:
+		tiles.append(e["tile"])
+
+	var loners := 0
+	for a in tiles:
+		var alone := true
+		for b in tiles:
+			if a != b and Vector2(a - b).length() < 6.0:
+				alone = false
+				break
+		if alone:
+			loners += 1
+	assert_true(loners >= 5,
+			"%d of %d desert trees stand on their own" % [loners, tiles.size()])
+
+
+func test_the_sprinkle_stays_light_enough_to_be_a_sprinkle() -> void:
+	# The ceiling is the same one the copse density has and it is not the snapshot: it is
+	# `AISystem`'s per-tick linear searches, which is what took the 2026-08-28 density
+	# attempt to 24.83 ms a tick. A lattice at 16 is 36 anchors on a 96x96 board, most of
+	# which the water, the clearings and the woods take.
+	var bare := _trees_in(_generate(1, MapGenerator.Type.DESERT, 2)).size()
+	assert_true(bare < 80, "a desert carries %d trees, not a forest's worth" % bare)
+	assert_true(MapGenerator.spacing_for(MapGenerator.SPRINKLE_SPACING,
+			Vector2i(192, 192)) > MapGenerator.SPRINKLE_SPACING,
+			"and it widens on a big board like every other lattice here")
+
+
+func test_no_sprinkled_tree_lands_in_a_base() -> void:
+	# `_clear_base` keeps copses out by zeroing the wood MASK, and this pass does not read
+	# the mask -- so without an explicit distance it would drop an oak between the town
+	# centre's wall and the ring the starting villagers stand on, which is where the first
+	# house goes.
+	#
+	# The bar is 8 rather than the keep-out's own 19, because `_place_base`'s guaranteed
+	# opening deliberately puts eight trees at `START_WOOD_MIN` 11 and they are not this
+	# pass's doing. 8 clears the town centre's 10x10 (radius 5) and the villager ring at
+	# `UNIT_RING_RADIUS` 7, which is what "in a base" means.
+	for type in [MapGenerator.Type.DESERT, MapGenerator.Type.RIVER,
+			MapGenerator.Type.ISLAND, MapGenerator.Type.FOREST]:
+		var data := _generate(1, type, 2)
+		for e in _trees_in(data):
+			for centre in data.starts:
+				var gap: float = Vector2(e["tile"] - centre).length()
+				assert_true(gap > 8.0,
+						"%s: a tree at %s is %d tiles from the start at %s"
+								% [MapGenerator.type_name(type), e["tile"], int(gap), centre])
+
+
 func test_the_lattice_widens_with_the_board_and_never_narrows() -> void:
 	var shape := {"spacing": 6}
 	assert_eq(MapGenerator.tree_spacing(shape, Vector2i(96, 96)), 6)

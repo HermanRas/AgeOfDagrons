@@ -17,8 +17,21 @@ func before_each() -> void:
 	w.setup(MatchConfig.debug_single_player())
 	tc = w.spawn_building(&"building.town_center", 1, Vector2i(10, 10),
 			SimBuilding.Phase.COMPLETE, true)
-	tree = w.spawn_resource_node(&"res.tree", Vector2i(9, 10), 0)   # size 0 -> amount 40
+	tree = w.spawn_resource_node(&"res.tree", Vector2i(9, 10), 0)   # the SMALL tree
 	villager = w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+
+
+## How long to give one villager to strip `tree` bare, derived from what is in it rather
+## than typed as a number.
+##
+## ⚠️ **A LITERAL HERE IS A TEST THAT FAILS WHEN A BALANCE NUMBER MOVES**, and three in
+## this file did exactly that on 2026-08-30 when the owner asked for `res.tree`'s amounts
+## to be doubled: the small tree went 40 -> 80, which is eight round trips at
+## `carry_cap`'s 10 instead of four, and a 4,000-tick budget that had been generous
+## stopped being enough. The wood total was hardcoded as `40` in three places too. None of
+## the three tests was about how much wood a tree holds.
+func _long_enough_to_strip_the_tree() -> int:
+	return maxi(4000, tree.starting_amount * 100)
 
 
 func _order_gather() -> void:
@@ -53,11 +66,14 @@ func test_a_full_load_is_deposited_and_the_villager_goes_back_for_more() -> void
 
 
 func test_the_tree_is_fully_gathered_and_the_villager_retires() -> void:
+	var held := tree.starting_amount
 	_order_gather()
-	var ticks := _run_until(func(): return villager.is_idle(), 4000)
+	var ticks := _run_until(func(): return villager.is_idle(),
+			_long_enough_to_strip_the_tree())
 	assert_true(ticks > 0, "it eventually ran the tree out and stopped")
 	assert_true(tree.is_depleted())
-	assert_eq(w.players[0].stock.get(&"wood", 0), 40, "the whole tree ended up in stock")
+	assert_eq(w.players[0].stock.get(&"wood", 0), held,
+			"the whole tree ended up in stock")
 	assert_eq(villager.carry_amount, 0)
 
 
@@ -79,16 +95,19 @@ func test_a_node_only_lets_gather_slots_many_units_draw_from_it_at_once() -> voi
 	# wins the tree's one slot and keeps it for the whole run -- it never stops
 	# holding the node, so there is never a tick where the slot is up for grabs.
 	var second := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 21))
+	var held := tree.starting_amount
 	w.queue_command(GatherCommand.new(1, [villager.id, second.id], tree.id))
 
 	# Wait for the incumbent to retire, not just for the node to empty -- that
 	# fires a tick before the last load it is still carrying home gets deposited.
-	var ticks := _run_until(func(): return villager.is_idle(), 4000)
+	var ticks := _run_until(func(): return villager.is_idle(),
+			_long_enough_to_strip_the_tree())
 	assert_true(ticks > 0, "the tree still empties out eventually")
 	assert_eq(second.carry_amount, 0, "the second villager never got a turn at a one-slot tree")
 	assert_true(second.is_idle(),
 			"nothing left in the tree for it to wait behind once the incumbent retired")
-	assert_eq(w.players[0].stock.get(&"wood", 0), 40, "but the whole tree still ended up in stock")
+	assert_eq(w.players[0].stock.get(&"wood", 0), held,
+			"but the whole tree still ended up in stock")
 
 
 func test_a_node_with_enough_slots_lets_multiple_units_gather_at_once() -> void:
@@ -125,15 +144,16 @@ func test_an_emptied_node_is_despawned_and_gives_its_tile_back() -> void:
 	# standing is not just a stale sprite -- it is an unwalkable, unbuildable hole
 	# in the ground that looks exactly like a tree.
 	var tile := tree.tile()
+	var held := tree.starting_amount
 	var ticks := 0
 	_order_gather()
-	ticks = _run_until(func(): return villager.is_idle(), 4000)
+	ticks = _run_until(func(): return villager.is_idle(), _long_enough_to_strip_the_tree())
 	assert_true(ticks > 0, "the tree ran out")
 	assert_null(w.get_entity(tree.id), "and is gone, not standing empty")
 	assert_eq(w.map.occupant(tile), 0, "its tile is unclaimed")
 	assert_true(w.map.is_passable(tile, SimMap.Domain.LAND), "walkable, not an invisible wall")
 	assert_true(w.map.can_place_building(Rect2i(tile, Vector2i.ONE)), "and buildable")
-	assert_eq(w.players[0].stock.get(&"wood", 0), 40,
+	assert_eq(w.players[0].stock.get(&"wood", 0), held,
 			"the last load still landed -- the node went, the wood did not")
 
 

@@ -330,11 +330,17 @@ func test_the_town_centre_is_the_drop_off_and_trains_the_villager() -> void:
 # ── resources ──────────────────────────────────────────────────────────────
 
 func test_resource_nodes_carry_a_kind_and_per_size_amounts() -> void:
+	# THE SHAPE, NOT THE BALANCE. This asserted `40` and `175` and broke on 2026-08-30
+	# when the owner asked for wood to be doubled -- a test about the seam failing over a
+	# number nobody was testing. What matters here is that three size classes parse and
+	# that a bigger one holds more; `resources.json` is where the figures live and where
+	# they are argued.
 	var tree: ResourceDef = reg.resource_def(&"res.tree")
 	assert_eq(tree.kind, &"wood")
 	assert_eq(tree.size_class_count(), 3)
-	assert_eq(tree.amount_for(0), 40)
-	assert_eq(tree.amount_for(2), 175)
+	assert_true(tree.amount_for(0) > 0, "a small tree holds something")
+	assert_true(tree.amount_for(2) > tree.amount_for(1), "and a big one holds more")
+	assert_true(tree.amount_for(1) > tree.amount_for(0))
 
 	var mine: ResourceDef = reg.resource_def(&"res.gold_mine")
 	assert_eq(mine.kind, &"gold")
@@ -343,10 +349,12 @@ func test_resource_nodes_carry_a_kind_and_per_size_amounts() -> void:
 
 func test_an_out_of_range_size_class_clamps_rather_than_crashing() -> void:
 	# A map generator asking for a size a resource does not define should get the
-	# nearest one, not take the sim down.
+	# nearest one, not take the sim down. Against the ENDS of the declared list rather
+	# than against literals, for the reason above.
 	var tree: ResourceDef = reg.resource_def(&"res.tree")
-	assert_eq(tree.amount_for(99), 175, "clamps to the largest")
-	assert_eq(tree.amount_for(-5), 40, "clamps to the smallest")
+	assert_eq(tree.amount_for(99), tree.amount_for(tree.size_class_count() - 1),
+			"clamps to the largest")
+	assert_eq(tree.amount_for(-5), tree.amount_for(0), "clamps to the smallest")
 
 
 func test_no_resource_node_claims_to_roam_any_more() -> void:

@@ -31,6 +31,93 @@ func test_it_generates_a_playable_map_at_every_player_count() -> void:
 		assert_eq(data.starts.size(), players, "%d players get %d starts" % [players, players])
 
 
+# ── an island a player can actually build on (owner, 2026-08-30) ────────────
+#
+# "The archipelago map type is so small you cannot fit half of the building from age 2 on
+# it." A disc of radius 18 is ~1,020 tiles and the base clearing alone takes ~380 of them,
+# against a market at 8x8, a barracks at 6x6 and fields at 6x6 each. The fix inverted the
+# dependency: the board is now derived from the island rather than the island capped by
+# the board.
+
+func test_the_board_is_sized_from_the_island_rather_than_by_area_per_player() -> void:
+	# ⚠️ THE TRAP THIS EXISTS FOR: raising `ISLAND_RADIUS` on its own makes the islands
+	# SMALLER. `_archipelago_ring_radius` subtracts the radius from the half-side, so a
+	# bigger island pulls the start ring inward, which shortens the chord between
+	# neighbours, which is exactly what `_island_radius` caps against.
+	for players in [2, 3, 4, 8]:
+		assert_true(MapGenerator.archipelago_side(players) > MapGenerator.side_for(players),
+				"%d players: an archipelago is roomier than the land map for the same count"
+						% players)
+		assert_eq(MapGenerator.generate(players, ARCH, players).size.x,
+				MapGenerator.archipelago_side(players),
+				"and the generator uses it")
+
+
+func test_a_land_map_is_sized_exactly_as_it_always_was() -> void:
+	# `side_for_type` is a per-type answer and not a new rule for everybody. A forest that
+	# grew with this would be a wire and tick cost nobody asked for.
+	for type in [MapGenerator.Type.FOREST, MapGenerator.Type.DESERT,
+			MapGenerator.Type.RIVER, MapGenerator.Type.ISLAND]:
+		assert_eq(MapGenerator.side_for_type(type, 4), MapGenerator.side_for(4),
+				"%s is unchanged" % MapGenerator.type_name(type))
+
+
+func test_every_island_is_wide_enough_to_hold_an_age_two_base() -> void:
+	# MEASURED OFF THE TERRAIN, not off the constant -- the point is what a player gets to
+	# build on, and `_island_radius`'s cap sits between the two. Counted as land tiles
+	# within the nominal radius of each start, against the footprint of the age-2 set the
+	# owner said would not fit: town centre 100, market 64, barracks 36, archery range 42,
+	# blacksmith 25, mill 20, two camps 40, four fields 144, eight houses 128 -- ~600 tiles
+	# of building before a single gap between them.
+	for players in [2, 8]:
+		var data := MapGenerator.generate(players, ARCH, players)
+		for i in range(data.starts.size()):
+			var centre: Vector2i = data.starts[i]
+			var land := 0
+			for dy in range(-MapGenerator.ISLAND_RADIUS, MapGenerator.ISLAND_RADIUS + 1):
+				for dx in range(-MapGenerator.ISLAND_RADIUS, MapGenerator.ISLAND_RADIUS + 1):
+					var t := centre + Vector2i(dx, dy)
+					if data.in_bounds(t) and data.is_ground_passable(t):
+						land += 1
+			assert_true(land > 1200,
+					"%dp island %d has %d buildable tiles" % [players, i + 1, land])
+
+
+func test_an_island_still_has_open_water_all_the_way_round_it() -> void:
+	# The failure the bigger radius could have introduced, and the one that reports
+	# nothing: two islands that merge validate perfectly and are simply a land map that
+	# took the long way round. Asserted as a real gap between neighbouring start centres,
+	# which is what `archipelago_side` solves for.
+	for players in [2, 3, 4, 8]:
+		var data := MapGenerator.generate(players, ARCH, players)
+		var starts := data.starts
+		for i in range(starts.size()):
+			var gap := Vector2(starts[i]).distance_to(Vector2(starts[(i + 1) % starts.size()]))
+			if starts.size() == 2 and i == 1:
+				continue          # the same pair, measured backwards
+			assert_true(gap > float(2 * MapGenerator.ISLAND_RADIUS),
+					"%dp: neighbours %d tiles apart, two islands are %d across"
+							% [players, int(gap), 2 * MapGenerator.ISLAND_RADIUS])
+
+
+func test_an_archipelago_carries_enough_wood_to_pay_for_a_navy() -> void:
+	# MEASURED, and it is why `CONTENT` grew a `start_wood`. The 2026-08-30 wood pass could
+	# not reach this type -- the copse mask is nearly empty on an island and the sprinkle
+	# lattice is laid over a board that is 92% sea, so it landed ONE tree on a two-player
+	# map. The count came back at 1,971 wood per player at eight players, against a
+	# desert's 4,025, on the map whose whole point is a fleet: a galley is 90 wood, a
+	# galleon 200, a town centre 275 and a mill 100.
+	var rd: ResourceDef = GameDataRegistry.resource_def(&"res.tree")
+	for players in [2, 8]:
+		var data := MapGenerator.generate(players, ARCH, players)
+		var wood := 0
+		for e in data.entities:
+			if StringName(e.get("def_id", &"")) == &"res.tree":
+				wood += rd.amount_for(int(e.get("size_class", 0)))
+		assert_true(wood / players >= 3500,
+				"%dp: %d wood per player" % [players, wood / players])
+
+
 func test_no_player_can_walk_to_another() -> void:
 	# The whole point of the type, and the one thing `MapValidator` cannot assert for
 	# itself: it has been told not to require land connectivity here, so if the islands
