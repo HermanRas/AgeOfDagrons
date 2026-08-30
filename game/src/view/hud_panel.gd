@@ -73,8 +73,13 @@ var body: Control
 ## exactly what it was before this existed. A page can never come out WIDER than the
 ## default, and never narrower than the screen allows.
 ##
-## The title recentres itself for free: it is centred inside the frame's own column,
-## not on the screen.
+## THE SLACK IS SPLIT BETWEEN BOTH EDGES, not taken off the right. The first version
+## pulled only the right edge in -- which is what "bring in the right side" asks for
+## literally, and which the owner reported the next day as *"market panel is off
+## centre"*. It was: a page narrower than the screen and pinned to the left margin sits
+## visibly off to one side, and the centred title inside it then reads as off-centre
+## too, because it is centred on the panel and the eye is measuring it against the
+## screen. What they wanted was the panel to STOP at the last button, not to stay put.
 var max_page_width := 0.0:
 	set(value):
 		max_page_width = value
@@ -169,9 +174,12 @@ func _apply_page_width(available: float) -> void:
 		return
 	# The margin is the floor. `maxf` is what makes this a CAP rather than a width: a
 	# screen too narrow to grant it lays out exactly as it did before this existed,
-	# rather than pushing the frame off the right edge.
-	_frame.offset_right = -MARGIN_H if max_page_width <= 0.0 \
-			else -maxf(MARGIN_H, available - MARGIN_H - max_page_width)
+	# rather than pushing the frame off the right edge. Halved and applied to BOTH
+	# offsets, so the page stays centred on the screen -- see `max_page_width`.
+	var margin := MARGIN_H if max_page_width <= 0.0 \
+			else maxf(MARGIN_H, (available - max_page_width) * 0.5)
+	_frame.offset_left = margin
+	_frame.offset_right = -margin
 
 
 ## The page's fill and border. A DOUBLE gold edge -- an outer band with a thinner

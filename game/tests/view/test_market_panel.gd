@@ -233,19 +233,31 @@ func _frame_width(available: float) -> float:
 	return (available + panel._frame.offset_right) - panel._frame.offset_left
 
 
-func test_a_wide_window_pulls_the_right_edge_in_and_a_narrow_one_does_not() -> void:
+func test_a_wide_window_shrinks_the_page_and_a_narrow_one_does_not() -> void:
 	# The cap is a CAP: past it the page stops growing, and below it the screen margin
 	# wins so a narrow screen lays out exactly as it did before the cap existed.
 	var cap: float = panel.max_page_width
 	var wide := cap + 4.0 * HudPanel.MARGIN_H
 
 	assert_eq(_frame_width(wide), cap, "capped on a wide window")
-	assert_eq(panel._frame.offset_left, HudPanel.MARGIN_H,
-			"and the left edge never moves -- only the right one comes in")
 
 	var narrow := HudPanel.MARGIN_H * 2.0 + 200.0
 	assert_eq(_frame_width(narrow), 200.0,
 			"too narrow for the cap, so the margin decides and nothing is clipped")
+
+
+func test_a_capped_page_stays_centred_on_the_screen() -> void:
+	# Reported the day after the cap landed: *"market panel is off centre"*. Taking the
+	# slack off the right edge alone is what "bring in the right side" asks for
+	# literally, and it leaves a narrow page pinned to the left of a wide screen.
+	var wide: float = panel.max_page_width + 4.0 * HudPanel.MARGIN_H
+	panel._apply_page_width(wide)
+
+	var left: float = panel._frame.offset_left
+	var right: float = -panel._frame.offset_right
+	assert_eq(left, right, "the same gap on both sides")
+	assert_true(left > HudPanel.MARGIN_H,
+			"and both are wider than the margin, since there was slack to split")
 
 
 func test_a_page_with_no_cap_fills_the_width_it_is_given() -> void:
