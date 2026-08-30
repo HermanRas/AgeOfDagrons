@@ -11,9 +11,13 @@ Everything you need to clone, build, run, contribute to and re-skin **Age of Dra
 | [5. Issues and feature requests](#5-issues-and-feature-requests) | What to include so a bug is reproducible |
 | [6. Adding assets and re-skinning](#6-adding-assets-and-re-skinning) | The asset seam, packs, and replacing all the art |
 
-> **Where the project actually is:** phase 0.9 of 13. The engine foundation works and is
-> device-verified; there is no playable game. Sections below say plainly when they
-> describe something that doesn't exist yet.
+> **Where the project actually is:** **v0.9.0, the first beta tag.** The MVP is achieved
+> and the game is played on a phone — menu, map, camera, units, buildings, resources, HUD,
+> ages, a 27-entry tech tree, control groups, win conditions, multiplayer and five AI
+> difficulties. Of fifteen phases, four are closed outright and two have not started.
+> **[PROGRESS.md](../PROGRESS.md) is the status document** and is kept current; this file
+> tells you how to build and contribute, and says plainly when it describes something that
+> does not exist yet.
 
 ---
 
@@ -53,11 +57,14 @@ Godot → **Import** → select `game/project.godot` → **Import & Edit**.
 First import takes a minute while the engine builds `game/.godot/` (gitignored, per-user,
 safe to delete and regenerate).
 
-Press **F5** to run. Today that launches `scenes/game/StressTest.tscn` — 200 villagers
-as dots on a dark field with a performance report overlaid. That is the current main
-scene, and it is deliberate: until the asset seam lands at 0.2a there is nothing else to
-show, and the stress test exercises the full real path (`host_solo()` → `SimHost` →
-`SnapshotSystem` → `Net` → `GameView`).
+Press **F5** to run. The main scene is `scenes/menu/Boot.tscn` — splash, then the main
+menu, and every front-door button opens a real screen except QUIT. From there you can
+start a match against the AI and play it.
+
+`scenes/game/StressTest.tscn` is still there and still useful: 200 villagers driven
+through the full real path (`host_solo()` → `SimHost` → `SnapshotSystem` → `Net` →
+`GameView`) with a performance report overlaid. It was the main scene until there was a
+game to boot into. **Judge it on the phone, never on desktop** (§2.9).
 
 ### 1.4 Run the test suite
 
@@ -71,10 +78,15 @@ godot --headless --path game res://tests/run_tests.tscn
 Exit code `0` = pass, `1` = fail. Expected output today:
 
 ```
-  29 test(s), 496 assertion(s) in 184 ms
-  29 passed, 0 failed
+  1779 test(s), 208740 assertion(s)
+  1779 passed, 0 failed
   RESULT: PASS
 ```
+
+> **One test can fail for reasons that are not the code.** `test_tick_cost` measures an
+> 8-player tick against a time budget, so it reports the machine as much as the commit —
+> it has failed at 49.81 ms on a loaded workstation and passed comfortably on the same
+> commit forty minutes later. **Re-run it alone before believing it.**
 
 Windows, with the pinned binary and no PATH entry:
 
@@ -109,10 +121,10 @@ godot --headless --path game --import --quit
 
 ### 1.5 Exporting a desktop build
 
-There is currently **only an `Android` export preset** in `game/export_presets.cfg`.
-Desktop is a development and test target, not a shipped one yet. To make a Windows or
-Linux build, add a preset in **Project → Export** — you'll need the matching export
-templates (**Editor → Manage Export Templates**).
+`game/export_presets.cfg` carries two presets: **`Android`** (the primary target, §2) and
+**`Windows Desktop`**. Both need the matching export templates
+(**Editor → Manage Export Templates**). There is no Linux or macOS preset — add one in
+**Project → Export** if you need it.
 
 ---
 
@@ -264,7 +276,10 @@ Signed
 [ DONE ] export
 ```
 
-Result: a **~59 MB** APK, `arm64-v8a` + `x86_64`.
+Result: an APK for `arm64-v8a` + `x86_64`. It measured **320.6 MB on 2026-08-27** and that
+figure is **certainly stale** — two art deliveries, three phases and the whole UI overhaul
+have landed since and nobody has rebuilt. **Re-measure before quoting it.** The budget is
+300 MB (§3.5), so this is worth watching rather than assuming.
 
 > **`.apk` files are gitignored.** Build artifacts never go in the repo.
 
@@ -461,9 +476,10 @@ Reusing AOD art means reproducing all three elements **verbatim**. They are requ
 
 ### 4.4 Attribution inside the game
 
-`CREDITS.md` is surfaced on an in-game Credits screen (phase 1.4). That is a **licence
-obligation, not a courtesy** — shipping the art without visible attribution would breach
-CC-BY-SA.
+`CREDITS.md` is surfaced on an in-game Credits screen, which **exists and is reachable from
+the main menu**. That is a **licence obligation, not a courtesy** — shipping the art without
+visible attribution would breach CC-BY-SA. The page also credits the two OFL typefaces,
+which the SIL licence does not strictly require but which costs nothing to get right.
 
 ---
 
@@ -503,7 +519,7 @@ networking, replays, the AI — is built on the simulation being deterministic.
 ### 5.2 Requesting a feature
 
 Say what you want and **why** — the problem, not just the solution. Then check
-[IDEA.md](../IDEA.md): the whole game is broken into 13 phases, and there's a good chance
+[IDEA.md](IDEA.md): the whole game is broken into phases, and there's a good chance
 your request is already planned. If so, say which phase; that helps far more than a new
 issue does.
 
@@ -522,10 +538,10 @@ directly through GitHub.
 AOD is designed to be re-skinned. That isn't an afterthought — it's the reason the asset
 architecture looks the way it does.
 
-> **⚠️ Status:** the asset *seam* is designed and documented, but `game/data/visuals.json`,
-> `game/data/audio.json` and the `GameDataRegistry` land at **phases 0.2a and 0.4** and do
-> not exist yet. This section describes the design you'll be working with, and is accurate
-> to the plan. Check `PLAN.md` §2 for the current authoritative detail.
+> **Status: this is all real now.** `game/data/visuals.json`, `game/data/audio.json` and
+> the `GameDataRegistry` all ship, and **361 sprite atlases are staged**. The section below
+> describes what the code does rather than what it is going to do. `PLAN.md` §2 remains the
+> authoritative detail.
 
 ### 6.1 The one rule
 
@@ -621,8 +637,12 @@ What is where:
 | Directory | What |
 |---|---|
 | `game/assets/ui/icons/` | 103 icons at 100×100 RGBA — verbs, resources, technologies, formations, stances |
-| `game/assets/ui/chrome/` | 27 panels, frames, bars, buttons and widgets. **Derived** — see below |
+| `game/assets/ui/chrome/` | 29 panels, frames, bars, buttons and widgets. **Derived** — see below |
 | `game/assets/ui/fonts/` | New Rocker and Cinzel Decorative, both SIL OFL, each beside its own licence text |
+
+**The `OFL.txt` beside each `.ttf` is not optional.** The SIL Open Font License requires
+its own text to ship with the fonts, and it is the easiest condition here to drop by
+accident when moving files around.
 
 `chrome/` is generated, not copied. `tools/prepare_ui_chrome.py` rewrites the master art
 in `assets/UI_Gen/sliced/chrome/` at the size that makes each piece's painted border draw
@@ -659,8 +679,18 @@ Because of §6.1, a total conversion is a content job with no code in it:
 
 | Document | What |
 |---|---|
-| [IDEA.md](../IDEA.md) | What we're building — phases 1–13, gameplay design |
-| [PLAN.md](../PLAN.md) | How — architecture, API reference, phase plan, risks. 1300 lines, the authoritative source |
+| [PROGRESS.md](../PROGRESS.md) | **Where the project is, phase by phase.** The status document — start here |
+| [IDEA.md](IDEA.md) | What we're building — the phases, gameplay design |
+| [PLAN.md](../PLAN.md) | How — architecture, API reference, phase plan, risks. The authoritative source |
+| [BUGS.md](../BUGS.md) | Owner-reported defects |
 | [asset_request.md](../asset_request.md) | Art the game side needs, requested per need and answered in place |
+| [ART_PROMPT.md](ART_PROMPT.md) | The 14 generation prompts behind the UI art set |
+| [Age & Unit Planning.md](Age%20&%20Unit%20Planning.md) | The roster, age by age — **entity templates, not actors** |
+| [AI_Player_difficulty.md](AI_Player_difficulty.md) | The five AI difficulty profiles |
+| [MOBILE_DEPLOY.md](MOBILE_DEPLOY.md) | Device deployment notes |
 | [CREDITS.md](../CREDITS.md) | Third-party attribution |
 | [LICENSE](../LICENSE) · [LICENSE-ART.md](../LICENSE-ART.md) | The two licences |
+
+> **The reference documents moved into `Docs/` on 2026-08-30.** Around 87 citations across
+> the codebase still name them by bare filename ("see IDEA.md"); read those as pointing
+> here.

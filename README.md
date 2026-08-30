@@ -19,13 +19,19 @@
 
 > ### ⚠️ Read this first
 >
-> **There is no game to play yet.** AOD is at **phase 0.9 of 13** — the engineering
-> foundation is built and proven on real hardware, but there is no map, no pathfinding,
-> no buildings, no resources and no UI. What runs today is a headless simulation, a
-> loopback network layer, and a 200-unit performance harness.
+> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.0 — the first
+> beta.** The MVP is achieved and the game is played on a phone: a map, units that gather
+> and fight, buildings, five ages, a 27-entry tech tree, control groups, win conditions,
+> multiplayer and five AI difficulties.
 >
-> Every image on this page is **concept art or a design mockup**, not a screenshot.
-> They show where this is going, not where it is.
+> **What is missing is named rather than glossed.** Of fifteen phases, four are closed
+> outright and two have not started — **13, the dragons this game is named after, because
+> `vis.dragon` has no rig and cannot walk, attack or die**; and 14, a declared ceiling
+> where no AI rule can see its opponent. Several others are one or two items short. LAN
+> discovery, save/load and chat transport are not built.
+>
+> **[PROGRESS.md](PROGRESS.md) is the status document** and is kept honest, phase by
+> phase. Read it before judging anything here.
 
 ---
 
@@ -74,15 +80,22 @@ somewhere to point besides the enemy's front gate.
 
 Version tags follow `v0.1.0`–`v0.8.9` alpha, `v0.9.x` beta, `v1.0.0` release.
 
-The full phase-by-phase breakdown is in **[IDEA.md](IDEA.md)**; the engineering plan
-that implements it is **[PLAN.md](PLAN.md)**.
+The full phase-by-phase breakdown is in **[Docs/IDEA.md](Docs/IDEA.md)**; the engineering
+plan that implements it is **[PLAN.md](PLAN.md)**; where it has actually got to is
+**[PROGRESS.md](PROGRESS.md)**.
 
 ---
 
-## Concept art & design mockups
+## Screenshots
 
-The intended look: chunky readable pixel art on an isometric field, gold-on-dark-brown
-UI chrome (`#E5B842` on `#2B1D14`), everything sized for a thumb.
+**These are captures of the running game, not mockups.** They used to be concept art; the
+six `UI_Design*.jpg` files were retired on 2026-08-30 when the UI overhaul made them out of
+date, and a picture of what the game actually looks like is worth more than a picture of
+what it was going to look like. Regenerate them from `dev_preview/preview_match.tscn` and
+`preview_menus.tscn`.
+
+The look: readable sprites on an isometric field, gold-on-dark-brown chrome (`#E5B842` on
+`#2B1D14`), everything sized for a thumb.
 
 ### Main HUD
 
@@ -92,18 +105,18 @@ Control groups down the left. Age and advancement progress across the top centre
 Resources top right. Selection and action panels bottom left. Ornate diamond minimap
 bottom right with a button in each of its four corner bosses.
 
-**These are screenshots of the running game, not mockups.** They used to be concept art;
-the six `UI_Design*.jpg` files were retired on 2026-08-30 when the UI overhaul made them
-out of date, and a picture of what the game actually looks like is worth more than a
-picture of what it was going to look like. Regenerate them from
-`dev_preview/preview_match.tscn` and `preview_menus.tscn`.
-
 ### Main menu
 
 <img src="Screenshot_Menu.jpg" alt="The main menu: an ornate dragon frame around six buttons" width="820">
 
-All of the chrome above is the project's own art. Typefaces are **Cinzel Decorative** for
-names and **New Rocker** for everything else, both SIL OFL.
+**Every pixel of chrome above is the project's own art**, and that is a licence fact as
+much as an aesthetic one. Until 2026-08-30 the UI was third-party itch.io art whose terms
+forbid redistributing the originals, so `game/assets/ui/` was gitignored and a clean clone
+had no HUD at all — every developer downloaded two packs by hand. Replacing the lot with
+owner-generated art retired that: **a clean clone now runs with its chrome intact.**
+
+Typefaces are **Cinzel Decorative** for names and **New Rocker** for everything else, both
+under the SIL Open Font License and both shipping beside their own licence text.
 
 ---
 
@@ -122,7 +135,8 @@ at 30 fps run the identical simulation.
 
 **3. `src/sim/` is a hard boundary, enforced by a test.** Nothing under `src/sim/` may
 extend `Node`, load a texture, read input, or reference the view layer. That is what
-makes the entire game logic testable headlessly in 184 ms — and it is checked by
+makes the entire game logic testable headlessly — 1779 tests and 208,740 assertions run
+from one command — and it is checked by
 [`test_sim_boundary.gd`](game/tests/sim/test_sim_boundary.gd) on every run, not by a
 convention people forget.
 
@@ -138,32 +152,55 @@ desktop to debug it.
 
 ### Verified on hardware
 
-Measured at phase 0.7 on a HONOR LNA-NX1 (Android 16, Mali-G610 MC2), 200 live units
-driven through the real `host_solo() → SimHost → SnapshotSystem → Net → GameView` path:
+The game is played on a phone — a HONOR LNA-NX1 (Android 16, Mali-G610 MC2) — and has been
+throughout. The numbers below are **the phase-0.7 stress-test measurement, and they predate
+every sprite in the game**: 200 untextured units through the real
+`host_solo() → SimHost → SnapshotSystem → Net → GameView` path. They are kept because the
+budgets are still the budgets, not because they describe today's build.
 
-| Metric | Measured | Budget |
+| Metric | Measured (phase 0.7) | Budget |
 |---|---|---|
 | Sim tick cost | 0.39 ms avg | < 5 ms per 100 ms tick |
 | Frame rate | 60 fps | 60 fps |
 | Draw calls | 209 | < 200 |
-| APK size | 59 MB | < 300 MB |
+| APK size | **320.6 MB** (2026-08-27) | < 300 MB |
+
+⚠️ **Two of those want re-measuring before anyone quotes them.** The APK was over budget
+when last built, and that build itself predates two art deliveries, three phases and the
+whole UI overhaul. Draw calls were over budget at 0.7 with no art at all. **Re-measure on
+the device; desktop numbers mean nothing for a mobile budget.**
 
 ---
 
 ## Current state
 
+Summarised from [PROGRESS.md](PROGRESS.md), which is the authoritative version and carries
+the detail of what each 🟢 is still short of.
+
 | Phase | | |
 |---|---|---|
-| 0.1 | ✅ | Project, Compatibility renderer, Android export, **deployed and verified on a physical device** |
-| 0.5 | ✅ | Headless sim skeleton — `SimWorld`, `SimClock`, entities, systems, commands, spatial hash |
-| 0.6 | ✅ | Loopback networking, snapshot broadcast, pooled and interpolated view layer |
-| 0.7 | ✅ | `state_hash()`, replay record/playback, sim boundary check, `StressTest` |
-| 0.8 | ✅ | Repo hygiene — `.gdignore` markers, non-synced art root, docs |
-| 0.9 | ✅ | Art pipeline built, proven on three assets, split into its own repo |
-| 0.2–0.4 | ⬜ | Asset seam, placeholder renderer, licence audit, asset packs, game data registry |
-| 1–13 | ⬜ | Menu, map, camera, units, buildings, resources, HUD, ages, control groups, win conditions, multiplayer, AI, **dragons** |
+| 0 | 🟢 | Foundation — sim, networking, `state_hash()`, replays, asset seam, licence audit. Left: `AssetPacks` (download, verify, mount) |
+| 1 | 🟢 | Main menu, settings, credits, HOW TO PLAY, lobby. Left: server browser |
+| 2 | 🟢 | Map generation, five biomes, Archipelago. Left: save map |
+| 3 | 🟢 | Camera & world view. Left: camera-follow, tap-minimap-to-move |
+| **4** | ✅ | **Units** — movement, combat, abilities, four stances, four formations, siege pack/unpack |
+| 5 | 🟡 | Buildings — **up next**, and art-paced: 23 more buildings behind ~70 bakes |
+| **6** | ✅ | **Resources & wildlife** |
+| **7** | ✅ | **Resource HUD** |
+| 8 | 🟢 | Main game interface. Left: chat has a wireframe but no transport |
+| 9 | 🟢 | Ages cost resources and advance on a timer; 27 technologies at seven buildings. Left: civilisations, age re-skin — both art-paced |
+| **10** | ✅ | **Control groups** |
+| 11 | 🟢 | Win conditions — Conquest works; Regicide and Trophy are declared and inert |
+| 12 | 🟡 | Multiplayer & five AI difficulties. Left: LAN discovery, campaign, save/load |
+| **13** | ⛔ | **Dragons — not started, blocked on art.** `vis.dragon` has one clip, `static`. The unit is real and trainable from age 4 and has its fire breath; it cannot walk, attack or die |
+| 14 | ⛔ | AI enemy-blindness — a declared ceiling, not a defect: no rule can see the opponent |
 
-**29 tests, 496 assertions, all passing.**
+**1779 tests, 208,740 assertions, 0 failures.**
+
+> **On phase 13, because it is the one this game is named after.** The dragon's mesh has no
+> rig — verified against pristine upstream art, not inferred. It is 0 A.D.'s own model and
+> CC-BY-SA, so rigging it is permitted and the mesh is only 454 triangles, but it is
+> modelling work rather than a pipeline setting. See `asset_request.md` [P7].
 
 ---
 
@@ -174,13 +211,18 @@ git clone https://github.com/HermanRas/AgeOfDagrons.git
 cd AgeOfDagrons
 ```
 
-Open `game/` in **Godot 4.7.1-stable** — the version is pinned, and mixing versions is
-not supported. Then:
+Open `game/` in **Godot 4.7.1-stable** — the version is pinned, and mixing versions is not
+supported. **Point Godot at `game/`, not at the repository root**, or it will offer to
+create a new project and you will wonder why nothing is there.
+
+Press **F5** to boot into the menu and start a match. To run the test suite:
 
 ```bash
-# run the test suite (this is the real entry point today)
 godot --headless --path game res://tests/run_tests.tscn
 ```
+
+Exit code `0` = pass. **Nothing runs it for you** — there is no CI on this repo — so it is
+a habit rather than a safety net.
 
 Full instructions — desktop build, Android build from scratch with no Android Studio,
 contributing, licensing, issues, and how to add or replace assets — are in
@@ -195,16 +237,27 @@ AgeOfDagrons/
 ├── game/                 ← the Godot project root (open THIS in Godot, not the repo root)
 │   ├── src/sim/          the authoritative simulation — no Node, no rendering, no input
 │   ├── src/net/          server-side sim host
-│   ├── src/view/         isometric projection, pooled entity views, stress test
-│   ├── src/autoload/     SimClock, Net
+│   ├── src/view/         isometric projection, pooled entity views, HUD
+│   ├── src/autoload/     SimClock, Net, GameDataRegistry
+│   ├── data/             the asset seam — visuals.json, units.json, techs.json, …
+│   ├── assets/           UI art, fonts, audio, and the staged sprite atlases
+│   ├── scenes/           menu, game and dev scenes
+│   ├── dev_preview/      preview harnesses used to capture the screenshots above
 │   └── tests/            headless test suite — one command, exit 0 or 1
-├── tools/                offline asset-pipeline recipes (isobake lives in its own repo)
-├── Docs/                 build, contribute, licence, assets
-├── IDEA.md               what we're building, phases 1–13
+├── tools/                asset-pipeline recipes and scripts (isobake is its own repo)
+├── assets/               source art the pipeline consumes — UI_Gen sheets, HELP_Gen captures
+├── Docs/                 build, contribute, licence, assets, design docs
 ├── PLAN.md               how we're building it — architecture, API, risks
+├── PROGRESS.md           where it actually is, phase by phase
+├── BUGS.md               owner-reported defects
 ├── asset_request.md      art the game side needs, requested per need
 └── CREDITS.md            third-party attribution (a licence obligation, not a courtesy)
 ```
+
+> **`game/assets/atlases/` is build output and is gitignored.** A fresh clone has no sprite
+> atlases; the game falls back to its placeholder renderer and still runs. They are produced
+> by the pipeline (`tools/`) and ship to players as downloadable packs, not through git.
+> **UI art is the opposite** — that is committed in full, and has been since 2026-08-30.
 
 ## Related repositories
 
