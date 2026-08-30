@@ -303,6 +303,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A NinePatchRect's BORDER IS DRAWN AT 1:1** | The `patch_margin` is in SOURCE pixels and does not scale with the rect, so a 1024 px plate with a measured 46 px border puts a 46 px border on a 152 px panel and clips the content behind its own frame. **Shrinking the margin makes it worse** — the margin says where the border ENDS, so the leftover bevel joins the stretched centre and smears across the panel. The only lever is the SOURCE SIZE; `tools/prepare_ui_chrome.py` is what turns "the border should draw at 12 px" into an output size. See §7's UI-overhaul block. |
 | **SWAPPING ONE FRAME FOR ANOTHER CAN INVERT THE DRAW ORDER** | A frame with a TRANSPARENT middle is drawn on top of what it frames; a frame with a FILLED recess must be drawn under, or it covers the picture entirely. Both replaced frames flipped on 2026-08-30 and a filename says nothing about which kind you have. Found by `preview_match` — a selected town centre with an empty brown square where its portrait goes — not by any test. |
 | **`draw_texture_rect_region` HAS NO KEEP-ASPECT MODE** | It fills the rect it is given, so a non-square crop in a square slot is stretched. `EntityPortrait.fit` is the arithmetic and lives beside the crop helper, because two hand-drawn slots made the identical mistake independently. A `TextureRect` with `STRETCH_KEEP_ASPECT_CENTERED` does not have the problem, which is why the action tiles never showed it. |
+| **A `PRESET_FULL_RECT` CONTROL CANNOT BE GIVEN A SIZE, AND SAYS SO ONLY AT RUNTIME** | Assigning `size` warns *"nodes with non-equal opposite anchors will have their size overridden after `_ready()`"* — and **outside a tree it raises no `NOTIFICATION_RESIZED` at all** (probed on 4.7.1). That makes it a bad lever for a headless test of anything layout-shaped: `test_market_panel` drove the new page-width cap through `panel.size`, the notification never fired, and the test asserted the *default* offsets while reading like it had asserted the cap. It failed loudly here only because the arithmetic was also being asserted. **Give the function the width instead of having it read `size`** — one untested line in the notification handler, verified in a render, beats a test that exercises nothing. Note also that a Control added to a tree has size `(0, 0)` for the rest of that frame, so `_init`/`_ready` are both too early to read it. |
 | **`gitea.wildfiregames.com` is behind an Anubis proof-of-work bot wall** | A plain HTTP client gets an HTML "Making sure you're not a bot!" challenge instead of JSON, which is easy to misread as a broken endpoint. A **`git-lfs/...` User-Agent is allowed through** — that one header is the whole difference. |
 
 ---
@@ -315,9 +316,8 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 88 test files, **1741 tests, all passing** — measured 2026-08-30
-after the UI overhaul's sixth commit, not quoted. (The assertion count was 208,317 at
-1680 tests on 2026-08-29 and has not been re-read since.)
+**361 atlases staged.** 88 test files, **1754 tests / 208,644 assertions, all passing** —
+measured 2026-08-30 after the fourth round of owner polish, not quoted.
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,
 293/71/1163) was stale within days — the 342 in an earlier version lasted about six hours.
@@ -541,6 +541,40 @@ Neither was visible to a test — both pass every structural assertion. In a row
 - **Everything in the chat page is disabled, and the microphone raises the stakes.** A
   mic that appears live and is heard by nobody is worse than a message that goes nowhere.
   `CheckButton`s rather than buttons so a disabled control still shows its STATE.
+
+**THE OWNER'S FOURTH PASS — FOUR ITEMS, ALL LANDED, 2026-08-30** (`9087a29`, `bad03a4`):
+
+| | |
+|---|---|
+| the market page | capped at its widest row; the two paragraphs wrap and the title recentres |
+| the selected-units roster | tapping a portrait now selects that one unit in the world |
+| the production queue | a queued technology draws its icon instead of a bare word |
+| buying a technology | the research menu closes, so the queue it went into is what you see |
+
+- **THE ROSTER WAS INERT FOR THE WHOLE PROJECT AND LOOKED FINISHED.** Twelve portraits,
+  each a pressable `ActionSlot` emitting `member:<n>`, and `SelectionPanel`'s own comment
+  recorded the other end: *"reaches here too and is harmlessly unmatched"*. It drew right,
+  took the tap, played the click sound and did nothing. **A control that is wired to
+  nothing is invisible to every test and to every screenshot** — the same class as the
+  minimap corner buttons, and worth assuming about any grid nobody has pressed on purpose.
+- **THE ROSTER IDS ARE SNAPSHOTTED AT DRAW TIME, NOT RE-READ AT PRESS TIME.**
+  `GameScene._roster_ids`. If a member dies in the ~100 ms between the two, the live
+  selection has closed up around the gap and index n names the unit *after* the one under
+  the thumb — and this feature is for fights, which is when members die. Held, the tap
+  names what was drawn; if that one died the selection comes back empty, which is true.
+  `_garrison_details` indexes for a different reason (a garrisoned unit has no id on the
+  wire at all) and cannot do this.
+- **A RESEARCH PRESS CLOSES ITS MENU; A PLACE PRESS DOES NOT.** Four lines apart in
+  `_on_detail_pressed` and deliberately opposite: placement is a repeated gesture, a
+  technology is bought once and its tile comes back greyed with a "…". Staying put read
+  as *"the action did not work"*, which is the owner's own wording. **The queue it lands
+  on is one snapshot stale and is not made optimistic** — a refused research would have to
+  be un-drawn.
+- **A CAP IS NOT A WIDTH.** `HudPanel.max_page_width` floors at the screen margin, so a
+  screen too narrow to grant it lays out exactly as it did before. `MarketPanel` measures
+  its own cap off the row arithmetic rather than naming a number, and the button count
+  comes from `market.json` — a fifth tributable resource widens the page instead of
+  falling off it. See §6 for why the test drives `_apply_page_width(width)` and not `size`.
 
 ⚠️ **A FONT CANNOT BE IMPORTED WHILE THE PROJECT THEME REFERENCES IT.** Swapping the body
 face deadlocks `--import`: `gui/theme/custom` loads at startup, the theme names the new
