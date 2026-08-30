@@ -13,6 +13,7 @@ config_version=5
 config/name="AgeOfDragons"
 run/main_scene="res://scenes/menu/Boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
+boot_splash/bg_color=Color(0.05490196, 0.039215688, 0.023529412, 1)
 boot_splash/image="uid://dqh8ksaaacbfv"
 config/icon="res://assets/icons/icon_256x256.png"
 config/windows_native_icon="res://assets/icons/icon.ico"
