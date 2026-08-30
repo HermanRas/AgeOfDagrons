@@ -114,6 +114,12 @@ NINE_PATCH: dict[str, tuple[tuple[int, int, int, int], int]] = {
 #: files off one master is 40 KB and no cleverness.
 EXTRA_SIZES: dict[str, tuple[str, int]] = {
     "panel_ornate_small": ("panel_ornate", 30),
+    # The tech tree's icon frame (2026-08-30). Same artwork as the tab plate, at a
+    # third of its border, because the two are drawn at wildly different sizes: a
+    # tab is ~110x28 and wants a 10 px gold edge, while a tech node's frame is 52
+    # square and a 10 px edge there is 20 of its 52 pixels -- the icon inside would
+    # be smaller than the frame around it. 6 leaves 40 px of icon.
+    "tab_plate_small": ("tab_plate", 6),
 }
 
 #: Pieces whose border REPEATS rather than being uniform, and which must

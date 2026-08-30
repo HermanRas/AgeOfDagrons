@@ -315,7 +315,7 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 88 test files, **1739 tests, all passing** — measured 2026-08-30
+**361 atlases staged.** 88 test files, **1741 tests, all passing** — measured 2026-08-30
 after the UI overhaul's sixth commit, not quoted. (The assertion count was 208,317 at
 1680 tests on 2026-08-29 and has not been re-read since.)
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
@@ -511,6 +511,21 @@ Neither was visible to a test — both pass every structural assertion. In a row
   **clamps** rather than trusts: it arrives off the wire, and an age past the ladder puts
   every sprite on a skin that does not exist. It unlocks the ladder and nothing else —
   `MapGen` still places one town centre, because starting buildings are the MAP's business.
+- **A TECH NODE IS A FRAMED ICON WITH ITS NAME UNDERNEATH** (owner's follow-up: *"we
+  are missing the icons ... 9 patch with tab_plate for border, tech icon inside, name
+  below outside of the frame"*). The subtitle naming the building and the prerequisites
+  had already moved into `TechDetailBox`, which is what left the room for a picture.
+  `tab_plate_small` is a second `EXTRA_SIZES` output — same trap as `panel_ornate_small`,
+  since a tab's 10 px gold edge is 20 of a 48 px frame's pixels. **The node height is a
+  BUDGET, not a preference**: four rows must fit or the bottom age is clipped by the
+  horizontal scrollbar, which is what the first render with icons did. `_NODE_SIZE`,
+  `_ROW_SEPARATION`, the 11 pt label and the one-line legend are all paying for that.
+  Icons come from `SelectionActions.ICONS` — the same map the blacksmith's action tiles
+  read, so a tech cannot have one icon on the building and another on the tree.
+- **`TechTreePanel.node_for(id)` EXISTS BECAUSE TWO CALLERS WALKED THE TREE FOR A NAME.**
+  A node used to be a Button whose `text` was the tech's name; when it became a framed
+  icon with a child Label, `text` went empty and both the test and `preview_match`
+  silently found nothing. The preview at least warned. Ask by ID.
 - **THE TECH TREE'S NODES SHRANK BECAUSE THE BOX PAID FOR IT.** 120×76 → 104×58: the
   subtitle naming the building and the prerequisites moved into `TechDetailBox`. A locked
   node still opens — *"what is Plate Mail and should I plan for it"* is a question about a

@@ -238,7 +238,7 @@ func test_tapping_a_node_opens_a_box_that_names_the_building() -> void:
 	# has looked exactly like a working one more than once.
 	var tree := TechTreePanel.new()
 	tree.set_age(2)
-	var node := _find_node(tree, "Forging")
+	var node := _find_node(tree, &"tech.forging")
 	assert_not_null(node, "the tree draws a Forging node")
 	if node != null:
 		node.pressed.emit()
@@ -255,7 +255,7 @@ func test_the_box_explains_the_upgrade_in_words_and_not_only_in_numbers() -> voi
 	# still not answer the question a player opened it with.
 	var tree := TechTreePanel.new()
 	tree.set_age(4)
-	var node := _find_node(tree, "Forging")
+	var node := _find_node(tree, &"tech.forging")
 	if node != null:
 		node.pressed.emit()
 	var said := _text_of(tree.detail_box())
@@ -271,7 +271,7 @@ func test_a_locked_technology_still_opens_its_description() -> void:
 	# silence. Nothing is bought here, so there is nothing to refuse.
 	var tree := TechTreePanel.new()
 	tree.set_age(1)
-	var node := _find_node(tree, "Plate Mail")
+	var node := _find_node(tree, &"tech.plate_mail")
 	assert_not_null(node, "the tree draws a Plate Mail node even in age 1")
 	if node != null:
 		node.pressed.emit()
@@ -286,7 +286,7 @@ func test_closing_the_page_closes_the_description() -> void:
 	# player has not looked at yet.
 	var tree := TechTreePanel.new()
 	tree.set_age(4)
-	var node := _find_node(tree, "Forging")
+	var node := _find_node(tree, &"tech.forging")
 	if node != null:
 		node.pressed.emit()
 	tree.open()
@@ -305,13 +305,62 @@ func test_an_effect_the_sim_reads_has_words_for_it() -> void:
 				"%s falls through to naming itself: '%s'" % [key, said])
 
 
-## The node button for a technology by its display name, or null.
-func _find_node(tree: TechTreePanel, tech_name: String) -> Button:
-	for row in tree._rows.get_children():
-		for node in row.get_children():
-			if node is Button and (node as Button).text == tech_name:
-				return node as Button
-	return null
+## The node button for a technology, by ID.
+##
+## `TechTreePanel.node_for` rather than a tree walk here. This helper used to scan for a
+## Button whose `text` was the tech's display name; the node became a framed icon with
+## its name in a child Label, `text` went empty, and the scan started returning null
+## against assertions that would have gone on passing. The panel keeps the index now.
+func _find_node(tree: TechTreePanel, tech_id: StringName) -> Button:
+	return tree.node_for(tech_id)
+
+
+func test_a_node_shows_the_technologys_icon_inside_a_frame() -> void:
+	# Project owner, 2026-08-30: "we are missing the icons ... putting the tech icon
+	# inside, with its name below outside of the frame". A node with a frame and no
+	# picture in it looks deliberate, so this asserts the picture.
+	var tree := TechTreePanel.new()
+	tree.set_age(4)
+	var node := _find_node(tree, &"tech.forging")
+	assert_not_null(node)
+	if node != null:
+		assert_true(_has_texture(node), "the node draws an icon, not just a frame")
+		assert_true(_has_nine_patch(node), "and the tab plate around it")
+	tree.free()
+
+
+func test_every_declared_technology_resolves_an_icon() -> void:
+	# `SelectionActions.ICONS` is shared with the blacksmith's action tiles, so a tech
+	# missing from it falls back to the generic scroll rather than drawing nothing --
+	# which is correct behaviour and also worth knowing about, since 27 identical
+	# scrolls is a tree nobody can read.
+	var generic := 0
+	for id in GameDataRegistry.tech_ids():
+		var file: String = SelectionActions.ICONS.get(
+				id, SelectionActions.TECH_FALLBACK_ICON)
+		assert_true(ResourceLoader.exists("res://assets/ui/icons/%s" % file),
+				"%s resolves %s" % [id, file])
+		if file == SelectionActions.TECH_FALLBACK_ICON:
+			generic += 1
+	assert_eq(generic, 0, "%d technologies fall back to the generic scroll" % generic)
+
+
+func _has_texture(node: Control) -> bool:
+	for child in node.get_children():
+		if child is TextureRect and (child as TextureRect).texture != null:
+			return true
+		if child is Control and _has_texture(child as Control):
+			return true
+	return false
+
+
+func _has_nine_patch(node: Control) -> bool:
+	for child in node.get_children():
+		if child is NinePatchRect and (child as NinePatchRect).texture != null:
+			return true
+		if child is Control and _has_nine_patch(child as Control):
+			return true
+	return false
 
 
 ## Whether any node in a row is drawn at full opacity -- which is how `_node`
@@ -339,18 +388,28 @@ func _heading_of(row: Control) -> String:
 	return ""
 
 
-## Nodes whose border is the FULL gold, which `_node` uses for RESEARCHED alone --
-## available draws it at 0.8 alpha and locked at 0.25.
+## Nodes carrying the RESEARCHED marker: the gold bar under the label.
+##
+## It reads the BAR rather than a stylebox border, which is what it used to read.
+## The node became a framed icon with its name underneath on 2026-08-30 and has no
+## border of its own any more -- the bar is the same signal the old
+## `border_width_bottom = 3` was, and it is present on every node, transparent,
+## precisely so that a state change never alters a tile's height.
 func _node_count_by_border(tree: TechTreePanel, colour: Color) -> int:
 	var n := 0
 	for row in tree._rows.get_children():
 		for node in row.get_children():
-			if not (node is Button):
-				continue
-			var style := (node as Button).get_theme_stylebox("normal") as StyleBoxFlat
-			if style != null and style.border_color == colour:
+			if node is Button and _marker_colour(node as Button) == colour:
 				n += 1
 	return n
+
+
+func _marker_colour(node: Button) -> Color:
+	for column in node.get_children():
+		for child in (column as Control).get_children():
+			if child is ColorRect:
+				return (child as ColorRect).color
+	return Color(0, 0, 0, 0)
 
 
 func _text_of(node: Control) -> String:

@@ -652,13 +652,14 @@ func _report_market_trade() -> void:
 ## line -- a locked one would photograph the same layout carrying "Needs the ... Age",
 ## which is a less useful picture of the feature.
 func _open_a_tech_description() -> void:
-	var wanted := "Forging"
-	for row in _game._tech_tree._rows.get_children():
-		for node in row.get_children():
-			if node is Button and (node as Button).text == wanted:
-				(node as Button).pressed.emit()
-				return
-	push_warning("preview_match: no %s node to tap in the tech tree" % wanted)
+	# BY ID, through `node_for`, not by scanning the tree for a Button whose text is
+	# "Forging". That is what this did first, and when the node became a framed icon
+	# with its name in a child Label the scan silently found nothing.
+	var button: Button = _game._tech_tree.node_for(&"tech.forging")
+	if button == null:
+		push_warning("preview_match: no tech.forging node to tap in the tech tree")
+		return
+	button.pressed.emit()
 
 
 ## WHAT THE BOX ACTUALLY SAYS, printed because a screenshot of a panel of prose cannot

@@ -31,12 +31,51 @@ enum State { LOCKED, AVAILABLE, RESEARCHED }
 ## length, which is what makes the grid read as a grid.
 const _PLACEHOLDER_COLUMNS := 4
 
-## One node. SMALLER AND SQUATTER than the 120x76 it was, and the detail box is what
-## paid for it: the subtitle used to name the building and the prerequisites on the tile
-## itself, which is why it needed the height. Both moved into the box that opens on a
-## tap, so a node is now a name and a state -- and eleven of them across a row is that
-## much less scrolling.
-const _NODE_SIZE := Vector2(104.0, 58.0)
+## One node: a framed ICON with its NAME underneath (project owner, 2026-08-30 --
+## *"we can use a 9 patch with tab_plate for border, putting the tech icon inside, with
+## its name below outside of the frame"*).
+##
+## It was a name in a bordered box. The subtitle that used to name the building and the
+## prerequisites moved into the detail box when that landed, which is what left room for
+## the picture.
+## THE HEIGHT IS A BUDGET, not a preference. Four rows have to fit the page or the
+## bottom age is clipped by the horizontal scrollbar -- which is what the first render
+## with icons did, cutting "Blast Furnace" in half and adding a vertical scrollbar
+## nobody asked for. The sum is 4 * this + 3 * `_ROW_SEPARATION` against roughly 390 px
+## of scroll area, so raising either number here costs the bottom of the tree.
+const _NODE_SIZE := Vector2(104.0, 84.0)
+
+## Between age rows. 14 to begin with, and the 12 px that bought is what let the fourth
+## row land on the page.
+const _ROW_SEPARATION := 10
+
+## The framed square the icon sits in, and the plate around it.
+##
+## `tab_plate_small` RATHER THAN `tab_plate`, and the difference is the nine-patch trap
+## this whole art set is arranged around: Godot draws a nine-patch border at 1:1, so the
+## 10 px gold edge that reads correctly on a 110x28 tab would be 20 of this frame's 52
+## pixels and the icon inside would be smaller than the frame around it.
+## `tools/prepare_ui_chrome.py`'s `EXTRA_SIZES` emits the same artwork at a 6 px border.
+const _FRAME_PATH := "res://assets/ui/chrome/tab_plate_small.png"
+const _FRAME_SIZE := Vector2(48.0, 48.0)
+
+## MEASURED off the prepared file, not copied from the table that made it. The
+## `NINE_PATCH` entry for `tab_plate` reads (19, 19, 0, 0) -- horizontal only, because
+## the tab is short enough that the measuring tool finds no vertical run -- and taking
+## those margins literally would stretch the top and bottom gold edges over a square
+## frame. The paint is 7/7/6 on the shipped 76x35, so 7 clears it on every side.
+const _FRAME_MARGIN := 7
+
+## How much of the frame the icon leaves to the moulding, as a fraction of `_FRAME_SIZE`.
+## A shade more than the 6 px border, so a square icon's corners tuck inside the plate's
+## rounded ones rather than touching them.
+const _ICON_INSET := 0.17
+
+## The gold bar under a RESEARCHED node. It replaces the `border_width_bottom = 3` the
+## old bordered box used for that state, and it is always present -- transparent when
+## the tech is not held -- so every node is the same height whatever its state. Rows of
+## uneven tiles was the first thing this rewrite produced.
+const _RESEARCHED_BAR_HEIGHT := 3.0
 
 ## The fixed-width heading at the left of each age row.
 const _HEADING_WIDTH := 132.0
@@ -44,6 +83,15 @@ const _HEADING_WIDTH := 132.0
 var _rows: VBoxContainer
 var _legend: Label
 var _detail: TechDetailBox
+
+## `tech id -> the node Button`, rebuilt with the rows.
+##
+## EXISTS SO NOBODY WALKS THE TREE LOOKING FOR A NAME. A node used to be a Button with
+## the tech's name as its `text`, and both a test and `preview_match` found one by
+## scanning for that string -- then the node became a framed icon with its name in a
+## child Label, `text` went empty, and both of them silently found nothing. The preview
+## at least warned; the test would have gone on asserting about a null.
+var _nodes: Dictionary = {}
 
 ## Which age the local player has reached, so a row can be drawn as reached or not.
 ## 0 before the first snapshot, which draws everything locked.
@@ -81,7 +129,7 @@ func _init() -> void:
 	column.add_child(scroll)
 
 	_rows = VBoxContainer.new()
-	_rows.add_theme_constant_override("separation", 14)
+	_rows.add_theme_constant_override("separation", _ROW_SEPARATION)
 	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_rows)
 
@@ -133,6 +181,9 @@ func rebuild() -> void:
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.queue_free()
+	# Cleared with the rows it indexes, or it holds Buttons that are on their way to
+	# being freed and `node_for` hands out a dangling one.
+	_nodes.clear()
 	# A REBUILD FREES THE NODE THE BOX IS DESCRIBING. It holds a `TechDef` rather than a
 	# Control, so it would survive -- but an open box over a tree that has just changed
 	# state under it is a box that may now be wrong about "available", and the honest
@@ -160,10 +211,12 @@ func rebuild() -> void:
 				+ "the nodes are placeholders. Research happens at the building that " \
 				+ "offers it, never on this page."
 	else:
-		_legend.text = "%d technologies — tap one to read what it does. " % declared \
-				+ "Research happens at the building named in the description, never " \
-				+ "here. Gold means researched, lit means available in your age, dim " \
-				+ "means a later age."
+		# ONE LINE. It was three sentences over two lines, and those 20 px are the
+		# difference between four age rows fitting the scroll area and the last one
+		# being clipped -- see `_NODE_SIZE`. What was dropped is "research happens at
+		# the building, never here", which the detail box says in full on every tap.
+		_legend.text = "%d technologies — tap one for what it does. " % declared \
+				+ "Gold: researched. Lit: available now. Dim: a later age."
 
 
 ## `age_required` -> the techs that want it. A tech with an age outside the ladder
@@ -273,35 +326,114 @@ func _state_of(def: TechDef, reached: bool) -> State:
 func _node(def: TechDef, state: State) -> Control:
 	var button := Button.new()
 	button.custom_minimum_size = _NODE_SIZE
-	button.text = def.name if def != null else "?"
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	button.add_theme_font_size_override("font_size", 13)
 	button.focus_mode = Control.FOCUS_NONE
+	# THE BUTTON ITSELF DRAWS NOTHING. Its whole look is the framed icon and the label
+	# below, both of which are children -- and left on the theme's own styles it would
+	# paint the game's painted button plate BEHIND them, which is a second frame around
+	# a frame. That is the exact complaint that retired the action tiles' double border.
+	var blank := StyleBoxEmpty.new()
+	for style_name in ["normal", "hover", "pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(style_name, blank)
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
-	style.set_border_width_all(1)
-	style.set_content_margin_all(6)
-	style.set_corner_radius_all(3)
+	# IGNORE all the way down, or a child Control eats the press before the Button
+	# under it ever sees one. `ResourceHUD` and `NoticeToast` both record what a
+	# display node left on Control's STOP default cost them.
+	var column := VBoxContainer.new()
+	column.set_anchors_preset(Control.PRESET_FULL_RECT)
+	column.add_theme_constant_override("separation", 3)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(column)
+
+	column.add_child(_framed_icon(def))
+
+	# 11, not 12. "Stone Shaft Mining" is the longest name in the set and at 12 it
+	# wraps onto a second line inside a 104 px tile, which the height budget above has
+	# no room for; at 11 every one of the 27 fits on one.
+	var label := HudPanel.text_label(def.name if def != null else "?", 11)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(label)
+
+	# The RESEARCHED marker, always present so every node is the same height.
+	var bar := ColorRect.new()
+	bar.custom_minimum_size = Vector2(0.0, _RESEARCHED_BAR_HEIGHT)
+	bar.color = HudStyle.GOLD if state == State.RESEARCHED else Color(0, 0, 0, 0)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(bar)
+
 	match state:
 		State.RESEARCHED:
-			style.border_color = HudStyle.GOLD
-			style.border_width_bottom = 3
+			# Full gold on the name as well as the bar. The legend says "gold means
+			# researched", and one 3 px rule at the bottom of a tile is not much to
+			# hang that sentence on by itself.
+			label.add_theme_color_override("font_color", HudStyle.GOLD)
 		State.AVAILABLE:
-			style.border_color = Color(HudStyle.GOLD, 0.8)
+			pass
 		_:
-			style.border_color = Color(HudStyle.GOLD, 0.25)
+			# The whole tile dims, frame and icon included, which is how every tech
+			# tree in the genre says "later age" and needs no words at this size.
 			button.modulate = Color(1.0, 1.0, 1.0, 0.45)
-	# EVERY STATE, or the theme's own plate shows through on hover and press -- the
-	# `aod_theme.tres` Button style is a painted nine-patch, and one of these nodes
-	# wearing it would read as a completely different control from its neighbours.
-	for name in ["normal", "hover", "pressed", "disabled"]:
-		button.add_theme_stylebox_override(name, style)
-	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 	if def != null:
 		button.pressed.connect(_on_node_pressed.bind(def, state))
+		_nodes[def.id] = button
 	return button
+
+
+## The gold frame with the technology's icon in it.
+##
+## The icon comes from `SelectionActions.ICONS`, which is the same map the blacksmith's
+## action tiles read, falling back to the generic scroll. ONE map rather than a second
+## copy here: a tech whose icon is right on the building and wrong on the tree would be
+## a bug nobody would think to look for.
+func _framed_icon(def: TechDef) -> Control:
+	var frame := Control.new()
+	frame.custom_minimum_size = _FRAME_SIZE
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	if ResourceLoader.exists(_FRAME_PATH):
+		var plate := NinePatchRect.new()
+		plate.texture = load(_FRAME_PATH)
+		# LINEAR: a painted plate drawn at a size other than its own. The sweep of
+		# 2026-08-30 is what made everything scaled crunchy before this was the default.
+		plate.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		plate.patch_margin_left = _FRAME_MARGIN
+		plate.patch_margin_right = _FRAME_MARGIN
+		plate.patch_margin_top = _FRAME_MARGIN
+		plate.patch_margin_bottom = _FRAME_MARGIN
+		plate.set_anchors_preset(Control.PRESET_FULL_RECT)
+		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		frame.add_child(plate)
+
+	if def == null:
+		return frame          # the placeholder lattice: a frame with nothing in it
+
+	var file: String = SelectionActions.ICONS.get(
+			def.id, SelectionActions.TECH_FALLBACK_ICON)
+	var path := "res://assets/ui/icons/%s" % file
+	if not ResourceLoader.exists(path):
+		return frame          # leave it out rather than fake it, as every optional
+							  # asset load in this codebase does
+
+	var icon := TextureRect.new()
+	icon.texture = load(path)
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Without this the icon pack's own 100x100 becomes the minimum size regardless of
+	# the anchors below -- the bug that ballooned `ResourceHUD` off the viewport.
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var inset := _FRAME_SIZE.x * _ICON_INSET
+	icon.offset_left = inset
+	icon.offset_top = inset
+	icon.offset_right = -inset
+	icon.offset_bottom = -inset
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(icon)
+	return frame
 
 
 func _on_node_pressed(def: TechDef, state: State) -> void:
@@ -312,3 +444,13 @@ func _on_node_pressed(def: TechDef, state: State) -> void:
 ## button and then asking what it opened is the check worth having here.
 func detail_box() -> TechDetailBox:
 	return _detail
+
+
+## One technology's node, or null if the tree is not drawing it.
+##
+## Public so a test and a preview can press the REAL button rather than call the
+## handler behind it -- the distinction `GameScene.corner_buttons` records, and which
+## has earned its keep on these screens more than once. Keyed by tech ID rather than by
+## display name, because a name is a label and a label is a thing that moves.
+func node_for(tech_id: StringName) -> Button:
+	return _nodes.get(tech_id)
