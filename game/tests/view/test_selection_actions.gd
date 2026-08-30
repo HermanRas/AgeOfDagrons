@@ -872,6 +872,33 @@ func test_a_queued_research_draws_its_own_name_rather_than_the_word_Queued() -> 
 			"no payload -- ActionSlot would try to crop a portrait a tech has not got")
 
 
+func test_a_queued_research_draws_the_same_icon_the_research_grid_did() -> void:
+	# "upgrades queue items does not show their tiles" (project owner, 2026-08-30). A
+	# queued unit has cropped its own portrait since 5.4; a queued tech drew a bare word
+	# beside it, which reads as a tile that failed to load rather than as a technology.
+	var smith := _finished(&"building.blacksmith", ["tech.forging"])
+	var queued := SelectionActions.details_for(&"", smith, 1, [], 2)[0]
+	var offered := _by_id(SelectionActions.details_for(&"research",
+			_finished(&"building.blacksmith"), 1, [], 2), &"research:tech.forging")
+
+	assert_false(queued.icon.is_empty(), "the queue entry has a picture")
+	assert_eq(queued.icon, offered.icon,
+			"and it is the SAME picture the grid it was bought from drew")
+	assert_true(queued.captioned,
+			"captioned: the blacksmith's four ladders differ by tier, not by motif")
+	assert_true(ResourceLoader.exists("res://assets/ui/icons/" + queued.icon),
+			"and the file is really there -- ActionSlot falls back silently when it is not")
+
+
+func test_a_queued_unit_still_crops_its_portrait_rather_than_taking_an_icon() -> void:
+	# The other half of the branch, so giving techs an icon cannot quietly give one to
+	# units as well -- an icon file WINS over the payload portrait in `ActionSlot`.
+	var tc := _town_center_facts(5, 1)
+	var queued := SelectionActions.details_for(&"", tc, 1, [], 1)[0]
+	assert_true(queued.icon.is_empty(), "no icon, so the villager's own sprite is drawn")
+	assert_eq(queued.payload, &"unit.villager")
+
+
 func test_the_blacksmiths_full_ladder_still_fits_one_page() -> void:
 	# Twelve is exactly MAX_DETAILS. Asserted so the day a thirteenth is added, this
 	# says so rather than the thirteenth silently not being there.

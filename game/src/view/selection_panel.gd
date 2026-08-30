@@ -442,6 +442,24 @@ func _on_detail_pressed(action: HudAction) -> void:
 	# rather than a fall-through.
 	if id.begins_with("research:") and _building_id != 0:
 		research_requested.emit(_building_id, StringName(id.trim_prefix("research:")))
+		# AND CLOSE THE MENU, so the grid falls back to the production queue the order
+		# just went into (project owner, 2026-08-30: *"after an upgrade is clicked ...
+		# staying on upgrade panel give the impression the action did not work. i had to
+		# manually go back to action panel to see the queue"*).
+		#
+		# THE OPPOSITE OF WHAT `place:` DOES four lines up, and the difference is what the
+		# player does next. Placement is a repeated gesture -- a second house should not
+		# need Build tapped again -- whereas a technology can be bought exactly once, and
+		# the slot that was pressed comes back greyed with a "..." on it. Leaving the menu
+		# open leaves the player looking at a tile that has stopped responding.
+		#
+		# The queue it lands on is one snapshot stale, because `_facts` is: the entry
+		# appears about a tenth of a second later, when the server confirms it. That is
+		# the honest lag, and it is why this does NOT insert an optimistic entry -- a
+		# refused research would have to be un-drawn again.
+		_active_action = &""
+		_detail_page = 0
+		_refresh_details()
 		return
 	# `ungarrison:all` and `ungarrison:<index>` (4.8). "all" is checked as a STRING
 	# rather than relying on `int("all")` returning 0 -- which it does, and which would
@@ -460,8 +478,12 @@ func _on_detail_pressed(action: HudAction) -> void:
 	#
 	# The four prefixes above return early rather than falling through, because each
 	# carries state this panel owns (`_building_id`) that GameScene would otherwise have
-	# to re-derive. `member:` and `overflow` from a group roster reach here too and are
-	# harmlessly unmatched at the other end; they are portraits, not verbs.
+	# to re-derive. `member:<n>` from a group roster reaches here too and is picked up at
+	# the other end by `GameScene._select_roster_member`: it names a POSITION in the
+	# roster this panel drew, and only GameScene knows which entity that was. It was
+	# genuinely unmatched -- a portrait you could press that did nothing -- from 4.3 until
+	# 2026-08-30. `overflow` still is, and correctly: it is disabled, so `ActionSlot`
+	# swallows its press and it never gets this far.
 	action_requested.emit(action.id)
 
 

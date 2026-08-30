@@ -397,6 +397,46 @@ func test_the_x_reports_nothing_as_an_order() -> void:
 	assert_eq(fired, [])
 
 
+# ── picking one out of a group ──────────────────────────────────────────────
+
+func test_a_roster_portrait_reports_which_position_was_tapped() -> void:
+	# "one villager in the mix of archers is very hard to tap.. group selecting and
+	# picking the one you want from this list will work great" (project owner,
+	# 2026-08-30). This panel knows the POSITION; only GameScene holds the entity ids,
+	# so this half asserts the position goes out and `_select_roster_member` is the
+	# other half.
+	var fired: Array = []
+	panel.action_requested.connect(func(id: StringName) -> void: fired.append(id))
+	panel.show_entity(_villager_facts(1), 3, true,
+			[&"unit.villager", &"unit.archer", &"unit.villager"])
+
+	assert_true(_press_detail(&"member:1"), "the middle portrait is pressable")
+	assert_eq(fired, [&"member:1"], "and says which one it was, not which def")
+
+
+func test_the_roster_draws_a_portrait_per_selected_entity_in_order() -> void:
+	# The position is only meaningful because the grid and the selection are the same
+	# list in the same order -- GameScene builds both in one loop for that reason.
+	panel.show_entity(_villager_facts(1), 3, true,
+			[&"unit.villager", &"unit.archer", &"unit.villager"])
+	assert_eq(_visible(panel._detail_slots), 3)
+	for i in range(3):
+		assert_eq(panel._detail_slots[i].action.id, StringName("member:%d" % i))
+
+
+func test_the_overflow_counter_is_not_pressable() -> void:
+	# It stands for the members that did not fit, so there is no one entity to pick.
+	# Disabled, so `ActionSlot` swallows the press and it never reaches GameScene.
+	var many: Array = []
+	for i in range(30):
+		many.append(&"unit.villager")
+	panel.show_entity(_villager_facts(1), 30, true, many)
+
+	var last := panel._detail_slots[SelectionActions.MAX_DETAILS - 1]
+	assert_eq(last.action.id, &"overflow")
+	assert_true(last.disabled)
+
+
 func test_the_x_goes_away_with_the_panel() -> void:
 	# 8.8's "visible only while something is selected", and it costs no code: it is
 	# a CHILD of the panel, the panel hides itself, and a hidden Control takes no
@@ -505,6 +545,66 @@ func test_a_portrait_slot_is_captioned_with_its_name() -> void:
 	# rebuilt.
 	assert_not_null(_find_across_pages(&"place:building.wonder"))
 	assert_eq(_caption_of(panel._detail_slots, &"place:building.wonder"), "Wonder")
+
+
+# ── research closes the menu it was bought from ─────────────────────────────
+
+## A finished blacksmith, which is the one building with a research row deep enough
+## to see this on: twelve technologies at age 4.
+func _blacksmith_facts(queue: Array = []) -> Dictionary:
+	return {"id": 7, "def_id": &"building.blacksmith", "owner_id": 1, "hp": 1000,
+			"max_hp": 1000, "alive": true, "phase": SimBuilding.Phase.COMPLETE,
+			"queue_len": queue.size(), "queue_fraction": 0.3, "queue": queue}
+
+
+func _open_research() -> void:
+	panel.show_entity(_blacksmith_facts(), 1, true, [], 2)
+	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"research").action)
+
+
+func test_buying_a_technology_drops_back_to_the_production_queue() -> void:
+	# "after an upgrade is clicked ... staying on upgrade panel give the impression the
+	# action did not work" (project owner, 2026-08-30).
+	var got: Array = []
+	panel.research_requested.connect(func(b: int, t: StringName) -> void: got.append([b, t]))
+
+	_open_research()
+	assert_not_null(_slot_with_action(panel._detail_slots, &"research:tech.forging"))
+	assert_true(_press_detail(&"research:tech.forging"))
+
+	assert_eq(got, [[7, &"tech.forging"]], "the order still went out")
+	assert_eq(panel._active_action, &"", "and the menu closed behind it")
+	assert_null(_slot_with_action(panel._detail_slots, &"research:tech.forging"),
+			"the grid is no longer the research menu")
+
+
+func test_the_queue_it_lands_on_is_whatever_the_last_snapshot_said() -> void:
+	# Deliberately NOT optimistic. The entry appears a tick later, when the server
+	# confirms it; a refused research would otherwise have to be un-drawn.
+	_open_research()
+	_press_detail(&"research:tech.forging")
+	assert_eq(_visible(panel._detail_slots), 0,
+			"an empty queue is still an empty queue until the next snapshot")
+
+	panel.show_entity(_blacksmith_facts(["tech.forging"]), 1, true, [], 2)
+	assert_not_null(_slot_with_action(panel._detail_slots, &"cancel:0"),
+			"and then it is there, without the menu being reopened")
+
+
+func test_the_research_menu_reopens_at_the_top_after_a_purchase() -> void:
+	# `_detail_page` is reset alongside `_active_action`, so a purchase made on page 2
+	# of some future longer list does not leave the next open scrolled.
+	_open_research()
+	_press_detail(&"research:tech.forging")
+	assert_eq(panel.current_detail_page(), 0)
+
+
+func test_placing_a_building_still_leaves_its_menu_open() -> void:
+	# The opposite call, and the contrast is the point: placement is a repeated gesture
+	# and a second house must not need Build tapped again.
+	_open_build(1)
+	_press_detail(&"place:building.house")
+	assert_eq(panel._active_action, &"build")
 
 
 func test_a_train_slot_is_captioned_too() -> void:

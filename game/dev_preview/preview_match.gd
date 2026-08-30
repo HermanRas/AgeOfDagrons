@@ -387,6 +387,24 @@ func _advance_script() -> void:
 			_report_research_queue()
 			_shoot("match_researching")
 		66:
+			# PICKING ONE OUT OF A GROUP (project owner, 2026-08-30: *"one villager in the
+			# mix of archers is very hard to tap.. group selecting and picking the one you
+			# want from this list will work great"*).
+			#
+			# The roster has drawn a portrait per selected entity since 4.3 and each one
+			# has emitted `member:<n>` all along, into nothing. What is in doubt is the
+			# other end -- so this presses the real `ActionSlot`, not `_select_roster_member`
+			# directly, because the whole point is that the tile a thumb lands on is wired.
+			_select_all_villagers()
+		67:
+			_report_roster("selected as a group")
+			_shoot("match_roster")
+		68:
+			_tap_a_roster_portrait()
+		69:
+			_report_roster("after tapping the third portrait")
+			_shoot("match_roster_picked")
+		70:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -396,7 +414,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		67:
+		71:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -1093,6 +1111,90 @@ func _report_research_queue() -> void:
 	print("  research queue: %s" % ("(empty)" if queued.is_empty() else ", ".join(queued)))
 	if queued.is_empty():
 		push_warning("preview_match: the press never reached the simulation")
+
+	# AND WHAT THE PANEL IS SHOWING, which is the half the owner actually reported
+	# (2026-08-30: *"staying on upgrade panel give the impression the action did not
+	# work"*). The sim moving and the grid still listing technologies is exactly the
+	# state that looked broken, and the two lines above cannot tell them apart.
+	var panel: SelectionPanel = _game._panel
+	var grid: Array[String] = []
+	for slot in panel._detail_slots:
+		if not slot.visible or slot.action == null:
+			continue
+		var a: HudAction = slot.action
+		grid.append("%s [%s]" % [a.id, _tile_source(a)])
+		# A QUEUE ENTRY DRAWS ONE OF TWO THINGS, never a bare word: an icon file for a
+		# technology, or the cropped portrait its `payload` names for a unit. Neither is
+		# what the owner photographed -- "upgrades queue items does not show their tiles".
+		if String(a.id).begins_with("cancel:") and a.icon.is_empty() and a.payload == null:
+			push_warning("preview_match: queue entry '%s' has no tile to draw" % a.id)
+	print("  detail grid: %s" % ("(empty)" if grid.is_empty() else ", ".join(grid)))
+
+	if panel._active_action == &"research":
+		push_warning("preview_match: the research menu is still open over the queue")
+
+
+## What an action tile actually draws its middle from, in `ActionSlot`'s own order of
+## preference: an icon file, else a cropped portrait, else the bare label.
+func _tile_source(a: HudAction) -> String:
+	if not a.icon.is_empty():
+		return a.icon
+	if a.payload != null:
+		return "portrait of %s" % a.payload
+	return "label '%s'" % a.label
+
+
+# ── picking one out of a group (PLAN.md 8.1c) ───────────────────────────────
+
+## The roster slot this preview taps. Third rather than first, so a report that says
+## "one selected" cannot be a group that never got past its own primary.
+const _ROSTER_PICK := 2
+
+
+## Press a roster portrait through the real slot's `pressed`, which is what a thumb
+## does. Calling `GameScene._select_roster_member` here would prove the handler and
+## nothing about whether the tile reaches it -- the trap `_press_the_clear_button` and
+## `_press_cancel_build` both exist for.
+func _tap_a_roster_portrait() -> void:
+	var panel: SelectionPanel = _game._panel
+	if _ROSTER_PICK >= panel._detail_slots.size():
+		push_warning("preview_match: the detail grid is smaller than the pick")
+		return
+	var slot: ActionSlot = panel._detail_slots[_ROSTER_PICK]
+	if not slot.visible or slot.action == null \
+			or not String(slot.action.id).begins_with("member:"):
+		push_warning("preview_match: slot %d is not a roster portrait (%s)"
+				% [_ROSTER_PICK, "empty" if slot.action == null else slot.action.id])
+		return
+	_roster_wanted = _game._roster_ids[_ROSTER_PICK] if _ROSTER_PICK < _game._roster_ids.size() \
+			else 0
+	slot.pressed.emit()
+
+
+var _roster_wanted := 0
+
+
+## What the panel and the selection say, side by side. Printed rather than only shot,
+## because a grid of near-identical villager portraits photographs the same whether it
+## is showing twelve of them or one.
+func _report_roster(when: String) -> void:
+	var panel: SelectionPanel = _game._panel
+	var ids: Array[int] = _game._view.selection.current()
+	var slots: Array[String] = []
+	for slot in panel._detail_slots:
+		if slot.visible and slot.action != null:
+			slots.append(String(slot.action.id))
+	print("roster (%s): %d selected %s, primary %d, grid [%s]"
+			% [when, ids.size(), ids.slice(0, 6), _game._view.selection.primary(),
+			", ".join(slots)])
+
+	if _roster_wanted == 0:
+		return
+	if ids.size() != 1:
+		push_warning("preview_match: the tap left %d selected, not 1" % ids.size())
+	elif ids[0] != _roster_wanted:
+		push_warning("preview_match: tapped portrait %d (entity %d) and got entity %d"
+				% [_ROSTER_PICK, _roster_wanted, ids[0]])
 
 
 func _clear_selection() -> void:

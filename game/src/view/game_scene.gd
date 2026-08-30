@@ -77,6 +77,18 @@ var _idle_cycle_id: int = 0
 ## the Cancel Build button.
 var _placing_def_id: StringName = &""
 
+## The selection as it was when the panel's roster of portraits was last DRAWN, so
+## `member:<n>` can be resolved back to an entity (PLAN.md 8.1c).
+##
+## A SNAPSHOT RATHER THAN A RE-READ of `_view.selection.current()` at press time, and the
+## difference shows up in exactly the case the roster exists for: a fight. If a member
+## dies between the draw and the tap, the live selection has closed up around the gap and
+## index n names the unit AFTER the one under the player's thumb -- so re-reading would
+## quietly select the wrong thing. Held here, the tap names the entity that was actually
+## drawn there, and if that one is the one that died the selection simply comes back
+## empty, which is true.
+var _roster_ids: Array[int] = []
+
 ## Whether the next world tap AIMS the selected unit's special ability (PLAN.md 4.10)
 ## rather than being read as an ordinary order.
 ##
@@ -1613,6 +1625,9 @@ func _on_action_requested(action_id: StringName) -> void:
 	if id.begins_with("formation:"):
 		_pick_formation(StringName(id.trim_prefix("formation:")))
 		return
+	if id.begins_with("member:"):
+		_select_roster_member(int(id.trim_prefix("member:")))
+		return
 
 	match action_id:
 		&"stop":
@@ -1650,6 +1665,34 @@ func _on_action_requested(action_id: StringName) -> void:
 			_toggle_selected_gate()
 		&"upgrade":
 			_upgrade_selected_building()
+
+
+## Narrow a group selection down to the one member whose portrait was tapped (project
+## owner, 2026-08-30: *"one villager in the mix of archers is very hard to tap.. group
+## selecting and picking the one you want from this list will work great"*).
+##
+## THIS IS WHAT THE ROSTER WAS ALWAYS FOR and it has been inert since 4.3 --
+## `SelectionActions._roster_details` has emitted `member:<n>` all along, and
+## `SelectionPanel`'s fall-through comment recorded that it "reaches here too and is
+## harmlessly unmatched at the other end". This is the other end.
+##
+## NOT AN ORDER, so no `_orders_refused()` guard: a selection is local view state that
+## never crosses the wire (`Selection`'s header), and a defeated player watching the end
+## of a match may still look through what they have. The same reason the [X] clears
+## without asking the server -- though that one IS gated, because it also cancels
+## placement mode.
+##
+## NO CAMERA MOVE. The picked unit is one of a group the player is already looking at, so
+## there is nothing to travel to, and a camera that jumped on every roster tap would be a
+## camera fighting the player mid-fight.
+func _select_roster_member(index: int) -> void:
+	if index < 0 or index >= _roster_ids.size():
+		return
+	# Through `_view.select` rather than by poking `selection`, so the rings in the world
+	# are repainted -- the group's rings have to come OFF, and that is the only visible
+	# confirmation that the tap did anything at all.
+	_view.select([_roster_ids[index]] as Array[int])
+	_refresh_panel()
 
 
 ## Set the whole movable selection's stance (PLAN.md 4.12).
@@ -2085,11 +2128,16 @@ func _refresh_panel() -> void:
 	var primary := _view.selection.primary()
 	if primary == 0:
 		_panel.show_nothing()
+		_roster_ids = []
 	else:
 		var facts := _view.facts_for(primary)
 		var is_mine := int(facts.get("owner_id", 0)) == Net.local_player_id()
 		var all_def_ids: Array = []
-		for id in _view.selection.current():
+		# Kept alongside the def ids, in the same loop and therefore in the same order,
+		# because `member:<n>` names a POSITION in this list and the two arrays going out
+		# of step would pick the wrong unit. See `_select_roster_member`.
+		_roster_ids = _view.selection.current()
+		for id in _roster_ids:
 			all_def_ids.append(_view.facts_for(id).get("def_id", &""))
 		# The skin gating the menus and tinting the portraits is the SELECTION
 		# OWNER's, not the local player's: a selected enemy building shows what

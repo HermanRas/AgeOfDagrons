@@ -771,9 +771,21 @@ static func _stance_badge(stance: int) -> String:
 ##
 ## A RESEARCH IN THE QUEUE IS A UNIT ID THAT RESOLVES TO NOTHING, and it used to draw
 ## as the word "Queued" (5.4's own note records that failure with the def ids that
-## fixed it). `payload` is left EMPTY for a technology on purpose: `ActionSlot` crops
-## the payload's portrait from a baked sprite, and a tech has none -- so it draws its
-## label, which is what the owner asked for at 9.3 anyway.
+## fixed it). `payload` stays EMPTY for a technology and always will: `ActionSlot` crops
+## the payload's portrait from a baked sprite, and a tech has none.
+##
+## IT TAKES ITS OWN ICON INSTEAD, since 2026-08-30 (project owner: *"upgrades queue items
+## does not show their tiles"*). A queued unit has drawn its cropped portrait since 5.4,
+## so a queued technology beside it -- a bare centred word with a percentage under it --
+## read as a tile that had failed to load rather than as the other kind of entry. The 27
+## icons landed with [P8] and `ICONS` is keyed by `techs.json`'s own ids, so this is the
+## SAME picture the Research grid and the tech tree draw for it; a player who has just
+## bought Wheelbarrow off one grid finds the same tile in the queue.
+##
+## CAPTIONED, for `_research_details`' reason and one more of its own. The blacksmith's
+## twelve are four ladders of three drawn as one motif per line, so the icon alone says
+## which LINE is queued and not which tier -- and the entry is pressable, cancelling and
+## refunding what it names.
 static func _queue_details(facts: Dictionary) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	var queue: Array = facts.get("queue", [])
@@ -791,6 +803,9 @@ static func _queue_details(facts: Dictionary) -> Array[HudAction]:
 		var a := HudAction.new(&"cancel:%d" % i, label)
 		if ud != null:
 			a.payload = def_id
+		elif td != null:
+			a.icon = ICONS.get(td.id, TECH_FALLBACK_ICON)
+			a.captioned = true
 		# The front entry is the one actually building; show its progress.
 		if i == 0:
 			a.badge = "%d%%" % roundi(float(facts.get("queue_fraction", 0.0)) * 100.0)
@@ -837,6 +852,13 @@ static func _garrison_details(facts: Dictionary) -> Array[HudAction]:
 ## becomes a "+N" counter rather than a portrait, so the grid never lies about
 ## how many are selected (UI_Design.md: "if they are more than 11 the last
 ## block shows +x overflow").
+##
+## `member:<n>` NAMES A POSITION IN THIS LIST, and pressing one narrows the selection to
+## that entity alone (`GameScene._select_roster_member`, live since 2026-08-30). An index
+## rather than an entity id because this function is not given one -- `all_def_ids` is
+## what it takes, and it is the caller that holds the ids in the same order. That is the
+## same shape `_garrison_details` uses, for a different reason: a garrisoned unit HAS no
+## id on the wire, whereas this one has an id the caller can look up.
 static func _roster_details(all_def_ids: Array) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	if all_def_ids.is_empty():
