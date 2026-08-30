@@ -587,6 +587,42 @@ func stock_of(owner_id: int) -> Dictionary:
 	return (_player_stock.get(owner_id, {}) as Dictionary).duplicate()
 
 
+## POPULATION ALREADY IN THE OVEN, for `owner`'s own buildings (PLAN.md 4.11).
+##
+## The client half of `PopulationSystem.has_room_for`, and the reason the polite
+## population toast can be shown to a joined player at all: `pop_used` and `pop_cap` ride
+## `player_state`, but the queue does not, so without this a client asking "have I room
+## for one more" would be answering a question one villager out of date for as long as
+## anything was training.
+##
+## EXACT FOR THE LOCAL PLAYER AND ONLY FOR THEM. Your own buildings are sent in full
+## whatever the fog says, so their `queue` is complete; a remembered enemy building has
+## its queue stripped (`SnapshotSystem._remembered`) and would report 0 here. Nothing
+## asks about anybody else and nothing should.
+##
+## ⚠️ **A QUEUED TECHNOLOGY COUNTS AS ONE POP, and that is `PopulationSystem.queued_pop`'s
+## arithmetic mirrored rather than corrected.** The sim's version reads
+## `ud.pop_cost if ud != null else 1`, and since 9.3 a research shares this queue
+## (`SimBuilding.queue`'s header), so a blacksmith teching costs a notional pop slot on
+## both sides. It is wrong in the same direction in both places, which is what keeps the
+## toast agreeing with the refusal; fix it in the sim first if it is ever worth fixing.
+func queued_pop_of(owner: int) -> int:
+	var pending := 0
+	for id in _facts:
+		var f: Dictionary = _facts[id]
+		if int(f.get("owner_id", -1)) != owner or bool(f.get("is_unit", false)):
+			continue
+		# RUBBLE IS SKIPPED, the same as in `queued_pop`: a destroyed building's queue
+		# never spawns anything, so reserving population for it charges the player for
+		# units that are not coming.
+		if not bool(f.get("alive", true)):
+			continue
+		for def_id in (f.get("queue", []) as Array):
+			var ud: UnitDef = GameDataRegistry.unit(StringName(def_id))
+			pending += ud.pop_cost if ud != null else 1
+	return pending
+
+
 ## Every entity's facts, keyed by id. A copy, for the same reason
 ## `Selection.current()` hands one out -- the minimap (8.2a) redraws its
 ## blips from this every snapshot and must not be able to mutate the view's

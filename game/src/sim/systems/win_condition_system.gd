@@ -82,7 +82,13 @@ func _last_man_standing(w: SimWorld) -> void:
 			# ONE WAY ONLY, never cleared. A player with no units and no buildings
 			# cannot build, train or gather, so there is no path back -- and a flag
 			# that could flicker off would take the defeat screen with it.
-			p.defeated = true
+			#
+			# THROUGH `defeat()` RATHER THAN THE FLAG, so the reason is recorded with it.
+			# This runs for every player every tick, including one who has ALREADY
+			# conceded -- `SimPlayer.defeat` keeps the first reason for exactly that, or
+			# a resignation would be relabelled an elimination the moment the abandoned
+			# base fell.
+			p.defeat(SimPlayer.Defeat.ELIMINATED)
 
 	if standing.size() > 1:
 		return

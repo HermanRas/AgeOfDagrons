@@ -332,8 +332,15 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	#
 	# `validate()` refuses a second resign, so a peer who conceded and THEN dropped -- the
 	# ordinary way of leaving -- is not defeated twice.
+	#
+	# LABELLED DISCONNECTED, not merely queued (project owner, 2026-08-30: *"when a
+	# player disconnects or resigns the server does not notify other players"*). The
+	# command is the same one and the outcome is the same flag; the reason is what lets
+	# the survivors be told which of the two happened, instead of reading "all opponents
+	# eliminated" about somebody whose phone lost signal. See `SimPlayer.defeat_reason`.
 	if _host != null and _host.world != null and pid > 0:
-		_host.world.queue_command(ResignCommand.new(pid, _host.world.tick))
+		_host.world.queue_command(ResignCommand.new(pid, _host.world.tick,
+				SimPlayer.Defeat.DISCONNECTED))
 
 	peer_left.emit(peer_id)
 

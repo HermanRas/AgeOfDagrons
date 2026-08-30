@@ -935,6 +935,10 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_refresh_hud(snap)
 	_refresh_minimap()
 	_feed_pages(snap)
+	# BEFORE `_refresh_result`, which is what stops the clock and shows the overlay. A
+	# player leaving is usually the very thing that ends the match, so announced after it
+	# the toast would be drawn behind the result panel on the frame it mattered.
+	_announce_defeats(snap)
 	_refresh_result(snap)
 	# The camera's centre is the listener, so a battle off the edge of the screen
 	# is not heard (`AudioManager._AUDIBLE_RADIUS_PX`). Passed in rather than
@@ -943,6 +947,95 @@ func _on_snapshot(snap: Dictionary) -> void:
 	# through `clamped_centre`), so it is the listener with nothing to derive.
 	_audio.observe(snap, Net.local_player_id(),
 		_camera.position if _camera != null else Vector2.INF)
+
+
+## Which player ids this client has already said something about. See `_announce_defeats`.
+var _announced_defeats: Dictionary = {}
+
+
+## TELL THE SURVIVORS SOMEBODY HAS GONE (project owner, 2026-08-30: *"when a player
+## disconnects or resigns the server does not notify other players"*).
+##
+## Until today the only thing that ever mentioned a defeat was the result screen, and it
+## only appears when the MATCH ends -- so in a three-player game one player could resign,
+## a second could be wiped out, and the last one would play on for ten minutes having
+## been told nothing. The chat page dims their tab, which nobody has open.
+##
+## READ OFF `player_state`, not off a message. `defeat_reason` (`SimPlayer.Defeat`) is on
+## the wire beside `defeated`, so this is a reader of sim state like the result screen
+## rather than a second notification channel that could disagree with it -- and it works
+## identically on a host and on a joined client, with nothing to forward.
+##
+## ⚠️ **THE FIRST SNAPSHOT IS PRIMED, NOT ANNOUNCED**, which is `MatchAudio`'s trap in a
+## different coat: a defeat is a STATE and not an event, so a client that joins (or
+## reconnects) into a match where somebody already conceded would open with a toast about
+## something that happened before it arrived. Everything already out on the first
+## snapshot is recorded silently and only later transitions speak.
+##
+## The local player is skipped: `_refresh_result` gives them a whole screen, and a toast
+## saying "you have resigned" underneath it is the same news twice.
+func _announce_defeats(snap: Dictionary) -> void:
+	var state: Dictionary = snap.get("player_state", {})
+	if state.is_empty():
+		return
+	var priming := _announced_defeats.is_empty()
+	var me := Net.local_player_id()
+	# SORTED, so two players knocked out on the same tick are announced in the same
+	# order on every machine -- dictionary order is not guaranteed and a screenshot of
+	# one client should read like a screenshot of another.
+	var ids: Array = state.keys()
+	ids.sort()
+	for id in ids:
+		var pid := int(id)
+		var entry: Dictionary = state[id]
+		if not bool(entry.get("defeated", false)):
+			continue
+		if _announced_defeats.has(pid):
+			continue
+		_announced_defeats[pid] = true
+		if priming or pid == me:
+			continue
+		_toast.show_message("Player %d %s" % [pid,
+				_defeat_phrase(int(entry.get("defeat_reason", SimPlayer.Defeat.ELIMINATED)))])
+	# A match where nobody is out yet must not prime forever, or the first defeat of the
+	# game is the one that gets swallowed. A sentinel entry no player id can collide with
+	# says "the opening has been seen".
+	_announced_defeats[0] = true
+
+
+## One player's exit, in the player's words. Kept beside `_announce_defeats` and used by
+## the result screen too, so the sentence a survivor reads mid-match and the one on the
+## panel afterwards cannot describe the same event two different ways.
+func _defeat_phrase(reason: int) -> String:
+	match reason:
+		SimPlayer.Defeat.RESIGNED:
+			return "has resigned"
+		SimPlayer.Defeat.DISCONNECTED:
+			return "has disconnected"
+		_:
+			return "has been eliminated"
+
+
+## Whether a defeat was somebody LEAVING rather than losing. One predicate, because both
+## the winner's sentence and the loser's own ask it and "resigned or disconnected" written
+## twice is one place for a third reason to be forgotten.
+func _forfeited(reason: int) -> bool:
+	return reason == SimPlayer.Defeat.RESIGNED or reason == SimPlayer.Defeat.DISCONNECTED
+
+
+## The same three reasons in the FIRST PERSON, for the losing player's own result panel.
+## A separate function rather than a suffix on `_defeat_phrase`, because English does not
+## let one string do both jobs -- and DISCONNECTED is not merely a person swap: a player
+## reading this did not choose to drop, so it says the connection went rather than
+## accusing them of leaving.
+func _own_defeat_text(reason: int) -> String:
+	match reason:
+		SimPlayer.Defeat.RESIGNED:
+			return "You resigned"
+		SimPlayer.Defeat.DISCONNECTED:
+			return "You lost your connection"
+		_:
+			return "You were eliminated"
 
 
 ## The end of the match (PLAN.md 11.1), read off the snapshot rather than worked
@@ -975,14 +1068,69 @@ func _refresh_result(snap: Dictionary) -> void:
 	# would push the buttons down out of it.
 	_match_over = true
 	var winner := int(snap.get("winner_id", 0))
-	if not over:
-		_result.show_result(false, "You were eliminated")
-	elif winner == player_id:
-		_result.show_result(true, "All opponents eliminated")
+	var reason := int(mine.get("defeat_reason", SimPlayer.Defeat.ELIMINATED))
+	if over and winner == player_id:
+		_result.show_result(true, _victory_subtitle(snap, player_id))
+	elif defeated and (_forfeited(reason) or not over):
+		# OUR OWN REASON, not a fixed sentence (2026-08-30). Two cases in one branch:
+		#
+		# **Knocked out while the match goes on** is what this used to be, and it said "You
+		# were eliminated" whatever had happened -- which contradicted a player who had
+		# just pressed Resign on purpose.
+		#
+		# **AND A FORFEIT EVEN WHEN THE MATCH IS OVER, which the first version of this fix
+		# missed and `preview_match` showed within the minute.** Resigning a DUEL ends the
+		# match, so `over` is true and the winner is the other player, and the branch below
+		# printed "Player 2 won" at somebody who had chosen to quit. True, and not an
+		# answer to what they did. Hoisted above the winner cases rather than folded into
+		# them, because in a bigger game "Player 5 won" is news and "You resigned" is the
+		# reason you are reading this at all -- the panel is 340 px and only one of them
+		# fits.
+		#
+		# First person rather than `_defeat_phrase`, which is written for a third party:
+		# "You has resigned" is what sharing one string here would have produced.
+		_result.show_result(false, _own_defeat_text(reason))
 	elif winner == 0:
 		_result.show_result(false, "Nobody was left standing")
 	else:
 		_result.show_result(false, "Player %d won" % winner)
+
+
+## HOW THE WIN WAS WON (BUGS.md, *"a forfeit is announced as an elimination"*).
+##
+## "All opponents eliminated" was the only thing this screen ever said, and it was a lie
+## every time a match ended because somebody left: the owner's own report is a joiner's
+## process being killed mid-match and the host being told it had wiped them out. The
+## snapshot carries a reason per player now, so the sentence can be true.
+##
+## NAMES THE ONE PLAYER WHEN THERE IS ONE, because a duel is what this game is mostly
+## played as and "Player 2 disconnected" is the whole story. With several opponents it
+## falls back to counting how many forfeited, since listing four names does not fit a
+## 340 px panel -- and a mixed ending ("two eliminated, one resigned") is a sentence
+## nobody needs. Elimination stays the default wording, which is what an all-conquest
+## match still gets.
+func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
+	var state: Dictionary = snap.get("player_state", {})
+	var ids: Array = state.keys()
+	ids.sort()
+	var others: Array[int] = []
+	var forfeits := 0
+	for id in ids:
+		if int(id) == player_id:
+			continue
+		others.append(int(id))
+		if _forfeited(int((state[id] as Dictionary).get(
+				"defeat_reason", SimPlayer.Defeat.NONE))):
+			forfeits += 1
+	if others.size() == 1:
+		var only: Dictionary = state[others[0]]
+		return "Player %d %s" % [others[0],
+				_defeat_phrase(int(only.get("defeat_reason", SimPlayer.Defeat.ELIMINATED)))]
+	if forfeits == others.size() and forfeits > 0:
+		return "Every opponent forfeited"
+	if forfeits > 0:
+		return "%d opponent%s forfeited" % [forfeits, "" if forfeits == 1 else "s"]
+	return "All opponents eliminated"
 
 
 ## Whether the player's input should be ignored outright: the match never started
@@ -1300,7 +1448,13 @@ func _on_placement_released(screen_pos: Vector2) -> void:
 	# a field the player has dragged away from its mill is technically true and
 	# tells them nothing about the rule they just broke.
 	if not result["can_afford"]:
-		_toast.show_message("Not enough resources")
+		# NAMES THE SHORTFALL, like the age badge and the research tile. "Not enough
+		# resources" was this one message that left the player counting five stockpiles
+		# by eye while the other three refusals in the file said what to go and get.
+		var bd: BuildingDef = GameDataRegistry.building(_placing_def_id)
+		_toast.show_message("Need %s to build %s"
+				% [_shortfall_text(_my_stock(), bd.cost if bd != null else {}),
+				bd.name if bd != null else "that"])
 	elif not result.get("placeable", true):
 		_toast.show_message(_adjacency_hint(_placing_def_id))
 	else:
@@ -1576,8 +1730,9 @@ func _upgrade_selected_building() -> void:
 		return
 
 	var price := UpgradeBuildingCommand.cost_delta(from, to)
-	if not PlacementAdvice.can_afford(price, _view.stock_of(Net.local_player_id())):
-		_toast.show_message("Not enough resources")
+	if not PlacementAdvice.can_afford(price, _my_stock()):
+		_toast.show_message("Need %s to build %s"
+				% [_shortfall_text(_my_stock(), price), to.name])
 		return
 	Net.submit_command(UpgradeBuildingCommand.new(Net.local_player_id(), id))
 	_toast.show_message("Building %s" % to.name.to_lower())
@@ -1805,20 +1960,25 @@ func _selected_ability_def() -> UnitDef:
 ## the cap with no explanation, which is the failure mode a full town centre and a
 ## broken button have in common.
 ##
-## Asks `PopulationSystem` the same question the host will, through `Net.host()` --
-## the documented solo-only exception `_preview_placement()` already uses to colour
-## the placement ghost by the host's own adjacency rule, and for the same reason: a
-## second implementation of the rule on this side would disagree with the server the
-## first time either one changed. A remote client has no host to ask and will need
-## the refusal sent back to it, which is a job for the multiplayer phase.
+## ASKED OF THE SNAPSHOT, NOT OF `Net.host()` (project owner, 2026-08-30: *"player 2 and
+## player 3 does not get alert for not enough resources"*). This used to read
+## `Net.host().world`, which is null on every joined client -- so the guard fell through,
+## the command went out, `validate()` dropped it in silence, and the button read as dead
+## for everybody but the host. See `_my_stock` for why one path now serves both sides.
 func _on_train_requested(building_id: int, unit_def_id: StringName) -> void:
 	var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
-	var world: SimWorld = Net.host().world if Net.host() != null else null
-	if ud != null and world != null \
-			and not PopulationSystem.has_room_for(world, Net.local_player_id(), ud.pop_cost):
+	if ud != null and not _has_pop_room(ud.pop_cost):
 		# Names the fix, not just the rule: "Population limit reached" alone leaves a
 		# new player looking for a setting, and the answer is always another house.
 		_toast.show_message("Population limit reached -- build a house")
+		return
+	# THE COST HALF, which this handler never had. `TrainCommand.validate()` refuses an
+	# unaffordable order as silently as it refuses one over the cap, so the two ways a
+	# train press can do nothing now say so in the same way -- and the shortfall is named
+	# for the age badge's reason: "Need 30 gold" sends the player somewhere.
+	if ud != null and not PlacementAdvice.can_afford(ud.cost, _my_stock()):
+		_toast.show_message("Need %s to train %s"
+				% [_shortfall_text(_my_stock(), ud.cost), ud.name])
 		return
 	Net.submit_command(TrainCommand.new(Net.local_player_id(), building_id, unit_def_id))
 
@@ -1838,11 +1998,9 @@ func _on_research_requested(building_id: int, tech_id: StringName) -> void:
 	var t: TechDef = GameDataRegistry.tech(tech_id)
 	if t == null:
 		return
-	var world: SimWorld = Net.host().world if Net.host() != null else null
-	var player: SimPlayer = world.player_for(Net.local_player_id()) if world != null else null
-	if player != null and not player.can_afford(t.cost):
+	if not PlacementAdvice.can_afford(t.cost, _my_stock()):
 		_toast.show_message("Need %s to research %s"
-				% [_shortfall_text(player, t.cost), t.name])
+				% [_shortfall_text(_my_stock(), t.cost), t.name])
 		return
 	Net.submit_command(ResearchCommand.new(Net.local_player_id(), building_id, tech_id))
 	_toast.show_message("Researching %s" % t.name)
@@ -1908,21 +2066,22 @@ func _on_debug_destroy_requested(target_id: int) -> void:
 ## this same treatment for, and the same reason a full town centre and a broken button
 ## look identical.
 ##
-## Asks the host the same question the server will, through `Net.host()` -- the
-## documented solo-only exception `_preview_placement` and `_on_train_requested`
-## already use. A second copy of the affordability rule here would disagree with the
-## server the first time either changed. A remote client has no host to ask, so it
-## submits and takes the silence; sending the refusal back is a multiplayer job.
+## ASKED OF THE SNAPSHOT, NOT OF `Net.host()`. Until 2026-08-30 this read
+## `Net.host().world` and a joined client's `Net.host()` is null, so `player` was null,
+## the guard fell through, and the command went out to be dropped in silence -- which is
+## the project owner's *"player 2 and player 3 does not get alert for not enough
+## resources ... trying to age up"* exactly. The old comment here said sending the
+## refusal back was "a multiplayer job"; it was not, because the client is already told
+## its own stock every tick. See `_my_stock`.
 func _on_age_advance_requested(next_age: int) -> void:
-	var world: SimWorld = Net.host().world if Net.host() != null else null
-	var player: SimPlayer = world.player_for(Net.local_player_id()) if world != null else null
 	var def: AgeDef = GameDataRegistry.age(next_age)
-	if player != null and def != null and not player.can_afford(def.cost):
+	if def != null and not PlacementAdvice.can_afford(def.cost, _my_stock()):
 		# NAMES WHAT IS SHORT, not just that something is. "Not enough resources" leaves
 		# the player counting five stockpiles by eye; the population toast beside this
 		# one sets the standard by naming the fix rather than the rule.
 		_toast.show_message("Need %s to reach the %s" % [
-				_shortfall_text(player, def.cost), def.name if def.name != "" else "next age"])
+				_shortfall_text(_my_stock(), def.cost),
+				def.name if def.name != "" else "next age"])
 		return
 	Net.submit_command(AdvanceAgeCommand.new(Net.local_player_id()))
 
@@ -1938,13 +2097,56 @@ func _on_age_advance_unavailable(reason: StringName) -> void:
 			_toast.show_message("This is the last age")
 
 
+## THE LOCAL PLAYER'S TREASURY, AS THE LAST SNAPSHOT REPORTED IT -- and the one answer
+## that is the same on a host and on a joined client.
+##
+## ⚠️ **EVERY POLITE REFUSAL IN THIS FILE USED TO ASK `Net.host().world`, WHICH IS NULL
+## ON A CLIENT** (project owner, 2026-08-30). Three handlers -- train, research and age
+## advance -- were written with a `player != null` guard in front of the toast, so on
+## players 2..8 the guard was simply false, no toast was shown, the command went out and
+## `validate()` dropped it without a word. The button read as broken for everybody except
+## whoever was hosting, and the comments each claimed the fix was "a multiplayer job".
+##
+## It is not, and it never was: `SnapshotSystem.build` has sent every player their own
+## `stock` since the wire had a `player_state` in it, and `GameView` caches it for the
+## placement ghost -- which is why the ghost was the only one of the four that already
+## worked for a joined player. The rule is now the ghost's rule everywhere:
+## `PlacementAdvice.can_afford` over `_view.stock_of`, one path, both sides.
+##
+## Advisory, exactly as the ghost is. The stock is one snapshot old (~100 ms), the server
+## re-checks every command anyway, and being wrong therefore costs a refusal rather than
+## a divergence. It errs toward SUBMITTING -- a purchase that just became affordable is
+## sent and accepted -- which is the right direction for a hint.
+func _my_stock() -> Dictionary:
+	return _view.stock_of(Net.local_player_id())
+
+
+## Whether one more unit of `pop_cost` fits under the local player's cap.
+##
+## `PopulationSystem.has_room_for` is the enforcing half and stays on the server. This is
+## the same sum over the same three numbers read off the snapshot instead of off the
+## world -- `pop_used` and `pop_cap` ride `player_state`, and the queue is counted by
+## `GameView.queued_pop_of`, whose header records the one arithmetic quirk the two share.
+func _has_pop_room(pop_cost: int) -> bool:
+	var me := Net.local_player_id()
+	var mine: Dictionary = (_last_snapshot.get("player_state", {}) as Dictionary).get(me, {})
+	if mine.is_empty():
+		return true          # no snapshot yet: never refuse on no information
+	return int(mine.get("pop_used", 0)) + _view.queued_pop_of(me) + pop_cost \
+			<= int(mine.get("pop_cap", 0))
+
+
 ## What is MISSING from `cost`, as "120 food, 30 gold" -- never what it costs. Ordered
 ## by `ResourceHUD.DISPLAY_ORDER` so the list reads in the same order as the counters
 ## the player is about to look at.
-func _shortfall_text(player: SimPlayer, cost: Dictionary) -> String:
+##
+## Takes a STOCK rather than a `SimPlayer`, which is what lets a joined client call it:
+## there is no `SimPlayer` on this side of the wire and there never will be. See
+## `_my_stock`.
+func _shortfall_text(stock: Dictionary, cost: Dictionary) -> String:
 	var parts: Array[String] = []
 	for kind in ResourceHUD.DISPLAY_ORDER:
-		var short := int(cost.get(kind, 0)) - int(player.stock.get(kind, 0))
+		var short := int(cost.get(kind, 0)) - int(stock.get(kind, 0))
 		if short > 0:
 			# A resource kind is bare in the data -- `&"wood"`, not `&"res.wood"`, which
 			# is the RESOURCE NODE namespace. No prefix to strip.

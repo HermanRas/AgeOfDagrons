@@ -93,6 +93,26 @@ var tech_mods: Dictionary = {}
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 var defeated: bool = false
 
+## WHY they are out (project owner, 2026-08-30: *"when a player disconnects or resigns
+## the server does not notify other players"*), and BUGS.md's older *"a forfeit is
+## announced as an elimination"*.
+##
+## The snapshot has carried the FACT of a defeat since 11.1 and never the reason, so a
+## host whose opponent's phone went into a tunnel read **"All opponents eliminated"** --
+## true about the outcome and untrue about how it happened, and with nothing said at the
+## moment it happened either. Three reasons is the whole list the game can tell apart:
+## `WinConditionSystem` sets ELIMINATED, a player's own press sets RESIGNED, and `Net`
+## sets DISCONNECTED for the `ResignCommand` it queues on a vanished peer's behalf
+## (12.1e). Anything else would be a distinction nothing can make.
+##
+## SET WITH `defeated` AND ONE-WAY LIKE IT. It is written in the same statement, so the
+## two can never disagree about whether somebody is out, and never cleared for the same
+## reason `defeated` is not -- a reason that could flicker would take the result screen's
+## sentence with it.
+enum Defeat { NONE, ELIMINATED, RESIGNED, DISCONNECTED }
+
+var defeat_reason: int = Defeat.NONE
+
 ## Fog of war (PLAN.md 2.5): one `Fog` byte per tile, row-major over SimMap's grid
 ## and indexed by `SimMap.index_of()`. `VisionSystem` is the only writer.
 ##
@@ -103,6 +123,22 @@ var defeated: bool = false
 ## that reads as entirely unseen. The alternative hides the whole map from everyone
 ## until something ticks, which is indistinguishable from a broken filter.
 var vision: PackedByteArray = PackedByteArray()
+
+
+## Put this player out of the match, and say why. THE ONLY WRITER of either field.
+##
+## ⚠️ **THE FIRST REASON IS THE TRUE ONE AND LATER ONES ARE IGNORED**, which is not
+## tidiness -- it is the whole reason this is a function. `WinConditionSystem` re-tests
+## every player every tick and defeats anyone owning nothing, so a player who RESIGNS and
+## then loses their last building a tick later would have their reason quietly rewritten
+## to ELIMINATED, and the winner would be told the opposite of what happened. The same
+## ordering protects a DISCONNECTED player, whose base is still standing at the moment
+## `Net` concedes for them and is knocked down some minutes later.
+func defeat(reason: int) -> void:
+	if defeated:
+		return
+	defeated = true
+	defeat_reason = reason
 
 
 func can_afford(cost: Dictionary) -> bool:

@@ -119,6 +119,13 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# in a match of three or more, a player is knocked out while the match
 			# goes on, and this is the only thing that says so.
 			"defeated": p.defeated,
+			# WHY they are out, as a `SimPlayer.Defeat` (2026-08-30). `defeated` alone
+			# told a client the FACT of a forfeit and nothing about it, so the survivors
+			# were shown the conquest sentence about an opponent who had unplugged --
+			# BUGS.md's "a forfeit is announced as an elimination" -- and were told
+			# nothing at all at the moment it happened. One int on a block that is
+			# already per-player, rather than a second channel beside `winner_id`.
+			"defeat_reason": p.defeat_reason,
 		}
 
 	return {

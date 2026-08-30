@@ -1199,9 +1199,14 @@ func state_hash() -> int:
 		# it is a pure function of this list, so hashing both would report one
 		# divergence twice and hashing only the total would say the sums differ without
 		# saying which tech they differ about.
+		# `defeat_reason` rides beside `defeated` because it is written in the same
+		# statement and is irreversible in the same way (`SimPlayer.defeat`) -- and
+		# because the ORDER of two defeats decides it: a player who resigns and is then
+		# wiped out keeps RESIGNED, so two hosts that applied the concession on different
+		# ticks would agree about `defeated` and disagree here.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
 				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated,
-				p.researched_ids(), p.vision])
+				p.defeat_reason, p.researched_ids(), p.vision])
 
 	# The outcome itself, which is the single most important thing in the hash to get
 	# right: two clients that disagree about who won have diverged about the only

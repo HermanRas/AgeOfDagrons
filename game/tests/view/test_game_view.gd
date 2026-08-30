@@ -740,6 +740,70 @@ func test_progress_for_an_unknown_player_is_zero_rather_than_a_divide_by_zero() 
 	assert_false(view.is_advancing(99))
 
 
+# ── what a CLIENT can work out about its own cap (project owner, 2026-08-30) ─
+#
+# "Player 2 and player 3 does not get alert for not enough resources." Every polite
+# refusal in `GameScene` used to ask `Net.host().world`, which is null on a joined
+# client, so the guard fell through and the toast never appeared. `stock_of` was already
+# here for the placement ghost -- which is exactly why the ghost was the one refusal that
+# already worked for players 2..8 -- and this is the population half of the same answer.
+
+func _building_with_queue(id: int, owner: int, queue: Array,
+		alive := true) -> Dictionary:
+	return {"id": id, "def_id": "building.barracks", "owner_id": owner,
+			"hp": 10, "max_hp": 10, "alive": alive, "phase": SimBuilding.Phase.COMPLETE,
+			"pos": {"x": SimWorld.SUBTILE * id, "y": SimWorld.SUBTILE},
+			"queue_len": queue.size(), "queue": queue}
+
+
+func test_queued_pop_counts_what_is_in_the_oven() -> void:
+	# `pop_used` rides `player_state` and the queue does not, so without this a client
+	# asking "have I room for one more" is one villager out of date the whole time
+	# anything is training -- and would show no toast on the press that fills the cap.
+	view.apply_snapshot({"tick": 1, "removed": [],
+			"updated": [_building_with_queue(1, 1, ["unit.villager", "unit.villager"])]})
+	assert_eq(view.queued_pop_of(1), 2)
+
+
+func test_queued_pop_charges_each_unit_its_own_pop_cost() -> void:
+	# A ballista is 3 population, not 1. Counting entries rather than costs would let a
+	# player queue three engines into a cap with room for one.
+	view.apply_snapshot({"tick": 1, "removed": [],
+			"updated": [_building_with_queue(1, 1, ["unit.ballista"])]})
+	assert_eq(view.queued_pop_of(1), GameDataRegistry.unit(&"unit.ballista").pop_cost)
+
+
+func test_queued_pop_ignores_other_players_and_rubble() -> void:
+	# Rubble for `PopulationSystem.queued_pop`'s reason: a destroyed building's queue
+	# never spawns anything, so reserving population for it charges the player for units
+	# that are not coming.
+	view.apply_snapshot({"tick": 1, "removed": [], "updated": [
+			_building_with_queue(1, 1, ["unit.villager"]),
+			_building_with_queue(2, 2, ["unit.villager", "unit.villager"]),
+			_building_with_queue(3, 1, ["unit.villager", "unit.villager"], false)]})
+	assert_eq(view.queued_pop_of(1), 1, "mine, standing, and nothing else")
+
+
+func test_queued_pop_is_zero_for_a_player_with_nothing_training() -> void:
+	assert_eq(view.queued_pop_of(1), 0, "and for a client that has had no snapshot yet")
+	view.apply_snapshot({"tick": 1, "removed": [],
+			"updated": [_building_with_queue(1, 1, [])]})
+	assert_eq(view.queued_pop_of(1), 0)
+
+
+func test_the_stock_a_client_reads_is_the_one_the_snapshot_sent() -> void:
+	# The whole of a joined player's knowledge of what they can afford. A copy, so the
+	# placement ghost reading it every time the finger moves cannot spend it.
+	view.apply_snapshot({"tick": 1, "updated": [], "removed": [],
+			"player_state": {2: {"age": 1, "colour": 0,
+					"stock": {&"wood": 120, &"gold": 5}}}})
+	assert_eq(int(view.stock_of(2).get(&"wood", 0)), 120)
+	assert_true(PlacementAdvice.can_afford({&"wood": 100}, view.stock_of(2)))
+	assert_false(PlacementAdvice.can_afford({&"gold": 30}, view.stock_of(2)))
+	view.stock_of(2)[&"wood"] = 99999
+	assert_eq(int(view.stock_of(2).get(&"wood", 0)), 120, "handed out as a copy")
+
+
 # ── a unit standing ON a building draws in front of it (owner, 2026-08-28) ───
 
 func test_a_unit_inside_a_footprint_counts_as_in_front_of_it() -> void:

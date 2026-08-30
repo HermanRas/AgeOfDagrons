@@ -19,15 +19,33 @@
 class_name ResignCommand
 extends Command
 
+## WHY, as a `SimPlayer.Defeat` (project owner, 2026-08-30: *"when a player disconnects
+## or resigns the server does not notify other players"*). RESIGNED for the pause menu's
+## button; DISCONNECTED for the one `Net._on_peer_disconnected` queues on a vanished
+## peer's behalf, which is the only difference between the two events as far as the sim
+## can tell -- both end with the same flag set on the same tick.
+##
+## ⚠️ **IT RIDES THE WIRE AND IT IS COSMETIC, AND BOTH HALVES OF THAT ARE DELIBERATE.**
+## It is on the wire so a REPLAY (`Replay` serialises commands through `to_dict`) shows a
+## dropped player as dropped rather than as a quitter. It is safe to trust off the wire
+## because the worst a client can do with it is mislabel its OWN forfeit -- `Net`
+## overwrites `player_id` with the id it knows the sender owns, so nobody can concede for
+## anybody else, and the label changes one sentence on a result screen and nothing in the
+## simulation.
+var reason: int = SimPlayer.Defeat.RESIGNED
 
-func _init(p_player_id: int = 0, p_issued_tick: int = 0) -> void:
+
+func _init(p_player_id: int = 0, p_issued_tick: int = 0,
+		p_reason: int = SimPlayer.Defeat.RESIGNED) -> void:
 	player_id = p_player_id
 	issued_tick = p_issued_tick
+	reason = p_reason
 
 
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["type"] = "resign"
+	d["reason"] = reason
 	return d
 
 
@@ -35,6 +53,10 @@ static func from_dict(d: Dictionary) -> ResignCommand:
 	var c := ResignCommand.new()
 	c.player_id = int(d.get("player_id", 0))
 	c.issued_tick = int(d.get("issued_tick", 0))
+	# Clamped to the two a resignation can legitimately be. An absent field is the old
+	# wire form and reads as RESIGNED, which is what every command sent before today was.
+	var r := int(d.get("reason", SimPlayer.Defeat.RESIGNED))
+	c.reason = r if r == SimPlayer.Defeat.DISCONNECTED else SimPlayer.Defeat.RESIGNED
 	return c
 
 
@@ -55,4 +77,4 @@ func apply(w: SimWorld) -> void:
 	var p := w.player_for(player_id)
 	if p == null:
 		return
-	p.defeated = true
+	p.defeat(reason)

@@ -94,9 +94,110 @@ func test_the_sender_cannot_resign_somebody_else() -> void:
 	assert_false(world.player_for(1).defeated, "not the player they named")
 
 
-func test_one_player_resigning_of_three_does_not_end_the_match() -> void:
-	# The defeat screen still appears for them -- `GameScene._refresh_result` shows it on
-	# `defeated` without `match_over` -- but the other two play on.
+# ── why they are out (project owner, 2026-08-30) ────────────────────────────
+#
+# "When a player disconnects or resigns the server does not notify other players", and
+# BUGS.md's older "a forfeit is announced as an elimination". The snapshot carried the
+# FACT of a defeat and never the reason, so the winner was told they had wiped out
+# somebody whose phone had lost signal.
+
+func test_a_resignation_says_it_was_a_resignation() -> void:
+	assert_true(_resign(2))
+	assert_eq(world.player_for(2).defeat_reason, SimPlayer.Defeat.RESIGNED)
+
+
+func test_a_dropped_peer_is_labelled_disconnected() -> void:
+	# The command `Net._on_peer_disconnected` queues on a vanished peer's behalf. Same
+	# command, same flag, different sentence for everybody still playing.
+	var cmd := ResignCommand.new(2, world.tick, SimPlayer.Defeat.DISCONNECTED)
+	assert_true(cmd.validate(world))
+	world.queue_command(cmd)
+	world.step()
+	assert_true(world.player_for(2).defeated)
+	assert_eq(world.player_for(2).defeat_reason, SimPlayer.Defeat.DISCONNECTED)
+
+
+func test_being_wiped_out_says_eliminated() -> void:
+	# The default, and the only reason that existed before today.
+	for e in world.entities.values():
+		if e.owner_id == 2:
+			e.alive = false
+	world.step()
+	assert_true(world.player_for(2).defeated)
+	assert_eq(world.player_for(2).defeat_reason, SimPlayer.Defeat.ELIMINATED)
+
+
+func test_the_first_reason_wins_and_a_later_defeat_cannot_relabel_it() -> void:
+	# ⚠️ THE WHOLE REASON `SimPlayer.defeat()` IS A FUNCTION. `WinConditionSystem` retests
+	# every player every tick, so a player who resigns and then has their abandoned base
+	# knocked down would silently become "eliminated" -- and the winner would be told the
+	# opposite of what happened, which is the bug this field exists to fix, arriving by a
+	# different door.
+	#
+	# THREE PLAYERS, because the two-player world stops evaluating the moment somebody
+	# concedes -- `match_over` latches and `process_tick` returns at its first line, so a
+	# duel could not have caught this however the flag was written.
+	var w := _three_player_world()
+	w.queue_command(ResignCommand.new(3, w.tick))
+	w.step()
+	assert_eq(w.player_for(3).defeat_reason, SimPlayer.Defeat.RESIGNED)
+	assert_false(w.match_over, "one and two are still fighting")
+
+	for e in w.entities.values():
+		if e.owner_id == 3:
+			e.alive = false
+	w.step()
+	w.step()
+	assert_eq(w.player_for(3).defeat_reason, SimPlayer.Defeat.RESIGNED,
+			"still a resignation, however the abandoned base ended up")
+
+
+func test_the_reason_rides_the_wire_and_a_missing_one_reads_as_a_resignation() -> void:
+	var back := Command.from_dict(
+			ResignCommand.new(7, 42, SimPlayer.Defeat.DISCONNECTED).to_dict())
+	assert_eq(back.reason, SimPlayer.Defeat.DISCONNECTED, "so a replay says what happened")
+
+	# The old wire form, and anything a client makes up. Only DISCONNECTED is taken as
+	# given; every other value collapses to RESIGNED, so the field cannot be used to
+	# invent a reason the game does not have.
+	var old := ResignCommand.from_dict({"type": "resign", "player_id": 7, "issued_tick": 42})
+	assert_eq(old.reason, SimPlayer.Defeat.RESIGNED)
+	var nonsense := ResignCommand.from_dict({"type": "resign", "reason": 99})
+	assert_eq(nonsense.reason, SimPlayer.Defeat.RESIGNED)
+
+
+func test_the_reason_reaches_the_snapshot() -> void:
+	# It is cosmetic in the sim and it is the whole feature on the client, which has no
+	# other way to learn it -- `GameScene._announce_defeats` reads exactly this.
+	assert_true(_resign(2))
+	var snap := SnapshotSystem.build(world, 1)
+	var them: Dictionary = (snap["player_state"] as Dictionary)[2]
+	assert_true(bool(them["defeated"]))
+	assert_eq(int(them["defeat_reason"]), SimPlayer.Defeat.RESIGNED)
+
+
+func test_two_worlds_that_forfeit_differently_do_not_hash_the_same() -> void:
+	# `defeat_reason` is in `state_hash()` for `defeated`'s reason: it is irreversible, and
+	# WHICH defeat landed first decides it, so two hosts that applied a concession on
+	# different ticks would agree about `defeated` and disagree here.
+	var other := SimWorld.new()
+	var cfg := MatchConfig.debug_skirmish()
+	other.setup(cfg)
+	MapGen.build(other, cfg)
+
+	world.queue_command(ResignCommand.new(2, world.tick, SimPlayer.Defeat.RESIGNED))
+	world.step()
+	other.queue_command(ResignCommand.new(2, other.tick, SimPlayer.Defeat.DISCONNECTED))
+	other.step()
+	assert_true(world.state_hash() != other.state_hash(),
+			"the hash can tell one forfeit from the other")
+
+
+## A three-player generated world. Extracted because two tests want one for the same
+## reason: a duel's `match_over` latches on the first concession and stops
+## `WinConditionSystem` evaluating anything afterwards, so anything about what happens
+## AFTER a defeat needs a third player still fighting.
+func _three_player_world() -> SimWorld:
 	var cfg := MatchConfig.debug_generated(3, MapGenerator.Type.FOREST, 2)
 	cfg.player_ids = [1, 2, 3] as Array[int]
 	cfg.colours = [2, 1, 3] as Array[int]
@@ -106,7 +207,13 @@ func test_one_player_resigning_of_three_does_not_end_the_match() -> void:
 	var w := SimWorld.new()
 	w.setup(cfg)
 	MapGen.build(w, cfg)
+	return w
 
+
+func test_one_player_resigning_of_three_does_not_end_the_match() -> void:
+	# The defeat screen still appears for them -- `GameScene._refresh_result` shows it on
+	# `defeated` without `match_over` -- but the other two play on.
+	var w := _three_player_world()
 	var cmd := ResignCommand.new(3, w.tick)
 	w.queue_command(cmd)
 	w.step()
