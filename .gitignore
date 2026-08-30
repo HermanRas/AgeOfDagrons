@@ -143,3 +143,5 @@ ehthumbs.db
 
 # Derived UI slices -- regenerate with tools/slice_ui_sheets.py, do not commit
 assets/UI_Gen/sliced/
+AgeOfDragons.console.exe
+AgeOfDragons.exe
