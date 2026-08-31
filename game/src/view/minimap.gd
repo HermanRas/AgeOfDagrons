@@ -56,11 +56,37 @@ const OWN_COLOR := Color(0.35, 1.0, 0.45)
 const OTHER_COLOR := Color(1.0, 0.35, 0.3)
 const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
 
+## AN ALLY (project owner, 2026-08-31: *"minimap is a problem, lets use your idea and
+## tint allies.. a diffrent color maybe sky blue if its not to close to the water
+## colour"*). Sky blue, `#87CEEB`, and the owner's question is the right one to have
+## asked -- it was measured rather than eyeballed.
+##
+## **THE HUE IS ALMOST EXACTLY SHALLOW WATER'S AND THE LIGHTNESS IS NOWHERE NEAR IT.**
+## `terrain.water_shallow` is `#3f7fa6` at hue 203°, this is hue 197° -- six degrees
+## apart, so on hue alone it would have been a bad pick. What separates them is CIE
+## `L*`: 79 against water's 51, and against deep water's 30. That is the same principle
+## `web/player-colour-ladder.html` settled the eight-player palette on, where the whole
+## eight span L* 36 to 100 and neighbours are about nine apart; 28 is three of those
+## steps. A pale blue dot on a mid-blue field reads, and it is the only pairing on this
+## map that has to work at all -- an ally in the water is a SHIP, and the archipelago is
+## the map whose whole point is a fleet.
+##
+## **IT IS DELIBERATELY NOT PALER THAN THIS**, which is the other bound. Pushing L* up
+## to 86 would separate it further from the water and start eating the one value
+## `DAMAGE_FLASH_COLOR` reserves -- see its note directly below, which is only true for
+## as long as no blip sits near white.
+const ALLY_COLOR := Color("#87CEEB")
+
 ## What one of ours flashes to when it is being hit (2026-08-30). WHITE, on the owner's
 ## ask, and it is the right pick for a reason worth keeping: the map already spends green
 ## on us, red on the enemy and a dull khaki on gaia, so any HUE would collide with a
 ## meaning the player has already learned. White is the one value left that no blip ever
 ## sits at, and it is the furthest from all three at minimap scale, which is two pixels.
+##
+## **THAT ARGUMENT NOW HAS FOUR COLOURS UNDER IT AND STILL HOLDS, BUT ONLY JUST.**
+## `ALLY_COLOR` above is the closest anything has come to white (L* 79 against 100), and
+## it is capped there for this reason. **A fifth blip colour has to be checked against
+## this one**, not only against the terrain.
 const DAMAGE_FLASH_COLOR := Color.WHITE
 const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
 ## The hairline around the map itself.
@@ -177,8 +203,16 @@ func _fog_color(state: int) -> Color:
 ## a function of the clock alone, so six hit units pulse TOGETHER and read as one alarm;
 ## computing it inside the loop would be the same answer today and the wrong shape the
 ## moment anything staggers it.
+## `teams` is `GameView.teams()` -- player id -> team number, straight off the wire.
+##
+## **DEFAULTED, UNLIKE THE ONE `Diplomacy` TAKES, AND THE DIFFERENCE IS WHAT A MISSING
+## ARGUMENT COSTS.** There it is mandatory because leaving it out is a hostility rule
+## silently OFF -- an ally you can shoot, with nothing on screen to say so. Here leaving
+## it out draws an ally red, which is exactly what the map did before today and is
+## visible in the first screenshot anybody takes. An empty table is also the honest
+## answer for a free-for-all, which is every match this game has played until now.
 func update_entities(facts: Dictionary, local_owner: int,
-		flashing: Dictionary = {}) -> void:
+		flashing: Dictionary = {}, teams: Dictionary = {}) -> void:
 	_blips.clear()
 	var white := not flashing.is_empty() and DamageAlert.white_phase()
 	for f in facts.values():
@@ -194,7 +228,17 @@ func update_entities(facts: Dictionary, local_owner: int,
 		if owner_id == local_owner:
 			color = OWN_COLOR
 		elif owner_id != 0:
-			color = OTHER_COLOR
+			# AN ALLY IS NOT AN ENEMY, and until 2026-08-31 this map said it was: green
+			# for your own and red for everything else, so in a 2v2 your partner's army
+			# crossing the map read as an incoming attack. Own and ally stay two colours
+			# rather than one -- you still have to find YOUR units, and a shared green
+			# would make a rescue indistinguishable from your own reinforcements.
+			#
+			# `owner_id != 0` first, so gaia never reaches the ally test: it has no row
+			# in `teams` and `Diplomacy.allied` guards it anyway, but the order here is
+			# what keeps the khaki default meaning what it always did.
+			color = ALLY_COLOR if Diplomacy.allied(local_owner, owner_id, teams) \
+					else OTHER_COLOR
 		# Only ever OUR entities: `DamageAlert` records nobody else's, so this cannot
 		# light up an enemy blip even if the caller passed one in.
 		if white and flashing.has(int(f.get("id", 0))):

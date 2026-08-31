@@ -271,7 +271,9 @@ var _count_picker: OptionButton
 var _mode_picker: OptionButton
 var _age_picker: OptionButton
 var _ready_button: Button
-var _slot_box: VBoxContainer
+## The slot rows AND their column headings, as one grid -- see `_build_game_setup` for
+## why it is a grid and not a column of `HBoxContainer`s.
+var _slot_box: GridContainer
 var _back_button: Button
 
 ## THE SAME CHAT WIDGET THE MINIMAP'S CORNER BUTTON OPENS (project owner, 2026-08-30:
@@ -815,10 +817,31 @@ func _build_game_setup() -> Control:
 	_count_picker.item_selected.connect(_on_count_selected)
 	column.add_child(_setting_row("Players", _count_picker))
 
-	# The rows live in their own box so changing the slot count can rebuild just them,
-	# without disturbing the count picker above or the victory row below.
-	_slot_box = VBoxContainer.new()
-	_slot_box.add_theme_constant_override("separation", 10)
+	# ⚠️ **A GRID, NOT A COLUMN OF ROWS, AND THE HEADINGS ARE WHY** (project owner,
+	# 2026-08-31: *"we are missing lables over the selections in player setup … COLOR |
+	# TEAM | TYPE"*, then *"column labels are miss aligned"*).
+	#
+	# The first version was a heading `HBoxContainer` that mirrored `_build_slot_row`'s
+	# widths by reading the same constants -- and its own comment claimed that was "the
+	# only reason it stays lined up". **It was not enough, and the owner's screenshot came
+	# back within the hour.** Two rows made of the same minimums still disagree the moment
+	# their TOTAL minimums differ by a pixel, because the one expanding child absorbs the
+	# difference: the slot row's identity block is a little wider than the 96 px floor the
+	# spacer copied, so every control after it started further left than the heading over
+	# it, by more in some columns than others.
+	#
+	# A `GridContainer` makes the columns **shared by construction**. There is no second
+	# list of widths to keep in step and no arithmetic to get wrong; the heading and the
+	# five swatches under it are in one column because they were added to one column.
+	#
+	# `_setting_row`'s note explains why the SETTING rows are not a grid, and that reason
+	# does not apply here: it is about the widest dropdown in the panel setting the left
+	# margin of the "Players" label. This grid holds the slot rows and nothing else, and
+	# tying those to one another is precisely the point.
+	_slot_box = GridContainer.new()
+	_slot_box.columns = 4
+	_slot_box.add_theme_constant_override("h_separation", 8)
+	_slot_box.add_theme_constant_override("v_separation", 10)
 	column.add_child(_slot_box)
 	_rebuild_slot_rows()
 
@@ -901,8 +924,64 @@ func _rebuild_slot_rows() -> void:
 		_slot_box.remove_child(child)
 		child.queue_free()
 	_slot_rows.clear()
+	# THE HEADING IS ROW 0 OF THE GRID, so it is rebuilt with the rows rather than living
+	# above them. That is the opposite of what the first version did and it is what buys
+	# the alignment: a heading outside the grid is back to being a second layout.
+	for cell in _build_slot_header():
+		_slot_box.add_child(cell)
 	for i in range(_slots):
-		_slot_box.add_child(_build_slot_row(i))
+		for cell in _build_slot_row(i):
+			_slot_box.add_child(cell)
+
+
+## The four cells of the grid's first row: an empty corner over the names, then a
+## heading over each of the three controls (project owner, 2026-08-31).
+##
+## **CELLS, NOT A ROW.** Returned as a list and added straight into `_slot_box`, so the
+## grid puts each one in the same column as the swatches and dropdowns beneath it. There
+## are no widths in this function at all any more, and that is the fix: the first version
+## carried a copy of `_SWATCH_MIN`, `_TEAM_MIN` and `_ROLE_MIN` and drifted anyway.
+##
+## **"COLOUR", not "COLOR", and that is the one word here I did not take literally.**
+## The owner wrote the spec as `COLOR | TEAM | TYPE`; every other visible string in this
+## game is British (`colours.json`, "Colour %d"), so a lone American spelling in a
+## heading row would read as a typo rather than as a choice. Say the word and it changes.
+##
+## "TYPE" for the role dropdown, which is the owner's word for it. The column holds
+## Human / AI (Easy) / Open / Closed, and "role" is this file's name for that, not a
+## player's — a player choosing between a person and a bot is choosing a TYPE of seat.
+func _build_slot_header() -> Array[Control]:
+	var cells: Array[Control] = []
+
+	# The corner over the "Player N" column, which has no heading and should not get one:
+	# a column of names does not need to be told it is names, and a word there would be
+	# the widest thing in that column and would push the whole grid right.
+	var corner := Control.new()
+	corner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cells.append(corner)
+
+	for title in ["COLOUR", "TEAM", "TYPE"]:
+		var label := Label.new()
+		label.text = title
+		label.add_theme_font_size_override("font_size", 12)
+		# DIMMER THAN A SETTING'S NAME, at the same gold. The rows below are the content
+		# and these are the ruling over them; a heading at full weight competes with the
+		# "Player N" labels down the left for the same eye.
+		label.add_theme_color_override("font_color", Color(HudStyle.GOLD, 0.7))
+		# CENTRED IN WHATEVER THE COLUMN TURNS OUT TO BE. `SIZE_FILL` hands the label the
+		# column's full width and the alignment centres the word inside it, so the
+		# heading follows its controls when a dropdown grows rather than needing to be
+		# re-measured against them.
+		label.size_flags_horizontal = Control.SIZE_FILL
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# AUTOWRAP OFF and no `clip_text`. A one-word label in a fixed cell is the exact
+		# arrangement `HudPanel.note_label` warns about (it wraps to one character per
+		# line), and `clip_text` would take the minimum to zero and hide the word rather
+		# than the box — both traps this screen has already paid for once each today.
+		label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		cells.append(label)
+	return cells
 
 
 ## One chair: who it is on the left, what fills it on the right.
@@ -914,15 +993,22 @@ func _rebuild_slot_rows() -> void:
 ## sentence do not fit one line at that width. Stacked, the left half is a two-line
 ## identity block and the right half is the two controls -- and the sentence gets a whole
 ## line to itself, which "waiting for a player" wanted anyway.
-func _build_slot_row(index: int) -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+##
+## **FOUR CELLS RATHER THAN AN `HBoxContainer` SINCE 2026-08-31**, so the grid can put
+## each of them in the same column as the heading above it. Nothing else about the row
+## changed; the separations that were the box's are the grid's constants now.
+func _build_slot_row(index: int) -> Array[Control]:
+	var cells: Array[Control] = []
 
 	var identity := VBoxContainer.new()
 	identity.add_theme_constant_override("separation", 0)
+	# THE ONE EXPANDING COLUMN, which is what pushes the three controls to the right-hand
+	# edge and keeps them there whatever the panel's width. In a grid this flag is read
+	# per COLUMN, so setting it on every row's identity cell is what makes column 0 the
+	# one that grows.
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	identity.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(identity)
+	cells.append(identity)
 
 	var name_label := _label("Player %d" % (index + 1))
 	identity.add_child(name_label)
@@ -949,16 +1035,16 @@ func _build_slot_row(index: int) -> Control:
 	colour.clip_text = true
 	colour.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	colour.pressed.connect(_on_colour_pressed.bind(index))
-	row.add_child(colour)
+	cells.append(colour)
 
 	# WHOSE SIDE, RIGHT BESIDE WHAT COLOUR (project owner, 2026-08-31). The two are the
 	# same kind of fact -- who this player IS, as against what fills the chair -- so they
 	# sit together and the role dropdown stays on the end of the row.
 	#
-	# NO COLUMN HEADING, because there is no room for one on a row this wide and because
-	# a one-character control with a number in it wants explaining in words rather than
-	# in a heading. The tooltip is that explanation, and it says what a team DOES: the
-	# only reason to set this is that allies stop being able to shoot each other.
+	# THE TOOLTIP STAYS EVEN THOUGH THE COLUMN NOW HAS A HEADING. "TEAM" says what the
+	# box is; the tooltip says what setting it DOES, which is the part that decides
+	# whether anybody touches it -- allies cannot shoot each other and they win or lose
+	# together. A one-character control has room for neither on its face.
 	var team := OptionButton.new()
 	team.custom_minimum_size = _TEAM_MIN
 	team.fit_to_longest_item = false
@@ -970,7 +1056,7 @@ func _build_slot_row(index: int) -> Control:
 		team.add_item(str(n), n)
 	team.select(team.get_item_index(_teams[index]))
 	team.item_selected.connect(_on_team_selected.bind(index))
-	row.add_child(team)
+	cells.append(team)
 
 	var role := OptionButton.new()
 	role.custom_minimum_size = _ROLE_MIN
@@ -996,12 +1082,12 @@ func _build_slot_row(index: int) -> Control:
 	role.add_item("Closed", int(Role.CLOSED))
 	role.select(role.get_item_index(int(_roles[index])))
 	role.item_selected.connect(_on_role_selected.bind(index))
-	row.add_child(role)
+	cells.append(role)
 
 	_slot_rows.append({"role": role, "colour": colour, "team": team,
 			"name": name_label, "status": status})
 	_refresh_colour_button(index)
-	return row
+	return cells
 
 
 func _button(text: String, on_pressed: Callable) -> Button:

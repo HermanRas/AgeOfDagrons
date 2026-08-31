@@ -56,9 +56,13 @@ never end, since two allies standing is two standing players and nothing can red
 one. **Not included, deliberately:** shared vision (one line, but `VisionSystem._reveal`
 is the hottest loop in the sim and team vision roughly doubles the tiles each player
 lights), shared control, and an AI that knows what an ally is — a bot teammate no longer
-attacks you and does not help you either. The lobby's two columns are **50/50** as of the
-same day, and the SERVERS button opens a **server-browser wireframe** that says on its own
-face that it discovers nothing.
+attacks you and does not help you either. **Both are the owner's call rather than an
+omission**: *"we will not be interacting with any other player units or buildings, no
+garrison, no repair, no healing… happy with AI attacking opposing teams but not team
+members."* The minimap **tints allies sky blue** (`#87CEEB`, measured at CIE L\* 79 against
+shallow water's 51 — a ship has to be visible on the archipelago), the lobby's two columns
+are **50/50**, its slot rows have a COLOUR/TEAM/TYPE heading, and the SERVERS button opens
+a **server-browser wireframe** that says on its own face that it discovers nothing.
 
 **THE LOBBY WAS REWORKED ON 2026-08-30** to the owner's spec — chat down the left two
 thirds, GAME SETUP and MAP SETUP down the right third (**50/50 since 2026-08-31**), a

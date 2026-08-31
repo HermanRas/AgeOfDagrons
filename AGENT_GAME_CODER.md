@@ -293,6 +293,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A FIXTURE THAT PUTS TWO HOSTILE UNITS NEAR EACH OTHER AND EXPECTS NOTHING TO HAPPEN** | Was safe for the whole life of the project and stopped being safe on 2026-08-29, when 4.12 gave military units a DEFENSIVE default. Six tests broke, and **not one of them was about stances**: `test_projectiles`' shooting range is an archer three tiles from an enemy militia, so the pair started fighting on its own and a five-arrow tower volley counted six — and the fan stopped being parallel, because the militia had closed the distance while the tower aimed. `test_garrison`'s "a foundation does not defend you" was answered by the archer standing next to the foundation. **The fix is to say what the fixture means** (`u.stance = SimUnit.Stance.PASSIVE`), never to reach for the default. Worth remembering as a class: a test whose premise is "nobody acts unless I say so" is resting on an absence, and absences get filled in. |
 | **AN AGGRESSIVE STANCE THAT SEES LESS THAN A DEFENSIVE ONE** | `unit.militia` declares `los: 4` against `StanceSystem.GUARD_RADIUS`'s 5, so reading `def.los` straight for AGGRESSIVE made the stance a player picks to start MORE fights start fewer — on six of the roster's units, not a corner case. `_sight_of` floors it at `GUARD_RADIUS`. The general form: **when one setting is meant to be strictly stronger than another, the ordering is the rule and the numbers are inputs** — assert the ordering, not the numbers. It was caught by a test written to pin exactly that, on its first run, and only because the assertion was a comparison rather than a literal. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
+| **TWO ROWS BUILT FROM THE SAME MINIMUMS STILL DRIFT APART, because the ONE EXPANDING CHILD absorbs whatever their totals differ by** | The lobby's COLOUR/TEAM/TYPE headings were an `HBoxContainer` mirroring `_build_slot_row`'s widths out of the same three constants, and its own comment claimed that was "the only reason it stays lined up". The slot row's identity block is a shade wider than the 96 px floor the heading's spacer copied, so every control started further left than its heading — **by a different amount per column**, which is what makes it read as broken rather than as offset. The fix is a `GridContainer`: columns shared by construction, no second list of widths. **Mirroring a layout is not sharing one.** `preview_skirmish._report_headings` now prints the drift per column. |
 | **A PREDICATE DELIBERATELY SPLIT IN TWO HAS TWO PLACES TO CHANGE, and the half carrying the good reason is the half you read** | `StanceSystem._may_start_on` and `AbilitySystem._is_hostile_to` both route the UNIT half through `CombatSystem._is_at_war_with` and both keep their own `owner_id != owner_id` for BUILDINGS — correctly, since a building is never gaia's. Teams widened the owner clause in *both* halves and both were missed on the first pass: an aggressive soldier would have opened fire on an ally's barracks while doing exactly the right thing about their soldiers. The comment explaining why the split exists is what makes the second half invisible. |
 | **A RULE THAT CAN BE LEFT OUT IS A RULE THAT IS OFF SOMEWHERE** | `Diplomacy.is_enemy(e, player_id, teams)` takes the team table as a REQUIRED argument with no default, so a call site that was not updated is a parse error rather than a silently permissive predicate. Same family as `if Net.host() != null and <rule>` below. When widening a predicate every system reaches through, make the new argument mandatory and update the call sites; a default is how you ship the old behaviour in the one place nobody looked. |
 | **A GUARD THAT INFERS AN ENTITY'S KIND FROM WHICH SNAPSHOT FIELDS IT CARRIES** | Wrong the moment the wire format is optimised, and 12.1f already did that once — it took `footprint` off the wire, so `not entry.has("footprint")` (meaning "is a unit") became true for **everything**. It bit `GameView` twice in the same file: the occluder loop was fixed for it in 4.13 and its comment says so, and the sort-bonus guard twenty lines below was missed until 2026-08-28. **Ask `GameDataRegistry`** — `unit(def_id) != null`, the way `_facts`'s own `is_unit` does. |
@@ -342,7 +343,8 @@ widened together.
 
 | | |
 |---|---|
-| the lobby | a `–`/1/2/3/4 picker per slot, and the two columns are 50/50 (measured: 544/544 at 1152) |
+| the lobby | a `–`/1/2/3/4 picker per slot under a COLOUR/TEAM/TYPE heading row, and the two columns are 50/50 (measured: 544/544 at 1152) |
+| the minimap | `ALLY_COLOR` sky blue, measured against both water colours |
 | the sim | `Diplomacy.allied` + `MatchConfig.teams` → `SimPlayer.team` → `SimWorld.teams` |
 | the four predicates | `Diplomacy.is_enemy`, `.is_enemy_fact`, `CombatSystem._is_at_war_with`, `AISystem._nearest_enemy` |
 | the win condition | counts SIDES, and `SimWorld.winner_team` beside `winner_id` |
@@ -391,13 +393,31 @@ widened together.
   thing about their soldiers. **The general form: a predicate split in two for a good
   reason has two places to change, and the half with the good reason attached is the half
   you read.** `test_teams` pins both, and they failed on the run before the fix.
-- **COLOUR IS UNCHANGED AND THAT IS THE OPEN DESIGN QUESTION.** Every player still gets
-  their own of eight, and PLAN.md §1 calls colour "the only thing telling players apart" —
-  so in a 2v2 the thing you most need to read at a glance is the thing the board does not
-  say. **Concretely: `Minimap.update_entities` draws own = `OWN_COLOR` and everything else
-  = `OTHER_COLOR`, so your ally's army reads as an incoming attack.** That is the cheapest
-  place to answer it; an allied selection ring and team-ordered colour assignment are the
-  other two, and they look different on screen. **The owner's call, not mine.**
+- **THE MINIMAP TINTS ALLIES SKY BLUE** (owner, 2026-08-31, answering the design question
+  this pass opened: *"minimap is a problem, lets use your idea and tint allies.. a diffrent
+  color maybe sky blue if its not to close to the water colour"*). `Minimap.ALLY_COLOR` is
+  `#87CEEB`, and the owner's question is the one worth recording because it was **measured
+  rather than eyeballed**: sky blue and `terrain.water_shallow` are **six degrees apart in
+  hue**, so hue is not what separates them — CIE `L*` is, at 79 against water's 51 and deep
+  water's 30. The pairing that has to work is a SHIP, since an ally in the water is a boat
+  and the archipelago is the map built around a fleet. It came out **better separated than
+  the enemy red already was** (that is L* 61, only 10 from shallow water). Capped at 79
+  rather than pushed lighter, because `DAMAGE_FLASH_COLOR`'s "no blip ever sits near white"
+  argument is what reserves the flash. `dev_preview/preview_minimap_teams.tscn` prints
+  every figure and saves a **6× nearest-neighbour crop** — a blip is two pixels, and
+  `preview_projectiles`' lesson is that "I cannot see it" and "it is not drawn" look
+  identical at 1:1. Own and ally stay two colours: you still have to find YOUR units.
+- **Colour ASSIGNMENT is still untouched** — every player gets their own of eight, in join
+  order, and team-ordered assignment (warm colours one side, cool the other) and an allied
+  selection ring are the two ideas left on the table. Neither is needed now that the
+  minimap reads correctly.
+- **NO INTERACTION WITH AN ALLY'S ANYTHING, CONFIRMED BY THE OWNER** (2026-08-31: *"we will
+  not be interacting with any other player units or buildings, no garrison, no repair, no
+  healing"*). So `GameView.tap_action`'s ally branch returning SELECT and nothing else is
+  the settled behaviour rather than a placeholder, and the owner-gated commands stay
+  owner-gated. **The AI's brief is settled too**: *"happy with AI attacking opposing teams
+  but not team members thats more than enough for now"* — which is exactly what
+  `AISystem._nearest_enemy` does. Do not read the absence of ally co-operation as a gap.
 - **`SkirmishScreen` REFUSES A LOBBY WITH ONE SIDE**, and says which team everybody is on
   rather than greying START. It is two presses from the default.
 - ⚠️ **A STRETCH RATIO ONLY DIVIDES WHAT IS LEFT AFTER EVERY MINIMUM IS HONOURED**, so

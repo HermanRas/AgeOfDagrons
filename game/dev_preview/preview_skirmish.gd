@@ -48,6 +48,7 @@ func _process(_delta: float) -> void:
 			_report_screen()
 			_report_footer()
 			_report_columns()
+			_report_headings()
 			_shoot("skirmish_screen")
 		1:
 			# EIGHT SLOTS, SIX CLOSED: two players on a board with eight players' worth of
@@ -89,10 +90,13 @@ func _process(_delta: float) -> void:
 			_make_it_two_v_two()
 		11:
 			_report_teams()
-			# AT FOUR PLAYERS, not at two, and that is the whole reason it is measured
+			# AT FOUR PLAYERS, not at two, and that is the whole reason both are measured
 			# here as well: the chat's minimum width grows one tab per player, so the
-			# split is only in danger once somebody has filled the lobby.
+			# split is only in danger once somebody has filled the lobby -- and the slot
+			# grid is rebuilt from scratch on every count change, which is exactly when a
+			# heading could come back in the wrong column or not at all.
 			_report_columns()
+			_report_headings()
 			_shoot("skirmish_teams")
 		12:
 			_pick_slots(2)
@@ -204,6 +208,43 @@ func _panels_in(node: Node) -> Array[PanelContainer]:
 			out.append(child)
 		out.append_array(_panels_in(child))
 	return out
+
+
+## ⚠️ **ARE THE COLUMN HEADINGS ACTUALLY OVER THEIR COLUMNS** (project owner,
+## 2026-08-31: *"column labels are miss aligned"*).
+##
+## The first heading row mirrored `_build_slot_row`'s widths by reading the same three
+## constants, and its own comment claimed that was enough. It was not: two rows built
+## from identical minimums still part company when their TOTALS differ, because the one
+## expanding child absorbs the difference. **It looked right in the code and wrong on the
+## screen, and nothing but a screenshot said so** -- so the check is a measurement now.
+## `_slot_box` is a `GridContainer` and the columns are shared by construction, which is
+## the real fix; this is what would catch it going back.
+func _report_headings() -> void:
+	var grid := _screen._slot_box
+	var titles := ["COLOUR", "TEAM", "TYPE"]
+	var keys := ["colour", "team", "role"]
+	for i in range(titles.size()):
+		var heading: Label = null
+		for child in grid.get_children():
+			if child is Label and (child as Label).text == titles[i]:
+				heading = child
+				break
+		if heading == null:
+			push_warning("preview_skirmish: no %s heading on the slot grid" % titles[i])
+			continue
+		var control: Control = _screen._slot_rows[0][keys[i]]
+		var h := heading.get_global_rect()
+		var c := control.get_global_rect()
+		var drift := (h.position.x + h.size.x * 0.5) - (c.position.x + c.size.x * 0.5)
+		print("    heading %-7s centre %.0f, control centre %.0f, drift %.0f px"
+				% [titles[i], h.position.x + h.size.x * 0.5,
+				c.position.x + c.size.x * 0.5, drift])
+		# A pixel or two is rounding in a container; anything a reader would notice is a
+		# heading over the wrong column.
+		if absf(drift) > 3.0:
+			push_warning("preview_skirmish: the %s heading is %.0f px off its column"
+					% [titles[i], drift])
 
 
 func _report_footer() -> void:

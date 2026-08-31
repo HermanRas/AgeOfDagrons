@@ -2178,8 +2178,11 @@ func _shortfall_text(stock: Dictionary, cost: Dictionary) -> String:
 ## driven directly since nothing else needs "every entity's facts" broadcast
 ## for its sake.
 func _refresh_minimap() -> void:
+	# The team table rides along so an ally draws sky blue rather than enemy red
+	# (2026-08-31). `GameView.teams()` is the client's copy of it, read off
+	# `player_state` -- the same numbers the sim refuses an attack order by.
 	_minimap.update_entities(_view.all_facts(), Net.local_player_id(),
-			_damage.flashing())
+			_damage.flashing(), _view.teams())
 	_minimap.set_fog(_last_vision)
 
 

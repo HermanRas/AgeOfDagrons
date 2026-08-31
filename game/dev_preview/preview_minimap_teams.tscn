@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_minimap_teams.gd" id="1_mmteams"]
+
+[node name="PreviewMinimapTeams" type="Node"]
+script = ExtResource("1_mmteams")
