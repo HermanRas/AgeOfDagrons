@@ -60,10 +60,14 @@ func validate(w: SimWorld) -> bool:
 	if unit_ids.is_empty():
 		return false
 
-	# Null, dead, a resource node, somebody's own, and gaia's scenery are all refused
-	# here -- but gaia's WILDLIFE is not, which is how a wolf can be hunted at all.
-	# See `Diplomacy`, which replaced this file's own copy of the owner clause.
-	if not Diplomacy.is_enemy(w.get_entity(target_id), player_id):
+	# Null, dead, a resource node, somebody's own, AN ALLY'S, and gaia's scenery are all
+	# refused here -- but gaia's WILDLIFE is not, which is how a wolf can be hunted at
+	# all. See `Diplomacy`, which replaced this file's own copy of the owner clause.
+	#
+	# THE SERVER IS THE TRUST BOUNDARY (§4), so no-friendly-fire is a rule here and not
+	# only in the tap that offers it: `GameView.tap_action` reads the same predicate off
+	# the same team numbers, and this is the copy that decides.
+	if not Diplomacy.is_enemy(w.get_entity(target_id), player_id, w.teams):
 		return false
 
 	var armed := false

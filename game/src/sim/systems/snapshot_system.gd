@@ -93,6 +93,17 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# from join order and never mutates, so it cannot diverge the way stock
 			# or control groups can.
 			"colour": p.colour,
+			# WHOSE SIDE THEY ARE ON (2026-08-31). Sent for the same reason `colour` is
+			# and read for a harder one: the client decides what a tap on an entity
+			# OFFERS, and `Diplomacy.is_enemy_fact` needs the same team numbers the sim
+			# refuses the order by. Out of `state_hash()` beside colour -- fixed at
+			# setup, never written again.
+			#
+			# EVERY PLAYER'S, not just the viewer's. Who is allied with whom is public:
+			# it was chosen in a lobby everyone could read, and a client has to know
+			# whether the two units fighting in front of it are enemies to draw the
+			# question its tap will ask.
+			"team": p.team,
 			# Age advancement in flight (9.2), as INT TICKS rather than a
 			# fraction -- the sim carries no floats, and the ring the HUD draws
 			# from these is a view concern. 0/0/0 when nothing is being
@@ -153,6 +164,12 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 		"mode": int(w.mode),
 		"match_over": w.match_over,
 		"winner_id": w.winner_id,
+		# WHICH SIDE WON (2026-08-31), 0 in a free-for-all. Beside `winner_id` rather
+		# than derived from it on the client: a player knocked out early has no way to
+		# look up the winner's team, since `player_state` carries a team per player but
+		# a defeated client is still being sent one snapshot per tick and should not
+		# have to join two fields to learn whether it won.
+		"winner_team": w.winner_team,
 	}
 
 

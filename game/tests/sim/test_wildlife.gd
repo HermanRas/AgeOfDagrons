@@ -35,22 +35,22 @@ func test_a_tree_is_not_a_target_but_a_wolf_is() -> void:
 	# and before the wolf every call site read "owner 0" and meant "scenery".
 	var tree := w.spawn_resource_node(&"res.tree", Vector2i(10, 10), 0)
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(12, 12))
-	assert_false(Diplomacy.is_enemy(tree, 1), "a swordsman may not be sent at an oak")
-	assert_true(Diplomacy.is_enemy(wolf, 1), "but may be sent at a wolf")
+	assert_false(Diplomacy.is_enemy(tree, 1, w.teams), "a swordsman may not be sent at an oak")
+	assert_true(Diplomacy.is_enemy(wolf, 1, w.teams), "but may be sent at a wolf")
 
 
 func test_a_wolf_is_not_its_own_enemy() -> void:
 	# Asked from the pack's side: owner 0 looking at owner 0. Nothing says "wolves are
 	# friendly to wolves" anywhere -- it falls out of the owner clause.
 	var a := w.spawn_unit(&"unit.wolf", 0, Vector2i(10, 10))
-	assert_false(Diplomacy.is_enemy(a, 0))
+	assert_false(Diplomacy.is_enemy(a, 0, w.teams))
 
 
 func test_the_dead_and_the_typeless_are_never_enemies() -> void:
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(10, 10))
 	wolf.take_damage(9999, 0)
-	assert_false(Diplomacy.is_enemy(wolf, 1), "a carcass is not a fight")
-	assert_false(Diplomacy.is_enemy(null, 1), "and null is not a crash")
+	assert_false(Diplomacy.is_enemy(wolf, 1, w.teams), "a carcass is not a fight")
+	assert_false(Diplomacy.is_enemy(null, 1, w.teams), "and null is not a crash")
 
 
 func test_the_view_and_the_sim_answer_the_same_question() -> void:
@@ -60,7 +60,7 @@ func test_the_view_and_the_sim_answer_the_same_question() -> void:
 		for is_unit in [true, false]:
 			var f := {"owner_id": owner_id, "is_unit": is_unit, "alive": true}
 			var expected: bool = (owner_id != 1) and (owner_id != 0 or is_unit)
-			assert_eq(Diplomacy.is_enemy_fact(f, 1), expected,
+			assert_eq(Diplomacy.is_enemy_fact(f, 1, w.teams), expected,
 					"owner %s, unit %s" % [owner_id, is_unit])
 
 

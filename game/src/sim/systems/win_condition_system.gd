@@ -1,6 +1,7 @@
-## Decides when a match is over and who won (PLAN.md 11.1). Writes exactly three
-## things and nothing else: `SimPlayer.defeated`, `SimWorld.match_over` and
-## `SimWorld.winner_id`. All three ride the snapshot, so the result screen is a
+## Decides when a match is over and who won (PLAN.md 11.1). Writes exactly four
+## things and nothing else: `SimPlayer.defeated`, `SimWorld.match_over`,
+## `SimWorld.winner_id` and `SimWorld.winner_team`. All of them ride the snapshot, so
+## the result screen is a
 ## reader of sim state rather than a client-side guess -- the same division
 ## `ResourceHUD` keeps for the population.
 ##
@@ -57,6 +58,13 @@ func process_tick(w: SimWorld) -> void:
 ## the test suite is exactly that -- declaring victory on tick 1 of a solo sandbox
 ## would be technically correct and useless. Two players is the floor for a match
 ## that can be won.
+##
+## ⚠️ **IT COUNTS SIDES, NOT PLAYERS, AND THAT IS NOT AN ENHANCEMENT** (2026-08-31). The
+## moment allies stopped being able to attack each other, the old rule stopped being able
+## to END A 2v2 AT ALL: two teammates both standing is `standing.size() == 2`, nothing
+## remains that can reduce it to one, and the match runs forever with both survivors
+## wandering an empty map. A team game needs this in the same commit as the team, or the
+## feature is a hang.
 func _last_man_standing(w: SimWorld) -> void:
 	if w.players.size() < 2:
 		return
@@ -90,7 +98,18 @@ func _last_man_standing(w: SimWorld) -> void:
 			# base fell.
 			p.defeat(SimPlayer.Defeat.ELIMINATED)
 
-	if standing.size() > 1:
+	# STANDING SIDES, which is what actually decides the match. A player on no team is
+	# their own side -- keyed by the NEGATIVE of their id, so it can never collide with a
+	# real team number and two unaligned players stay two sides. That is what makes this
+	# identical to the old rule for every free-for-all: one side per standing player.
+	var sides: Dictionary = {}          # side key -> lowest standing player id on it
+	for pid in standing:
+		var p := w.player_for(pid)
+		var key: int = p.team if p != null and p.team > 0 else -pid
+		if not sides.has(key) or pid < int(sides[key]):
+			sides[key] = pid
+
+	if sides.size() > 1:
 		return
 
 	w.match_over = true
@@ -98,7 +117,16 @@ func _last_man_standing(w: SimWorld) -> void:
 	# (it needs simultaneous mutual annihilation) but reachable instantly in a test
 	# that steps a world with no entities in it, and the alternative is a match
 	# flagged as over with a winner nobody can name.
-	w.winner_id = standing[0] if standing.size() == 1 else 0
+	#
+	# WHICH TEAM WON IS THE ANSWER; `winner_id` IS STILL A PLAYER because it is on the
+	# wire, in the hash, and read by two screens. It names the LOWEST-id survivor of the
+	# winning side -- deterministic, and a real player rather than a sentinel -- and
+	# `winner_team` beside it is what a teammate who was knocked out earlier reads to be
+	# told they won. Same shape as `defeat_reason`: one more field on a block that is
+	# already carried, rather than a second channel.
+	var keys := sides.keys()
+	w.winner_id = int(sides[keys[0]]) if sides.size() == 1 else 0
+	w.winner_team = keys[0] if sides.size() == 1 and int(keys[0]) > 0 else 0
 
 
 ## Whether there is a match here to decide at all: does the world hold anybody's

@@ -93,6 +93,16 @@ var _player_stock: Dictionary = {}
 ## nothing wrote this.
 var _player_techs: Dictionary = {}
 
+## owner_id -> team number, from that same `player_state` block (2026-08-31). Exactly
+## the shape `SimWorld.teams` has and exactly what `Diplomacy` takes, so the tap and
+## the sim answer "is that an enemy" off the same numbers.
+##
+## KEPT APART FROM THE SKIN for `_player_stock`'s reason: the skin is the two axes that
+## pick an atlas, and a team is neither of them. Empty until the first snapshot with a
+## `player_state` in it, which reads as a free-for-all -- the right answer for a client
+## that has not been told otherwise, and the behaviour of every match before teams.
+var _player_teams: Dictionary = {}
+
 ## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
 ## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
 ## answer questions about an entity that the *view* nodes do not carry -- who owns
@@ -577,6 +587,24 @@ func _read_player_skins(snap: Dictionary) -> void:
 		for tech_id in (ps.get("researched", []) as Array):
 			held[StringName(tech_id)] = true
 		_player_techs[int(pid)] = held
+		# WHOSE SIDE THEY ARE ON (2026-08-31). Absent from a host built before teams
+		# existed, which reads as 0 -- no team, so a free-for-all, which is the match
+		# that host is running.
+		_player_teams[int(pid)] = int(ps.get("team", 0))
+
+
+## The team table, in the shape every `Diplomacy` predicate takes.
+##
+## NOT A COPY, unlike `stock_of` -- it is read on the tap path and on every entity of a
+## drawn frame, and nothing mutates it but `_read_player_skins`.
+func teams() -> Dictionary:
+	return _player_teams
+
+
+## Whether `owner_id` is on this client's own side, which is what a HUD asking "may I
+## draw this as friendly" wants. Your own id answers true.
+func allied_with_me(owner_id: int) -> bool:
+	return Diplomacy.allied(local_player_id, owner_id, _player_teams)
 
 
 ## What a player holds, as the last snapshot reported it. Empty for a player not in it.
@@ -894,7 +922,21 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 	# THROUGH `Diplomacy`, sharing the sim's answer rather than keeping the view's
 	# own. When these two drift the player taps an enemy, the tap offers an attack,
 	# `AttackCommand.validate` refuses it, and nothing happens with nothing said.
-	if Diplomacy.is_enemy_fact(f, owner):
+	# AN ALLY'S IS LOOKED AT, NEVER ORDERED (2026-08-31). Checked before the enemy branch
+	# because `is_enemy_fact` now sends an ally home false, and without this the tap fell
+	# through to the last line -- so a teammate's town centre with villagers in hand was
+	# a MOVE ONTO IT, and with nothing selected it was NONE, which is worse than what
+	# they had before teams existed: an enemy at least reselects.
+	#
+	# SELECT AND ONLY SELECT, because that is the entire list of things an ally's entity
+	# can honestly do today. Shared control, repairing an ally's building and garrisoning
+	# an ally's tower are all owner-gated in the sim, so any other verb here would be an
+	# offer the server refuses -- the invisible-refusal failure this file guards against
+	# three times above.
+	if Diplomacy.allied(owner, int(f["owner_id"]), _player_teams):
+		return TapAction.SELECT
+
+	if Diplomacy.is_enemy_fact(f, owner, _player_teams):
 		return TapAction.ATTACK if has_movable_selection else TapAction.SELECT
 
 	return TapAction.MOVE if has_movable_selection else TapAction.NONE

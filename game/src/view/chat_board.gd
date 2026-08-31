@@ -27,6 +27,19 @@
 ## "shrink if crowded", so the toggles lost their labels and the quick phrases became
 ## "A", "H", "Y", "N" **at a width where every one of them fitted**.
 ##
+## ⚠️ **AND THE PLAYER TABS ARE THE SAME TRAP WITH A COUNT ON IT, FOUND 2026-08-31 WHEN
+## THE LOBBY WENT 50/50.** A tab is `_TAB_MIN` wide and there is one per player, so the
+## row's minimum is 150 px times however many people are in the match: four tabs is 624
+## px with the frame, which is more than half of a 1152 px viewport — so the CHAT column
+## took 670 of the 1104 available and the SETUP column, given 418 against its own larger
+## minimum, ran its two panels off the right-hand edge of the screen. Eight tabs is 1240
+## px and would have done it to the full-page chat as well. **The row scrolls sideways
+## now**, which is the only answer consistent with the paragraph above: a tab is either
+## legible or off to the side, never squashed to a chip and a letter. It is also the one
+## place in this project where a horizontal `ScrollContainer` is right — everywhere else
+## the rule is that sideways scrolling hides a control where nothing says it exists, and
+## here the hidden thing is a name you can drag into view rather than a button you need.
+##
 ## A WIREFRAME, and the project owner asked for it as one: the layout is real so the art
 ## can be drawn against it, and there is no chat transport underneath. What makes it a
 ## wireframe rather than a mock-up is that everything it CAN know, it knows for real --
@@ -116,9 +129,24 @@ func _init() -> void:
 	# `show_players()`; empty until the first snapshot arrives, which is a state a page
 	# opened on the very first frame can genuinely be in -- and the state the lobby is
 	# in before anybody has joined.
+	# IN A SIDEWAYS SCROLL, so the row's width is not the page's width -- see the header.
+	# The container carries the row's HEIGHT as its minimum and nothing of its width,
+	# which is exactly the asymmetry that was wanted.
+	var tab_scroll := ScrollContainer.new()
+	tab_scroll.custom_minimum_size = Vector2(0.0, _TAB_MIN.y + 4.0)
+	tab_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# NEVER a vertical bar: the row is one tab tall by construction, and a vertical
+	# scrollbar appearing inside it would eat the height the tabs are drawn at.
+	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# SHOW_NEVER, not the default. A visible horizontal bar under four tabs on a page
+	# wide enough for six is chrome for a scroll that is not happening; a thumb drags the
+	# row directly, which is what `ScrollContainer` gives for free on touch.
+	tab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	add_child(tab_scroll)
+
 	_tabs = HBoxContainer.new()
 	_tabs.add_theme_constant_override("separation", 8)
-	add_child(_tabs)
+	tab_scroll.add_child(_tabs)
 
 	# The log SCROLLS, and it has to: four sample lines fit and forty would not, and
 	# a page that grew past its own frame is the failure mode `ResourceHUD` records.
@@ -148,9 +176,21 @@ func _init() -> void:
 
 
 ## The voice bar. Every control here is DISABLED, and the header says why.
+##
+## ⚠️ **AN `HFlowContainer`, AND THAT IS THE THIRD ANSWER TO THE WIDTH PROBLEM IN THIS
+## FILE** (2026-08-31). Three `CheckButton`s reading "Speakers", "Microphone" and "Push to
+## talk" are about 545 px of minimum between them, which after the tabs were dealt with
+## was the largest thing left setting the CHAT column's width -- and the owner had just
+## asked for that column to be half the screen, which at 1152 is 544. The header above
+## rules out `clip_text` on these (it is unconditional, so they lose their labels at a
+## width where they fitted) and a sideways scroll is wrong for a row of CONTROLS rather
+## than a row of names. A flow container is the one that gives up neither: at a width
+## that fits them they lay out exactly as they did, and at a narrower one the last of
+## them moves to a second line. Its minimum is the WIDEST SINGLE CHILD, not the sum.
 func _build_voice_row() -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 16)
+	row.add_theme_constant_override("v_separation", 4)
 	row.add_child(HudPanel.text_label("VOICE", 16))
 
 	for spec in _VOICE_TOGGLES:
@@ -167,11 +207,10 @@ func _build_voice_row() -> Control:
 		voice_toggles[label] = toggle
 		row.add_child(toggle)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(spacer)
-
+	# THE EXPANDING SPACER THAT USED TO PUSH THE NOTE RIGHT IS GONE WITH THE HBox. A flow
+	# container places children at their minimum and wraps; an expanding spacer in one
+	# takes a whole line to itself and pushes the note off the row entirely.
+	#
 	# The one honest thing this row can say today.
 	#
 	# AUTOWRAP OFF -- see `HudPanel.note_label`, which autowraps and says at length what
@@ -182,11 +221,13 @@ func _build_voice_row() -> Control:
 	var note := HudPanel.note_label("no voice channel", 13)
 	note.autowrap_mode = TextServer.AUTOWRAP_OFF
 	note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# AUTOWRAP_OFF makes its minimum width the whole string; `clip_text` takes that back
-	# to nothing, so the note is the first thing to give when the column is narrow. It
-	# is also the least load-bearing thing in the row -- the disabled toggles beside it
-	# already say there is no voice.
-	note.clip_text = true
+	# ⚠️ **NO `clip_text` ANY MORE, AND IT WOULD BE WORSE THAN USELESS HERE.** In the old
+	# HBox it was the right lever -- it took the note's minimum to nothing so the note was
+	# the first thing to give when the column narrowed. In a flow container a minimum of
+	# nothing means it always "fits", so it stays on the row and is drawn at zero width:
+	# the text disappears instead of moving to the next line, which is the one thing
+	# wrapping was supposed to buy. With a real minimum it flows, and its 110 px is well
+	# under the widest toggle.
 	row.add_child(note)
 	return row
 
@@ -197,7 +238,12 @@ func _build_composer_row() -> Control:
 	row.add_theme_constant_override("separation", 8)
 
 	_message_field = TouchLineEdit.new()
-	_message_field.placeholder_text = "Message your allies…"
+	# SHORT, because the field is the only thing in the composer row with no minimum of
+	# its own: SEND and the four quick phrases take their width first and the field gets
+	# what is left, which in a half-width lobby column is not much. "Message your allies…"
+	# came out as "Message yo" in the 50/50 render, and a placeholder cut mid-word reads
+	# as a broken control rather than as a narrow one.
+	_message_field.placeholder_text = "Message…"
 	_message_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_message_field.editable = false
 	row.add_child(_message_field)

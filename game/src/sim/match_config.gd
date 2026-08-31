@@ -99,6 +99,21 @@ var ai_players: Array[bool] = []
 ## from before difficulty existed still deserializes into exactly the match it used to.
 var ai_levels: Array[int] = []
 
+## WHOSE SIDE EACH PLAYER IS ON, position for position with `player_ids` (the lobby's
+## team selector, 2026-08-31). Read by `SimWorld.setup()` into `SimPlayer.team`.
+##
+## **SHORTER OR EMPTY IS LEGAL AND MEANS A FREE-FOR-ALL**, which is what every debug
+## factory, every test fixture and every recorded config from before the selector
+## existed wants -- and it is why 0 rather than 1 is the "no team" value: an absent
+## entry and an unaligned player are the same thing and read the same way. Same
+## forward-compatibility shape as `ai_levels` above and for its reason.
+##
+## IT IS IN THE CONFIG FOR `colours`' AND `starting_age`'s REASON. Every client builds
+## its own world (2.4a), and two of them disagreeing about who is allied with whom would
+## have one player's tower shooting a unit the other's tower is protecting -- a
+## divergence in hp several seconds after the cause, which is the worst kind to read.
+var teams: Array[int] = []
+
 
 ## A generated skirmish: two players, yellow against red, on a real procedural map.
 ##
@@ -155,6 +170,7 @@ func to_dict() -> Dictionary:
 		"colours": colours,
 		"ai_players": ai_players,
 		"ai_levels": ai_levels,
+		"teams": teams,
 		"map_size": {"x": map_size.x, "y": map_size.y},
 		"mode": int(mode),
 		"seed": seed,
@@ -193,6 +209,14 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	for v in d.get("ai_levels", []):
 		levels.append(int(v))
 	c.ai_levels = levels
+
+	# Absent from a host built before the team selector existed, which leaves this empty
+	# and every player unaligned -- a free-for-all, which is the match that host is
+	# actually running. See the field's own note.
+	var sides: Array[int] = []
+	for v in d.get("teams", []):
+		sides.append(int(v))
+	c.teams = sides
 
 	var ms: Dictionary = d.get("map_size", {})
 	c.map_size = Vector2i(int(ms.get("x", DEBUG_MAP_SIZE.x)), int(ms.get("y", DEBUG_MAP_SIZE.y)))

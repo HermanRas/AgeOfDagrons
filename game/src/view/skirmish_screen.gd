@@ -89,8 +89,17 @@ const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 const _SEED_MAX := 999999
 
-## THE LOBBY'S PROPORTIONS (project owner, 2026-08-30: *"2 columns, left 2/3rds of the
-## screen CHAT, right 1/3rd of the screen setup's, bottom 20% nav with buttons"*).
+## THE LOBBY'S PROPORTIONS. **HALF AND HALF SINCE 2026-08-31** (project owner: *"srink
+## the chat pannel to 50% and grow game setup and map setup to 50% so the 2 columns is
+## hald and half"*), where the first spec was *"left 2/3rds of the screen CHAT, right
+## 1/3rd of the screen setup's"*.
+##
+## IT BUYS BACK MOST OF THE FOLD, which is the thing the 2:1 split could not do. At
+## 1152x648 the setup column went from roughly 435 px of width to about 545, and the two
+## framed panels want ~700 px of HEIGHT between them -- but a wider column is a shorter
+## one: the map picture is `KEEP_ASPECT_CENTERED` inside its own fixed height, and the
+## slot rows stop wrapping their identity lines. It still scrolls at eight slots. See
+## `_PREVIEW_HEIGHT` for why shrinking the picture is not the lever.
 ##
 ## Stretch ratios rather than pixel sizes or percentages of `size`, so the split holds
 ## at every viewport this game is ever laid out at -- `window/stretch/aspect` is
@@ -104,7 +113,7 @@ const _SEED_MAX := 999999
 ## setup column scrolled. It now takes the height it needs and **the two columns take
 ## everything else** (*"have the single row that looks really good hug the bottom of the
 ## screen, srink the footer and grow the tow main columns down"*).
-const _CHAT_STRETCH := 2.0
+const _CHAT_STRETCH := 1.0
 const _SETUP_STRETCH := 1.0
 
 ## Inside a dragon-framed panel, clear of the moulding. Larger than
@@ -147,6 +156,42 @@ const _ROLE_MIN := Vector2(150.0, 0.0)
 const _SWATCH_MIN := Vector2(76.0, 0.0)
 const _PICKER_MIN := Vector2(140.0, 0.0)
 
+## The team dropdown, beside the swatch (project owner, 2026-08-31: *"teams number
+## [1,2,3,4] on the lobby a small 1 char drop down next to color"*).
+##
+## ONE CHARACTER PLUS THE ARROW. **62, AND 46 WAS MEASURED WRONG** -- an `OptionButton`
+## draws its own indicator and the theme's content margins whatever the text is, and this
+## project's theme is a painted nine-patch with a generous one. At 46 the arrow and the
+## margins took the whole control and the render came back as an empty red box beside the
+## colour swatch, which is a dropdown that has lost the only thing it displays.
+##
+## `fit_to_longest_item` is turned OFF -- it is on by default and would size this to the
+## widest ITEM, the same rule `_ROLE_MIN`'s note describes fighting on the role picker.
+## **And `clip_text` is deliberately NOT set here**, unlike on the two pickers beside it:
+## every item is one character, so there is nothing to clip, and clipping is what hides
+## the digit rather than the box when the arithmetic above is wrong again.
+const _TEAM_MIN := Vector2(62.0, 0.0)
+
+## How many sides a match may be split into, which is the owner's list exactly.
+##
+## FOUR IS A DESIGN NUMBER, NOT A LIMIT OF ANYTHING. `SimPlayer.team` is a plain int and
+## `Diplomacy.allied` compares two of them, so nothing below this screen cares -- eight
+## teams would work and would also be a free-for-all with extra steps.
+const _TEAM_COUNT := 4
+
+## The item id for "no team", which is `SimPlayer.team`'s 0 and is a real answer rather
+## than a missing one -- see `MatchConfig.teams`.
+##
+## IT HAS TO BE OFFERED, and that is not a hedge. Eight slots cannot each have their own
+## team out of four numbers, so a lobby that only offered 1-4 would have to default some
+## pair of players into an alliance nobody asked for. Every slot opens unaligned instead,
+## which is exactly the free-for-all this game has always played, and a team is something
+## you deliberately do.
+const _NO_TEAM := 0
+
+## What `_NO_TEAM` looks like in a control one character wide.
+const _NO_TEAM_LABEL := "–"
+
 ## Slot counts offered, which is the whole 2-8 the generator supports. Was pinned at 2
 ## while nothing else was tested; the generator has validated every type at every count
 ## since 2.4b, and CLOSED means a big board no longer forces a big match.
@@ -178,6 +223,11 @@ var _starting_age: int = 1
 ## Slots past `_slots` are simply not looked at.
 var _roles: Array[Role] = []
 var _colours: Array[int] = []
+
+## Whose side each slot is on, 0 for nobody's. Sized like `_colours` and seeded to
+## `_NO_TEAM` for the same reason: raising the slot count must never conjure an
+## alliance that was not asked for.
+var _teams: Array[int] = []
 
 var _data: MapData = null
 
@@ -231,12 +281,21 @@ var _back_button: Button
 ## no snapshot; `ChatBoard.show_players` takes the shape both callers can produce.
 var _chat: ChatBoard
 
+## The two halves of the body, held so their rects can be measured. See `_init`.
+var _chat_column: PanelContainer
+var _setup_column: ScrollContainer
+
 ## The in-game technology tree, opened over the lobby by the nav button (project owner:
 ## *"TechTree (same panel from minimap buttin ingame)"*). The same `TechTreePanel`, set
 ## to the age the match would OPEN in -- which is the question worth asking here, since
 ## the starting-age picker is two panels away and this is what it buys you.
 var _tech_tree: TechTreePanel
 var _tech_button: Button
+
+## The server browser wireframe (2026-08-31), opened over the lobby by the nav button.
+## Held for the tech tree's reason: a preview and a test both want to open it without
+## walking the child list looking for it.
+var _browser: ServerBrowserPanel
 var _browser_button: Button
 
 ## The plate around the map picture, turned 45° to sit on the diamond. Held because its
@@ -298,10 +357,16 @@ func _init() -> void:
 	page.add_child(body)
 
 	_chat = ChatBoard.new()
-	var chat_panel := _framed("CHAT", _build_chat_column(), true)
-	chat_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	chat_panel.size_flags_stretch_ratio = _CHAT_STRETCH
-	body.add_child(chat_panel)
+	# HELD, both of them, because "is the split actually half and half" is a question
+	# about these two rects and nothing else -- and the answer is not the stretch ratios,
+	# which only divide what is left after every minimum is honoured. Walking the tree
+	# for them found a chat tab's `PanelContainer` instead, which is how the first
+	# version of `preview_skirmish._report_columns` reported a 36/64 split of a lobby
+	# that was already exactly even.
+	_chat_column = _framed("CHAT", _build_chat_column(), true)
+	_chat_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat_column.size_flags_stretch_ratio = _CHAT_STRETCH
+	body.add_child(_chat_column)
 
 	# ⚠️ THE SETUP COLUMN SCROLLS, AND IT IS NOT OPTIONAL. This screen offers up to eight
 	# slots and each is a two-line block: at eight, the GAME SETUP panel alone is taller
@@ -309,18 +374,18 @@ func _init() -> void:
 	# bottom of the screen with no indication they existed. A `VBoxContainer` does not
 	# clip or compress past its children's minimum sizes -- it overflows, silently and
 	# off the edge. Found in the render; every structural test passed.
-	var setup_scroll := ScrollContainer.new()
-	setup_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	setup_scroll.size_flags_stretch_ratio = _SETUP_STRETCH
+	_setup_column = ScrollContainer.new()
+	_setup_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_setup_column.size_flags_stretch_ratio = _SETUP_STRETCH
 	# Vertical only. Sideways scrolling would let the panels be narrower than the column
 	# and hide a dropdown off to the right, which is the same failure in the other axis.
-	setup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	body.add_child(setup_scroll)
+	_setup_column.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.add_child(_setup_column)
 
 	var setups := VBoxContainer.new()
 	setups.add_theme_constant_override("separation", 12)
 	setups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	setup_scroll.add_child(setups)
+	_setup_column.add_child(setups)
 	# MAP FIRST (project owner, 2026-08-30: *"swap map and game setup"*). It also puts the
 	# panel that fits above the fold at the top of a column that scrolls -- see `_init`'s
 	# note on the scroll and `_PREVIEW_HEIGHT` on why the fold is where it is.
@@ -335,6 +400,13 @@ func _init() -> void:
 	# only correct by accident is one a later insertion breaks silently.
 	_tech_tree = TechTreePanel.new()
 	add_child(_tech_tree)
+
+	# AND THE SERVER BROWSER, over the same page. Neither it nor the tech tree can be
+	# open at the same time as the other -- both are reached from the one nav row -- so
+	# the order between THEM is arbitrary; what is not arbitrary is that both go in
+	# before the colour picker, which must draw over everything. See the note above.
+	_browser = ServerBrowserPanel.new()
+	add_child(_browser)
 
 	# LAST CHILD, so it draws over the page it covers. Added to the screen rather
 	# than to a slot row for the reason `_colour_picker`'s own note gives.
@@ -430,11 +502,12 @@ func _build_join_column() -> Control:
 
 ## The two side doors: somewhere to find a host, and something to read while waiting.
 ##
-## SERVER BROWSER IS A DISABLED PLACEHOLDER and says so on its face. The owner's note
-## was *"server browser (place holder) ... comming up next"*, and the standing rule on
-## this project is that a control wired to nothing must not look like one that works --
-## the selection panel's roster grid drew, took taps and played a click sound for the
-## whole life of the project while doing nothing at all.
+## SERVER BROWSER OPENS A WIREFRAME (project owner, 2026-08-31: *"lets build out a
+## wireframe for server browser / server discovery"*). It was a disabled placeholder,
+## on the standing rule that a control wired to nothing must not look like one that
+## works -- and that rule has not been relaxed, it has been satisfied differently:
+## the button now opens a page, and the PAGE is what says it discovers nothing.
+## `ServerBrowserPanel`'s header carries what a real one needs, in order.
 func _build_doors_column() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -443,9 +516,8 @@ func _build_doors_column() -> Control:
 	# "SERVERS", not "SERVER BROWSER". Six of them share one row now and the longer
 	# label came out as "SERVER BROWSE" -- `clip_text` cuts, it does not shrink, so a
 	# label that does not fit is a label with a letter missing rather than a smaller one.
-	_browser_button = _nav_button("SERVERS", Callable())
-	_browser_button.disabled = true
-	_browser_button.tooltip_text = "Server browser — coming next, nothing behind this yet"
+	_browser_button = _nav_button("SERVERS", _on_browser_pressed)
+	_browser_button.tooltip_text = "Server browser — a wireframe; discovery is not built yet"
 	row.add_child(_browser_button)
 
 	_tech_button = _nav_button("TECH TREE", _on_tech_tree_pressed)
@@ -489,6 +561,12 @@ func _on_tech_tree_pressed() -> void:
 	_tech_tree.set_age(_starting_age)
 	_tech_tree.set_researched({})
 	_tech_tree.open()
+
+
+## Open the server browser over the lobby (2026-08-31). Nothing is passed to it because
+## it reads nothing yet -- see `ServerBrowserPanel`, which is a wireframe and says so.
+func _on_browser_pressed() -> void:
+	_browser.open()
 
 
 func _heading(text: String) -> Label:
@@ -791,9 +869,13 @@ func _build_game_setup() -> Control:
 func _seed_slot_defaults() -> void:
 	_roles.clear()
 	_colours.clear()
+	_teams.clear()
 	for i in range(_MAX_OFFERED_PLAYERS):
 		_roles.append(Role.HUMAN if i == 0 else (
 				Role.PLAYTEST_AI if i == 1 else Role.CLOSED))
+		# EVERY SLOT UNALIGNED. See `_NO_TEAM`: four numbers cannot give eight slots a
+		# side each, and the default this game has always played is a free-for-all.
+		_teams.append(_NO_TEAM)
 	# Yellow against red first, the owner's default; the rest take whatever is left, since
 	# two players sharing a colour is an unplayable match (§1) at any count.
 	var preferred := [2, 1]
@@ -869,6 +951,27 @@ func _build_slot_row(index: int) -> Control:
 	colour.pressed.connect(_on_colour_pressed.bind(index))
 	row.add_child(colour)
 
+	# WHOSE SIDE, RIGHT BESIDE WHAT COLOUR (project owner, 2026-08-31). The two are the
+	# same kind of fact -- who this player IS, as against what fills the chair -- so they
+	# sit together and the role dropdown stays on the end of the row.
+	#
+	# NO COLUMN HEADING, because there is no room for one on a row this wide and because
+	# a one-character control with a number in it wants explaining in words rather than
+	# in a heading. The tooltip is that explanation, and it says what a team DOES: the
+	# only reason to set this is that allies stop being able to shoot each other.
+	var team := OptionButton.new()
+	team.custom_minimum_size = _TEAM_MIN
+	team.fit_to_longest_item = false
+	team.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	team.tooltip_text = "Team — players on the same team cannot attack each other, " \
+			+ "and win or lose together. %s is no team at all." % _NO_TEAM_LABEL
+	team.add_item(_NO_TEAM_LABEL, _NO_TEAM)
+	for n in range(1, _TEAM_COUNT + 1):
+		team.add_item(str(n), n)
+	team.select(team.get_item_index(_teams[index]))
+	team.item_selected.connect(_on_team_selected.bind(index))
+	row.add_child(team)
+
 	var role := OptionButton.new()
 	role.custom_minimum_size = _ROLE_MIN
 	# See `_ROLE_MIN`: the list keeps its honest placeholder labels and the CONTROL
@@ -895,7 +998,8 @@ func _build_slot_row(index: int) -> Control:
 	role.item_selected.connect(_on_role_selected.bind(index))
 	row.add_child(role)
 
-	_slot_rows.append({"role": role, "colour": colour, "name": name_label, "status": status})
+	_slot_rows.append({"role": role, "colour": colour, "team": team,
+			"name": name_label, "status": status})
 	_refresh_colour_button(index)
 	return row
 
@@ -940,20 +1044,50 @@ func regenerate() -> void:
 	# rather than two starts crammed into one corner of it.
 	_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
 	_preview.show_map(_data)
+	_refresh_status()
+	_refresh_start_button()
+	_publish_lobby()
 
+
+## What the MAP SETUP panel says about the match as it stands: the board, the counts,
+## the team split, or whichever of the three rules is being broken.
+##
+## SPLIT OUT OF `regenerate()` ON 2026-08-31, because a team change moves this line and
+## does not move the map. Every figure in it that comes from the map is read off `_data`
+## rather than recomputed, so calling it on its own is free -- and calling `regenerate()`
+## for a setting the generator does not take would throw the map away and build the
+## identical one back, which is what `_on_starting_age_selected` already refuses to do.
+func _refresh_status() -> void:
+	if _data == null:
+		return
 	var problems: Array = _data.meta.get("problems", [])
 	var active := _active_slots().size()
 	if active < _MIN_PLAYERS:
 		# Said rather than shown as a dead button. Closing one slot too many is easy to do
 		# and impossible to diagnose from a greyed START.
+		#
+		# BEFORE THE ONE-SIDE TEST BELOW, and the order is not cosmetic: one player is
+		# also one side, so the team message would fire for a lobby whose real problem is
+		# that it is empty -- and it indexes `_active_slots()[0]`, which does not exist.
 		_status.text = "%d player — close fewer slots, a match needs %d" % [active, _MIN_PLAYERS]
+		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+	elif _sides() < 2:
+		# ONE SIDE IS NOT A MATCH, and it is two presses away: put both players on team 1
+		# and `WinConditionSystem` finds exactly one standing side on tick 1, so the game
+		# is won before anybody has moved. Said rather than shown as a dead START, for
+		# the reason immediately above -- a greyed button for a rule the player has just
+		# invented is impossible to diagnose.
+		_status.text = "everybody is on team %d — a match needs two sides" \
+				% _teams[_active_slots()[0]]
 		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
 	elif problems.is_empty():
 		# The player count AND the size, because they are now different numbers and the
 		# whole point of closing a slot is the gap between them.
-		_status.text = "%s, %d x %d — %d players on room for %d — ready" % [
+		# The team split rides on the END of this line and only when there is one, so a
+		# free-for-all reads exactly as it always has -- see `_summarise_teams`.
+		_status.text = "%s, %d x %d — %d players on room for %d — ready%s" % [
 				MapGenerator.type_name(_data.meta.get("type", _type) as MapGenerator.Type),
-				_data.size.x, _data.size.y, active, _slots]
+				_data.size.x, _data.size.y, active, _slots, _team_suffix()]
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 	else:
 		# A MAP THAT FAILS VALIDATION CANNOT BE STARTED (2.4b's gate). Saying why beats
@@ -961,8 +1095,6 @@ func regenerate() -> void:
 		# sentence because MapValidator writes them for a person.
 		_status.text = "Unplayable map: %s" % String(problems[0])
 		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
-	_refresh_start_button()
-	_publish_lobby()
 
 
 ## Tell the people waiting what they are waiting for, whenever it changes.
@@ -997,6 +1129,9 @@ func build_config() -> MatchConfig:
 		# Position for position with `ai_players`. Humans get a level too and it is
 		# never read -- a hole here would misalign every bot after it.
 		cfg.ai_levels.append(int(AI_ROLE_LEVELS.get(_roles[i], SimPlayer.AILevel.EASY)))
+		# WHOSE SIDE (2026-08-31), compacted with everything else on the row -- a closed
+		# slot's team is nobody's, exactly as its colour is.
+		cfg.teams.append(_teams[i])
 	cfg.seed = _seed
 	cfg.map_type = _type
 	cfg.map_data = _data
@@ -1026,12 +1161,19 @@ func map_data() -> MapData:
 ##      READY is a host who can drop somebody into a match they never got to look at,
 ##      which is the whole reason the lobby channel exists. Agreement is also cancelled
 ##      whenever a setting changes, so this cannot be satisfied by a stale yes.
+##   6. **Two SIDES at least** (2026-08-31), which is rule 4 restated for teams and is
+##      not implied by it: four players all on team 1 is four active slots and one side,
+##      and `WinConditionSystem` would declare that match won on tick 1. Refused here
+##      rather than started and instantly ended, and `regenerate()` says which team
+##      everybody is on rather than leaving a dead button to explain itself.
 func can_start() -> bool:
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
 	if _lobby == Lobby.JOINED:
 		return false
 	if _active_slots().size() < _MIN_PLAYERS:
+		return false
+	if _sides() < 2:
 		return false
 	if unfilled_slots() != 0:
 		return false
@@ -1075,6 +1217,22 @@ func _on_count_selected(item: int) -> void:
 	_rebuild_slot_rows()
 	regenerate()
 	_refresh_lobby()
+
+
+## HOW MANY SIDES THE ACTIVE SLOTS MAKE UP, which is the number a match is won over --
+## `WinConditionSystem._last_man_standing` counts exactly this and the two must agree.
+##
+## An unaligned player is their own side; a team is one however many are on it. So a
+## free-for-all of five is five sides and a 2v2 is two, which is what makes this the
+## same rule for both and lets `can_start` ask one question.
+func _sides() -> int:
+	var seen: Dictionary = {}
+	for i in _active_slots():
+		# The NEGATIVE of the slot index for an unaligned player, so it can never collide
+		# with a real team number. `WinConditionSystem` keys the same way, on the player
+		# id -- same trick, and the comment there says why.
+		seen[_teams[i] if _teams[i] > 0 else -(i + 1)] = true
+	return seen.size()
 
 
 ## Slots with somebody or something in them: the actual players. CLOSED slots reserve
@@ -1270,6 +1428,26 @@ func _on_role_selected(item: int, index: int) -> void:
 	_refresh_lobby()
 
 
+## WHOSE SIDE A SLOT IS ON CHANGED (2026-08-31).
+##
+## NO `regenerate()`, for `_on_starting_age_selected`'s reason: the map is a function of
+## the seed, the type and the two player counts, and a team is none of those. **The ring
+## of starts is already team-shaped without doing anything** -- `_start_positions`
+## spreads players evenly by index, so teams 1,1,2,2 land at 0°/90° against 180°/270° and
+## allies are adjacent for free. The one map type that is NOT is the river, whose banks
+## alternate by `i % 2` and so split a pair; that is flagged and not fixed here, because
+## teams would have to be threaded through `MapGenerator.generate` for one map type.
+##
+## It publishes, because a player who agreed to a duel is being asked to play a 2v1.
+func _on_team_selected(item: int, index: int) -> void:
+	_teams[index] = (_slot_rows[index]["team"] as OptionButton).get_item_id(item)
+	# The MAP panel's line carries the split and the one-side refusal, and neither of
+	# them is the map -- see `_refresh_status`.
+	_refresh_status()
+	_publish_lobby()
+	_refresh_lobby()
+
+
 ## Whether any slot is waiting for a person on another device.
 func _wants_peers() -> bool:
 	for i in range(_slots):
@@ -1409,6 +1587,20 @@ func _on_lobby_config_received() -> void:
 		_colours[i] = cfg.colours[i]
 		_refresh_colour_button(i)
 
+	# THE TEAMS, which the joining player is agreeing to as much as they are agreeing to
+	# the map. A host on an older build sends no `teams` at all and this leaves every row
+	# unaligned -- the free-for-all that host is actually running.
+	#
+	# Guarded on the item existing, `starting_age`'s guard and for its reason: the number
+	# arrives off the wire, and a host offering more sides than this build lists would
+	# otherwise select nothing and silently show `–`.
+	for i in range(mini(_slot_rows.size(), cfg.teams.size())):
+		_teams[i] = int(cfg.teams[i])
+		var picker: OptionButton = _slot_rows[i]["team"]
+		var item := picker.get_item_index(_teams[i])
+		if item >= 0:
+			picker.select(item)
+
 	# THE ROLES TOO, which the first version of this forgot -- so a joined client kept its
 	# own local defaults and showed Player 2 as "PlayTest AI" while the host showed the
 	# same chair as "Open". The joining player was reading that about their own seat.
@@ -1519,6 +1711,13 @@ func _refresh_lobby() -> void:
 		role_picker.disabled = joined or _slot_peers.has(i)
 		# Your own colour stays live on a joined client. Everyone else's is theirs.
 		(_slot_rows[i]["colour"] as Button).disabled = joined and i != _local_slot()
+		# TEAMS ARE THE HOST'S, INCLUDING YOUR OWN -- unlike the swatch two lines up,
+		# and the difference is what the two settings ARE. A colour is your identity and
+		# affects nobody else; a team is the SHAPE OF THE MATCH, and a joiner who could
+		# put themselves on the host's side would be rewriting a 1v1 into a 2v0 that
+		# nobody agreed to. It is a term of the invitation, so it arrives with the rest
+		# of them and READY is how you answer it.
+		(_slot_rows[i]["team"] as OptionButton).disabled = joined
 
 	if joined:
 		var cfg := Net.lobby_config()
@@ -1576,9 +1775,56 @@ func _invitation_terms(cfg: MatchConfig) -> String:
 	var resolved := cfg.map_type
 	if cfg.map_data != null:
 		resolved = cfg.map_data.meta.get("type", cfg.map_type) as MapGenerator.Type
-	return "%s, %d x %d — seed %d — %s — from %s" % [
+	# THE TEAM SPLIT IS A TERM OF THE INVITATION and one of the more important ones: a
+	# player who presses READY on what they read as a duel and lands in a 2v1 has agreed
+	# to something else. Built from the CONFIG rather than from `_teams`, like every
+	# other figure on this line, so a joiner reads what the host sent.
+	return "%s, %d x %d — seed %d — %s — from %s%s" % [
 			MapGenerator.type_name(resolved), cfg.map_size.x, cfg.map_size.y, cfg.seed,
-			MatchConfig.mode_name(cfg.mode), _age_label(cfg.starting_age)]
+			MatchConfig.mode_name(cfg.mode), _age_label(cfg.starting_age),
+			_summarise_teams(cfg.teams)]
+
+
+## The team split of the slots as they stand, for the host's own status line.
+func _team_suffix() -> String:
+	var sides: Array[int] = []
+	for i in _active_slots():
+		sides.append(_teams[i])
+	return _summarise_teams(sides)
+
+
+## " — 2v2", or nothing at all when nobody is on a team.
+##
+## SILENT IN A FREE-FOR-ALL, deliberately: "1v1v1v1" is a true description of every
+## match this game has ever played and adding it to the line would be four characters
+## of news per player. The suffix appears when somebody has actually made a team, which
+## is also the moment it starts being worth reading.
+##
+## Sizes descending, so "2v1" rather than "1v2" -- the bigger side leads, the same
+## convention the genre uses and the same one `UnitDef.attack_volley` was pinned as an
+## ORDERING for. Unaligned players are each their own side, which is what they are.
+static func _summarise_teams(sides: Array) -> String:
+	var counts: Dictionary = {}
+	var loose := 0
+	for i in range(sides.size()):
+		var t := int(sides[i])
+		if t <= 0:
+			loose += 1
+			continue
+		counts[t] = int(counts.get(t, 0)) + 1
+	if counts.is_empty():
+		return ""
+	var group_sizes: Array[int] = []
+	for t in counts:
+		group_sizes.append(int(counts[t]))
+	for i in range(loose):
+		group_sizes.append(1)
+	group_sizes.sort()
+	group_sizes.reverse()
+	var parts: Array[String] = []
+	for n in group_sizes:
+		parts.append(str(n))
+	return " — %s" % "v".join(parts)
 
 
 func _refresh_lobby_text() -> void:

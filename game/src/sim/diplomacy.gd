@@ -19,8 +19,38 @@
 ## Wildlife does not fight wildlife: a wolf asking about another wolf gets `owner_id ==
 ## player_id` and the answer is no. A pack does not turn on itself, and nothing has to
 ## say so specially.
+##
+## TEAMS (2026-08-31) ARE THE SECOND THING THAT MAKES A NON-ENEMY, and every predicate
+## here takes the team table as an argument rather than reading one from anywhere. It
+## is a REQUIRED argument, with no default, and that is the whole safety property:
+## §6's standing lesson is that a rule which can be left out is a rule that is off
+## somewhere nobody looks, and GDScript reports a missing argument at parse time. An
+## FFA caller passes `{}` and says so.
 class_name Diplomacy
 extends RefCounted
+
+
+## Whether two player ids are on the same side. `teams` is `player_id -> team number`,
+## which is `SimWorld.teams` in the sim and `GameView.teams()` on a client.
+##
+## THREE RULES AND ALL THREE ARE LOAD-BEARING:
+##
+##   - A player is always allied with themselves, which is the clause every caller used
+##     to write as `owner_id == player_id`.
+##   - **Team 0 IS NOT A TEAM.** It is the absence of one, and it is what every player
+##     in a free-for-all carries -- so two teamless players are enemies, which is what
+##     keeps every match played before this existed playing exactly as it did. An
+##     unlisted player reads as 0 for the same reason.
+##   - **Gaia allies with nobody.** Owner 0 is not a player, has no row in `teams`, and
+##     a wolf on "team 0" alongside every FFA player would make the whole roster its
+##     friends. Guarded explicitly rather than left to fall out of the rule above.
+static func allied(a: int, b: int, teams: Dictionary) -> bool:
+	if a == b:
+		return true
+	if a <= 0 or b <= 0:
+		return false
+	var team := int(teams.get(a, 0))
+	return team > 0 and team == int(teams.get(b, 0))
 
 
 ## True when `player_id` is allowed to attack `e`, and when `e` is worth attacking.
@@ -29,12 +59,15 @@ extends RefCounted
 ## plain false rather than a crash or a caller-side type test. Every call site used to
 ## carry its own `is SimUnit or is SimBuilding` line beside its own owner line; both
 ## belong to the same question and both live here now.
-static func is_enemy(e: SimEntity, player_id: int) -> bool:
+static func is_enemy(e: SimEntity, player_id: int, teams: Dictionary) -> bool:
 	if e == null or not e.alive:
 		return false
 	if not (e is SimUnit or e is SimBuilding):
 		return false
-	if e.owner_id == player_id:
+	# YOUR OWN AND YOUR ALLY'S, in one question. `allied` folds in the `owner_id ==
+	# player_id` clause this line used to be, so a teammate's tower is exactly as
+	# unattackable as your own.
+	if allied(player_id, e.owner_id, teams):
 		return false
 	if e.owner_id != 0:
 		return true
@@ -52,11 +85,16 @@ static func is_enemy(e: SimEntity, player_id: int) -> bool:
 ##
 ## `owner_id`, `is_unit` and `alive` are all the facts a snapshot carries about this,
 ## and they are exactly the three the sim form reads.
-static func is_enemy_fact(f: Dictionary, player_id: int) -> bool:
+##
+## THE CLIENT'S TEAM TABLE COMES OFF THE WIRE, from `player_state.team` by way of
+## `GameView.teams()` -- so the tap and the sim are reading the same numbers, which is
+## the only thing that keeps the tap from offering an attack `AttackCommand` then
+## refuses.
+static func is_enemy_fact(f: Dictionary, player_id: int, teams: Dictionary) -> bool:
 	if f.is_empty() or not bool(f.get("alive", true)):
 		return false
 	var owner := int(f.get("owner_id", 0))
-	if owner == player_id:
+	if allied(player_id, owner, teams):
 		return false
 	if owner != 0:
 		return true

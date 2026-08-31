@@ -299,6 +299,13 @@ func _player_transitions(snap: Dictionary, me: int) -> void:
 	if not over and not defeated:
 		return
 	_announced_result = true
-	var won := over and int(snap.get("winner_id", 0)) == me
+	# YOUR SIDE WINNING IS YOU WINNING (2026-08-31), the same rule `_refresh_result`
+	# applies to the screen -- and it has to be applied twice, because this is
+	# deliberately independent of that function rather than called from it. The one
+	# thing it does NOT copy is the forfeit clause: the screen distinguishes "you
+	# resigned" from "you lost" in words, and there is no third fanfare to play.
+	var winning_team := int(snap.get("winner_team", 0))
+	var won := over and (int(snap.get("winner_id", 0)) == me
+			or (winning_team > 0 and winning_team == int(mine.get("team", 0))))
 	_out().play_sfx(&"ui.victory" if won else &"ui.defeat")
 	_out().play_music(&"match.victory" if won else &"match.defeat")

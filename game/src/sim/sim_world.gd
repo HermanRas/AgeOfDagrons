@@ -29,7 +29,26 @@ var mode: MatchConfig.Mode = MatchConfig.Mode.LAST_MAN_STANDING
 var match_over: bool = false
 var winner_id: int = 0
 
+## WHICH SIDE WON (2026-08-31), 0 for a free-for-all win and for a draw. `winner_id`
+## still names a player -- the lowest-id survivor of the winning side -- and this is
+## what tells a teammate who was knocked out on tick 400 that their side went on to
+## take it. Written only by `WinConditionSystem`, beside the other two.
+var winner_team: int = 0
+
 var players: Array[SimPlayer] = []
+
+## player id -> team number, the argument every `Diplomacy` predicate takes.
+##
+## DERIVED FROM `players` AND SAFE TO CACHE because `SimPlayer.team` is written once by
+## `setup()` and never again -- the same property that keeps it out of `state_hash()`.
+## A derived structure that can go stale is a liability (§6 has a row about exactly
+## that); this one cannot, because nothing in the sim can change a team mid-match.
+##
+## Cached at all because the alternative is `player_for()` twice per candidate, and the
+## hottest caller is `CombatSystem._is_at_war_with` -- once per entity in a tower's scan
+## rect, per tower, per tick. A linear walk of eight players inside that loop is the
+## shape of measurement `AISystem`'s id cache exists to undo.
+var teams: Dictionary = {}
 var entities: Dictionary = {}          # int id -> SimEntity
 var spatial: SpatialHash = null
 var paths: PathService = null
@@ -48,9 +67,11 @@ func setup(cfg: MatchConfig) -> void:
 	tick = 0
 	entities.clear()
 	players.clear()
+	teams.clear()
 	mode = cfg.mode
 	match_over = false
 	winner_id = 0
+	winner_team = 0
 	# A carried map decides its own size; `cfg.map_size` is the debug-map default and
 	# the fallback. Taking the map's own size means a config cannot be half-applied --
 	# a 96x96 map into a 64x64 grid would silently crop a quarter of it off.
@@ -155,7 +176,14 @@ func setup(cfg: MatchConfig) -> void:
 		# does not exist and `AgeSystem` on an advance with no target.
 		p.age = clampi(cfg.starting_age, 1,
 				GameDataRegistry.age_count() if GameDataRegistry != null else 4)
+		# WHOSE SIDE THEY ARE ON (the lobby's team selector, 2026-08-31). A short or
+		# absent `teams` leaves 0, which is no team at all and so a free-for-all -- see
+		# `MatchConfig.teams`. Not clamped the way `starting_age` is: an out-of-range
+		# team number names a side nobody else is on, which is exactly what an unaligned
+		# player already is, so the worst a bad value can do is put somebody on their own.
+		p.team = int(cfg.teams[i]) if i < cfg.teams.size() else 0
 		players.append(p)
+		teams[p.id] = p.team
 
 
 func step() -> void:
@@ -1212,6 +1240,11 @@ func state_hash() -> int:
 	# right: two clients that disagree about who won have diverged about the only
 	# question the match was asked. `mode` stays out -- it comes from MatchConfig and
 	# never mutates, the same reason `colour` stays out above.
-	parts.append([match_over, winner_id])
+	# `winner_team` rides with them because it is WRITTEN by the same statement and is a
+	# second thing two clients could disagree about while agreeing on `winner_id` -- a
+	# host that lost a player's team number would call the same survivor the winner of a
+	# free-for-all. The team NUMBERS themselves stay out, beside `colour` and `mode`:
+	# they come from MatchConfig and never mutate.
+	parts.append([match_over, winner_id, winner_team])
 
 	return hash(parts)

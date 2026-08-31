@@ -47,6 +47,7 @@ func _process(_delta: float) -> void:
 				return
 			_report_screen()
 			_report_footer()
+			_report_columns()
 			_shoot("skirmish_screen")
 		1:
 			# EIGHT SLOTS, SIX CLOSED: two players on a board with eight players' worth of
@@ -70,53 +71,79 @@ func _process(_delta: float) -> void:
 		6:
 			_screen._tech_tree.close()
 		7:
+			# THE SERVER BROWSER WIREFRAME (project owner, 2026-08-31). Through the real
+			# nav button for the tech tree's reason -- and this one especially, since the
+			# button spent its whole life disabled and "it is enabled now" is exactly the
+			# kind of change that gets made without connecting anything to it.
+			_screen._browser_button.pressed.emit()
+			_hold(LOBBY_FRAMES)
+		8:
+			_report_browser()
+			_shoot("skirmish_server_browser")
+		9:
+			_screen._browser.close()
+		10:
+			# A 2v2, set through the real dropdowns. The picture is the point: four rows
+			# each carrying a swatch and a one-character team box, in a column that is now
+			# half the screen rather than a third.
+			_make_it_two_v_two()
+		11:
+			_report_teams()
+			# AT FOUR PLAYERS, not at two, and that is the whole reason it is measured
+			# here as well: the chat's minimum width grows one tab per player, so the
+			# split is only in danger once somebody has filled the lobby.
+			_report_columns()
+			_shoot("skirmish_teams")
+		12:
+			_pick_slots(2)
+		13:
 			# THE COLOUR PICKER (2026-08-21), which replaced a cycle. Pressed through the
 			# slot row's real Button, because what is in doubt is that a press on that row
 			# opens the grid -- the handler on its own would pass with the button unwired.
 			_open_the_colour_picker()
-		8:
+		14:
 			_report_colour_picker()
 			_shoot("skirmish_colour_picker")
-		9:
+		15:
 			_pick_a_colour()
-		10:
+		16:
 			_report_colours()
 			_shoot("skirmish_colour_picked")
-		11:
+		17:
 			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
 			# is the hosting path and not a simulation of it.
 			_open_a_slot()
-		12:
+		18:
 			_report_lobby()
 			_shoot("skirmish_lobby_waiting")
-		13:
+		19:
 			# A peer arriving. The connection itself is (g)'s ground already proven on two
 			# devices; what is unproven is that this SCREEN shows the chair being taken
 			# and lets START go ahead once it is.
 			_screen._on_peer_joined(7777)
 			_hold(LOBBY_FRAMES)
-		14:
+		20:
 			_report_lobby()
 			_shoot("skirmish_lobby_filled")
-		15:
+		21:
 			# The JOINING device's view of the same screen -- the one state that cannot be
 			# reached from here honestly, since a real one needs a second process dialling
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
 			_join_someone_elses_match()
-		16:
+		22:
 			_shoot("skirmish_lobby_joined")
-		17:
+		23:
 			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
 			# most here is the one where adding multiplayer broke playing alone.
 			_close_the_slot()
-		18:
+		24:
 			_start_the_match()
-		19:
+		25:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -139,6 +166,46 @@ func _hold(frames: int) -> void:
 ## and "fits" is a claim about pixels that a screenshot answers badly: a button whose
 ## last few pixels are off the edge looks very nearly like one that is not. This prints
 ## the rects and warns on anything past the viewport, so the answer is measured.
+## ⚠️ **WHERE THE TWO COLUMNS ACTUALLY END UP, WHICH IS NOT WHAT THE STRETCH RATIOS SAY.**
+##
+## `_CHAT_STRETCH` and `_SETUP_STRETCH` are both 1.0 as of 2026-08-31, and a ratio only
+## divides the space LEFT OVER after every child's minimum is honoured — so a column
+## whose contents have a big minimum takes more than its share and the other one gets
+## less than its own minimum and OVERFLOWS. That is not hypothetical: four chat tabs at
+## `ChatBoard._TAB_MIN` made the CHAT column 670 px of a 1104 px body and ran the setup
+## panels off the right-hand edge of the screen. Printed and warned about rather than
+## eyeballed, because "half" is a claim about pixels.
+func _report_columns() -> void:
+	var edge := float(get_viewport().get_visible_rect().size.x)
+	var c := _screen._chat_column.get_global_rect()
+	var s := _screen._setup_column.get_global_rect()
+	print("columns: chat %.0f..%.0f (%.0f wide), setup %.0f..%.0f (%.0f wide)"
+			% [c.position.x, c.end.x, c.size.x, s.position.x, s.end.x, s.size.x])
+	var share := c.size.x / maxf(1.0, c.size.x + s.size.x)
+	print("    chat takes %.0f%% of the body (the owner asked for 50)" % (share * 100.0))
+	# THE PANELS INSIDE THE COLUMN, not just the column. A `ScrollContainer` whose child
+	# has a bigger minimum than it does draws that child past its own edge, so the column
+	# can be exactly half the screen while the plates in it hang over the bezel -- which
+	# is precisely what four chat tabs did on the first 50/50 render.
+	for panel in _panels_in(_screen._setup_column):
+		var r := panel.get_global_rect()
+		if r.end.x > edge:
+			push_warning("preview_skirmish: a setup panel runs %.0f px off the right edge"
+					% (r.end.x - edge))
+	if absf(share - 0.5) > 0.02:
+		push_warning("preview_skirmish: the split is %.0f/%.0f, not half and half"
+				% [share * 100.0, (1.0 - share) * 100.0])
+
+
+func _panels_in(node: Node) -> Array[PanelContainer]:
+	var out: Array[PanelContainer] = []
+	for child in node.get_children():
+		if child is PanelContainer:
+			out.append(child)
+		out.append_array(_panels_in(child))
+	return out
+
+
 func _report_footer() -> void:
 	var edge := float(get_viewport().get_visible_rect().size.x)
 	var controls: Array = [
@@ -176,6 +243,59 @@ func _report_tech_tree() -> void:
 	if tree._age != _screen._starting_age:
 		push_warning("preview_skirmish: tree at age %d, lobby starts at age %d"
 				% [tree._age, _screen._starting_age])
+
+
+## What came up behind the SERVERS button, and whether it is honest about itself.
+##
+## THE ASSERTION WORTH HAVING IS THAT NOTHING IS LIVE. A wireframe that quietly grows a
+## working-looking control is the failure this whole page is written against, so the
+## enabled state of its two action buttons is printed and warned about rather than left
+## to a screenshot -- a greyed button and a live one are two shades of the same brown.
+func _report_browser() -> void:
+	var page: ServerBrowserPanel = _screen._browser
+	print("browser: open %s, %d sample rows, refresh disabled %s, join disabled %s"
+			% [page.is_open(), page.row_count(), page.refresh_button().disabled,
+			page.join_button().disabled])
+	if not page.is_open():
+		push_warning("preview_skirmish: the SERVERS button did not open the browser")
+	if not page.refresh_button().disabled or not page.join_button().disabled:
+		push_warning("preview_skirmish: a wireframe control is live and discovery is not")
+
+
+## Four slots, two a side, through the real dropdowns.
+func _make_it_two_v_two() -> void:
+	_pick_slots(4)
+	for i in range(4):
+		_pick_role(i, SkirmishScreen.Role.PLAYTEST_AI)
+		var picker: OptionButton = _screen._slot_rows[i]["team"]
+		var item := picker.get_item_index(1 if i < 2 else 2)
+		picker.select(item)
+		picker.item_selected.emit(item)
+	_hold(LOBBY_FRAMES)
+
+
+## THE SPLIT AND WHERE THE STARTS LANDED, because the second is the half a picture of a
+## lobby cannot show. Allies are adjacent on the ring for free -- `_start_positions`
+## spreads players evenly by index -- and "for free" is the kind of claim that stops
+## being true the day somebody reorders the loop. Printed as distances: a teammate should
+## be nearer than either opponent.
+func _report_teams() -> void:
+	var cfg := _screen.build_config()
+	print("teams:  %s, startable %s" % [cfg.teams, _screen.can_start()])
+	print("    status: %s" % _screen.status_text())
+	var starts := _screen.map_data().starts
+	if starts.size() != cfg.teams.size():
+		push_warning("preview_skirmish: %d starts for %d players"
+				% [starts.size(), cfg.teams.size()])
+		return
+	for i in range(starts.size()):
+		var parts: Array[String] = []
+		for j in range(starts.size()):
+			if i == j:
+				continue
+			parts.append("p%d(t%d) %d" % [j + 1, cfg.teams[j],
+					int(Vector2(starts[i]).distance_to(Vector2(starts[j])))])
+		print("    player %d (team %d) -> %s" % [i + 1, cfg.teams[i], ", ".join(parts)])
 
 
 func _report_screen() -> void:

@@ -239,8 +239,13 @@ func _nearest_hostile_unit(w: SimWorld, b: SimBuilding) -> SimEntity:
 ## `aggro_radius > 0` is the data already saying which animals pick fights (wolf, bear,
 ## boar carry one; sheep, cattle and deer are 0), so a bear wandering into a settlement
 ## is still shot -- which is what a watch tower is for -- and the flock is not.
+##
+## AND AN ALLY IS NOT AT WAR WITH YOU (2026-08-31). This is the predicate a tower, an
+## aggressive soldier and a dragon's breath all reach through, so a team that was
+## missing here would be a team whose towers shoot each other -- and that is the one
+## failure a player would read as the feature not existing at all.
 static func _is_at_war_with(w: SimWorld, u: SimUnit, owner_id: int) -> bool:
-	if not u.alive or u.owner_id == owner_id:
+	if not u.alive or Diplomacy.allied(owner_id, u.owner_id, w.teams):
 		return false
 	if u.owner_id != 0:
 		return true
@@ -362,7 +367,7 @@ func _reacquire(w: SimWorld, u: SimUnit) -> bool:
 		# Trees are not belligerents and wolves are -- both are gaia, so the test
 		# cannot be about owner 0 alone. `Diplomacy` owns that distinction; before
 		# it, this line was one of four copies of the same clause.
-		if not Diplomacy.is_enemy(e, u.owner_id):
+		if not Diplomacy.is_enemy(e, u.owner_id, w.teams):
 			continue
 		var is_building := 1 if e is SimBuilding else 0
 		var gap := tile_gap(here, _rect_of(e))

@@ -236,12 +236,20 @@ func _nearest_target(w: SimWorld, u: SimUnit, radius: int) -> SimEntity:
 ## asking a question with no wrong answer and no useful one. A foundation is excluded
 ## because shooting one is a border war nobody declared, which is `_process_building`'s
 ## reasoning for the same exclusion.
+##
+## ⚠️ **THE BUILDING HALF HAS ITS OWN OWNER CLAUSE AND THAT IS EXACTLY THE KIND OF LINE
+## TEAMS BREAK** (2026-08-31). `b.owner_id != owner_id` was true of an ALLY's barracks,
+## so an aggressive soldier posted next to one would have opened fire on it while the
+## unit half quietly did the right thing -- the same class as the four copies of the
+## hostility clause `Diplomacy` was written to collapse, arriving in the one place that
+## could not use it. Through `Diplomacy.allied` now, which is the whole rule.
 static func _may_start_on(w: SimWorld, e: SimEntity, owner_id: int) -> bool:
 	if e is SimUnit:
 		return CombatSystem._is_at_war_with(w, e as SimUnit, owner_id)
 	if e is SimBuilding:
 		var b := e as SimBuilding
-		return b.alive and b.owner_id != 0 and b.owner_id != owner_id and b.is_complete()
+		return b.alive and b.owner_id != 0 and b.is_complete() \
+				and not Diplomacy.allied(owner_id, b.owner_id, w.teams)
 	return false
 
 

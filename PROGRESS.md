@@ -47,9 +47,22 @@ third-party itch.io art whose licence forbids redistributing the originals, so t
 directories were gitignored and every developer downloaded two packs by hand.
 `tools/licence_audit.py` went from 129 problems to PASS.
 
-**THE LOBBY WAS REWORKED THE SAME DAY** to the owner's spec — chat down the left two
-thirds, GAME SETUP and MAP SETUP down the right third, a one-row nav strip hugging the
-bottom — and **HOW TO PLAY exists** (1.8): six annotated captures of this game's own HUD,
+**TEAMS EXIST, 2026-08-31.** A one-character `–`/1/2/3/4 dropdown beside each slot's
+colour swatch, `MatchConfig.teams` on the wire, `SimPlayer.team` finally written after
+being declared and unread since 0.4 — and the four hostility predicates widened together,
+because missing one is not a missing feature, it is your ally's tower shooting you.
+`WinConditionSystem` now counts **sides** rather than players: without that a 2v2 could
+never end, since two allies standing is two standing players and nothing can reduce it to
+one. **Not included, deliberately:** shared vision (one line, but `VisionSystem._reveal`
+is the hottest loop in the sim and team vision roughly doubles the tiles each player
+lights), shared control, and an AI that knows what an ally is — a bot teammate no longer
+attacks you and does not help you either. The lobby's two columns are **50/50** as of the
+same day, and the SERVERS button opens a **server-browser wireframe** that says on its own
+face that it discovers nothing.
+
+**THE LOBBY WAS REWORKED ON 2026-08-30** to the owner's spec — chat down the left two
+thirds, GAME SETUP and MAP SETUP down the right third (**50/50 since 2026-08-31**), a
+one-row nav strip hugging the bottom — and **HOW TO PLAY exists** (1.8): six annotated captures of this game's own HUD,
 one to a page, behind the front-door button that had answered with a "not available yet"
 toast since 1.1. Every front-door button now opens a screen except QUIT. Two bugs the
 overhaul surfaced were fixed with it: **construction was reading as damage** and blowing
@@ -113,7 +126,7 @@ real work remains · ⛔ not started
 | # | Phase | State | What is left |
 |---|---|---|---|
 | 0 | Foundation | 🟢 | **0.3 `AssetPacks`** — manifest, download, verify, mount, plus a download screen |
-| 1 | Main menu | 🟢 | Server browser (see below); lobby wants faction, team and game-type controls it has no systems for yet. **1.5 settings and 1.8 HOW TO PLAY both closed 2026-08-30** — settings as an overlay rather than a screen, HOW TO as a six-page picture guide. The two setup panels in the lobby still do not both fit at 1152×648 and the column scrolls; flagged to the owner rather than guessed at |
+| 1 | Main menu | 🟢 | **Teams landed 2026-08-31** and so did a server-browser **wireframe** (discovery itself is unbuilt — the page lists what it needs). The lobby still wants faction and game-type controls it has no systems for yet. **1.5 settings and 1.8 HOW TO PLAY both closed 2026-08-30** — settings as an overlay rather than a screen, HOW TO as a six-page picture guide. The two setup panels in the lobby still do not both fit at 1152×648 and the column scrolls; flagged to the owner rather than guessed at |
 | 2 | Map | 🟢 | **2.4c save map**, and nothing else — 2.4d Archipelago closed 2026-08-29. **Retuned 2026-08-30** on the owner's playtest: wood doubled and sprinkled over open ground, and the archipelago's islands grown from radius 18 to 26 with the BOARD now derived from the island (128 / 160 / 240 at 2 / 4 / 8 players) rather than the island capped by the board |
 | 3 | Camera & world view | 🟢 | 3.5 camera-follow, 3.7 tap-minimap-to-move |
 | 4 | Units | ✅ | **CLOSED 2026-08-29.** The last three landed together: 4.10 abilities (monk heal, dragon fire breath), 4.12 stances (four, military defaults Defensive), 4.14 formations (line/grid/vee/box). 4.13 closed 2026-08-28 with `SiegeSystem` |

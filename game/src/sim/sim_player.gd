@@ -49,6 +49,19 @@ var is_ai: bool = false
 enum AILevel { PASSIVE, EASY, NORMAL, HARD, UNFAIR }
 var ai_level: int = AILevel.EASY
 
+## WHOSE SIDE THIS PLAYER IS ON (the lobby's team selector, 2026-08-31). Declared
+## since 0.4 and read by nothing until now, which is the hole `garrison_cap` and
+## `researched` were both in before something finally filled them.
+##
+## **0 IS NOT A TEAM, IT IS THE ABSENCE OF ONE**, and it is what a free-for-all
+## carries -- so every match played before the selector existed plays exactly as it
+## did, and a config that names no teams is still a config. `Diplomacy.allied` is the
+## one place that rule is written down.
+##
+## Set once, by `SimWorld.setup` out of `MatchConfig.teams`, and never written again.
+## That is why it stays out of `state_hash()`, the same reasoning `colour` and `mode`
+## are given there -- a disagreement about it comes from the config and not from the
+## simulation, and the config is broadcast whole.
 var team: int = 0
 var stock: Dictionary = {}           # StringName kind -> int amount
 var pop_used: int = 0

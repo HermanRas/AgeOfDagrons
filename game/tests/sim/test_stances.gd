@@ -214,7 +214,7 @@ func test_a_grazing_sheep_is_never_attacked_unasked() -> void:
 
 	w.step()
 	assert_eq(mine.task, SimUnit.Task.IDLE)
-	assert_true(Diplomacy.is_enemy(sheep, 1),
+	assert_true(Diplomacy.is_enemy(sheep, 1, w.teams),
 			"and the point is that the OTHER predicate still says yes -- this test is "
 			+ "worthless if the two ever agree")
 

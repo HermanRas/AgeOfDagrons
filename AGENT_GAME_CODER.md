@@ -293,6 +293,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A FIXTURE THAT PUTS TWO HOSTILE UNITS NEAR EACH OTHER AND EXPECTS NOTHING TO HAPPEN** | Was safe for the whole life of the project and stopped being safe on 2026-08-29, when 4.12 gave military units a DEFENSIVE default. Six tests broke, and **not one of them was about stances**: `test_projectiles`' shooting range is an archer three tiles from an enemy militia, so the pair started fighting on its own and a five-arrow tower volley counted six — and the fan stopped being parallel, because the militia had closed the distance while the tower aimed. `test_garrison`'s "a foundation does not defend you" was answered by the archer standing next to the foundation. **The fix is to say what the fixture means** (`u.stance = SimUnit.Stance.PASSIVE`), never to reach for the default. Worth remembering as a class: a test whose premise is "nobody acts unless I say so" is resting on an absence, and absences get filled in. |
 | **AN AGGRESSIVE STANCE THAT SEES LESS THAN A DEFENSIVE ONE** | `unit.militia` declares `los: 4` against `StanceSystem.GUARD_RADIUS`'s 5, so reading `def.los` straight for AGGRESSIVE made the stance a player picks to start MORE fights start fewer — on six of the roster's units, not a corner case. `_sight_of` floors it at `GUARD_RADIUS`. The general form: **when one setting is meant to be strictly stronger than another, the ordering is the rule and the numbers are inputs** — assert the ordering, not the numbers. It was caught by a test written to pin exactly that, on its first run, and only because the assertion was a comparison rather than a literal. |
 | **Two agents, one working tree** | Commits interleave. Check `git log` and what you actually staged; the art agent may have already committed your shared file (`asset_request.md`). |
+| **A PREDICATE DELIBERATELY SPLIT IN TWO HAS TWO PLACES TO CHANGE, and the half carrying the good reason is the half you read** | `StanceSystem._may_start_on` and `AbilitySystem._is_hostile_to` both route the UNIT half through `CombatSystem._is_at_war_with` and both keep their own `owner_id != owner_id` for BUILDINGS — correctly, since a building is never gaia's. Teams widened the owner clause in *both* halves and both were missed on the first pass: an aggressive soldier would have opened fire on an ally's barracks while doing exactly the right thing about their soldiers. The comment explaining why the split exists is what makes the second half invisible. |
+| **A RULE THAT CAN BE LEFT OUT IS A RULE THAT IS OFF SOMEWHERE** | `Diplomacy.is_enemy(e, player_id, teams)` takes the team table as a REQUIRED argument with no default, so a call site that was not updated is a parse error rather than a silently permissive predicate. Same family as `if Net.host() != null and <rule>` below. When widening a predicate every system reaches through, make the new argument mandatory and update the call sites; a default is how you ship the old behaviour in the one place nobody looked. |
 | **A GUARD THAT INFERS AN ENTITY'S KIND FROM WHICH SNAPSHOT FIELDS IT CARRIES** | Wrong the moment the wire format is optimised, and 12.1f already did that once — it took `footprint` off the wire, so `not entry.has("footprint")` (meaning "is a unit") became true for **everything**. It bit `GameView` twice in the same file: the occluder loop was fixed for it in 4.13 and its comment says so, and the sort-bonus guard twenty lines below was missed until 2026-08-28. **Ask `GameDataRegistry`** — `unit(def_id) != null`, the way `_facts`'s own `is_unit` does. |
 | **TWO DEAD GUARDS CAN CANCEL OUT, so fixing one breaks what looked unrelated** | `_in_front_of_any` had `if r.has_point(tile): return true` sitting below a check that was false for every tile inside the rect — unreachable. Making it reachable instantly failed three sort tests, because the caller's kind-guard was *also* dead and every building had been asking the function about itself; a building's own tile is inside its own rect, so the unreachable branch was the only thing keeping that harmless. **When a one-line fix breaks distant tests, look for a second dead guard rather than reverting** — the tests were right and both bugs were real. |
 | **A comment that says a bound cannot be exceeded, when it bounds a DELTA and not a RESULT** | `SeparationSystem.MAX_PUSH` is 120 of a 256 sub-tile and its note argues a push "can never carry a unit out of the tile MovementSystem just placed it in". True only from the tile's centre: from sub-position 250 a +120 push crosses the boundary, and the code under that comment already calls `spatial.move()` when it does. Three systems trusted the comment and retired any worker that lost adjacency, which is the owner's 2026-08-28 "pushed villagers go idle". |
@@ -330,6 +332,101 @@ carry `age_required`, which is a *gate*, not a skin.
 ---
 
 ## 7. Where things stand
+
+### TEAMS — 2026-08-31
+
+`SimPlayer.team` was declared at 0.4 and read by **nothing** for the life of the project.
+It means something now: a one-character dropdown beside each slot's colour swatch in the
+lobby, `MatchConfig.teams` on the wire, and four hostility predicates that had to be
+widened together.
+
+| | |
+|---|---|
+| the lobby | a `–`/1/2/3/4 picker per slot, and the two columns are 50/50 (measured: 544/544 at 1152) |
+| the sim | `Diplomacy.allied` + `MatchConfig.teams` → `SimPlayer.team` → `SimWorld.teams` |
+| the four predicates | `Diplomacy.is_enemy`, `.is_enemy_fact`, `CombatSystem._is_at_war_with`, `AISystem._nearest_enemy` |
+| the win condition | counts SIDES, and `SimWorld.winner_team` beside `winner_id` |
+| the server browser | `ServerBrowserPanel`, a wireframe, behind the lobby's SERVERS button |
+
+- ⚠️ **THE TEAM ARGUMENT IS REQUIRED, WITH NO DEFAULT, AND THAT IS THE SAFETY PROPERTY.**
+  `Diplomacy.is_enemy(e, player_id, teams)` could have taken `teams := {}` and every
+  existing call site would have compiled — and every one that was not updated would have
+  been a rule silently off in one place, which is §6's `if Net.host() != null and <rule>`
+  row wearing a different hat. GDScript reports a missing argument at parse time. An FFA
+  caller passes `{}` and says so.
+- ⚠️ **0 IS THE ABSENCE OF A TEAM, NOT A TEAM EVERYBODY SHARES.** Two unaligned players
+  both read 0, so a rule written as "equal teams are allies" makes the entire back
+  catalogue of fixtures one enormous alliance. `Diplomacy.allied` guards it and
+  `test_teams` asserts it by name. Gaia is guarded separately for the same reason —
+  owner 0 has no row at all, so it would read as 0 too.
+- ⚠️ **A TEAM GAME WITHOUT A TEAM WIN CONDITION IS A HANG, NOT A MISSING FEATURE.** The
+  moment allies could not attack each other, `_last_man_standing`'s "one player left"
+  became unreachable in a 2v2: two teammates standing is two standing players and nothing
+  remains that can reduce it to one. `WinConditionSystem` groups standing players into
+  SIDES (team, or the negative of the player id for the unaligned), and `winner_id` still
+  names the lowest-id survivor of the winning side because it is on the wire and in the
+  hash. `winner_team` is what a teammate knocked out on tick 400 reads to be told they won.
+- **THE RING OF STARTS IS ALREADY TEAM-SHAPED AND NOTHING WAS DONE TO IT.**
+  `_start_positions` spreads players evenly by index, so teams 1,1,2,2 land at 0°/90°
+  against 180°/270° — allies adjacent, enemies opposite, for free. **The river is the
+  exception and is NOT fixed**: `_river_start_positions` alternates banks by `i % 2` and
+  so splits a pair. Fixing it means threading teams through `MapGenerator.generate` for
+  one map type; flagged rather than done. The archipelago separates allies by design (one
+  island each) and that is a question for the owner, not a bug.
+- **WHAT PLAYERS WILL EXPECT AND NOT GET.** No shared vision (one line in `VisionSystem`,
+  deliberately skipped — `_reveal` is 32 of 55 ms on an 8-player map and team vision
+  roughly doubles the tiles each player lights; measure `test_tick_cost` either side
+  before landing it). No shared unit control, no repairing an ally's building, no
+  garrisoning in an ally's tower — all owner-gated in the sim, which is why an ally's
+  entity taps to SELECT and to nothing else. **And the AI does not cooperate**: no rule
+  in `data/ai_*.json` knows what an ally is, so a bot teammate fights in the same
+  direction as you by coincidence. It does at least no longer attack you.
+- ⚠️ **TWO OWNER CLAUSES DID NOT GO THROUGH `Diplomacy` AND BOTH WERE MISSED FIRST TIME.**
+  `StanceSystem._may_start_on` and `AbilitySystem._is_hostile_to` each call
+  `_is_at_war_with` for the UNIT half — and each keeps its own `owner_id != owner_id` for
+  the BUILDING half, because a building is never gaia's and the shared predicate would be
+  answering a question with no useful answer. Both comments say so and both were right;
+  what neither could know is that teams widen the owner clause in *both* halves. An
+  aggressive soldier would have shot an ally's barracks while quietly doing the right
+  thing about their soldiers. **The general form: a predicate split in two for a good
+  reason has two places to change, and the half with the good reason attached is the half
+  you read.** `test_teams` pins both, and they failed on the run before the fix.
+- **COLOUR IS UNCHANGED AND THAT IS THE OPEN DESIGN QUESTION.** Every player still gets
+  their own of eight, and PLAN.md §1 calls colour "the only thing telling players apart" —
+  so in a 2v2 the thing you most need to read at a glance is the thing the board does not
+  say. **Concretely: `Minimap.update_entities` draws own = `OWN_COLOR` and everything else
+  = `OTHER_COLOR`, so your ally's army reads as an incoming attack.** That is the cheapest
+  place to answer it; an allied selection ring and team-ordered colour assignment are the
+  other two, and they look different on screen. **The owner's call, not mine.**
+- **`SkirmishScreen` REFUSES A LOBBY WITH ONE SIDE**, and says which team everybody is on
+  rather than greying START. It is two presses from the default.
+- ⚠️ **A STRETCH RATIO ONLY DIVIDES WHAT IS LEFT AFTER EVERY MINIMUM IS HONOURED**, so
+  "50/50" was not two constants — it was three width bugs the split surfaced, none of
+  which any test could see. `ChatBoard`'s tab row is 150 px per PLAYER, so four tabs made
+  the chat column 670 px of a 1104 px body and ran the setup panels **off the right edge
+  of the screen** (eight tabs would have done it to the full-page chat too); the voice
+  row's three `CheckButton`s were 545 px more. The tabs now scroll sideways, the voice row
+  is an `HFlowContainer` — its minimum is the widest single child rather than the sum —
+  and the split measures 544/544. **`clip_text` was the wrong lever for both** and this
+  file's own header explains why: it is unconditional, not "shrink if crowded".
+  `preview_skirmish._report_columns` prints both rects, at two and at four players,
+  and warns on anything past the edge.
+- ⚠️ **`clip_text` TAKES A `Label`'s OR `Button`'s MINIMUM WIDTH TO ZERO**, which is the
+  point of it and is also two of the defects in this pass's first render: the server
+  browser's column headings came out as **a row of icons with no words**, and the team
+  picker at a 46 px minimum came out as **an empty red box** — the theme's painted
+  nine-patch margins plus the dropdown arrow ate the whole control and the digit was
+  clipped away rather than overflowing where it could be seen. A clipped control needs
+  its own `custom_minimum_size`, or no `clip_text` at all where every item is one
+  character. **Both were invisible to the suite and obvious in the screenshot.**
+- **THE SERVER BROWSER IS A WIREFRAME AND THE PAGE SAYS SO ON ITS OWN FACE**, because the
+  owner reviews by screenshot. Its three rows are a labelled layout sample using RFC 5737
+  documentation addresses; REFRESH, JOIN and the filter toggle are all disabled. What a
+  real one needs — a UDP beacon rather than a master server, a host NAME (the one field
+  `MatchConfig` has not got), a join that ends in the lobby's existing join, and a
+  refresh that is a rolling window rather than a clear — is written out in order in the
+  class header. It also uses the four `net_*.png` icons that had been committed and
+  referenced by nothing since the UI overhaul.
 
 ### THE FOUR-DEVICE PLAYTEST — 2026-08-30, six findings, all six closed
 

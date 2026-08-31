@@ -338,7 +338,7 @@ func _nearest_threat(w: SimWorld, u: SimUnit) -> Vector2i:
 	var best_gap := 1 << 30
 	var best_id := 0
 	for e in w.entities_in_rect(rect):
-		if not (e is SimUnit) or not Diplomacy.is_enemy(e, u.owner_id):
+		if not (e is SimUnit) or not Diplomacy.is_enemy(e, u.owner_id, w.teams):
 			continue
 		var gap := CombatSystem.tile_gap(u.tile(), Rect2i(e.tile(), Vector2i.ONE))
 		# Lowest id breaks a tie, as everywhere else here: determinism, not fairness.
@@ -386,7 +386,7 @@ func _nearest_prey(w: SimWorld, u: SimUnit, radius: int) -> int:
 	for e in w.entities_in_rect(rect):
 		if not (e is SimUnit):
 			continue
-		if not Diplomacy.is_enemy(e, u.owner_id):
+		if not Diplomacy.is_enemy(e, u.owner_id, w.teams):
 			continue
 		var gap := CombatSystem.tile_gap(here, Rect2i(e.tile(), Vector2i.ONE))
 		if gap > radius:

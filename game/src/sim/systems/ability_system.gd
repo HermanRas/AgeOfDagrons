@@ -168,11 +168,18 @@ func _burn(w: SimWorld, u: SimUnit, def: UnitDef, aim: Vector2i) -> void:
 ## door. This is a weapon a player aimed at a tile, and refusing to burn the foundation
 ## squarely inside the blast would be the game overruling a deliberate order. Two rules
 ## because the two questions differ, and each says so.
+##
+## ⚠️ **AN ALLY'S BUILDING IS NOT IN THE BLAST** (2026-08-31), and the building half's
+## own owner clause is where that had to be said -- the unit half gets it free from
+## `_is_at_war_with`. It is a real difference from the friendly-fire a player might
+## expect of an area weapon, and it is the same answer the tower and the aggressive
+## stance give: teams in this game are absolute, not a damage modifier.
 static func _is_hostile_to(w: SimWorld, e: SimEntity, owner_id: int) -> bool:
 	if e is SimUnit:
 		return CombatSystem._is_at_war_with(w, e as SimUnit, owner_id)
 	if e is SimBuilding:
-		return e.alive and e.owner_id != 0 and e.owner_id != owner_id
+		return e.alive and e.owner_id != 0 \
+				and not Diplomacy.allied(owner_id, e.owner_id, w.teams)
 	return false
 
 

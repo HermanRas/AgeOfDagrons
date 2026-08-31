@@ -895,7 +895,12 @@ func _nearest_enemy(w: SimWorld, p: SimPlayer, from_unit: int) -> int:
 		# wildlife nearby would march its whole army off to hunt it instead of the
 		# player -- `_issue_attack` sends the ENTIRE military at whatever this returns.
 		# Wildlife defence is retaliation, which is 4.12's stances and not this.
-		if not e.alive or e.owner_id == 0 or e.owner_id == p.id:
+		#
+		# ALLIES ARE SKIPPED BY THE SAME CLAUSE AS ITS OWN STUFF (2026-08-31), through
+		# `Diplomacy.allied` rather than a fourth hand-written copy -- `owner_id == p.id`
+		# is precisely the line teams widen. Without it a bot teammate's opening attack
+		# marches on whichever base is nearest, and the nearest base is usually yours.
+		if not e.alive or e.owner_id == 0 or Diplomacy.allied(p.id, e.owner_id, w.teams):
 			continue
 		if not (e is SimUnit or e is SimBuilding):
 			continue

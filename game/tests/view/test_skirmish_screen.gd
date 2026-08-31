@@ -279,6 +279,148 @@ func test_a_joiner_shown_a_bigger_match_grows_its_own_rows() -> void:
 	assert_eq(screen._slot_rows.size(), 4, "the joiner shows all four")
 
 
+# ── teams (2026-08-31) ─────────────────────────────────────────────────────
+#
+# "teams number [1,2,3,4] on the lobby a small 1 char drop down next to color". Driven
+# through the dropdown's own signal for `_pick_role`'s reason: the wiring is what is in
+# doubt, and setting `_teams[i]` directly would pass with the picker unconnected.
+
+func _pick_team(index: int, team: int) -> void:
+	var picker: OptionButton = screen._slot_rows[index]["team"]
+	var item := picker.get_item_index(team)
+	assert_true(item >= 0, "team %d is on the list" % team)
+	picker.select(item)
+	picker.item_selected.emit(item)
+
+
+func test_every_slot_opens_on_no_team_at_all() -> void:
+	# The default has to be the free-for-all this game has always played -- and it also
+	# has to BE representable, which is why 0 is on the list: eight slots cannot each
+	# have their own side out of four numbers.
+	_pick_slots(8)
+	for i in range(8):
+		assert_eq(screen._teams[i], 0, "slot %d starts unaligned" % (i + 1))
+	assert_eq(screen.build_config().teams, [0, 0] as Array[int],
+			"and the config says so for the two active slots")
+
+
+func test_the_team_picker_offers_exactly_the_owners_four_and_a_way_out() -> void:
+	var picker: OptionButton = screen._slot_rows[0]["team"]
+	assert_eq(picker.item_count, 5, "four teams plus no-team")
+	for n in range(1, 5):
+		assert_true(picker.get_item_index(n) >= 0, "team %d is offered" % n)
+	assert_true(picker.get_item_index(0) >= 0, "and so is leaving a team")
+
+
+func test_picking_a_team_reaches_the_config() -> void:
+	_pick_slots(4)
+	for i in range(4):
+		_pick_role(i, SkirmishScreen.Role.PLAYTEST_AI)
+	_pick_team(0, 1)
+	_pick_team(1, 1)
+	_pick_team(2, 2)
+	_pick_team(3, 2)
+	assert_eq(screen.build_config().teams, [1, 1, 2, 2] as Array[int])
+
+
+func test_a_closed_slot_takes_its_team_out_of_the_config_with_it() -> void:
+	# Teams are compacted with everything else on the row. A team left behind by a closed
+	# slot would misalign every player after it -- the same hole a hole in `ai_levels`
+	# would leave, and the reason both are position-for-position.
+	_pick_slots(4)
+	for i in range(4):
+		_pick_role(i, SkirmishScreen.Role.PLAYTEST_AI)
+		_pick_team(i, 1 if i < 2 else 2)
+	_pick_role(1, SkirmishScreen.Role.CLOSED)
+	var cfg := screen.build_config()
+	assert_eq(cfg.teams, [1, 2, 2] as Array[int])
+	assert_eq(cfg.teams.size(), cfg.player_ids.size(),
+			"one team per player, whatever was closed")
+
+
+func test_everybody_on_one_team_is_not_a_match() -> void:
+	# Two presses from the default, and `WinConditionSystem` would find exactly one
+	# standing side on tick 1 -- a match won before anybody moved. Refused here rather
+	# than started and instantly ended.
+	assert_true(screen.can_start(), "the default is startable")
+	_pick_team(0, 3)
+	assert_true(screen.can_start(),
+			"one aligned and one loose is still two sides -- 0 is not a team")
+	_pick_team(1, 3)
+	assert_false(screen.can_start(), "and now there is only one side")
+	assert_true(screen.status_text().contains("two sides"),
+			"and it says why rather than leaving a dead button: %s" % screen.status_text())
+	_pick_team(1, 4)
+	assert_true(screen.can_start(), "split them again and it is a match")
+
+
+func test_the_split_is_named_on_the_line_only_when_there_is_one() -> void:
+	# "1v1v1v1" is a true description of every match this game has ever played, and four
+	# characters of news per player.
+	# "1v1", not "v" -- the map type is on this line too and the RIVER has a v in it.
+	assert_false(screen.status_text().contains("1v1"),
+			"a free-for-all says nothing: %s" % screen.status_text())
+	_pick_slots(4)
+	for i in range(4):
+		_pick_role(i, SkirmishScreen.Role.PLAYTEST_AI)
+		_pick_team(i, 1 if i < 2 else 2)
+	assert_true(screen.status_text().contains("2v2"), "got %s" % screen.status_text())
+
+
+func test_the_bigger_side_leads_the_summary() -> void:
+	# The genre's convention, and the same "assert the ORDERING" rule the galleon's
+	# volley is pinned by: 2v1, never 1v2.
+	#
+	# THE ARGUMENT IS ONE TEAM NUMBER PER PLAYER, not a list of group sizes -- which is
+	# worth saying because the first version of this test read it the other way round and
+	# expected "2v1v1" of a three-player lobby.
+	assert_eq(SkirmishScreen._summarise_teams([1, 1, 2, 2]), " — 2v2")
+	assert_eq(SkirmishScreen._summarise_teams([1, 2, 2, 2]), " — 3v1",
+			"the bigger side leads, whichever number it was given")
+	assert_eq(SkirmishScreen._summarise_teams([1, 1, 2, 0]), " — 2v1v1",
+			"and an unaligned player is a side of one")
+	assert_eq(SkirmishScreen._summarise_teams([0, 0, 0]), "", "nobody on a team, no suffix")
+
+
+func test_a_joiner_adopts_the_hosts_teams_and_cannot_change_them() -> void:
+	# A colour is your identity and is yours on either device; a team is the SHAPE of the
+	# match, and a joiner who could put themselves on the host's side would be rewriting
+	# a 1v1 into a 2v0 nobody agreed to.
+	var host_side := SkirmishScreen.new()
+	host_side._slots = 4
+	for i in range(4):
+		host_side._roles[i] = SkirmishScreen.Role.PLAYTEST_AI
+		host_side._teams[i] = 1 if i < 2 else 2
+	var proposal := host_side.build_config()
+	host_side.free()
+
+	Net._lobby_config = proposal
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+	assert_eq(screen._teams.slice(0, 4), [1, 1, 2, 2] as Array[int],
+			"the rows show the host's teams")
+	for i in range(4):
+		assert_true((screen._slot_rows[i]["team"] as OptionButton).disabled,
+				"including your own row: slot %d" % (i + 1))
+	assert_true(screen.terms_text().contains("2v2"),
+			"and the split is a term of the invitation: %s" % screen.terms_text())
+
+
+func test_a_host_with_no_teams_reads_as_a_free_for_all_on_the_joiner() -> void:
+	# A config from before the selector existed carries no `teams` at all, and the match
+	# that host is running is a free-for-all. Same forward-compatibility shape as
+	# `ai_levels` and `starting_age`.
+	var proposal := MatchConfig.debug_generated(1, MapGenerator.Type.FOREST, 2)
+	assert_true(proposal.teams.is_empty(), "the fixture names no teams")
+	Net._lobby_config = proposal
+	screen._lobby = SkirmishScreen.Lobby.JOINED
+	screen._on_lobby_config_received()
+	assert_eq(screen._teams[0], 0)
+	assert_eq(screen._teams[1], 0)
+	assert_false(screen.terms_text().contains("1v1"),
+			"and nothing is claimed about sides: %s" % screen.terms_text())
+
+
 # ── the lobby half (12.1c) ─────────────────────────────────────────────────
 #
 # The screen's third state. These drive the real handlers and open a real socket, for
@@ -657,13 +799,38 @@ func test_a_host_has_no_terms_line_at_all() -> void:
 	assert_false(screen._terms_label.visible, "hosting is not being invited")
 
 
-func test_the_server_browser_is_visibly_a_placeholder() -> void:
-	# "server browser (place holder) ... comming up next". A control wired to nothing
+func test_the_server_browser_opens_a_page_that_admits_what_it_is() -> void:
+	# "lets build out a wireframe for server browser / server discovery" (2026-08-31).
+	# The button was disabled until then, on the rule that a control wired to nothing
 	# must not look like one that works -- the selection panel's roster grid drew, took
 	# taps and played a click sound for the life of the project while doing nothing.
-	assert_true(screen._browser_button.disabled)
-	assert_false(screen._browser_button.tooltip_text.is_empty(),
-			"and says why, since a greyed button with no reason reads as broken")
+	#
+	# THE RULE IS SATISFIED ON THE PAGE NOW, NOT ON THE BUTTON, so this asserts both
+	# halves: the button really opens something, and everything behind it is inert.
+	assert_false(screen._browser_button.disabled, "it opens the wireframe now")
+	assert_false(screen._browser.is_open())
+	screen._browser_button.pressed.emit()
+	assert_true(screen._browser.is_open(), "and the press is wired to the page")
+
+	assert_true(screen._browser.refresh_button().disabled, "nothing to refresh yet")
+	assert_true(screen._browser.join_button().disabled, "and nowhere to join")
+	assert_true(screen._browser.row_count() > 0,
+			"a wireframe with no rows shows nothing about the shape it is a wireframe of")
+	for row in screen._browser._rows.get_children():
+		if row is Button:
+			assert_true((row as Button).disabled,
+					"every sample row is inert -- they are a layout, not servers")
+
+
+func test_the_server_browser_says_on_its_face_that_it_finds_nothing() -> void:
+	# THE PAGE IS THE DISCLAIMER, and the owner reviews by screenshot -- so the words
+	# have to be ON it rather than in its header comment. Asserted as text because a
+	# wireframe that stops saying it is one is the failure mode here.
+	var said := false
+	for label in _labels_in(screen._browser):
+		if label.text.to_lower().contains("wireframe"):
+			said = true
+	assert_true(said, "the page announces itself as a wireframe")
 
 
 func test_all_three_panels_wear_the_dragon_frame() -> void:
@@ -711,6 +878,15 @@ func test_the_turned_plate_is_sized_from_the_diamonds_own_geometry() -> void:
 
 
 ## Every PanelContainer under `node`, depth first.
+func _labels_in(node: Node) -> Array[Label]:
+	var out: Array[Label] = []
+	for child in node.get_children():
+		if child is Label:
+			out.append(child)
+		out.append_array(_labels_in(child))
+	return out
+
+
 func _panels_in(node: Node) -> Array[PanelContainer]:
 	var out: Array[PanelContainer] = []
 	for child in node.get_children():

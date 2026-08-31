@@ -1069,7 +1069,23 @@ func _refresh_result(snap: Dictionary) -> void:
 	_match_over = true
 	var winner := int(snap.get("winner_id", 0))
 	var reason := int(mine.get("defeat_reason", SimPlayer.Defeat.ELIMINATED))
-	if over and winner == player_id:
+	# YOUR SIDE WINNING IS YOU WINNING (2026-08-31). `winner_id` names one survivor of
+	# the winning side, so in a 2v2 the other member -- including one knocked out on tick
+	# 400 while their partner went on to take it -- would have been shown "Player 3 won"
+	# about their own team. `winner_team` is 0 in every free-for-all, and a player on no
+	# team also has team 0, so the guard is the `> 0` and not the comparison.
+	#
+	# **A PLAYER WHO FORFEITED DOES NOT WIN WITH THEIR TEAM**, and that clause is why
+	# this is not simply a team comparison. Resigning used to make the victory branch
+	# unreachable for you by construction -- you own nothing, so you are not standing --
+	# and a team puts it back in reach through somebody else's survival. "You resigned"
+	# is the answer to what they did; the branch below already says it, and this keeps
+	# the branch reachable.
+	var my_team := int(mine.get("team", 0))
+	var winning_team := int(snap.get("winner_team", 0))
+	var we_won := winner == player_id \
+			or (winning_team > 0 and winning_team == my_team and not _forfeited(reason))
+	if over and we_won:
 		_result.show_result(true, _victory_subtitle(snap, player_id))
 	elif defeated and (_forfeited(reason) or not over):
 		# OUR OWN REASON, not a fixed sentence (2026-08-30). Two cases in one branch:
