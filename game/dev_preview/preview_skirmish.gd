@@ -72,23 +72,30 @@ func _process(_delta: float) -> void:
 		6:
 			_screen._tech_tree.close()
 		7:
-			# THE SERVER BROWSER WIREFRAME (project owner, 2026-08-31). Through the real
-			# nav button for the tech tree's reason -- and this one especially, since the
-			# button spent its whole life disabled and "it is enabled now" is exactly the
-			# kind of change that gets made without connecting anything to it.
+			# THE SERVER BROWSER (project owner, 2026-08-31). Through the real nav button
+			# for the tech tree's reason -- and this one especially, since the button spent
+			# most of its life disabled and "it is enabled now" is exactly the kind of
+			# change that gets made without connecting anything to it.
 			_screen._browser_button.pressed.emit()
 			_hold(LOBBY_FRAMES)
 		8:
+			# THREE REAL BEACONS DOWN A REAL SOCKET. See `_send_sample_beacons` -- these
+			# are not fixture rows, they are datagrams the page's own listener decodes,
+			# and the picture is worthless without them: an empty table shows nothing
+			# about the shape of a table, which is the whole thing being reviewed.
+			_send_sample_beacons()
+			_hold(LOBBY_FRAMES)
+		9:
 			_report_browser()
 			_shoot("skirmish_server_browser")
-		9:
-			_screen._browser.close()
 		10:
+			_screen._browser.close()
+		11:
 			# A 2v2, set through the real dropdowns. The picture is the point: four rows
 			# each carrying a swatch and a one-character team box, in a column that is now
 			# half the screen rather than a third.
 			_make_it_two_v_two()
-		11:
+		12:
 			_report_teams()
 			# AT FOUR PLAYERS, not at two, and that is the whole reason both are measured
 			# here as well: the chat's minimum width grows one tab per player, so the
@@ -98,56 +105,69 @@ func _process(_delta: float) -> void:
 			_report_columns()
 			_report_headings()
 			_shoot("skirmish_teams")
-		12:
-			_pick_slots(2)
 		13:
+			_pick_slots(2)
+		14:
 			# THE COLOUR PICKER (2026-08-21), which replaced a cycle. Pressed through the
 			# slot row's real Button, because what is in doubt is that a press on that row
 			# opens the grid -- the handler on its own would pass with the button unwired.
 			_open_the_colour_picker()
-		14:
+		15:
 			_report_colour_picker()
 			_shoot("skirmish_colour_picker")
-		15:
-			_pick_a_colour()
 		16:
+			_pick_a_colour()
+		17:
 			_report_colours()
 			_shoot("skirmish_colour_picked")
-		17:
+		18:
 			# THE LOBBY (12.1c). Setting a slot to Open is what opens the socket, so this
 			# is the hosting path and not a simulation of it.
 			_open_a_slot()
-		18:
-			_report_lobby()
-			_shoot("skirmish_lobby_waiting")
 		19:
+			_report_lobby()
+			# AND THE BEACON IT NOW PUTS ON THE WIRE. Opening a slot is what starts
+			# advertising -- one act, as it is one act to open the socket -- so a lobby
+			# waiting for somebody is exactly the state that has to be findable.
+			_report_beacon()
+			_shoot("skirmish_lobby_waiting")
+		20:
 			# A peer arriving. The connection itself is (g)'s ground already proven on two
 			# devices; what is unproven is that this SCREEN shows the chair being taken
 			# and lets START go ahead once it is.
 			_screen._on_peer_joined(7777)
 			_hold(LOBBY_FRAMES)
-		20:
-			_report_lobby()
-			_shoot("skirmish_lobby_filled")
 		21:
+			_report_lobby()
+			# THE CHAIR COUNT ON THE WIRE FOLLOWED THE CHAIR. `SLOTS` is what a browser
+			# reads to decide whether a lobby is worth pressing, and it is derived in
+			# `_refresh_beacon` -- so a peer arriving and the beacon still saying "1 / 2"
+			# would be a full lobby advertising a free seat.
+			_report_beacon()
+			_shoot("skirmish_lobby_filled")
+		22:
 			# The JOINING device's view of the same screen -- the one state that cannot be
 			# reached from here honestly, since a real one needs a second process dialling
 			# in. FORCED, and labelled as forced: what it is worth is the LOOK of a screen
 			# that configures nothing, which no test can judge. The control states
 			# themselves are asserted in test_skirmish_screen.
 			_join_someone_elses_match()
-		22:
-			_shoot("skirmish_lobby_joined")
 		23:
+			_shoot("skirmish_lobby_joined")
+		24:
 			Net._lobby_config = null
 			_screen._lobby = SkirmishScreen.Lobby.HOSTING
 			# Back to a plain skirmish, so the solo path below is exercised exactly as it
 			# was before this screen learned to host -- the regression that would matter
 			# most here is the one where adding multiplayer broke playing alone.
 			_close_the_slot()
-		24:
-			_start_the_match()
 		25:
+			# THE BEACON HAS TO HAVE STOPPED WITH THE SLOT. A row in somebody's browser for
+			# a lobby that is not listening is a row that fails when pressed, and this is
+			# the cheapest place to notice it -- `_refresh_beacon` decides both ends.
+			_report_beacon()
+			_start_the_match()
+		26:
 			if _frames < SETTLE_FRAMES + MATCH_FRAMES:
 				return
 			_report_match()
@@ -286,21 +306,94 @@ func _report_tech_tree() -> void:
 				% [tree._age, _screen._starting_age])
 
 
-## What came up behind the SERVERS button, and whether it is honest about itself.
+## THREE HOSTS, ANNOUNCED THE WAY A REAL ONE WOULD BE.
 ##
-## THE ASSERTION WORTH HAVING IS THAT NOTHING IS LIVE. A wireframe that quietly grows a
-## working-looking control is the failure this whole page is written against, so the
-## enabled state of its two action buttons is printed and warned about rather than left
-## to a screenshot -- a greyed button and a live one are two shades of the same brown.
+## ⚠️ **THESE ARE NOT FIXTURE ROWS AND THAT DISTINCTION IS THE WHOLE POINT.** The page has
+## a real `LanBrowser` bound to a real socket; this opens a second socket and sends it
+## three real datagrams, which it decodes with the same `LanBeacon.decode` a host on the
+## next desk would go through. So the picture shows the table doing its job rather than a
+## constant being drawn -- which is what the wireframe's `SAMPLE_ROWS` did, and what its
+## own comment said had to be deleted the day discovery landed.
+##
+## THE ORIGINS ARE REWRITTEN, and that is the one thing here a real host would not do. A
+## browser refuses its own process (`LanBrowser.include_self`), so a beacon carrying this
+## process's origin would correctly be ignored -- and turning that rule off for the
+## preview would be photographing a page with its safety catch off. Giving the three
+## payloads other origins is the honest version: three strangers, one real rule.
+##
+## RFC 5737 documentation addresses, so nobody can mistake a row for somebody's machine.
+func _send_sample_beacons() -> void:
+	var socket := PacketPeerUDP.new()
+	if socket.set_dest_address("127.0.0.1", LanBeacon.PORT) != OK:
+		push_warning("preview_skirmish: could not aim the sample beacons")
+		return
+	var samples := [
+		["Herman's table", MapGenerator.Type.FOREST, Vector2i(128, 128), 4, 2, 1],
+		["Kitchen phone", MapGenerator.Type.ARCHIPELAGO, Vector2i(160, 160), 4, 3, 2],
+		["Study desktop", MapGenerator.Type.RIVER, Vector2i(96, 96), 2, 2, 1],
+	]
+	for i in range(samples.size()):
+		var s: Array = samples[i]
+		socket.put_packet(LanBeacon.encode({
+			"aod": LanBeacon.VERSION,
+			"origin": "preview-%d" % i,
+			"name": s[0], "map": int(s[1]),
+			"w": (s[2] as Vector2i).x, "h": (s[2] as Vector2i).y,
+			"mode": int(MatchConfig.Mode.LAST_MAN_STANDING),
+			"age": s[5], "slots": s[3], "taken": s[4], "port": Net.PORT,
+		}))
+	socket.close()
+
+
+## What came up behind the SERVERS button, and whether the network actually reached it.
+##
+## ⚠️ **AN EMPTY TABLE AND A DEAD SOCKET LOOK IDENTICAL IN A SCREENSHOT**, which is why
+## the listening state and the bind error are printed rather than left to the picture --
+## and why the page itself has an empty-state sentence distinguishing them. A run that
+## finds nothing here is either a bug or another copy of the game holding port 27016, and
+## the warning says which.
 func _report_browser() -> void:
 	var page: ServerBrowserPanel = _screen._browser
-	print("browser: open %s, %d sample rows, refresh disabled %s, join disabled %s"
-			% [page.is_open(), page.row_count(), page.refresh_button().disabled,
-			page.join_button().disabled])
+	var lan := page.browser()
+	print("browser: open %s, listening %s (err %s), %d rows, join disabled %s"
+			% [page.is_open(), lan.is_listening(), error_string(lan.listen_error()),
+			page.row_count(), page.join_button().disabled])
+	print("  note: %s" % ("(none)" if page.note_text().is_empty() else page.note_text()))
+	for row in lan.hosts():
+		print("  host %-16s %-16s %s %dx%d  %d/%d  age %d  seen %d s"
+				% [row["name"], row["address"],
+				MapGenerator.type_name(int(row["map"]) as MapGenerator.Type),
+				(row["size"] as Vector2i).x, (row["size"] as Vector2i).y,
+				row["taken"], row["slots"], row["age"], lan.seconds_since(row)])
 	if not page.is_open():
 		push_warning("preview_skirmish: the SERVERS button did not open the browser")
-	if not page.refresh_button().disabled or not page.join_button().disabled:
-		push_warning("preview_skirmish: a wireframe control is live and discovery is not")
+	if not lan.is_listening():
+		push_warning("preview_skirmish: the browser never bound port %d (%s)"
+				% [page.discovery_port, error_string(lan.listen_error())])
+	elif page.row_count() == 0:
+		push_warning("preview_skirmish: three beacons were sent and none was decoded")
+	# THE FILTER HIDES A FULL LOBBY, and one of the three samples is full on purpose --
+	# so a table showing all three is a filter that is not doing its job.
+	if page.filter_button().button_pressed and page.row_count() != 2:
+		push_warning("preview_skirmish: the free-slot filter passed %d of 3 rows, want 2"
+				% page.row_count())
+
+
+## What this device is putting on the wire, if anything.
+##
+## ⚠️ **THE STATE THAT MATTERS IS THE ONE WHERE IT SHOULD BE SILENT.** A beacon that
+## outlives its advertised slot is a listing for a lobby nobody is listening on, and it is
+## invisible from this machine -- the only place it shows up is somebody else's browser,
+## pressing a row that fails. So both directions are warned about.
+func _report_beacon() -> void:
+	var hosting := _screen._lobby == SkirmishScreen.Lobby.HOSTING
+	print("beacon: hosting %s, advertising %s, name \"%s\", %d of %d chairs taken"
+			% [hosting, _screen._beacon.is_advertising(), _screen.host_name(),
+			_screen.build_config().player_ids.size() - _screen.unfilled_slots(),
+			_screen.build_config().player_ids.size()])
+	if hosting != _screen._beacon.is_advertising():
+		push_warning("preview_skirmish: hosting is %s and the beacon is %s"
+				% [hosting, _screen._beacon.is_advertising()])
 
 
 ## Four slots, two a side, through the real dropdowns.

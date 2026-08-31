@@ -141,7 +141,7 @@ real work remains · ⛔ not started
 | 9 | Ages & tech | 🟢 | **Ages are real: they cost resources** (AoE II's ladder, 2026-08-27) and advance on a timer with a HUD ring. **9.3 and 9.4 landed 2026-08-29**: 27 technologies at seven buildings, researched from an action tile on the building, with the tech-tree page as the read-only guide to what is where. What is left is **9.5 civilisations** and **9.6 the age re-skin**, both art-paced. ⚠️ **The AI researches nothing** — `techs: true` in every profile against no rule that emits a `ResearchCommand` |
 | 10 | Control groups | ✅ | |
 | 11 | Win conditions | 🟢 | Conquest works. Regicide and Trophy are declared and inert |
-| 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. **First FOUR-DEVICE session 2026-08-30** (two Windows, one Android, one AI) and it found the two things only a joined client can see: every polite refusal in the HUD asked `Net.host().world` and was therefore dead on players 2..8, and a resign or a disconnect told the survivors nothing. Both closed. Left: **12.1b LAN discovery**, 12.3 campaign, 12.4 save/load and replays |
+| 12 | Multiplayer & AI | 🟡 | **12.2b done 2026-08-27** — five real difficulties, rule sets in `data/ai_*.json`. **First FOUR-DEVICE session 2026-08-30** (two Windows, one Android, one AI) and it found the two things only a joined client can see: every polite refusal in the HUD asked `Net.host().world` and was therefore dead on players 2..8, and a resign or a disconnect told the survivors nothing. Both closed. **LAN DISCOVERY LANDED 2026-08-31** — a UDP beacon on `Net.PORT + 1` and a live server browser behind the lobby's SERVERS button, so typing an IP is now optional. Left: **12.1b reconnect**, 12.3 campaign, 12.4 save/load and replays |
 | 13 | Dragons | ⛔ | Not started — and as of 2026-08-29 **blocked on art rather than on sequencing**: `vis.dragon` carries one clip, `static`, so the unit cannot walk, attack or die. `asset_request.md` [P7]. The unit itself is real and trainable at the castle from age 4, and 4.10 gave it its fire breath |
 | 14 | **NEEDS UPGRADE** — AI enemy-blindness | ⛔ | Opened 2026-08-27 with 12.2b. A declared ceiling, not a defect: no rule can see the opponent, so an army is a target number and never a response |
 
@@ -184,8 +184,9 @@ nothing else now that 9.3 has settled that an upgrade and a technology are two m
 `ai_profile` since 12.2b against nothing, and 9.3 did not change that — it made it matter.
 Note that the first rule that researches invalidates every row of BUGS.md's ladder table.
 
-**3. Then, in no forced order:** 2.4c the map save format, 12.1b LAN discovery, 12.3
-campaign, phase 14's AI enemy-blindness, and 13.x dragons once the art lands.
+**3. Then, in no forced order:** 2.4c the map save format, 12.1b reconnect (discovery
+landed 2026-08-31), 12.3 campaign, phase 14's AI enemy-blindness, and 13.x dragons once
+the art lands.
 
 ---
 
@@ -224,7 +225,9 @@ Committed as planning so the intent survives; none of it is built.
   condition** picker, a map-size choice and in-lobby chat. One civilisation is a locked v1
   decision (§1), teams do not exist, and Regicide is declared inert (11.2).
 - **`UI_Design_Hosting.png`** — a **server browser** with filters, versions and a server
-  list. **12.1b is the LAN subset of this**; the rest implies a master server.
+  list. **The LAN subset of this SHIPPED 2026-08-31** (`ServerBrowserPanel`): a host list
+  with a free-slot filter, fed by a UDP beacon. The rest of the mockup implies a master
+  server, which `LanBeacon`'s header argues against by name rather than by omission.
 - **`web/player-colour-ladder.html`** — the research behind the eight-colour palette:
   CIE lightness spread, dichromacy safety, and why the A.6 tint shader is not a multiply.
 

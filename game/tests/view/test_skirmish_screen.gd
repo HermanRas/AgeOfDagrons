@@ -11,6 +11,13 @@ extends TestCase
 ## contend for one port. See `before_each`.
 const _TEST_PORT := 47015
 
+## The same argument one port up, for discovery (2026-08-31). Both halves bind real
+## sockets -- the beacon shouts at this and the browser binds it -- so a suite on
+## `LanBeacon.PORT` would fight a game the owner has open, and worse, would be FOUND by
+## one: a test lobby's beacon appearing in the owner's real server browser is a row for a
+## host that exists for a hundredth of a second.
+const _TEST_DISCOVERY_PORT := 47016
+
 var screen: SkirmishScreen
 
 
@@ -20,6 +27,7 @@ func before_each() -> void:
 	# port fights the game: these ten tests went red the first time the owner had this
 	# screen open with a slot advertised while the suite ran.
 	screen.host_port = _TEST_PORT
+	screen.discovery_port = _TEST_DISCOVERY_PORT
 
 
 func after_each() -> void:
@@ -799,38 +807,137 @@ func test_a_host_has_no_terms_line_at_all() -> void:
 	assert_false(screen._terms_label.visible, "hosting is not being invited")
 
 
-func test_the_server_browser_opens_a_page_that_admits_what_it_is() -> void:
-	# "lets build out a wireframe for server browser / server discovery" (2026-08-31).
-	# The button was disabled until then, on the rule that a control wired to nothing
-	# must not look like one that works -- the selection panel's roster grid drew, took
-	# taps and played a click sound for the life of the project while doing nothing.
-	#
-	# THE RULE IS SATISFIED ON THE PAGE NOW, NOT ON THE BUTTON, so this asserts both
-	# halves: the button really opens something, and everything behind it is inert.
-	assert_false(screen._browser_button.disabled, "it opens the wireframe now")
+func test_the_server_browser_opens_and_binds_a_socket() -> void:
+	# "lets build out a wireframe for server browser / server discovery", then "lets wire
+	# it up and make it live" (2026-08-31). The button was a disabled placeholder before
+	# either, on the rule that a control wired to nothing must not look like one that
+	# works -- the selection panel's roster grid drew, took taps and played a click sound
+	# for the life of the project while doing nothing.
+	assert_false(screen._browser_button.disabled)
 	assert_false(screen._browser.is_open())
+	assert_false(screen._browser.browser().is_listening(),
+			"a page nobody has opened must not hold the port -- another copy of the "
+			+ "game cannot then have it")
+
 	screen._browser_button.pressed.emit()
-	assert_true(screen._browser.is_open(), "and the press is wired to the page")
+	assert_true(screen._browser.is_open(), "the press is wired to the page")
+	assert_true(screen._browser.browser().is_listening(), "and the page really listens")
+	assert_eq(screen._browser.browser().listen_error(), OK)
 
-	assert_true(screen._browser.refresh_button().disabled, "nothing to refresh yet")
-	assert_true(screen._browser.join_button().disabled, "and nowhere to join")
-	assert_true(screen._browser.row_count() > 0,
-			"a wireframe with no rows shows nothing about the shape it is a wireframe of")
-	for row in screen._browser._rows.get_children():
-		if row is Button:
-			assert_true((row as Button).disabled,
-					"every sample row is inert -- they are a layout, not servers")
+	screen._browser.close()
+	assert_false(screen._browser.browser().is_listening(),
+			"and gives the port back on the way out")
 
 
-func test_the_server_browser_says_on_its_face_that_it_finds_nothing() -> void:
-	# THE PAGE IS THE DISCLAIMER, and the owner reviews by screenshot -- so the words
-	# have to be ON it rather than in its header comment. Asserted as text because a
-	# wireframe that stops saying it is one is the failure mode here.
-	var said := false
+func test_the_server_browser_says_why_join_is_off_rather_than_only_greying_it() -> void:
+	# A DISABLED BUTTON THAT DOES NOT SAY WHY is the failure this page's whole history is
+	# about, and there are four ways JOIN is off. Two of them are asserted here because
+	# they are the two a player will actually meet.
+	screen._browser_button.pressed.emit()
+	assert_true(screen._browser.join_button().disabled, "nothing found, nothing picked")
+	assert_eq(screen._browser.row_count(), 0, "and no host has been invented to fill it")
+
+	# THE ONE THE WIREFRAME'S HEADER PREDICTED. `Net.has_session()` is true for a host the
+	# moment a slot is opened, and this page is reached FROM that screen -- so without the
+	# check a host pressing JOIN would be dialling out of a session it is already running,
+	# and the refusal would arrive from the lobby's join two taps later.
+	_open_slot_two()
+	screen._browser._refresh_join()
+	assert_true(screen._browser.join_button().disabled)
+	assert_true(screen._browser.note_text().to_lower().contains("already in a session"),
+			"it says which of the four reasons: %s" % screen._browser.note_text())
+
+
+func test_picking_a_row_and_pressing_join_goes_through_the_lobbys_own_join() -> void:
+	# ⚠️ **THE THIRD OF THE WIREFRAME'S FOUR PROMISES**, and the one worth a test: a
+	# browser with its OWN copy of the join would rediscover every failure the lobby
+	# already handles -- already in a session, a refused socket, the missing Android
+	# INTERNET permission. So the press has to end in this screen's Join field and this
+	# screen's button, which is what the last two assertions are about.
+	screen._browser_button.pressed.emit()
+	_hear_a_beacon("Study desktop", "127.0.0.1", _TEST_PORT)
+	assert_eq(screen._browser.row_count(), 1, "the beacon was decoded into a row")
+	assert_true(screen._browser.join_button().disabled, "nothing picked yet")
+	assert_true(screen._browser.note_text().to_lower().contains("pick a server"),
+			"and it says so: %s" % screen._browser.note_text())
+
+	# THROUGH THE ROW BUTTON, not through the handler. A row wired to nothing draws and
+	# takes taps exactly like one that works -- see the selection panel's roster grid,
+	# inert for the whole life of the project.
+	var row := _first_browser_row()
+	assert_not_null(row)
+	row.button_pressed = true
+	row.pressed.emit()
+	assert_false(screen._browser.join_button().disabled, "a picked row is joinable")
+	assert_eq(screen._browser.note_text(), "", "and nothing is left to explain")
+
+	screen._browser.join_button().pressed.emit()
+	assert_false(screen._browser.is_open(),
+			"the page closes first, or its own answer lands behind it")
+	# THE PORT CAME WITH IT. A beacon carries the port its host actually bound, and this
+	# one is not the default -- so a browser that could only dial `Net.PORT` would be one
+	# that cannot reach the single host a test can stand up.
+	assert_eq(screen._join_field.text, "127.0.0.1:%d" % _TEST_PORT)
+	assert_eq(screen.lobby_state(), SkirmishScreen.Lobby.JOINED,
+			"and the lobby's own join really ran: %s" % screen.lobby_text())
+
+
+func test_advertising_a_slot_is_what_starts_the_beacon() -> void:
+	# ONE ACT, exactly as opening the socket is one act -- there is no separate "make me
+	# visible" button to forget, and no way to be listed without listening.
+	assert_false(screen._beacon.is_advertising(), "a local skirmish tells nobody anything")
+	_open_slot_two()
+	assert_true(screen._beacon.is_advertising(), "an advertised slot is findable")
+
+	# ⚠️ AND IT STOPS WITH THE SLOT. A row in somebody's browser for a lobby that is not
+	# listening is a row that fails when it is pressed, and nothing on THIS machine would
+	# ever show it -- so the only place the fault appears is the other player's screen.
+	_pick_role(1, SkirmishScreen.Role.PLAYTEST_AI)
+	assert_false(screen._beacon.is_advertising())
+
+
+func test_the_beacon_counts_chairs_and_not_heads() -> void:
+	# What a browser reads to decide whether a lobby is worth pressing. A CLOSED slot is
+	# in neither number: it is room on the map and not a seat, which is what closing it
+	# means -- so eight slots with six closed advertises "1 / 2" and not "1 / 8".
+	_pick_count(8)
+	_pick_role(1, SkirmishScreen.Role.OPEN)
+	var cfg := screen.build_config()
+	assert_eq(cfg.player_ids.size(), 2, "six of the eight are closed by default")
+	assert_eq(screen.unfilled_slots(), 1, "and the open one is empty")
+
+	var wire := LanBeacon.payload_for(cfg, screen.host_name(),
+			cfg.player_ids.size() - screen.unfilled_slots(), screen.host_port)
+	assert_eq(int(wire["slots"]), 2)
+	assert_eq(int(wire["taken"]), 1, "the human; the open chair is not a head")
+
+
+func test_the_host_name_is_never_blank_on_the_wire() -> void:
+	# A host with an empty name is a browser row with nothing in its first column, and the
+	# fallback there is the bare address -- which is what a host looked like before this
+	# field existed and is worse than the machine name it started with. So the fallback
+	# lives at the one place the name is READ, rather than in the field where it would
+	# fight the player's own backspace.
+	assert_ne(screen.host_name(), "", "it opens on the machine's own name")
+	screen._name_field.text = "   "
+	assert_eq(screen.host_name(), LanBeacon.default_host_name(),
+			"a cleared field falls back rather than advertising nothing")
+	screen._name_field.text = "Kitchen phone"
+	assert_eq(screen.build_config().host_name, "Kitchen phone",
+			"and it travels on the config, which is what the beacon reads")
+
+
+func test_the_empty_list_distinguishes_quiet_from_broken() -> void:
+	# A blank panel is indistinguishable from a broken page, and "there are no hosts" and
+	# "this device never opened a socket" want completely different things done about them.
+	screen._browser_button.pressed.emit()
+	var said := ""
 	for label in _labels_in(screen._browser):
-		if label.text.to_lower().contains("wireframe"):
-			said = true
-	assert_true(said, "the page announces itself as a wireframe")
+		if label.text.to_lower().contains("listening for hosts"):
+			said = label.text
+	assert_ne(said, "", "the empty list says what it is waiting for")
+	assert_true(said.to_lower().contains("join field"),
+			"and names the way in that always works: %s" % said)
 
 
 func test_all_three_panels_wear_the_dragon_frame() -> void:
@@ -878,6 +985,31 @@ func test_the_turned_plate_is_sized_from_the_diamonds_own_geometry() -> void:
 
 
 ## Every PanelContainer under `node`, depth first.
+## Put a host in the browser's table the way an arriving datagram would.
+##
+## THROUGH `LanBeacon.encode`/`decode`, not by hand, so the row under test is the shape a
+## real beacon produces -- including the cap and the strip. What is skipped is only the
+## socket, which `tests/net/test_lan_discovery.gd` covers with two real ones.
+func _hear_a_beacon(host: String, address: String, port: int) -> void:
+	var lan := screen._browser.browser()
+	var row := LanBeacon.decode(LanBeacon.encode({
+		"aod": LanBeacon.VERSION, "origin": "test-%s" % address, "name": host,
+		"map": int(MapGenerator.Type.FOREST), "w": 96, "h": 96,
+		"mode": int(MatchConfig.Mode.LAST_MAN_STANDING), "age": 1,
+		"slots": 2, "taken": 1, "port": port,
+	}), address)
+	row["at"] = Time.get_ticks_msec()
+	lan._hosts[row["origin"]] = row
+	lan.poll()
+
+
+func _first_browser_row() -> Button:
+	for child in screen._browser._rows.get_children():
+		if child is Button:
+			return child
+	return null
+
+
 func _labels_in(node: Node) -> Array[Label]:
 	var out: Array[Label] = []
 	for child in node.get_children():

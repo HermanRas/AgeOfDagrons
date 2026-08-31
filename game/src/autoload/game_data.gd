@@ -847,6 +847,22 @@ func age_count() -> int:
 	return _ages.size()
 
 
+## "II. Ember" -- the numeral and the name, which is what `ages.json`'s own note says a
+## place with room for prose should show (the HUD badge takes the numeral alone because
+## it has no room for words).
+##
+## HERE RATHER THAN IN THE LOBBY, where it started life as `SkirmishScreen._age_label`.
+## The server browser has to render an age that arrived off a beacon, and a second copy of
+## four lines is how the two would come to disagree about whether "Age 2" or "II. Ember"
+## is what this game calls it. Out of range answers a plain "Age n" -- the number is
+## always true, and this is fed by the network.
+func age_label(index: int) -> String:
+	var def := age(index)
+	if def == null:
+		return "Age %d" % index
+	return "%s. %s" % [def.numeral, def.name]
+
+
 func unit_ids() -> Array[StringName]:
 	return _sorted_keys(_units)
 

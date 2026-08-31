@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_lan_discovery.gd" id="1"]
+
+[node name="PreviewLanDiscovery" type="Node"]
+script = ExtResource("1")

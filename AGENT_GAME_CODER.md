@@ -108,6 +108,11 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_garrison.tscn   # 4.8/4.9, six screenshots
 & $godot --path game res://dev_preview/preview_touch_controls.tscn  # can a THUMB use it?
 
+# LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag (§7).
+# Start the beacon first; it waits. The exit code is the answer.
+& $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
+& $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role browse
+
 # The facing trio — how a re-baked atlas gets checked (see §7, the mirror item)
 & $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
 & $godot --path game res://dev_preview/preview_combat_facing.tscn  # eight attackers in a ring
@@ -328,6 +333,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A GUARD OF THE SHAPE `if Net.host() != null and <rule>` IS A RULE THAT IS OFF ON EVERY CLIENT** | And it survives review because solo play, where every test and every preview lives, has the local player AS the host — so the wrong branch is the one nobody takes. Three of `GameScene`'s polite refusals shipped that way and were dead for players 2..8 (owner, 2026-08-30). **Whatever a client needs is almost certainly already in `player_state`**: stock, population, age, researched techs, and now `defeat_reason`. `GameView.stock_of` and `_my_stock`/`_has_pop_room` are the client-safe readers. |
 | **A WATER UNIT ON LAND CANNOT BE ORDERED TO DO ANYTHING, and reports nothing** | `validate()` passes, `PathService` returns an empty route because there is no start node for its domain, the task is retired on tick 1, and the log reads "order accepted" while the ship stands still. **The debug map has ZERO water tiles** — measured, 64×64 — so any fixture with a ship paints a channel and then calls `PathService.rebuild`. `AStarGrid2D` holds solidity IN THE GRID, not in the query, so terrain written behind its back does not exist to pathing. `test_transport._make_a_coast` is the pattern. |
 | **A BALANCE NUMBER WRITTEN INTO AN ASSERTION IS A TEST THAT FAILS WHEN THE OWNER ASKS FOR A BALANCE CHANGE** | Doubling `res.tree` broke five tests and **not one was about wood**: two literal `40`s and a tick budget in `test_gather` (generous at four round trips, short at eight) and two in `test_game_data`. Derive from the def — `tree.starting_amount`, `amount_for(size_class_count() - 1)` — and assert the SHAPE (three classes, bigger holds more) rather than the figures. |
+| **`JSON.parse_string()` PUSHES AN ENGINE ERROR PER FAILURE and `JSON.new().parse()` does not** | Irrelevant on a config file and a hole on a socket: `LanBeacon.decode` reads whatever the network sends it, so the static helper turns one malformed datagram a millisecond into a log somebody can fill from across the room. Found by a single deliberately malformed test fixture printing "Parse JSON failed" into an otherwise clean run. **Wherever untrusted bytes meet a parser, check which form of it talks.** |
+| **A DISABLED CONTROL'S REASON FOR BEING DISABLED IS NOT THE SAME FACT AS ITS BEING DISABLED** | `ServerBrowserPanel` set JOIN's `disabled` from "is there a sentence to print", which is right in three of its four states and wrong in the one it lives in: an empty list needs no sentence — the page already says so at length in the middle of itself — so JOIN came out **enabled with nothing to join**. Only one of the two facts is always expressible; compute them separately. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -348,7 +355,7 @@ widened together.
 | the sim | `Diplomacy.allied` + `MatchConfig.teams` → `SimPlayer.team` → `SimWorld.teams` |
 | the four predicates | `Diplomacy.is_enemy`, `.is_enemy_fact`, `CombatSystem._is_at_war_with`, `AISystem._nearest_enemy` |
 | the win condition | counts SIDES, and `SimWorld.winner_team` beside `winner_id` |
-| the server browser | `ServerBrowserPanel`, a wireframe, behind the lobby's SERVERS button |
+| the server browser | `ServerBrowserPanel`, behind the lobby's SERVERS button — a wireframe that day, **live the same day** (see below) |
 
 - ⚠️ **THE TEAM ARGUMENT IS REQUIRED, WITH NO DEFAULT, AND THAT IS THE SAFETY PROPERTY.**
   `Diplomacy.is_enemy(e, player_id, teams)` could have taken `teams := {}` and every
@@ -439,14 +446,99 @@ widened together.
   clipped away rather than overflowing where it could be seen. A clipped control needs
   its own `custom_minimum_size`, or no `clip_text` at all where every item is one
   character. **Both were invisible to the suite and obvious in the screenshot.**
-- **THE SERVER BROWSER IS A WIREFRAME AND THE PAGE SAYS SO ON ITS OWN FACE**, because the
-  owner reviews by screenshot. Its three rows are a labelled layout sample using RFC 5737
-  documentation addresses; REFRESH, JOIN and the filter toggle are all disabled. What a
-  real one needs — a UDP beacon rather than a master server, a host NAME (the one field
-  `MatchConfig` has not got), a join that ends in the lobby's existing join, and a
-  refresh that is a rolling window rather than a clear — is written out in order in the
-  class header. It also uses the four `net_*.png` icons that had been committed and
-  referenced by nothing since the UI overhaul.
+- **THE SERVER BROWSER WAS A WIREFRAME FOR ABOUT AN HOUR AND IS NOW LIVE** — see the next
+  section. The wireframe's own header listed four things a real one needed, in order, and
+  all four landed; that list is worth copying as a habit, because writing it down while
+  the page was still a picture is what made the wiring pass a matter of following it.
+
+### LAN DISCOVERY — 2026-08-31, PLAN.md 12.1b's discovery half
+
+Typing an IP was the friction point on the hardware playtests and it is now optional.
+Owner: *"we built out the wireframe for server browser, lets wire it up and make it live"*.
+
+| | |
+|---|---|
+| the shout | `LanBeacon` — a JSON datagram at `255.255.255.255:27016` (`Net.PORT + 1`) once a second, while a slot is advertised |
+| the listen | `LanBrowser` — binds the same port, holds a **rolling window** over what it hears |
+| the page | `ServerBrowserPanel` — six columns, a free-slot filter, REFRESH and JOIN |
+| the new field | `MatchConfig.host_name`, a GAME SETUP row, `LanBeacon.default_host_name()` for the default |
+| the proof | `tests/net/test_lan_discovery.gd` (two real sockets, one process) and `dev_preview/preview_lan_discovery.tscn` (two processes, real broadcast) |
+
+- ⚠️ **THERE IS NO MASTER SERVER AND THERE MUST NOT QUIETLY BECOME ONE.** An internet
+  browser is a service somebody has to run and pay for; this phase's multiplayer is two
+  devices on a sofa. `LanBeacon`'s header says so in the file, deliberately, because the
+  next person asked for "servers on the internet" will start in that file.
+- ⚠️ **A BEACON IS A DATAGRAM AND DATAGRAMS ARE LOST**, which is why a host stays listed
+  for `WINDOW_MSEC` (4 s, four beacons) after its last one and why **REFRESH starts the
+  window again rather than clearing the list**. A list that cleared and repopulated would
+  read as a flicker, and a row that vanished the one second a packet went missing reads as
+  a host dropping out — which is the exact thing a player opens this page to learn.
+- ⚠️ **THE ADDRESS IS THE TRANSPORT'S, NEVER THE PAYLOAD'S.** `LanBrowser` dials
+  `PacketPeerUDP.get_packet_ip()`, so a beacon cannot name somebody else's machine and
+  have a stranger's browser dial it. Same shape as `Net._recv_colour_request` resolving
+  the asker's slot from the peer id rather than from what the packet claims. Everything
+  else in a beacon is a string a stranger wrote: `LanBeacon._clean` caps it and strips
+  control characters, and **ids travel while labels do not** — `map`, `mode` and `age` are
+  the integers `MatchConfig` holds and the browser resolves them with its own tables, so
+  a host cannot put arbitrary text in a column.
+- ⚠️ **`JSON.parse_string()` PUSHES AN ENGINE ERROR FOR EVERY PACKET IT CANNOT READ**, and
+  this socket is open to whatever the network sends it — so one malformed datagram a
+  millisecond is a log somebody can fill from across the room. `JSON.new().parse()`
+  returns the error and says nothing. Caught by a single deliberately malformed fixture
+  printing "Parse JSON failed" into an otherwise clean suite run. **Anywhere untrusted
+  bytes meet a parser, check which form of it talks.**
+- **A BROWSER REFUSES ITS OWN PROCESS**, keyed on `LanBeacon.origin()` (process id plus a
+  microsecond stamp). `Net.has_session()` is true for a host the moment a slot is opened
+  and this page is reached FROM that screen, so a host's own broadcast comes straight back
+  on every platform that loops broadcast to local sockets — and a browser listing the
+  machine it is running on has already lost the player's trust. `include_self` exists for
+  the one-process test and for nothing else.
+- ⚠️ **JOIN'S BEING OFF AND ITS REASON FOR BEING OFF ARE TWO FACTS, AND ONLY ONE OF THEM
+  IS ALWAYS EXPRESSIBLE.** The first version set `disabled` from "is there a sentence to
+  print", which is wrong in the state the page spends most of its life in: an empty list
+  needs no sentence — the list says so itself, at length, in the middle of the page — so
+  JOIN came out **enabled with nothing to join**. The suite caught it on the first run.
+- **THE JOIN IS THE LOBBY'S JOIN.** The page emits `join_requested` and stops;
+  `SkirmishScreen` fills its own field and presses its own button. A browser with its own
+  copy of `Net.join` would rediscover every failure the lobby already words — already in a
+  session, a refused socket, the missing Android INTERNET permission. `_on_join_pressed`
+  grew an optional `:port` for this, and **a colon is not a port separator in an IPv6
+  literal**: `fe80::1` would otherwise be torn into host `fe80:` on port 1.
+- **THE BEACON'S LIFE IS THE ADVERTISED SLOT'S LIFE, AND BOTH ENDS MATTER.** It starts
+  when the lobby starts listening (one act, exactly as opening the socket is one act — no
+  separate "make me visible" button to forget) and **stops at `_on_start_pressed`**,
+  because a match in progress cannot be joined: `Net.start_match` builds the world and a
+  peer arriving after it has no map. A beacon outliving its lobby is a row that fails when
+  pressed, **and nothing on the hosting machine would ever show it** — the fault appears
+  only on the other player's screen. `preview_skirmish._report_beacon` warns on both ends.
+- **`taken` IS CHAIRS, NOT HEADS.** A CLOSED slot is in neither the numerator nor the
+  denominator: it is room on the map and not a seat, so eight slots with six closed
+  advertises "1 / 2".
+- **THE LAST COLUMN IS "SEEN", AND IT WAS "PING" IN THE WIREFRAME.** A beacon is one-way,
+  so there is no round trip to time and a latency figure would have to be invented — on a
+  page whose entire history is about not inventing things. Seconds since the last beacon
+  is real, is the number the rolling window turns on, and answers what a ping column is
+  actually asked: *is this host still there*.
+- **THE PREVIEW SENDS THREE REAL DATAGRAMS RATHER THAN DRAWING THREE FIXTURE ROWS**
+  (`preview_skirmish._send_sample_beacons`), which is what the wireframe's `SAMPLE_ROWS`
+  constant said had to happen the day discovery landed. The origins are rewritten so the
+  page's own refuse-my-own-process rule stays ON in the photograph — turning it off for a
+  screenshot would be photographing the page with its safety catch off.
+- ⚠️ **THE ONE LINE NO TEST IN THE SUITE REACHES IS `set_broadcast_enabled(true)`.** Two
+  `PacketPeerUDP`s in one process are two real sockets (unlike two ENet peers — see
+  `test_net_remote`'s header), so the suite's round trip is genuine; it just goes over
+  127.0.0.1. Without the flag the OS refuses a datagram to 255.255.255.255 outright and
+  **both machines see a browser that finds nothing with no error anywhere near it**.
+  `preview_lan_discovery.tscn --role beacon|browse` is the two-process check, and it is
+  also the two-machine bring-up.
+- 📝 **THE HOST NAME ROW MADE THE LOBBY'S KNOWN FOLD ONE ROW WORSE.** GAME SETUP and MAP
+  SETUP already wanted ~700 px in a ~545 px column and already scrolled; this adds ~40.
+  Flagged rather than fixed, the same way the fold itself is — see `_PREVIEW_HEIGHT`, and
+  note that shrinking the map picture is not the lever.
+- 📝 **NOT DONE, DELIBERATELY:** the joined client's invitation line still says
+  *"from I. Age of Ash"* and does not name the host, even though `host_name` now travels
+  on the lobby config. It is a one-line format change on an already-long line and the
+  browser shows the name before you dial; worth doing next to the line, not to the field.
 
 ### THE FOUR-DEVICE PLAYTEST — 2026-08-30, six findings, all six closed
 
@@ -523,9 +615,9 @@ and civilian plus seven fauna), all footprints measured (each baked atlas resolv
 back through `attribution.actor` to its 0 A.D. template, parent chain walked to
 `<Obstruction><Static>`, max taken per axis across the four ages).
 
-**361 atlases staged.** 95 test files (`test_*.gd` under `game/tests/`, counted on disk),
-**1826 tests, all passing** — measured 2026-08-30 after the four-device playtest fixes,
-not quoted.
+**361 atlases staged.** 96 test files (`test_*.gd` under `game/tests/`, counted on disk),
+**1877 tests, 210,647 assertions, all passing** — measured 2026-08-31 after LAN discovery
+landed, not quoted.
 `tools/licence_audit.py`: **PASS, 361 recipes and 150 shipped asset files.**
 **RE-MEASURE RATHER THAN TRUSTING THIS LINE**; it is the first thing in the file to rot,
 and every previous figure here (1474/83, 1417/82, 1395/82, 1353/80, 1272/78, 1232/76,

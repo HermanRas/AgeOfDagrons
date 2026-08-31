@@ -1679,7 +1679,7 @@ Core mobile mechanic; needed testing under real thumb use, so it shipped in MVP.
 | # | Item | Tag |
 |---|---|---|
 | 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
-| 12.1b | LAN discovery and reconnect. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
+| 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is still open.** *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
 | 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played.<br><br>**The spec now exists: `AI_Player_difficulty.md`**, committed 2026-08-23. It is the owner's, and it settles what each tier does rather than leaving it to be invented later — five tiers, separated along four axes that are all data or existing systems rather than new cleverness: **when it attacks** (never / 10 min / 7 min / once its economy is up), **how far it ages up** (2 / 2 / 3 / 4 / 4), **how many towers it may build** (0 / 1 / 5 / unlimited + castles), and **what it starts with** (Unfair opens with 8 villagers, 2 swordsmen and a scout).<br><br>Two things to know before building it. **The phase-9 gate LIFTED on 2026-08-29:** every tier from Easy up says "can use tech tree upgrades", and 9.3 built them — 27 technologies and a `ResearchCommand` waiting to be emitted. So a tier's tech behaviour is now a rule to write rather than a system to build, and ⚠️ **the first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching. And **Passive is already real**, so the spec's cheapest win is `Normal`, which differs from the shipped Easy only in an attack timer, an age cap and a tower count | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 | |
@@ -1763,7 +1763,22 @@ rule the view depends on — and then needing reliability after all. Deliberatel
 
 ##### Still open
 
-- **12.1b LAN discovery and reconnect.** Typing an IP was the friction point on hardware.
+- ✅ **LAN discovery is DONE, 2026-08-31.** Typing an IP was the friction point on
+  hardware and it is now optional: a lobby with an advertised slot broadcasts a small
+  `LanBeacon` datagram on `Net.PORT + 1` once a second, and the lobby's SERVERS button
+  opens a `ServerBrowserPanel` that lists whoever answers and dials one. **No master
+  server, and the beacon's header argues why there must not quietly become one** — an
+  internet browser is a service somebody has to run and pay for, and this phase's
+  multiplayer is two devices on a sofa. Four things worth knowing before touching it:
+  a host stays listed for four beacons' worth of silence, because a datagram is allowed
+  to go missing and a row that blinks reads as a host dropping out; JOIN goes through
+  `SkirmishScreen._on_join_pressed` rather than a second call into `Net.join`, so the
+  refusals the lobby already words are worded once; `MatchConfig.host_name` is the one
+  field the format needed that nothing had, and it is provenance rather than simulation;
+  and a browser refuses beacons from its own process, because `Net.has_session()` is true
+  for a host the moment a slot is opened and this page is reached from that very screen.
+- **12.1b's other half, RECONNECT, is still open.** A dropped peer concedes
+  (`SimPlayer.defeat_reason`, 12.1e) and there is no way back into a match.
   *Desync detection is retired* — `Net` has no `SimWorld` on a client and `state_hash()`
   appears only in tests, so with one authoritative sim and full snapshots there is no
   second simulation to diverge from.
@@ -1937,7 +1952,7 @@ flow (4.13), roaming and fleeing (6.1b), herding (6.5), fishing (6.5).
 | 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | 2.4c Save map | Medium | Low-medium | §11.3 |
-| 12.1b LAN discovery | Medium | Low | Typing an IP was the friction point on hardware |
+| 12.1b reconnect | Medium | Medium | LAN **discovery** landed 2026-08-31 and closed the friction point (typing an IP). Getting back INTO a match after a drop is what is left, and it is the harder half: a returning peer needs the config, a full snapshot and its old player id |
 | 12.3 Campaign | Medium | Medium | The screen exists as a placeholder and PLAY opens it |
 | 12.4 Save/load and replays | Medium | Medium | Replay record/play already exists as a test fixture (0.7) |
 | 4.12 Stances, 4.14 formations, 4.10 abilities, 5.3 upgrades | Medium | Medium each | 5.3 is half-built: the gate upgrade is the first real one |
@@ -2228,7 +2243,8 @@ too as of `c64ccef` (its wagon was rebaked one level down so the ox-cart rig win
 at the cost of its four engineers), and colour is UNMEASURED on all three, so all start
 `"colours": false`. **Nothing is waiting on art here any more.**
 
-**Then, in no strongly forced order:** 2.4c the map save format; 12.1b LAN discovery; 12.3
+**Then, in no strongly forced order:** 2.4c the map save format; 12.1b reconnect (discovery
+landed 2026-08-31); 12.3
 campaign; **Phase 14, the AI's enemy-blindness** (which is a rebuild of 12.2b's condition
 vocabulary, not a bug fix, and wants a game whose balance is settled first); and 13.x dragons
 once the RTS is a game.

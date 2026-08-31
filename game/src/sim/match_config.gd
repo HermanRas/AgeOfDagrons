@@ -84,6 +84,24 @@ var map_type: MapGenerator.Type = MapGenerator.Type.RANDOM
 ## and not the age's. It unlocks the ladder, which is what an age is.
 var starting_age: int = 1
 
+## WHAT THIS HOST IS CALLED, for the server browser (2026-08-31).
+##
+## **THE ONE FIELD DISCOVERY NEEDED THAT NOTHING HAD.** Until this existed a host was an
+## IP address, and a browser listing four addresses is a browser nobody can choose from.
+##
+## PROVENANCE, LIKE `seed` AND `map_type`, NOT SIMULATION. Nothing in `src/sim/` reads
+## it, it is not in `state_hash()`, and two clients disagreeing about it changes nothing
+## about the match -- which is precisely why it may live here: `to_dict()` is the one
+## description of a session that already travels to both the lobby and the beacon, and a
+## second channel carrying the host's name is a second thing that can say something
+## different from the first.
+##
+## EMPTY IS LEGAL and means "nobody typed one", which is every debug factory, every test
+## fixture and every config recorded before this existed. `LanBeacon.default_host_name()`
+## is what the lobby fills it with; a browser showing an empty name falls back to the
+## address, which is what a host was called before.
+var host_name: String = ""
+
 ## Which slots are bots, position for position with `player_ids` (PLAN.md 12.2a).
 ## EMPTY means every player is human, which is what every debug factory here wants.
 ## Read by `SimWorld.setup()` into `SimPlayer.is_ai`.
@@ -176,6 +194,7 @@ func to_dict() -> Dictionary:
 		"seed": seed,
 		"map_type": int(map_type),
 		"starting_age": starting_age,
+		"host_name": host_name,
 		# null for the fixed debug map, which is integer code and identical everywhere.
 		"map_data": map_data.to_dict() if map_data != null else null,
 	}
@@ -227,6 +246,10 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	# match that host is actually running. Same forward-compatibility shape as
 	# `ai_levels` above, and for the same reason.
 	c.starting_age = int(d.get("starting_age", 1))
+	# Absent from a host built before the browser existed, which reads as "nobody typed
+	# one" -- and that is exactly what such a host is. Same forward-compatibility shape as
+	# `ai_levels` and `teams` above, and for the same reason.
+	c.host_name = String(d.get("host_name", ""))
 
 	var md = d.get("map_data")
 	if md != null and md is Dictionary:

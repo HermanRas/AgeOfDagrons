@@ -249,6 +249,21 @@ var _autoready := false
 ## the tests could not have it. The suite now hosts somewhere nobody else would.
 var host_port: int = Net.PORT
 
+## The port the beacon shouts at and the browser listens on. `LanBeacon.PORT` in the game,
+## always, and settable for `host_port`'s reason: both halves of discovery bind real
+## sockets, and a suite that took the game's own discovery port would fight the game the
+## owner has open on this machine exactly as it once did over 27015.
+##
+## ⚠️ **IT HAS TO REACH BOTH HALVES OR IT REACHES NEITHER USEFULLY.** A test that moved
+## only the listener would have a beacon shouting at 27016 and nobody there, which passes
+## as "no hosts found" -- the failure this whole page's empty state exists to tell apart
+## from a real one.
+var discovery_port: int = LanBeacon.PORT:
+	set(value):
+		discovery_port = value
+		if _browser != null:
+			_browser.discovery_port = value
+
 ## Slot index -> the peer id standing in it. Only ever holds OPEN slots.
 ##
 ## Kept here rather than asked of `Net.peer_players()` on demand because that map is
@@ -294,11 +309,34 @@ var _setup_column: ScrollContainer
 var _tech_tree: TechTreePanel
 var _tech_button: Button
 
-## The server browser wireframe (2026-08-31), opened over the lobby by the nav button.
-## Held for the tech tree's reason: a preview and a test both want to open it without
-## walking the child list looking for it.
+## The server browser (2026-08-31), opened over the lobby by the nav button. Held for the
+## tech tree's reason: a preview and a test both want to open it without walking the child
+## list looking for it.
 var _browser: ServerBrowserPanel
 var _browser_button: Button
+
+## THIS DEVICE SAYING "I AM HOSTING", once a second, while a slot is advertised
+## (2026-08-31). The other end of the browser above, and the reason a host is findable at
+## all -- `LanBeacon`'s header carries the argument for a broadcast rather than a master
+## server.
+##
+## ⚠️ **ITS LIFE IS EXACTLY THE ADVERTISED SLOT'S LIFE, AND BOTH ENDS OF THAT MATTER.** It
+## starts when the lobby starts listening, because a beacon for a socket nobody has bound
+## is a row that fails when pressed. It stops when the match starts, because a match in
+## progress cannot be joined -- `Net.start_match` builds the world and a peer arriving
+## after that is a peer with no map -- so a beacon outliving the lobby would be a listing
+## for a game nobody can get into. `_refresh_lobby` is where both are decided, since every
+## path that changes anything ends there.
+var _beacon: LanBeacon
+
+## What this host is called in somebody else's browser (2026-08-31).
+##
+## ⚠️ **THE ONE FIELD DISCOVERY NEEDED THAT NOTHING HAD.** Before this, a host was an IP
+## address -- and a browser listing four addresses is a browser nobody can choose from.
+## `ServerBrowserPanel`'s wireframe header named it as the single new field and said it
+## "wants to be a lobby setting beside the seed"; it is in GAME SETUP rather than MAP
+## SETUP, because it describes the SESSION and the seed describes the map.
+var _name_field: TouchLineEdit
 
 ## The plate around the map picture, turned 45° to sit on the diamond. Held because its
 ## size is recomputed from the box's `resized` -- see `_fit_map_frame`.
@@ -408,6 +446,13 @@ func _init() -> void:
 	# the order between THEM is arbitrary; what is not arbitrary is that both go in
 	# before the colour picker, which must draw over everything. See the note above.
 	_browser = ServerBrowserPanel.new()
+	# ⚠️ **THE BROWSER'S JOIN IS THIS SCREEN'S JOIN**, which is the fourth of the four
+	# things its wireframe header said a real one needs. It emits an address and stops;
+	# everything after that is the path a typed address already takes, so the refusals the
+	# lobby knows how to word -- already in a session, a refused socket, the missing
+	# Android INTERNET permission -- are worded once, here, and a browser cannot grow its
+	# own quietly different copy of any of them.
+	_browser.join_requested.connect(_on_browser_join_requested)
 	add_child(_browser)
 
 	# LAST CHILD, so it draws over the page it covers. Added to the screen rather
@@ -416,6 +461,13 @@ func _init() -> void:
 	_colour_picker.colour_chosen.connect(_on_colour_chosen)
 	_colour_picker.cancelled.connect(func() -> void: _picking_slot = -1)
 	add_child(_colour_picker)
+
+	# A PLAIN Node CHILD, not a control: it is a socket and a timer, and it is added to
+	# the screen so it is freed with it. Nothing broadcasts until `_refresh_lobby` says
+	# this device is hosting -- see the field's own note, and `LanBeacon.advertise` on why
+	# the first packet waits for a frame rather than going out on the call.
+	_beacon = LanBeacon.new()
+	add_child(_beacon)
 
 	regenerate()
 
@@ -504,12 +556,12 @@ func _build_join_column() -> Control:
 
 ## The two side doors: somewhere to find a host, and something to read while waiting.
 ##
-## SERVER BROWSER OPENS A WIREFRAME (project owner, 2026-08-31: *"lets build out a
-## wireframe for server browser / server discovery"*). It was a disabled placeholder,
-## on the standing rule that a control wired to nothing must not look like one that
-## works -- and that rule has not been relaxed, it has been satisfied differently:
-## the button now opens a page, and the PAGE is what says it discovers nothing.
-## `ServerBrowserPanel`'s header carries what a real one needs, in order.
+## SERVER BROWSER FINDS HOSTS (project owner, 2026-08-31: *"lets build out a wireframe
+## for server browser / server discovery"*, then *"lets wire it up and make it live"* the
+## same day). It went disabled placeholder -> labelled wireframe -> live in three steps,
+## and the standing rule was never relaxed at any of them: a control wired to nothing must
+## not look like one that works. `ServerBrowserPanel`'s header records which of its four
+## wireframe promises landed where.
 func _build_doors_column() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -519,7 +571,7 @@ func _build_doors_column() -> Control:
 	# label came out as "SERVER BROWSE" -- `clip_text` cuts, it does not shrink, so a
 	# label that does not fit is a label with a letter missing rather than a smaller one.
 	_browser_button = _nav_button("SERVERS", _on_browser_pressed)
-	_browser_button.tooltip_text = "Server browser — a wireframe; discovery is not built yet"
+	_browser_button.tooltip_text = "Server browser — find a host on this network"
 	row.add_child(_browser_button)
 
 	_tech_button = _nav_button("TECH TREE", _on_tech_tree_pressed)
@@ -565,10 +617,28 @@ func _on_tech_tree_pressed() -> void:
 	_tech_tree.open()
 
 
-## Open the server browser over the lobby (2026-08-31). Nothing is passed to it because
-## it reads nothing yet -- see `ServerBrowserPanel`, which is a wireframe and says so.
+## Open the server browser over the lobby (2026-08-31). Nothing is passed to it: it binds
+## its own socket on `open()` and reads the network, not this screen.
 func _on_browser_pressed() -> void:
 	_browser.open()
+
+
+## A row in the browser was picked and JOIN pressed. **INTO THE FIELD AND THROUGH THE
+## REAL BUTTON**, which is the fourth thing `ServerBrowserPanel`'s header asked for: there
+## is one join path, so there is one set of refusals and one place they are worded.
+##
+## The page closes FIRST. `_on_join_pressed` writes to `_lobby_status`, which lives in the
+## chat frame underneath this page -- so leaving the browser open would put the answer to
+## the press behind the thing that was pressed, including "join failed", which is the one
+## a player most needs to read.
+##
+## The port is put in the field only when it is not the default. A player who came here to
+## avoid typing an address should not be handed one with a colon in it to wonder about,
+## and `Net.PORT` is what `_on_join_pressed` dials anyway.
+func _on_browser_join_requested(address: String, port: int) -> void:
+	_browser.close()
+	_join_field.text = address if port == Net.PORT else "%s:%d" % [address, port]
+	_on_join_pressed()
 
 
 func _heading(text: String) -> Label:
@@ -805,6 +875,34 @@ func _fit_map_frame() -> void:
 func _build_game_setup() -> Control:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
+
+	# WHAT THIS DEVICE IS CALLED IN SOMEBODY ELSE'S SERVER BROWSER (2026-08-31), and the
+	# first row because it is the only setting on this screen that is about the HOST
+	# rather than about the match.
+	#
+	# A `TouchLineEdit` for `_build_join_column`'s reason and not as a precaution: this
+	# project turns mouse emulation off, so a plain `LineEdit` never takes focus from a
+	# finger and never raises a keyboard -- the bug that blocked the join field, arriving
+	# again the moment a second field was added. **It carries the same unverified risk as
+	# the join field**: a landscape Android keyboard covers roughly the bottom two thirds,
+	# and this row is in a column that already scrolls.
+	#
+	# Pre-filled from the machine rather than left blank, because a blank one is a browser
+	# row with nothing in its first column, and nobody renames a device they have not
+	# noticed. `LanBeacon.default_host_name` is where "what is this machine called" lives.
+	_name_field = TouchLineEdit.new()
+	_name_field.text = LanBeacon.default_host_name()
+	_name_field.max_length = LanBeacon.MAX_NAME
+	_name_field.placeholder_text = "shown in other players' server browser"
+	_name_field.custom_minimum_size = _PICKER_MIN
+	# PUBLISHES ON EVERY KEYSTROKE, unlike the seed box beside it. There is no press to
+	# hang it off -- a field has no button -- and the cost of being wrong is a lobby
+	# rebroadcast per letter, which is a 20-40 KB reliable message. So `text_submitted`
+	# and focus loss are what commit it, and typing alone changes only the beacon.
+	_name_field.text_changed.connect(_on_host_name_typed)
+	_name_field.text_submitted.connect(func(_t: String) -> void: _publish_lobby())
+	_name_field.focus_exited.connect(_publish_lobby)
+	column.add_child(_setting_row("Host name", _name_field))
 
 	_count_picker = OptionButton.new()
 	_count_picker.custom_minimum_size = _PICKER_MIN
@@ -1224,7 +1322,27 @@ func build_config() -> MatchConfig:
 	cfg.map_size = _data.size if _data != null else MatchConfig.DEBUG_MAP_SIZE
 	cfg.mode = _mode
 	cfg.starting_age = _starting_age
+	# WHAT THIS HOST IS CALLED, which travels for two audiences: the beacon reads it out
+	# of here, and so does a joined client, whose invitation line can name whose match it
+	# is being asked into rather than an address. It is provenance and nothing simulates
+	# it -- see `MatchConfig.host_name`.
+	cfg.host_name = host_name()
 	return cfg
+
+
+## What to call this device, with the field's text winning and the machine's own name
+## standing in for an empty one.
+##
+## NEVER BLANK. A host that cleared the field would broadcast an empty first column, and
+## `ServerBrowserPanel` would fall back to showing the bare address -- which is what a
+## host looked like before this existed and is worse than the machine name it started
+## with. So the fallback is here, at the one place the name is read, rather than being
+## pushed back into the field where it would fight the player's own backspace.
+func host_name() -> String:
+	if _name_field == null:
+		return LanBeacon.default_host_name()
+	var typed := _name_field.text.strip_edges()
+	return typed if not typed.is_empty() else LanBeacon.default_host_name()
 
 
 func map_data() -> MapData:
@@ -1350,11 +1468,14 @@ func _age_count() -> int:
 
 ## "II. Ember" -- the numeral and the name, which is exactly what `ages.json` says a
 ## place with room for prose should show.
+##
+## MOVED INTO `GameDataRegistry` ON 2026-08-31 and kept here as the one-line reach for it.
+## The server browser has to render an age that came off a beacon, and two copies of four
+## lines is how one screen comes to call it "II. Ember" and another "Age 2".
 func _age_label(age: int) -> String:
-	var def: AgeDef = GameDataRegistry.age(age) if GameDataRegistry != null else null
-	if def == null:
+	if GameDataRegistry == null:
 		return "Age %d" % age
-	return "%s. %s" % [def.numeral, def.name]
+	return GameDataRegistry.age_label(age)
 
 
 func _on_type_selected(index: int) -> void:
@@ -1365,6 +1486,20 @@ func _on_type_selected(index: int) -> void:
 func _on_seed_changed(value: float) -> void:
 	_seed = int(value)
 	regenerate()
+
+
+## The host's name changed under a thumb.
+##
+## **THE BEACON MOVES AND THE LOBBY DOES NOT**, and that split is the whole reason this is
+## not just `_publish_lobby`. A beacon is 200 bytes of UDP once a second and re-aiming it
+## costs nothing, so a browser two rooms away should follow the name as it is typed. A
+## lobby broadcast is the whole `MatchConfig` -- the map included, 20-40 KB, reliable --
+## AND it cancels every player's agreement (`Net.broadcast_lobby_config`), so one per
+## keystroke would clear the READY flags of everybody in the room while somebody fixes a
+## typo. Committing on Enter and on focus loss is what the two fields on this screen both
+## do; only the cost of being wrong differs.
+func _on_host_name_typed(_text: String) -> void:
+	_refresh_beacon()
 
 
 ## A new seed AND a regenerate, so the button is one press rather than "type a number,
@@ -1555,21 +1690,45 @@ func unfilled_slots() -> int:
 
 # ── lobby ───────────────────────────────────────────────────────────────────
 
+## AN OPTIONAL `:port` SINCE 2026-08-31, and it is not a convenience feature. The server
+## browser hands this function an address it heard on the wire, and a beacon carries the
+## port its host actually bound -- which is `Net.PORT` in the game and deliberately is not
+## in the suite (`test_skirmish_screen._TEST_PORT`), so a browser that could only dial the
+## default would be a browser that cannot dial the one host a test can stand up.
+##
+## ⚠️ **A COLON IS NOT A PORT SEPARATOR IN AN IPv6 LITERAL**, which is what the
+## `splittable` test is for: `fe80::1` ends in a colon and a digit and would otherwise be
+## torn into host `fe80:` on port 1. So the split happens only where what precedes the
+## colon holds no colon of its own -- an IPv4 address -- or is a bracketed IPv6 literal,
+## `[fe80::1]:27015`. A trailing colon with no digits, or a port outside 1..65535, falls
+## back to the default instead of dialling port 0: the field is typed into by hand and a
+## typo should cost a retry, not a silent failure.
 func _on_join_pressed() -> void:
-	var ip := _join_field.text.strip_edges()
-	if ip.is_empty():
+	var typed := _join_field.text.strip_edges()
+	if typed.is_empty():
 		_say("type the host's address first")
 		return
 	if _lobby != Lobby.LOCAL:
 		_say("already in a session -- go Back to leave it")
 		return
 
-	var err := Net.join(ip, Net.PORT)
+	var ip := typed
+	var port := Net.PORT
+	var mark := typed.rfind(":")
+	if mark > 0:
+		var head := typed.substr(0, mark)
+		var tail := typed.substr(mark + 1)
+		var splittable := not head.contains(":") or head.ends_with("]")
+		if splittable and tail.is_valid_int() and int(tail) > 0 and int(tail) <= 65535:
+			ip = head
+			port = int(tail)
+
+	var err := Net.join(ip, port)
 	if err != OK:
 		_say("join failed: %s" % error_string(err))
 		return
 	_lobby = Lobby.JOINED
-	_say("dialling %s:%d..." % [ip, Net.PORT])
+	_say("dialling %s:%d..." % [ip, port])
 	_refresh_lobby()
 
 
@@ -1776,6 +1935,11 @@ func _refresh_lobby() -> void:
 	_reroll_button.disabled = joined
 	_mode_picker.disabled = joined
 	_age_picker.disabled = joined
+	# A JOINED CLIENT IS NOT A HOST, so its name is a setting for a session it is not
+	# running. Left live it would read as "this is what people will see", which is the
+	# host's name and not this one -- the same lie every other control in this list was
+	# switched off for.
+	_name_field.editable = not joined
 	_count_picker.disabled = joined or _MAX_OFFERED_PLAYERS <= MapGenerator.MIN_PLAYERS
 
 	# THE PREVIEW SHOWS THE HOST'S MAP, ONCE THERE IS ONE. A joined client used to
@@ -1818,6 +1982,35 @@ func _refresh_lobby() -> void:
 	_refresh_slot_rows()
 	_refresh_chat_players()
 	_refresh_lobby_text()
+	_refresh_beacon()
+
+
+## Say "I am hosting" on the network, or stop saying it (2026-08-31).
+##
+## HERE BECAUSE EVERY PATH THAT CHANGES ANYTHING ENDS HERE, which is the invariant
+## `_refresh_lobby` already carried -- so a slot filling up, a map re-rolled, a colour
+## picked and the socket opening all move the beacon without four call sites remembering
+## to. The payload is rebuilt each time and `LanBeacon.advertise` is idempotent, so
+## "update what is being said" and "start saying it" are one call.
+##
+## ⚠️ **ONLY WHILE A SLOT IS ACTUALLY OPEN.** Not while joined -- a client is not a host --
+## and not for a plain local skirmish, which has no socket at all: a beacon for a session
+## nobody bound is a row in somebody's browser that fails the moment it is pressed. And it
+## stops at `_on_start_pressed`, because a match in progress cannot be joined.
+##
+## `taken` is `cfg.player_ids.size() - unfilled_slots()`, which is chairs with a person or
+## a bot in them out of chairs that exist. A CLOSED slot is in neither number: it is room
+## on the map and not a seat, which is exactly what closing it means.
+func _refresh_beacon() -> void:
+	if _beacon == null:
+		return
+	if _lobby != Lobby.HOSTING:
+		_beacon.stop()
+		return
+	var cfg := build_config()
+	_beacon.advertise(LanBeacon.payload_for(cfg, host_name(),
+			cfg.player_ids.size() - unfilled_slots(), host_port),
+			LanBeacon.BROADCAST_ADDRESS, discovery_port)
 
 
 ## Put the lobby's roster into the chat board's player tabs.
@@ -2107,6 +2300,14 @@ func _on_start_pressed() -> void:
 		return
 	var cfg := build_config()
 	start_requested.emit(cfg)
+
+	# ⚠️ **STOP ADVERTISING BEFORE THE WORLD EXISTS, NOT WHENEVER THIS SCREEN IS FREED.**
+	# A match in progress cannot be joined -- `Net.start_match` builds the world and a peer
+	# arriving after that has no map and no snapshot it can make sense of -- so a beacon
+	# that outlived the lobby by even the length of a scene change would be a row somebody
+	# could press. Said here explicitly rather than left to `queue_free`, which is one
+	# refactor away from being deferred past the moment it matters.
+	_beacon.stop()
 
 	if _lobby == Lobby.HOSTING:
 		# The clock stays held until every joiner reports ready (12.1d), so starting the
