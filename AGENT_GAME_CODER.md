@@ -120,10 +120,33 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   key files a second card beside the first rather than updating it. PLAN.md's §15 header
   records that its own numbering has been renumbered twice and that cross-references
   drifted both times — which is exactly why the keys are the board's and not PLAN.md's.
-- **Labels are the two-agent fence, not two boards**: `game-code` is mine, `art` is the
-  art agent's, and `owner-decision` marks the four cards that cannot move without the
-  owner. One board because *"5.7 is blocked on the art side's A.10"* is the single most
-  useful thing either agent can read here, and two projects would hide it.
+- 🚫 **I TOUCH ONLY `game-code` CARDS. I NEVER TOUCH AN `art` CARD — NOT TO MOVE IT, NOT
+  TO EDIT IT, NOT TO CLOSE IT.** The owner's instruction, 2026-09-01, and it was given
+  because the two of us were **updating over each other**: one board, two agents, and
+  both of us reading the whole thing as ours to keep current. I had also been reporting
+  the art side's progress in my own summaries, which is the same mistake one step
+  earlier — **their cards are not mine to describe either.**
+
+  **The label is the fence, and it is the WHOLE fence.** `game-code` is mine. `art` is
+  theirs. `owner-decision` and `blocked-on-art` are cross-cutting and say nothing about
+  who moves a card — read the `game-code`/`art` label beside them.
+
+  ⚠️ **A CARD THAT CHANGES HANDS IS THE OWNER'S TAG SWAP TO MAKE, NOT MINE.** When my
+  work on a card ends with the next step belonging to the art side, **say so and stop**:
+  *"card X is now the art side's — swap the tag"*. Do not relabel it, and do not move it
+  into a bucket on their behalf. Same in reverse: a card that arrives labelled `art` is
+  not mine to pick up even when the work is plainly code, until the owner has swapped it.
+
+  ⚠️ **A DUAL-LABELLED CARD IS AMBIGUOUS UNDER THIS RULE AND MUST BE REPORTED, NOT
+  GUESSED AT.** `P7-footprint` was seeded with **both** `game-code` and `art` because it
+  is a question one side owes the other, and under the fence above that is exactly the
+  card neither of us can safely touch. Flag any card carrying both labels and let the
+  owner pick one; two labels means two agents each with a defensible claim, which is the
+  conflict this rule exists to end.
+
+  One board rather than two projects is still right — *"5.7 is blocked on the art side's
+  A.10"* is the single most useful thing either agent can read here, and two projects
+  would hide it. **Read the whole board; write only your own half of it.**
 - **Do not add a status narrative to PLAN.md, PROGRESS.md, or this file.** A card that has
   moved is the report. This is the third status list this project has had and the previous
   two both drifted (`ASSET_MISSING.md`, deleted; `PROGRESS.md`, superseded).
