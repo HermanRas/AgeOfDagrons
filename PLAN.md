@@ -527,7 +527,7 @@ Systems run in this fixed order by `SimWorld.step()`:
 | `AnimationSystem` | Sets the `anim` view hint | ✅ |
 | `DeathSystem` | hp≤0 → corpse/rubble, free tiles, drop cargo, timers | ✅ |
 | `PopulationSystem` | Recount `pop_used`/`pop_cap`; owns the cap rule | ✅ |
-| `VisionSystem` | Recompute per-player fog | ✅ |
+| `VisionSystem` | Recompute per-player fog — **an ally's entities included since 2026-09-01** (§11.4a) | ✅ |
 | `WinConditionSystem` | Evaluate the active mode's victory rule | ✅ |
 | `AISystem` | Drive AI players (emits Commands like any player) | ✅ 12.2a |
 | ~~`TechSystem`~~ → `TechMods` | Research timers, stat modifiers | ✅ 9.3, **and it is not a `SimSystem`.** The timers turned out to be the production queue's — a research is an entry on it and `ProductionSystem` has counted those down since 5.4, so a second system ticking the same counter would be two owners of it. What was left is the modifiers, which are a pure function of which techs a player holds, so `TechMods` is a static resolver in the shape of `Formation` and `WallPlan` rather than a per-tick pass with nothing to do on 99.9% of ticks |
@@ -1094,7 +1094,7 @@ not the feature that was asked for.
 | 1.4 | ✅ `Credits.tscn` — a `RichTextLabel` mirroring CREDITS.md, hardcoded because CREDITS.md lives outside `res://` | `[MVP]` |
 | 1.5 | ✅ **DONE 2026-08-23** — settings, as an overlay on the menu rather than a scene of its own: it holds one thing (volume, 8.2b) and a whole screen to get back from is a poor trade for three sliders. Built in code in `main_menu.gd`, not authored into `MainMenu.tscn`, so the editor cannot silently reformat it. `Settings.tscn` in §8 stays unbuilt and this row is why | |
 | 1.6 | ✅ **DONE 2026-08-17** — `SkirmishScreen` (`src/view/skirmish_screen.gd`) + `scenes/menu/Skirmish.tscn`; PLAY now routes through it. See §11.1 | |
-| 1.7 | **Lobby and multiplayer UI — design references, committed 2026-08-23. Two of the things they show are now built; the rest is not.** Three artefacts, and they are ahead of the systems rather than behind them, which is the useful thing about them.<br><br>**`UI_Design_Lobby.png`** — the hosting lobby. What it shows that still does not exist: a **Faction** column (one civilisation is a locked v1 decision, §1 — this is 9.5 territory), a **Game Type** and **Victory Conditions** picker offering Conquest and **Regicide** (declared and inert, 11.2), a **Map Size** choice (size is currently derived from the player count, §11.2's area rule), and **in-lobby chat** (8.6 is a wireframe with no transport). What it confirms as already right: eight slots, per-slot AI difficulty, the map preview, and the four minimap corner buttons.<br><br>⚠️ **THE TEAM COLUMN IS BUILT, 2026-08-31**, and this row said for eight days that *"there is no team or diplomacy concept at all"*. There is: a one-character `–`/1/2/3/4 dropdown beside each colour swatch under a COLOUR/TEAM/TYPE heading, `MatchConfig.teams` → `SimPlayer.team` → `SimWorld.teams`, read by `Diplomacy.allied` and through it by every hostility predicate (§4.13), with `WinConditionSystem` counting **sides** rather than players (§11.1) and the minimap tinting an ally sky blue (§8.2a). **`–` is on that list because four numbers cannot give eight slots a side each**, so every slot opens unaligned and a free-for-all is what the game plays unless somebody deliberately makes a team. **Shared vision, shared control, ally repair/garrison/healing and an ally-aware AI are all deliberately OUT** — the owner's call, 2026-08-31, not an unfinished edge: *"we will not be interacting with any other player units or buildings, no garrison, no repair, no healing… happy with AI attacking opposing teams but not team members."* So an ally's entity taps to SELECT and to nothing else, and every owner-gated command stays owner-gated.<br><br>**`UI_Design_Hosting.png`** — a **server browser**: filters by map type and game type, a game-**version** filter, and a list of named servers with player counts and Playing/Lobby status. **12.1b LAN discovery is the subset of this that is planned**; the rest implies a master server, server naming and version negotiation, none of which is scoped. Worth reading before 12.1b is designed, so that LAN discovery does not paint itself into a corner this cannot grow out of. **A WIREFRAME OF IT EXISTS AS OF 2026-08-31** — `ServerBrowserPanel`, behind the lobby's SERVERS button, disabled throughout and saying so on its own face. Its header is where the four things a real one needs are written down in order, and the one that is genuinely missing from the systems is a host **NAME**: `MatchConfig` carries everything else the columns show, and a list of four IP addresses is a list nobody can choose from.<br><br>**`web/player-colour-ladder.html`** — the research behind the eight-colour palette: CIE `L*` spread so four of the eight separate by **lightness** rather than hue, dichromacy safety per pair, and the argument that A.6's tint must not be a multiply (against white it is a no-op and the player looks untinted). Cross-referenced from §9's palette and §12A A.6, which is where the shader decision lives | |
+| 1.7 | **Lobby and multiplayer UI — design references, committed 2026-08-23. Two of the things they show are now built; the rest is not.** Three artefacts, and they are ahead of the systems rather than behind them, which is the useful thing about them.<br><br>**`UI_Design_Lobby.png`** — the hosting lobby. What it shows that still does not exist: a **Faction** column (one civilisation is a locked v1 decision, §1 — this is 9.5 territory), a **Game Type** and **Victory Conditions** picker offering Conquest and **Regicide** (declared and inert, 11.2), a **Map Size** choice (size is currently derived from the player count, §11.2's area rule), and **in-lobby chat** (8.6 is a wireframe with no transport). What it confirms as already right: eight slots, per-slot AI difficulty, the map preview, and the four minimap corner buttons.<br><br>⚠️ **THE TEAM COLUMN IS BUILT, 2026-08-31**, and this row said for eight days that *"there is no team or diplomacy concept at all"*. There is: a one-character `–`/1/2/3/4 dropdown beside each colour swatch under a COLOUR/TEAM/TYPE heading, `MatchConfig.teams` → `SimPlayer.team` → `SimWorld.teams`, read by `Diplomacy.allied` and through it by every hostility predicate (§4.13), with `WinConditionSystem` counting **sides** rather than players (§11.1) and the minimap tinting an ally sky blue (§8.2a). **`–` is on that list because four numbers cannot give eight slots a side each**, so every slot opens unaligned and a free-for-all is what the game plays unless somebody deliberately makes a team. ⚠️ **SHARED VISION LANDED 2026-09-01 AND IS NOW THE ONE EXCEPTION TO THIS LIST** — an ally's eyes are your eyes, in the grid and in the snapshot both. See §11.4a for the one line it took and what it costs, and note that the owner reserved the keep-or-drop decision on it pending play. **Shared control, ally repair/garrison/healing and an ally-aware AI remain deliberately OUT** — the owner's call, 2026-08-31, not an unfinished edge: *"we will not be interacting with any other player units or buildings, no garrison, no repair, no healing… happy with AI attacking opposing teams but not team members."* So an ally's entity taps to SELECT and to nothing else, and every owner-gated command stays owner-gated.<br><br>**`UI_Design_Hosting.png`** — a **server browser**: filters by map type and game type, a game-**version** filter, and a list of named servers with player counts and Playing/Lobby status. **12.1b LAN discovery is the subset of this that is planned**; the rest implies a master server, server naming and version negotiation, none of which is scoped. Worth reading before 12.1b is designed, so that LAN discovery does not paint itself into a corner this cannot grow out of. **A WIREFRAME OF IT EXISTS AS OF 2026-08-31** — `ServerBrowserPanel`, behind the lobby's SERVERS button, disabled throughout and saying so on its own face. Its header is where the four things a real one needs are written down in order, and the one that is genuinely missing from the systems is a host **NAME**: `MatchConfig` carries everything else the columns show, and a list of four IP addresses is a list nobody can choose from.<br><br>**`web/player-colour-ladder.html`** — the research behind the eight-colour palette: CIE `L*` spread so four of the eight separate by **lightness** rather than hue, dichromacy safety per pair, and the argument that A.6's tint must not be a multiply (against white it is a no-op and the player looks untinted). Cross-referenced from §9's palette and §12A A.6, which is where the shader decision lives | |
 | 1.8 | ✅ **DONE 2026-08-30 — HOW TO PLAY.** `Help.tscn`/`help_screen.gd`, six annotated captures behind the front door's HOW TO button, which had answered with a "not available yet" toast since 1.1. **The pages carry their own instructions**, painted onto real captures of this game's HUD (`assets/HELP_Gen/` → `game/assets/ui/help/`), so this screen writes no tutorial prose that could drift out of step with the interface — when a control moves, the fix is a new capture.<br><br>**A pager, not a scroll**, which is the one decision worth defending: `Credits.tscn` scrolls because credits are a column of text, and six wide screenshots stacked in a `ScrollContainer` on a handset give each one a sixth of the height it was drawn for. **Built in code rather than authored as a `.tscn`** — the page list is data, and six near-identical `TextureRect` nodes by hand is six places to forget when a seventh capture lands. `test_help_screen` asserts, among the paging, that every page's file is actually staged under `res://`: a `PAGES` table of strings stays true when the images are missing. Order is the reading order, not the delivery order: camera, selection, commands, control groups, panels, ages | |
 
 #### 11.1 Skirmish settings (1.6) — ✅ built 2026-08-17
@@ -1161,7 +1161,7 @@ from either picture alone.
 | 2.4b | ✅ **DONE 2026-08-17** — `MapData` / `MapGenerator` / `MapValidator` in `src/sim/`, all eight changes applied; see §11.2. The `game_map_gen/` prototype is left untouched | |
 | 2.4c | **Save map.** See §11.3 | |
 | 2.4d | **Archipelago map type** — one island per player, a few sheep, no predators. See §11.6 | |
-| 2.5 | ✅ Fog of war — `VisionSystem` + snapshot filtering + `FogOverlay`. See §11.4 | |
+| 2.5 | ✅ Fog of war — `VisionSystem` + snapshot filtering + `FogOverlay`. See §11.4, and §11.4a for shared vision (2026-09-01) | |
 | 2.6 | ✅ Starting conditions: town centre, 5 villagers on distinct passable tiles, plus wood/gold/stone/food/livestock clusters placed **for the screen** as much as for the grid (iso sends `dx-dy` to screen x, so "below the town centre where the map is empty" is behind the HUD) | `[MVP]` |
 | 2.7 | Real terrain tileset (art track A.1) | |
 
@@ -1379,6 +1379,69 @@ twice puts a darker diamond grid across every explored region.
 
 **Known simplification:** a static destroyed behind the fog stops being sent rather than leaving
 AoE's stale ghost, which would need a per-player last-seen copy of every static.
+
+#### 11.4a Shared vision (12.x) — landed 2026-09-01, kept or dropped at the owner's call
+
+**An ally's eyes are your eyes.** One line in `VisionSystem._recompute` —
+`Diplomacy.allied(e.owner_id, p.id, w.teams)` where it used to read `e.owner_id != p.id`. It is
+the whole change because `allied` answers true for `a == b`, so it *subsumes* the owner check it
+replaces, and refuses any id ≤ 0, so gaia grants nobody vision. §1.7 listed this as deliberately
+out until today.
+
+**THE COST IS LINEAR IN TEAM SIZE, NOT "ROUGHLY DOUBLE"** — a team of N lights every member's
+entities N times, because each member computes the same answer independently. 8 players on
+192×192, seed 3, measured by `dev_preview/preview_vision_cost.tscn`:
+
+| layout | tile-writes per recompute | vs free-for-all |
+|---|---|---|
+| free-for-all (control) | 9,168 | 1.00× |
+| 2v2v2v2 | 18,336 | 2.00× |
+| 4v4 | 36,672 | **4.00×** |
+| 8 on one team | 73,344 | 8.00× |
+
+Free-for-all is **unchanged**, so every existing fixture, every recorded config and every solo
+match is provably unaffected — `–` on the team dropdown means team 0, and `allied` refuses it.
+
+**THE METRIC IS TILE-WRITES, NOT MILLISECONDS, AND THAT IS THE POINT.** `lit` is the count of
+indices `_reveal` marks, read off the incremental-decay cache; it is deterministic — same seed,
+same number, any machine. Wall-clock here is not evidence and this measurement re-proved it: the
+free-for-all row timed 3.27 ms before the change and 4.91 ms after, on **provably identical
+work**. A ratio of `lit` between two layouts is a fact; a ratio of ms is a rumour.
+
+⚠️ **`test_tick_cost` CANNOT MEASURE ANY OF THIS, FOR TWO SEPARATE REASONS**, both found by
+trying, and both of which would have reported the change as free:
+
+1. **`MatchConfig.debug_generated()` never sets `teams`**, and an absent entry means team 0, which
+   means no team (see `MatchConfig.teams`). **Every world that factory builds is a free-for-all**
+   — so is every fixture in `test_vision.gd` — and shared vision changes a free-for-all by
+   nothing at all.
+2. **Its per-system table cannot see `VisionSystem`.** `_per_system_ms` calls `process_tick`
+   without stepping, so `w.tick` is whatever the last step left — 5 settling + 20 sampled = **25,
+   odd** — and `VISION_INTERVAL = 2` makes `due` false, so `_recompute` returns at once, the row
+   reads ~0.00 ms and the 0.05 ms cutoff drops it. **The 17.9 ms figure in `VisionSystem`'s own
+   header predates the interval and describes nothing that test measures today.**
+
+**THE FIX IF 4× IS TOO EXPENSIVE, designed and deliberately not built: one grid per TEAM rather
+than per player.** Allied grids are identical *by construction* — same tiles, same entities, every
+tick — so a team of 4 computes the same answer four times. Per-team collapses 4.00× back to
+**1.00×**, making shared vision free rather than 4×, and each member's `p.vision` becomes an
+assignment of the shared `PackedByteArray`, which is copy-on-write and so costs nothing until
+something writes it. Equivalent rather than approximate: teams are fixed at `setup()` and allies
+light identical tiles from tick 1, so their EXPLORED sets converge immediately anyway. Not built
+because it restructures the sim's hottest system and the feature may yet be dropped — **if the
+answer is keep, do this before anything else touches the file.**
+
+Six tests in `test_vision.gd`'s `shared vision (12.x)` section, with a `_with_teams()` fixture
+because `before_each` there sets no teams either. The one worth naming is **gaia grants nobody
+vision**: a naive `teams.get(a) == teams.get(b)` would fail it, since gaia's absent entry and an
+unallied player's entry are both 0, and a wildlife herd revealing the map to everyone on team 0 is
+a bug nobody would look for. The other five cover both directions of the sharing, the free-for-all
+control, different teams sharing nothing, an ally **receiving** the enemy only your scout can see
+(the snapshot half — §5.1 step 6, the security property, not just the grid), and a never-scouted
+enemy still being withheld from a whole team.
+
+**Still unmeasured: the on-device figure.** §3.1's 5 ms budget is checked by `StressTest.tscn` on
+the reference device; everything above is desktop.
 
 ### Phase 3 — Camera & world view
 

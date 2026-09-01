@@ -310,6 +310,110 @@ func test_the_snapshot_carries_nobodys_fog_at_all() -> void:
 	assert_ne(_player(1).vision, _player(2).vision, "per player, as it always was")
 
 
+# ── shared vision (12.x) ────────────────────────────────────────────────────
+#
+# AN ALLY'S EYES ARE YOUR EYES. One line in `VisionSystem._recompute`, and the whole
+# section exists because that line is easy to write and easy to get subtly wrong in
+# three directions: a free-for-all must not change, gaia must grant nothing, and the
+# thing that actually matters is the SNAPSHOT rather than the grid.
+#
+# `MatchConfig.debug_generated()` sets no teams and `before_each` above sets none
+# either, so every other test in this file is a free-for-all and none of them exercise
+# this. That is also why `preview_vision_cost.tscn` had to build its own worlds to
+# measure the cost.
+
+
+## A fresh world where the teams are actually set. `teams` is position-for-position with
+## the player ids, exactly as `MatchConfig.teams` is, and 0 means no team at all.
+func _with_teams(teams: Array[int], players: int = 2) -> void:
+	w = SimWorld.new()
+	var cfg := MatchConfig.new()
+	var ids: Array[int] = []
+	for i in range(players):
+		ids.append(i + 1)
+	cfg.player_ids = ids
+	cfg.teams = teams
+	cfg.map_size = Vector2i(48, 48)
+	w.setup(cfg)
+	w.map.fill_terrain(SimMap.Terrain.GRASS)
+
+
+func test_an_allys_scout_lights_the_ground_for_you() -> void:
+	_with_teams([1, 1])
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	var theirs := w.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	w.step()
+
+	assert_eq(_fog(1, theirs.tile()), SimPlayer.Fog.VISIBLE,
+			"my teammate is standing there, so I can see it")
+	assert_eq(_fog(2, Vector2i(5, 5)), SimPlayer.Fog.VISIBLE, "and it goes both ways")
+
+
+func test_a_free_for_all_still_sees_only_its_own() -> void:
+	# THE CONTROL, and the row `preview_vision_cost.tscn` reports as 1.00x: team 0 is
+	# no team, so `allied` refuses it and this is the behaviour that existed before
+	# shared vision. Every fixture in the repo predating the team selector is this case.
+	_with_teams([0, 0])
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	var theirs := w.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	w.step()
+
+	assert_eq(_fog(1, theirs.tile()), SimPlayer.Fog.UNSEEN,
+			"an unallied player's scout lights nothing for me")
+
+
+func test_players_on_different_teams_share_nothing() -> void:
+	_with_teams([1, 2])
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	var theirs := w.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	w.step()
+
+	assert_eq(_fog(1, theirs.tile()), SimPlayer.Fog.UNSEEN, "different team, no sharing")
+
+
+func test_gaia_grants_vision_to_nobody() -> void:
+	# `allied` refuses any id <= 0, which is what keeps this true -- and it would NOT be
+	# true of a naive `teams.get(a) == teams.get(b)`, because gaia's absent entry and an
+	# unallied player's entry are both 0. A wildlife herd revealing the map to everyone
+	# on team 0 is the bug this asserts against.
+	_with_teams([0, 0])
+	var deer := w.spawn_unit(&"unit.villager", 0, Vector2i(40, 40))
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	w.step()
+
+	assert_eq(_fog(1, deer.tile()), SimPlayer.Fog.UNSEEN, "gaia is on nobody's team")
+
+
+func test_an_ally_receives_the_enemy_only_your_scout_can_see() -> void:
+	# THE HALF THAT MATTERS. The grid is a drawing hint; the snapshot filter is the
+	# security property (PLAN.md 5.1 step 6), and shared vision is only real if the
+	# entities travel too. Players 1 and 2 are a team, player 3 is the enemy.
+	_with_teams([1, 1, 2], 3)
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	w.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	var enemy := w.spawn_unit(&"unit.villager", 3, Vector2i(41, 40))
+	w.step()
+
+	assert_true(_sent_to(1).has(enemy.id),
+			"my teammate is looking at them, so I am told about them")
+	var entry := _entry_for(1, enemy.id)
+	assert_false(bool(entry.get("remembered", false)), "seen live, not remembered")
+	assert_true(entry.has("hp"), "and in full")
+
+
+func test_a_never_scouted_enemy_is_still_withheld_from_a_team() -> void:
+	# Shared vision widens what a team can see; it must not turn the filter off. Same
+	# board as the test above with the ally's scout moved home, so nobody on team 1 is
+	# anywhere near player 3.
+	_with_teams([1, 1, 2], 3)
+	w.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	w.spawn_unit(&"unit.villager", 2, Vector2i(6, 6))
+	var enemy := w.spawn_unit(&"unit.villager", 3, Vector2i(41, 40))
+	w.step()
+
+	assert_false(_sent_to(1).has(enemy.id), "neither of us has been there")
+
+
 func test_a_player_who_is_not_in_the_world_sees_everything() -> void:
 	# A spectator, a replay, or a test asking for a player id the world has never
 	# heard of. Unfiltered is the useful answer and the safe one -- there is no client

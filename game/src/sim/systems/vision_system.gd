@@ -102,7 +102,17 @@ func _recompute(w: SimWorld, p: SimPlayer) -> void:
 
 	var lit := PackedInt32Array()
 	for e in w.entities.values():
-		if not e.alive or e.owner_id != p.id:
+		# AN ALLY'S EYES ARE YOUR EYES (PLAN.md 12.x). `allied` folds in the
+		# `owner_id == p.id` clause this line used to be -- it answers true for
+		# `a == b` -- so a player with no team sees exactly what they saw before, and
+		# gaia grants nobody vision because `allied` refuses any id <= 0.
+		#
+		# MEASURED BEFORE IT LANDED, because `_reveal` is the hottest loop in the sim and
+		# the fear was that this doubles it. It does not: see `preview_vision_cost.tscn`,
+		# which counts the tile-writes deterministically rather than timing them. A 4v4
+		# on the 8-slot board costs 4.00x the FFA tile-writes, exactly as the arithmetic
+		# says, and the ceiling of eight-on-one-team costs 8.00x.
+		if not e.alive or not Diplomacy.allied(e.owner_id, p.id, w.teams):
 			continue
 		if not (e is SimUnit or e is SimBuilding):
 			continue
