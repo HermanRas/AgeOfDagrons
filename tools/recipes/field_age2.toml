@@ -1,7 +1,22 @@
-# Field -- AGE 2 (Age of Embers), the Gaulish/German skin (PLAN.md 2.7, 9.2).
+# Field -- ONE OF FOUR RANDOM FIELD VARIANTS. NOT an age skin, despite the id.
 #
-# Generated 2026-08-15 with the rest of the age-2 building pass. Buildings carry
-# the age; units do not.
+# Owner, 2026-09-01: "fields dont age, random selected at placement time, working
+# as intended." A field attaches to the mill and the game picks one of four at
+# PLACEMENT time. game/data/visuals.json maps vis.field_1..4 onto field_age2,
+# field_age3, field_age4 and farm. The `_ageN` ids are historical -- they came
+# from the 2026-08-15 age pass below -- and are NOT worth renaming, because the
+# game reads them by name.
+#
+# LOAD-BEARING AND ONE LINE FROM BEING DESTROYED: age2, age3 and age4 all name
+# the SAME actor (plot_field_temp.xml) and differ ONLY because isobake seeds the
+# variant RNG from the RECIPE ID (zeroad.py _import_actor), so each rolls its own
+# crop. That accident IS the variety the game is using. Adding `variant_seed` to
+# these three -- the fix that was right for player colour, AGENT_ASSET.md 4 --
+# would collapse all three into one field. Do not. (farm.toml is a genuinely
+# different actor, the Mediterranean one, so it varies on purpose.)
+#
+# Generated 2026-08-15 with the rest of the age-2 building pass, when fields were
+# still expected to age. Buildings carry the age; units do not.
 #
 # Actor resolved through its entity template, never guessed from a filename:
 #   simulation/templates/structures/gaul/field.xml -> <VisualActor><Actor>

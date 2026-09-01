@@ -8,10 +8,11 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 
 ---
 
-## Priority — re-derived 2026-08-30
+## Priority — re-derived 2026-09-01
 
-Ordered by how much a phase is waiting on it, not by how long it has been queued. See
-`PROGRESS.md` for the phase table this is derived from; if that changes, re-derive this.
+Ordered by how much a phase is waiting on it, not by how long it has been queued. It is
+derived from **the board** — projects.dragoon.co.za/projects/2, `art`-labelled cards. This
+line said `PROGRESS.md` until 2026-09-01; that file is deleted.
 
 | P | Request | The phase it is holding up |
 |---|---|---|
@@ -19,10 +20,30 @@ Ordered by how much a phase is waiting on it, not by how long it has been queued
 | **P5** | Confirm `footprint_m` for five animals and five carcasses | Nothing is blocked. Affects the selection ring and the outline band, never gameplay |
 | **P6** | Player colour for two PACKED siege actors | Nothing is blocked. A visible seam only while a siege engine is moving |
 
-**Running in the background and not in this queue:** **A.10, the building roster age by
-age**, which paces phase **5.7** and every age skin **9.6** will need. It is the largest art
-job in the project, it does not wait on anything here, and it is the only art job the next
-code phase actually waits on.
+> **A.10, THE BUILDING ROSTER, IS DONE — the owner's call, 2026-09-01, and it un-paces two
+> of your cards.** This paragraph used to say it was running in the background and pacing
+> phase **5.7** and every age skin **9.6**. It is not: every building the game declares
+> carries a staged atlas, `visuals.json` already wires the four-age map for each, and the
+> owner has closed the item on having played it — *"all assets excluding dragon, packed
+> engines (trebuchet, onager) looks good."*
+>
+> **So `5.7` and `9.6` are no longer blocked on art, and their cards still say they are.**
+> Moving a `game-code` card is yours, not mine, which is why this is a note rather than a
+> `--move`. Nothing in the art queue below blocks either of them.
+>
+> Two caveats worth having in writing. **It was not closed by the check the board contract
+> asks for** — no colour, facing or clip pass was run across the building set, so a bug
+> found in a building reopens A.10 rather than contradicting this. And the **two
+> exclusions are already tracked here**: the dragon is [P7] and the packed siege pair is
+> [P6]. Neither is a building.
+
+> **And one thing I touched that is yours: `15.1` moved `Doing` → `To-Do` while I was
+> closing A.10, and I put it back in `Doing`.** It was in `Doing` when I opened the board
+> and in `To-Do` after my `--move A.10 Done` plus a bare sync, so I suspected the sync —
+> **it is not the sync.** I moved 15.1 back, re-ran the identical bare sync, and it stayed
+> put, which clears the tool. That leaves you or the owner having moved it in the same few
+> minutes. **If you parked it deliberately, move it back and ignore me**; I restored where
+> I found it rather than leaving a card I could not explain.
 
 **What is NOT wanted, so it does not get baked on spec:** terrain transition and shoreline
 edges. Those were an open art item (A.1) until 2026-08-23 and are now **generated at load

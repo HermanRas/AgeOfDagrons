@@ -116,12 +116,30 @@ exact and worth getting right:
 | **`asset_request.md`** | the ask, the measurements, the reasoning, my answer in place. Unchanged. Still where a request is refused, corrected or argued |
 | **the board** | which bucket a card is in, and nothing else |
 
-**My cards carry the `art` label.** There are eight: **A.10** (the building roster, the
-only card in `Doing`), **P5**, **P6**, **P7**, the 27 tech icons, the `location_scale`
-root-bone decision, the dragon-footprint question the game side owes me, and the
-delivered UI set. `game-code` is theirs. **One board rather than two projects** because
-*"5.7 and 9.6 are blocked on A.10"* is the most useful sentence either of us can read
-off it, and two projects would hide it.
+**My cards carry the `art` label.** There are eight: **A.10** (the building roster —
+**closed 2026-09-01**, see below), **P5**, **P6**, **P7**, the 27 tech icons, the
+`location_scale` root-bone decision, the dragon-footprint question the game side owes me,
+and the delivered UI set. `game-code` is theirs. **One board rather than two projects**
+because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either of us
+could read off it, and two projects would hide it.
+
+> ⚠️ **A.10 SAT IN `Doing` FOR WEEKS AFTER THE ART WAS DELIVERED, AND IT BLOCKED TWO CODE
+> CARDS THAT WERE NOT ACTUALLY BLOCKED.** The owner asked what A.10 was about on
+> 2026-09-01; the answer turned out to be that every building the game declares already had
+> a staged atlas and a wired four-age map, and the card's own text still said "running in
+> the background" when nothing was running. Closed on the owner's call the same day —
+> *"all assets excluding dragon, packed engines (trebuchet, onager) looks good, bugs may be
+> reported but for now its considered complete."*
+>
+> **The drift is the lesson, not the card.** The board was seeded from PLAN.md §12A and
+> `PROGRESS.md`, and it inherited their staleness rather than fixing it — a fresh tracker
+> seeded from a stale one starts stale. **This is the fourth tracker this project has had
+> and the first three all drifted.** What stops the fifth is the §1.1 rule that a card moves
+> when work starts, not the rule that says a card exists.
+>
+> **And the cheap check that would have caught it: ask the board what is blocked, then look
+> on disk.** Two `Blocked` cards citing an art card is a claim about `game/assets/atlases`,
+> and that claim is one `Get-ChildItem` away from being tested.
 
 ```powershell
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
@@ -736,6 +754,22 @@ with WinError 5. Delete contents, not the directory.
 > — env paths, shards, and what each skipped step breaks. The two flags that job
 > needs are in §4 under "A PIPELINE FIX CHANGES NO RECIPE".
 
+- **A.10, the building roster, is CLOSED** — owner, 2026-09-01. Every declared building has
+  its staged atlas and its four-age map, with two excluded assets that are not buildings and
+  are tracked as [P7] and [P6]. Closed on the owner having played it rather than on a check,
+  so a building bug **reopens A.10**; it does not contradict the closure.
+- **`vis.farm` IS NOT BLOCKED, whatever PLAN.md §12A A.4 still says.** It was baked and
+  staged 2026-08-25 and the owner confirmed it in game. **0 A.D.'s "farm" is our "field"**,
+  it attaches to the mill, and **fields do not age**: the game picks one of four at
+  placement time, `vis.field_1..4` → `field_age2` / `field_age3` / `field_age4` / `farm`.
+  The 64-attachpoint scatter collapse is real, unfixed and **not worth fixing** — one crop
+  clump reads fine at this camera. `tools/recipes/farm.toml` and `field_age2.toml` carry it.
+  > ⚠️ **THE THREE `field_ageN` RECIPES NAME ONE ACTOR AND DIFFER ONLY BY THE RECIPE-ID
+  > VARIANT SEED.** That is the same mechanism §4 calls catastrophic for player colour, and
+  > here it is the *feature* — it is what makes three different-looking fields. Giving them
+  > a `variant_seed`, or merging age3 and age4 as their own headers once suggested, would
+  > silently cost the game three quarters of its field variety. **The fix that is right for
+  > a colour set is wrong here; read what the ids are FOR before generating over them.**
 - **193 base recipes**, **168 generated colour recipes** (21 units × 8).
 - **Nothing is running** on the workstation.
 - **Staging is complete and current: 361 atlases.** All eight colours are correct

@@ -1,12 +1,16 @@
-# Field -- AGE 4 (Age of Dragons), the Roman skin (PLAN.md 2.7, 9.2).
+# Field -- ONE OF FOUR RANDOM FIELD VARIANTS. NOT an age skin, despite the id.
+# See field_age2.toml for the whole story, including why adding `variant_seed`
+# here would collapse three of the four variants into one.
 #
-# Generated 2026-08-15 in the age-4 building pass. Buildings carry the age;
-# units do not.
+# Generated 2026-08-15 in the age-4 building pass, when fields were still expected
+# to age. Buildings carry the age; units do not.
 #
 # Actor resolved through its entity template, never guessed from a filename:
 #   simulation/templates/structures/iber/field.xml -> <VisualActor><Actor>
 #
-# Unchanged from age 3 -- the roster keeps the Iberian field at age 4, so this and vis.field_age3 are the same bake and could share one atlas.
+# This once read "same actor as age 3, so the two could share one atlas". They
+# must NOT: they are two of the four random variants and share nothing but the
+# actor. Merging them would cost the game a quarter of its field variety.
 #
 # Render settings inherited from the calibrated `field.toml`. Canvas by
 # interpolation: a same-role building at the same footprint frames within the

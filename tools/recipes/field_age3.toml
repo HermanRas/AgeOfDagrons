@@ -1,7 +1,9 @@
-# Field -- AGE 3 (Age of Flame), the Persian (achae) + Iberian skin (PLAN.md 2.7, 9.2).
+# Field -- ONE OF FOUR RANDOM FIELD VARIANTS. NOT an age skin, despite the id.
+# See field_age2.toml for the whole story, including why adding `variant_seed`
+# here would collapse three of the four variants into one.
 #
-# Generated 2026-08-15 in the age-3 building pass. Buildings carry the age;
-# units do not.
+# Generated 2026-08-15 in the age-3 building pass, when fields were still expected
+# to age. Buildings carry the age; units do not.
 #
 # Actor resolved through its entity template, never guessed from a filename:
 #   simulation/templates/structures/iber/field.xml -> <VisualActor><Actor>

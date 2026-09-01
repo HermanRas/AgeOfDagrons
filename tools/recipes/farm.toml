@@ -1,5 +1,20 @@
-# Farm -- BLOCKED, 2026-08-08. Not baked; this recipe records the dead end for
-# whoever next touches it, same treatment as deer.toml.
+# Farm -- BAKED, STAGED AND IN THE GAME. It is the fourth field variant.
+#
+# **THE BLOCK BELOW IS HISTORY. DO NOT SPEND ANOTHER HOUR ON IT.** This header
+# said "BLOCKED, not baked" from 2026-08-08 until 2026-09-01, and it was already
+# false by 2026-08-25, when vis.farm was baked and staged. The owner has looked at
+# it in game and closed it: "farm is, field in the game baked and working well
+# with 4 variant random on placed."
+#
+# Naming, which is the part that costs time: 0 A.D. calls this a FARM, our game
+# calls it a FIELD, and it attaches to the mill. Fields do NOT age here -- the
+# game picks one of four at placement time. game/data/visuals.json maps
+# vis.field_4 -> vis.farm; field_age2/3/4 are the other three, and field_age2.toml
+# carries the rest of the story.
+#
+# The 64-attachpoint collapse recorded below is real and unfixed. It is simply
+# not worth fixing: one clump of crop foliage against 64 reads acceptably at this
+# camera, and the four variants together cover the variety it would have bought.
 #
 # structures/athen/field.xml uses structures/plot_field_medit.xml. Every field
 # variant in 0 A.D. (plot_field_temp/medit/desert/tropic/chin/3D_8x8/...)

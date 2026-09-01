@@ -295,8 +295,8 @@
     {
       "key": "A.10",
       "title": "ART — the building roster, age by age",
-      "bucket": "Doing", "priority": 3, "labels": ["art"],
-      "description": "RUNNING IN THE BACKGROUND ON THE ART SIDE and deliberately not in asset_request.md's queue. It is the largest art job in the project, it waits on nothing, and it is the only art job the next code phase actually waits on.\n\nIt paces 5.7 (23 buildings, ~70 bakes) and every age skin 9.6 will want.\n\nasset_request.md priority table, PLAN.md 12A A.10."
+      "bucket": "Done", "priority": 3, "labels": ["art"],
+      "description": "DONE — the owner's call, 2026-09-01: \"all assets excluding dragon, packed engines (trebuchet, onager) looks good, bugs may be reported but for now its considered complete.\"\n\nThe roster had in fact been delivered for some time and the card had not moved: every building the game declares carries a staged atlas, and visuals.json wires the four-age map for each. It was baked age by age as planned — age 1 five buildings, age 2 eight more, age-3 buildings two skins each, ages 1 and 2 deliberately NOT collapsed.\n\nCLOSED WITH TWO KNOWN EXCLUSIONS, both tracked elsewhere and neither a building: vis.dragon (P7, no rig) and the two packed siege actors (P6, player colour).\n\nNOT closed by the check the board contract asks for — no colour/facing/clip pass was run over the building set. It is closed on the owner having played it. A bug found later reopens it rather than contradicting this.\n\nFields were the one loose end and are settled: they do NOT age. The game picks one of four at placement time and a field attaches to the mill; vis.field_1..4 map onto field_age2/3/4 and farm. tools/recipes/field_age2.toml carries the reasoning, including why those three must never be given a variant_seed.\n\nasset_request.md delivered log, PLAN.md 12A A.10."
     },
 
     {
