@@ -77,7 +77,9 @@ flagged there as agreement rather than drift — the arrangement that already pu
    is the unit-speed pass" line were all overtaken within hours of being written.
    That is the failure the board removes: **a card cannot go stale that way,
    because moving it IS the act of changing its status.** What was worth keeping
-   out of it is on the cards; `git show HEAD~1:PROGRESS.md` has the rest.
+   out of it is on the cards; **`git show ff141cd^:PROGRESS.md`** has the rest — named by
+   the commit that removed it rather than by `HEAD~1`, which was right for about ten
+   minutes.
 6. `game/data/*.json` `_note` blocks — these are long, and they are the real
    design record for the data. **Read them in full before editing that file.**
    Several encode measurements and decisions that are expensive to re-derive.
@@ -160,15 +162,37 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   the art side's progress in my own summaries, which is the same mistake one step
   earlier — **their cards are not mine to describe either.**
 
-  **The label is the fence, and it is the WHOLE fence.** `game-code` is mine. `art` is
-  theirs. `owner-decision` and `blocked-on-art` are cross-cutting and say nothing about
-  who moves a card — read the `game-code`/`art` label beside them.
+  **The label is the fence, and it is the WHOLE fence. THERE ARE THREE SIDES, NOT TWO**
+  (owner, 2026-09-01):
 
-  ⚠️ **A CARD THAT CHANGES HANDS IS THE OWNER'S TAG SWAP TO MAKE, NOT MINE.** When my
-  work on a card ends with the next step belonging to the art side, **say so and stop**:
-  *"card X is now the art side's — swap the tag"*. Do not relabel it, and do not move it
-  into a bucket on their behalf. Same in reverse: a card that arrives labelled `art` is
-  not mine to pick up even when the work is plainly code, until the owner has swapped it.
+  | label | whose | means |
+  |---|---|---|
+  | `game-code` | mine | I move it, I write it, I close it |
+  | `art` | the art agent's | I read it and touch nothing |
+  | **`owner-decision`** | **the owner's** | **it cannot move until they rule. Not mine, not the art side's** |
+
+  `blocked-on-art` is the one genuinely cross-cutting label and says nothing about who
+  may write a card — read the side label beside it.
+
+  ⚠️ **A CARD THAT CHANGES HANDS IS THE OWNER'S TAG SWAP TO MAKE, NOT MINE**, and there
+  are now **two places to hand one to**. When my work on a card ends, say so and stop:
+
+  - *"card X is now the art side's — please swap the tag to `art`"*, when the next step
+    is a bake, a measurement or anything only the pipeline can do.
+  - *"card X needs your review — please swap the tag to `owner-decision`"*, when the next
+    step is a **judgement call, a cost, or a look at a screenshot**. **This is the one to
+    reach for by default when I am blocked on a person rather than on a tool.** Before
+    2026-09-01 the only handover I had was `art`, which meant a card waiting on the owner
+    got parked in the art side's queue where nothing about it was theirs to do.
+
+  In both cases: do not relabel it and do not move it into a bucket on anybody's behalf.
+  Same in reverse — a card labelled `art` or `owner-decision` is not mine to pick up even
+  when the work is plainly code, until the owner has swapped it back.
+
+  **`9.5` is the worked example.** The owner stripped its `game-code` label on
+  2026-09-01 to mean *"mine, and when we work on it is my call"*, leaving it
+  `owner-decision` + `blocked-on-art`. That is not a card missing a label; it is a card
+  correctly assigned to the third side. **Do not add `game-code` back to it.**
 
   ⚠️ **A DUAL-LABELLED CARD IS AMBIGUOUS UNDER THIS RULE AND MUST BE REPORTED, NOT
   GUESSED AT.** Both tools refuse a card carrying the other side's label, so a card with
@@ -181,9 +205,16 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   One board rather than two projects is still right — *"5.7 is blocked on the art side's
   A.10"* is the single most useful thing either agent can read here, and two projects
   would hide it. **Read the whole board; write only your own half of it.**
-- **Do not add a status narrative to PLAN.md, PROGRESS.md, or this file.** A card that has
-  moved is the report. This is the third status list this project has had and the previous
-  two both drifted (`ASSET_MISSING.md`, deleted; `PROGRESS.md`, superseded).
+- **Do not add a status narrative to PLAN.md or to this file.** A card that has moved is
+  the report. Four trackers have now been deleted rather than kept in step —
+  `ASSET_MISSING.md`, `UI_Design.md`, `PROGRESS.md` and `board.json` — and every one of
+  them was a copy of something that had already moved on.
+- **`asset_request.md` IS THE CHANNEL TO THE ART AGENT AND THE OWNER READS IT TOO.** The
+  owner asked the art agent to read my notes there on 2026-09-01, so a reply written only
+  in chat reaches nobody. **Anything the other side needs to act on goes in that file**,
+  under a `[game-code]` heading, and anything I move that is not mine gets said there —
+  neither of us can tell the other's card move from a tool bug, and **Vikunja keeps no
+  history**.
 - ⚠️ **THREE API READINGS LOOK EXACTLY LIKE A FAILURE AND ARE NOT.**
   `GET /views/{v}/tasks` never populates `bucket_id`; `GET .../buckets` reports
   `count: 0` for every bucket; and PowerShell's console prints `campaign â scenario 3`
@@ -477,12 +508,79 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A BALANCE NUMBER WRITTEN INTO AN ASSERTION IS A TEST THAT FAILS WHEN THE OWNER ASKS FOR A BALANCE CHANGE** | Doubling `res.tree` broke five tests and **not one was about wood**: two literal `40`s and a tick budget in `test_gather` (generous at four round trips, short at eight) and two in `test_game_data`. Derive from the def — `tree.starting_amount`, `amount_for(size_class_count() - 1)` — and assert the SHAPE (three classes, bigger holds more) rather than the figures. |
 | **`JSON.parse_string()` PUSHES AN ENGINE ERROR PER FAILURE and `JSON.new().parse()` does not** | Irrelevant on a config file and a hole on a socket: `LanBeacon.decode` reads whatever the network sends it, so the static helper turns one malformed datagram a millisecond into a log somebody can fill from across the room. Found by a single deliberately malformed test fixture printing "Parse JSON failed" into an otherwise clean run. **Wherever untrusted bytes meet a parser, check which form of it talks.** |
 | **A DISABLED CONTROL'S REASON FOR BEING DISABLED IS NOT THE SAME FACT AS ITS BEING DISABLED** | `ServerBrowserPanel` set JOIN's `disabled` from "is there a sentence to print", which is right in three of its four states and wrong in the one it lives in: an empty list needs no sentence — the page already says so at length in the middle of itself — so JOIN came out **enabled with nothing to join**. Only one of the two facts is always expressible; compute them separately. |
+| **A BACKTICK IN A POWERSHELL DOUBLE-QUOTED STRING IS AN ESCAPE CHARACTER, so every markdown code span passed through the shell LOSES ITS FIRST LETTER** | Writing a Kanban note containing `` `blocked-on-art` `` reached Vikunja as `locked-on-art` — the backtick ate the `b`, silently, and the text was otherwise perfect so it read as a typo rather than as shell mangling. Same family as `Set-Content -Encoding utf8`'s BOM and the here-string-into-pathspecs row: **the shell is a lossy channel for prose.** The fix is the one this file already uses for commit messages — **write the text to a FILE and pass the path** (`card_game.py append KEY notes.md` takes one, as does `git commit -F`). A single-quoted PowerShell string also works, but then you cannot interpolate, and the habit that survives contact is "prose goes through a file". |
 | **GDScript WILL NOT COMPILE `{...}[key]` — subscripting a dictionary LITERAL inline — and the error points at a different file** | It is a whole-FILE compilation error, so every `static func` on the class vanishes and the symptom is `Nonexistent function 'from_dict' in base 'GDScript'` raised from whichever file *calls* it. Cost a full suite run on 15.1: the real fault was one line in `objective_def.gd` and four files reported it. A `match` is the fix. **The general form: when a static on a class is suddenly "nonexistent", the class did not compile — read the FIRST error in the run, not the loudest one.** A const dictionary at class scope is fine; it is only the inline literal subscript that fails. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
 
 ## 7. Where things stand
+
+### PHASE 15, SCENARIOS — 15.1 and 15.3 landed 2026-09-01
+
+Campaigns are read off disk and a scenario can produce a `MatchConfig`. **Scenario 3 is
+launchable and needs only 15.5's screen to call it**; scenarios 1 and 2 refuse until 15.2.
+Suite **1926 passed, 0 failed**. Commits `3b01530` (15.1) and `afba341` (15.3).
+
+| | |
+|---|---|
+| the defs | `ObjectiveDef`, `ScenarioDef`, `CampaignDef` in `src/data/`, plain `RefCounted` like every other def |
+| the loader | `Campaigns` — **not an autoload**; §6.1's table is exactly four and only the front door reads this |
+| the content | `scenarios/HowToPlay/` — one `campaign.json`, three `scenario.json`, outside `res://` |
+| the launch | `ScenarioDef.build_config()`, tested by asserting the config rather than by starting a match |
+
+- ⚠️ **`== 0` IS A COMPARISON AN UNIMPLEMENTED SUBJECT PASSES**, which is why `area`,
+  `named_unit` and `ticks` are refused **at load** rather than defaulted. A subject that
+  silently counted zero would announce victory on tick 1 of a scenario nobody could win.
+  The refusal says *"not evaluable yet"* rather than *"unknown"* on purpose — "not built"
+  and "you misspelled it" want different reactions from whoever reads the log.
+- ⚠️ **`SCENARIO` MODE IS REFUSED AT LAUNCH, AND THAT IS THREE LINES TO DELETE WHEN 15.2
+  LANDS.** `MatchConfig.Mode` has no `SCENARIO` member; PLAN.md assigns it, and
+  `MatchConfig.objectives`, to 15.2. Both shortcuts are traps and both look like they
+  work: **mapping it onto `LAST_MAN_STANDING`** lets conquest win an economy lesson with
+  two villagers and no house (decision 5's named failure), and **adding an inert member**
+  launches scenario 1 into a match that can never be won *or* lost, because
+  `WinConditionSystem` deliberately never ends a match in an unimplemented mode. *Inert*
+  is the safe direction for a mode nobody has selected; it is the wrong direction for the
+  mode a PLAY button is about to select.
+- **`ScenarioDef.Mode` is its own two-member enum and NOT `MatchConfig.Mode`.** That is
+  what let 15.1 be complete and tested without touching `MatchConfig` at all — PLAN.md
+  15's build order asks every row to be a place you can stop.
+- ⚠️ **`AIProfile.IDS` AND `SimPlayer.AILevel` ARE COUPLED BY POSITION AND NEITHER FILE
+  SAYS SO.** The conversion is `IDS.find(name)`. Reordering either list, or inserting a
+  difficulty in the middle, would keep working while silently giving every scenario the
+  wrong opponent. `test_scenario_launch` pins the pairing **by name**; same family as
+  `colours.json`'s load-bearing order.
+- **The dev override needs no config file, which departs from PLAN.md 3.3** — it describes
+  one, on `tools/isobake.local.toml`'s precedent, and that precedent does not transfer.
+  The art root is genuinely machine-specific; `scenarios/` is the **sibling of the Godot
+  project on every clone**, so `res://../scenarios` finds it unaided. A fresh checkout runs
+  the campaign with no setup step, and a setup step nobody performs is why
+  `game/assets/ui/` was gitignored for months and a clean clone had no HUD.
+  `game/content.local.json` is still read first for a differing layout. **The
+  `OS.has_feature("editor")` gate is the whole safety argument** and is unchanged: true for
+  editor runs, the headless suite and every `dev_preview`, false in an export.
+- **The loader uses `JSON.new().parse()`, never `JSON.parse_string()`** — the static form
+  pushes an engine error *per failure*, and **a campaign is downloadable, shareable
+  content**, so these bytes are as untrusted as a network packet. `GameDataRegistry` is
+  right to use the static form; its files ship in the APK.
+- **Icons and backgrounds are held as PATHS, not textures.** Outside `res://` there is no
+  `.import` sidecar and `load()` cannot open them at all. 15.5 goes through `Image.load()`
+  when a campaign is **opened** — the background is 1920×1080 and costs a real decode.
+- **`progress` is a completion count, so it is also the index of the first LOCKED
+  scenario**: 0 unlocks scenario 1 only. Clamped rather than trusted, because it comes from
+  a writable file in `user://` a player can edit and a half-finished write can truncate.
+- **A campaign cannot reach a phone until 0.3 `AssetPacks` lands.** `user://` on Android is
+  internal app storage and is not `adb push`-able, and the override is editor-only.
+  Everything in Phase 15 is exercisable on Windows and in the suite; the first on-device
+  run waits on 0.3. A real dependency, not a footnote.
+- **Settled by the owner and needing no action: a scenario does not leak into the server
+  browser.** Solo always fills both slots (one human, one AI) and the browser filters to
+  hosts with open space by default, so a tutorial is not advertised.
+- **Still owed to the art side:** the dragon footprint answer — wingspan or standing
+  ground. `P7-footprint` is a `game-code` card as of the owner's 2026-09-01 swap, so it is
+  mine to answer, and `GameView._ring_ground_m` is where the sim-rect / visual-rect split
+  is already written down.
 
 ### TEAMS — 2026-08-31
 
@@ -1424,8 +1522,10 @@ open item, parked from 2026-08-21 until the owner could judge it, and they did:
 pass** — villager 200 → 100 and everything else by the same factor, so the
 relative pacing `units.json` describes is untouched; the four `speed: 0` units
 stayed 0 and odd values rounded away from zero. **The owner playtested it on 2026-08-27
-and confirmed it: *"sound and speed is much better."*** PROGRESS.md still lists this as
-the top open item and is stale; PLAN.md §15 has been rewritten around what it left behind.
+and confirmed it: *"sound and speed is much better."*** PLAN.md §15 has been rewritten
+around what it left behind. *(This paragraph used to add that PROGRESS.md still listed it
+as the top open item and was stale — which it was, and that file was deleted on
+2026-09-01 for exactly that habit.)*
 
 Two consequences were recorded in BUGS.md rather than smoothed over, and neither
 is a reason to undo it:
