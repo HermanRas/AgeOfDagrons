@@ -1,0 +1,40 @@
+{
+  "_note": [
+    "TEACHES FIGHTING. Won by leaving the enemy nothing.",
+    "",
+    "NO OBJECTIVES, AND THAT IS THE WHOLE POINT OF THIS FILE. `last_man_standing` is the",
+    "game's ordinary conquest rule, already built and already tested, so this scenario is",
+    "PLAYABLE BEFORE A LINE OF OBJECTIVE CODE EXISTS -- 15.1 + 15.3 + 15.5 and it runs.",
+    "That makes it the cheapest of the three and the one that proves the launch path on its",
+    "own, which is the opposite of how the plan read before 2026-09-01. The loader REFUSES",
+    "a last_man_standing scenario that carries objectives, because those rows would never",
+    "be read and silently ignoring an authored win condition loses the author's intent.",
+    "",
+    "IT WAS SPECIFIED AS '0 ENEMY UNITS ON MAP' AND THAT IS NOT REACHABLE (owner's call,",
+    "2026-09-01). A Passive AI runs its whole economy and never attacks, so it keeps",
+    "training villagers from its town centre and the count refills faster than an early army",
+    "empties it -- the scenario would have been unwinnable while looking correct. Widening it",
+    "to units AND buildings is the conquest rule wearing the words a player reads as",
+    "'destroy the enemy', it needs no new rule, it keeps the Passive opponent, and it teaches",
+    "the lesson the scenario is named for: YOU CANNOT FINISH AN ENEMY BY CHASING THEIR",
+    "VILLAGERS. Take the town centre.",
+    "",
+    "THE MAP TYPE MATTERS MORE HERE THAN IN THE OTHER TWO. A River map puts the two starts",
+    "on opposite banks, so finding the opponent is part of the lesson. Note that",
+    "_river_start_positions alternates banks by index, which splits an allied PAIR --",
+    "irrelevant at two players, and a real bug for a future 2v2 scenario."
+  ],
+
+  "name": "How To Find Opponent and Attack",
+  "description": "Somewhere across the river is another player. Build an army, go and find them, and leave them nothing.",
+  "message": "Train soldiers at the barracks, select them, and tap an enemy to attack. Use the minimap to find your opponent.\n\nGoal: destroy every enemy unit AND building. Their villagers keep coming -- take their buildings.",
+
+  "mode": "last_man_standing",
+
+  "map": { "type": "river", "seed": 815103 },
+
+  "opponents": ["passive"],
+  "starting_age": 1,
+
+  "objectives": []
+}

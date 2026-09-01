@@ -1,0 +1,23 @@
+{
+  "_note": [
+    "The first campaign (PLAN.md 15.8). Thin content on a real mechanism, deliberately:",
+    "three scenarios, each on a GENERATED River map against a PASSIVE opponent, teaching",
+    "the economy, then the age ladder, then fighting.",
+    "",
+    "`scenarios` NAMES ITS FOLDERS IN PLAY ORDER AND THAT ORDER IS NOT DERIVABLE.",
+    "`scenario_10` sorts before `scenario_2`, so sorting the directory names would put a",
+    "tenth scenario second -- and a campaign's order is a design decision anyway. A folder",
+    "holding a scenario.json that this list does not name is REPORTED rather than played",
+    "last, because it is either work in progress or a typo in this list.",
+    "",
+    "PROGRESS IS NOT IN THIS FILE and cannot be: an update is allowed to replace this",
+    "folder wholesale, and it must not take the player's place in the campaign with it.",
+    "Progress is user://campaign_progress.json, keyed by this folder's NAME -- so renaming",
+    "the directory forgets how far every player had got."
+  ],
+
+  "name": "How To Play",
+  "description": "Three short lessons: gather and build, climb the ages, then find your opponent and finish them.",
+
+  "scenarios": ["scenario_1", "scenario_2", "scenario_3"]
+}

@@ -108,6 +108,14 @@ tools_env/
 # PLAN.md §2.6: raw-art paths are never committed. The committed camera config
 # is tools/isobake.toml; see tools/isobake.local.toml.example.
 tools/isobake.local.toml
+
+# Optional, editor-only override for where campaigns are read from (PLAN.md 3.3,
+# `Campaigns.LOCAL_CONFIG`). NOT REQUIRED, unlike isobake's: `scenarios/` is the
+# sibling of the Godot project on every clone, so the loader derives the path and a
+# fresh checkout runs the campaign with no setup step. This file exists only for a
+# layout that differs.
+game/content.local.json
+
 .venv/
 venv/
 __pycache__/

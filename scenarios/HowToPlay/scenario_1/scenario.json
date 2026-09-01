@@ -1,0 +1,54 @@
+{
+  "_note": [
+    "TEACHES THE ECONOMY. Won by owning a house AND ten villagers.",
+    "",
+    "TWO WIN ROWS, AND THEY ARE ANDed. 'A house and ten villagers' is one objective in two",
+    "halves, which is exactly what multiple `win` rows mean (PLAN.md 11.8). An OR would",
+    "need grouping and no scenario wants one yet.",
+    "",
+    "WHY 10 VILLAGERS RATHER THAN A ROUND 5: MapGen starts every player with 5, so a target",
+    "of 5 is a scenario already won on tick 0 and would teach nothing. The lesson is that",
+    "villagers make villagers.",
+    "",
+    "THE OPPONENT IS PASSIVE, which runs its whole economy and never attacks -- so this",
+    "scenario cannot be lost by being raided while you learn. Elimination is still the loss",
+    "(you own nothing, you are out), because that is true on every map in this game whatever",
+    "a file declares, which is why no lose condition is written here.",
+    "",
+    "SCENARIO MODE MUST NOT LET CONQUEST WIN THIS (15.2): killing the passive AI's five",
+    "villagers and its town centre must NOT end this in victory with two villagers and no",
+    "house, or the scenario teaches the opposite of its name."
+  ],
+
+  "name": "How To Gather and Build",
+  "description": "Villagers gather food, wood, gold and stone, and they build. Put up a house and grow to ten villagers.",
+  "message": "Tap a villager, then tap a tree or a berry bush to gather. Tap your town centre to train more villagers. Build a house from the build menu to raise your population cap.\n\nGoal: own 1 house and 10 villagers.",
+
+  "mode": "scenario",
+
+  "_note_map": [
+    "A PINNED SEED IS NOT A PINNED MAP (PLAN.md 11.7). `seed` reproduces this map only",
+    "through the exact MapGenerator that made it -- any generator change makes the same",
+    "seed produce something else, and FastNoiseLite's float maths is not identical across",
+    "CPUs. Acceptable for these three and only these three, because their objectives count",
+    "villagers and ages rather than describing a place. 16.10 swaps the seed for a FILE and",
+    "retires the trap."
+  ],
+  "map": { "type": "river", "seed": 815101 },
+
+  "opponents": ["passive"],
+  "starting_age": 1,
+
+  "objectives": [
+    {
+      "subject": "building", "id": "building.house", "owner": "self",
+      "compare": ">=", "value": 1, "output": "win",
+      "text": "Build a house"
+    },
+    {
+      "subject": "unit", "id": "unit.villager", "owner": "self",
+      "compare": ">=", "value": 10, "output": "win",
+      "text": "Reach 10 villagers"
+    }
+  ]
+}

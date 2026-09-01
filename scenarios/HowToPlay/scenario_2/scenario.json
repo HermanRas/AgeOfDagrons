@@ -1,0 +1,38 @@
+{
+  "_note": [
+    "TEACHES THE AGE LADDER. Won by reaching age 2, the Age of Embers.",
+    "",
+    "ONE ROW, AND IT NAMES NO id. `subject: age` counts nothing on the map -- it reads",
+    "SimPlayer.age -- so an id here would be meaningless and the loader refuses one rather",
+    "than ignoring it.",
+    "",
+    "THE VALUE IS THE AGE INDEX, NOT A COST. Ages are indexed from 1 (SimPlayer.age starts",
+    "there), so `>= 2` is 'has advanced once'. ages.json names age 2 'Age of Embers II';",
+    "advancing costs resources and then runs on a timer with a HUD ring, so this scenario",
+    "is really about affording it -- which is why it comes after the economy lesson and not",
+    "before it.",
+    "",
+    "STARTS AT AGE 1 for the obvious reason: a scenario about advancing an age cannot start",
+    "in the age it is asking you to reach. `starting_age` is one number for everybody, so",
+    "the passive opponent starts there too."
+  ],
+
+  "name": "How To Age Up",
+  "description": "A new age unlocks better buildings and better units. Gather enough to advance from the Age of Ash into the Age of Embers.",
+  "message": "Tap your town centre and choose ADVANCE AGE. It costs resources and then takes time -- the ring on your age badge shows how long is left.\n\nGoal: reach the Age of Embers.",
+
+  "mode": "scenario",
+
+  "map": { "type": "river", "seed": 815102 },
+
+  "opponents": ["passive"],
+  "starting_age": 1,
+
+  "objectives": [
+    {
+      "subject": "age", "owner": "self",
+      "compare": ">=", "value": 2, "output": "win",
+      "text": "Advance to the Age of Embers"
+    }
+  ]
+}
