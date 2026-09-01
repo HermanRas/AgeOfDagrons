@@ -117,15 +117,14 @@ exact and worth getting right:
 | **`asset_request.md`** | the ask, the measurements, the reasoning, my answer in place. Unchanged. Still where a request is refused, corrected or argued |
 | **the board** | which bucket a card is in, and nothing else |
 
-**My cards carry the `art` label.** There are eight: **A.10** (the building roster —
-**closed 2026-09-01**, see below), **P5**, **P6**, **P7**, **P9-packed-siege** (new
-2026-09-01), the `location_scale` root-bone decision, and two delivered UI cards — **P8** and **P8-tech-icons**, which are
-**the same work twice** and were closed together on 2026-09-01 after the second sat in
-`Blocked` for two days saying the icons had not been made. **`P7-footprint` was mine and is
-not any more** — the owner resolved its dual label to `game-code` on 2026-09-01, so the game
-side owes me the wingspan-or-ground answer and both tools now refuse the card. `game-code` is theirs. **One board rather than two projects**
-because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either of us
-could read off it, and two projects would hide it.
+**My cards carry the `art` label; `game-code` is theirs; `owner-decision` is neither's.**
+As of 2026-09-01 the art side holds **two open cards — `P6` and `P9-packed-siege`, and they
+are the same two actors**, so settling P9 first is what stops P6's 16 colour bakes being
+thrown away. Closed: `A.10`, `P8`, `P8-tech-icons`, `carcass-root-bone`. **Cards leave by
+tag swap, not by being finished**: `P5` went to `game-code` once the measuring was done and
+only the wiring remained, `P7` and `P7-footprint` likewise. **One board rather than two
+projects**, because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either
+agent could read off it and two projects would hide it.
 
 > ## ⛔ THE LABEL IS THE FENCE. I TOUCH `art` CARDS AND NOTHING ELSE.
 >
@@ -188,33 +187,24 @@ could read off it, and two projects would hide it.
 >   it lives until one of us runs a sync — so the board is the column, and `board.json` is
 >   the text. This is worth telling the owner before they lose something.
 
-> ⚠️ **A.10 SAT IN `Doing` FOR WEEKS AFTER THE ART WAS DELIVERED, AND IT BLOCKED TWO CODE
-> CARDS THAT WERE NOT ACTUALLY BLOCKED.** The owner asked what A.10 was about on
-> 2026-09-01; the answer turned out to be that every building the game declares already had
-> a staged atlas and a wired four-age map, and the card's own text still said "running in
-> the background" when nothing was running. Closed on the owner's call the same day —
-> *"all assets excluding dragon, packed engines (trebuchet, onager) looks good, bugs may be
-> reported but for now its considered complete."*
+> ⚠️ **WHEN A CARD CLAIMS ART IS MISSING, LOOK ON DISK BEFORE BELIEVING IT.** Twice in one
+> hour on 2026-09-01: **A.10** sat in `Doing` saying "running in the background" for weeks
+> after the whole building roster was staged and four-age-mapped, blocking two code cards
+> that were not blocked; **`P8-tech-icons`** sat in `Blocked` saying every research tile drew
+> its name, while all 27 icons sat in `game/assets/ui/icons/` wired to
+> `selection_actions.gd`. A `Blocked` card citing art is a claim about `game/assets/atlases`,
+> and that claim is one `Get-ChildItem` from being tested.
 >
-> **The drift is the lesson, not the card.** The board was seeded from PLAN.md §12A and
-> `PROGRESS.md`, and it inherited their staleness rather than fixing it — a fresh tracker
-> seeded from a stale one starts stale. **This is the fourth tracker this project has had
-> and the first three all drifted.** What stops the fifth is the §1.1 rule that a card moves
-> when work starts, not the rule that says a card exists.
->
-> **And the cheap check that would have caught it: ask the board what is blocked, then look
-> on disk.** Two `Blocked` cards citing an art card is a claim about `game/assets/atlases`,
-> and that claim is one `Get-ChildItem` away from being tested. **`P8-tech-icons` was the
-> same story an hour later** — parked in `Blocked` saying every research tile drew its name,
-> while all 27 icons sat in `game/assets/ui/icons/` wired to `selection_actions.gd`. It is a
-> **subset of `P8`**, which shipped them, and a subset card does not close itself when the
-> superset ships. **When a card claims art is missing, look before believing it.**
+> Two causes worth naming. **A fresh tracker seeded from a stale one starts stale** — this
+> board was seeded from PLAN.md §12A and `PROGRESS.md` and inherited their drift; the rule
+> that stops it is *a card moves when work starts*. And **a subset card does not close
+> itself when the superset ships** — `P8-tech-icons` was part of `P8`, which says so in its
+> own text.
 >
 > **⚠️ HALF-DONE WORK GETS ITS OWN `To-Do` CARD. DO NOT NOTE IT ON THE CLOSED ONE.** Owner,
-> 2026-09-01, on my listing A.10's two exclusions in its own description: *"rather add new
-> to-Do items if there are none than adding a note on a card with status completed."* A
-> caveat inside a `Done` card is invisible to anyone reading the board as a queue. That is
-> what `P9-packed-siege` is.
+> 2026-09-01: *"rather add new to-Do items if there are none than adding a note on a card
+> with status completed."* A caveat inside a `Done` card is invisible to anyone reading the
+> board as a queue.
 
 ```powershell
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
@@ -225,66 +215,40 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 & $py kanban\card.py append P6 note.md  # add to a description, clobber nothing
 ```
 
-> ### ⚠️ `vikunja_sync.py` AND `board.json` ARE DELETED — 2026-09-01, and the reason is a rule
->
-> Owner: *"nothing lives in repo, everything lives online, no board.json for sync."* **The
-> board is the only truth. Nothing on disk mirrors it.** `git show 917ef8b^:kanban/board.json`
-> if the old manifest is ever wanted; the game side deleted both, I wrote `card.py`.
->
-> **`board.json` WAS A SECOND SOURCE OF TRUTH, and this project has now lost four of those** —
-> `ASSET_MISSING.md`, `PROGRESS.md`, `UI_Design.md`, and the board's own descriptions, which
-> were seeded from a stale PLAN.md and inherited its staleness. A mirror of a live system is a
-> tracker, and every tracker here has drifted. **Do not build a fifth.**
->
-> **But the drift was not what forced this. The GRANULARITY was.** A bare sync PATCHed the
-> title, description, labels and `done` flag of **all 65 cards** from `board.json` — both
-> agents' halves together — so there was no such thing as editing one card, and every edit
-> either of us made was a whole-board write. That is how we came to overwrite each other, and
-> it is why the fix is a tool with a unit of one rather than better discipline.
->
-> The near-miss worth remembering, from the game side: the manifest still said `game-code` for
-> `9.5` after the owner had **deliberately stripped that label**, so the next bare sync would
-> have silently put it back as one line of a 64-card run. **A whole-board write makes every
-> stale byte in the manifest an active claim.**
->
-> **`card.py` ENFORCES THE FENCE RATHER THAN TRUSTING ME TO.** Every write reads the card's
-> labels first and refuses a `game-code` card outright — column, description, title, all of
-> it. There is no override flag and there is not going to be one. Reads are always allowed.
->
-> **`card_game.py` is the game side's ten-line wrapper: it imports `card.py` and swaps
-> `MINE`/`THEIRS`.** One implementation, not a fork. Two things that binds me to:
-> **`MINE` and `THEIRS` are a published interface now** — their wrapper asserts the exact
-> values before overriding, so a rename stops their tool loudly rather than silently running
-> them under my fence, but it does stop it. Rename only after saying so in `asset_request.md`.
-> And **anything that should follow the fence must read `MINE` at call time, never bake in the
-> string `"art"`** — `--by` did exactly that and had to be worked around in their wrapper.
->
-> **A DUAL-LABELLED CARD IS UNWRITABLE FROM BOTH TOOLS, BY DESIGN**, since each refuses the
-> other's label. That is correct: two labels means two agents with a claim. **A tag swap is the
-> OWNER's**, in the Vikunja UI, and neither tool has a command for it on purpose.
->
-> ### ⚠️ `kanban/` IS UNTRACKED AND LOCAL. DO NOT COMMIT IT, DO NOT `git add -f` IT.
+> ### ⚠️ `kanban/` IS LOCAL AND UNTRACKED. NEVER COMMIT IT, NEVER `git add -f` IT.
 >
 > Owner, 2026-09-01: *"kanban is our local progress tracker and does not belong in the game
-> repo."* Untracked in `95ca73d`, `kanban/` is in `.gitignore`, and the files stay on disk.
-> I committed `card.py` on 2026-09-01 at the game side's request and that commit is now
-> superseded — **the ruling outranks the request**, and re-adding it with `-f` would be
-> reversing the owner rather than helping a colleague.
+> repo"*, and *"nothing lives in repo, everything lives online."* Untracked in `95ca73d`.
+> `vikunja_sync.py` and `board.json` are deleted (`git show 917ef8b^:kanban/board.json`);
+> `card.py` replaced them and `card_game.py` is the game side's ten-line wrapper around it.
 >
-> **One hazard follows and it is permanent: `card.py` and `card_game.py` HAVE NO GIT COPY.**
-> §1's `git checkout -- <file>` warning is about losing uncommitted work; these files are
-> now uncommitted for ever, so that hazard never expires for them. There is no second copy
-> on this machine beyond Google Drive's own version history. **Treat an edit to either as
-> unrecoverable if you get it wrong**, and read before you overwrite.
+> **Why the sync died is the transferable part, and it was GRANULARITY, not drift.** A bare
+> sync PATCHed the title, description, labels and `done` of **all 65 cards** from
+> `board.json` — both agents' halves together — so there was no such thing as editing one
+> card. That is how we came to overwrite each other, and why the fix is a tool with a unit
+> of one rather than better discipline. `board.json` was also a second source of truth, and
+> **this project has now lost four of those** (`ASSET_MISSING.md`, `PROGRESS.md`,
+> `UI_Design.md`, the board's own seeded descriptions). **Do not build a fifth.**
 >
-> **A KEY IS PARSED TOLERANTLY, BECAUSE THE UI RETYPES THE SEPARATOR.** `card.py` writes
-> `"<key> - <title>"` but a title edited in the Vikunja web UI comes back with an EM DASH,
-> and splitting on `" - "` alone then swallows the entire title as the key. Card #43 did
-> exactly that when the owner swapped P7's tag: `card.py show P7` began answering *"no card
-> with key 'P7'"* while the card sat in `Blocked`, and offered its own title as the
-> suggestion. **The card was fine and the parser was brittle.** `SEP_RE` now accepts every
-> dash a person or an editor can produce. Expect the same class of thing wherever this tool
-> reads back a field a human can edit.
+> **`card.py` enforces the fence rather than trusting me to** — every write reads the card's
+> labels and refuses a `game-code` card outright, with no override flag. Reads always work.
+> **`MINE`/`THEIRS` are a published interface**: their wrapper asserts the values before
+> swapping them, so a rename stops their tool loudly rather than silently running them under
+> my fence — rename only after saying so in `asset_request.md`. And **anything that follows
+> the fence must read `MINE` at call time, never bake in `"art"`** (`--by` did, and had to be
+> worked around in their wrapper).
+>
+> **HAZARD, AND IT IS PERMANENT: `card.py` and `card_game.py` HAVE NO GIT COPY.** §1's
+> `git checkout --` warning is about losing uncommitted work; these are uncommitted for
+> ever, so it never expires for them. No second copy beyond Google Drive's version history.
+> **Treat an edit to either as unrecoverable, and read before you overwrite.**
+>
+> **A KEY IS PARSED TOLERANTLY BECAUSE THE UI RETYPES THE SEPARATOR.** `card.py` writes
+> `"<key> - <title>"`, but a title edited in the web UI comes back with an EM DASH and
+> splitting on `" - "` then swallows the whole title as the key — `card.py show P7` answered
+> *"no card with key 'P7'"* while the card sat in `Blocked`. **The card was fine; the parser
+> was brittle.** `SEP_RE` now takes any dash. Expect this wherever the tool reads back a
+> field a human can edit.
 
 **Five buckets: `To-Do` → `Doing` → `Test` → `Blocked` → `Done`.** `To-Do` carries a
 hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
@@ -302,50 +266,33 @@ hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
   columns on a chiral subject for a facing claim, the five-direction one-pose read for a
   clip. **A green batch summary is evidence of nothing** and is never grounds to move a
   card to `Done`.
-- ⚠️ **`--move` IS THE ONLY WAY TO MOVE A CARD; EDITING `kanban/board.json`'s `bucket`
-  DOES NOTHING** to a card that exists. That field is a seed applied once at creation.
-  Descriptions and labels are rewritten from the manifest on a re-sync; the column is
-  deliberately left alone, so work in flight is never dragged backwards.
-- **`kanban/` belongs to neither of us and both of us write to it** — it is not `game/`
-  and not `tools/`, and it was added at the owner's request on 2026-09-01. **But each of us
-  writes only our own labelled cards**, per the boxed rule above. Add an `art` card by
-  giving it a `key` in `board.json` and running a bare sync; a card the GAME side needs is
-  theirs to add, or the owner's. **Never renumber a `key`**: the sync matches on it, so a
-  changed key files a second card instead of updating one.
+- **`append`, never `set`.** `append` stamps and adds; `set` replaces a whole description
+  and needs `--replace` spelled out. The board is a shared document and the owner writes
+  their reviews into these cards — **re-read a card immediately before writing to it**, per
+  the owner's own working order: *"ready the card, do the work, check the card for updates,
+  add your update."*
+- **`card.py new` adds an `art` card.** A card the GAME side needs is theirs to add, or the
+  owner's. **Never reuse or renumber a key** — the tool matches on it.
 - **PLAN.md is no longer mine or theirs to keep current.** The owner asks for PLAN.md
   updates themselves, at a major commit — *"i will manually request updates to plan.md
   when we commit major changes."* It stays the authority for architecture and still wins
   every disagreement. **PLAN.md §12A is where the art track's reasoning lives and it is
   now updated on request only**, so do not append to it as a running log; put the finding
   in the recipe, in §4 here, or in `asset_request.md`.
-- ⚠️ **DO NOT JUDGE THE BOARD'S TEXT THROUGH POWERSHELL, and do not judge placement by
-  the obvious endpoint.** `Invoke-RestMethod` piped to a console printed
-  `ART â the building roster` for a card the server stores with a correct em dash — §4's
-  own "before quoting a UI element as evidence, check it is capable of varying with the
-  thing you are claiming" rule, one layer out. And `GET /views/{v}/tasks` never fills in
-  `bucket_id` while `GET .../buckets` reports `count: 0` for everything, both of which
-  read as an empty board. **`GET .../buckets/tasks` is the only authoritative mapping.**
-- **The `.env` token expires** (Vikunja enforces an expiry), so a 401 from `--check` is
-  maintenance rather than a broken board; the script prints the re-minting steps. `.env`
-  is gitignored as of 2026-09-01 — it was not before, and `origin` is public.
+- ⚠️ **DO NOT TALK TO THE BOARD FROM POWERSHELL, and that is why `card.py` is Python.**
+  PS 5.1's `Invoke-RestMethod` decodes a charset-less response as ISO-8859-1, turning the
+  em dash every card title carries into `ART â roster` — observed against this board — and
+  it writes the corruption back on a PATCH. PowerShell 7 is not installed here.
+- **The `.env` token expires** (Vikunja enforces it), so a 401 is maintenance rather than a
+  broken board; `card.py` prints the re-minting steps. `.env` is gitignored as of
+  2026-09-01 — it was not before, and `origin` is public. It was never committed: checked.
 
-> ⚠️ **`PROGRESS.md` IS DELETED** — 2026-09-01, the owner's call, superseded by the board.
-> **This is the third time this repo has removed a tracker rather than kept it in step**:
-> `ASSET_MISSING.md` went 2026-08-16 for drifting out of step with the PLAN.md section it
-> claimed to mirror, `UI_Design.md` and its six mockups went 2026-08-30 as outdated, and
-> both left citations behind that are read as history. Do the same here.
->
-> **Seven references now point at nothing** (counted, not estimated): one in
-> `asset_request.md`, four in `README.md`, two in `Docs/README.md`. Four of those are not
-> dead links but **active false claims** — `README.md:33` and `Docs/README.md:18` both say
-> *"PROGRESS.md is the status document"* and `README.md:177` calls it *"the authoritative
-> version"*. Left rather than churned, but they are the ones to fix first if either README
-> is opened, because a wrong pointer is worse than a broken one.
->
-> The one that binds me: **`asset_request.md:14` says the priority table is *"derived
-> from `PROGRESS.md`"*.** That is now false — it derives from the board — and it is worth
-> correcting the next time I touch that file. `git show HEAD~1:PROGRESS.md` if the old
-> phase table is ever wanted.
+> ⚠️ **`PROGRESS.md` IS DELETED** (2026-09-01, superseded by the board), as are
+> `ASSET_MISSING.md` and `UI_Design.md`. Citations to all three survive in older files and
+> are **history, not links** — leave them rather than churn. **`README.md` and
+> `Docs/README.md` still call `PROGRESS.md` "the status document", which is an active false
+> claim rather than a dead link**; fix those two lines first if either README is ever
+> opened, because a wrong pointer is worse than a broken one.
 
 ## 2. Machine layout
 
@@ -870,6 +817,39 @@ or count DISTINCT frame indices in the table.** The general lesson is the one th
 entry above teaches too — before quoting a number as evidence, check it is capable of
 varying with the thing you are claiming.
 
+**`isobake inspect` PRINTS RAW 0 A.D. UNITS AND LABELS THEM `m`. EVERY FIGURE IT HAS EVER
+GIVEN IS OUT BY TWO.** The bake scales by `metres_per_tile / ZEROAD_UNITS_PER_TILE` =
+2.0 / 4.0 = **0.5** (`zeroad.py`), and `inspect` on a bare actor never applies it — so a
+wolf it calls "2.291 m tall" is **1.15 m**. isobake's own docstring is the control: a
+citizen body mesh measures 3.85 raw and should be 1.93 m. The bake says so too, in every
+log — `23 object(s) imported, scale x0.5`.
+
+The tell that it was wrong was two recipes disagreeing: `dragon.toml` records
+`18.380 x 16.212 x 7.523 raw → 9.19 x 8.11 x 3.76 m` correctly, while `wolf.toml`'s
+`4.582 raw units tall (2.291 m)` reads it the wrong way round. **One of them had to be
+wrong, and a contradiction between two comments is worth more than either comment.**
+Delivered figures in `asset_request.md` [P5]; `tools/measure_footprint.py` does the
+conversion for you.
+
+**A CARCASS SHARES ITS ACTOR WITH THE LIVE ANIMAL** — `wolf_carcass.toml` names
+`fauna/wolf.xml` — so `inspect` returns one box for both and cannot describe a corpse at
+all. A carcass is the death clip's FINAL pose, which means posing the rig and measuring the
+deformed mesh off the evaluated depsgraph.
+
+> ⚠️ **AND BLENDER ≥4.4 NEEDS `action_slot` BOUND OR THE POSE SILENTLY DOES NOT HAPPEN.**
+> Assigning `animation_data.action` alone leaves `action_slot` at None and every curve drives
+> nothing — the armature sits at rest **and reports success**. My first measurement run
+> returned identical rest and posed heights for all seven species and looked entirely
+> plausible. `render_impl._assign_action` exists for this; call it rather than assigning.
+> Same family as the six green-and-wrong bugs in §5.
+
+**AN AXIS-ALIGNED BOX IS THE WRONG FOOTPRINT FOR A BODY THAT DIES TWISTED.** Use the
+minimum-area ground rectangle. The control that the rotation search works is that a
+STANDING animal's oriented and axis-aligned boxes come out identical — they do, for all
+five. The wolf is the one species whose corpse is nearly square (2.48 × 2.48 m, splayed),
+which is why its carcass covers *more* ground than the bear's despite being a fifth the
+weight, and why that is the art telling the truth rather than a bug.
+
 **Canvas sizing**: interpolate from the nearest calibrated recipe plus margin and
 trust the clip-check (`CLIPPED` in the summary). Do not compute it by hand.
 
@@ -887,7 +867,7 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-08-30
+## 5. State as of 2026-09-01
 
 > ### ⚠️ `art_work/out` IS EMPTY. `game/assets/atlases` IS NOW THE ONLY COPY OF THE ART.
 >
@@ -1004,24 +984,31 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
-- **`vis.dragon` is out for rigging, and the blocker has MOVED from the art to isobake.**
-  The mesh has no rig at all — verified pristine against HEAD's git-lfs `oid`, then read
-  four ways (§4). The art is 0 A.D.'s own and CC-BY-SA 3.0, **not** bespoke as PLAN.md A.9
-  and `asset_request.md` [P7] both assumed, so it can be rigged and the rig redistributed;
-  `tools/recipes/dragon.toml` has led with that correction since 2026-08-25 and it went
-  unread twice. `tools/dragon_to_glb.py` prepares the upload; outputs live in
-  `art_source/dragon_rig`, never in the repo.
-- **`adapters/generic.py` IS THE ONLY THING BETWEEN A RIGGED DRAGON AND AN ATLAS, and it is
-  a stub that raises `NotImplementedError`.** Only `zeroad`, `terrain` and `smoke` are real.
-  Its own docstring scopes the job and it is bounded rather than a rewrite: camera, rotation
-  loop, projection, packing and atlas format are all source-agnostic and already work, so
-  the adapter only has to stand a subject at the origin at the right scale with its clips
-  resolved — enable the bundled importers, remap axes to `directions.CANONICAL_FORWARD`,
-  fit to the recipe's `height_m`, and map action names onto clip names.
-  **`isobake inspect` ALREADY reads glTF and FBX**, so judge a rigged file — armature,
-  actions, bounding box, real-world size — *before* writing the adapter that consumes it.
-  That ordering is the point: it costs nothing and tells you whether the rig is worth the
-  work.
+- **THE DRAGON RIG CAME BACK, and the only thing left between it and an atlas is
+  `adapters/generic.py`.** Board card `P7`, now `owner-decision`. The art is 0 A.D.'s own
+  and CC-BY-SA 3.0 — **not** bespoke as PLAN.md A.9 assumed — so it could be rigged and the
+  rig redistributed. Delivered in `art_source/dragon_rig` (never in the repo, §1): a
+  43-bone armature with the mesh skinned to it, and every clip drives all 43 bones.
+  > ⚠️ **USE `Untitled.blend`, NOT THE GLB.** `walk_Idle_Fly_attack_die-animaion.glb` is
+  > named after the clips and **contains none of them** — its actions are stock auto-rigger
+  > walk cycles, the export having dropped `Death`, `Fly2`, `idle`, `shootFire` and `walk`.
+  > **A filename is not an inventory**; `isobake inspect` reads glTF, FBX and `.blend`, so
+  > check before trusting one.
+
+  Three things to handle when it is taken: a stray **`Icosphere`** sits at the world origin
+  in both blends and would bake as a ball beside the dragon (plus their own Camera and
+  Light); the rig came back **upright on two legs** — biped bone names, 5.44 m tall against
+  a 3.76 m source — which is the owner's call and the reason the card is `owner-decision`;
+  and it was rigged on the **sparse** mesh (341 verts), so `dragon_dense.glb` is still in
+  hand if deformation proves coarse. **Whether it deforms well is unknown and cannot be
+  known until it renders** — which is the argument for writing the adapter: it turns a
+  decision the owner cannot make into one they can make by looking.
+
+  `generic.py` raises `NotImplementedError` (only `zeroad`, `terrain` and `smoke` are real)
+  and is **bounded rather than a rewrite** — camera, rotation loop, projection, packing and
+  atlas format are all source-agnostic and already work. It only has to stand a subject at
+  the origin at the right scale with its clips resolved: enable the bundled importers, remap
+  axes to `directions.CANONICAL_FORWARD`, fit to `height_m`, map action names to clip names.
 - ✅ **CLOSED 2026-09-01 — the deer's carcass floats 0.217 m and that is now the accepted
   state, on the owner's call: "not worth the pipeline change."** It is the only asset
   affected; its lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px
