@@ -252,3 +252,134 @@ func win_objectives() -> Array[ObjectiveDef]:
 		if o.output == ObjectiveDef.Output.WIN:
 			out.append(o)
 	return out
+
+
+## THE LAUNCH PATH (PLAN.md 15.3): this scenario as a `MatchConfig`, or null with the
+## reasons in `problems`.
+##
+## ## WHY IT IS HERE AND NOT ON A SCREEN
+##
+## Decision 1 says a scenario screen is one more producer of a `MatchConfig`, exactly as
+## `SkirmishScreen.build_config()` is. But 15.3 asks to be *"tested by asserting the config
+## rather than by starting a match"*, and a function on a `Control` cannot be, so it lives
+## on the data. 15.5 calls this and puts the result in `Net.pending_match`; nothing in the
+## boot path, the net layer or `SimWorld.setup()` learns what a campaign is.
+##
+## ## IT REFUSES `SCENARIO` MODE TODAY, AND THAT REFUSAL IS THREE LINES TO DELETE
+##
+## `MatchConfig.Mode` has no `SCENARIO` member yet -- PLAN.md assigns it, and
+## `MatchConfig.objectives`, to **15.2**. Two wrong ways to paper over that, and it is
+## worth naming both because either would look like it worked:
+##
+## - **Map `SCENARIO` onto `LAST_MAN_STANDING`.** Scenario 1 would then be won by killing
+##   the passive AI's five villagers, with two villagers and no house, which is decision 5's
+##   named failure and teaches the opposite of the scenario's name.
+## - **Add an inert `SCENARIO` member here.** `WinConditionSystem` deliberately never ends
+##   a match in an unimplemented mode, so scenario 1 would launch into a match that can
+##   never be won OR lost. A player would sit in it forever. "Inert" is the safe direction
+##   for a mode nobody has selected yet; it is the wrong direction for the mode a PLAY
+##   button is about to select.
+##
+## So a `SCENARIO` scenario refuses to launch and says which row it is waiting for. **This
+## is exactly what PLAN.md 15 predicts**: scenario 3 is playable at 15.1 + 15.3 + 15.5, and
+## 15.2 is what unlocks scenarios 1 and 2. When 15.2 lands, delete the guard below and set
+## `cfg.mode` from `mode`.
+##
+## ## A PINNED SEED IS NOT A PINNED MAP
+##
+## PLAN.md 11.7's second trap, and it is the reason the map is GENERATED here and then
+## carried as data. `MatchConfig.map_data` travels as the map because `FastNoiseLite`'s
+## float maths is not identical between an ARM phone and an x86 desktop, so a host and a
+## client regenerating from a shared seed can disagree about where the water is. `seed` and
+## `map_type` ride along as provenance only.
+##
+## What the trap costs is separate and unfixed: **any `MapGenerator` change makes this seed
+## produce a different map.** Acceptable for these three, whose objectives count villagers
+## and ages rather than describing a place. 16.10 pins a FILE instead.
+## `out_problems` is named apart from this class's own `problems` deliberately: a parameter
+## called `problems` would SHADOW the field, and the two mean different things here -- one
+## is what the loader found, the other is what this call is reporting.
+func build_config(out_problems: Array[String]) -> MatchConfig:
+	# Decision 4: a scenario that cannot be trusted must refuse to start rather than start
+	# and evaluate to true on tick 1. Every complaint the loader already found comes along,
+	# so a caller has one place to look.
+	if not is_playable():
+		for p in problems_or_self():
+			out_problems.append(p)
+		return null
+
+	if mode == Mode.SCENARIO:
+		out_problems.append("mode 'scenario' needs 15.2's ObjectiveSystem before it can be"
+				+ " launched -- MatchConfig has no SCENARIO mode yet, and mapping it onto"
+				+ " last_man_standing would let conquest win an economy lesson")
+		return null
+
+	var cfg := MatchConfig.new()
+
+	# PLAYER 1 IS THE HUMAN and the opponents follow, numbered 1..N with no gaps.
+	# `SkirmishScreen.build_config` compacts for a reason that binds here too: `Net` hands
+	# out the lowest free id to a joining peer and `MapGen.build_from` resolves a map's
+	# player index BY POSITION in `world.players`, so a match whose ids skipped one would
+	# hand somebody else's base to the wrong player.
+	cfg.player_ids = [1]
+	cfg.ai_players = [false]
+	# Position for position with `ai_players`. The human gets a level too and it is never
+	# read -- a hole here would misalign every bot after it.
+	cfg.ai_levels = [int(SimPlayer.AILevel.EASY)]
+	# A FREE-FOR-ALL. 0 is the ABSENCE of a team rather than a team everybody shares, which
+	# is what makes "the human against one bot" the right shape here: two players both
+	# reading 0 are not allies. Written out per row rather than left empty -- both are legal
+	# and mean the same thing, and the explicit form is one less thing to check when a
+	# future campaign wants 2v2.
+	cfg.teams = [0]
+
+	for level in opponents:
+		cfg.player_ids.append(cfg.player_ids.size() + 1)
+		cfg.ai_players.append(true)
+		cfg.ai_levels.append(_ai_level_of(level))
+		cfg.teams.append(0)
+
+	# LEFT EMPTY ON PURPOSE, which `MatchConfig.colours` documents as "derive from join
+	# order". The alternative is a palette list here, and a second copy of `colours.json`'s
+	# order is a second thing to keep in step with a file whose ORDER IS LOAD-BEARING --
+	# saves and replays index into it. Join order gives player 1 the first entry.
+	cfg.colours = []
+
+	cfg.seed = seed
+	cfg.map_type = map_type
+	cfg.map_data = MapGenerator.generate(seed, map_type, cfg.player_ids.size())
+	# The map is the authority on its own size; a config disagreeing with the map it
+	# carries would build a world the wrong shape.
+	cfg.map_size = cfg.map_data.size if cfg.map_data != null else MatchConfig.DEBUG_MAP_SIZE
+	cfg.mode = MatchConfig.Mode.LAST_MAN_STANDING
+	cfg.starting_age = starting_age
+	# "Nobody typed one", which is what a scenario is: it is a solo match on loopback and
+	# there is no host name field anywhere near it. `LanBeacon.default_host_name()` is the
+	# lobby's fallback and does not belong here.
+	cfg.host_name = ""
+	return cfg
+
+
+## `problems`, or a single generic line if something refused without saying why. Never
+## empty for an unplayable scenario, because "it will not start and I do not know why" is
+## the one outcome that costs an afternoon.
+func problems_or_self() -> Array[String]:
+	if not problems.is_empty():
+		return problems
+	return ["scenario '%s' is not playable and did not say why" % folder] as Array[String]
+
+
+## An AI level name to `SimPlayer.AILevel`.
+##
+## ⚠️ **`AIProfile.IDS` AND `SimPlayer.AILevel` ARE COUPLED BY POSITION AND NOTHING SAYS SO
+## AT EITHER END.** `IDS` is `["passive", "easy", "normal", "hard", "unfair"]` and the enum
+## is `{ PASSIVE, EASY, NORMAL, HARD, UNFAIR }`, so `find()` is the conversion -- and it is
+## a conversion that would keep working, silently and wrongly, if either list were reordered
+## or a level were inserted in the middle. `test_scenario_launch` asserts the pairing by
+## NAME for exactly that reason; this comment is not the guard, that test is.
+func _ai_level_of(level: StringName) -> int:
+	var index := AIProfile.IDS.find(String(level))
+	# Unreachable through `from_dict`, which refuses an unknown level -- so this guards a
+	# def built by hand in a test or by a future editor, and Easy is what every older
+	# config that named no level already gets.
+	return index if index >= 0 else int(SimPlayer.AILevel.EASY)
