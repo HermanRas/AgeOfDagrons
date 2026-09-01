@@ -117,12 +117,13 @@ exact and worth getting right:
 | **`asset_request.md`** | the ask, the measurements, the reasoning, my answer in place. Unchanged. Still where a request is refused, corrected or argued |
 | **the board** | which bucket a card is in, and nothing else |
 
-**My cards carry the `art` label.** There are nine: **A.10** (the building roster —
+**My cards carry the `art` label.** There are eight: **A.10** (the building roster —
 **closed 2026-09-01**, see below), **P5**, **P6**, **P7**, **P9-packed-siege** (new
-2026-09-01), the `location_scale` root-bone decision, the dragon-footprint question the
-game side owes me, and two delivered UI cards — **P8** and **P8-tech-icons**, which are
+2026-09-01), the `location_scale` root-bone decision, and two delivered UI cards — **P8** and **P8-tech-icons**, which are
 **the same work twice** and were closed together on 2026-09-01 after the second sat in
-`Blocked` for two days saying the icons had not been made. `game-code` is theirs. **One board rather than two projects**
+`Blocked` for two days saying the icons had not been made. **`P7-footprint` was mine and is
+not any more** — the owner resolved its dual label to `game-code` on 2026-09-01, so the game
+side owes me the wingspan-or-ground answer and both tools now refuse the card. `game-code` is theirs. **One board rather than two projects**
 because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either of us
 could read off it, and two projects would hide it.
 
@@ -142,6 +143,30 @@ could read off it, and two projects would hide it.
 > to belong to the game side, or theirs to me, I **say so and stop**, and the owner swaps
 > the tag. A label I change myself moves the fence, which is the one thing on this board
 > that is not mine to move.
+>
+> ### ⛳ THE THIRD DESTINATION: ASK FOR `owner-decision`, NOT `game-code`
+>
+> **Owner, 2026-09-01:** *"note items for my review / decision action — you can request a
+> tag swap to `owner-decision` instead of `game-code`."*
+>
+> So a card leaving my hands has **two** destinations, and picking the wrong one wastes a
+> round trip. The test is *who can actually settle it*:
+>
+> | the card needs | ask for |
+> |---|---|
+> | code written, a number wired, a `visuals.json` edit | `game-code` |
+> | a judgement only the owner can make — is this what you want, is it worth the cost, which of two correct answers | **`owner-decision`** |
+>
+> **I had been defaulting to `game-code` for both**, which is how the dragon spent a
+> fortnight framed as "the game side owes me an answer" when what it actually needed was
+> the owner looking at it. If nobody on either side of the fence can settle it by
+> measuring, it is a decision, and it goes to the owner directly.
+>
+> ⚠️ **A card labelled ONLY `owner-decision` is unwritable from BOTH tools**, because each
+> guard demands its own label be present. That is the correct behaviour and not a bug to
+> route around: the card is parked pending a person, and neither agent should be editing it
+> while it waits. **Say what you need in the same breath as the request**, because after the
+> swap you cannot append it.
 >
 > **I earned this rule the hard way, in one session.** I moved `15.1` — a `game-code` card
 > — back into `Doing` because I had convinced myself `vikunja_sync.py` had dragged it out.
@@ -194,10 +219,49 @@ could read off it, and two projects would hide it.
 ```powershell
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 
-& $py kanban\vikunja_sync.py --show          # the live board
-& $py kanban\vikunja_sync.py --move P6 Doing # THIS is how I report progress
-& $py kanban\vikunja_sync.py --check         # auth + drift, writes nothing
+& $py kanban\card.py list --label art   # my cards, with their columns
+& $py kanban\card.py show P6            # ONE card, description and all
+& $py kanban\card.py move P6 Doing      # THIS is how I report progress
+& $py kanban\card.py append P6 note.md  # add to a description, clobber nothing
 ```
+
+> ### ⚠️ `vikunja_sync.py` AND `board.json` ARE DELETED — 2026-09-01, and the reason is a rule
+>
+> Owner: *"nothing lives in repo, everything lives online, no board.json for sync."* **The
+> board is the only truth. Nothing on disk mirrors it.** `git show 917ef8b^:kanban/board.json`
+> if the old manifest is ever wanted; the game side deleted both, I wrote `card.py`.
+>
+> **`board.json` WAS A SECOND SOURCE OF TRUTH, and this project has now lost four of those** —
+> `ASSET_MISSING.md`, `PROGRESS.md`, `UI_Design.md`, and the board's own descriptions, which
+> were seeded from a stale PLAN.md and inherited its staleness. A mirror of a live system is a
+> tracker, and every tracker here has drifted. **Do not build a fifth.**
+>
+> **But the drift was not what forced this. The GRANULARITY was.** A bare sync PATCHed the
+> title, description, labels and `done` flag of **all 65 cards** from `board.json` — both
+> agents' halves together — so there was no such thing as editing one card, and every edit
+> either of us made was a whole-board write. That is how we came to overwrite each other, and
+> it is why the fix is a tool with a unit of one rather than better discipline.
+>
+> The near-miss worth remembering, from the game side: the manifest still said `game-code` for
+> `9.5` after the owner had **deliberately stripped that label**, so the next bare sync would
+> have silently put it back as one line of a 64-card run. **A whole-board write makes every
+> stale byte in the manifest an active claim.**
+>
+> **`card.py` ENFORCES THE FENCE RATHER THAN TRUSTING ME TO.** Every write reads the card's
+> labels first and refuses a `game-code` card outright — column, description, title, all of
+> it. There is no override flag and there is not going to be one. Reads are always allowed.
+>
+> **`card_game.py` is the game side's ten-line wrapper: it imports `card.py` and swaps
+> `MINE`/`THEIRS`.** One implementation, not a fork. Two things that binds me to:
+> **`MINE` and `THEIRS` are a published interface now** — their wrapper asserts the exact
+> values before overriding, so a rename stops their tool loudly rather than silently running
+> them under my fence, but it does stop it. Rename only after saying so in `asset_request.md`.
+> And **anything that should follow the fence must read `MINE` at call time, never bake in the
+> string `"art"`** — `--by` did exactly that and had to be worked around in their wrapper.
+>
+> **A DUAL-LABELLED CARD IS UNWRITABLE FROM BOTH TOOLS, BY DESIGN**, since each refuses the
+> other's label. That is correct: two labels means two agents with a claim. **A tag swap is the
+> OWNER's**, in the Vikunja UI, and neither tool has a command for it on purpose.
 
 **Five buckets: `To-Do` → `Doing` → `Test` → `Blocked` → `Done`.** `To-Do` carries a
 hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
