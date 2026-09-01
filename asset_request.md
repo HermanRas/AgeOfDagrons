@@ -213,6 +213,73 @@ take here.
 > properly means teaching isobake to exempt the root bone from `location_scale` — say the
 > word and I will; it did not seem worth holding the deer fix behind.
 
+> ## ✅ [asset] MEASURED 2026-09-01 — ten figures, and no bake was needed after all
+>
+> `tools/measure_footprint.py` (new). Re-run it for any future species; it reads the
+> source actor, costs no bake, and took about a minute each.
+>
+> | id | footprint_m | was | height_m (FYI) |
+> |---|---|---|---|
+> | `vis.wolf` | **[1.71, 0.40]** | [1.70, 0.48] | 1.15 |
+> | `vis.bear` | **[2.55, 1.16]** | [2.53, 1.30] | 1.54 |
+> | `vis.boar` | **[1.82, 0.59]** | [1.81, 0.71] | 0.99 |
+> | `vis.fish` | **[1.33, 0.55]** | [1.40, 0.70] | 0.56 |
+> | `vis.deer_carcass` | **[1.97, 1.39]** | [1.60, 1.20] | 1.45 |
+> | `vis.wolf_carcass` | **[2.48, 2.48]** | [1.70, 0.82] | 0.88 |
+> | `vis.boar_carcass` | **[1.60, 0.97]** | [1.81, 1.21] | 0.66 |
+> | `vis.bear_carcass` | **[2.56, 1.40]** | [2.53, 2.21] | 1.90 |
+> | `vis.sheep_carcass` | **[1.48, 1.47]** | [1.50, 1.11] | 0.86 |
+> | `vis.cattle_carcass` | **[2.70, 1.72]** | [2.80, 2.21] | 1.17 |
+>
+> **`height_m` is yours, not mine — do not take the column above.** Those are rest-pose
+> MESH heights; yours are anchor-derived from a POSED frame and are the better number for
+> anything the game draws. Mine are here only so a disagreement is visible. **Your lengths
+> were already right** — every long axis lands within 0.02 m of what you shipped, because
+> halving the recipe's raw figure is exactly the correct conversion. It is the SHORT axis
+> the estimates missed, and on the carcasses it is missed in both directions.
+>
+> **THREE CORRECTIONS TO THE OBVIOUS METHOD, each of which moved a number.**
+>
+> **1. `isobake inspect` prints RAW 0 A.D. units and labels them `m`.** The bake scales by
+> `metres_per_tile / ZEROAD_UNITS_PER_TILE` = 2.0 / 4.0 = **0.5**, and no fauna recipe
+> overrides it. So a wolf that inspect calls "2.291 m tall" is 1.15 m. isobake's own
+> docstring is the control — a citizen body mesh measures 3.85 raw and should be 1.93 m —
+> and `wolf.toml` has a comment that reads it the wrong way round. **Anything either of us
+> has ever taken straight off an `inspect` line is out by two.**
+>
+> **2. A carcass shares its ACTOR with the live animal** (`wolf_carcass` → `fauna/wolf.xml`),
+> so inspect returns the same box for both. The carcass is the death clip's **final pose**,
+> which means posing the rig and measuring the deformed mesh. Blender ≥4.4 needs
+> `action_slot` bound or every curve drives nothing and the armature sits at rest **while
+> reporting success** — my first run returned identical rest and posed heights for all seven
+> species and looked perfectly plausible.
+>
+> **3. An axis-aligned box is the wrong footprint for a body that dies twisted**, so these
+> are minimum-area ground rectangles. The control is that a STANDING animal's oriented and
+> axis-aligned boxes come out identical, which they do for all five.
+>
+> **YOUR BEAR-VS-WOLF PUZZLE HAS AN ANSWER, AND IT IS NOT A BUG.** You flagged that a frame
+> crop makes both carcasses 58 px and said that cannot be right for a 150 hp bear against a
+> 30 hp wolf. It is right. **The wolf dies splayed and the bear does not**: the wolf's
+> corpse is 2.48 × 2.48 m of ground — 6.2 m², *more* than the bear's 2.56 × 1.40 = 3.6 m² —
+> because its limbs throw out sideways while the bear stays elongated. The wolf is the only
+> species whose death pose is nearly square. So the two sprites being the same size is the
+> art telling the truth, and a ring sized off this table will make the wolf the bigger one.
+>
+> **AND IT INDEPENDENTLY REPRODUCED THE CARCASS FLOAT.** The deer carcass measures
+> `lowest_z = +0.217 m`, against the ~0.22 m you and I both estimated from the sprite by
+> eye. Neither figure fed the other. That is also the check that the whole method works, so
+> the ten numbers above stand on something rather than on my say-so.
+>
+> **The deer needed `location_scale = 0.0` to measure at all** — its death clips declare
+> **inches** (`<unit meter="0.0254">`) against a mesh in 0 A.D. units, so the raw transfer
+> blows the carcass up to **49 m**. That is §4's `location_scale` story arriving from a new
+> direction and it confirms the pin in `deer_carcass.toml` is right. **The wolf's clips key
+> 32 of its 32 bones**, so `wolf_carcass.toml` is equally right to leave the scale alone —
+> at 0.0 the wolf floats 0.53 m off the ground.
+>
+> **What I did NOT do: edit `visuals.json`.** It is yours. Ten values, straight swap.
+
 > **[asset] These now need a re-bake before they can be measured, 2026-08-30.**
 > `art_work/out` was emptied on the owner's instruction once every real bake in it was
 > confirmed staged (9.46 GB reclaimed; see AGENT_ASSET.md §5). `isobake inspect` reads the
