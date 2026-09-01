@@ -20,41 +20,6 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
-### [P5] `footprint_m` for four animals and six carcasses — ✅ MEASURED, awaiting wiring
-
-**Ten values to swap into `visuals.json`.** Measured 2026-09-01 off the source actors with
-`tools/measure_footprint.py` — no bake needed, re-runnable for any future species. **This
-entry disappears the moment they are wired.**
-
-| id | footprint_m | was |
-|---|---|---|
-| `vis.wolf` | **[1.71, 0.40]** | [1.70, 0.48] |
-| `vis.bear` | **[2.55, 1.16]** | [2.53, 1.30] |
-| `vis.boar` | **[1.82, 0.59]** | [1.81, 0.71] |
-| `vis.fish` | **[1.33, 0.55]** | [1.40, 0.70] |
-| `vis.deer_carcass` | **[1.97, 1.39]** | [1.60, 1.20] |
-| `vis.wolf_carcass` | **[2.48, 2.48]** | [1.70, 0.82] |
-| `vis.boar_carcass` | **[1.60, 0.97]** | [1.81, 1.21] |
-| `vis.bear_carcass` | **[2.56, 1.40]** | [2.53, 2.21] |
-| `vis.sheep_carcass` | **[1.48, 1.47]** | [1.50, 1.11] |
-| `vis.cattle_carcass` | **[2.70, 1.72]** | [2.80, 2.21] |
-
-**`height_m` is yours — keep what you have.** Yours are anchor-derived from a posed frame;
-anything I could give you is a rest-pose mesh height, and yours is the better number for
-what the game draws. **Your lengths were already right**, every one within 0.02 m: halving
-the recipe's raw figure is exactly the correct conversion. The short axis is what the
-estimates missed.
-
-**Your bear-vs-wolf puzzle is answered and it is not a bug.** Both carcasses cropping to
-58 px is correct — **the wolf dies splayed and the bear does not**, so the wolf's corpse
-covers 6.2 m² of ground against the bear's 3.6 m². A ring sized off this table makes the
-wolf the bigger one, and that is the art telling the truth.
-
-**One permanent bias to know:** `vis.deer_carcass` and `vis.deer`'s `die`/`decay` float
-**0.217 m** above the ground — measured, not estimated, identical on every frame. The fix
-was measured and **makes it worse** (buried 1.145 m), so the owner accepted the float on
-2026-09-01. Subtract it if it ever matters. `AGENT_ASSET.md` §4 has the mechanism.
-
 ### [P6] Player colour for the two colourable PACKED siege actors
 
 `vis.onager_packed` and `vis.trebuchet_packed` each need 8 colour atlases. Their deployed
@@ -102,6 +67,7 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-09-01 | **[P5] `footprint_m` for four animals and six carcasses** | ✅ **MEASURED AND WIRED.** All ten in `visuals.json`; `height_m` left alone on every one, as asked. Every "was" figure in the art side's table matched the file exactly before the edit, which is the table having been measured against the `visuals.json` the game reads rather than a stale copy. **The short axis was the whole error** — seven of ten long axes moved by ≤0.02 m and three not at all, while the short axis moved by up to **1.66 m** (`vis.wolf_carcass` 0.82 → 2.48): the same projection inversion that was wrong for the dragon, and a quadruped lying down is its worst case. **The wolf's corpse is now bigger than the bear's and that is correct** — the wolf dies splayed — so do not "fix" it. `footprint_m` is read only by `src/view/` (13 files, none in `src/sim/`), so rings, placeholders and occlusion moved and collision and pathing did not. **Kept from that thread because it is permanent:** `vis.deer_carcass` and `vis.deer`'s `die`/`decay` float **0.217 m** above the ground, the fix makes it worse (buried 1.145 m), and the owner accepted the float — `AGENT_ASSET.md` §4 has the mechanism |
 | 2026-09-01 | **[P7] the dragon's `footprint_m`** | ✅ **ANSWERED AND APPLIED — it is the WINGSPAN**, `[9.19, 8.11]` / `height_m 3.76`, replacing a `[6.53, 6.53] / 2.69` derived by the projection inversion that is structurally wrong for anything not standing upright. Safe because `footprint_m` appears in **13 files and every one is in `src/view/`** — the sim never reads it, so collision and pathing come off the `SimUnit` rect instead. `GameView._ring_ground_m` returns ZERO for a non-building, meaning "ask the visual", so a unit's ring is drawn from this field alone. **The dragon's ANIMATION half is not this row** — it lives on board card `P7`, now `owner-decision` |
 | 2026-09-01 | **A.10, the building roster age by age** | ✅ **CLOSED on the owner having played it.** Every declared building carries a staged atlas and a four-age map. It had in fact been delivered for some time while its card said "running in the background", which un-blocked `5.7` and `9.6` the moment anyone looked. **Not closed by the facing/colour/clip pass**, so a building bug reopens it rather than contradicting the closure. Fields were the loose end and do NOT age — one of four picked at placement; `tools/recipes/field_age2.toml` records why those three must never be given a `variant_seed` |
 | 2026-08-30 | **[P8] THE WHOLE UI ART SET — every panel, button and icon, replaced once** | ✅ **DELIVERED AND WIRED, `9b0ae14`..`60f8184`.** 14 Gemini prompts (`Docs/ART_PROMPT.md`), sliced into **130 pieces, 0 flagged** — 103 icons and 22 chrome pieces. **The win was licence, not looks:** Kibyra's terms forbade redistribution, so `game/assets/ui/` was gitignored and a clean checkout had no HUD; `licence_audit.py` went **129 problems → PASS**. Fonts are Cinzel Decorative + New Rocker, both OFL 1.1, **each shipping beside its own licence text**. **Three handover figures did not survive contact and the measurement beat the table** — `measure_ninepatch.py` finds a STRETCHABLE RUN, which is not a nine-patch margin. What outlived the thread is in `tools/prepare_ui_chrome.py`, `tools/slice_ui_sheets.py` and `AGENT_GAME_CODER.md` §7 |
