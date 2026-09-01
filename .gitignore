@@ -163,4 +163,22 @@ ehthumbs.db
 assets/UI_Gen/sliced/
 AgeOfDragons.console.exe
 AgeOfDragons.exe
-kanban/board.json
+
+# ─────────────────────────────────────────────────────────────
+# The Kanban tools — LOCAL, never cloned (owner's ruling 2026-09-01)
+# ─────────────────────────────────────────────────────────────
+# `card.py`, `card_game.py` and their README talk to a private Vikunja instance with
+# a token from `.env`. They are how the two agents track work; they are no part of
+# the game and mean nothing to a contributor who clones this repo.
+#
+# THIS RULE WAS ALREADY HERE AND THE FOLDER SHIPPED ANYWAY, which is the thing worth
+# remembering: **.gitignore does not untrack what git is already tracking.** All three
+# files were committed before the rule was added (`ff141cd`, `917ef8b`, `9e0d743`), so
+# git went on tracking them and the ignore line was silently doing nothing. Untracked
+# with `git rm -r --cached kanban` on 2026-09-01; the files stay on disk.
+#
+# They remain in HISTORY. Removing them from the tip is what stops a clone getting
+# them; purging them from every commit needs a rewrite nobody has asked for. Nothing
+# secret is in them -- `.env` was never committed (see Secrets above, verified with
+# `git log --all -- .env`) -- so the history is an untidiness, not an exposure.
+kanban/
