@@ -30,7 +30,8 @@ I own the **art pipeline**: 0 A.D. source art in, baked sprite atlases out.
 | `art_source/0ad` — the 0 A.D. checkout | game scenes, sim, tests |
 | the isobake source (its own repo, §2) | `AGENT_GAME_CODER.md` |
 | `asset_request.md` (my replies) | `tools/stage_audio.py`, `tools/prepare_ui_chrome.py`, `tools/licence_audit.py` |
-| `kanban/` — my `art`-labelled cards (§1.1). **Shared, not mine** | `PROGRESS.md` — **DELETED 2026-09-01**, superseded by the board. In git; citations are history |
+| `kanban/` — **only** my `art`-labelled cards (§1.1). Shared, not mine | `game-code` cards — every field of them, column included (§1.1, owner 2026-09-01) |
+| | `PROGRESS.md` — **DELETED 2026-09-01**, superseded by the board. In git; citations are history |
 
 > **Three scripts in `tools/` are the GAME side's, by a ruling I made on 2026-08-23 and
 > extended on 2026-08-30.** They asked whether `stage_audio.py` should move out of my
@@ -125,6 +126,43 @@ game side owes me, and two delivered UI cards — **P8** and **P8-tech-icons**, 
 because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either of us
 could read off it, and two projects would hide it.
 
+> ## ⛔ THE LABEL IS THE FENCE. I TOUCH `art` CARDS AND NOTHING ELSE.
+>
+> **Owner's instruction, 2026-09-01:** *"you can only update and move cards with 'ART' tag.
+> do not touch cards with 'game-code' tag. let me know if you update your card thats moving
+> to the other agent and i will swap the tag."*
+>
+> That is **every** kind of touch on a `game-code` card — its column, its description, its
+> title, its labels, its `done` flag. Not "unless it is obviously stale", not "unless the
+> owner asked me a question about it", not "unless it is five minutes of work". If a
+> `game-code` card is wrong, **say so in `asset_request.md` and leave it**; being right
+> about their card is not a licence to edit it.
+>
+> **I do not re-label a card either — the owner does.** If one of my `art` cards turns out
+> to belong to the game side, or theirs to me, I **say so and stop**, and the owner swaps
+> the tag. A label I change myself moves the fence, which is the one thing on this board
+> that is not mine to move.
+>
+> **I earned this rule the hard way, in one session.** I moved `15.1` — a `game-code` card
+> — back into `Doing` because I had convinced myself `vikunja_sync.py` had dragged it out.
+> It had not; the other agent was working the same board at the same time. Then I offered
+> to rewrite `9.6` and `5.7`'s descriptions because both were stale. Both instincts were
+> *correct about the facts and wrong about the fence*, and that is exactly the shape this
+> rule exists to stop.
+>
+> ⚠️ **AND KNOW WHAT A BARE SYNC ACTUALLY DOES, because "I only edited my own cards" is not
+> the whole story.** A bare `vikunja_sync.py` PATCHes the title, description, labels and
+> `done` flag of **every card in `board.json`**, all 65, from that file — mine and theirs
+> alike. It is safe only because it rewrites their cards to the values already there. Two
+> consequences that follow:
+>
+> - **Never edit a `game-code` entry in `board.json`.** There is no scoped push; the next
+>   bare sync by either of us carries whatever is in that file to the server.
+> - **A description typed into the Vikunja WEB UI is not durable.** The next sync by either
+>   agent overwrites it from `board.json`. If the owner edits a card's text in the browser,
+>   it lives until one of us runs a sync — so the board is the column, and `board.json` is
+>   the text. This is worth telling the owner before they lose something.
+
 > ⚠️ **A.10 SAT IN `Doing` FOR WEEKS AFTER THE ART WAS DELIVERED, AND IT BLOCKED TWO CODE
 > CARDS THAT WERE NOT ACTUALLY BLOCKED.** The owner asked what A.10 was about on
 > 2026-09-01; the answer turned out to be that every building the game declares already had
@@ -182,9 +220,11 @@ hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
   Descriptions and labels are rewritten from the manifest on a re-sync; the column is
   deliberately left alone, so work in flight is never dragged backwards.
 - **`kanban/` belongs to neither of us and both of us write to it** — it is not `game/`
-  and not `tools/`, and it was added at the owner's request on 2026-09-01. Add a card by
-  giving it a `key` in `board.json` and running a bare sync. **Never renumber a `key`**:
-  the sync matches on it, so a changed key files a second card instead of updating one.
+  and not `tools/`, and it was added at the owner's request on 2026-09-01. **But each of us
+  writes only our own labelled cards**, per the boxed rule above. Add an `art` card by
+  giving it a `key` in `board.json` and running a bare sync; a card the GAME side needs is
+  theirs to add, or the owner's. **Never renumber a `key`**: the sync matches on it, so a
+  changed key files a second card instead of updating one.
 - **PLAN.md is no longer mine or theirs to keep current.** The owner asks for PLAN.md
   updates themselves, at a major commit — *"i will manually request updates to plan.md
   when we commit major changes."* It stays the authority for architecture and still wins
