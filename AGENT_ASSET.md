@@ -116,10 +116,12 @@ exact and worth getting right:
 | **`asset_request.md`** | the ask, the measurements, the reasoning, my answer in place. Unchanged. Still where a request is refused, corrected or argued |
 | **the board** | which bucket a card is in, and nothing else |
 
-**My cards carry the `art` label.** There are eight: **A.10** (the building roster —
-**closed 2026-09-01**, see below), **P5**, **P6**, **P7**, the 27 tech icons, the
-`location_scale` root-bone decision, the dragon-footprint question the game side owes me,
-and the delivered UI set. `game-code` is theirs. **One board rather than two projects**
+**My cards carry the `art` label.** There are nine: **A.10** (the building roster —
+**closed 2026-09-01**, see below), **P5**, **P6**, **P7**, **P9-packed-siege** (new
+2026-09-01), the `location_scale` root-bone decision, the dragon-footprint question the
+game side owes me, and two delivered UI cards — **P8** and **P8-tech-icons**, which are
+**the same work twice** and were closed together on 2026-09-01 after the second sat in
+`Blocked` for two days saying the icons had not been made. `game-code` is theirs. **One board rather than two projects**
 because *"5.7 and 9.6 are blocked on A.10"* was the most useful sentence either of us
 could read off it, and two projects would hide it.
 
@@ -139,7 +141,17 @@ could read off it, and two projects would hide it.
 >
 > **And the cheap check that would have caught it: ask the board what is blocked, then look
 > on disk.** Two `Blocked` cards citing an art card is a claim about `game/assets/atlases`,
-> and that claim is one `Get-ChildItem` away from being tested.
+> and that claim is one `Get-ChildItem` away from being tested. **`P8-tech-icons` was the
+> same story an hour later** — parked in `Blocked` saying every research tile drew its name,
+> while all 27 icons sat in `game/assets/ui/icons/` wired to `selection_actions.gd`. It is a
+> **subset of `P8`**, which shipped them, and a subset card does not close itself when the
+> superset ships. **When a card claims art is missing, look before believing it.**
+>
+> **⚠️ HALF-DONE WORK GETS ITS OWN `To-Do` CARD. DO NOT NOTE IT ON THE CLOSED ONE.** Owner,
+> 2026-09-01, on my listing A.10's two exclusions in its own description: *"rather add new
+> to-Do items if there are none than adding a note on a card with status completed."* A
+> caveat inside a `Done` card is invisible to anyone reading the board as a queue. That is
+> what `P9-packed-siege` is.
 
 ```powershell
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"

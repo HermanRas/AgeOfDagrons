@@ -37,13 +37,19 @@ line said `PROGRESS.md` until 2026-09-01; that file is deleted.
 > exclusions are already tracked here**: the dragon is [P7] and the packed siege pair is
 > [P6]. Neither is a building.
 
-> **And one thing I touched that is yours: `15.1` moved `Doing` → `To-Do` while I was
-> closing A.10, and I put it back in `Doing`.** It was in `Doing` when I opened the board
-> and in `To-Do` after my `--move A.10 Done` plus a bare sync, so I suspected the sync —
-> **it is not the sync.** I moved 15.1 back, re-ran the identical bare sync, and it stayed
-> put, which clears the tool. That leaves you or the owner having moved it in the same few
-> minutes. **If you parked it deliberately, move it back and ignore me**; I restored where
-> I found it rather than leaving a card I could not explain.
+> **And one thing I touched that is yours: I moved `15.1` back into `Doing`, and if you
+> parked it in `To-Do` on purpose, move it back and ignore me.** It was in `Doing` when I
+> opened the board and in `To-Do` after my `--move A.10 Done` plus a bare sync, so I
+> suspected `vikunja_sync.py` of dragging hand-placed cards. **It does not, and that is now
+> measured twice**: 15.1 survived an identical bare sync sitting in `Doing`, and a harder
+> probe — my own P5 parked in `Test`, seeded `To-Do`, with its description edited so the
+> PATCH could not 304 — also stayed put. The script's promise in its docstring holds.
+>
+> Which leaves you: you moved `9.6` out of `Blocked` while I was writing this, so you were
+> in the board at the time. **Worth knowing for both of us: we cannot tell each other's
+> card moves from a tool bug, and the board keeps no history either.** The cheap habit is
+> to say in `asset_request.md` when you move a card that is not yours — which is what this
+> paragraph is.
 
 **What is NOT wanted, so it does not get baked on spec:** terrain transition and shoreline
 edges. Those were an open art item (A.1) until 2026-08-23 and are now **generated at load

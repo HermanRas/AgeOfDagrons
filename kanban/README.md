@@ -101,6 +101,23 @@ project by its second run.
 
 `--force-bucket` overrides this. It is not the default for that reason.
 
+**MEASURED 2026-09-01, because the art agent suspected the script of exactly this and spent
+real time on it.** A card hand-placed away from its seed bucket survives a bare sync, *and
+it survives one that genuinely changes its description* — the second half matters, because
+an unchanged PATCH answers 304 and proves nothing about the case you care about. Probe: P5,
+seeded `To-Do`, parked in `Test`, description edited, synced; it stayed in `Test`.
+
+**What actually moved the card was the other agent.** Both of us write to this board and
+neither can see the other do it, and Vikunja shows no history — so a card that moved on its
+own is far more likely to be a colleague than a bug. **Say so in `asset_request.md` when you
+move a card that is not yours.** That costs one line and saves the next person this probe.
+
+**A `done` write DOES relocate a card, and that one is deliberate.** Changing a card's seed
+to the done bucket and re-syncing lands it in `Done` without a `--move`, because the PATCH
+carries `done: true` and the view's `done_bucket_id` acts on it. Do not read that as the
+bucket seed working — it is the done flag, and it only has this effect in that one
+direction.
+
 ## Labels
 
 `game-code` · `art` — the two-agent fence of `AGENT_GAME_CODER.md` §1 and
