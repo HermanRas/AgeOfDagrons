@@ -101,25 +101,58 @@ are the board's and not a typo — **`To-Do` carries a hyphen**, and **`Test` si
 | `Blocked` | cannot proceed. Say what on, in the card |
 | `Done` | verified. Not "the code is written" |
 
+### ⛔ NOTHING IN THE REPO MIRRORS THE BOARD — the online-only tool (2026-09-01)
+
+**The owner's ruling:** *"nothing lives in repo, everything lives online, no board.json
+for sync"*. **`kanban/board.json` and `kanban/vikunja_sync.py` are DELETED.** There is no
+local manifest, nothing to re-seed from, and no whole-board write. `git show` has both if
+the seed text is ever wanted.
+
+**My tool is `kanban/card_game.py`.** One card at a time, and the server is the truth.
+
 ```powershell
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 
-& $py kanban\vikunja_sync.py --show            # the live board, bucket by bucket
-& $py kanban\vikunja_sync.py --move 15.1 Doing # THIS is how progress is reported
-& $py kanban\vikunja_sync.py --check           # auth + drift, writes nothing
-& $py kanban\vikunja_sync.py                   # re-seed from kanban/board.json
+& $py kanban\card_game.py list --label game-code   # mine
+& $py kanban\card_game.py show 15.5                # READ IT BEFORE YOU START
+& $py kanban\card_game.py move 15.5 Doing          # scoped: this card, nothing else
+& $py kanban\card_game.py append 15.5 notes.md     # ADD to a description, clobber nothing
+& $py kanban\card_game.py new 17.1 "Title"         # create
 ```
 
-- ⚠️ **`--move` IS THE ONLY WAY TO MOVE A CARD. EDITING `board.json`'s `bucket` DOES
-  NOTHING** to a card that already exists. That field is a **seed**, applied once at
-  creation, and a re-sync deliberately leaves the column alone — otherwise every sync
-  would drag work-in-flight back to where the manifest guessed it was. Descriptions and
-  labels *are* rewritten from the manifest; the column is not.
-- **A new work item means a new card in `kanban/board.json`, then a bare re-sync.** Give
-  it a `key`, and never renumber one afterwards: the sync matches on the key, so a changed
-  key files a second card beside the first rather than updating it. PLAN.md's §15 header
-  records that its own numbering has been renumbered twice and that cross-references
-  drifted both times — which is exactly why the keys are the board's and not PLAN.md's.
+- **The cycle the owner asked for:** *"ready the card. do the work, check the card for
+  updated, add your updated."* So `show` **before** starting, `show` **again** when you
+  finish — somebody may have written to the card while you worked — then `append`. Both
+  agents write to this board, neither can see the other do it, and **Vikunja shows no
+  history**, so a card that changed on its own is far more likely to be a colleague than a
+  bug.
+- **`append`, not `set`.** `append` stamps `[game-code <date>]` and adds to the end, so a
+  read-then-write cannot race into a clobber. `set` replaces a description outright and
+  demands `--replace` spelled out, because a card is a shared document and losing
+  somebody's note is silent.
+- ⚠️ **`kanban/card_game.py` IS TEN LINES WRAPPING `kanban/card.py`, WHICH IS THE ART
+  AGENT'S FILE AND NOT MINE TO EDIT.** It imports the module and swaps the two constants
+  that name the fence, so there is one implementation and one place to fix a bug rather
+  than two 400-line copies that must agree about a shared board. **It asserts what those
+  constants say before overriding them**, because setting an attribute on a module always
+  succeeds — a silent failure there would leave me running under the *art* side's fence:
+  refused on my own cards and free on theirs. If that assertion fires, fix the wrapper and
+  raise it in `asset_request.md`; do not edit `card.py`.
+- **A refusal from my own tool prints "The art agent updates and moves 'game-code' cards
+  only".** That sentence is `card.py`'s template with my constant interpolated into it, so
+  it reads oddly and is not a bug — the card name and the offending label above it are
+  correct. Not worth reaching into their file for.
+- **Why the sync went, in one line each:** a bare run PATCHed the title, description,
+  priority, labels and done flag of **every** card, both agents' alike, so every edit was
+  a whole-board write; `board.json` was a second source of truth and drifted, which is the
+  fourth time this project has paid for one; and the manifest still said `game-code` for
+  card `9.5` after the owner had deliberately stripped that label, so the next run would
+  have silently undone their decision as one line of a 64-card write.
+- **A new work item is `new`, not a manifest edit.** The key becomes the title prefix and
+  both tools match on it, so **renaming a card is free and renumbering a key makes it a
+  different card.** PLAN.md's §15 header records that its own numbering has been renumbered
+  twice and that cross-references drifted both times — which is why the keys are the
+  board's and not PLAN.md's.
 - 🚫 **I TOUCH ONLY `game-code` CARDS. I NEVER TOUCH AN `art` CARD — NOT TO MOVE IT, NOT
   TO EDIT IT, NOT TO CLOSE IT.** The owner's instruction, 2026-09-01, and it was given
   because the two of us were **updating over each other**: one board, two agents, and
@@ -138,11 +171,12 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   not mine to pick up even when the work is plainly code, until the owner has swapped it.
 
   ⚠️ **A DUAL-LABELLED CARD IS AMBIGUOUS UNDER THIS RULE AND MUST BE REPORTED, NOT
-  GUESSED AT.** `P7-footprint` was seeded with **both** `game-code` and `art` because it
-  is a question one side owes the other, and under the fence above that is exactly the
-  card neither of us can safely touch. Flag any card carrying both labels and let the
-  owner pick one; two labels means two agents each with a defensible claim, which is the
-  conflict this rule exists to end.
+  GUESSED AT.** Both tools refuse a card carrying the other side's label, so a card with
+  BOTH is unwritable from either end — which is correct, because two labels means two
+  agents each with a defensible claim. **A tag swap is the owner's, done in the Vikunja
+  UI**, and neither tool has a command for it on purpose. `P7-footprint` was the one such
+  card, seeded with both because it is a question one side owes the other; **the owner
+  resolved it to `game-code` on 2026-09-01** and it is mine.
 
   One board rather than two projects is still right — *"5.7 is blocked on the art side's
   A.10"* is the single most useful thing either agent can read here, and two projects
@@ -157,10 +191,10 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   only authoritative bucket→task mapping**, and §2's "a `Get-Content` dump is not
   evidence" rule extends to `Invoke-RestMethod` piped to a terminal. All three cost a
   false alarm on the day the board was seeded.
-- **The token in `.env` expires.** Vikunja API tokens carry a mandatory expiry, so
-  `--check` failing with a 401 is routine maintenance and not a broken board; the script
-  prints the re-minting steps. `.env` is gitignored as of 2026-09-01 — it was not before,
-  and `origin` is a public GitHub repo.
+- **The token in `.env` expires.** Vikunja API tokens carry a mandatory expiry, so a 401
+  from `list` is routine maintenance and not a broken board; the tool prints the
+  re-minting steps rather than a stack trace. `.env` is gitignored as of 2026-09-01 — it
+  was not before, and `origin` is a public GitHub repo.
 
 **PLAN.md used to be mojibake** (double-encoded UTF-8, so table rows could not be
 matched by an exact-string edit). It is **clean, re-confirmed 2026-08-27** — that
