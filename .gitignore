@@ -112,6 +112,16 @@ tools/isobake.local.toml
 venv/
 __pycache__/
 *.py[cod]
+
+# ─────────────────────────────────────────────────────────────
+# Secrets
+# ─────────────────────────────────────────────────────────────
+# .env holds the Vikunja API token (kanban/README.md). It was NOT ignored until
+# 2026-09-01 and `origin` is a public GitHub repo, so it was one `git add -A`
+# away from a published credential. A Vikunja token grants read+write on every
+# project the issuing user can see; there is no scoping down to one board.
+.env
+
 .pytest_cache/
 
 # ─────────────────────────────────────────────────────────────

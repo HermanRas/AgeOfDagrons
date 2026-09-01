@@ -7,7 +7,15 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated 2026-08-30.
+Last updated **2026-09-01** — progress moved to a Kanban board (§1.1), and PLAN.md is
+now updated on the owner's request rather than as work lands.
+
+> **§1.1 was written by the GAME-CODE agent, at the owner's instruction of 2026-09-01,
+> and that is by agreement rather than by drift** — the same standing that puts three of
+> the game side's scripts in `tools/` (§1). They set the board up; this section is the
+> half of it that binds me. Everything else in this file is still mine. If §1.1 is wrong
+> about how the art side should use the board, correct it here rather than working around
+> it, and say so in `asset_request.md`.
 
 ---
 
@@ -22,6 +30,7 @@ I own the **art pipeline**: 0 A.D. source art in, baked sprite atlases out.
 | `art_source/0ad` — the 0 A.D. checkout | game scenes, sim, tests |
 | the isobake source (its own repo, §2) | `AGENT_GAME_CODER.md` |
 | `asset_request.md` (my replies) | `tools/stage_audio.py`, `tools/prepare_ui_chrome.py`, `tools/licence_audit.py` |
+| `kanban/` — my `art`-labelled cards (§1.1). **Shared, not mine** | `PROGRESS.md` — **DELETED 2026-09-01**, superseded by the board. In git; citations are history |
 
 > **Three scripts in `tools/` are the GAME side's, by a ruling I made on 2026-08-23 and
 > extended on 2026-08-30.** They asked whether `stage_audio.py` should move out of my
@@ -93,6 +102,93 @@ between my writing it and committing it. Re-read before you commit.
 request using the format at the bottom of that file; I answer inline under the
 same heading. Treat it as a conversation. Their requests take priority over
 planned work.
+
+## 1.1 The Kanban board — where progress is reported (new 2026-09-01)
+
+**`asset_request.md` is still the conversation. It is no longer the status.** On the
+owner's instruction, status lives on a Vikunja board:
+[projects.dragoon.co.za/projects/2](https://projects.dragoon.co.za/projects/2), seeded
+2026-09-01 with 64 cards. `kanban/README.md` is the full contract. The division is
+exact and worth getting right:
+
+| | |
+|---|---|
+| **`asset_request.md`** | the ask, the measurements, the reasoning, my answer in place. Unchanged. Still where a request is refused, corrected or argued |
+| **the board** | which bucket a card is in, and nothing else |
+
+**My cards carry the `art` label.** There are eight: **A.10** (the building roster, the
+only card in `Doing`), **P5**, **P6**, **P7**, the 27 tech icons, the `location_scale`
+root-bone decision, the dragon-footprint question the game side owes me, and the
+delivered UI set. `game-code` is theirs. **One board rather than two projects** because
+*"5.7 and 9.6 are blocked on A.10"* is the most useful sentence either of us can read
+off it, and two projects would hide it.
+
+```powershell
+$py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
+
+& $py kanban\vikunja_sync.py --show          # the live board
+& $py kanban\vikunja_sync.py --move P6 Doing # THIS is how I report progress
+& $py kanban\vikunja_sync.py --check         # auth + drift, writes nothing
+```
+
+**Five buckets: `To-Do` → `Doing` → `Test` → `Blocked` → `Done`.** `To-Do` carries a
+hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
+
+- **`Doing` before the batch starts, not after it finishes.** A colour batch is 16
+  sequential bakes and `restore_art_sources.sh` is another 30–45 minutes — the owner
+  cannot tell a long bake from a dead session by looking at the tree, and §3 already
+  warns that a buffered log looks like a hung run. **The card is the only signal that
+  something is in flight.**
+- ⚠️ **`Test` MEANS STAGED AND LOOKED AT, WHICH FOR ART IS NOT THE SUITE.** §6 says the
+  game side cannot see the difference between baked and staged; §4 says **six separate
+  bugs in this pipeline reported `ok` for every frame they ruined.** So a bake that
+  finished `ok` belongs in `Test`, and it reaches `Done` when the check that can see the
+  relevant fault has run — `check_colour_consistency.py --staged` for a colour set, four
+  columns on a chiral subject for a facing claim, the five-direction one-pose read for a
+  clip. **A green batch summary is evidence of nothing** and is never grounds to move a
+  card to `Done`.
+- ⚠️ **`--move` IS THE ONLY WAY TO MOVE A CARD; EDITING `kanban/board.json`'s `bucket`
+  DOES NOTHING** to a card that exists. That field is a seed applied once at creation.
+  Descriptions and labels are rewritten from the manifest on a re-sync; the column is
+  deliberately left alone, so work in flight is never dragged backwards.
+- **`kanban/` belongs to neither of us and both of us write to it** — it is not `game/`
+  and not `tools/`, and it was added at the owner's request on 2026-09-01. Add a card by
+  giving it a `key` in `board.json` and running a bare sync. **Never renumber a `key`**:
+  the sync matches on it, so a changed key files a second card instead of updating one.
+- **PLAN.md is no longer mine or theirs to keep current.** The owner asks for PLAN.md
+  updates themselves, at a major commit — *"i will manually request updates to plan.md
+  when we commit major changes."* It stays the authority for architecture and still wins
+  every disagreement. **PLAN.md §12A is where the art track's reasoning lives and it is
+  now updated on request only**, so do not append to it as a running log; put the finding
+  in the recipe, in §4 here, or in `asset_request.md`.
+- ⚠️ **DO NOT JUDGE THE BOARD'S TEXT THROUGH POWERSHELL, and do not judge placement by
+  the obvious endpoint.** `Invoke-RestMethod` piped to a console printed
+  `ART â the building roster` for a card the server stores with a correct em dash — §4's
+  own "before quoting a UI element as evidence, check it is capable of varying with the
+  thing you are claiming" rule, one layer out. And `GET /views/{v}/tasks` never fills in
+  `bucket_id` while `GET .../buckets` reports `count: 0` for everything, both of which
+  read as an empty board. **`GET .../buckets/tasks` is the only authoritative mapping.**
+- **The `.env` token expires** (Vikunja enforces an expiry), so a 401 from `--check` is
+  maintenance rather than a broken board; the script prints the re-minting steps. `.env`
+  is gitignored as of 2026-09-01 — it was not before, and `origin` is public.
+
+> ⚠️ **`PROGRESS.md` IS DELETED** — 2026-09-01, the owner's call, superseded by the board.
+> **This is the third time this repo has removed a tracker rather than kept it in step**:
+> `ASSET_MISSING.md` went 2026-08-16 for drifting out of step with the PLAN.md section it
+> claimed to mirror, `UI_Design.md` and its six mockups went 2026-08-30 as outdated, and
+> both left citations behind that are read as history. Do the same here.
+>
+> **Seven references now point at nothing** (counted, not estimated): one in
+> `asset_request.md`, four in `README.md`, two in `Docs/README.md`. Four of those are not
+> dead links but **active false claims** — `README.md:33` and `Docs/README.md:18` both say
+> *"PROGRESS.md is the status document"* and `README.md:177` calls it *"the authoritative
+> version"*. Left rather than churned, but they are the ones to fix first if either README
+> is opened, because a wrong pointer is worse than a broken one.
+>
+> The one that binds me: **`asset_request.md:14` says the priority table is *"derived
+> from `PROGRESS.md`"*.** That is now false — it derives from the board — and it is worth
+> correcting the next time I touch that file. `git show HEAD~1:PROGRESS.md` if the old
+> phase table is ever wanted.
 
 ## 2. Machine layout
 

@@ -31,7 +31,15 @@ once — see §6).
 **How the two agents talk:** [asset_request.md](asset_request.md). I append a
 request using the format at the bottom of that file; the art agent answers
 inline under the same heading. It works well — treat it as a conversation, and
-answer their questions there rather than only in chat.
+answer their questions there rather than only in chat. **That file is still the
+conversation; it is no longer the status** — see §2.1.
+
+`kanban/` is **shared and belongs to neither side of the fence.** It is not `game/`
+and not `tools/`, and it was added at the owner's request on 2026-09-01. Both agents
+write to it: I keep the `game-code` cards, the art agent keeps the `art` ones.
+**`AGENT_ASSET.md` §1.1 was written from here**, by that same instruction, and is
+flagged there as agreement rather than drift — the arrangement that already puts
+`stage_audio.py` and two others in `tools/`. Do not edit the rest of that file.
 
 ---
 
@@ -41,7 +49,13 @@ answer their questions there rather than only in chat.
    line is an entity *template path*, not a hint about what kind of unit is
    wanted; the actor to bake is one hop inside the file's `<VisualActor><Actor>`.
 2. **[PLAN.md](PLAN.md)** — architecture and phase order. §1 locked decisions,
-   §2.7/§2.7.1 the age+faction skin model, §9 the data schema.
+   §2.7/§2.7.1 the age+faction skin model, §9 the data schema. ⚠️ **DO NOT WRITE
+   PROGRESS INTO IT ANY MORE.** As of 2026-09-01 the owner asks for PLAN.md updates
+   **themselves, at a major commit** — *"i will manually request updates to plan.md
+   when we commit major changes"*. It remains the authority for architecture and
+   reasoning, and it still wins every disagreement; what left it is the running
+   commentary. Status goes on the board (§2.1). **Do not edit it unprompted**, and
+   when you are asked to, update it in one pass rather than a line at a time.
 3. **[IDEA.md](IDEA.md)** — what we're building. ⚠️ **`UI_Design.md` AND ITS SIX
    MOCKUPS ARE DELETED** (owner, 2026-08-30: *"they are all out dated now"*), and this
    file listed them as authoritative until then. They are in git; **43 citations across
@@ -53,16 +67,77 @@ answer their questions there rather than only in chat.
    the reversal is noted rather than argued; treat it as settled. It also carries a
    "standing hazards" section of traps left behind by *fixed* bugs, each of which
    can bite again. Cleaned 2026-08-23 from 424 lines to 170 with nothing open lost.
-5. **[PROGRESS.md](PROGRESS.md)** — the phase table, added 2026-08-23. Status only,
-   no reasoning, and it says so itself: where it disagrees with PLAN.md, PLAN.md
-   wins and PROGRESS.md is the one to fix. `asset_request.md`'s art priority
-   ordering is derived from it, so the art agent reads it too. **It goes stale
-   first** — its header figures (suite size, APK size) and its "the single item
-   most worth doing is the unit-speed pass" line were both overtaken within hours
-   of being written.
+5. **THE KANBAN BOARD** — status, and the only place it lives. See §2.1.
+   ⚠️ **`PROGRESS.md` IS DELETED** (2026-09-01, the owner's call), the same way
+   `ASSET_MISSING.md` and `UI_Design.md` went: superseded, removed, and left in git
+   rather than kept as a second thing to maintain. **Citations to it across the repo
+   are history**, read like `ASSET_MISSING §n`. Its own header made the case for
+   its removal and was right about itself — it admitted the file *"goes stale
+   first"*, and its two headline figures and its "the single item most worth doing
+   is the unit-speed pass" line were all overtaken within hours of being written.
+   That is the failure the board removes: **a card cannot go stale that way,
+   because moving it IS the act of changing its status.** What was worth keeping
+   out of it is on the cards; `git show HEAD~1:PROGRESS.md` has the rest.
 6. `game/data/*.json` `_note` blocks — these are long, and they are the real
    design record for the data. **Read them in full before editing that file.**
    Several encode measurements and decisions that are expensive to re-derive.
+
+### 2.1 The Kanban board — where progress is reported (new 2026-09-01)
+
+**Status lives on a Vikunja board and nowhere else**, on the owner's instruction:
+[projects.dragoon.co.za/projects/2](https://projects.dragoon.co.za/projects/2). Seeded
+2026-09-01 with 64 cards derived from PLAN.md's numbered rows and `asset_request.md`'s
+P-numbers. `kanban/README.md` is the full contract; what a session needs is here.
+
+**Five buckets: `To-Do` → `Doing` → `Test` → `Blocked` → `Done`.** Note two shapes that
+are the board's and not a typo — **`To-Do` carries a hyphen**, and **`Test` sits before
+`Blocked`**. Both were read off the owner's existing board rather than chosen.
+
+| bucket | what it means here |
+|---|---|
+| `To-Do` | not started |
+| `Doing` | being worked on right now. **Move the card before you start**, not after |
+| `Test` | written, and waiting on the one check that can judge it — the suite, a preview screenshot, or the owner playing it. §5's whole argument is that these are different |
+| `Blocked` | cannot proceed. Say what on, in the card |
+| `Done` | verified. Not "the code is written" |
+
+```powershell
+$py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
+
+& $py kanban\vikunja_sync.py --show            # the live board, bucket by bucket
+& $py kanban\vikunja_sync.py --move 15.1 Doing # THIS is how progress is reported
+& $py kanban\vikunja_sync.py --check           # auth + drift, writes nothing
+& $py kanban\vikunja_sync.py                   # re-seed from kanban/board.json
+```
+
+- ⚠️ **`--move` IS THE ONLY WAY TO MOVE A CARD. EDITING `board.json`'s `bucket` DOES
+  NOTHING** to a card that already exists. That field is a **seed**, applied once at
+  creation, and a re-sync deliberately leaves the column alone — otherwise every sync
+  would drag work-in-flight back to where the manifest guessed it was. Descriptions and
+  labels *are* rewritten from the manifest; the column is not.
+- **A new work item means a new card in `kanban/board.json`, then a bare re-sync.** Give
+  it a `key`, and never renumber one afterwards: the sync matches on the key, so a changed
+  key files a second card beside the first rather than updating it. PLAN.md's §15 header
+  records that its own numbering has been renumbered twice and that cross-references
+  drifted both times — which is exactly why the keys are the board's and not PLAN.md's.
+- **Labels are the two-agent fence, not two boards**: `game-code` is mine, `art` is the
+  art agent's, and `owner-decision` marks the four cards that cannot move without the
+  owner. One board because *"5.7 is blocked on the art side's A.10"* is the single most
+  useful thing either agent can read here, and two projects would hide it.
+- **Do not add a status narrative to PLAN.md, PROGRESS.md, or this file.** A card that has
+  moved is the report. This is the third status list this project has had and the previous
+  two both drifted (`ASSET_MISSING.md`, deleted; `PROGRESS.md`, superseded).
+- ⚠️ **THREE API READINGS LOOK EXACTLY LIKE A FAILURE AND ARE NOT.**
+  `GET /views/{v}/tasks` never populates `bucket_id`; `GET .../buckets` reports
+  `count: 0` for every bucket; and PowerShell's console prints `campaign â scenario 3`
+  for text the server stores correctly as an em dash. **`GET .../buckets/tasks` is the
+  only authoritative bucket→task mapping**, and §2's "a `Get-Content` dump is not
+  evidence" rule extends to `Invoke-RestMethod` piped to a terminal. All three cost a
+  false alarm on the day the board was seeded.
+- **The token in `.env` expires.** Vikunja API tokens carry a mandatory expiry, so
+  `--check` failing with a 401 is routine maintenance and not a broken board; the script
+  prints the re-minting steps. `.env` is gitignored as of 2026-09-01 — it was not before,
+  and `origin` is a public GitHub repo.
 
 **PLAN.md used to be mojibake** (double-encoded UTF-8, so table rows could not be
 matched by an exact-string edit). It is **clean, re-confirmed 2026-08-27** — that
@@ -274,6 +349,16 @@ carry `age_required`, which is a *gate*, not a skin.
   was covering for it.
 - The project owner reviews by screenshot and gives precise UI feedback. Expect
   it and act on it directly — it is usually right and usually cheap.
+- **`Test` is a real column, not a formality, and this file is 1,600 lines of why.**
+  Move a card to `Test` when the code is written and pull it to `Done` only once the
+  check that *can see the fault* has run — which is rarely the suite. Three things
+  shipped green and broken because nothing looked: every unit's atlas was MIRRORED
+  past a check blind to reflections, three HUD refusals were dead for players 2..8
+  because `Net.host()` is never null in solo play, and the volume sliders were inert
+  under a thumb from the day they landed. 1,779 tests ran past all three. **Ask which
+  failures your check is blind to before moving a card out of `Test`** — a green check
+  on a fault it cannot express is worse than no check, because it ends the
+  investigation.
 
 ---
 
