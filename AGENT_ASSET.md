@@ -262,6 +262,29 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 > **A DUAL-LABELLED CARD IS UNWRITABLE FROM BOTH TOOLS, BY DESIGN**, since each refuses the
 > other's label. That is correct: two labels means two agents with a claim. **A tag swap is the
 > OWNER's**, in the Vikunja UI, and neither tool has a command for it on purpose.
+>
+> ### ⚠️ `kanban/` IS UNTRACKED AND LOCAL. DO NOT COMMIT IT, DO NOT `git add -f` IT.
+>
+> Owner, 2026-09-01: *"kanban is our local progress tracker and does not belong in the game
+> repo."* Untracked in `95ca73d`, `kanban/` is in `.gitignore`, and the files stay on disk.
+> I committed `card.py` on 2026-09-01 at the game side's request and that commit is now
+> superseded — **the ruling outranks the request**, and re-adding it with `-f` would be
+> reversing the owner rather than helping a colleague.
+>
+> **One hazard follows and it is permanent: `card.py` and `card_game.py` HAVE NO GIT COPY.**
+> §1's `git checkout -- <file>` warning is about losing uncommitted work; these files are
+> now uncommitted for ever, so that hazard never expires for them. There is no second copy
+> on this machine beyond Google Drive's own version history. **Treat an edit to either as
+> unrecoverable if you get it wrong**, and read before you overwrite.
+>
+> **A KEY IS PARSED TOLERANTLY, BECAUSE THE UI RETYPES THE SEPARATOR.** `card.py` writes
+> `"<key> - <title>"` but a title edited in the Vikunja web UI comes back with an EM DASH,
+> and splitting on `" - "` alone then swallows the entire title as the key. Card #43 did
+> exactly that when the owner swapped P7's tag: `card.py show P7` began answering *"no card
+> with key 'P7'"* while the card sat in `Blocked`, and offered its own title as the
+> suggestion. **The card was fine and the parser was brittle.** `SEP_RE` now accepts every
+> dash a person or an editor can produce. Expect the same class of thing wherever this tool
+> reads back a field a human can edit.
 
 **Five buckets: `To-Do` → `Doing` → `Test` → `Blocked` → `Done`.** `To-Do` carries a
 hyphen and `Test` sits before `Blocked`; both are the owner's board, not typos.
