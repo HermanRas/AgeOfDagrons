@@ -635,8 +635,36 @@ a fortnight on 0.0319.
 
 **Its one real cost, so budget for it:** the ROOT bone's location IS meaningful —
 it carries a death clip's drop to the ground — and 0.0 zeroes that too, leaving
-the corpse floating ~5 px (0.22 m). Standing and walking are unaffected. Exempting
-the root from the scale is the proper fix and is not written yet.
+the corpse floating ~5 px (0.22 m). Standing and walking are unaffected.
+
+> ⚠️ **"EXEMPTING THE ROOT BONE IS THE PROPER FIX" WAS WRONG, AND THIS FILE ASSERTED IT FOR
+> FOUR DAYS.** Measured 2026-09-01, as a probe *before* editing isobake: exempting the root
+> takes the deer from **floating +0.217 m to buried −1.145 m** — five times worse, in the
+> other direction. The mill was unchanged either way, so the risk everyone worried about was
+> never the real one.
+>
+> **The reason is structural and it generalises.** `location_scale` exists *because* the
+> clip is mis-scaled — the deer's death `.dae` declares INCHES against a mesh in 0 A.D.
+> units. The root's Z curve is in those same wrong units as every other curve, so exempting
+> it from the correction does not restore good data, it **restores the error at full
+> magnitude**. And the exemption can only ever act where `location_scale != 1.0`, which is
+> exactly the handful of clips whose locations are untrustworthy. **An exemption from a
+> correction is only as good as the data underneath it.**
+>
+> A factor of ≈0.16 would make it land. **Do not fit it.** That is the 0.0319 mistake
+> verbatim — one data point on one clip, and the paragraph above already records how that
+> went.
+>
+> **The owner's call, 2026-09-01: accept the float; not worth a pipeline change.** If it is
+> ever reopened, the shape that would work is `rest_on_ground` as an opt-in per anim —
+> translate the posed body so its lowest vertex sits at z = 0, which is unit-independent,
+> needs no fitted constant and asserts the physical fact instead of trusting a curve. It is
+> right for a carcass (one settled pose) and **wrong for an animated `die`**, where the body
+> should actually fall. That is why it would have to be opt-in.
+>
+> **The transferable lesson is the cheapness of the probe.** Prototyping the change in a
+> throwaway measurement script cost two minutes and caught a regression that a bake would
+> have reported as `ok`.
 
 **Three process lessons, and they are the transferable part.**
 
@@ -994,13 +1022,12 @@ The one-line index, so a symptom can be matched to a known shape:
   actions, bounding box, real-world size — *before* writing the adapter that consumes it.
   That ordering is the point: it costs nothing and tells you whether the rig is worth the
   work.
-- **The root bone is exempt from nothing, and `location_scale = 0.0` therefore
-  drops a death clip's fall.** The deer's carcass floats ~5 px (0.22 m) — its
-  lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px below.
-  §4 has the mechanism. **The fix is to exempt the root bone from
-  `location_scale`**, which is a small, well-defined isobake change and the only
-  open pipeline item. It affects one asset today; it would affect any future
-  species whose clips come from an unlike rig.
+- ✅ **CLOSED 2026-09-01 — the deer's carcass floats 0.217 m and that is now the accepted
+  state, on the owner's call: "not worth the pipeline change."** It is the only asset
+  affected; its lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px
+  below. **Do not reopen this by proposing the root-bone exemption** — that was measured and
+  it makes the deer WORSE (buried 1.145 m), for the structural reason in §4. The float is a
+  known, measured, accepted 5 px, not an outstanding bug.
 - **`vis.deer`'s `run` clip is a substitution, not a bake.** `deer_run_01.dae`
   does not transfer to this rig at all, so `run` is the walk clip at 22 fps under
   its own anim name. If anyone ever writes a real retarget step, this is the asset

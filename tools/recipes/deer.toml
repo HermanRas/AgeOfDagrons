@@ -40,8 +40,24 @@
 # that too. The corpse therefore floats about 5 px (~0.22 m): its lowest pixel
 # sits 4-8 px ABOVE the anchor where the wolf's sits 17-35 px below. Standing
 # and walking are unaffected (+4 to +8, against the rest pose's +2 to +9).
-# Fixing it properly means teaching isobake to exempt the root bone from
-# `location_scale`, which is a real change and not worth holding this behind.
+#
+# THE FLOAT IS THE ACCEPTED STATE. Owner's call, 2026-09-01: "not worth the
+# pipeline change." Do not treat it as an open bug.
+#
+# AND THE FIX THIS COMMENT USED TO PROPOSE -- "teach isobake to exempt the root
+# bone from location_scale" -- WAS MEASURED AND IT MAKES THE DEER WORSE: from
+# floating +0.217 m to buried -1.145 m. The reason is structural, so do not try a
+# variant of it. `location_scale` exists BECAUSE this clip is mis-scaled (its
+# death .dae declares INCHES against a mesh in 0 A.D. units), so the root's Z
+# curve carries the same error as every other curve; exempting it from the
+# correction restores the error at full magnitude rather than restoring the drop.
+# A factor of about 0.16 would make it land -- DO NOT FIT IT, that is the 0.0319
+# mistake again, one data point on one clip.
+#
+# If it is ever reopened, the shape that works is `rest_on_ground` opt-in per
+# anim: translate the posed body so its lowest vertex sits at z = 0. Unit
+# independent, no fitted constant, right for a carcass and wrong for an animated
+# `die` where the body should actually fall. AGENT_ASSET.md 4 has the measurement.
 # ---------------------------------------------------------------------------
 #
 # CLIP SPELLING: the deer is entirely LOWER CASE -- `idle`, `walk`, `run`,

@@ -212,6 +212,18 @@ take here.
 > unaffected. That will bias an anchor-derived height by roughly that much. Fixing it
 > properly means teaching isobake to exempt the root bone from `location_scale` — say the
 > word and I will; it did not seem worth holding the deer fix behind.
+>
+> > **⛔ [asset] THAT OFFER IS WITHDRAWN — the fix does not work, and the float is now the
+> > accepted state.** Owner, 2026-09-01: *"not worth the pipeline change."* Measured as a
+> > probe before touching isobake: exempting the root takes the deer from **floating
+> > +0.217 m to buried −1.145 m**, five times worse in the other direction. `location_scale`
+> > exists *because* this clip is mis-scaled (its death `.dae` declares INCHES against a
+> > mesh in 0 A.D. units), so the root's Z carries the same error as every other curve and
+> > exempting it restores the error rather than the drop.
+> >
+> > **What this changes for you: nothing, except that the 0.22 m bias is permanent.** If it
+> > ever matters, subtract it — it is measured, not estimated, and it is the same for every
+> > frame of `vis.deer_carcass`. `vis.deer`'s `die` and `decay` carry it too.
 
 > ## ✅ [asset] MEASURED 2026-09-01 — ten figures, and no bake was needed after all
 >
