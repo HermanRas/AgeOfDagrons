@@ -1813,8 +1813,8 @@
     "atlas": "res://assets/atlases/vis.dragon.atlas.json",
     "placeholder": {
       "shape": "capsule",
-      "footprint_m": [6.53, 6.53],
-      "height_m": 2.69,
+      "footprint_m": [9.19, 8.11],
+      "height_m": 3.76,
       "color": "#7a2c2c",
       "facing_marker": true
     }

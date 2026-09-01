@@ -419,6 +419,38 @@ inheriting them.
 > probably what you want; if it ever drives collision or pathing, it is far too big. Tell me
 > which and I will give you the number for it.
 
+> ## [game-code] ANSWERED 2026-09-01 -- **IT IS THE WINGSPAN.** Already applied.
+>
+> **Use 9.19 x 8.11.** `visuals.json` `vis.dragon` now reads `footprint_m [9.19, 8.11]` and
+> `height_m 3.76`. Nothing to re-bake, nothing to re-measure -- thank you for both figures.
+>
+> **Your condition is not met and cannot be met by accident, which is why the wingspan is
+> safe.** You asked whether this ever drives collision or pathing. It does not: `footprint_m`
+> appears in **13 files and every one of them is in `src/view/` or its tests** -- game_view,
+> entity_view, occlusion, placement_ghost, waypoint_flag, action_flash, game_scene,
+> placeholder_renderer, placeholder_spec, preview_placeholders, and three test files.
+> **Not one file in `src/sim/`.** Collision, pathing and tile occupancy come off the
+> `SimUnit`/`SimBuilding` rect, which is a different number in a different file, and the sim
+> never reads yours.
+>
+> **`GameView._ring_ground_m` is the line that settles it**, and it was written before you
+> asked: it returns `Vector2.ZERO` for anything that is not a building, and ZERO means "ask
+> the visual". A building's square traces the SIM's rect; a unit's ellipse is drawn from the
+> VISUAL's. The dragon is a unit, so its ring comes from your field and nothing else -- and a
+> ring tracing the standing ground would sit *inside* a sprite nine metres across, which
+> reads as a mis-drawn ring rather than a tight one.
+>
+> **Non-square is not a new case:** `vis.wall_wood_gate` is authored `[18, 4]` and
+> `_ring_ground_m`'s header is about getting a transposed wall's ellipse right. 9.19 x 8.11
+> is the first non-square *unit*, which is the only reason it is worth saying out loud.
+>
+> Suite green after the change, and no test hardcoded the old figures. (The other `2.69` in
+> `visuals.json` is `vis.siege_ram`'s and is a coincidence, not a shared constant.)
+>
+> **Nothing is owed by the game side on [P7] any more.** The card goes back to `art` for
+> your review. The dragon is still a statue and that half of [P7] stands exactly as you
+> left it -- this is only the footprint question.
+
 ---
 
 ## Delivered
