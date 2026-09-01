@@ -39,6 +39,7 @@ class_name CampaignScreen
 extends Control
 
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
+const _SCENARIO_SCENE := "res://scenes/menu/Scenario.tscn"
 
 ## The credits and help screens' ground colour, so the pages behind the front door are
 ## recognisably the same room.
@@ -310,21 +311,33 @@ func _nothing_found_text() -> String:
 			+ " read from " + Campaigns.USER_ROOT + ".")
 
 
-## Open a campaign — 15.5's scenario screen, which does not exist yet.
+## Open a campaign: park it on `ScenarioScreen.pending` and change scene (15.5).
 ##
-## ANSWERS WITH A TOAST RATHER THAN DOING NOTHING, which is PLAN.md 1.1's rule for the
-## front door and the reason HOW TO had a toast for the eleven days before `HelpScreen`
-## landed: a button that visibly does nothing reads as a bug, and a button that says why
-## reads as a plan. **This function body is the whole of what 15.5 replaces** — the row, the
-## press and the campaign it hands over are all in place.
+## THE HANDOFF IS `Net.pending_match`'S PATTERN and `ScenarioScreen`'s header argues it: a
+## `CampaignDef` is a live object, not a path, so it cannot travel through
+## `change_scene_to_file`, and a fifth autoload for one hop between two adjacent screens is
+## a global to save a field.
+##
+## `_last_opened` is set FIRST and unconditionally, so it records the press whether or not
+## there is a tree to change scene in — that is what makes a row press assertable in the
+## suite.
+##
+## This replaced a `NoticeToast` saying the scenario list was not built, which is what stood
+## here for the few hours between 15.4 and 15.5. The toast node stays: PLAN.md 1.1's rule is
+## that a front-door button says something rather than nothing, and a screen that has to
+## re-author a toast is how a button ends up silent.
 func open_campaign(c: CampaignDef) -> void:
 	_last_opened = c
-	# GUARDED ON THE TREE, not on the toast existing. `NoticeToast` fades with a tween and a
-	# tween needs a `SceneTree`; the suite builds this screen with `CampaignScreen.new()` and
-	# never parents it, so an unguarded call would fail every test that presses a row rather
-	# than the one that meant to check the message.
+	if not c.is_playable():
+		# Belt and braces — the row is already disabled for this. Reachable only if a
+		# campaign becomes unplayable between the build and the press, which `reload()`
+		# makes possible once 0.3 can install content while this screen is open.
+		if is_inside_tree():
+			_toast.show_message("%s cannot be played yet" % c.name)
+		return
+	ScenarioScreen.pending = c
 	if is_inside_tree():
-		_toast.show_message("%s — the scenario list is not built yet" % c.name)
+		get_tree().change_scene_to_file(_SCENARIO_SCENE)
 
 
 func _on_row_pressed(index: int) -> void:

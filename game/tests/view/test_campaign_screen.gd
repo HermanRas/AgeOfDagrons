@@ -26,6 +26,10 @@ func before_each() -> void:
 
 func after_each() -> void:
 	screen.free()
+	# `open_campaign` parks the campaign on a STATIC for the next scene to consume, so a
+	# test that presses a row leaves it set. Cleared here rather than in the screen, because
+	# consuming it is `ScenarioScreen._init()`'s job and a test is not that.
+	ScenarioScreen.pending = null
 
 
 ## The repo's own `scenarios/` folder, which the editor and the headless suite both read
@@ -68,6 +72,16 @@ func test_pressing_a_row_opens_that_campaign() -> void:
 	screen.row(0).pressed.emit()
 	assert_not_null(screen.last_opened())
 	assert_eq(screen.last_opened().folder, "HowToPlay")
+
+
+func test_pressing_a_row_parks_the_campaign_for_the_scenario_screen() -> void:
+	# THE HANDOFF, which is `Net.pending_match`'s pattern: a CampaignDef is a live object and
+	# cannot travel through `change_scene_to_file`. The scene change itself needs a tree and
+	# is not exercised here; parking the campaign is the half that can be.
+	assert_null(ScenarioScreen.pending)
+	screen.row(0).pressed.emit()
+	assert_not_null(ScenarioScreen.pending, "the scenario screen has something to open")
+	assert_eq(ScenarioScreen.pending.folder, "HowToPlay")
 
 
 func test_opening_out_of_range_is_ignored_rather_than_crashing() -> void:
