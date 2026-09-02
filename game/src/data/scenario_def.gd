@@ -108,6 +108,14 @@ var objectives: Array[ObjectiveDef] = []
 ## every icon in it.
 var icon_path: String = ""
 
+## The scenario's own folder, absolute. Where `map.png` and `map.json` live (2.4c).
+##
+## Kept rather than derived, because a `ScenarioDef` can come from either root and only the
+## loader knows which one it read — `Campaigns.roots()` is a list and first match wins by
+## folder name, so re-deriving this would have to re-run that resolution and could pick the
+## other copy. Same reason `CampaignDef.root` exists.
+var dir: String = ""
+
 ## Everything wrong with this file, in the author's terms. Empty means playable.
 ##
 ## Decision 4: **inert is the safe direction to be unfinished in.** A scenario that
@@ -124,6 +132,7 @@ func is_playable() -> bool:
 static func from_dict(p_folder: String, d: Dictionary, dir_path: String) -> ScenarioDef:
 	var s := ScenarioDef.new()
 	s.folder = p_folder
+	s.dir = dir_path
 	s.name = str(d.get("name", p_folder))
 	s.description = str(d.get("description", ""))
 	s.message = str(d.get("message", ""))
@@ -347,10 +356,29 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 
 	cfg.seed = seed
 	cfg.map_type = map_type
-	cfg.map_data = MapGenerator.generate(seed, map_type, cfg.player_ids.size())
+
+	# ⚠️ **THE SAVED MAP IS THE MAP. THE SEED ONLY RECORDS HOW IT WAS FIRST MADE.**
+	#
+	# The owner's correction of 2026-09-01: generating is a ONE-OFF authoring step -- *"it is
+	# just a way to get a map once off while i have no tool to provide you with a valid map"*
+	# -- not something a launch does. `MapGenerator` uses `FastNoiseLite`, whose float maths
+	# is not guaranteed identical between an ARM phone and an x86 desktop, so a scenario that
+	# generated at launch could be a DIFFERENT MAP on the player's phone than on the
+	# designer's desktop. For a hand-tuned tutorial mission that is a defect, not a
+	# theoretical one, and card 15.1 had already written it down as "a pinned seed is not a
+	# pinned map". `MatchConfig` sends the map rather than the seed over the wire for the
+	# same reason (PLAN.md 11.3, 2.4c).
+	#
+	# So there is no generator call on this path at all. `tools/`-side authoring writes the
+	# pair, `MapFile` reads it, and the absence of one is a PROBLEM rather than a silent
+	# fallback to generating -- a fallback is how an unpinned scenario would ship looking
+	# exactly like a pinned one.
+	cfg.map_data = map_data(out_problems)
+	if cfg.map_data == null:
+		return null
 	# The map is the authority on its own size; a config disagreeing with the map it
 	# carries would build a world the wrong shape.
-	cfg.map_size = cfg.map_data.size if cfg.map_data != null else MatchConfig.DEBUG_MAP_SIZE
+	cfg.map_size = cfg.map_data.size
 	cfg.mode = MatchConfig.Mode.LAST_MAN_STANDING
 	cfg.starting_age = starting_age
 	# "Nobody typed one", which is what a scenario is: it is a solo match on loopback and
@@ -358,6 +386,29 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	# lobby's fallback and does not belong here.
 	cfg.host_name = ""
 	return cfg
+
+
+## The scenario's saved map, read off disk. Null with a reason when there is not one.
+##
+## SEPARATE FROM `build_config` so 15.5 can ask "is there a map?" without building a config,
+## and so the authoring tool can check its own work. Not cached: a `MapData` is tens of
+## kilobytes per scenario and a campaign list holds every scenario it found, which is the
+## same argument `CampaignDef` makes for holding icon PATHS rather than textures.
+func map_data(out_problems: Array[String]) -> MapData:
+	if dir.is_empty():
+		out_problems.append("scenario '%s' does not know where it lives, so it cannot"
+				% folder + " find its map")
+		return null
+	if not MapFile.exists_in(dir):
+		out_problems.append(("scenario '%s' has no saved map -- expected %s and %s in %s."
+				+ " Generate one with dev_preview/preview_author_maps.tscn")
+				% [folder, MapFile.TERRAIN_FILE, MapFile.META_FILE, dir])
+		return null
+	return MapFile.load_map(dir, out_problems)
+
+
+func has_map() -> bool:
+	return not dir.is_empty() and MapFile.exists_in(dir)
 
 
 ## `problems`, or a single generic line if something refused without saying why. Never

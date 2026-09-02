@@ -91,9 +91,13 @@ func test_the_map_travels_as_the_map_and_not_as_the_seed() -> void:
 
 
 func test_the_same_scenario_builds_the_same_map_twice() -> void:
-	# What makes a scenario replayable AT ALL on one build. It does not make the seed
-	# portable across a MapGenerator change -- nothing here can, which is why 16.10 pins a
-	# file instead -- so this asserts the property that actually holds today.
+	# ⚠️ **THIS NOW HOLDS FOR A STRONGER REASON THAN IT USED TO, and the old reason was the
+	# weaker property this file could offer.** It used to say "the same seed and generator
+	# must give the same map", and admitted it "does not make the seed portable across a
+	# MapGenerator change". Since 2026-09-01 there is no generator on this path at all: the
+	# map is READ FROM `map.png`, so it is identical across runs, across machines, across
+	# CPU architectures and across every future change to `MapGenerator`. That is the whole
+	# point of 2.4c and the reason the owner asked for a saved map.
 	var s := _shipped("scenario_3")
 	assert_not_null(s)
 	if s == null:
@@ -108,7 +112,8 @@ func test_the_same_scenario_builds_the_same_map_twice() -> void:
 		return
 	assert_eq(first.map_size, second.map_size)
 	assert_eq(first.map_data.to_dict(), second.map_data.to_dict(),
-			"the same seed and generator must give the same map")
+			"the same file must give the same map")
+	assert_eq(first.map_data.terrain, second.map_data.terrain, "byte for byte")
 
 
 # ── the refusal that is waiting on 15.2 ────────────────────────────────────────
@@ -281,7 +286,22 @@ func test_the_config_survives_the_wire_the_way_a_hosted_match_would() -> void:
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
+## Where the synthetic scenarios below keep their saved map.
+##
+## `user://` AND NOT A SHIPPED FOLDER, deliberately: these tests are about
+## `build_config`'s arithmetic — player ids, level mapping, array lengths — and borrowing
+## `scenario_3`'s real map would tie every one of them to authored content that the owner
+## is free to re-roll.
+const _TEST_MAP_DIR := "user://test_scenario_maps/scenario_t"
+
+
 ## A minimal legal scenario, with `overrides` merged over it.
+##
+## ⚠️ **IT NEEDS A REAL SAVED MAP ON DISK NOW.** `build_config` stopped generating on
+## 2026-09-01 (owner's ruling, PLAN.md 11.3): the saved `map.png` is the map and a scenario
+## without one refuses to launch, on purpose, so that an unpinned scenario cannot ship
+## looking exactly like a pinned one. A `dir_path` of `""` used to be harmless here and now
+## means "no map", which would refuse every config these tests build.
 func _scenario(overrides: Dictionary) -> ScenarioDef:
 	var d: Dictionary = {
 		"name": "T",
@@ -290,7 +310,22 @@ func _scenario(overrides: Dictionary) -> ScenarioDef:
 		"opponents": ["passive"],
 	}
 	d.merge(overrides, true)
-	return ScenarioDef.from_dict("scenario_t", d, "")
+	return ScenarioDef.from_dict("scenario_t", d, _ensure_test_map())
+
+
+## A tiny map at `_TEST_MAP_DIR`, written once and reused.
+##
+## SMALL AND HAND-BUILT rather than generated: nothing here reads the terrain, and a 96×96
+## `MapGenerator.generate` per test would put a real map's cost on eleven tests that only
+## want a config to come back non-null.
+func _ensure_test_map() -> String:
+	if MapFile.exists_in(_TEST_MAP_DIR):
+		return _TEST_MAP_DIR
+	var data := MapData.create(Vector2i(16, 16), SimMap.Terrain.GRASS)
+	var problems := MapFile.save(data, _TEST_MAP_DIR, {"name": "test", "players": 2})
+	if not problems.is_empty():
+		fail("could not write the test map: %s" % " | ".join(problems))
+	return _TEST_MAP_DIR
 
 
 func _config(s: ScenarioDef) -> MatchConfig:

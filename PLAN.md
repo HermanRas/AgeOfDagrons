@@ -1159,7 +1159,7 @@ from either picture alone.
 | 2.3 | ✅ Footprints written into `occupancy`; `despawn()` frees tiles **before** dropping the entity, or occupancy keyed by id would leave tiles claimed forever. A building's `pos` is its footprint **centre** so the view draws every entity identically | `[MVP]` |
 | 2.4a | ✅ `MapGen.build_debug_map()` — one start position, fully deterministic, asserted by building two worlds from one config and comparing hashes | `[MVP]` |
 | 2.4b | ✅ **DONE 2026-08-17** — `MapData` / `MapGenerator` / `MapValidator` in `src/sim/`, all eight changes applied; see §11.2. The `game_map_gen/` prototype is left untouched | |
-| 2.4c | **Save map.** See §11.3 | |
+| 2.4c | ✅ **FORMAT DONE 2026-09-01** — `MapFile`: `map.png` (terrain, kind in the R channel) + `map.json` (the header and the entity list). **This is what Phase 16's MapMaker writes**, which is why it was promoted ahead of it. Scenarios read it and no longer generate at launch. See §11.3.<br><br>**Still open on this row: the Save Map BUTTON** on the pause menu, and the picker that lists `user://maps/` beside `user://content/maps/`. The format was the blocker and the format is settled; the UI is not built | |
 | 2.4d | **Archipelago map type** — one island per player, a few sheep, no predators. See §11.6 | |
 | 2.5 | ✅ Fog of war — `VisionSystem` + snapshot filtering + `FogOverlay`. See §11.4, and §11.4a for shared vision (2026-09-01) | |
 | 2.6 | ✅ Starting conditions: town centre, 5 villagers on distinct passable tiles, plus wood/gold/stone/food/livestock clusters placed **for the screen** as much as for the grid (iso sends `dx-dy` to screen x, so "below the town centre where the map is empty" is behind the HUD) | `[MVP]` |
@@ -1230,6 +1230,57 @@ and shared — can name it, keep it, and pick it again from 1.6. Three things it
 - **It saves the MAP, not the MATCH.** By the time the button is pressed the world is full of buildings and rubble. What gets written is the terrain and start layout the match was **started** with, so `GameScene` must hold on to its map source rather than reading the live `SimMap`. Saving current state is a save *game* (12.4) — the button must not blur the two.
 - **`user://maps/`, never `res://`**, which is read-only once exported. The picker lists **authored** maps and **saved** ones together — and as of 2026-09-01 that is `user://content/maps/` and `user://maps/`, not `res://maps/` and `user://maps/`: authored maps left `game/` with the campaigns (§3.3), so both halves of the list are now under `user://`. **They stay two directories**, so installing or replacing authored content cannot overwrite somebody's save and uninstalling it cannot delete one.
 - **The PNG is authoritative; the seed is provenance.** A sidecar JSON carries {name, type, players, size, seed, format_version, created}. The seed alone cannot reproduce a map, because any generator change makes the same seed produce something else.
+
+##### ✅ The format, built 2026-09-01 — `MapFile` (`src/data/map_file.gd`)
+
+**`map.png` + `map.json` in one directory**, written and read by `MapFile.save()` /
+`MapFile.load_map()`. The owner's ruling of 2026-09-01 — *"2.4c will guide tool"* — so **this
+is what Phase 16's MapMaker writes**, and we revisit it only if the tool finds a shortfall.
+
+⚠️ **`R` IS THE TERRAIN KIND AND IS THE ONLY CHANNEL THAT IS DATA.** `SimMap.Terrain` is seven
+values, so a kind fits a byte with room to spare, and reading one channel is exact and
+independent of any palette. **`G` and `B` are a cosmetic tint so the file still reads as a map
+in an image viewer, and a loader must never read them** — they may be restyled freely, and a
+palette-based decode would silently reinterpret every map already saved the first time
+somebody changed a colour. That is the trap `directions_reversed` was reverted twice to avoid.
+Bytes come from `Image.get_data()` and never `get_pixel()`: a `Color` is floats, and
+`6 / 255.0` and back is an off-by-one on a value that indexes an enum.
+
+**Why a PNG rather than `MapData.to_dict()`.** `to_dict()` is the **wire** form and stays
+that — Godot's RPC layer encodes Variants in binary, so `terrain` rides as raw bytes. Through
+*JSON* the same field becomes the text `"[1, 2, 250]"`, and a 192×192 map is 36,864 numbers:
+roughly 150 KB of digits for content that ships in packs and sits in git. **Measured on the
+shipped scenarios: 96×96 terrain is ~900 bytes as a PNG.** So the sidecar is `to_dict()` minus
+`terrain` plus the header — which works because `from_dict()` already treats an absent
+`terrain` as empty, and it means **one encoding of entities, two of terrain, each where it
+belongs**.
+
+**The pair must agree about size or the load is refused** — disagreeing means the two files
+have been edited apart, and picking one would put every entity on the wrong tile. A
+`format_version` that is not this build's is refused rather than guessed, for the same reason.
+A map file is untrusted input (packs and a player-writable `user://`), so parsing goes through
+`JSON.new().parse()`.
+
+##### ✅ Scenarios stopped generating at launch, 2026-09-01
+
+**The owner's correction:** *"just generate a map and save it for the scenario, not gen one
+every time you click the scenario.. it is just a way to get a map once off while i have no
+tool to provide you with a valid map."* `MapGenerator` is an **authoring tool**, not a runtime
+step.
+
+`ScenarioDef.build_config()` now reads `MapFile` and **never calls the generator**, and a
+scenario with no saved map **refuses to launch** rather than falling back — a fallback is how
+an unpinned scenario would ship looking exactly like a pinned one. `dev_preview/preview_author_maps.tscn`
+is the tool that writes them; it refuses to overwrite without `--force` (a saved map is
+authored content under version control) and reads every map back before claiming it wrote one.
+The three How To Play maps are committed.
+
+**This closed a live defect, not a tidiness.** Card 15.1 already recorded *"a pinned seed is
+not a pinned map"*: `FastNoiseLite`'s float maths is not guaranteed identical between an ARM
+phone and an x86 desktop, so a scenario generating at launch could be a **different map on the
+player's phone than on the designer's desktop**. `test_the_same_scenario_builds_the_same_map_twice`
+used to assert the weaker "same seed and generator give the same map"; it now holds across
+machines, architectures and every future generator change.
 
 #### 11.6 Archipelago (2.4d) — a map type where the sea is the map
 
