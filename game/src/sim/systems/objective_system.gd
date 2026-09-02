@@ -22,22 +22,30 @@
 ## (15.6). Nothing else, so `ResultScreen` needs no new reader: a scenario ends through
 ## exactly the fields a conquest match ends through.
 ##
-## ## ⚠️ A WIN ROW LATCHES ONCE MET, AND WITHOUT THAT SCENARIO 2 IS UNWINNABLE
+## ## ⚠️ A WIN ROW LATCHES ONCE MET, AND HERE IS THE FAILURE THAT PROVED IT NECESSARY
 ##
-## Not a convenience. **Measured 2026-09-02, from the owner's own objectives for scenario
-## 2: "gather 500 food" AND "advance to the Age of Embers".** Advancing to age 2 costs
-## exactly 500 food (`ages.json`), and `AdvanceAgeCommand` deducts it when the advance
-## STARTS. So the food row is true at the moment the player can afford the age, and false
-## from the instant they buy it -- 100 ticks before the age they bought arrives. The two
-## rows are ANDed and can never be true on the same tick. Evaluated live, that scenario
-## would have shipped **unwinnable while looking completely correct**, which is precisely
-## what the owner already caught in scenario 3's *"0 enemy units on map"*.
-##
-## So an objective list is a CHECKLIST and not a snapshot: a win row that has ever been
+## An objective list is a CHECKLIST and not a snapshot: a win row that has ever been
 ## satisfied stays satisfied, in `objective_done`, one-way, exactly as `SimPlayer.defeated`
-## is one-way and for the same reason -- a tick that could flicker off would take the
+## is one-way and for the same reason -- a verdict that could flicker off would take the
 ## result with it. It is also what the player already believes is happening, because a
 ## ticked line on a goal list does not untick.
+##
+## **THE CONCRETE CASE HAS SINCE BEEN WITHDRAWN, AND IT IS RECORDED HERE ANYWAY, BECAUSE
+## THE TRAP IT DEMONSTRATED IS REAL AND CHEAP TO WALK BACK INTO.** For a few hours on
+## 2026-09-02 scenario 2 asked for *"gather 500 food"* AND *"advance to the Age of
+## Embers"*. Advancing to age 2 costs **exactly 500 food** (`ages.json`) and
+## `AdvanceAgeCommand` deducts it when the advance STARTS -- so the food row was true at
+## the moment the age became affordable and false from the instant it was bought, 100
+## ticks before the age arrived. ANDed, the two could never be true on the same tick, and
+## that scenario would have shipped **unwinnable while looking completely correct**. The
+## owner then clarified that the 500 food was *"purely user guidance"* and it is no longer
+## an objective at all.
+##
+## So no shipped scenario depends on the latch today. It stays, because **any ANDed pair
+## where satisfying one row SPENDS what satisfied the other has the same shape**, and a
+## resource is only the most obvious such thing: units die, buildings fall, an age is
+## bought. Evaluating live would make every one of those a scenario that has to be won on
+## a single tick.
 ##
 ## LOSE ROWS DO NOT LATCH, and do not need to: a lose row ends the match on the tick it
 ## fires, so there is no later tick for a latch to matter on. ALERT rows latch so 15.6
@@ -282,12 +290,18 @@ static func _sum(census: Dictionary, ids: Array[int], bucket_key: String,
 
 ## What `ids` are holding of one resource kind, added together.
 ##
-## ⚠️ **IT IS WHAT THEY HOLD NOW, NOT WHAT THEY HAVE EVER GATHERED**, and the difference
-## is the whole reason a win row latches. `SimPlayer.stock` is a balance: it goes DOWN
-## when the player builds a house or buys an age. *"Gather 500 food"* is therefore
-## measured as *"hold 500 food at some point"*, which is exactly what the scenario's own
-## overview tells the player to watch for -- *"watch the food icon until it ticks up to
-## 500"* -- and it is the header's worked example of why the latch is not optional.
+## ⚠️ **IT IS WHAT THEY HOLD NOW, NOT WHAT THEY HAVE EVER GATHERED**, and that difference
+## is the header's worked example of why a win row latches. `SimPlayer.stock` is a
+## balance: it goes DOWN when the player builds a house or buys an age. So *"gather 500
+## food"* is measured as *"hold 500 food at some point"*.
+##
+## **NO SHIPPED SCENARIO USES THIS SUBJECT.** It was added on 2026-09-02 for a scenario 2
+## row the owner withdrew the same day (*"500 food is not a wining objective or tracked
+## items, its purely user guidance"*). It is kept because 16.6's Map Conditions screen is
+## the obvious author of one and because `subject` travels as an int, so removing and
+## re-adding it would mean getting the enum position right a second time -- the same
+## reason `area`/`named_unit`/`ticks` are declared ahead of use. It is fully evaluated and
+## tested, so it cannot rot quietly.
 ##
 ## Cumulative gathering was the alternative and is deliberately not built: it needs a
 ## new per-player running total, written by `GatherSystem`, folded into `state_hash()`

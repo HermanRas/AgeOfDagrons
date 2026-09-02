@@ -163,12 +163,16 @@ var objective_progress: Array[int] = []
 ## WHICH OBJECTIVES HAVE BEEN MET AT LEAST ONCE (15.2), position for position with
 ## `objective_progress`. 1 is met, 0 is not.
 ##
-## ⚠️ **ONE-WAY, LIKE `defeated`, AND FOR THE SAME REASON -- AND WITHOUT IT SCENARIO 2
-## CANNOT BE WON.** Advancing to the Age of Embers costs exactly 500 food, so the
-## owner's *"gather 500 food AND age up"* is two ANDed rows that are never true on the
-## same tick: buying the age is what makes the food row false, 100 ticks before the age
-## it bought arrives. An objective list is a CHECKLIST, and a ticked line does not
-## untick. `ObjectiveSystem`'s header carries the full worked example.
+## ⚠️ **ONE-WAY, LIKE `defeated`, AND FOR THE SAME REASON.** An objective list is a
+## CHECKLIST, and a ticked line does not untick; a verdict that could flicker off would
+## take the result screen with it.
+##
+## The failure that proved it necessary was an ANDed pair where satisfying one row SPENT
+## what satisfied the other -- 500 food and an age advance that costs exactly 500 food --
+## which could never be true on the same tick. That particular pair was withdrawn by the
+## owner within hours, so nothing shipped depends on this today; the SHAPE is general
+## (units die, buildings fall, resources are spent), which is why it stays.
+## `ObjectiveSystem`'s header carries the full worked example.
 ##
 ## A `PackedByteArray` rather than `Array[bool]`: it is one byte per row on the wire and
 ## in the hash, and it is the encoding `vision` already uses for the same reason.

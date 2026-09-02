@@ -130,16 +130,21 @@ func test_scenario_one_is_two_win_rows_that_are_anded() -> void:
 	assert_eq(wins[1].compare, ObjectiveDef.Compare.AT_LEAST)
 
 
-func test_scenario_ones_villager_target_needs_exactly_the_house_it_also_asks_for() -> void:
-	# ⚠️ **WHAT MAKES THE TWO ROWS DEPEND ON EACH OTHER RATHER THAN MERELY SIT BESIDE EACH
-	# OTHER.** MapGen gives every player a town centre (10 population) and 5 villagers, and
-	# a house is worth 5 -- so the owner's target of 15 is reachable with EXACTLY ONE HOUSE
-	# and not reachable without one. A target of 10 would have been satisfiable while
-	# ignoring the build half of a scenario named "How To Gather and Build".
+func test_scenario_ones_villager_target_costs_more_than_one_house() -> void:
+	# ⚠️ **THIS TEST ASSERTED THE OPPOSITE AND WAS WRONG, AND THE OWNER FOUND IT IN PLAY.**
+	# It claimed 15 villagers was reachable with EXACTLY ONE HOUSE, from "town centre 10 +
+	# house 5 = 15" — and it passed, because the arithmetic left out a unit. **The saved
+	# map gives every player 5 villagers AND one `unit.scout_cavalry`**, so the opening
+	# population is 6/10, not 5/10, and fifteen villagers plus that scout is SIXTEEN.
+	# The owner sat at 15/15 with 14 villagers and a scout and could not train the
+	# fifteenth. `dev_preview/PreviewScenarioWin.tscn` prints the population as it drives
+	# the scenario, which is how it was measured.
 	#
-	# Derived from the DEFS rather than written as literals, so a balance change to the
-	# town centre, the house or the starting villagers fails this test instead of quietly
-	# making one half of the lesson optional.
+	# The scenario is winnable — a second house is 30 wood — so what was broken was the
+	# BRIEFING claiming one house was enough. This test now pins the true figure, and it
+	# reads the STARTING UNITS OFF THE MAP rather than assuming them: if the scout is ever
+	# removed, or the target moved to 14, this fails and the briefing text is what needs
+	# revisiting.
 	var s := _shipped("scenario_1")
 	assert_not_null(s)
 	if s == null:
@@ -156,12 +161,43 @@ func test_scenario_ones_villager_target_needs_exactly_the_house_it_also_asks_for
 		if o.id == &"unit.villager":
 			target = o.value
 	assert_true(target > 0, "scenario 1 has a villager target")
-	assert_true(target > tc.provides_pop,
-			"a target within the town centre's own %d population needs no house"
-			% tc.provides_pop)
-	assert_true(target <= tc.provides_pop + house.provides_pop,
-			"a target above %d needs a SECOND house, which the build row does not ask for"
-			% (tc.provides_pop + house.provides_pop))
+
+	# What the map actually hands player 1, by def id, and what it costs in population.
+	var problems: Array[String] = []
+	var data := s.map_data(problems)
+	assert_not_null(data, " | ".join(problems))
+	if data == null:
+		return
+	var start_villagers := 0
+	var other_pop := 0
+	for e in data.entities:
+		if int(e.get("player", 0)) != 1:
+			continue
+		var def_id := StringName(str(e.get("def_id", "")))
+		var ud: UnitDef = GameDataRegistry.unit(def_id)
+		if ud == null:
+			continue                      # a building; its pop is provided, not consumed
+		if def_id == &"unit.villager":
+			start_villagers += 1
+		else:
+			other_pop += ud.pop_cost
+
+	assert_true(target > start_villagers,
+			"a target within the %d villagers the map already grants is won on tick 0"
+			% start_villagers)
+	assert_true(other_pop > 0,
+			"the map grants a non-villager starting unit, which is the whole point of this"
+			+ " test -- if that stops being true, one house IS enough and the briefing"
+			+ " should say so again")
+
+	# ceil((target + other_pop - tc_pop) / house_pop), spelled out rather than with a
+	# float division: the sim carries no floats and neither should its arithmetic here.
+	var short_by := target + other_pop - tc.provides_pop
+	var houses := (short_by + house.provides_pop - 1) / house.provides_pop
+	assert_true(houses >= 2,
+			"%d villagers plus %d population of other starting units against a %d cap"
+			% [target, other_pop, tc.provides_pop]
+			+ " needs %d houses -- the briefing must not claim one is enough" % houses)
 
 
 func test_scenario_ones_villager_target_is_above_what_the_map_gives_you() -> void:
@@ -178,59 +214,48 @@ func test_scenario_ones_villager_target_is_above_what_the_map_gives_you() -> voi
 			assert_true(o.value > 5, "the target must exceed the 5 villagers MapGen grants")
 
 
-func test_scenario_two_counts_food_and_an_age_and_only_one_of_them_names_an_id() -> void:
+func test_scenario_two_counts_an_age_and_names_no_id() -> void:
 	var s := _shipped("scenario_2")
 	assert_not_null(s)
 	if s == null:
 		return
 	assert_eq(s.mode, ScenarioDef.Mode.SCENARIO)
 	var wins := s.win_objectives()
-	assert_eq(wins.size(), 2, "the owner's two rows, 2026-09-02")
+	# ⚠️ **ONE ROW, AND IT WAS BRIEFLY TWO** (owner, 2026-09-02: *"500 food is not a wining
+	# objective or tracked items, its purely user guidance"*). A `resource` row asking for
+	# 500 food shipped for a few hours and was withdrawn; the number stays in the briefing,
+	# because 500 food is exactly what advancing costs and the counter climbing to it is
+	# the visible half of a goal that otherwise shows nothing for minutes.
+	assert_eq(wins.size(), 1, "the age is the only tracked objective")
+	assert_eq(wins[0].subject, ObjectiveDef.Subject.AGE)
+	assert_true(wins[0].id.is_empty(), "an age counts no entities, so it names no id")
+	assert_eq(wins[0].value, 2, "ages are indexed from 1, so >= 2 is 'has advanced once'")
 
-	assert_eq(wins[0].subject, ObjectiveDef.Subject.RESOURCE)
-	assert_eq(wins[0].id, &"food", "a resource row names WHICH resource")
-	assert_eq(wins[0].value, 500)
 
-	assert_eq(wins[1].subject, ObjectiveDef.Subject.AGE)
-	assert_true(wins[1].id.is_empty(), "an age counts no entities, so it names no id")
-	assert_eq(wins[1].value, 2, "ages are indexed from 1, so >= 2 is 'has advanced once'")
-
-
-func test_scenario_twos_two_rows_are_never_true_at_the_same_instant() -> void:
-	# ⚠️ **THE MEASUREMENT THAT FORCED THE WIN LATCH, kept as a test so it cannot quietly
-	# stop being true.** Advancing to age 2 costs EXACTLY the food the first row asks for,
-	# and `AdvanceAgeCommand` deducts it when the advance STARTS -- so buying the age is
-	# what makes the food row false, 100 ticks before the age it bought arrives. Multiple
-	# win rows are ANDed, so evaluated live this scenario is UNWINNABLE while looking
-	# completely correct.
-	#
-	# `ObjectiveSystem` latches a satisfied win row for exactly this reason
-	# (`SimPlayer.objective_done`). If a balance change ever makes the age cheaper than the
-	# food row, this test fails and the latch stops being load-bearing here -- which is
-	# worth knowing either way, because the comment in scenario_2.json claims it is.
+func test_scenario_twos_briefing_still_names_the_food_the_advance_costs() -> void:
+	# The 500 in the message is not decoration and not an objective: it is the AGE COST,
+	# so a balance change to `ages.json` would make the briefing tell the player to watch
+	# for the wrong number. That is a lie a test can catch and a playtest probably would
+	# not -- the player would simply wait at 500 and find the button still refused.
 	var s := _shipped("scenario_2")
 	assert_not_null(s)
 	if s == null:
 		return
-
-	var food_target := 0
 	var target_age := 0
 	for o in s.win_objectives():
-		if o.subject == ObjectiveDef.Subject.RESOURCE and o.id == &"food":
-			food_target = o.value
-		elif o.subject == ObjectiveDef.Subject.AGE:
+		if o.subject == ObjectiveDef.Subject.AGE:
 			target_age = o.value
-	assert_true(food_target > 0 and target_age > 1, "both rows are present")
+	assert_true(target_age > 1, "there is an age to advance to")
 
 	var next: AgeDef = GameDataRegistry.age(target_age)
 	assert_not_null(next, "age %d is in ages.json" % target_age)
 	if next == null:
 		return
-	var cost: Dictionary = next.cost
-	assert_true(int(cost.get(&"food", 0)) >= food_target,
-			"advancing to age %d costs %d food against a target of %d -- if the cost were"
-			% [target_age, int(cost.get(&"food", 0)), food_target]
-			+ " lower, the player could keep the food AND buy the age")
+	var food := int(next.cost.get(&"food", 0))
+	assert_true(food > 0, "advancing costs food")
+	assert_true(s.message.contains(str(food)),
+			"the briefing tells the player to watch for %d food, which is what age %d costs"
+			% [food, target_age])
 
 
 func test_scenario_three_wins_by_conquest_and_declares_nothing() -> void:

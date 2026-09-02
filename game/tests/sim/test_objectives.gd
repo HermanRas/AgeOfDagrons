@@ -183,15 +183,20 @@ func test_a_resource_row_counts_only_its_own_kind() -> void:
 
 
 func test_a_win_row_stays_met_after_the_player_spends_what_met_it() -> void:
-	# ⚠️ **THE MOST LOAD-BEARING TEST IN THIS FILE, and it comes from a measurement rather
-	# than from a preference.** Scenario 2 asks for 500 food AND age 2. Advancing to age 2
-	# costs exactly 500 food and `AdvanceAgeCommand` deducts it when the advance STARTS, so
-	# the food row is true at the moment the age is affordable and false from the instant it
-	# is bought -- 100 ticks before the age arrives. ANDed live, the two are never true
-	# together and the scenario is UNWINNABLE WHILE LOOKING CORRECT.
+	# ⚠️ **THE RULE THAT COMES FROM A MEASUREMENT RATHER THAN A PREFERENCE.** The pair below
+	# is the one that shipped in scenario 2 for a few hours on 2026-09-02 and was then
+	# withdrawn by the owner: 500 food AND age 2, where advancing to age 2 costs exactly 500
+	# food and `AdvanceAgeCommand` deducts it when the advance STARTS. So the food row is
+	# true at the moment the age is affordable and false from the instant it is bought, 100
+	# ticks before the age arrives. ANDed live, the two are never true together and the
+	# scenario is UNWINNABLE WHILE LOOKING CORRECT.
 	#
-	# So a satisfied win row latches. Simulated here by spending the food directly, which
-	# is what the command does.
+	# **KEPT AS A TEST THOUGH NO SHIPPED SCENARIO IS THAT SHAPE ANY MORE**, because the
+	# shape is what matters: any ANDed pair where satisfying one row SPENDS what satisfied
+	# the other behaves this way, and a resource is only the most obvious such thing. This
+	# is the case that would break first if the latch were ever taken out as unused.
+	#
+	# The spend is done directly, which is what the command does.
 	w = _world([
 		_row({"subject": "resource", "id": "food", "value": 500}),
 		_row({"subject": "age", "value": 2}),

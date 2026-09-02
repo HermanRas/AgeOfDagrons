@@ -331,7 +331,13 @@ func test_the_objective_list_survives_the_wire_field_by_field() -> void:
 	# ABOUT**, and they would disagree about whether the match has been WON -- the one
 	# question the match was asked. Asserted field by field rather than by comparing
 	# dictionaries, because a dictionary comparison passes when BOTH sides lost the same key.
-	var s := _shipped("scenario_2")
+	#
+	# SCENARIO 1, because it is the one whose rows carry an `id`. JSON has no StringName, so
+	# `unit.villager` comes back a String and `&"unit.villager" == "unit.villager"` is
+	# FALSE; `from_wire` converts at the boundary and this is what would catch it if it
+	# stopped, since the row would silently count a def nobody owns. Scenario 2's single
+	# `age` row names no id and would assert nothing about that.
+	var s := _shipped("scenario_1")
 	assert_not_null(s)
 	if s == null:
 		return
