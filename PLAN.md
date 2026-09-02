@@ -1231,7 +1231,16 @@ and shared — can name it, keep it, and pick it again from 1.6. Three things it
 - **`user://maps/`, never `res://`**, which is read-only once exported. The picker lists **authored** maps and **saved** ones together — and as of 2026-09-01 that is `user://content/maps/` and `user://maps/`, not `res://maps/` and `user://maps/`: authored maps left `game/` with the campaigns (§3.3), so both halves of the list are now under `user://`. **They stay two directories**, so installing or replacing authored content cannot overwrite somebody's save and uninstalling it cannot delete one.
 - **The PNG is authoritative; the seed is provenance.** A sidecar JSON carries {name, type, players, size, seed, format_version, created}. The seed alone cannot reproduce a map, because any generator change makes the same seed produce something else.
 
-##### ✅ The format, built 2026-09-01 — `MapFile` (`src/data/map_file.gd`)
+##### ✅ The format, built 2026-09-01, CONFIRMED IN PLAY 2026-09-02 — `MapFile` (`src/data/map_file.gd`)
+
+⚠️ **THE FORMAT IS FIXED BY USE NOW, NOT ONLY BY TESTS, AND THE CHEAP MOMENT TO CHANGE IT
+HAS PASSED.** The owner played scenario 3 off a saved map and confirmed it starts, is
+*identical across runs* where it used to be re-rolled, and is winnable. Eleven tests said
+the round trip is exact; only a played match says the file describes a map the game can
+build a world from. Before that confirmation, changing this format cost three committed maps
+and one `--force` run — from here it costs that plus whatever MapMaker has been built
+against, which is precisely why this section was promoted ahead of Phase 16 instead of
+written after it.
 
 **`map.png` + `map.json` in one directory**, written and read by `MapFile.save()` /
 `MapFile.load_map()`. The owner's ruling of 2026-09-01 — *"2.4c will guide tool"* — so **this
