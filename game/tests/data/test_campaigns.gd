@@ -120,14 +120,48 @@ func test_scenario_one_is_two_win_rows_that_are_anded() -> void:
 	assert_eq(s.starting_age, 1)
 
 	var wins := s.win_objectives()
-	assert_eq(wins.size(), 2, "a house AND ten villagers is one objective in two halves")
+	assert_eq(wins.size(), 2, "a house AND fifteen villagers is one objective in two halves")
 	assert_eq(wins[0].subject, ObjectiveDef.Subject.BUILDING)
 	assert_eq(wins[0].id, &"building.house")
 	assert_eq(wins[0].value, 1)
 	assert_eq(wins[1].subject, ObjectiveDef.Subject.UNIT)
 	assert_eq(wins[1].id, &"unit.villager")
-	assert_eq(wins[1].value, 10)
+	assert_eq(wins[1].value, 15, "the owner's target, 2026-09-02")
 	assert_eq(wins[1].compare, ObjectiveDef.Compare.AT_LEAST)
+
+
+func test_scenario_ones_villager_target_needs_exactly_the_house_it_also_asks_for() -> void:
+	# ⚠️ **WHAT MAKES THE TWO ROWS DEPEND ON EACH OTHER RATHER THAN MERELY SIT BESIDE EACH
+	# OTHER.** MapGen gives every player a town centre (10 population) and 5 villagers, and
+	# a house is worth 5 -- so the owner's target of 15 is reachable with EXACTLY ONE HOUSE
+	# and not reachable without one. A target of 10 would have been satisfiable while
+	# ignoring the build half of a scenario named "How To Gather and Build".
+	#
+	# Derived from the DEFS rather than written as literals, so a balance change to the
+	# town centre, the house or the starting villagers fails this test instead of quietly
+	# making one half of the lesson optional.
+	var s := _shipped("scenario_1")
+	assert_not_null(s)
+	if s == null:
+		return
+	var tc: BuildingDef = GameDataRegistry.building(&"building.town_center")
+	var house: BuildingDef = GameDataRegistry.building(&"building.house")
+	assert_not_null(tc)
+	assert_not_null(house)
+	if tc == null or house == null:
+		return
+
+	var target := 0
+	for o in s.win_objectives():
+		if o.id == &"unit.villager":
+			target = o.value
+	assert_true(target > 0, "scenario 1 has a villager target")
+	assert_true(target > tc.provides_pop,
+			"a target within the town centre's own %d population needs no house"
+			% tc.provides_pop)
+	assert_true(target <= tc.provides_pop + house.provides_pop,
+			"a target above %d needs a SECOND house, which the build row does not ask for"
+			% (tc.provides_pop + house.provides_pop))
 
 
 func test_scenario_ones_villager_target_is_above_what_the_map_gives_you() -> void:
@@ -144,17 +178,59 @@ func test_scenario_ones_villager_target_is_above_what_the_map_gives_you() -> voi
 			assert_true(o.value > 5, "the target must exceed the 5 villagers MapGen grants")
 
 
-func test_scenario_two_counts_an_age_and_names_no_id() -> void:
+func test_scenario_two_counts_food_and_an_age_and_only_one_of_them_names_an_id() -> void:
 	var s := _shipped("scenario_2")
 	assert_not_null(s)
 	if s == null:
 		return
 	assert_eq(s.mode, ScenarioDef.Mode.SCENARIO)
 	var wins := s.win_objectives()
-	assert_eq(wins.size(), 1)
-	assert_eq(wins[0].subject, ObjectiveDef.Subject.AGE)
-	assert_true(wins[0].id.is_empty(), "an age counts no entities, so it names no id")
-	assert_eq(wins[0].value, 2, "ages are indexed from 1, so >= 2 is 'has advanced once'")
+	assert_eq(wins.size(), 2, "the owner's two rows, 2026-09-02")
+
+	assert_eq(wins[0].subject, ObjectiveDef.Subject.RESOURCE)
+	assert_eq(wins[0].id, &"food", "a resource row names WHICH resource")
+	assert_eq(wins[0].value, 500)
+
+	assert_eq(wins[1].subject, ObjectiveDef.Subject.AGE)
+	assert_true(wins[1].id.is_empty(), "an age counts no entities, so it names no id")
+	assert_eq(wins[1].value, 2, "ages are indexed from 1, so >= 2 is 'has advanced once'")
+
+
+func test_scenario_twos_two_rows_are_never_true_at_the_same_instant() -> void:
+	# ⚠️ **THE MEASUREMENT THAT FORCED THE WIN LATCH, kept as a test so it cannot quietly
+	# stop being true.** Advancing to age 2 costs EXACTLY the food the first row asks for,
+	# and `AdvanceAgeCommand` deducts it when the advance STARTS -- so buying the age is
+	# what makes the food row false, 100 ticks before the age it bought arrives. Multiple
+	# win rows are ANDed, so evaluated live this scenario is UNWINNABLE while looking
+	# completely correct.
+	#
+	# `ObjectiveSystem` latches a satisfied win row for exactly this reason
+	# (`SimPlayer.objective_done`). If a balance change ever makes the age cheaper than the
+	# food row, this test fails and the latch stops being load-bearing here -- which is
+	# worth knowing either way, because the comment in scenario_2.json claims it is.
+	var s := _shipped("scenario_2")
+	assert_not_null(s)
+	if s == null:
+		return
+
+	var food_target := 0
+	var target_age := 0
+	for o in s.win_objectives():
+		if o.subject == ObjectiveDef.Subject.RESOURCE and o.id == &"food":
+			food_target = o.value
+		elif o.subject == ObjectiveDef.Subject.AGE:
+			target_age = o.value
+	assert_true(food_target > 0 and target_age > 1, "both rows are present")
+
+	var next: AgeDef = GameDataRegistry.age(target_age)
+	assert_not_null(next, "age %d is in ages.json" % target_age)
+	if next == null:
+		return
+	var cost: Dictionary = next.cost
+	assert_true(int(cost.get(&"food", 0)) >= food_target,
+			"advancing to age %d costs %d food against a target of %d -- if the cost were"
+			% [target_age, int(cost.get(&"food", 0)), food_target]
+			+ " lower, the player could keep the food AND buy the age")
 
 
 func test_scenario_three_wins_by_conquest_and_declares_nothing() -> void:

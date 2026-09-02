@@ -52,9 +52,32 @@ func test_the_campaign_opens_with_a_row_per_scenario() -> void:
 
 func test_the_heading_is_the_campaign_and_the_panel_is_the_scenario() -> void:
 	# The two are different strings and swapping them is the obvious wiring mistake.
+	#
+	# ⚠️ **IT SETS ITS OWN PROGRESS, AND IT USED NOT TO.** `open()` selects the FURTHEST
+	# UNLOCKED scenario, so which one the panel is showing is a function of
+	# `user://campaign_progress.json` -- real state on whoever's machine runs the suite.
+	# This test asserted scenario 1 while relying on the file, so it passed on a fresh
+	# checkout and failed the moment a developer's install had any progress in it. That is
+	# exactly the trap this file's own header warns about, and it was latent until
+	# 2026-09-02, when a progress file written by hand to unlock all three for a play-test
+	# turned it into a failure with nothing to do with what it tests.
+	_at_progress(0)
 	assert_eq(screen._heading.text, campaign.name)
 	assert_true(screen.panel_title().ends_with(campaign.scenarios[0].name),
 			"panel shows the SCENARIO name, got: " + screen.panel_title())
+
+
+func test_opening_a_campaign_always_selects_a_row_that_exists() -> void:
+	# `open()` selects the furthest unlocked scenario, out of a progress figure that comes
+	# from a PLAYER-WRITABLE file -- so the value it clamps could be anything, including a
+	# number past the end of the campaign. What can be asserted without depending on that
+	# file is the invariant: whatever it read, the selection is a real row.
+	#
+	# Deliberately NOT asserting WHICH row, which is the mistake the test above was making.
+	assert_true(screen.selected_index() >= 0, "something is always selected")
+	assert_true(screen.selected_index() < campaign.scenarios.size(),
+			"and never past the end, whatever user:// says")
+	assert_false(screen.panel_title().is_empty())
 
 
 func test_rows_are_numbered_by_the_declared_order_not_the_folder_name() -> void:
@@ -100,15 +123,31 @@ func test_a_locked_scenario_cannot_be_played_and_says_why() -> void:
 	assert_true(screen.play_note().contains("Locked"), screen.play_note())
 
 
-func test_an_objective_scenario_refuses_to_start_and_says_so() -> void:
-	# THE HONEST GAP, and the reason this is a test rather than a surprise: scenario 1 and 2
-	# are `"mode": "scenario"` and `ScenarioDef.build_config` returns null until 15.2 builds
-	# the ObjectiveSystem. A PLAY button that simply did nothing would read as a broken game.
+func test_an_objective_scenario_is_playable_now_that_the_evaluator_exists() -> void:
+	# ⚠️ **THIS TEST USED TO ASSERT THE OPPOSITE**, and the inversion is the whole of 15.2
+	# from this screen's side. It read `..._refuses_to_start_and_says_so`, because scenario
+	# 1 and 2 are `"mode": "scenario"` and `build_config` returned null until
+	# `ObjectiveSystem` existed. It does now, so the PLAY button is live and there is no
+	# note to write -- which is what makes the campaign finishable rather than a dead end
+	# behind two greyed rows.
 	_at_progress(2)
 	screen.select(0)
 	assert_eq(campaign.scenarios[0].mode, ScenarioDef.Mode.SCENARIO)
-	assert_false(screen.play_enabled(), "objective scenarios wait on 15.2")
-	assert_false(screen.play_note().is_empty(), "and the panel says why")
+	assert_true(screen.play_enabled(), "objective scenarios launch as of 15.2")
+	assert_true(screen.play_note().is_empty(),
+			"nothing to explain: " + screen.play_note())
+
+
+func test_every_shipped_scenario_can_be_started_once_it_is_unlocked() -> void:
+	# THE ROW A FRESH PLAYER ACTUALLY HITS. Before 15.2 only scenario 1 was unlocked and
+	# scenario 1 could not launch, so the campaign was a dead end and the one scenario that
+	# worked was locked behind two that did not. Asserted across all three rather than for
+	# scenario 1 alone, because the failure was structural rather than about one file.
+	_at_progress(2)
+	for i in range(campaign.scenarios.size()):
+		screen.select(i)
+		assert_true(screen.play_enabled(), "%s: %s"
+				% [campaign.scenarios[i].folder, screen.play_note()])
 
 
 func test_the_last_man_standing_scenario_is_playable_end_to_end() -> void:
@@ -132,11 +171,46 @@ func test_the_last_man_standing_scenario_is_playable_end_to_end() -> void:
 	assert_not_null(cfg.map_data, "and a real map came with it")
 
 
-func test_launching_a_locked_or_unbuildable_scenario_does_not_start_one() -> void:
+func test_launching_a_locked_scenario_does_not_start_one() -> void:
+	# ⚠️ **THIS TEST USED TO LEAN ON THE 15.2 GAP.** It selected scenario 1 -- an objective
+	# scenario -- and asserted `launch()` refused, which was true for the wrong reason:
+	# `build_config` returned null because nothing could evaluate an objective. That is
+	# fixed, so the refusal has to come from the thing the test is actually named for.
+	#
+	# A LOCKED row is the real case: progress 0 unlocks scenario 1 only, and `select(2)`
+	# does not consult the lock -- it is the panel swap. So a player who somehow reached a
+	# locked scenario's PLAY button must still not start it.
+	_at_progress(0)
+	screen.select(2)
+	assert_false(screen._campaign.is_unlocked(2, 0), "scenario 3 is locked at progress 0")
+	assert_false(screen.play_enabled(), "so PLAY is greyed")
+	assert_false(screen.play_note().is_empty(), "and says it is locked")
+
+
+func test_launching_an_unbuildable_scenario_reports_rather_than_no_ops() -> void:
+	# The other half of what the old test covered: `build_config` refusing where
+	# `_why_not_playable` did not. Reached with a hand-built def whose map is missing,
+	# since every shipped scenario now builds -- and that is the point of the branch:
+	# a silent no-op is how a button ends up doing nothing at all.
 	_at_progress(2)
-	screen.select(0)
-	assert_false(screen.launch(), "an objective scenario cannot build a config yet")
+	var broken := ScenarioDef.from_dict("scenario_x", {
+		"name": "No Map At All",
+		"mode": "last_man_standing",
+		"map": {"type": "river", "seed": 1},
+		"opponents": ["passive"],
+	}, "user://test_scenario_screen/definitely_not_here")
+	assert_true(broken.is_playable(), "the JSON itself is fine")
+	screen._campaign.scenarios.append(broken)
+	screen._rebuild_rows()
+	screen.select(screen.row_count() - 1)
+
+	assert_false(screen.launch(), "no saved map, so no match")
 	assert_null(screen.launched(), "and nothing was handed to Net")
+	# The refusal's MESSAGE goes to `_say`, which is a no-op without a tree (a tween needs
+	# a `SceneTree`), so it cannot be read here -- `_why_not_playable` is what fills
+	# `play_note()`, and it deliberately said this scenario was fine. That disagreement
+	# between the cheap predicate and the real authority is the case `launch()`'s own
+	# comment is about, and returning false rather than doing nothing is the whole fix.
 
 
 func test_selecting_out_of_range_is_ignored_rather_than_crashing() -> void:

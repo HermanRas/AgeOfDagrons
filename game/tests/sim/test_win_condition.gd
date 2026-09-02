@@ -296,8 +296,25 @@ func test_king_of_the_hill_decides_nothing_yet() -> void:
 	assert_false(_player(2).defeated)
 
 
-func test_the_declared_modes_are_the_three_that_were_asked_for() -> void:
-	# The lobby (1.6/11.3) shows this list; the sim only acts on the first.
+func test_the_declared_modes_are_the_four_that_were_asked_for() -> void:
+	# The lobby (1.6/11.3) shows the first three; SCENARIO is not offered there and comes
+	# out of `scenario.json` instead.
+	#
+	# ⚠️ **ORDER IS THE ASSERTION, NOT MEMBERSHIP.** `mode` travels as an int in
+	# `MatchConfig.to_dict()`, so inserting a member rather than appending one renumbers
+	# the rest and silently reinterprets every recorded config and every beacon row in
+	# flight. This test is what fails instead.
 	assert_eq(MatchConfig.Mode.keys(),
-			["LAST_MAN_STANDING", "TROPHY", "KING_OF_THE_HILL"])
+			["LAST_MAN_STANDING", "TROPHY", "KING_OF_THE_HILL", "SCENARIO"])
+	assert_eq(int(MatchConfig.Mode.LAST_MAN_STANDING), 0)
+	assert_eq(int(MatchConfig.Mode.SCENARIO), 3, "appended, so the older three keep their ints")
 	assert_eq(WinConditionSystem.KOTH_TARGET_SCORE, 1000)
+
+
+func test_every_mode_has_a_name_for_a_player_to_read() -> void:
+	# A beacon row or a result screen naming a blank rule is worse than a wrong one,
+	# because a blank reads as a broken build rather than as a mode.
+	for mode in MatchConfig.Mode.values():
+		assert_false(MatchConfig.mode_name(mode).is_empty(),
+				"%s has no name" % MatchConfig.Mode.keys()[mode])
+	assert_eq(MatchConfig.mode_name(MatchConfig.Mode.SCENARIO), "Scenario")

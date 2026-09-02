@@ -29,6 +29,20 @@ var mode: MatchConfig.Mode = MatchConfig.Mode.LAST_MAN_STANDING
 var match_over: bool = false
 var winner_id: int = 0
 
+## THE AUTHORED WIN CONDITION (PLAN.md 11.8, 15.2), and whose viewpoint it is written
+## from. Both come from `MatchConfig` and never change; `ObjectiveSystem` reads them and
+## `SimPlayer.objective_progress` is where its answers go.
+##
+## Only meaningful when `mode == MatchConfig.Mode.SCENARIO`, and empty everywhere else --
+## which is every skirmish, every debug factory and every test fixture.
+##
+## HELD HERE RATHER THAN INSIDE THE SYSTEM because a client needs the DEFS to draw
+## 15.6's tracker: every client builds its own world from the config (2.4a), so the
+## labels are already local and only the PROGRESS has to ride the snapshot. A system
+## that kept them privately would make the view ask the host for text it already has.
+var objectives: Array[ObjectiveDef] = []
+var objective_player_id: int = 0
+
 ## WHICH SIDE WON (2026-08-31), 0 for a free-for-all win and for a draw. `winner_id`
 ## still names a player -- the lowest-id survivor of the winning side -- and this is
 ## what tells a teammate who was knocked out on tick 400 that their side went on to
@@ -72,6 +86,12 @@ func setup(cfg: MatchConfig) -> void:
 	match_over = false
 	winner_id = 0
 	winner_team = 0
+	# The authored win condition (15.2). `duplicate()` so a caller that reuses a config --
+	# every `dev_preview` tool, and `preview_ai_match`'s four rungs -- cannot have the
+	# world's list grow or shrink under it. The DEFS inside are shared and never mutated:
+	# `ObjectiveDef` is parsed once and read thereafter.
+	objectives = cfg.objectives.duplicate()
+	objective_player_id = cfg.objective_player_id
 	# A carried map decides its own size; `cfg.map_size` is the debug-map default and
 	# the fallback. Taking the map's own size means a config cannot be half-applied --
 	# a 96x96 map into a 64x64 grid would silently crop a quarter of it off.
@@ -106,6 +126,11 @@ func setup(cfg: MatchConfig) -> void:
 	# WinConditionSystem (11.1) is after those, for the same reason and one more: a
 	# player whose last building fell THIS tick has lost as of this tick, and every
 	# system that could still have saved them has already had its say.
+	# ObjectiveSystem (15.2) sits DIRECTLY BEFORE it, which is WildlifeSystem's reason
+	# inverted: the objective is judged on the finished tick, and the win system has to
+	# see its verdict on the SAME tick rather than the next one -- otherwise a scenario
+	# won on tick N is announced on tick N+1, by which point the elimination rule has
+	# already had a tick to say something else about the same world.
 	# AISystem (12.2a) is last of all, and that is what makes it fair: it looks at the
 	# finished tick and its orders are queued for the next one, exactly like a player
 	# reacting to what is on screen. Running it earlier would let it act on a
@@ -146,7 +171,7 @@ func setup(cfg: MatchConfig) -> void:
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
-			WinConditionSystem.new(), AISystem.new()]
+			ObjectiveSystem.new(), WinConditionSystem.new(), AISystem.new()]
 
 	for i in range(cfg.player_ids.size()):
 		var p := SimPlayer.new()
@@ -1232,9 +1257,23 @@ func state_hash() -> int:
 		# because the ORDER of two defeats decides it: a player who resigns and is then
 		# wiped out keeps RESIGNED, so two hosts that applied the concession on different
 		# ticks would agree about `defeated` and disagree here.
+		# `objective_progress` (15.2) is in here for `vision`'s reason rather than
+		# `pop_used`'s: it is not derived from anything else in the hash. The counts are
+		# read off the world, but WHICH entities were counted depends on `Diplomacy` and
+		# the team table, so two hosts that resolved `owner: enemy` differently would agree
+		# about every entity in the world and disagree about how far along the objective
+		# was -- silently, for the whole match, and then announce victory on different
+		# ticks. The objective DEFS stay out beside `mode` and the team numbers: they come
+		# from MatchConfig and never mutate.
+		# `objective_done` is folded in BESIDE it rather than instead of it, and the pair
+		# is not redundant: the latch is IRREVERSIBLE (`defeated`'s property, and the
+		# reason that flag is in this list), so two hosts that ticked the same row on
+		# different ticks would go on agreeing about the live count for the rest of the
+		# match while carrying different verdicts about it.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
 				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated,
-				p.defeat_reason, p.researched_ids(), p.vision])
+				p.defeat_reason, p.researched_ids(), p.vision, p.objective_progress,
+				p.objective_done])
 
 	# The outcome itself, which is the single most important thing in the hash to get
 	# right: two clients that disagree about who won have diverged about the only

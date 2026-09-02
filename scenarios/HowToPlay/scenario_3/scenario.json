@@ -27,7 +27,7 @@
 
   "name": "How To Find Opponent and Attack",
   "description": "Somewhere across the river is another player. Build an army, go and find them, and leave them nothing.",
-  "message": "Train soldiers at the barracks, select them, and tap an enemy to attack. Use the minimap to find your opponent.\n\nGoal: destroy every enemy unit AND building. Their villagers keep coming -- take their buildings.",
+  "message": "Objective: Destroy every enemy unit AND building.\n\nOverview: Train soldiers at the barracks, select them, and tap an enemy to attack. Use the minimap to find your opponent -- they are somewhere across the river.\n\nTheir villagers keep coming, so you cannot finish them by chasing villagers. Take their buildings.",
 
   "mode": "last_man_standing",
 

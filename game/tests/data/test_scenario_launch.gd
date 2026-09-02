@@ -116,29 +116,37 @@ func test_the_same_scenario_builds_the_same_map_twice() -> void:
 	assert_eq(first.map_data.terrain, second.map_data.terrain, "byte for byte")
 
 
-# ── the refusal that is waiting on 15.2 ────────────────────────────────────────
+# ── the two objective lessons, which launch as of 15.2 ─────────────────────────
 
-func test_the_two_scenario_mode_lessons_refuse_and_name_the_row_they_wait_for() -> void:
-	# Not a defect: PLAN.md 15 says scenario 3 is playable at 15.1 + 15.3 + 15.5 and that
-	# 15.2 is what unlocks scenarios 1 and 2. The refusal is the honest form of that.
+func test_the_two_scenario_mode_lessons_launch_now_that_the_evaluator_exists() -> void:
+	# This used to be `..._refuse_and_name_the_row_they_wait_for`, and the refusal was the
+	# honest form of PLAN.md 15's build order: scenario 3 playable at 15.1 + 15.3 + 15.5,
+	# with 15.2 unlocking the other two. 15.2 is built, so they start.
 	for folder in ["scenario_1", "scenario_2"]:
 		var s := _shipped(folder)
 		assert_not_null(s, folder)
 		if s == null:
 			continue
-		assert_true(s.is_playable(), "%s is well formed -- it is the evaluator that is missing" % folder)
+		assert_true(s.is_playable(), folder)
 
 		var problems: Array[String] = []
-		assert_null(s.build_config(problems), "%s cannot launch before 15.2" % folder)
-		assert_eq(problems.size(), 1)
-		assert_true(problems[0].contains("15.2"), problems[0])
+		var cfg := s.build_config(problems)
+		assert_not_null(cfg, "%s must launch: %s" % [folder, " | ".join(problems)])
+		if cfg == null:
+			continue
+		assert_eq(problems, [] as Array[String])
+		assert_eq(cfg.mode, MatchConfig.Mode.SCENARIO,
+				"%s is decided by its objectives, not by conquest" % folder)
+		assert_false(cfg.objectives.is_empty(), "%s carries its win rows" % folder)
+		assert_eq(cfg.objective_player_id, 1, "the human is the protagonist")
 
 
-func test_a_scenario_mode_refusal_never_silently_becomes_a_conquest_match() -> void:
-	# The failure this guard exists for, stated as a test: mapping SCENARIO onto
-	# LAST_MAN_STANDING would let killing the passive AI's five villagers win an economy
-	# lesson with two villagers and no house -- decision 5's named failure, and the
-	# scenario would teach the opposite of its name.
+func test_a_scenario_mode_lesson_never_silently_becomes_a_conquest_match() -> void:
+	# THE FAILURE THIS PINS IS STILL THE ONE THAT MATTERS, and it changed shape rather
+	# than going away. Mapping SCENARIO onto LAST_MAN_STANDING would let killing the
+	# passive AI's five villagers win an economy lesson with two villagers and no house --
+	# decision 5's named failure, and the scenario would teach the opposite of its name.
+	# The refusal used to be what prevented it; the MODE now is.
 	var s := _scenario({
 		"mode": "scenario",
 		"objectives": [{"subject": "unit", "id": "unit.villager", "compare": ">=",
@@ -146,8 +154,42 @@ func test_a_scenario_mode_refusal_never_silently_becomes_a_conquest_match() -> v
 	})
 	assert_true(s.is_playable())
 	var problems: Array[String] = []
-	assert_null(s.build_config(problems),
-			"a scenario-mode lesson must refuse rather than launch as conquest")
+	var cfg := s.build_config(problems)
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_ne(cfg.mode, MatchConfig.Mode.LAST_MAN_STANDING,
+			"conquest must not be allowed to decide an objective scenario")
+	assert_eq(cfg.mode, MatchConfig.Mode.SCENARIO)
+
+
+func test_a_last_man_standing_scenario_carries_no_objectives_and_no_protagonist() -> void:
+	# Scenario 3's shape. `ObjectiveSystem` does nothing outside SCENARIO mode, so these
+	# two fields being empty is not what makes it safe -- but a config that carried
+	# objectives it would never read is a config somebody would later "fix" by reading them.
+	var cfg := _config(_scenario({"mode": "last_man_standing"}))
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_eq(cfg.mode, MatchConfig.Mode.LAST_MAN_STANDING)
+	assert_eq(cfg.objectives.size(), 0)
+	assert_eq(cfg.objective_player_id, 0, "0 is nobody, which is every non-scenario match")
+
+
+func test_the_briefing_reaches_the_config_because_the_hud_has_never_heard_of_a_campaign() -> void:
+	# 15.6's modal reads `MatchConfig.scenario_message`, not `ScenarioDef.message`: the
+	# message field is shared with skirmish by the owner's spec, so it belongs to the match
+	# HUD. Provenance like `host_name` -- nothing in the sim reads it.
+	var s := _shipped("scenario_1")
+	assert_not_null(s)
+	if s == null:
+		return
+	var cfg := _config(s)
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_eq(cfg.scenario_message, s.message)
+	assert_false(cfg.scenario_message.is_empty(), "a scenario explains itself before tick 1")
 
 
 # ── an unplayable scenario refuses, and says what the loader already knew ──────
@@ -282,6 +324,45 @@ func test_the_config_survives_the_wire_the_way_a_hosted_match_would() -> void:
 	assert_eq(back.map_type, cfg.map_type)
 	assert_eq(back.starting_age, cfg.starting_age)
 	assert_eq(back.map_size, cfg.map_size, "the map has to arrive, not be regenerated")
+
+
+func test_the_objective_list_survives_the_wire_field_by_field() -> void:
+	# ⚠️ **AN OBJECTIVE THAT DOES NOT SURVIVE THE WIRE IS A RULE TWO CLIENTS CAN DISAGREE
+	# ABOUT**, and they would disagree about whether the match has been WON -- the one
+	# question the match was asked. Asserted field by field rather than by comparing
+	# dictionaries, because a dictionary comparison passes when BOTH sides lost the same key.
+	var s := _shipped("scenario_2")
+	assert_not_null(s)
+	if s == null:
+		return
+	var cfg := _config(s)
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+
+	var json := JSON.new()
+	assert_eq(json.parse(JSON.stringify(cfg.to_dict())), OK)
+	var back := MatchConfig.from_dict(json.data)
+
+	assert_eq(back.mode, MatchConfig.Mode.SCENARIO)
+	assert_eq(back.objective_player_id, cfg.objective_player_id)
+	assert_eq(back.scenario_message, cfg.scenario_message)
+	assert_eq(back.objectives.size(), cfg.objectives.size())
+	for i in range(cfg.objectives.size()):
+		var sent: ObjectiveDef = cfg.objectives[i]
+		var got: ObjectiveDef = back.objectives[i]
+		assert_eq(got.subject, sent.subject, "row %d subject" % i)
+		# A StringName through JSON comes back a String, and `&"food" == "food"` is FALSE
+		# -- `from_wire` converts at the boundary, and this is what would catch it if it
+		# stopped: the row would silently count a resource nobody holds.
+		assert_eq(got.id, sent.id, "row %d id" % i)
+		assert_eq(typeof(got.id), TYPE_STRING_NAME, "row %d id stays a StringName" % i)
+		assert_eq(got.owner, sent.owner, "row %d owner" % i)
+		assert_eq(got.owner_index, sent.owner_index, "row %d owner_index" % i)
+		assert_eq(got.compare, sent.compare, "row %d compare" % i)
+		assert_eq(got.value, sent.value, "row %d value" % i)
+		assert_eq(got.output, sent.output, "row %d output" % i)
+		assert_eq(got.text, sent.text, "row %d text" % i)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────

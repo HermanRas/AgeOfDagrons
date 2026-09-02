@@ -11,9 +11,9 @@ extends RefCounted
 ## How the match is won (PLAN.md 11.1/11.2). Chosen in the lobby once 1.6/11.3
 ## exist; until then every match is the default.
 ##
-## ONLY LAST_MAN_STANDING IS IMPLEMENTED. The other two are declared here so the
-## mode is a real axis rather than a boolean, and so the lobby has a list to show
-## -- `WinConditionSystem` documents exactly what each of them still needs, and
+## TWO OF THE FOUR ARE IMPLEMENTED. Trophy and King of the Hill are declared here
+## so the mode is a real axis rather than a boolean, and so the lobby has a list to
+## show -- `WinConditionSystem` documents exactly what each of them still needs, and
 ## deliberately never ends a match in either. A mode that half-works would end
 ## matches for reasons the player cannot see; one that does nothing leaves a
 ## sandbox, which is what the debug map already is.
@@ -25,7 +25,22 @@ extends RefCounted
 ##   KING_OF_THE_HILL   hold a zone on the map with more units than anybody else
 ##                      to score; first to WinConditionSystem.KOTH_TARGET_SCORE
 ##                      wins.
-enum Mode { LAST_MAN_STANDING, TROPHY, KING_OF_THE_HILL }
+##   SCENARIO           an authored objective list decides it (15.2). Won by
+##                      `objectives` below; LOST by elimination like every other
+##                      mode, which is the half of conquest a scenario keeps.
+##
+## ⚠️ **`SCENARIO` IS APPENDED, NOT INSERTED, AND THAT IS A WIRE RULE.** `mode`
+## travels as an int in `to_dict()` and is read back by `from_dict()`, so inserting a
+## member would renumber TROPHY and KING_OF_THE_HILL and silently reinterpret every
+## recorded config and every beacon row already in flight. New modes go on the end.
+##
+## **IT IS NOT A LOBBY CHOICE, and `SkirmishScreen` deliberately does not offer it.**
+## That picker lists the three by name rather than iterating this enum, so adding a
+## member here does not add a row there -- which is what should happen: a scenario's
+## win condition comes out of `scenario.json`, and a Victory dropdown offering
+## "Scenario" would be offering a mode with no objectives behind it, which is a match
+## that can be lost and never won.
+enum Mode { LAST_MAN_STANDING, TROPHY, KING_OF_THE_HILL, SCENARIO }
 
 
 ## A mode's name for a player to read (the skirmish screen, 1.6/11.3). Spelled out
@@ -35,6 +50,11 @@ static func mode_name(mode: Mode) -> String:
 	match mode:
 		Mode.TROPHY: return "Trophy"
 		Mode.KING_OF_THE_HILL: return "King of the Hill"
+		# Named for the RESULT SCREEN and the LAN beacon, not for a picker: nothing offers
+		# this mode as a choice (see the enum). A beacon row for a hosted scenario would
+		# otherwise show a blank rule, and "Last Man Standing" -- the old fallback -- would
+		# be an outright wrong one.
+		Mode.SCENARIO: return "Scenario"
 		_: return "Last Man Standing"
 
 ## Deliberately small. PLAN.md 10's MVP is "one small map on a phone", and an 8x8
@@ -117,6 +137,59 @@ var ai_players: Array[bool] = []
 ## from before difficulty existed still deserializes into exactly the match it used to.
 var ai_levels: Array[int] = []
 
+## THE AUTHORED WIN CONDITION (PLAN.md 11.8, 15.2). Empty in every other mode, which
+## is every skirmish and every debug factory.
+##
+## ONLY READ WHEN `mode == Mode.SCENARIO`. `ScenarioDef` refuses the two ways these can
+## contradict the mode -- a `scenario` with no win row can never be won, and a
+## `last_man_standing` carrying objectives would have them silently ignored -- so a
+## config where the two disagree cannot come from a scenario file at all.
+##
+## IT IS IN THE CONFIG FOR `mode`'s REASON, and rather more sharply: every client builds
+## its own world (2.4a) and `ObjectiveSystem` runs in each of them, so two clients
+## holding different objective lists would disagree about whether the match has been WON
+## -- which is the one question the match was asked. `state_hash()` folds the outcome in,
+## so it would be caught, as a desync on the tick somebody won.
+var objectives: Array[ObjectiveDef] = []
+
+## WHOSE VIEWPOINT `objectives` ARE WRITTEN FROM (15.2). 0 means nobody, which is every
+## non-scenario match. `ScenarioDef.build_config` sets it to 1, the human.
+##
+## ## THE OBJECTIVES NEED A VIEWPOINT AND THIS IS IT
+##
+## `ObjectiveDef.Owner` is `self` / `enemy` / `ally` / an index, and three of those four
+## are RELATIVE terms. A relative term with no viewpoint is not a rule, so the viewpoint
+## is carried rather than derived.
+##
+## ⚠️ **DERIVING IT WOULD HAND THE TUTORIAL TO THE BOT.** The obvious derivation is "the
+## first player who is not an AI", and the failure is immediate: scenario 1 is won by
+## reaching ten villagers, the Passive opponent runs its whole economy and trains
+## villagers from its town centre, so evaluating "self" for every player means the AI
+## completes the economy lesson first and the human watches it happen. Objectives are
+## evaluated for this player and nobody else.
+##
+## ONE INT AND NOT A LIST, deliberately. A co-op scenario does not want the objectives
+## evaluated once per protagonist -- that is two separate verdicts about one shared goal
+## -- it wants them evaluated once for a SIDE, which is what `Owner.ALLY` already
+## expresses from this player's viewpoint ("your side owns 10 houses"). A list would look
+## like it handled co-op while promising something else.
+var objective_player_id: int = 0
+
+## WHAT THE SCENARIO SAYS BEFORE THE FIRST ORDER (PLAN.md 15.6). Empty means no modal,
+## which is every skirmish.
+##
+## PROVENANCE, LIKE `host_name`, `seed` AND `map_type` -- NOT SIMULATION. Nothing in
+## `src/sim/` reads it, it is not in `state_hash()`, and two clients disagreeing about it
+## changes nothing about the match. That is precisely why it may live here: `to_dict()`
+## is the one description of a session that already travels to every client, and a second
+## channel carrying the briefing is a second thing that can say something different from
+## the first.
+##
+## SHARED WITH SKIRMISH BY THE OWNER'S SPEC, which is why it is on the config rather than
+## reached for through `ScenarioDef`: the match HUD shows it, and the HUD has never heard
+## of a campaign.
+var scenario_message: String = ""
+
 ## WHOSE SIDE EACH PLAYER IS ON, position for position with `player_ids` (the lobby's
 ## team selector, 2026-08-31). Read by `SimWorld.setup()` into `SimPlayer.team`.
 ##
@@ -195,9 +268,23 @@ func to_dict() -> Dictionary:
 		"map_type": int(map_type),
 		"starting_age": starting_age,
 		"host_name": host_name,
+		# THE AUTHORED WIN CONDITION (15.2), already normalised. `ObjectiveDef.to_dict`
+		# writes the PARSED form -- enums as ints, the comparison already decided -- so the
+		# sim end never re-parses the author's `">="`: a comparison that arrived as a string
+		# is a comparison two builds could disagree about.
+		"objectives": _objectives_to_wire(),
+		"objective_player_id": objective_player_id,
+		"scenario_message": scenario_message,
 		# null for the fixed debug map, which is integer code and identical everywhere.
 		"map_data": map_data.to_dict() if map_data != null else null,
 	}
+
+
+func _objectives_to_wire() -> Array:
+	var out: Array = []
+	for o in objectives:
+		out.append(o.to_dict())
+	return out
 
 
 static func from_dict(d: Dictionary) -> MatchConfig:
@@ -250,6 +337,25 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	# one" -- and that is exactly what such a host is. Same forward-compatibility shape as
 	# `ai_levels` and `teams` above, and for the same reason.
 	c.host_name = String(d.get("host_name", ""))
+
+	# THE AUTHORED WIN CONDITION (15.2). Absent from a host built before objectives
+	# existed, which reads as an empty list -- and an empty list is exactly what every
+	# match that host can run carries, because it has no SCENARIO mode to select either.
+	# Same forward-compatibility shape as `ai_levels` and `teams` above.
+	#
+	# THROUGH `from_wire` AND NOT `from_dict`: this is the normalised form coming BACK,
+	# not an author's file going in. `from_dict` validates spellings, refuses the three
+	# unevaluable subjects and appends complaints -- all of which happened on the host,
+	# before the config was sent. Re-running it here would mean a client could reject one
+	# row of a list the host is already simulating, and then run a different rule.
+	var objectives: Array[ObjectiveDef] = []
+	for v in d.get("objectives", []):
+		if v is Dictionary:
+			objectives.append(ObjectiveDef.from_wire(v as Dictionary))
+	c.objectives = objectives
+	c.objective_player_id = int(d.get("objective_player_id", 0))
+	# Absent means no briefing, which is every skirmish and every older recorded config.
+	c.scenario_message = String(d.get("scenario_message", ""))
 
 	var md = d.get("map_data")
 	if md != null and md is Dictionary:

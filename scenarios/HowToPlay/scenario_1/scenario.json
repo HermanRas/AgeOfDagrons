@@ -1,38 +1,48 @@
 {
   "_note": [
-    "TEACHES THE ECONOMY. Won by owning a house AND ten villagers.",
+    "TEACHES THE ECONOMY. Won by owning a house AND fifteen villagers.",
     "",
-    "TWO WIN ROWS, AND THEY ARE ANDed. 'A house and ten villagers' is one objective in two",
-    "halves, which is exactly what multiple `win` rows mean (PLAN.md 11.8). An OR would",
+    "TWO WIN ROWS, AND THEY ARE ANDed. 'A house and fifteen villagers' is one objective in",
+    "two halves, which is exactly what multiple `win` rows mean (PLAN.md 11.8). An OR would",
     "need grouping and no scenario wants one yet.",
     "",
-    "WHY 10 VILLAGERS RATHER THAN A ROUND 5: MapGen starts every player with 5, so a target",
-    "of 5 is a scenario already won on tick 0 and would teach nothing. The lesson is that",
-    "villagers make villagers.",
+    "THE OBJECTIVE AND THE MESSAGE ARE THE OWNER'S OWN WORDS, 2026-09-02, and the target",
+    "moved from 10 villagers to 15 with them. 15 is a better number than it looks: MapGen",
+    "gives every player a town centre worth 10 population and 5 villagers, and a house is",
+    "worth 5, so 15 villagers is reachable with EXACTLY ONE HOUSE and not reachable without",
+    "one. That makes the two win rows depend on each other instead of merely sitting beside",
+    "each other -- the player cannot satisfy the villager half while ignoring the build half.",
+    "(A target of 5 would be a scenario already won on tick 0 and would teach nothing; the",
+    "lesson is that villagers make villagers, and that population needs housing.)",
     "",
     "THE OPPONENT IS PASSIVE, which runs its whole economy and never attacks -- so this",
     "scenario cannot be lost by being raided while you learn. Elimination is still the loss",
     "(you own nothing, you are out), because that is true on every map in this game whatever",
     "a file declares, which is why no lose condition is written here.",
     "",
-    "SCENARIO MODE MUST NOT LET CONQUEST WIN THIS (15.2): killing the passive AI's five",
-    "villagers and its town centre must NOT end this in victory with two villagers and no",
-    "house, or the scenario teaches the opposite of its name."
+    "SCENARIO MODE MUST NOT LET CONQUEST WIN THIS, and as of 15.2 it does not: killing the",
+    "passive AI's five villagers and its town centre eliminates THEM and ends nothing, so",
+    "this cannot be won with two villagers and no house. WinConditionSystem._scenario is",
+    "where that fork lives -- conquest's loss without conquest's win.",
+    "",
+    "A FOUNDATION IS NOT A HOUSE. ObjectiveSystem counts COMPLETE buildings only, which is",
+    "the population cap's rule and deliberately not the elimination rule's, so pegging out a",
+    "house and walking away does not tick this row."
   ],
 
   "name": "How To Gather and Build",
-  "description": "Villagers gather food, wood, gold and stone, and they build. Put up a house and grow to ten villagers.",
-  "message": "Tap a villager, then tap a tree or a berry bush to gather. Tap your town centre to train more villagers. Build a house from the build menu to raise your population cap.\n\nGoal: own 1 house and 10 villagers.",
+  "description": "Villagers gather food, wood, gold and stone, and they build. Put up a house and grow to fifteen villagers.",
+  "message": "Objective: Build 1 house, and reach 15 Villagers.\n\nOverview: Select a single villager and tap the build icon on the bottom left hand of the screen, tap the House tile, then drag the house to an open spot on the map where it turns GREEN and place it.\n\nSelect some villagers and tap on a berry bush -- look for an ORANGE tile flash to indicate they will gather it.\n\nTrain more villagers from your town centre. One house is exactly enough population for fifteen.",
 
   "mode": "scenario",
 
   "_note_map": [
-    "A PINNED SEED IS NOT A PINNED MAP (PLAN.md 11.7). `seed` reproduces this map only",
-    "through the exact MapGenerator that made it -- any generator change makes the same",
-    "seed produce something else, and FastNoiseLite's float maths is not identical across",
-    "CPUs. Acceptable for these three and only these three, because their objectives count",
-    "villagers and ages rather than describing a place. 16.10 swaps the seed for a FILE and",
-    "retires the trap."
+    "THE MAP IS THE SAVED map.png BESIDE THIS FILE (2.4c, PLAN.md 11.3). `seed` below is",
+    "PROVENANCE ONLY -- it records how the map was first generated and nothing reads it to",
+    "rebuild one. build_config() does not call MapGenerator at all, which is the owner's",
+    "ruling of 2026-09-01: generating is a one-off authoring step, not something a launch",
+    "does. That closed the 'a pinned seed is not a pinned map' defect for good, since",
+    "FastNoiseLite's float maths is not identical between an ARM phone and an x86 desktop."
   ],
   "map": { "type": "river", "seed": 815101 },
 
@@ -47,8 +57,8 @@
     },
     {
       "subject": "unit", "id": "unit.villager", "owner": "self",
-      "compare": ">=", "value": 10, "output": "win",
-      "text": "Reach 10 villagers"
+      "compare": ">=", "value": 15, "output": "win",
+      "text": "Reach 15 villagers"
     }
   ]
 }

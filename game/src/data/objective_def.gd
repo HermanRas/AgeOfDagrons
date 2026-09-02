@@ -47,7 +47,17 @@ extends RefCounted
 
 ## What is being counted. `AREA`, `NAMED_UNIT` and `TICKS` parse but are refused --
 ## they are named here so the refusal can say "not yet" rather than "unknown".
-enum Subject { UNIT, BUILDING, AGE, AREA, NAMED_UNIT, TICKS }
+##
+## ⚠️ **`RESOURCE` IS APPENDED, NOT INSERTED, AND THAT IS A WIRE RULE.** `subject`
+## travels as an int in `to_dict()`, so slipping a member in beside `AGE` -- where it
+## reads better -- would renumber `AREA`, `NAMED_UNIT` and `TICKS` and silently
+## reinterpret every objective already recorded or in flight. New subjects go on the end.
+##
+## `RESOURCE` arrived on 2026-09-02 with the owner's own objectives for scenario 2
+## (*"Gather 500 food, and Age up to Age of Ember"*), which the five existing subjects
+## could not express at all. It reads `SimPlayer.stock`, which is a BALANCE and not a
+## running total -- see `ObjectiveSystem._stock_of`, and the latch its header explains.
+enum Subject { UNIT, BUILDING, AGE, AREA, NAMED_UNIT, TICKS, RESOURCE }
 
 ## Whose things are counted. `INDEX` means an explicit player number in `owner_index`.
 ##
@@ -72,7 +82,16 @@ const _SUBJECTS := {
 	"area": Subject.AREA,
 	"named_unit": Subject.NAMED_UNIT,
 	"ticks": Subject.TICKS,
+	"resource": Subject.RESOURCE,
 }
+
+## The resource kinds a `resource` row may name, which are `SimPlayer.stock`'s keys.
+##
+## PINNED HERE RATHER THAN LEFT OPEN, because a typo is the whole failure mode: `stock`
+## is a plain Dictionary and `stock.get(&"foood", 0)` is 0, so a misspelled kind reads as
+## "the player has none and never will" -- a scenario that cannot be won, with nothing on
+## screen to say why. Four names is a list worth writing down twice.
+const RESOURCE_KINDS := ["food", "wood", "gold", "stone"]
 
 ## Subject -> the row of PLAN.md that has to land before it can be evaluated. Presence
 ## in this map is what makes a subject refused; adding the evaluator means deleting a
@@ -89,9 +108,13 @@ const _COMPARES := {">=": Compare.AT_LEAST, "<=": Compare.AT_MOST, "==": Compare
 
 const _OUTPUTS := {"win": Output.WIN, "lose": Output.LOSE, "alert": Output.ALERT}
 
-## Subjects that count entities and may therefore name a def id. `AGE` may not, and an
-## `age` row carrying one is a sign the author meant something else.
-const _COUNTS_ENTITIES: Array[Subject] = [Subject.UNIT, Subject.BUILDING]
+## Subjects that may name an `id`. `AGE` may not, and an `age` row carrying one is a
+## sign the author meant something else.
+##
+## `RESOURCE` is in here and is the one that REQUIRES one -- see `_read_id`. The other
+## two are optional, because "any unit" is a real question and "500 of any resource"
+## would add food to stone.
+const _NAMES_AN_ID: Array[Subject] = [Subject.UNIT, Subject.BUILDING, Subject.RESOURCE]
 
 var subject: Subject = Subject.UNIT
 
@@ -161,16 +184,48 @@ static func from_dict(d: Dictionary, problems: Array[String]) -> ObjectiveDef:
 		problems.append("negative value %d -- nothing this counts can go below zero" % o.value)
 		return null
 
-	# JSON has no StringName, so everything off the wire is a String and
-	# `&"unit.villager" == "unit.villager"` is FALSE. Convert at the boundary.
-	o.id = StringName(str(d.get("id", "")))
-	if not o.id.is_empty() and not _COUNTS_ENTITIES.has(o.subject):
-		problems.append("subject '%s' counts no entities, so it cannot name id '%s'"
-				% [subject_key, o.id])
+	if not o._read_id(d, subject_key, problems):
 		return null
 
 	o.text = str(d.get("text", ""))
 	return o
+
+
+## The `id` half of a row: which unit, which building, which resource.
+##
+## THREE REFUSALS, and the third is the one that would otherwise cost an afternoon:
+##
+##   - A subject that names nothing carrying an id (`age`), which means the author meant
+##     a different subject.
+##   - A `resource` row with NO id, which cannot be measured at all.
+##   - A `resource` row naming something that is not one of the four KINDS. `stock` is a
+##     plain Dictionary, so a typo reads as a balance of zero that never rises -- an
+##     unwinnable scenario whose only symptom is that nothing ever happens. Unit and
+##     building ids are NOT checked the same way, and deliberately: `GameDataRegistry`
+##     already validates the roster and this class is loaded by the front door, which
+##     must not need the registry to parse a file.
+func _read_id(d: Dictionary, subject_key: String, problems: Array[String]) -> bool:
+	# JSON has no StringName, so everything off the wire is a String and
+	# `&"unit.villager" == "unit.villager"` is FALSE. Convert at the boundary.
+	id = StringName(str(d.get("id", "")))
+
+	if not id.is_empty() and not _NAMES_AN_ID.has(subject):
+		problems.append("subject '%s' counts no entities, so it cannot name id '%s'"
+				% [subject_key, id])
+		return false
+
+	if subject != Subject.RESOURCE:
+		return true
+
+	if id.is_empty():
+		problems.append("a 'resource' objective must name which resource in 'id' (one of %s)"
+				% ", ".join(RESOURCE_KINDS))
+		return false
+	if not RESOURCE_KINDS.has(String(id)):
+		problems.append("unknown resource '%s' (expected one of %s)"
+				% [id, ", ".join(RESOURCE_KINDS)])
+		return false
+	return true
 
 
 func _read_owner(d: Dictionary, problems: Array[String]) -> bool:
@@ -235,7 +290,13 @@ static func from_wire(d: Dictionary) -> ObjectiveDef:
 func describe() -> String:
 	if not text.is_empty():
 		return text
-	var what := "Age" if subject == Subject.AGE else (String(id) if not id.is_empty() else "units")
+	var what := String(id) if not id.is_empty() else "units"
+	if subject == Subject.AGE:
+		what = "Age"
+	elif subject == Subject.RESOURCE:
+		# Capitalised because a resource id is a bare word ("food") where a unit id is a
+		# namespaced one ("unit.villager"), and "food at least 500" reads as a fragment.
+		what = String(id).capitalize()
 	# A `match` rather than subscripting a dictionary literal: GDScript will not compile
 	# `{...}[key]` inline, and the failure is a whole-file compilation error that makes
 	# every static on this class vanish -- so `ObjectiveDef.from_dict` reported

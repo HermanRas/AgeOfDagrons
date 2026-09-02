@@ -137,6 +137,23 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# nothing at all at the moment it happened. One int on a block that is
 			# already per-player, rather than a second channel beside `winner_id`.
 			"defeat_reason": p.defeat_reason,
+			# HOW FAR ALONG EACH AUTHORED OBJECTIVE IS (15.2), and which are ticked off.
+			# What 15.6's tracker draws, and the reason it needs only these two arrays: the
+			# objective DEFS are already on the client, because every client builds its own
+			# world from the same `MatchConfig` (2.4a), so the LABELS are local and only the
+			# numbers have to travel. Sending the text every tick would be sending a
+			# scenario file ten times a second.
+			#
+			# EMPTY IN EVERY NON-SCENARIO MATCH, which is what "no tracker" reads as -- and
+			# empty for every player but the one the objectives were authored for, since
+			# `self`/`enemy`/`ally` are measured from one viewpoint (`SimPlayer`'s own note).
+			#
+			# Sent to EVERYBODY rather than filtered to the objective player, beside
+			# `researched` and for its reason: filtering would break the single
+			# `player_state` shape for no gain, and a scenario's goals are not a secret from
+			# the bot that cannot read them.
+			"objective_progress": p.objective_progress,
+			"objective_done": p.objective_done,
 		}
 
 	return {

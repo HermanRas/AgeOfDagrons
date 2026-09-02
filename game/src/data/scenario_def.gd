@@ -274,25 +274,14 @@ func win_objectives() -> Array[ObjectiveDef]:
 ## on the data. 15.5 calls this and puts the result in `Net.pending_match`; nothing in the
 ## boot path, the net layer or `SimWorld.setup()` learns what a campaign is.
 ##
-## ## IT REFUSES `SCENARIO` MODE TODAY, AND THAT REFUSAL IS THREE LINES TO DELETE
+## ## BOTH MODES LAUNCH AS OF 15.2 (2026-09-02)
 ##
-## `MatchConfig.Mode` has no `SCENARIO` member yet -- PLAN.md assigns it, and
-## `MatchConfig.objectives`, to **15.2**. Two wrong ways to paper over that, and it is
-## worth naming both because either would look like it worked:
-##
-## - **Map `SCENARIO` onto `LAST_MAN_STANDING`.** Scenario 1 would then be won by killing
-##   the passive AI's five villagers, with two villagers and no house, which is decision 5's
-##   named failure and teaches the opposite of the scenario's name.
-## - **Add an inert `SCENARIO` member here.** `WinConditionSystem` deliberately never ends
-##   a match in an unimplemented mode, so scenario 1 would launch into a match that can
-##   never be won OR lost. A player would sit in it forever. "Inert" is the safe direction
-##   for a mode nobody has selected yet; it is the wrong direction for the mode a PLAY
-##   button is about to select.
-##
-## So a `SCENARIO` scenario refuses to launch and says which row it is waiting for. **This
-## is exactly what PLAN.md 15 predicts**: scenario 3 is playable at 15.1 + 15.3 + 15.5, and
-## 15.2 is what unlocks scenarios 1 and 2. When 15.2 lands, delete the guard below and set
-## `cfg.mode` from `mode`.
+## This function used to refuse `SCENARIO` outright and name the row it was waiting for,
+## which was the honest form of *"scenario 3 is playable at 15.1 + 15.3 + 15.5, and 15.2
+## is what unlocks scenarios 1 and 2"*. `ObjectiveSystem` exists now, so the mode travels
+## and all three How To Play scenarios start. The two wrong ways that refusal could have
+## been papered over are recorded at the `cfg.mode` line, because either would have looked
+## like it worked.
 ##
 ## ## A PINNED SEED IS NOT A PINNED MAP
 ##
@@ -315,12 +304,6 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	if not is_playable():
 		for p in problems_or_self():
 			out_problems.append(p)
-		return null
-
-	if mode == Mode.SCENARIO:
-		out_problems.append("mode 'scenario' needs 15.2's ObjectiveSystem before it can be"
-				+ " launched -- MatchConfig has no SCENARIO mode yet, and mapping it onto"
-				+ " last_man_standing would let conquest win an economy lesson")
 		return null
 
 	var cfg := MatchConfig.new()
@@ -379,7 +362,43 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	# The map is the authority on its own size; a config disagreeing with the map it
 	# carries would build a world the wrong shape.
 	cfg.map_size = cfg.map_data.size
-	cfg.mode = MatchConfig.Mode.LAST_MAN_STANDING
+
+	# ⚠️ **THE SCENARIO'S OWN MODE NOW REACHES THE MATCH (15.2).** Until 2026-09-02 this
+	# line was `LAST_MAN_STANDING` unconditionally, above a guard that refused SCENARIO
+	# outright -- which was honest while nothing could evaluate an objective, and is a
+	# defect the moment `ObjectiveSystem` exists. Both wrong ways to have papered over it
+	# are worth keeping named, because either would have looked like it worked:
+	#
+	# - **Map SCENARIO onto LAST_MAN_STANDING.** Scenario 1 would then be won by killing
+	#   the Passive AI's five villagers, with two villagers and no house -- decision 5's
+	#   named failure, teaching the opposite of the scenario's name.
+	# - **Leave SCENARIO inert.** A mode `WinConditionSystem` never ended would launch
+	#   scenario 1 into a match that can be neither won nor lost, and the player would sit
+	#   in it forever. Inert is the safe direction for a mode nobody has selected; it is
+	#   the wrong one for the mode a PLAY button is about to select.
+	cfg.mode = MatchConfig.Mode.SCENARIO if mode == Mode.SCENARIO \
+			else MatchConfig.Mode.LAST_MAN_STANDING
+
+	# THE PARSED DEFS TRAVEL, NOT THE AUTHOR'S TEXT. `ObjectiveDef.from_dict` has already
+	# refused every spelling it cannot promise to evaluate, so what goes on the wire is
+	# normalised -- the sim never re-parses a `">="`.
+	#
+	# BOTH FIELDS ARE SET TOGETHER OR NEITHER IS, and a conquest scenario gets neither.
+	# `ObjectiveSystem` ignores them outside SCENARIO mode, so filling them in anyway would
+	# be harmless TODAY -- and it would also be a config asserting that player 1 is the
+	# protagonist of a match that has no objectives, which is the kind of untrue field
+	# somebody later reads without checking the mode.
+	if cfg.mode == MatchConfig.Mode.SCENARIO:
+		cfg.objectives = objectives.duplicate()
+		# PLAYER 1, THE HUMAN, and `MatchConfig.objective_player_id` records at length why
+		# this is carried rather than derived: "the first player who is not an AI" would
+		# hand the economy lesson to the Passive bot, which trains villagers of its own.
+		cfg.objective_player_id = 1
+	# 15.6's briefing modal. Carried on the config because the match HUD shows it and the
+	# HUD has never heard of a campaign -- and because the field is shared with skirmish
+	# by the owner's spec.
+	cfg.scenario_message = message
+
 	cfg.starting_age = starting_age
 	# "Nobody typed one", which is what a scenario is: it is a solo match on loopback and
 	# there is no host name field anywhere near it. `LanBeacon.default_host_name()` is the

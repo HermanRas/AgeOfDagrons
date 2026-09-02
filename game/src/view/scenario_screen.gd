@@ -347,11 +347,19 @@ func select(index: int) -> void:
 ## Why PLAY is refused for `index`, or "" when it is not.
 ##
 ## ⚠️ **DELIBERATELY DOES NOT CALL `build_config()`.** That is the authority on whether a
-## scenario can start, and it is also the function that GENERATES THE MAP — a 192×192
-## `MapGenerator.generate` per row selection would make browsing the list cost a map each
-## time. So this is the cheap predicate and `launch()` still asks the real one; if the two
-## ever disagree, `launch()` wins and says so in a toast rather than starting something
-## broken.
+## scenario can start, and it is also the function that READS THE SAVED MAP OFF DISK — a
+## `MapFile.load_map` per row selection is a PNG decode plus an 18 KB JSON parse every
+## time the player moves the highlight. So this is the cheap predicate and `launch()`
+## still asks the real one; if the two ever disagree, `launch()` wins and says so in a
+## toast rather than starting something broken.
+##
+## *(Before 2026-09-01 the expensive thing was `MapGenerator.generate` rather than a file
+## read, which was the owner's correction and is now 11.3. The argument for a cheap
+## predicate survived the change of what it was avoiding.)*
+##
+## **THE `mode == SCENARIO` CLAUSE IS GONE AS OF 15.2.** It said *"objective scenarios are
+## not playable yet"*, and it was true and load-bearing for exactly one day: `ObjectiveSystem`
+## evaluates them now, so scenarios 1 and 2 are as startable as scenario 3.
 func _why_not_playable(index: int) -> String:
 	var s := _campaign.scenarios[index]
 	if not _campaign.is_unlocked(index, _progress):
@@ -363,11 +371,6 @@ func _why_not_playable(index: int) -> String:
 		if problems.is_empty():
 			return "This scenario cannot be played."
 		return "This scenario cannot be played: %s" % problems[0]
-	if s.mode == ScenarioDef.Mode.SCENARIO:
-		# 15.2. Said in the player's terms rather than as a row number, and stated rather
-		# than hidden: two of the three shipped How To Play scenarios are this case, and a
-		# PLAY button that simply did nothing would read as a broken game.
-		return "Objective scenarios are not playable yet — only the last-man-standing ones."
 	return ""
 
 

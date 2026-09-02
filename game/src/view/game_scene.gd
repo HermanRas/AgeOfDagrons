@@ -46,6 +46,10 @@ var _market: MarketPanel
 ## wired to nothing has twice looked exactly like a working one.
 var corner_buttons: Dictionary = {}
 
+## WHAT THE SCENARIO ASKS, shown once before the first order (15.6). Empty message means
+## no modal, which is every skirmish -- see `ScenarioBriefing.show_message`.
+var _briefing: ScenarioBriefing
+
 var _result: ResultScreen
 var _error_label: Label
 var _error: String = ""
@@ -549,6 +553,13 @@ func _build_hud() -> void:
 	_market.exchange_requested.connect(_on_exchange_requested)
 	hud.add_child(_market)
 
+	# THE BRIEFING (15.6), above the pages and below the result. Above them because a
+	# scenario's goal is the first thing the player is owed and a market panel opened
+	# underneath it would be unreadable anyway; below the result because if a match somehow
+	# ended while the briefing was still up, the verdict is what outranks.
+	_briefing = ScenarioBriefing.new()
+	hud.add_child(_briefing)
+
 	# ADDED AFTER ALL OF THEM, so it draws over the lot. If the match is decided
 	# while the player happens to have a page open, the result is the thing that
 	# outranks -- and the pause menu's Resume would otherwise restart a clock the
@@ -819,6 +830,13 @@ func _on_exchange_requested(kind: StringName, buying: bool) -> void:
 ## solo-only: a hosted match plays on a generated map.
 func _start_match() -> void:
 	var cfg := Net.match_config()
+	# THE BRIEFING BEFORE THE FIRST ORDER (15.6). Here rather than in `_ready()` because
+	# on a CLIENT the config does not exist yet at `_ready()` time -- this function is
+	# the one that runs on both paths, and `show_message` latches so the late-config path
+	# cannot raise it a second time. An empty message opens nothing, which is every
+	# skirmish. Before the early return below, so the fixed-debug-map branch gets it too.
+	if cfg != null:
+		_briefing.show_message(cfg.scenario_message)
 	if cfg != null and cfg.map_data != null:
 		var md := cfg.map_data
 		# The client's own copy of the GROUND, for the placement ghost. Terrain only --
@@ -1012,6 +1030,12 @@ func _defeat_phrase(reason: int) -> String:
 			return "has resigned"
 		SimPlayer.Defeat.DISCONNECTED:
 			return "has disconnected"
+		# 15.2. Barely reachable -- only the scenario's own player can fail an objective,
+		# and this function is written about SOMEBODY ELSE -- but a missing case here falls
+		# through to "has been eliminated", which is the exact class of lie this function
+		# was split out to stop telling.
+		SimPlayer.Defeat.OBJECTIVE_FAILED:
+			return "failed the objective"
 		_:
 			return "has been eliminated"
 
@@ -1034,6 +1058,10 @@ func _own_defeat_text(reason: int) -> String:
 			return "You resigned"
 		SimPlayer.Defeat.DISCONNECTED:
 			return "You lost your connection"
+		# 15.2. A scenario's `lose` row, which is a different thing from being wiped out --
+		# the player may still own an army and have failed "do not lose your town centre".
+		SimPlayer.Defeat.OBJECTIVE_FAILED:
+			return "You did not complete the objective"
 		_:
 			return "You were eliminated"
 
@@ -1087,7 +1115,11 @@ func _refresh_result(snap: Dictionary) -> void:
 			or (winning_team > 0 and winning_team == my_team and not _forfeited(reason))
 	if over and we_won:
 		_result.show_result(true, _victory_subtitle(snap, player_id))
-	elif defeated and (_forfeited(reason) or not over):
+	# `_is_scenario` is the 15.2 clause: a scenario loss sets `match_over` with NO winner,
+	# so without it a failed tutorial fell through to "Nobody was left standing" -- said
+	# about a match where the Passive opponent is standing perfectly happily, having never
+	# attacked. Our own reason is the true answer, exactly as it is for a forfeit.
+	elif defeated and (_forfeited(reason) or not over or _is_scenario(snap)):
 		# OUR OWN REASON, not a fixed sentence (2026-08-30). Two cases in one branch:
 		#
 		# **Knocked out while the match goes on** is what this used to be, and it said "You
@@ -1126,6 +1158,21 @@ func _refresh_result(snap: Dictionary) -> void:
 ## nobody needs. Elimination stays the default wording, which is what an all-conquest
 ## match still gets.
 func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
+	# ⚠️ **A SCENARIO IS NOT WON BY BEATING ANYBODY (15.2).** Every sentence below is about
+	# what happened to the OPPONENTS, and in a scenario nothing did: `ObjectiveSystem`
+	# deliberately does not defeat them, because there is no true reason to record about a
+	# Passive bot that never attacked and still owns its town centre. Their
+	# `defeat_reason` is therefore `NONE`, which `_defeat_phrase` renders as "has been
+	# eliminated" -- so without this branch, finishing the economy lesson printed "Player
+	# 2 has been eliminated" over a player 2 in perfect health.
+	#
+	# THE MODE IS READ OUT OF THE SNAPSHOT HERE rather than passed in as a flag, and that
+	# is deliberate: this function already receives the snapshot, and `Diplomacy`'s header
+	# states the general rule -- **a rule that can be left out is a rule that is off
+	# somewhere nobody looks.** A `scenario: bool` parameter would be one more thing every
+	# future caller has to remember to get right; `snap` carries `mode` and always has.
+	if _is_scenario(snap):
+		return "Objectives complete"
 	var state: Dictionary = snap.get("player_state", {})
 	var ids: Array = state.keys()
 	ids.sort()
@@ -1149,12 +1196,33 @@ func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
 	return "All opponents eliminated"
 
 
+## Whether this match is decided by an authored objective list rather than by conquest
+## (15.2), read off the snapshot's `mode`.
+##
+## `mode` has ridden along since 11.1 precisely so a screen can name the rule that decided
+## the match without remembering what the front door picked -- and a scenario is decided
+## ABOUT the player rather than BETWEEN players, which changes both sentences the result
+## screen can print.
+##
+## One predicate rather than the comparison written out at both call sites: a mode test
+## spelled twice is one place for the next mode to be forgotten.
+func _is_scenario(snap: Dictionary) -> bool:
+	return int(snap.get("mode", MatchConfig.Mode.LAST_MAN_STANDING)) \
+			== int(MatchConfig.Mode.SCENARIO)
+
+
 ## Whether the player's input should be ignored outright: the match never started
-## (`_error`) or it has finished (`_match_over`). One predicate for both because
-## every guard in this file wanted both the moment the second one existed, and two
-## separate checks is how one of them ends up missing from a handler.
+## (`_error`), it has finished (`_match_over`), or the briefing is still up. One
+## predicate for all three because every guard in this file wanted them the moment the
+## second one existed, and two separate checks is how one of them ends up missing from a
+## handler.
+##
+## THE BRIEFING IS IN HERE FOR THE TOUCH PATH (15.6). Its `MOUSE_FILTER_STOP` swallows
+## GUI presses, but this file also handles raw touch that never goes through GUI input at
+## all -- so without this clause a tap "on the X" would dismiss the briefing AND order a
+## villager somewhere behind it, which is the same hole `_match_over` is here to plug.
 func _orders_refused() -> bool:
-	return _error != "" or _match_over
+	return _error != "" or _match_over or (_briefing != null and _briefing.is_open())
 
 
 ## Pushes 7.1's two counter signals, plus 10.1's per-slot control-group signal,

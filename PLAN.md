@@ -2292,6 +2292,14 @@ condition on an ordinary map, playable before a line of objective code exists. *
 not a blocker for a playable campaign**, which is the opposite of how it read yesterday: 15.1 +
 15.3 + a screen is a shippable scenario 3, and 15.2 is what unlocks scenarios 1 and 2.
 
+✅ **All three launch as of 2026-09-02**, and the sequencing above paid off exactly as written:
+scenario 3 was playable and play-confirmed a day before the evaluator existed. What it also
+exposed is the cost of that order — **a FRESH player could not reach scenario 3 at all**, because
+progress 0 unlocks scenario 1 only and scenario 1 could not start, so the one working mission was
+locked behind two that were not. ⚠️ **And that is still half-true until 15.7**: nothing writes
+`user://campaign_progress.json` yet, so finishing scenario 1 unlocks nothing. 15.7 is what closes
+the loop, and it is now the only row between here and a campaign a player can play through.
+
 *Two alternatives were considered and are recorded so they are not re-proposed: an inert AI level
 (`data/ai_inert.json` with an empty rule list — cheap, but it adds a rung to a ladder 12.2b already
 calls half-placeholder), and an unowned slot (`ai_players[i] = false` on a player no peer joins,
@@ -2337,11 +2345,11 @@ dummy rather than an opponent).*
 | # | Item | Tag |
 |---|---|---|
 | 15.1 | **Scenario and campaign data, and the loader.** `campaign.json` + `scenario.json`, typed into `CampaignDef`/`ScenarioDef` (`src/data/`, plain `RefCounted` like every other def) and read by a `Campaigns` loader that walks §3.3's **root list** — the editor-only dev override first, then `user://content/scenarios/`. **Not an autoload** — §6.1's table is exactly four and the front door is the only thing that reads this. See §11.7 for the schema and the traps | |
-| 15.2 | **The objective vocabulary, in the sim.** `MatchConfig.Mode.SCENARIO` + `MatchConfig.objectives`, an `ObjectiveSystem` immediately **before** `WinConditionSystem` in the tick order, and per-player objective progress on `player_state`. Headless-testable end to end with no screen in existence. **Not a blocker for a playable campaign** — scenario 3 is `LAST_MAN_STANDING` and needs none of it — so this is what unlocks scenarios 1 and 2 and can trail the screens if the owner would rather see the campaign first. See §11.8 | |
+| 15.2 | ✅ **The objective vocabulary, in the sim** (2026-09-02). `MatchConfig.Mode.SCENARIO` + `objectives` + `objective_player_id`, an `ObjectiveSystem` immediately **before** `WinConditionSystem`, and per-player progress on `player_state`. **All three How To Play scenarios launch**, so the campaign is finishable rather than a dead end behind two greyed rows. Two things the row did not predict and §11.8 now records: a win row must **latch**, or the owner's scenario 2 is unwinnable; and the vocabulary needed a sixth subject, `resource`. See §11.8 | |
 | 15.3 | **The launch path.** `ScenarioDef` → `MatchConfig`: two players, the human plus one Passive AI, `map_type = RIVER`, the seed pinned in `scenario.json`, `starting_age = 1`, and the scenario's own `mode` — `LAST_MAN_STANDING` with no objectives, or `SCENARIO` with them. One function, tested by asserting the config rather than by starting a match. ⚠️ **A pinned seed is not a pinned map** — §11.7's second trap | |
 | 15.4 | ✅ **DONE 2026-09-01** — campaign selection. `CampaignScreen` builds a row per campaign found on disk: icon left, title top, description right, BACK at the bottom. **The last front-door destination that was a placeholder rather than a feature.**<br><br>**`Campaign.tscn` is now a three-line shell**, `Help.tscn`'s shape, and the screen is built in `_init()` — `HelpScreen`'s pattern, and it applies harder here because **the row list is data discovered at runtime**: a player may have one campaign installed or nine, so a `.tscn` could not hold this list even in principle. `_init()` rather than `_ready()` is also what makes it testable headlessly — `CampaignScreen.new()` is a whole screen with no `SceneTree` near it.<br><br>⚠️ **THE LIST IS INSIDE A `ScrollContainer` FROM THE FIRST LINE, AND THAT IS NOT DECORATION.** A `VBoxContainer` overflows — it does not clip, scroll or compress past its children's minimums — and the lobby shipped with its bottom nav strip off the screen for exactly this while every structural test passed, because a node asked for its rect returns that rect whether or not the window contains it. One campaign fits today; the ninth would not, and the failure only appears on the machine that has the content. `test_campaign_screen` asserts the parent is a `ScrollContainer` and deliberately asserts no measurement.<br><br>**New: `ContentImage.load_texture()`** — the one place that opens a PNG outside `res://`. `load()` and `ResourceLoader` **cannot open these at all** (no `.import` sidecar), so the route is `Image.load_from_file` + `ImageTexture.create_from_image`, per `scenarios/README.md`. Null is the only failure mode, because a campaign is shareable content and a malformed icon should cost a placeholder rather than a crash. 15.5 uses the same function for scenario icons and the background. A row with no icon draws a lettered plate.<br><br>**`open_campaign()` is the whole of what 15.5 replaces.** The row, the press and the campaign handed over are in place; the body currently answers with a `NoticeToast`, which is 1.1's rule for the front door — a button that visibly does nothing reads as a bug, one that says why reads as a plan. The screen owns its own toast rather than borrowing `MainMenu.tscn`'s `%Toast`, which is gone the moment this scene loads.<br><br>A campaign whose `campaign.json` is broken, or which has no playable scenario, is **shown and disabled with its first complaint as the blurb** — never hidden. A campaign that silently vanishes is indistinguishable from one the game failed to find, and the player has a folder on disk they can see. The empty-list notice distinguishes the two genuinely different cases: in the editor the dev override is live so an empty list means `scenarios/` is missing, while an exported build has no override at all and an empty list is normal until a pack is installed | |
 | 15.5 | ✅ **DONE 2026-09-01** — `ScenarioScreen` + `Scenario.tscn` (a shell). Campaign title at the top, a scrolling column of scenario rows with everything past `progress` locked, the campaign background plus title/description/PLAY in the main panel, and selecting a row **swaps the panel without a scene change** — the background is a 1920×1080 decode and re-entering a scene to read a different paragraph would pay for it again.<br><br>**SCENARIO 3 IS NOW PLAYABLE END TO END** (15.1 + 15.3 + this), which was this row's whole point. PLAY parks the config on `Net.pending_match` and changes scene — the SOLO path `SkirmishScreen` already proves, where `GameScene._ready()` calls `host_solo()` and consumes it. Deliberately **not** `Net.start_match()`, which is for a lobby whose socket is already open.<br><br>**The campaign travels on `ScenarioScreen.pending`, a static**, on `Net.pending_match`'s precedent: a `CampaignDef` is a live object, not a path, so it cannot go through `change_scene_to_file`. One-shot — taken and cleared in `_init()`, so a second visit with nothing parked shows the no-campaign notice rather than silently reopening the last one. **A fifth autoload was the other option and was rejected**: 6.1's table is exactly four, and a global to save a field between two adjacent screens is a poor trade.<br><br>**New: `CampaignProgress`, READ-ONLY.** `user://campaign_progress.json`, keyed by `CampaignDef.folder`. 15.5 needs it to know what is locked; **15.7 adds the write.** Left read-only rather than stubbed with a `record()` that does nothing, because a write that silently fails is worse than one that does not exist. Every value is clamped and type-checked — the file is player-writable, so a negative would otherwise reach `unlocked_count()`'s `clampi` and lock the first scenario, giving a campaign that cannot be started and cannot be explained.<br><br>⚠️ **`_why_not_playable()` DELIBERATELY DOES NOT CALL `build_config()`.** That is the authority on whether a scenario can start and it is also the function that **generates the map** — a 192×192 `MapGenerator.generate` per row selection would cost a map every time the player browsed. So the panel uses a cheap predicate (locked / not playable / `mode == SCENARIO`) and `launch()` still asks the real one; if the two ever disagree, `launch()` wins, says so in a toast and pushes a warning rather than starting something broken. There is a test for that path.<br><br>**Objective scenarios refuse to start and say why in the panel** — scenario 1 and 2 are `"mode": "scenario"` and wait on 15.2. A disabled PLAY with its reason on a line of its own, not a tooltip: a disabled button on a touch screen has nowhere to hover, and one that simply did nothing would read as a broken game.<br><br>⚠️ **`test_scenario_screen` NEVER TRUSTS `user://` FOR LOCK STATE.** Progress is real state on the machine running the suite, so a developer who has played the campaign would get a different lock pattern from a fresh checkout — a test that passes for one person and fails for the next. Every locking test sets `_progress` directly; only one reads the file, and it asserts merely that reading cannot throw or go negative | |
-| 15.6 | **The scenario message and the objective tracker.** A modal carrying `scenario.json`'s `message`, dismissed by an X; and a small live panel listing each objective with its progress ("Villagers 4 / 10") read off `player_state`. The message field is **shared with skirmish** by the owner's spec, so it belongs to the match HUD and not to the campaign screens | |
+| 15.6 | **The scenario message ✅ and the objective tracker.** ⚠️ **THE MESSAGE HALF LANDED EARLY, WITH 15.2, BECAUSE THE OWNER HIT IT IN PLAY** (2026-09-02): *"the map message did not show during play test… a scenario message is required and the user needs to tap the X to close it, interactive consent of the goal"*. `message` had existed in `scenario.json` and `ScenarioDef` since 15.1 with **nothing drawing it**, so all three missions launched with their goal invisible — the same hole `pop_used` and `garrison_cap` were in, a field the data fills and no reader reads. `ScenarioBriefing` is the modal; it rides `MatchConfig.scenario_message` as provenance (the HUD has never heard of a campaign) and **does not stop `SimClock`**, because on a host that clock is everybody's and the field is shared with skirmish. **Still to do: the tracker** — a live panel listing each objective with its progress ("Villagers 4 / 15"), read off `player_state.objective_progress`/`objective_done`, which 15.2 already writes and sends. The labels are **already on the client**: every client builds its own world from the same `MatchConfig` (2.4a), so only the numbers travel | |
 | 15.7 | **Completion and unlock.** On `match_over` with the local player winning, raise `user://campaign_progress.json`'s counter for that campaign. **One-way, a maximum, never decremented** — the same property that makes `SimPlayer.defeated` safe to read anywhere — and idempotent, because a result screen can be reached twice | |
 | 15.8 | **The three "How To Play" scenarios** — content only, three `scenario.json` files and one `campaign.json`, against the icons already staged. This is the row that is *only* data if 15.1–15.7 did their jobs | |
 | 15.9 | **`dev_preview/preview_campaign.tscn` + tests.** The preview photographs selection → scenario → launch. The tests are the load-bearing half, and there are four cases rather than three: **drive the sim to each of the two objectives and assert it fires**; assert that wiping the opponent in `SCENARIO` mode does **not** win (decision 5, and the one no screenshot can see); and drive scenario 3's conquest to a real `LAST_MAN_STANDING` result. A win condition that never fires is invisible from every screenshot | |
@@ -2396,7 +2404,93 @@ Progress is a single integer per campaign, and `campaign.json` declares its scen
 explicitly rather than sorting folder names — `scenario_10` sorts before `scenario_2`, and a
 campaign's order is a design decision anyway.
 
-#### 11.8 The objective vocabulary (15.2), which 16.6 also writes
+#### 11.8 The objective vocabulary — ✅ BUILT 2026-09-02 (15.2), and 16.6 also writes it
+
+##### ⚠️ A WIN ROW LATCHES ONCE MET, AND THE MEASUREMENT THAT FORCED IT
+
+**This was not in the spec above and it should have been.** The owner's own objectives for
+scenario 2, handed over on 2026-09-02, are *"gather 500 food"* AND *"advance to the Age of
+Embers"*. Advancing to age 2 costs **exactly 500 food** (`ages.json`), and
+`AdvanceAgeCommand` deducts it when the advance **starts** — so the food row is true at the
+moment the age becomes affordable and false from the instant it is bought, 100 ticks before
+the age it bought arrives. Multiple win rows are ANDed. Evaluated live, **that scenario
+would have shipped unwinnable while looking completely correct** — the same failure the
+owner had already caught in scenario 3's *"0 enemy units on map"*, reached by a different
+route.
+
+So an objective list is a **checklist, not a snapshot**: a win row that has ever been
+satisfied stays satisfied, in `SimPlayer.objective_done`, one-way exactly as
+`SimPlayer.defeated` is one-way and for the same reason — a verdict that could flicker off
+would take the result with it. It is also what the player already believes is happening,
+because a ticked line on a goal list does not untick. `test_campaigns` asserts the age cost
+against the food target, so a balance change that made the latch stop being load-bearing
+*here* fails a test rather than going unnoticed.
+
+`lose` rows do **not** latch and do not need to: a lose row ends the match on the tick it
+fires. `alert` rows latch so 15.6 can fire a toast once rather than ten times a second.
+
+##### The sixth subject: `resource` (2026-09-02)
+
+`unit` · `building` · `age` · `area` · `named_unit` · `ticks` could not express *"gather 500
+food"* at all, so `resource` was added, reading `SimPlayer.stock` with the kind in `id`
+(`food`/`wood`/`gold`/`stone`, pinned in `ObjectiveDef.RESOURCE_KINDS` and cross-checked
+against `MapGen.STARTING_STOCK` by a test — `stock.get(&"foood", 0)` is 0, so a typo would
+be an unwinnable scenario whose only symptom is that nothing happens).
+
+**It is appended to the enum, not inserted beside `age` where it reads better**, because
+`subject` travels as an int: inserting would renumber `area`/`named_unit`/`ticks` and
+silently reinterpret every objective already recorded or in flight. Same rule applied to
+`MatchConfig.Mode.SCENARIO` and to `SimPlayer.Defeat.OBJECTIVE_FAILED`, both appended.
+
+**It measures what is HELD, not what has ever been gathered** — `stock` is a balance, and
+it goes down. Cumulative gathering would need a new per-player running total written by
+`GatherSystem`, folded into `state_hash()` and carried on the wire; no authored scenario
+has asked for it, and the latch makes *"hold 500 at some point"* mean what the scenario's
+own overview tells the player to watch for.
+
+##### What was decided that the spec left open
+
+- **`ally` includes the viewer.** It means YOUR SIDE. The only reason the owner axis has an
+  `ally` is a co-op scenario, and a rule counting your teammate's houses while ignoring
+  your own is a rule nobody would author; `self` is already there for the narrower question.
+- **`age` over a set of players is the MAXIMUM**, which is the reading that works in both
+  directions: *"an enemy has reached the Age of Embers"* is `>= 2` against the most
+  advanced, and *"every enemy is still in the Age of Ash"* is `<= 1` against that same
+  number. Minimum would invert the second; a sum would compare an age against a total.
+- **Multiple `lose` rows are ORed**, unlike `win`'s AND. Two failure conditions that had to
+  be true *simultaneously* would be a scenario you can only lose by bad luck.
+- **`objective_player_id` is carried, never derived.** The obvious derivation — "the first
+  player who is not an AI" — hands the economy lesson to the Passive bot, which trains
+  villagers of its own. One int rather than a list: a co-op scenario wants one verdict
+  about a SIDE, which `ally` already expresses, not one verdict per protagonist.
+- **A building counts only when COMPLETE**, which is the population cap's rule and
+  deliberately not the elimination rule's (that one counts a foundation, because it is
+  answering whether the owner is still in the game). *"Build a house"* is not satisfied by
+  pegging one out and walking away.
+- **The winning scenario does NOT defeat its opponent.** `SimPlayer.defeat` records a
+  reason and there is no true one — the Passive bot that just lost scenario 1 still owns
+  its town centre. Writing `ELIMINATED` would be the forfeit bug again, and
+  `GameScene._victory_subtitle` reads exactly that field, so it branches on the mode and
+  says *"Objectives complete"* instead.
+
+##### The two traps that would each have shipped a broken campaign
+
+**GAIA IS NOT AN ENEMY.** `{"subject": "unit", "owner": "enemy", "==": 0}` is this
+section's own example of *leave the enemy nothing*, and owner 0 owns the trees, the sheep,
+the deer AND the wolves — so an evaluator counting "entities not mine" would make that row
+mean **kill every animal on the map**. The owner set is resolved from `SimWorld.players`
+and never from entity owner ids, so gaia is excluded by construction rather than by a
+clause somebody could delete.
+
+**AN UNPOPULATED WORLD MUST DECIDE NOTHING.** Same row: in a world with no entities, "the
+enemy has 0 units" is TRUE, so a naive evaluator declares victory on tick 1 of every world
+that has not been stood up — which is most of the sim suite — and `match_over` latches, so
+the verdict sticks for the whole run. That is `_trophy()`'s shape exactly, and
+`WinConditionSystem._world_is_populated` is reused rather than reimplemented. Relatedly,
+`_count` returns **-1** for a subject it cannot measure and `_satisfied` fails every
+comparison against it: 0 is a value that PASSES `== 0` and `<= n`.
+
+#### 11.8a The vocabulary as specified (15.1's parse, 15.2's evaluation)
 
 **One language, written down once.** MapMaker's Map Conditions screen and a hand-written
 `scenario.json` must emit the same records or there are two dialects and the tool can author maps
@@ -2447,6 +2541,14 @@ opponent is **not** victory — otherwise killing the passive AI's five villager
 centre wins scenario 1 with two villagers and no house, and the scenario teaches the opposite of
 its name. This is a genuine fork in a function whose header currently argues it counts sides; do
 it by calling the elimination half and skipping the sides half, not by copying the function.
+
+✅ **Built as specified**: `_eliminate_the_bankrupt()` is the shared half and
+`WinConditionSystem._scenario()` calls it without the sides rule. Two consequences worth
+naming, both tested: wiping out the opponent eliminates *them* and ends *nothing* (the human
+plays on until the objectives are met, which looks like a hang and is not), and the `< 2`
+player guard does **not** carry over — it exists upstairs because "last man standing" is
+trivially true of somebody with no opponents, whereas a lone player who loses everything has
+genuinely lost a scenario.
 
 ### Phase 16 — MapMaker (the PC authoring tool)
 

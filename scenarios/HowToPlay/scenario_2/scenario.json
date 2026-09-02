@@ -1,16 +1,37 @@
 {
   "_note": [
-    "TEACHES THE AGE LADDER. Won by reaching age 2, the Age of Embers.",
+    "TEACHES THE AGE LADDER. Won by gathering 500 food AND reaching age 2, the Age of Embers.",
     "",
-    "ONE ROW, AND IT NAMES NO id. `subject: age` counts nothing on the map -- it reads",
+    "THE OBJECTIVE AND THE MESSAGE ARE THE OWNER'S OWN WORDS, 2026-09-02. The food row is",
+    "new with them, and it needed a new SUBJECT: the five that existed counted units,",
+    "buildings and ages, and none of them could express a resource at all. `resource` reads",
+    "SimPlayer.stock and names its kind in `id` (food/wood/gold/stone).",
+    "",
+    "⚠️ THESE TWO ROWS ARE NEVER TRUE ON THE SAME TICK, AND THAT IS WHY A WIN ROW LATCHES.",
+    "Advancing to age 2 costs EXACTLY 500 food (ages.json) and AdvanceAgeCommand deducts it",
+    "when the advance STARTS -- so the food row is true at the moment the player can afford",
+    "the age, and false from the instant they buy it, 100 ticks before the age they bought",
+    "arrives. Multiple win rows are ANDed. Evaluated live, this scenario would have shipped",
+    "UNWINNABLE WHILE LOOKING COMPLETELY CORRECT, which is exactly what the owner already",
+    "caught in scenario 3's '0 enemy units on map'. ObjectiveSystem therefore treats an",
+    "objective list as a CHECKLIST: a win row that has ever been satisfied stays satisfied",
+    "(SimPlayer.objective_done, one-way like `defeated`). A ticked line does not untick,",
+    "which is also what the player already believes is happening.",
+    "",
+    "SO 'GATHER 500 FOOD' MEANS 'HOLD 500 FOOD AT SOME POINT', which is precisely what the",
+    "overview below tells the player to watch for. Cumulative gathering would be a new",
+    "per-player running total in the sim, on the wire and in state_hash() -- see",
+    "ObjectiveSystem._stock_of, which records that the current answer is a choice.",
+    "",
+    "THE FOOD ROW IS NOT REDUNDANT even though the age costs the same 500. It is what makes",
+    "the FIRST HALF of the lesson legible: the player is told to watch a counter climb, and",
+    "the tracker (15.6) can tick that half off before the age is bought. Without it the",
+    "scenario is a single row that stays blank for several minutes.",
+    "",
+    "THE AGE ROW NAMES NO id. `subject: age` counts nothing on the map -- it reads",
     "SimPlayer.age -- so an id here would be meaningless and the loader refuses one rather",
-    "than ignoring it.",
-    "",
-    "THE VALUE IS THE AGE INDEX, NOT A COST. Ages are indexed from 1 (SimPlayer.age starts",
-    "there), so `>= 2` is 'has advanced once'. ages.json names age 2 'Age of Embers II';",
-    "advancing costs resources and then runs on a timer with a HUD ring, so this scenario",
-    "is really about affording it -- which is why it comes after the economy lesson and not",
-    "before it.",
+    "than ignoring it. THE VALUE IS THE AGE INDEX, NOT A COST: ages are indexed from 1, so",
+    "`>= 2` is 'has advanced once'.",
     "",
     "STARTS AT AGE 1 for the obvious reason: a scenario about advancing an age cannot start",
     "in the age it is asking you to reach. `starting_age` is one number for everybody, so",
@@ -19,16 +40,25 @@
 
   "name": "How To Age Up",
   "description": "A new age unlocks better buildings and better units. Gather enough to advance from the Age of Ash into the Age of Embers.",
-  "message": "Tap your town centre and choose ADVANCE AGE. It costs resources and then takes time -- the ring on your age badge shows how long is left.\n\nGoal: reach the Age of Embers.",
+  "message": "Objective: Gather 500 food, and advance to the Age of Embers.\n\nOverview: Select 3 of the villagers and have them gather food from berry bushes, have 1 villager gather wood from a tree, and have the last villager gather stone from a rock.\n\nOn the top right of the screen are your resource counters -- watch the food icon until it ticks up to 500. Then tap the gold AGE icon at the top centre of your screen to age up. The ring around it shows how long the advance has left.",
 
   "mode": "scenario",
 
+  "_note_map": [
+    "THE MAP IS THE SAVED map.png BESIDE THIS FILE (2.4c, PLAN.md 11.3). `seed` is",
+    "PROVENANCE ONLY -- build_config() never calls MapGenerator."
+  ],
   "map": { "type": "river", "seed": 815102 },
 
   "opponents": ["passive"],
   "starting_age": 1,
 
   "objectives": [
+    {
+      "subject": "resource", "id": "food", "owner": "self",
+      "compare": ">=", "value": 500, "output": "win",
+      "text": "Gather 500 food"
+    },
     {
       "subject": "age", "owner": "self",
       "compare": ">=", "value": 2, "output": "win",

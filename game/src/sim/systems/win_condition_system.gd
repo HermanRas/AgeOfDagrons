@@ -10,13 +10,17 @@
 ## alive, and a player whose last building fell THIS tick has lost as of this tick,
 ## not the next one. PLAN.md 5.1's tick diagram puts it in the same place.
 ##
-## ONE OF THE THREE MODES IS BUILT. `MatchConfig.Mode` declares all three because
+## TWO OF THE FOUR MODES ARE BUILT. `MatchConfig.Mode` declares all four because
 ## the lobby (1.6/11.3) needs a list and because a mode axis with one value on it
 ## invites the next mode to be bolted on as a boolean. `_trophy()` and
 ## `_king_of_the_hill()` end no matches at all, and each says what it is still
 ## missing -- the safe direction to be unfinished in. The unsafe direction is a
 ## half-built rule: "you lose when your trophy is gone" evaluated on a map with no
 ## trophies on it defeats everybody on tick 1.
+##
+## SCENARIO (15.2) is the fourth, and it is the only mode whose WIN lives somewhere else:
+## `ObjectiveSystem`, which runs directly before this one. What is here is the half of
+## conquest a scenario keeps -- see `_scenario()`.
 ##
 ## Once `match_over` is set nothing here runs again, so a result cannot be
 ## overwritten by the corpses and rubble settling in the seconds after it.
@@ -46,6 +50,8 @@ func process_tick(w: SimWorld) -> void:
 			_trophy(w)
 		MatchConfig.Mode.KING_OF_THE_HILL:
 			_king_of_the_hill(w)
+		MatchConfig.Mode.SCENARIO:
+			_scenario(w)
 
 
 ## Own nothing and you are out; the last player left wins (PLAN.md 11.1's
@@ -71,32 +77,7 @@ func _last_man_standing(w: SimWorld) -> void:
 	if not _world_is_populated(w):
 		return
 
-	# ONE pass for every player, not `_owns_anything()` per player. Per-player was
-	# O(players x entities), which on an 8-player generated map is eight walks of a
-	# thousand entities every tick -- part of the same measurement that caught
-	# VisionSystem's full-grid decay.
-	var owners := _owners_with_anything(w)
-	var standing: Array[int] = []
-	for p in w.players:
-		# `not p.defeated` is what makes RESIGNING mean anything (12.1e). Owning something
-		# used to be the whole test, so a player who conceded -- or whose device vanished,
-		# which `Net` turns into the same command -- went on counting as standing while
-		# their abandoned base sat there, and the match could never resolve. Safe to read
-		# here precisely because the flag is one-way: it is set below and by
-		# `ResignCommand`, and never cleared by anything.
-		if owners.has(p.id) and not p.defeated:
-			standing.append(p.id)
-		else:
-			# ONE WAY ONLY, never cleared. A player with no units and no buildings
-			# cannot build, train or gather, so there is no path back -- and a flag
-			# that could flicker off would take the defeat screen with it.
-			#
-			# THROUGH `defeat()` RATHER THAN THE FLAG, so the reason is recorded with it.
-			# This runs for every player every tick, including one who has ALREADY
-			# conceded -- `SimPlayer.defeat` keeps the first reason for exactly that, or
-			# a resignation would be relabelled an elimination the moment the abandoned
-			# base fell.
-			p.defeat(SimPlayer.Defeat.ELIMINATED)
+	var standing := _eliminate_the_bankrupt(w)
 
 	# STANDING SIDES, which is what actually decides the match. A player on no team is
 	# their own side -- keyed by the NEGATIVE of their id, so it can never collide with a
@@ -127,6 +108,86 @@ func _last_man_standing(w: SimWorld) -> void:
 	var keys := sides.keys()
 	w.winner_id = int(sides[keys[0]]) if sides.size() == 1 else 0
 	w.winner_team = keys[0] if sides.size() == 1 and int(keys[0]) > 0 else 0
+
+
+## SCENARIO MODE (PLAN.md 11.8, 15.2): **conquest's LOSS without conquest's WIN.**
+##
+## ⚠️ **HALF OF `_last_man_standing` IS WANTED HERE AND HALF IS NOT, AND THAT IS THE
+## WHOLE POINT OF THE FORK.** Owning nothing is still defeat -- true on every map in this
+## game whatever a file declares, which is why `ScenarioDef` has no lose-condition field
+## at all. Outlasting the opponent is NOT victory: killing the Passive AI's five
+## villagers and its town centre would otherwise win scenario 1 with two villagers and no
+## house, and the scenario would teach the opposite of its name.
+##
+## PLAN.md 11.8 asks for it *"by calling the elimination half and skipping the sides
+## half, not by copying the function"*, which is why `_eliminate_the_bankrupt` exists.
+## Copying it would leave two rules that both eliminate players and could drift about
+## what a foundation is worth.
+##
+## THE `< 2` PLAYER GUARD DOES NOT APPLY, and leaving it out is deliberate. It exists
+## above because "last man standing" is TRIVIALLY TRUE of somebody with no opponents, so
+## a solo sandbox would declare victory on tick 1. A scenario's loss is not a comparison
+## between players: a lone player who loses everything has genuinely lost, and there is
+## nothing trivial about it. `_world_is_populated` is still needed and still here.
+##
+## THE OPPONENT BEING WIPED OUT ENDS NOTHING, which is the case worth stating because it
+## looks like a hang and is not: the bot is defeated, the human plays on, and the match
+## ends when `ObjectiveSystem` says the objectives are met. A player who destroys the
+## enemy and then never reaches ten villagers has not finished the lesson.
+func _scenario(w: SimWorld) -> void:
+	if not _world_is_populated(w):
+		return
+	_eliminate_the_bankrupt(w)
+
+	# KEEPING THE LOSS MEANS ENDING THE MATCH ON IT. `ObjectiveSystem` runs directly
+	# before this and returns early for a defeated player, so it cannot have declared a
+	# win on this tick -- the two cannot both fire.
+	var p := w.player_for(w.objective_player_id)
+	if p == null or not p.defeated:
+		return
+	w.match_over = true
+	# NOBODY WON: the teaching opponent has no win condition of its own, so naming it the
+	# winner would print "Player 2 won" at somebody who lost a tutorial to a bot that
+	# never attacked. `GameScene` tells this apart from the mutual-annihilation draw --
+	# which carries the same 0 -- by the player's own `defeat_reason`.
+	w.winner_id = 0
+	w.winner_team = 0
+
+
+## Defeat everybody who owns nothing, and return the ids still standing.
+##
+## SHARED BY CONQUEST AND BY SCENARIO MODE (11.8), which is the reason it is a function:
+## owning nothing is defeat on every map in this game, and two copies of that rule could
+## drift about what a foundation is worth or whether a corpse counts.
+func _eliminate_the_bankrupt(w: SimWorld) -> Array[int]:
+	# ONE pass for every player, not `_owns_anything()` per player. Per-player was
+	# O(players x entities), which on an 8-player generated map is eight walks of a
+	# thousand entities every tick -- part of the same measurement that caught
+	# VisionSystem's full-grid decay.
+	var owners := _owners_with_anything(w)
+	var standing: Array[int] = []
+	for p in w.players:
+		# `not p.defeated` is what makes RESIGNING mean anything (12.1e). Owning something
+		# used to be the whole test, so a player who conceded -- or whose device vanished,
+		# which `Net` turns into the same command -- went on counting as standing while
+		# their abandoned base sat there, and the match could never resolve. Safe to read
+		# here precisely because the flag is one-way: it is set below and by
+		# `ResignCommand`, and never cleared by anything.
+		if owners.has(p.id) and not p.defeated:
+			standing.append(p.id)
+		else:
+			# ONE WAY ONLY, never cleared. A player with no units and no buildings
+			# cannot build, train or gather, so there is no path back -- and a flag
+			# that could flicker off would take the defeat screen with it.
+			#
+			# THROUGH `defeat()` RATHER THAN THE FLAG, so the reason is recorded with it.
+			# This runs for every player every tick, including one who has ALREADY
+			# conceded -- `SimPlayer.defeat` keeps the first reason for exactly that, or
+			# a resignation would be relabelled an elimination the moment the abandoned
+			# base fell. It is also what keeps a scenario's OBJECTIVE_FAILED from being
+			# rewritten to ELIMINATED a tick later.
+			p.defeat(SimPlayer.Defeat.ELIMINATED)
+	return standing
 
 
 ## Whether there is a match here to decide at all: does the world hold anybody's

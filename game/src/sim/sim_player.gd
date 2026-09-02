@@ -113,18 +113,69 @@ var defeated: bool = false
 ## The snapshot has carried the FACT of a defeat since 11.1 and never the reason, so a
 ## host whose opponent's phone went into a tunnel read **"All opponents eliminated"** --
 ## true about the outcome and untrue about how it happened, and with nothing said at the
-## moment it happened either. Three reasons is the whole list the game can tell apart:
-## `WinConditionSystem` sets ELIMINATED, a player's own press sets RESIGNED, and `Net`
-## sets DISCONNECTED for the `ResignCommand` it queues on a vanished peer's behalf
-## (12.1e). Anything else would be a distinction nothing can make.
+## moment it happened either. Four reasons is the whole list the game can tell apart:
+## `WinConditionSystem` sets ELIMINATED, a player's own press sets RESIGNED, `Net` sets
+## DISCONNECTED for the `ResignCommand` it queues on a vanished peer's behalf (12.1e),
+## and `ObjectiveSystem` sets OBJECTIVE_FAILED for a scenario's authored `lose` row
+## (15.2). Anything else would be a distinction nothing can make.
+##
+## ⚠️ **OBJECTIVE_FAILED IS APPENDED, NOT INSERTED.** It travels as an int in
+## `player_state.defeat_reason` and is folded into `state_hash()`, so inserting a member
+## would renumber the other three and relabel every recorded and in-flight defeat.
+##
+## IT IS A REASON OF ITS OWN AND NOT ELIMINATED WEARING A LABEL. A player who fails
+## *"do not lose your town centre"* may still own an army, so calling that an
+## elimination would be exactly the failure BUGS.md recorded for the forfeit -- a true
+## statement about the outcome and a false one about how it happened.
 ##
 ## SET WITH `defeated` AND ONE-WAY LIKE IT. It is written in the same statement, so the
 ## two can never disagree about whether somebody is out, and never cleared for the same
 ## reason `defeated` is not -- a reason that could flicker would take the result screen's
 ## sentence with it.
-enum Defeat { NONE, ELIMINATED, RESIGNED, DISCONNECTED }
+enum Defeat { NONE, ELIMINATED, RESIGNED, DISCONNECTED, OBJECTIVE_FAILED }
 
 var defeat_reason: int = Defeat.NONE
+
+## HOW FAR ALONG EACH AUTHORED OBJECTIVE IS (PLAN.md 11.8, 15.2), position for position
+## with `MatchConfig.objectives`. The COUNT the rule measured, not whether it passed:
+## 15.6's tracker draws "Villagers 4 / 10" by pairing this with the def's own `value`,
+## so the number the player reads is the number the sim compared.
+##
+## `ObjectiveSystem` is the only writer.
+##
+## **EMPTY MEANS NO OBJECTIVES HAVE BEEN EVALUATED**, and that is load-bearing rather
+## than merely an initial state -- exactly as `vision` below documents. `SimWorld.setup`
+## leaves it empty and `ObjectiveSystem` sizes it on its first tick, so a world that has
+## never been stepped (most of the sim suite, and any tool that stands one up) reads as
+## "no tracker" rather than as an objective list of zeros that nothing is maintaining.
+##
+## ONLY `MatchConfig.objective_player_id`'s ROW IS EVER FILLED, and the others stay
+## empty on purpose. Progress is measured from ONE viewpoint -- `self`, `enemy` and
+## `ally` are relative terms -- so another player's array could only hold the same
+## objectives re-counted from a viewpoint nobody authored them for. 15.6's tracker reads
+## the LOCAL player's, which is empty and draws nothing for a spectator.
+##
+## An `Array[int]` rather than a Dictionary because the objectives are an ORDERED list
+## and the wire carries them in that order; a keyed form would need ids the author never
+## wrote.
+var objective_progress: Array[int] = []
+
+## WHICH OBJECTIVES HAVE BEEN MET AT LEAST ONCE (15.2), position for position with
+## `objective_progress`. 1 is met, 0 is not.
+##
+## ⚠️ **ONE-WAY, LIKE `defeated`, AND FOR THE SAME REASON -- AND WITHOUT IT SCENARIO 2
+## CANNOT BE WON.** Advancing to the Age of Embers costs exactly 500 food, so the
+## owner's *"gather 500 food AND age up"* is two ANDed rows that are never true on the
+## same tick: buying the age is what makes the food row false, 100 ticks before the age
+## it bought arrives. An objective list is a CHECKLIST, and a ticked line does not
+## untick. `ObjectiveSystem`'s header carries the full worked example.
+##
+## A `PackedByteArray` rather than `Array[bool]`: it is one byte per row on the wire and
+## in the hash, and it is the encoding `vision` already uses for the same reason.
+##
+## LOSE ROWS ARE NEVER LATCHED HERE -- a lose row ends the match on the tick it fires,
+## so there is no later tick for a latch to matter on. Their slot stays 0.
+var objective_done: PackedByteArray = PackedByteArray()
 
 ## Fog of war (PLAN.md 2.5): one `Fog` byte per tile, row-major over SimMap's grid
 ## and indexed by `SimMap.index_of()`. `VisionSystem` is the only writer.
