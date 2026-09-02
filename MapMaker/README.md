@@ -95,3 +95,9 @@ a guide for using the MapMaker tool, including instructions for creating maps an
 
 Written **last** (`PLAN.md` 16.9): a guide to an interface still being built is a guide that will
 be wrong.
+
+
+### Note for Coder AI 
+The format, which the MapMaker now inherits
+map.png + map.json in one directory. The one rule I'd want the tool to read first:
+R is the terrain kind and is the only channel that is data. G and B are a cosmetic tint so the file still looks like a map in an image viewer, and a loader must never read them.
