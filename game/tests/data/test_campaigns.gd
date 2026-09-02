@@ -72,7 +72,11 @@ func test_how_to_play_loads_with_its_three_scenarios_in_declared_order() -> void
 	assert_true(found.has("HowToPlay"), "the repo's own campaign is discovered")
 	var campaign: CampaignDef = found["HowToPlay"]
 	assert_eq(campaign.name, "How To Play")
-	assert_eq(campaign.scenarios.size(), 3)
+	# THE ORDER, which is what this test is for -- not the LENGTH, which is just how much
+	# content the owner has written today (three on 2026-09-01, five on 2026-09-02). The
+	# first three are asserted by name because `campaign.json`'s order is a design decision
+	# that cannot be derived from the folder names.
+	assert_true(campaign.scenarios.size() >= 3)
 	assert_eq(campaign.scenarios[0].folder, "scenario_1")
 	assert_eq(campaign.scenarios[1].folder, "scenario_2")
 	assert_eq(campaign.scenarios[2].folder, "scenario_3")
@@ -91,7 +95,9 @@ func test_the_real_campaign_has_no_problems_at_all() -> void:
 	assert_eq(campaign.all_problems(), [] as Array[String],
 			"HowToPlay should load clean: %s" % ", ".join(campaign.all_problems()))
 	assert_true(campaign.is_playable())
-	assert_eq(campaign.playable_scenarios().size(), 3)
+	assert_eq(campaign.playable_scenarios().size(), campaign.scenarios.size(),
+			"EVERY shipped scenario is playable, not merely some of them -- which is the"
+			+ " assertion a hardcoded count was quietly weakening as content was added")
 
 
 func test_the_campaign_art_resolves_to_paths_and_is_never_loaded_here() -> void:
@@ -120,31 +126,36 @@ func test_scenario_one_is_two_win_rows_that_are_anded() -> void:
 	assert_eq(s.starting_age, 1)
 
 	var wins := s.win_objectives()
-	assert_eq(wins.size(), 2, "a house AND fifteen villagers is one objective in two halves")
+	assert_eq(wins.size(), 2, "a house AND fourteen villagers is one objective in two halves")
 	assert_eq(wins[0].subject, ObjectiveDef.Subject.BUILDING)
 	assert_eq(wins[0].id, &"building.house")
 	assert_eq(wins[0].value, 1)
 	assert_eq(wins[1].subject, ObjectiveDef.Subject.UNIT)
 	assert_eq(wins[1].id, &"unit.villager")
-	assert_eq(wins[1].value, 15, "the owner's target, 2026-09-02")
+	assert_eq(wins[1].value, 14,
+			"the owner's target -- 15 first, corrected to 14 the same day once the scout in"
+			+ " the population cap was accounted for")
 	assert_eq(wins[1].compare, ObjectiveDef.Compare.AT_LEAST)
 
 
-func test_scenario_ones_villager_target_costs_more_than_one_house() -> void:
-	# ⚠️ **THIS TEST ASSERTED THE OPPOSITE AND WAS WRONG, AND THE OWNER FOUND IT IN PLAY.**
-	# It claimed 15 villagers was reachable with EXACTLY ONE HOUSE, from "town centre 10 +
-	# house 5 = 15" — and it passed, because the arithmetic left out a unit. **The saved
-	# map gives every player 5 villagers AND one `unit.scout_cavalry`**, so the opening
-	# population is 6/10, not 5/10, and fifteen villagers plus that scout is SIXTEEN.
-	# The owner sat at 15/15 with 14 villagers and a scout and could not train the
-	# fifteenth. `dev_preview/PreviewScenarioWin.tscn` prints the population as it drives
-	# the scenario, which is how it was measured.
+func test_scenario_ones_villager_target_needs_exactly_the_one_house_it_asks_for() -> void:
+	# ⚠️ **THIS TEST HAS NOW ASSERTED ALL THREE OF: one house, two houses, and one house
+	# again — and the third time it is derived rather than assumed.** Worth the whole story,
+	# because the failure repeated itself:
 	#
-	# The scenario is winnable — a second house is 30 wood — so what was broken was the
-	# BRIEFING claiming one house was enough. This test now pins the true figure, and it
-	# reads the STARTING UNITS OFF THE MAP rather than assuming them: if the scout is ever
-	# removed, or the target moved to 14, this fails and the briefing text is what needs
-	# revisiting.
+	# It first claimed **15 villagers needs exactly one house**, from "town centre 10 +
+	# house 5 = 15", and PASSED, because the arithmetic left out a unit. The saved map
+	# grants five villagers AND one `unit.scout_cavalry`, so the opening
+	# population is 6/10 and fifteen villagers plus that scout is SIXTEEN. The owner played
+	# to a dead stop at 15/15 with fourteen villagers and a scout. It was then rewritten to
+	# assert TWO houses, and the owner corrected the content instead: *"i did not account
+	# for the scout in the pop cap, resuting in the player needing a second house"* — target
+	# 14. Which makes one house exactly right again, for a reason that is now checked.
+	#
+	# **The lesson is the derivation, not the number.** This reads the STARTING ENTITIES OFF
+	# THE MAP and computes the houses needed, so moving the target or removing the scout
+	# fails here rather than quietly turning the briefing text into a lie — which is exactly
+	# what happened twice.
 	var s := _shipped("scenario_1")
 	assert_not_null(s)
 	if s == null:
@@ -186,18 +197,24 @@ func test_scenario_ones_villager_target_costs_more_than_one_house() -> void:
 			"a target within the %d villagers the map already grants is won on tick 0"
 			% start_villagers)
 	assert_true(other_pop > 0,
-			"the map grants a non-villager starting unit, which is the whole point of this"
-			+ " test -- if that stops being true, one house IS enough and the briefing"
-			+ " should say so again")
+			"the map grants a non-villager starting unit -- the scout, which is the whole"
+			+ " reason the target is 14 and not 15")
 
-	# ceil((target + other_pop - tc_pop) / house_pop), spelled out rather than with a
-	# float division: the sim carries no floats and neither should its arithmetic here.
+	# ceil((target + other_pop - tc_pop) / house_pop), spelled out rather than with a float
+	# division: the sim carries no floats and neither should the arithmetic about it.
 	var short_by := target + other_pop - tc.provides_pop
 	var houses := (short_by + house.provides_pop - 1) / house.provides_pop
-	assert_true(houses >= 2,
-			"%d villagers plus %d population of other starting units against a %d cap"
+	assert_eq(houses, 1,
+			"%d villagers plus %d population of other starting units against a %d town"
 			% [target, other_pop, tc.provides_pop]
-			+ " needs %d houses -- the briefing must not claim one is enough" % houses)
+			+ " centre needs %d house(s) of %d -- the objective asks for ONE, and the"
+			% [houses, house.provides_pop]
+			+ " briefing tells the player that one is exactly enough")
+	# AND THE HOUSE IS NOT SPARE ROOM: one fewer would not do it. This is the half that
+	# makes the two win rows depend on each other instead of merely sitting side by side.
+	assert_true(target + other_pop > tc.provides_pop,
+			"the target must not fit inside the town centre's own %d population, or the"
+			% tc.provides_pop + " build row is decoration")
 
 
 func test_scenario_ones_villager_target_is_above_what_the_map_gives_you() -> void:
@@ -554,17 +571,54 @@ func test_the_user_root_is_read_and_declared_order_beats_alphabetical() -> void:
 	assert_eq(campaign.scenarios[1].folder, "scenario_10")
 
 
-func test_a_folder_the_order_list_forgets_is_reported_rather_than_played_last() -> void:
+func test_a_folder_the_order_list_forgets_is_noted_rather_than_played_last() -> void:
+	# ⚠️ **THIS WAS A `problem` AND IS NOW A `note`, WHICH IS THE DIFFERENCE BETWEEN A
+	# WORK IN PROGRESS AND A BROKEN CAMPAIGN.** `is_playable()` is `problems.is_empty()`,
+	# so while an unnamed folder was a problem, starting to write a new mission made every
+	# FINISHED mission in the campaign unlaunchable -- which is what happened the moment
+	# the owner created a `scenario_4/` on 2026-09-02.
+	#
+	# It is still said, because it is the only warning a designer gets that a scenario they
+	# have written will never be played, and it is still not appended to the play order --
+	# playing it last is wrong whether it is unfinished or a typo. And the typo reading is
+	# not going unguarded: an order entry naming a folder that does NOT exist is a separate
+	# check and is still fatal (the test below).
+	var c := Campaigns.new()
 	_write_campaign(_ORDER_FIXTURE, ["scenario_2"], ["scenario_2", "scenario_10"])
+
+	var campaign: CampaignDef = _by_folder(c.discover()).get(_ORDER_FIXTURE)
+	assert_not_null(campaign)
+	if campaign == null:
+		return
+	assert_eq(campaign.scenarios.size(), 1, "only what the order names is loaded")
+	assert_true(_joined(campaign.notes).contains("scenario_10"), _joined(campaign.notes))
+	assert_true(_joined(campaign.notes).contains("will never be played"),
+			_joined(campaign.notes))
+	assert_eq(campaign.problems, [] as Array[String],
+			"an unfinished mission is not a broken campaign")
+	assert_true(campaign.is_playable(), "and the finished ones still start")
+
+	# The loader keeps the two apart in its own log for the same reason: `warnings` has to
+	# be able to stay empty for shipped content (`test_campaign_screen`).
+	assert_true(_joined(c.notes).contains("scenario_10"), _joined(c.notes))
+	assert_false(_joined(c.warnings).contains("scenario_10"), _joined(c.warnings))
+
+
+func test_an_order_entry_with_no_folder_is_still_fatal() -> void:
+	# The other half of the pair above, and the half that has to stay a `problem`: an order
+	# list naming a scenario that is not on disk is a typo or a botched install, and the
+	# campaign genuinely cannot be played in the order it declares.
+	# ORDER names scenario_99, DISK holds only scenario_2 -- which is the opposite way round
+	# from the test above, and the argument order is easy to get backwards: `_write_campaign`
+	# takes (folder, order, on_disk).
+	_write_campaign(_ORDER_FIXTURE, ["scenario_2", "scenario_99"], ["scenario_2"])
 
 	var campaign: CampaignDef = _by_folder(Campaigns.new().discover()).get(_ORDER_FIXTURE)
 	assert_not_null(campaign)
 	if campaign == null:
 		return
-	assert_eq(campaign.scenarios.size(), 1, "only what the order names is loaded")
-	assert_true(_joined(campaign.problems).contains("scenario_10"), _joined(campaign.problems))
-	assert_true(_joined(campaign.problems).contains("will never be played"),
-			_joined(campaign.problems))
+	assert_true(_joined(campaign.problems).contains("scenario_99"), _joined(campaign.problems))
+	assert_false(campaign.is_playable(), "a campaign that cannot follow its own order")
 
 
 func test_the_dev_override_shadows_an_installed_campaign_of_the_same_name() -> void:
@@ -580,7 +634,8 @@ func test_the_dev_override_shadows_an_installed_campaign_of_the_same_name() -> v
 	if campaign == null:
 		return
 	assert_ne(campaign.root, Campaigns.USER_ROOT, "the repo copy wins, not the installed one")
-	assert_eq(campaign.scenarios.size(), 3, "the real HowToPlay, not the one-scenario fixture")
+	assert_true(campaign.scenarios.size() >= 3,
+			"the real HowToPlay, not the one-scenario fixture")
 	assert_true(_joined(c.warnings).contains("shadowed"), _joined(c.warnings))
 
 

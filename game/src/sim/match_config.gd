@@ -190,6 +190,25 @@ var objective_player_id: int = 0
 ## of a campaign.
 var scenario_message: String = ""
 
+## WHICH CAMPAIGN MISSION THIS IS (PLAN.md 15.7), or `""`/-1 for a match that is not one --
+## which is every skirmish and every debug factory.
+##
+## PROVENANCE, like `scenario_message` and `host_name`: nothing in `src/sim/` reads either,
+## neither is in `state_hash()`, and two clients disagreeing about them changes nothing
+## about the match.
+##
+## **THEY ARE HERE SO THAT WINNING CAN BE RECORDED WITHOUT THE HUD LEARNING WHAT A CAMPAIGN
+## IS.** `GameScene` already detects the win -- it reads `match_over` and `winner_id` off
+## the snapshot to raise `ResultScreen` -- and this is the smallest thing that lets the same
+## moment write `user://campaign_progress.json`. The alternative was a second channel from
+## the scenario screen to the match, which is a second thing that can disagree with the
+## config about which mission is being played.
+##
+## BOTH, because neither is enough: the folder is the key progress is stored under and the
+## index is what the completion COUNT comes from (`index + 1`).
+var campaign_folder: String = ""
+var scenario_index: int = -1
+
 ## WHOSE SIDE EACH PLAYER IS ON, position for position with `player_ids` (the lobby's
 ## team selector, 2026-08-31). Read by `SimWorld.setup()` into `SimPlayer.team`.
 ##
@@ -275,6 +294,8 @@ func to_dict() -> Dictionary:
 		"objectives": _objectives_to_wire(),
 		"objective_player_id": objective_player_id,
 		"scenario_message": scenario_message,
+		"campaign_folder": campaign_folder,
+		"scenario_index": scenario_index,
 		# null for the fixed debug map, which is integer code and identical everywhere.
 		"map_data": map_data.to_dict() if map_data != null else null,
 	}
@@ -356,6 +377,10 @@ static func from_dict(d: Dictionary) -> MatchConfig:
 	c.objective_player_id = int(d.get("objective_player_id", 0))
 	# Absent means no briefing, which is every skirmish and every older recorded config.
 	c.scenario_message = String(d.get("scenario_message", ""))
+	# Absent means "not a campaign mission", which is what every skirmish and every config
+	# recorded before 15.7 actually is. -1 rather than 0, because 0 is a real scenario index.
+	c.campaign_folder = String(d.get("campaign_folder", ""))
+	c.scenario_index = int(d.get("scenario_index", -1))
 
 	var md = d.get("map_data")
 	if md != null and md is Dictionary:

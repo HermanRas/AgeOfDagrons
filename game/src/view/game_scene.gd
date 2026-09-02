@@ -1114,6 +1114,10 @@ func _refresh_result(snap: Dictionary) -> void:
 	var we_won := winner == player_id \
 			or (winning_team > 0 and winning_team == my_team and not _forfeited(reason))
 	if over and we_won:
+		# BEFORE the overlay, so the campaign is unlocked by the time the player can press
+		# MAIN MENU and go looking for the next mission. `ScenarioScreen.open()` re-reads
+		# the file every visit, so that is all the sequencing this needs.
+		_record_campaign_progress()
 		_result.show_result(true, _victory_subtitle(snap, player_id))
 	# `_is_scenario` is the 15.2 clause: a scenario loss sets `match_over` with NO winner,
 	# so without it a failed tutorial fell through to "Nobody was left standing" -- said
@@ -1194,6 +1198,39 @@ func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
 	if forfeits > 0:
 		return "%d opponent%s forfeited" % [forfeits, "" if forfeits == 1 else "s"]
 	return "All opponents eliminated"
+
+
+## Raise `user://campaign_progress.json` for the mission just won (PLAN.md 15.7).
+##
+## ## WHY THE WIN IS RECORDED HERE, OF ALL PLACES
+##
+## This is the one function in the game that already knows the local player has won: it
+## reads `match_over` and `winner_id` off the snapshot to decide what `ResultScreen` says.
+## Anywhere else would need a second route to the same fact, and two routes can disagree
+## about whether the player won -- which is the difference between a campaign that unlocks
+## and one that does not.
+##
+## **NOT IN THE SIM.** Progress is per-installation persistence, not simulation: it is not
+## in `state_hash()`, a joined client's progress is its own business, and `src/sim/` may not
+## touch `user://` at all.
+##
+## A MATCH THAT IS NOT A CAMPAIGN MISSION RECORDS NOTHING, which is every skirmish -- the
+## config carries an empty folder, and both this and `record_completed` check.
+##
+## THE OWNER FOUND THE ABSENCE OF THIS BY PLAYING FOR IT (2026-09-02): they reset the file
+## to 0, won scenario 1 outright, and scenario 2 stayed locked. Until 15.7 nothing in the
+## game had ever written that file -- the same hole `pop_used`, `garrison_cap` and
+## `ScenarioDef.message` were each in, and the reason a field with no writer is worth
+## hunting for rather than waiting for.
+func _record_campaign_progress() -> void:
+	var cfg := Net.match_config()
+	if cfg == null or cfg.campaign_folder.is_empty() or cfg.scenario_index < 0:
+		return
+	if not CampaignProgress.record_completed(cfg.campaign_folder, cfg.scenario_index):
+		# Said out loud rather than swallowed: a failed write is a campaign that will not
+		# unlock, and its only symptom is a locked row with no explanation.
+		push_warning("could not record completing %s/%d"
+				% [cfg.campaign_folder, cfg.scenario_index])
 
 
 ## Whether this match is decided by an authored objective list rather than by conquest

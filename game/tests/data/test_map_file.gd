@@ -171,7 +171,9 @@ func test_the_three_shipped_scenarios_all_carry_a_saved_map() -> void:
 	# which would look exactly like a scenario that refuses to launch for an unrelated
 	# reason. `preview_author_maps.tscn` is what writes these.
 	var found := 0
+	var declared := 0
 	for c in Campaigns.new().discover():
+		declared += c.scenarios.size()
 		for s in c.scenarios:
 			found += 1
 			assert_true(s.has_map(), "%s/%s has no saved map" % [c.folder, s.folder])
@@ -184,7 +186,12 @@ func test_the_three_shipped_scenarios_all_carry_a_saved_map() -> void:
 					"%s/%s terrain matches its own size" % [c.folder, s.folder])
 			assert_false(data.starts.is_empty(),
 					"%s/%s has start positions" % [c.folder, s.folder])
-	assert_eq(found, 3, "the shipped campaign is three scenarios")
+	# EVERY DECLARED SCENARIO WAS CHECKED, rather than a hardcoded total. The count used to
+	# be 3 and the owner shipped a fourth and fifth on 2026-09-02; asserting the number
+	# only asserted how much content exists. What is worth holding is that the loop visited
+	# all of it, plus a floor so an empty campaign cannot pass by checking nothing.
+	assert_eq(found, declared, "every scenario the campaign declares was checked")
+	assert_true(found >= 3, "and there are at least the original three")
 
 
 func test_a_scenario_without_a_map_refuses_to_launch_and_says_where_to_look() -> void:

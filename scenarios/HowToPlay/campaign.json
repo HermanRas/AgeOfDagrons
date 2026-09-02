@@ -1,8 +1,12 @@
 {
   "_note": [
-    "The first campaign (PLAN.md 15.8). Thin content on a real mechanism, deliberately:",
-    "three scenarios, each on a GENERATED River map against a PASSIVE opponent, teaching",
-    "the economy, then the age ladder, then fighting.",
+    "The first campaign (PLAN.md 15.8). FIVE scenarios on saved River maps: the economy,",
+    "the age ladder, finding and fighting an opponent, the dragon, and then a real duel.",
+    "",
+    "It was three until 2026-09-02, when the owner added scenario_4 and scenario_5 and",
+    "called the campaign complete. The first four face a PASSIVE opponent, which runs its",
+    "whole economy and never attacks; scenario_5 faces an EASY one, which does -- that is",
+    "the whole point of it, and it is the only mission that can be lost to an enemy.",
     "",
     "`scenarios` NAMES ITS FOLDERS IN PLAY ORDER AND THAT ORDER IS NOT DERIVABLE.",
     "`scenario_10` sorts before `scenario_2`, so sorting the directory names would put a",
@@ -15,9 +19,13 @@
     "Progress is user://campaign_progress.json, keyed by this folder's NAME -- so renaming",
     "the directory forgets how far every player had got."
   ],
-
   "name": "How To Play",
-  "description": "Three short lessons: gather and build, climb the ages, then find your opponent and finish them.",
-
-  "scenarios": ["scenario_1", "scenario_2", "scenario_3"]
+  "description": "Five short lessons: gather and build, climb the ages, find your opponent, tame a dragon, then survive a real duel.",
+  "scenarios": [
+    "scenario_1",
+    "scenario_2",
+    "scenario_3",
+    "scenario_4",
+    "scenario_5"
+  ]
 }

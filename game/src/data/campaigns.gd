@@ -65,7 +65,21 @@ const LOCAL_CONFIG := "res://content.local.json"
 
 ## Every complaint from the last `discover()`, in the order found. Never printed from
 ## here: see the class comment.
+##
+## ⚠️ **AN EMPTY `warnings` IS THE SHIPPED-CONTENT CONTRACT**, which `test_campaign_screen`
+## asserts: a shadowed, malformed or half-declared campaign in the repo's own `scenarios/`
+## is a broken commit rather than a runtime state. That is exactly why `notes` below is a
+## SECOND list and not more entries in this one.
 var warnings: Array[String] = []
+
+## Things worth saying that are not wrong (2026-09-02). Separate from `warnings` because
+## that list has to be able to stay empty -- see its note.
+##
+## Today this is one thing: a scenario folder `campaign.json`'s order does not name, which
+## is what a half-written mission looks like on disk. The owner started authoring
+## `scenario_4/` and, while it was a `warning`, it both failed the shipped-content test and
+## made the three finished missions unplayable. `CampaignDef.notes` carries the reasoning.
+var notes: Array[String] = []
 
 
 ## The roots to search, in priority order, skipping any that do not exist.
@@ -112,6 +126,7 @@ func _configured_dev_root() -> String:
 ## is -- if it ever becomes one, `campaign.json` gains a field and this gains a sort key.
 func discover() -> Array[CampaignDef]:
 	warnings.clear()
+	notes.clear()
 	var out: Array[CampaignDef] = []
 	var seen: Dictionary = {}
 
@@ -175,6 +190,11 @@ func _read_campaign(root: String, folder: String) -> CampaignDef:
 	_read_scenarios(c, dir_path, d.get("scenarios", []))
 	for p in c.all_problems():
 		warnings.append(p)
+	# Notes go into their OWN list, not into `warnings`. A designer wants to be told that a
+	# folder of theirs will never be played; `warnings` has to be able to stay empty for
+	# shipped content, and a half-written mission on a developer's disk must not break that.
+	for n in c.all_notes():
+		notes.append(n)
 	return c
 
 
@@ -200,18 +220,36 @@ func _read_scenarios(c: CampaignDef, dir_path: String, raw: Variant) -> void:
 		if not parsed is Dictionary:
 			c.problems.append("scenario '%s' is not a JSON object" % folder)
 			continue
-		c.scenarios.append(ScenarioDef.from_dict(folder, parsed as Dictionary, scenario_dir))
+		var s := ScenarioDef.from_dict(folder, parsed as Dictionary, scenario_dir)
+		# WHERE IT SITS IN THIS CAMPAIGN (15.7). Set here because only this loop knows: the
+		# ORDER comes from `campaign.json`'s list and deliberately not from the folder names
+		# (`scenario_10` sorts before `scenario_2`), so the index is the position in THIS
+		# append sequence and nothing else can derive it. `progress` is a count of
+		# completions and so also the index of the first locked scenario, which is why the
+		# index rather than the folder is what a win is recorded against.
+		s.campaign_folder = c.folder
+		s.index = c.scenarios.size()
+		c.scenarios.append(s)
 
-	# A folder the order list forgot. Reported rather than appended: it is either work in
-	# progress or a typo in the list, and playing it last is wrong for both. See
-	# `CampaignDef`'s class comment.
+	# A folder the order list forgot. Still reported -- it is the only warning a designer
+	# gets that a scenario they have written will never be played -- but reported as a NOTE
+	# rather than a problem, so it does not stop the campaign.
+	#
+	# ⚠️ **IT WAS A `problem` UNTIL 2026-09-02 AND THAT MADE A WORK IN PROGRESS FATAL.** The
+	# owner began authoring `scenario_4/`, and because `CampaignDef.is_playable()` is
+	# `problems.is_empty()`, the three FINISHED missions could no longer be started. An
+	# unnamed folder means either work in progress or a typo in the order list; the first
+	# wants the campaign to keep working, and the second is caught by the other end of the
+	# same pair a few lines up -- an order entry naming a folder that does not exist is
+	# still a `problem`, and still fatal. Never appended to the play order, either way:
+	# playing it last is wrong for both readings.
 	var on_disk := DirAccess.open(dir_path)
 	if on_disk != null:
 		for folder in on_disk.get_directories():
 			if not named.has(folder) \
 					and FileAccess.file_exists(dir_path.path_join(folder)
 							.path_join(ScenarioDef.JSON_FILE)):
-				c.problems.append("folder '%s' holds a %s but campaign.json's order does"
+				c.notes.append("folder '%s' holds a %s but campaign.json's order does"
 						% [folder, ScenarioDef.JSON_FILE]
 						+ " not name it, so it will never be played")
 

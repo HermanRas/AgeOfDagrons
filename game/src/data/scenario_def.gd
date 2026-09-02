@@ -116,6 +116,25 @@ var icon_path: String = ""
 ## other copy. Same reason `CampaignDef.root` exists.
 var dir: String = ""
 
+## WHERE THIS SCENARIO SITS IN ITS CAMPAIGN (15.7): the campaign's folder, and this
+## scenario's position in `CampaignDef.scenarios`. `""`/-1 means "not part of a campaign",
+## which is a def built by hand in a test.
+##
+## SET BY THE LOADER, for the reason `dir` is: only `Campaigns` knows, because only it has
+## read `campaign.json`'s ORDER LIST. A scenario cannot derive its own index -- the order is
+## a design decision in that file and deliberately not the folder names, since
+## `scenario_10` sorts before `scenario_2`.
+##
+## BOTH ARE NEEDED AND NEITHER IS ENOUGH. The folder is the key
+## `user://campaign_progress.json` is written under, and the index is what the completion
+## COUNT is derived from (`index + 1`) -- so a scenario that knew its campaign but not its
+## place could only record "something was finished".
+##
+## They travel to the match on `MatchConfig` as provenance, so `GameScene` can record a win
+## without the HUD learning what a campaign is -- the same route `scenario_message` takes.
+var campaign_folder: String = ""
+var index: int = -1
+
 ## Everything wrong with this file, in the author's terms. Empty means playable.
 ##
 ## Decision 4: **inert is the safe direction to be unfinished in.** A scenario that
@@ -398,6 +417,14 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	# HUD has never heard of a campaign -- and because the field is shared with skirmish
 	# by the owner's spec.
 	cfg.scenario_message = message
+
+	# WHICH MISSION THIS IS (15.7), so a win can be recorded against the right row without
+	# `GameScene` learning what a campaign is. Set for BOTH modes, unlike `objectives`
+	# above: a `last_man_standing` scenario is still a campaign mission and still unlocks
+	# the next one -- scenario 3 is exactly that. Empty/-1 for a def built by hand, which
+	# `CampaignProgress.record_completed` refuses.
+	cfg.campaign_folder = campaign_folder
+	cfg.scenario_index = index
 
 	cfg.starting_age = starting_age
 	# "Nobody typed one", which is what a scenario is: it is a solo match on loopback and

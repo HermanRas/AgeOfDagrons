@@ -44,9 +44,28 @@ func _at_progress(completions: int) -> void:
 	screen.select(0)
 
 
+## Every row unlocked, DERIVED from the campaign rather than from a number.
+##
+## ⚠️ **`_at_progress(2)` USED TO MEAN "ALL OF THEM" AND SILENTLY STOPPED MEANING IT.**
+## HowToPlay was three scenarios, so 2 completions unlocked the lot; the owner then added
+## a fourth and a fifth on 2026-09-02 and every test that said `_at_progress(2)` was
+## suddenly testing a partly-locked campaign — one of them failed with "scenario_4:
+## Locked", which reads as a broken scenario rather than as a stale constant.
+##
+## Same lesson as the villager target and the house arithmetic, for the third time in one
+## day: **derive a fact about the content from the content.** A test that hardcodes how
+## much content there is fails every time somebody adds some.
+func _unlock_all() -> void:
+	_at_progress(campaign.scenarios.size() - 1)
+
+
 func test_the_campaign_opens_with_a_row_per_scenario() -> void:
 	assert_not_null(campaign, "scenarios/HowToPlay is on disk")
-	assert_eq(screen.row_count(), 3)
+	# ONE ROW PER SCENARIO, whatever the campaign happens to hold -- which is the property
+	# this test is named for. A hardcoded count would only be asserting how much content
+	# exists, and the owner adds content.
+	assert_eq(screen.row_count(), campaign.scenarios.size())
+	assert_true(screen.row_count() >= 3, "and HowToPlay has at least its original three")
 	assert_eq(screen.campaign().folder, "HowToPlay")
 
 
@@ -83,7 +102,7 @@ func test_opening_a_campaign_always_selects_a_row_that_exists() -> void:
 func test_rows_are_numbered_by_the_declared_order_not_the_folder_name() -> void:
 	# `scenario_10` sorts before `scenario_2`, so a screen numbering by name would be wrong
 	# the moment a campaign has ten missions. The number comes from the list index.
-	_at_progress(2)
+	_unlock_all()
 	for i in range(screen.row_count()):
 		var labels := _labels_of(screen.row(i))
 		assert_true(labels.has("%d. %s" % [i + 1, campaign.scenarios[i].name]),
@@ -113,7 +132,8 @@ func test_progress_past_the_end_does_not_unlock_more_than_there_is() -> void:
 	_at_progress(99)
 	for i in range(screen.row_count()):
 		assert_false(screen.row(i).disabled, "row %d open" % i)
-	assert_eq(screen.row_count(), 3, "and no extra rows appeared")
+	assert_eq(screen.row_count(), campaign.scenarios.size(),
+			"and no extra rows appeared")
 
 
 func test_a_locked_scenario_cannot_be_played_and_says_why() -> void:
@@ -130,7 +150,7 @@ func test_an_objective_scenario_is_playable_now_that_the_evaluator_exists() -> v
 	# `ObjectiveSystem` existed. It does now, so the PLAY button is live and there is no
 	# note to write -- which is what makes the campaign finishable rather than a dead end
 	# behind two greyed rows.
-	_at_progress(2)
+	_unlock_all()
 	screen.select(0)
 	assert_eq(campaign.scenarios[0].mode, ScenarioDef.Mode.SCENARIO)
 	assert_true(screen.play_enabled(), "objective scenarios launch as of 15.2")
@@ -143,7 +163,7 @@ func test_every_shipped_scenario_can_be_started_once_it_is_unlocked() -> void:
 	# scenario 1 could not launch, so the campaign was a dead end and the one scenario that
 	# worked was locked behind two that did not. Asserted across all three rather than for
 	# scenario 1 alone, because the failure was structural rather than about one file.
-	_at_progress(2)
+	_unlock_all()
 	for i in range(campaign.scenarios.size()):
 		screen.select(i)
 		assert_true(screen.play_enabled(), "%s: %s"
@@ -153,7 +173,7 @@ func test_every_shipped_scenario_can_be_started_once_it_is_unlocked() -> void:
 func test_the_last_man_standing_scenario_is_playable_end_to_end() -> void:
 	# 15.5's whole point: scenario 3 needs nothing 15.2 has not built, so 15.1 + 15.3 + this
 	# is a campaign mission a player can actually start.
-	_at_progress(2)
+	_unlock_all()
 	screen.select(2)
 	assert_eq(campaign.scenarios[2].mode, ScenarioDef.Mode.LAST_MAN_STANDING)
 	assert_true(screen.play_enabled(), "scenario 3 plays: " + screen.play_note())
@@ -192,7 +212,7 @@ func test_launching_an_unbuildable_scenario_reports_rather_than_no_ops() -> void
 	# `_why_not_playable` did not. Reached with a hand-built def whose map is missing,
 	# since every shipped scenario now builds -- and that is the point of the branch:
 	# a silent no-op is how a button ends up doing nothing at all.
-	_at_progress(2)
+	_unlock_all()
 	var broken := ScenarioDef.from_dict("scenario_x", {
 		"name": "No Map At All",
 		"mode": "last_man_standing",
@@ -221,12 +241,12 @@ func test_selecting_out_of_range_is_ignored_rather_than_crashing() -> void:
 
 
 func test_selecting_swaps_the_panel_without_touching_the_rows() -> void:
-	_at_progress(2)
+	_unlock_all()
 	screen.select(1)
 	assert_eq(screen.selected_index(), 1)
 	assert_true(screen.panel_title().ends_with(campaign.scenarios[1].name))
 	assert_eq(screen.panel_description(), campaign.scenarios[1].description)
-	assert_eq(screen.row_count(), 3, "a selection is not a rebuild")
+	assert_eq(screen.row_count(), campaign.scenarios.size(), "a selection is not a rebuild")
 	assert_true(screen.row(1).button_pressed, "the chosen row reads as chosen")
 	assert_false(screen.row(0).button_pressed, "and the others do not")
 

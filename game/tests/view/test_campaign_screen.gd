@@ -33,13 +33,17 @@ func after_each() -> void:
 
 
 ## The repo's own `scenarios/` folder, which the editor and the headless suite both read
-## through `Campaigns`' dev override. One campaign, "How To Play", three scenarios.
+## through `Campaigns`' dev override. One campaign, "How To Play".
+##
+## HOW MANY SCENARIOS IT HOLDS IS NOT ASSERTED, deliberately: this screen lists CAMPAIGNS,
+## and the count inside one is content the owner adds to (three on 2026-09-01, five the day
+## after). A floor is kept so an empty campaign cannot pass by listing nothing.
 func test_the_shipped_campaign_is_found_and_listed() -> void:
 	assert_eq(screen.campaign_count(), 1, "scenarios/ holds exactly HowToPlay")
 	assert_false(screen.showing_empty_notice(), "something was found, so no empty notice")
 	var c: CampaignDef = screen.campaigns()[0]
 	assert_eq(c.folder, "HowToPlay")
-	assert_eq(c.scenarios.size(), 3)
+	assert_true(c.scenarios.size() >= 3, "and it has missions in it")
 
 
 func test_every_campaign_gets_a_row() -> void:

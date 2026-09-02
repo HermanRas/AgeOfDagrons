@@ -96,7 +96,9 @@ func test_the_owners_real_briefings_all_fit_the_shape_the_modal_expects() -> voi
 	# 420x520 with a scroller in it -- so what actually matters is that every shipped
 	# scenario HAS one and that it is not so short as to be useless.
 	var found := 0
+	var declared := 0
 	for c in Campaigns.new().discover():
+		declared += c.scenarios.size()
 		for s in c.scenarios:
 			found += 1
 			assert_false(s.message.strip_edges().is_empty(),
@@ -112,4 +114,7 @@ func test_the_owners_real_briefings_all_fit_the_shape_the_modal_expects() -> voi
 			assert_true(fresh.show_message(s.message),
 					"%s/%s must actually raise the modal" % [c.folder, s.folder])
 			fresh.free()
-	assert_eq(found, 3, "the shipped campaign is three scenarios")
+	# Derived, not hardcoded: HowToPlay grew from three to five on 2026-09-02 and a count
+	# here would only have been asserting how much content exists.
+	assert_eq(found, declared, "every scenario the campaign declares has a briefing")
+	assert_true(found >= 3, "and there are at least the original three")

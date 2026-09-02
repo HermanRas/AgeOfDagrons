@@ -176,6 +176,71 @@ func test_a_last_man_standing_scenario_carries_no_objectives_and_no_protagonist(
 	assert_eq(cfg.objective_player_id, 0, "0 is nobody, which is every non-scenario match")
 
 
+func test_every_shipped_scenario_carries_where_it_sits_in_its_campaign() -> void:
+	# ⚠️ **15.7's WHOLE DEPENDENCY.** `GameScene` records a win against
+	# `campaign_folder` + `scenario_index`, so a scenario that reached the match without
+	# them would be a mission that plays, wins, and unlocks nothing -- which is exactly the
+	# bug the owner reported, in a different disguise. Both are set by the LOADER, because
+	# only it has read `campaign.json`'s order list.
+	#
+	# ASSERTED FOR ALL THREE, and by POSITION, because the index is what the completion
+	# count is derived from: an off-by-one unlocks the wrong row or none.
+	var campaign: CampaignDef = null
+	for c in Campaigns.new().discover():
+		if c.folder == "HowToPlay":
+			campaign = c
+	assert_not_null(campaign)
+	if campaign == null:
+		return
+
+	for i in range(campaign.scenarios.size()):
+		var s := campaign.scenarios[i]
+		assert_eq(s.campaign_folder, "HowToPlay", "%s knows its campaign" % s.folder)
+		assert_eq(s.index, i, "%s knows it is number %d" % [s.folder, i])
+
+		var problems: Array[String] = []
+		var cfg := s.build_config(problems)
+		assert_not_null(cfg, "%s: %s" % [s.folder, " | ".join(problems)])
+		if cfg == null:
+			continue
+		assert_eq(cfg.campaign_folder, "HowToPlay")
+		assert_eq(cfg.scenario_index, i, "and it reaches the match")
+
+
+func test_a_conquest_mission_still_carries_its_campaign_row() -> void:
+	# Scenario 3 is `last_man_standing` and carries no objectives -- but it IS a campaign
+	# mission and winning it must still unlock what follows. `objectives` and
+	# `objective_player_id` are deliberately left empty for it; these two are deliberately
+	# not, and the distinction is easy to get wrong in one `if`.
+	var s := _shipped("scenario_3")
+	assert_not_null(s)
+	if s == null:
+		return
+	var cfg := _config(s)
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_eq(cfg.mode, MatchConfig.Mode.LAST_MAN_STANDING)
+	assert_eq(cfg.objectives.size(), 0, "no objectives")
+	assert_eq(cfg.objective_player_id, 0, "and no protagonist")
+	assert_eq(cfg.campaign_folder, "HowToPlay", "but it is still a campaign mission")
+	assert_eq(cfg.scenario_index, 2)
+
+
+func test_a_hand_built_scenario_carries_no_campaign_and_records_nothing() -> void:
+	# A def built in a test or by a future editor. `""`/-1 is what
+	# `CampaignProgress.record_completed` refuses, so a match like this cannot write
+	# progress for a campaign it is not part of.
+	var cfg := _config(_scenario({"opponents": ["passive"]}))
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_eq(cfg.campaign_folder, "")
+	assert_eq(cfg.scenario_index, -1, "-1 and not 0, because 0 is a real scenario index")
+	assert_false(CampaignProgress.record_completed(cfg.campaign_folder, cfg.scenario_index,
+			"user://test_scenario_launch/should_never_exist.json"))
+
+
 func test_the_briefing_reaches_the_config_because_the_hud_has_never_heard_of_a_campaign() -> void:
 	# 15.6's modal reads `MatchConfig.scenario_message`, not `ScenarioDef.message`: the
 	# message field is shared with skirmish by the owner's spec, so it belongs to the match
@@ -353,6 +418,8 @@ func test_the_objective_list_survives_the_wire_field_by_field() -> void:
 	assert_eq(back.mode, MatchConfig.Mode.SCENARIO)
 	assert_eq(back.objective_player_id, cfg.objective_player_id)
 	assert_eq(back.scenario_message, cfg.scenario_message)
+	assert_eq(back.campaign_folder, cfg.campaign_folder)
+	assert_eq(back.scenario_index, cfg.scenario_index)
 	assert_eq(back.objectives.size(), cfg.objectives.size())
 	for i in range(cfg.objectives.size()):
 		var sent: ObjectiveDef = cfg.objectives[i]

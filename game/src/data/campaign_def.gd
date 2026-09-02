@@ -60,6 +60,27 @@ var root: String = ""
 ## scenario, so that one bad file costs one row rather than the campaign.
 var problems: Array[String] = []
 
+## Things worth SAYING that do not stop the campaign being played (2026-09-02).
+##
+## ## WHY THIS EXISTS: A WORK-IN-PROGRESS SCENARIO MUST NOT BRICK THE CAMPAIGN
+##
+## The owner started authoring a fourth How To Play mission -- a `scenario_4/` folder with
+## its own `scenario.json`, not yet named in `campaign.json`'s order -- and **the whole
+## campaign became unplayable**, because an unnamed folder was a `problems` entry and
+## `is_playable()` is `problems.is_empty()`. Three tests failed and, far worse, the three
+## finished missions could not be started.
+##
+## That complaint is still made, because it is the only warning a designer gets that a
+## folder will never be played. But it is not FATAL, and the argument is that the fatal
+## case is already covered somewhere else: an order list naming a folder that does not
+## exist is a separate check and stays a `problem`. So of the two things an unnamed folder
+## can mean -- *work in progress* or *a typo in the order list* -- the first wants the
+## campaign to keep working and the second is caught by the other end of the same pair.
+##
+## **THE TEST FOR "LOADS WITHOUT COMPLAINT" THEREFORE READS `all_problems()` AND NOT THIS.**
+## Notes are for the log and for a developer; problems are what stop a player.
+var notes: Array[String] = []
+
 
 func is_playable() -> bool:
 	return problems.is_empty() and not playable_scenarios().is_empty()
@@ -82,6 +103,15 @@ func all_problems() -> Array[String]:
 	for s in scenarios:
 		for p in s.problems:
 			out.append("%s/%s/%s: %s" % [folder, s.folder, ScenarioDef.JSON_FILE, p])
+	return out
+
+
+## Every non-fatal note, prefixed the same way. Logged beside `all_problems()` so a
+## designer sees it, and deliberately not folded into that one -- see `notes`.
+func all_notes() -> Array[String]:
+	var out: Array[String] = []
+	for n in notes:
+		out.append("%s/%s: %s" % [folder, JSON_FILE, n])
 	return out
 
 
