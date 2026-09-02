@@ -1,0 +1,25 @@
+{
+  "_note": [
+    "TEACHES DEFENDING AGAINST A FIRST STRIKE.",
+    "",
+    "This scenario is a direct 1v1 duel.",
+    "You will face an opponent that attacks you early.",
+    "Your goal is to survive the initial assault",
+    "and then defeat the enemy in battle.",
+    "This is the real deal: 1 versus 1, with no hiding.",
+    "You must hold your ground and win the fight."
+  ],
+  "name": "How To Survive the Initial Attack and Defeat the Enemy",
+  "description": "You will face an opponent that attacks you. Survive the opening assault, then defeat the enemy in a real 1v1 showdown.",
+  "message": "Objective: Survive the initial attack and defeat the enemy.\n\nOverview: You are facing a real 1v1 battle. Your opponent will attack you first, so you must hold out through the opening assault and then counterattack to win.\n\nThis is not a team fight or a tutorial battle -- it is a true duel.",
+  "mode": "last_man_standing",
+  "map": {
+    "type": "river",
+    "seed": 815103
+  },
+  "opponents": [
+    "easy"
+  ],
+  "starting_age": 1,
+  "objectives": []
+}

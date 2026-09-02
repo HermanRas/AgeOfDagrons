@@ -1,0 +1,26 @@
+{
+  "_note": [
+    "TEACHES DRAGON TAMING. Won by obtaining a dragon.",
+    "",
+    "This scenario is a bit different from the others.",
+    "You are not trying to destroy your opponent,",
+    "but rather to find and tame a dragon. The dragon",
+    "is located somewhere across the river, and you ",
+    "will need to build an army to get there.",
+    "The dragon is a neutral unit, so you will",
+    "need to attack it to tame it"
+  ],
+  "name": "How To Find a Dragon and Tame It",
+  "description": "Somewhere across the river is a Dragons nest. Build an army, go and find it, Kill the Dragon and tame the baby Dragon.",
+  "message": "Objective: Destroy The Dragon AND Tame the baby.\n\nOverview: Train soldiers at the barracks, select them, and tap The Dragon to attack. Use the minimap to find the nest -- it is somewhere across the river.\n\nKilling the Dragon will reveal a baby in the nest.",
+  "mode": "last_man_standing",
+  "map": {
+    "type": "river",
+    "seed": 815103
+  },
+  "opponents": [
+    "passive"
+  ],
+  "starting_age": 1,
+  "objectives": []
+}
