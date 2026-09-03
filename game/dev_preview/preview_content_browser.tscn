@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_content_browser.gd" id="1_pcb"]
+
+[node name="PreviewContentBrowser" type="Node"]
+script = ExtResource("1_pcb")

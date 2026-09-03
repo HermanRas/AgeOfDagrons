@@ -40,6 +40,7 @@ extends Control
 
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 const _SCENARIO_SCENE := "res://scenes/menu/Scenario.tscn"
+const _CONTENT_BROWSER_SCENE := "res://scenes/menu/ContentBrowser.tscn"
 
 ## The credits and help screens' ground colour, so the pages behind the front door are
 ## recognisably the same room.
@@ -64,6 +65,7 @@ var _rows: Array[Button] = []
 var _list: VBoxContainer
 var _empty: Label
 var _back_button: Button
+var _download_button: Button
 var _toast: NoticeToast
 
 ## The last campaign `open_campaign` was asked for. **This is 15.5's seam**, and it is a
@@ -133,6 +135,22 @@ func _init() -> void:
 	UiFont.title(_back_button, 22)
 	_back_button.pressed.connect(_on_back_pressed)
 	footer.add_child(_back_button)
+
+	# DOWNLOAD MORE at the opposite end (the owner's mockup, 2026-09-03). An expanding
+	# spacer rather than an anchor, because the footer is in the page's FLOW -- the same
+	# reason BACK is not anchored to the window: a control pinned to the viewport can end
+	# up under the list on a short one.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	footer.add_child(spacer)
+
+	_download_button = Button.new()
+	_download_button.text = "DOWNLOAD MORE"
+	_download_button.custom_minimum_size = Vector2(280, 58)
+	UiFont.title(_download_button, 22)
+	_download_button.pressed.connect(_on_download_pressed)
+	footer.add_child(_download_button)
 
 	# THIS SCREEN OWNS ITS OWN TOAST rather than borrowing the main menu's, because the two
 	# are different scenes — `MainMenu.tscn`'s `%Toast` is gone the moment this one loads.
@@ -353,6 +371,13 @@ func _on_row_pressed(index: int) -> void:
 ## screen that is on screen.
 func _on_back_pressed() -> void:
 	get_tree().change_scene_to_file(_MAIN_MENU_SCENE)
+
+
+## DOWNLOAD MORE -> `ContentBrowser` (0.3). Touches the tree for `_on_back_pressed`'s
+## reason and is untested for it; what the suite asserts is that the BUTTON EXISTS and
+## says what it says, which is the half that can rot silently.
+func _on_download_pressed() -> void:
+	get_tree().change_scene_to_file(_CONTENT_BROWSER_SCENE)
 
 
 # ── readers, for the suite and for 15.5 ──────────────────────────────────────

@@ -263,12 +263,33 @@ func _report_help() -> void:
 			push_warning("preview_menus: help %s is off the page: %s" % [name, rect])
 
 
+## THE CAMPAIGN SCREEN'S FOOTER, AND WHETHER BOTH BUTTONS ARE ON THE PAGE.
+##
+## ⚠️ **THIS CHECK USED TO BE INCAPABLE OF PASSING.** It looked for `%BackButton`, and
+## `CampaignScreen` builds its footer in code without ever setting `unique_name_in_owner` --
+## so the lookup was always null and the warning *"the campaign screen has no way back"*
+## fired on every single run of this preview. A warning that is always wrong is worse than
+## no warning, because it teaches whoever reads the log to skip that line.
+##
+## Fixed to read the fields directly, which is what `_report_help` next door already does.
+##
+## The rect check is the half that earns its place now that there are TWO buttons: the
+## phone's design viewport is 1404x648 (PLAN.md 3), DOWNLOAD MORE is 280 px wide with BACK
+## at 180, and a footer that fits on a desktop preview can still push a button off the edge
+## on a handset. That is the lobby's bug (§3's nav strip), and it passes every structural
+## test because a node asked for its rect returns that rect whether or not the window
+## contains it.
 func _report_campaign() -> void:
-	var back: Button = _current.get_node_or_null("%BackButton")
-	print("  campaign: back button %s, rect %s"
-			% [back != null, back.get_global_rect() if back != null else "-"])
-	if back == null:
-		push_warning("preview_menus: the campaign screen has no way back")
+	var window := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for name in ["_back_button", "_download_button"]:
+		var control: Control = _current.get(name)
+		if control == null:
+			push_warning("preview_menus: the campaign screen has no %s" % name)
+			continue
+		var rect := control.get_global_rect()
+		print("  campaign: %s '%s' at %s" % [name, control.text, rect])
+		if not window.encloses(rect):
+			push_warning("preview_menus: campaign %s is off the page: %s" % [name, rect])
 
 
 ## THE LOBBY'S CONTROLS, AND WHETHER THEY ARE ALL ON THE PAGE.
