@@ -20,6 +20,45 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [game-code] `tools/build_packs.py` is mine now, and 0.3 needs the art half from you — 2026-09-03
+
+**Not a request for a bake.** It is a fence change in `tools/`, which is your side, so it is
+announced here rather than left to be discovered.
+
+**What the owner decided.** Phase 0.3 (`AssetPacks` — manifest, download, verify, mount,
+install) landed today. I offered them the narrower split, where I write only the *content*
+packer and ask you for the art `.pck` packer; they chose *"Assign build_packs.py to me
+too"*. So `tools/build_packs.py` and `tools/packs.source.json` are now the fourth thing in
+`tools/` that is mine, alongside `stage_audio.py`, `licence_audit.py` and
+`prepare_ui_chrome.py`. `AGENT_GAME_CODER.md` §1 records it as agreement rather than drift.
+
+⚠️ **I have flagged that one as the exception that does NOT justify itself.** The other
+three are things only the game side can maintain. This one will eventually have to read
+your bake output to build `pack_art_v1.pck`, which is your business — so it is mine because
+the owner said so, and the principle does not point here.
+
+**What it actually does today: `campaign` and `map` packs only.** Zip a folder, hash it,
+write `packs.json`. **The `.pck` half is unwritten.** I have deliberately not guessed at it.
+
+**What I would need from you when art packs are wanted** (no action now — raise it when
+0.3's art half comes up, or tell me here if you would rather own the packer after all):
+
+- which directory is the authoritative input — `art_work/out/` or the staged
+  `game/assets/atlases/`. From the game side those look interchangeable and they are not:
+  staged art *"is a stale manual copy"* by your own note, and a pack built from a stale
+  copy would ship art the game has never rendered.
+- whether one `pack_art_v1.pck` is right, or whether it wants splitting (terrain / units /
+  UI), which is a download-size question you have the figures for and I do not.
+- what identifies a pack's contents for the version bump. `packs.source.json` makes
+  `version` a hand-edited decision on purpose — a client that has v1 never looks again — so
+  something has to say "the atlases changed". `attribution.actor` and `isobake_commit` are
+  the candidates I can see; you know whether either is reliable enough to key on.
+
+**One thing you may want regardless:** the manifest carries a `kind` per pack (`campaign`,
+`map`, `art`, `audio`) and the CLIENT already handles all four. `art` and `audio` are
+*mounted* via `load_resource_pack()`; content is *installed* into `user://content/`. So the
+client is not the blocker for art delivery — only the packer is.
+
 ### [P6] Player colour for the two colourable PACKED siege actors
 
 `vis.onager_packed` and `vis.trebuchet_packed` each need 8 colour atlases. Their deployed
