@@ -78,6 +78,18 @@ build/
 packs/
 game/assets/atlases/
 
+# Built content packs (tools/build_packs.py, phase 0.3). `*.pck` above already covers
+# the art half; these are the zips. 2.2 MB each and rebuildable byte-for-byte from
+# `scenarios/` — the builder is deterministic precisely so that holds.
+web/downloads/*.zip
+
+# ⚠️ `web/downloads/packs.json` IS COMMITTED, AND IT IS THE ONE ARTEFACT THAT MUST BE.
+# It is generated, so the reflex is to ignore it — but `build_packs.py` reads it as the
+# record of WHAT IS ALREADY PUBLISHED, and that is what makes the version guard work:
+# content changed under an unchanged `version` is refused because the committed manifest
+# still holds the old checksum. Ignore it and a fresh clone has no baseline, the guard
+# never fires, and every existing install goes silently stale.
+
 # Staged 0 A.D. audio (tools/stage_audio.py). Same call as the atlases above:
 # it IS redistributable -- 0 A.D. is CC-BY-SA 3.0, unlike the itch.io UI packs
 # -- but it is ~52 MB of derived files that reach players through the audio

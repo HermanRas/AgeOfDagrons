@@ -1,0 +1,70 @@
+{
+  "_note": [
+    "WHAT TO PUBLISH. Read by tools/build_packs.py (PLAN.md 3.2/3.3, phase 0.3).",
+    "",
+    "THIS FILE HOLDS PUBLISHING DECISIONS ONLY. Title and description are NOT here -- they",
+    "are read out of each campaign's own campaign.json, because duplicating them would let",
+    "the store page and the game disagree about what a campaign is called. What lives here",
+    "is what campaign.json cannot know: the pack id, its version, and whether the game",
+    "requires it.",
+    "",
+    "`version` IS BUMPED BY HAND AND THAT IS DELIBERATE. Publishing is the one step in this",
+    "project with no undo -- a client that has downloaded v2 will not look again until it",
+    "sees v3 -- so the number is a decision rather than a side effect of running a script.",
+    "build_packs.py compares what it built against the published packs.json and REFUSES to",
+    "write a manifest whose bytes changed under an unchanged version, which is the mistake",
+    "this guards: content edited, script re-run, and every existing install left stale with",
+    "no way to notice.",
+    "",
+    "`required` is the owner's split (2026-09-03): true means the boot sequence fetches it",
+    "with nobody asked, false means it is offered in DOWNLOAD MORE and fetched only when a",
+    "player picks it. How To Play is the tutorial, so the front door would be lying without",
+    "it. Everything after the first campaign is expected to be optional."
+  ],
+  "base_url": "https://aod.dragoon.co.za/downloads/",
+  "packs": [
+    {
+      "id": "howtoplay",
+      "kind": "campaign",
+      "folder": "HowToPlay",
+      "source": "scenarios/HowToPlay",
+      "version": 1,
+      "required": true,
+      "author": "Age of Dragons"
+    },
+    {
+      "_note": [
+        "A TEST PACK, and the only reason it exists is that the OPTIONAL download path had",
+        "nothing to exercise it: How To Play is required, so DOWNLOAD MORE was empty the",
+        "moment it was installed and the browse-and-pick half could not be tried on a phone.",
+        "The owner asked for one on 2026-09-03 -- 'does not need to be playable only",
+        "downloadable'. It is in fact playable, because deriving it from a real campaign was",
+        "less work than breaking one.",
+        "",
+        "`derive` IS WHY THERE IS NO SECOND COPY IN GIT. It rewrites campaign.json's name and",
+        "description as the zip is built, so this costs one entry here instead of 2.2 MB of",
+        "duplicated content that would drift from the original -- and, more importantly, a",
+        "real scenarios/HowToPlayDummy/ folder would be picked up by the EDITOR's dev",
+        "override and show as a second campaign in every developer's campaign list forever.",
+        "",
+        "`folder` MUST DIFFER FROM THE ORIGINAL'S. It is the install directory, the identity",
+        "Campaigns shadows by, and the key into user://campaign_progress.json -- so reusing",
+        "'HowToPlay' would not install a second campaign, it would overwrite the first and",
+        "inherit its progress.",
+        "",
+        "DELETE THIS ENTRY once there is a real optional campaign to list."
+      ],
+      "id": "howtoplay_dummy",
+      "kind": "campaign",
+      "folder": "HowToPlayDummy",
+      "source": "scenarios/HowToPlay",
+      "derive": {
+        "name": "How To Play (Dummy)",
+        "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content."
+      },
+      "version": 1,
+      "required": false,
+      "author": "Age of Dragons"
+    }
+  ]
+}

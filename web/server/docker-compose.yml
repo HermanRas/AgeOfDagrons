@@ -1,0 +1,28 @@
+# aod.dragoon.co.za (phase 0.3). Lives on the box at /opt/aod/docker-compose.yml; this is
+# the copy in git, because the version that exists only on a server is the version nobody
+# can review.
+#
+# TWO CHANGES FROM WHAT RAN BEFORE 2026-09-03, AND BOTH ARE THE POINT:
+#
+#   1. `nginx:alpine` INSTEAD OF A BUILT PHP IMAGE. See nginx.conf's header -- `php -S` is
+#      single-threaded, so one big download blocked the whole site.
+#   2. `./app` IS BIND-MOUNTED RATHER THAN `COPY`-ED IN. The old Dockerfile baked the site
+#      into the image, so publishing a pack would have meant rebuilding the image with a
+#      400 MB layer in it. Now publishing is `scp` plus nothing.
+#
+# The container NAME and the published PORT are unchanged on purpose: nginx-proxy-manager
+# routes aod.dragoon.co.za to this host on 8081, and that mapping is configured in NPM's
+# own database, not here. Renaming either would take the site down in a way that looks like
+# a DNS fault.
+services:
+  web:
+    image: nginx:alpine
+    container_name: ageOfDagons-web
+    ports:
+      - "8081:80"
+    volumes:
+      # Read-only: nothing the web server does should be able to change the site. A pack is
+      # published by writing to the host directory, not through nginx.
+      - ./app:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
