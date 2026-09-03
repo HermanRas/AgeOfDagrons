@@ -96,8 +96,11 @@ func test_not_in_a_tree_still_shows_the_message_without_crashing() -> void:
 # ── the paragraph mode, 2026-08-30 ──────────────────────────────────────────
 #
 # The owner's ask: "the current alert box can be reused in single player
-# campaigns for long text". Nothing calls `show_long_message` yet -- 12.3 is
-# unbuilt -- so these are the only exercise it gets.
+# campaigns for long text". IT HAS A CALLER AS OF 15.6 -- a scenario's `alert`
+# objective, through `GameScene._announce_objective_alerts` -- and that first
+# caller immediately found the defect the centring test below pins. This block
+# used to say nothing called it, which is why it is worth noting what changed:
+# a mode with no caller had never been positioned by anybody.
 
 
 func test_a_long_message_grows_the_banner_and_a_short_one_shrinks_it_back() -> void:
@@ -109,6 +112,45 @@ func test_a_long_message_grows_the_banner_and_a_short_one_shrinks_it_back() -> v
 	t.show_message("Not enough resources")
 	assert_false(t.is_long(), "and it must go back, or every later notice is huge")
 	assert_eq(t.custom_minimum_size, NoticeToast.SIZE)
+	t.free()
+
+
+func test_growing_to_the_paragraph_size_keeps_the_banner_on_the_screen_s_axis() -> void:
+	# ⚠️ **THE CALLER CANNOT DO THIS AND THAT IS WHY THE WIDGET DOES.** `GameScene` anchors
+	# this at CENTER_TOP and writes `position.x = -SIZE.x / 2` ONCE; `show_long_message`
+	# then changes the width underneath that offset. Left alone the 720 px banner keeps the
+	# 320 px banner's left edge and hangs 200 px right of centre -- an alert visibly
+	# off-axis, with nothing in `GameScene` to blame.
+	#
+	# Found by 15.6's alerts, which are `show_long_message`'s first caller of any kind.
+	var t := NoticeToast.new()
+	t.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	t.position = Vector2(-NoticeToast.SIZE.x * 0.5, 409.0)
+	t.show_long_message("The enemy has crossed the river in force.")
+	assert_almost_eq(t.position.x, -NoticeToast.LONG_SIZE.x * 0.5, 0.5)
+	assert_almost_eq(t.position.x + t.custom_minimum_size.x * 0.5, 0.0, 0.5,
+			"the banner's own centre is still the anchor")
+	t.show_message("Not enough resources")
+	assert_almost_eq(t.position.x, -NoticeToast.SIZE.x * 0.5, 0.5, "and back again")
+	assert_almost_eq(t.position.y, 409.0, 0.5, "the vertical placement is the caller's")
+	t.free()
+
+
+func test_a_stretched_toast_is_left_where_its_layout_put_it() -> void:
+	# The other half of the rule: "centred" is only a question this can answer when the two
+	# horizontal anchors agree. Anchored between two edges, the offsets belong to whatever
+	# laid it out and re-centring would fight it.
+	#
+	# ⚠️ THIS CASE PRINTS *"Nodes with non-equal opposite anchors will have their size
+	# overridden"* INTO THE RUN, and the warning is the engine agreeing with the test:
+	# `_resize`'s `size = to` cannot mean anything on a stretched Control. Left in rather
+	# than worked around, so the next reader knows where that line comes from -- it is this
+	# assertion, not a defect in the widget.
+	var t := NoticeToast.new()
+	t.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	t.position = Vector2(40.0, 10.0)
+	t.show_long_message("Something long enough to change the width.")
+	assert_almost_eq(t.position.x, 40.0, 0.5)
 	t.free()
 
 

@@ -167,7 +167,26 @@ func _show(text: String, hold: float) -> void:
 ## longer one off the dragons rather than a nicety, and at `LONG_SIZE` it is the
 ## difference between five lines and five lines printed over two dragons' faces.
 func _resize(to: Vector2) -> void:
+	# ⚠️ **IT HAS TO HOLD ITS OWN CENTRE, BECAUSE THE CALLER CANNOT.** `GameScene` positions
+	# this at `-SIZE.x / 2` from CENTER_TOP and `SIZE`'s own comment says so -- but that
+	# offset is written ONCE, and switching to `LONG_SIZE` here changes the width underneath
+	# it. Left alone, a 720 px banner keeps the 320 px banner's left edge and hangs 200 px
+	# to the right of centre: the whole alert visibly off-axis, with nothing in `GameScene`
+	# to blame for it. 15.6's authored alerts are the first caller `show_long_message` has
+	# ever had, which is why a mode that has existed since 2026-08-30 surfaced this now.
+	#
+	# THE HALF-DELTA, NOT `-to.x / 2`. Growing about the middle keeps the banner wherever
+	# the caller put it; assuming the caller centred it on the anchor would MOVE a toast
+	# somebody had placed deliberately, and would move one at construction before any
+	# caller has placed it at all.
+	#
+	# Only when the two horizontal anchors agree -- anchored to a vertical line rather than
+	# stretched between two edges. For anything else the offsets are the layout's to own and
+	# "centred" is not a question this can answer.
+	var was := custom_minimum_size.x
 	custom_minimum_size = to
+	if was > 0.0 and is_equal_approx(anchor_left, anchor_right):
+		position.x += (was - to.x) * 0.5
 	size = to
 	_label.offset_left = to.x * _TEXT_INSET_X
 	_label.offset_right = -to.x * _TEXT_INSET_X

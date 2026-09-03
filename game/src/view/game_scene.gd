@@ -50,6 +50,23 @@ var corner_buttons: Dictionary = {}
 ## no modal, which is every skirmish -- see `ScenarioBriefing.show_message`.
 var _briefing: ScenarioBriefing
 
+## THE SAME QUESTION, ASKED FOR THE REST OF THE MATCH (15.6). The briefing is dismissed
+## and then the player is on their own memory, which is exactly how 15.2's play-test
+## stalled on a scenario that was winnable throughout.
+var _tracker: ObjectiveTracker
+
+## The scenario's rules, kept here because two things need them every tick and neither
+## should re-read `Net.match_config()` at 10 Hz: the tracker's row labels and the alert
+## toast's text. Empty in every non-scenario match, which is the guard both readers use.
+var _scenario_objectives: Array[ObjectiveDef] = []
+
+## ⚠️ **WHOSE `player_state` ROW CARRIES THE PROGRESS**, and it is not necessarily this
+## client's: `ObjectiveSystem` evaluates the objectives for `MatchConfig.objective_player_id`
+## and fills that player's arrays alone. Reading the LOCAL player's row would draw an empty
+## tracker for anybody who is not the protagonist -- which is nobody today, and is a co-op
+## scenario tomorrow. 0 means nobody, which is every skirmish.
+var _objective_player_id: int = 0
+
 var _result: ResultScreen
 var _error_label: Label
 var _error: String = ""
@@ -357,6 +374,19 @@ func _build_hud() -> void:
 	_groups_hud.group_selected.connect(_on_group_selected)
 	_groups_hud.group_assign_requested.connect(_on_group_assign_requested)
 	hud.add_child(_groups_hud)
+
+	# BESIDE THE CONTROL-GROUP STACK, not below it. The stack is five 64 px slots plus its
+	# gaps from y = 12, so it ends at 340 and the selection panel grows UP from the bottom
+	# edge to meet whatever is left -- putting the tracker under it would park a panel in
+	# the one part of the left column whose height nothing controls. The strip to the right
+	# of the stack is free from x = 86 to the age header's left edge at 493, and a scenario
+	# HUD carries neither a build grid nor a full selection panel most of the time.
+	#
+	# Hidden until `setup()` finds a win row, so a skirmish sees no empty frame here.
+	_tracker = ObjectiveTracker.new()
+	_tracker.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_tracker.position = Vector2(12 + ControlGroupSlot.SIZE + 10, 12)
+	hud.add_child(_tracker)
 
 	# A fixed footprint a little larger than the rotated diamond's own bounding
 	# box (SIZE * sqrt(2)) so its tips have room to reach almost to the edges
@@ -837,6 +867,7 @@ func _start_match() -> void:
 	# skirmish. Before the early return below, so the fixed-debug-map branch gets it too.
 	if cfg != null:
 		_briefing.show_message(cfg.scenario_message)
+		_setup_objectives(cfg)
 	if cfg != null and cfg.map_data != null:
 		var md := cfg.map_data
 		# The client's own copy of the GROUND, for the placement ghost. Terrain only --
@@ -953,6 +984,9 @@ func _on_snapshot(snap: Dictionary) -> void:
 	_refresh_hud(snap)
 	_refresh_minimap()
 	_feed_pages(snap)
+	# BEFORE `_announce_defeats` and `_refresh_result`, for the reason the comment below
+	# gives about both: an alert banner raised after the result overlay is drawn behind it.
+	_refresh_objectives(snap)
 	# BEFORE `_refresh_result`, which is what stops the clock and shows the overlay. A
 	# player leaving is usually the very thing that ends the match, so announced after it
 	# the toast would be drawn behind the result panel on the frame it mattered.
@@ -965,6 +999,101 @@ func _on_snapshot(snap: Dictionary) -> void:
 	# through `clamped_centre`), so it is the listener with nothing to derive.
 	_audio.observe(snap, Net.local_player_id(),
 		_camera.position if _camera != null else Vector2.INF)
+
+
+## Stand the tracker up, once, from the config (15.6).
+##
+## ⚠️ **GATED ON `SCENARIO` MODE, WHICH IS EXACTLY `ObjectiveSystem`'s OWN GUARD** and is
+## copied deliberately rather than widened to "has objectives". Outside that mode nothing
+## in the sim ever measures a row, so a config carrying objectives in `last_man_standing`
+## -- which `ScenarioDef` refuses, but a hand-built config or a future editor could make
+## -- would put a panel on screen reading "0 / 14" for the whole match, with no tick able
+## to move it. A tracker that cannot change is worse than none: it reads as a goal the
+## player is failing at.
+##
+## `setup()` latches, so the client path that runs this a second time when a late config
+## lands is free.
+func _setup_objectives(cfg: MatchConfig) -> void:
+	if cfg.mode != MatchConfig.Mode.SCENARIO:
+		return
+	_scenario_objectives = cfg.objectives
+	_objective_player_id = cfg.objective_player_id
+	_tracker.setup(cfg.objectives)
+
+
+## This tick's objective figures, and any alert the sim has just latched (15.6).
+##
+## READ OFF `player_state` LIKE EVERY OTHER FACT ON THIS SCREEN, and off
+## `objective_player_id`'s row rather than the local player's -- see `_objective_player_id`.
+## `SnapshotSystem` sends every player's row to every client, which is what `_feed_pages`
+## and `_announce_defeats` already rely on.
+func _refresh_objectives(snap: Dictionary) -> void:
+	if _scenario_objectives.is_empty():
+		return
+	var state: Dictionary = snap.get("player_state", {})
+	var mine: Dictionary = state.get(_objective_player_id, {})
+	if mine.is_empty():
+		return
+	var progress: Array = mine.get("objective_progress", [])
+	# `objective_done` is a `PackedByteArray` in the sim and arrives as one, since a
+	# snapshot does not go through JSON -- and `JSON.stringify` would encode it as the
+	# STRING "[1, 0]", which is the trap `MapData.from_dict` records paying for. Converted
+	# through a type check rather than assumed, because the cost of being wrong is a
+	# runtime error on the tick somebody completes an objective.
+	var raw: Variant = mine.get("objective_done", null)
+	var done: Array = Array(raw) if raw is PackedByteArray or raw is Array else []
+	_tracker.show_progress(progress, done)
+	_announce_objective_alerts(done)
+
+
+## An `alert` row firing, as a toast (PLAN.md 11.8's third output, and the half of it
+## `ObjectiveSystem`'s header hands to 15.6).
+##
+## THE SIM LATCHES IT AND THIS SPEAKS ONCE. `objective_done` is one-way for alert rows
+## precisely so this can be a level rather than an edge -- ten snapshots a second past a
+## satisfied row would otherwise be ten banners.
+##
+## ⚠️ **THE FIRST SNAPSHOT IS PRIMED, NOT ANNOUNCED**, `_announce_defeats`' trap in the
+## same coat: a latched alert is a STATE, so a client joining or reconnecting into a
+## scenario mid-way would open with a banner about something that fired before it arrived.
+##
+## **NO SHIPPED SCENARIO HAS AN ALERT ROW.** This is the writer for a channel that had a
+## reader and no speaker, which is the hole 15.7 found in `campaign_progress.json` and the
+## one `ScenarioDef.message` sat in for a week -- so it is tested rather than demonstrated
+## by content, and 16.6's Map Conditions screen is the tool that will author the first one.
+func _announce_objective_alerts(done: Array) -> void:
+	var priming := _alerted_objectives.is_empty()
+	for i in range(_scenario_objectives.size()):
+		if _scenario_objectives[i].output != ObjectiveDef.Output.ALERT:
+			continue
+		if i >= done.size() or int(done[i]) == 0:
+			continue
+		if _alerted_objectives.has(i):
+			continue
+		_alerted_objectives[i] = true
+		if priming:
+			continue
+		var text := _scenario_objectives[i].describe()
+		# THE LONG BANNER FOR A SENTENCE, THE SHORT ONE FOR A LABEL. The 320 px banner's
+		# dark field is about 205 px and holds a line or two; an authored alert is prose and
+		# was the reason `show_long_message` was built (owner, 2026-08-30: *"the current
+		# alert box can be reused in single player campaigns for long text"*). This is its
+		# first caller, and it found a real defect in the widget -- see `NoticeToast._resize`.
+		if text.length() > _SHORT_ALERT_CHARS:
+			_toast.show_long_message(text)
+		else:
+			_toast.show_message(text)
+	# The sentinel `_announce_defeats` needs for the same reason: a scenario whose alert
+	# has not fired yet must not prime forever, or the first one is the one swallowed. -1 is
+	# not an index any objective can have.
+	_alerted_objectives[-1] = true
+
+
+## Roughly what the short banner holds. See `_announce_objective_alerts`.
+const _SHORT_ALERT_CHARS := 44
+
+## Which alert rows this client has already banner'd, by index into `_scenario_objectives`.
+var _alerted_objectives: Dictionary = {}
 
 
 ## Which player ids this client has already said something about. See `_announce_defeats`.

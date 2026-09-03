@@ -270,6 +270,8 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_projectiles.tscn # arrow/bolt/stone in flight
 & $godot --path game res://dev_preview/preview_garrison.tscn   # 4.8/4.9, six screenshots
 & $godot --path game res://dev_preview/preview_touch_controls.tscn  # can a THUMB use it?
+& $godot --path game res://dev_preview/preview_scenario_hud.tscn    # briefing + objective tracker
+& $godot --path game res://dev_preview/preview_scenario_hud.tscn -- --scenario 2
 
 # LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag (§7).
 # Start the beacon first; it waits. The exit code is the answer.
@@ -308,6 +310,15 @@ setting a match runs under. It was verified against the bug it is for rather tha
 to catch it: swapping the panel back to a plain `HSlider` makes it report NOTHING on three
 of its four rows. **Run it after adding any control that is not a `BaseButton`** — a button
 answers a raw touch and, in this project, nothing else does.
+
+`preview_scenario_hud` launches a real campaign mission through the real path
+(`Net.pending_match`, then `Game.tscn`) and photographs the two things 15.6 added: the
+briefing modal, and the objective tracker with one row ticked. **It INJECTS an `alert`
+objective**, because no shipped scenario has one and the banner half of the feature would
+otherwise be photographed empty — the injected row is the script's and not the file's.
+Three faults it can see that no headless test can: a tracker that overlaps the
+control-group stack, one that runs off the viewport, and a banner that is not on the
+screen's axis. All three are measured and warned about rather than left to the eye.
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
 art faces. A wall lying across its own footprint has the same footprint, the same
@@ -510,6 +521,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A DISABLED CONTROL'S REASON FOR BEING DISABLED IS NOT THE SAME FACT AS ITS BEING DISABLED** | `ServerBrowserPanel` set JOIN's `disabled` from "is there a sentence to print", which is right in three of its four states and wrong in the one it lives in: an empty list needs no sentence — the page already says so at length in the middle of itself — so JOIN came out **enabled with nothing to join**. Only one of the two facts is always expressible; compute them separately. |
 | **A BACKTICK IN A POWERSHELL DOUBLE-QUOTED STRING IS AN ESCAPE CHARACTER, so every markdown code span passed through the shell LOSES ITS FIRST LETTER** | Writing a Kanban note containing `` `blocked-on-art` `` reached Vikunja as `locked-on-art` — the backtick ate the `b`, silently, and the text was otherwise perfect so it read as a typo rather than as shell mangling. Same family as `Set-Content -Encoding utf8`'s BOM and the here-string-into-pathspecs row: **the shell is a lossy channel for prose.** The fix is the one this file already uses for commit messages — **write the text to a FILE and pass the path** (`card_game.py append KEY notes.md` takes one, as does `git commit -F`). A single-quoted PowerShell string also works, but then you cannot interpolate, and the habit that survives contact is "prose goes through a file". |
 | **GDScript WILL NOT COMPILE `{...}[key]` — subscripting a dictionary LITERAL inline — and the error points at a different file** | It is a whole-FILE compilation error, so every `static func` on the class vanishes and the symptom is `Nonexistent function 'from_dict' in base 'GDScript'` raised from whichever file *calls* it. Cost a full suite run on 15.1: the real fault was one line in `objective_def.gd` and four files reported it. A `match` is the fix. **The general form: when a static on a class is suddenly "nonexistent", the class did not compile — read the FIRST error in the run, not the loudest one.** A const dictionary at class scope is fine; it is only the inline literal subscript that fails. |
+| **THE SHIPPED BODY FACE HAS NO CHECK MARK, AND A MISSING GLYPH IS SILENT** | New Rocker (`UiFont.BODY_PATH`) answers `Font.has_char` **false** for U+2713, U+2714 and U+2717 — and for every geometric substitute worth trying: ● ○ ■ ▪ ★ √. What it does have is `•`, `»`, `†`, `§`, `·` and ASCII. Measured with a throwaway probe, which is the only reason it is known: a glyph the face lacks does not fail, it draws a **tofu box**, and in a screenshot that reads as a broken icon rather than as a missing font. 15.6's first render put a literal `*` beside a completed objective (the fallback firing, correctly). **Draw a mark rather than typing one** — `ObjectiveTracker.TickMark` is twelve lines of `draw_polyline`, cannot be broken by a font swap, and is the mark the player expects. Same family as the `assets/UI_Gen/font_comparison.png` lesson: a face is chosen on the characters this game actually prints. |
+| **A WIDGET THAT RESIZES ITSELF, UNDER AN OFFSET ITS CALLER WROTE ONCE** | `NoticeToast` is anchored CENTER_TOP at `-SIZE.x / 2` and `show_long_message` swaps a 320 px banner for a 720 px one — so the long banner kept the short one's left edge and hung **200 px right of centre**, with nothing in `GameScene` to blame. It survived from 2026-08-30 to 15.6 because `show_long_message` **had never had a caller**, and a mode nobody calls has never been positioned by anybody. The fix belongs in the widget (it holds its own centre across a resize, by the HALF-DELTA so it keeps wherever the caller put it) and not in the caller. **When a widget can change its own size, ask who owns its position** — and treat "nothing calls this yet" in a header as a warning that the first caller will find something. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
