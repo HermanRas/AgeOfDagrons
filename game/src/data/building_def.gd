@@ -170,21 +170,33 @@ var buildable: bool = true
 ## open to everybody, including whoever is besieging it. See `ToggleGateCommand`.
 var is_gate: bool = false
 
-## What this building can be turned into where it stands, or `&""` for the
-## overwhelming majority that cannot be upgraded at all (PLAN.md 5.8).
+## What this building can be turned into where it stands: a LIST, empty for the
+## overwhelming majority that cannot be upgraded at all (PLAN.md 5.8, 5.3).
 ##
-## Only the three LONG wall segments carry one today, and each names its own tier's
-## gate. That is what makes a gate placeable at all on a north-south wall: a gate is
-## 9x2 and `PlaceBuildingCommand` has no facing and never transposes a footprint, so
-## a tap-placed gate could only ever lie east-west. Upgrading in place sidesteps the
-## whole question -- the segment already knows its axis, and the gate inherits it.
+## ⚠️ **A LIST SINCE 5.3, AND THE LONG WALL IS WHY.** It was one id, which was enough
+## while the only upgrade in the game was a long segment becoming its tier's gate. A
+## long palisade now has TWO futures and they are not alternatives to each other in any
+## order -- it can become a palisade gate, or a stone wall of the same length, and a
+## player will want both on different segments of the same wall. One field could not
+## express that, and picking one would have meant dropping a verb the owner asked for.
 ##
-## THE TARGET MUST HAVE THE SAME FOOTPRINT, which is why this sits on the long piece
-## and not on the short one: a 3x2 segment has nowhere to put a 9x2 gate, and growing
-## the footprint would mean re-checking ground the player cannot see is needed.
-## `UpgradeBuildingCommand.validate()` enforces the match rather than trusting it,
-## since it is a fact about two separate JSON entries that nothing else pins.
-var upgrades_to: StringName = &""
+## THE ORDER IS THE ORDER THE TILES APPEAR IN, so the gate stays first: it is the one
+## that has been on that panel since 5.8, and a button moving under a player's thumb
+## because a new one was added above it is the change nobody asked for.
+##
+## The gate is what makes a gate placeable at all on a north-south wall: a gate is 9x2
+## and `PlaceBuildingCommand` has no facing and never transposes a footprint, so a
+## tap-placed gate could only ever lie east-west. Upgrading in place sidesteps the whole
+## question -- the segment already knows its axis, and the gate inherits it.
+##
+## EVERY TARGET MUST HAVE THE SAME FOOTPRINT, which is why the gate sits on the long
+## piece and not on the short one: a 3x2 segment has nowhere to put a 9x2 gate, and
+## growing the footprint would mean claiming ground nobody checked was free. It is also
+## why the watch tower does NOT upgrade to the guard tower, which is the obvious pair in
+## the roster and was ruled out for this exact reason (owner, 2026-09-03): [3,2] against
+## [3,3]. `UpgradeBuildingCommand.validate()` enforces the match rather than trusting
+## it, since it is a fact about two separate JSON entries that nothing else pins.
+var upgrades_to: Array[StringName] = []
 
 ## `amount: -1` in the JSON: this building's crop never runs out. A FIELD IS
 ## INEXHAUSTIBLE (project owner, 2026-08-17), which reverses the call recorded
@@ -260,7 +272,17 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
 	b.buildable = bool(d.get("buildable", true))
 	b.is_gate = bool(d.get("is_gate", false))
-	b.upgrades_to = StringName(d.get("upgrades_to", ""))
+	# A LIST, and a BARE STRING IS STILL READ as a one-target list. `GameDefs.name_list`
+	# is what every other id list in this file goes through; the string case is two lines
+	# and it means the shape this field had for the whole of 5.8 keeps working, in a game
+	# whose owner has already proved that people hand-author its JSON.
+	var raw_upgrades: Variant = d.get("upgrades_to", [])
+	if raw_upgrades is String or raw_upgrades is StringName:
+		var one := StringName(raw_upgrades)
+		b.upgrades_to = ([one] as Array[StringName]) if not one.is_empty() \
+				else ([] as Array[StringName])
+	else:
+		b.upgrades_to = GameDefs.name_list(raw_upgrades)
 
 	# THE SAME KEYS units.json USES -- damage/type/range/cooldown_ticks/projectile --
 	# so the two files describe an attack identically and neither reader has to know

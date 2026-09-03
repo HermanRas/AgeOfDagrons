@@ -1960,22 +1960,32 @@ func _toggle_selected_gate() -> void:
 	_toast.show_message("Opening the gate" if locked else "Closing the gate")
 
 
-## Turn the selected building into what its def upgrades to (PLAN.md 5.8) -- a long
-## wall segment into its tier's gate, which is the only upgrade that exists.
+## Turn the selected building into one of the things its def upgrades to (PLAN.md 5.8,
+## 5.3) -- a long wall segment into its tier's gate, or any wall piece into the same
+## piece one tier up.
+##
+## ⚠️ **THE TARGET COMES FROM THE TILE AND IS NOT RE-DERIVED HERE.** A long palisade
+## offers two, so "what does this building upgrade to" no longer has one answer, and a
+## screen that picked its own would sooner or later pick the other one than the tile the
+## thumb landed on. It is resolved through `UpgradeBuildingCommand.resolve_target`, the
+## same function the server validates with, so the two cannot disagree about whether the
+## def offers it -- an empty target still means the first, which is what every caller
+## meant before 5.3.
 ##
 ## The affordability check here is the POLITE half, exactly as `_on_train_requested`'s
 ## population check is: `UpgradeBuildingCommand.validate()` is what actually refuses,
 ## and a failed command is dropped silently, so without this the button would simply
 ## do nothing and say nothing. The price is read through the command's own
 ## `cost_delta`, so the message cannot quote a figure the server would not charge.
-func _upgrade_selected_building() -> void:
+func _upgrade_selected_building(target_def_id: StringName = &"") -> void:
 	var id := _view.selection.primary()
 	if id == 0:
 		return
 	var from: BuildingDef = GameDataRegistry.building(_view.facts_for(id).get("def_id", &""))
-	if from == null or from.upgrades_to == &"":
+	var target := UpgradeBuildingCommand.resolve_target(from, target_def_id)
+	if target.is_empty():
 		return
-	var to: BuildingDef = GameDataRegistry.building(from.upgrades_to)
+	var to: BuildingDef = GameDataRegistry.building(target)
 	if to == null:
 		return
 
@@ -1984,7 +1994,7 @@ func _upgrade_selected_building() -> void:
 		_toast.show_message("Need %s to build %s"
 				% [_shortfall_text(_my_stock(), price), to.name])
 		return
-	Net.submit_command(UpgradeBuildingCommand.new(Net.local_player_id(), id))
+	Net.submit_command(UpgradeBuildingCommand.new(Net.local_player_id(), id, target))
 	_toast.show_message("Building %s" % to.name.to_lower())
 
 
@@ -2033,6 +2043,12 @@ func _on_action_requested(action_id: StringName) -> void:
 	if id.begins_with("member:"):
 		_select_roster_member(int(id.trim_prefix("member:")))
 		return
+	# WHICH upgrade, since 5.3: a long wall offers a gate AND the next tier, so the tile
+	# has to say which one it is. The bare `&"upgrade"` below is the disabled placeholder
+	# and never arrives here.
+	if id.begins_with("upgrade:"):
+		_upgrade_selected_building(StringName(id.trim_prefix("upgrade:")))
+		return
 
 	match action_id:
 		&"stop":
@@ -2068,8 +2084,6 @@ func _on_action_requested(action_id: StringName) -> void:
 			_arm_ability()
 		&"gate":
 			_toggle_selected_gate()
-		&"upgrade":
-			_upgrade_selected_building()
 
 
 ## Narrow a group selection down to the one member whose portrait was tapped (project

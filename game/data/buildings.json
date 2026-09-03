@@ -128,7 +128,25 @@
     "footprint and facing. See `UpgradeBuildingCommand`. The target must declare the",
     "SAME footprint -- validated, not trusted -- because the conversion keeps the",
     "ground the building already holds, and that is also why only the LONG piece",
-    "carries the field: a 3x2 short segment has nowhere to put a 9x2 gate.",
+    "carries a GATE target: a 3x2 short segment has nowhere to put a 9x2 gate.",
+    "",
+    "EVERY PIECE NOW CLIMBS ITS TIER TOO (5.3, owner 2026-09-03), which is why",
+    "`upgrades_to` is a LIST. Wood becomes stone becomes reinforced, LENGTH FOR",
+    "LENGTH -- short to short, medium to medium, long to long, gate to gate -- so a",
+    "wall the drag laid down as a mix of lengths can be upgraded piece by piece",
+    "rather than only where it happens to be long. Footprints are identical across",
+    "the three tiers (the table below), so the same-footprint rule is satisfied by",
+    "construction rather than by luck.",
+    "",
+    "A LONG SEGMENT THEREFORE HAS TWO FUTURES AND THE GATE IS LISTED FIRST, because",
+    "that is the tile that has been on its panel since 5.8 and a button that moves",
+    "under a player's thumb is the change nobody asked for. Reinforced short, medium",
+    "and gate name nothing: they are the top of the ladder.",
+    "",
+    "THE WATCH TOWER DOES NOT UPGRADE TO THE GUARD TOWER, which is the obvious pair",
+    "in the roster and was ruled out on the footprint rule (owner, 2026-09-03):",
+    "[3, 2] against [3, 3]. The command would have refused it anyway -- worth",
+    "knowing so it is not proposed a third time.",
     "",
     "FOOTPRINTS, and this is the one pleasant surprise in the whole feature: every",
     "civ 0 A.D. bakes a wall from agrees on the segment lengths. Measured the usual",
@@ -826,6 +844,8 @@
     "drop_off": [],
     "age_required": 2,
 
+    "upgrades_to": ["building.wall_stone_short"],
+
     "wall_lengths": ["building.wall_wood_short", "building.wall_wood_medium",
                      "building.wall_wood_long"]
   },
@@ -850,7 +870,8 @@
     "drop_off": [],
     "age_required": 2,
 
-    "buildable": false
+    "buildable": false,
+    "upgrades_to": ["building.wall_stone_medium"]
   },
 
   "building.wall_wood_long": {
@@ -874,7 +895,7 @@
     "age_required": 2,
 
     "buildable": false,
-    "upgrades_to": "building.wall_wood_gate"
+    "upgrades_to": ["building.wall_wood_gate", "building.wall_stone_long"]
   },
 
   "building.wall_wood_gate": {
@@ -898,7 +919,8 @@
     "age_required": 2,
 
     "buildable": false,
-    "is_gate": true
+    "is_gate": true,
+    "upgrades_to": ["building.wall_stone_gate"]
   },
 
   "building.wall_stone_short": {
@@ -920,6 +942,8 @@
     "trains": [],
     "drop_off": [],
     "age_required": 3,
+
+    "upgrades_to": ["building.wall_reinforced_short"],
 
     "wall_lengths": ["building.wall_stone_short", "building.wall_stone_medium",
                      "building.wall_stone_long"]
@@ -945,7 +969,8 @@
     "drop_off": [],
     "age_required": 3,
 
-    "buildable": false
+    "buildable": false,
+    "upgrades_to": ["building.wall_reinforced_medium"]
   },
 
   "building.wall_stone_long": {
@@ -969,7 +994,7 @@
     "age_required": 3,
 
     "buildable": false,
-    "upgrades_to": "building.wall_stone_gate"
+    "upgrades_to": ["building.wall_stone_gate", "building.wall_reinforced_long"]
   },
 
   "building.wall_stone_gate": {
@@ -993,7 +1018,8 @@
     "age_required": 3,
 
     "buildable": false,
-    "is_gate": true
+    "is_gate": true,
+    "upgrades_to": ["building.wall_reinforced_gate"]
   },
 
   "building.wall_reinforced_short": {
@@ -1064,7 +1090,7 @@
     "age_required": 4,
 
     "buildable": false,
-    "upgrades_to": "building.wall_reinforced_gate"
+    "upgrades_to": ["building.wall_reinforced_gate"]
   },
 
   "building.wall_reinforced_gate": {

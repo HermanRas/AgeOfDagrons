@@ -141,16 +141,31 @@ func _process(_delta: float) -> void:
 			# button at all. Found exactly that way with the gate's Open/Close button.
 			_finish_the_walls()
 		13:
-			_select_the_wall_to_upgrade()
+			# ⚠️ AGE 3 BEFORE THE PANEL IS PHOTOGRAPHED, and it is not a convenience.
+			# The tier tile is age-gated on its TARGET, so at the age 2 this preview has
+			# run in since it was written, a long palisade correctly offers its gate and
+			# nothing else -- one tile, and a photograph that shows none of what 5.3 did.
+			# The first run of this step reported exactly that and it read as a missing
+			# tile rather than as a rule working.
+			_jump_age(3)
 		14:
-			_upgrade_into_a_gate()
+			_select_the_wall_to_upgrade()
 		15:
+			# THE PANEL ITSELF, since 5.3 gave a long wall TWO upgrade tiles -- become a
+			# gate, or become the next tier. The owner's ask was about the row having four
+			# icons rather than three, and a row is the one thing no assertion in
+			# `test_selection_actions` can look at.
+			_report_upgrade_tiles()
+			_shoot("wall_upgrade_tiles")
+		16:
+			_upgrade_into_a_gate()
+		17:
 			_select_the_gate()
 			_report_gate("open")
 			_shoot("wall_gate_open")
-		16:
+		18:
 			_lock_the_gate()
-		17:
+		19:
 			_report_gate("locked")
 			_shoot("wall_gate_locked")
 		_:
@@ -309,7 +324,11 @@ func _select_the_wall_to_upgrade() -> void:
 		if b.origin_tile() != _gate_wall_origin:
 			continue
 		var bd: BuildingDef = GameDataRegistry.building(b.def_id)
-		if bd == null or bd.upgrades_to == &"":
+		# `.is_empty()`, since 5.3 made this a LIST. `bd.upgrades_to == &""` still
+		# COMPILES against an Array and is simply always false, so the guard would have
+		# stopped filtering silently and this loop would have taken whichever building
+		# stood at the origin first.
+		if bd == null or bd.upgrades_to.is_empty():
 			continue
 		_gate_id = int(id)          # the id survives the upgrade; see convert_building
 		_zoom_to(b.origin_tile(), b.footprint.x, b.footprint.y)
@@ -330,14 +349,44 @@ func _select_the_wall_to_upgrade() -> void:
 func _upgrade_into_a_gate() -> void:
 	var panel: SelectionPanel = _game._panel
 	for slot in panel._action_slots:
-		if slot.visible and slot.action != null and slot.action.id == &"upgrade":
+		# ⚠️ THE GATE TILE BY NAME, not "the upgrade tile". Since 5.3 the row carries one
+		# per target and the ids say which (`upgrade:building.wall_wood_gate`), so a
+		# preview that pressed the first one it found would eventually press the tier
+		# upgrade and photograph a stone wall where the gate pictures should be.
+		if slot.visible and slot.action != null \
+				and slot.action.payload == &"building.wall_wood_gate":
 			if not slot.action.enabled:
 				push_warning("preview_walls: the upgrade button is greyed out")
 				return
-			print("  upgrade: pressing '%s'" % slot.action.label)
+			print("  upgrade: pressing '%s' (%s)" % [slot.action.label, slot.action.id])
 			panel._on_action_pressed(slot.action)
 			return
-	push_warning("preview_walls: no upgrade action on the panel")
+	push_warning("preview_walls: no gate upgrade action on the panel")
+
+
+## What the wall's action row is actually offering, which is 5.3's whole subject: the
+## owner asked for the long wall to have FOUR icons like the gate does, one turning it
+## into a gate and one climbing the tier.
+##
+## PRINTED AS WELL AS PHOTOGRAPHED, because a greyed tile and a missing tile look similar
+## at a glance and mean different things -- one is an age gate doing its job, the other is
+## a def that lost its target.
+func _report_upgrade_tiles() -> void:
+	var panel: SelectionPanel = _game._panel
+	var shown := 0
+	var upgrades := 0
+	for slot in panel._action_slots:
+		if not slot.visible or slot.action == null:
+			continue
+		shown += 1
+		if String(slot.action.id).begins_with("upgrade"):
+			upgrades += 1
+			print("    tile: %-28s enabled=%s  -> %s"
+					% [slot.action.id, slot.action.enabled, slot.action.payload])
+	print("  action row: %d tiles, %d of them upgrades" % [shown, upgrades])
+	if upgrades < 2:
+		push_warning("preview_walls: a long wall should offer BOTH a gate and its tier;"
+				+ " found %d upgrade tile(s)" % upgrades)
 
 
 ## Find the gate and select it, so its panel is up and its Open/Close button exists.

@@ -341,7 +341,7 @@ static func _building_actions(def_id: StringName, age: int = 1,
 			a.cost = ud.cost
 		out.append(a)
 
-	out.append(_upgrade_action(bd, age, facts))
+	out.append_array(_upgrade_actions(bd, age, facts))
 
 	# WHAT THIS BUILDING TEACHES (PLAN.md 9.3), and it is ONE slot rather than one per
 	# technology -- the blacksmith offers twelve and the action column has eight in
@@ -398,34 +398,63 @@ static func _has_rally_point(facts: Dictionary) -> bool:
 
 
 ## Upgrade, which is a REAL verb for anything declaring `upgrades_to` and the same
-## disabled placeholder it has always been for everything else (PLAN.md 5.8).
+## disabled placeholder it has always been for everything else (PLAN.md 5.8, 5.3).
 ##
-## Only the three long wall segments qualify today, and each becomes its tier's gate.
+## ⚠️ **ONE TILE PER TARGET SINCE 5.3, WHICH IS WHY THIS RETURNS A LIST.** A long
+## palisade offers two: become a Palisade Gate, or become a Stone Wall. They are not
+## alternatives in a menu somewhere -- they are two things the player will want on
+## different segments of the same wall, so both are on the row and each says which one
+## it is. Everything else that upgrades offers exactly one and gets exactly one tile,
+## byte-identical to before.
+##
+## THE ID CARRIES THE TARGET (`upgrade:building.wall_stone_long`), the way a train tile
+## carries its unit. `&"upgrade"` with no target survives as the DISABLED placeholder,
+## which is honest: the bare verb is what a building that cannot upgrade shows, and a
+## live tile is the verb plus the thing it is about to give you.
+##
 ## The label is the TARGET's own name -- "Palisade Gate", not "Upgrade" -- because
 ## "Upgrade" on a wall says nothing about what you are about to get, and the player is
 ## being asked to spend on it. Same reason a train button says "Archer".
 ##
 ## Age is checked here as well as in `UpgradeBuildingCommand.validate()`, so a player
-## holding an age-2 wall does not get a live button for a gate they cannot buy yet.
-## Affordability deliberately is NOT: the panel shows what a building can do, the
-## command refuses what the player cannot pay for, and a button that vanishes when
-## your wood dips is harder to find than one that says no.
-static func _upgrade_action(bd: BuildingDef, age: int, facts: Dictionary) -> HudAction:
-	if bd.upgrades_to == &"" or int(facts.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
-		return _act(&"upgrade", false)
-	var to: BuildingDef = GameDataRegistry.building(bd.upgrades_to)
-	if to == null or to.age_required > age:
-		return _act(&"upgrade", false)
-	# NO ICON, deliberately, where the disabled placeholder above keeps one -- and this
-	# is STILL right now that `&"upgrade"` has real art rather than the tech-tree glyph
-	# it used to borrow. `ActionSlot` prefers an icon file over the payload portrait, so
-	# passing one would draw a chevron over a perfectly good picture of the gate you are
-	# about to get. Left blank, the slot crops the gate's own sprite exactly as the
-	# train and place cells do, and the tile says WHICH gate rather than "upgrade".
-	var a := HudAction.new(&"upgrade",
-			to.name if not to.name.is_empty() else String(to.id), "", true)
-	a.payload = to.id
-	return a
+## holding an age-2 wall does not get a live button for a stone one they cannot buy yet
+## -- and that check is PER TARGET, which is what makes a long palisade in age 2 show
+## its gate and not its stone upgrade. Affordability deliberately is NOT checked: the
+## panel shows what a building can do, the command refuses what the player cannot pay
+## for, and a button that vanishes when your wood dips is harder to find than one that
+## says no.
+static func _upgrade_actions(bd: BuildingDef, age: int,
+		facts: Dictionary) -> Array[HudAction]:
+	var out: Array[HudAction] = []
+	if bd.upgrades_to.is_empty() \
+			or int(facts.get("phase", -1)) != SimBuilding.Phase.COMPLETE:
+		out.append(_act(&"upgrade", false))
+		return out
+
+	for target_id in bd.upgrades_to:
+		var to: BuildingDef = GameDataRegistry.building(target_id)
+		if to == null or to.age_required > age:
+			continue
+		# NO ICON, deliberately, where the disabled placeholder above keeps one -- and
+		# this is STILL right now that `&"upgrade"` has real art rather than the tech-tree
+		# glyph it used to borrow. `ActionSlot` prefers an icon file over the payload
+		# portrait, so passing one would draw a chevron over a perfectly good picture of
+		# the gate you are about to get. Left blank, the slot crops the target's own
+		# sprite exactly as the train and place cells do, and the tile says WHICH thing
+		# rather than "upgrade" -- which is what lets two of them sit side by side and be
+		# told apart at a glance.
+		var a := HudAction.new(StringName("upgrade:%s" % target_id),
+				to.name if not to.name.is_empty() else String(to.id), "", true)
+		a.payload = to.id
+		out.append(a)
+
+	# EVERY TARGET WAS AGE-GATED OUT, which is an age-2 player holding an age-2 wall that
+	# only climbs to stone: the verb exists and cannot be used yet, which is precisely
+	# what the disabled placeholder means. Returning nothing would take the slot away and
+	# move every button after it.
+	if out.is_empty():
+		out.append(_act(&"upgrade", false))
+	return out
 
 
 ## The Research slot for a building that offers technologies, or `null` for one that

@@ -635,8 +635,14 @@ func _wall_facts(def_id: StringName,
 func test_a_finished_long_wall_offers_its_tier_s_gate() -> void:
 	# The `upgrade` slot has been a disabled placeholder on every building since the
 	# panel was written. This is the first thing that makes it a real verb.
+	#
+	# THE ID CARRIES THE TARGET SINCE 5.3 (`upgrade:building.wall_wood_gate`), because a
+	# long wall now offers two of them and a bare `&"upgrade"` could not say which tile
+	# the thumb landed on. The bare id survives as the disabled placeholder.
 	var action := _by_id(SelectionActions.for_selection(
-			_wall_facts(&"building.wall_wood_long"), 1, true, [], 2), &"upgrade")
+			_wall_facts(&"building.wall_wood_long"), 1, true, [], 2),
+			&"upgrade:building.wall_wood_gate")
+	assert_not_null(action, "the gate tile is on the row")
 	assert_true(action.enabled, "a long wall can become a gate")
 	assert_eq(action.payload, &"building.wall_wood_gate", "and it names which one")
 	# LABELLED WITH THE TARGET, not "Upgrade": the player is being asked to spend, and
@@ -654,50 +660,107 @@ func test_a_wall_still_being_built_does_not_offer_the_upgrade() -> void:
 	assert_false(action.enabled, "there is no finished wall to convert yet")
 
 
-func test_the_short_and_medium_segments_offer_no_upgrade() -> void:
+func test_the_short_and_medium_segments_are_never_offered_a_gate() -> void:
 	# A gate is 9x2 and the conversion keeps the ground the building already holds,
 	# so only the long piece has room for one.
+	#
+	# ⚠️ THEY DO UPGRADE NOW -- to the next tier at their own length (5.3) -- so this
+	# can no longer read "no upgrade at all". At age 2 the tier target is age-gated out
+	# and the row shows the disabled placeholder, which is asserted below as its own
+	# case rather than folded in here: the two facts have different reasons and would
+	# stop being true at different times.
 	for too_short in [&"building.wall_wood_short", &"building.wall_wood_medium"]:
-		var action := _by_id(SelectionActions.for_selection(
-				_wall_facts(too_short), 1, true, [], 2), &"upgrade")
-		assert_false(action.enabled, "%s is too short to hold a gate" % too_short)
+		var actions := SelectionActions.for_selection(_wall_facts(too_short), 1, true, [], 4)
+		for a in actions:
+			if not String(a.id).begins_with("upgrade:"):
+				continue
+			assert_false(GameDataRegistry.building(a.payload).is_gate,
+					"%s is too short to hold a gate, but offers %s" % [too_short, a.payload])
 
 
-func test_a_gate_does_not_offer_to_become_another_gate() -> void:
+func test_a_piece_whose_only_upgrade_is_out_of_age_keeps_a_disabled_slot() -> void:
+	# An age-2 player holding a wood short wall: the verb exists and cannot be used yet,
+	# which is exactly what the placeholder means. Returning nothing instead would take
+	# the slot away and move every button after it under the player's thumb.
 	var action := _by_id(SelectionActions.for_selection(
-			_wall_facts(&"building.wall_wood_gate"), 1, true, [], 2), &"upgrade")
-	assert_false(action.enabled, "the chain ends at the gate")
+			_wall_facts(&"building.wall_wood_short"), 1, true, [], 2), &"upgrade")
+	assert_not_null(action, "the slot is still there")
+	assert_false(action.enabled, "a stone wall is age 3")
 
 
-func test_the_upgrade_button_is_age_gated_on_the_gate() -> void:
+func test_a_gate_climbs_to_the_next_tier_s_gate() -> void:
+	# It used to end the chain. Since 5.3 a palisade gate becomes a stone gate -- but
+	# only at age 3, so at age 2 the row still shows the placeholder.
+	var wood_gate := _wall_facts(&"building.wall_wood_gate")
+	assert_false(_by_id(SelectionActions.for_selection(wood_gate, 1, true, [], 2),
+			&"upgrade").enabled, "a stone gate is age 3")
+	var at_three := _by_id(SelectionActions.for_selection(wood_gate, 1, true, [], 3),
+			&"upgrade:building.wall_stone_gate")
+	assert_not_null(at_three)
+	assert_true(at_three.enabled)
+
+
+func test_a_long_wall_at_the_right_age_offers_BOTH_its_futures() -> void:
+	# The panel change 5.3 is actually about (owner, 2026-09-03): *"just add the upgrade
+	# icon next to long wall gate icon so it also has 4 icons, one turns it into a gate
+	# and one upgrade to stone"*. Two tiles, each naming what it gives you.
+	var actions := SelectionActions.for_selection(
+			_wall_facts(&"building.wall_wood_long"), 1, true, [], 3)
+	var offered: Array = []
+	for a in actions:
+		if String(a.id).begins_with("upgrade:"):
+			offered.append(a.payload)
+	assert_eq(offered, [&"building.wall_wood_gate", &"building.wall_stone_long"],
+			"the gate first, because that tile was there before the tier one was")
+	assert_true(actions.size() <= SelectionActions.MAX_ACTIONS, "and the row still fits")
+
+
+func test_the_upgrade_button_is_age_gated_PER_TARGET() -> void:
 	# Held as well as on the server (`UpgradeBuildingCommand.validate`), so a player
 	# is not shown a live button for something the host would refuse.
+	#
+	# PER TARGET is the part 5.3 added: an age-3 player with a stone long wall gets the
+	# stone gate and NOT the reinforced wall, which is age 4. Checking the age once for
+	# the whole verb would have offered both or neither.
 	var wall := _wall_facts(&"building.wall_stone_long")
 	assert_false(_by_id(SelectionActions.for_selection(wall, 1, true, [], 2),
 			&"upgrade").enabled, "a stone gate is age 3")
-	assert_true(_by_id(SelectionActions.for_selection(wall, 1, true, [], 3),
-			&"upgrade").enabled)
+	assert_not_null(_by_id(SelectionActions.for_selection(wall, 1, true, [], 3),
+			&"upgrade:building.wall_stone_gate"))
+	assert_null(_by_id(SelectionActions.for_selection(wall, 1, true, [], 3),
+			&"upgrade:building.wall_reinforced_long"), "reinforced is age 4")
+	assert_not_null(_by_id(SelectionActions.for_selection(wall, 1, true, [], 4),
+			&"upgrade:building.wall_reinforced_long"))
 
 
 func test_every_building_that_declares_an_upgrade_can_actually_take_it() -> void:
-	# Derived from the data rather than listed: the target must exist and must have
+	# Derived from the data rather than listed: every target must exist and must have
 	# the SAME footprint, because `SimWorld.convert_building` keeps the ground the
 	# building already holds. A target that wanted more of it would silently occupy
 	# tiles nobody checked were free, and that is a relationship between two separate
 	# JSON entries with nothing else pinning it.
+	#
+	# ⚠️ "AND THE TARGET DOES NOT UPGRADE ONWARD" WAS ASSERTED HERE AND IS GONE. It was
+	# true when the only upgrade was a wall becoming a gate, and 5.3's tier ladder is
+	# chains by design -- wood to stone to reinforced. What replaces it is the loop check
+	# below: a chain may not come back to where it started.
 	for id in GameDataRegistry.building_ids():
 		var bd: BuildingDef = GameDataRegistry.building(id)
-		if bd == null or bd.upgrades_to == &"":
+		if bd == null:
 			continue
-		var to: BuildingDef = GameDataRegistry.building(bd.upgrades_to)
-		assert_not_null(to, "%s upgrades to %s, which exists" % [id, bd.upgrades_to])
-		assert_eq(to.footprint, bd.footprint,
-				"%s and %s claim the same ground" % [id, bd.upgrades_to])
-		assert_true(to.upgrades_to == &"", "%s does not upgrade onward" % bd.upgrades_to)
-		# The upgrade must cost SOMETHING, or the tier's cheaper piece is strictly
-		# worse than the thing it becomes and nobody would ever build one.
-		assert_false(UpgradeBuildingCommand.cost_delta(bd, to).is_empty(),
-				"%s charges for the upgrade" % id)
+		for target in bd.upgrades_to:
+			var to: BuildingDef = GameDataRegistry.building(target)
+			assert_not_null(to, "%s upgrades to %s, which exists" % [id, target])
+			if to == null:
+				continue
+			assert_eq(to.footprint, bd.footprint,
+					"%s and %s claim the same ground" % [id, target])
+			assert_false(to.upgrades_to.has(id),
+					"%s and %s upgrade into each other" % [id, target])
+			# The upgrade must cost SOMETHING, or the cheaper piece is strictly worse
+			# than the thing it becomes and nobody would ever build one.
+			assert_false(UpgradeBuildingCommand.cost_delta(bd, to).is_empty(),
+					"%s charges for the upgrade to %s" % [id, target])
 
 
 func test_walls_are_age_gated_like_everything_else() -> void:

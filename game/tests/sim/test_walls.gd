@@ -482,7 +482,7 @@ func test_the_price_is_the_difference_and_not_the_whole_gate() -> void:
 func test_a_kind_the_wall_never_paid_for_is_charged_in_full() -> void:
 	# The stone gate costs 30 wood on top of its stone, and the stone wall paid no
 	# wood at all -- so the delta is the whole 30 there and the difference in stone.
-	# Floored PER KIND, so a cheaper kind cannot hand back a refund in another.
+	# There is no credit to apply: the stone wall's 45 stone is all wanted by the gate.
 	var from: BuildingDef = GameDataRegistry.building(&"building.wall_stone_long")
 	var to: BuildingDef = GameDataRegistry.building(&"building.wall_stone_gate")
 	var delta := UpgradeBuildingCommand.cost_delta(from, to)
@@ -491,6 +491,20 @@ func test_a_kind_the_wall_never_paid_for_is_charged_in_full() -> void:
 			int(to.cost[&"stone"]) - int(from.cost[&"stone"]), "stone is the difference")
 	for kind in delta:
 		assert_true(int(delta[kind]) > 0, "%s is a charge, never a refund" % kind)
+
+
+func test_a_surplus_of_a_kind_the_target_STILL_WANTS_is_credited_too() -> void:
+	# The palisade gate is the case that needs it. 50 wood becoming a stone gate that
+	# asks for 30 wood and 45 stone leaves 20 wood over -- and crediting only the kinds
+	# the target wants NONE of would drop that on the floor and charge the full 45 stone,
+	# while the player watches a 50-wood gate be consumed by the upgrade.
+	var from: BuildingDef = GameDataRegistry.building(WOOD_GATE)
+	var to: BuildingDef = GameDataRegistry.building(&"building.wall_stone_gate")
+	var delta := UpgradeBuildingCommand.cost_delta(from, to)
+	assert_false(delta.has(&"wood"), "50 already paid covers the 30 it asks for")
+	var surplus := int(from.cost[&"wood"]) - int(to.cost[&"wood"])
+	assert_eq(int(delta.get(&"stone", 0)), int(to.cost[&"stone"]) - surplus,
+			"and the 20 left over comes off the stone")
 
 
 func test_health_carries_its_fraction_across_the_upgrade() -> void:
@@ -512,16 +526,149 @@ func test_an_undamaged_wall_becomes_an_undamaged_gate_exactly() -> void:
 	assert_eq(wall.hp, wall.max_hp, "full health, not a rounding of it")
 
 
-func test_only_the_long_segment_upgrades() -> void:
+func test_only_the_long_segment_is_offered_a_gate() -> void:
 	# The gate is 9x2 and `convert_building` keeps the ground the building already
-	# holds, so a 3x2 short segment has nowhere to put one. The rule is enforced by
-	# which defs declare `upgrades_to` and re-checked on the footprint.
-	for short_id in [&"building.wall_wood_short", &"building.wall_wood_medium"]:
-		var seg := world.spawn_building(short_id, 1, CLEAR, SimBuilding.Phase.COMPLETE,
-				true, Vector2i.ZERO, 0)
-		assert_false(UpgradeBuildingCommand.new(1, seg.id).validate(world),
-				"%s is too short to hold a gate" % short_id)
-		world.despawn(seg.id)
+	# holds, so a 3x2 short segment has nowhere to put one.
+	#
+	# ⚠️ THIS USED TO ASSERT THAT A SHORT SEGMENT COULD NOT BE UPGRADED AT ALL, and 5.3
+	# ended that: every piece now climbs its tier at its own length. Worse, the old
+	# assertion would still have PASSED -- a wood wall's stone target is age 3 and this
+	# fixture's player is younger, so `validate()` would have refused it for a reason
+	# that has nothing to do with what the test is named after. A fixture that agrees
+	# with the change for the wrong reason is the trap §5 of AGENT_GAME_CODER.md is
+	# about, so this asks the DEFS what they offer instead.
+	for id in [&"building.wall_wood_short", &"building.wall_wood_medium",
+			&"building.wall_stone_short", &"building.wall_stone_medium"]:
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		assert_false(bd.upgrades_to.is_empty(), "%s climbs its tier" % id)
+		for target in bd.upgrades_to:
+			assert_false(GameDataRegistry.building(target).is_gate,
+					"%s is too short to hold a gate, but offers %s" % [id, target])
+
+
+# ── the tier ladder (5.3, owner 2026-09-03) ─────────────────────────────────
+
+func test_every_piece_climbs_its_tier_length_for_length() -> void:
+	# DERIVED FROM THE DEFS RATHER THAN LISTED, so adding a fourth tier or renaming a
+	# piece fails here instead of quietly leaving a length behind. A wall the drag laid
+	# down as a mix of lengths has to be upgradable piece by piece; a ladder with a hole
+	# in it is a wall the player can only half improve, and they cannot see why.
+	for pair in [["wood", "stone"], ["stone", "reinforced"]]:
+		for piece in ["short", "medium", "long", "gate"]:
+			var from_id := StringName("building.wall_%s_%s" % [pair[0], piece])
+			var want := StringName("building.wall_%s_%s" % [pair[1], piece])
+			var bd: BuildingDef = GameDataRegistry.building(from_id)
+			assert_not_null(bd, from_id)
+			assert_true(bd.upgrades_to.has(want),
+					"%s should climb to %s, offers %s" % [from_id, want, bd.upgrades_to])
+
+
+func test_a_long_wall_offers_its_gate_FIRST_and_then_its_tier() -> void:
+	# The order is the order the tiles appear in, and the gate has been on that panel
+	# since 5.8 -- a button that moves under a player's thumb because a new one was
+	# added above it is the change nobody asked for.
+	var bd: BuildingDef = GameDataRegistry.building(WOOD_LONG)
+	assert_eq(bd.upgrades_to,
+			[WOOD_GATE, &"building.wall_stone_long"] as Array[StringName])
+
+
+func test_the_wood_a_wall_cost_is_credited_against_a_stone_one() -> void:
+	# The owner's call, 2026-09-03: *"lets credit the wood onto stone"*. Same-kind credit
+	# alone would have charged the full 45 stone, since a stone wall shares no resource
+	# with the palisade it replaces -- a price that makes an upgrade cost exactly what a
+	# rebuild costs, which is another way of saying there is no upgrade.
+	#
+	# 1:1, because `market.json` prices food, wood and stone identically against gold and
+	# that is the only exchange rate this game has ever declared.
+	var from: BuildingDef = GameDataRegistry.building(WOOD_LONG)
+	var to: BuildingDef = GameDataRegistry.building(&"building.wall_stone_long")
+	var delta := UpgradeBuildingCommand.cost_delta(from, to)
+	var expected := int(to.cost[&"stone"]) - int(from.cost[&"wood"])
+	assert_eq(int(delta.get(&"stone", 0)), expected, "45 stone less 36 wood of credit")
+	assert_false(delta.has(&"wood"), "and no wood is asked for again")
+
+
+func test_the_credit_can_cover_a_whole_upgrade_and_never_pays_out() -> void:
+	# A cheaper target must be free rather than a refund: `SimPlayer.pay` on a negative
+	# would hand resources back for downgrading, and the same arithmetic runs on every
+	# client. There is no such pair in the roster today, which is exactly why it is
+	# worth pinning before somebody authors one.
+	var dear: BuildingDef = GameDataRegistry.building(&"building.wall_reinforced_long")
+	var cheap: BuildingDef = GameDataRegistry.building(WOOD_LONG)
+	var delta := UpgradeBuildingCommand.cost_delta(dear, cheap)
+	for kind in delta:
+		assert_true(int(delta[kind]) > 0, "%s is a charge, never a refund" % kind)
+	assert_true(delta.is_empty(), "75 stone of credit covers a 36-wood wall outright")
+
+
+func test_a_tier_upgrade_charges_what_the_delta_says_and_converts_in_place() -> void:
+	var wall := _a_long_wall()
+	var id := wall.id
+	world.player_for(1).age = 3
+	world.player_for(1).stock[&"stone"] = 500
+	var before := _held(&"stone")
+
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id, &"building.wall_stone_long")))
+	assert_eq(wall.def_id, &"building.wall_stone_long", "stone now")
+	assert_eq(wall.id, id, "same entity, upgraded in place")
+	assert_false(wall.is_gate, "and it did not become a gate by accident")
+	var expected := UpgradeBuildingCommand.cost_delta(
+			GameDataRegistry.building(WOOD_LONG),
+			GameDataRegistry.building(&"building.wall_stone_long"))
+	assert_eq(before - _held(&"stone"), int(expected.get(&"stone", 0)))
+
+
+func test_a_command_may_not_name_a_target_the_def_does_not_offer() -> void:
+	# THE LIST IS THE AUTHORITY AND THE SERVER IS THE ONLY TRUST BOUNDARY. Without this,
+	# a client could send `building.castle` and turn a 36-wood palisade into a 650-stone
+	# castle for the difference -- which is a real exploit and not a tidiness point.
+	var wall := _a_long_wall()
+	world.player_for(1).age = 4
+	world.player_for(1).stock[&"stone"] = 5000
+	assert_false(UpgradeBuildingCommand.new(1, wall.id, &"building.castle").validate(world))
+	assert_false(UpgradeBuildingCommand.new(1, wall.id,
+			&"building.wall_reinforced_long").validate(world),
+			"two rungs at once is not on the list either")
+	assert_eq(wall.def_id, WOOD_LONG, "untouched")
+
+
+func test_an_empty_target_still_means_the_first_one() -> void:
+	# Every command written before 5.3 named no target, and there are three years of
+	# tests in this file that still do not. Empty resolves to the head of the list, which
+	# is why that order is load bearing.
+	var wall := _a_long_wall()
+	assert_true(_run(UpgradeBuildingCommand.new(1, wall.id)))
+	assert_eq(wall.def_id, WOOD_GATE, "the gate, as it always was")
+
+
+func test_every_declared_upgrade_in_the_whole_ROSTER_keeps_its_footprint() -> void:
+	# ⚠️ THE GUARD THAT MAKES THE FEATURE SAFE TO EXTEND, and it is the reason the watch
+	# tower does not become a guard tower: [3, 2] against [3, 3]. `convert_building` keeps
+	# the ground the building already holds, so a bigger target would occupy tiles nobody
+	# checked were free -- a wall growing a row into a unit standing beside it.
+	#
+	# Walked over EVERY building rather than over the walls, because the next upgrade
+	# somebody adds will not be a wall, and this is the test that will meet it first.
+	for id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		for target in bd.upgrades_to:
+			var to: BuildingDef = GameDataRegistry.building(target)
+			assert_not_null(to, "%s upgrades to %s, which does not exist" % [id, target])
+			if to == null:
+				continue
+			assert_eq(to.footprint, bd.footprint,
+					"%s [%s] cannot become %s [%s]" % [id, bd.footprint, target, to.footprint])
+
+
+func test_the_watch_tower_does_not_upgrade_to_the_guard_tower() -> void:
+	# The owner's decision, 2026-09-03, and it is pinned by name because it is the pair
+	# anybody reading the roster proposes first. The footprints differ, so it would be
+	# refused anyway -- this says it was a decision rather than an oversight.
+	assert_true((GameDataRegistry.building(&"building.watch_tower") as BuildingDef)
+			.upgrades_to.is_empty())
+	assert_ne((GameDataRegistry.building(&"building.watch_tower") as BuildingDef).footprint,
+			(GameDataRegistry.building(&"building.guard_tower") as BuildingDef).footprint,
+			"and this is why")
 
 
 func test_a_foundation_cannot_be_upgraded() -> void:
@@ -538,10 +685,26 @@ func test_you_cannot_upgrade_somebody_elses_wall() -> void:
 	assert_eq(wall.def_id, WOOD_LONG, "untouched")
 
 
-func test_a_gate_does_not_upgrade_again() -> void:
-	# It declares no `upgrades_to`, so the chain ends rather than looping.
-	var gate := _a_gate()
-	assert_false(UpgradeBuildingCommand.new(1, gate.id).validate(world))
+func test_a_gate_climbs_to_the_next_tier_s_gate_and_never_back_to_a_wall() -> void:
+	# Since 5.3 a palisade gate becomes a stone gate becomes a reinforced one. What must
+	# NOT appear is a target that is not a gate: a doorway silently becoming solid wall
+	# would shut a hole the player deliberately left in their own defences.
+	var gate: BuildingDef = GameDataRegistry.building(WOOD_GATE)
+	assert_eq(gate.upgrades_to, [&"building.wall_stone_gate"] as Array[StringName])
+	for target in gate.upgrades_to:
+		assert_true(GameDataRegistry.building(target).is_gate, "%s is a gate" % target)
+
+
+func test_the_top_of_the_ladder_upgrades_to_nothing() -> void:
+	# The chain ends rather than looping, which is what it always did -- the end has
+	# simply moved from the wood gate to the reinforced tier.
+	for id in [&"building.wall_reinforced_short", &"building.wall_reinforced_medium",
+			&"building.wall_reinforced_gate"]:
+		assert_true((GameDataRegistry.building(id) as BuildingDef).upgrades_to.is_empty(),
+				"%s is the top of its ladder" % id)
+	# The reinforced LONG is the exception and keeps exactly one: its own gate.
+	assert_eq((GameDataRegistry.building(&"building.wall_reinforced_long") as BuildingDef)
+			.upgrades_to, [&"building.wall_reinforced_gate"] as Array[StringName])
 
 
 func test_an_upgrade_you_cannot_afford_is_refused_and_charges_nothing() -> void:
@@ -565,10 +728,16 @@ func test_the_age_gate_is_on_the_gate_and_not_on_the_wall_you_have() -> void:
 
 
 func test_the_upgrade_survives_the_wire() -> void:
-	var round_tripped := Command.from_dict(UpgradeBuildingCommand.new(1, 77).to_dict())
+	var round_tripped := Command.from_dict(
+			UpgradeBuildingCommand.new(1, 77, &"building.wall_stone_long").to_dict())
 	assert_true(round_tripped is UpgradeBuildingCommand)
 	assert_eq((round_tripped as UpgradeBuildingCommand).building_id, 77)
 	assert_eq(round_tripped.player_id, 1)
+	# THE TARGET TRAVELS. Without it the server would have to guess which of a long
+	# wall's two futures the player pressed, and JSON has no StringName -- so this also
+	# pins the conversion at the boundary that every other id off the wire needs.
+	assert_eq((round_tripped as UpgradeBuildingCommand).target_def_id,
+			&"building.wall_stone_long")
 
 
 func test_the_upgrade_moves_the_state_hash() -> void:
