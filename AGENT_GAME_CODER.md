@@ -272,6 +272,8 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_touch_controls.tscn  # can a THUMB use it?
 & $godot --path game res://dev_preview/preview_scenario_hud.tscn    # briefing + objective tracker
 & $godot --path game res://dev_preview/preview_scenario_hud.tscn -- --scenario 2
+& $godot --path game res://dev_preview/preview_campaign.tscn        # list -> scenarios -> PLAY -> match
+& $godot --path game res://dev_preview/preview_campaign.tscn -- --scenario 1
 
 # LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag (§7).
 # Start the beacon first; it waits. The exit code is the answer.
@@ -319,6 +321,17 @@ otherwise be photographed empty — the injected row is the script's and not the
 Three faults it can see that no headless test can: a tracker that overlaps the
 control-group stack, one that runs off the viewport, and a banner that is not on the
 screen's axis. All three are measured and warned about rather than left to the eye.
+
+`preview_campaign` walks the whole campaign path pressing the REAL buttons — CAMPAIGN list
+→ the scenario list with its locks → PLAY → a match with its briefing up — and prints the
+unlock table, which is the same fact the owner reads off the screen by which rows are
+bright. ⚠️ **It performs the two scene changes ITSELF**, because
+`get_tree().change_scene_to_file` from a preview would replace the preview: each press is
+made with the screen out of the tree (the branch the suite uses), and the next scene is
+instantiated **from the constant the screen it just pressed names**, so a wrong constant
+shows up as the wrong screen. What it covers is the two HANDOFFS — `ScenarioScreen.pending`
+and the config `launch()` builds — which is where a live object crossing between screens
+can be dropped. What it cannot cover is that the scene change is reached.
 
 `preview_walls` exists for the one thing **no test can judge**: which way a wall's
 art faces. A wall lying across its own footprint has the same footprint, the same

@@ -70,6 +70,56 @@ func test_the_shipped_scenario_three_builds_a_launchable_config() -> void:
 	assert_eq(cfg.starting_age, 1)
 
 
+func test_a_conquest_mission_really_ends_when_the_opponent_is_gone() -> void:
+	# 15.9's FOURTH CASE, and the only test in this file that builds a world rather than
+	# inspecting a config. It is worth the cost for one reason: everything else here proves
+	# scenario 3 *launches*, and a mission that launches and can never END is the exact
+	# failure 15.2's notes warn about twice -- an inert `SCENARIO` member, and
+	# `WinConditionSystem` deliberately never ending a match in a mode it does not implement.
+	# From the player's chair "it cannot be won" and "nothing happens" are the same thing.
+	#
+	# `dev_preview/PreviewScenarioWin.tscn` drives all five this way and prints as it goes;
+	# this pins the one that is a CONQUEST mission, so the suite fails rather than waiting
+	# for somebody to run the preview.
+	var s := _shipped("scenario_3")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var cfg := s.build_config(problems)
+	assert_not_null(cfg, " | ".join(problems))
+	if cfg == null:
+		return
+
+	# `setup` THEN `MapGen.build`, which is what `SimHost.build` does. Without the second
+	# call there is no town centre and no starting villagers, so there would be nothing to
+	# destroy and the match would be over for the wrong reason.
+	var w := SimWorld.new()
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	w.step()
+	assert_false(w.match_over, "a mission is not decided on the tick it starts")
+
+	var killed := 0
+	for e in w.entities.values():
+		if (e is SimUnit or e is SimBuilding) and e.owner_id == 2:
+			e.alive = false
+			killed += 1
+	# THE GUARD THAT MAKES THE REST MEAN ANYTHING. If the saved map handed player 2 nothing,
+	# every assertion below would pass on an opponent who was never there -- which is
+	# `_world_is_populated`'s whole subject, and the shape `preview_garrison`'s header
+	# records paying for: a measurement whose assertions were all true and worthless.
+	assert_true(killed > 0, "the saved map must actually give the opponent something to lose")
+
+	for i in range(30):
+		w.step()
+		if w.match_over:
+			break
+	assert_true(w.match_over, "conquest must end a last_man_standing mission")
+	assert_eq(w.winner_id, 1, "and the human is who won it")
+	assert_true(w.player_for(2).defeated)
+
+
 func test_the_map_travels_as_the_map_and_not_as_the_seed() -> void:
 	# PLAN.md 11.7's second trap, and the half that IS fixed: FastNoiseLite's float maths
 	# is not identical between an ARM phone and an x86 desktop, so a host and a client
