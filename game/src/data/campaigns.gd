@@ -44,14 +44,26 @@
 ## release even if the file ships in the APK. Nothing else about the override is
 ## load-bearing.
 ##
-## ## THE PRICE, STATED PLAINLY
+## ## THE PRICE THIS USED TO CARRY, AND WHO PAYS IT NOW: NOBODY (0.3 landed 2026-09-03)
 ##
-## **A campaign cannot be tested on a phone until 0.3 `AssetPacks` lands.** `user://` on
-## Android is internal app storage and is not `adb push`-able, and the override is
-## editor-only. Everything in Phase 15 is fully exercisable on Windows and in the
-## headless suite; the first on-device run waits on 0.3. That is a real dependency, not a
-## footnote -- PLAN.md 3.3 lists the two escapes if it bites first, and both are a line
-## in `ROOT_*` below rather than a redesign.
+## This header used to say, in bold, that **a campaign could not be tested on a phone until
+## 0.3 `AssetPacks` landed** -- `user://` on Android being internal app storage, and the dev
+## override being editor-only. That was true when it was written and it is **no longer
+## true**, twice over:
+##
+##   - **0.3 is built.** `PackInstaller` downloads a campaign, verifies its SHA-256 and
+##     installs it into `USER_ROOT`, so the delivery path this file reads from is a real one
+##     rather than a promise. **VERIFIED ON HARDWARE by the owner, 2026-09-03**, on PC and
+##     phone, offline, online, and on a throttled 125 kbps connection.
+##   - **A debug build never needed to wait anyway.** A `--export-debug` APK is
+##     `android:debuggable`, so `adb shell run-as <pkg>` reaches the app's own files
+##     directory -- a third escape beyond PLAN.md 3.3's two, needing no code and no
+##     re-export. `Docs/MOBILE_DEPLOY.md` carries it, and it is how Phase 15 was first
+##     played on a phone on 2026-09-02, before 0.3 existed.
+##
+## Kept rather than deleted because the SHAPE of the dependency is still the thing to
+## understand about this file: the override is editor-only, a device reads `USER_ROOT`, and
+## something has to put content there.
 class_name Campaigns
 extends RefCounted
 

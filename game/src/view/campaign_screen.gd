@@ -318,9 +318,14 @@ func _fallback_blurb(c: CampaignDef) -> String:
 ## THE TWO CASES ARE GENUINELY DIFFERENT and conflating them wastes somebody's afternoon.
 ## In the editor the dev override is live, so an empty list means the repo's `scenarios/`
 ## folder is missing or unreadable. In an exported build there is no override at all
-## (`Campaigns.roots()` gates it on `OS.has_feature("editor")`), so an empty list is the
-## normal state before a campaign is installed — and on Android `user://` is internal app
-## storage that cannot be pushed to until 0.3 `AssetPacks` lands.
+## (`Campaigns.roots()` gates it on `OS.has_feature("editor")`), so an empty list means no
+## campaign has been installed yet.
+##
+## ⚠️ **THE TEXT BELOW SAYS "CAMPAIGNS ARRIVE AS CONTENT PACKS" AND THAT IS NOW LITERAL.**
+## This comment used to end *"until 0.3 `AssetPacks` lands"*; 0.3 landed 2026-09-03 and was
+## verified on a phone offline, online and at 125 kbps. So an empty list in a release build
+## is either a first run that has not finished downloading, or a download that failed — and
+## in both cases DOWNLOAD MORE beside BACK is where a player retries.
 func _nothing_found_text() -> String:
 	if OS.has_feature("editor"):
 		return ("No campaigns found. The editor reads the repository's own `scenarios/`"
