@@ -497,19 +497,35 @@ an out-of-date API listing is worse than none. Read the file headers; they carry
 | `Net` (`net.gd`) | Transport + RPC boundary. `host_solo()`, `submit_command()`, `_recv_command` (up, reliable), `_recv_snapshot` (down, unreliable_ordered). `host_open()`/`join()` are §12.1 |
 | `SimClock` (`sim_clock.gd`) | 10 Hz pump; `advance()` holds the logic separately from `_process` so it runs headless |
 | `EventBus` (`event_bus.gd`) | Decouples HUD widgets from whoever receives the snapshot |
-**That is all four, and 0.3 landing did not make it five.** `project.godot`'s `[autoload]` block
-lists exactly these. Two names this document used to put in this table do **not** exist and were
-listed as though they did: `AssetPacks` and `AudioManager` — the second never existed at all (§7.5).
+| `AudioManager` (`audio_manager.gd`) | The mix and the sound ids (§7.5, phase 11). **Added to this table 2026-09-04** — see the correction below |
+**THAT IS FIVE, AND THIS TABLE SAID FOUR FOR MONTHS.** ⚠️ **CORRECTED 2026-09-04 BY READING
+`project.godot`, WHICH IS THE AUTHORITY**: its `[autoload]` block lists `GameDataRegistry`,
+`SimClock`, `Net`, `EventBus` **and `AudioManager`**.
+
+**The error was a true sentence left to rot.** This paragraph said `AudioManager` *"never existed
+at all"*, and when it was written that was correct and was itself a correction — §7.5 records that
+this document claimed an `AudioManager` for months while there was no such file and zero call
+sites. **Then phase 11 built it** (2026-08-23, `src/autoload/audio_manager.gd`, 22 KB, a real
+autoload), §7.5 was updated to say so, and this table was not. So the document contradicted itself
+in two places, and the stale half is the one a reader counting autoloads would land on.
+
+⚠️ **AND IT WAS REINFORCED RATHER THAN CAUGHT ON 2026-09-04**, while this section was being
+updated for 0.3: the sentence was rewritten to *"that is all four, and 0.3 landing did not make it
+five"* without opening `project.godot`. **The lesson is the one §2 already states for encoding and
+§12A states for art — check the artefact, not the document about the artefact** — and it is worth
+recording because the claim being reinforced was about a FILE, which is the cheapest possible thing
+to verify.
 
 ⚠️ **0.3 IS BUILT AS OF 2026-09-03 AND IS DELIBERATELY NOT AN AUTOLOAD.** `PackDef`,
 `PackManifest`, `PackIndex`, `PackInstaller` and the two screens are ordinary classes, on
 `Campaigns`' precedent (15.1) and `CampaignProgress`'s (15.5): **a global to hold state between
-two adjacent screens is a poor trade**, and this table has now been held at four against three
-separate features that each looked like they wanted a fifth. If a fifth is ever added it should be
-because something genuinely spans the whole session, not because a value needed carrying across a
-`change_scene_to_file`.
+two adjacent screens is a poor trade.** That argument stands on its own and does not depend on the
+count above being any particular number — three features have now each looked like they wanted a
+global and none of them needed one. A new autoload should be something that genuinely spans the
+whole session, which is exactly what `AudioManager` is and what a value carried across a
+`change_scene_to_file` is not.
 
-**None of the four carries a `class_name`**, which would shadow the singleton identifier. This
+**None of the five carries a `class_name`**, which would shadow the singleton identifier. This
 said "three autoloads", naming `net.gd`, `sim_clock.gd` and `event_bus.gd` as a special case;
 `game_data.gd` is the same, so it is a universal rule for autoloads rather than a trio.
 
@@ -2731,16 +2747,32 @@ alone.*
 
    | File | Where it really is | Really depends on |
    |---|---|---|
-   | `iso.gd` | **`src/view/`**, not `src/sim/` | nothing. The only one the claim was true of |
+   | `iso.gd` | **`src/view/`**, not `src/sim/` | **`SimWorld.SUBTILE`** (`from_sim_pos`). The claim was not true of this one either |
    | `map_data.gd` | `src/sim/` | **`SimMap`** (the `Terrain` enum and `DOMAIN_TERRAIN`), **`GameDataRegistry`**, `BuildingDef`, `ResourceDef` — `footprint_rect_of()` asks the registry for every footprint |
    | `atlas_entry.gd` | **`src/view/`** | `Iso`, `PlaceholderSpec` |
    | **`map_file.gd`** | `src/data/` | **`SimMap.Terrain`** — and it was **not in the list at all**, despite being the actual save/load code |
 
-   **So the copy set is four files, not three, and it drags `SimMap`'s terrain tables and a
-   `GameDataRegistry` stand-in in behind it.** That is not a reason to change the approach — the
-   tool has to read `data/*.json` for the roster anyway, so the "stand-in" is the thing it was
-   already going to build, and it is what supplies the footprints `map_data.gd` wants. It **is** a
-   reason to size 16.1 honestly and to hash **four** files rather than three.
+   ✅ **BUILT 2026-09-04 (16.1), AND THE FINAL ANSWER IS SEVEN COPIES PLUS ONE STAND-IN**, which
+   is worth recording because the number moved three times while it was being built and each
+   move was a dependency this decision had asserted did not exist:
+
+   | `MapMaker/format/` | why it is there |
+   |---|---|
+   | `map_data.gd`, `map_file.gd` | the map, and the code that writes it |
+   | `sim_map.gd` | the `Terrain` enum and `DOMAIN_TERRAIN` the two above index. **Genuinely pure**, so copied whole rather than trimmed |
+   | `building_def.gd`, `resource_def.gd` | footprints, via the stand-in |
+   | **`game_defs.gd`** | `tile_size` / `int_map` / `name_list` / `int_list`. **Found only when the project refused to compile** — both defs parse their JSON through it. Copied rather than reimplemented, because `tile_size`'s fallback is what turns `"footprint": []` into `Vector2i.ONE`, and a second opinion about that is a second opinion about how big a building is |
+   | `iso.gd` | tile-to-screen, for 16.2's canvas |
+   | `sim_world.gd` | ⚠️ **the one file that is NOT a verbatim copy**: a one-constant stand-in for `SUBTILE`, because the real `SimWorld` is ~1,500 lines the tool has no use for. **Checked by DECLARATION rather than by hash** — the guard pulls `const SUBTILE := ...` out of the game's source and compares it. Editing `iso.gd` to drop the one line that needs it was the alternative and was rejected: an edited copy can never be hash-checked, so the check would be off on the file that decides where a tile lands on screen |
+
+   `atlas_entry.gd` is **deliberately absent**. It is not format-critical, it is *icon*-critical,
+   it drags `PlaceholderSpec` behind it, and nothing before 16.3's palette needs it — it joins
+   `FormatGuard.COPIES` on the day the palette does, which is one row in a table.
+
+   **None of this changed the approach**, which is the point: the tool has to read `data/*.json`
+   for the roster anyway, so the `GameDataRegistry` stand-in is a thing it was already going to
+   build. **Registering it under that exact autoload name is what keeps `map_data.gd` byte-identical
+   and therefore hashable** — an edited copy could never be checked against anything.
 3. **THE COPIES CHECK THEMSELVES, because a copy nobody diffs is a copy that has drifted.**
    MapMaker reads the three originals **as text** from the configured game root at startup, hashes
    them, and **refuses to save** — loudly, naming the file — if they no longer match its own. That

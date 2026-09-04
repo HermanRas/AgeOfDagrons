@@ -422,6 +422,44 @@ backoff and skips what is already staged, so re-running it after an interruption
 costs only the difference. Run it in the background and get on with something
 else.
 
+### The MapMaker — a SECOND Godot project (Phase 16, started 2026-09-04)
+
+`MapMaker/` is its own project on the same pinned 4.7.1, PC only, never shipped. **`--path`
+points at it instead of at `game/`**, and it has its own suite:
+
+```powershell
+& $godot --headless --path MapMaker                          # the startup report; EXIT CODE IS THE ANSWER
+& $godot --path MapMaker                                     # the window
+& $godot --headless --path MapMaker res://tests/run_tests.tscn
+& $godot --headless --path MapMaker --import                 # its own class cache, separate from the game's
+```
+
+⚠️ **`--import` IS PER PROJECT.** Adding a `class_name` under `MapMaker/` and then running the
+GAME's `--import` refreshes the wrong cache, and the failure looks identical to the game's:
+"Identifier not declared in the current scope".
+
+**`MapMaker/format/` IS SEVEN VERBATIM COPIES OF GAME FILES AND ONE STAND-IN. DO NOT EDIT ANY OF
+THEM.** `FormatGuard` reads the originals out of `game/` as text, hashes them, and the tool
+**refuses to save** when a copy has drifted (PLAN.md §16 decision 3). Editing a copy to fix
+something is how the check gets turned off on the file that decides what a map means. If the
+game's format changes, re-copy — `Copy-Item game\src\sim\map_data.gd MapMaker\format\map_data.gd`
+— and run the report; it names every file that is wrong.
+
+⚠️ **THE ONE EDITABLE FILE IN THERE IS `format/sim_world.gd`**, which is a one-constant stand-in
+(`SUBTILE`) for a 1,500-line original and is checked by **declaration**, not by hash. Do not grow
+it: something needing more of `SimWorld` than a constant means the tool is reaching into the
+simulation, which is what decision 2 exists to prevent.
+
+**`src/game_content.gd` is registered as the autoload `GameDataRegistry`, and the name is the
+trick** — `format/map_data.gd` calls `GameDataRegistry.building()`/`.resource_def()` for
+footprints, so answering to that identifier keeps the copy unedited and therefore hashable.
+
+⚠️ **`data/*.json` CARRIES `_note` KEYS THAT ARE DOCUMENTATION, NOT ENTRIES**, and a reader that
+does not skip them reports two warnings on a good roster and puts a `_note` in the palette. The
+game strips any key beginning `_` (`GameDataRegistry._read_json`); mirror it rather than writing a
+fresh loader — the convention is invisible in the JSON's shape and obvious only in the code that
+reads it. This cost a red test on the first run.
+
 There is **no CI**. Every check is a local command someone runs by hand.
 
 ---

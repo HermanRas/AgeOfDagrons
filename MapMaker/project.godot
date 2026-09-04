@@ -1,0 +1,41 @@
+; MapMaker -- the PC authoring tool for AOD maps and scenarios (PLAN.md Phase 16).
+;
+; A SECOND GODOT PROJECT, deliberately: two projects cannot share a res://, and this one
+; is never shipped to a player and never runs on a phone. Pinned to the same Godot 4.7.1
+; as the game -- see PLAN.md 1.3 for why that pin exists at all.
+;
+; NO "Mobile" IN config/features and no handheld orientation, unlike game/project.godot.
+; PLAN.md 16 decision 6: mouse and keyboard only, which is a real simplification and not an
+; omission -- TouchSlider/TouchLineEdit and the whole emulate_mouse_from_touch hazard do not
+; apply here, so stock Slider and LineEdit are fine in this project and nowhere else.
+
+config_version=5
+
+[application]
+
+config/name="AOD MapMaker"
+run/main_scene="res://Boot.tscn"
+config/features=PackedStringArray("4.7")
+
+[autoload]
+
+; ONE AUTOLOAD, AND ITS NAME IS LOAD-BEARING. `format/map_data.gd` is a VERBATIM copy of the
+; game's and calls `GameDataRegistry.building()` / `.resource_def()` for footprints; naming
+; this object the same thing satisfies those calls without editing the copy, which is what
+; keeps the copy hashable by FormatGuard. See src/game_content.gd.
+GameDataRegistry="*res://src/game_content.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+; A DESKTOP TOOL, so the window is resizable and the canvas does not stretch: an editor
+; showing a map at a scaled-up "canvas_items" resolution would be lying about pixel sizes,
+; which is the one thing an iso canvas must not do (16.2).
+window/size/resizable=true
+window/stretch/mode="disabled"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

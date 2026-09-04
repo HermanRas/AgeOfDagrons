@@ -128,6 +128,16 @@ tools/isobake.local.toml
 # layout that differs.
 game/content.local.json
 
+# The same arrangement for the MapMaker (PLAN.md 16.1, `GameRoot.LOCAL_CONFIG`), and
+# NOT REQUIRED for the same reason: `game/` is the sibling of `MapMaker/` on every
+# clone, so the tool derives the path. This file exists only for a layout that differs.
+MapMaker/mapmaker.local.json
+
+# The MapMaker is a SECOND Godot project, so it has its own import cache. `.godot/`
+# is already ignored at the top of this file by directory name, but the pattern is
+# anchored, so the second project needs saying out loud.
+MapMaker/.godot/
+
 .venv/
 venv/
 __pycache__/
