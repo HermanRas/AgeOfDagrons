@@ -58,6 +58,30 @@ const _ECONOMY := [
 	{"def": &"res.stone", "count": 2, "radius": 15},
 ]
 
+## How far in or out of its declared radius a kind may be placed when the declared ring cannot
+## supply it (2026-09-04).
+##
+## ⚠️ **THIS EXISTS BECAUSE THE FIRST AUTHORED MAP CAME OUT UNPLAYABLE AND SAVED WITHOUT A
+## MURMUR.** The owner dropped two starts on a 48x48 map at (6,6) and (35,35) — a perfectly
+## reasonable thing to do, and `MIN_SIZE` is 48 — and got **9 of 24 entities for player 1 and
+## 21 for player 2**: no scout and no stone for one, no gold at all for the other. Neither
+## could have climbed the age ladder.
+##
+## Two faults, and the second is the nastier:
+##
+##   1. **Off-map ring tiles were skipped and never replaced.** Both starts sit within 15 tiles
+##      of an edge, so the outer rings run to (-9,-9) and (50,50).
+##   2. **The ring was SAMPLED, not walked.** `step = ring.size() / wanted` gave 2 gold on a
+##      radius-14 ring exactly **two attempts**: one landed on a tile the other player's
+##      cluster already held (29 tiles apart, so their outer rings intersect) and the other was
+##      off-map. Two misses and the whole resource kind vanished.
+##
+## Bounded rather than unlimited, because the economy's whole promise is *within walking
+## distance*: a stone mine found 20 tiles away is worse than an honest warning that there was
+## no room for one. 6 is enough to clear a map edge at these radii and not enough to move a
+## resource somewhere surprising.
+const RADIUS_SLACK := 6
+
 
 ## The key every entity this places is tagged with, naming the player whose start put it
 ## there.
@@ -107,15 +131,11 @@ static func _place_base(data: MapData, claimed: Dictionary, player: int,
 
 static func _place_units(data: MapData, claimed: Dictionary, player: int,
 		centre: Vector2i) -> void:
-	var ring := _ring_tiles(centre, UNIT_RING_RADIUS)
 	var wanted := VILLAGERS + 1               # the villagers, plus the scout
-	# EVERY OTHER POSITION, so no two units start adjacent -- the generator's rule.
-	var step := maxi(2, ring.size() / maxi(1, wanted))
 	var placed := 0
-	var i := 0
-	while placed < wanted and i < ring.size():
-		var t: Vector2i = ring[i]
-		i += step
+	for t in _candidates(centre, UNIT_RING_RADIUS, wanted):
+		if placed >= wanted:
+			break
 		if not _free(data, claimed, t):
 			continue
 		claimed[t] = true
@@ -134,22 +154,189 @@ static func _place_economy(data: MapData, claimed: Dictionary, centre: Vector2i)
 			# tomorrow; a start missing its stone is a map the author can fix, and a tool
 			# that died on it is not.
 			continue
-		var ring := _ring_tiles(centre, int(entry["radius"]))
+		var footprint := rd.footprint_for_size(0)
 		var wanted := int(entry["count"])
-		var step := maxi(1, ring.size() / maxi(1, wanted))
 		var placed := 0
-		var i := 0
-		while placed < wanted and i < ring.size():
-			var t: Vector2i = ring[i]
-			i += step
+		for t in _candidates(centre, int(entry["radius"]), wanted):
+			if placed >= wanted:
+				break
+			if not _fits(data, claimed, t, footprint):
+				continue
 			# GAIA OWNS EVERY RESOURCE NODE (`player: 0`), which is what keeps them out of
 			# `seats()`' highest-player arithmetic and out of `remove_start`'s sweep.
-			if _fits(data, claimed, t, rd.footprint_for_size(0)):
-				for tile in _rect_tiles(t, rd.footprint_for_size(0)):
-					claimed[tile] = true
-				data.add_entity(def_id, 0, t)
-				placed += 1
-	return
+			for tile in _rect_tiles(t, footprint):
+				claimed[tile] = true
+			data.add_entity(def_id, 0, t)
+			placed += 1
+
+
+# ── where things may go ─────────────────────────────────────────────────────
+
+## Every tile worth trying for `wanted` things around `centre`, best first.
+##
+## ⚠️ **THE WHOLE RING IS OFFERED, NOT A SAMPLE OF IT — THAT WAS THE BUG.** The old code
+## stepped `ring.size() / wanted` tiles at a time, so two gold mines got exactly two chances
+## and a single collision or off-map tile lost the kind outright. See `RADIUS_SLACK` for the
+## map that proved it. Now the caller walks this list until it has what it needs, so a
+## placement fails only when there is genuinely nowhere.
+##
+## **THE SPREAD IS PRESERVED, WHICH IS WHY THIS IS NOT JUST THE RING IN ORDER.** `_spread`
+## puts `wanted` evenly-spaced tiles first, so a start that has room looks exactly as it did —
+## a fan of villagers, resources around the compass — and the remaining tiles follow as
+## fallbacks. Walking the ring in raw order instead would clump the whole opening into one arc.
+##
+## Radii are tried `r, r+1, r-1, r+2, r-2, …` out to `RADIUS_SLACK`, skipping anything that
+## would land inside the base: a ring at or under `UNIT_RING_RADIUS` overlaps the town centre's
+## own footprint and the units standing around it.
+static func _candidates(centre: Vector2i, radius: int, wanted: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for step in _radius_order():
+		var r := radius + step
+		# A UNIT RING MAY BE ITS OWN RADIUS BUT NOTHING MAY GO TIGHTER. `>=` rather than `>`
+		# would forbid the unit ring itself, which is the one caller that legitimately sits
+		# there.
+		if r < UNIT_RING_RADIUS or r <= 0:
+			continue
+		out.append_array(_spread(_ring_tiles(centre, r), wanted))
+	return out
+
+
+## `[0, 1, -1, 2, -2, …]` out to `RADIUS_SLACK`. Outward first at each distance, because a
+## resource slightly further out is a smaller change to a start than one tucked in behind the
+## villagers.
+static func _radius_order() -> Array[int]:
+	var out: Array[int] = [0]
+	for d in range(1, RADIUS_SLACK + 1):
+		out.append(d)
+		out.append(-d)
+	return out
+
+
+## `ring` reordered so the first `wanted` entries are evenly spaced around it, then the rest.
+##
+## The even-spacing half replaces the generator's "every other position" rule, which existed so
+## no two units start adjacent: at 6 units on a 56-tile ring the spacing is every ninth tile.
+## **The fallback half CAN place two things adjacent**, and that is the right trade — a start
+## with six units standing close together is playable, and a start missing its scout is not.
+static func _spread(ring: Array[Vector2i], wanted: int) -> Array[Vector2i]:
+	if wanted <= 1 or ring.size() <= wanted:
+		return ring
+	var out: Array[Vector2i] = []
+	var picked := {}
+	for k in range(wanted):
+		# Integer arithmetic on purpose -- the sim is deterministic and so is this, and two
+		# machines authoring the same map must produce the same file (PLAN.md 11.3).
+		var i := (k * ring.size()) / wanted
+		picked[i] = true
+		out.append(ring[i])
+	for i in range(ring.size()):
+		if not picked.has(i):
+			out.append(ring[i])
+	return out
+
+
+# ── did each start actually get its opening? (16.4b) ────────────────────────
+
+## One sentence per start that is short of what `place()` promises, or empty when every start
+## is whole. Warnings, never refusals — see below.
+##
+## ⚠️ **THE TOOL SAVED AN UNPLAYABLE MAP WITHOUT A MURMUR, AND THAT IS WHAT THIS IS FOR.** The
+## placement bug `RADIUS_SLACK` describes is fixed, but the underlying exposure is not: a map
+## can still be too cramped, too crowded or too watery for a start to fit, and the author is
+## the last person who should find out from a match. `MapValidator` on the game side answers a
+## different question — is this file *loadable* — and cannot answer this one, because "a start
+## owes 24 things" is `StartLayout`'s promise and lives nowhere else.
+##
+## ⚠️ **A WARNING AND NOT A REFUSAL, DELIBERATELY.** `_ECONOMY`'s own header says to delete the
+## cluster and place your own, and 16.3's palette is the row that makes that pleasant. An
+## author who has done exactly that must not be blocked from saving by a checker counting
+## berry bushes. So this reports and the save proceeds.
+##
+## **COUNTED BY OWNERSHIP AND PROXIMITY, NOT BY `ORIGIN_KEY`.** The tag would be easier and is
+## the wrong tool: `MapFile` drops it on save, so it exists only in the session that placed the
+## start and a map opened by 16.4a would audit as empty. Owned things are counted by player id;
+## gaia nodes are attributed to the nearest start, which is the same rule a player reads off
+## the screen.
+static func audit(data: MapData) -> Array[String]:
+	var out: Array[String] = []
+	for i in data.starts.size():
+		var centre: Vector2i = data.starts[i]
+		if centre.x < 0:
+			continue
+		var short := _shortfalls(data, i + 1, centre)
+		if not short.is_empty():
+			out.append("P%d's start is short: %s" % [i + 1, ", ".join(short)])
+	return out
+
+
+## `["3 of 5 villagers", "no scout"]` for one start, or empty when it is whole.
+static func _shortfalls(data: MapData, player: int, centre: Vector2i) -> Array[String]:
+	var got := _tally(data, player, centre)
+	var out: Array[String] = []
+	_note_short(out, got, TOWN_CENTRE, 1, "town centre", "town centres")
+	_note_short(out, got, VILLAGER, VILLAGERS, "villager", "villagers")
+	_note_short(out, got, SCOUT, 1, "scout", "scouts")
+	for entry in _ECONOMY:
+		var def_id: StringName = entry["def"]
+		if GameDataRegistry.resource_def(def_id) == null:
+			continue          # not in the roster any more; `_place_economy` skipped it too
+		var label := GameDataRegistry.display_name(def_id)
+		_note_short(out, got, def_id, int(entry["count"]), label, label)
+	return out
+
+
+static func _note_short(out: Array[String], got: Dictionary, def_id: StringName,
+		want: int, one: String, many: String) -> void:
+	var n := int(got.get(def_id, 0))
+	if n >= want:
+		return
+	# "NO STONE" READS BETTER THAN "0 OF 2 STONE", and the difference matters: a missing kind
+	# is a start that cannot reach an age, while a short one is merely poorer.
+	out.append("no %s" % one if n == 0 else "%d of %d %s" % [n, want, many])
+
+
+## What is actually within reach of this start, by def id.
+static func _tally(data: MapData, player: int, centre: Vector2i) -> Dictionary:
+	var got := {}
+	for e in data.entities:
+		var owner_id := int(e.get("player", 0))
+		# ⚠️ `tile`, NOT `x`/`y`. An in-memory entity carries a `Vector2i` under `tile`;
+		# `x` and `y` exist only in the SAVED dictionary, which `MapData.to_dict()` builds by
+		# splitting that vector. Reading `x` here returned 0 for everything, so every gaia node
+		# was attributed to whichever start was nearest (0,0) and the audit reported the other
+		# player as having no resources at all -- a warning that looked exactly like the real
+		# bug it was written to catch.
+		var t: Vector2i = e.get("tile", Vector2i.ZERO)
+		var mine := false
+		if owner_id == player:
+			# Owned outright. Position is not consulted: a villager the author has since
+			# dragged across the map is still that player's villager.
+			mine = true
+		elif owner_id == 0:
+			mine = _nearest_start(data, t) == player
+		if mine:
+			var id := StringName(e.get("def_id", &""))
+			got[id] = int(got.get(id, 0)) + 1
+	return got
+
+
+## Which player's start a gaia node is nearest to, by the Chebyshev metric the sim measures
+## range in. 0 when the map has no starts at all.
+##
+## Ties go to the LOWER player number, which is arbitrary and has to be *stable*: a node
+## counted for both players would make two short starts look whole.
+static func _nearest_start(data: MapData, t: Vector2i) -> int:
+	var best := 0
+	var best_d := -1
+	for i in data.starts.size():
+		var s: Vector2i = data.starts[i]
+		if s.x < 0:
+			continue
+		var d := maxi(absi(t.x - s.x), absi(t.y - s.y))
+		if best_d < 0 or d < best_d:
+			best_d = d
+			best = i + 1
+	return best
 
 
 # ── geometry ────────────────────────────────────────────────────────────────

@@ -31,6 +31,10 @@ const _TEXT := Color(0.82, 0.82, 0.86)
 const _GOOD := Color(0.55, 0.80, 0.55)
 const _BAD := Color(0.95, 0.45, 0.40)
 
+## Saved, and worth reading anyway (16.4b). A third colour because there is a third outcome --
+## see `save()`.
+const _WARN := Color(0.95, 0.78, 0.35)
+
 enum Tool { PAINT, START }
 
 var _canvas: MapCanvas = null
@@ -162,10 +166,17 @@ func save() -> Array[String]:
 	# was gone before the author's hand left the button. The owner's playtest report was
 	# exactly this: *"i clicked save, not sure if it worked"*. An action's outcome must
 	# outlive the next hover.
-	if problems.is_empty():
+	if not problems.is_empty():
+		_notice("SAVE FAILED — %s" % "; ".join(PackedStringArray(problems)), _BAD)
+	elif _document.warnings.is_empty():
 		_notice("SAVED → %s" % _document.dir, _GOOD)
 	else:
-		_notice("SAVE FAILED — %s" % "; ".join(PackedStringArray(problems)), _BAD)
+		# ⚠️ **THREE OUTCOMES, NOT TWO** (16.4b). "Saved" and "failed" cannot express the case
+		# that actually bit the owner: the file wrote perfectly and the map was unplayable.
+		# AMBER and the word SAVED together, because both halves are true and burying either
+		# one is how the first authored map reached a match with a player owning nine things.
+		_notice("SAVED, BUT LOOK — %s" % "; ".join(PackedStringArray(_document.warnings)),
+				_WARN)
 	_refresh_status()
 	return problems
 

@@ -43,6 +43,16 @@ var map_name: String = ""
 ## True when there are changes `save()` has not written.
 var dirty := false
 
+## What was wrong with the map the last time it was SAVED — not what stopped it saving.
+##
+## ⚠️ **WARNINGS AND PROBLEMS ARE DIFFERENT THINGS AND THE DIFFERENCE IS THE FEATURE** (16.4b).
+## `save()` returns *problems*: the map could not be written, and the author has lost nothing
+## but has gained nothing either. These are the other case — **the file was written and it is
+## worth looking at anyway.** Conflating them would mean either refusing to save a map an
+## author deliberately hand-built (see `StartLayout.audit`) or saying nothing at all, and the
+## second is what shipped an unplayable map on 2026-09-04.
+var warnings: Array[String] = []
+
 
 static func create(size: Vector2i, p_name: String) -> MapDocument:
 	var doc := MapDocument.new()
@@ -167,6 +177,9 @@ func seats() -> int:
 ## installing content is the game's job.
 func save(maps_dir: String) -> Array[String]:
 	var problems: Array[String] = []
+	# CLEARED FIRST, so a stale warning from a previous save cannot outlive the fault it was
+	# about -- the same reason the editor's notice line is rewritten rather than appended to.
+	warnings = []
 	if map_name.is_empty():
 		problems.append("the map needs a name before it can be saved")
 		return problems
@@ -185,6 +198,11 @@ func save(maps_dir: String) -> Array[String]:
 	if problems.is_empty():
 		dir = target
 		dirty = false
+		# AUDITED AFTER A SUCCESSFUL WRITE, not before it. An author who has been told their
+		# map is thin should still have the file: refusing to write is how you lose work over
+		# an opinion, and 16.3's palette is where a deliberate hand-built economy stops
+		# looking thin.
+		warnings = StartLayout.audit(data)
 	return problems
 
 
