@@ -1829,8 +1829,9 @@
     "",
     "NEITHER CAN TAKE PLAYER COLOUR, and it was measured rather than assumed:",
     "white against blue at `directions = 1` moved 0 of 5,567 opaque pixels. So",
-    "neither carries `colours: true`, and `unit.dragon` carries `limit: 1`",
-    "instead -- see UnitLimitSystem for why an art fact became a sim rule."
+    "neither carries `colours: true`. That would make two dragons unattributable,",
+    "and the answer is that there is only ever ONE: gaia's mother, at the nest,",
+    "claimed by killing her (PLAN.md 13.2). Nobody trains a dragon."
   ],
 
   "vis.dragon": {
@@ -1892,6 +1893,113 @@
       "footprint_m": [4.22, 4.22],
       "height_m": 0.76,
       "color": "#8a5a2b"
+    }
+  },
+
+  "_note_dragon_nest": [
+    "THE DRAGON NEST (PLAN.md 13.2), declared 2026-09-04. THE ART WAS ALREADY BAKED",
+    "AND STAGED AND THE GAME SIMPLY COULD NOT SEE IT -- all three atlases sat in",
+    "assets/atlases/ with nothing in this file pointing at them, which looks exactly",
+    "like art that was never made. Checked file by file rather than trusted: PLAN.md",
+    "said 'all three are staged' and that claim has been wrong before.",
+    "",
+    "THE SHRINE IS THE CORE, AND THAT IS THE WHOLE TRICK. PLAN.md describes the nest as",
+    "'22 bushes and 12 standing stones around a shrine WITH NO CORE' -- there is no",
+    "bespoke nest mesh and nobody is going to model one. But EntityView draws an",
+    "entity's own visual first and then its props, so a props-only visual would paint a",
+    "magenta placeholder in the middle of its own decoration. Making the shrine the",
+    "core costs nothing, needs no code, and matches the description: the shrine IS the",
+    "thing in the middle.",
+    "",
+    "PROP ORDER IS SCREEN DEPTH, AND THE SORT KEY IS x+y RATHER THAN y. Iso._project",
+    "puts screen y at (x + y) * half.y, and EntityView splits behind-the-core from",
+    "in-front at `at.y < 0` -- which is x+y < 0, not y < 0. Sorting these by world y",
+    "would have got both the split and the back-to-front order wrong, and it would have",
+    "looked like a z-order bug in the renderer rather than a bad list.",
+    "",
+    "THE LAYOUT IS TWO RINGS AT ODD COUNTS WITH OFFSET PHASES (13 and 9 bushes against",
+    "12 stones) so the overgrowth does not line up with the henge and read as a",
+    "pattern. Generated rather than hand-placed; furthest prop is 8.8 m = 4.4 tiles",
+    "from centre, which is what sizes building.dragon_nest's footprint.",
+    "",
+    "NAMING DRIFT WORTH KNOWING: PLAN.md's art column says `bush_badlands`, and what",
+    "was actually baked is `flora/trees/temperate_bush_biome.xml`. Either is a bush and",
+    "nothing depends on which; PLAN.md now names the one that exists."
+  ],
+
+  "vis.prop_nest_bush": {
+    "atlas": "res://assets/atlases/vis.prop_nest_bush.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [3.06, 3.06],
+      "height_m": 1.2,
+      "color": "#4a5f32"
+    }
+  },
+
+  "vis.prop_standing_stone": {
+    "atlas": "res://assets/atlases/vis.prop_standing_stone.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [0.91, 0.91],
+      "height_m": 1.8,
+      "color": "#8e8b84"
+    }
+  },
+
+  "vis.prop_shrine_celtic": {
+    "atlas": "res://assets/atlases/vis.prop_shrine_celtic.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [4.0, 4.0],
+      "height_m": 2.5,
+      "color": "#7d7a72"
+    }
+  },
+
+  "vis.dragon_nest": {
+    "atlas": "res://assets/atlases/vis.prop_shrine_celtic.atlas.json",
+    "props": [
+      { "visual": "vis.prop_nest_bush", "offset_m": [-7.62, -4.40] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-3.01, -8.27] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [-3.30, -5.72] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [-5.72, -3.30] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-8.67, 1.53] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [0.00, -6.60] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [-6.60, 0.00] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-2.56, -3.70] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-3.98, -2.09] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [3.01, -8.27] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-0.54, -4.47] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-4.50, 0.00] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [1.60, -4.21] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [-5.72, 3.30] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [3.30, -5.72] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-3.98, 2.09] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [3.37, -2.98] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-5.66, 6.74] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-2.56, 3.70] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [5.72, -3.30] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [-3.30, 5.72] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [7.62, -4.40] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [4.37, -1.08] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [-0.54, 4.47] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [4.37, 1.08] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [1.60, 4.21] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [3.37, 2.98] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [6.60, 0.00] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [0.00, 6.60] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [0.00, 8.80] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [5.72, 3.30] },
+      { "visual": "vis.prop_standing_stone", "offset_m": [3.30, 5.72] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [8.67, 1.53] },
+      { "visual": "vis.prop_nest_bush", "offset_m": [5.66, 6.74] }
+    ],
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [17.6, 17.6],
+      "height_m": 2.5,
+      "color": "#5a5340"
     }
   },
 

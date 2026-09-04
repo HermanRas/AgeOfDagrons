@@ -735,7 +735,7 @@
     "attack": { "damage": 12, "type": "pierce", "range": 8, "cooldown_ticks": 20,
                 "projectile": "vis.projectile_arrow", "volley": 5 },
 
-    "trains": ["unit.knight", "unit.elite_swordsman", "unit.trebuchet", "unit.dragon"],
+    "trains": ["unit.knight", "unit.elite_swordsman", "unit.trebuchet"],
     "drop_off": [],
     "age_required": 3
   },
@@ -1115,5 +1115,72 @@
 
     "buildable": false,
     "is_gate": true
+  },
+
+  "_note_dragon_nest": [
+    "THE DRAGON NEST (PLAN.md 13.2), declared 2026-09-04. A MAP POI, NOT A BUILDING",
+    "ANYBODY BUILDS -- `buildable: false` is the existing mechanism for exactly this",
+    "('the system may place this, the menu may not offer it', the same flag the stone",
+    "walls use), so it needs no new concept and no exception in SelectionActions.",
+    "",
+    "`blocks_movement: false`, AND THAT IS A GAMEPLAY DECISION RATHER THAN A DETAIL. A",
+    "10x10 blocking footprint dropped in open ground would be the largest obstacle on",
+    "the map and would reroute every path near it. What the nest actually is is a henge",
+    "of stones with bushes between them: you walk through it. The footprint's job is",
+    "occupancy -- so nobody drops a house on the nest -- which is precisely the split",
+    "`blocks_movement` exists for and the same call `building.field` made.",
+    "",
+    "THE 10x10 FOOTPRINT IS DERIVED, NOT PICKED. `vis.dragon_nest`'s furthest prop sits",
+    "8.8 m from centre and METRES_PER_TILE is 2.0, so the art reaches 4.4 tiles each",
+    "way; 10 covers it with a little to spare. If the layout in visuals.json grows, this",
+    "has to grow with it or the art will hang outside the tiles the nest claims.",
+    "",
+    "NO cost, NO build_time_ticks, NO age_required THAT MEANS ANYTHING -- it is placed",
+    "by MapGen at world build, so there is nothing to pay and no age to wait for.",
+    "",
+    "IT IS DESTRUCTIBLE ON PURPOSE: killing the nest kills the baby growing in it, which",
+    "is what makes a claim something you have to HOLD and what lets a rival deny it.",
+    "That rule is not written yet -- see 13.2 -- and hp is what it will act on.",
+    "",
+    "hp 1200 IS PROVISIONAL AND WANTS THE OWNER'S EYE. It has to survive long enough",
+    "that holding the nest for 360 s is a real defence, and fall fast enough that denial",
+    "is a real option -- so it is a number about the LENGTH OF THAT WINDOW, not about",
+    "how sturdy stones are. For scale: field 100, house 550, watch tower 850, town",
+    "centre 2000, castle 4800. 1200 puts it above every ordinary building and well under",
+    "a castle, so a committed raid breaks it inside the window and a couple of stray",
+    "soldiers do not.",
+    "",
+    "visual_rubble POINTS AT THE NEST ITSELF, AND THAT IS A KNOWN WART. There is no",
+    "rubble bake, and a ruined henge would still have its stones standing -- but it means",
+    "a destroyed nest looks exactly like a live one, which is misleading the moment the",
+    "claim rule exists. The likely answer when 13.2 lands is to remove the entity on",
+    "death rather than leave rubble; recorded here so it is a decision and not a",
+    "surprise. visual_foundation is set for the same reason: the nest is placed COMPLETE",
+    "by MapGen and should never BE a foundation, and leaving it empty would draw a",
+    "magenta placeholder if anything ever did."
+  ],
+
+  "building.dragon_nest": {
+    "name": "Dragon Nest",
+    "visual": "vis.dragon_nest",
+    "visual_foundation": "vis.dragon_nest",
+    "visual_rubble": "vis.dragon_nest",
+
+    "hp": 1200,
+    "footprint": [10, 10],
+    "los": 4,
+
+    "cost": {},
+    "build_time_ticks": 0,
+
+    "provides_pop": 0,
+    "garrison_cap": 0,
+
+    "trains": [],
+    "drop_off": [],
+    "age_required": 1,
+
+    "buildable": false,
+    "blocks_movement": false
   }
 }

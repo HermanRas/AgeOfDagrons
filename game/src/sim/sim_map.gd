@@ -183,23 +183,32 @@ func is_buildable(t: Vector2i, domain: int = Domain.LAND) -> bool:
 func is_terrain_passable(t: Vector2i, domain: int = Domain.LAND) -> bool:
 	if not in_bounds(t):
 		return false
+	# ⚠️ **AIR ANSWERS BEFORE `move_cost`, AND THAT IS THE WHOLE FIX.**
+	#
+	# `move_cost` comes from `TERRAIN_COST`, which marks ROCK and FOREST IMPASSABLE -- and
+	# until 2026-09-04 this returned false on those tiles BEFORE looking at the domain. So
+	# `DOMAIN_TERRAIN[AIR]`, which lists rock and forest as crossable, was a lie: a flying
+	# unit was refused precisely the tiles flying is for, while the table read as though air
+	# already worked. Never noticed because the only air unit had `speed: 0`, so nothing
+	# asked.
+	#
+	# ⚠️ **AND IT RETURNS EARLY RATHER THAN CONSULTING THE TABLE, WHICH IS A HOT-PATH
+	# DECISION.** `PathService._sync_rect` calls this for every tile of every domain grid --
+	# 65k per sweep on a 256x256 map -- so the first version, which moved the
+	# `DOMAIN_TERRAIN` array lookup ahead of this integer compare for ALL domains, put an
+	# `Array.has()` in front of the cheapest possible early-out and blew the tick budget in
+	# three tests. LAND and WATER now take exactly the path they always did.
+	#
+	# The shortcut is only sound because `DOMAIN_TERRAIN[AIR]` lists **every** `Terrain`
+	# member, so there is nothing for air to look up. That is not left to trust:
+	# `test_sim_map.test_the_air_row_still_covers_every_terrain_kind` pins it, and it is what
+	# stops this early return from silently diverging from the table above.
+	if domain == Domain.AIR:
+		return true
 	var i := _index(t)
-	# ⚠️ **THE DOMAIN IS CONSULTED BEFORE `move_cost`, AND THAT ORDER IS THE WHOLE FIX.**
-	#
-	# `move_cost` is derived from `TERRAIN_COST`, which marks ROCK and FOREST IMPASSABLE --
-	# and until 2026-09-04 this function returned false on those tiles BEFORE looking at the
-	# domain. So `DOMAIN_TERRAIN[AIR]`, which lists rock and forest as crossable, was a lie:
-	# a flying unit was refused precisely the tiles that flying is for, and the table read as
-	# though air already worked. The dragon's `domain: air` had never been exercised because
-	# its `speed` was 0, so nothing had ever asked.
-	#
-	# A domain that declares a terrain crossable therefore crosses it whatever the cost array
-	# says. The cost array still governs SPEED for that domain, and IMPASSABLE remains
-	# impassable for anyone who has not declared the terrain -- which is land and water,
-	# unchanged.
-	if not (DOMAIN_TERRAIN[domain] as Array).has(terrain[i] as Terrain):
+	if move_cost[i] == IMPASSABLE:
 		return false
-	return domain == Domain.AIR or move_cost[i] != IMPASSABLE
+	return (DOMAIN_TERRAIN[domain] as Array).has(terrain[i] as Terrain)
 
 
 # ── mutation ───────────────────────────────────────────────────────────────

@@ -91,15 +91,25 @@ func test_a_tower_foundation_offers_nothing_to_garrison() -> void:
 	assert_false(_ids(SelectionActions.for_selection(facts, 1, true, [], 4)).has("garrison"))
 
 
+## ⚠️ **THIS WAS `== MAX_ACTIONS` AND IS NOW ONE UNDER IT, because the castle stopped training
+## the dragon** (2026-09-04, PLAN.md 13.2 — a dragon is claimed at a nest, never trained).
+##
+## 3 trains + garrison + upgrade + destroy + repair = 7. It was 8 exactly, which is why the
+## comment here used to read *"a ninth verb would drop Destroy silently"*.
+##
+## **Asserted as `<=` rather than as an exact number.** An equality here is a tripwire that
+## fires on any roster edit and says nothing about whether the row is CORRECT — it broke on
+## this one, and the number it was guarding was never the point. What must stay true is that
+## the row fits and that nothing real fell off the end.
 func test_the_castles_action_row_still_fits_in_its_eight_slots() -> void:
-	# 4 trains + garrison + upgrade + repair + destroy = 8 exactly. `_capped` slices
-	# at MAX_ACTIONS, so a ninth verb would drop Destroy silently.
 	var facts := _building_facts(&"building.castle", 1, ["unit.archer"])
 	var actions := SelectionActions.for_selection(facts, 1, true, [], 4)
-	assert_eq(actions.size(), SelectionActions.MAX_ACTIONS)
+	assert_true(actions.size() <= SelectionActions.MAX_ACTIONS,
+			"the row must fit: %d of %d" % [actions.size(), SelectionActions.MAX_ACTIONS])
 	var ids := _ids(actions)
 	assert_true(ids.has("garrison"))
 	assert_true(ids.has("destroy"), "and nothing fell off the end")
+	assert_true(ids.has("repair"), "which at 7 now includes the placeholder")
 
 
 # ── the roster in the detail grid ───────────────────────────────────────────

@@ -154,23 +154,62 @@ func test_a_building_without_one_does_not() -> void:
 	assert_false(_actions(_building_facts(10, &"building.barracks")).has("stop"))
 
 
-func test_the_castle_sheds_repair_rather_than_destroy_at_the_cap() -> void:
-	# A castle with a rally point asks for nine of MAX_ACTIONS' eight. Repair has been
-	# a disabled placeholder since 4.3 and does nothing when pressed; Destroy is a real
-	# command. Repair is last in the row precisely so the cap takes it.
+## ⚠️ **THE CASTLE NO LONGER OVERFLOWS, so this test no longer tests what it is named for —
+## and the rule it was guarding is pinned below instead.**
+##
+## It asserted that a castle with a rally point asks for NINE of `MAX_ACTIONS`' eight and that
+## Repair is the one dropped. The castle stopped training the dragon on 2026-09-04 (PLAN.md
+## 13.2: claimed at a nest, never trained), so the row is 3 trains + garrison + upgrade + stop
+## + destroy + repair = **8 exactly** — at the cap, shedding nothing.
+##
+## **A DATA EDIT SILENTLY RETIRED A BEHAVIOUR TEST, which is the lesson worth keeping.** No
+## building may now exceed eight, so nothing here exercises `_capped`'s slice at all;
+## `test_the_row_sheds_the_placeholder_before_a_real_verb` below drives the ordering rule
+## directly, where a roster change cannot reach it.
+func test_the_castle_now_sits_exactly_at_the_cap_with_a_rally_point() -> void:
 	var facts := _building_facts(10, &"building.castle", 1, Vector2i(30, 30))
 	var ids := _actions(facts)
-	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS)
-	assert_true(ids.has("stop"), "the new verb is there")
-	assert_true(ids.has("destroy"), "and the real command survived")
-	assert_false(ids.has("repair"), "the placeholder is what fell off")
+	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS, str(ids))
+	assert_true(ids.has("stop"), "the rally-clearing verb is there")
+	assert_true(ids.has("destroy"), "and the real command")
+	assert_true(ids.has("repair"), "and at exactly 8 the placeholder survives too")
 
 
-func test_the_castle_still_keeps_repair_when_it_has_no_rally_point() -> void:
+func test_the_castle_has_a_slot_to_spare_without_a_rally_point() -> void:
 	var ids := _actions(_building_facts(10, &"building.castle"))
-	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS)
+	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS - 1, str(ids))
 	assert_true(ids.has("repair"))
 	assert_true(ids.has("destroy"))
+
+
+## ⚠️ **THE ORDERING RULE, DRIVEN DIRECTLY RATHER THAN THROUGH A BUILDING.**
+##
+## When a row exceeds `MAX_ACTIONS`, `_capped` slices and whatever sits ninth is dropped
+## **silently**. Repair is last on purpose: it has been a disabled placeholder since 4.3 and
+## does nothing when pressed, while Destroy is a real command — so given one of the two has to
+## go, it must be the placeholder.
+##
+## This used to be covered only through `building.castle`, which happened to emit nine. A
+## single line in `buildings.json` took that coverage away without failing anything about the
+## rule itself, so the rule is now tested on a row this file builds. **A behaviour test tied
+## to whichever piece of data happens to be widest is a test with an expiry date.**
+func test_the_row_sheds_the_placeholder_before_a_real_verb() -> void:
+	var row: Array[HudAction] = []
+	# Seven fillers, so the two below land ninth and tenth in the same order a building
+	# emits them: ... destroy, repair.
+	for i in range(SelectionActions.MAX_ACTIONS - 1):
+		row.append(HudAction.new(&"filler:%d" % i, "Filler %d" % i))
+	row.append(SelectionActions._act(&"destroy"))
+	row.append(SelectionActions._act(&"repair", false))
+	assert_true(row.size() > SelectionActions.MAX_ACTIONS, "the fixture has to overflow")
+
+	var kept := SelectionActions._capped(row)
+	var ids: Array[String] = []
+	for a in kept:
+		ids.append(String(a.id))
+	assert_eq(kept.size(), SelectionActions.MAX_ACTIONS, "sliced to the cap")
+	assert_true(ids.has("destroy"), "the real command must survive the slice")
+	assert_false(ids.has("repair"), "the disabled placeholder is what falls off")
 
 
 func test_a_watch_tower_has_room_for_everything() -> void:

@@ -82,6 +82,11 @@ func test_the_full_roster_is_present() -> void:
 		&"building.market", &"building.blacksmith", &"building.stable",
 		&"building.archery_range", &"building.dock", &"building.field",
 		&"building.watch_tower", &"building.guard_tower", &"building.castle",
+		# A GAIA MAP POI, not a building anybody builds (`buildable: false`, PLAN.md 13.2,
+		# declared 2026-09-04). It is in this list because the list is "every building def
+		# that exists", and it is the first entry that no player can ever own -- which is why
+		# `test_skins` had to grow a second exemption for it.
+		&"building.dragon_nest",
 		&"building.monastery", &"building.university", &"building.siege_workshop",
 		&"building.wonder",
 		# WALLS, three tiers of four pieces (PLAN.md 5.8). Twelve defs and only six

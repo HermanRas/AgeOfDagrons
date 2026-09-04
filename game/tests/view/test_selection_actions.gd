@@ -383,18 +383,32 @@ func test_a_building_lists_only_the_units_its_owner_has_the_age_for() -> void:
 
 func test_the_castle_fills_in_across_two_ages() -> void:
 	# The castle is the widest gate in the roster: knights in age 3, then elite
-	# swordsmen, the trebuchet and the dragon in age 4.
+	# swordsmen and the trebuchet in age 4.
 	var age3 := _ids(SelectionActions.for_selection(
 			_building_facts(&"building.castle"), 1, true, [], 3))
 	assert_true(age3.has(&"train:unit.knight"))
 	assert_false(age3.has(&"train:unit.elite_swordsman"))
-	assert_false(age3.has(&"train:unit.dragon"))
 
 	var age4 := _ids(SelectionActions.for_selection(
 			_building_facts(&"building.castle"), 1, true, [], 4))
 	for unit_id in [&"train:unit.knight", &"train:unit.elite_swordsman",
-			&"train:unit.trebuchet", &"train:unit.dragon"]:
+			&"train:unit.trebuchet"]:
 		assert_true(age4.has(unit_id), "age 4 castle offers %s" % unit_id)
+
+
+## ⚠️ **THE CASTLE DOES NOT TRAIN THE DRAGON, AND IT USED TO** (owner, 2026-09-04). This test
+## asserted `train:unit.dragon` at age 4 until the route was dropped: there is one dragon on a
+## map, she is gaia's, and the only way to own one is to kill her and hold the nest for 360 s
+## while her baby grows (PLAN.md 13.2). Pinned as an ABSENCE because a train button is how the
+## old route would come back by accident — `trainable_at: []` on the unit and a missing entry
+## in `building.castle.trains` are two places, and this reads the result of both.
+func test_no_building_offers_to_train_a_dragon() -> void:
+	for building_id in GameDataRegistry.building_ids():
+		for age in [1, 2, 3, 4]:
+			var ids := _ids(SelectionActions.for_selection(
+					_building_facts(building_id), 1, true, [], age))
+			assert_false(ids.has(&"train:unit.dragon"),
+					"%s at age %d must not offer a dragon" % [building_id, age])
 
 
 func test_a_train_row_never_overflows_its_grid_at_any_age() -> void:

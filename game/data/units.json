@@ -58,11 +58,12 @@
     "age 4. A LESSON WORTH KEEPING: a comment naming a blocker outlives the",
     "blocker, and the number it justifies is the last thing anyone re-reads.",
     "",
-    "`limit` IS AN ART CONSTRAINT, NOT A BALANCE NUMBER. The dragon is the only",
-    "unit that carries one. It has no playercolour mask and cannot be given one,",
-    "so two on screen are indistinguishable -- and colours.json says player",
-    "colour is the only thing marking ownership in v1. How many is here; WHOSE",
-    "they are counted across depends on the match mode, in UnitLimitSystem.",
+    "THERE IS ONE DRAGON ON A MAP AND NOBODY TRAINS IT. It has no playercolour",
+    "mask and cannot be given one, so two on screen would be unattributable --",
+    "colours.json says player colour is the only ownership cue in v1. The answer",
+    "is not a cap but the design: gaia's mother paths around the nest, and you",
+    "claim a dragon by killing her and holding the nest. See the dragon's own",
+    "`_note_not_trainable` below, and PLAN.md 13.2.",
     "",
     "`packing` IS THE SECOND SPEED, added 2026-08-28 with `SiegeSystem` (PLAN.md",
     "4.13). 0 A.D. ships each engine as a packed/unpacked actor PAIR, and the",
@@ -872,7 +873,6 @@
     "los": 12,
     "domain": "air",
     "pop_cost": 10,
-    "limit": 1,
 
     "cost": { "food": 500, "gold": 800 },
     "build_time_ticks": 2000,
@@ -889,7 +889,46 @@
       "cooldown_ticks": 150
     },
 
-    "trainable_at": ["building.castle"],
+    "_note_not_trainable": [
+      "NOBODY TRAINS A DRAGON. `trainable_at` is empty and that is the design, settled by",
+      "the owner on 2026-09-04: there is ONE dragon on a map, she is gaia's, she paths",
+      "around `building.dragon_nest`, and the only way to own one is to kill her, hold the",
+      "nest for 360 s while her baby grows, and receive the grown dragon. PLAN.md 13.2.",
+      "",
+      "SHE CARRIES A `wildlife` BLOCK, AND THAT IS NOT A LOOPHOLE TO SILENCE A WARNING.",
+      "GameDataRegistry warns when a unit is trainable nowhere, exempting wildlife because",
+      "wildlife enters a match by being PLACED (4.13's wolf) -- which is exactly how the",
+      "mother arrives. By this codebase's own definition she is wildlife: gaia's, hostile,",
+      "and needing a task, a path, a facing and a cooldown, every one of which lives on",
+      "SimUnit. `roam_radius` IS the owner's 'pathing around the nest'; `aggro_radius` is",
+      "what makes her a guardian rather than scenery; `flees: false` because a guardian",
+      "that bolted the first time it was hit would be no guard at all.",
+      "",
+      "SHE DROPS NO CARCASS ON PURPOSE. Every other predator leaves a `res.*` node to",
+      "harvest. Her death drops a BABY instead, which is a spawn rule (13.2) and not a",
+      "carcass -- so `carcass` is absent rather than set to something meat-shaped.",
+      "",
+      "IT WAS `[\"building.castle\"]` UNTIL TODAY, and PLAN.md's roster table still said so",
+      "while 13.2 described the nest -- two routes to the same unit, written a page apart,",
+      "which is how `only one dragon` and `trains at the castle` both looked true.",
+      "",
+      "`cost` AND `build_time_ticks` ARE KEPT DELIBERATELY. Nothing charges them now, and",
+      "they are the record of what the unit was priced at -- 500 food + 800 gold, age 4 --",
+      "if a castle route ever returns. Deleting them would lose the balance work; a reader",
+      "should know they are inert, which is what this note is for.",
+      "",
+      "`age_required` IS ALSO INERT for the same reason: it gates a TRAIN MENU this unit no",
+      "longer appears in. A nest is placed by MapGen whatever age anyone is."
+    ],
+
+    "wildlife": {
+      "aggro_radius": 10,
+      "roam_radius": 8,
+      "flees": false,
+      "herdable": false
+    },
+
+    "trainable_at": [],
     "age_required": 4
   }
 }

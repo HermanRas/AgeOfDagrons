@@ -137,6 +137,20 @@ func test_air_crosses_everything_including_what_stops_the_ground_domains() -> vo
 			"and forest, which is most of what obstructs a map")
 
 
+## ⚠️ **THE GUARD ON `is_terrain_passable`'s AIR SHORTCUT.** That function returns `true` for
+## AIR without consulting `DOMAIN_TERRAIN` at all, because the lookup sat in front of the
+## cheapest early-out and cost three tick-budget tests. The shortcut is only correct while the
+## table's air row covers **every** terrain kind — so if a WATER_DEEP-like eighth kind is ever
+## added and left off that row, this fails here rather than becoming a dragon that flies over
+## something the table says it cannot.
+func test_the_air_row_still_covers_every_terrain_kind() -> void:
+	var air: Array = SimMap.DOMAIN_TERRAIN[SimMap.Domain.AIR]
+	for kind in SimMap.Terrain.values():
+		assert_true(air.has(kind),
+				"DOMAIN_TERRAIN[AIR] must list %s, or is_terrain_passable's shortcut lies"
+				% SimMap.Terrain.keys()[kind])
+
+
 ## And it flies OVER things, not just over ground. A dragon that could cross a forest but not
 ## a town centre would still be walled in by a building line.
 func test_air_ignores_what_is_standing_on_the_ground() -> void:

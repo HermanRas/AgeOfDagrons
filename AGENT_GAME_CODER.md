@@ -438,7 +438,21 @@ points at it instead of at `game/`**, and it has its own suite:
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
 & $godot --path MapMaker res://dev/preview_editor.tscn                   # 4 canvas screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
+Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
 ```
+
+⚠️ **`maps/` IS AUTHORED CONTENT, NOT A SCRATCH DIRECTORY — DELETE YOUR TEST MAPS** (project
+owner, 2026-09-04: *"don't commit random test maps to the repo, always delete test maps unless
+deliberately created as demo content for people cloning the repo"*). `maps/river_demo` was
+committed on the 16.2 round trip and should not have been: nothing depends on it existing and
+`author_map.tscn` writes it again in seconds, so it is a build artefact that happened to land
+in a tracked folder. Removed.
+
+**THE ONE EXCEPTION IS `maps/sample_duel`, AND IT IS DELIBERATE.** It is committed so the suite
+runs on a **clean clone** — `test_skirmish_screen.test_the_committed_sample_map_reaches_the_picker`
+asserts it is discoverable, and a picker with nothing in it cannot be shown to work. The other
+tests in that section skip rather than fail when it is missing; that one does not. **Do not
+tidy it away.**
 
 ⚠️ **THE TWO-COMMAND ROUND TRIP IS THE ONLY THING THAT PROVES PHASE 16'S CONTRACT**, and it
 needs both projects: `author_map` writes the file, `preview_saved_map --folder` plays it and
@@ -550,6 +564,34 @@ rendered frame. Node methods that need a viewport — `grab_focus()`,
 `get_local_mouse_position()` — must be guarded with `is_inside_tree()` or they print an engine
 error per test, which `ScriptErrorSpy` does **not** catch because it is an ERROR and not a
 SCRIPT ERROR.
+
+**TWO TRAPS FROM THE 13.x PASS, both of which cost a red suite:**
+
+- ⚠️ **A ONE-LINE DATA EDIT CAN SILENTLY RETIRE A BEHAVIOUR TEST.** Dropping `unit.dragon`
+  from `building.castle.trains` took the castle's action row from 9 to 8, and the castle was
+  **the only thing in the game that exceeded `SelectionActions.MAX_ACTIONS`** — so
+  `test_the_castle_sheds_repair_rather_than_destroy_at_the_cap` stopped exercising `_capped`'s
+  slice at all. Two of its assertions failed, which is the lucky case; had the row gone from 9
+  to 8 in the other direction the test would have kept passing while the rule went untested.
+  **A behaviour test tied to whichever piece of data happens to be widest has an expiry date**
+  — the shedding rule is now driven on a synthetic row, and roster-derived counts are asserted
+  with `<=` rather than `==` where the exact number was never the point.
+- ⚠️ **`SimMap.is_terrain_passable` IS A HOT PATH.** `PathService._sync_rect` calls it for
+  every tile of every domain grid — ~65k per full sweep on a 256² map. Fixing the AIR domain
+  by moving the `DOMAIN_TERRAIN[domain].has(...)` array lookup ahead of the
+  `move_cost == IMPASSABLE` integer compare **blew the tick budget in three tests**, for every
+  domain, to fix one. AIR now returns early and LAND/WATER take exactly the path they always
+  did. The early return is only sound because AIR's row lists every terrain kind, so
+  `test_the_air_row_still_covers_every_terrain_kind` pins that rather than trusting it.
+
+**A UNIT THAT NOBODY TRAINS MUST BE `wildlife`, OR THE DATA IS "INCONSISTENT".**
+`GameDataRegistry` warns `"unit 'x' is trainable at no building"` and exempts only
+`is_wildlife` — and **four separate tests assert `load_warnings.is_empty()`**, so one warning
+reds all four with a message about data cleanliness that names the wrong culprit. The dragon
+earned the flag honestly rather than by adding an exemption: she is gaia's, hostile, placed
+rather than built, and `roam_radius`/`aggro_radius` are exactly the guardian behaviour 13.2
+wants, so `WildlifeSystem` supplies it free. `MapGenerator.PREDATORS` names species per map
+type, so the flag does **not** place her anywhere by accident.
 
 There is **no CI**. Every check is a local command someone runs by hand.
 

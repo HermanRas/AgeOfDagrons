@@ -1,4 +1,31 @@
 {
+  "_note_dragon_nest": [
+    "⚠️ A `_note` IS ONLY SAFE AT THE TOP LEVEL OF THIS FILE, and that is why this one",
+    "lives up here instead of beside the entry it describes. `entity_sfx` reads",
+    "`units`/`buildings`/`resources` and looks up a def id inside them -- it never",
+    "filters `_`-prefixed keys the way GameDataRegistry._read_json does for the roster",
+    "files. A note placed inside the `buildings` block on 2026-09-04 was therefore read",
+    "as an ENTRY: `entity_sfx` tried to assign an Array to a Dictionary and aborted",
+    "eight assertions, and the def-existence test reported `_note_dragon_nest` as a",
+    "building that does not exist. The convention differs per file; this file's is here.",
+    "",
+    "THE DRAGON NEST HAS NO `build` ENTRY, AND THAT ABSENCE IS THE HONEST ONE: nobody",
+    "builds it (`buildable: false`, PLAN.md 13.2), so there is no villager hammering to",
+    "accompany. Only `complete` and `select` are set, which are the two test_audio_seam",
+    "requires of every building.",
+    "",
+    "`complete.universal` RATHER THAN `complete.wonder`, even though a henge is the more",
+    "wonder-shaped thing. That cue can only ever fire if something spawns the nest as a",
+    "FOUNDATION and finishes it, which MapGen will not do -- so it is a sound that should",
+    "never be heard, and a triumphal fanfare going off because of a bug would be a loud",
+    "way to be told about it. Neutral is the right sound for an event that means",
+    "something has gone wrong.",
+    "",
+    "`select.monastery` BECAUSE THE CORE OF THE NEST IS A SHRINE",
+    "(`structures/celts/small_stone_monument.xml`). That one genuinely plays: the nest is",
+    "selectable, and it is the only sound a player will ever associate with it."
+  ],
+
   "_note": [
     "WHICH SOUND EACH ENTITY MAKES (PLAN.md 7.5, A.7). The companion to",
     "audio.json and a different question from it: audio.json maps a sound ID to",
@@ -111,6 +138,8 @@
     "building.university":     { "complete": "complete.university",     "select": "select.university",  "build": "villager.build_stone" },
     "building.siege_workshop": { "complete": "complete.siege_workshop", "select": "select.barracks",    "build": "villager.build_saw" },
     "building.wonder":         { "complete": "complete.wonder",         "select": "select.wonder",      "build": "villager.build_stone" },
+
+    "building.dragon_nest":    { "complete": "complete.universal",      "select": "select.monastery" },
 
     "building.wall_wood_short":       { "complete": "complete.wall", "select": "select.wall", "build": "villager.build_saw" },
     "building.wall_wood_medium":      { "complete": "complete.wall", "select": "select.wall", "build": "villager.build_saw" },

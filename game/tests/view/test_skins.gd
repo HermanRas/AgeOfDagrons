@@ -135,10 +135,29 @@ func test_every_building_with_a_baked_age_variant_declares_the_age_map() -> void
 	# exclusive by _validate_variants().
 	const NOT_AGE_SKINNED := [&"building.field"]
 
+	## ⚠️ **NOBODY OWNS A DRAGON NEST, SO NOBODY ADVANCES IT** (added 2026-09-04, PLAN.md
+	## 13.2). This is the deliberate second exemption the comment above asks for, and it is a
+	## different KIND from the field's: the field has four bakes that are not ages, whereas the
+	## nest is a gaia map POI (`buildable: false`) with **one** bake and no owner. The rule
+	## this test enforces is "it must modernise as its owner advances", and a henge of standing
+	## stones has no owner to advance — it is not going to be rebuilt in brick when Rome
+	## arrives. So it carries neither an age map nor variants, and both absences are asserted
+	## rather than merely skipped.
+	const UNOWNED_POI := [&"building.dragon_nest"]
+
 	var aged := _entries_with("ages")
 	var varied := _entries_with("variants")
 	for building_id in reg.building_ids():
 		var bd: BuildingDef = reg.building(building_id)
+		if UNOWNED_POI.has(building_id):
+			assert_false(bd.buildable,
+					"%s is exempt because nobody owns it, so it must not be buildable"
+					% building_id)
+			assert_false(aged.has(String(bd.visual)),
+					"%s's visual %s has no owner to age with" % [building_id, bd.visual])
+			assert_false(varied.has(String(bd.visual)),
+					"%s's visual %s has one bake, not a set" % [building_id, bd.visual])
+			continue
 		if NOT_AGE_SKINNED.has(building_id):
 			assert_true(varied.has(String(bd.visual)),
 					"%s's visual %s offers interchangeable variants" % [building_id, bd.visual])
@@ -157,7 +176,12 @@ func test_units_carry_the_colour_flag_and_buildings_do_not_yet() -> void:
 	# untinted through a path that looks like it worked.
 	# Two units genuinely cannot be tinted, and the exemptions are named rather
 	# than inferred so adding a third is a deliberate edit here:
-	#   unit.dragon   -- bespoke art, no playercolor mask at all.
+	#   unit.dragon   -- MEASURED, not assumed: white against blue moved 0 of 5,567 opaque
+	#                    pixels. 0 A.D.'s dragon carries no playercolour mask, and the rigged
+	#                    bake goes through an adapter with no `player_colour` path at all, so
+	#                    a mask appearing tomorrow would still not be enough. (The comment
+	#                    here said "bespoke art", which was wrong twice over -- it is 0 A.D.'s
+	#                    own fauna/dragon.xml.)
 	#   unit.ballista -- 0 A.D. puts NO player colour on any siege engine; its
 	#                    eight tint passes measured 0.0%, i.e. eight copies of one
 	#                    picture. unit.onager only escapes this because its actor
@@ -167,17 +191,25 @@ func test_units_carry_the_colour_flag_and_buildings_do_not_yet() -> void:
 	var tinted := _entries_with("colours")
 	for unit_id in reg.unit_ids():
 		var ud: UnitDef = reg.unit(unit_id)
-		# WILDLIFE IS SKIPPED BY RULE, not added to the list above, and the difference
-		# matters. The two exemptions are facts about particular art -- somebody could
-		# bake the dragon a mask tomorrow. A wolf is owner 0's: there is no player
-		# whose colour it could wear, so there is nothing to bake and never will be.
-		if ud.is_wildlife:
-			assert_false(tinted.has(String(ud.visual)),
-					"%s is gaia's and has no colour to wear" % unit_id)
-			continue
+		# ⚠️ **THE NAMED EXEMPTIONS ARE TESTED FIRST, AND THE ORDER STOPPED BEING COSMETIC
+		# ON 2026-09-04.** The dragon became `is_wildlife` that day (she is gaia's guardian
+		# at the nest, PLAN.md 13.2), so the wildlife branch below would have swallowed her
+		# -- and its reason does not apply to her. Wildlife is exempt because *"there is no
+		# player whose colour it could wear"*, and **a dragon CAN come to be owned**: killing
+		# the mother and holding the nest hands the grown baby to a player. She is exempt for
+		# the other reason entirely, which is that the art has no mask. Same assertion, wrong
+		# explanation, and the explanation is the part a reader acts on.
 		if UNTINTABLE.has(unit_id):
 			assert_false(tinted.has(String(ud.visual)),
 					"%s claims no colour bake it has not got" % unit_id)
+			continue
+		# WILDLIFE IS SKIPPED BY RULE, not added to the list above, and the difference
+		# matters. The two exemptions are facts about particular art -- somebody could
+		# bake the dragon a mask tomorrow. A wolf is owner 0's and stays owner 0's: there is
+		# no player whose colour it could wear, so there is nothing to bake and never will be.
+		if ud.is_wildlife:
+			assert_false(tinted.has(String(ud.visual)),
+					"%s is gaia's and has no colour to wear" % unit_id)
 			continue
 		assert_true(tinted.has(String(ud.visual)),
 				"%s's visual %s declares per-colour bakes" % [unit_id, ud.visual])

@@ -998,7 +998,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `building.wall_stone` + `gate_stone` | 3 | | `pers/*` |
 | `building.wall_reinforced` + `gate_reinforced` | 4 | | `rome/*` |
 | `building.wonder` | 4 | Wonder victory (11.2) | `hellenic_epic_temple` |
-| `building.dragon_nest` | — | **Not buildable** — a map POI (13.2). Footprint for occupancy only, never a placement ghost | 22× `bush_badlands`, 12× `standing_stone`, `shrine_celtic` |
+| `building.dragon_nest` | ✅ declared 2026-09-04 | **Not buildable** (`buildable: false`) — a map POI (13.2). 10×10, `blocks_movement: false`: the footprint stops a house being dropped on it, and you walk through a henge. **hp 1200 is provisional** — it is really a number about the 360 s window. Still needs MapGen placement | 22× `prop_nest_bush`, 12× `prop_standing_stone`, `prop_shrine_celtic` — **all three baked, staged AND now declared**. ⚠️ **The shrine is the CORE**, not a prop: `EntityView` draws a visual before its props, so "no core" would have painted a magenta placeholder inside its own decoration. The bush is `flora/trees/temperate_bush_biome.xml`, not the `bush_badlands` this row used to name |
 
 **Units** — one hand-picked actor for all four ages, deliberately mixed-civ. Cavalry point at the
 `_m` mount, which carries its `_r` rider as a nested prop.
@@ -1034,8 +1034,8 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `unit.elite_swordsman` | 4 | Castle | `units/athenians/infantry_swordsman_c` — `_c`, not `_e`: 0 A.D. dresses its Athenian champion in the citizen-tier mesh, so this is a visibly *different soldier* from `unit.swordsman`, which is better for a Castle unit |
 | `unit.galleon` | 4 | Dock | `structures/ptolemies/quinquereme` — recipe written, unbaked |
 | `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `units/han/siege_mangonel` + `siege_mangonel_pivot_packed`. The only entity exercising plural `trainable_at` |
-| `unit.dragon` | — | Castle | `fauna/dragon` ✅ |
-| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at 10% scale. **Also what `Mode.TROPHY` needs** (11.2) |
+| `unit.dragon` | — | **Not trained — claimed.** ~~Castle~~, dropped 2026-09-04: the nest is the only route (13.2) | `fauna/dragon` ✅ rigged |
+| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at **20% scale** (owner, 2026-09-04; this said 10%, and no new bake is needed either way). **Also what `Mode.TROPHY` needs** (11.2), for a different job — see 13.2 |
 
 **GAIA — and the split matters, because it moved on 2026-08-23.** This paragraph listed every
 animal as a `res.*` resource node and was the last place in the document still describing the world
@@ -2321,6 +2321,68 @@ attack" is indistinguishable from "nothing in this fixture would have".
 13.2 Dragon Nest POI: guardian dragon, claim-on-defeat, 360 s baby-dragon timer, destructible.
 *(The nest is composed entirely from existing gaia props — all three staged. The dragon was never
 bespoke either: it is 0 A.D.'s own `fauna/dragon.xml`.)*
+
+#### 13.1 ✅ DONE 2026-09-04 — the adult dragon flies
+
+`vis.dragon_rigged`, `speed: 220` (owner's call — faster than the scout cavalry at 195, because it
+flies and is the most expensive thing on the map), and **`air` made real**: `DOMAIN_TERRAIN[AIR]`
+had listed rock and forest since 2.2 but `is_terrain_passable` tested `move_cost` — where both are
+`IMPASSABLE` — before ever reaching the domain, so the air row was unreachable. Nothing caught it
+because the only air unit had `speed: 0` and no path was ever requested. **A declared row in a
+table is indistinguishable from a working one.** Air now also ignores occupancy, so it flies over
+buildings; a flyer stopped by forest *and* buildings is a land unit with extra steps. This reversed
+a pinned test that asserted the opposite, and that test now records the reversal.
+
+Facing verified on `preview_facing_chart` at all 8 directions × 3 clips — correct and consistent
+between clips. The chart grew `--magnify` to get there: at the infantry default of 3× a 9.19 m
+dragon overflowed every cell and produced an unreadable wall of wings.
+
+#### 13.2 — the nest is the ONLY route to a dragon (owner, 2026-09-04)
+
+⚠️ **THE ROSTER TABLE AND THIS PHASE CONTRADICTED EACH OTHER FOR MONTHS AND BOTH LOOKED TRUE.**
+§9's line for `unit.dragon` said **Castle**; 13.2 here described a guardian and a claim. Two routes
+to one unit, written a page apart, which is exactly why *"only one dragon"* and *"trains at the
+castle"* could both be believed. **Settled: there is no castle route.** `trainable_at` is now `[]`
+and `building.castle.trains` has dropped it.
+
+The rule, as given:
+
+| | |
+|---|---|
+| **One dragon per map**, and she is **gaia's** | placed by MapGen with the nest, pathing around it |
+| **Claim by killing her** | on her death a `unit.dragon_baby` spawns at the nest |
+| **360 s to grow** | then it becomes a full `unit.dragon` **owned by the claimant** |
+| **The nest is destructible, and killing it kills the baby** | so a claim must be *held*, and a rival can deny it |
+| **Baby scale: 20%** | ~1.84 × 1.62 m — bigger than a villager, obviously a juvenile, still findable at phone zoom |
+
+**WHY THE CAP MECHANISM WAS BUILT AND THEN REMOVED, so nobody rebuilds it.** A `UnitDef.limit`
+plus a `UnitLimitSystem` (per-map in conquest, per-player in Trophy, uncapped in a scenario) was
+written and tested on 2026-09-04 against the *castle* reading. Dropping castle training left it
+with **no consumer at all** — nothing trains a dragon, so a train-time cap can never fire — and an
+unused mechanism is the same "declared but unexercised" trap 13.1 above just paid for. It is
+deleted rather than parked; `git log` has it if a unique HERO ever needs one for regicide (11.2).
+Uniqueness for the dragon is now a MapGen property: place one nest, place one mother.
+
+**Still open, and none of it is art:**
+
+- `unit.dragon_baby` needs **no new bake** — it is `vis.dragon_rigged` at 20% — but nothing in
+  `EntityView` scales a sprite today. `_draw_frame` places the frame at `Rect2(at - anchor,
+  rect.size)` with the anchor unscaled, and the mirror transform would need the factor too.
+  Footprint, selection ring and placeholder metres have to scale with it or a baby gets a 9 m
+  footprint.
+- ✅ **`building.dragon_nest` and `vis.dragon_nest` are declared (2026-09-04).** The three prop
+  atlases were **already baked and staged, and nothing in `visuals.json` pointed at them** —
+  which is indistinguishable from art that was never made, and is why this row read as
+  blocked. The shrine is the core (see §9's row); the 34 props are sorted by **x+y**, because
+  `Iso._project` puts screen y at `(x+y) * half.y` and `EntityView` splits behind-the-core from
+  in-front at `at.y < 0` — sorting by world y gets both the split and the depth order wrong and
+  looks like a renderer bug. **What is left is MapGen placement**, and one wart: `visual_rubble`
+  points at the nest itself, so a destroyed nest currently looks identical to a live one.
+- **The grow timer and the ownership transfer**, which is the first thing in this game to change
+  who owns a gaia unit. `HerdSystem` is the nearest shape and explicitly does *not* do this
+  (*"herding is not owning"*), so it is a new rule rather than an extension of that one.
+- Trophy (11.2) also wants `unit.dragon_baby`, but for a different job — one per player, as a thing
+  you protect. Sharing the def is fine; sharing the **spawn rule** is not.
 
 **ART IS NO LONGER THE BLOCKER, as of 2026-09-04.** `vis.dragon_rigged` is staged and animating —
 8 directions × `idle`/`walk`/`attack`/`die`/`decay` — so **13.1's fire breath finally has a clip
