@@ -127,6 +127,32 @@ var roam_radius: int = 0
 ## nobody ever had to deal with.
 var flees: bool = false
 
+## Whether this animal GUARDS A PLACE rather than living wherever it happens to be
+## (PLAN.md 13.2). One unit carries it: the mother dragon at the dragon nest.
+##
+## **THE OTHER FIVE ANIMALS ARE ROAMERS AND THIS ONE IS A POST, and every wildlife rule
+## that treats those as the same thing gets a guardian wrong.** `WildlifeSystem` reads
+## this in three places and each one is a rule that was written for a wolf:
+##
+##   - **the post is the thing guarded, not the tile it spawned on.** A roamer settles
+##     where it was put; a guardian adopts the nearest gaia structure, so she circles
+##     the nest rather than the patch of grass MapGen found room for her on.
+##   - **aggro is measured from the post.** Anything that comes to the nest is hers
+##     whichever side of it she is on -- and, far more importantly, *the ground she
+##     threatens is a fixed circle*. Measured from the animal it is a circle that drifts
+##     with her wandering, which is how a 600 hp flyer ends up in somebody's opening.
+##     `MapGenerator.NEST_START_CLEARANCE` is derived against this and would be
+##     unsatisfiable without it -- see its note.
+##   - **`SETTLEMENT_RADIUS` does not apply.** The retreat exists so a player can escape
+##     a roaming predator by running home (owner, 2026-08-28); a guardian is the opposite
+##     shape -- you have to go to *it*. Left in, a forward tower within 15 tiles of the
+##     nest would drive the guardian off her nest permanently, which is both a broken
+##     guardian and a free way to skip the whole fight.
+##
+## Same argument as `flees: false`, one step further out: a guardian that bolted when hit
+## would be no guard at all, and neither is one that emigrates.
+var guards_post: bool = false
+
 ## Whether walking a unit past this animal puts it under that player's orders (6.5's
 ## livestock, 2026-08-23). Sheep and cattle; nothing else.
 ##
@@ -272,6 +298,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 		u.carcass_def = StringName((wild as Dictionary).get("carcass", ""))
 		u.roam_radius = int((wild as Dictionary).get("roam_radius", 0))
 		u.flees = bool((wild as Dictionary).get("flees", false))
+		u.guards_post = bool((wild as Dictionary).get("guards", false))
 		u.is_herdable = bool((wild as Dictionary).get("herdable", false))
 	return u
 

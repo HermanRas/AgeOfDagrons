@@ -98,13 +98,28 @@ func mark_dirty(rect: Rect2i = Rect2i()) -> void:
 ## For use once the map is finished being generated (2.4a): the full sweep has to
 ## happen sometime, and paying it during setup hides it in load time instead of
 ## spending it on the player's first move order.
-func rebuild(map: SimMap) -> void:
+##
+## ⚠️ **`extra` IS WHAT THE WATER RULE BELOW CANNOT ANSWER, AND THE AIR DOMAIN IS WHY
+## (2026-09-04).** Water is decided by looking at the terrain, because a map with water in
+## it is a map a ship might sail. **There is no terrain that tells you a flyer is coming**
+## -- the air grid is wanted because of an ENTITY, and this function is handed a map. So
+## the caller that spawned the units says which domains it spawned, and the promise this
+## function makes in its own first line goes on holding.
+##
+## Without it the sweep is not skipped, it is merely MOVED to the worst possible moment:
+## `_grid_for` raises `_needs_full`, so the first air path request re-sweeps **every** grid
+## on that tick -- 33,856 tiles a grid on an eight-player board, mid-match, in one tick.
+## Nothing had ever reached this: `unit.dragon` carried `speed: 0` until 13.1, so the only
+## air unit in the game had never asked for a route.
+func rebuild(map: SimMap, extra: Array[int] = []) -> void:
 	_needs_full = true
 	# Land always; water only where there is any, so a land map never pays for a grid
 	# nothing will ever route against.
 	_grid_for(SimMap.Domain.LAND)
 	if _map_has_water(map):
 		_grid_for(SimMap.Domain.WATER)
+	for domain in extra:
+		_grid_for(int(domain))
 	_sync(map)
 
 
@@ -120,6 +135,13 @@ static func _map_has_water(map: SimMap) -> bool:
 
 func queued() -> int:
 	return _order.size()
+
+
+## Whether a grid for `domain` has been built. For `rebuild`'s own test: a grid that is
+## missing is not an error, it is a full sweep waiting to happen on somebody's first
+## order -- which is exactly the cost this class exists to move into load time.
+func has_grid_for(domain: int) -> bool:
+	return _grids.has(domain)
 
 
 ## Ask for a path for `unit_id`. Solved on this tick or a later one, depending on

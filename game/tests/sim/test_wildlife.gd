@@ -246,6 +246,139 @@ func test_a_building_far_enough_away_changes_nothing() -> void:
 	assert_eq(wolf.task_target_id, villager.id, "still hunting, out in the wild")
 
 
+# ── the guardian: an animal that belongs to a PLACE (PLAN.md 13.2) ─────────
+#
+# Five animals live wherever they happen to be; the mother dragon lives at the dragon
+# nest, and every rule above was written for the first kind. `UnitDef.guards_post` is the
+# switch and these are the three things it changes. All three were found by placing her
+# on a generated map and watching what happened -- none of them by reading.
+
+
+## The mother beside a gaia nest, which is how `MapGenerator._place_nest` stands her up:
+## one tile clear of the footprint, with the post adopted on her first think tick.
+## Returns [dragon, nest].
+func _guarded_nest(at: Vector2i = Vector2i(40, 40)) -> Array:
+	var nest := w.spawn_building(&"building.dragon_nest", 0, at,
+			SimBuilding.Phase.COMPLETE, true)
+	var dragon := w.spawn_unit(&"unit.dragon", 0, nest.tile() + Vector2i(6, 0))
+	return [dragon, nest]
+
+
+func test_a_guardian_takes_the_thing_it_guards_as_home_not_the_tile_it_stood_on() -> void:
+	# A roamer settles where it was put. She cannot: `MapGen` stands her a tile off the
+	# footprint because a unit ON a building is an overlap the validator rejects, so
+	# "where she was put" is six tiles off-centre -- and `roam_radius` would then circle a
+	# patch of grass beside the nest rather than the nest.
+	var pair := _guarded_nest()
+	var dragon: SimUnit = pair[0]
+	var nest: SimBuilding = pair[1]
+	assert_ne(dragon.tile(), nest.tile(), "the fixture really does stand her off it")
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(dragon.roam_home, nest.tile(),
+			"her post is the nest's middle, not her spawn tile")
+
+
+func test_a_roamer_still_settles_where_it_was_put() -> void:
+	# The other half, and the one that must not change: a wolf beside a gaia ruin adopts
+	# nothing. `guards_post` is the only difference between these two tests.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	w.spawn_building(&"building.dragon_nest", 0, Vector2i(44, 40),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.roam_home, Vector2i(40, 40), "a wolf guards nothing")
+
+
+func test_a_guardian_is_not_driven_off_its_nest_by_a_forward_tower() -> void:
+	# ⚠️ **THE EXPLOIT THIS CLOSES, and it costs one building.** `SETTLEMENT_RADIUS` is
+	# the player's escape from a roaming predator (owner, 2026-08-28: "so early game the
+	# player can manually run villagers back to town to save them"). A POI guardian is the
+	# opposite shape -- you have to go to IT -- so left in, one house within 15 tiles of
+	# the nest sends the dragon 20 tiles away and relocates her home there for good.
+	# The nest would then be claimable without a fight.
+	var pair := _guarded_nest()
+	var dragon: SimUnit = pair[0]
+	var nest: SimBuilding = pair[1]
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	w.spawn_building(&"building.house", 1, nest.tile() + Vector2i(8, 0),
+			SimBuilding.Phase.COMPLETE, true)
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(dragon.flee_ticks, 0, "she is not going anywhere")
+	assert_eq(dragon.roam_home, nest.tile(), "and her post has not moved")
+
+
+func test_a_guardian_answers_for_the_ground_around_its_NEST_not_around_itself() -> void:
+	# Her aggro circle is fixed to the post, and that is what makes
+	# `MapGenerator.nest_start_clearance()` satisfiable at all -- measured from the animal
+	# it drifts with her wandering, and 24 tiles of clearance on a 96-tile board cannot
+	# cover a circle that moves. It is also the plainer rule to play against.
+	#
+	# So: a villager who walks up to the nest is hers wherever she happens to be standing.
+	var pair := _guarded_nest()
+	var dragon: SimUnit = pair[0]
+	var nest: SimBuilding = pair[1]
+	var def: UnitDef = w.unit_def(&"unit.dragon")
+	# On the far side of the nest from her, inside the post's reach and further from HER
+	# than that reach -- so only the post-centred rule can see him.
+	var at := nest.tile() - Vector2i(def.aggro_radius, 0)
+	var villager := w.spawn_unit(&"unit.villager", 1, at)
+	assert_true(CombatSystem.tile_gap(dragon.tile(), Rect2i(at, Vector2i.ONE))
+			> def.aggro_radius, "the fixture is out of reach of the dragon herself")
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS * 2 + 1)
+	assert_eq(dragon.task, SimUnit.Task.ATTACK, "she came for him")
+	assert_eq(dragon.task_target_id, villager.id)
+
+
+func test_a_villager_walking_PAST_the_nest_is_not_the_guardian_s_business() -> void:
+	# The bound has to be real in both directions, or she is not a guardian, she owns the
+	# middle of the map. Beyond the post's reach and beyond her own.
+	var pair := _guarded_nest()
+	var dragon: SimUnit = pair[0]
+	var nest: SimBuilding = pair[1]
+	var def: UnitDef = w.unit_def(&"unit.dragon")
+	w.spawn_unit(&"unit.villager", 1, nest.tile() + Vector2i(0, def.aggro_radius + 8))
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS * 2 + 1)
+	_assert_not_hunting(dragon, "he is walking past, not walking in")
+
+
+func test_a_guardian_cannot_be_walked_away_from_its_post() -> void:
+	# ⚠️ **THE LEASH, AND WITHOUT IT THE CIRCLE ABOVE IS DECORATION.** She never CHOOSES a
+	# target outside her post -- she is handed them. `CombatSystem._reacquire` looks
+	# REACQUIRE_RADIUS around wherever she is STANDING the moment a target dies, and
+	# `_close_in` walks her there; two of those in a row and she is hunting somebody
+	# else's mine.
+	#
+	# Measured on a generated map before this existed: she left a nest at (33, 63),
+	# followed the kills to an AI mining site 11 tiles past her own reach, and camped it
+	# for 3,000 ticks. `test_ai_playtest` reported it as a bot that never saved 500 food.
+	var pair := _guarded_nest()
+	var dragon: SimUnit = pair[0]
+	var nest: SimBuilding = pair[1]
+	var def: UnitDef = w.unit_def(&"unit.dragon")
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+
+	# Handed a target well outside the post, exactly as a re-acquire would.
+	var far := w.spawn_unit(&"unit.villager", 1,
+			nest.tile() + Vector2i(def.aggro_radius + 10, 0))
+	dragon.set_task_attack(far.id, far.tile())
+	assert_eq(dragon.task, SimUnit.Task.ATTACK, "she is on it to begin with")
+
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_ne(dragon.task_target_id, far.id, "she has dropped him")
+	assert_true(far.alive and far.hp == far.max_hp, "and he was never touched")
+
+
+func test_a_wolf_may_still_be_led_away_because_that_is_what_a_wolf_IS() -> void:
+	# The leash is a guardian rule and only a guardian rule. A wolf chasing a villager
+	# across the map is 4.13 working; `_check_settlement_retreat` is what ends that chase,
+	# and it is the rule a guardian is exempt from instead.
+	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	var far := w.spawn_unit(&"unit.villager", 1, Vector2i(70, 40))
+	wolf.set_task_attack(far.id, far.tile())
+	_run(WildlifeSystem.THINK_INTERVAL_TICKS + 1)
+	assert_eq(wolf.task_target_id, far.id, "still going after him")
+
+
 # ── roaming and fleeing (6.1b) ─────────────────────────────────────────────
 
 func test_a_predator_with_nothing_to_hunt_wanders() -> void:

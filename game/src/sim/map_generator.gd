@@ -194,6 +194,76 @@ const PREDATORS := {
 ## eight tiles is not a herd, it is seven deer.
 const HERD_SPREAD := 3
 
+## THE DRAGON NEST AND HER MOTHER, ONE PER MAP (PLAN.md 13.2).
+##
+## ⚠️ **THIS IS THE WHOLE UNIQUENESS MECHANISM, AND THAT IS DELIBERATE.** A `UnitDef.limit`
+## plus a `UnitLimitSystem` was built and tested on 2026-09-04 against a reading in which
+## the castle trained dragons; the owner settled that there is no castle route, which left
+## the cap with no consumer at all and it was deleted. *"Uniqueness for the dragon is now a
+## MapGen property: place one nest, place one mother."* So the guarantee lives here, in one
+## call at the bottom of `_generate_once`, and nothing anywhere else has to be asked.
+##
+## **A CONTESTED MIDPOINT, WHICH IS WHY IT IS SEARCHED FROM THE MAP CENTRE.** The claim
+## rule is "kill her, then hold the nest for 360 s while the baby grows", so the nest has
+## to be ground somebody can be *denied*. At the centre it is roughly equidistant from
+## every start on every layout the four ring-based types produce, and the search widens
+## outward, so the site stays as near the middle as the terrain and the clearance allow.
+##
+## **NO RNG DRAW REACHES ANYTHING ELSE.** The nest goes in after `_place_base` and before
+## `_place_trees`, and both tree passes are pure hashes of the anchor -- so this consumes
+## from the stream at a point where nothing downstream reads it. Every existing seed keeps
+## the terrain, veins, herds and copses it always had, with a nest added on top. That is
+## the same property `_sprinkle_trees` documents having preserved, and it is not luck: it
+## is why the call sits where it does.
+const NEST_DEF := &"building.dragon_nest"
+const NEST_GUARDIAN_DEF := &"unit.dragon"
+
+## Slack beyond the arithmetic floor `nest_start_clearance()` computes. See there.
+const NEST_CLEARANCE_SLACK := 7
+
+## How far past the nest's own footprint the mother stands, in tiles.
+##
+## ONE TILE OUT, AND SHE MAY NOT STAND ON IT. A unit's entry claims the tile it is on as
+## far as placement goes (`MapData.footprint_rect_of`), so a dragon on the nest's centre is
+## an entity overlapping another entity -- which `MapValidator._overlapping_entities`
+## counts, which fails the map, which retries eight times and hands back an unplayable one.
+## It costs nothing: she adopts the nest as her post on her first tick
+## (`WildlifeSystem.POST_RADIUS`), so where exactly she was stood is not where she lives.
+const NEST_GUARDIAN_RING := 1
+
+
+## How far the nest keeps clear of every start, in tiles.
+##
+## ⚠️ **DERIVED FROM HER AGGRO RADIUS RATHER THAN WRITTEN DOWN, and that is the lesson
+## `MapGen.DEBUG_ENEMY_SQUAD` paid for**: a placement pinned to a literal goes quietly wrong
+## the day the radius it was chosen against is retuned. The floor is arithmetic:
+##
+##     aggro_radius (10)  the guard circle around the nest -- `UnitDef.guards_post`
+##   + UNIT_RING_RADIUS (7)  where the starting villagers and the scout stand
+##   ------
+##     17                 the distance at which an opening villager is NOT already inside it
+##   + NEST_CLEARANCE_SLACK (7)  room for the first houses and fields forward of the ring
+##
+## **AND IT IS ONLY SATISFIABLE BECAUSE A GUARDIAN'S AGGRO IS MEASURED FROM HER POST.**
+## Measured from the animal, the circle drifts with her wandering: `roam_radius` 8 plus the
+## nest's half-extent means she reaches 14 tiles out, so the floor would be 31 -- and the
+## two-player board puts its starts 30 tiles from the centre. There is no clearance a 96-tile
+## map can afford that keeps a 600 hp flyer out of an age-1 opening under the roaming rule.
+## The fix was the rule, not the number.
+static func nest_start_clearance() -> int:
+	return nest_guard_radius() + UNIT_RING_RADIUS + NEST_CLEARANCE_SLACK
+
+
+## How far the mother will pick a fight, measured from the nest -- her `aggro_radius`.
+##
+## READ OFF THE ROSTER so the placement moves with a retune, and defaulted rather than
+## asserted so a project without the def still generates a map. **It is a radius around the
+## NEST and not around her**, which is `UnitDef.guards_post`'s whole subject; the two
+## placement rules below both depend on that being true.
+static func nest_guard_radius() -> int:
+	var d: UnitDef = GameDataRegistry.unit(NEST_GUARDIAN_DEF)
+	return d.aggro_radius if d != null else 10
+
 ## FISH, per start, in SHALLOW water only (6.5). Deep water is excluded on purpose --
 ## it is what an island's middle ocean is made of, and a shoal five tiles from any
 ## shore is a food source a player can see and never reach until they have a dock and a
@@ -527,6 +597,12 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	var claimed: Dictionary = {}
 	for i in range(count):
 		_place_base(data, claimed, i + 1, data.starts[i], resolved, rng)
+
+	# THE DRAGON NEST, after every base and before every tree (PLAN.md 13.2). After the
+	# bases because the guaranteed opening outranks a POI and `claimed` has to be complete
+	# before the nest looks for 100 free tiles; before the trees because they read
+	# `claimed` and would otherwise grow a copse through the henge.
+	_place_nest(data, claimed, rng)
 
 	# THE LANE GOES IN BEFORE THE TREES, not by removing them afterwards. Clearing the
 	# mask means the copses are never anchored in the road at all, so a lane cannot come
@@ -1249,6 +1325,283 @@ static func _place_gaia_units(data: MapData, claimed: Dictionary, centre: Vector
 		claimed[tile] = true
 		data.add_entity(def_id, 0, tile)
 		placed += 1
+
+
+## One dragon nest and one mother, as near the middle of the map as the ground and the
+## clearance allow (PLAN.md 13.2). See `NEST_DEF` for why this is the whole of "one dragon
+## per map" and why it sits where it does in `_generate_once`.
+##
+## **BEST-EFFORT, LIKE EVERY PLACER HERE, AND THE ARCHIPELAGO IS THE CASE THAT MISSES.**
+## Its middle is open ocean and its only land is an island per player -- an island of radius
+## `ISLAND_RADIUS` centred on a start, so every tile of it is within 26 of that start and a
+## nest needing `nest_start_clearance()` (24) plus its own five-tile half-extent cannot fit
+## on dry land anywhere. It therefore gets no nest, and that falls out of the arithmetic
+## rather than out of a special case: nothing here mentions the type. **Whether a naval map
+## should get a nest islet of its own is a design question and not a bug** -- an air unit
+## crossing water a land army cannot is a good fight, and it is the owner's call.
+##
+## A missing def is also survivable and is checked first, exactly as `_place_scatter` checks
+## for its `ResourceDef`: a project without the nest declared generates the map it always
+## did rather than crashing.
+static func _place_nest(data: MapData, claimed: Dictionary, rng: RandomNumberGenerator) -> void:
+	var bd: BuildingDef = GameDataRegistry.building(NEST_DEF)
+	if bd == null:
+		return
+	# ⚠️ **PREFERRED, THEN ACCEPTED, AND THE TWO PASSES ARE WHAT THE AI TAUGHT THIS
+	# FUNCTION.** The first also keeps her reach off the straight lines between starts (see
+	# `_off_every_road`); the second drops that and takes the most central site left. A map
+	# with no nest is worse than a nest on somebody's road.
+	if _try_nest(data, claimed, rng, true):
+		return
+	_try_nest(data, claimed, rng, false)
+
+
+## One search for a nest site. True if one was found and the nest and mother were placed.
+static func _try_nest(data: MapData, claimed: Dictionary, rng: RandomNumberGenerator,
+		off_road: bool) -> bool:
+	var bd: BuildingDef = GameDataRegistry.building(NEST_DEF)
+	var footprint := bd.footprint
+	var half := int(ceil(float(maxi(footprint.x, footprint.y)) * 0.5))
+	var clearance := float(nest_start_clearance())
+	var middle := Vector2i(data.size.x / 2, data.size.y / 2)
+	var protected := _opening_tiles(data)
+	var reach := nest_guard_radius()
+	var road_keep_out := float(reach + NEST_CLEARANCE_SLACK) if off_road else 0.0
+
+	# OUTWARD FROM THE CENTRE, ring by ring, so the site is the most central one that
+	# qualifies. `max_radius` is a fraction of the board rather than a constant, because
+	# what the search has to cross is a feature of the MAP: a river map's two starts both
+	# sit at the river's midpoint, so a nest has to walk ~20 tiles ALONG the water on a
+	# 96-tile board before it is far enough from either of them -- and a fixed number that
+	# covered that would be most of the way across an eight-player board.
+	for radius in range(0, data.size.x / 3 + 1):
+		# Radius 0 is the centre tile itself; `_ring_tiles` would hand back four copies of
+		# it, since its four edge walks all degenerate onto the same tile.
+		var ring: Array[Vector2i] = [middle]
+		if radius > 0:
+			ring = _ring_tiles(middle, radius)
+		# ROTATED BY THE SEED. `_ring_tiles` starts at the north-west corner and runs
+		# clockwise, so taking the first fit would put every river map's nest on the same
+		# side of the water. The rotation is a draw from the seeded rng like every other
+		# angle in this file, so it is still identical on two machines.
+		var start := rng.randi_range(0, ring.size() - 1)
+		for n in range(ring.size()):
+			var centre: Vector2i = ring[(start + n) % ring.size()]
+			var origin := centre - footprint / 2
+			# CHEAPEST TEST FIRST, and on the archipelago that ordering is the difference
+			# between a fast miss and a slow one: `_nest_fits` gives up on its first tile of
+			# sea, and the guard sweep below is 441 lookups that never need doing.
+			if not _clear_of_every_start(data, centre, clearance):
+				continue
+			if not _nearer_the_middle(data, centre, middle):
+				continue
+			if not _off_every_road(data, centre, road_keep_out):
+				continue
+			if not _nest_fits(data, claimed, origin, footprint):
+				continue
+			if not _out_of_reach(protected, centre, reach):
+				continue
+			data.add_entity(NEST_DEF, 0, origin)
+			for t in MapData.footprint_rect_of(data.entities[data.entities.size() - 1]):
+				claimed[t] = true
+			# HER FIRST, THEN THE CLEARING, and the order is forced: she stands one tile
+			# off the footprint, which is inside her own reach, so claiming the circle
+			# first would leave her nowhere to be put.
+			_place_guardian(data, claimed, centre, half)
+			_claim_her_reach(claimed, centre, reach)
+			return true
+	return false
+
+
+## Whether a nest standing at `origin` covers nothing but free, walkable ground.
+##
+## WALKABLE, even though the nest itself does not block movement (`buildings.json`: it is a
+## henge of stones you walk through). The requirement is not about the nest -- it is that
+## the thing everybody has to come and fight over stands on ground everybody can reach, and
+## half a nest in a lake would be a POI you cannot lay siege to.
+static func _nest_fits(data: MapData, claimed: Dictionary, origin: Vector2i,
+		footprint: Vector2i) -> bool:
+	for y in range(origin.y, origin.y + footprint.y):
+		for x in range(origin.x, origin.x + footprint.x):
+			var t := Vector2i(x, y)
+			if claimed.has(t) or not data.is_ground_passable(t):
+				return false
+	return true
+
+
+## Whether `centre` is at least `clearance` tiles from every start.
+##
+## EUCLIDEAN, matching `_sprinkle_trees`' own keep-out test rather than the Chebyshev the
+## rings are built on -- what is being asked is "how far is the walk", and a diagonal
+## Chebyshev radius would let a nest sit 1.4x nearer a start on the diagonal than on the
+## axis for the same number.
+static func _clear_of_every_start(data: MapData, centre: Vector2i, clearance: float) -> bool:
+	for start in data.starts:
+		if Vector2(centre - start).length() < clearance:
+			return false
+	return true
+
+
+## Every tile of the guaranteed opening: what a player owns, and every resource node they
+## will send somebody to stand on.
+##
+## ⚠️ **THIS IS THE RULE `nest_start_clearance()` ALONE COULD NOT EXPRESS, AND THE AI FOUND
+## IT (2026-09-04).** A distance from the START protects the base and the ring the villagers
+## stand on. It does not protect the ECONOMY, because `_place_vein` walks outward from 9
+## tiles off the base for up to `VEIN_MAX_STEPS` and a 35-tile stone vein can wander a long
+## way further -- so a start whose ore happened to run toward the middle put a working tile
+## inside the dragon's reach. She then ate whoever was sent to mine it, over and over.
+##
+## `test_ai_playtest` is what reported it, and it reported it as an ECONOMY failure: the
+## bot finished 9,000 ticks on 3 food, having never saved the 500 an age costs, holding
+## three villagers of the eight it had trained. Nothing said "a dragon killed them"; the
+## symptom was a bot that could not afford to advance.
+##
+## **GAIA IS DELIBERATELY NOT IN HERE.** A deer herd or a wolf inside her circle is nobody's
+## problem -- she does not hunt gaia (`Diplomacy` sends owner 0 looking at owner 0 home as
+## "not an enemy") -- and counting them would push the nest away from the middle for no
+## gain. What is kept is precisely what a player has a reason to walk to.
+static func _opening_tiles(data: MapData) -> Dictionary:
+	var out: Dictionary = {}
+	for e in data.entities:
+		var owned := int(e.get("player", 0)) > 0
+		var workable := GameDataRegistry.resource_def(e.get("def_id", &"")) != null
+		if not owned and not workable:
+			continue
+		for t in MapData.footprint_rect_of(e):
+			out[t] = true
+	return out
+
+
+## Reserve every tile the mother answers for, so nothing is grown inside it afterwards.
+##
+## ⚠️ **`_out_of_reach` GUARDS THE GROUND THAT IS ALREADY TAKEN; THIS GUARDS THE GROUND
+## THAT IS ABOUT TO BE.** The nest goes in before both tree passes, so a check against
+## `data.entities` at that moment cannot see a single copse -- and a copse eight tiles from
+## the nest is precisely what killed the AI's villagers: a *reason* to walk into her reach,
+## which is worse than a route that happens to pass through it.
+##
+## Through `claimed`, which is the mechanism this file already uses for "nothing goes here",
+## so `_place_trees` and `_sprinkle_trees` need no idea a dragon exists. The visible result
+## is a bare clearing round the henge -- correct on a forest map for the same reason it is
+## correct anywhere: nothing grows where a dragon lives.
+static func _claim_her_reach(claimed: Dictionary, centre: Vector2i, reach: int) -> void:
+	for dy in range(-reach, reach + 1):
+		for dx in range(-reach, reach + 1):
+			claimed[centre + Vector2i(dx, dy)] = true
+
+
+## Whether nothing in `tiles` is within `reach` tiles of `centre`.
+##
+## CHEBYSHEV, because that is the metric the thing being modelled uses: `_nearest_prey`
+## measures its aggro radius with `CombatSystem.tile_gap`, and a Euclidean test here would
+## leave the diagonal corners of her real reach unprotected.
+static func _out_of_reach(tiles: Dictionary, centre: Vector2i, reach: int) -> bool:
+	for dy in range(-reach, reach + 1):
+		for dx in range(-reach, reach + 1):
+			if tiles.has(centre + Vector2i(dx, dy)):
+				return false
+	return true
+
+
+## Whether a nest here would still read as the middle of the map: no further from the
+## centre of the board than it is from the nearest start.
+##
+## ⚠️ **THIS IS WHAT STOPS "OFF THE ROAD" TURNING INTO "IN SOMEBODY'S BACK GARDEN", and
+## without it the road rule below fails in the worst possible way -- by SUCCEEDING a long
+## way out.** Starts sit on a ring, so on four or eight players there is a chord between
+## every pair and the chords crisscross the whole middle; the first ground clear of all of
+## them is the board's own corner. Measured before this existed: nests 45 to 82 tiles
+## off-centre with the nearest start at 24 tiles, which is the clearance floor. The rule
+## looked like it was working and the map was worse than if it had not.
+##
+## **A COMPARISON RATHER THAN A FRACTION**, and that is deliberate. Any "no further than a
+## quarter of the board" number has to be re-justified for every board size -- and would
+## have been wrong anyway, because the rings are Chebyshev and a diagonal cap of 32 tiles is
+## 45 tiles of real distance. *Nearer the middle than the nearest player* needs no
+## calibration, means exactly what the design says ("a contested midpoint"), and is true on
+## every board from 96 to 192.
+static func _nearer_the_middle(data: MapData, centre: Vector2i, middle: Vector2i) -> bool:
+	var from_middle := Vector2(centre - middle).length()
+	for start in data.starts:
+		if Vector2(centre - start).length() < from_middle:
+			return false
+	return true
+
+
+## Whether `centre` is at least `keep_out` tiles off the straight line between every pair
+## of starts. Always true for a `keep_out` of 0, which is the second pass.
+##
+## ⚠️ **THE MAP CENTRE IS ON EVERY ROAD, AND THAT IS GEOMETRY RATHER THAN BAD LUCK.**
+## `_start_positions` puts starts evenly around a ring, so on a two-player map they are
+## diametrically opposite and *the line between them passes through the middle of the board*.
+## A POI at the centre is therefore not "equidistant and contested", it is **parked on the
+## only road** -- and `MapValidator` guarantees that road exists.
+##
+## **`test_ai_playtest` is what found this, and it found it as an economy failure.** The bot
+## worked out its opening, picked the next nearest wood -- 60 tiles away, across the map --
+## and walked villager after villager from (41, 18) to (65, 78) past a nest at (48, 48). That
+## route passes **4.6 tiles** from the nest's middle, so every one of them was one-shot by a
+## 30-damage flyer on the way. The bot finished 9,000 ticks on 3 food with 4 units left,
+## having trained eight; nothing in the log said "dragon", only that it could never afford
+## an age. **This is PLAN.md §14's declared ceiling being reached by a new hazard rather
+## than a new defect** -- the AI has no condition that can see danger, so it will feed the
+## same route forever.
+##
+## **AND NO TUNING OF HER REACH FIXES IT, WHICH IS WHY THIS IS A PLACEMENT RULE.** Measured
+## against that route: an aggro radius of 7, 6 or 5 still catches it at 4.6 tiles, and 4
+## clears it by half a tile. Making the nest block movement makes it worse, not better --
+## A* then hugs the footprint, which is nearer her middle than cutting the corner was. The
+## only variable with any room in it is *where the nest is*.
+##
+## `keep_out` is her reach plus `NEST_CLEARANCE_SLACK`, because a real route is not a
+## straight line: it bends around woods and lakes, and the slack is what that bending
+## may cost. Seventeen tiles off the mid-line of a 96-tile board is still equidistant from
+## both starts and still the middle of the map to look at.
+static func _off_every_road(data: MapData, centre: Vector2i, keep_out: float) -> bool:
+	if keep_out <= 0.0:
+		return true
+	var here := Vector2(centre)
+	for i in range(data.starts.size()):
+		for j in range(i + 1, data.starts.size()):
+			if _gap_to_segment(here, Vector2(data.starts[i]), Vector2(data.starts[j])) < keep_out:
+				return false
+	return true
+
+
+## Distance from `p` to the segment `a`-`b`. The road, not the infinite line: two starts on
+## the far side of the board from each other say nothing about the ground beyond either of
+## them, and using the line would rule out the whole diameter rather than the part between.
+static func _gap_to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var along := b - a
+	var length_squared := along.length_squared()
+	if length_squared <= 0.0:
+		return p.distance_to(a)          # two starts on one tile; nothing to divide by
+	var t := clampf((p - a).dot(along) / length_squared, 0.0, 1.0)
+	return p.distance_to(a + along * t)
+
+
+## The mother, one tile off the nest's footprint (PLAN.md 13.2). Gaia's, like every animal.
+##
+## SHE IS NOT REQUIRED TO STAND ON LAND, and that is not laziness: she is `domain: air`, so
+## `SimMap` lets her over water, forest and rock alike, and a nest whose north side happens
+## to be a lake would otherwise leave the map's one dragon unplaced over a technicality
+## about ground she never touches. What she does need is a tile nothing else has claimed.
+##
+## The ring widens if the first is full, because the nest's own surroundings are the one
+## place on the map where something else (a base's outer resource ring, a neighbouring
+## start's trees) may already be standing.
+static func _place_guardian(data: MapData, claimed: Dictionary, centre: Vector2i,
+		half: int) -> void:
+	if GameDataRegistry.unit(NEST_GUARDIAN_DEF) == null:
+		return
+	for out in range(NEST_GUARDIAN_RING, NEST_GUARDIAN_RING + 4):
+		for t in _ring_tiles(centre, half + out):
+			if not data.in_bounds(t) or claimed.has(t):
+				continue
+			claimed[t] = true
+			data.add_entity(NEST_GUARDIAN_DEF, 0, t)
+			return
 
 
 ## Walk a vein of `def_id` outward from `VEIN_DISTANCE` tiles off the base, placing

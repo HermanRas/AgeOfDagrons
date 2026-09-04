@@ -2318,7 +2318,7 @@ attack" is indistinguishable from "nothing in this fixture would have".
 ### Phase 13 — Dragons
 
 13.1 Dragon unit: air domain, castle-tier stats, fire-breath AoE + cooldown.
-13.2 Dragon Nest POI: guardian dragon, claim-on-defeat, 360 s baby-dragon timer, destructible.
+13.2 Dragon Nest POI: guardian dragon ✅ (13.2a), claim-on-defeat, 360 s baby-dragon timer, destructible.
 *(The nest is composed entirely from existing gaia props — all three staged. The dragon was never
 bespoke either: it is 0 A.D.'s own `fauna/dragon.xml`.)*
 
@@ -2363,8 +2363,69 @@ unused mechanism is the same "declared but unexercised" trap 13.1 above just pai
 deleted rather than parked; `git log` has it if a unique HERO ever needs one for regicide (11.2).
 Uniqueness for the dragon is now a MapGen property: place one nest, place one mother.
 
+##### 13.2a ✅ DONE 2026-09-04 — MapGen places the nest and the mother
+
+`MapGenerator._place_nest` runs once per generated map, after every base and before both tree
+passes, and **that position in the pipeline is load-bearing**: `claimed` has to be complete before
+the nest looks for 100 free tiles, and both tree passes are pure hashes of the anchor rather than
+rng draws — so nothing downstream reads the stream this consumes from, and **every existing seed
+keeps the terrain, veins, herds and copses it always had** with a nest added on top.
+
+`unit.dragon` gained `guards: true` (`UnitDef.guards_post`), which is the difference between an
+animal that lives *somewhere* and one that guards a *place*. Five animals were the first kind and
+every wildlife rule was written for them; three of those rules get a guardian wrong.
+
+**The placement is arithmetic, not composition, and every number is derived:**
+
+| | |
+|---|---|
+| `nest_guard_radius()` | her `aggro_radius`, read off the roster |
+| `nest_start_clearance()` | guard radius + `UNIT_RING_RADIUS` + slack = **24** |
+| off the road | her reach + slack off the segment between every pair of starts |
+| nearer the middle | no further from the board's centre than from the nearest start |
+| her reach is `claimed` | so neither tree pass grows a reason to walk in there |
+
+Measured across 5 types × {2, 4, 8} players × 6 seeds: **every land map gets exactly one nest and
+one mother**, 0–21 tiles off centre, never nearer a start than 24. **The archipelago gets none and
+that is arithmetic rather than a hole** — its only land is an island of `ISLAND_RADIUS` 26 centred
+on a start, so no site can be 24 from that start *and* hold a 10×10 footprint. Nothing in
+`_place_nest` mentions the type; a test pins the impossibility so that changing either number
+surfaces as a decision. *Whether a naval map should get a nest islet is the owner's call.*
+
+⚠️ **THREE DEFECTS FOUND BY PLACING HER, AND NOT ONE LOOKED LIKE A DRAGON PROBLEM:**
+
+1. **`test_tick_cost` went to 22 ms on two players and 58 ms on eight**, against a 15 ms tripwire.
+   `PathService` builds one `AStarGrid2D` per domain *lazily*, and `_grid_for` raises `_needs_full`
+   — so the mother's first flight re-swept **every** grid, 33,856 tiles apiece, in one tick.
+   Water is pre-built by looking at the terrain; **nothing in terrain says a flyer is coming**, so
+   `rebuild()` now takes the domains `MapGen._domains_spawned` actually placed. Unreachable before
+   13.1: the only air unit in the game had `speed: 0` and never asked for a route.
+2. **`test_ai_playtest` finished 9,000 ticks on 3 food** with four units of the eight it trained.
+   The bot worked out its opening, picked the next nearest wood 60 tiles away and walked villager
+   after villager past the nest — and *the map centre is on every road*, because starts sit on a
+   ring and a two-player pair is diametrically opposite through it. **No tuning of her reach fixes
+   that** (7, 6 and 5 all still catch a route passing 4.6 tiles from centre; making the nest block
+   movement makes it *worse*, since A* then hugs the footprint) — so it is a placement rule.
+3. **The off-road rule then failed by succeeding**, 45–82 tiles out with the nearest start at the
+   clearance floor: on a 4- or 8-player ring the chords crisscross the whole middle and the first
+   ground clear of all of them is the board's own corner. `_nearer_the_middle` is the fix, and it
+   is a comparison rather than a fraction because a Chebyshev cap of 32 is 45 tiles diagonally.
+
+And one that was a real exploit: **`CombatSystem._reacquire` could walk the guardian off her post.**
+She never *chooses* a target outside it, but she is handed them — measured leaving a nest at
+(33, 63) to camp an AI mining site 11 tiles past her own reach for 3,000 ticks. `guards_post` now
+carries a leash, and exempts her from `SETTLEMENT_RADIUS`, without which one forward tower moves
+the dragon off the nest for good and the claim is free.
+
+**Not on the fixed debug map, and it was tried.** A 10×10 *occupied* footprint is the largest
+obstacle a 64×64 board has ever had, and four test files scan that map for clear ground —
+`test_walls`' own header already records that assuming a clear strip there *"cost two tests at
+once"*. `map_gen.gd` carries the note; `preview_dragon_nest` is where the art is looked at.
+
 **Still open, and none of it is art:**
 
+- **The claim itself** — the baby, the timer, the ownership transfer. What exists now is the mother
+  and her nest standing on the map; killing her drops nothing yet.
 - `unit.dragon_baby` needs **no new bake** — it is `vis.dragon_rigged` at 20% — but nothing in
   `EntityView` scales a sprite today. `_draw_frame` places the frame at `Rect2(at - anchor,
   rect.size)` with the anchor unscaled, and the mirror transform would need the factor too.
@@ -2376,8 +2437,9 @@ Uniqueness for the dragon is now a MapGen property: place one nest, place one mo
   blocked. The shrine is the core (see §9's row); the 34 props are sorted by **x+y**, because
   `Iso._project` puts screen y at `(x+y) * half.y` and `EntityView` splits behind-the-core from
   in-front at `at.y < 0` — sorting by world y gets both the split and the depth order wrong and
-  looks like a renderer bug. **What is left is MapGen placement**, and one wart: `visual_rubble`
-  points at the nest itself, so a destroyed nest currently looks identical to a live one.
+  looks like a renderer bug. ~~What is left is MapGen placement~~ — done, see 13.2a. One wart
+  remains: `visual_rubble` points at the nest itself, so a destroyed nest looks identical to a
+  live one.
 - **The grow timer and the ownership transfer**, which is the first thing in this game to change
   who owns a gaia unit. `HerdSystem` is the nearest shape and explicitly does *not* do this
   (*"herding is not owning"*), so it is a new rule rather than an extension of that one.

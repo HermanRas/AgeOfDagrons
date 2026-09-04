@@ -88,6 +88,19 @@ const RETREAT_SPREAD_RAD := 0.9
 ## into the water.
 const RETREAT_ATTEMPTS := 4
 
+## How far a GUARDIAN looks for the thing it guards, in tiles (PLAN.md 13.2).
+##
+## A guardian adopts a gaia structure as its post instead of settling where it stood --
+## see `UnitDef.guards_post`. This is only how far it will look on its first tick:
+## `MapGenerator._place_nest` stands the mother one tile off the nest's own footprint, so
+## the real distance is about 6 and the slack is for a scenario author placing her by hand.
+##
+## FOUND ONCE AND KEPT. `roam_home` is written on the first think and never re-derived, so
+## this costs one rect query per guardian per match rather than one per think -- and it
+## means a nest destroyed later does not un-post the dragon that was guarding it, which is
+## the right answer until 13.2's claim rule says what should happen instead.
+const POST_RADIUS := 12
+
 
 func process_tick(w: SimWorld) -> void:
 	# Sorted, because every decision below has to be identical on every machine running
@@ -117,7 +130,7 @@ func _tick_animal(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
 	# "where does this animal consider home" has an answer from the start -- a bolt can
 	# move it, and moving it from the (-1, -1) sentinel would mean nothing.
 	if u.roam_home == Vector2i(-1, -1):
-		u.roam_home = u.tile()
+		u.roam_home = _post_for(w, u, def)
 	if u.roam_cooldown > 0:
 		u.roam_cooldown -= 1
 
@@ -140,11 +153,54 @@ func _tick_animal(w: SimWorld, u: SimUnit, def: UnitDef) -> void:
 	# is already in a fight alone -- deliberately, so it does not oscillate between two
 	# villagers -- so a check placed after it would never be reached by the wolf that
 	# matters, the one already eating somebody in your town.
-	if _check_settlement_retreat(w, u, def):
+	# A GUARDIAN IS EXEMPT, and `UnitDef.guards_post` has the argument: the retreat is the
+	# player's escape from a ROAMING predator, and a POI guardian is the opposite shape --
+	# you have to go to it. Left in, one forward tower within `SETTLEMENT_RADIUS` of the
+	# dragon nest would move the dragon off the nest for the rest of the match.
+	if not def.guards_post and _check_settlement_retreat(w, u, def):
 		return
 	if def.aggro_radius > 0 and _hunt(w, u, def):
 		return
 	_roam(w, u, def)
+
+
+## Where this animal considers home on its first tick: the thing it guards, or the tile it
+## is standing on (PLAN.md 13.2).
+##
+## ⚠️ **GAIA'S BUILDINGS ONLY, which is the same filter `_nearest_settlement` applies from
+## the other side** -- that one skips `owner_id == 0` so a neutral structure never becomes a
+## wolf sanctuary, and this one keeps *nothing else*, so a guardian cannot adopt a player's
+## castle as her post and start defending it. The two together are why the nest needed no
+## new concept of ownership: gaia owns it, and both rules already knew what that meant.
+##
+## Nearest wins and the lowest id breaks a tie, as everywhere in this file -- determinism,
+## not fairness.
+func _post_for(w: SimWorld, u: SimUnit, def: UnitDef) -> Vector2i:
+	if not def.guards_post:
+		return u.tile()
+	var here := u.tile()
+	var span := POST_RADIUS * 2 + 1
+	var rect := Rect2i(here - Vector2i(POST_RADIUS, POST_RADIUS), Vector2i(span, span))
+
+	var best := here
+	var best_gap := 1 << 30
+	var best_id := 0
+	for e in w.entities_in_rect(rect):
+		if not (e is SimBuilding) or not e.alive or e.owner_id != 0:
+			continue
+		var b: SimBuilding = e
+		var gap := CombatSystem.tile_gap(here, b.footprint_rect())
+		if gap > POST_RADIUS:
+			continue          # the rect is square; the radius is meant to be too
+		if best_id != 0 and (gap > best_gap or (gap == best_gap and int(b.id) > best_id)):
+			continue
+		best_gap = gap
+		best_id = int(b.id)
+		# THE FOOTPRINT'S CENTRE, not its origin. `roam_home` is the middle of the circle
+		# she wanders and the middle of the ground she threatens, and for a 10x10 nest the
+		# origin would put both five tiles off to one corner of it.
+		best = b.tile()
+	return best
 
 
 ## Start a bolt if this animal has just been hurt. True only when it STARTED one.
@@ -270,13 +326,38 @@ func _nearest_settlement(w: SimWorld, u: SimUnit) -> Vector2i:
 
 ## Pick a fight if there is one within reach. True if it did, or is already in one.
 func _hunt(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
+	# ⚠️ **A GUARDIAN'S AGGRO IS A CIRCLE AROUND ITS POST; A ROAMER'S IS AROUND ITSELF.**
+	# `UnitDef.guards_post` carries the reasoning and `MapGenerator.nest_start_clearance`
+	# depends on it: the ground a guardian threatens has to be FIXED, or it drifts with her
+	# wandering and no clearance a 2-player board can afford keeps her out of an opening.
+	# It is also the plainer rule to play against -- come to the nest and the dragon is
+	# yours to deal with; stay away and she is not.
+	var from := u.roam_home if def.guards_post else u.tile()
+
 	# ALREADY BUSY IS LEFT ALONE. A wolf mid-chase must not re-target every five ticks
 	# onto whoever is momentarily nearest, or it oscillates between two villagers and
 	# reaches neither. `CombatSystem` drops it back to IDLE when its target dies or
 	# gets away, and that is when this looks again.
-	if u.task == SimUnit.Task.ATTACK and w.get_entity(u.task_target_id) != null:
-		return true
-	var prey := _nearest_prey(w, u, def.aggro_radius)
+	if u.task == SimUnit.Task.ATTACK:
+		var current := w.get_entity(u.task_target_id)
+		if current != null and _within_post(u, def, from, current):
+			return true
+		if current != null:
+			# ⚠️ **AND THIS IS THE LEASH, WITHOUT WHICH THE CIRCLE ABOVE IS DECORATION.**
+			# A guardian never *chooses* a target outside its post -- but it is handed
+			# them: `CombatSystem._reacquire` looks `REACQUIRE_RADIUS` around wherever the
+			# unit is STANDING the moment its target dies, and `_close_in` then walks it
+			# there. Two or three of those in a row and the guardian is a long way from
+			# what it was guarding, hunting whatever it finds.
+			#
+			# Measured, because it did not look like a chase from outside: the mother left
+			# a nest at (33, 63), followed the kills to an AI mining site at (38, 74) --
+			# 11 tiles out, past her own reach -- and camped it for 3,000 ticks, killing
+			# every villager the bot sent. `test_ai_playtest` reported that as a bot which
+			# never saved 500 food. **A guardian that can be walked away from its post is
+			# not a guardian, it is a wandering predator with extra steps.**
+			u.stop()
+	var prey := _nearest_prey(w, u, from, def.aggro_radius)
 	if prey == 0:
 		return false
 	var tile: Vector2i = w.get_entity(prey).tile()
@@ -288,6 +369,19 @@ func _hunt(w: SimWorld, u: SimUnit, def: UnitDef) -> bool:
 	if w.paths != null:
 		w.paths.request(u.id, tile)
 	return true
+
+
+## Whether `target` is still something this animal is allowed to be fighting.
+##
+## ALWAYS TRUE FOR A ROAMER, which is the behaviour every animal before the dragon had and
+## the behaviour a wolf must keep: chasing a villager home is the whole of 4.13, and
+## `_check_settlement_retreat` is what ends it.
+func _within_post(u: SimUnit, def: UnitDef, post: Vector2i, target: SimEntity) -> bool:
+	if not def.guards_post:
+		return true
+	# THE TARGET'S WHOLE FOOTPRINT, so a guardian is not talked out of a building whose
+	# near wall is inside its reach and whose centre is not.
+	return CombatSystem.tile_gap(post, target.occupied_rect()) <= def.aggro_radius
 
 
 ## Wander somewhere new within `roam_radius` of home, if it is idle and due.
@@ -376,8 +470,10 @@ static func _hash(n: int) -> int:
 ## this be attacked", and a town centre may. A wolf gnawing the corner of a granary is
 ## not what anybody means by wildlife, and it would also park the animal permanently on
 ## a target that cannot flee and takes four hundred bites to fell.
-func _nearest_prey(w: SimWorld, u: SimUnit, radius: int) -> int:
-	var here := u.tile()
+##
+## `here` IS PASSED IN RATHER THAN READ OFF `u`, and that is the guardian (13.2): a wolf
+## looks from where it is standing and the mother dragon looks from the nest. See `_hunt`.
+func _nearest_prey(w: SimWorld, u: SimUnit, here: Vector2i, radius: int) -> int:
 	var span := radius * 2 + 1
 	var rect := Rect2i(here - Vector2i(radius, radius), Vector2i(span, span))
 

@@ -183,6 +183,30 @@ const DEBUG_BEAR := [Vector2i(4, 20)]
 ## it -- which is the point: it is the first thing in the game that starts a fight.
 const DEBUG_WOLF := [Vector2i(-16, 14)]
 
+# ⚠️ THERE IS DELIBERATELY NO DRAGON NEST ON THIS MAP, AND IT WAS TRIED (2026-09-04).
+#
+# It belongs here by every argument DEBUG_BOAR and DEBUG_BEAR make -- this is the sandbox
+# where every piece of art has to be reachable to be looked at, and `vis.dragon_nest` and
+# `vis.dragon_rigged` appear in no running match, only in `preview_dragon_nest`. The nest
+# was added at (5, 5)-(14, 14): the one quadrant with nothing in it, and the only distance
+# on a 64x64 board that keeps a 600 hp flyer's guard circle clear of the opening (see
+# `MapGenerator.nest_start_clearance` -- it needs 24 tiles and the board affords 26).
+#
+# IT COST FOUR TEST FILES AND NOT ONE OF THEM WAS ABOUT A DRAGON. A nest is 10x10 of
+# OCCUPIED ground -- `blocks_movement: false` frees the pathfinder, not
+# `can_place_building` -- so it is the largest obstacle on this map by a wide margin, and
+# several tests go looking for clear ground here by SCANNING for it: `test_siege._pick_lane`
+# sweeps from (2, 2) for a clear 8-tile lane and `test_walls._clear_run` for a strip, and
+# both then measure behaviour against wherever they landed. Moving where they land breaks
+# them -- and `test_walls`' own header already records that assuming a clear strip on this
+# map "cost two tests at once" once before.
+#
+# So the fixed map keeps the shape a dozen tests depend on, and the nest lives where 13.2
+# actually puts it: MapGenerator, one per GENERATED map, which is what every real match is
+# played on. If this map ever needs one, the honest route is a bigger board rather than a
+# tighter corner.
+
+
 ## What a SECOND player gets on the debug map (MatchConfig.debug_skirmish): two
 ## soldiers and nothing else -- no town centre, no villagers, no stock. Offsets
 ## are from the FIRST player's town-centre origin, same frame as the resource
@@ -348,7 +372,30 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 			p.add_resource(kind, int(STARTING_STOCK[kind]))
 
 	if w.paths != null:
-		w.paths.rebuild(w.map)
+		w.paths.rebuild(w.map, _domains_spawned(w))
+
+
+## Every movement domain something on this map actually stands in.
+##
+## FOR `PathService.rebuild`, which can read a map and cannot read a roster: water is
+## visible in the terrain and **a flyer is not visible anywhere in it**. A generated map
+## carries one air unit -- the mother dragon at the nest (13.2) -- and without this the
+## grid she routes against is built on the tick she first wants to move, which re-sweeps
+## every grid mid-match. See `rebuild`.
+##
+## Sorted, because the order grids are created in is the order `_sync` iterates them, and
+## two hosts must build the same world in the same way (PLAN.md 7.1).
+static func _domains_spawned(w: SimWorld) -> Array[int]:
+	var out: Array[int] = []
+	for id in w.entities:
+		var e: Variant = w.entities[id]
+		if not (e is SimUnit):
+			continue
+		var domain := int((e as SimUnit).domain)
+		if not out.has(domain):
+			out.append(domain)
+	out.sort()
+	return out
 
 
 ## Populate `w` with the fixed debug map. Call after SimWorld.setup(), which has

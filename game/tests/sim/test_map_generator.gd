@@ -439,6 +439,210 @@ func test_a_wolf_never_spawns_within_reach_of_anybody_s_opening() -> void:
 							% [def_id, tile, gap, start])
 
 
+# ── one dragon per map, and it is a MapGen property (PLAN.md 13.2) ─────────
+#
+# "Uniqueness for the dragon is now a MapGen property: place one nest, place one mother."
+# A `UnitDef.limit` and a `UnitLimitSystem` were built for this and deleted on the same
+# day, because dropping the castle route left them with nothing to cap. So the guarantee
+# lives in `_place_nest` and these are the tests standing behind it.
+
+
+## Every real type except the archipelago, at every player count worth checking. The
+## archipelago is exercised separately, because it is the one that legitimately misses.
+func _land_types() -> Array:
+	var out: Array = []
+	for t in MapGenerator.real_types():
+		if t != MapGenerator.Type.ARCHIPELAGO:
+			out.append(t)
+	return out
+
+
+func _nest_middle(data: MapData) -> Vector2i:
+	var found := _entities_of(data, MapGenerator.NEST_DEF)
+	if found.is_empty():
+		return Vector2i(-1, -1)
+	var bd: BuildingDef = GameDataRegistry.building(MapGenerator.NEST_DEF)
+	return (found[0]["tile"] as Vector2i) + bd.footprint / 2
+
+
+func test_every_generated_map_carries_exactly_one_nest_and_one_mother() -> void:
+	# ONE, not "at least one" -- the whole point. And a nest with no mother is a POI you
+	# can claim for free, so the pair is asserted together rather than separately.
+	for type in _land_types():
+		for players in [2, 4, 8]:
+			for p_seed in [1, 7]:
+				var data := _generate(p_seed, type, players)
+				var where := "%s %dP seed %d" % [MapGenerator.type_name(type), players, p_seed]
+				assert_eq(_entities_of(data, MapGenerator.NEST_DEF).size(), 1,
+						"one nest on %s" % where)
+				assert_eq(_entities_of(data, MapGenerator.NEST_GUARDIAN_DEF).size(), 1,
+						"one mother on %s" % where)
+
+
+func test_the_nest_and_the_mother_belong_to_nobody() -> void:
+	# `player` 0 is what `MapGen.build_from` turns into owner 0, and both halves need it:
+	# a player-owned nest would count toward a win condition, and a player-owned dragon
+	# would be a free castle-tier flyer nobody paid for.
+	var data := _generate(4)
+	for def_id in [MapGenerator.NEST_DEF, MapGenerator.NEST_GUARDIAN_DEF]:
+		for e in _entities_of(data, def_id):
+			assert_eq(int(e["player"]), 0, "%s is gaia's" % def_id)
+
+
+func test_the_mother_stands_off_the_nest_rather_than_on_it() -> void:
+	# ⚠️ NOT COSMETIC. A unit's entry claims the tile it stands on as far as placement
+	# goes, so a dragon on the nest is an entity overlapping another entity --
+	# `MapValidator._overlapping_entities` counts it, `generate()` then retries eight
+	# times and hands back a map with `meta.problems` filled in. It would fail as an
+	# unplayable map rather than as a misplaced dragon.
+	for p_seed in [1, 2, 3]:
+		var data := _generate(p_seed)
+		var bd: BuildingDef = GameDataRegistry.building(MapGenerator.NEST_DEF)
+		var origin: Vector2i = _entities_of(data, MapGenerator.NEST_DEF)[0]["tile"]
+		var rect := SimMap.footprint_rect(origin, bd.footprint)
+		var at: Vector2i = _entities_of(data, MapGenerator.NEST_GUARDIAN_DEF)[0]["tile"]
+		assert_false(rect.has_point(at), "the mother at %s is outside %s" % [at, rect])
+
+
+func test_the_nest_stands_on_ground_an_army_can_reach() -> void:
+	# Every tile of it, and walkable rather than merely in bounds: the thing everybody
+	# has to come and fight over cannot be half in a lake. It does not block movement --
+	# it is a henge you walk through -- so this is about the siege, not the pathfinder.
+	for type in _land_types():
+		var data := _generate(6, type)
+		var bd: BuildingDef = GameDataRegistry.building(MapGenerator.NEST_DEF)
+		var origin: Vector2i = _entities_of(data, MapGenerator.NEST_DEF)[0]["tile"]
+		for y in range(origin.y, origin.y + bd.footprint.y):
+			for x in range(origin.x, origin.x + bd.footprint.x):
+				assert_true(data.is_ground_passable(Vector2i(x, y)),
+						"%s of the nest on %s is walkable"
+								% [Vector2i(x, y), MapGenerator.type_name(type)])
+
+
+func test_the_nest_is_a_contested_MIDPOINT_and_not_a_corner() -> void:
+	# ⚠️ THE TEST FOR THE BUG THE ROAD RULE INTRODUCED. `_off_every_road` keeps the nest
+	# off the lines between starts, and on a 4- or 8-player ring the chords crisscross the
+	# whole middle -- so the first ground clear of all of them is the board's own CORNER.
+	# Measured before `_nearer_the_middle` existed: nests 45 to 82 tiles off-centre with
+	# the nearest start 24 tiles away. **The rule looked like it was working.**
+	for type in _land_types():
+		for players in [2, 4, 8]:
+			var data := _generate(2, type, players)
+			var middle := Vector2i(data.size.x / 2, data.size.y / 2)
+			var nest := _nest_middle(data)
+			var from_middle := Vector2(nest - middle).length()
+			for start in data.starts:
+				assert_true(Vector2(nest - start).length() >= from_middle,
+						"%s %dP: the nest at %s is %d from the middle and %d from %s"
+								% [MapGenerator.type_name(type), players, nest,
+								int(from_middle), int(Vector2(nest - start).length()), start])
+
+
+func test_nothing_anybody_would_walk_to_is_within_the_mother_s_reach() -> void:
+	# ⚠️ **THE ONE `test_ai_playtest` PAID FOR**, and it took two rules to satisfy because
+	# it has two halves. `nest_start_clearance()` protects the town centre and the unit
+	# ring and says nothing about the ECONOMY: a start's ore vein walks outward from 9
+	# tiles off the base for up to VEIN_MAX_STEPS, so a start whose ore ran toward the
+	# middle put a working tile inside her reach -- and a working tile in her reach is a
+	# villager killed on arrival, every time one is sent, for the whole match.
+	#
+	# `_out_of_reach` covers what is standing there when the nest goes in; `_claim_her
+	# _reach` covers the two TREE passes, which run afterwards and which a check at that
+	# moment cannot see. Both are needed and this asserts the property, not either rule.
+	#
+	# Measured from the NEST and not from the dragon, which is `UnitDef.guards_post`'s
+	# whole point: a guardian's aggro circle is fixed, so this is checkable at all.
+	var reach := MapGenerator.nest_guard_radius()
+	for type in _land_types():
+		for p_seed in [1, 5, 9]:
+			var data := _generate(p_seed, type)
+			var nest := _nest_middle(data)
+			for e in data.entities:
+				var owned := int(e.get("player", 0)) > 0
+				var workable := GameDataRegistry.resource_def(e.get("def_id", &"")) != null
+				if not owned and not workable:
+					continue          # gaia animals; she does not hunt her own side
+				for t in MapData.footprint_rect_of(e):
+					var gap := maxi(absi(t.x - nest.x), absi(t.y - nest.y))
+					assert_true(gap > reach,
+							"%s seed %d: %s at %s is %d tiles from the nest, reach is %d"
+									% [MapGenerator.type_name(type), p_seed,
+									e["def_id"], t, gap, reach])
+
+
+func test_the_nest_keeps_its_distance_from_every_start() -> void:
+	# The coarse rule beside the precise one above, and it protects what has nothing
+	# standing on it yet: the ground inside the clearing where the first houses go.
+	var clearance := MapGenerator.nest_start_clearance()
+	for type in _land_types():
+		for players in [2, 4]:
+			var data := _generate(8, type, players)
+			var nest := _nest_middle(data)
+			for start in data.starts:
+				assert_true(Vector2(nest - start).length() >= float(clearance),
+						"nest at %s is %d from start %s, wants %d"
+								% [nest, int(Vector2(nest - start).length()), start, clearance])
+
+
+func test_the_clearance_is_derived_from_her_aggro_and_not_written_down() -> void:
+	# `MapGen.DEBUG_ENEMY_SQUAD` is the precedent: a placement pinned to a literal goes
+	# quietly wrong the day the radius it was chosen against is retuned. So the floor is
+	# arithmetic and this is the arithmetic.
+	var d: UnitDef = GameDataRegistry.unit(MapGenerator.NEST_GUARDIAN_DEF)
+	assert_eq(MapGenerator.nest_guard_radius(), d.aggro_radius)
+	assert_eq(MapGenerator.nest_start_clearance(),
+			d.aggro_radius + MapGenerator.UNIT_RING_RADIUS
+			+ MapGenerator.NEST_CLEARANCE_SLACK)
+
+
+func test_an_archipelago_gets_no_nest_and_that_is_arithmetic() -> void:
+	# ⚠️ A DOCUMENTED MISS, NOT A HOLE. Its middle is open ocean and its only land is one
+	# island per player, centred on that player's start with radius ISLAND_RADIUS -- so
+	# every tile of dry land is within 26 tiles of a start, and a nest needs
+	# `nest_start_clearance()` plus its own five-tile half-extent. Nothing in
+	# `_place_nest` mentions the type; this simply cannot fit.
+	#
+	# It is pinned so that a change to ISLAND_RADIUS or to the clearance which makes a
+	# nest possible here shows up as this test failing, rather than as an islet nobody
+	# decided to add. Whether a naval map SHOULD have one is the owner's call.
+	var bd: BuildingDef = GameDataRegistry.building(MapGenerator.NEST_DEF)
+	var half := maxi(bd.footprint.x, bd.footprint.y) / 2
+	assert_true(MapGenerator.ISLAND_RADIUS < MapGenerator.nest_start_clearance() + half,
+			"an island of radius %d cannot hold a nest %d tiles from its start"
+					% [MapGenerator.ISLAND_RADIUS, MapGenerator.nest_start_clearance()])
+	for players in [2, 4, 8]:
+		var data := _generate(3, MapGenerator.Type.ARCHIPELAGO, players)
+		assert_eq(_entities_of(data, MapGenerator.NEST_DEF).size(), 0,
+				"%dP archipelago" % players)
+		assert_eq(_entities_of(data, MapGenerator.NEST_GUARDIAN_DEF).size(), 0,
+				"and no mother without a nest to guard")
+
+
+func test_the_mother_is_the_one_thing_on_the_map_that_flies() -> void:
+	# The air domain was declared in 2.2 and unreachable until 13.1, because the only air
+	# unit had `speed: 0` and never asked for a route. This is what makes it reachable in
+	# a real match, so it is worth asserting that the map really does place a flyer.
+	var d: UnitDef = GameDataRegistry.unit(MapGenerator.NEST_GUARDIAN_DEF)
+	assert_eq(SimMap.from_domain_name(d.domain), SimMap.Domain.AIR)
+	assert_true(d.speed > 0, "and she can move, which she could not until 13.1")
+
+
+func test_a_generated_map_pre_builds_the_grid_its_flyer_will_route_against() -> void:
+	# ⚠️ **THE COST OF THE FIRST FLIGHT, AND IT IS PAID AT LOAD OR IN A TICK.**
+	# `PathService` builds a grid per domain lazily and `_grid_for` raises `_needs_full`,
+	# so the first air path request re-sweeps EVERY grid -- 33,856 tiles apiece on an
+	# 8-player board, mid-match, in one tick. `test_tick_cost` measured 22 ms on two
+	# players and 58 ms on eight against a 15 ms tripwire before `MapGen._domains_spawned`
+	# told `rebuild` what was coming.
+	#
+	# Water is decided by looking at the terrain; NOTHING IN THE TERRAIN SAYS A FLYER IS
+	# COMING, which is the whole reason `rebuild` needed telling.
+	var w := _world_on(4, MapGenerator.Type.FOREST, 2)
+	assert_true(w.paths.has_grid_for(SimMap.Domain.AIR),
+			"the air grid exists before anything has flown")
+	assert_true(w.paths.has_grid_for(SimMap.Domain.LAND), "and the land grid, as always")
+
+
 func test_deer_arrive_in_herds_rather_than_sprinkled() -> void:
 	# Seven deer spread evenly round a base is not a herd, it is seven deer. Each
 	# animal should have several of its own kind within a herd's spread of it.
