@@ -27,9 +27,15 @@ extends RefCounted
 enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST }
 
 ## Which surfaces a unit can cross. `UnitDef.domain` is the string form
-## ("land"); `from_domain_name()` converts. Land-only in MVP (PLAN.md 2.2), but
-## the rules are declared for all three now because `is_passable()` would
-## otherwise have to be rewritten rather than extended.
+## ("land"); `from_domain_name()` converts.
+##
+## ⚠️ **DECLARING A DOMAIN IS NOT THE SAME AS IMPLEMENTING IT, and AIR proved that.** All
+## three rows sat in `DOMAIN_TERRAIN` from 2.2 on the reasoning that `is_passable()` would
+## then be extended rather than rewritten — and the table was still wrong for AIR for months,
+## because the two functions below tested `move_cost` and `occupancy` before ever reaching
+## the domain. Nothing caught it: the only air unit had `speed: 0`, so no path was ever asked
+## for. Both are fixed and both carry a test. **A declared-but-unexercised row in a table is
+## indistinguishable from a working one.**
 enum Domain { LAND, WATER, AIR }
 
 ## Impassable to every domain -- a cliff, not a preference. Distinct from a
@@ -149,6 +155,12 @@ func index_of(t: Vector2i) -> int:
 func is_passable(t: Vector2i, domain: int = Domain.LAND) -> bool:
 	if not is_terrain_passable(t, domain):
 		return false
+	# AIR IGNORES OCCUPANCY, which is the second half of what flying means. A dragon that
+	# could cross a forest but not a town centre would still be walled in by a building line,
+	# and "over" is the one thing air has that the other two domains do not. `blocking` is a
+	# statement about the GROUND, and nothing in this game occupies the sky.
+	if domain == Domain.AIR:
+		return true
 	var i := _index(t)
 	return occupancy[i] == 0 or blocking[i] == 0
 
@@ -172,9 +184,22 @@ func is_terrain_passable(t: Vector2i, domain: int = Domain.LAND) -> bool:
 	if not in_bounds(t):
 		return false
 	var i := _index(t)
-	if move_cost[i] == IMPASSABLE:
+	# ⚠️ **THE DOMAIN IS CONSULTED BEFORE `move_cost`, AND THAT ORDER IS THE WHOLE FIX.**
+	#
+	# `move_cost` is derived from `TERRAIN_COST`, which marks ROCK and FOREST IMPASSABLE --
+	# and until 2026-09-04 this function returned false on those tiles BEFORE looking at the
+	# domain. So `DOMAIN_TERRAIN[AIR]`, which lists rock and forest as crossable, was a lie:
+	# a flying unit was refused precisely the tiles that flying is for, and the table read as
+	# though air already worked. The dragon's `domain: air` had never been exercised because
+	# its `speed` was 0, so nothing had ever asked.
+	#
+	# A domain that declares a terrain crossable therefore crosses it whatever the cost array
+	# says. The cost array still governs SPEED for that domain, and IMPASSABLE remains
+	# impassable for anyone who has not declared the terrain -- which is land and water,
+	# unchanged.
+	if not (DOMAIN_TERRAIN[domain] as Array).has(terrain[i] as Terrain):
 		return false
-	return (DOMAIN_TERRAIN[domain] as Array).has(terrain[i] as Terrain)
+	return domain == Domain.AIR or move_cost[i] != IMPASSABLE
 
 
 # ── mutation ───────────────────────────────────────────────────────────────

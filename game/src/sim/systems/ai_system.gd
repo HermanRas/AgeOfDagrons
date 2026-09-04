@@ -676,6 +676,12 @@ func _issue_train(w: SimWorld, p: SimPlayer, step: Dictionary) -> bool:
 			_why = "cannot afford %s: cost %s vs stock %s" % [unit_def, ud.cost, p.stock]
 		elif not PopulationSystem.has_room_for(w, p.id, ud.pop_cost):
 			_why = "population capped at %d/%d" % [p.pop_used, p.pop_cap]
+		elif not UnitLimitSystem.allows(w, p.id, ud):
+			# NO AI CHANGE WAS NEEDED FOR THE CAP ITSELF -- the loop above already breaks on a
+			# refused `validate()`. This branch exists so the DIAGNOSTIC does not blame the
+			# age gate for a limit, which is the same "one message for several faults" trap
+			# the MapMaker's startup report fell into on 2026-09-04.
+			_why = "%s is limited to %d and that many already exist" % [unit_def, ud.limit]
 		else:
 			_why = "%s refused %s (own age %d, unit needs %d)" % [at, unit_def, p.age,
 					ud.age_required]

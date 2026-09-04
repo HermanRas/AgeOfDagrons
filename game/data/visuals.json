@@ -1809,8 +1809,43 @@
     }
   },
 
+  "_note_dragon": [
+    "TWO DRAGON VISUALS, AND `unit.dragon` USES THE RIGGED ONE (2026-09-04).",
+    "",
+    "`vis.dragon` is the original bake off the unrigged 0 A.D. mesh: ONE static",
+    "frame, fps 1, loop false, across 8 stored directions. It cannot walk, attack",
+    "or die, which is why `unit.dragon` carried `speed: 0` for months -- a moving",
+    "unit with one frame slides across the map.",
+    "",
+    "`vis.dragon_rigged` is the same mesh with a commissioned armature, and it",
+    "bakes all five clips: idle, walk (Fly2), attack (shootFire), die and decay.",
+    "That is what unblocked 13.x.",
+    "",
+    "THE STATIC ONE IS KEPT RATHER THAN DELETED, and not out of sentiment: it is",
+    "1/50th the size (154 KB against 7.7 MB) and it is the fallback if the rigged",
+    "bake ever has to be pulled. Nothing references it today. If it is still",
+    "unreferenced when the art pack is built, drop it from the pack -- 7.7 MB is",
+    "already the single largest visual in the game.",
+    "",
+    "NEITHER CAN TAKE PLAYER COLOUR, and it was measured rather than assumed:",
+    "white against blue at `directions = 1` moved 0 of 5,567 opaque pixels. So",
+    "neither carries `colours: true`, and `unit.dragon` carries `limit: 1`",
+    "instead -- see UnitLimitSystem for why an art fact became a sim rule."
+  ],
+
   "vis.dragon": {
     "atlas": "res://assets/atlases/vis.dragon.atlas.json",
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [9.19, 8.11],
+      "height_m": 3.76,
+      "color": "#7a2c2c",
+      "facing_marker": true
+    }
+  },
+
+  "vis.dragon_rigged": {
+    "atlas": "res://assets/atlases/vis.dragon_rigged.atlas.json",
     "placeholder": {
       "shape": "capsule",
       "footprint_m": [9.19, 8.11],

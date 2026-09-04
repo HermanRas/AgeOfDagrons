@@ -68,7 +68,11 @@ func test_setting_terrain_also_sets_its_movement_cost() -> void:
 	assert_true(m.cost_at(t) > m.cost_at(Vector2i(0, 0)), "sand is slower than grass")
 
 
-func test_rock_and_forest_are_impassable_to_everything() -> void:
+## Renamed from `..._to_everything` on 2026-09-04: it only ever checked LAND and WATER, and
+## once AIR genuinely crossed them the old name was a claim the body did not make. **AIR is
+## excluded on purpose here** -- see `test_air_crosses_everything...` below for that half and
+## for why the rule was reversed.
+func test_rock_and_forest_are_impassable_to_both_ground_domains() -> void:
 	m.set_terrain(Vector2i(1, 1), SimMap.Terrain.ROCK)
 	m.set_terrain(Vector2i(2, 1), SimMap.Terrain.FOREST)
 	for t in [Vector2i(1, 1), Vector2i(2, 1)] as Array[Vector2i]:
@@ -107,14 +111,40 @@ func test_land_and_water_domains_exclude_each_other() -> void:
 	assert_false(m.is_passable(sea, SimMap.Domain.LAND), "a villager cannot walk on deep water")
 
 
-func test_air_crosses_everything_that_is_not_a_wall() -> void:
-	# Dragons are phase 13, but the rule is declared now so is_passable() extends
-	# rather than needing a rewrite.
+## ⚠️ **THIS TEST WAS REVERSED ON 2026-09-04, AND THE REVERSAL IS THE POINT.**
+##
+## It used to assert that air is stopped by ROCK, on the reasoning that *"IMPASSABLE still
+## means impassable -- it is not a domain preference"*. That reading was consistent and it
+## made `DOMAIN_TERRAIN[AIR]`, which lists rock and forest, dead weight: `is_terrain_passable`
+## tested `move_cost` first, so the table's air row could never be reached.
+##
+## Nothing noticed for months because **the only air unit had `speed: 0`** and no path was
+## ever asked for. The dragon moves now (13.x), and the question became live: FOREST is
+## IMPASSABLE too, and forest plus buildings is most of what obstructs a real map — so a
+## flyer stopped by both is a land unit with extra steps, and "over" is the only thing air
+## has that land and water do not.
+##
+## So the domain now wins over the cost array for AIR, and occupancy does not apply to it at
+## all. IMPASSABLE still means impassable for **land and water**, which is every other unit in
+## the game — see the test above.
+func test_air_crosses_everything_including_what_stops_the_ground_domains() -> void:
 	m.set_terrain(Vector2i(1, 1), SimMap.Terrain.WATER_DEEP)
 	m.set_terrain(Vector2i(2, 2), SimMap.Terrain.ROCK)
+	m.set_terrain(Vector2i(3, 3), SimMap.Terrain.FOREST)
 	assert_true(m.is_passable(Vector2i(1, 1), SimMap.Domain.AIR), "air crosses water")
-	assert_false(m.is_passable(Vector2i(2, 2), SimMap.Domain.AIR),
-			"IMPASSABLE still means impassable -- it is not a domain preference")
+	assert_true(m.is_passable(Vector2i(2, 2), SimMap.Domain.AIR), "and rock")
+	assert_true(m.is_passable(Vector2i(3, 3), SimMap.Domain.AIR),
+			"and forest, which is most of what obstructs a map")
+
+
+## And it flies OVER things, not just over ground. A dragon that could cross a forest but not
+## a town centre would still be walled in by a building line.
+func test_air_ignores_what_is_standing_on_the_ground() -> void:
+	m.set_occupied(Rect2i(6, 6, 4, 4), 99, true)
+	assert_false(m.is_passable(Vector2i(7, 7), SimMap.Domain.LAND),
+			"the building blocks the ground")
+	assert_true(m.is_passable(Vector2i(7, 7), SimMap.Domain.AIR),
+			"nothing in this game occupies the sky")
 
 
 func test_domain_names_from_unit_defs_map_onto_the_enum() -> void:

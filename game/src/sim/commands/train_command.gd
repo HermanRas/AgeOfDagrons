@@ -57,6 +57,12 @@ func validate(w: SimWorld) -> bool:
 	# which would refuse every unit in the game. See `has_room_for()`'s own header.
 	if not PopulationSystem.has_room_for(w, player_id, ud.pop_cost):
 		return false
+	# THE PER-KIND CAP (PLAN.md 13), which the dragon is the only unit to carry. Enforced
+	# HERE and not only in the menu for §4's reason -- the server is the trust boundary -- and
+	# what the limit is counted across depends on the match mode, which is
+	# `UnitLimitSystem`'s business rather than this command's.
+	if not UnitLimitSystem.allows(w, player_id, ud):
+		return false
 	# Same reasoning as PlaceBuildingCommand: `bd.trains` is the building's roster
 	# across ALL ages and the per-unit gate is what narrows it, so without this an
 	# age-2 archery range would happily queue a crossbowman for any client that

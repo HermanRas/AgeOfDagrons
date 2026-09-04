@@ -39,6 +39,25 @@ isometric orthographic camera and packed into trimmed texture atlases. CC-BY-SA 
 share-alike, so **our derived atlases are themselves CC-BY-SA 3.0** — see
 [`LICENSE-ART.md`](../../LICENSE-ART.md). The game code is MIT; the two do not merge.
 
+### One row has a second source, and it is declared under 0 A.D.'s terms by decision
+
+`vis.dragon_rigged`'s **mesh and texture are Wildfire Games'**, but its **rig and animation
+clips are not from 0 A.D. at all** — the model ships unrigged, and the armature and the five
+clips (`idle`, `Fly2`, `shootFire`, `Death`) were commissioned separately under MIT-style
+terms.
+
+⚠️ **THE PROJECT OWNER'S CALL, 2026-09-04: the whole asset is declared CC-BY-SA 3.0.** Where
+two licences meet, the **stricter one governs the combined work**, and between CC-BY-SA 3.0
+and MIT that is 0 A.D.'s — MIT permits everything share-alike does and more, so honouring
+CC-BY-SA satisfies both. Declaring the row this way is therefore correct rather than merely
+cautious, and it needs no second entry.
+
+This is written down because the generated table above says every row *derives from 0 A.D.*,
+which for this one row is **narrower than the truth** — and a reader who notices that should
+find the decision here instead of re-opening it. `tools/licence_audit.py` generates the row
+from the bake's own `attribution` block and cannot know about the rig, so **the audit passing
+is not what makes this right**; this paragraph is.
+
 ---
 
 ## Art pack — baked atlases

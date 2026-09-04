@@ -19,6 +19,7 @@
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_facing_chart.tscn
 ##   ... -- --units unit.knight,unit.villager    -- chart those instead of the default set
+##   ... -- --units unit.dragon --magnify 0.6    -- a unit too big to read at 3x
 extends Node2D
 
 const SHOT_DIR := "user://"
@@ -32,6 +33,12 @@ const ORIGIN := Vector2(130.0, 215.0)
 ## at and far too small to tell a front from a back in a screenshot. The chart exists
 ## to be READ, so it magnifies -- nearest-neighbour, since everything else here is
 ## pixel art and a smoothed sprite would invent detail to be misled by.
+## ⚠️ **THE DEFAULT IS SIZED FOR AN INFANTRYMAN, AND A BIG UNIT NEEDS `--magnify`.** A
+## villager is ~40 px tall so 3x makes her readable; the DRAGON is 9.19 m across and at 3x
+## every cell overflowed into its neighbours, producing a wall of overlapping wings in which
+## no facing could be read at all. That chart was not a *wrong* answer, it was an unreadable
+## one — which is worse, because it looks like output. `--magnify 0.6` is what the dragon
+## wants.
 const MAGNIFY := 3.0
 const CLIPS: Array[StringName] = [&"idle", &"walk", &"attack"]
 
@@ -56,6 +63,7 @@ var _units: Array[StringName] = DEFAULT_UNITS
 
 var _page := 0
 var _frames := 0
+var _magnify := MAGNIFY
 var _views: Array[EntityView] = []
 var _labels: Array[Node] = []
 
@@ -79,6 +87,7 @@ func _ready() -> void:
 	get_window().size = CHART_WINDOW
 	get_window().content_scale_size = CHART_WINDOW
 	_units = _units_argument()
+	_magnify = _magnify_argument()
 	_build(_units[0])
 
 
@@ -96,6 +105,19 @@ func _units_argument() -> Array[StringName]:
 		if not out.is_empty():
 			return out
 	return DEFAULT_UNITS
+
+
+## `-- --magnify 0.6`, for a unit too big to read at the infantry default. See `MAGNIFY`.
+##
+## Clamped rather than trusted: a 0 would draw nothing and a negative would mirror every
+## sprite, and a chart about FACING that silently flipped its own sprites would be the worst
+## possible failure of this particular instrument.
+func _magnify_argument() -> float:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] == "--magnify":
+			return clampf(float(args[i + 1]), 0.1, 12.0)
+	return MAGNIFY
 
 
 func _process(_delta: float) -> void:
@@ -155,7 +177,7 @@ func _build(unit_id: StringName) -> void:
 			view.skin_age = 0
 			view.skin_colour = -1
 			view.position = at
-			view.scale = Vector2(MAGNIFY, MAGNIFY)
+			view.scale = Vector2(_magnify, _magnify)
 			view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			# SET DIRECTLY, not through `Iso.sim_facing_to_sprite`. The chart is about
 			# what the ART does with an index; putting the conversion in the middle of

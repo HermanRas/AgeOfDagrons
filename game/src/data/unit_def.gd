@@ -191,6 +191,20 @@ var ability_amount: int = 0
 var ability_damage_type: StringName = &"melee"
 var ability_cooldown_ticks: int = 0
 
+## HOW MANY MAY EXIST AT ONCE, or **0 for no limit** — which is every unit but the dragon.
+##
+## What the number is counted ACROSS is not here: it depends on the match mode, and
+## `UnitLimitSystem.scope_for()` is where the owner's rule lives (one per map in the two
+## conquest modes, one per player in Trophy, uncapped in a scenario). A def says *how many*;
+## the mode says *whose*.
+##
+## ⚠️ **THIS IS AN ART CONSTRAINT WEARING A BALANCE FIELD'S CLOTHES.** The dragon has no
+## playercolour mask and cannot be given one (`UnitLimitSystem`'s header has the measurement),
+## so two of them on screen are indistinguishable — and `colours.json` says player colour is
+## the only thing that distinguishes ownership in v1. The limit is what makes that
+## unobservable rather than confusing. It is not a statement about how strong a dragon is.
+var limit: int = 0
+
 var packed_visual: StringName = &""
 var packed_speed: int = 0
 ## Ticks to fold up or set up, the same figure both ways. 0 A.D. gives no separate
@@ -209,6 +223,12 @@ func packs() -> bool:
 ## the same "absence is the switch" rule kept in one place.
 func has_ability() -> bool:
 	return ability_id != &""
+
+
+## Whether a cap applies to this unit at all. Same "absence is the switch" rule as `packs()`
+## and `has_ability()`, kept in one place so no caller invents `limit > 0` for itself.
+func is_limited() -> bool:
+	return limit > 0
 
 
 static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
@@ -239,6 +259,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.armor_pierce = int(armor.get("pierce", 0))
 
 	u.garrison_cap = int(d.get("garrison_cap", 0))
+	u.limit = maxi(0, int(d.get("limit", 0)))
 
 	var ability: Variant = d.get("ability")
 	if ability is Dictionary:
