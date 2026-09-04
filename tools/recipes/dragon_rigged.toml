@@ -1,0 +1,144 @@
+# The dragon, ANIMATED -- the game's namesake (PLAN.md 13.1, 13.2, A.9).
+#
+# The first recipe in the project that is not a 0 A.D. actor. `dragon.toml`
+# bakes the same creature STATIC through the zeroad adapter and stays: it is the
+# fallback if this one is ever withdrawn, and it is the control this was checked
+# against. This one drives a rigged copy through `adapter = "generic"`
+# (isobake 5592f23).
+#
+# PROVENANCE, because it is split and the licence follows the split:
+#   mesh + texture   0 A.D. / Wildfire Games, CC-BY-SA 3.0 (attribution below)
+#   rig + clips      NOT 0 A.D. -- authored on that mesh by an auto-rigger
+#   baked frames     CC-BY-SA 3.0, being renders of the 0 A.D. mesh
+# The rigging service's own terms are the one open question and are the owner's
+# to settle before this ships. See asset_request.md and game/assets/LICENCES.md.
+#
+# ⚠️ USE `dragon_rigged.blend`, NOT `Untitled.blend`. The rigger's return packs a
+# 256x256 GREEN STRIPED PLACEHOLDER where `animal_dragon.dds` belongs, and bakes
+# a lime-green dragon. Its UVs survived intact (0.009..0.991), so the fix was to
+# re-point the image node at 0 A.D.'s original; `dragon_rigged.blend` is that
+# copy and the rigger's return is untouched beside it. Nothing in a material
+# audit shows the problem -- nodes on, image packed, has_data, wired to Base
+# Color. Only opening the image does.
+id      = "vis.dragon_rigged"
+adapter = "generic"
+
+[source]
+file    = "dragon_rig/dragon_rigged.blend"
+# A stray sphere at the world origin, 1.9 m across, left by the round-trip. It
+# would bake as a ball beside the dragon. Their Camera and Light are dropped by
+# the adapter without being named.
+exclude = ["Icosphere"]
+# NO height_m AND NO drop_to_ground, both deliberately, and this is the trap the
+# adapter's docstring is about. Both options measure the ARMATURE'S REST POSE,
+# and this rig's rest is 3.89 x 7.89 x 5.44 m buried 1.78 m -- a pose no frame
+# here ever renders. The four clips below start at 9.19 x 8.11 x 3.76 m sitting
+# on z = 0, which is `dragon.toml`'s own measurement of the source to three
+# decimals. So the file is already in metres and already seated: fitting to rest
+# would scale every good clip by 0.69, and grounding it would lift a correctly
+# seated dragon 1.78 m into the air. Both would have reported `ok`.
+
+[render]
+# Copied from dragon.toml, not chosen. Same creature, same size, same camera --
+# so the two atlases are directly comparable and the canvas is calibrated rather
+# than guessed. The 8-direction idle probe packed to 67.1% with no CLIPPED.
+canvas = [320, 320]
+supersample = 4
+directions = 8
+frame_origin_at = 0.25
+engine = "eevee"
+samples = 24
+# MEASURED 2026-09-04, not inherited. Probed at 0 first and read all four
+# columns: 0 showed a back, 4 a face, 2 faced screen RIGHT and 6 screen LEFT --
+# every one inverted, and inverted CONSISTENTLY. That consistency is the
+# finding. A REFLECTION leaves 0 and 4 correct, because they are its fixed
+# points, and breaks only 2 and 6; all four wrong together rules a mirror out
+# and leaves a pure rotation. Open jaws and asymmetric wings make this subject
+# chiral, so it can fail that test where a wall cannot.
+#
+# The value equals dragon.toml's 180 and the REASON does not: there it cancels
+# something the zeroad adapter does, here it is this rig's own forward after
+# .dae -> glb -> auto-rigger -> .blend. Do not read the agreement as a project
+# constant. The next generic source gets probed the same way.
+yaw_offset_deg = 180.0
+
+# ---------------------------------------------------------------------------
+# THE CLIPS. The source holds seven actions and FIVE distinct ones: `walk` and
+# `walk002` are byte-identical keyframe data and `walk001` is the same motion
+# with redundant per-bone location curves, so the three walks are ONE cycle
+# stored three ways.
+#
+# ⚠️ EVERY CLIP FROM THIS RIGGER IS A PING-PONG, so read `end` before changing a
+# frame count. Each plays a gesture over frames 0..~29 and then retraces it
+# exactly back -- measured on the evaluated depsgraph, frame 36 mirroring 24 and
+# 44 mirroring 16 on `Death`. For a looping attack or a wingbeat that is correct
+# and wanted. For a death it is a resurrection.
+# ---------------------------------------------------------------------------
+
+[anims.idle]
+clip = "idle"
+frames = 12
+fps = 8
+loop = true
+# 0 peaks over the clip and only 0.225 m of travel -- a settle, not a cycle --
+# so the whole window is one loop and the conventional 12 @ 8 is right.
+
+[anims.walk]
+# THE SUBSTITUTION, owner's call 2026-09-04: a dragon that moves should fly.
+# `walk` is kept as the anim NAME so the game needs no change, exactly as
+# `vis.deer`'s `run` is its walk clip at 22 fps. The rigger's actual walk cycle
+# is unusable -- 3.87 x 7.82 x 5.51 m buried 1.80 m -- and replacing this with a
+# real one later is a one-line change here and nothing on the game side.
+clip = "Fly2"
+# 16 @ 12, NOT the conventional 12 @ 15, and the reason is measured: `Fly2`
+# holds TWO wingbeats, peaking at frames 20 and 40. Played as one cycle at 15
+# fps that is 2.5 wingbeats a second on a 9 m span -- hummingbird speed. 16
+# frames at 12 fps puts the pair in 1.33 s, so ~1.5 Hz and 8 frames a beat.
+# The whole clip is the clean loop: first and last wingtip heights differ by
+# 0.032 m, and a looping sample excludes the duplicate end frame anyway.
+frames = 16
+fps = 12
+loop = true
+
+[anims.attack]
+# The fire breath, and the only aggressive clip the rigger returned -- it was
+# asked for a melee `attack` and sent `Fly2` instead. So this one clip serves
+# both the 30-damage attack and the 40-damage ability until that changes.
+clip = "shootFire"
+frames = 12
+fps = 15
+loop = true
+# Its ping-pong is CORRECT here: rear up, breathe, return to neutral is what a
+# looping attack should do, so it takes the whole window.
+
+[anims.die]
+clip = "Death"
+frames = 10
+fps = 12
+loop = false
+# ⚠️ `end = 0.5` IS LOAD-BEARING. The dragon collapses at the midpoint (wingtip
+# top 3.904 m -> 2.926 m at frames 28..32) and then stands straight back up, the
+# second half mirroring the first frame for frame. Baked whole, this clip is a
+# resurrection. The one-shot rule samples [start, end] inclusive, so the last
+# frame lands exactly on the collapsed pose.
+end = 0.5
+
+[anims.decay]
+clip = "Death"
+frames = 1
+fps = 1
+loop = false
+# The corpse, held. NOT `start = 1.0` -- that is the convention everywhere else
+# in this directory and it is WRONG on a palindrome, because position 1.0 here
+# is the dragon back on its feet. 0.5 is the collapsed pose, and `frames = 1`
+# samples exactly that position. This is the standing-corpse bug of 2026-08-16
+# arriving from the other end of the clip.
+start = 0.5
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/fauna/dragon.xml"

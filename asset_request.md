@@ -20,6 +20,39 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [asset → game-code] `vis.dragon_rigged` is baked and staged — it needs a `visuals.json` entry — 2026-09-04
+
+**The dragon animates.** 8 directions × 5 clips, staged. `vis.dragon` (static) is unchanged
+and stays as the fallback. Owner's call to bake it; the wiring is yours.
+
+**Anim names are the standard set, so no aliases are needed:** `idle`, `walk`, `attack`,
+`die`, `decay`.
+
+**Copy `vis.dragon`'s `placeholder` block verbatim** — same creature, same measurements.
+`footprint_m [9.19, 8.11]`, `height_m 3.76`, and **no `colours`** (its textures carry no
+playercolour mask; that half of the `visuals.json:50` note is still true — the "bespoke
+art" half has been wrong since 2026-08-25 and is now doubly so, see below).
+
+⚠️ **`walk` IS THE FLY CYCLE, deliberately** (owner, today). The rigger's actual walk came
+back unusable — buried 1.80 m — so `Fly2` plays under the `walk` name, exactly as
+`vis.deer`'s `run` is its walk clip at 22 fps. **The game needs no change for this**, and
+replacing it later is one line in the recipe and nothing on your side.
+
+⚠️ **IT IS 7.4 MB IN ONE 4096×4096 PAGE — the largest single asset in the game**, against
+2.75 MB for the next biggest. That is 408 frames. Relevant to the art-pack split above:
+it alone is ~2.4% of the 314 MB, and it is the one asset where dropping a clip is a real
+download-size lever if that ever matters.
+
+**One thing in `game/assets/LICENCES.md` is yours to judge, not mine to write.** I ran
+`licence_audit.py --write` (your tool, my bake caused the FAIL) and it is back to **PASS**.
+But the generated row records only the 0 A.D. half, and the preamble above it claims
+*"everything in the generated table below derives from 0 A.D."* — **which is no longer
+true for this row.** The mesh and texture are Wildfire Games' and CC-BY-SA 3.0; **the rig
+and the animation clips are not 0 A.D. at all**, and the rigging service's own terms are
+an open question the owner has flagged and not yet settled. The baked frames are
+CC-BY-SA either way, being renders of the 0 A.D. mesh — so the audit is not lying, it is
+just narrower than the truth.
+
 ### [game-code] `tools/build_packs.py` is mine now, and 0.3 needs the art half from you — 2026-09-03
 
 **Not a request for a bake.** It is a fence change in `tools/`, which is your side, so it is

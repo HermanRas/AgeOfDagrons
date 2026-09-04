@@ -85,6 +85,7 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 | `vis.dock_age3` | `dock_age3.toml` | `art/actors/structures/achaemenids/dock.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.dock_age4` | `dock_age4.toml` | `art/actors/structures/romans/dock.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.dragon` | `dragon.toml` | `art/actors/fauna/dragon.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.dragon_rigged` | `dragon_rigged.toml` | `art/actors/fauna/dragon.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.elite_swordsman` | `elite_swordsman.toml` | `art/actors/units/athenians/infantry_swordsman_c.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.farm` | `farm.toml` | `art/actors/structures/plot_field_medit.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.field_age2` | `field_age2.toml` | `art/actors/structures/plot_field_temp.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
@@ -189,7 +190,7 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 | `vis.trade_cart` | `trade_cart.toml` | `art/actors/units/athenians/trader.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.transport_ship` | `transport_ship.toml` | `art/actors/structures/celts/skiff.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.trebuchet` | `trebuchet_deployed.toml` | `art/actors/units/han/siege_mangonel.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
-| `vis.trebuchet_packed` | `trebuchet_packed.toml` | `art/actors/units/han/siege_mangonel_pivot_packed.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.trebuchet_packed` | `trebuchet_packed.toml` | `art/actors/units/han/siege_mangonel_packed.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.tree_bamboo` | `tree_bamboo.toml` | `art/actors/flora/trees/bamboo.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.tree_banyan` | `tree_banyan.toml` | `art/actors/flora/trees/banyan.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.tree_beech` | `tree_beech.toml` | `art/actors/flora/trees/european_beech.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |

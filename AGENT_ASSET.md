@@ -673,6 +673,41 @@ so do not go looking for a setting. Substitute another clip (deer `run` is now
 The cost is one bake per clip set and it is the only check that would have caught
 this before the owner did, twice.
 
+**A SOURCE CLIP MAY BE A PING-PONG, AND THE FRAME COUNTS IN THIS DIRECTORY ARE A
+0 A.D. CONVENTION THAT ASSUMES IT IS NOT.** Every recipe here writes `idle` 12 @ 8,
+`walk` 12 @ 15, `die` 10 @ 12, `decay` 2 @ 1 with `start = 1.0` — inherited from
+0 A.D., whose clips run once and stop. **Nothing checks that a source agrees**, and
+the dragon's auto-rigger returned five clips of which every one plays a gesture over
+frames 0–29 and then **retraces it exactly back**. Two separate ways that ruins a
+bake, and neither reports anything:
+
+- **A DEATH BECOMES A RESURRECTION.** `Death` collapses at frames 28–32 (wingtip top
+  3.904 → 2.926 m) and stands straight back up, frame 36 mirroring 24 and 44
+  mirroring 16, ending **0.008 m from where it started**. Baked whole, the dragon
+  dies and gets up — and `decay` pinned to the final pose is a **STANDING CORPSE**.
+  That is the 2026-08-16 standing-corpse bug arriving from the *other end* of the
+  clip, which is why the fix is `AnimSpec.end` (isobake `bac2ac0`) rather than a
+  third special case: `end = 0.5` for the death, `frames = 1` with `start = 0.5`
+  for the corpse.
+- **A LOOP'S CYCLE COUNT DOUBLES.** `Fly2` holds **two** wingbeats, peaking at frames
+  20 and 40. Sampled as one cycle at the conventional 15 fps that is 2.5 wingbeats a
+  second on a 9 m span — hummingbird speed on a dragon. **`frames` and `fps` set the
+  playback rate of the WHOLE window**, so the cycle count is an input to them and not
+  a detail.
+
+**`isobake inspect` CANNOT SEE ANY OF THIS. It reports one pose**, and a frame range,
+and a frame range says nothing about shape. The measurement that does is three
+minutes: assign the action, step the frame range, and read the **evaluated
+depsgraph's** mesh (`obj.evaluated_get(dg).to_mesh()` — `bound_box` alone will not
+show a deform), plotting one scalar such as the highest vertex. Count the peaks;
+compare the first pose to the last. A palindrome is unmistakable and a two-beat cycle
+is a count.
+
+⚠️ **AND REMEMBER `_assign_action` OR THE WHOLE MEASUREMENT IS OF THE REST POSE** —
+Blender ≥4.4 needs `action_slot` bound and reports success without it, per the
+carcass note below. **Bake the rest pose as the control**: if every "posed"
+measurement equals it, the slot is not bound.
+
 **ESTABLISH THE NOISE FLOOR BEFORE CHOOSING A THRESHOLD, whenever you compare
 rendered frames.** EEVEE samples, so two frames that MUST be identical still
 differ — by ~44 in a channel at 24 samples. A decay check once used a threshold of
@@ -1070,12 +1105,29 @@ The one-line index, so a symptom can be matched to a known shape:
   coarse — **and it does not, on the evidence of the `idle` probe**, which reads as the same
   creature as the staged `vis.dragon`.
 
-  **What is actually left, now that it renders**: `walk` (above), the four-column facing
-  read on a chiral subject to fix `yaw_offset_deg`, a canvas size, and the owner looking at
-  a turntable. The "biped rest pose" that made this `owner-decision` was a measurement
-  artefact, so **the question the card was parked on has changed** — it is no longer "do you
-  accept a different creature", it is "is one broken walk cycle worth a second rigging
-  round-trip".
+  ✅ **BAKED AND STAGED 2026-09-04 as `vis.dragon_rigged`** — `tools/recipes/dragon_rigged.toml`,
+  408 frames, 8 directions × 5 clips, one 4096×4096 page at 51.7% fill, no `CLIPPED`,
+  `dirty=False` on isobake `bac2ac0`. **7.4 MB, the largest single asset in the game**
+  (next is 2.75 MB). `vis.dragon` stays as the static fallback. Wiring is the game side's
+  — raised in `asset_request.md`; `licence_audit.py --write` is back to PASS.
+
+  **`yaw_offset_deg = 180.0`, measured not inherited**, and the four-column read passes on
+  the shipped bake: 0 face, 2 screen LEFT, 4 back, 6 screen RIGHT. Probed at 0 first and
+  found all four inverted *consistently* — which is what rules out a reflection, since 0
+  and 4 are its fixed points. It equals `dragon.toml`'s 180 and **the reason differs**:
+  there it cancels a zeroad-adapter behaviour, here it is this rig's own forward. Do not
+  read the agreement as a project constant.
+
+  **`walk` is `Fly2`, the owner's call** — a dragon that moves should fly. The anim NAME is
+  kept so the game needs no change, exactly as `vis.deer`'s `run` is its walk clip.
+  Replacing it later is one line in the recipe. **16 frames @ 12 fps, not the conventional
+  12 @ 15**, because the clip holds TWO wingbeats — confirmed in the baked output, where
+  frame width dips to 134 px at indices 6 and 11 and the seam closes at 212→209 px.
+
+  **The question `P7` is parked on has changed.** The "biped rest pose" was a measurement
+  artefact, so it is no longer "do you accept a different creature" — the creature is
+  right. What is left is the owner looking at a turntable, and whether one broken walk
+  cycle is worth a second rigging round-trip.
 - ✅ **CLOSED 2026-09-01 — the deer's carcass floats 0.217 m and that is now the accepted
   state, on the owner's call: "not worth the pipeline change."** It is the only asset
   affected; its lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px
