@@ -33,6 +33,7 @@ const _OK := Color(0.55, 0.80, 0.55)
 const _BAD := Color(0.95, 0.45, 0.40)
 const _DIM := Color(0.70, 0.70, 0.74)
 
+var _startup: Startup = null
 var _root: GameRoot = null
 var _guard: FormatGuard = null
 var _label: RichTextLabel = null
@@ -41,7 +42,7 @@ var _actions: HBoxContainer = null
 
 func _ready() -> void:
 	_build_ui()
-	var lines := _startup()
+	var lines := _report()
 	_label.text = "\n".join(PackedStringArray(lines))
 	for line in lines:
 		# Stripped of BBCode for the console: the tags are for the label, and a terminal
@@ -71,7 +72,7 @@ func _open_editor() -> void:
 	# can be handed over: the editor must not have to re-run the check to know whether it may
 	# save, and a static would be a second place that answer lives.
 	var editor: Control = load("res://Editor.tscn").instantiate()
-	editor.setup(ready_to_work())
+	editor.setup(_startup)
 	get_tree().root.add_child(editor)
 	# Removed rather than hidden: this screen holds a `FormatGuard` and a report and has
 	# nothing to contribute once the editor is up.
@@ -81,21 +82,28 @@ func _open_editor() -> void:
 
 ## Is the tool in a state where it could author a map?
 ##
-## **BOTH HALVES, AND NEITHER IS OPTIONAL.** A roster with no game project behind it means an
-## empty palette; format copies that have drifted mean a file the game cannot read. 16.4b's
-## save path asks exactly this question.
+## Delegated to `Startup` since 2026-09-04, so this screen and `Editor` cannot come to
+## different conclusions -- and so a screen opened on its own can reach the same answer. See
+## `Startup`'s header for the playtest bug that moved it.
 func ready_to_work() -> bool:
-	return _root != null and not _root.path.is_empty() \
-			and GameDataRegistry.is_loaded() and _guard != null and _guard.passed()
+	return _startup != null and _startup.can_save()
 
 
-func _startup() -> Array[String]:
+## The whole report, as BBCode lines. Named `_report` and not `_startup` because the field
+## holding the `Startup` took that name -- GDScript will not have both, and the collision is a
+## parse error rather than a shadow.
+func _report() -> Array[String]:
 	var lines: Array[String] = []
 	lines.append("[b]AOD MapMaker[/b]   Godot %s" % Engine.get_version_info().string)
 	lines.append("")
 
 	# ── the game project ──
-	_root = GameRoot.resolve()
+	#
+	# Through `Startup`, which does the resolve, the roster load and the guard in one place
+	# so this screen and `Editor` cannot disagree. The locals below are kept for the report,
+	# which walks the same three stages and prints each.
+	_startup = Startup.check()
+	_root = _startup.root
 	if _root.path.is_empty():
 		lines.append("[color=#f27366]CANNOT FIND THE GAME PROJECT[/color]")
 		for p in _root.problems:
@@ -129,7 +137,9 @@ func _startup() -> Array[String]:
 
 func _roster_lines() -> Array[String]:
 	var lines: Array[String] = []
-	var ok := GameDataRegistry.load_from(_root)
+	# ALREADY LOADED BY `Startup.check()`. Loading again here would be a second read of the
+	# same files and a second chance for the two to disagree about what is in them.
+	var ok := GameDataRegistry.is_loaded()
 	lines.append("[b]roster[/b]  (read live from the game's data/, never copied)")
 	lines.append("  units       %4d" % GameDataRegistry.unit_ids().size())
 	lines.append("  buildings   %4d" % GameDataRegistry.building_ids().size())
@@ -159,7 +169,9 @@ func _roster_lines() -> Array[String]:
 
 func _format_lines() -> Array[String]:
 	var lines: Array[String] = []
-	_guard = FormatGuard.check(_root)
+	# `Startup`'s, not a fresh check: seven file hashes are cheap but two results are not one
+	# result, and this screen hands the SAME object to the editor.
+	_guard = _startup.guard if _startup.guard != null else FormatGuard.check(_root)
 	lines.append("[b]format copies[/b]  (PLAN.md 16 decision 3 — a copy nobody diffs has"
 			+ " drifted)")
 	for r in _guard.results:

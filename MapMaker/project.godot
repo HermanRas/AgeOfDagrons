@@ -10,9 +10,12 @@ config_version=5
 
 [application]
 
-config/name="AOD MapMaker"
-run/main_scene="res://Boot.tscn"
+config/name="AOD_MapMaker"
+run/main_scene="res://Editor.tscn"
 config/features=PackedStringArray("4.7")
+boot_splash/image="uid://fk1aqj4ig3pv"
+config/icon="uid://bgipudvttoo25"
+config/windows_native_icon="res://assets/icons/icon.ico"
 
 [autoload]
 

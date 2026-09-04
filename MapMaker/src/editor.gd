@@ -35,6 +35,7 @@ enum Tool { PAINT, START }
 
 var _canvas: MapCanvas = null
 var _status: Label = null
+var _notice_label: Label = null
 var _name_field: LineEdit = null
 var _width: SpinBox = null
 var _height: SpinBox = null
@@ -45,18 +46,28 @@ var _tool_buttons: Dictionary = {}
 var _document: MapDocument = null
 var _brush: int = SimMap.Terrain.GRASS
 var _tool: Tool = Tool.PAINT
-var _guard_ok := false
+
+## What the tool needs before it can save. **Never null after `_ready()`** — see `_ready()`.
+var _startup: Startup = null
 
 
-## `ready_to_work` from the boot screen: false means a format copy has drifted and saving is
-## refused (decision 3). The editor still OPENS, so somebody can look at a map — it is the
-## save that is dangerous, not the drawing.
-func setup(guard_ok: bool) -> void:
-	_guard_ok = guard_ok
+## Hand over a `Startup` the boot screen has already computed, so the work is not repeated.
+##
+## ⚠️ **AN OPTIMISATION, NOT A PRECONDITION, AND IT USED TO BE THE OTHER WAY ROUND.** 16.2
+## shipped requiring this call, the owner pointed `run/main_scene` at `Editor.tscn` — the
+## obvious thing to do, because the editor is the tool — and the editor came up with no
+## roster and Save refusing. `_ready()` now checks for itself if nobody has. See `Startup`.
+func setup(startup: Startup) -> void:
+	_startup = startup
 
 
 func _ready() -> void:
 	_build_ui()
+	# SELF-SUFFICIENT. Launched from `Boot.tscn` this is already filled in; launched directly
+	# -- as the main scene, from a preview, or from an exported build -- it is not, and doing
+	# the work here is what makes both routes behave the same.
+	if _startup == null:
+		_startup = Startup.check()
 	_new_map()
 
 
@@ -135,17 +146,36 @@ func apply_tool(tile: Vector2i) -> void:
 func save() -> Array[String]:
 	if _document == null:
 		return ["nothing to save"] as Array[String]
-	if not _guard_ok:
+	if not _startup.can_save():
 		# DECISION 3, ENFORCED AT THE ONE PLACE IT MATTERS. The guard's whole promise is that
 		# a stale tool cannot WRITE -- refusing at the button rather than at startup means
-		# the author can still look at a map while the copies are being brought back into
-		# step.
-		return ["the format copies have drifted — saving is disabled. See the startup report."] \
-				as Array[String]
+		# the author can still look at a map while whatever is wrong is put right.
+		#
+		# ⚠️ **IT REPORTS THE REASON THAT ACTUALLY FIRED.** This used to say "the format
+		# copies have drifted" whatever the fault, so a missing game project -- the thing
+		# that really happened in the 2026-09-04 playtest -- was reported as a corrupt tool.
+		return [_startup.reason] as Array[String]
 	_document.map_name = _name_field.text
 	var problems := _document.save(maps_dir())
-	_refresh_status(problems)
+	# ⚠️ **THE RESULT GOES ON ITS OWN LINE AND STAYS THERE.** It used to go into the status
+	# line, which `_refresh_status()` rewrites on **every mouse move** — so the confirmation
+	# was gone before the author's hand left the button. The owner's playtest report was
+	# exactly this: *"i clicked save, not sure if it worked"*. An action's outcome must
+	# outlive the next hover.
+	if problems.is_empty():
+		_notice("SAVED → %s" % _document.dir, _GOOD)
+	else:
+		_notice("SAVE FAILED — %s" % "; ".join(PackedStringArray(problems)), _BAD)
+	_refresh_status()
 	return problems
+
+
+## Say what just happened, and keep saying it until something else happens.
+func _notice(text: String, colour: Color) -> void:
+	if _notice_label == null:
+		return
+	_notice_label.text = "  " + text
+	_notice_label.add_theme_color_override("font_color", colour)
 
 
 # ── ui ──────────────────────────────────────────────────────────────────────
@@ -179,6 +209,13 @@ func _build_ui() -> void:
 	_status = Label.new()
 	_status.add_theme_color_override("font_color", _TEXT)
 	rows.add_child(_status)
+
+	# THE ACTION LINE, below the live status. Two lines rather than one because they have
+	# different lifetimes: the status describes the map *now* and is rewritten constantly,
+	# while this holds the last thing the author DID until they do something else.
+	_notice_label = Label.new()
+	_notice_label.add_theme_color_override("font_color", _TEXT)
+	rows.add_child(_notice_label)
 
 
 func _file_row() -> Control:
@@ -288,7 +325,12 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	if _document == null:
 		_status.text = "  no map"
 		return
-	var hover := _canvas.tile_at(_canvas.get_local_mouse_position())
+	# THERE IS NOT ALWAYS A POINTER TO ASK ABOUT. `get_local_mouse_position()` needs a
+	# viewport, and this screen is built and driven outside a tree by the suite -- which
+	# printed an engine error per test until this was guarded. Off-map is the honest answer.
+	var hover := Vector2i(-1, -1)
+	if _canvas.is_inside_tree():
+		hover = _canvas.tile_at(_canvas.get_local_mouse_position())
 	var seats := _document.seats()
 	var bits: Array[String] = [
 		"%d x %d" % [_document.data.size.x, _document.data.size.y],
@@ -308,11 +350,13 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		bits.append("saved to %s" % _document.dir.get_file())
 	if _document.dirty:
 		bits.append("UNSAVED")
-	if not _guard_ok:
-		bits.append("SAVING DISABLED — format copies have drifted")
+	if not _startup.can_save():
+		# THE REASON, not a generic banner. Three different faults with three different
+		# fixes, and the playtest that found this had the one message blaming the wrong one.
+		bits.append("SAVING DISABLED — %s" % _startup.reason)
 	_status.text = "  " + "   ".join(PackedStringArray(bits))
 	_status.add_theme_color_override("font_color",
-			_BAD if (not _guard_ok or seats < 2) else _GOOD)
+			_BAD if (not _startup.can_save() or seats < 2) else _GOOD)
 
 
 # ── small builders ──────────────────────────────────────────────────────────

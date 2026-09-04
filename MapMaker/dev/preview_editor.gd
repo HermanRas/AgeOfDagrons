@@ -19,12 +19,17 @@
 ##
 ## Usage:
 ##   Godot --path MapMaker res://dev/preview_editor.tscn
-##       -- writes user://editor_fit.png, editor_zoomed.png, editor_start.png
+##       -- writes user://editor_fit.png, editor_zoomed.png, editor_start.png,
+##          editor_saved.png
 extends Node
 
 const SHOT_DIR := "user://"
 const SETTLE_FRAMES := 30
 const UI_FRAMES := 8
+
+## The name the Save shot writes under, and the prefix `_clean_up_the_saved_map()` requires
+## before it will delete anything.
+const SHOT_MAP_NAME := "Preview Shot"
 
 var _editor: Control = null
 var _frames := 0
@@ -33,18 +38,19 @@ var _resume_at := 0
 
 
 func _ready() -> void:
-	var root := GameRoot.resolve()
-	if root.path.is_empty() or not GameDataRegistry.load_from(root):
-		printerr("cannot read the game's roster: %s"
-				% "; ".join(PackedStringArray(root.problems)))
+	# THROUGH `Startup`, and refused up front rather than photographed. A shot of a
+	# "SAVING DISABLED" banner over an empty canvas proves nothing about the drawing, which is
+	# this preview's whole job -- so a bad checkout is an exit code and a sentence.
+	var startup := Startup.check()
+	if not startup.can_save():
+		printerr("cannot preview the editor: %s" % startup.reason)
 		get_tree().quit(1)
 		return
 
 	_editor = load("res://Editor.tscn").instantiate()
-	# TRUE, because this preview is about the canvas rather than about the guard -- and the
-	# guard has its own tests plus a verified failure path (16.1). Passing false here would
-	# photograph a "SAVING DISABLED" banner and prove nothing about the drawing.
-	_editor.setup(true)
+	# NOTHING HANDED OVER ON PURPOSE. `Editor._ready()` checks for itself since the 2026-09-04
+	# playtest, and a preview that skipped that path would not be photographing the editor the
+	# main scene produces. The check above is what guarantees the shot is worth taking.
 	add_child(_editor)
 
 
@@ -74,8 +80,18 @@ func _process(_delta: float) -> void:
 		5:
 			_report("player 1's start")
 			_shoot("editor_start")
+			_save_for_the_shot()
+		6:
+			# ⚠️ **THE ONE DEFECT ONLY A PICTURE CAN CHECK.** The owner's playtest said *"i
+			# clicked save, not sure if it worked"* -- the confirmation went into the status
+			# line, which `_refresh_status()` rewrites on every mouse move, so it was gone
+			# before their hand left the button. No test can see a label that is overwritten a
+			# frame later; this shot can.
+			_report("after pressing Save")
+			_shoot("editor_saved")
+			_clean_up_the_saved_map()
 			print("")
-			print("OK — three shots written. Look at them: the arithmetic is tested, the"
+			print("OK — four shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -118,6 +134,36 @@ func _build_map() -> MapDocument:
 func _zoom_to(tile: Vector2i, zoom: float) -> void:
 	(_editor._canvas as MapCanvas).center_on(tile, zoom)
 	_hold(UI_FRAMES)
+
+
+## Press Save the way the button does, then hold a few frames so the notice is on screen.
+##
+## Named `SHOT_MAP_NAME` and **deleted again afterwards**: this writes into repo-root `maps/`,
+## which is a tracked directory, and a preview that leaves a folder behind turns `git status`
+## into noise. Anything but the real `Editor.save()` would photograph a label nothing sets.
+func _save_for_the_shot() -> void:
+	_editor._name_field.text = SHOT_MAP_NAME
+	var problems: Array = _editor.save()
+	if problems.is_empty():
+		print("saved to %s" % _editor.document().dir)
+	else:
+		printerr("save failed: %s" % "; ".join(PackedStringArray(problems)))
+	_hold(UI_FRAMES)
+
+
+func _clean_up_the_saved_map() -> void:
+	var dir: String = _editor.document().dir
+	if dir.is_empty() or not dir.get_file().begins_with("preview_"):
+		# GUARDED BY THE NAME, so a future edit that renames the document cannot make this
+		# delete an author's real map.
+		return
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	for f in d.get_files():
+		d.remove(f)
+	DirAccess.open(dir.get_base_dir()).remove(dir.get_file())
+	print("  cleaned up %s" % dir)
 
 
 func _report(what: String) -> void:

@@ -204,3 +204,4 @@ AgeOfDragons.exe
 # secret is in them -- `.env` was never committed (see Secrets above, verified with
 # `git log --all -- .env`) -- so the history is an untidiness, not an exposure.
 kanban/
+MapMaker.exe

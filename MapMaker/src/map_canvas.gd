@@ -98,13 +98,74 @@ var _hover := Vector2i(-1, -1)
 var _panning := false
 var _painting := false
 
+## The cursor's own layer. See `_ready()`: this is what stops a mouse-move repainting 9,216
+## tiles.
+var _overlay: Control = null
+
+## Where the last paint sample landed, so a fast drag can be filled in. -1 between strokes.
+##
+## ⚠️ **WITHOUT THIS A DRAG LEAVES GAPS.** `InputEventMouseMotion` arrives once a frame at
+## best, so a quick stroke jumps several tiles between samples and paints a dotted line --
+## which the owner's playtest reported as *"some tiles did not place due to lag"*. It was not
+## lag dropping them; nothing had ever been asked to paint them.
+var _last_painted := Vector2i(-1, -1)
+
 
 func _ready() -> void:
 	# THE CANVAS TAKES PRESSES. Every other Control in this tool is a button or a field, so
 	# this is the one place the default `MOUSE_FILTER_STOP` is what we want.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_CLICK
-	resized.connect(queue_redraw)
+	# ⚠️ **THE MAP DREW OVER THE TOOLBAR WITHOUT THIS** (owner's playtest, 2026-09-04). A
+	# `Control` does not clip its own `_draw` to its rect, and this one draws a whole map
+	# projected from an arbitrary pan -- so at any zoom that put tiles above y=0 they landed
+	# on top of the buttons. It reads as a layering bug and is one line.
+	clip_contents = true
+	resized.connect(_on_resized)
+
+	# THE HOVER CURSOR LIVES ON ITS OWN LAYER, AND THAT IS THE PERFORMANCE FIX.
+	#
+	# The owner's playtest: *"the tool is very slow ... some tiles did not place due to
+	# lag"*. The cause was not the tile count as such -- it was that the CURSOR was drawn in
+	# the same `_draw` as the terrain, so every mouse-move called `queue_redraw()` on the
+	# whole map. At fit-to-view a 96x96 map is 9,216 tiles and the cull covers all of them,
+	# so a single drag re-issued ~18,000 draw calls per motion event.
+	#
+	# Godot redraws a `CanvasItem` only when that item is invalidated, so putting the cursor
+	# on a child means moving the mouse repaints four line segments and the terrain is left
+	# alone. The terrain now redraws only when the MAP or the VIEW changes, which is what a
+	# `_draw` is for.
+	_overlay = Control.new()
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.draw.connect(_draw_overlay)
+	add_child(_overlay)
+
+
+## The cull depends on the rect, so a resize is a view change.
+##
+## The overlay is not resized here: it is anchored `PRESET_FULL_RECT`, so the layout pass
+## follows the canvas on its own. Assigning `size` as well fought the anchors and Godot said
+## so ("If you want to set size, change the anchors").
+func _on_resized() -> void:
+	_view_moved()
+
+
+## The pan or zoom changed: redraw both layers and tell the editor.
+##
+## ⚠️ **THE OVERLAY HAS TO BE INVALIDATED TOO, and that is the trap in splitting the layers.**
+## The cursor diamond is drawn from `_hover` through the CURRENT pan and zoom, so a mouse-wheel
+## zoom -- which moves the view without producing a motion event -- would leave the diamond
+## sitting at its old screen position over completely different tiles until the pointer next
+## moved. Every write to `_zoom` or `_pan` goes through here for that reason.
+func _view_moved() -> void:
+	queue_redraw()
+	# NULL UNTIL `_ready()`, and that is a supported state rather than an oversight: the
+	# projection maths (`tile_at`, `_zoom_at`, `fit_to_view`) is pure and the tests drive it on
+	# a canvas that never enters the tree, which is what makes it testable without a window.
+	if _overlay != null:
+		_overlay.queue_redraw()
+	view_changed.emit()
 
 
 ## Point the canvas at a document and frame the whole map.
@@ -128,8 +189,7 @@ func fit_to_view() -> void:
 	_zoom = clampf(minf(size.x / bounds.size.x, size.y / bounds.size.y) * margin,
 			MIN_ZOOM, MAX_ZOOM)
 	_pan = size * 0.5 - bounds.get_center() * _zoom
-	queue_redraw()
-	view_changed.emit()
+	_view_moved()
 
 
 func zoom() -> float:
@@ -144,8 +204,7 @@ func zoom() -> float:
 func center_on(tile: Vector2i, at_zoom: float) -> void:
 	_zoom = clampf(at_zoom, MIN_ZOOM, MAX_ZOOM)
 	_pan = size * 0.5 - Iso.tile_centre_to_world(tile) * _zoom
-	queue_redraw()
-	view_changed.emit()
+	_view_moved()
 
 
 ## The tile under a position in this control's local space, or (-1, -1) off the map.
@@ -169,8 +228,13 @@ func _button(e: InputEventMouseButton) -> void:
 	match e.button_index:
 		MOUSE_BUTTON_LEFT:
 			_painting = e.pressed
+			# A NEW STROKE STARTS FRESH. Carrying the last sample across a release would
+			# bridge two separate clicks with a painted line between them.
+			_last_painted = Vector2i(-1, -1)
 			if e.pressed:
-				grab_focus()
+				# Focus needs a tree; the suite drives presses on a canvas without one.
+				if is_inside_tree():
+					grab_focus()
 				_emit_paint(e.position)
 		MOUSE_BUTTON_MIDDLE:
 			# MIDDLE-DRAG PANS, not left-drag: left is the tool, and a canvas where the
@@ -187,25 +251,63 @@ func _button(e: InputEventMouseButton) -> void:
 func _motion(e: InputEventMouseMotion) -> void:
 	if _panning:
 		_pan += e.relative
-		queue_redraw()
-		view_changed.emit()
+		_view_moved()
 	var t := tile_at(e.position)
 	if t != _hover:
 		_hover = t
 		hovered.emit(t)
-		queue_redraw()
+		# THE OVERLAY ONLY. The terrain has not changed and neither has the view, so
+		# repainting the map here is the whole of what made a drag stutter. Null before
+		# `_ready()` -- see `_view_moved()` for why that is a supported state.
+		if _overlay != null:
+			_overlay.queue_redraw()
 	if _painting:
-		# EMITTED ON EVERY MOTION AND NOT ONLY ON A NEW TILE. `MapDocument.paint()` returns
-		# whether anything changed and the editor repaints on that, so the filtering lives
-		# where the state is -- the canvas does not know what the current tool does and
-		# cannot tell a redundant call from a meaningful one.
 		_emit_paint(e.position)
 
 
 func _emit_paint(local: Vector2) -> void:
 	var t := tile_at(local)
-	if t.x >= 0:
+	if t.x < 0:
+		# Off the map: the stroke is broken rather than bridged, so dragging out over the
+		# void and back does not paint a line across everything in between.
+		_last_painted = Vector2i(-1, -1)
+		return
+	# FILL IN FROM THE LAST SAMPLE. See `_last_painted`: motion events are far apart at
+	# speed, and a stroke has to be continuous or the author is painting dots.
+	if _last_painted.x >= 0 and _last_painted != t:
+		for step in _tiles_between(_last_painted, t):
+			painted.emit(step)
+	else:
 		painted.emit(t)
+	_last_painted = t
+
+
+## The tiles on the straight line from `from` to `to`, excluding `from`.
+##
+## Bresenham on the tile grid rather than interpolating screen positions and re-inverting
+## each one: the projection is not linear in tile space per pixel, so a screen-space walk
+## across a long jump lands unevenly and can still skip a tile. Tile space is where the
+## stroke has to be continuous, so that is where the line is drawn.
+static func _tiles_between(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var d := (to - from).abs()
+	var step := Vector2i(signi(to.x - from.x), signi(to.y - from.y))
+	var err := d.x - d.y
+	var at := from
+	# BOUNDED, because a bad `from` would otherwise loop forever. The longest legitimate
+	# stroke is the map's diagonal, and MAX_SIZE bounds that.
+	var guard := d.x + d.y + 2
+	while at != to and guard > 0:
+		guard -= 1
+		var e2 := err * 2
+		if e2 > -d.y:
+			err -= d.y
+			at.x += step.x
+		if e2 < d.x:
+			err += d.x
+			at.y += step.y
+		out.append(at)
+	return out
 
 
 ## Zoom about the pointer, so the tile under the cursor stays under it.
@@ -217,12 +319,15 @@ func _zoom_at(anchor: Vector2, factor: float) -> void:
 	var before := (anchor - _pan) / _zoom
 	_zoom = clampf(_zoom * factor, MIN_ZOOM, MAX_ZOOM)
 	_pan = anchor - before * _zoom
-	queue_redraw()
-	view_changed.emit()
+	_view_moved()
 
 
 # ── drawing ─────────────────────────────────────────────────────────────────
 
+## The map: terrain, entities and starts.
+##
+## **REDRAWN ONLY WHEN THE MAP OR THE VIEW CHANGES.** The cursor is `_draw_overlay`'s, on a
+## child item, so a mouse-move does not come through here -- see `_ready()`.
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), _OUT_OF_BOUNDS)
 	if document == null:
@@ -231,8 +336,15 @@ func _draw() -> void:
 	_draw_terrain(range_rect)
 	_draw_entities()
 	_draw_starts()
-	if _hover.x >= 0:
-		_outline(_hover, _CURSOR, 2.0)
+
+
+## The hover cursor, and nothing else. Cheap on purpose: this is what repaints on every
+## mouse-move.
+func _draw_overlay() -> void:
+	if document == null or _hover.x < 0:
+		return
+	var poly := _diamond(_hover)
+	_overlay.draw_polyline(poly + PackedVector2Array([poly[0]]), _CURSOR, 2.0)
 
 
 func _draw_terrain(range_rect: Rect2i) -> void:

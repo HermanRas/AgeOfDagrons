@@ -428,15 +428,15 @@ else.
 points at it instead of at `game/`**, and it has its own suite:
 
 ```powershell
-& $godot --headless --path MapMaker                          # the startup report; EXIT CODE IS THE ANSWER
-& $godot --path MapMaker                                     # the window: report -> New map -> the editor
+& $godot --path MapMaker                                     # the window -- opens straight into the editor
+& $godot --headless --path MapMaker res://Boot.tscn --quit-after 2   # the startup report; EXIT CODE IS THE ANSWER
 & $godot --headless --path MapMaker res://tests/run_tests.tscn
 & $godot --headless --path MapMaker --import                 # its own class cache, separate from the game's
 
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 3 canvas screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 4 canvas screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 ```
 
@@ -446,6 +446,23 @@ compares **every terrain tile** of the running world against the file. Neither p
 check the other, which is decision 2's whole point — the FILE is the contract, not the code.
 MapMaker screenshots land in `%APPDATA%\Godot\app_userdata\AOD MapMaker\` (note the space),
 NOT in the game's `AgeOfDragons` folder.
+
+⚠️ **`run/main_scene` IS `Editor.tscn`, AND A SCREEN THAT NEEDS ANOTHER SCREEN TO HAVE RUN
+FIRST IS A BUG WAITING FOR THAT CHANGE.** 16.2 shipped with the startup work in `Boot.gd`,
+handed to `Editor.setup()`. The owner repointed the main scene at the editor — **the obvious
+thing to do, because the editor is the tool** — and all of it was skipped: no roster, so a
+start placed **14 entities instead of 48** (a hardcoded 10×10 town-centre fallback and its
+villagers, no resources at all), and Save refused with *"the format copies have drifted"* when
+nothing had drifted. The requirement now lives in `Startup`, both screens ask for it, and
+`Editor._ready()` asks on its own behalf if nobody has; `setup()` is an **optimisation, never a
+precondition**, and `test_startup` pins that. The same trap is waiting for any preview or
+export preset that opens a screen directly.
+
+⚠️ **AND THE SECOND HALF: ONE MESSAGE FOR THREE FAULTS SENDS PEOPLE TO THE WRONG PLACE.** The
+status line said "format copies have drifted" for *any* not-ready reason, so a missing game
+project — what actually happened — was reported as a corrupt tool. `Startup.reason` names the
+one that fired. An exported `MapMaker.exe` sits in the repo root where `../game` does not
+exist, so it genuinely needs `mapmaker.local.json`; that message says so.
 
 ⚠️ **NEVER PUT LOAD-BEARING PROSE IN `MapMaker/project.godot`.** Opening the project in the
 Godot editor **rewrites that file**: it strips every comment and drops any setting that
@@ -495,6 +512,44 @@ does not skip them reports two warnings on a good roster and puts a `_note` in t
 game strips any key beginning `_` (`GameDataRegistry._read_json`); mirror it rather than writing a
 fresh loader — the convention is invisible in the JSON's shape and obvious only in the code that
 reads it. This cost a red test on the first run.
+
+**THE 2026-09-04 PLAYTEST FOUND THREE MORE THINGS, AND NONE OF THEM WAS WHAT IT LOOKED LIKE:**
+
+- ⚠️ **"SOME TILES DID NOT PLACE DUE TO LAG" WAS NOT LAG.** `InputEventMouseMotion` arrives
+  once a frame at best, so a quick drag jumps several tiles between samples and only the
+  samples were emitted — a dotted line. Nothing was dropping tiles; **nothing had ever been
+  asked to paint them.** `_tiles_between()` walks Bresenham in TILE space (not screen space —
+  the projection is not linear per pixel, so a screen-space walk lands unevenly and can still
+  skip one), a release breaks the stroke so two clicks are not joined up, and leaving the map
+  breaks it too so dragging out over the void and back does not paint a line across
+  everything. Four tests.
+- ⚠️ **"THE TOOL IS VERY SLOW" WAS THE HOVER CURSOR SHARING A `_draw` WITH THE TERRAIN.** Godot
+  redraws a `CanvasItem` only when **that item** is invalidated, so a cursor drawn in the
+  canvas's own `_draw` means every mouse-move calls `queue_redraw()` on the whole map — at
+  fit-to-view a 96×96 map is 9,216 tiles and the cull covers all of them, so one drag re-issued
+  ~18,000 draw calls per motion event. The cursor is now a child `Control`. **The trap in
+  splitting the layers is that the overlay must be invalidated on a view change too** (a wheel
+  zoom produces no motion event), which is why every write to `_zoom`/`_pan` goes through
+  `_view_moved()`. Do not resize the overlay by hand: it is anchored `PRESET_FULL_RECT` and
+  assigning `size` fights the anchors.
+- ⚠️ **"MAP RENDERS OVER UI" IS ONE LINE: `clip_contents = true`.** A `Control` does not clip
+  its own `_draw` to its rect, and this one projects a whole map from an arbitrary pan, so any
+  zoom putting tiles above y=0 painted them over the toolbar.
+- **"I CLICKED SAVE, NOT SURE IF IT WORKED": AN ACTION'S OUTCOME MUST OUTLIVE THE NEXT HOVER.**
+  The confirmation went into the status line, which `_refresh_status()` rewrites on every mouse
+  move. There are now two lines with different lifetimes — the status describes the map *now*,
+  `_notice()` holds the last thing the author DID. **No test can see a label overwritten a
+  frame later**, so `preview_editor` presses the real Save and photographs it (writing under
+  `Preview Shot` and deleting the folder afterwards, so `git status` stays quiet).
+
+**A `RefCounted` TEST HARNESS HAS NO TREE AND DOES NOT `await`.** `run_tests` calls
+`instance.call(method)`, so a coroutine test returns immediately and every assertion after its
+first `await` is recorded **after the test already passed**. Drive `_ready()` by hand instead
+(`add_child` does not need a tree) and assert structure rather than anything that needs a
+rendered frame. Node methods that need a viewport — `grab_focus()`,
+`get_local_mouse_position()` — must be guarded with `is_inside_tree()` or they print an engine
+error per test, which `ScriptErrorSpy` does **not** catch because it is an ERROR and not a
+SCRIPT ERROR.
 
 There is **no CI**. Every check is a local command someone runs by hand.
 

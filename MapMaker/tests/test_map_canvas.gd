@@ -200,5 +200,203 @@ func test_centring_puts_the_tile_in_the_middle() -> void:
 	assert_almost_eq(at.y, canvas.size.y * 0.5, 0.5)
 
 
+# ── the drag stroke ─────────────────────────────────────────────────────────
+#
+# The owner's playtest of 16.2: *"the tool is very slow look at the single like drag of the
+# cursor, some tiles did not place due to lag"*. Two separate faults wearing one symptom, and
+# the tests below pin each — because both look like "lag" and neither is.
+
+
+## ⚠️ **NOTHING WAS DROPPING TILES; NOTHING HAD EVER BEEN ASKED TO PAINT THEM.**
+##
+## `InputEventMouseMotion` arrives once a frame at best, so a quick stroke jumps several tiles
+## between samples. Emitting only the sampled tile paints a dotted line, which reads exactly
+## like a tool too slow to keep up — the one diagnosis that sends you optimising the drawing
+## instead of fixing the input.
+func test_a_fast_drag_paints_a_continuous_line() -> void:
+	var from := Vector2i(10, 10)
+	var to := Vector2i(20, 26)
+	var walked := MapCanvas._tiles_between(from, to)
+	assert_eq(walked[walked.size() - 1], to, "the walk has to arrive: %s" % [walked])
+
+	# EVERY STEP TOUCHES THE LAST, which is what "continuous" means for a brush: a chebyshev
+	# distance of one, so a diagonal counts and a jump of two does not.
+	var previous := from
+	for step in walked:
+		var d := (step - previous).abs()
+		assert_true(maxi(d.x, d.y) == 1,
+				"step %s to %s is not adjacent" % [previous, step])
+		previous = step
+
+
+## Both ways, and through the axes -- a Bresenham with a sign error is right in one octant.
+func test_the_stroke_is_continuous_in_every_direction() -> void:
+	var ends := [
+		Vector2i(0, 0), Vector2i(9, 0), Vector2i(0, 9), Vector2i(9, 9),
+		Vector2i(30, 4), Vector2i(4, 30), Vector2i(40, 41),
+	]
+	for a in ends:
+		for b in ends:
+			if a == b:
+				continue
+			var walked := MapCanvas._tiles_between(a, b)
+			assert_eq(walked[walked.size() - 1], b, "%s to %s must arrive" % [a, b])
+			var previous: Vector2i = a
+			for step in walked:
+				var d := (step - previous).abs()
+				assert_true(maxi(d.x, d.y) == 1, "%s to %s broke at %s" % [a, b, step])
+				previous = step
+
+
+## The gap is filled by dragging, and this drives it the way a mouse does: press, then one
+## motion event a long way off. Both tiles and everything between them must be painted.
+func test_dragging_paints_the_tiles_the_pointer_skipped_over() -> void:
+	var painted: Array[Vector2i] = []
+	canvas.painted.connect(func(t: Vector2i) -> void: painted.append(t))
+	canvas.center_on(Vector2i(48, 48), 1.0)
+
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = _centre_of(Vector2i(40, 40))
+	canvas._button(press)
+
+	var motion := InputEventMouseMotion.new()
+	motion.position = _centre_of(Vector2i(46, 44))
+	canvas._motion(motion)
+
+	assert_true(painted.has(Vector2i(40, 40)), "the press itself: %s" % [painted])
+	assert_true(painted.has(Vector2i(46, 44)), "the far end: %s" % [painted])
+	assert_true(painted.size() >= 7,
+			"a six-tile jump has to fill in, got %d: %s" % [painted.size(), painted])
+
+
+## ⚠️ **A RELEASE BREAKS THE STROKE.** Carrying the last sample across it would bridge two
+## separate clicks with a painted line between them -- so clicking one corner of the map and
+## then the other would draw a diagonal across everything.
+func test_two_separate_clicks_are_not_joined_up() -> void:
+	var painted: Array[Vector2i] = []
+	canvas.painted.connect(func(t: Vector2i) -> void: painted.append(t))
+	canvas.center_on(Vector2i(48, 48), 1.0)
+
+	_click(Vector2i(20, 20))
+	_click(Vector2i(60, 60))
+	assert_eq(painted, [Vector2i(20, 20), Vector2i(60, 60)] as Array[Vector2i])
+
+
+## Dragging out over the void and back must not paint a line across everything in between.
+func test_a_stroke_leaving_the_map_does_not_bridge_across_it() -> void:
+	var painted: Array[Vector2i] = []
+	canvas.painted.connect(func(t: Vector2i) -> void: painted.append(t))
+	canvas.center_on(Vector2i(48, 48), 1.0)
+
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = _centre_of(Vector2i(2, 2))
+	canvas._button(press)
+
+	var off := InputEventMouseMotion.new()
+	off.position = Vector2(-4000.0, -4000.0)
+	canvas._motion(off)
+
+	var back := InputEventMouseMotion.new()
+	back.position = _centre_of(Vector2i(90, 90))
+	canvas._motion(back)
+
+	assert_eq(painted, [Vector2i(2, 2), Vector2i(90, 90)] as Array[Vector2i],
+			"an off-map excursion breaks the stroke rather than bridging it")
+
+
+# ── layering and cost ───────────────────────────────────────────────────────
+
+## ⚠️ **THE MAP DREW OVER THE TOOLBAR** (owner's playtest). A `Control` does not clip its own
+## `_draw` to its rect, and this one draws a whole map projected from an arbitrary pan -- so at
+## any zoom putting tiles above y=0 they landed on top of the buttons. It reads as a layering
+## bug and is one property.
+func test_the_canvas_clips_its_drawing_to_its_own_rect() -> void:
+	var fresh := _ready_canvas()
+	assert_true(fresh.clip_contents, "the map must not draw outside the canvas")
+	fresh.free()
+
+
+## ⚠️ **THE CURSOR ON ITS OWN LAYER IS THE PERFORMANCE FIX, and this is what keeps it there.**
+##
+## The playtest's "very slow" was not the tile count as such: the hover cursor was drawn in the
+## same `_draw` as the terrain, so every mouse-move invalidated the whole map. At fit-to-view a
+## 96x96 map is 9,216 tiles and the cull covers all of them, so one drag re-issued ~18,000 draw
+## calls per motion event. Godot redraws a `CanvasItem` only when that item is invalidated, so
+## a child means moving the mouse repaints four line segments.
+##
+## **WHAT THIS CAN AND CANNOT CHECK.** A redraw is counted by the renderer on a frame, and this
+## harness runs tests on a `RefCounted` with no tree and no frames -- so "the terrain was not
+## repainted" is not observable here. What is observable is the *structure the fix depends on*:
+## a separate `CanvasItem` for the cursor that does not intercept the canvas's input. If a
+## later edit moves the cursor back into `_draw()`, the overlay stops being drawn to and this
+## test is where the shape is written down.
+func test_the_cursor_has_its_own_canvas_item() -> void:
+	var fresh := _ready_canvas()
+	assert_true(fresh._overlay != null, "the cursor needs its own layer")
+	assert_true(fresh._overlay is CanvasItem,
+			"a separate CanvasItem is what makes the redraw independent")
+	assert_eq(fresh._overlay.get_parent(), fresh, "and it hangs off the canvas")
+	assert_true(fresh._overlay.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+			"the overlay must not eat the presses the canvas needs")
+	fresh.free()
+
+
+## ⚠️ **THE OVERLAY HAS TO STAY THE SAME RECT AS THE CANVAS.** It is a child `Control` with its
+## own size, and a cursor drawn into a stale rect is clipped at the old edge -- the diamond
+## vanishing near the bottom of a resized window, which reads as a projection fault. This
+## canvas is resized constantly: the toolbar wraps, the window is dragged, `Fit` is pressed.
+##
+## Pinned as the ANCHORS rather than as a size, because the anchors are the mechanism -- the
+## layout pass follows the parent on its own. The first version assigned `size` in
+## `_on_resized()` as well, which fights them, and Godot said so.
+func test_the_cursor_layer_is_anchored_to_the_whole_canvas() -> void:
+	var fresh := _ready_canvas()
+	assert_almost_eq(fresh._overlay.anchor_right, 1.0, 0.001)
+	assert_almost_eq(fresh._overlay.anchor_bottom, 1.0, 0.001)
+	assert_almost_eq(fresh._overlay.anchor_left, 0.0, 0.001)
+	assert_almost_eq(fresh._overlay.anchor_top, 0.0, 0.001)
+	fresh.free()
+
+
+## And a resize still counts as a view change, because the cull is computed from the rect.
+func test_a_resize_redraws_the_map() -> void:
+	var fresh := _ready_canvas()
+	fresh.show_document(doc)
+	var seen := [0]
+	fresh.view_changed.connect(func() -> void: seen[0] += 1)
+	fresh._on_resized()
+	assert_eq(seen[0], 1, "the visible-tile range depends on the size, so it must be redone")
+	fresh.free()
+
+
+## A canvas that has run `_ready()`, without a tree -- which `add_child` does not need. The
+## suite's other tests deliberately use one that has NOT, since the projection maths is pure
+## and testing it without a window is the point.
+func _ready_canvas() -> MapCanvas:
+	var fresh := MapCanvas.new()
+	fresh._ready()
+	# The canvas's own anchors are left alone (only the overlay's are set), so a plain
+	# assignment is fine here -- it was assigning the OVERLAY's size that fought its anchors.
+	fresh.size = Vector2(1600, 900)
+	return fresh
+
+
+func _click(t: Vector2i) -> void:
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = _centre_of(t)
+	canvas._button(down)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = down.position
+	canvas._button(up)
+
+
 func _centre_of(t: Vector2i) -> Vector2:
 	return canvas._to_screen_f(Vector2(t) + Vector2(0.5, 0.5))
