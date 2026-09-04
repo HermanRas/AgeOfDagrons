@@ -111,7 +111,7 @@ func test_the_ally_blip_is_far_enough_from_the_water_to_be_seen_on_it() -> void:
 
 
 ## CIE L*, from a colour's relative luminance. The one measure the eight-player palette
-## was chosen on (`web/player-colour-ladder.html`), where neighbours sit about nine
+## was chosen on (`web/server/app/player-colour-ladder.html`), where neighbours sit about nine
 ## apart -- which is what makes the thresholds above readable as "three steps".
 func _lightness(c: Color) -> float:
 	var y := 0.2126 * _linear(c.r) + 0.7152 * _linear(c.g) + 0.0722 * _linear(c.b)

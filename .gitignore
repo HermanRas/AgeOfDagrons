@@ -81,9 +81,13 @@ game/assets/atlases/
 # Built content packs (tools/build_packs.py, phase 0.3). `*.pck` above already covers
 # the art half; these are the zips. 2.2 MB each and rebuildable byte-for-byte from
 # `scenarios/` — the builder is deterministic precisely so that holds.
-web/downloads/*.zip
+#
+# ⚠️ THE PATH MOVED ON 2026-09-04 and the old pattern did not stop matching — it simply
+# matched nothing, so every built zip reappeared as untracked. `web/` was reorganised so
+# `web/server/` mirrors `/opt/aod/` exactly, which puts the site under `web/server/app/`.
+web/server/app/downloads/*.zip
 
-# ⚠️ `web/downloads/packs.json` IS COMMITTED, AND IT IS THE ONE ARTEFACT THAT MUST BE.
+# ⚠️ `web/server/app/downloads/packs.json` IS COMMITTED, AND IT IS THE ONE ARTEFACT THAT MUST BE.
 # It is generated, so the reflex is to ignore it — but `build_packs.py` reads it as the
 # record of WHAT IS ALREADY PUBLISHED, and that is what makes the version guard work:
 # content changed under an unchanged `version` is refused because the committed manifest

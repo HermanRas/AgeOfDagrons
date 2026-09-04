@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build downloadable packs and the manifest the game reads (PLAN.md 3.2/3.3, phase 0.3).
 
-    python tools/build_packs.py              # build everything into web/downloads/
+    python tools/build_packs.py              # build everything into web/server/app/downloads/
     python tools/build_packs.py --dry-run    # say what would change, write nothing
     python tools/build_packs.py --only howtoplay
 
@@ -41,7 +41,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOURCE_FILE = REPO / "tools" / "packs.source.json"
-OUT_DIR = REPO / "web" / "downloads"
+# ⚠️ THE OUTPUT DIRECTORY MIRRORS THE SERVER, and that is the point of the 2026-09-04 `web/`
+# reorganisation: `web/server/` is a byte-for-byte picture of `/opt/aod/`, so a deploy is a
+# recursive copy with no path translation to get wrong. `app/` is what `docker-compose.yml`
+# bind-mounts as the document root, so a file's path under `web/server/app/` IS its URL path.
+OUT_DIR = REPO / "web" / "server" / "app" / "downloads"
 MANIFEST_NAME = "packs.json"
 
 # The manifest shape the client reads. `PackManifest.FORMAT_VERSION` must agree.

@@ -65,7 +65,7 @@ const GAIA_COLOR := Color(0.55, 0.5, 0.35, 0.7)
 ## `terrain.water_shallow` is `#3f7fa6` at hue 203°, this is hue 197° -- six degrees
 ## apart, so on hue alone it would have been a bad pick. What separates them is CIE
 ## `L*`: 79 against water's 51, and against deep water's 30. That is the same principle
-## `web/player-colour-ladder.html` settled the eight-player palette on, where the whole
+## `web/server/app/player-colour-ladder.html` settled the eight-player palette on, where the whole
 ## eight span L* 36 to 100 and neighbours are about nine apart; 28 is three of those
 ## steps. A pale blue dot on a mid-blue field reads, and it is the only pairing on this
 ## map that has to work at all -- an ally in the water is a SHIP, and the archipelago is

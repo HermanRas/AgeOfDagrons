@@ -135,7 +135,7 @@ func _legend() -> Control:
 ## CIE `L*` for every blip colour and every terrain it sits on. Lightness rather than
 ## hue because hue is what does NOT separate sky blue from shallow water — they are six
 ## degrees apart — and lightness is what does. Same measure the eight-player palette was
-## chosen on (`web/player-colour-ladder.html`).
+## chosen on (`web/server/app/player-colour-ladder.html`).
 func _report() -> void:
 	var terrains := {
 		"grass": GameDataRegistry.placeholder_for(&"terrain.grass").color,

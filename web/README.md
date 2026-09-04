@@ -3,18 +3,32 @@
 Deployed to **https://aod.dragoon.co.za/**. This directory is the source; the live site is
 whatever was last uploaded.
 
+## `web/server/` IS A PICTURE OF `/opt/aod/`, AND THAT IS THE WHOLE LAYOUT
+
+Reorganised by the owner on **2026-09-04**. Every path under `web/server/` is the path it
+occupies on the box, so **a deploy is a recursive copy and there is no translation to get
+wrong**. Before this, the site lived at `web/` and the config at `web/server/`, and every
+publish command had to re-derive which local directory mapped to `/opt/aod/app/` — the kind
+of arithmetic that is done correctly ninety-nine times.
+
 ```
 web/
-├── index.html                  -> https://aod.dragoon.co.za/index.html
-├── player-colour-ladder.html   -> /player-colour-ladder.html
-├── downloads/
-│   ├── index.html              -> /downloads/index.html
-│   ├── packs.json              -> /downloads/packs.json      (built, see below)
-│   └── *.zip / *.pck           -> /downloads/...             (built, gitignored)
-└── server/                     -> NOT served. The container's own config
-    ├── docker-compose.yml
-    └── nginx.conf
+├── README.md                          -> not deployed. This file
+└── server/                            -> /opt/aod/
+    ├── docker-compose.yml             -> /opt/aod/docker-compose.yml
+    ├── nginx.conf                     -> /opt/aod/nginx.conf
+    └── app/                           -> /opt/aod/app/   THE DOCUMENT ROOT
+        ├── index.html                 -> https://aod.dragoon.co.za/index.html
+        ├── player-colour-ladder.html  -> /player-colour-ladder.html
+        └── downloads/
+            ├── index.html             -> /downloads/index.html
+            ├── packs.json             -> /downloads/packs.json   (built, COMMITTED)
+            └── *.zip / *.pck          -> /downloads/...          (built, gitignored)
 ```
+
+⚠️ **`app/` IS THE DOCUMENT ROOT, SO A FILE'S PATH UNDER IT IS ITS URL PATH.** `nginx.conf`
+and `docker-compose.yml` sit *beside* `app/` and are never served — that is what makes the
+mirror safe. Anything dropped inside `app/` is public the moment it is copied up.
 
 Both pages are placeholders right now.
 
@@ -24,13 +38,8 @@ Both pages are placeholders right now.
 copy in git of what runs there — the version that exists only on a box is the version
 nobody can review.
 
-```
-/opt/aod/
-├── docker-compose.yml     <- web/server/docker-compose.yml
-├── nginx.conf             <- web/server/nginx.conf
-├── app/                   <- everything in web/ except server/
-└── backup-2026-09-03/     <- the php-cli image this replaced
-```
+The box also holds `backup-2026-09-03/`, the php-cli image this replaced. It is **not**
+mirrored into git: it is a rollback artefact, not source.
 
 **It was `php -S` until 2026-09-03 and is now `nginx:alpine`.** Two reasons, and the first
 is the one that mattered: PHP's built-in server is **single-threaded**, so one phone pulling
@@ -42,14 +51,19 @@ The second: `./app` is now **bind-mounted** rather than `COPY`-ed into an image,
 publishing a pack is an `scp` instead of an image rebuild carrying a 400 MB layer.
 
 ```powershell
-# deploy the site or the server config
-scp web\server\docker-compose.yml web\server\nginx.conf 100.96.0.2:/opt/aod/
-scp web\index.html web\player-colour-ladder.html 100.96.0.2:/opt/aod/app/
+# deploy EVERYTHING -- config and site in one copy, because the trees are identical
+scp -r web\server\* 100.96.0.2:/opt/aod/
 ssh 100.96.0.2 "cd /opt/aod && docker compose up -d"
 
 # after a config-only change, a reload is enough and drops no connections
 ssh 100.96.0.2 "docker exec ageOfDagons-web nginx -t && docker exec ageOfDagons-web nginx -s reload"
 ```
+
+⚠️ **`scp -r web\server\*` WILL ALSO PUSH ANY BUILT ZIP SITTING IN `app/downloads/`**, which
+is usually what you want but is not the publish order below — a manifest and its payloads
+going up in one unordered copy is the race that order exists to avoid. For a pack publish,
+use the two commands under *Publishing, in order*; use the recursive copy for the site and
+the config.
 
 ## What the game itself fetches
 
@@ -87,7 +101,7 @@ It also appears in DOWNLOAD MORE, which is the manual retry.
 $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
 
 & $py tools\build_packs.py --dry-run     # what would change
-& $py tools\build_packs.py               # build into web/downloads/
+& $py tools\build_packs.py               # build into web/server/app/downloads/
 & $py tools\build_packs.py --only howtoplay
 ```
 
@@ -105,9 +119,12 @@ that stops "content edited, script re-run, every existing install silently stale
 ### Publishing, in order
 
 ```powershell
-scp web\downloads\campaign_*.zip 100.96.0.2:/opt/aod/app/downloads/   # 1. payloads
-scp web\downloads\packs.json     100.96.0.2:/opt/aod/app/downloads/   # 2. manifest LAST
+scp web\server\app\downloads\campaign_*.zip 100.96.0.2:/opt/aod/app/downloads/   # 1. payloads
+scp web\server\app\downloads\packs.json     100.96.0.2:/opt/aod/app/downloads/   # 2. manifest LAST
 ```
+
+The local and remote halves of each line are now the same path, which is the mirror doing
+its job: `web\server\` + the rest is `/opt/aod/` + the rest.
 
 **Step 2 last matters.** The manifest is what tells clients a pack exists; publishing it
 before the file is uploaded is a download failure for every client that checks in between,
