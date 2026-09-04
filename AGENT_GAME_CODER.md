@@ -274,6 +274,8 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_scenario_hud.tscn -- --scenario 2
 & $godot --path game res://dev_preview/preview_campaign.tscn        # list -> scenarios -> PLAY -> match
 & $godot --path game res://dev_preview/preview_campaign.tscn -- --scenario 1
+& $godot --path game res://dev_preview/preview_saved_map.tscn       # 16.0: pick a SAVED map, play it
+& $godot --path game res://dev_preview/preview_saved_map.tscn -- --force   # re-roll the sample map
 
 # LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag (§7).
 # Start the beacon first; it waits. The exit code is the answer.
@@ -321,6 +323,23 @@ otherwise be photographed empty — the injected row is the script's and not the
 Three faults it can see that no headless test can: a tracker that overlaps the
 control-group stack, one that runs off the viewport, and a banner that is not on the
 screen's axis. All three are measured and warned about rather than left to the eye.
+
+`preview_saved_map` is 16.0's proof and it **authors the sample map it needs** — `maps/sample_duel`,
+written once and committed, because a picker with nothing in it cannot be shown to work and
+repo-root `maps/` is empty until the MapMaker exists. It refuses to overwrite without `--force`
+(`preview_author_maps`' rule: the file is authored content under version control). The load-bearing
+step is the last one: it starts a real match from the config and compares the world's buildings and
+**every terrain tile** against the FILE, because a screen that previews a saved map and hands the
+match a generated one looks perfect in both screenshots.
+
+⚠️ **IT COST TWO RED RUNS AND BOTH ARE WORTH KNOWING.** (1) **Raising the slot count adds ROOM, not
+players** — new slots default to `CLOSED`, which is the whole point of `_slots` versus
+`_active_slots()`. The first version moved only the count picker and reported the seat gate as
+broken; `can_start()` was right and the way of exercising it was not. Seating N players means
+setting N-1 **roles** too, and `_seat_players()` in both the preview and `test_skirmish_screen` now
+carries that. (2) **`SimBuilding` has `origin_tile()`, not `origin`** — `pos` is the footprint's
+CENTRE in sub-tile units, so `pos / SUBTILE` is five tiles off the `MapData.tile` for a 10×10 town
+centre: far enough to read as the map having been ignored entirely.
 
 `preview_campaign` walks the whole campaign path pressing the REAL buttons — CAMPAIGN list
 → the scenario list with its locks → PLAY → a match with its briefing up — and prints the

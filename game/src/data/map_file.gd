@@ -139,6 +139,34 @@ static func save(data: MapData, dir_path: String, header: Dictionary = {}) -> Ar
 ## packet — hence `JSON.new().parse()` rather than `JSON.parse_string()` (the static helper
 ## pushes an engine error per failure, which is a log somebody else can fill), and hence the
 ## size cross-check below rather than trusting either file about the other.
+## The sidecar alone, parsed and version-checked, WITHOUT decoding the PNG (16.0).
+##
+## ## WHY THIS EXISTS RATHER THAN CALLING `load_map()` AND READING `.meta`
+##
+## A picker listing saved maps needs a name, a size and a player count per row, and
+## `load_map()` would charge a **192x192 PNG decode per entry** to get them. The sidecar is
+## `to_dict()` with terrain taken out, so it already carries `w`, `h`, `starts`, `entities`
+## and `meta` -- every figure a list needs, in a file measured in kilobytes. So a folder of
+## fifty maps costs fifty small JSON parses instead of fifty decodes, and the full load
+## happens once, when one of them is actually chosen.
+##
+## Same reasoning as `ScenarioScreen._why_not_playable()` declining to call `build_config()`
+## for a row the player is merely looking at: browsing must not cost what committing costs.
+##
+## ⚠️ **THE PNG IS STILL THE AUTHORITY ON THE MAP** (see the class comment) and this function
+## never contradicts that -- it answers questions ABOUT a map, never hands one back. It
+## deliberately does NOT check that the PNG exists or that its dimensions agree with `w`/`h`;
+## `load_map()` owns both, and duplicating them here would be a second opinion to keep in
+## step. **A row this returns may therefore still fail to load**, which is why every caller
+## surfaces `load_map`'s problems rather than assuming a listed map is a loadable one.
+static func read_header(dir_path: String, out_problems: Array[String]) -> Dictionary:
+	var json_path := dir_path.path_join(META_FILE)
+	if not FileAccess.file_exists(json_path):
+		out_problems.append("%s does not exist" % json_path)
+		return {}
+	return _parse_sidecar(json_path, out_problems)
+
+
 static func load_map(dir_path: String, out_problems: Array[String]) -> MapData:
 	var png_path := dir_path.path_join(TERRAIN_FILE)
 	var json_path := dir_path.path_join(META_FILE)
@@ -149,27 +177,8 @@ static func load_map(dir_path: String, out_problems: Array[String]) -> MapData:
 		out_problems.append("%s does not exist" % png_path)
 		return null
 
-	var text := FileAccess.get_file_as_string(json_path)
-	if text.is_empty():
-		out_problems.append("%s is empty or unreadable" % json_path)
-		return null
-	var json := JSON.new()
-	if json.parse(text) != OK:
-		out_problems.append("%s: line %d: %s"
-				% [json_path, json.get_error_line(), json.get_error_message()])
-		return null
-	if not json.data is Dictionary:
-		out_problems.append("%s is not a JSON object" % json_path)
-		return null
-	var d: Dictionary = json.data
-
-	# REFUSED RATHER THAN GUESSED. A future format may move terrain, change the channel or
-	# add a layer, and a reader that pressed on regardless would produce a map that is wrong
-	# in a way nothing on screen explains.
-	var version := int(d.get("format_version", 0))
-	if version != FORMAT_VERSION:
-		out_problems.append("%s is format_version %d; this build reads %d"
-				% [json_path, version, FORMAT_VERSION])
+	var d := _parse_sidecar(json_path, out_problems)
+	if d.is_empty():
 		return null
 
 	var img := Image.load_from_file(png_path)
@@ -210,3 +219,44 @@ static func load_map(dir_path: String, out_problems: Array[String]) -> MapData:
 		terrain[i] = kind
 	data.terrain = terrain
 	return data
+
+
+## Read, parse and version-check `map.json`. `{}` on anything untrustworthy, with the
+## reason appended.
+##
+## Shared by `load_map()` and `read_header()` so the two cannot come to disagree about what
+## a readable sidecar is -- and in particular so that **a version this build cannot read is
+## refused in both directions.** A picker that listed a version-2 map because only the full
+## loader checked would offer a row that fails the moment it is pressed.
+##
+## **`{}` UNAMBIGUOUSLY MEANS FAILURE**, and that is a property of the format rather than a
+## convention: `save()` always writes `format_version`, and the check below rejects a
+## sidecar without one (absent reads as 0, which is never `FORMAT_VERSION`). So there is no
+## such thing as a valid empty sidecar for this to be confused with.
+static func _parse_sidecar(json_path: String, out_problems: Array[String]) -> Dictionary:
+	var text := FileAccess.get_file_as_string(json_path)
+	if text.is_empty():
+		out_problems.append("%s is empty or unreadable" % json_path)
+		return {}
+	# `JSON.new().parse()` rather than the static `JSON.parse_string()`: a map file is
+	# untrusted input (see the class comment) and the static helper pushes an engine error
+	# per failure, which is a log somebody else gets to fill.
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		out_problems.append("%s: line %d: %s"
+				% [json_path, json.get_error_line(), json.get_error_message()])
+		return {}
+	if not json.data is Dictionary:
+		out_problems.append("%s is not a JSON object" % json_path)
+		return {}
+	var d: Dictionary = json.data
+
+	# REFUSED RATHER THAN GUESSED. A future format may move terrain, change the channel or
+	# add a layer, and a reader that pressed on regardless would produce a map that is wrong
+	# in a way nothing on screen explains.
+	var version := int(d.get("format_version", 0))
+	if version != FORMAT_VERSION:
+		out_problems.append("%s is format_version %d; this build reads %d"
+				% [json_path, version, FORMAT_VERSION])
+		return {}
+	return d

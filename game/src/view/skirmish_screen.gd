@@ -89,6 +89,16 @@ const _GAME_SCENE := "res://scenes/game/Game.tscn"
 const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
 const _SEED_MAX := 999999
 
+## Where the map picker's SAVED entries start numbering (16.0), above every
+## `MapGenerator.Type`.
+##
+## ⚠️ **A COLLISION HERE WOULD NOT FAIL, IT WOULD LIE.** The generator items carry `Type`
+## values as their ids and this screen reads `get_item_id()` back as a `Type`, so an id that
+## overlapped would quietly select a map type -- a picker that looks right and shows the
+## wrong board. Far above any plausible enum on purpose, and `_saved_index_of()` is the only
+## place that decodes it.
+const _SAVED_ITEM_ID_BASE := 1000
+
 ## THE LOBBY'S PROPORTIONS. **HALF AND HALF SINCE 2026-08-31** (project owner: *"srink
 ## the chat pannel to 50% and grow game setup and map setup to 50% so the 2 columns is
 ## hald and half"*), where the first spec was *"left 2/3rds of the screen CHAT, right
@@ -230,6 +240,32 @@ var _colours: Array[int] = []
 var _teams: Array[int] = []
 
 var _data: MapData = null
+
+## THE SAVED MAP CHOSEN IN THE MAP PICKER, OR EMPTY FOR A GENERATED ONE (16.0).
+##
+## A directory rather than a `MapData`, and the loaded map lands in `_data` like any other:
+## everything downstream of this screen -- the preview, `build_config()`, the lobby
+## broadcast, `MapGen.build_from()` -- already takes the map as DATA and cannot tell where
+## it came from. That is `MatchConfig.map_data`'s own argument (a seed only reproduces a map
+## through the exact generator that made it) paying off, and it is why this feature is a
+## picker rather than a plumbing change.
+##
+## **EMPTY IS THE GENERATOR AND IS THE DEFAULT**, so a lobby that has never touched this
+## behaves exactly as it did before the feature existed.
+var _saved_dir: String = ""
+
+## The rows behind the saved entries in the picker, from `SavedMaps.discover()`.
+##
+## Discovered ONCE, when the panel is built. A player who saves a map mid-lobby is a case
+## that cannot arise -- the Save Map button is on the pause menu, inside a match (11.3) --
+## and re-scanning on every repaint would put a filesystem walk behind a preview refresh.
+var _saved_maps: Array[Dictionary] = []
+
+## Why the chosen saved map would not load, or empty. Held rather than pushed straight into
+## `_status`, because `_refresh_status` is called from paths that did not touch the map (a
+## colour, a team) and would otherwise wipe the reason off a screen whose map is still
+## broken.
+var _saved_load_error: String = ""
 
 var _lobby: Lobby = Lobby.LOCAL
 
@@ -775,6 +811,7 @@ func _build_map_setup() -> Control:
 			int(MapGenerator.Type.RANDOM))
 	for type in MapGenerator.real_types():
 		_type_picker.add_item(MapGenerator.type_name(type), int(type))
+	_add_saved_map_items()
 	_type_picker.item_selected.connect(_on_type_selected)
 	column.add_child(_setting_row("Map", _type_picker))
 
@@ -796,6 +833,97 @@ func _build_map_setup() -> Control:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_status)
 	return _framed("MAP SETUP", column)
+
+
+## The saved maps, below the generator types, behind a separator (16.0).
+##
+## ## ONE PICKER, NOT TWO CONTROLS
+##
+## The alternative was a "source" toggle beside the Map row -- generated versus saved -- and
+## it is worse for a reason the owner's own README states: *"Maps saved by the tool are
+## available to load in the game under skirmish"*, i.e. **a saved map is a map you pick**,
+## not a mode you switch the screen into. One control also means one signal, one selection
+## to restore, and nothing to keep in step.
+##
+## ⚠️ **IDS ARE OFFSET BY `_SAVED_ITEM_ID_BASE` AND THE OFFSET IS LOAD-BEARING.** The
+## generator items carry `MapGenerator.Type` values as their ids, and this screen reads
+## `get_item_id()` back as a `Type` in two places. An id that collided would not fail -- it
+## would select a map type, silently, and the picker would look right while showing the
+## wrong board. 1000 is far above any plausible enum and `_saved_index_of()` is the only
+## thing that decodes it.
+##
+## **NOTHING IS ADDED WHEN THERE ARE NO SAVED MAPS**, which is today: `maps/` does not exist
+## in a fresh clone, the Save Map button is parked (11.3), and no pack ships maps yet. So a
+## player who has never authored one sees the picker exactly as it was -- no separator, no
+## empty heading, nothing to explain.
+func _add_saved_map_items() -> void:
+	var loader := SavedMaps.new()
+	_saved_maps = loader.discover()
+	# The loader's complaints are the player's business, not the log's: a map that cannot be
+	# read is one they can see sitting in a folder. Pushed as warnings so the reason is
+	# recoverable, and NOT surfaced in `_status`, which describes the match rather than the
+	# library. `SavedMaps.warnings` never fires for a merely absent root.
+	for w in loader.warnings:
+		push_warning("saved maps: %s" % w)
+	if _saved_maps.is_empty():
+		return
+	_type_picker.add_separator("Saved")
+	for i in _saved_maps.size():
+		var entry: Dictionary = _saved_maps[i]
+		_type_picker.add_item(_saved_item_label(entry), _SAVED_ITEM_ID_BASE + i)
+
+
+## "Duel Valley (2p)" -- the name and what it can seat.
+##
+## THE PLAYER COUNT IS IN THE LABEL because it is the one fact that decides whether the
+## lobby you have set up can start on this map at all, and finding it out by picking the map
+## and reading a red line underneath is a worse way to learn it. `clip_text` is on, so a
+## long name loses its tail rather than stretching the panel -- and the count is the part
+## worth keeping, which is why it is not a prefix.
+static func _saved_item_label(entry: Dictionary) -> String:
+	var players := int(entry.get("players", 0))
+	if players <= 0:
+		# A map whose sidecar lists no players. It is still offered -- refusing to show it
+		# would make a broken map indistinguishable from a missing one (`CampaignScreen`'s
+		# rule for a campaign that will not load) -- and `can_start()` is what stops it.
+		return "%s (no starts)" % str(entry.get("name", ""))
+	return "%s (%dp)" % [str(entry.get("name", "")), players]
+
+
+## Which `_saved_maps` row a picker id names, or -1 for a generator type.
+static func _saved_index_of(item_id: int) -> int:
+	return item_id - _SAVED_ITEM_ID_BASE if item_id >= _SAVED_ITEM_ID_BASE else -1
+
+
+## How many players the chosen saved map can seat, or 0 when there is no saved map chosen
+## (which is also what a map with no usable starts reports -- see `SavedMaps._players_in`).
+##
+## **0 MEANS "NO LIMIT FROM A MAP", NOT "NO PLAYERS"**, and every caller reads it that way,
+## because that is exactly the generated case: the generator builds starts for whatever
+## count it is handed, so there is nothing to check against.
+func _saved_seats() -> int:
+	return int(_saved_entry().get("players", 0))
+
+
+## What to call the chosen map on screen: its name, or the plain word for a generated one.
+func _saved_map_name() -> String:
+	var name := str(_saved_entry().get("name", "")).strip_edges()
+	if not name.is_empty():
+		return name
+	# A saved map whose row has gone (an empty `_saved_entry`) with `_saved_dir` still set
+	# cannot happen through the picker, but the directory is the honest answer if it ever
+	# does -- better than a blank where a map name goes.
+	return _saved_dir.get_file() if not _saved_dir.is_empty() else "Generated map"
+
+
+## The chosen saved map's row, or `{}` when the generator is selected.
+func _saved_entry() -> Dictionary:
+	if _saved_dir.is_empty():
+		return {}
+	for entry in _saved_maps:
+		if str(entry.get("dir", "")) == _saved_dir:
+			return entry
+	return {}
 
 
 ## The map picture inside a frame TURNED 45° TO HUG IT (project owner, 2026-08-30: *"the
@@ -1223,14 +1351,64 @@ func _nav_button(text: String, on_pressed: Callable) -> Button:
 ## Public because it is the whole behaviour of the screen and a test wants to drive it
 ## without pressing anything.
 func regenerate() -> void:
-	# TWO COUNTS. The map is SIZED for every slot and POPULATED for the players actually
-	# in them, which is what makes "eight players, six closed" a big empty board for two
-	# rather than two starts crammed into one corner of it.
-	_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
+	if _saved_dir.is_empty():
+		# TWO COUNTS. The map is SIZED for every slot and POPULATED for the players actually
+		# in them, which is what makes "eight players, six closed" a big empty board for two
+		# rather than two starts crammed into one corner of it.
+		_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
+	else:
+		_data = _load_saved_map()
 	_preview.show_map(_data)
 	_refresh_status()
 	_refresh_start_button()
 	_publish_lobby()
+	_refresh_map_controls()
+
+
+## The chosen saved map, read off disk (16.0). Null becomes an unstartable lobby, never a
+## crash and never a silent fall back to the generator.
+##
+## ⚠️ **A FAILURE HERE IS REPORTED AS AN UNPLAYABLE MAP, NOT PAPERED OVER.** Quietly
+## generating one instead would hand the player a board they did not choose and start a
+## match on it -- and because a generated map is perfectly valid, nothing on the screen or
+## in the match would ever say the file had not been read. `_refresh_status` names the
+## reason; `can_start()` refuses on `_data == null`, which it already did.
+##
+## `MapFile.load_map` is called EVERY time a saved entry is selected rather than cached,
+## which is one PNG decode per pick. Deliberate: the file is the authority (2.4c), a player
+## who edits a map in the tool and comes back to the lobby should get the map they just
+## saved, and a decode is milliseconds against a screen the player is reading.
+func _load_saved_map() -> MapData:
+	var problems: Array[String] = []
+	var data := MapFile.load_map(_saved_dir, problems)
+	if data == null:
+		_saved_load_error = problems[0] if not problems.is_empty() else "could not be read"
+		return null
+	_saved_load_error = ""
+	return data
+
+
+## Grey out the seed controls while a saved map is chosen (16.0).
+##
+## **A SEED DESCRIBES A GENERATED MAP AND MEANS NOTHING TO A FILE.** Left live, the box
+## would invite a change that either did nothing -- which reads as a broken control -- or
+## threw the chosen map away, which is worse. Disabled says "not for this map" in the one
+## way that needs no words.
+##
+## The seed is NOT hidden and NOT cleared: it is still the seed you would get back by
+## switching to a generated map, and `MatchConfig.seed` keeps carrying it as provenance.
+##
+## ⚠️ **JOINED WINS OVER THIS.** `_refresh_lobby` disables the same controls for a joined
+## client, where the map is the host's and none of it is local business, so both callers set
+## the same properties and the last one to run must not re-enable what the other locked.
+## Hence `or`, and hence this being called from `regenerate()` -- which `_apply_config` runs
+## before `_refresh_lobby`.
+func _refresh_map_controls() -> void:
+	if _seed_box == null or _reroll_button == null:
+		return
+	var on_file := not _saved_dir.is_empty()
+	_seed_box.editable = not on_file and _lobby != Lobby.JOINED
+	_reroll_button.disabled = on_file or _lobby == Lobby.JOINED
 
 
 ## What the MAP SETUP panel says about the match as it stands: the board, the counts,
@@ -1243,10 +1421,32 @@ func regenerate() -> void:
 ## identical one back, which is what `_on_starting_age_selected` already refuses to do.
 func _refresh_status() -> void:
 	if _data == null:
+		# A CHOSEN SAVED MAP THAT WOULD NOT LOAD (16.0). Before this branch existed the
+		# function returned on a null map and left whatever the last line happened to say,
+		# so picking an unreadable file looked like picking nothing at all.
+		if not _saved_dir.is_empty():
+			_status.text = "Unreadable map: %s" % _saved_load_error
+			_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
 		return
 	var problems: Array = _data.meta.get("problems", [])
 	var active := _active_slots().size()
-	if active < _MIN_PLAYERS:
+	var seats := _saved_seats()
+	if seats > 0 and active > seats:
+		# TOO MANY PLAYERS FOR AN AUTHORED MAP, and this is a correctness gate rather than
+		# tidiness. `MapGen.build_from()` gives a player a town centre and villagers only by
+		# spawning the entities the map LISTS for their index -- it never falls back to
+		# `_start_origin()` the way the debug map does -- so a player beyond the map's count
+		# starts alive, owning nothing, and is defeated on the first tick the win condition
+		# looks. See `SavedMaps._players_in`.
+		#
+		# SAID RATHER THAN SHOWN AS A DEAD BUTTON, and BEFORE the two rules below for their
+		# own reason: this one is fixed by closing a slot, which is the same gesture the
+		# "close fewer slots" message asks the player to undo. Naming both numbers is what
+		# makes the fix obvious.
+		_status.text = "%s seats %d — close %d slot%s, or pick another map" % [
+				_saved_map_name(), seats, active - seats, "" if active - seats == 1 else "s"]
+		_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+	elif active < _MIN_PLAYERS:
 		# Said rather than shown as a dead button. Closing one slot too many is easy to do
 		# and impossible to diagnose from a greyed START.
 		#
@@ -1269,9 +1469,21 @@ func _refresh_status() -> void:
 		# whole point of closing a slot is the gap between them.
 		# The team split rides on the END of this line and only when there is one, so a
 		# free-for-all reads exactly as it always has -- see `_summarise_teams`.
-		_status.text = "%s, %d x %d — %d players on room for %d — ready%s" % [
-				MapGenerator.type_name(_data.meta.get("type", _type) as MapGenerator.Type),
-				_data.size.x, _data.size.y, active, _slots, _team_suffix()]
+		#
+		# A SAVED MAP IS NAMED BY ITS FILE, NOT BY A TYPE (16.0). `meta.type` is only there
+		# on a map that was GENERATED and then saved; a map authored in the MapMaker has no
+		# type at all, and falling through to `_type` would label it with whatever the
+		# picker last had -- "Random", for a hand-painted map. It also reports the map's own
+		# seat count rather than `_slots`, because room on the board is the generator's idea
+		# and an authored map's capacity is fixed by its author.
+		if seats > 0 or not _saved_dir.is_empty():
+			_status.text = "%s — %d x %d — %d of %d players — ready%s" % [
+					_saved_map_name(), _data.size.x, _data.size.y, active,
+					maxi(seats, active), _team_suffix()]
+		else:
+			_status.text = "%s, %d x %d — %d players on room for %d — ready%s" % [
+					MapGenerator.type_name(_data.meta.get("type", _type) as MapGenerator.Type),
+					_data.size.x, _data.size.y, active, _slots, _team_suffix()]
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 	else:
 		# A MAP THAT FAILS VALIDATION CANNOT BE STARTED (2.4b's gate). Saying why beats
@@ -1370,6 +1582,12 @@ func map_data() -> MapData:
 ##      and `WinConditionSystem` would declare that match won on tick 1. Refused here
 ##      rather than started and instantly ended, and `regenerate()` says which team
 ##      everybody is on rather than leaving a dead button to explain itself.
+##   7. **No more players than a chosen SAVED map seats** (16.0). Only for a saved map:
+##      the generator builds starts for the count it is handed, an authored file's are
+##      fixed. This is the same shape as rule 4 -- refused here rather than started and
+##      instantly ended -- because `MapGen.build_from()` gives a player their base only
+##      from the entities the map lists for their index, so a surplus player opens the
+##      match owning nothing.
 func can_start() -> bool:
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
@@ -1380,6 +1598,17 @@ func can_start() -> bool:
 	if _sides() < 2:
 		return false
 	if unfilled_slots() != 0:
+		return false
+	# 7. **A SAVED MAP CANNOT SEAT MORE PLAYERS THAN IT WAS AUTHORED FOR** (16.0). The
+	#    generated case is exempt because the generator builds starts for the count it is
+	#    handed; a file's starts are fixed. Enforced HERE and not only in the status line
+	#    because this is a correctness rule, not advice: `MapGen.build_from()` spawns a
+	#    player's base only from the entities the map lists for their index and never falls
+	#    back to `_start_origin()`, so the surplus player would begin the match alive,
+	#    owning nothing, and be eliminated on the first tick anything looked. 0 means no
+	#    saved map is chosen -- see `_saved_seats()`.
+	var seats := _saved_seats()
+	if seats > 0 and _active_slots().size() > seats:
 		return false
 	return Net.all_peers_ready()
 
@@ -1478,8 +1707,19 @@ func _age_label(age: int) -> String:
 	return GameDataRegistry.age_label(age)
 
 
+## A map type OR a saved map, from the one picker (16.0).
+##
+## `_type` is deliberately LEFT ALONE when a saved map is chosen, rather than being set to
+## some sentinel. It stays the last generator type asked for, so switching back to
+## "Generated" is the type you had -- and `MatchConfig.map_type` keeps carrying it as
+## provenance, which is what `_map_summary` prints and what Re-generate would work from.
+## The map itself always travels as `map_data`, so nothing downstream needs a sentinel to
+## know which of the two it is looking at.
 func _on_type_selected(index: int) -> void:
-	_type = _type_picker.get_item_id(index) as MapGenerator.Type
+	var saved := _saved_index_of(_type_picker.get_item_id(index))
+	_saved_dir = str(_saved_maps[saved].get("dir", "")) if saved >= 0 else ""
+	if saved < 0:
+		_type = _type_picker.get_item_id(index) as MapGenerator.Type
 	regenerate()
 
 
@@ -1813,6 +2053,14 @@ func _on_lobby_config_received() -> void:
 	_starting_age = cfg.starting_age
 	_data = cfg.map_data
 
+	# THE HOST'S MAP IS NOT A FILE ON THIS MACHINE (16.0). A client that had picked a saved
+	# map locally before joining would otherwise keep pointing at it -- and `_refresh_status`
+	# would name that map, and its seat count, on a screen showing the host's board. The map
+	# travels as data (`MatchConfig.map_data`) precisely so a client never needs the file, so
+	# clearing this is the whole of what a joined client has to do about the feature.
+	_saved_dir = ""
+	_saved_load_error = ""
+
 	# THE SLOT COUNT FIRST, and rebuild the rows to match it, because a host on eight
 	# slots and a client still showing two would leave six of the host's players with no
 	# row to appear in -- the joining player would be reading a two-player lobby for an
@@ -1870,7 +2118,15 @@ func _on_lobby_config_received() -> void:
 		picker.select(picker.get_item_index(int(_roles[i])))
 
 	_seed_box.set_value_no_signal(_seed)
-	_type_picker.select(_type_picker.get_item_index(int(_type)))
+	# GUARDED LIKE `starting_age` BELOW, AND 16.0 IS WHY IT HAD TO BE. This is a joined
+	# client applying the HOST's config: the host may be on a saved map, whose `map_type` is
+	# only provenance, and it may be a type this build's picker does not offer. `select(-1)`
+	# clears the picker, which reads as "no map chosen" on a screen showing the host's map
+	# perfectly well -- so a type we cannot name leaves the selection alone. The map itself
+	# is unaffected either way: it arrives as `map_data` and is already in `_data`.
+	var type_item := _type_picker.get_item_index(int(_type))
+	if type_item >= 0:
+		_type_picker.select(type_item)
 	_mode_picker.select(_mode_picker.get_item_index(int(_mode)))
 	# Guarded, unlike the two above: `starting_age` comes off the wire and a host on a
 	# longer ages.json than this build would name an age with no item to select.
@@ -1930,9 +2186,13 @@ func _refresh_lobby() -> void:
 	# a live control here would be a lie about who decides. Every one of these was found
 	# by LOOKING at the joined screen rather than by reasoning about it: Re-generate, the
 	# player count and the victory picker were all still live in the first version.
-	_seed_box.editable = not joined
+	# THE SEED PAIR GOES THROUGH `_refresh_map_controls()` AND NOT THROUGH THESE TWO LINES,
+	# because there are now two independent reasons to lock them -- joined, and a saved map
+	# chosen (16.0) -- and whichever of the two functions ran last would otherwise undo the
+	# other. It reads `_lobby` itself, so it is `joined` plus one more condition rather than
+	# a different rule.
+	_refresh_map_controls()
 	_type_picker.disabled = joined
-	_reroll_button.disabled = joined
 	_mode_picker.disabled = joined
 	_age_picker.disabled = joined
 	# A JOINED CLIENT IS NOT A HOST, so its name is a setting for a session it is not

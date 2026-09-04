@@ -1205,3 +1205,176 @@ func test_a_config_from_before_the_selector_reads_as_age_one() -> void:
 	var d := MatchConfig.debug_skirmish().to_dict()
 	d.erase("starting_age")
 	assert_eq(MatchConfig.from_dict(d).starting_age, 1)
+
+
+# ── saved maps in the picker (16.0) ─────────────────────────────────────────
+#
+# Against the repo's own `maps/` folder, read through `SavedMaps`' dev override --
+# `test_campaign_screen`'s arrangement, and for its reason: the discovery rules and the seat
+# arithmetic are covered over scratch directories in `test_saved_maps`, and what is left to
+# assert here is that THIS SCREEN wires them to the picker, the seed box and `can_start()`.
+#
+# `dev_preview/preview_saved_map.tscn` authors `maps/sample_duel` and its output is
+# committed, so these run on a clean clone.
+
+## The sample map's row, or `{}` if the folder has gone. Every test below skips rather than
+## fails when there is no saved map at all: the alternative is a file whose whole section
+## goes red the day somebody deletes a sample, which reads as a broken feature.
+func _sample_row() -> Dictionary:
+	for entry in screen._saved_maps:
+		if str(entry.get("folder", "")) == "sample_duel":
+			return entry
+	return {}
+
+
+func _pick_sample() -> bool:
+	var row := _sample_row()
+	if row.is_empty():
+		return false
+	for i in screen._type_picker.item_count:
+		var saved := SkirmishScreen._saved_index_of(screen._type_picker.get_item_id(i))
+		if saved >= 0 and screen._saved_maps[saved] == row:
+			screen._type_picker.select(i)
+			screen._on_type_selected(i)
+			return true
+	return false
+
+
+func test_the_committed_sample_map_reaches_the_picker() -> void:
+	var row := _sample_row()
+	assert_false(row.is_empty(), "maps/sample_duel should be discovered through the dev override")
+	if row.is_empty():
+		return
+	assert_eq(int(row["players"]), 2)
+	# The seat count is in the LABEL, because it is the one fact that decides whether the
+	# lobby you have set up can start on this map -- learning it by picking the map and
+	# reading a red line is worse.
+	assert_true(SkirmishScreen._saved_item_label(row).contains("(2p)"),
+			"the row says what it seats: " + SkirmishScreen._saved_item_label(row))
+
+
+## THE ONE THAT WOULD CATCH THE FEATURE BEING A LIE: the screen must show the FILE, not a
+## generated map that happens to be the same size.
+func test_picking_a_saved_map_shows_the_file_and_not_a_generated_map() -> void:
+	if not _pick_sample():
+		return
+	var shown := screen.map_data()
+	assert_not_null(shown)
+	if shown == null:
+		return
+	var problems: Array[String] = []
+	var from_file := MapFile.load_map(str(_sample_row()["dir"]), problems)
+	assert_eq(problems, [] as Array[String])
+	assert_not_null(from_file)
+	if from_file == null:
+		return
+	assert_eq(shown.terrain, from_file.terrain, "the screen is showing the file's terrain")
+	assert_eq(shown.starts, from_file.starts)
+
+
+## And it reaches the MATCH, which is the screen's entire output.
+func test_the_config_carries_the_saved_map():
+	if not _pick_sample():
+		return
+	var cfg := screen.build_config()
+	assert_not_null(cfg.map_data)
+	if cfg.map_data == null:
+		return
+	assert_eq(cfg.map_data.terrain, screen.map_data().terrain)
+	# The map is the authority on its own size -- a config that disagreed with the map it
+	# carries would build a world the wrong shape.
+	assert_eq(cfg.map_size, cfg.map_data.size)
+
+
+## A SEED MEANS NOTHING TO A FILE. Left live, the box would invite a change that either does
+## nothing -- reading as a broken control -- or throws the chosen map away.
+func test_a_saved_map_locks_the_seed_controls() -> void:
+	if not _pick_sample():
+		return
+	assert_false(screen._seed_box.editable, "the seed does not describe a file")
+	assert_true(screen._reroll_button.disabled)
+
+
+## And switching back gives them straight back, with the seed you had. `_type` is
+## deliberately never overwritten by a saved pick, which is what makes this true.
+func test_going_back_to_a_generated_map_restores_the_seed_controls() -> void:
+	if not _pick_sample():
+		return
+	var seed_before := screen.build_config().seed
+	var item := screen._type_picker.get_item_index(int(MapGenerator.Type.RIVER))
+	screen._type_picker.select(item)
+	screen._on_type_selected(item)
+	assert_true(screen._seed_box.editable)
+	assert_false(screen._reroll_button.disabled)
+	assert_eq(screen.build_config().seed, seed_before, "the seed you had is the seed you get")
+	assert_eq(screen.build_config().map_type, MapGenerator.Type.RIVER)
+
+
+## ⚠️ THE CORRECTNESS GATE, and it is not cosmetic. `MapGen.build_from()` gives a player a
+## town centre and villagers only by spawning the entities the map LISTS for their index --
+## it never falls back to `_start_origin()` the way the debug map does -- so a fourth player
+## on a two-seat map opens the match alive, owning nothing, and is eliminated on the first
+## tick anything looks.
+func test_more_players_than_a_saved_map_seats_cannot_start() -> void:
+	if not _pick_sample():
+		return
+	assert_true(screen.can_start(), "two on a two-seat map is fine: " + screen.status_text())
+	_seat_players(4)
+	assert_eq(screen.build_config().player_ids.size(), 4, "four players are really in it")
+	assert_false(screen.can_start(), "four on a two-seat map must be refused")
+	# SAID, not shown as a dead button: the fix is closing a slot, and naming both numbers
+	# is what makes that obvious.
+	assert_true(screen.status_text().contains("seats 2"),
+			"the refusal names the number: " + screen.status_text())
+
+
+## The generated case is EXEMPT, and this is what stops rule 7 from breaking every existing
+## lobby: the generator builds starts for whatever count it is handed.
+func test_a_generated_map_has_no_seat_limit() -> void:
+	_seat_players(8)
+	assert_eq(screen.build_config().player_ids.size(), 8)
+	assert_true(screen.can_start(), "eight on a generated map: " + screen.status_text())
+
+
+## ⚠️ **RAISING THE SLOT COUNT ADDS ROOM, NOT PLAYERS** -- new slots default to CLOSED, which
+## is the whole point of `_slots` versus `_active_slots()`. So seating N players means
+## setting N-1 roles as well, and a test that only moved the count picker would assert
+## against a two-player lobby on a bigger board and pass for the wrong reason.
+##
+## This cost the 16.0 preview a red run before it cost this file one, which is the preview
+## doing its job: `can_start()` was correct and the way of exercising it was not.
+func _seat_players(n: int) -> void:
+	var item := screen._count_picker.get_item_index(n)
+	screen._count_picker.select(item)
+	screen._on_count_selected(item)
+	for i in range(1, n):
+		var picker: OptionButton = screen._slot_rows[i]["role"]
+		var role_item := picker.get_item_index(int(SkirmishScreen.Role.AI_PASSIVE))
+		picker.select(role_item)
+		screen._on_role_selected(role_item, i)
+
+
+## A joined client never has the host's file, and the map travels as data -- so clearing the
+## local selection is the whole of what it has to do. Without this the client would name its
+## OWN saved map, and that map's seat count, on a screen showing the host's board.
+func test_a_joined_client_forgets_its_own_saved_map() -> void:
+	if not _pick_sample():
+		return
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.map_data = MapGenerator.generate(99, MapGenerator.Type.ISLAND, 2, 2)
+	cfg.map_size = cfg.map_data.size
+	Net._lobby_config = cfg
+	screen._on_lobby_config_received()
+	assert_eq(screen._saved_dir, "", "the host's map is not a file on this machine")
+	assert_eq(screen.map_data().terrain, cfg.map_data.terrain, "and it shows the host's map")
+
+
+## An id collision would not fail -- it would select a map TYPE, silently, and the picker
+## would look right while showing the wrong board. Pinned because the guard is a constant
+## somebody could reasonably decide to tidy.
+func test_saved_ids_cannot_collide_with_a_map_type() -> void:
+	for type in MapGenerator.Type.values():
+		assert_eq(SkirmishScreen._saved_index_of(int(type)), -1,
+				"map type %d must not decode as a saved map" % int(type))
+	assert_eq(SkirmishScreen._saved_index_of(SkirmishScreen._SAVED_ITEM_ID_BASE), 0)
+	assert_eq(SkirmishScreen._saved_index_of(SkirmishScreen._SAVED_ITEM_ID_BASE + 3), 3)
