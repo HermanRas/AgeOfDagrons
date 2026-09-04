@@ -1,0 +1,360 @@
+{
+  "w": 96,
+  "h": 96,
+  "entities": [
+    {
+      "def_id": "building.town_center",
+      "player": 1,
+      "x": 14,
+      "y": 52,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 12,
+      "y": 50,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 21,
+      "y": 50,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 26,
+      "y": 54,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 26,
+      "y": 63,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 18,
+      "y": 64,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.scout_cavalry",
+      "player": 1,
+      "x": 12,
+      "y": 61,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 9,
+      "y": 47,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 25,
+      "y": 47,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 29,
+      "y": 59,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 21,
+      "y": 67,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 9,
+      "y": 63,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 7,
+      "y": 45,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 19,
+      "y": 45,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 31,
+      "y": 45,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 31,
+      "y": 57,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 31,
+      "y": 69,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 19,
+      "y": 69,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 7,
+      "y": 69,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 7,
+      "y": 57,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 5,
+      "y": 43,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 33,
+      "y": 71,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 4,
+      "y": 42,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 34,
+      "y": 72,
+      "size_class": 0
+    },
+    {
+      "def_id": "building.town_center",
+      "player": 2,
+      "x": 71,
+      "y": 33,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 69,
+      "y": 31,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 78,
+      "y": 31,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 83,
+      "y": 35,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 83,
+      "y": 44,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 75,
+      "y": 45,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.scout_cavalry",
+      "player": 2,
+      "x": 69,
+      "y": 42,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 66,
+      "y": 28,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 82,
+      "y": 28,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 86,
+      "y": 40,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 78,
+      "y": 48,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 66,
+      "y": 44,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 64,
+      "y": 26,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 26,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 88,
+      "y": 26,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 88,
+      "y": 38,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 88,
+      "y": 50,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 50,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 64,
+      "y": 50,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 64,
+      "y": 38,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 62,
+      "y": 24,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 90,
+      "y": 52,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 61,
+      "y": 23,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 91,
+      "y": 53,
+      "size_class": 0
+    }
+  ],
+  "starts": [
+    {
+      "x": 19,
+      "y": 57
+    },
+    {
+      "x": 76,
+      "y": 38
+    }
+  ],
+  "meta": {
+    "format_version": 1
+  },
+  "format_version": 1,
+  "created": "2026-09-04T10:26:18",
+  "name": "River Demo",
+  "players": 2,
+  "authored_by": "MapMaker 16.2"
+}

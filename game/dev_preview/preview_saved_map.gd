@@ -26,8 +26,22 @@
 ## real directory so the picker, the seat gate and the match path have something to be
 ## tested against.
 ##
+## ## IT ALSO PLAYS A MAP SOMEBODY ELSE AUTHORED — `--folder` (added 2026-09-04, 16.2)
+##
+## With `--folder <name>` it skips the authoring above entirely and drives the picker to that
+## folder in `maps/` instead. **That is how the MapMaker's output gets played**, and it is the
+## second half of a check no single process can make:
+##
+##     Godot --headless --path MapMaker res://dev/author_map.tscn
+##     Godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
+##
+## Two projects, one file between them, which is PLAN.md §16 decision 2 in one command each.
+## The seat-gate step is skipped for a foreign map, because its seat count is whatever its
+## author chose and this preview has no business asserting a number it did not pick.
+##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_saved_map.tscn [-- --force]
+##       [-- --folder <name>]
 ##       -- writes user://saved_map_picked.png and user://saved_map_match.png
 extends Node
 
@@ -56,14 +70,48 @@ var _resume_at := 0
 ## here instead of agreeing with itself.
 var _from_file: MapData = null
 
+## Which folder in `maps/` is under test. The sample by default; anything else came from
+## `--folder` and was authored elsewhere.
+var _folder := SAMPLE_FOLDER
+
 
 func _ready() -> void:
-	var force := OS.get_cmdline_user_args().has("--force")
-	if not _ensure_sample(force):
+	var args := OS.get_cmdline_user_args()
+	_folder = _arg(args, "--folder", SAMPLE_FOLDER)
+	# A FOREIGN MAP IS NEVER AUTHORED HERE. `--folder` names somebody else's file -- the
+	# MapMaker's, usually -- so this scene must not create, replace or re-roll it. It only
+	# reads it back to compare the running world against.
+	if _folder == SAMPLE_FOLDER:
+		if not _ensure_sample(args.has("--force")):
+			get_tree().quit(1)
+			return
+	elif not _load_foreign():
 		get_tree().quit(1)
 		return
 	_screen = load("res://scenes/menu/Skirmish.tscn").instantiate()
 	add_child(_screen)
+
+
+## Read a map this preview did not write, so `_report_match` has something to compare against.
+func _load_foreign() -> bool:
+	var dir := ProjectSettings.globalize_path("res://").path_join("../maps").simplify_path() \
+			.path_join(_folder)
+	var problems: Array[String] = []
+	_from_file = MapFile.load_map(dir, problems)
+	if _from_file == null:
+		push_error("cannot read maps/%s: %s"
+				% [_folder, "; ".join(PackedStringArray(problems))])
+		return false
+	print("foreign map: %s" % dir)
+	print("foreign map: %dx%d, %d entities, %d starts"
+			% [_from_file.size.x, _from_file.size.y, _from_file.entities.size(),
+			_from_file.starts.size()])
+	return true
+
+
+func _arg(args: PackedStringArray, key: String, fallback: String) -> String:
+	var at := Array(args).find(key)
+	return str(args[at + 1]) if at >= 0 and at + 1 < args.size() else fallback
 
 
 func _process(_delta: float) -> void:
@@ -85,17 +133,21 @@ func _process(_delta: float) -> void:
 				return
 			_shoot("saved_map_picked")
 		3:
-			# THE SEAT GATE, driven through the REAL pickers. Four PLAYERS on a map that
-			# seats two, which `MapGen.build_from()` would answer by giving players 3 and 4
-			# nothing at all -- alive, owning nothing, defeated on the first tick anything
-			# looked. Refused rather than started.
-			_seat_players(4)
+			# THE SEAT GATE, driven through the REAL pickers. More PLAYERS than the map
+			# seats, which `MapGen.build_from()` would answer by giving the surplus nothing
+			# at all -- alive, owning nothing, defeated on the first tick anything looked.
+			# Refused rather than started.
+			#
+			# SKIPPED FOR A FOREIGN MAP: its seat count is whatever its author chose, and
+			# this preview has no business asserting a number it did not pick.
+			if _folder == SAMPLE_FOLDER:
+				_seat_players(_seats() + 2)
 		4:
-			if not _report_seat_gate():
+			if _folder == SAMPLE_FOLDER and not _report_seat_gate():
 				get_tree().quit(1)
 				return
 		5:
-			_seat_players(SAMPLE_PLAYERS)
+			_seat_players(_seats())
 		6:
 			_start_the_match()
 		7:
@@ -172,7 +224,7 @@ func _report_listing() -> bool:
 		var saved := SkirmishScreen._saved_index_of(id)
 		print("  %2d  id %-5d %-28s %s" % [i, id, _screen._type_picker.get_item_text(i),
 				"SAVED" if saved >= 0 else ""])
-		if saved >= 0 and _screen._saved_maps[saved].get("folder", "") == SAMPLE_FOLDER:
+		if saved >= 0 and _screen._saved_maps[saved].get("folder", "") == _folder:
 			found = i
 	if found < 0:
 		push_error("the sample map is not in the picker -- discovery did not reach maps/")
@@ -184,7 +236,7 @@ func _report_listing() -> bool:
 func _pick_saved_map() -> void:
 	for i in _screen._type_picker.item_count:
 		var saved := SkirmishScreen._saved_index_of(_screen._type_picker.get_item_id(i))
-		if saved >= 0 and _screen._saved_maps[saved].get("folder", "") == SAMPLE_FOLDER:
+		if saved >= 0 and _screen._saved_maps[saved].get("folder", "") == _folder:
 			_screen._type_picker.select(i)
 			_screen._type_picker.item_selected.emit(i)
 			break
@@ -227,15 +279,33 @@ func _report_picked() -> bool:
 	return ok
 
 
-## Four slots on a two-seat map: refused, and it says which way out to take.
+## How many players the map under test can seat, read off the FILE.
+##
+## The same arithmetic `SavedMaps._players_in()` does, and deliberately not read from the
+## screen: this preview's job is to check the screen against the file, so taking the number
+## from the screen would make the comparison circular.
+func _seats() -> int:
+	if _from_file == null:
+		return SAMPLE_PLAYERS
+	var starts := 0
+	for s in _from_file.starts:
+		if s.x >= 0:
+			starts += 1
+	var highest := 0
+	for e in _from_file.entities:
+		highest = maxi(highest, int(e.get("player", 0)))
+	return mini(starts, highest) if starts > 0 and highest > 0 else 0
+
+
+## More players than the map seats: refused, and it says which way out to take.
 func _report_seat_gate() -> bool:
 	print("")
-	print("── four players on a two-seat map ──")
+	print("── %d players on a %d-seat map ──" % [_seats() + 2, _seats()])
 	print("  status:    %s" % _screen.status_text())
 	print("  can start: %s" % _screen.can_start())
 	if _screen.can_start():
-		push_error("four players started on a map seating two -- players 3 and 4 would open"
-				+ " the match owning nothing")
+		push_error("more players started than the map seats -- the surplus would open the"
+				+ " match owning nothing")
 		return false
 	# The message has to name the map and the number, or the fix is a guess.
 	if not _screen.status_text().contains(SAMPLE_NAME):

@@ -429,10 +429,29 @@ points at it instead of at `game/`**, and it has its own suite:
 
 ```powershell
 & $godot --headless --path MapMaker                          # the startup report; EXIT CODE IS THE ANSWER
-& $godot --path MapMaker                                     # the window
+& $godot --path MapMaker                                     # the window: report -> New map -> the editor
 & $godot --headless --path MapMaker res://tests/run_tests.tscn
 & $godot --headless --path MapMaker --import                 # its own class cache, separate from the game's
+
+# 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
+& $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
+& $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 3 canvas screenshots
+& $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 ```
+
+⚠️ **THE TWO-COMMAND ROUND TRIP IS THE ONLY THING THAT PROVES PHASE 16'S CONTRACT**, and it
+needs both projects: `author_map` writes the file, `preview_saved_map --folder` plays it and
+compares **every terrain tile** of the running world against the file. Neither process can
+check the other, which is decision 2's whole point — the FILE is the contract, not the code.
+MapMaker screenshots land in `%APPDATA%\Godot\app_userdata\AOD MapMaker\` (note the space),
+NOT in the game's `AgeOfDragons` folder.
+
+⚠️ **NEVER PUT LOAD-BEARING PROSE IN `MapMaker/project.godot`.** Opening the project in the
+Godot editor **rewrites that file**: it strips every comment and drops any setting that
+matches an engine default. A careful explanation of why the tool has no `Mobile` feature and
+no canvas stretch was written there on 2026-09-04 and was gone within the hour. Reasoning
+about project settings belongs in a script header or here.
 
 ⚠️ **`--import` IS PER PROJECT.** Adding a `class_name` under `MapMaker/` and then running the
 GAME's `--import` refreshes the wrong cache, and the failure looks identical to the game's:
@@ -453,6 +472,23 @@ simulation, which is what decision 2 exists to prevent.
 **`src/game_content.gd` is registered as the autoload `GameDataRegistry`, and the name is the
 trick** — `format/map_data.gd` calls `GameDataRegistry.building()`/`.resource_def()` for
 footprints, so answering to that identifier keeps the copy unedited and therefore hashable.
+
+**EVERY CHANGE TO A MAP GOES THROUGH `MapDocument`, AND NOTHING OUTSIDE IT WRITES TO `data`.**
+Reading is fine — the canvas does nothing else. That funnel is what makes 16.2a's undo a list
+of inverted calls rather than an archaeology exercise, so a stray `document.data.set_terrain()`
+is a change the stack will never see and will look like undo being broken.
+
+⚠️ **A START MARKER WITHOUT A BASE IS A BROKEN MAP, so `place_start()` places both.**
+`MapGen.build_from()` gives a player their town centre and units purely from the entities the
+map LISTS for their index — it never derives a base from a start — so a bare start authors a
+player who opens the match owning nothing. That is the fault 16.0's `can_start()` rule 7
+refuses, and the tool must not be able to create it by accident.
+
+⚠️ **`StartLayout.ORIGIN_KEY` IS SESSION-ONLY EDITING METADATA AND `MapFile` DROPS IT.** Every
+resource node is gaia (`player: 0`), so removing a start by OWNER cannot find the cluster it
+placed — moving a start left the old one behind and the entity count went 24 → 40. The tag
+fixes that, `MapData.to_dict()` writes only five keys so it never reaches the file, and a test
+pins both halves.
 
 ⚠️ **`data/*.json` CARRIES `_note` KEYS THAT ARE DOCUMENTATION, NOT ENTRIES**, and a reader that
 does not skip them reports two warnings on a good roster and puts a `_note` in the palette. The

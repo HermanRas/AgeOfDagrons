@@ -36,6 +36,7 @@ const _DIM := Color(0.70, 0.70, 0.74)
 var _root: GameRoot = null
 var _guard: FormatGuard = null
 var _label: RichTextLabel = null
+var _actions: HBoxContainer = null
 
 
 func _ready() -> void:
@@ -51,6 +52,31 @@ func _ready() -> void:
 		# The exit code is the answer -- see the class comment. Deferred rather than called
 		# here so the print buffer is flushed and, on a non-headless run, the frame is drawn.
 		get_tree().quit(0 if ready_to_work() else 1)
+		return
+
+	# ── into the editor (16.2) ──
+	#
+	# THE REPORT IS A GATE, NOT A SPLASH. The button appears whatever the guard said, and
+	# `Editor.setup()` is told which -- because a drifted copy makes SAVING dangerous, not
+	# drawing: an author should still be able to open the tool and look at a map while the
+	# copies are brought back into step. `Editor.save()` is where decision 3 is enforced.
+	var open := Button.new()
+	open.text = "New map  →" if ready_to_work() else "Open the editor anyway (saving disabled)"
+	open.pressed.connect(_open_editor)
+	_actions.add_child(open)
+
+
+func _open_editor() -> void:
+	# INSTANTIATED AND SWAPPED BY HAND rather than `change_scene_to_file`, so the guard result
+	# can be handed over: the editor must not have to re-run the check to know whether it may
+	# save, and a static would be a second place that answer lives.
+	var editor: Control = load("res://Editor.tscn").instantiate()
+	editor.setup(ready_to_work())
+	get_tree().root.add_child(editor)
+	# Removed rather than hidden: this screen holds a `FormatGuard` and a report and has
+	# nothing to contribute once the editor is up.
+	get_parent().remove_child(self)
+	queue_free()
 
 
 ## Is the tool in a state where it could author a map?
@@ -163,12 +189,21 @@ func _build_ui() -> void:
 		margin.add_theme_constant_override("margin_" + side, 24)
 	add_child(margin)
 
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 12)
+	margin.add_child(rows)
+
 	_label = RichTextLabel.new()
 	_label.bbcode_enabled = true
 	_label.selection_enabled = true          # so a person can copy a path out of a warning
+	_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_label.add_theme_color_override("default_color", _DIM)
 	_label.add_theme_font_override("normal_font", ThemeDB.fallback_font)
-	margin.add_child(_label)
+	rows.add_child(_label)
+
+	_actions = HBoxContainer.new()
+	_actions.add_theme_constant_override("separation", 8)
+	rows.add_child(_actions)
 
 
 static func _as_strings(names: Array[StringName]) -> Array[String]:
