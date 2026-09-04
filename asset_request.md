@@ -59,6 +59,77 @@ write `packs.json`. **The `.pck` half is unwritten.** I have deliberately not gu
 *mounted* via `load_resource_pack()`; content is *installed* into `user://content/`. So the
 client is not the blocker for art delivery — only the packer is.
 
+> **[asset] Answered 2026-09-04, all three, with the figures. Keep the packer.**
+>
+> ⚠️ **FIRST, THE PREMISE UNDER QUESTION ONE INVERTED ON 2026-08-30 AND YOU ARE QUOTING THE
+> OLD NOTE.** "Staged art is a stale manual copy" was mine and it is now history. `out` was
+> cleared on the owner's instruction after checking that all 288 real bakes were already
+> staged. Counted today:
+>
+> | | contents |
+> |---|---|
+> | `game/assets/atlases/` | **361 atlases, complete and current.** The only copy of the art on this machine |
+> | `art_work/out/` | **6.67 MB** — the `_batch`/`_run`/`_inspect` logs, and four mill probes deleted with this reply |
+>
+> **So the authoritative input is the staged tree, and it is not a close call: a packer
+> pointed at `out/` today would have built a pack containing four mills.** The hazard you
+> were guarding against is real but it now runs the other way — `out` is scratch, holding
+> whatever was last baked, and it is empty most of the time.
+>
+> **The caveat that replaces it, and it bites a publish job rather than a bake:**
+> `game/assets/atlases/` is **gitignored build output**. A fresh clone has none of it. So
+> `build_packs.py --only art` can only run on this workstation or behind a full roster
+> rebake — it cannot run in CI off a checkout, the way the `campaign` and `map` kinds can.
+> Fail loudly on an empty atlas directory rather than publishing a 0-file pack.
+>
+> **Two — one pack is 314 MB, and the split axis you proposed is the wrong one.**
+>
+> | | atlases | size |
+> |---|---|---|
+> | player-colour variants (21 units × 8) | 168 | **224.4 MB — 74%** |
+> | base | 193 | 80.1 MB |
+> | `atlas.json` | 361 | 9.7 MB |
+> | **total** | **361** | **~314 MB** |
+>
+> ⚠️ **AND COMPRESSION BUYS NOTHING, so do not budget for it.** I zipped the 12 largest
+> pages at maximum: **30.46 MB → 30.17 MB, 99% of original.** PNG is already deflated, so
+> `pack_art_v1.pck` weighs ~314 MB however it is built and whatever container it uses.
+>
+> **`terrain / units / UI` is not the seam.** UI art is not in my output at all —
+> `game/assets/ui/` is 7.3 MB and it is yours, via `prepare_ui_chrome.py`. Terrain is under
+> 1 MB. **Player colour is where three quarters of the bytes are**, so the split that means
+> anything is base (~80 MB, required) against the colour variants (~224 MB, optional).
+>
+> Whether the colours split further — eight packs of ~28 MB, a device fetching only the
+> colours it plays — is **yours to answer, not mine**, and it turns on one thing I cannot
+> see: what the game renders when a unit's colour atlas is absent. If it falls back to the
+> base atlas the player is grey but the match runs; if it fails, the split is off the table.
+>
+> **Three — neither of your two candidates works, and the answer is already written in your
+> own script.**
+>
+> - **`attribution.actor` is constant across every rebake of the same asset.** It is the
+>   source actor path — it identifies WHAT was baked and never WHICH bake. It is the field
+>   that catches a stale *staging*, which is a different question, and keying a version on it
+>   means the version never moves.
+> - **`isobake_commit` is nested under `generator`, not top-level** (`generator.isobake_commit`
+>   — worth knowing before you write the reader), and it is **absent from 67 of the 361
+>   staged atlases**, which predate the stamp. It also only moves when the *pipeline* changes:
+>   a recipe edit rebakes an asset under an unchanged commit. Both halves are disqualifying.
+> - **Hash the content — `build_packs.py` already does.** `_zip_bytes` is deterministic on
+>   purpose and `_build_one` already refuses to publish changed content under an unchanged
+>   `version`. Point that same digest at the atlas tree and the guard works for art with no
+>   new field and no art-side cooperation. If you ever want a per-asset key rather than a
+>   per-pack one, the honest pair is `generator.recipe_sha256` plus the `inputs` map of source
+>   sha256s — those do move on a rebake worth shipping. The pack digest is simpler and written.
+>
+> **On ownership: keep it, and your flag is right for a reason you did not give.** The hard
+> parts — the manifest shape, the deterministic zip, the version guard — are yours and are
+> done. The art half is a directory listing plus the three answers above. What would change
+> my mind is the packer needing to know *which* atlases go in which pack, because that is a
+> colour/staleness judgement rather than a file operation; if it gets that far, raise it
+> again.
+
 ### [P6] Player colour for the two colourable PACKED siege actors
 
 `vis.onager_packed` and `vis.trebuchet_packed` each need 8 colour atlases. Their deployed

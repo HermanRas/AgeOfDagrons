@@ -587,8 +587,25 @@ the corpse floating ~5 px (0.22 m). Standing and walking are unaffected.
 > ⚠️ **"EXEMPTING THE ROOT BONE IS THE PROPER FIX" WAS WRONG, AND THIS FILE ASSERTED IT FOR
 > FOUR DAYS.** Measured 2026-09-01, as a probe *before* editing isobake: exempting the root
 > takes the deer from **floating +0.217 m to buried −1.145 m** — five times worse, in the
-> other direction. The mill was unchanged either way, so the risk everyone worried about was
-> never the real one.
+> other direction.
+>
+> ⚠️ **AND STRIKE THE MILL FROM THAT PROBE — IT WAS NEVER A CONTROL.** This entry used to add
+> "the mill was unchanged either way, so the risk everyone worried about was never the real
+> one." The first clause is true and **the inference from it is worthless**, because all four
+> mill recipes are incapable of varying with the change under test. `mill_age3` and
+> `mill_age4` carry **no `[anims]` block at all** — age 3 drops the rotary mill for a plain
+> building — so `location_scale` never runs on them. `mill` and `mill_age2` do run it, at
+> 0.0, but the only objects riding a translating bone are the two donkeys, and both recipes
+> **`drop_objects = ["donkey", "Horse"]`**. A grinder that pivots in place has nothing for a
+> root exemption to move. The four probe bakes were deleted 2026-09-04 (owner) and `out` is
+> back to its 1.04 MB of logs.
+>
+> **The withdrawal still stands on the DEER measurement alone**, which is a real one. But
+> this is §4's own recurring lesson caught in my own probe: *before quoting a result as
+> evidence, check the thing measured is capable of varying with the claim.* Same shape as
+> Atlas's `Animation` dropdown and `directions.table`'s constant 8. **Choosing a control is
+> a claim that needs checking, not a free second data point** — read the recipe before
+> trusting the reading.
 >
 > **The reason is structural and it generalises.** `location_scale` exists *because* the
 > clip is mis-scaled — the deer's death `.dae` declares INCHES against a mesh in 0 A.D.
@@ -922,6 +939,18 @@ with WinError 5. Delete contents, not the directory.
 - **Staging is complete and current: 361 atlases.** All eight colours are correct
   for all 21 colourable units — `check_colour_consistency.py --staged` reports
   **0 of 21 with pages that disagree and 0 where only the import counts did**.
+  > **What the whole set WEIGHS, measured 2026-09-04 for the art-pack question and worth
+  > not re-measuring: 314 MB.** 304.5 MB of pages plus 9.7 MB of `atlas.json`. **168
+  > colour-variant atlases are 224.4 MB of that — 74%** — against 80.1 MB for the 193 base
+  > atlases, so player colour is the only split axis that moves the number. **Compression
+  > is not one:** the 12 largest pages zip 30.46 → 30.17 MB, **99%**, because PNG is already
+  > deflated. UI art is not in this tree at all (`game/assets/ui/`, 7.3 MB, the game side's).
+  >
+  > ⚠️ **AND THIS TREE IS GITIGNORED**, so a fresh clone has none of it — an art packer can
+  > only run here or behind a full rebake, never in CI off a checkout. Told to the game side
+  > in `asset_request.md` 2026-09-04, with `attribution.actor` and `isobake_commit` ruled out
+  > as version keys: the first is constant across rebakes of one asset, the second is missing
+  > from 67 of the 361 and only moves when the PIPELINE changes.
 - `vis.ballista` is base-only because **its own** crew textures measure a 0% mask
   — *not* because siege engines are a class that cannot tint. The ram does, at
   6.8%; see §4. Every other unit has its eight. **Re-measured 2026-08-16 after
