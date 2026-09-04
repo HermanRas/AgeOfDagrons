@@ -52,8 +52,17 @@ instructions painted over them, so the layer *under* the annotation is this proj
 rendering of 0 A.D. art and is covered by the CC-BY-SA 3.0 attribution above.
 **Licence:** project assets, not third-party material — nothing here is owed to anyone
 else. Recorded because *how* an asset was made is part of its provenance, and because
-purely AI-generated images may not be copyrightable in some jurisdictions. Detail and the
-caveat: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
+purely AI-generated images may not be copyrightable in some jurisdictions. Per-file
+detail: [`game/assets/LICENCES.md`](game/assets/LICENCES.md).
+**The terms this rests on, with their links and their dates:**
+[`GeminiCopyRight.md`](GeminiCopyRight.md) — Google's [Terms of Service](https://policies.google.com/terms)
+(effective 30 July 2026) state that for content its services generate, "Google won't claim
+ownership over that content"; commercial use is permitted on every tier. **Two things that
+file records and this entry cannot fit:** the widely-cited *Generative AI Additional Terms*
+URL was retired on 22 May 2024 and folded into the main ToS, so it is the wrong citation;
+and under US law (Copyright Office guidance, 88 Fed. Reg. 16,190) purely AI-generated
+material is not registrable — these files are ours to ship and **probably not ours to
+restrict**, which is why they are not described as MIT project code.
 
 ### New Rocker — body typeface
 **Used for:** every label in the game (`gui/theme/custom_font`).

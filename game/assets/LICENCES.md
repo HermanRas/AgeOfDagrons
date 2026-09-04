@@ -493,18 +493,36 @@ own provenance.
 > explicitly rather than left as "ours", because generated assets carry a different set of
 > facts from drawn ones and the difference is invisible in the file itself.
 >
-> **Why this is fine to ship.** Google's generative-AI terms do not claim ownership of
-> output; what the service produces for you is yours to use, including commercially. No
-> third party's rights are being relied on here, so nothing needs crediting to anyone else
-> and there is no copyleft to propagate. These are **not** 0 A.D. material and carry none
-> of its CC-BY-SA obligations.
+> 📄 **THE TERMS THIS RESTS ON ARE NOW CITED, WITH DATES:**
+> [`GeminiCopyRight.md`](../../GeminiCopyRight.md) (transposed 2026-09-04). Everything
+> below is the summary; that file is the evidence, and it is the one to re-read before
+> relying on any of this, because the terms carry dates and the dates move.
+>
+> **Why this is fine to ship.** Google's [Terms of Service](https://policies.google.com/terms)
+> (effective 30 July 2026) say of content its services generate: "Google won't claim
+> ownership over that content." What the service produces for you is yours to use,
+> including commercially. No third party's rights are being relied on here, so nothing
+> needs crediting to anyone else and there is no copyleft to propagate. These are **not**
+> 0 A.D. material and carry none of its CC-BY-SA obligations. ⚠️ **Do not cite
+> `policies.google.com/terms/generative-ai` for this** — that document was retired on
+> 22 May 2024 and folded into the main ToS, and it is still served and still reads live.
 >
 > **The one caveat worth writing down.** In several jurisdictions — the US most clearly —
 > purely AI-generated images may attract no copyright at all, because copyright wants a
-> human author. That does not stop us shipping them; it means they may not be *ours to
+> human author (Copyright Office registration guidance, 88 Fed. Reg. 16,190; *Thaler v.
+> Perlmutter*). That does not stop us shipping them; it means they may not be *ours to
 > restrict*, so treat them as effectively unprotectable rather than as MIT-licensed
 > project code. Practically this only matters if someone else reuses the icon and we would
-> want to object. If that ever matters, replace them with drawn originals.
+> want to object. If that ever matters, replace them with drawn originals. **The same terms
+> also grant no exclusivity** — Google reserves the right to generate the same or similar
+> output for anybody else.
+>
+> ⚠️ **"PAID ACCOUNT" ABOVE IS PROVENANCE AND NOT A DATA CLAIM.** It says which account
+> made the file. It does **not** mean the prompts were withheld from training: paid-means-no-training
+> is a documented property of the Gemini **API** and of **Workspace**, not of a paid
+> consumer Google AI Pro/Ultra subscription, where the control is the Keep Activity toggle
+> and it is on by default. Irrelevant to our right to ship these files; recorded because
+> the tier distinction is the thing everybody gets wrong.
 >
 > **If they are regenerated or replaced,** update this row in the same change. Note also
 > that Gemini output carries Google's SynthID watermark, so these files are detectable as
