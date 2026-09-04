@@ -1013,8 +1013,48 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
-- **THE DRAGON RIG CAME BACK, and the only thing left between it and an atlas is
-  `adapters/generic.py`.** Board card `P7`, now `owner-decision`. The art is 0 A.D.'s own
+- ✅ **`adapters/generic.py` IS WRITTEN — isobake `5592f23`, 2026-09-04.** The pipeline can
+  bake a `.blend`/glTF/FBX. Two probes render: the rest pose, and `idle` through the full
+  clip path. `paths.models` is the new machine-local root (`isobake.local.toml`), so a
+  recipe says `file = "dragon_rig/dragon_rigged.blend"`. Throwaway probes live in
+  `tools/recipes/probe/`.
+  > ⚠️ **EVERY TRANSFORM IS OPT-IN AND `height_m`/`drop_to_ground` ARE BOTH OFF BY
+  > DEFAULT, because both measure the REST POSE and a rest pose need not resemble the
+  > creature.** This rig's rest is 3.89 × 7.89 × **5.44 m buried 1.78 m**; four of its five
+  > clips are **9.19 × 8.11 × 3.76 m on z = 0**, the source dragon's figures to three
+  > decimals. Fitting to rest would have scaled every good clip by 0.69 and grounding it
+  > would have lifted a correctly-seated dragon into the air. **Both would have reported
+  > `ok`.** Measure the pose you will render, never the one the file opens in.
+  >
+  > ⚠️ **THE SUBJECT HANGS OFF A WRAPPER EMPTY AND MUST STAY THERE.**
+  > `render_impl._cancel_horizontal_root_motion` **assigns** `armature.location.x/y` every
+  > animated frame, so placement written to the armature is silently overwritten — a static
+  > probe looks perfect and the animated bake drifts.
+  >
+  > **`isobake inspect` and the bake now share one importer** (`blender/sources.py`).
+  > inspect used `wm.open_mainfile` for `.blend`, which the bake can never do — it would
+  > destroy the camera and lights `render_impl` builds before calling the adapter. **That
+  > moved a published number**: the rig reported 3.886 × 7.885 × 5.439 m and now reports
+  > 9.190 × 8.106 × 4.743 m, because the old figure was the artist's *saved pose*. Same
+  > family as the ballista's tool/bake disagreement in §4.
+- ⚠️ **THE AUTO-RIGGER THREW AWAY THE DRAGON'S SKIN, and it bakes lime green until fixed.**
+  `Untitled.blend` packs a 256×256 **green striped placeholder** where `animal_dragon.dds`
+  belongs. The UVs came back intact (0.009–0.991, genuinely unwrapped), so re-pointing the
+  image node at 0 A.D.'s original restores it exactly — `art_source/dragon_rig/dragon_rigged.blend`
+  is that copy, and the auto-rigger's return is left untouched beside it. **Bake the
+  retextured one.** The tell was a flat green render with diagonal banding against the
+  staged `vis.dragon`'s pink membranous wings; nothing in the material audit looked wrong
+  (`use_nodes`, image packed, `has_data`, wired to Base Color) — **only looking at the
+  image itself showed it**.
+- ⚠️ **`walk` IS THE BROKEN CLIP AND IT IS AN ASSET PROBLEM, NOT AN ADAPTER ONE.** All three
+  walk variants measure 3.87 × 7.82 × 5.51 m **buried 1.80 m**, where `Death`, `Fly2`,
+  `idle` and `shootFire` are the correct dragon on the ground. `walk` and `walk002` are
+  **byte-identical keyframe data**; `walk001` is the same motion with redundant per-bone
+  location curves. So three actions are one broken walk cycle, and the "upright biped at
+  5.44 m" this file reported for a fortnight was **that clip and the rest pose**, not a
+  re-posed creature. Measured on the evaluated depsgraph — `inspect` cannot see it, because
+  it reports one pose.
+- **THE DRAGON RIG CAME BACK.** Board card `P7`, still `owner-decision`. The art is 0 A.D.'s own
   and CC-BY-SA 3.0 — **not** bespoke as PLAN.md A.9 assumed — so it could be rigged and the
   rig redistributed. Delivered in `art_source/dragon_rig` (never in the repo, §1): a
   43-bone armature with the mesh skinned to it, and every clip drives all 43 bones.
@@ -1024,20 +1064,18 @@ The one-line index, so a symptom can be matched to a known shape:
   > **A filename is not an inventory**; `isobake inspect` reads glTF, FBX and `.blend`, so
   > check before trusting one.
 
-  Three things to handle when it is taken: a stray **`Icosphere`** sits at the world origin
-  in both blends and would bake as a ball beside the dragon (plus their own Camera and
-  Light); the rig came back **upright on two legs** — biped bone names, 5.44 m tall against
-  a 3.76 m source — which is the owner's call and the reason the card is `owner-decision`;
-  and it was rigged on the **sparse** mesh (341 verts), so `dragon_dense.glb` is still in
-  hand if deformation proves coarse. **Whether it deforms well is unknown and cannot be
-  known until it renders** — which is the argument for writing the adapter: it turns a
-  decision the owner cannot make into one they can make by looking.
+  The stray **`Icosphere`** at the world origin is handled by `exclude = ["Icosphere"]`;
+  the Camera and Light are dropped by the adapter without being named. It was rigged on the
+  **sparse** mesh (341 verts), so `dragon_dense.glb` is still in hand if deformation proves
+  coarse — **and it does not, on the evidence of the `idle` probe**, which reads as the same
+  creature as the staged `vis.dragon`.
 
-  `generic.py` raises `NotImplementedError` (only `zeroad`, `terrain` and `smoke` are real)
-  and is **bounded rather than a rewrite** — camera, rotation loop, projection, packing and
-  atlas format are all source-agnostic and already work. It only has to stand a subject at
-  the origin at the right scale with its clips resolved: enable the bundled importers, remap
-  axes to `directions.CANONICAL_FORWARD`, fit to `height_m`, map action names to clip names.
+  **What is actually left, now that it renders**: `walk` (above), the four-column facing
+  read on a chiral subject to fix `yaw_offset_deg`, a canvas size, and the owner looking at
+  a turntable. The "biped rest pose" that made this `owner-decision` was a measurement
+  artefact, so **the question the card was parked on has changed** — it is no longer "do you
+  accept a different creature", it is "is one broken walk cycle worth a second rigging
+  round-trip".
 - ✅ **CLOSED 2026-09-01 — the deer's carcass floats 0.217 m and that is now the accepted
   state, on the owner's call: "not worth the pipeline change."** It is the only asset
   affected; its lowest pixel sits 4–8 px above the anchor where the wolf's sits 17–35 px
