@@ -336,6 +336,16 @@ Primary source is the project website `https://aod.dragoon.co.za/` (website sour
 `load_resource_pack()` → assets resolve through the seam. If a pack is absent or fails
 verification, **the game runs on placeholders** rather than failing.
 
+✅ **BUILT AND HARDWARE-VERIFIED 2026-09-03 (0.3), WITH ONE HALF MISSING — THE PACKER.** Everything
+above is live for `campaign` and `map` packs: manifest, download, SHA-256 verify, install, mount,
+the boot screen and a browser. **`pack_art_v1.pck` and `pack_audio_v1.pck` do not exist yet**, and
+the gap is `tools/build_packs.py`, which zips content and does not yet build a `.pck` — **the
+client already handles both `art` and `audio`**, so no code here is blocking. The three questions
+that block the packer are with the art side in `asset_request.md`. The placeholder rule above was
+the thing most worth proving and it was proved with the network off: no manifest, no stall, front
+door. See Phase 0's 0.3 row for what is still open, including the resume problem that only appears
+at art-pack sizes.
+
 ### 3.3 Content delivery — scenarios and maps (new 2026-09-01)
 
 **Campaigns and authored maps are content, not code, and they moved out of `game/` because of it**
@@ -358,15 +368,16 @@ copy that ships in the APK, which is the thing being avoided. Reading the repo f
 costs one config file (`tools/isobake.local.toml`'s arrangement, §1.3) and **cannot leak into a
 release build**, because an exported build has no editor feature and therefore no override.
 
-⚠️ **THE PRICE OF THE MOVE, STATED PLAINLY: A CAMPAIGN CANNOT BE TESTED ON THE PHONE UNTIL 0.3
-LANDS.** `user://` on Android is internal app storage and is not `adb push`-able, and the override
-is editor-only — so the delivery path to a device is `AssetPacks`, **the one Phase 0 item still
-open**. Everything in Phase 15 is fully exercisable on Windows and in the headless suite; the first
-on-device run of a campaign waits on 0.3, and that is a real dependency rather than a footnote.
-**Two escapes if it bites before then**, neither of which needs redesigning anything: turn on
-Godot's external-data-dir setting for a debug build so `user://` becomes pushable, or add a
-bundled root to the list above and seed it into `user://content/` on first run — the loader is a
-root list precisely so that stays a one-line answer.
+✅ **THE PRICE OF THE MOVE IS PAID: 0.3 LANDED 2026-09-03 AND A CAMPAIGN HAS NOW REACHED A PHONE.**
+This paragraph said, correctly for two days, that *a campaign cannot be tested on the phone until
+0.3 lands* — `user://` on Android is internal app storage and is not `adb push`-able, and the
+override is editor-only, so the delivery path to a device was `AssetPacks` and nothing else. It is
+built, and the `howtoplay` pack installs and loads on hardware. **The SHAPE of the dependency is
+still what a reader needs, which is why this is rewritten rather than deleted:** the dev override
+is editor-only, a device reads `user://content/`, and something has to put content there. Two
+escapes were listed here and neither was needed; the one worth remembering is that a **debug**
+build never had to wait at all, because `run-as` reaches the app's own files directory
+(`Docs/MOBILE_DEPLOY.md`).
 
 ⚠️ **INSTALLED CONTENT IS DATA, SO `AssetPacks` GAINS A SECOND VERB.** Art and audio are **mounted**
 (`load_resource_pack()`, which lands them under `res://` read-only, which is right for a texture).
@@ -408,7 +419,9 @@ AOD_Mobile/
   tools/                      # OFFLINE pipeline - Python, never shipped
     isobake.toml              # camera config; MUST match Iso.TILE_SIZE
     recipes/                  # AOD content: which 0 A.D. actor is our what
-    build_packs.py            # atlases -> .pck + manifest + checksums
+    build_packs.py            # 0.3, built 2026-09-03: campaign/map zips + manifest +
+                              # checksums. The ART `.pck` half is NOT written yet
+    packs.source.json         # what build_packs.py publishes, and at what version
     licence_audit.py          # every asset must declare a licence
     stage_atlases.py
   game/                       # THE GODOT PROJECT
@@ -484,10 +497,17 @@ an out-of-date API listing is worse than none. Read the file headers; they carry
 | `Net` (`net.gd`) | Transport + RPC boundary. `host_solo()`, `submit_command()`, `_recv_command` (up, reliable), `_recv_snapshot` (down, unreliable_ordered). `host_open()`/`join()` are §12.1 |
 | `SimClock` (`sim_clock.gd`) | 10 Hz pump; `advance()` holds the logic separately from `_process` so it runs headless |
 | `EventBus` (`event_bus.gd`) | Decouples HUD widgets from whoever receives the snapshot |
-**That is all four.** `project.godot`'s `[autoload]` block lists exactly these. Two names this
-document used to put in this table do **not** exist and were listed as though they did:
-`AssetPacks` is 0.3 and unbuilt (§3.2 describes it; the Phase 0 table already says it is the one
-Phase 0 item still open), and `AudioManager` never existed at all — see §7.5.
+**That is all four, and 0.3 landing did not make it five.** `project.godot`'s `[autoload]` block
+lists exactly these. Two names this document used to put in this table do **not** exist and were
+listed as though they did: `AssetPacks` and `AudioManager` — the second never existed at all (§7.5).
+
+⚠️ **0.3 IS BUILT AS OF 2026-09-03 AND IS DELIBERATELY NOT AN AUTOLOAD.** `PackDef`,
+`PackManifest`, `PackIndex`, `PackInstaller` and the two screens are ordinary classes, on
+`Campaigns`' precedent (15.1) and `CampaignProgress`'s (15.5): **a global to hold state between
+two adjacent screens is a poor trade**, and this table has now been held at four against three
+separate features that each looked like they wanted a fifth. If a fifth is ever added it should be
+because something genuinely spans the whole session, not because a value needed carrying across a
+`change_scene_to_file`.
 
 **None of the four carries a `class_name`**, which would shadow the singleton identifier. This
 said "three autoloads", naming `net.gd`, `sim_clock.gd` and `event_bus.gd` as a special case;
@@ -729,12 +749,15 @@ Game.tscn         [MVP]  the match - game_scene.gd
                          IdleVillagerBadge (top-centre), ResourceHUD (top-right),
                          SelectionPanel (bottom-left), Minimap + 4 corner buttons
                          (bottom-right), SelectionBox, NoticeToast, PauseMenu,
-                         ResultScreen
+                         ResultScreen, ScenarioBriefing (15.6, modal),
+                         ObjectiveTracker (15.6, top-left beside the ring stack)
 Credits.tscn      [MVP]
 Help.tscn                1.8 - HOW TO PLAY, six annotated captures, one to a page
 StressTest.tscn   [MVP]  perf harness
 Skirmish.tscn            1.6 - skirmish settings, and the multiplayer lobby
-DownloadScreen.tscn      3.2
+Campaign.tscn            15.4 - a three-line shell; CampaignScreen builds itself in _init()
+Scenario.tscn            15.5 - the same shape, for the same reason: the list is runtime data
+DownloadScreen.tscn      3.2 / 0.3 - BUILT 2026-09-03, plus the DOWNLOAD MORE browser
 Settings.tscn            never built - 1.5 is an overlay on MainMenu instead
 ```
 
@@ -1068,7 +1091,7 @@ enforcement and win conditions are all in.
 Rows are the item and its state. `✅` = done, the file named is where it lives. Blank tag = not
 scheduled.
 
-### Phase 0 — Foundation *(all ✅, all `[MVP]`)*
+### Phase 0 — Foundation *(all ✅, all `[MVP]` — and as of 2026-09-03 that is finally true)*
 
 0.1 device-verified Godot project · 0.2a asset seam (`GameDataRegistry`, `atlas_for()` total,
 parsing pinned against a verbatim shipped bake) · 0.2b procedural placeholder renderer, sizes in
@@ -1077,12 +1100,43 @@ metres · 0.2c `licence_audit.py` + `LICENCES.md` · 0.4 `GameDataRegistry` enti
 `state_hash()`, `Replay`, `sim/` boundary check, `StressTest.tscn` · 0.8 working roots and
 `.gdignore` · 0.9 the render pipeline, built as `isobake` and proven on a grass tile, an oak and a
 960-frame villager.
-**0.3 `AssetPacks` (manifest/download/verify/mount + DownloadScreen) is the one Phase 0 item still open.** `[MVP]`
-⚠️ **AND IT STOPPED BEING ONLY AN ART ERRAND ON 2026-09-01.** Campaigns and authored maps moved out
-of `game/` (§3.3), so this is now the **only route by which a campaign can reach a phone** — and it
-gains a second verb while it is being built: art and audio are *mounted*, a campaign must be
-*installed* into `user://content/`, because content that cannot be updated, removed or shared is
-not the feature that was asked for.
+**0.3 ✅ `AssetPacks` — DONE 2026-09-03, and it was the last open Phase 0 item.** `[MVP]`
+**`PackDef`/`PackManifest`/`PackIndex` (`src/data/`) + `PackInstaller` (`src/net/`)**, the boot
+download screen and the DOWNLOAD MORE browser (`src/view/`), `tools/build_packs.py` +
+`packs.source.json`, and an nginx host to serve them from (`web/server/`, in git). It gained the
+second verb it was promised on 2026-09-01: art and audio are **mounted**, a campaign is
+**installed** into `user://content/`, because content that cannot be updated, removed or shared is
+not the feature that was asked for. **Two content classes**, the owner's split: `required` is
+fetched at boot with nobody asked, optional is browse-and-pick.
+
+⚠️ **CLOSED ON HARDWARE, NOT ON THE SUITE.** The owner ran it on PC and phone under the three
+network conditions the design had to answer and all three held: **no internet** (the boot reaches
+the front door rather than stalling on the manifest — §3.2's placeholder rule, and the one that most
+needed to hold), **internet**, and **125 kbps** (~2.4 minutes for a 2.2 MB pack, which is what
+exercises the progress reporting and the deliberate absence of a timeout on a payload —
+`MANIFEST_TIMEOUT_SECONDS` bounds the small request only, precisely so a slow download is not
+mistaken for a broken server). 2,120 green tests could not have told us the offline boot reaches
+the menu on a real handset.
+
+⚠️ **WHAT IS STILL OPEN IS NOT THIS ROW AND MUST NOT BE READ INTO ITS CLOSURE.** The **content**
+half is delivered; three things are separate work:
+
+1. **`pack_art_v1.pck` IS NOT BUILT.** `build_packs.py` does `campaign` and `map` zips only. **The
+   CLIENT already handles `art` and `audio`**, so only the packer blocks art delivery — the three
+   questions for the art side (which directory is authoritative for a bake, one art pack or
+   several, what identifies a bake for a version bump) are in `asset_request.md`. **This is the
+   piece that keeps the APK under 300 MB, so it is the one with a real deadline behind it.**
+2. **No resumable downloads.** The server answers Range with 206 (verified) but
+   `HTTPRequest.set_download_file` cannot append, so an interrupted pack restarts from zero.
+   Irrelevant at 2.2 MB; at 125 kbps a 400 MB art pack is nine hours and one dropped connection
+   means starting again. **Worth its own card before art packs ship.**
+3. **A mounted pack cannot be un-mounted** — Godot has no `unload_resource_pack()` — so DELETE is
+   offered on content and not on art. Not a defect; it constrains what an art-pack UI can promise.
+
+**Ownership note:** `tools/build_packs.py` + `packs.source.json` are the game-code agent's by the
+owner's decision of 2026-09-03, a fourth named exception inside `tools/`. Flagged in
+`AGENT_GAME_CODER.md` §1 as the exception that does not justify itself — it will eventually read
+the art pipeline's output, so the ownership gets raised again rather than quietly drifting.
 
 ### Phase 1 — Main menu
 
@@ -1141,8 +1195,13 @@ dev tool's PNG stays square on purpose: judging whether a river cuts a map in tw
 question about tile space, and both pictures still come from one `image()` so they cannot
 disagree about what the map *contains*.
 
-**Still open on this screen:** saved maps in the map-source picker, which waits on 2.4c's
-file format; the OPEN slot role, which needs 12.1's listening host; and the art — it is
+**Still open on this screen:** ~~saved maps in the map-source picker~~ — ✅ **BUILT 2026-09-04
+as 16.0**: the Map picker lists every map `SavedMaps` finds across §3.3's three roots below a
+`Saved` separator, picking one loads the file into `_data` and locks the seed controls (a seed
+describes a generated map and means nothing to a file), and **`can_start()` gained rule 7** —
+a lobby may not seat more players than an authored map was written for, because
+`MapGen.build_from()` hands a player their base only from the entities the map lists for their
+index. The OPEN slot role, which needs 12.1's listening host; and the art — it is
 built from stock `OptionButton`/`SpinBox` controls, the `ResourceHUD`-at-7.1 stage where
 the job is the wiring. Verified live end to end by `dev_preview/preview_skirmish.tscn`,
 which photographs the screen, starts a match from what it built, and **compares the
@@ -1224,8 +1283,39 @@ output is a map file, so this section is where the format it writes gets decided
 cannot be built first without inventing a second format and then reconciling two. §12's table used
 to call this "medium impact, no strong ordering"; it is now the first thing Phase 16 waits on.
 
-A Save Map button on the pause menu, so a player who likes a random map — or one someone else made
-and shared — can name it, keep it, and pick it again from 1.6. Three things it must get right:
+⏸️ **THE BUTTON IS PARKED, AND SPLIT IN TWO — THE OWNER'S RULING, 2026-09-04.** *"lets park the save
+map button for later, or build it in 2 sub phases, Save Map - only seed and spawndetials for a map
+layout you liked while you where playing it. and Save Game - when a map is interupted by IRL so you
+can pick it back up with your friends or vs AI later."*
+
+**The split is this document's own line and is hereby reaffirmed by the owner rather than
+introduced:** Save Map is 11.3, Save Game is 12.4, and the third bullet below has warned since it
+was written that the button must not blur them. Nothing in Phase 16 waits on either — 16.0 was
+scoped down to the picker alone, and 16.4a reads the five maps that already exist on disk.
+
+✅ **AND THE "HOW" IS SETTLED: IT WRITES A `MapFile`.** The owner's clarification, 2026-09-04, when
+this document read *"only seed and spawn details"* back to them as a design constraint: *"it was
+just my way of saying i want to be able to save the file not guidance on how it should be done, use
+what what ever way allows loading what you are playing, with as little effort as possible as you
+will be ingame at the time."*
+
+So **`MapFile.save()` is the answer on both criteria at once**, which is worth writing down because
+the cheap-looking option was the expensive one: writing `map.png` + `map.json` from a match is
+already implemented and covered by eleven tests, while a seed+spawns writer is code nobody has
+written and a **second format** beside `MapFile` (decision 1's hazard). It is also the only one of
+the two that satisfies *"loading what you are playing"* — `MapGenerator` is `FastNoiseLite`, so the
+same seed produces a **different** map after any generator change or on another machine, which
+`dev_preview/preview_author_maps.gd`'s header calls *"the whole reason the file exists"*. **The
+seed still rides along, inside `meta`, as provenance** — which is what that field is for.
+
+⚠️ **A LESSON ABOUT READING THE OWNER'S WORDS, kept because it cost a round trip:** *"only seed and
+spawn details"* was a description of the FEATURE they wanted, not a specification of its
+implementation, and it was treated as the second. Where an instruction can be read as a constraint
+on internals, check whether the outcome is what was actually being asked for.
+
+The feature, when it thaws: a Save Map button on the pause menu, so a player who likes a random map
+— or one someone else made and shared — can name it, keep it, and pick it again from 1.6. Three
+things it must get right:
 
 - **It saves the MAP, not the MATCH.** By the time the button is pressed the world is full of buildings and rubble. What gets written is the terrain and start layout the match was **started** with, so `GameScene` must hold on to its map source rather than reading the live `SimMap`. Saving current state is a save *game* (12.4) — the button must not blur the two.
 - **`user://maps/`, never `res://`**, which is read-only once exported. The picker lists **authored** maps and **saved** ones together — and as of 2026-09-01 that is `user://content/maps/` and `user://maps/`, not `res://maps/` and `user://maps/`: authored maps left `game/` with the campaigns (§3.3), so both halves of the list are now under `user://`. **They stay two directories**, so installing or replacing authored content cannot overwrite somebody's save and uninstalling it cannot delete one.
@@ -1566,7 +1656,7 @@ all twenty. What it deliberately does not do is stop an already-paid-for unit fr
 |---|---|---|
 | 5.1 | ✅ `PlaceBuildingCommand` + drag placement: entering build mode **locks the camera**, so the one finger that would pan drags `PlacementGhost` instead. Two-finger pan was ruled out — it collides with box-select's trigger and breaks one-handed play | `[MVP]` |
 | 5.2 | ✅ Foundation → under construction → complete, reachable without a debug command | `[MVP]` |
-| 5.3 | Building upgrades | |
+| 5.3 | ✅ **BUILT 2026-09-03, awaiting the owner's play-test** (`673540b`; card in `Test`, not `Done`, because the check that can judge it is somebody playing it and they asked for it by name). **Eight new upgrade links, length for length** — short→short, medium→medium, long→long, gate→gate, across wood→stone→reinforced — on top of 5.8's three gate conversions. The shape is the owner's: a long wall now carries **four** action tiles, two of them upgrades (Palisade Gate, Stone Wall, destroy, repair), each cropping the art of the thing it gives you.<br><br>**`upgrades_to` IS A LIST**, and the long wall is why — one field could not say "gate OR next tier". The order is the tile order, so the gate stays first: a button that moves under a player's thumb because a new one appeared above it is the change nobody asked for. A bare string still parses as a one-target list, because this project's owner has now proved that people hand-author its JSON (15.8).<br><br>**THE COMMAND CARRIES ITS TARGET** — one building offers two and the server cannot guess which tile was pressed. `resolve_target` is shared by the panel and by `validate()`, and **the list is the authority**: a client naming `building.castle` is refused. That is a real exploit, not tidiness — a 36-wood palisade would otherwise become a 650-stone castle for the difference.<br><br>**THE CREDIT CROSSES RESOURCE KINDS at 1:1**, the owner's call, and that rate is **read off the game** rather than chosen: `market.json` prices food, wood and stone identically against gold (130/70 each), so one-for-one is the only exchange rate this game has ever declared. Routing it through the market would make an upgrade depend on owning one and lose 60% to the spread. It counts the **surplus** of a kind the target still wants, not only the kinds it wants none of — the palisade gate needs that. A long palisade → stone wall is **9 stone** (45 less 36 of credit), where same-kind credit alone would have charged the full 45, which is what a rebuild costs and therefore another way of saying there is no upgrade. **50% health stays 50%** — already `convert_building`'s rule, now tested against a tier upgrade and not only a gate.<br><br>⚠️ **NO WATCH TOWER → GUARD TOWER**, the owner's call on the footprint mismatch ([3,2] vs [3,3]). Nothing had to be removed: `validate()` has refused a footprint change since 5.8, because `convert_building` keeps the ground the building already holds. Pinned by name in a test — it is the pair anybody reading the roster proposes first — plus a second test that walks **every** building and asserts every declared target keeps its footprint.<br><br>⚠️ **AND THE "A TIME" REQUIREMENT DIED WITH THAT TOWER.** The reasoning below was about a NON-WALL upgrade; every upgrade that remains **is** a wall, and a wall is exactly the case where instant is right — a timed tier upgrade would open your own defences for the length of it. Said out loud in `UpgradeBuildingCommand`'s header, with the note that 9.3's queue is where a timer goes the day something that is not a wall upgrades. Suite 2158/0. `preview_walls` photographs the action row and prints what is on it — **at age 3**, because at age 2 a long palisade correctly offers its gate and nothing else | |
 | 5.4 | ✅ `TrainCommand` (pays up front), `CancelProductionCommand` (refunds exactly what was paid), `ProductionSystem` advancing only the queue front | `[MVP]` |
 | 5.5 | ✅ Destruction → `DESTROYED` phase + `free_footprint()`, so the ground is buildable the instant it falls. Rubble stays opaque forever (no damaged art tier) | `[MVP]` |
 | 5.6 | ✅ Building health on the shared dot | `[MVP]` |
@@ -2002,7 +2092,7 @@ separate bar) is the one to reach for before inventing a scoreboard.
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
 | 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played.<br><br>**The spec now exists: `AI_Player_difficulty.md`**, committed 2026-08-23. It is the owner's, and it settles what each tier does rather than leaving it to be invented later — five tiers, separated along four axes that are all data or existing systems rather than new cleverness: **when it attacks** (never / 10 min / 7 min / once its economy is up), **how far it ages up** (2 / 2 / 3 / 4 / 4), **how many towers it may build** (0 / 1 / 5 / unlimited + castles), and **what it starts with** (Unfair opens with 8 villagers, 2 swordsmen and a scout).<br><br>Two things to know before building it. **The phase-9 gate LIFTED on 2026-08-29:** every tier from Easy up says "can use tech tree upgrades", and 9.3 built them — 27 technologies and a `ResearchCommand` waiting to be emitted. So a tier's tech behaviour is now a rule to write rather than a system to build, and ⚠️ **the first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching. And **Passive is already real**, so the spec's cheapest win is `Normal`, which differs from the shipped Easy only in an attack timer, an age cap and a tower count | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 for the front-door decision. ➡️ **GROWN INTO PHASE 15, 2026-09-01**, on the owner's two new specs (`scenarios/README.md`, `MapMaker/README.md`): this row is one line and the work is nine. Read Phase 15 instead of this row; what stays here is only the fact that PLAY already leads to the frame | |
-| 12.4 | Save/load and replays *(replay record/play already exists as a test fixture, 0.7)* | |
+| 12.4 | **Save GAME**, and replays *(replay record/play already exists as a test fixture, 0.7)*.<br><br>⚠️ **THE OWNER GAVE THIS ROW ITS PURPOSE ON 2026-09-04 AND IT IS NOT WHAT "save/load" SOUNDED LIKE:** *"Save Game - when a map is interupted by IRL so you can pick it back up with your friends or vs AI later."* So the case that defines the feature is a **multiplayer** match resumed on another day — not a solo autosave — and that is materially harder than the row's one line implies, because everything that makes the sim deterministic has to come back identical on **every** peer: the tick, the full `SimWorld`, each `SimPlayer.id` and its colour index, the AI rungs and their rule state, and `state_hash()` agreeing across all of them on the first tick after the reload. **`colours.json` order being load-bearing (§4) is a save-file constraint, not only a replay one.** Two things already point the way: `Replay` (0.7) proves a match is reproducible from a seed plus a command list, which is one legitimate shape for a save file, and 12.1b's reconnect needs *"the config, a full snapshot and its old player id"* — **the same three things**, so whichever lands first should build them for both.<br><br>**Distinct from Save MAP (11.3), and the two must never be blurred:** a saved *map* is the terrain and start layout a match was STARTED with; a saved *game* is a half-built settlement with rubble in it. 11.3's third bullet has said so since it was written and the owner's 2026-09-04 ruling reaffirms it | |
 
 #### 12.1 Multiplayer — ✅ steps a–g all built and validated phone↔PC on real WiFi
 
@@ -2344,15 +2434,15 @@ dummy rather than an opponent).*
 
 | # | Item | Tag |
 |---|---|---|
-| 15.1 | **Scenario and campaign data, and the loader.** `campaign.json` + `scenario.json`, typed into `CampaignDef`/`ScenarioDef` (`src/data/`, plain `RefCounted` like every other def) and read by a `Campaigns` loader that walks §3.3's **root list** — the editor-only dev override first, then `user://content/scenarios/`. **Not an autoload** — §6.1's table is exactly four and the front door is the only thing that reads this. See §11.7 for the schema and the traps | |
+| 15.1 | ✅ **Scenario and campaign data, and the loader.** `campaign.json` + `scenario.json`, typed into `CampaignDef`/`ScenarioDef` (`src/data/`, plain `RefCounted` like every other def) and read by a `Campaigns` loader that walks §3.3's **root list** — the editor-only dev override first, then `user://content/scenarios/`. **Not an autoload** — §6.1's table is exactly four and the front door is the only thing that reads this. See §11.7 for the schema and the traps | |
 | 15.2 | ✅ **The objective vocabulary, in the sim** (2026-09-02). `MatchConfig.Mode.SCENARIO` + `objectives` + `objective_player_id`, an `ObjectiveSystem` immediately **before** `WinConditionSystem`, and per-player progress on `player_state`. **All three How To Play scenarios launch and all three can be driven to their win** (`dev_preview/PreviewScenarioWin.tscn`), so the campaign is finishable rather than a dead end behind two greyed rows. Three things the row did not predict, all in §11.8: a win row must **latch**; the vocabulary needed a sixth subject, `resource`; and **the reachability of an authored target is not obvious from the roster** — see §11.8's note on the scout | |
-| 15.3 | **The launch path.** `ScenarioDef` → `MatchConfig`: two players, the human plus one Passive AI, `map_type = RIVER`, the seed pinned in `scenario.json`, `starting_age = 1`, and the scenario's own `mode` — `LAST_MAN_STANDING` with no objectives, or `SCENARIO` with them. One function, tested by asserting the config rather than by starting a match. ⚠️ **A pinned seed is not a pinned map** — §11.7's second trap | |
+| 15.3 | ✅ **The launch path.** `ScenarioDef` → `MatchConfig`: two players, the human plus one Passive AI, `map_type = RIVER`, the seed pinned in `scenario.json`, `starting_age = 1`, and the scenario's own `mode` — `LAST_MAN_STANDING` with no objectives, or `SCENARIO` with them. One function, tested by asserting the config rather than by starting a match. ⚠️ **A pinned seed is not a pinned map** — §11.7's second trap | |
 | 15.4 | ✅ **DONE 2026-09-01** — campaign selection. `CampaignScreen` builds a row per campaign found on disk: icon left, title top, description right, BACK at the bottom. **The last front-door destination that was a placeholder rather than a feature.**<br><br>**`Campaign.tscn` is now a three-line shell**, `Help.tscn`'s shape, and the screen is built in `_init()` — `HelpScreen`'s pattern, and it applies harder here because **the row list is data discovered at runtime**: a player may have one campaign installed or nine, so a `.tscn` could not hold this list even in principle. `_init()` rather than `_ready()` is also what makes it testable headlessly — `CampaignScreen.new()` is a whole screen with no `SceneTree` near it.<br><br>⚠️ **THE LIST IS INSIDE A `ScrollContainer` FROM THE FIRST LINE, AND THAT IS NOT DECORATION.** A `VBoxContainer` overflows — it does not clip, scroll or compress past its children's minimums — and the lobby shipped with its bottom nav strip off the screen for exactly this while every structural test passed, because a node asked for its rect returns that rect whether or not the window contains it. One campaign fits today; the ninth would not, and the failure only appears on the machine that has the content. `test_campaign_screen` asserts the parent is a `ScrollContainer` and deliberately asserts no measurement.<br><br>**New: `ContentImage.load_texture()`** — the one place that opens a PNG outside `res://`. `load()` and `ResourceLoader` **cannot open these at all** (no `.import` sidecar), so the route is `Image.load_from_file` + `ImageTexture.create_from_image`, per `scenarios/README.md`. Null is the only failure mode, because a campaign is shareable content and a malformed icon should cost a placeholder rather than a crash. 15.5 uses the same function for scenario icons and the background. A row with no icon draws a lettered plate.<br><br>**`open_campaign()` is the whole of what 15.5 replaces.** The row, the press and the campaign handed over are in place; the body currently answers with a `NoticeToast`, which is 1.1's rule for the front door — a button that visibly does nothing reads as a bug, one that says why reads as a plan. The screen owns its own toast rather than borrowing `MainMenu.tscn`'s `%Toast`, which is gone the moment this scene loads.<br><br>A campaign whose `campaign.json` is broken, or which has no playable scenario, is **shown and disabled with its first complaint as the blurb** — never hidden. A campaign that silently vanishes is indistinguishable from one the game failed to find, and the player has a folder on disk they can see. The empty-list notice distinguishes the two genuinely different cases: in the editor the dev override is live so an empty list means `scenarios/` is missing, while an exported build has no override at all and an empty list is normal until a pack is installed | |
 | 15.5 | ✅ **DONE 2026-09-01** — `ScenarioScreen` + `Scenario.tscn` (a shell). Campaign title at the top, a scrolling column of scenario rows with everything past `progress` locked, the campaign background plus title/description/PLAY in the main panel, and selecting a row **swaps the panel without a scene change** — the background is a 1920×1080 decode and re-entering a scene to read a different paragraph would pay for it again.<br><br>**SCENARIO 3 IS NOW PLAYABLE END TO END** (15.1 + 15.3 + this), which was this row's whole point. PLAY parks the config on `Net.pending_match` and changes scene — the SOLO path `SkirmishScreen` already proves, where `GameScene._ready()` calls `host_solo()` and consumes it. Deliberately **not** `Net.start_match()`, which is for a lobby whose socket is already open.<br><br>**The campaign travels on `ScenarioScreen.pending`, a static**, on `Net.pending_match`'s precedent: a `CampaignDef` is a live object, not a path, so it cannot go through `change_scene_to_file`. One-shot — taken and cleared in `_init()`, so a second visit with nothing parked shows the no-campaign notice rather than silently reopening the last one. **A fifth autoload was the other option and was rejected**: 6.1's table is exactly four, and a global to save a field between two adjacent screens is a poor trade.<br><br>**New: `CampaignProgress`, READ-ONLY.** `user://campaign_progress.json`, keyed by `CampaignDef.folder`. 15.5 needs it to know what is locked; **15.7 adds the write.** Left read-only rather than stubbed with a `record()` that does nothing, because a write that silently fails is worse than one that does not exist. Every value is clamped and type-checked — the file is player-writable, so a negative would otherwise reach `unlocked_count()`'s `clampi` and lock the first scenario, giving a campaign that cannot be started and cannot be explained.<br><br>⚠️ **`_why_not_playable()` DELIBERATELY DOES NOT CALL `build_config()`.** That is the authority on whether a scenario can start and it is also the function that **generates the map** — a 192×192 `MapGenerator.generate` per row selection would cost a map every time the player browsed. So the panel uses a cheap predicate (locked / not playable / `mode == SCENARIO`) and `launch()` still asks the real one; if the two ever disagree, `launch()` wins, says so in a toast and pushes a warning rather than starting something broken. There is a test for that path.<br><br>**Objective scenarios refuse to start and say why in the panel** — scenario 1 and 2 are `"mode": "scenario"` and wait on 15.2. A disabled PLAY with its reason on a line of its own, not a tooltip: a disabled button on a touch screen has nowhere to hover, and one that simply did nothing would read as a broken game.<br><br>⚠️ **`test_scenario_screen` NEVER TRUSTS `user://` FOR LOCK STATE.** Progress is real state on the machine running the suite, so a developer who has played the campaign would get a different lock pattern from a fresh checkout — a test that passes for one person and fails for the next. Every locking test sets `_progress` directly; only one reads the file, and it asserts merely that reading cannot throw or go negative | |
-| 15.6 | **The scenario message ✅ and the objective tracker.** ⚠️ **THE MESSAGE HALF LANDED EARLY, WITH 15.2, BECAUSE THE OWNER HIT IT IN PLAY** (2026-09-02): *"the map message did not show during play test… a scenario message is required and the user needs to tap the X to close it, interactive consent of the goal"*. `message` had existed in `scenario.json` and `ScenarioDef` since 15.1 with **nothing drawing it**, so all three missions launched with their goal invisible — the same hole `pop_used` and `garrison_cap` were in, a field the data fills and no reader reads. `ScenarioBriefing` is the modal; it rides `MatchConfig.scenario_message` as provenance (the HUD has never heard of a campaign) and **does not stop `SimClock`**, because on a host that clock is everybody's and the field is shared with skirmish. **Still to do: the tracker** — a live panel listing each objective with its progress ("Villagers 4 / 15"), read off `player_state.objective_progress`/`objective_done`, which 15.2 already writes and sends. The labels are **already on the client**: every client builds its own world from the same `MatchConfig` (2.4a), so only the numbers travel | |
+| 15.6 | ✅ **DONE 2026-09-03 — the scenario message AND the objective tracker**, the second half in `a054182` and **confirmed by the owner in play**: *"perfect, tested and confirmed working"*, with a device screenshot of scenario 1 won, both rows ticked ("Build a house 1 / 1", "Reach 14 villagers 14 / 14") beside the control-group stack and VICTORY over it. `ObjectiveTracker` is a 300 px panel at top-left (measured 86,12 300×97 at 1152×648: the ring stack ends at x=76, the age header starts at 493, so it touches neither) with one row per **win** objective — the author's text, the sim's live count, and a gold tick.<br><br>**IT RENDERS AND COMPUTES NOTHING.** `objective_progress`/`objective_done` are `ObjectiveSystem`'s and ride `player_state`, so this is a reader of facts the server decided. A tracker that counted villagers itself would be a second evaluator, and the tick it disagreed on would be a player watching "14 / 14" while the match refused to end. **A row's index is its place in the FULL list**, not on the panel — the arrays include alerts and losses, so a tracker numbering its own rows would show the house count against the villager target: two real numbers, wrongly paired, on a panel that looks correct. **And the progress is the objective PLAYER's row, not the viewer's** — nobody today, a co-op scenario later. Win rows only: a lose row's progress reads as an instruction ("Lose your town centre 1 / 1"), and `_ROW_OUTPUTS` makes showing them a one-line change.<br><br>**ALSO THE ALERT OUTPUT**, which this row did not name and `ObjectiveSystem`'s header assigns here: a channel with a reader and no speaker, the same hole `campaign_progress.json` was in until 15.7. The sim **latches** an alert so the client speaks once, and the first snapshot is **primed** or a client joining mid-scenario opens with a banner about something that fired before it arrived. **No shipped scenario has an alert row**, so it is tested rather than demonstrated by content — 16.6's Map Conditions screen is the obvious author of the first one.<br><br>⚠️ **TWO DEFECTS THE FIRST RENDER FOUND, both now gotcha rows in `AGENT_GAME_CODER.md` §6.** (1) **New Rocker has no check mark** — measured, not assumed: `has_char` is false for U+2713/2714/2717 and for the bullets, squares and stars; a missing glyph draws tofu rather than failing, and the first completed objective got a literal `*`. The tick is twelve lines of `draw_polyline` now and cannot be broken by a font swap. (2) **`NoticeToast.show_long_message` put the banner 200 px off centre** — `GameScene` writes `-SIZE.x / 2` once and the paragraph banner is 720 px wide. It survived since 2026-08-30 because **that mode had never had a caller**, and a mode nobody calls has never been positioned by anybody.<br><br>Nothing in the tracker is pressable — every node is `MOUSE_FILTER_IGNORE`, asserted over the whole subtree because `mouse_filter` does not inherit and a widget quietly taking presses once cost three build tiles for a week. Suite 2144/0. `dev_preview/preview_scenario_hud.tscn` launches a real mission through the real path and measures what no headless test can, warning on a tracker that overlaps the ring stack or the resource HUD, one off the viewport, and a banner off the screen's axis; it **injects** an alert row and says so. Two calls were raised for the owner and **neither was taken up, so both stand as shipped**: an AGE row reads "Advance to the Age of Embers 1 / 2" (the count is the age index), and the tracker stays top-left. *Kept for the reasoning: the message half landed early, with 15.2, because the owner hit it in play* (2026-09-02): *"the map message did not show during play test… a scenario message is required and the user needs to tap the X to close it, interactive consent of the goal"*. `message` had existed in `scenario.json` and `ScenarioDef` since 15.1 with **nothing drawing it**, so all three missions launched with their goal invisible — the same hole `pop_used` and `garrison_cap` were in, a field the data fills and no reader reads. `ScenarioBriefing` is the modal; it rides `MatchConfig.scenario_message` as provenance (the HUD has never heard of a campaign) and **does not stop `SimClock`**, because on a host that clock is everybody's and the field is shared with skirmish. **The tracker was what remained here and it is the ✅ above** — a live panel listing each objective with its progress ("Villagers 4 / 15"), read off `player_state.objective_progress`/`objective_done`, which 15.2 already writes and sends. The labels are **already on the client**: every client builds its own world from the same `MatchConfig` (2.4a), so only the numbers travel | |
 | 15.7 | ✅ **Completion and unlock** (2026-09-02). On `match_over` with the local player winning, raise `user://campaign_progress.json`'s counter for that campaign. **One-way, a maximum, never decremented** — the same property that makes `SimPlayer.defeated` safe to read anywhere — and idempotent, because a result screen can be reached twice. **Found by the owner playing for it**: they reset the file to 0, won scenario 1 outright, and scenario 2 stayed locked, because until this row *nothing in the game had ever written that file*. `CampaignProgress.record_completed()` is the write; `MatchConfig` carries `campaign_folder`/`scenario_index` as provenance so `GameScene` can record a win without the HUD learning what a campaign is. Every function in `CampaignProgress` now takes a `path`, defaulted to `USER_FILE`, **so the tests never touch the developer's own progress** — a lesson that cost a false failure the same day | |
 | 15.8 | ✅ **The "How To Play" scenarios** — content only, and it *was* only data, which is the row doing its job. **The owner wrote them, and there are FIVE rather than three** (2026-09-02, *"i added the final 2 scenarios, this completes HowToPlay"*): the economy, the age ladder, finding an opponent, the dragon, and a real duel against an **Easy** AI — the only mission in the campaign that can be lost to an enemy, since the first four face a Passive one that never attacks. All five load, launch and can be driven to their win (`PreviewScenarioWin.tscn`). ⚠️ **Two content gaps stand and are the owner's call, not defects in 15.1–15.7:** `scenario_4`'s briefing promises *"Destroy The Dragon AND Tame the baby"* but its map carries **no dragon and no nest** — it is byte-identical to scenario 3's, and 13.2's baby dragon has no def, no bake and no taming mechanic, so it is won by conquest like scenario 3; and scenarios 3, 4 and 5 all share **the same map** (seed 815103, 170 entities). ⚠️ **A test must never hardcode how many scenarios there are** — that constant broke six tests the day content was added, and `_at_progress(2)` silently stopped meaning "all unlocked" | |
-| 15.9 | **`dev_preview/preview_campaign.tscn` + tests.** The preview photographs selection → scenario → launch. The tests are the load-bearing half, and there are four cases rather than three: **drive the sim to each of the two objectives and assert it fires**; assert that wiping the opponent in `SCENARIO` mode does **not** win (decision 5, and the one no screenshot can see); and drive scenario 3's conquest to a real `LAST_MAN_STANDING` result. A win condition that never fires is invisible from every screenshot. **Half done: `dev_preview/PreviewScenarioWin.tscn` drives EVERY shipped scenario to its win** through the real path — `Campaigns` → `build_config` → `SimWorld.setup` → `MapGen` — and prints mode, rows, progress, latches and **population** as it goes. It was built to diagnose a play-test failure and earned its place immediately: the population line is what exposed the scout. The four cases above live in `test_objectives`/`test_campaigns`; what 15.9 still owes is the SCREEN half, `preview_campaign.tscn` | |
+| 15.9 | ✅ **DONE 2026-09-03 (`0c5fa96`) — and with it PHASE 15 IS CLOSED.** The card asked for a preview plus four test cases; **three of the four already existed**, so what landed is the preview, the fourth case, and a note saying where the other three live. The owner had walked this path by hand the same day — front door, CAMPAIGN, the scenario list with 4 and 5 locked, a briefing in the match, DOWNLOAD MORE — which answered the question *for that build*; `preview_campaign.tscn` is the version that can answer it again next month, printing which row is locked, which is selected, what progress reads, whether PLAY is live, what config it launched and what the tracker says.<br><br>⚠️ **IT PERFORMS THE TWO SCENE CHANGES ITSELF, WHICH IS THE ONE THING IT DOES NOT PROVE.** Both screens hand off and then call `change_scene_to_file`, which from a preview would replace the preview and end the run — so each press is made **with the screen out of the tree**, the branch the suite already uses because both screens guard the change with `is_inside_tree()` on purpose, and the next scene is instantiated **from the constant the screen itself names**, so a wrong constant appears as the wrong screen. What it covers is the two **handoffs** — `ScenarioScreen.pending` and the config `launch()` builds — which is where a live object crossing between screens gets dropped. **Nothing covers the scene change itself and nothing can without a second process.**<br><br>**Where the four cases actually are:** 1+2 in `test_objectives` (`test_a_single_win_row_ends_the_match_on_the_tick_it_is_met`, `test_two_win_rows_are_anded_and_neither_half_wins_alone`); 3 in `test_objectives.test_wiping_out_the_opponent_does_not_win_a_scenario` with the config half in `test_scenario_launch`; **4 written here** — `test_scenario_launch.test_a_conquest_mission_really_ends_when_the_opponent_is_gone`, because everything else in that file proves scenario 3 *launches*, and a mission that launches and can never end is the failure 15.2's notes warn about twice. It guards on the saved map having handed the opponent something to lose, without which every assertion after it would pass on an opponent who was never there.<br><br>**Two defects in the preview's own first run**, both now commented in it: a row `Button`'s `text` is **empty** (both screens build rows from an icon and two Labels *inside* the Button, so the report printed a column of blanks and read as a list of nameless campaigns — names come off the defs, only `disabled` off the button); and defaulting `--scenario` to 0 made `--scenario 1` indistinguishable from asking for nothing, since 0 is a real answer. Suite 2145/0. *Kept for the reasoning:* the preview photographs selection → scenario → launch. The tests are the load-bearing half, and there are four cases rather than three: **drive the sim to each of the two objectives and assert it fires**; assert that wiping the opponent in `SCENARIO` mode does **not** win (decision 5, and the one no screenshot can see); and drive scenario 3's conquest to a real `LAST_MAN_STANDING` result. A win condition that never fires is invisible from every screenshot. **`dev_preview/PreviewScenarioWin.tscn` drives EVERY shipped scenario to its win** through the real path — `Campaigns` → `build_config` → `SimWorld.setup` → `MapGen` — and prints mode, rows, progress, latches and **population** as it goes. It was built to diagnose a play-test failure and earned its place immediately: the population line is what exposed the scout. That was the sim half; the **screen** half is `preview_campaign.tscn` above, and both now exist | |
 
 **Build order is the numbering**, and every row above is meant to be a place you can stop — with
 one licence: **scenario 3 alone is playable at 15.1 + 15.3 + 15.5**, since `LAST_MAN_STANDING`
@@ -2606,12 +2696,23 @@ genuinely lost a scenario.
 game; it is never shipped to a player and never runs on a phone. `MapMaker/README.md` is the only
 thing in that folder today.
 
-**Its purpose in the plan's order is the SECOND half of the owner's sequence:** Phase 15 ships
-three placeholder scenarios on generated maps, then this tool re-authors those three maps for a
-custom look, and then a second campaign — **"The Dragon Born"** — is built with it. So Phase 16 is
-what turns scenarios from a mechanism into content, and nothing in Phase 15 waits on it.
+**Its purpose in the plan's order is the SECOND half of the owner's sequence:** Phase 15 shipped
+**five** scenarios on generated-then-saved maps, then this tool re-authors those maps for a custom
+look, and then a second campaign — **"The Dragon Born"** — is built with it. So Phase 16 is what
+turns scenarios from a mechanism into content, and nothing in Phase 15 waited on it.
 
-#### Six decisions that bind everything below
+✅ **BOTH PREREQUISITES ARE NOW CLOSED AND THIS IS THE PHASE THE QUEUE POINTS AT** (2026-09-03):
+Phase 15 finished with 15.6 and 15.9, and 2.4c's format was confirmed in play on 2026-09-02, which
+is what decision 1 demanded. **What is NOT closed is the tool's own game-side seam — see 16.0**,
+which is new and is where this phase now starts.
+
+#### Eight decisions that bind everything below
+
+*Reviewed against the code 2026-09-04, before starting. **Six of the things this phase assumed
+turned out to be wrong or missing**, and they are folded in below rather than left to be
+discovered: decision 2's copy list is wrong, decision 7 is new and load-bearing, decision 8 is new,
+and the table has gained 16.0, 16.2a, 16.4a and 16.4b. The rows that were already right were left
+alone.*
 
 1. ⚠️ **2.4c IS A PREREQUISITE, NOT A NEIGHBOUR.** MapMaker's whole output is a map file, and
    §11.3 is where that file's format is decided. Building the tool first means inventing a second
@@ -2620,11 +2721,26 @@ what turns scenarios from a mechanism into content, and nothing in Phase 15 wait
 2. **THE FILE FORMAT IS THE CONTRACT, NOT THE CODE.** Two Godot projects cannot share a `res://`.
    So MapMaker **reads the game's data live** — `data/*.json` for the placeable roster and its
    footprints, `assets/atlases/` for the icons — from a path in a local, gitignored config file,
-   which is `tools/isobake.local.toml`'s precedent for exactly this problem. It carries its **own
-   copy of the format-critical trio**: `map_data.gd`, `iso.gd` and `atlas_entry.gd`, all three
-   pure `RefCounted` maths with no dependencies. **A junction or symlink into `game/` is
-   rejected**: this repo sits inside Google Drive sync, and a link there is one more way to
-   corrupt a `.git` that has been corrupted once already (§1.3).
+   which is `tools/isobake.local.toml`'s precedent for exactly this problem. **A junction or
+   symlink into `game/` is rejected**: this repo sits inside Google Drive sync, and a link there
+   is one more way to corrupt a `.git` that has been corrupted once already (§1.3).
+
+   ⚠️ **THIS DECISION NAMED THE WRONG FILES AND CALLED THEM DEPENDENCY-FREE. CORRECTED 2026-09-04
+   BY READING THEM.** It said "the format-critical trio: `map_data.gd`, `iso.gd` and
+   `atlas_entry.gd`, all three pure `RefCounted` maths with no dependencies". Measured:
+
+   | File | Where it really is | Really depends on |
+   |---|---|---|
+   | `iso.gd` | **`src/view/`**, not `src/sim/` | nothing. The only one the claim was true of |
+   | `map_data.gd` | `src/sim/` | **`SimMap`** (the `Terrain` enum and `DOMAIN_TERRAIN`), **`GameDataRegistry`**, `BuildingDef`, `ResourceDef` — `footprint_rect_of()` asks the registry for every footprint |
+   | `atlas_entry.gd` | **`src/view/`** | `Iso`, `PlaceholderSpec` |
+   | **`map_file.gd`** | `src/data/` | **`SimMap.Terrain`** — and it was **not in the list at all**, despite being the actual save/load code |
+
+   **So the copy set is four files, not three, and it drags `SimMap`'s terrain tables and a
+   `GameDataRegistry` stand-in in behind it.** That is not a reason to change the approach — the
+   tool has to read `data/*.json` for the roster anyway, so the "stand-in" is the thing it was
+   already going to build, and it is what supplies the footprints `map_data.gd` wants. It **is** a
+   reason to size 16.1 honestly and to hash **four** files rather than three.
 3. **THE COPIES CHECK THEMSELVES, because a copy nobody diffs is a copy that has drifted.**
    MapMaker reads the three originals **as text** from the configured game root at startup, hashes
    them, and **refuses to save** — loudly, naming the file — if they no longer match its own. That
@@ -2645,19 +2761,54 @@ what turns scenarios from a mechanism into content, and nothing in Phase 15 wait
    `TouchSlider`/`TouchLineEdit` and the whole `emulate_mouse_from_touch` hazard do not apply and
    `preview_touch_controls` is not a gate here. Stock `Slider` and `LineEdit` are fine in this
    project and nowhere else.
+7. **NEW 2026-09-04 — BUMPING `FORMAT_VERSION` IS ALLOWED, AND IT IS A CHECKLIST RATHER THAN A
+   ONE-LINE CHANGE.** ✅ **The owner's ruling, 2026-09-04:** *"not a problem, only tested on my
+   mobile and laptop easy to updated. feel free to bump as needed."* So 16.5's "new field therefore
+   a bump" stands — what was wrong was the assumption that a bump costs nothing, and the four
+   things it actually costs are recorded here so a bump is a decision rather than a surprise:
+
+   - **`MapFile.load_map()` refuses a mismatch outright** (`if version != FORMAT_VERSION`). There
+     is **no migration path and no tolerance** — an old file does not degrade, it fails to load.
+   - **Five committed `map.json` files** are on version 1 (`scenarios/HowToPlay/scenario_1`
+     through `_5`), and they are the whole shipped campaign. **They must be rewritten in the same
+     change as the bump**, which `preview_author_maps --force` can do today and 16.10 will do
+     properly.
+   - **They are also inside the published `howtoplay` content pack** as of 2026-09-03, so the pack
+     needs a version bump and a re-download. Cheap at two devices, which is the owner's point.
+   - **Two constants share this name** and they version different things — `MapFile.FORMAT_VERSION`
+     (on disk) and `MapData.FORMAT_VERSION` (the wire). A field that only a *file* carries bumps
+     the first; anything that rides a snapshot to a joining client bumps the second. **Areas ride
+     both**, because `MapGen.build_from()` gets the map from `MapData` on every client.
+
+   **Prefer an optional field where it is free** — `from_dict`'s `d.get(field, default)` shape
+   already gives that for every field it reads, so "absent means none" costs nothing and skips the
+   checklist entirely. Bump when the *meaning* of an existing field changes, which is what the
+   constant is documented to be for.
+8. **NEW 2026-09-04: THE TOOL IS NOT ALLOWED TO BE THE ONLY THING THAT CAN JUDGE ITS OUTPUT.** Two
+   consequences, both now rows. **A map is validated on save** (16.4b) — `MapValidator.problems()`
+   is already `static` and already takes a `MapData`, so the tool can run the game's own
+   connectivity, resource-proximity and overlap checks with no new logic; an authored map is
+   *more* likely to fail them than a generated one, because the generator was written to satisfy
+   them and a person is not. And **the tool gets the game's `TestCase` harness** (16.1), since the
+   copies of decision 2 are pure functions and a second Godot project with 2,158 tests on one side
+   of the fence and none on the other is where the format quietly diverges.
 
 | # | Item | Tag |
 |---|---|---|
-| 16.1 | **Project skeleton.** `MapMaker/project.godot` on the pinned 4.7.1, windowed desktop, plus the local config naming the game root and the startup hash check of decision 3. Deliverable is deliberately tiny: it launches, reads the game's `data/*.json`, and prints how many unit, building, resource and terrain entries it found. If that number is wrong, nothing built on top of it can be right | |
-| 16.2 | **The vertical slice: iso canvas, terrain painting, save, and LOAD IN THE GAME.** Grid overlay, paint each `SimMap.Terrain`, write 2.4c's format into repo-root `maps/`, then open it from the skirmish screen's map-source picker and play it. **This is the row that proves the contract**, and it is worth doing before a single object can be placed. It also exercises §3.3's dev override in the direction that matters — the tool writes a folder the game reads without either of them going through `res://` | |
-| 16.3 | **The object palette.** Player 1–8 + Gaia dropdown, colour picker, category dropdown (Unit / Building / Area / Terrain), search filter, icons cropped from the staged atlases the way `ControlGroupSlot` already does it. ⚠️ **Never take `unit_ids()`/`building_ids()` order into the list** — `Array[StringName].sort()` orders by identity, not text, and not stably between runs; sort explicitly | |
-| 16.4 | **Placement and the three cursors.** Select / move / edit, click to place, **drag to place walls** the way the game does — and the wall art's facing is settled and measured (§12A's third wall finding), so mirror `WallPlan`'s axis rule rather than re-deriving it. Footprint collision uses the **sim's** footprint, not the visual's measured extent; the two are different rects and both are right (§6's gotcha) | |
-| 16.5 | **Areas** — named regions, which is a **new `MapData` field and therefore a `FORMAT_VERSION` bump** and a matching reader on the game side. They are what unlocks `subject: "area"` in §11.8's vocabulary, and until both ends exist the loader rejects it | |
+| **16.0** | ⛔ **NEW 2026-09-04 — THE SKIRMISH SAVED-MAP PICKER, AND IT IS A PREREQUISITE BECAUSE 16.2 CANNOT BE VERIFIED WITHOUT IT.** The owner's README says *"Maps saved by the tool are available to load in the game under skirmish"* and **there is no saved-map source in that picker.** §1.6's own "still open" line has said so since it was written, and `MapFile.load_map` has exactly one caller in `game/src`, `ScenarioDef` — so the only way to play an authored map today is to hand-write a `scenario.json` beside it. ⚠️ **Do not fold this into 16.2.** It is game-code in `game/`, it is a feature 1.6 wants regardless, and it is what makes "does the tool's output work?" answerable **by pressing PLAY instead of by editing JSON**. **It lists two directories:** repo-root `maps/` (what the tool writes) and `user://maps/` (what a player's own save would write), because a picker that knows only one of them has to be extended later by whoever adds the other. ⬅️ **SCOPED DOWN 2026-09-04 ON THE OWNER'S RULING** — this row was written as *picker + pause-menu Save Map button* and the button is **parked**, split in two, and now lives in §11.3. Nothing in Phase 16 needs it before 16.4a, and 16.4a can read the five maps that already exist | |
+| 16.1 | **Project skeleton.** `MapMaker/project.godot` on the pinned 4.7.1, windowed desktop, plus the local config naming the game root and the startup hash check of decision 3. Deliverable is deliberately tiny: it launches, reads the game's `data/*.json`, and prints how many unit, building, resource and terrain entries it found. If that number is wrong, nothing built on top of it can be right.<br><br>⚠️ **AMENDED 2026-09-04, AND IT IS BIGGER THAN IT LOOKS.** Decision 2's corrected table is the real scope: **four copied files, not three** (`map_data.gd`, `map_file.gd`, `iso.gd`, `atlas_entry.gd`), and behind them **`SimMap`'s terrain tables** and a **`GameDataRegistry` stand-in** that `map_data.gd` calls for every footprint. The stand-in is not extra work — reading `data/*.json` for the roster IS this row's deliverable, so the same object answers both. **Hash four files, not three.** Also part of this row per decision 8: **copy the game's `TestCase` harness**, because everything the tool carries is a pure function and the format is exactly the thing that must not drift silently | |
+| 16.2 | **The vertical slice: iso canvas, terrain painting, save, and LOAD IN THE GAME.** Grid overlay, paint each `SimMap.Terrain`, write 2.4c's format into repo-root `maps/`, then open it from the skirmish screen's map-source picker and play it. **This is the row that proves the contract**, and it is worth doing before a single object can be placed. It also exercises §3.3's dev override in the direction that matters — the tool writes a folder the game reads without either of them going through `res://`.<br><br>⚠️ **AMENDED 2026-09-04.** Its acceptance — *"open it from the skirmish screen's map-source picker"* — **is 16.0's, not this row's**, and nothing could open it that way when this was written. Two things this row also has to answer that it did not name: a **NEW MAP dialog** (size and player count; `MapData.create(size)` needs both and there is no default that is right for two players and for eight), and **`starts`**, which is `MapData`'s own field and **not derived from a town centre** — see 16.4's amendment. `MapValidator` measures connectivity *between starts*, so a map with none validates as a map with no players | |
+| **16.2a** | ⛔ **NEW 2026-09-04 — UNDO/REDO, AND IT GOES HERE RATHER THAN AT THE END BECAUSE THAT IS THE WHOLE POINT.** Nothing in the README or in this table mentioned it, and an editor without undo is not a tool somebody will author a campaign in — a mis-drag across a painted coastline is otherwise unrecoverable, so the person using it stops experimenting, which is the one thing the tool exists to let them do. **It is cheap now and expensive later**: every mutation in the tool is already a discrete act on a `MapData` (paint a tile, paint a rect, add an entity, move one, set a start), so an undo stack is a list of those acts inverted — and this project already has the shape, because `Command`/`validate()`/apply is how every change to the sim works (§4's invariant). Retrofitting it after 16.4–16.7 means finding every mutation already written and hoping none was missed. ⚠️ **`Ctrl+Z` must not be a `_input` handler on the canvas** — the palette's search `LineEdit` takes focus and swallows it, which is the same class of bug as the HUD `Control` that ate three build buttons (§8) | |
+| 16.3 | **The object palette.** Player 1–8 + Gaia dropdown, colour picker, category dropdown (Unit / Building / Area / Terrain), search filter, icons cropped from the staged atlases the way `ControlGroupSlot` already does it — and **a palette that finds no atlases must draw lettered plates and carry on**, `CampaignScreen`'s answer for a missing icon and `atlas_for()`'s totality rule (§2.1) applied one project over: `game/assets/atlases/` is gitignored staged art, so it is present on the owner's machine and absent in a clean clone, and a tool that will not open without it is a tool that cannot be handed to anybody. ⚠️ **Never take `unit_ids()`/`building_ids()` order into the list** — `Array[StringName].sort()` orders by identity, not text, and not stably between runs; sort explicitly.<br><br>⛔ **AMENDED 2026-09-04 — THE CATEGORY LIST IS MISSING RESOURCES, AND WITHOUT THEM NO MAP IN THIS GAME IS PLAYABLE.** The dropdown was spec'd as Unit / Building / Area / Terrain. Every resource node — trees, berry bushes, gold and stone mines, fish — is a `ResourceDef` placed as a **gaia entity with `player: 0`**, and `MapValidator` **requires resources within reach of every start** and will fail an authored map that has none. Add a **Resource** category. It brings one thing nothing else in the palette needs: **`size_class`**, the fourth argument to `MapData.add_entity` and the input to `ResourceDef.footprint_for_size` — a small gold mine and a large one are the same def at different sizes, so the palette needs a size selector on this category and only this one. A placement that leaves it 0 silently authors the small variant | |
+| 16.4 | **Placement and the three cursors.** Select / move / edit, click to place, **drag to place walls** the way the game does — and the wall art's facing is settled and measured (§12A's third wall finding), so mirror `WallPlan`'s axis rule rather than re-deriving it. Footprint collision uses the **sim's** footprint, not the visual's measured extent; the two are different rects and both are right (§6's gotcha). **Use `MapData.claimed_tiles()` and `footprint_rect_of()`** rather than writing a second collision test — they are what the generator and the validator already agree on, and a third opinion about what is in the way is a map that validates and cannot be built.<br><br>⚠️ **AMENDED 2026-09-04: A PLAYER START IS ITS OWN TOOL AND ITS OWN FIELD.** `MapData.starts` is *"one per player in player order: the CENTRE tile"*, kept deliberately separate from the town-centre entity — its own header explains why: the validator and the preview both want "where does player N begin" without knowing which entity is their town centre or how big its footprint is. So **placing a town centre does not set a start and setting a start does not place a town centre**, and the tool needs a distinct start-marker cursor. `player_count()` **is** `starts.size()`, so a map's player count is decided by this tool and by nothing else | |
+| 16.5 | **Areas** — named regions, a **new `MapData` field** plus a matching reader on the game side. They are what unlocks `subject: "area"` in §11.8's vocabulary, and until both ends exist the loader rejects it. ⛔ **AMENDED 2026-09-04: THIS ROW SAID "AND THEREFORE A `FORMAT_VERSION` BUMP" AND THAT WOULD HAVE DESTROYED THE SHIPPED CAMPAIGN.** `MapFile.load_map` refuses a version mismatch with no migration and no tolerance, and five committed `map.json` files plus the published `howtoplay` pack are on version 1. **The field is added optionally, absent means "no areas", and the version does not move** — decision 7 has the full reasoning and the rule it sets for every field after this one | |
+| **16.4a** | ⛔ **NEW 2026-09-04 — FILE ▸ OPEN: READ A MAP BACK INTO THE TOOL. 16.10 IS IMPOSSIBLE WITHOUT IT AND NO ROW OWNED IT.** 16.2's title ends *"and LOAD IN THE GAME"*, which is a different direction; the README's File menu lists *"open an existing map"* and nothing in this table delivered it. **16.10's whole job is to re-author the five existing How To Play maps**, which means opening files that already exist, and "The Dragon Born" means opening yesterday's work this morning — an author who can only ever save is authoring in one sitting. **The code is already written and tested**: `MapFile.load_map(dir, problems)` returns a `MapData`, `MapData.from_dict` tolerates all three terrain shapes, and eleven tests pin the round trip. What this row owes is the dialog, the two source directories (repo-root `maps/` **and** `user://maps/`, per 16.0 — a map handed back from a played match lands in the second), and **surfacing `out_problems` instead of dropping it**: a partial load that silently shows an empty canvas over somebody's authored map is how a file gets overwritten with nothing | |
+| **16.4b** | ⛔ **NEW 2026-09-04 — VALIDATE ON SAVE (decision 8).** `MapValidator.problems(data)` is already `static`, already takes a `MapData`, and is the same gate 2.4b puts in front of every generated map: start-to-start connectivity, resources within reach of each start, overlapping entities, and the sea-map rules. **An authored map is MORE likely to fail it than a generated one** — the generator was written to satisfy these checks and a person painting a coastline was not, so the tool is where a map that cannot be played should be caught, not the match. **Warn and let it save anyway**, naming each problem: a work-in-progress map with one start placed is a normal state to close the tool in, and a validator that refuses to save is a validator people learn to route around. **Refusing is decision 3's job and only decision 3's** — a stale format is a corrupt file, an unreachable start is a bad map, and the two deserve different answers | |
 | 16.6 | **The Map Conditions editor.** Writes §11.8's vocabulary and invents nothing: the same `subject`/`owner`/`compare`/`value`/`output` records. **It validates that there is at least one WIN and does not ask for a lose** — the README's "at least one lose condition" requirement is dropped, because owning nothing is defeat on every map in this game whatever it declares (Phase 15 decision 5), and a map whose answer is "beat them" therefore needs **no conditions at all**. A time limit is one more row with `subject: "ticks"` — and it must be **ticks**, not seconds, for `ages.json`'s reason | |
 | 16.7 | **Per-entity overrides and named units** — the expensive row, and the only one with real sim cost. Health, attack, speed and a NAME on an individual placed entity means `SimUnit`/`SimBuilding` carry overrides, `MapGen.build_from()` applies them, and **`state_hash()` must fold them in** or two clients disagree about how much hp a scripted hero has. Named units are also what `subject: "named_unit"` needs. **Do not start here**; 16.2–16.6 are usable without it | |
 | 16.8 | **Scenario export** — write a `campaign.json` / `scenario.json` pair and the icon slots beside the map, so a campaign is authored in the tool rather than by hand-editing JSON. This is where 15.1's schema gets its second consumer, and the schema is the one that must not move | |
 | 16.9 | **`MapMaker/HOW-To.md`** — the owner's ask, and it is written last on purpose: a guide to an interface still being built is a guide that will be wrong | |
-| 16.10 | **Content: re-author the three "How To Play" maps** for a custom look and feel, which also swaps their pinned seeds for pinned **files** and retires §11.7's seed trap; then **"The Dragon Born"**, the second campaign, built entirely in the tool | |
+| 16.10 | **Content: re-author the "How To Play" maps** for a custom look and feel; then **"The Dragon Born"**, the second campaign, built entirely in the tool. ⚠️ **AMENDED 2026-09-04 on two counts.** **There are FIVE scenarios, not three** — the owner wrote scenarios 4 and 5 on 2026-09-02 (15.8) — and **the seed trap is already retired**: all five have committed `map.png` + `map.json` written by `preview_author_maps` on 2026-09-01/02 and `ScenarioDef.build_config()` reads the file, never the generator. So this row is no longer "swap seeds for files"; it is **replace five generated files with five authored ones**, and it has two facts to work with that make it much cheaper than it reads — the three later maps are **byte-identical to scenario 3's** (seed 815103, 170 entities), so authoring one good duel map covers three rows, and **scenario 4's briefing promises a dragon its map has not got**, which is the content gap 15.8 flagged for the owner and this row is where it gets fixed. **`preview_author_maps.tscn` is what this row retires**, and its own header says so | |
 
 ---
 
@@ -2682,14 +2833,15 @@ flow (4.13), roaming and fleeing (6.1b), herding (6.5), fishing (6.5).
 | 12.2b AI decision flow | High | Medium-high | The difficulty *list* ships and the opponents behind it do not — Normal/Hard/Unfair are Easy wearing three names and say so on screen. Parked until the balancing pass has been played, because tuning an AI against unbalanced speeds tunes it against the wrong game |
 | 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
-| **2.4c Save map** | **High, promoted** | Low-medium | §11.3. **It is the file format Phase 16 writes**, so it blocks the MapMaker and is no longer an optional convenience |
-| **Phase 15 Scenarios & campaigns** | High — it is what PLAY leads to | Medium, in nine shippable steps | 12.3 grown into a phase. One campaign, three placeholder scenarios on generated River maps against a Passive AI, then a real objective vocabulary underneath them. **Owner's stated priority, 2026-09-01** |
-| **Phase 16 MapMaker** | High — it turns scenarios into content | High; a second Godot project | **After Phase 15 and after 2.4c**, both by the owner's sequence and by dependency. 16.2 is the row that proves the format contract; 16.7 (per-entity overrides) is the only row with real sim cost |
+| ~~**2.4c Save map**~~ | — | — | ✅ **DONE 2026-09-01, CONFIRMED IN PLAY 2026-09-02.** §11.3. It was the file format Phase 16 writes, so it blocked the MapMaker; `MapFile` is now fixed by use and not only by tests |
+| ~~**Phase 15 Scenarios & campaigns**~~ | — | — | ✅ **CLOSED 2026-09-03** with 15.6 and 15.9. All nine rows done; 12.3's one-line row was hiding a phase and the phase shipped in three days. What it left behind rather than closed: the `alert` row is tested and authored by nothing, and scenario 4's briefing promises a dragon the map has not got (15.8) |
+| ~~**0.3 AssetPacks**~~ | — | — | ✅ **DONE 2026-09-03**, hardware-verified under three network conditions, and it was the last open Phase 0 item. **The `.pck` packer for art is the half that is missing** and it has the only real deadline on this page — it is what keeps the APK under 300 MB |
+| **Phase 16 MapMaker** | High — it turns scenarios into content | High; a second Godot project | ⚠️ **NOW UNBLOCKED ON BOTH COUNTS AND THEREFORE UP NEXT** — it waited on Phase 15 and on 2.4c, and both closed. **It starts at 16.0**, which is new and is game-code rather than tool work: the skirmish saved-map picker and the pause-menu Save Map button are both specified in the owner's README, neither is built, and 16.2 cannot be verified without the first of them. 16.2 is still the row that proves the format contract; 16.7 (per-entity overrides) is the only row with real sim cost. **A 2026-09-04 review against the code changed six things in this phase before a line was written** — see §16's decision 2 and 7 |
 | 12.1b reconnect | Medium | Medium | LAN **discovery** landed 2026-08-31 and closed the friction point (typing an IP). Getting back INTO a match after a drop is what is left, and it is the harder half: a returning peer needs the config, a full snapshot and its old player id |
 | ~~12.3 Campaign~~ | — | — | ➡️ **Now Phase 15, above.** The one-line row was hiding nine steps |
 | 12.4 Save/load and replays | Medium | Medium | Replay record/play already exists as a test fixture (0.7) |
 | **11.2 King of the Hill** | Medium — a second win condition is a second way to play | Low-medium, and lower than it was | **Both open design questions were settled by the owner on 2026-09-01 (§11.9)**: the scoring ladder, and the target as a *duration* — five minutes uncontested, worked back to `KOTH_TARGET_SCORE = 9000`. What is left is three known pieces of work: a zone centre (a line in `MapGenerator`, or 16.5's authored areas), `SimPlayer.score` written **by side**, and the minimap ring. Trophy stays blocked on a `unit.dragon_baby` with no def and no bake |
-| 4.12 Stances, 4.14 formations, 4.10 abilities, 5.3 upgrades | Medium | Medium each | 5.3 is half-built: the gate upgrade is the first real one |
+| ~~4.12 Stances, 4.14 formations, 4.10 abilities, 5.3 upgrades~~ | — | — | ✅ **ALL FOUR DONE.** The first three closed 2026-08-29; **5.3 built 2026-09-03** and is with the owner to play-test. Eight tier upgrades across three wall tiers, with the wood spent credited 1:1 against the stone — see the 5.3 row. **PHASE 5 IS CLOSED WITH IT** |
 | 13.x Dragons | The differentiator | Medium (art exists; needs rigging) | Once the RTS is a game |
 | **Naval combat** | Medium | Medium | Newly *reachable* rather than newly wanted: ships float and path since 2026-08-23. Transports have no load/unload, and nothing has ever fought at sea. Archipelago is what would demand it |
 
@@ -2861,7 +3013,7 @@ Live risks only. Retired ones are in `b904b76`.
 | Pathfinding stalls at scale | Medium | Per-tick budget from day one; flow fields in reserve |
 | GDScript too slow at 200 units | Medium | Measure on device; targeted GDExtension only if proven |
 | Mobile thermal throttling | Medium | 10 Hz sim, pooled views, draw-call budget, sustained-load testing |
-| Asset pack download fails / user offline | Medium | Game runs on placeholders; packs are `required: false` |
+| ~~Asset pack download fails / user offline~~ | **Retired 2026-09-03** | ✅ **Tested rather than mitigated on paper.** The owner ran the built 0.3 with **no internet**, with internet, and at **125 kbps**, and all three reached the front door — the offline case being the one that mattered, since a boot that stalls on an unreachable manifest is the failure this row was written about. Placeholders remain the fallback and content packs remain skippable. **What replaces it:** an *interrupted* download cannot resume (see Known gaps), which is a different risk and only bites at art-pack sizes |
 | WSL/Docker fighting Android USB deploy | Low | §1.2 — native Windows for editor + deploy |
 
 ---
@@ -2929,11 +3081,27 @@ to the art side the same day** (`asset_request.md` [P7]) — one clip, `static`,
 cannot start until that changes. **Then item 2 below shipped ahead of item 1**, on a second
 instruction the same day: the tech tree is wired (9.3 + 9.4) while Phase 5 is still open.*
 
-**1. PHASE 5, BUILDINGS — up next, the owner's call on 2026-08-29.** Two rows were open and they
+*⚠️ **2026-09-03 CLOSED THREE THINGS THAT THIS SECTION SPENT WEEKS DESCRIBING AS OPEN**, and the
+board is where each of them moved — PLAN.md is being brought back into line with it rather than
+kept as a second status. **0.3 `AssetPacks`** (the last Phase 0 item, and the only route a campaign
+had to a phone) closed on the owner running it on hardware under three network conditions.
+**Phase 15 closed** with 15.6's objective tracker, confirmed by the owner in play, and 15.9's
+preview. **5.3 was built** and is in `Test` awaiting a play-test the owner asked for by name. The
+net effect on this list is that **Phase 16, the MapMaker, is up next and is now unblocked on both
+of the things it was waiting for** — Phase 15 and 2.4c. Everything under items 1 and 2 below is
+kept for its reasoning, struck where it has been overtaken.*
+
+**~~1.~~ ✅ PHASE 5, BUILDINGS — CLOSED 2026-09-03.** *(Was "up next, the owner's call on
+2026-08-29".)* Two rows were open and they
 were very different jobs. **5.7, the full roster, CLOSED 2026-09-01 with no code written** (see
 its own row): it was only ever paced by A.10 on the art side, and A.10 had in fact been finished
-for some time behind a card that still said otherwise. **5.3, building upgrades, is the code half
-and is already half-built**:
+for some time behind a card that still said otherwise. **5.3, building upgrades, was the code half
+and was half-built — the other half went in on 2026-09-03 (`673540b`) and the row carries the
+detail.** Two things settled there that this paragraph could not have predicted: the credit for
+what a building already cost **crosses resource kinds at 1:1**, read off `market.json` rather than
+chosen, and **the "TIME" requirement below died** — every upgrade that survived the footprint rule
+is a wall, and instant is right for a wall, because a timed tier upgrade would open your own
+defences for the length of it. What follows is the original reasoning:
 `BuildingDef.upgrades_to`, `UpgradeBuildingCommand` and `SimWorld.convert_building` all exist and
 have shipped a real upgrade since 5.8 — the wall-to-gate conversion, which mutates in place and
 keeps the entity id rather than respawning. What is missing is everything an upgrade that is not a
@@ -2954,12 +3122,13 @@ Two things it left behind rather than closed:*
     Furnace is fighting an army that never will. **The AI ladder's tick table in BUGS.md was
     measured before this and is not invalidated by it** (neither side researches), but the first
     rule that does research invalidates every row.
-  - **5.3, building upgrades, is still open and its open question is now ANSWERED.** §15's item 1
-    asked "per-building action or player-wide tech", and the owner's ruling settles it: an upgrade
-    is an action tile on a building, and a *technology* is the player-wide thing bought there.
-    They are two mechanisms, not one — the wall-to-gate conversion changes one building and stays
-    `UpgradeBuildingCommand`. What 5.3 still needs is a COST and a TIME for a non-gate upgrade,
-    and the queue that 9.3 just taught to hold a research is the obvious place to put the time.
+  - ~~**5.3, building upgrades, is still open**~~ — **✅ BUILT 2026-09-03**, and its open question
+    had already been answered here: §15's item 1 asked "per-building action or player-wide tech",
+    and the owner's ruling settled it — an upgrade is an action tile on a building, a *technology*
+    is the player-wide thing bought there. **They stayed two mechanisms** and the wall-to-gate
+    conversion stayed `UpgradeBuildingCommand`. The COST landed; **the TIME did not, and that was
+    right** — the only surviving upgrades are walls, so 9.3's queue is still where a timer goes the
+    day something that is not a wall upgrades, and it holds nothing today.
 
 *~~3. 4.13's pack/unpack state machine.~~ **Built 2026-08-28** — see the Phase 4 table's 4.13
 row. All three engines travel packed and fight deployed, automatically, on an order rather than
@@ -2990,18 +3159,21 @@ new specs are theirs: [scenarios/README.md](scenarios/README.md) and
 [MapMaker/README.md](MapMaker/README.md). The sequence they asked for, which is also the
 dependency order:
 
-1. **Phase 15, in its numbered order** — one campaign, "How To Play", three scenarios on
-   **generated River maps** against a **Passive** opponent, with the objective vocabulary built in
-   the sim underneath them. 15.1 (data + loader) → 15.2 (the rule, headless-testable with no
-   screen in existence) → 15.3 (the launch path) → 15.4/15.5 (the two screens) → 15.6 (message +
-   tracker) → 15.7 (progress) → 15.8 (the three, content only) → 15.9 (preview + tests that
-   **drive the sim to each win**). **Scenario 3 is playable at 15.1 + 15.3 + 15.5** and 15.2 is
-   what unlocks the other two, so there is a working campaign in the middle of that list rather
-   than only at the end.
-2. **2.4c, the map save format** — which stopped being optional the moment a tool exists to write
-   it. §11.3 carries the promotion note.
-3. **Phase 16, in its numbered order**, with 16.2 (paint → save → open it in the game) as the row
-   that proves the format contract before anything is built on top of it.
+1. ~~**Phase 15, in its numbered order**~~ — ✅ **CLOSED 2026-09-03**, all nine rows, in three
+   days: 15.1 (data + loader) → 15.2 (the rule, headless-testable with no screen in existence) →
+   15.3 (the launch path) → 15.4/15.5 (the two screens) → 15.6 (message + tracker) → 15.7
+   (progress) → 15.8 (the scenarios, content only, and the owner wrote **five**) → 15.9 (preview +
+   tests that drive the sim to each win). The prediction that **scenario 3 is playable at 15.1 +
+   15.3 + 15.5** held exactly, and there was a working campaign in the middle of the list rather
+   than only at the end. **Two things it left rather than closed**, both recorded where they bind:
+   the `alert` row and its banner are tested and authored by nothing (16.6 writes the first one),
+   and scenario 4's briefing promises a dragon its map has not got — a content gap and the owner's
+   call, not a defect in 15.1–15.9.
+2. ~~**2.4c, the map save format**~~ — ✅ **DONE 2026-09-01, CONFIRMED IN PLAY 2026-09-02.** §11.3
+   carries both notes. The format is fixed by use now, which is why it went ahead of the tool.
+3. ⬅️ **PHASE 16, THE MAPMAKER — THIS IS WHERE THE QUEUE NOW POINTS, AND IT IS UNBLOCKED ON BOTH
+   PREREQUISITES.** In its numbered order, with **16.2 (paint → save → open it in the game) as the
+   row that proves the format contract** before anything is built on top of it.
 4. **16.10** — re-author the three placeholder maps for a custom look, which retires §11.7's seed
    trap by giving each scenario a **file** rather than a seed, and then **"The Dragon Born"**, the
    second campaign, authored entirely in the tool.
@@ -3011,8 +3183,11 @@ only here.** ✅ **Scenario 3 is `LAST_MAN_STANDING`** — *leave the enemy noth
 enemy units" is unreachable against an AI that never stops training villagers; Phase 15's opening
 keeps the reasoning. ✅ **`scenarios/` and `maps/` moved out of `game/`** to the repo root, because
 installable, shareable content cannot live in `res://`; §3.3 is the new content-delivery section
-and it names the one real cost — **a campaign cannot reach a phone until 0.3 `AssetPacks` does**,
-which promotes the last open Phase 0 item from "still open" to "on the path".
+and it named the one real cost — *a campaign cannot reach a phone until 0.3 `AssetPacks` does* —
+which promoted the last open Phase 0 item from "still open" to "on the path". ✅ **AND IT WALKED
+THAT PATH: 0.3 CLOSED 2026-09-03 AND A CAMPAIGN HAS REACHED A PHONE.** The promotion was the right
+call and the cost was real; what remains of it is the **art** `.pck`, which is a packer and not a
+client (see Phase 0's 0.3 row).
 
 **Then, in no strongly forced order:** 12.1b reconnect (discovery landed 2026-08-31); **Phase 14,
 the AI's enemy-blindness** (which is a rebuild of 12.2b's condition vocabulary, not a bug fix, and
@@ -3044,6 +3219,15 @@ twice while the bug was there.
 
 Still outstanding, in `asset_request.md`'s own priority order:
 
+- ⚠️ **NEW 2026-09-03, AND IT IS A QUESTION RATHER THAN A BAKE: what does `pack_art_v1.pck`
+  contain?** 0.3 shipped the whole client and the content packer; the art packer needs three
+  answers from the art side, all asked in `asset_request.md` — **which directory is
+  authoritative for a bake** (`art_work/out/` versus the staged copy under
+  `game/assets/atlases/`, which memory says is a stale manual copy), **whether one art pack is
+  right or it wants splitting**, and **what identifies a bake for a version bump**. This is the
+  piece that keeps the APK under 300 MB, so of everything on this list it is the one with a
+  deadline rather than a wish behind it. It is not blocked on a bake and no atlas needs
+  re-cutting for it.
 - **[P7] `vis.dragon` cannot move** — one clip, `static`. **The only art gap that blocks a
   phase**: 13.x is unstartable while the unit is a statue. It trains, fights and breathes
   fire today, so nothing is blocked now.
@@ -3069,3 +3253,12 @@ Still outstanding, in `asset_request.md`'s own priority order:
   evidence the shape is affordable — but per player multiplies by player count, not by two.
 - **A static destroyed behind the fog stops being sent** rather than leaving AoE's stale
   ghost, which would need a per-player last-seen copy of every static (§11.4).
+- **A pack download cannot resume** (new 2026-09-03, from 0.3). The server answers Range with
+  206 — verified — but `HTTPRequest.set_download_file` cannot append, so an interrupted
+  download restarts from zero. Invisible at 2.2 MB and unacceptable at 400: the owner's
+  125 kbps test run took ~2.4 minutes for the small pack, which is **nine hours** for an art
+  pack, and one dropped connection would mean starting it again. **Deserves its own card before
+  art packs ship**, and it is the one item on this list with a date attached to it.
+- **A mounted pack cannot be un-mounted.** Godot has no `unload_resource_pack()`, so DELETE is
+  offered on installed content and cannot be offered on art. Not a defect — it constrains what
+  an art-pack UI is allowed to promise.
