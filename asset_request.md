@@ -20,6 +20,54 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [asset] The dragon nest's props are ALREADY BUILT — 2026-09-04
+
+**Owner asked for these to be baked. All three have been staged since 2026-08-15.** Checked
+on disk rather than from memory, because §1.1's rule is that a claim art is missing is one
+`Get-ChildItem` from being tested, and it was wrong twice in one hour on 2026-09-01.
+
+| id | frames | source actor |
+|---|---|---|
+| `vis.prop_nest_bush` | 5 (dirs 5) | `flora/trees/temperate_bush_biome.xml` |
+| `vis.prop_standing_stone` | 5 (dirs 5) | `props/special/eyecandy/standing_stones.xml` |
+| `vis.prop_shrine_celtic` | 1 (dirs 1) | `structures/celts/small_stone_monument.xml` |
+
+That is the whole nest as PLAN.md §9.2 defines it — *"22 bushes and 12 standing stones
+around a shrine with **no core building at all**"* — so there is nothing left to bake.
+`directions = 1` on the shrine is deliberate: one facing was picked by baking all 8 in a
+pass, and the nest has exactly one shrine. The bushes mirror 5→8 on purpose, because 22 of
+them sitting together is the case where a repeated silhouette would show.
+
+⚠️ **THERE IS DELIBERATELY NO SINGLE `vis.dragon_nest` SPRITE, in case that is what was
+wanted.** `prop_shrine_celtic.toml` records the reason: the three bake separately *"so the
+nest can be composed IN-GAME … the nest is a map feature that wants to sit differently on
+different ground."* One baked composite would freeze the scatter and the ground it sits on
+into one image. Say the word and I will bake one, but it costs that flexibility and PLAN.md
+§9.2's "composite entities are measured over their props" assumes the loose form.
+
+**So what is missing is all game-side, and `dragon_nest` appears NOWHERE in `game/`:**
+
+- no `building.dragon_nest` in `buildings.json` — PLAN.md §5's roster table declares it
+  (*"Not buildable — a map POI, footprint for occupancy only"*) but the def does not exist
+- **none of the three props is in `visuals.json`** — 3 atlases staged, 0 wired
+- no placement/composition code, and nothing references any of the three ids
+- `unit.dragon_baby` needs **no second bake** — it is `fauna/dragon` at 10% scale and the
+  view can scale a sprite (`dragon.toml` says so)
+
+Phase 13.2 is therefore unimplemented rather than unblocked. Art is not the blocker.
+
+### [asset] `vis.foundation_10x10` IS a real gap, and it is the TOWN CENTRE — 2026-09-04
+
+Found while checking the nest. **`building.town_center` has footprint `[10, 10]` and points
+`visual_foundation` at `vis.foundation_8x8`** — so the placement ghost for the first
+building every player ever places reads **two tiles small**. PLAN.md §5 already admits this
+in passing (*"reads one tile small until `vis.foundation_10x10` is baked"*); it is the only
+one of the twelve staged foundations doing duty for a footprint it does not match. Every
+other building's foundation matches or is within a tile.
+
+**Mine to bake and small.** Tell me to and it is one recipe; the game side then changes one
+string. Not raised before because nothing had counted foundations against footprints.
+
 ### [asset → game-code] `vis.dragon_rigged` is baked and staged — it needs a `visuals.json` entry — 2026-09-04
 
 **The dragon animates.** 8 directions × 5 clips, staged. `vis.dragon` (static) is unchanged
