@@ -175,10 +175,30 @@ func save() -> Array[String]:
 		# that actually bit the owner: the file wrote perfectly and the map was unplayable.
 		# AMBER and the word SAVED together, because both halves are true and burying either
 		# one is how the first authored map reached a match with a player owning nine things.
-		_notice("SAVED, BUT LOOK — %s" % "; ".join(PackedStringArray(_document.warnings)),
-				_WARN)
+		_notice("SAVED, BUT LOOK — %s" % _summarised(_document.warnings), _WARN)
 	_refresh_status()
 	return problems
+
+
+## The warnings as one line, trimmed to what will actually fit on one.
+##
+## ⚠️ **CAPPED SINCE 16.4b's SECOND HALF, and the cap is not tidiness.** The audit produces one
+## sentence per start; `MapValidator` produces one per *problem* per player, so an
+## eight-player map that has been cut in half can hand this a dozen of them. `_notice_label`
+## is a single unwrapped Label in a 1600 px window — past about 200 characters the text is
+## simply not on screen, and **the sentence that gets clipped is not the one the author
+## chooses.** Two and a count is legible; twelve is a blank end to a line.
+##
+## THE COUNT IS THE POINT of the tail, not decoration: "and 9 more" tells an author this is a
+## broken map rather than a map with a rough edge, which is the difference between fixing it
+## now and shipping it. The full list stays on `MapDocument.warnings` for anything that wants
+## it — a log, a panel, or 16.4c.
+static func _summarised(warnings: Array[String], keep := 2) -> String:
+	var shown := warnings.slice(0, keep)
+	var line := "; ".join(PackedStringArray(shown))
+	if warnings.size() > shown.size():
+		line += " (and %d more)" % (warnings.size() - shown.size())
+	return line
 
 
 ## Say what just happened, and keep saying it until something else happens.

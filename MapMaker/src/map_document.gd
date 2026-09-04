@@ -51,6 +51,12 @@ var dirty := false
 ## worth looking at anyway.** Conflating them would mean either refusing to save a map an
 ## author deliberately hand-built (see `StartLayout.audit`) or saying nothing at all, and the
 ## second is what shipped an unplayable map on 2026-09-04.
+##
+## **TWO SOURCES, AND NEITHER CAN ANSWER THE OTHER'S QUESTION.** `StartLayout.audit` reports a
+## start short of its opening — the half that would have caught the 48x48 map. `MapValidator`
+## is the game's own gate (2.4b) and reports what this tool has no business holding a second
+## opinion about: start-to-start connectivity, overlapping entities, resources within a WALK
+## rather than within a radius, and the sea-map rules. Appended in that order, narrow to fatal.
 var warnings: Array[String] = []
 
 
@@ -203,6 +209,23 @@ func save(maps_dir: String) -> Array[String]:
 		# an opinion, and 16.3's palette is where a deliberate hand-built economy stops
 		# looking thin.
 		warnings = StartLayout.audit(data)
+		# ⚠️ **AND THEN THE GAME'S OWN GATE, WHICH IS THE OTHER HALF OF 16.4b AND THE HALF
+		# THAT COULD NOT BE WRITTEN HERE.** `StartLayout.audit` knows whether a start got its
+		# opening; it has no idea whether the two starts can REACH each other, whether two
+		# entities are standing on the same ground, or whether a sea map's players can build
+		# a dock. `MapValidator` is the gate 2.4b already puts in front of every generated
+		# map, so the tool now runs the game's checks rather than an imitation of them --
+		# which is why `format/map_validator.gd` exists and why `FormatGuard` hashes it.
+		#
+		# **THESE ARE THE SEVEREST WARNINGS IN THE TOOL AND THEY ARE STILL WARNINGS.** A map
+		# that fails this one is a map the lobby will refuse to start, so the author has to be
+		# told plainly -- and refusing to WRITE it would lose the work of an author who is
+		# halfway through joining two halves of an island. Same rule the audit follows, for a
+		# louder problem: the file is fine, the map is not.
+		#
+		# Appended after the audit rather than merged, so the order on the notice line goes
+		# from "your start is short" to "nobody can reach anybody" -- narrow to fatal.
+		warnings.append_array(MapValidator.problems(data))
 	return problems
 
 

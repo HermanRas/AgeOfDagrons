@@ -30,6 +30,21 @@
 ##   - `iso.gd` — tile-to-screen, for 16.2's canvas. **Also not dependency-free**: one line
 ##     reads `SimWorld.SUBTILE`, hence `format/sim_world.gd`.
 ##
+##   - `map_validator.gd` — **the eighth, added 2026-09-04 for 16.4b, and the one that is not
+##     about the FORMAT at all.** It is an opinion *about* a map: start-to-start connectivity,
+##     resources within reach, overlapping entities and the sea-map rules. That is exactly why
+##     `MapDocument.seats()`'s header records pulling this kind of arithmetic in here as
+##     **rejected** — *"it is not part of the format, it is an opinion ABOUT a map, and putting
+##     it there would mean a hash check failing whenever the lobby's rule changed."*
+##
+##     ⚠️ **THE OWNER OVERRULED THAT, AND THE TRADE IS WORTH STATING PLAINLY** (2026-09-04:
+##     *"re-copying is fine"*). The alternative was a second validator written inside the tool,
+##     and **a validator that disagrees with the game's is worse than one that occasionally
+##     needs re-copying**: the tool would pass a map the lobby then refuses, which is 16.4b's
+##     own failure mode with an extra step. The cost is real and it is a chore, not a risk —
+##     when 2.4b's rules change, this guard says so, names the file, and `Boot`'s report says
+##     what to copy. A drifted opinion says nothing at all.
+##
 ## `atlas_entry.gd` is deliberately **absent**. It is not format-critical — it is ICON
 ## critical — it drags `PlaceholderSpec` behind it, and nothing before 16.3's palette needs
 ## it. It joins `COPIES` on the day the palette does, which is one row in the table below.
@@ -39,6 +54,11 @@
 ## `format/sim_world.gd` is a one-constant stand-in for a 1,500-line original, so a hash
 ## would be meaningless. It is checked by pulling the `const SUBTILE := ...` line out of the
 ## game's source and comparing it. Narrower, and exactly as loud when it breaks.
+##
+## `format/map_generator.gd` is the second, and it exists for the same reason one level down:
+## the verbatim `map_validator.gd` reads `MapGenerator.Type.ARCHIPELAGO`, and the generator
+## itself is 1,500 lines of noise fields this tool must never carry — **authoring a map by
+## hand and generating one are opposite jobs.** So the `enum Type` line is checked instead.
 ##
 ## ⚠️ **LINE ENDINGS ARE NORMALISED BEFORE HASHING, AND THAT IS NOT A DETAIL.** This repo
 ## checks out with CRLF on Windows (`git` says so on every commit) while these files are
@@ -59,6 +79,7 @@ const COPIES := [
 	{"copy": "res://format/building_def.gd", "origin": "src/data/building_def.gd"},
 	{"copy": "res://format/resource_def.gd", "origin": "src/data/resource_def.gd"},
 	{"copy": "res://format/game_defs.gd", "origin": "src/data/game_defs.gd"},
+	{"copy": "res://format/map_validator.gd", "origin": "src/sim/map_validator.gd"},
 ]
 
 ## Single declarations depended on from files too big to copy. `prefix` locates the line in
@@ -70,6 +91,17 @@ const DECLARATIONS := [
 		"prefix": "const SUBTILE",
 		"expected": "const SUBTILE := 256",
 		"used_by": "res://format/sim_world.gd",
+	},
+	# THE WHOLE ENUM AND NOT JUST `ARCHIPELAGO`, which is the only name `map_validator.gd`
+	# spells. A type INSERTED in the middle renumbers every one after it, and the game's own
+	# header records what that costs: `meta.type` is a saved int, so it "would silently turn
+	# every recorded Desert into a Forest". A check that watched only the name would keep
+	# comparing against the wrong number and calling sea maps land maps.
+	{
+		"origin": "src/sim/map_generator.gd",
+		"prefix": "enum Type",
+		"expected": "enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST, ARCHIPELAGO }",
+		"used_by": "res://format/map_generator.gd",
 	},
 ]
 

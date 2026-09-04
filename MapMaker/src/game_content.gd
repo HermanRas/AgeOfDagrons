@@ -105,6 +105,24 @@ func resource_def(id: StringName) -> ResourceDef:
 	return _resources.get(id)
 
 
+## ⚠️ **THE RETURN TYPE IS `Variant` AND THAT IS THE POINT, not a shortcut.**
+##
+## `format/map_validator.gd` (16.4b) calls this in two places and **both only ever ask whether
+## it is null**: "is this entity a unit, or is it a building or a node?" On the game side it
+## answers a real `UnitDef`; here the raw JSON dictionary answers that question exactly as
+## well, and typing this `-> UnitDef` would mean copying `unit_def.gd` and its dependency
+## surface into `format/` to satisfy a comparison against null.
+##
+## The class comment above says the day 16.3 needs *something only `UnitDef` computes*, the
+## answer is to copy the file in properly rather than re-derive the field here. **This is not
+## that day**: nothing is being derived, and there is no second opinion to drift — a def id
+## either appears in `units.json` or it does not.
+##
+## `null` for an unknown id, which is the game registry's own rule and what the copy tests.
+func unit(id: StringName) -> Variant:
+	return _units.get(id)
+
+
 # ── what the palette will ask (16.3) ────────────────────────────────────────
 
 ## ⚠️ **SORTED AS TEXT, EXPLICITLY.** `Array[StringName].sort()` orders by identity rather

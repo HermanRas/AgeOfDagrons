@@ -96,6 +96,22 @@ func test_the_save_load_code_is_one_of_the_guarded_files() -> void:
 			"the Terrain enum is the byte written into map.png")
 
 
+## ⚠️ **THE EIGHTH FILE, AND THE ONE THAT IS NOT ABOUT THE FORMAT AT ALL** (16.4b).
+##
+## `MapDocument.seats()`'s header records pulling this kind of arithmetic into `format/` as
+## REJECTED -- *"it is not part of the format, it is an opinion ABOUT a map"* -- and the owner
+## overruled that on 2026-09-04 (*"re-copying is fine"*). Pinned by name, because the whole
+## value of the decision is that the tool runs **the game's** checks: a second validator
+## written in here would pass maps the lobby then refuses, which is 16.4b's own failure mode
+## with an extra step.
+func test_the_games_own_validator_is_one_of_the_guarded_files() -> void:
+	var origins: Array[String] = []
+	for entry in FormatGuard.COPIES:
+		origins.append(str(entry["origin"]))
+	assert_true(origins.has("src/sim/map_validator.gd"),
+			"the tool must run the game's gate, not an imitation of it")
+
+
 # ── drift is DETECTED, which is the whole point ─────────────────────────────
 
 ## One changed line in one original, and the guard must refuse.
@@ -191,10 +207,74 @@ func test_a_vanished_declaration_is_a_failure() -> void:
 	assert_true(guard.refusal().contains("no line starting"), guard.refusal())
 
 
-## The shim and the check must agree with each other, or the check is testing itself.
-func test_the_shim_says_what_the_guard_expects() -> void:
+## ⚠️ **A RETUNED VALIDATION RULE MUST REFUSE, and this is the test that makes the eighth
+## file worth having.** `MIN_NEARBY` is the lobby's opinion about what a playable start is; if
+## the game raises it and this tool goes on saving maps against the old number, the tool
+## reports a map as fine that the skirmish screen then refuses to start -- which is exactly
+## the drift `MapDocument.seats()` predicted and exactly what the guard converts into a
+## message naming the file to re-copy.
+func test_a_retuned_validation_rule_is_caught() -> void:
+	var text := FileAccess.get_file_as_string("res://format/map_validator.gd")
+	var guard := FormatGuard.check(_fake_game({
+		"src/sim/map_validator.gd": text.replace(
+				"const MIN_NEARBY := {&\"wood\": 4, &\"gold\": 1, &\"stone\": 1, &\"food\": 1}",
+				"const MIN_NEARBY := {&\"wood\": 8, &\"gold\": 2, &\"stone\": 2, &\"food\": 2}"),
+	}))
+	assert_false(guard.passed(), "the lobby's rule changing must stop the tool saving")
+	assert_true(guard.refusal().contains("map_validator.gd"), guard.refusal())
+
+
+## ⚠️ **A MAP TYPE INSERTED IN THE MIDDLE, WHICH IS THE HAZARD THE GAME'S OWN HEADER NAMES:**
+## *"`MatchConfig.map_type` is stored as an int and a saved map records it, so inserting a type
+## in the middle would silently turn every recorded Desert into a Forest."*
+##
+## `format/map_validator.gd` reads `MapGenerator.Type.ARCHIPELAGO` to decide whether a map
+## takes the land connectivity claim or the sea one. A renumbered enum means this tool calls
+## sea maps land maps with nothing failing anywhere -- so the whole enum is checked, not just
+## the one name the validator spells.
+func test_a_map_type_inserted_in_the_middle_is_caught() -> void:
+	var guard := FormatGuard.check(_fake_game({
+		"src/sim/map_generator.gd": "extends RefCounted\n\n"
+				+ "enum Type { RANDOM, ISLAND, LAKES, RIVER, DESERT, FOREST, ARCHIPELAGO }\n",
+	}))
+	assert_false(guard.passed(), "a type in the middle renumbers every one after it")
+	assert_true(guard.refusal().contains("enum Type"), guard.refusal())
+
+
+## An APPENDED type is caught too, and that is deliberate rather than strict. It is safe for
+## the wire -- the game's header says the next one goes on the end for that reason -- but the
+## tool still has to be re-copied before it can know the type exists, and a guard that waved
+## it through would be a guard with a judgement in it.
+func test_an_appended_map_type_is_also_caught() -> void:
+	var guard := FormatGuard.check(_fake_game({
+		"src/sim/map_generator.gd": "extends RefCounted\n\n"
+				+ "enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST, ARCHIPELAGO, TUNDRA }\n",
+	}))
+	assert_false(guard.passed())
+
+
+## The shims and the checks must agree with each other, or each check is testing itself.
+##
+## BOTH OF THEM, driven off the table rather than written out: a shim added without its
+## declaration row, or with a row that quotes something the shim does not say, is a file
+## nobody is guarding -- and it would look exactly like a guarded one.
+func test_the_shims_say_what_the_guard_expects() -> void:
+	var seen: Array[String] = []
 	for entry in FormatGuard.DECLARATIONS:
-		if str(entry["prefix"]) == "const SUBTILE":
-			assert_eq(str(entry["expected"]), "const SUBTILE := %d" % SimWorld.SUBTILE)
-			return
-	fail("no SUBTILE declaration in the guard's table")
+		var prefix := str(entry["prefix"])
+		seen.append(prefix)
+		match prefix:
+			"const SUBTILE":
+				assert_eq(str(entry["expected"]), "const SUBTILE := %d" % SimWorld.SUBTILE)
+			"enum Type":
+				# Rebuilt from the shim's own enum rather than compared as text, so this
+				# cannot pass by both sides carrying the same typo.
+				var names: Array[String] = []
+				for key in MapGenerator.Type.keys():
+					names.append(str(key))
+				assert_eq(str(entry["expected"]),
+						"enum Type { %s }" % ", ".join(PackedStringArray(names)))
+			_:
+				fail("declaration '%s' has no agreement test" % prefix)
+	assert_true(seen.has("const SUBTILE") and seen.has("enum Type"),
+			"both shims are in the guard's table, got %s" % [seen])
