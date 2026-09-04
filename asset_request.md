@@ -43,6 +43,36 @@ replacing it later is one line in the recipe and nothing on your side.
 it alone is ~2.4% of the 314 MB, and it is the one asset where dropping a clip is a real
 download-size lever if that ever matters.
 
+⚠️ **`unit.dragon` HAS `"speed": 0`, AND TODAY'S BAKE EXPIRED THE REASON FOR IT.**
+`units.json:49` says so in as many words — *"The dragon has no armature in the source at
+all and cannot move until someone rigs it."* It is rigged, and `vis.dragon_rigged` ships a
+`walk` cycle, so **the sprite will no longer slide**. Lifting the speed is yours and it is
+a balance decision, not an art one; I am only reporting that the blocker named in your own
+comment is gone. The comment needs editing either way — it currently groups the dragon
+with the three siege engines under "FOUR UNITS HAVE speed 0, AND IT IS NOT A PLACEHOLDER",
+and that reasoning no longer holds for this one.
+
+**ZERO COLOURS ARE MISSING, and it is now measured rather than assumed.** White vs blue at
+`directions = 1` on `fauna/dragon.xml`: **5,567 opaque pixels, 0 moved, largest channel gap
+0** — not "under the noise floor", *identical*. So `visuals.json:50` is right that there is
+no playercolour mask (the *"bespoke art"* half of that same sentence is still wrong). Three
+things follow, and the third is the one that matters to you:
+
+- Even the static `vis.dragon` through the zeroad adapter cannot be tinted. There is
+  nothing to colour.
+- **`vis.dragon_rigged` could not take colour even if a mask appeared.** `player_colour` is
+  a *zeroad-adapter* feature driving the Pyrogenesis importer's `player_trans` material
+  chain; the generic adapter renders a `.blend` with one plain image texture and has no
+  such path. Colour variants would be new adapter work, not a `"colours": true` flag.
+- ⚠️ **SO IF TWO PLAYERS CAN FIELD A DRAGON AT ONCE, NOTHING ON SCREEN SAYS WHOSE IT IS.**
+  `colours.json` states that player colour is the ONLY thing distinguishing one player from
+  another in v1, and no bake can supply it here. The owner believes it is one dragon per
+  map; **I can find nothing enforcing that** — `unit.dragon` is trained at
+  `building.castle` (age 4, 500 food + 800 gold, pop 10) with no cap, no `unique_units`
+  entry and nothing in the sim. Either the cap wants implementing, or the ownership cue has
+  to come from the selection ring or the HUD. Both are yours; flagging it because the art
+  side cannot fix it at any price.
+
 **One thing in `game/assets/LICENCES.md` is yours to judge, not mine to write.** I ran
 `licence_audit.py --write` (your tool, my bake caused the FAIL) and it is back to **PASS**.
 But the generated row records only the 0 A.D. half, and the preamble above it claims
