@@ -382,15 +382,23 @@ func test_scenario_fours_map_carries_the_dragon_its_briefing_PROMISES() -> void:
 	assert_eq(int(counts.get("unit.dragon p0", 0)), 1, "exactly one mother, gaia's")
 
 	# THE ARMY THE BRIEFING NAMES BY NUMBER. Player 1 is the human (`build_config` numbers
-	# them that way), and these three counts are quoted verbatim in `message`.
-	assert_eq(int(counts.get("unit.elite_swordsman p1", 0)), 100)
+	# them that way), and both counts are quoted verbatim in `message`.
+	#
+	# ⚠️ **THESE MOVED ONCE ALREADY AND THAT IS WHY THE PROSE IS ASSERTED TOO.** The first
+	# playtest cut the army from 155 to 75 -- 100 swordsmen to 25, the five onagers dropped,
+	# the 50 archers left alone. A data edit that forgot the briefing would leave the player
+	# reading about 100 swordsmen and counting 25, which is scenario 1's fifteenth-villager
+	# defect exactly: content and prose disagreeing, with only the prose on screen.
+	assert_eq(int(counts.get("unit.elite_swordsman p1", 0)), 25)
 	assert_eq(int(counts.get("unit.archer p1", 0)), 50)
-	assert_eq(int(counts.get("unit.onager p1", 0)), 5)
-	for named in ["100 elite swordsmen", "50 archers", "5 onagers"]:
+	assert_eq(int(counts.get("unit.onager p1", 0)), 0, "the onagers were dropped outright")
+	for named in ["25 elite swordsmen", "50 archers"]:
 		assert_true(s.message.contains(named),
 				"the briefing still says '%s': %s" % [named, s.message])
+	assert_false(s.message.contains("onager"),
+			"and no longer promises a siege engine that is not there: %s" % s.message)
 
-	# AND NOBODY IS STANDING ON ANYBODY. 155 units stamped in around a base is exactly
+	# AND NOBODY IS STANDING ON ANYBODY. 75 units stamped in around a base is exactly
 	# where two entities end up on one tile, which fails the map -- `preview_author_maps`
 	# re-validates after stamping them, and this is the same claim asserted about the file
 	# that actually shipped.

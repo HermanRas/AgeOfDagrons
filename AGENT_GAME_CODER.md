@@ -1947,7 +1947,23 @@ plugs in; read the row rather than re-deriving it:
   sent** rather than leaving AoE's stale ghost, which would need a per-player last-seen copy of
   every static (§11.4).
 
-### PHASE 13, DRAGONS — CODE-COMPLETE 2026-09-04/06
+### PHASE 13, DRAGONS — 13.1 AND 13.2 BUILT 2026-09-04/06, REOPENED THE SAME DAY
+
+⚠️ **THREE NEW ROWS ARRIVED ON 2026-09-06 AFTER THE OWNER PLAYED WHAT 13.2 DELIVERED**, which is
+the phase working rather than slipping. `4.8c` (#77, filed under Phase 4 — siege engines are half
+of it), `13.3` (#78, the nest heals at 1 hp/tick) and `13.4` (#79, fire-breath particles plus a
+120 s cooldown). **Two of the three carry a balance change inside a sentence that reads like a
+feature**, and both are the reason to read the cards before writing anything:
+
+- **1 hp/tick is 10 hp/SECOND** at `SimClock`'s 10 Hz — a 600 hp mother full in a minute, at the
+  nest, where she always is. And if the **hatchling** heals too, 13.2b's *"a rival went straight
+  at it instead"* denial branch is dead: 300 hp behind 10 dps of regen is not a target.
+- **120 s is 1200 ticks against today's 150** — an 8× nerf to the fire breath, not a rounding.
+
+⚠️ **AND 13.3 CHANGES WHAT SCENARIO 4'S PLAY-TEST MEASURES.** The nest's 1200 hp and the
+hatchling's 300/8-8 are still provisional; healing the mother at the nest makes them provisional
+against a *different fight*. **Play scenario 4 before building 13.3**, or those two numbers get
+settled twice.
 
 13.1 flies her, 13.2a puts one nest and one gaia mother on every generated land map, 13.2b is the
 claim. **The phase's own priority line was wrong and that is the part worth carrying**: PLAN.md

@@ -24,11 +24,24 @@
   "base_url": "https://aod.dragoon.co.za/downloads/",
   "packs": [
     {
+      "_note_v2": [
+        "V2, 2026-09-06: scenario 4 is the dragon claim (PLAN.md 13.2 / 15.8). New map with",
+        "the nest, the mother and a 75-unit army; mode `scenario` with two win rows; starts",
+        "in age 4. v1 was a mission whose briefing promised a dragon its map had not got.",
+        "",
+        "⚠️ THE OWNER ASKED FOR 'campaign_howtoplay_v1.zip' REPACKED AND THAT FILENAME IS NOT",
+        "WHAT SHIPPED, on purpose. build_packs.py REFUSED the rebuild -- content changed under",
+        "an unchanged version -- and it is right: a client holding v1 checks the manifest,",
+        "sees v1, and never looks again. Overwriting the v1 zip in place would leave every",
+        "existing install permanently on the old scenario 4 with nothing on screen to say so,",
+        "which is exactly the mistake the guard was written for. So the file to copy is",
+        "campaign_howtoplay_v2.zip."
+      ],
       "id": "howtoplay",
       "kind": "campaign",
       "folder": "HowToPlay",
       "source": "scenarios/HowToPlay",
-      "version": 1,
+      "version": 2,
       "required": true,
       "author": "Age of Dragons"
     },
@@ -52,7 +65,12 @@
         "'HowToPlay' would not install a second campaign, it would overwrite the first and",
         "inherit its progress.",
         "",
-        "DELETE THIS ENTRY once there is a real optional campaign to list."
+        "DELETE THIS ENTRY once there is a real optional campaign to list.",
+        "",
+        "V2 FOR THE SAME REASON AND ON THE SAME DAY. It derives from the same folder, so its",
+        "bytes moved when scenario 4 did and the guard refused it too. Bumped rather than",
+        "left behind: two campaigns both called How To Play, holding two different scenario",
+        "4s, is precisely the confusion this entry's `folder` rule above is worried about."
       ],
       "id": "howtoplay_dummy",
       "kind": "campaign",
@@ -62,7 +80,7 @@
         "name": "How To Play (Dummy)",
         "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content."
       },
-      "version": 1,
+      "version": 2,
       "required": false,
       "author": "Age of Dragons"
     }

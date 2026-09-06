@@ -174,7 +174,7 @@ func show_progress(progress: Array, done: Array) -> void:
 		var i: int = row["index"]
 		var measured: int = int(progress[i]) if i < progress.size() else -1
 		var is_done: bool = i < done.size() and int(done[i]) != 0
-		(row["count"] as Label).text = _progress_text(row["def"], measured)
+		(row["count"] as Label).text = _progress_text(row["def"], measured, is_done)
 		var colour: Color = DONE_COLOR if is_done else _pending_colour()
 		(row["text"] as Label).add_theme_color_override("font_color", colour)
 		(row["count"] as Label).add_theme_color_override("font_color", colour)
@@ -195,9 +195,41 @@ func show_progress(progress: Array, done: Array) -> void:
 ## no shipped row can produce -- `ObjectiveDef` refuses the three unevaluable subjects at
 ## load. It is drawn as a dash rather than as a number, because printing -1 in a HUD is
 ## how a sentinel becomes a bug report about arithmetic.
-func _progress_text(o: ObjectiveDef, measured: int) -> String:
+##
+## ⚠️ **A TARGET OF ZERO IS A ROW YOU SATISFY BY TAKING SOMETHING AWAY, AND THE RAW COUNT
+## SAYS NOTHING ABOUT IT.** Reported by the owner off scenario 4, 2026-09-06: *"kill dragon
+## 0/0 does not read correctly, invert the count for units killed so the status reads 1/1."*
+## The row is `unit.dragon`, gaia's, `== 0`, so once the mother is dead the honest
+## measurement is 0 against a target of 0 and the panel drew **`0 / 0`** beside a tick --
+## which reads as a bug, not as a completed goal.
+##
+## **The note above had already named this failure and the `==` case walked straight past
+## it.** *"3 / 0 reads as a bug"* was written about `<=`, and the sentence that let it
+## through is the next one: *"AT_LEAST and EXACTLY share a form on purpose: both are numbers
+## to arrive AT."* True of `== 1`. False of `== 0`, because **nothing counts UP to zero**.
+##
+## So the rule is the TARGET and not the comparison: **`value == 0` draws as a checkbox**,
+## `0 / 1` until met and `1 / 1` once met, for `==` and `<=` alike -- they are the same
+## requirement spelled two ways, and a row that said `max 0` was telling the player about a
+## ceiling when what they wanted was a body count.
+##
+## **WHAT THIS TRADES AWAY, SO NOBODY "FIXES" IT BACK.** The numerator is no longer how many
+## are left -- *leave the enemy nothing* now says `0 / 1` where it used to say `3 / max 0`,
+## and the 3 is gone. That number cannot be kept: a real "killed 3 of 4" needs the count the
+## row STARTED at, and no such baseline exists anywhere in the sim or on the wire. Adding one
+## is a per-objective array on `SimPlayer`, folded into `state_hash()` and carried every
+## snapshot, for a numerator. The tick and the colour beside this column already say whether
+## the row is done; this makes the number agree with them instead of contradicting them.
+##
+## **`done` IS THE SIM'S LATCH AND NOT `measured == 0`**, which this class could work out for
+## itself and must not: the header's whole rule is that it renders facts the server decided.
+## `objective_done` is one-way, so a row that flickers back to 1 dragon (there is no such
+## route today, but 16.7's named units will make one) stays ticked and stays `1 / 1`.
+func _progress_text(o: ObjectiveDef, measured: int, done: bool = false) -> String:
 	if measured < 0:
 		return "--"
+	if o.value == 0:
+		return "%d / 1" % (1 if done else 0)
 	# AT_LEAST and EXACTLY share a form on purpose: both are numbers to arrive AT, and
 	# "3 / 3" is right for either. Only the ceiling needs saying out loud.
 	if o.compare == ObjectiveDef.Compare.AT_MOST:

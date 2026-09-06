@@ -163,14 +163,73 @@ func test_a_ticked_row_does_not_untick_when_the_count_falls() -> void:
 
 
 func test_an_at_most_row_says_what_its_number_is_FOR() -> void:
-	# PLAN.md 11.8's own example is *leave the enemy nothing*, `<= 0`. Rendered as progress
-	# towards a floor it reads "3 / 0", which is a player being told to climb towards a
-	# number they must stay below.
+	# A ceiling with room under it: "2 of at most 5" is a number to stay below, and drawing
+	# it as "2 / 5" would tell a player to climb towards it.
+	#
+	# ⚠️ **THIS TEST USED TO USE `<= 0` AND ASSERT `"3 / max 0"`, AND THAT ASSERTION IS NOW
+	# REVERSED** -- see the zero-target test below for why and by whom. The `max` form is
+	# still right and is still tested; it is only the target of ZERO that left it.
+	var few := _objective({"subject": "unit", "id": "unit.wolf", "owner": "gaia",
+			"compare": "<=", "value": 5, "output": "win", "text": "Thin out the wolves"})
+	tracker.setup([few] as Array[ObjectiveDef])
+	tracker.show_progress([2], [1])
+	assert_true(tracker.row_line(0).contains("2 / max 5"), tracker.row_line(0))
+
+
+func test_a_target_of_ZERO_counts_what_you_KILLED_and_not_what_is_left() -> void:
+	# ⚠️ **REPORTED BY THE OWNER OFF SCENARIO 4, 2026-09-06**: *"kill dragon 0/0 does not
+	# read correctly, invert the count for units killed so the status reads 1/1."* The row
+	# is `unit.dragon`, gaia's, `== 0`. Once the mother was dead the honest measurement was
+	# 0 against a target of 0, so the panel drew **"0 / 0" beside a tick** -- which reads as
+	# a bug rather than as a completed goal, in a screenshot of a scenario that had in fact
+	# been won.
+	#
+	# **`_progress_text`'s own note had already named this failure and the `==` branch walked
+	# past it.** It said *"3 / 0 reads as a bug"* -- about `<=` -- and then said AT_LEAST and
+	# EXACTLY share a form because *"both are numbers to arrive AT"*. True of `== 1`. False
+	# of `== 0`: **nothing counts up to zero.** So the rule is the TARGET and not the
+	# comparison, and `<= 0` and `== 0` now draw the same because they ask the same thing.
+	var mother := _objective({"subject": "unit", "id": "unit.dragon", "owner": "gaia",
+			"compare": "==", "value": 0, "output": "win", "text": "Kill the mother dragon"})
 	var none_left := _objective({"subject": "unit", "owner": "enemy", "compare": "<=",
 			"value": 0, "output": "win", "text": "Leave the enemy nothing"})
-	tracker.setup([none_left] as Array[ObjectiveDef])
-	tracker.show_progress([3], [0])
-	assert_true(tracker.row_line(0).contains("3 / max 0"), tracker.row_line(0))
+	tracker.setup([mother, none_left] as Array[ObjectiveDef])
+
+	# She is alive: one dragon on the map, and NEITHER row done. The old rendering put "1 / 0"
+	# and "3 / max 0" here.
+	tracker.show_progress([1, 3], [0, 0])
+	assert_true(tracker.row_line(0).contains("0 / 1"), tracker.row_line(0))
+	assert_true(tracker.row_line(1).contains("0 / 1"), tracker.row_line(1))
+
+	# Dead. This is the line in the owner's screenshot.
+	tracker.show_progress([0, 0], [1, 1])
+	assert_true(tracker.row_line(0).contains("1 / 1"), tracker.row_line(0))
+	assert_true(tracker.row_line(1).contains("1 / 1"), tracker.row_line(1))
+	assert_false(tracker.row_line(0).contains("0 / 0"),
+			"the reading that started this: %s" % tracker.row_line(0))
+
+
+func test_a_zero_target_reads_the_sims_latch_and_never_the_count() -> void:
+	# ⚠️ **THE TRACKER MUST NOT WORK OUT `done` FROM `measured == 0` ITSELF**, which for a
+	# zero-target row is the one place it looks equivalent and is not. `objective_done` is
+	# one-way in the sim precisely so a verdict cannot flicker off; deriving it here would
+	# undo that on the client, which is where the player is looking. Nothing can raise gaia's
+	# dragon count back today -- 16.7's named units will make a route -- so this pins the
+	# rule while it is still cheap.
+	var mother := _objective({"subject": "unit", "id": "unit.dragon", "owner": "gaia",
+			"compare": "==", "value": 0, "output": "win", "text": "Kill the mother dragon"})
+	tracker.setup([mother] as Array[ObjectiveDef])
+
+	# Count says zero, the SIM says not done. The panel follows the sim.
+	tracker.show_progress([0], [0])
+	assert_true(tracker.row_line(0).contains("0 / 1"), tracker.row_line(0))
+	assert_false(tracker.row_is_done(0))
+
+	# And the other way: a count that came back up cannot untick a latched row.
+	tracker.show_progress([0], [1])
+	tracker.show_progress([1], [1])
+	assert_true(tracker.row_line(0).contains("1 / 1"), tracker.row_line(0))
+	assert_true(tracker.row_is_done(0))
 
 
 func test_the_snapshot_before_the_first_evaluation_draws_no_zeros() -> void:
