@@ -215,13 +215,30 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   under a `[game-code]` heading, and anything I move that is not mine gets said there —
   neither of us can tell the other's card move from a tool bug, and **Vikunja keeps no
   history**.
-- ⚠️ **THREE API READINGS LOOK EXACTLY LIKE A FAILURE AND ARE NOT.**
+- ⚠️ **FOUR API READINGS LOOK EXACTLY LIKE A FAILURE AND ARE NOT.**
   `GET /views/{v}/tasks` never populates `bucket_id`; `GET .../buckets` reports
   `count: 0` for every bucket; and PowerShell's console prints `campaign â scenario 3`
   for text the server stores correctly as an em dash. **`GET .../buckets/tasks` is the
   only authoritative bucket→task mapping**, and §2's "a `Get-Content` dump is not
   evidence" rule extends to `Invoke-RestMethod` piped to a terminal. All three cost a
   false alarm on the day the board was seeded.
+
+  **THE FOURTH, 2026-09-06: A READ-BACK IN THE SAME PROCESS AS THE WRITE CAN RETURN THE
+  OLD VALUE.** Adding the `next` label to `11.x-trophy` wrote correctly and then read
+  back unchanged, so a verify-after-write reported the write as a silent no-op — and the
+  diagnosis that followed (*"`labels/bulk` does not replace an existing set"*) was
+  **wrong**; the very next run found the label already there. **The write had worked all
+  along.** Verify in a SECOND invocation, or with `show`, and treat an immediate read-back
+  as advisory. The general form is this section's own: *the failure mode of this API is a
+  reading that looks broken, not a write that is.*
+
+  📝 **Labels are still not a CLI verb, and this did not make them one.** `card_game.py`'s
+  header explains why — a tag swap between the three sides is the owner's, done in the UI.
+  A one-off scoped write for a card that stays `game-code` is a different thing, and the
+  endpoint that is safe for it is **`PUT /tasks/{id}/labels` with `{"label_id": N}`**,
+  which ADDS. `.../labels/bulk` REPLACES, so sending only the new label would strip
+  `game-code` and leave the card unwritable from this tool — the exact clobber
+  `vikunja_sync.py` was deleted for.
 - **The token in `.env` expires.** Vikunja API tokens carry a mandatory expiry, so a 401
   from `list` is routine maintenance and not a broken board; the tool prints the
   re-minting steps rather than a stack trace. `.env` is gitignored as of 2026-09-01 — it
