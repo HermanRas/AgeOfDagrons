@@ -23,7 +23,16 @@
     "",
     "`select.monastery` BECAUSE THE CORE OF THE NEST IS A SHRINE",
     "(`structures/celts/small_stone_monument.xml`). That one genuinely plays: the nest is",
-    "selectable, and it is the only sound a player will ever associate with it."
+    "selectable, and it is the only sound a player will ever associate with it.",
+    "",
+    "AND THE HATCHLING (13.2b) GETS A DEATH AND NOTHING ELSE. `die.predator` is her",
+    "mother's, which is the right family and the only dragon-shaped death staged. No",
+    "`attack`, because it cannot fight -- damage 0, aggro_radius 0 -- so an attack line",
+    "would be a sound nothing in the game can ever reach. No `idle` either, and that one",
+    "was TRIED: `animal.predator_idle` does not exist. What audio.json staged for the",
+    "predators is `animal.predator_attack` and nothing else, so an idle line here would",
+    "have failed `test_every_sound_the_entity_map_names_is_declared` -- which is the test",
+    "doing exactly its job. The bear has no idle for the same reason."
   ],
 
   "_note": [
@@ -115,7 +124,8 @@
     "unit.bear":   { "death": "die.predator", "attack": "animal.predator_attack" },
     "unit.wolf":   { "death": "die.predator", "attack": "animal.predator_attack" },
 
-    "unit.dragon": { "death": "die.predator", "attack": "attack.fire" }
+    "unit.dragon":      { "death": "die.predator", "attack": "attack.fire" },
+    "unit.dragon_baby": { "death": "die.predator" }
   },
 
   "buildings": {

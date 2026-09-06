@@ -1492,13 +1492,27 @@ func _resolve(visual_id: StringName, age: int = 0, colour: int = -1) -> AtlasEnt
 		load_warnings.append("no visuals.json entry for '%s'" % visual_id)
 		return AtlasEntry.from_placeholder(visual_id, PlaceholderSpec.unknown())
 
+	# HOW BIG TO DRAW WHAT THE ENTRY RESOLVES TO (13.2b). Read here rather than in
+	# `_load_atlas` because it is a property of the visual ENTRY and not of the baked
+	# file: `vis.dragon_baby` and `vis.dragon_rigged` name the same atlas and draw at
+	# two sizes, which is what saved a second 7.7 MB bake of identical frames.
+	var scale := float(decl.get("scale", 1.0))
+
 	var atlas := _load_atlas(visual_id, _atlas_path_for_skin(decl, age, colour))
 	if atlas != null:
+		atlas.scale = scale
 		return atlas
 
 	var ph: Variant = decl.get("placeholder")
 	if ph is Dictionary:
-		return AtlasEntry.from_placeholder(visual_id, PlaceholderSpec.from_dict(ph))
+		# The placeholder branch takes it too, and must: the box a placeholder draws is
+		# built from `footprint_m`/`height_m`, which are authored at the scaled size, so
+		# leaving the entry at 1.0 here would be right by accident. It is set anyway so
+		# that `scale` means the same thing whichever branch a caller got -- a reader
+		# asking "how big is this drawn" gets one answer.
+		var entry := AtlasEntry.from_placeholder(visual_id, PlaceholderSpec.from_dict(ph))
+		entry.scale = scale
+		return entry
 
 	load_warnings.append("'%s' has neither a usable atlas nor a placeholder" % visual_id)
 	return AtlasEntry.from_placeholder(visual_id, PlaceholderSpec.unknown())

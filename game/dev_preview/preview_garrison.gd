@@ -507,7 +507,7 @@ func _put_them_back() -> void:
 func _burn_it_down() -> void:
 	var t := _tower()
 	var held := t.garrison.size()
-	t.take_damage(t.hp, 0)
+	t.take_damage(t.hp, 0, SimEntity.NO_ATTACKER)
 	print("  destroyed the tower with %d inside" % held)
 
 

@@ -1150,14 +1150,17 @@
     "a castle, so a committed raid breaks it inside the window and a couple of stray",
     "soldiers do not.",
     "",
-    "visual_rubble POINTS AT THE NEST ITSELF, AND THAT IS A KNOWN WART. There is no",
-    "rubble bake, and a ruined henge would still have its stones standing -- but it means",
-    "a destroyed nest looks exactly like a live one, which is misleading the moment the",
-    "claim rule exists. The likely answer when 13.2 lands is to remove the entity on",
-    "death rather than leave rubble; recorded here so it is a decision and not a",
-    "surprise. visual_foundation is set for the same reason: the nest is placed COMPLETE",
-    "by MapGen and should never BE a foundation, and leaving it empty would draw a",
-    "magenta placeholder if anything ever did."
+    "visual_rubble POINTS AT THE NEST ITSELF, AND THE WART IT USED TO BE IS ANSWERED BY",
+    "`leaves_rubble: false` (13.2b). There is no rubble bake and there should not be one:",
+    "a razed henge is not a pile of debris, it is an absence. The prediction recorded here",
+    "before the claim rule existed -- 'the likely answer when 13.2 lands is to remove the",
+    "entity on death rather than leave rubble' -- is exactly what happened, and it stopped",
+    "being cosmetic the moment razing the nest became how a rival DENIES a dragon claim:",
+    "an attacker who had just succeeded would have watched an apparently untouched nest",
+    "for a minute. `visual_rubble` is kept rather than emptied, because the DESTROYED",
+    "phase still exists for the one tick between the fall and the despawn and an empty",
+    "field would draw a magenta placeholder in it. visual_foundation is set for the same",
+    "reason: the nest is placed COMPLETE by MapGen and should never BE a foundation."
   ],
 
   "building.dragon_nest": {
@@ -1181,6 +1184,7 @@
     "age_required": 1,
 
     "buildable": false,
-    "blocks_movement": false
+    "blocks_movement": false,
+    "leaves_rubble": false
   }
 }

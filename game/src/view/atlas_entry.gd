@@ -55,6 +55,21 @@ const _ANIM_ALIAS := {
 var id: StringName = &""
 var is_placeholder := true
 
+## What to multiply the drawn frame by, from the visuals.json entry's `scale` (13.2b).
+## 1.0 for everything but `vis.dragon_baby`, which is `vis.dragon_rigged` at 0.2.
+##
+## SET BY THE RESOLVER, NOT BY THE ATLAS. It belongs to the visual ENTRY and not to the
+## baked file -- that is what lets two entries share one atlas and draw at two sizes,
+## which is the whole point of it and the reason a second 7.7 MB bake was not needed.
+## `GameDataRegistry._resolve` writes it, and the resolved-entry cache is keyed per
+## visual id (`_skin_key`), so the two entries are two objects and cannot tread on each
+## other despite parsing the same file.
+##
+## THE SPRITE ONLY. Anything measured in metres -- the selection ring, the health dot,
+## the placeholder box -- comes off `placeholder.footprint_m` / `height_m`, which are
+## authored at the scaled size. visuals.json's `_note_dragon_baby` has the argument.
+var scale: float = 1.0
+
 # ── placeholder branch ─────────────────────────────────────────────────────
 var placeholder: PlaceholderSpec = null
 

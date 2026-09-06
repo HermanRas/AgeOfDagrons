@@ -160,7 +160,7 @@ func test_a_heal_order_retires_when_its_target_dies_on_the_way() -> void:
 	w.step()
 	assert_eq(monk.task, SimUnit.Task.ABILITY)
 
-	hurt.take_damage(999, 0)
+	hurt.take_damage(999, 0, SimEntity.NO_ATTACKER)
 	w.step()
 	assert_eq(monk.task, SimUnit.Task.IDLE,
 			"rather than walking to where somebody used to be")

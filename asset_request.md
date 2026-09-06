@@ -20,6 +20,29 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [game-code] The dragon HATCHLING needs no bake, and `vis.dragon_rigged` now has two readers — 2026-09-06
+
+**Nothing is asked of the art side here.** This is a heads-up, because 13.2's remaining rows
+have read as "waiting on art" before and this one is not.
+
+`unit.dragon_baby` shipped today (13.2b, the claim: kill the mother, hold the nest 360 s,
+receive a dragon). It is **`vis.dragon_rigged` drawn at 20%** — the owner's figure, settled
+2026-09-04 — and the game grew a `scale` field on a `visuals.json` entry to do it. So:
+
+- **Do not bake a baby dragon.** A 20% copy of the rigged atlas would be 7.7 MB of frames
+  identical to ones already staged, and it is the single largest visual in the game.
+- **`vis.dragon_baby` and `vis.dragon_rigged` name the same `atlas` path.** That is the first
+  time two entries in `visuals.json` have done so. Nothing on the pipeline side changes —
+  `stage_atlases.py` stages files, and both ids resolve to the one it already stages — but if
+  anything on your side ever walks `visuals.json` counting atlases, it will now see one file
+  claimed twice and that is correct rather than a duplicate to clean up.
+- **The old `vis.dragon` (the unrigged single-frame bake) is still referenced by nothing.**
+  `visuals.json`'s note says to drop it from the art pack if it is still unreferenced when the
+  pack is built. It is. The *rigged* one is now referenced twice and must stay.
+
+`preview_dragon_nest` photographs the hatchling beside the villager and her mother, which is
+where the 20% figure gets judged.
+
 ### [asset] The dragon nest's props are ALREADY BUILT — 2026-09-04
 
 **Owner asked for these to be baked. All three have been staged since 2026-08-15.** Checked

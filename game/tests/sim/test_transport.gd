@@ -251,7 +251,7 @@ func test_sinking_a_transport_drowns_what_is_aboard() -> void:
 	boat.pos = SimUnit.centre_of_tile(offshore)
 	world.spatial.move(boat.id, offshore)
 
-	boat.take_damage(boat.hp, 0)
+	boat.take_damage(boat.hp, 0, SimEntity.NO_ATTACKER)
 	world.step()
 	assert_false(soldier.alive, "the passenger went down with it")
 	assert_eq(soldier.garrisoned_in, 0, "and is no longer inside anything")

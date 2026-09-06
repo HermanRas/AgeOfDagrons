@@ -71,6 +71,31 @@ const RUBBLE_TOTAL_TICKS := 600
 const RUBBLE_FADE_TICKS := 100
 var rubble_ticks_left: int = -1
 
+## Whether this building leaves wreckage at all, from `BuildingDef.leaves_rubble`
+## (13.2b). True for all 31 real buildings; false only for the dragon nest.
+##
+## THE POINT IS THAT RUBBLE IS ART, and a building with no rubble bake cannot honestly
+## have a rubble phase. `building.dragon_nest` points `visual_rubble` at the nest itself
+## -- buildings.json calls that "a known wart" and says so at length -- so a nest a rival
+## has just razed to deny a claim stands there looking exactly as it did before, which is
+## the single most misleading frame this feature could produce. A henge has no rubble to
+## draw; it is either there or it is not.
+var leaves_rubble: bool = true
+
+## ── the dragon claim (PLAN.md 13.2, built 13.2b) ────────────────────────────
+##
+## SIM-ONLY, AND DELIBERATELY OFF THE WIRE. `to_snapshot()` does not send any of these
+## three and must not casually start: `SnapshotSystem` groups `updated` by sorted field
+## names (12.1f), so fields present on one building and absent on the rest split that
+## building into its own wire shape and cost bytes on every other building besides. A
+## nest countdown on the player's screen is a real feature and it is its own row, whose
+## first question is exactly that cost.
+##
+## Zero and -1 on every building in the game but one, for as long as a claim is running.
+var claim_owner: int = 0
+var claim_ticks_left: int = -1
+var claim_baby_id: int = 0
+
 ## A FIELD IS A RESOURCE NODE WEARING A FOOTPRINT. It is placed, costed and
 ## built like a building and then harvested like a berry bush, so it needs the
 ## three things GatherSystem asks of anything gatherable: what kind, how much is

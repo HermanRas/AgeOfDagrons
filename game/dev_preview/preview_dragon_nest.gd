@@ -19,6 +19,19 @@
 ## that the dragon belongs to it* — and the dragon-to-nest ratio is what says whether she looks
 ## like she fits in her own nest.
 ##
+## ## AND SINCE 13.2b, THE HATCHLING — WHICH IS THE WHOLE OF THE VISUAL PROOF FOR `scale`
+##
+## `vis.dragon_baby` is `vis.dragon_rigged` at 20%, which is the first time anything in this
+## game has drawn one atlas at two sizes. **No headless test can judge the result**: the data
+## agreeing with itself is asserted in `tests/view/test_visual_scale.gd`, and what is left over
+## is exactly the part a person has to look at — does it read as a juvenile dragon, or as a
+## dragon that has been moved further away. It stands between the villager and the mother
+## because that is the comparison the owner's figure was chosen against.
+##
+## `_report_scale()` prints the half a screenshot cannot settle: **where the feet ended up.** A
+## sprite scaled about its frame's corner and one scaled about its anchor are both small
+## dragons in a picture and are several metres apart on the ground.
+##
 ## ## WHAT A FAILURE LOOKS LIKE
 ##
 ## - **A magenta box in the middle** means the core did not resolve — the shrine atlas is the
@@ -75,6 +88,17 @@ func _ready() -> void:
 	# room for a caption -- to the east the labels ran off the viewport.
 	_place(&"vis.villager", Vector2i(-9, 2), "villager  ~1 m")
 	_place(&"vis.dragon_rigged", Vector2i(-4, 9), "mother dragon  9.19 m")
+	# THE HATCHLING (13.2b), and it is here for the reason the other two are: 20% of
+	# something is a number, and whether it reads as a juvenile dragon is a question for
+	# a person. Standing between the villager and the mother on purpose -- that is the
+	# comparison the owner's "bigger than a villager, obviously a baby" was about.
+	# BEYOND THE VILLAGER RATHER THAN BETWEEN HER AND THE MOTHER, which is where it went
+	# first: the mother's wingspan is 9 m of sprite and the hatchling landed inside it,
+	# so the one comparison this shot exists for was drawn on top of one of the two things
+	# being compared. In iso, screen y is (x+y) and screen x is (x-y) -- so the way to
+	# move something sideways without moving it down the picture is to change x and y in
+	# opposite directions, which is what this does against the villager's (-9, 2).
+	_place(&"vis.dragon_baby", Vector2i(-13, 6), "hatchling  1.84 m (20%)")
 
 	var report := Label.new()
 	report.text = ("dragon nest: %s core + %d props   |   footprint %dx%d tiles = %.1f x %.1f m"
@@ -84,6 +108,54 @@ func _ready() -> void:
 	report.position = Vector2(20.0, 16.0)
 	report.size = Vector2(1360.0, 22.0)
 	add_child(report)
+
+	_report_scale()
+
+
+## What the scale actually DOES to a drawn frame, printed rather than left to the eye.
+##
+## ⚠️ **THE FAULT A PICTURE CANNOT SETTLE ON ITS OWN IS WHERE THE FEET WENT.** A sprite
+## scaled about its frame's top-left corner and one scaled about its ANCHOR look identical
+## in isolation -- both are small dragons -- and differ by several metres of ground.
+## `_draw_frame` folds the scale into the canvas transform, which scales every local
+## coordinate including the frame's offset from the anchor, so the anchor stays exactly on
+## the node origin. That is checkable, so it is checked here: **the drawn rect's anchor
+## point must be (0, 0) local for both, at any scale.**
+##
+## The other half is the ratio, which is only worth printing because it comes from two
+## places that have to agree by hand -- `scale` and the authored `footprint_m`. See
+## visuals.json's `_note_dragon_baby`.
+func _report_scale() -> void:
+	var adult := GameDataRegistry.atlas_for(&"vis.dragon_rigged")
+	var baby := GameDataRegistry.atlas_for(&"vis.dragon_baby")
+	print("scale: adult %.2f, hatchling %.2f" % [adult.scale, baby.scale])
+
+	if adult.is_placeholder or baby.is_placeholder:
+		print("  (art not staged -- placeholder boxes, so the drawn sizes below are absent)")
+		return
+
+	for pair in [["adult", adult], ["hatchling", baby]]:
+		var e: AtlasEntry = pair[1]
+		var f := e.frame_at(&"idle", 0, 0)
+		if f.is_empty():
+			print("  %s: no idle frame" % pair[0])
+			continue
+		var rect: Rect2i = f["rect"]
+		var anchor: Vector2 = f["anchor"]
+		# Exactly what `EntityView._draw_frame` computes, with `at` at the origin.
+		var dest := Rect2(-anchor * e.scale, Vector2(rect.size) * e.scale)
+		print("  %s: frame %dx%d px -> drawn %.1fx%.1f px, feet at (%.1f, %.1f)"
+				% [pair[0], rect.size.x, rect.size.y, dest.size.x, dest.size.y,
+				dest.position.x + anchor.x * e.scale, dest.position.y + anchor.y * e.scale])
+
+	var ph_adult := GameDataRegistry.placeholder_for(&"vis.dragon_rigged")
+	var ph_baby := GameDataRegistry.placeholder_for(&"vis.dragon_baby")
+	var ratio := ph_baby.footprint_m.x / maxf(0.001, ph_adult.footprint_m.x)
+	print("  metres declared at %.3f of the adult against a sprite scale of %.3f"
+			% [ratio, baby.scale])
+	if absf(ratio - baby.scale) > 0.01:
+		printerr("  ⚠️ the hatchling's footprint_m and its scale disagree -- "
+				+ "its selection ring will not fit its sprite")
 
 
 func _place(visual_id: StringName, tile: Vector2i, caption: String) -> void:

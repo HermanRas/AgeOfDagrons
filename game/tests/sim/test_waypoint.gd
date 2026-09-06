@@ -101,7 +101,7 @@ func test_you_cannot_set_a_rally_point_on_somebody_elses_building() -> void:
 
 func test_a_destroyed_building_takes_no_orders() -> void:
 	var tower := _tower()
-	tower.take_damage(tower.hp, 0)
+	tower.take_damage(tower.hp, 0, SimEntity.NO_ATTACKER)
 	assert_false(SetWaypointCommand.new(1, tower.id, Vector2i(30, 30)).validate(w))
 
 
@@ -223,7 +223,7 @@ func test_a_garrison_killed_with_its_building_is_not_sent_anywhere() -> void:
 	assert_true(w.garrison_unit(tower, archer))
 	tower.waypoint = Vector2i(30, 30)
 
-	tower.take_damage(tower.hp, 0)
+	tower.take_damage(tower.hp, 0, SimEntity.NO_ATTACKER)
 	w.step()
 
 	assert_false(archer.alive)

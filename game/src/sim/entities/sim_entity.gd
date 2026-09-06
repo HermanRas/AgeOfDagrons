@@ -13,6 +13,16 @@ var max_hp: int = 0
 var alive: bool = true
 var vision_range: int = 0
 
+## Whose blow last landed on this, or `NO_ATTACKER` if nothing traceable ever has
+## (PLAN.md 13.2). Written only by `take_damage` and read, today, only by `NestSystem` --
+## the dragon's claimant is whoever landed the killing blow.
+##
+## SIM-ONLY AND DELIBERATELY OFF THE WIRE. `SnapshotSystem`'s shape tables group `updated`
+## by sorted field names (12.1f), so an extra int here is an extra int on every unit,
+## building and tree in the game -- and nothing on the client has a use for it. If a kill
+## feed or a claim countdown ever wants it, that is the row where the cost gets weighed.
+var last_attacker_owner: int = NO_ATTACKER
+
 ## How many units this entity can hold, and who is in it (PLAN.md 4.8).
 ##
 ## **HERE RATHER THAN ON `SimBuilding`, AS OF 2026-08-29 AND THE TRANSPORT SHIP.** These
@@ -81,7 +91,32 @@ func garrison_ids() -> Array[int]:
 	return out
 
 
-func take_damage(amount: int, _attack_type: int) -> void:
+## Nobody in particular did this. A transport sinking with soldiers aboard, a garrison
+## going down with its tower, a debug destroy -- damage that is a CONSEQUENCE rather than
+## a blow, and there is no honest owner to name for it.
+##
+## NOT 0, which is gaia and is a real attacker: a wolf killing a villager is owner 0
+## landing a hit, and a rule reading "unknown" as "gaia" would credit the dragon's death
+## to the wilderness the moment anything untraceable finished her off.
+const NO_ATTACKER := -1
+
+
+## `attacker_owner` IS REQUIRED, WITH NO DEFAULT, AND THAT IS THE SAFETY PROPERTY -- the
+## same argument `Diplomacy.is_enemy(e, player_id, teams)` makes about its team table. It
+## could have defaulted to `NO_ATTACKER` and every one of the four existing damage sources
+## would have compiled unchanged; the one that was never updated would then be a kill that
+## quietly credits nobody, and the symptom is a dragon that cannot be claimed by whichever
+## weapon you happened to use. GDScript reports a missing argument at parse time instead.
+##
+## WHY THIS EXISTS AT ALL, given `WildlifeSystem._check_flee` deliberately does not use it:
+## that one needs to know it was hurt, and a drop in hp is the same information for the
+## price of a field. 13.2's claim needs to know *by whom*, which no delta can answer.
+##
+## `last_attacker_owner` PERSISTS rather than being read and cleared. The killer is
+## whoever landed the blow that took hp to 0, which is by definition the last write.
+func take_damage(amount: int, _attack_type: int, attacker_owner: int) -> void:
+	if attacker_owner != NO_ATTACKER:
+		last_attacker_owner = attacker_owner
 	hp = maxi(0, hp - amount)
 	if hp == 0:
 		alive = false

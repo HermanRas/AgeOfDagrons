@@ -48,7 +48,7 @@ func test_a_wolf_is_not_its_own_enemy() -> void:
 
 func test_the_dead_and_the_typeless_are_never_enemies() -> void:
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(10, 10))
-	wolf.take_damage(9999, 0)
+	wolf.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	assert_false(Diplomacy.is_enemy(wolf, 1, w.teams), "a carcass is not a fight")
 	assert_false(Diplomacy.is_enemy(null, 1, w.teams), "and null is not a crash")
 
@@ -406,7 +406,7 @@ func test_a_deer_bolts_when_it_is_hit() -> void:
 	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(40, 40))
 	_run(2)
 	var before := deer.tile()
-	deer.take_damage(5, 0)
+	deer.take_damage(5, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 	assert_true(deer.flee_ticks > 0, "running")
 	_run(WildlifeSystem.FLEE_TICKS)
@@ -421,7 +421,7 @@ func test_a_deer_runs_away_from_what_hit_it_rather_than_towards_it() -> void:
 	var hunter := w.spawn_unit(&"unit.villager", 1, Vector2i(37, 40))
 	_run(2)
 	var before: int = absi(deer.tile().x - hunter.tile().x)
-	deer.take_damage(5, 0)
+	deer.take_damage(5, 0, SimEntity.NO_ATTACKER)
 	_run(WildlifeSystem.FLEE_TICKS)
 	assert_true(absi(deer.tile().x - hunter.tile().x) > before,
 			"further from the villager than it started")
@@ -433,7 +433,7 @@ func test_a_hunted_deer_settles_somewhere_new() -> void:
 	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(40, 40))
 	_run(2)
 	var first_home := deer.roam_home
-	deer.take_damage(5, 0)
+	deer.take_damage(5, 0, SimEntity.NO_ATTACKER)
 	_run(WildlifeSystem.FLEE_TICKS + 2)
 	assert_true(deer.roam_home != first_home,
 			"home moved from %s to %s" % [first_home, deer.roam_home])
@@ -444,7 +444,7 @@ func test_a_predator_does_not_flee_when_hurt() -> void:
 	# hazard nobody ever had to deal with. `flees` is per-animal data, not a rule.
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
 	_run(2)
-	wolf.take_damage(5, 0)
+	wolf.take_damage(5, 0, SimEntity.NO_ATTACKER)
 	_run(3)
 	assert_eq(wolf.flee_ticks, 0)
 
@@ -465,7 +465,7 @@ func test_a_deer_is_not_a_resource_node_any_more() -> void:
 
 func test_hunting_a_deer_yields_the_food_it_used_to_stand_around_holding() -> void:
 	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(40, 40))
-	deer.take_damage(9999, 0)
+	deer.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 	var carcass: SimResourceNode = null
 	for e in w.entities.values():
@@ -579,7 +579,7 @@ func test_you_may_still_slaughter_the_sheep_you_are_herding() -> void:
 
 func test_a_slaughtered_sheep_leaves_the_food_it_was_carrying() -> void:
 	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(40, 40))
-	sheep.take_damage(9999, 0)
+	sheep.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 	var carcass: SimResourceNode = null
 	for e in w.entities.values():
@@ -623,7 +623,7 @@ func test_a_player_still_may_not_order_an_attack_on_a_tree() -> void:
 func test_killing_a_wolf_leaves_a_gatherable_carcass_on_its_tile() -> void:
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
 	var tile := wolf.tile()
-	wolf.take_damage(9999, 0)
+	wolf.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 
 	assert_null(w.get_entity(wolf.id), "the unit is gone the tick it dies")
@@ -642,7 +642,7 @@ func test_a_wolf_leaves_no_corpse_to_wait_out() -> void:
 	# A villager's body takes 70 seconds to clear (4.7). The wolf's body IS the
 	# reward, so making the hunter stand over it for a minute would read as a bug.
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
-	wolf.take_damage(9999, 0)
+	wolf.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 	for e in w.entities.values():
 		assert_false(e is SimUnit and (e as SimUnit).def_id == &"unit.wolf",
@@ -653,7 +653,7 @@ func test_only_one_carcass_is_dropped_however_long_the_world_runs() -> void:
 	# The sentinel guard. `corpse_ticks_left` is reused as "already handled" here,
 	# and without it every tick between death and despawn would queue another node.
 	var wolf := w.spawn_unit(&"unit.wolf", 0, Vector2i(40, 40))
-	wolf.take_damage(9999, 0)
+	wolf.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(30)
 	var count := 0
 	for e in w.entities.values():
@@ -666,7 +666,7 @@ func test_a_villager_killed_by_a_wolf_still_leaves_an_ordinary_corpse() -> void:
 	# The carcass path is keyed off `is_wildlife`, not off "died". Everything else
 	# dies the way it always did.
 	var villager := w.spawn_unit(&"unit.villager", 1, Vector2i(40, 40))
-	villager.take_damage(9999, 0)
+	villager.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	_run(1)
 	assert_not_null(w.get_entity(villager.id), "still there as a corpse")
 	assert_eq(villager.anim, &"die")

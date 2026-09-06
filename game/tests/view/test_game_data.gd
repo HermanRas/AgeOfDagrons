@@ -58,6 +58,11 @@ func test_the_full_roster_is_present() -> void:
 		&"unit.trebuchet", &"unit.trade_cart",
 		&"unit.fishing_ship", &"unit.transport_ship", &"unit.galley",
 		&"unit.galleon", &"unit.dragon",
+		# THE HATCHLING (13.2b), and it is the only unit in this list that no player
+		# and no map generator ever places: `NestSystem` spawns exactly one, when the
+		# mother is killed, and it exists for the 360 s of a claim. It is gaia's and
+		# wildlife for the same reason she is -- see `units.json`'s `_note_dragon_baby`.
+		&"unit.dragon_baby",
 		# GAIA'S, and the only units here nobody trains (4.13). They are `UnitDef` and
 		# not `ResourceDef` because they move and bite, which are `SimUnit` powers;
 		# each turns into a node when it dies. See `UnitDef.is_wildlife`.

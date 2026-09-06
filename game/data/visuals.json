@@ -1856,6 +1856,45 @@
     }
   },
 
+  "_note_dragon_baby": [
+    "THE HATCHLING IS THE ADULT AT 20% AND SHARES ITS ATLAS BYTE FOR BYTE (13.2b).",
+    "The owner settled the figure on 2026-09-04 -- PLAN.md had said 10%, a",
+    "conversation had said 30%, and 20% is the answer. No bake was needed and none",
+    "should ever be made: a second 7.7 MB atlas of the same frames at a smaller",
+    "size is a download nobody gets anything for.",
+    "",
+    "`scale` IS THE FIRST OF ITS KIND IN THIS FILE AND IT AFFECTS THE SPRITE ONLY.",
+    "`EntityView._draw_frame` folds it into the canvas transform it already sets for",
+    "the mirror, so the frame's anchor still lands exactly on the projected world",
+    "origin and a scaled unit stays on its feet. Everything MEASURED IN METRES --",
+    "the selection ring, the health dot's height, the placeholder box -- reads the",
+    "`placeholder` block below and never the scale, which is why those figures are",
+    "AUTHORED at 20% rather than derived from it.",
+    "",
+    "SO THE TWO HAVE TO AGREE BY HAND, and that is a deliberate trade rather than an",
+    "oversight. Deriving them would mean the projection inversion documented at the",
+    "top of this file running on numbers it was not measured for; writing them out",
+    "means anybody changing the scale has three numbers to change and a note saying",
+    "so. 9.19 x 8.11 x 3.76 at 20% is 1.84 x 1.62 x 0.75, which is what is below.",
+    "",
+    "NO `colours` FLAG, for the adult's reason: the 0 A.D. dragon carries no",
+    "playercolour mask at all (measured -- 0 of 5,567 opaque pixels moved). It never",
+    "needs one. The hatchling is GAIA'S for its whole life; the moment it would",
+    "belong to somebody it has already become `unit.dragon`."
+  ],
+
+  "vis.dragon_baby": {
+    "atlas": "res://assets/atlases/vis.dragon_rigged.atlas.json",
+    "scale": 0.2,
+    "placeholder": {
+      "shape": "capsule",
+      "footprint_m": [1.84, 1.62],
+      "height_m": 0.75,
+      "color": "#7a2c2c",
+      "facing_marker": true
+    }
+  },
+
   "vis.prop_wood_lumber": {
     "atlas": "res://assets/atlases/vis.prop_wood_lumber.atlas.json",
     "placeholder": {

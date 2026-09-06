@@ -115,7 +115,11 @@ func _process_building(w: SimWorld, b: SimBuilding) -> void:
 	# in a castle are one heavier arrow every two seconds, not sixteen arrows -- see
 	# `SimBuilding.attack_bonus` for why that is the shape the owner asked for.
 	var damage := b.attack_damage + b.attack_bonus(w)
-	target.take_damage(_damage_after_armour(w, target, damage, b.attack_type), 0)
+	# `b.owner_id` and not the garrison's: the shot is the TOWER'S, and its occupants
+	# only price it. A castle held by one player and stuffed with an ally's archers is
+	# still the castle's kill -- which matters because 13.2 credits a dragon to whoever
+	# landed the blow.
+	target.take_damage(_damage_after_armour(w, target, damage, b.attack_type), 0, b.owner_id)
 	# After the damage and carrying none of it, exactly as a unit's shot is. A tower
 	# firing invisibly would be the "ranged combat resolved with no visible cause"
 	# problem the header describes, and worse here: there is no archer sprite drawing
@@ -299,7 +303,7 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# nothing else in the roster notices.
 	if not u.can_fire():
 		return
-	target.take_damage(_damage_against(w, u, target, def), 0)
+	target.take_damage(_damage_against(w, u, target, def), 0, u.owner_id)
 	# THE ARROW IS LOOSED AFTER THE DAMAGE, and it carries none of it (4.13). The blow
 	# has already landed; this is only what shows where it came from. `SimProjectile`'s
 	# header has the argument for keeping those two apart, and the consequence: the

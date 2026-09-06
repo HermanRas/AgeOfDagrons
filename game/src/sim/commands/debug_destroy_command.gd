@@ -41,4 +41,7 @@ func validate(w: SimWorld) -> bool:
 func apply(w: SimWorld) -> void:
 	var e := w.get_entity(target_id)
 	if e != null:
-		e.take_damage(e.hp, 0)
+		# `NO_ATTACKER`, not `player_id`. `validate` only lets you destroy your OWN
+		# entity, so this is a demolition and not a blow -- nobody attacked anything, and
+		# crediting the owner would let a player claim a dragon by bulldozing a house.
+		e.take_damage(e.hp, 0, SimEntity.NO_ATTACKER)

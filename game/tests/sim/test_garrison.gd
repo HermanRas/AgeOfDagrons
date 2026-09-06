@@ -102,7 +102,7 @@ func test_a_route_that_never_arrives_stands_the_unit_down() -> void:
 	assert_eq(archer.task, SimUnit.Task.GARRISON)
 
 	# Move the goalposts: the tower is gone before it gets there.
-	tower.take_damage(tower.hp, 0)
+	tower.take_damage(tower.hp, 0, SimEntity.NO_ATTACKER)
 	assert_true(_run_until(func(): return archer.is_idle(), 600) > 0,
 			"it stopped rather than walking to a building that is not there")
 	assert_eq(archer.garrisoned_in, 0)
@@ -276,7 +276,7 @@ func test_the_garrison_dies_with_the_building() -> void:
 		inside.append(u)
 		assert_true(w.garrison_unit(tower, u))
 
-	tower.take_damage(tower.hp, 0)
+	tower.take_damage(tower.hp, 0, SimEntity.NO_ATTACKER)
 	w.step()
 
 	assert_true(tower.garrison.is_empty())
@@ -295,7 +295,7 @@ func test_the_bodies_appear_beside_the_wreckage_rather_than_where_they_walked_in
 	archer.pos = SimUnit.centre_of_tile(Vector2i(4, 4))
 	assert_true(w.garrison_unit(tower, archer))
 
-	tower.take_damage(tower.hp, 0)
+	tower.take_damage(tower.hp, 0, SimEntity.NO_ATTACKER)
 	w.step()
 
 	assert_false(u_far(archer, tower), "the body is against the tower, not at (4, 4)")
@@ -640,7 +640,7 @@ func test_an_empty_order_is_refused() -> void:
 func test_a_dead_unit_cannot_be_ordered_in() -> void:
 	var tower := _tower()
 	var archer := w.spawn_unit(&"unit.archer", 1, Vector2i(24, 21))
-	archer.take_damage(archer.hp, 0)
+	archer.take_damage(archer.hp, 0, SimEntity.NO_ATTACKER)
 	assert_false(GarrisonCommand.new(1, [archer.id], tower.id).validate(w))
 
 

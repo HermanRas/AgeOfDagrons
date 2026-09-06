@@ -450,29 +450,55 @@ func _draw_frame(vis: AtlasEntry, anim_name: StringName, at: Vector2,
 	var rect: Rect2i = f["rect"]
 	var anchor: Vector2 = f["anchor"]
 	var src := Rect2(rect.position, rect.size)
+	var flip := bool(f["flip_x"])
+
+	# HOW BIG, from the ENTITY's visual and not from `vis` (13.2b). The two differ only
+	# for a prop: a prop is part of the assembly the entity draws, so it shrinks with the
+	# entity rather than keeping whatever scale its own visuals.json entry declares.
+	# Nothing has both a scale and props today; getting it backwards would be invisible
+	# until something does, and would then look like the props had come loose.
+	var s := visual().scale
 
 	# Hand the rim the same frame this is about to draw, so the two can never
 	# disagree about which animation, facing or position the unit is in. Only for
 	# the entity's OWN sprite -- a prop standing beside a building is scenery and
 	# has nobody behind it to announce.
+	#
+	# The rim is a separate `Node2D`, so it takes the scale as a NODE scale rather than
+	# through the rect -- one place, applied to the shader's own draw. Its `WIDTH_PX`
+	# margin scales with it, so a 20% sprite gets a 0.4 px rim: right as geometry and
+	# nearly invisible in practice. Not worth a second mechanism for the one case it can
+	# arise in -- a hatchling standing behind a building -- and recorded here so a rim
+	# that "does not work on the baby" is a known consequence rather than a new bug.
 	if is_self and _outline != null and _outline.visible:
+		_outline.scale = Vector2(s, s)
 		_outline.set_frame(tex, src, Rect2(at - anchor, Vector2(rect.size)),
-				bool(f["flip_x"]), outline_colour)
+				flip, outline_colour)
 
 	# The frame is placed so its anchor -- the projected world origin, exact by
 	# construction rather than measured (PLAN.md 9.1) -- lands on `at`. Mirrored
 	# facings reflect about that same point, so a flipped sprite stays on its
 	# feet; `at.x` is negated under the mirror for the same reason draw_offset is
 	# kept out of it.
-	if bool(f["flip_x"]):
-		draw_set_transform(draw_offset, 0.0, Vector2(-1.0, 1.0))
+	#
+	# THE SCALE RIDES THE TRANSFORM THE MIRROR ALREADY SET UP, which is what makes it a
+	# few lines rather than an arithmetic pass over every rect. `draw_set_transform`
+	# builds T(position) * R * S, so `draw_offset` is NOT scaled -- a building's shift is
+	# a screen offset and has no business shrinking -- while every local coordinate is,
+	# `at` included. That is right at both ends: the entity's own frame passes
+	# `at == ZERO`, so its anchor stays exactly on the projected origin however small it
+	# is drawn, and a prop's offset shrinks with the thing it decorates.
+	if flip or s != 1.0:
+		draw_set_transform(draw_offset, 0.0, Vector2(-s if flip else s, s))
+	if flip:
 		draw_texture_rect_region(
 			tex, Rect2(anchor.x - rect.size.x - at.x, at.y - anchor.y,
 					rect.size.x, rect.size.y), src
 		)
-		draw_set_transform(draw_offset, 0.0, Vector2.ONE)
 	else:
 		draw_texture_rect_region(tex, Rect2(at - anchor, Vector2(rect.size)), src)
+	if flip or s != 1.0:
+		draw_set_transform(draw_offset, 0.0, Vector2.ONE)
 
 
 ## This visual's props, resolved once and cached: `[{visual, at}]` with `at` the

@@ -170,6 +170,14 @@ func setup(cfg: MatchConfig) -> void:
 			CombatSystem.new(),
 			ProductionSystem.new(), AgeSystem.new(),
 			MovementSystem.new(), SeparationSystem.new(), AnimationSystem.new(),
+			# NestSystem (13.2b) sits DIRECTLY BEFORE DeathSystem, and both halves of
+			# that are load-bearing. After CombatSystem, so a mother or a nest killed on
+			# this tick is already `alive == false` and the claim reacts on the tick the
+			# death happened. Before DeathSystem, because that is what retires a corpse
+			# and -- for a building carrying `leaves_rubble: false`, which the nest does
+			# -- despawns it outright the tick it falls. One tick later there would be no
+			# nest left in `entities` to read the claim off.
+			NestSystem.new(),
 			DeathSystem.new(), PopulationSystem.new(), VisionSystem.new(),
 			ObjectiveSystem.new(), WinConditionSystem.new(), AISystem.new()]
 
@@ -335,6 +343,10 @@ func spawn_building(def_id: StringName, owner: int, origin: Vector2i,
 		b.gather_kind = d.gather_kind
 		b.gather_amount = d.gather_amount
 		b.gather_slots = d.gather_slots
+		# Copied off the def at spawn like everything else in this block, so
+		# `DeathSystem` never asks the registry and a def edited mid-match cannot change
+		# how a building already standing falls down.
+		b.leaves_rubble = d.leaves_rubble
 	else:
 		b.max_hp = 1
 

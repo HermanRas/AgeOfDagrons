@@ -162,6 +162,22 @@ var wall_lengths: Array[StringName] = []
 ## `PlaceWallCommand` is a perfectly legal placement of a def the menu will not show.
 var buildable: bool = true
 
+## Whether a destroyed one leaves wreckage for a minute before clearing (13.2b). True
+## for every building in the roster except `building.dragon_nest`.
+##
+## IT IS AN ART QUESTION WEARING A RULE'S CLOTHES. `SimBuilding.Phase.DESTROYED` draws
+## `visual_rubble`, and a def with no rubble bake has to point that at something -- the
+## nest points it at ITSELF, which buildings.json flags as a known wart and which stops
+## being merely untidy the moment 13.2's claim exists: a rival razes the nest to deny the
+## claim, the baby dies, and the henge stands there looking untouched. There is no honest
+## rubble frame for a circle of standing stones, so it does not get a rubble phase.
+##
+## THE ALTERNATIVE WAS A `visual_rubble` THAT MEANS "NONE", and it is worse: the phase
+## would still exist, the entity would still be in the world for 600 ticks, and every
+## caller that asks "is there still a nest here" would get yes from a thing that has been
+## destroyed. Saying it in the def means `DeathSystem` can retire the entity instead.
+var leaves_rubble: bool = true
+
 ## Whether this is a GATE: a wall piece that can be opened and closed.
 ##
 ## The mechanism is `SimBuilding.gate_locked` plus `blocks_now()`, and it is cheap
@@ -271,6 +287,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 
 	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
 	b.buildable = bool(d.get("buildable", true))
+	b.leaves_rubble = bool(d.get("leaves_rubble", true))
 	b.is_gate = bool(d.get("is_gate", false))
 	# A LIST, and a BARE STRING IS STILL READ as a one-target list. `GameDefs.name_list`
 	# is what every other id list in this file goes through; the string case is two lines

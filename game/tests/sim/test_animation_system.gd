@@ -165,7 +165,7 @@ func test_a_players_own_idle_unit_never_grazes() -> void:
 func _shot_deer() -> SimUnit:
 	var deer := w.spawn_unit(&"unit.deer", 0, Vector2i(30, 30))
 	w.step()
-	deer.take_damage(1, 0)
+	deer.take_damage(1, 0, SimEntity.NO_ATTACKER)
 	return deer
 
 

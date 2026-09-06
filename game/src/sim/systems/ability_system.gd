@@ -154,7 +154,7 @@ func _burn(w: SimWorld, u: SimUnit, def: UnitDef, aim: Vector2i) -> void:
 		if e == null or not e.alive:
 			continue
 		e.take_damage(CombatSystem._damage_after_armour(w, e, _amount(w, u, def),
-				def.ability_damage_type), 0)
+				def.ability_damage_type), 0, u.owner_id)
 
 
 ## Whether `e` may be caught in `owner_id`'s blast.

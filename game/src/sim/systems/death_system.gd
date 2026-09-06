@@ -147,6 +147,17 @@ func _process_building(w: SimWorld, b: SimBuilding, to_despawn: Array[int]) -> v
 		# AFTER `free_footprint`, so the ground they are put out onto is no longer
 		# claimed by the building that is killing them.
 		_kill_garrison(w, b)
+		# A BUILDING WITH NO RUBBLE ART GOES THE TICK IT FALLS (13.2b). One def carries
+		# it -- the dragon nest, whose `visual_rubble` points at the nest itself, so a
+		# minute of "rubble" would be a henge standing there looking exactly as it did
+		# while it was alive. That is the single most misleading frame this feature could
+		# produce, since razing the nest is how a rival DENIES a dragon claim: the
+		# attacker would have no way to tell it had worked.
+		#
+		# AFTER `free_footprint` and after the garrison, so the two things a fall has to
+		# do have both happened. It is not an early return past them.
+		if not b.leaves_rubble:
+			to_despawn.append(b.id)
 		return
 
 	# A building already DESTROYED when this system first sees it -- one spawned
@@ -201,4 +212,9 @@ func _kill_garrison(w: SimWorld, b: SimEntity) -> void:
 			b.garrison.remove_at(i)
 			u.garrisoned_in = 0
 		if u.alive:
-			u.take_damage(u.hp, 0)
+			# CREDITED TO WHOEVER FELLED THE BUILDING, not to nobody. The occupants died
+			# because somebody razed the thing they were standing in, and that is as
+			# traceable a kill as an arrow -- `b.last_attacker_owner` is already the right
+			# answer, including `NO_ATTACKER` when the building itself fell to nothing
+			# traceable (a debug destroy, or a transport scuttled by a test).
+			u.take_damage(u.hp, 0, b.last_attacker_owner)

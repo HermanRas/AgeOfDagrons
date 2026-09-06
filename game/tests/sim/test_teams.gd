@@ -220,7 +220,7 @@ func test_a_team_game_ends_when_one_SIDE_is_left_standing() -> void:
 	w.step()
 	assert_false(w.match_over, "two sides on the board")
 
-	doomed.take_damage(9999, 0)
+	doomed.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	w.step()
 	assert_true(w.match_over, "one side left")
 	assert_eq(w.winner_team, 1)
@@ -233,8 +233,8 @@ func test_both_members_of_the_winning_side_are_winners_including_a_dead_one() ->
 	# side's victory as somebody else's.
 	var survivor := w.spawn_unit(&"unit.militia", 2, Vector2i(30, 30))
 	var mine := w.spawn_unit(&"unit.militia", 1, Vector2i(10, 10))
-	w.spawn_unit(&"unit.militia", 3, Vector2i(40, 40)).take_damage(9999, 0)
-	mine.take_damage(9999, 0)
+	w.spawn_unit(&"unit.militia", 3, Vector2i(40, 40)).take_damage(9999, 0, SimEntity.NO_ATTACKER)
+	mine.take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	w.step()
 
 	assert_true(w.match_over)
@@ -249,7 +249,7 @@ func test_a_free_for_all_still_ends_exactly_as_it_did() -> void:
 	world.setup(_config([0, 0, 0, 0]))
 	world.map.fill_terrain(SimMap.Terrain.GRASS)
 	var last := world.spawn_unit(&"unit.militia", 1, Vector2i(10, 10))
-	world.spawn_unit(&"unit.militia", 2, Vector2i(40, 40)).take_damage(9999, 0)
+	world.spawn_unit(&"unit.militia", 2, Vector2i(40, 40)).take_damage(9999, 0, SimEntity.NO_ATTACKER)
 	world.step()
 	assert_true(world.match_over)
 	assert_eq(world.winner_id, int(last.owner_id))
