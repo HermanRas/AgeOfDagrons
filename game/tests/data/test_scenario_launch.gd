@@ -168,11 +168,17 @@ func test_the_same_scenario_builds_the_same_map_twice() -> void:
 
 # ── the two objective lessons, which launch as of 15.2 ─────────────────────────
 
-func test_the_two_scenario_mode_lessons_launch_now_that_the_evaluator_exists() -> void:
+func test_the_scenario_mode_lessons_launch_now_that_the_evaluator_exists() -> void:
 	# This used to be `..._refuse_and_name_the_row_they_wait_for`, and the refusal was the
 	# honest form of PLAN.md 15's build order: scenario 3 playable at 15.1 + 15.3 + 15.5,
 	# with 15.2 unlocking the other two. 15.2 is built, so they start.
-	for folder in ["scenario_1", "scenario_2"]:
+	#
+	# SCENARIO 4 JOINED THEM ON 2026-09-06 and is the interesting one to have here: it is
+	# the first `scenario`-mode mission whose rows are not about the player's own economy,
+	# so it is the first that could be refused at load by a vocabulary gap (`owner: gaia`)
+	# rather than by a typo. A scenario that will not launch is exactly what
+	# `is_playable()` is for, and exactly what nothing else in this suite would notice.
+	for folder in ["scenario_1", "scenario_2", "scenario_4"]:
 		var s := _shipped(folder)
 		assert_not_null(s, folder)
 		if s == null:

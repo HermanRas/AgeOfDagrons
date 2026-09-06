@@ -1,26 +1,109 @@
 {
   "_note": [
-    "TEACHES DRAGON TAMING. Won by obtaining a dragon.",
+    "TEACHES THE DRAGON CLAIM (PLAN.md 13.2). Won by killing the mother AND holding the",
+    "nest until the hatchling grows.",
     "",
-    "This scenario is a bit different from the others.",
-    "You are not trying to destroy your opponent,",
-    "but rather to find and tame a dragon. The dragon",
-    "is located somewhere across the river, and you ",
-    "will need to build an army to get there.",
-    "The dragon is a neutral unit, so you will",
-    "need to attack it to tame it"
+    "⚠️ IT USED TO BE `last_man_standing`, AND THAT WAS A DIFFERENT MISSION FROM THE ONE ITS",
+    "OWN BRIEFING DESCRIBED. The file said 'Destroy The Dragon AND Tame the baby' and then",
+    "declared conquest, so the actual win was 'leave the passive opponent nothing' -- a",
+    "player could finish this scenario without ever crossing the river, and a player who did",
+    "everything the briefing asked would still be sitting there afterwards. PLAN.md 15.8",
+    "logged it as 'scenario 4's briefing promises a dragon its map has not got' and parked",
+    "the fix at 16.10; 13.2b made the whole rule real on 2026-09-06, so it is fixed here",
+    "instead.",
+    "",
+    "TWO WIN ROWS, ANDed, which is what multiple `win` rows mean (PLAN.md 11.8) and the",
+    "shape scenario 1 already uses. THE SECOND IMPLIES THE FIRST -- you cannot own a dragon",
+    "without having killed her -- and the first is written anyway, because it is the half of",
+    "the goal the player can finish in the first few minutes. Without it the tracker shows",
+    "one unticked line for six minutes after the fight is won, which reads as 'nothing I did",
+    "counted'.",
+    "",
+    "⚠️ `owner: \"gaia\"` IS WHY THIS SCENARIO NEEDED A LINE OF CODE AT ALL. The mother is a",
+    "UNIQUE unit and the obvious spelling is `subject: \"named_unit\"` -- which is refused",
+    "until 16.7's per-entity overrides exist, and rightly so. What she actually is, to",
+    "anything that can count today, is `unit.dragon` belonging to owner 0; and `owner` had",
+    "no way to say owner 0, because a player number below 1 is refused (it is a typo",
+    "everywhere else). So `ObjectiveDef.Owner` gained `GAIA`, appended for the wire's sake,",
+    "and `ObjectiveSystem._owners_for` answers it with the literal [0] rather than through",
+    "`Diplomacy` -- see that file's trap 1, which this deliberately does not weaken.",
+    "",
+    "⚠️ THE ONE WAY THIS SCENARIO CAN DEAD-END, RECORDED BECAUSE IT IS UNREACHABLE RATHER",
+    "THAN IMPOSSIBLE: if the mother dies to something that is not a player, row 1 ticks and",
+    "row 2 never can. `NestSystem._start_claims` requires `last_attacker_owner > 0`, so a",
+    "mother killed by gaia or by a debug destroy hatches nothing, and `claim_owner` is never",
+    "cleared -- there is no second chance at her. In play there is no route to it: wildlife",
+    "does not attack gaia (`Diplomacy`), and the only other killers are a falling building",
+    "and `DebugDestroyCommand`. Left unguarded on purpose. A guard would mean either",
+    "re-opening a spent claim or reviving her, and both are new rules for a case a real",
+    "player cannot reach.",
+    "",
+    "STARTS IN AGE 4, THE AGE OF DRAGONS, and that is not flavour: the army below is",
+    "castle-tier and the mission is a fight, not an economy. Scenario 2 is the age ladder's",
+    "lesson and this one must not repeat it -- six minutes of holding ground is long enough",
+    "without 500 food first.",
+    "",
+    "THE ARMY AND THE NEST ARE BOTH IN `map.json`, NOT IN THIS FILE. A saved map is the",
+    "per-scenario starting-entity list, and `MapGen.build_from` spawns exactly what it",
+    "lists. `dev_preview/preview_author_maps.gd` is what stamped them -- the nest and the",
+    "mother from `MapGenerator` itself (13.2a places one of each on every generated map),",
+    "the 155 units from that file's `GARRISONS` table. To change either, edit there and",
+    "re-run it with `--force --campaign HowToPlay --scenario scenario_4`. A `starting_units`",
+    "field HERE would be a number that does nothing until somebody remembered to re-author",
+    "the map, which is the seed trap wearing a different hat.",
+    "",
+    "⚠️ THE PLAYER OPENS AT 171/10 POPULATION and can train nothing until the army thins",
+    "out. That is `PopulationSystem`'s declared direction (report the truth, refuse only the",
+    "next order) and it is not a dead end -- losses free the cap. It is also not pretty, and",
+    "it is the first thing to look at on a playtest. Covering it means 33 houses or a",
+    "castle, and a castle trains and shoots, which would change the mission.",
+    "",
+    "THE OPPONENT IS STILL PASSIVE and is now almost scenery: it runs its economy, never",
+    "attacks, and cannot be the reason this is won or lost. Elimination is still the loss,",
+    "as it is on every map in this game, which is why no lose row is written."
   ],
+
   "name": "How To Find a Dragon and Tame It",
-  "description": "Somewhere across the river is a Dragons nest. Build an army, go and find it, Kill the Dragon and tame the baby Dragon.",
-  "message": "Objective: Destroy The Dragon AND Tame the baby.\n\nOverview: Train soldiers at the barracks, select them, and tap The Dragon to attack. Use the minimap to find the nest -- it is somewhere across the river.\n\nKilling the Dragon will reveal a baby in the nest.",
-  "mode": "last_man_standing",
-  "map": {
-    "type": "river",
-    "seed": 815103
-  },
-  "opponents": [
-    "passive"
+  "description": "A dragon guards her nest down by the river, midway between the two towns. Kill her, then hold the nest while her hatchling grows -- six minutes, and it is yours.",
+  "message": "Objective: Kill the mother dragon, then hold her nest until the hatchling grows.\n\nOverview: You start in the Age of Dragons with an army already at your town centre -- 100 elite swordsmen, 50 archers and 5 onagers. Drag a box around them to select them, then use the minimap to find the standing stones by the river, near the middle of the map.\n\nThe mother flies and hits hard. Send everything.\n\nWhen she dies a hatchling appears at the nest, and SIX MINUTES later it becomes your dragon. It is not yours until then: if the nest is destroyed, or the hatchling is killed, the claim is lost for good. Keep your army on the nest until the dragon takes wing.",
+
+  "mode": "scenario",
+
+  "_note_map": [
+    "THE MAP IS THE SAVED map.png BESIDE THIS FILE (2.4c, PLAN.md 11.3). `seed` is",
+    "PROVENANCE ONLY -- build_config() never calls MapGenerator, so a generator change",
+    "cannot move the nest this scenario is authored around.",
+    "",
+    "⚠️ THE BRIEFING NO LONGER SAYS 'ACROSS THE RIVER', AND THAT WAS MEASURED RATHER THAN",
+    "REWORDED FOR STYLE. `_place_nest` put the nest at (55, 55) with the starts at (65, 30)",
+    "and (30, 65), and this map's river is a broken diagonal band with dry gaps -- so the",
+    "line from player 1's start to the nest is 25 tiles of unbroken grass and crosses no",
+    "water at all. Sampled off map.png's R channel, which is the only channel that is data.",
+    "'Across the river' is how this file described a dragon it did not have; writing it",
+    "again about a dragon on the player's own bank would be the same defect at a smaller",
+    "size. The nest is on player 1's side, which is asymmetric and costs nothing here: the",
+    "opponent is Passive and is never going to contest it.",
+    "",
+    "THE SEED IS UNCHANGED AND THE TERRAIN CAME BACK IDENTICAL -- same size, same two",
+    "starts. What changed is five trees (the nest clears its own ground, `_claim_her_reach`)",
+    "plus the nest, the mother and the garrison. That is `_place_nest`'s documented claim",
+    "about not disturbing the RNG stream, confirmed on a real map."
   ],
-  "starting_age": 1,
-  "objectives": []
+  "map": { "type": "river", "seed": 815103 },
+
+  "opponents": ["passive"],
+  "starting_age": 4,
+
+  "objectives": [
+    {
+      "subject": "unit", "id": "unit.dragon", "owner": "gaia",
+      "compare": "==", "value": 0, "output": "win",
+      "text": "Kill the mother dragon"
+    },
+    {
+      "subject": "unit", "id": "unit.dragon", "owner": "self",
+      "compare": "==", "value": 1, "output": "win",
+      "text": "Hold the nest and claim her hatchling"
+    }
+  ]
 }

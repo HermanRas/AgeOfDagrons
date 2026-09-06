@@ -1982,11 +1982,28 @@ from the rest of the RTS.
   player OWNS, so a dragon handed to somebody knocked out four minutes ago un-ends a finished
   match, 360 s after anyone was watching. **Anything that hands a player an entity on a timer owes
   the same check.**
+- **THE PHASE HAS A FIXTURE NOW: How To Play scenario 4** (2026-09-06, on the owner's
+  instruction). Age 4, an army on the map, one nest, one mother, `mode: scenario` with two ANDed
+  rows — *kill the mother*, then *own the dragon*. `PreviewScenarioWin.tscn` wins it on tick
+  **3602**, waiting out all 3600 ticks rather than spawning a dragon. **It is where the two
+  provisional numbers get judged**, with one caveat worth knowing before reading a play-test as a
+  verdict: against a **Passive** opponent it cannot answer the *denial* half of either number,
+  because nobody contests the nest. Denial still wants a live opponent.
+- ⚠️ **A SCENARIO COUNTING A GAIA UNIT NEEDED A NEW OWNER, AND THE OBVIOUS SPELLING IS THE WRONG
+  ONE.** *"Kill the mother dragon"* is not `subject: "named_unit"` (16.7's, refused at load) and
+  not `owner: 0` (a player index below 1 is a typo everywhere else and stays refused). It is
+  `owner: "gaia"`, appended to `ObjectiveDef.Owner` because owner travels as an int, resolved as
+  the **literal `[0]`** and deliberately NOT through `Diplomacy` — `allied(0, 0)` is false, so
+  gaia routed through `_side_of` lands in the ENEMY bucket and *leave the enemy nothing* means
+  *shoot every deer* again. `age` and `resource` refuse gaia at load: `player_for(0)` is null, and
+  0 is a value a comparison PASSES.
 - **Still open, and both are the owner's:** the nest's 1200 hp and the hatchling's 300/8-8 want
   playing rather than writing, and **nothing about the claim is on the wire** — a nest panel
   saying whose claim it is and how long is left is a real feature whose first question is that
   cost (`SnapshotSystem` groups `updated` by sorted field names, so two ints on `SimBuilding` is
-  two ints on every building in the game).
+  two ints on every building in the game). In scenario 4 the **briefing** carries that
+  information instead, which is the cheapest substitute there is and the reason 13.2c is not
+  urgent.
 
 ### Where the queue points
 
@@ -1998,8 +2015,10 @@ copy:
 1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2 and 16.4b are done and the
    owner has authored a map in it. **Next is 16.4a (File ▸ Open), then 16.3 (the palette)**, in
    that order.
-2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". Three of the five
-   scenarios share one map, so one good duel map covers three rows.
+2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
+   share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
+   scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep
+   the nest and the mother**, which `test_campaigns` asserts.
 
 Then, in no forced order: Phase 14's AI enemy-blindness; the AI researching anything at all;
 11.2 King of the Hill and Trophy (whose last blocker went with 13.2b's sprite scaling); 12.1b

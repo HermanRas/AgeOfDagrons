@@ -288,14 +288,114 @@ func test_scenario_three_wins_by_conquest_and_declares_nothing() -> void:
 
 
 func test_every_shipped_scenario_pins_a_seed_and_a_message() -> void:
-	for folder in ["scenario_1", "scenario_2", "scenario_3"]:
-		var s := _shipped(folder)
-		assert_not_null(s, folder)
-		if s == null:
-			continue
-		assert_ne(s.seed, 0, "%s pins a seed" % folder)
-		assert_false(s.message.is_empty(), "%s explains itself on load" % folder)
-		assert_false(s.description.is_empty(), "%s has a description for the screen" % folder)
+	# DERIVED FROM THE CAMPAIGN, not from a list of three folders. The hardcoded list was
+	# written when there were three missions and was still asserting three after the owner
+	# added two -- so scenarios 4 and 5 could have shipped with no briefing at all and this
+	# test would have passed. Same weakness `test_the_real_campaign_has_no_problems_at_all`
+	# had its hardcoded count taken out for.
+	var campaign: CampaignDef = _by_folder(Campaigns.new().discover()).get("HowToPlay")
+	assert_not_null(campaign)
+	if campaign == null:
+		return
+	assert_true(campaign.scenarios.size() >= 5, "five missions have been authored")
+	for s in campaign.scenarios:
+		assert_ne(s.seed, 0, "%s pins a seed" % s.folder)
+		assert_false(s.message.is_empty(), "%s explains itself on load" % s.folder)
+		assert_false(s.description.is_empty(), "%s has a description for the screen" % s.folder)
+
+
+# ── scenario 4, the dragon claim ────────────────────────────────────────────────
+
+func test_scenario_four_wins_by_the_claim_and_not_by_conquest() -> void:
+	# ⚠️ **THIS IS THE ROW PLAN.md 15.8 LOGGED AS A CONTENT GAP** -- *"scenario 4's briefing
+	# promises a dragon its map has not got"* -- and until 2026-09-06 the mission also
+	# WON BY CONQUEST while its briefing described a hunt. A player could finish it without
+	# crossing the map, and a player who did everything the briefing asked was not finished.
+	var s := _shipped("scenario_4")
+	assert_not_null(s)
+	if s == null:
+		return
+	assert_eq(s.mode, ScenarioDef.Mode.SCENARIO,
+			"the claim decides this, not leaving the passive opponent nothing")
+	assert_true(s.is_playable(), _joined(s.problems_or_self()))
+
+	# THE LAST AGE, and the number is load-bearing rather than flavour: the army the map
+	# grants is castle-tier, and scenario 2 is where the age ladder is taught.
+	assert_eq(s.starting_age, 4, "the Age of Dragons")
+
+	var wins := s.win_objectives()
+	assert_eq(wins.size(), 2, "two halves, ANDed: kill her, then hold the nest")
+
+	# ROW 1 IS THE MOTHER, WHO BELONGS TO NOBODY. The obvious spelling for a unique unit is
+	# `named_unit`, which is refused until 16.7 -- so she is counted as what she is, a
+	# `unit.dragon` owned by gaia, going to zero.
+	assert_eq(wins[0].subject, ObjectiveDef.Subject.UNIT)
+	assert_eq(wins[0].id, &"unit.dragon")
+	assert_eq(wins[0].owner, ObjectiveDef.Owner.GAIA)
+	assert_eq(wins[0].compare, ObjectiveDef.Compare.EXACTLY)
+	assert_eq(wins[0].value, 0)
+
+	# ROW 2 IS THE PAYOUT, and it is the player's own dragon rather than gaia's hatchling:
+	# `NestSystem` keeps the baby gaia's for the whole 360 s window on purpose, so a row
+	# counting the hatchling would tick the moment the mother fell and the six minutes the
+	# scenario is about would decide nothing.
+	assert_eq(wins[1].subject, ObjectiveDef.Subject.UNIT)
+	assert_eq(wins[1].id, &"unit.dragon")
+	assert_eq(wins[1].owner, ObjectiveDef.Owner.SELF)
+	assert_eq(wins[1].value, 1)
+
+	for o in wins:
+		assert_false(o.text.is_empty(), "the tracker has a line to draw for every row")
+
+
+func test_scenario_fours_map_carries_the_dragon_its_briefing_PROMISES() -> void:
+	# ⚠️ **THE MOST IMPORTANT TEST FOR THIS SCENARIO, AND IT READS THE MAP RATHER THAN THE
+	# ROSTER.** Every figure below is a promise the briefing makes to the player in prose,
+	# and all of them live in `map.json` -- so `scenario.json` and the map can drift apart
+	# without a single line of code changing. Two ways that has already happened once:
+	# 15.8's content gap (a briefing describing a dragon the map had never had), and
+	# scenario 1's fifteenth villager (arithmetic from the roster instead of from the map).
+	#
+	# It is also the guard on the first row's `== 0`. *"Gaia has no dragons"* is TRUE on a
+	# map with no dragon on it, so a scenario 4 whose map lost its mother would announce
+	# that half of its goal as complete on tick 1 -- `ObjectiveSystem`'s trap 3, arriving
+	# through authored content instead of through an unimplemented subject.
+	var s := _shipped("scenario_4")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var data := s.map_data(problems)
+	assert_not_null(data, _joined(problems))
+	if data == null:
+		return
+
+	var counts := {}
+	for e in data.entities:
+		var key := "%s p%d" % [e.get("def_id", &""), int(e.get("player", 0))]
+		counts[key] = int(counts.get(key, 0)) + 1
+
+	# ONE NEST AND ONE MOTHER, GAIA'S. 13.2a made this MapGen's guarantee rather than a
+	# `UnitDef.limit`, and "one dragon per map" is the whole of it -- so a second of either
+	# would not be caught anywhere else in the game.
+	assert_eq(int(counts.get("building.dragon_nest p0", 0)), 1, "exactly one nest, gaia's")
+	assert_eq(int(counts.get("unit.dragon p0", 0)), 1, "exactly one mother, gaia's")
+
+	# THE ARMY THE BRIEFING NAMES BY NUMBER. Player 1 is the human (`build_config` numbers
+	# them that way), and these three counts are quoted verbatim in `message`.
+	assert_eq(int(counts.get("unit.elite_swordsman p1", 0)), 100)
+	assert_eq(int(counts.get("unit.archer p1", 0)), 50)
+	assert_eq(int(counts.get("unit.onager p1", 0)), 5)
+	for named in ["100 elite swordsmen", "50 archers", "5 onagers"]:
+		assert_true(s.message.contains(named),
+				"the briefing still says '%s': %s" % [named, s.message])
+
+	# AND NOBODY IS STANDING ON ANYBODY. 155 units stamped in around a base is exactly
+	# where two entities end up on one tile, which fails the map -- `preview_author_maps`
+	# re-validates after stamping them, and this is the same claim asserted about the file
+	# that actually shipped.
+	assert_eq(MapValidator.problems(data), [] as Array[String],
+			"the saved map still validates with the garrison on it")
 
 
 # ── the three subjects that must be REFUSED, not defaulted ──────────────────────
@@ -361,6 +461,69 @@ func test_an_owner_may_be_a_name_or_a_player_number_and_the_type_survives() -> v
 	assert_eq(indexed.owner, ObjectiveDef.Owner.INDEX)
 	assert_eq(indexed.owner_index, 3)
 	assert_eq(problems, [] as Array[String])
+
+
+func test_gaia_is_a_spelling_and_owner_zero_is_still_a_typo() -> void:
+	# The two must not collapse into each other. `owner: 0` is a player number below 1,
+	# which is a mistake everywhere in this game, and it stays refused; `"gaia"` is an
+	# author saying "the things that belong to nobody" on purpose. Scenario 4's first row
+	# is the reason the second exists at all.
+	var problems: Array[String] = []
+	var named := ObjectiveDef.from_dict({"subject": "unit", "id": "unit.dragon",
+			"owner": "gaia", "compare": "==", "value": 0}, problems)
+	assert_not_null(named, _joined(problems))
+	if named == null:
+		return
+	assert_eq(named.owner, ObjectiveDef.Owner.GAIA)
+	assert_eq(problems, [] as Array[String])
+
+	var zero_problems: Array[String] = []
+	assert_null(ObjectiveDef.from_dict({"subject": "unit", "owner": 0,
+			"compare": "==", "value": 0}, zero_problems))
+	assert_true(zero_problems[0].contains("is not a player"), zero_problems[0])
+
+
+func test_gaia_survives_the_wire_at_the_position_it_was_appended_at() -> void:
+	# ⚠️ `owner` TRAVELS AS AN INT. A member inserted beside SELF rather than appended
+	# would renumber ENEMY, ALLY and INDEX and silently reinterpret every objective already
+	# in flight -- the same rule `RESOURCE` carries on the `Subject` enum. Asserted by
+	# VALUE, because that is the thing a reordering breaks and a name would hide.
+	assert_eq(int(ObjectiveDef.Owner.SELF), 0)
+	assert_eq(int(ObjectiveDef.Owner.ENEMY), 1)
+	assert_eq(int(ObjectiveDef.Owner.ALLY), 2)
+	assert_eq(int(ObjectiveDef.Owner.INDEX), 3)
+	assert_eq(int(ObjectiveDef.Owner.GAIA), 4, "appended, never inserted")
+
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "unit", "id": "unit.dragon",
+			"owner": "gaia", "compare": "==", "value": 0, "text": "Kill her"}, problems)
+	assert_not_null(o)
+	if o == null:
+		return
+	var back := ObjectiveDef.from_wire(o.to_dict())
+	assert_eq(back.owner, ObjectiveDef.Owner.GAIA)
+	assert_eq(back.id, &"unit.dragon")
+	assert_eq(back.compare, ObjectiveDef.Compare.EXACTLY)
+	assert_eq(back.text, "Kill her")
+
+
+func test_gaia_is_refused_for_the_subjects_that_read_a_player() -> void:
+	# ⚠️ **TRAP 3 COMING BACK THROUGH THE OWNER AXIS.** `w.player_for(0)` is null, so an
+	# `age` row about gaia would measure 0 and a `resource` row would measure 0 -- and both
+	# are values a comparison PASSES. `<= 1` against "gaia's age" is true on tick 1 of every
+	# match, forever. Refused at load, in the same place and for the same reason the three
+	# unbuilt subjects are.
+	for subject in ["age", "resource"]:
+		var problems: Array[String] = []
+		var d := {"subject": subject, "owner": "gaia", "compare": "<=", "value": 1}
+		if subject == "resource":
+			d["id"] = "food"          # a resource row must name a kind; that is a separate rule
+		assert_null(ObjectiveDef.from_dict(d, problems),
+				"'%s' must not be askable about gaia" % subject)
+		assert_eq(problems.size(), 1, "one reason for %s: %s" % [subject, _joined(problems)])
+		assert_true(problems[0].contains("gaia is not a player"), problems[0])
+		assert_true(problems[0].contains(subject),
+				"the message names the subject to change: %s" % problems[0])
 
 
 func test_an_id_less_row_means_any_of_that_subject() -> void:

@@ -101,6 +101,10 @@ func _drive(c: CampaignDef, s: ScenarioDef) -> void:
 			w.step()
 			if w.match_over:
 				break
+		# A CLAIM IN FLIGHT IS SOMETHING THE WORLD OWES THE PLAYER, so it is waited out
+		# rather than shortcut. See `_settle`.
+		if not w.match_over:
+			_settle(w)
 		print("    after row %d (%s): %s" % [i, _describe_row(o), _state(w, p)])
 		if w.match_over:
 			break
@@ -121,6 +125,14 @@ func _drive(c: CampaignDef, s: ScenarioDef) -> void:
 ## villager is the same entity a trained one is, which is the only property that matters
 ## to `_census`.
 func _satisfy(w: SimWorld, p: SimPlayer, o: ObjectiveDef) -> void:
+	# GAIA'S SIDE OF THE ROW IS KILLED, NOT SPAWNED, and it is checked before `subject`
+	# because it is the OWNER that decides the verb here. `_spawn_up_to` would count the
+	# hero's dragons against a row about the mother's, find 0, decide the row was already
+	# satisfied, and report a scenario that never ticked -- which is scenario 4's first row
+	# exactly.
+	if o.owner == ObjectiveDef.Owner.GAIA:
+		_kill_gaia_down_to(w, p, o)
+		return
 	match o.subject:
 		ObjectiveDef.Subject.UNIT:
 			_spawn_up_to(w, p, o, true)
@@ -158,6 +170,84 @@ func _spawn_up_to(w: SimWorld, p: SimPlayer, o: ObjectiveDef, units: bool) -> vo
 					origin + Vector2i(i * 6, 0), SimBuilding.Phase.COMPLETE, true)
 	print("      spawned %d more %s (had %d, wanted %d)"
 			% [want - have, o.id, have, want])
+
+
+## Bring gaia's count of `o.id` down to `o.value` by killing them, credited to the hero.
+##
+## ⚠️ **`take_damage` WITH THE HERO'S OWNER ID, AND THAT ARGUMENT IS THE WHOLE POINT.**
+## Scenario 4's win does not come from the mother being dead -- it comes from
+## `NestSystem._start_claims` reading `last_attacker_owner` and hatching a claim for
+## whoever landed the blow. `alive = false`, which is what `_drive_conquest` does two
+## functions down, would kill her and drop **nothing**: `last_attacker_owner` stays
+## `NO_ATTACKER`, the nest never hatches, and the second row could never be satisfied. So
+## this is the crudest means that is still the REAL mechanism, which is this file's rule.
+##
+## AT_LEAST IS NOT SATISFIABLE FROM HERE and says so rather than doing nothing. *"Gaia must
+## have at least one dragon"* is a row about the map being right, not about anything a
+## driver can arrange, and silently leaving it would print a scenario that did not win with
+## no line explaining which step was skipped.
+func _kill_gaia_down_to(w: SimWorld, p: SimPlayer, o: ObjectiveDef) -> void:
+	if o.compare == ObjectiveDef.Compare.AT_LEAST and o.value > 0:
+		print("      CANNOT SATISFY '%s >= %d' for gaia -- that is a fact about the map"
+				% [o.id, o.value])
+		return
+	var victims: Array[SimUnit] = []
+	for e in w.entities.values():
+		if not (e is SimUnit) or not e.alive or e.owner_id != 0:
+			continue
+		if o.id.is_empty() or e.def_id == o.id:
+			victims.append(e as SimUnit)
+	# Determinism is not required of a dev_preview, but a stable order makes two runs
+	# comparable, which is the only reason anybody reads this scene's output twice.
+	victims.sort_custom(func(a: SimUnit, b: SimUnit) -> bool: return a.id < b.id)
+
+	var killed := 0
+	while victims.size() - killed > o.value and killed < victims.size():
+		var v := victims[killed]
+		v.take_damage(v.hp, 0, p.id)
+		killed += 1
+	print("      killed %d of gaia's %s, credited to player %d (had %d, row wants %d)"
+			% [killed, o.id if not o.id.is_empty() else &"units", p.id, victims.size(),
+			o.value])
+
+
+## Step until nothing is mid-claim, up to the length of one claim plus the usual grace.
+##
+## ## WHY THE DRIVER WAITS SIX MINUTES INSTEAD OF SPAWNING A DRAGON
+##
+## `_spawn_up_to` would satisfy scenario 4's second row in one line, and it would prove
+## nothing: the row is *"you own a dragon"*, and handing the player one skips the entire
+## feature the scenario exists to teach. What is being checked here is the wiring between a
+## `scenario.json` and a running match, and for this scenario the wiring runs **through
+## `NestSystem`** -- the hatch, the countdown, the handover. So the claim is played out at
+## the real rate, 3600 ticks of it, and the row satisfies itself.
+##
+## GENERIC RATHER THAN KEYED TO SCENARIO 4. Any scenario whose goal is a thing the world
+## hands over on a timer wants this, and the condition is read off the world (*is a claim
+## running?*) rather than off a folder name.
+##
+## BOUNDED, because a driver that cannot finish is worse than one that reports a failure: a
+## claim abandoned mid-count (the nest razed, the claimant defeated) clears
+## `claim_ticks_left` and this returns immediately, but a bug that left it counting forever
+## would otherwise hang the run.
+func _settle(w: SimWorld) -> void:
+	if not _claim_running(w):
+		return
+	var limit := NestSystem.GROW_TICKS + GRACE_TICKS
+	print("      a claim is running -- stepping up to %d ticks for it to mature" % limit)
+	for t in range(limit):
+		w.step()
+		if w.match_over or not _claim_running(w):
+			break
+	if _claim_running(w):
+		print("      !!! still mid-claim after %d ticks" % limit)
+
+
+func _claim_running(w: SimWorld) -> bool:
+	for e in w.entities.values():
+		if e is SimBuilding and (e as SimBuilding).claim_ticks_left >= 0:
+			return true
+	return false
 
 
 ## Kill everything the opponents own, which is how a `last_man_standing` scenario ends.

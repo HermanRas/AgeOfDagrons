@@ -65,7 +65,23 @@ enum Subject { UNIT, BUILDING, AGE, AREA, NAMED_UNIT, TICKS, RESOURCE }
 ## have freely: the rule runs on the server, which can see the whole world. 15.2 routes
 ## `ENEMY`/`ALLY` through `Diplomacy` and passes the team table -- where the argument is
 ## REQUIRED with no default, for PLAN.md 4.13's reason.
-enum Owner { SELF, ENEMY, ALLY, INDEX }
+##
+## ⚠️ **`GAIA` IS APPENDED, NOT INSERTED, FOR `RESOURCE`'s REASON** -- `owner` travels as an
+## int in `to_dict()`, so a member slipped in beside `SELF` would renumber the rest and
+## silently reinterpret every objective already recorded or in flight.
+##
+## **AND IT DOES NOT WEAKEN "GAIA IS NOT AN ENEMY"** (`ObjectiveSystem`'s trap 1), which is
+## the rule that keeps *leave the enemy nothing* from meaning *shoot every deer*. That rule
+## is about what `ENEMY` resolves to and it is unchanged: `ENEMY` and `ALLY` are still
+## resolved from `SimWorld.players`, which gaia has no row in. This is the opposite
+## direction -- an author naming owner 0 **on purpose**, once, because the thing they want
+## counted belongs to nobody. Scenario 4 is the first: *"kill the mother dragon"* is
+## `unit.dragon`, gaia's, `== 0`, and there was no way to say it.
+##
+## `owner: 0` STAYS REFUSED and is not a synonym for this. "Player ids start at 1" is still
+## true, an author who typed 0 for a player number has made a mistake, and a spelling
+## (`"gaia"`) says what an index cannot.
+enum Owner { SELF, ENEMY, ALLY, INDEX, GAIA }
 
 ## Integer comparisons only. Spelled as words rather than kept as `">="` so nothing
 ## downstream ever compares strings to decide what a rule means.
@@ -102,7 +118,20 @@ const _NOT_YET := {
 	Subject.TICKS: "16.6, the authored time limit",
 }
 
-const _OWNERS := {"self": Owner.SELF, "enemy": Owner.ENEMY, "ally": Owner.ALLY}
+const _OWNERS := {"self": Owner.SELF, "enemy": Owner.ENEMY, "ally": Owner.ALLY,
+	"gaia": Owner.GAIA}
+
+## Subjects that read a `SimPlayer` rather than counting entities, and therefore cannot be
+## asked about gaia.
+##
+## ⚠️ **THE REFUSAL IS THE WHOLE COST OF ADDING `GAIA` AND IT IS WORTH SPELLING OUT.**
+## `w.player_for(0)` is null -- gaia has no row in `players` -- so `_age_of` would answer 0
+## and `_stock_of` would answer 0 for it. Both are values a comparison PASSES: `<= 1`
+## against "gaia's age" is true, and `<= 500` against "gaia's food" is true, on tick 1,
+## forever. That is trap 3 (*`== 0` is a comparison an unimplemented subject passes*) coming
+## back through the OWNER axis instead of the subject one, so it is refused at load in
+## exactly the same place and for exactly the same reason.
+const _NOT_ABOUT_GAIA: Array[Subject] = [Subject.AGE, Subject.RESOURCE]
 
 const _COMPARES := {">=": Compare.AT_LEAST, "<=": Compare.AT_MOST, "==": Compare.EXACTLY}
 
@@ -244,10 +273,19 @@ func _read_owner(d: Dictionary, problems: Array[String]) -> bool:
 
 	var key := str(raw).to_lower()
 	if not _OWNERS.has(key):
-		problems.append("unknown owner '%s' (expected self, enemy, ally or a player number)"
-				% key)
+		problems.append("unknown owner '%s'"
+				% key + " (expected self, enemy, ally, gaia or a player number)")
 		return false
 	owner = _OWNERS[key]
+
+	# See `_NOT_ABOUT_GAIA`. Reached with `subject` already read -- `from_dict` does that
+	# first -- so the message can name both halves of the combination, which is what the
+	# author has to change.
+	if owner == Owner.GAIA and _NOT_ABOUT_GAIA.has(subject):
+		problems.append("owner 'gaia' cannot be asked about '%s'"
+				% _SUBJECTS.find_key(subject)
+				+ " -- gaia is not a player, so it has no age and holds no resources")
+		return false
 	return true
 
 

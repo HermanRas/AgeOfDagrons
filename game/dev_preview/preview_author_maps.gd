@@ -25,6 +25,39 @@
 ##       [-- --force] [--campaign HowToPlay] [--scenario scenario_3]
 extends Node
 
+## Armies a scenario starts its HUMAN with, stamped into the saved map after generation.
+## Keyed `"<campaign folder>/<scenario folder>"`; absent means the ordinary opening.
+##
+## ## WHY THE ARMY IS IN THE MAP AND NOT IN `scenario.json`
+##
+## A saved map **already is** the per-scenario starting-entity list -- `MapGen.build_from`
+## spawns exactly what it lists, resolving the 1-based player index as it goes -- so putting
+## the army there needs no runtime code at all, and it is the form Phase 16's MapMaker will
+## author anyway. A `starting_units` field in `scenario.json` would be a second mechanism
+## for the same thing, and a worse one: the map is what a launch reads, so the field would
+## be a number in a file that **does nothing until somebody re-runs this tool**. That is a
+## documented lie waiting to happen, and it is the same shape as the `seed` trap this whole
+## file exists to close -- *the map is the authority; everything beside it is provenance*.
+##
+## So this table is the authoring record, `--force` re-applies it, and `test_campaigns`
+## asserts the saved map really carries what the briefing promises.
+##
+## ⚠️ **THE POPULATION CAP IS NOT RAISED TO MATCH, DELIBERATELY.** 155 units against a town
+## centre's 10 is a HUD reading of `171/10` for as long as the army is alive, and no
+## training is possible until losses bring it back under. That is `PopulationSystem`'s
+## declared direction (*report the truth, refuse only the NEXT order*) rather than a
+## defect, and it is not a dead end: the army dying frees the cap, so the player can always
+## rebuild. Covering it would mean either 33 houses of clutter or castles, which train and
+## shoot and would change the mission. **The owner's call, and it wants looking at on the
+## first playtest.**
+const GARRISONS := {
+	"HowToPlay/scenario_4": [
+		[&"unit.elite_swordsman", 100],
+		[&"unit.archer", 50],
+		[&"unit.onager", 5],
+	],
+}
+
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -107,6 +140,30 @@ func _author(s: ScenarioDef, force: bool) -> String:
 				% [s.folder, "; ".join(PackedStringArray(map_problems))])
 		return "failed"
 
+	# THE GARRISON GOES IN AFTER THE VALIDATOR HAS ALREADY PASSED THE MAP, so it is
+	# re-validated below rather than trusted. `MapGenerator.generate` runs `MapValidator`
+	# itself and writes the verdict into `meta.problems`, which is what was just checked --
+	# a map with 155 entities added since is not the map that was checked.
+	var garrison := GARRISONS.get("%s/%s" % [s.campaign_folder, s.folder], []) as Array
+	if not garrison.is_empty():
+		var placed := _garrison(data, garrison)
+		if placed < 0:
+			print("  ! %-14s no room for the garrison near player 1's start" % s.folder)
+			return "failed"
+		print("    + garrison: %d units at player 1's start" % placed)
+
+		# RE-RUN, and not because units are expected to break anything -- they are not
+		# blocking and they are not resources, so connectivity and `MIN_NEARBY` cannot move.
+		# It is the OVERLAP count that matters: a unit's tile is claimed as far as placement
+		# goes, and 155 of them stamped near a base is exactly where two entities end up on
+		# one tile. An overlapping map retries eight times in the generator and hands back an
+		# unplayable one; stamped in afterwards there is nothing to retry, so it has to be
+		# caught here or it ships.
+		var after := MapValidator.problems(data)
+		if not after.is_empty():
+			print("  ! %-14s the garrison broke the map: %s" % [s.folder, "; ".join(after)])
+			return "failed"
+
 	var was := s.has_map()
 	var problems := MapFile.save(data, s.dir, {
 		"name": s.name,
@@ -136,6 +193,71 @@ func _author(s: ScenarioDef, force: bool) -> String:
 		print("    ! round trip changed the terrain -- the PNG is not lossless here")
 		return "failed"
 	return "written"
+
+
+## Stand `spec`'s units on free ground around player 1's start. Returns how many were
+## placed, or **-1 if it could not place every one of them**.
+##
+## ALL OR NOTHING, because the briefing names the numbers. Placing 94 of 100 swordsmen
+## because the ground ran out is a mission that is quietly harder than the one that was
+## authored, and the only symptom is a player losing a fight they were meant to win.
+##
+## RINGS OUTWARD FROM THE START, in a fixed order, so the same table produces the same map
+## every time -- no RNG is drawn here at all, which is what keeps this step from disturbing
+## the generator's stream the way `_place_nest` had to be careful not to.
+##
+## ⚠️ **A UNIT'S TILE IS CLAIMED EVEN THOUGH A UNIT BLOCKS NOTHING.** `MapData` says so at
+## `footprint_rect_of` and `MapValidator._overlapping_entities` enforces it: two villagers
+## must not be written onto one tile. So `claimed` grows as we go, and the town centre's
+## 10x10 and every resource node in the opening are already in it.
+##
+## SIZE_CLASS 0 and PLAYER 1: the human. A garrison for an opponent would want the player
+## index passed in, and no scenario has asked for one -- when one does, that is the change,
+## not a second function.
+func _garrison(data: MapData, spec: Array) -> int:
+	if data.starts.is_empty():
+		return -1
+	var start: Vector2i = data.starts[0]
+	var claimed := data.claimed_tiles()
+
+	# Flattened first, so one walk outward places the whole army rather than one walk per
+	# def -- which would put the archers in a ring outside the swordsmen and the onagers
+	# outside them again, and 155 units is far enough out for that to be a visible band.
+	var wanted: Array[StringName] = []
+	for row in spec:
+		var def_id: StringName = row[0]
+		if GameDataRegistry.unit(def_id) == null:
+			print("    ! no such unit as '%s'" % def_id)
+			return -1
+		for i in range(int(row[1])):
+			wanted.append(def_id)
+
+	var at := 0
+	for radius in range(1, maxi(data.size.x, data.size.y)):
+		for t in _ring(start, radius):
+			if at >= wanted.size():
+				break
+			if claimed.has(t) or not data.is_ground_passable(t):
+				continue
+			claimed[t] = true
+			data.add_entity(wanted[at], 1, t)
+			at += 1
+		if at >= wanted.size():
+			return at
+	return -1
+
+
+## The tiles exactly `radius` from `centre` in Chebyshev distance, clockwise from the
+## top-left corner. A ring rather than a filled square so each radius is visited once.
+func _ring(centre: Vector2i, radius: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for x in range(centre.x - radius, centre.x + radius + 1):
+		out.append(Vector2i(x, centre.y - radius))
+		out.append(Vector2i(x, centre.y + radius))
+	for y in range(centre.y - radius + 1, centre.y + radius):
+		out.append(Vector2i(centre.x - radius, y))
+		out.append(Vector2i(centre.x + radius, y))
+	return out
 
 
 func _arg(name: String, fallback: String) -> String:

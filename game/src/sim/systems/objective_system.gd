@@ -62,6 +62,14 @@
 ## entities, so gaia is excluded by construction rather than by a clause somebody could
 ## delete. `Diplomacy`'s header is the longer version of this: *"gaia is not one thing"*.
 ##
+## **`Owner.GAIA` (2026-09-06) DOES NOT WEAKEN THAT, AND THE DIFFERENCE IS WHO DECIDED.**
+## An author may now name owner 0 outright, because scenario 4 needs *"kill the mother
+## dragon"* and there was no way to say it. What trap 1 forbids is gaia arriving in a set
+## the author did not ask for; `GAIA` is gaia arriving because they typed it. The
+## implementation keeps them apart on purpose: it returns the literal `[0]` and is NOT
+## routed through `Diplomacy`, whose `allied(0, 0)` is false -- so gaia going through
+## `_side_of` would come back as an ENEMY, which is trap 1 all over again by a new road.
+##
 ## **2. AN UNPOPULATED WORLD MUST DECIDE NOTHING.** Same example, same rule: in a world
 ## with no entities in it, "the enemy has 0 units" is TRUE, so a naive evaluator declares
 ## victory on tick 1 of every world that has not been stood up yet -- which is most of
@@ -366,6 +374,10 @@ static func _age_of(w: SimWorld, ids: Array[int]) -> int:
 ## alliances do -- *"player 3 must survive"*, which is an escort mission's shape. It is
 ## per-OBJECTIVE, which is why this takes `o` and is not one table built per tick.
 ##
+## `GAIA` is owner 0 named outright -- the wildlife, the trees and the dragon nest. See the
+## header's trap 1 for why it is a spelling rather than an index, and why it deliberately
+## does not go through `Diplomacy`.
+##
 ## An index nobody occupies resolves to a player who owns nothing and has no age, so its
 ## counts come back 0 -- the same answer as a player who lost everything. That ambiguity
 ## is left alone on purpose: refusing an unoccupied index belongs at LOAD, where the
@@ -373,6 +385,14 @@ static func _age_of(w: SimWorld, ids: Array[int]) -> int:
 ## are to guess or to end the match.
 static func _owners_for(w: SimWorld, viewer: SimPlayer, o: ObjectiveDef) -> Array[int]:
 	match o.owner:
+		ObjectiveDef.Owner.GAIA:
+			# OWNER 0, NAMED OUTRIGHT, which is the one thing trap 1 does not forbid -- see
+			# `ObjectiveDef.Owner`. It is not routed through `Diplomacy` and must not be:
+			# `allied(0, 0)` is FALSE by that class's own rule (*"gaia allies with nobody"*),
+			# so gaia would fall into `_side_of`'s not-allied bucket and be counted as an
+			# ENEMY -- which is the exact meaning trap 1 exists to prevent. The two axes stay
+			# separate: `ENEMY`/`ALLY` come off `w.players`, `GAIA` is the literal 0.
+			return [0] as Array[int]
 		ObjectiveDef.Owner.INDEX:
 			return [o.owner_index] as Array[int]
 		ObjectiveDef.Owner.ALLY:

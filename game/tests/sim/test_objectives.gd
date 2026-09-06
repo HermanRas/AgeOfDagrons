@@ -277,6 +277,63 @@ func test_gaia_is_not_an_enemy_so_leave_the_enemy_nothing_is_not_shoot_every_dee
 	assert_true(mine.alive)
 
 
+func test_a_gaia_row_counts_gaia_and_nobody_else() -> void:
+	# Scenario 4's first row: *"kill the mother dragon"*, which is `unit.dragon` belonging
+	# to owner 0 going to zero. The obvious spelling is `named_unit` and that is refused
+	# until 16.7, so this is what an author has instead.
+	w = _world([_row({"subject": "unit", "id": "unit.dragon", "owner": "gaia",
+			"compare": "==", "value": 0})])
+	_both_armed()
+	var mother := w.spawn_unit(&"unit.dragon", 0, Vector2i(24, 24))
+	# ONE OF EACH SIDE'S OWN, so a row that resolved gaia to "everybody" or to "not mine"
+	# would come back with 3 rather than 1 and the assertion below would name it.
+	w.spawn_unit(&"unit.dragon", 1, Vector2i(11, 11))
+	w.spawn_unit(&"unit.dragon", 2, Vector2i(31, 31))
+	w.step()
+	assert_eq(w.player_for(1).objective_progress[0], 1,
+			"gaia's one dragon, not the two the players are holding")
+	assert_false(w.match_over)
+
+	mother.alive = false
+	w.step()
+	assert_eq(w.player_for(1).objective_progress[0], 0, "a corpse belongs to nobody")
+	assert_true(w.match_over, "and the row is met with both players' dragons still flying")
+	assert_eq(w.winner_id, 1)
+
+
+func test_a_gaia_row_is_not_reached_through_diplomacy() -> void:
+	# ⚠️ **THE ONE WAY `Owner.GAIA` COULD HAVE RE-OPENED TRAP 1.** `Diplomacy.allied(0, 0)`
+	# is FALSE by that class's own rule -- *gaia allies with nobody* -- so implementing GAIA
+	# by feeding 0 through `_side_of` would have filed it under NOT-ALLIED, which is the
+	# enemy bucket. The row would then have counted every player's things as well as gaia's.
+	# Two dragons per player against gaia's one is what tells the two apart.
+	w = _world([_row({"subject": "unit", "id": "unit.dragon", "owner": "gaia",
+			"compare": "==", "value": 1})])
+	_both_armed()
+	w.spawn_unit(&"unit.dragon", 0, Vector2i(24, 24))
+	for i in range(2):
+		w.spawn_unit(&"unit.dragon", 1, Vector2i(11 + i, 11))
+		w.spawn_unit(&"unit.dragon", 2, Vector2i(31 + i, 31))
+	w.step()
+	assert_eq(w.player_for(1).objective_progress[0], 1,
+			"exactly gaia's, with four others on the map")
+
+
+func test_gaia_owns_buildings_too_so_the_nest_is_countable() -> void:
+	# Not used by any shipped scenario and asserted anyway, because it is the half of
+	# `Owner.GAIA` a future map condition is most likely to want -- *"the nest is still
+	# standing"* -- and because `_census` files buildings and units in different buckets, so
+	# one of them working does not prove the other does.
+	w = _world([_row({"subject": "building", "id": "building.dragon_nest", "owner": "gaia",
+			"compare": ">=", "value": 1})])
+	_both_armed()
+	w.spawn_building(&"building.dragon_nest", 0, Vector2i(24, 24),
+			SimBuilding.Phase.COMPLETE, true)
+	w.step()
+	assert_eq(w.player_for(1).objective_progress[0], 1)
+	assert_true(w.match_over)
+
+
 func test_self_counts_only_your_own_things() -> void:
 	w = _world([_row({"subject": "unit", "id": "unit.villager", "value": 4})])
 	_both_armed()
