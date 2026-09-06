@@ -43,6 +43,21 @@ var fog: FogOverlay = FogOverlay.new()
 ## nothing can touch has no business being an entity.
 var spent: SpentProjectiles = SpentProjectiles.new()
 
+## Where the dragon's breath landed, for about a second (13.4). Same argument as `spent`
+## one line up, and `BlastEffects`' header carries the one difference: a projectile is an
+## entity whose despawn this view can already see, and a breath weapon is a number changing
+## on the caster, which is why it needed one field on the wire.
+var blasts: BlastEffects = BlastEffects.new()
+
+## How badly hurt a building has to be before it catches fire (13.4, owner's ask: *"fire
+## particles on buildings with low health"*).
+##
+## A THIRD, which is where `HealthDot.color_for` has already gone red -- so the fire and the
+## dot say the same thing at the same moment rather than being two thresholds a player has
+## to learn separately. Chosen to be well clear of "took a couple of arrows": a building on
+## fire should mean it is going to fall unless somebody does something.
+const BURNING_BELOW := 0.34
+
 ## The fog this client works out for itself (12.1f), instead of being sent it every tick.
 ## Null until `build_terrain()` gives it a board -- a snapshot with no board draws unfogged,
 ## which is what an empty grid has always meant.
@@ -129,6 +144,14 @@ func _ready() -> void:
 	# Iso.footprint_sort_offset for why a footprint cannot sort by its centre.
 	pool.y_sort_enabled = true
 	add_child(pool)
+
+	# ⚠️ **AFTER THE ENTITIES AND NOT BEFORE, WHICH IS THE OPPOSITE OF `spent` ABOVE.** A
+	# spent arrow is a mark on the dirt and belongs under whatever is standing on it; a
+	# fireball is in the AIR, and drawing it under the units it just burned would put the
+	# explosion behind the explosion's victims. Not y-sorted either -- there is nothing to
+	# sort a blast against, since it covers 25 tiles at once and half the things in it are
+	# nearer than the other half.
+	add_child(blasts)
 
 	# LAST, so it draws over the ground AND over the entities standing on it (2.5).
 	# A remembered building in explored territory is dimmed by the same wash that
@@ -304,11 +327,49 @@ func apply_snapshot(snap: Dictionary) -> void:
 			view.set_target_transform(target, _last_tick)
 
 		var max_hp := float(entry.get("max_hp", 0))
+		var health := 1.0
 		if max_hp > 0.0:
-			view.set_health_dot(float(entry.get("hp", 0)) / max_hp)
+			health = float(entry.get("hp", 0)) / max_hp
+			view.set_health_dot(health)
 
 		var alive := bool(entry.get("alive", true))
 		view.set_dead(not alive)
+
+		# ⚠️ **A BURNING BUILDING (13.4), AND EVERY CLAUSE HERE IS LOAD-BEARING.** The
+		# question is decided in this file rather than in `EntityView` because two of the
+		# three facts live in the snapshot and nowhere else -- see `set_burning`.
+		#
+		#   - A BUILDING. `entry.has("phase")` is what says so on the wire, and it is the
+		#     same test the facing branch above already uses.
+		#   - COMPLETE. **This is the clause that matters most.** A foundation starts at a
+		#     few hit points and climbs (5.2), so "hp below a third" is TRUE for nearly every
+		#     foundation in the game -- and an opening in which every pegged-out house is
+		#     ablaze is not a subtle bug, it is most of what the player is looking at.
+		#   - ALIVE. Rubble is not a fire; a destroyed building has already fallen, and 5.5
+		#     leaves it standing as wreckage for a minute. Fire on it would read as a
+		#     building still burning down long after the fight moved on.
+		if entry.has("phase"):
+			view.set_burning(alive and health < BURNING_BELOW
+					and int(entry["phase"]) == SimBuilding.Phase.COMPLETE)
+
+		# ⚠️ **THE ABILITY FIRED THIS TICK (13.4).** `AbilitySystem` sets the cooldown to its
+		# full value the instant the breath lands and counts it down by one every tick
+		# after, so the ONLY way this number can rise is a fire. Compared against `_facts`,
+		# which still holds last tick's entry -- it is overwritten a few lines below, so this
+		# must stay above that write.
+		#
+		# AN EDGE AND NOT "IS IT AT MAXIMUM", which would also work and would be worse: a
+		# single dropped or coalesced snapshot would swallow the effect entirely, and at a
+		# 120 s cooldown that is the only breath that fight was going to get.
+		#
+		# NO FOG CLAUSE, deliberately. A dragon the client cannot see is not in `updated` at
+		# all, so no rise is ever observed and no fire is drawn -- which is the correct
+		# answer and is `SpentProjectiles`' property too. A guard here would be a second
+		# opinion about visibility.
+		var was_cooldown := int((_facts.get(id, {}) as Dictionary).get("ability_cooldown", 0))
+		var now_cooldown := int(entry.get("ability_cooldown", 0))
+		if now_cooldown > was_cooldown and entry.has("ability_aim"):
+			_play_blast(def_id, entry["ability_aim"])
 		# Two kinds of remains count down to nothing: a unit's corpse over its
 		# last 10 s (4.7) and a building's rubble over the last 10 s of the minute
 		# it stands for (5.5, amended 2026-08-16). Each carries its own key, so
@@ -389,6 +450,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 			# while it is running, so 0 -- ready -- is the default for a unit with an
 			# ability and the permanent state of everything without one. The action
 			# slot greys itself off exactly this.
+			#
+			# ALSO WHAT `_play_blast` COMPARES AGAINST (13.4): this entry is last tick's
+			# until the assignment it sits inside completes, which is why the rise is
+			# detected above rather than here.
 			"ability_cooldown": int(entry.get("ability_cooldown", 0)),
 			# Present only on buildings (SimBuilding.to_snapshot); 0 elsewhere, which
 			# reads correctly as "nothing queued" rather than needing its own guard.
@@ -1190,11 +1255,23 @@ func _covers(f: Dictionary, tile: Vector2i) -> bool:
 ## format still loads rather than silently reading (0, 0) -- which is precisely the failure
 ## `ClientFog` shipped with for an afternoon.
 func _sub_pos(entry: Dictionary) -> Vector2i:
-	var p: Variant = entry.get("pos", Vector2i.ZERO)
-	if p is Vector2i:
-		return p
-	if p is Dictionary:
-		return Vector2i(int((p as Dictionary).get("x", 0)), int((p as Dictionary).get("y", 0)))
+	return _as_tile(entry.get("pos", Vector2i.ZERO))
+
+
+## A wire value that is meant to be a pair of ints, however it arrived.
+##
+## ⚠️ **BOTH FORMS ARE REAL AND THIS IS NOT DEFENSIVE PROGRAMMING.** Godot's RPC layer
+## encodes Variants in binary, so a `Vector2i` written by `to_snapshot` arrives as one --
+## but anything that has been through JSON comes back as `{"x": .., "y": ..}`, which is
+## every hand-written test fixture in this suite today and will be every recorded replay
+## when 12.4 lands. `_sub_pos` has carried both since the beginning; `ability_aim` (13.4)
+## uses the same reader rather than a second one that only knows the binary form and fails
+## silently at (0, 0) -- which for a fireball means one drawn in the map's north corner.
+func _as_tile(v: Variant) -> Vector2i:
+	if v is Vector2i:
+		return v
+	if v is Dictionary:
+		return Vector2i(int((v as Dictionary).get("x", 0)), int((v as Dictionary).get("y", 0)))
 	return Vector2i.ZERO
 
 
@@ -1401,6 +1478,36 @@ func _building_anim(entry: Dictionary) -> StringName:
 		return AtlasEntry.STATIC_ANIM
 	var def: BuildingDef = GameDataRegistry.building(StringName(entry.get("def_id", &"")))
 	return AtlasEntry.OPEN_ANIM if def != null and def.is_gate else AtlasEntry.STATIC_ANIM
+
+
+## Draw fire over the ground a special ability just covered (13.4).
+##
+## ⚠️ **THE SIZE COMES OFF THE CASTER'S OWN DEF AND IS NEVER CHOSEN HERE.**
+## `AbilitySystem._burn` damages a square `radius * 2 + 1` tiles across centred on the aim,
+## and `radius` is `units.json`'s. A picture drawn at a size the view picked would be the
+## client telling the player the wrong thing about where the damage went -- PLAN.md 4's
+## invariant arriving through decoration instead of through a rule. The client already holds
+## the whole roster (every client builds its world from the same `MatchConfig`), so this
+## costs a registry lookup and nothing on the wire.
+##
+## A UNIT WITHOUT AN ABILITY DRAWS NOTHING and cannot get here anyway -- `ability_cooldown`
+## is only sent while an ability is cooling -- so the null guard covers a def that was
+## removed from the roster under a running match, which is a modded-data case rather than a
+## reachable one.
+##
+## `ability_target_tile` DEFAULTS TO (0, 0) on `SimUnit`, so a unit whose cooldown somehow
+## rose without an aim being set would draw a fireball in the map's north corner. That is
+## what the `has("ability_aim")` test at the call site is for; the two halves are sent
+## together and this refuses to invent one.
+func _play_blast(def_id: StringName, aim: Variant) -> void:
+	var def: UnitDef = GameDataRegistry.unit(def_id)
+	if def == null or not def.has_ability():
+		return
+	# HEAL HAS NO SPLASH. `ability_effect` is the same axis `AbilitySystem._fire` branches
+	# on, so a monk's cooldown rising draws nothing rather than setting its patient alight.
+	if def.ability_effect != &"damage":
+		return
+	blasts.play(Iso.tile_centre_to_world(_as_tile(aim)), def.ability_radius * 2 + 1)
 
 
 ## Leave a mark on the ground where a despawned EFFECT ended, or do nothing.

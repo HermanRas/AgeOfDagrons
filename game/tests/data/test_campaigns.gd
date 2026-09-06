@@ -382,26 +382,25 @@ func test_scenario_fours_map_carries_the_dragon_its_briefing_PROMISES() -> void:
 	assert_eq(int(counts.get("unit.dragon p0", 0)), 1, "exactly one mother, gaia's")
 
 	# THE ARMY THE BRIEFING NAMES BY NUMBER. Player 1 is the human (`build_config` numbers
-	# them that way), and both counts are quoted verbatim in `message`.
+	# them that way), and the count is quoted verbatim in `message`.
 	#
-	# ⚠️ **THESE MOVED ONCE ALREADY AND THAT IS WHY THE PROSE IS ASSERTED TOO.** The first
-	# playtest cut the army from 155 to 75 -- 100 swordsmen to 25, the five onagers dropped,
-	# the 50 archers left alone. A data edit that forgot the briefing would leave the player
+	# ⚠️ **IT MOVED TWICE IN ONE DAY AND THAT IS WHY THE PROSE IS ASSERTED TOO.** 155 units,
+	# then 75, then 25 -- each cut made off a real play-through, and the first draft was
+	# wrong by a factor of six. A data edit that forgot the briefing would leave the player
 	# reading about 100 swordsmen and counting 25, which is scenario 1's fifteenth-villager
 	# defect exactly: content and prose disagreeing, with only the prose on screen.
 	assert_eq(int(counts.get("unit.elite_swordsman p1", 0)), 25)
-	assert_eq(int(counts.get("unit.archer p1", 0)), 50)
-	assert_eq(int(counts.get("unit.onager p1", 0)), 0, "the onagers were dropped outright")
-	for named in ["25 elite swordsmen", "50 archers"]:
-		assert_true(s.message.contains(named),
-				"the briefing still says '%s': %s" % [named, s.message])
-	assert_false(s.message.contains("onager"),
-			"and no longer promises a siege engine that is not there: %s" % s.message)
+	assert_eq(int(counts.get("unit.archer p1", 0)), 0, "the archers went on the second cut")
+	assert_eq(int(counts.get("unit.onager p1", 0)), 0, "the onagers on the first")
+	assert_true(s.message.contains("25 elite swordsmen"), s.message)
+	for gone in ["archer", "onager"]:
+		assert_false(s.message.contains(gone),
+				"the briefing no longer promises a %s that is not there: %s" % [gone, s.message])
 
-	# AND NOBODY IS STANDING ON ANYBODY. 75 units stamped in around a base is exactly
-	# where two entities end up on one tile, which fails the map -- `preview_author_maps`
-	# re-validates after stamping them, and this is the same claim asserted about the file
-	# that actually shipped.
+	# AND NOBODY IS STANDING ON ANYBODY. Units stamped in around a base is exactly where two
+	# entities end up on one tile, which fails the map -- `preview_author_maps` re-validates
+	# after stamping them, and this is the same claim asserted about the file that actually
+	# shipped.
 	assert_eq(MapValidator.problems(data), [] as Array[String],
 			"the saved map still validates with the garrison on it")
 

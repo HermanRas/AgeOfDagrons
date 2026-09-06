@@ -48,7 +48,15 @@
 extends Node2D
 
 const SHOT_PATH := "user://dragon_nest.png"
-const SETTLE_FRAMES := 12
+
+## ⚠️ **RAISED FROM 12 TO 24 FOR 13.4'S PARTICLES.** Twelve was plenty for static art: the
+## nest, the villager and the two dragons are all standing still and settle in a frame or
+## two. A blast is `FlameParticles.LIFETIME_BLAST` long, so at 12 frames the screenshot
+## caught it a fifth of the way through -- a cluster of embers still on the ground rather
+## than a fireball. 24 frames is about 0.4 s at 60 fps, which is the middle of its life and
+## the frame worth judging. It costs the still nothing else, since everything else in the
+## scene is static.
+const SETTLE_FRAMES := 24
 
 ## Tile 0,0 of the drawn ground sits here, and everything else is projected from it, so the
 ## nest's own origin lands where its footprint says it does.
@@ -60,6 +68,8 @@ const ORIGIN := Vector2(700.0, 250.0)
 var _footprint := Vector2i(10, 10)
 
 var _frames := 0
+
+var _blasts: BlastEffects = null
 
 
 func _ready() -> void:
@@ -99,6 +109,40 @@ func _ready() -> void:
 	# move something sideways without moving it down the picture is to change x and y in
 	# opposite directions, which is what this does against the villager's (-9, 2).
 	_place(&"vis.dragon_baby", Vector2i(-13, 6), "hatchling  1.84 m (20%)")
+
+	# ── 13.4's two fires, which are here for this scene's founding reason ──────────
+	#
+	# **PARTICLES ARE THE PUREST CASE OF "NO ASSERTION SETTLES THIS".** `test_fire_particles`
+	# pins WHEN a fire appears, WHERE it is drawn and THAT it stops -- every fact that is not
+	# taste. Whether the flames read as fire or as orange confetti, and whether they hide the
+	# sprite they are supposed to be damaging, is a question for a person, which is the same
+	# sentence this file's header opens with about the nest.
+	#
+	# ⚠️ **AND THE BLAST IS ALL BUT UNLOOKABLE-AT IN A REAL MATCH NOW.** The owner's 120 s
+	# cooldown means one breath per two minutes, from the one dragon on the map, quite
+	# possibly off screen -- so "play until you see it" is not a review, it is a wait. Here
+	# it fires on a timer.
+	var burning := _place(&"vis.house", Vector2i(4, -6), "house at 20% health -- burning")
+	burning.set_health_dot(0.2)
+	burning.set_burning(true)
+
+	# THE SAME NODE THE MATCH USES, not a hand-built emitter, and the span read off the DRAGON
+	# rather than typed here. A preview that stood up its own particles at its own size would
+	# be reviewing something the game does not draw -- the trap `preview_walls` names about
+	# photographing art the seam never resolves.
+	_blasts = BlastEffects.new()
+	add_child(_blasts)
+	var dragon: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	var span := dragon.ability_radius * 2 + 1 if dragon != null else 5
+	var blast_at := ORIGIN + Iso.tile_to_world_f(Vector2(-2, -4))
+	_blasts.play(blast_at, span)
+
+	var marker := Label.new()
+	marker.text = "fire breath: %dx%d tiles" % [span, span]
+	marker.position = blast_at + Vector2(-110.0, 40.0)
+	marker.size = Vector2(220.0, 20.0)
+	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(marker)
 
 	var report := Label.new()
 	report.text = ("dragon nest: %s core + %d props   |   footprint %dx%d tiles = %.1f x %.1f m"
@@ -158,7 +202,7 @@ func _report_scale() -> void:
 				+ "its selection ring will not fit its sprite")
 
 
-func _place(visual_id: StringName, tile: Vector2i, caption: String) -> void:
+func _place(visual_id: StringName, tile: Vector2i, caption: String) -> EntityView:
 	var view := EntityView.new()
 	view.visual_id = visual_id
 	view.position = ORIGIN + Iso.tile_to_world_f(Vector2(tile))
@@ -173,6 +217,7 @@ func _place(visual_id: StringName, tile: Vector2i, caption: String) -> void:
 	label.size = Vector2(220.0, 20.0)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(label)
+	return view
 
 
 ## Grass, plus the nest's own footprint outlined on it. The outline is the load-bearing part:

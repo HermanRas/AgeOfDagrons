@@ -20,6 +20,7 @@ func after_each() -> void:
 	view.terrain.free()
 	view.fog.free()
 	view.spent.free()
+	view.blasts.free()
 	view.free()
 
 

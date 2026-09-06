@@ -328,8 +328,72 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 	# swinging at something already dead is a tick of the attack animation
 	# playing over a corpse, and AnimationSystem runs later in this same tick --
 	# so the difference is visible, not merely tidy.
-	if not target.alive and not _reacquire(w, u):
+	if target.alive:
+		return
+	# ⚠️ **A HUNTER EATS WHAT IT KILLED INSTEAD OF LOOKING FOR THE NEXT ONE** (owner,
+	# 2026-09-06: *"after a villager kills a sheep the next action is harvest sheep, not
+	# kill another sheep"*). See `_claims_the_carcass` for what this was doing before and
+	# why it looked like combat working correctly.
+	if _claims_the_carcass(w, u, target):
 		u.stop()
+		return
+	if not _reacquire(w, u):
+		u.stop()
+
+
+## Whether `u` has just killed something it can EAT, and is claiming it.
+##
+## ## THE BUG THIS CLOSES LOOKED EXACTLY LIKE COMBAT WORKING CORRECTLY
+##
+## Reported by the owner, 2026-09-06: *"after a villager kills a sheep the next action is
+## harvest sheep, not kill another sheep."* `Diplomacy.is_enemy` says a gaia UNIT is fair
+## game -- correctly, that is what lets anybody hunt at all -- so a sheep is an enemy, and
+## `_reacquire` did precisely what it was written to do: found the next one and went for it.
+##
+## **Measured before it was explained**, because the first two guesses were wrong. The tap
+## path was checked first and is fine (a tap on a live sheep resolves to ATTACK, before and
+## after a carcass appears beside it). What a real villager actually did, driven in the sim:
+## killed sheep one at tick 155, re-acquired sheep two at tick 160, re-acquired sheep three
+## at tick 340 -- **ending with two carcasses lying on the grass and zero food gathered.**
+## One hunt order became a massacre that fed nobody.
+##
+## `_reacquire`'s own header says what it is for, and it is not this: *"an army kills one
+## unit of a group and then stands among the rest doing nothing."* That is a fight. A hunt
+## is the other thing, and the difference is not the target -- it is whether the killer can
+## eat what it killed.
+##
+## ## THE TEST IS THE HUNTER'S OWN `gather_rate`, WHICH IS WHY NO UNIT LIST APPEARS HERE
+##
+## A villager gathers food and claims the sheep; a swordsman does not and re-acquires
+## exactly as before, which keeps *"an army wading through a flock"* working for the units
+## that argument was about. Nothing names a villager, so a future unit that can butcher
+## inherits this by having a `gather_rate`, and one that cannot is unaffected.
+##
+## ⚠️ **IT WRITES TO THE PREY, NOT THE HUNTER** -- see `SimUnit.killed_by_id`. The carcass
+## does not exist yet: `DeathSystem` runs last and is what spawns it, so there is no id to
+## hand over on this tick. The caller then `stop()`s the hunter and `DeathSystem` gives it
+## the gather order the moment the carcass is real, which `GatherSystem` acts on next tick
+## because it runs first.
+func _claims_the_carcass(w: SimWorld, u: SimUnit, target: SimEntity) -> bool:
+	if not (target is SimUnit):
+		return false
+	var prey := target as SimUnit
+	var prey_def := w.unit_def(prey.def_id)
+	if prey_def == null or not prey_def.is_wildlife or prey_def.carcass_def == &"":
+		return false
+	# ALREADY CLAIMED. Two soldiers can land a blow on the same tick and the second must not
+	# quietly take the kill from the first -- and `killed_by_id` is read exactly once, so a
+	# second write here would be the difference between a determinism bug and a rule.
+	if prey.killed_by_id != 0:
+		return false
+	var carcass: ResourceDef = w.resource_def(prey_def.carcass_def)
+	if carcass == null:
+		return false
+	var def := w.unit_def(u.def_id)
+	if def == null or int(def.gather_rate.get(carcass.kind, 0)) <= 0:
+		return false
+	prey.killed_by_id = u.id
+	return true
 
 
 ## The next thing to hit, within `REACQUIRE_RADIUS` of where the unit is standing

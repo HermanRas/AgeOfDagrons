@@ -25,7 +25,7 @@ func process_tick(w: SimWorld) -> void:
 	for id in to_despawn:
 		w.despawn(id)
 	for c in carcasses:
-		w.spawn_resource_node(c[0], c[1], 0)
+		_hand_to_the_hunter(w, w.spawn_resource_node(c[0], c[1], 0), int(c[2]))
 
 
 ## A dead animal becomes a CARCASS rather than a corpse, and the difference is that a
@@ -62,8 +62,47 @@ func _process_wildlife(w: SimWorld, u: SimUnit, to_despawn: Array[int],
 	u.corpse_ticks_left = 0
 	u.stop()
 	to_despawn.append(u.id)
-	carcasses.append([def.carcass_def, u.tile()])
+	# `killed_by_id` travels with the carcass so `_hand_to_the_hunter` can act after the
+	# node exists. Read off the body here because the body is about to be despawned.
+	carcasses.append([def.carcass_def, u.tile(), u.killed_by_id])
 	return true
+
+
+## Put the hunter on the carcass it just made (owner, 2026-09-06).
+##
+## ## WHY IT HAPPENS HERE AND NOT WHERE THE BLOW LANDED
+##
+## `CombatSystem` knows who killed what and cannot act on it: the carcass does not exist
+## until this system spawns it, several systems later in the same tick. So the kill leaves a
+## note on the body (`SimUnit.killed_by_id`), the body is despawned above, and the note is
+## cashed here -- the first moment there is an id to gather.
+##
+## THE TICK ORDER MAKES IT FEEL IMMEDIATE. This system runs LAST, and `GatherSystem` runs
+## THIRD, so the order set here is acted on at the top of the very next tick. A tenth of a
+## second between the sheep dropping and the villager kneeling over it.
+##
+## ## FOUR REFUSALS, AND THE LAST TWO ARE THE ONES THAT MATTER
+##
+## No node (`spawn_resource_node` refuses ground that is already claimed) and no hunter (it
+## died in the same fight) are the ordinary two. The other two are rules:
+##
+##   - **NOBODY CLAIMED IT.** `killed_by_id` is 0 for a wolf that starved, a debug destroy,
+##     an animal killed by something that cannot eat it, and every carcass placed by MapGen.
+##     Those all still lie there for whoever wants them.
+##   - ⚠️ **THE HUNTER IS ONLY GIVEN THIS IF IT IS STILL IDLE.** `CombatSystem` stops it on
+##     the killing blow, so IDLE is what it should be -- unless the player has given it
+##     something else to do in the meantime, and `CommandSystem` runs FIRST, so a fresh
+##     order this tick is already on it. Overriding that would be the game countermanding
+##     the player, silently, a tenth of a second after they tapped.
+func _hand_to_the_hunter(w: SimWorld, node: SimResourceNode, hunter_id: int) -> void:
+	if node == null or hunter_id == 0:
+		return
+	var hunter := w.get_entity(hunter_id) as SimUnit
+	if hunter == null or not hunter.alive or hunter.task != SimUnit.Task.IDLE:
+		return
+	hunter.set_task_gather(node.id, node.tile())
+	if w.paths != null:
+		w.paths.request(hunter.id, node.tile())
 
 
 ## A unit's death plays out over time -- die anim, drop cargo, corpse, decay,

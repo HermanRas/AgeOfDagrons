@@ -107,6 +107,24 @@ var ability_cooldown: int = 0
 ## point, and a breath weapon that landed where the dragon stopped would miss.
 var ability_target_tile: Vector2i = Vector2i.ZERO
 
+## WHO GETS THE MEAT (2026-09-06). Set on a WILDLIFE unit by `CombatSystem` at the moment
+## a killing blow lands, and read once by `DeathSystem` when it turns this animal into a
+## carcass, so the hunter is handed what it just killed.
+##
+## ⚠️ **IT IS ON THE PREY AND NOT ON THE HUNTER, AND THAT IS BECAUSE OF THE TICK ORDER.**
+## The carcass does not exist when the blow lands -- `DeathSystem` runs last and is what
+## spawns it -- so `CombatSystem` cannot set a gather task on an entity id that is not
+## there yet. What it CAN do is leave a note on the body. Recording the intent on the
+## hunter instead would mean a "pending harvest" field that has to survive across a tick
+## boundary and be cleared on every other path out of it, which is a second lifetime to get
+## wrong for the same answer.
+##
+## SIM-ONLY, off the wire and out of `state_hash()`, exactly as `last_attacker_owner` is:
+## it is read on the same tick it is written, by one system, and no client has any use for
+## it. 0 is "nobody claimed this", which is what a starved animal, a debug destroy or a
+## kill by something that cannot eat it all leave behind.
+var killed_by_id: int = 0
+
 var anim: StringName = &"idle"
 
 ## SIEGE ONLY (PLAN.md 4.13, 9.2.1) -- `SiegeSystem` writes all three and nothing else
@@ -558,6 +576,22 @@ func to_snapshot() -> Dictionary:
 	# overwhelming majority of units have no ability at all. Same call `packed` makes.
 	if ability_cooldown > 0:
 		d["ability_cooldown"] = ability_cooldown
+		# ⚠️ **WHERE IT WENT (13.4), AND IT RIDES INSIDE THE SHAPE ABOVE ON PURPOSE.**
+		# `BlastEffects` needs the aim to draw fire on the ground the breath actually
+		# covered, and until 2026-09-06 nothing on the wire could say it -- `ability_cooldown`
+		# was enough to grey an action slot and no more.
+		#
+		# 12.1f's rule is that a field carried by SOME entities splits the roster into
+		# another wire SHAPE, and `ability_cooldown` had already paid that cost: a unit with a
+		# cooling ability is already its own shape. Adding this field under the SAME condition
+		# joins that shape rather than making a third, so a match with no ability in it sends
+		# not one byte more than before. Sent unconditionally it would be two ints on every
+		# unit in the game, forever, for a decoration.
+		#
+		# IT IS THE AIM AND NOT `task_target_tile`, for the reason `ability_target_tile`
+		# itself exists: `set_path` rewrites the latter to wherever the route could actually
+		# end, so a dragon that stopped short would draw its fireball on its own feet.
+		d["ability_aim"] = ability_target_tile
 	# ON THE WIRE, unlike every other wildlife field, because the CLIENT has to know:
 	# `GameView.movable_selection` uses it to decide whether tapping the ground with a
 	# sheep selected is an order or nothing at all. Without it the client would offer

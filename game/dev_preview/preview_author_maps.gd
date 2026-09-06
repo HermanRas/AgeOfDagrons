@@ -42,29 +42,37 @@ extends Node
 ## So this table is the authoring record, `--force` re-applies it, and `test_campaigns`
 ## asserts the saved map really carries what the briefing promises.
 ##
-## ⚠️ **THE POPULATION CAP IS NOT RAISED TO MATCH, DELIBERATELY.** 75 units against a town
-## centre's 10 is a HUD reading of `81/10` for as long as the army is alive, and no
+## ⚠️ **THE POPULATION CAP IS NOT RAISED TO MATCH, DELIBERATELY.** 25 units against a town
+## centre's 10 is a HUD reading of `31/10` for as long as the army is alive, and no
 ## training is possible until losses bring it back under. That is `PopulationSystem`'s
 ## declared direction (*report the truth, refuse only the NEXT order*) rather than a
 ## defect, and it is not a dead end: the army dying frees the cap, so the player can always
-## rebuild. Covering it would mean either houses by the dozen or castles, which train and
-## shoot and would change the mission. **The owner's call, and it was looked at on the
-## first playtest** -- the army came down, the cap did not go up.
+## rebuild. Covering it would mean houses or a castle, and a castle trains and shoots, which
+## would change the mission. **The owner's call, made twice now** -- the army came down both
+## times and the cap has stayed where it is.
 ##
-## **CUT FROM 155 TO 75 ON 2026-09-06 AFTER THAT PLAYTEST** -- *"the army is way too much,
-## make it 25 elite swardsmen and 0 anogers"*. Swordsmen 100 -> 25 and the onagers dropped
-## outright; **archers were not mentioned and stay at 50**, which is the literal reading of
-## an instruction that named two numbers precisely and left the third alone.
+## **CUT TWICE ON 2026-09-06, BOTH TIMES OFF A REAL PLAY-THROUGH, 155 -> 75 -> 25.**
+## First *"the army is way too much, make it 25 elite swardsmen and 0 anogers"*; then, having
+## played that, *"units is still way too much, lets drop the archers aswell."* So the mission
+## is **25 elite swordsmen and nothing else**, which is a third of the population the first
+## draft handed out.
 ##
-## Losing the onagers costs the mission nothing and tidies something up: they are `speed: 0`
-## siege that must pack to move, they were the slowest thing in the column by a long way, and
-## a **flying** target is the one thing a siege engine is worst against. They were in the
-## first draft because "an army" wants a siege piece in it, which is a habit rather than a
-## reason.
+## **THE PATTERN IS WORTH MORE THAN THE NUMBER, because the first draft was wrong by a factor
+## of six and no test could have said so.** 155 units was arrived at by asking what "an army"
+## looks like; 25 is what killing one dragon actually takes. An authored fight's difficulty
+## is a property of the fight, not of the roster or the arithmetic -- the same lesson §11.8
+## records about scenario 1's fifteenth villager, where the reachable target was a property
+## of the MAP and not of `buildings.json`. **A number in this table is a guess until somebody
+## has played it.**
+##
+## Losing the siege and the archers costs the mission nothing and tidies two things up: the
+## onagers were `speed: 0` siege that must pack to move -- the slowest thing in the column by
+## a long way, and a **flying** target is what a siege engine is worst against -- and 50
+## archers made the fight a firing line rather than a scrap. Both were in the first draft
+## because "an army" wants a mix, which is a habit rather than a reason.
 const GARRISONS := {
 	"HowToPlay/scenario_4": [
 		[&"unit.elite_swordsman", 25],
-		[&"unit.archer", 50],
 	],
 }
 

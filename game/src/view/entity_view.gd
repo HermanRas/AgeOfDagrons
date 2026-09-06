@@ -86,6 +86,13 @@ var draw_offset: Vector2 = Vector2.ZERO:
 		# that also carries a sort offset would have its rim adrift from it.
 		if _outline != null:
 			_outline.position = draw_offset
+		# ⚠️ THE FLAMES ARE A CHILD NODE TOO (13.4) and take the shift the same way, for
+		# the same reason. A BUILDING is what makes this load-bearing rather than
+		# defensive: `Iso.footprint_sort_offset` gives every building a non-zero offset,
+		# so a burning town centre would otherwise leave its fire out on the grass at the
+		# footprint's front corner.
+		if _flames != null:
+			_flames.position = _flame_offset()
 		queue_redraw()
 
 var anim: StringName = &"idle"
@@ -129,6 +136,10 @@ var occluded: bool = false:
 var outline_colour: Color = Color.WHITE
 
 var _outline: OutlineView = null
+
+## Flames, while this entity is a badly damaged building (13.4). Null is the normal state
+## for almost everything -- see `set_burning`, which builds and frees it.
+var _flames: GPUParticles2D = null
 var _visual: AtlasEntry = null
 ## Decorative props standing around this entity (GameDataRegistry.props_for),
 ## resolved to atlases and screen offsets. `_props_resolved` rather than a null
@@ -229,6 +240,80 @@ func set_health_dot(pct: float) -> void:
 
 func set_dead(value: bool) -> void:
 	dead = value
+
+
+## Show or hide flames on this entity (PLAN.md 13.4, owner's ask 2026-09-06: *"fire
+## particles on buildings with low health"*).
+##
+## ## THE CALLER DECIDES *WHETHER*, THIS DECIDES *HOW*
+##
+## `GameView` passes the answer rather than this working it out, and that split is not
+## arbitrary: the question is *"is this a COMPLETE, living BUILDING under the threshold"*,
+## and two of those three facts are not here. This node knows a `visual_id` and a health
+## fraction; it has never heard of a building phase, and teaching it would mean a second
+## place that decides what a building is.
+##
+## ⚠️ **THE FOUNDATION TRAP IS THE REASON THAT MATTERS.** A building under construction
+## starts at a few hit points and climbs (5.2), so *"hp below a third"* is TRUE for every
+## foundation in the game for most of its build time. Fire on every foundation the moment it
+## is pegged out is not a subtle bug -- it is most of what a player looks at during an
+## opening -- and the phase that rules it out lives in the snapshot, which is `GameView`'s.
+##
+## ## LAZY, AND FREED WHEN IT STOPS
+##
+## Built on first use exactly as `_outline` is, so the overwhelming majority of entities --
+## every unit, every tree, every undamaged building -- carry no emitter and no particle
+## material at all. **Freed rather than hidden when the fire goes out**, which is the
+## opposite of `_outline`'s choice and deliberately so: an outline flickers on and off as a
+## unit walks behind a house and wants to be cheap to toggle, while a building crosses the
+## damage threshold rarely and then either burns for a long time or is repaired. A hidden
+## `GPUParticles2D` still holds a process material and a texture reference per building on
+## the map.
+##
+## ⚠️ **`EntityViewPool` RECYCLES THESE NODES**, so a view released while burning and handed
+## to a fresh entity would arrive already on fire. `release()` calls this with false.
+func set_burning(on: bool) -> void:
+	if on == (_flames != null):
+		return
+	if not on:
+		_flames.queue_free()
+		_flames = null
+		return
+	# SIZED FROM THE ART, not from a constant. `placeholder_for` is total and answers a
+	# sensible box for anything unresolved, which is the same source the health dot uses to
+	# find the top of the sprite -- so the fire and the dot cannot disagree about how tall
+	# the thing is.
+	var spec := GameDataRegistry.placeholder_for(visual_id)
+	var footprint := Iso.metres_to_world(spec.footprint_m)
+	var height := Iso.height_to_world(spec.height_m)
+	_flames = FlameParticles.building_fire(absf(footprint.x), absf(height.y))
+	_flames.position = _flame_offset()
+	add_child(_flames)
+	# AFTER `add_child`. `emitting = true` on a node outside the tree is silently dropped by
+	# GPUParticles2D, which presents as "the fire never appears" and is a miserable hour.
+	_flames.emitting = true
+
+
+## Whether this view is currently on fire. Read off the NODE rather than off a flag kept
+## beside it, so it answers what is on the screen -- the same rule `row_is_done` follows in
+## `ObjectiveTracker`.
+func is_burning() -> bool:
+	return _flames != null
+
+
+## Where the flames sit relative to this node.
+##
+## UP THE SPRITE RATHER THAN AT ITS FEET. The anchor is the projected ground origin, so a
+## fire at (0, 0) burns under the floor of a two-storey building. A third of the way up
+## reads as the roof catching, and leaves the health dot -- which sits at full height plus a
+## gap (`_draw_health_dot`) -- clear above it.
+##
+## `draw_offset` IS PART OF IT, because that is what cancels a building's sort offset. See
+## the setter above, which is the other caller and the reason this is a function rather than
+## two copies of one expression.
+func _flame_offset() -> Vector2:
+	var spec := GameDataRegistry.placeholder_for(visual_id)
+	return draw_offset + Iso.height_to_world(spec.height_m) * 0.35
 
 
 ## 1.0 is fully opaque; PLAN.md 4.7's 10 s corpse fade rides this down to 0

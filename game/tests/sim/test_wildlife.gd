@@ -476,6 +476,119 @@ func test_hunting_a_deer_yields_the_food_it_used_to_stand_around_holding() -> vo
 	assert_true(GatherSystem.is_harvestable(carcass, 1))
 
 
+# ── a hunter eats what it killed (owner, 2026-09-06) ───────────────────────
+
+func test_a_villager_who_kills_a_sheep_harvests_it_instead_of_hunting_the_next() -> void:
+	# ⚠️ **THE BUG LOOKED EXACTLY LIKE COMBAT WORKING CORRECTLY**, which is why it shipped:
+	# *"after a villager kills a sheep the next action is harvest sheep, not kill another
+	# sheep."* `Diplomacy.is_enemy` says a gaia UNIT is fair game -- correctly, that is what
+	# lets anybody hunt -- so a sheep is an enemy and `CombatSystem._reacquire` did precisely
+	# what it was written to do: found the next one and went for it.
+	#
+	# Driven in the sim before it was explained, the villager killed sheep one, re-acquired
+	# sheep two, re-acquired sheep three, and finished with **two carcasses on the grass and
+	# zero food gathered**. One hunt order became a massacre that fed nobody.
+	var vil := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+	var first := w.spawn_unit(&"unit.sheep", 0, Vector2i(21, 20))
+	var second := w.spawn_unit(&"unit.sheep", 0, Vector2i(22, 20))
+	vil.set_task_attack(first.id, first.tile(), false)
+
+	# Long enough to kill one sheep at 3 damage a swing through 25 hp, and nowhere near
+	# long enough to kill two.
+	_run(200)
+
+	assert_false(first.alive, "the sheep she was told to kill")
+	assert_true(second.alive, "and NOT the one standing next to it")
+	assert_eq(vil.task, SimUnit.Task.GATHER,
+			"she is butchering, not looking for another fight")
+
+	var node := w.get_entity(vil.gather_node_id) as SimResourceNode
+	assert_not_null(node, "and the thing she is on is the carcass she just made")
+	if node == null:
+		return
+	assert_eq(node.def_id, &"res.sheep_carcass")
+	assert_eq(node.tile(), Vector2i(21, 20), "where the sheep fell")
+
+
+func test_the_meat_actually_comes_out_of_the_carcass() -> void:
+	# The half a task assertion cannot see: the old behaviour left carcasses lying on the
+	# grass, so "she is on the carcass" is only worth anything if food comes out of it.
+	#
+	# ⚠️ **ASSERTED AT THE CARCASS AND NOT AT THE PLAYER'S STOCK, because this world has no
+	# `PathService`.** Stock needs the full gather-then-deliver round trip and delivery is a
+	# WALK to a drop-off; with `w.paths` null she can harvest where she stands and can never
+	# carry it home. That is a property of the harness, not of the rule under test -- and a
+	# test that quietly depended on it would fail for a reason that has nothing to do with
+	# hunting.
+	var vil := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(21, 20))
+	vil.set_task_attack(sheep.id, sheep.tile(), false)
+	_run(200)
+
+	var node := w.get_entity(vil.gather_node_id) as SimResourceNode
+	assert_not_null(node)
+	if node == null:
+		return
+	var full := node.amount
+	_run(300)
+	assert_true(node.amount < full,
+			"mutton is coming out of it without anybody having tapped anything")
+	assert_true(int(vil.carry_amount) > 0, "and she is carrying it")
+
+
+func test_a_SWORDSMAN_DOES_NOT_CLAIM_THE_CARCASS() -> void:
+	# ⚠️ **THE HALF THAT MUST NOT CHANGE.** `_reacquire` exists because *"an army kills one
+	# unit of a group and then stands among the rest doing nothing"*, and that argument is
+	# untouched. The test is the killer's own `gather_rate` rather than a list of units, so
+	# a swordsman -- who cannot butcher -- is left to the ordinary combat path.
+	#
+	# **ASSERTED AS "HE IS NOT GATHERING" RATHER THAN "HE RE-ACQUIRED"**, and the reason is
+	# the harness again: `_reacquire` returns false immediately when `w.paths` is null, so in
+	# this world every killer goes IDLE and the re-acquire half cannot be observed at all.
+	# `test_combat` owns that behaviour and has a path service to see it with. What belongs
+	# here is the new fork, and this is the side of it that must stay shut.
+	var sword := w.spawn_unit(&"unit.swordsman", 1, Vector2i(20, 20))
+	var first := w.spawn_unit(&"unit.sheep", 0, Vector2i(21, 20))
+	w.spawn_unit(&"unit.sheep", 0, Vector2i(22, 20))
+	sword.set_task_attack(first.id, first.tile(), false)
+	_run(200)
+
+	assert_false(first.alive)
+	assert_ne(sword.task, SimUnit.Task.GATHER, "a swordsman is not a butcher")
+	assert_eq(sword.gather_node_id, 0)
+
+
+func test_an_animal_nobody_killed_is_left_where_it_lies() -> void:
+	# `killed_by_id` is 0 for a debug destroy, for a starved animal, for anything killed by
+	# something that cannot eat it, and for every carcass MapGen places. All of those still
+	# lie there for whoever wants them -- the hand-over is a claim, not a rule about
+	# carcasses in general.
+	var vil := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(21, 20))
+	sheep.take_damage(9999, 0, SimEntity.NO_ATTACKER)
+	_run(3)
+	assert_eq(vil.task, SimUnit.Task.IDLE, "she did not kill it and is not summoned to it")
+
+
+func test_a_PLAYERS_ORDER_BEATS_THE_CARCASS() -> void:
+	# ⚠️ `CommandSystem` RUNS FIRST AND `DeathSystem` RUNS LAST, so an order given on the
+	# tick the sheep dies is already on the villager when the carcass appears. Handing her
+	# the carcass anyway would be the game countermanding the player, silently, a tenth of a
+	# second after they tapped. The guard is `task != IDLE`.
+	var vil := w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
+	var sheep := w.spawn_unit(&"unit.sheep", 0, Vector2i(21, 20))
+	var tree := w.spawn_resource_node(&"res.tree", Vector2i(30, 30), 0)
+	assert_not_null(tree)
+	vil.set_task_attack(sheep.id, sheep.tile(), false)
+	_run(200)
+	assert_false(sheep.alive)
+
+	# She took the carcass, as she should have. Now the player says otherwise.
+	vil.set_task_gather(tree.id, tree.tile())
+	_run(5)
+	assert_eq(vil.gather_node_id, tree.id, "the player's tree, not the sheep")
+
+
 # ── herding livestock (6.5) ────────────────────────────────────────────────
 
 func test_walking_a_unit_past_a_sheep_claims_it() -> void:

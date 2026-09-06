@@ -892,10 +892,26 @@
     "carry_cap": {},
     "gather_rate": {},
 
+    "_note_fire_breath": [
+      "⚠️ `cooldown_ticks` WAS 150 -- FIFTEEN SECONDS -- UNTIL 2026-09-06. The owner asked",
+      "for 120 s (PLAN.md 13.4), which is 1200, and that is an EIGHTFOLD change rather than",
+      "a rounding: at 15 s the breath was a rhythm inside a fight, and at 120 it happens once",
+      "in most fights and her ordinary 30-damage bite becomes nearly all of her output.",
+      "Recorded here because a number that moved by 8x is the first thing anybody should see",
+      "when a later playtest says the mother feels weak.",
+      "",
+      "THE SHAPE STAYED A 5x5 GROUND BLAST, and that was the owner's call between the two",
+      "options 13.4 put up: *\"if the 5x5 ground blast is easier to add lets do it\"*. The",
+      "alternative was a swept line out of her head, which is a different weapon and would",
+      "have needed a target SHAPE in `AbilitySystem` and integer swept tiles in the hash.",
+      "`radius: 2` therefore still means the square `radius * 2 + 1 = 5` tiles across that",
+      "`_burn` damages -- and `BlastEffects` is passed that same span so the fire is drawn",
+      "over exactly the ground the damage covered, rather than over a size the view chose."
+    ],
     "ability": {
       "id": "fire_breath", "name": "Fire Breath", "effect": "damage", "target": "ground",
       "range": 5, "radius": 2, "amount": 40, "damage_type": "melee",
-      "cooldown_ticks": 150
+      "cooldown_ticks": 1200
     },
 
     "_note_not_trainable": [

@@ -1951,14 +1951,22 @@ plugs in; read the row rather than re-deriving it:
 
 ⚠️ **THREE NEW ROWS ARRIVED ON 2026-09-06 AFTER THE OWNER PLAYED WHAT 13.2 DELIVERED**, which is
 the phase working rather than slipping. `4.8c` (#77, filed under Phase 4 — siege engines are half
-of it), `13.3` (#78, the nest heals at 1 hp/tick) and `13.4` (#79, fire-breath particles plus a
-120 s cooldown). **Two of the three carry a balance change inside a sentence that reads like a
-feature**, and both are the reason to read the cards before writing anything:
+of it), `13.3` (#78, the nest heals at 1 hp/tick) and `13.4` (#79, ✅ **shipped the same day**).
+**Two of the three carried a balance change inside a sentence that reads like a feature:**
 
 - **1 hp/tick is 10 hp/SECOND** at `SimClock`'s 10 Hz — a 600 hp mother full in a minute, at the
   nest, where she always is. And if the **hatchling** heals too, 13.2b's *"a rival went straight
-  at it instead"* denial branch is dead: 300 hp behind 10 dps of regen is not a target.
-- **120 s is 1200 ticks against today's 150** — an 8× nerf to the fire breath, not a rounding.
+  at it instead"* denial branch is dead: 300 hp behind 10 dps of regen is not a target. **Still
+  open — read #78 before writing it.**
+- **The fire breath's cooldown is now 1200 ticks against 150** — an 8× nerf, shipped with 13.4.
+  `units.json` carries a `_note_fire_breath` saying so, which is where a puzzled playtester will
+  look first.
+
+**13.4 ALSO PUT A FIELD ON THE WIRE FOR NOTHING, AND THE TRICK IS REUSABLE.** `ability_aim` goes
+inside `SimUnit.to_snapshot`'s existing `if ability_cooldown > 0` block. §12.1f's rule is that a
+field carried by SOME entities splits the roster into another wire shape — and that split had
+already been paid for by `ability_cooldown`, so joining an existing conditional costs nothing
+where a new one costs a shape table. **Look for an existing condition before adding a field.**
 
 ⚠️ **AND 13.3 CHANGES WHAT SCENARIO 4'S PLAY-TEST MEASURES.** The nest's 1200 hp and the
 hatchling's 300/8-8 are still provisional; healing the mother at the nest makes them provisional

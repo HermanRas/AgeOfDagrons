@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "generated": "2026-09-06T17:27:13Z",
+  "generated": "2026-09-06T18:42:03Z",
   "packs": [
     {
       "id": "howtoplay",
@@ -11,8 +11,8 @@
       "title": "How To Play",
       "author": "Age of Dragons",
       "description": "Five short lessons: gather and build, climb the ages, find your opponent, tame a dragon, then survive a real duel.",
-      "size": 2227840,
-      "sha256": "62eec18289a0f53b6ff2f358431e687d183c2e8eb943968a04b40fdb9194d76d",
+      "size": 2227788,
+      "sha256": "9180ec45478205fe8b6c61713ad9e15f3e11e79fa94b828f66e06f74512493f4",
       "urls": [
         "https://aod.dragoon.co.za/downloads/campaign_howtoplay_v2.zip"
       ]
@@ -26,8 +26,8 @@
       "title": "How To Play (Dummy)",
       "author": "Age of Dragons",
       "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content.",
-      "size": 2227313,
-      "sha256": "5213021f54b14d972062f1186a32b7f37141a832791c197fb452c16b4ddb0f34",
+      "size": 2227261,
+      "sha256": "200e0a5f1b0ef8aa276a72c01faea934d1f888711a3ee6398140217b151055f4",
       "urls": [
         "https://aod.dragoon.co.za/downloads/campaign_howtoplay_dummy_v2.zip"
       ]

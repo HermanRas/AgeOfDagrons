@@ -2329,7 +2329,8 @@ attack" is indistinguishable from "nothing in this fixture would have".
 13.2 ✅ Dragon Nest POI: guardian dragon (13.2a), claim-on-defeat + 360 s baby-dragon timer +
 destructible nest (13.2b).
 13.3 ⛔ The nest heals what stands on it — **owner's ask, 2026-09-06**.
-13.4 ⛔ The fire breath gets particles, and a 120 s cooldown — **owner's ask, 2026-09-06**.
+13.4 ✅ Fire, in two places — the breath's splash zone and any badly damaged building — plus the
+120 s cooldown. The swept line was **not** built: the owner took the 5×5 blast as it stood.
 *(4.8c is the third of that day's three and lives in Phase 4, because siege engines are half of
 it and they are nothing to do with dragons.)*
 *(The nest is composed entirely from existing gaia props — all three staged. The dragon was never
@@ -2603,62 +2604,75 @@ and if it is too strong the honest knob is the rate, not the radius.
    denial, which is the opposite of what that branch was written for. **Recommendation: exclude
    `unit.dragon_baby`,** and say so in the def rather than in a radius.
 
-##### 13.4 ⛔ The fire breath gets particles, and a 120 s cooldown — owner's ask, 2026-09-06
+##### 13.4 ✅ DONE 2026-09-06 — fire, in two places, and a 120 s cooldown
 
-*"add gpu particles for special flame attack (straight line, starting at the dragons head,
-shooting away from it, growing from 0 to 5 tiles, then sweeping from left to right and back to
-left then shrinking back down to 0) has a 120sec cooldown."*
+The ask was *"add gpu particles for special flame attack (straight line, starting at the dragons
+head … sweeping from left to right and back … ) has a 120sec cooldown"*, and the row put a fork
+in front of it. **The owner took the cheap side and added a second fire:** *"if the 5×5 ground
+blast is easier to add lets do it but i would still like some particle at the splash zone and
+fire particles on buildings with low health."*
 
-⚠️ **THE COOLDOWN IS A SIM CHANGE AND AN 8× NERF, NOT PART OF THE VFX.**
-`unit.dragon.ability.cooldown_ticks` is **150 today — fifteen seconds**. 120 s is **1200**. At 15
-seconds the fire breath is a rhythm inside a fight; at 120 it is a thing that happens **once** in
-most fights, and the dragon's ordinary 30-damage attack becomes almost all of her output. That
-may be exactly right for a unit there is only one of. It is a balance decision either way, and it
-should be made knowing it is a factor of eight rather than a rounding of the existing number.
+**THE SWEPT LINE IS NOT BUILT AND THE BLAST SHAPE IS UNCHANGED.** `units.json` still declares
+`target: "ground"`, `range: 5`, `radius: 2` — a 5×5 square at a tile the player picks, resolved by
+`AbilitySystem._burn` on the tick it fires. What that bought: no new target shape in the sim, no
+swept tiles to fold into `state_hash()`, and no risk to determinism at all. What it costs is
+recorded here rather than lost — a blast at a tile is indistinguishable from a spell, and this
+dragon's weapon is supposed to come out of her face. **The line is still the better weapon and
+this is the row it would come back to.**
 
-⚠️ **THE DESCRIBED SHAPE AND THE IMPLEMENTED ABILITY ARE DIFFERENT WEAPONS, AND ONE OF THEM HAS
-TO GIVE.** What `units.json` declares is `target: "ground"`, `range: 5`, `radius: 2` — a 5×5 blast
-at a tile the player picks, resolved by `AbilitySystem` on the tick it fires. What is described is
-a **swept line** from her head. Two ways to go, and they are not the same job:
+⚠️ **THE COOLDOWN WAS A SIM CHANGE AND AN 8× NERF, AND IT RODE IN THE SAME SENTENCE AS A VFX
+REQUEST.** `cooldown_ticks` was **150 — fifteen seconds** — and is now **1200**. At 15 s the
+breath was a rhythm inside a fight; at 120 it happens **once** in most fights and her ordinary
+30-damage bite becomes nearly all of her output. `units.json` carries a `_note_fire_breath` saying
+so, because a number that moved by a factor of eight is the first thing anybody should find when
+a later playtest reports that the mother feels weak.
 
-- **Decoration over an unchanged blast.** Cheap, no sim change, no determinism risk — and the
-  animation will be visibly lying to anyone watching where the damage lands, because the beam will
-  sweep across ground that takes none.
-- **The ability becomes a swept line.** `AbilitySystem` grows a target SHAPE, the swept tiles are
-  computed in integers from the caster's facing, and `state_hash()` covers the result because the
-  damage is still applied in one tick. More work, and it is the version where the picture is true.
+**ONE FIELD WENT ON THE WIRE AND IT WAS FREE.** `SnapshotSystem` carried `ability_cooldown` and
+nothing else — enough to grey an action slot, not enough to say where anything landed — so
+`SimUnit.to_snapshot` now sends `ability_aim` **inside the same `if ability_cooldown > 0`**. That
+placement is the whole reason it costs nothing: §12.1f's rule is that a field carried by *some*
+entities splits the roster into another wire shape, and `ability_cooldown` had already paid that
+split. A unit with a cooling ability was already its own shape; this joins it, and a match with no
+ability in it sends not one byte more than before.
 
-**Recommend the second**, and note that it also settles a question 4.10 left: an ability whose
-effect is a circle at a chosen tile is indistinguishable from a spell, and this dragon's is
-supposed to come out of her face.
+`GameView` watches the cooldown **rise** — the only thing that can cause it, since `AbilitySystem`
+otherwise counts down one per tick — and `BlastEffects` draws fire over the ground. An **edge**
+rather than *"is it at maximum"*, because a dropped or coalesced snapshot would swallow the
+effect, and at a 120 s cooldown that is the only breath the fight was going to get. **No fog
+clause and none wanted**: a dragon the client cannot see is absent from `updated`, so no rise is
+observed — the property `SpentProjectiles` gets from `removed`.
 
-⚠️ **THE PARTICLES MUST NOT DECIDE ANYTHING** (§4's invariant, no exception for effects). The
-sweep is a *view* animation and its duration must not gate the damage — a beam that hurt what it
-crossed as it crossed it would be the client deciding a fight, and two clients would disagree
-about it by a frame. The sim resolves the whole effect on one tick; the view spends as long as it
-likes drawing it.
+⚠️ **THE PICTURE IS DRAWN AT THE SIZE THE SIM BURNS**, `radius * 2 + 1`, read off the def and
+passed in. A view that chose its own would be the client telling the player something untrue about
+where a fight happened — §4's invariant arriving through decoration.
 
-⚠️ **THE VIEW CANNOT CURRENTLY BE TOLD THE ABILITY FIRED, AND THAT IS THE FIRST PIECE OF WORK.**
-`SnapshotSystem` carries `ability_cooldown` per unit and **nothing else** — the action slot greys
-itself off that number, which is all anything has needed. There is no *"X used ability Y at tile
-T"* anywhere on the wire, and inferring the fire from a cooldown stepping 0 → 1200 is exactly the
-kind of derived event that misses one when a snapshot is dropped or a client reconnects
-mid-cooldown. **`SimProjectile` is the precedent to follow, not to copy**: a projectile is a real
-sim entity that rides the ordinary entity channel and the view plays something where it stops
-(`SpentProjectiles`), so the effect exists in the simulation and the picture follows it.
+**THE BUILDING FIRE HAD ONE TRAP AND IT IS THE FOUNDATION.** A building under construction starts
+at a few hit points and climbs (5.2), so *"below a third"* is TRUE for nearly every foundation for
+most of its build time — an opening in which every pegged-out house is ablaze is not a subtle bug,
+it is most of what the screen shows. The rule is therefore **complete, alive, and under
+`GameView.BURNING_BELOW` (a third, where `HealthDot` has already gone red)**, decided in
+`GameView` because two of those three facts live only in the snapshot. Rubble is excluded for its
+own reason: it has already fallen.
 
-**Two art-side facts before a single particle is emitted**, and the second is the one that will
-cost an afternoon if it is guessed:
+**AND THE POOL PUTS THE FIRE OUT.** `EntityViewPool` recycles these nodes, so a burning house
+released and handed to the next entity would arrive alight — and the next entity is most likely a
+unit or a tree, which `GameView` never calls `set_burning` on, so nothing would ever put it out.
 
-- **`GPUParticles2D` under the entity's canvas item**, so it inherits the same
-  `draw_set_transform` the sprite does — including `vis.dragon_baby`'s `scale`, if a hatchling
-  ever breathes.
-- ⚠️ **"HER HEAD" IS A PIXEL OFFSET AND IT IS DIFFERENT IN ALL EIGHT DIRECTIONS.** The sim knows
-  a tile and a facing; it does not know where in a 209×85 frame her muzzle is, and the anchor is
-  her feet. **Measure it off the atlas** — one offset per direction — rather than deriving it
-  from the footprint. That is 12A's wall lesson exactly: *atlas frames are pixels I can read*, and
-  a beam starting from the middle of her chest is the sort of thing that reads as a broken effect
-  rather than as a wrong constant.
+**THE SPARK IS GENERATED IN CODE AND MUST STAY THAT WAY.** `FlameParticles.spark_texture()` paints
+a 32×32 radial falloff at load. An asset would put this behind the art queue, add a `LICENCES.md`
+row for a blurred dot, and — worst — resolve to a magenta placeholder box if it ever went missing,
+which is a hundred magenta squares fountaining out of a burning house.
+
+⚠️ **`GPUParticles2D` FALLS BACK TO THE CPU ON `gl_compatibility`**, which is the renderer an old
+Android device gets. Not broken, but not free either; `AMOUNT_BUILDING` (14) and `AMOUNT_BLAST`
+(64) are sized so the CPU path is survivable. Worth knowing before a frame-rate report is blamed
+on something else.
+
+`preview_dragon_nest` gained a burning house and one blast, because **particles are the purest
+case of "no assertion settles this"** — `test_fire_particles` pins *when*, *where* and *that it
+stops*, and whether flames read as fire or as orange confetti is a question for a person. The
+scene's `SETTLE_FRAMES` went 12 → 24 so the screenshot catches the middle of the blast's life
+rather than a cluster of embers still on the ground.
 
 ### Phase 14 — **NEEDS UPGRADE**: the AI cannot see what it is fighting
 
@@ -3505,10 +3519,12 @@ be judged without. In the order they cost least to most:
 - **13.3 — the nest heals at 1 hp/tick.** A dozen lines inside `NestSystem`. ⚠️ **Three questions
   have to be answered before it is written** and the third can break 13.2's denial branch
   outright — see the row.
-- **13.4 — the fire breath's particles, and a 120 s cooldown.** The biggest of the three and it is
-  not the particles: **the view is not currently told the ability fired at all**, and the shape
-  described is a different weapon from the one `units.json` declares. ⚠️ **The cooldown is a
-  separate, 8× balance change** riding in the same sentence (150 ticks → 1200).
+- ~~**13.4 — the fire breath's particles, and a 120 s cooldown.**~~ ✅ **DONE the same day.** The
+  owner settled its open question — *"if the 5×5 ground blast is easier to add lets do it"* — so
+  the swept line was not built and the sim shape is unchanged. What shipped is fire at the splash
+  zone, fire on badly damaged buildings, one free field on the wire (`ability_aim`, inside
+  `ability_cooldown`'s existing shape), and the cooldown at 1200. ⚠️ **That last is an 8× balance
+  change** and `units.json` says so where a puzzled playtester will find it.
 
 **3. 16.10 — the content the tool exists for.** Re-author the five How To Play maps for a custom
 look, then **"The Dragon Born"**, the second campaign, authored entirely in the tool. One fact

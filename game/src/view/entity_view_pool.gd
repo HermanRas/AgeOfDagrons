@@ -33,6 +33,12 @@ func release(id: int) -> void:
 	_active.erase(id)
 	view.visible = false
 	view.set_selected(false)
+	# ⚠️ **AND PUT THE FIRE OUT** (13.4). These nodes are RECYCLED, so a burning house
+	# released and handed to the next entity that needs a view would arrive already alight --
+	# and the new entity is very likely a unit or a tree, neither of which `GameView` ever
+	# calls `set_burning` on, so nothing downstream would ever turn it off again. Selection
+	# is cleared here for the same reason and has been since the pool existed.
+	view.set_burning(false)
 	_free.append(view)
 
 
