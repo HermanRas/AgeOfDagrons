@@ -1,6 +1,6 @@
 ## Dev check for 15.9: the whole campaign path, screen by screen, pressing the real
-## buttons — CAMPAIGN list -> the scenario list with its locks -> PLAY -> a match with its
-## briefing up.
+## buttons — CAMPAIGN list -> RESET PROGRESS' alert -> the scenario list with its locks ->
+## PLAY -> a match with its briefing up.
 ##
 ## ## WHY A SCRIPT WHEN A PERSON CAN CLICK IT
 ##
@@ -27,8 +27,8 @@
 ##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_campaign.tscn
-##       -- writes user://campaign_list.png, campaign_scenarios.png, campaign_in_match.png
-##          and quits.
+##       -- writes user://campaign_list.png, campaign_reset_alert.png,
+##          campaign_scenarios.png, campaign_in_match.png and quits.
 ##   ... -- --scenario 3     -- pick a different mission off the list (1-based)
 ##   ... -- --interactive    -- stop after the scenario screen and leave it up.
 extends Node
@@ -85,17 +85,22 @@ func _advance() -> void:
 			_shoot("campaign_list")
 			_report_campaigns()
 		1:
-			_open_the_campaign()
+			_open_the_reset_alert()
 		2:
+			_shoot("campaign_reset_alert")
+			_cancel_the_reset_alert()
+		3:
+			_open_the_campaign()
+		4:
 			_shoot("campaign_scenarios")
 			_report_scenarios()
 			if _interactive:
 				set_process(false)
 				return
-		3:
+		5:
 			_press_play()
 			_gap = SETTLE_FRAMES
-		4:
+		6:
 			_shoot("campaign_in_match")
 			_report_match()
 		_:
@@ -127,6 +132,42 @@ func _report_campaigns() -> void:
 		push_warning("preview_campaign: nothing installed -- the dev override reads"
 				+ " res://../scenarios and is editor-only, so this is a real finding in an"
 				+ " export and a broken checkout here")
+
+
+# ── the reset alert ─────────────────────────────────────────────────────────
+
+## Open RESET PROGRESS' modal so there is a PICTURE of it, which is the half no assertion
+## covers: `test_campaign_screen` proves the button opens the overlay and that CANCEL
+## changes nothing, and neither can see a paragraph running off the panel or two buttons
+## overlapping on a phone.
+##
+## Pressed IN the tree, unlike the two row presses below — this one does not change scene,
+## and being parented is what lets CANCEL take the focus, which is the layout detail most
+## worth looking at.
+func _open_the_reset_alert() -> void:
+	_campaign_screen.reset_button().pressed.emit()
+	var overlay := _campaign_screen.confirm_overlay()
+	print("pressed RESET PROGRESS -> alert open=%s" % overlay.is_open())
+	print("    %s" % overlay.title_text())
+	print("    %s" % overlay.body_text().replace("\n", " "))
+	print("    [%s] [%s]" % [overlay.cancel_button().text, overlay.confirm_button().text])
+	if not overlay.is_open():
+		push_warning("preview_campaign: RESET PROGRESS opened no alert -- the button is one"
+				+ " press away from deleting the player's whole campaign, and the modal is"
+				+ " the only thing in the way")
+
+
+## ⚠️ **CANCEL, NEVER CONFIRM, AND THAT IS NOT A STYLE CHOICE.** This preview drives the
+## REAL screen, whose `progress_path` is the real `user://campaign_progress.json` — the
+## suite repoints it, a preview does not. Pressing the other button here would delete the
+## progress of whoever ran the preview, once per run, as a side effect of taking a
+## screenshot. The alert is photographed and then dismissed.
+func _cancel_the_reset_alert() -> void:
+	var before := CampaignProgress.all()
+	_campaign_screen.confirm_overlay().cancel_button().pressed.emit()
+	print("cancelled the alert -> open=%s, progress untouched=%s"
+			% [_campaign_screen.confirm_overlay().is_open(),
+			CampaignProgress.all() == before])
 
 
 ## Press the first campaign's row, with the screen OUT OF THE TREE so its own scene change

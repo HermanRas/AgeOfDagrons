@@ -136,6 +136,59 @@ static func record_completed(folder: String, scenario_index: int,
 	return _write(data, path)
 
 
+## Forget every campaign's progress. Returns whether the file is gone afterwards (true
+## also when there was nothing to forget).
+##
+## ⚠️ **NO PLAN.md ROW YET.** Asked for by the owner on 2026-09-06 — *"add a reset button to
+## the campaign screen, with an alert asking the user if they are sure they want to reset
+## the progress of all scenarios; set progress back to 0"* — after Phase 15 had closed, and
+## PLAN.md is the owner's to add to. The date and the quotation are here so this is
+## attributable to a decision rather than to somebody's idea of a good feature.
+##
+## ## ⚠️ THIS IS THE ONE THING IN THIS FILE THAT GOES BACKWARDS
+##
+## `record_completed` above spends twenty lines arguing that **progress is a maximum and is
+## never decremented**, and every one of those reasons still holds — for the game. They are
+## all about the game rewinding progress *behind the player's back*: a replay re-locking
+## later missions, a second result screen counting twice. **A player asking for it is the
+## opposite case**, and it is the only caller this is offered to. It is not reachable from
+## the sim, from `GameScene`, or from anything that runs during a match; the campaign screen
+## puts a modal in front of it, and that modal is the actual safety.
+##
+## So the invariant is not "the number only goes up" — it is **"the number only goes up
+## unless the player says otherwise"**, which is the same shape as every other destructive
+## thing in a game's menu.
+##
+## ## IT DELETES THE FILE RATHER THAN WRITING `{}`
+##
+## Both read back identically through `all()`, so this is a choice about what is left on
+## disk. Deleting returns the player to the state a **fresh install** is in, byte for byte,
+## which means there is no fourth state for anything downstream to interpret — a file that
+## exists holds progress, and no file means none. It also disposes of a file that could not
+## be parsed, which `_write` cannot do: a corrupt file is exactly when somebody reaches for
+## this button, and "reset" that leaves the corruption in place would be the worst possible
+## time to preserve it.
+##
+## ⚠️ **IT TAKES EVERY CAMPAIGN, not just the one on screen.** The button lives on the
+## screen that lists campaigns rather than inside one, its modal says "all scenarios", and
+## per-campaign reset would need a row-level control that does not exist. If one is ever
+## wanted, it is a new function — do not add a `folder` argument to this one and change what
+## an existing call means.
+static func reset_all(path: String = USER_FILE) -> bool:
+	if not FileAccess.file_exists(path):
+		# Already nothing, which is a fresh install and every player who has not finished a
+		# scenario. Success, not a failure to report: the caller asked for a state, not for
+		# a deletion.
+		return true
+	var err := DirAccess.remove_absolute(path)
+	if err != OK:
+		# SAID OUT LOUD for `_write`'s reason. A reset that silently did nothing would look
+		# exactly like a reset that worked until the player reopened the campaign.
+		push_warning("CampaignProgress: cannot delete %s (%s)" % [path, error_string(err)])
+		return false
+	return true
+
+
 static func _write(data: Dictionary, path: String) -> bool:
 	# The directory exists for `USER_FILE` (it is `user://` itself) and may not for a test's
 	# own path. Made rather than assumed, so a test does not have to know.

@@ -218,6 +218,64 @@ func test_the_file_it_writes_is_the_file_it_reads() -> void:
 	assert_true(text.begins_with("{"), "no BOM in front of it: PowerShell's Set-Content adds one and it corrupted project.godot here once")
 
 
+# ── reset_all (2026-09-06): the one thing here that goes backwards ───────────
+
+func test_a_reset_forgets_every_campaign() -> void:
+	CampaignProgress.record_completed("HowToPlay", 3, _path())
+	CampaignProgress.record_completed("Other", 0, _path())
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 4)
+
+	assert_true(CampaignProgress.reset_all(_path()))
+	assert_eq(CampaignProgress.all(_path()), {})
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 0)
+	assert_eq(CampaignProgress.completed("Other", _path()), 0,
+			"every campaign, not the one that happened to be on screen")
+
+
+func test_a_reset_leaves_a_fresh_install_byte_for_byte() -> void:
+	# It DELETES rather than writing `{}`, so there is no fourth state downstream: a file
+	# that exists holds progress, and no file means none.
+	CampaignProgress.record_completed("HowToPlay", 0, _path())
+	assert_true(FileAccess.file_exists(_path()))
+	CampaignProgress.reset_all(_path())
+	assert_false(FileAccess.file_exists(_path()), "the file is gone, not emptied")
+
+
+func test_resetting_nothing_succeeds() -> void:
+	# The state of every player who has just installed the game, and of anybody who presses
+	# the button twice. The caller asked for a state, not for a deletion.
+	assert_false(FileAccess.file_exists(_path()))
+	assert_true(CampaignProgress.reset_all(_path()))
+	assert_true(CampaignProgress.reset_all(_path()), "and again")
+
+
+func test_a_reset_disposes_of_a_file_that_could_not_be_read() -> void:
+	# ⚠️ A corrupt file is exactly when somebody reaches for this button, and `_write` cannot
+	# help them -- it would have to parse the thing first. Deleting can, which is half the
+	# reason this deletes.
+	_write_raw("{\"HowToPlay\": ")
+	assert_true(CampaignProgress.reset_all(_path()))
+	assert_false(FileAccess.file_exists(_path()))
+
+
+func test_progress_can_be_recorded_again_after_a_reset() -> void:
+	# The reset must not leave the campaign unable to record anything -- which is the failure
+	# `record_completed`'s "a corrupt file is REPLACED" note exists to avoid, arrived at from
+	# the other direction.
+	CampaignProgress.record_completed("HowToPlay", 2, _path())
+	CampaignProgress.reset_all(_path())
+	assert_true(CampaignProgress.record_completed("HowToPlay", 0, _path()))
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 1,
+			"and it counts from one again, not from where it left off")
+
+
+func test_the_default_reset_path_is_the_players_own_file() -> void:
+	# ⚠️ ASSERTED WITHOUT CALLING IT. `reset_all()` on its default would delete the progress
+	# of whoever is running the suite; what can safely be checked is that the default is the
+	# same constant every other function here defaults to.
+	assert_eq(CampaignProgress.USER_FILE, "user://campaign_progress.json")
+
+
 # ── the shape of the whole loop, which is what the owner reported broken ──────
 
 func test_the_unlock_arithmetic_matches_what_the_screen_will_ask() -> void:

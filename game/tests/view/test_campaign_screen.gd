@@ -17,11 +17,28 @@
 ## below — not that any measurement came out right.
 extends TestCase
 
+## ## ⚠️ NOTHING HERE MAY TOUCH THE REAL PROGRESS FILE
+##
+## RESET PROGRESS (2026-09-06) put a button on this screen that **deletes**
+## `user://campaign_progress.json`, so
+## `before_each` repoints the screen at a path under this directory before any test can
+## press it. Left on its default, one run of the suite would silently wipe the campaign
+## progress of whoever ran it. `CampaignProgress`' own header records the milder version of
+## this biting once already — a test that merely READ the real file passed on a fresh
+## checkout and failed on a machine that had played the game.
+const DIR := "user://test_campaign_screen"
+const PROGRESS := "user://test_campaign_screen/progress.json"
+
 var screen: CampaignScreen
 
 
 func before_each() -> void:
 	screen = CampaignScreen.new()
+	screen.progress_path = PROGRESS
+	if not DirAccess.dir_exists_absolute(DIR):
+		DirAccess.make_dir_recursive_absolute(DIR)
+	if FileAccess.file_exists(PROGRESS):
+		DirAccess.remove_absolute(PROGRESS)
 
 
 func after_each() -> void:
@@ -123,6 +140,83 @@ func test_the_shipped_campaign_loads_without_complaint() -> void:
 	# a broken commit, not a runtime state.
 	assert_eq(screen.warnings(), [] as Array[String],
 			"scenarios/ loads clean: " + "; ".join(screen.warnings()))
+
+
+# ── RESET PROGRESS (2026-09-06) ───────────────────────────────────────────────
+
+func test_the_reset_button_is_on_the_screen_and_says_what_it_does() -> void:
+	# The half that can rot silently, which is `test_the_download_button`'s argument: a
+	# button wired to nothing still looks right on the screen.
+	assert_not_null(screen.reset_button())
+	assert_eq(screen.reset_button().text, "RESET PROGRESS")
+	assert_false(screen.reset_button().disabled,
+			"never gated on there being progress -- reading the real file to decide would"
+			+ " make this screen's construction depend on user:// state")
+
+
+func test_pressing_reset_only_asks() -> void:
+	# ⚠️ THE WHOLE POINT OF THE MODAL. There must be no path from a single tap to a wiped
+	# campaign. `record_completed` is written to it first, so the file has something in it
+	# to lose.
+	CampaignProgress.record_completed("HowToPlay", 2, PROGRESS)
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 3)
+
+	assert_false(screen.confirm_overlay().is_open(), "no modal before the press")
+	screen.reset_button().pressed.emit()
+	assert_true(screen.confirm_overlay().is_open(), "the press opens the question")
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 3,
+			"and changes nothing until it is answered")
+
+
+func test_the_alert_says_what_is_lost_in_the_players_terms() -> void:
+	# "Progress" is a number in a JSON file; what the player has is unlocked missions, and
+	# what they need told is that those lock again. The word "undone" is the one that stops
+	# a reflexive yes.
+	screen.reset_button().pressed.emit()
+	var body := screen.confirm_overlay().body_text().to_lower()
+	assert_true(body.contains("lock"), "it says the scenarios lock again: " + body)
+	assert_true(body.contains("undone"), "and that it cannot be undone: " + body)
+	assert_true(body.contains("campaign"), "and that it is every campaign, not this one")
+
+
+func test_cancelling_the_alert_keeps_every_scenario_unlocked() -> void:
+	CampaignProgress.record_completed("HowToPlay", 1, PROGRESS)
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().cancel_button().pressed.emit()
+	assert_false(screen.confirm_overlay().is_open())
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 2,
+			"CANCEL must leave the file exactly as it was")
+
+
+func test_confirming_the_alert_sets_progress_back_to_zero() -> void:
+	CampaignProgress.record_completed("HowToPlay", 3, PROGRESS)
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 4)
+
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 0)
+	assert_false(screen.confirm_overlay().is_open(), "and the modal is gone")
+
+
+func test_a_reset_takes_every_campaign_not_just_the_listed_one() -> void:
+	# The button is on the screen that lists campaigns rather than inside one, and the modal
+	# says so. A future second campaign must not survive a reset the player was told cleared
+	# everything.
+	CampaignProgress.record_completed("HowToPlay", 0, PROGRESS)
+	CampaignProgress.record_completed("SomeOtherCampaign", 4, PROGRESS)
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+	assert_eq(CampaignProgress.all(PROGRESS), {}, "nothing is left behind")
+
+
+func test_resetting_with_nothing_to_reset_is_a_no_op_and_not_an_error() -> void:
+	# The button is deliberately never disabled, so this is the ordinary state of a player
+	# who has just installed the game and pressed it out of curiosity.
+	assert_eq(CampaignProgress.all(PROGRESS), {})
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+	assert_eq(CampaignProgress.all(PROGRESS), {})
 
 
 ## Every `Label` text under `node`, recursively — the row's own children are nested in a
