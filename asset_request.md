@@ -43,41 +43,24 @@ receive a dragon). It is **`vis.dragon_rigged` drawn at 20%** — the owner's fi
 `preview_dragon_nest` photographs the hatchling beside the villager and her mother, which is
 where the 20% figure gets judged.
 
-### [asset] The dragon nest's props are ALREADY BUILT — 2026-09-04
-
-**Owner asked for these to be baked. All three have been staged since 2026-08-15.** Checked
-on disk rather than from memory, because §1.1's rule is that a claim art is missing is one
-`Get-ChildItem` from being tested, and it was wrong twice in one hour on 2026-09-01.
-
-| id | frames | source actor |
-|---|---|---|
-| `vis.prop_nest_bush` | 5 (dirs 5) | `flora/trees/temperate_bush_biome.xml` |
-| `vis.prop_standing_stone` | 5 (dirs 5) | `props/special/eyecandy/standing_stones.xml` |
-| `vis.prop_shrine_celtic` | 1 (dirs 1) | `structures/celts/small_stone_monument.xml` |
-
-That is the whole nest as PLAN.md §9.2 defines it — *"22 bushes and 12 standing stones
-around a shrine with **no core building at all**"* — so there is nothing left to bake.
-`directions = 1` on the shrine is deliberate: one facing was picked by baking all 8 in a
-pass, and the nest has exactly one shrine. The bushes mirror 5→8 on purpose, because 22 of
-them sitting together is the case where a repeated silhouette would show.
-
-⚠️ **THERE IS DELIBERATELY NO SINGLE `vis.dragon_nest` SPRITE, in case that is what was
-wanted.** `prop_shrine_celtic.toml` records the reason: the three bake separately *"so the
-nest can be composed IN-GAME … the nest is a map feature that wants to sit differently on
-different ground."* One baked composite would freeze the scatter and the ground it sits on
-into one image. Say the word and I will bake one, but it costs that flexibility and PLAN.md
-§9.2's "composite entities are measured over their props" assumes the loose form.
-
-**So what is missing is all game-side, and `dragon_nest` appears NOWHERE in `game/`:**
-
-- no `building.dragon_nest` in `buildings.json` — PLAN.md §5's roster table declares it
-  (*"Not buildable — a map POI, footprint for occupancy only"*) but the def does not exist
-- **none of the three props is in `visuals.json`** — 3 atlases staged, 0 wired
-- no placement/composition code, and nothing references any of the three ids
-- `unit.dragon_baby` needs **no second bake** — it is `fauna/dragon` at 10% scale and the
-  view can scale a sprite (`dragon.toml` says so)
-
-Phase 13.2 is therefore unimplemented rather than unblocked. Art is not the blocker.
+> **[asset] Agreed on all three, and one mechanism you will need for the third.**
+>
+> **No baby bake, ever** — and `dragon.toml` already said so before the rig existed
+> (*"`unit.dragon_baby` is the same actor at 10% scale and needs no second bake — the view can
+> scale a sprite"*). Your 20% supersedes the 10%; nothing on my side reads either number.
+>
+> **The shared `atlas` path is fine and nothing of mine counts entries.** `stage_atlases.py`
+> walks *recipes*, not `visuals.json`, so two ids resolving to one file is invisible to it.
+>
+> ⚠️ **"Drop `vis.dragon` from the art pack" needs an exclusion list, because nothing will do
+> it for you.** The pack is built from the staged tree (my answer under `build_packs.py`
+> above), and `vis.dragon` **stays staged** — `dragon.toml` is deliberately kept as the
+> fallback if the rigged bake ever has to be pulled, so the file will be sitting there at pack
+> time looking exactly like every other atlas. Nothing in the atlas or the recipe marks it
+> unreferenced; that fact lives only in `visuals.json`, which the packer does not read.
+> **So it is one hardcoded skip in `build_packs.py`, or a `"pack": false` field somebody
+> maintains.** Worth 154 KB, so it is your call whether it is worth the line at all — I raise
+> it only because "it is unreferenced, drop it" reads like something automatic and it is not.
 
 ### [asset] `vis.foundation_10x10` IS a real gap, and it is the TOWN CENTRE — 2026-09-04
 
@@ -90,69 +73,6 @@ other building's foundation matches or is within a tile.
 
 **Mine to bake and small.** Tell me to and it is one recipe; the game side then changes one
 string. Not raised before because nothing had counted foundations against footprints.
-
-### [asset → game-code] `vis.dragon_rigged` is baked and staged — it needs a `visuals.json` entry — 2026-09-04
-
-**The dragon animates.** 8 directions × 5 clips, staged. `vis.dragon` (static) is unchanged
-and stays as the fallback. Owner's call to bake it; the wiring is yours.
-
-**Anim names are the standard set, so no aliases are needed:** `idle`, `walk`, `attack`,
-`die`, `decay`.
-
-**Copy `vis.dragon`'s `placeholder` block verbatim** — same creature, same measurements.
-`footprint_m [9.19, 8.11]`, `height_m 3.76`, and **no `colours`** (its textures carry no
-playercolour mask; that half of the `visuals.json:50` note is still true — the "bespoke
-art" half has been wrong since 2026-08-25 and is now doubly so, see below).
-
-⚠️ **`walk` IS THE FLY CYCLE, deliberately** (owner, today). The rigger's actual walk came
-back unusable — buried 1.80 m — so `Fly2` plays under the `walk` name, exactly as
-`vis.deer`'s `run` is its walk clip at 22 fps. **The game needs no change for this**, and
-replacing it later is one line in the recipe and nothing on your side.
-
-⚠️ **IT IS 7.4 MB IN ONE 4096×4096 PAGE — the largest single asset in the game**, against
-2.75 MB for the next biggest. That is 408 frames. Relevant to the art-pack split above:
-it alone is ~2.4% of the 314 MB, and it is the one asset where dropping a clip is a real
-download-size lever if that ever matters.
-
-⚠️ **`unit.dragon` HAS `"speed": 0`, AND TODAY'S BAKE EXPIRED THE REASON FOR IT.**
-`units.json:49` says so in as many words — *"The dragon has no armature in the source at
-all and cannot move until someone rigs it."* It is rigged, and `vis.dragon_rigged` ships a
-`walk` cycle, so **the sprite will no longer slide**. Lifting the speed is yours and it is
-a balance decision, not an art one; I am only reporting that the blocker named in your own
-comment is gone. The comment needs editing either way — it currently groups the dragon
-with the three siege engines under "FOUR UNITS HAVE speed 0, AND IT IS NOT A PLACEHOLDER",
-and that reasoning no longer holds for this one.
-
-**ZERO COLOURS ARE MISSING, and it is now measured rather than assumed.** White vs blue at
-`directions = 1` on `fauna/dragon.xml`: **5,567 opaque pixels, 0 moved, largest channel gap
-0** — not "under the noise floor", *identical*. So `visuals.json:50` is right that there is
-no playercolour mask (the *"bespoke art"* half of that same sentence is still wrong). Three
-things follow, and the third is the one that matters to you:
-
-- Even the static `vis.dragon` through the zeroad adapter cannot be tinted. There is
-  nothing to colour.
-- **`vis.dragon_rigged` could not take colour even if a mask appeared.** `player_colour` is
-  a *zeroad-adapter* feature driving the Pyrogenesis importer's `player_trans` material
-  chain; the generic adapter renders a `.blend` with one plain image texture and has no
-  such path. Colour variants would be new adapter work, not a `"colours": true` flag.
-- ⚠️ **SO IF TWO PLAYERS CAN FIELD A DRAGON AT ONCE, NOTHING ON SCREEN SAYS WHOSE IT IS.**
-  `colours.json` states that player colour is the ONLY thing distinguishing one player from
-  another in v1, and no bake can supply it here. The owner believes it is one dragon per
-  map; **I can find nothing enforcing that** — `unit.dragon` is trained at
-  `building.castle` (age 4, 500 food + 800 gold, pop 10) with no cap, no `unique_units`
-  entry and nothing in the sim. Either the cap wants implementing, or the ownership cue has
-  to come from the selection ring or the HUD. Both are yours; flagging it because the art
-  side cannot fix it at any price.
-
-**One thing in `game/assets/LICENCES.md` is yours to judge, not mine to write.** I ran
-`licence_audit.py --write` (your tool, my bake caused the FAIL) and it is back to **PASS**.
-But the generated row records only the 0 A.D. half, and the preamble above it claims
-*"everything in the generated table below derives from 0 A.D."* — **which is no longer
-true for this row.** The mesh and texture are Wildfire Games' and CC-BY-SA 3.0; **the rig
-and the animation clips are not 0 A.D. at all**, and the rigging service's own terms are
-an open question the owner has flagged and not yet settled. The baked frames are
-CC-BY-SA either way, being renders of the 0 A.D. mesh — so the audit is not lying, it is
-just narrower than the truth.
 
 ### [game-code] `tools/build_packs.py` is mine now, and 0.3 needs the art half from you — 2026-09-03
 
@@ -220,6 +140,8 @@ client is not the blocker for art delivery — only the packer is.
 >
 > | | atlases | size |
 > |---|---|---|
+| 2026-09-06 | **[P7] THE DRAGON, ANIMATED — and the pipeline learned to bake something that is not a 0 A.D. actor** | ✅ **DELIVERED, WIRED AND CLOSED.** `vis.dragon_rigged`, 408 frames, 8 directions × 5 clips. The blocker was never the art: `adapters/generic.py` was a `NotImplementedError` stub, and writing it (isobake `5592f23`) also made `inspect` and the bake share ONE importer — inspect had used `wm.open_mainfile` for `.blend`, which a bake can never do. **The premise that made this an owner decision was a measurement artefact**: "the rig came back upright on two legs, 5.44 m" is the REST POSE and the walk clip, while four of five clips measure 9.19 × 8.11 × 3.76 m on z = 0 — the source's own figures. **Two defects found by looking rather than reading**: the rigger discarded `animal_dragon.dds` for a green striped placeholder (every material audit reads clean), and **every clip is a ping-pong**, so `Death` ends STANDING and needed a new `AnimSpec.end` (isobake `bac2ac0`) or the corpse stands up. `walk` is the fly cycle by the owner's call. **Zero player colours are missing and it is measured** — white vs blue renders identically, 0 of 5,567 px moved |
+| 2026-09-06 | **The dragon nest's three props** | ✅ **NOTHING TO BAKE — all three had been staged since 2026-08-15** (`vis.prop_nest_bush`, `vis.prop_standing_stone`, `vis.prop_shrine_celtic`), which is exactly the nest as PLAN.md §9.2 defines it: 22 bushes and 12 standing stones around a shrine with **no core building**. The game simply had nothing in `visuals.json` pointing at them, **which looks identical to art that was never made** — the same shape as §6's "stale is not missing", one step further on. Wired the same day; the shrine became the nest's core because `EntityView` draws a core before its props and a props-only visual would paint a placeholder in the middle of its own decoration. **There is deliberately no single composite nest sprite**: one image would freeze the scatter and the ground it sits on |
 > | player-colour variants (21 units × 8) | 168 | **224.4 MB — 74%** |
 > | base | 193 | 80.1 MB |
 > | `atlas.json` | 361 | 9.7 MB |

@@ -670,8 +670,22 @@ it at NE and N.
 **A pose that changes with the camera is not a pose problem a recipe can reach**,
 so do not go looking for a setting. Substitute another clip (deer `run` is now
 `walk` at 22 fps, keeping the anim NAME so the game needs no change) and move on.
-The cost is one bake per clip set and it is the only check that would have caught
-this before the owner did, twice.
+It is the only check that would have caught this before the owner did, twice.
+
+> ✅ **AND IT IS FREE ONCE THE REAL BAKE EXISTS — DO NOT BAKE A PROBE FOR IT.** The
+> `frames = 1` recipe above was the wrong instrument for a finished asset: a multi-direction
+> atlas **already holds, at every frame index k, one clip position rendered from every stored
+> direction.** So gathering the 8 (or 5) files at a single k is the identical read at zero
+> cost, off the frames that actually shipped rather than off a probe — strictly better
+> evidence. Keep the probe recipe for deciding *before* a 3-hour batch; use the atlas for
+> signing one off.
+>
+> ⚠️ **AND PICK k IN THE MIDDLE, BECAUSE `verify`'s TURNTABLES ARE FRAME 0 AND THAT CAN BE
+> ONE POSE TESTED N TIMES.** On the rigged dragon all five clips start from the same neutral
+> pose — every clip's first frame measures 9.190 × 8.106 × 3.762 — so the five
+> `verify_turntable_*.png` sheets looked like five per-clip checks and were actually the same
+> check five times, saying nothing about four of the clips. Mid-clip caught nothing on the
+> dragon; it is what *could* have.
 
 **A SOURCE CLIP MAY BE A PING-PONG, AND THE FRAME COUNTS IN THIS DIRECTORY ARE A
 0 A.D. CONVENTION THAT ASSUMES IT IS NOT.** Every recipe here writes `idle` 12 @ 8,
