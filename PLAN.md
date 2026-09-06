@@ -570,8 +570,15 @@ Systems run in this fixed order by `SimWorld.step()`:
 | `PopulationSystem` | Recount `pop_used`/`pop_cap`; owns the cap rule | ✅ |
 | `VisionSystem` | Recompute per-player fog — **an ally's entities included since 2026-09-01** (§11.4a) | ✅ |
 | `WinConditionSystem` | Evaluate the active mode's victory rule | ✅ |
+| `NestSystem` | The dragon claim — hatch, count 3600 ticks, hand over, deny (13.2b) | ✅ 13.2b |
 | `AISystem` | Drive AI players (emits Commands like any player) | ✅ 12.2a |
-| ~~`TechSystem`~~ → `TechMods` | Research timers, stat modifiers | ✅ 9.3, **and it is not a `SimSystem`.** The timers turned out to be the production queue's — a research is an entry on it and `ProductionSystem` has counted those down since 5.4, so a second system ticking the same counter would be two owners of it. What was left is the modifiers, which are a pure function of which techs a player holds, so `TechMods` is a static resolver in the shape of `Formation` and `WallPlan` rather than a per-tick pass with nothing to do on 99.9% of ticks |
+
+⚠️ **`TechSystem` IS NOT ON THIS LIST AND MUST NOT BE ADDED.** §9.3 promised one for *"research
+timers, stat modifiers"* and neither half wanted a system. The timers are the **production
+queue's** — a research is an entry on it and `ProductionSystem` has counted those down since 5.4,
+so a second system ticking the same counter would be two owners of it. The modifiers are a pure
+function of which techs a player holds, so `TechMods` is a **static resolver** in the shape of
+`Formation`, `WallPlan` and `Diplomacy`.
 
 The State column means *built unless it says otherwise*. It used to carry a bare phase number for
 both `TechSystem` and `AISystem`, which read as "scheduled" for one and was wrong for the other.
@@ -990,7 +997,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `building.dock` | 2 | Fishing + transport ship; galley from 3, galleon from 4 | `gaul` · `pers` · `rome` `/dock` |
 | `building.watch_tower` | 2 | Throws stones | `gaul`/`pers` `sentry_tower` · `rome/defense_tower` |
 | `building.guard_tower` | 3 | Shoots arrows. **Is a wall tower**, so it tracks that age's newest wall tier | `pers` · `rome` `/wall_tower` |
-| `building.castle` | 3 | **+40 pop.** Knight; elite swordsman + trebuchet from 4; the dragon | `iber/fortress` · `rome/fortress` |
+| `building.castle` | 3 | **+40 pop.** Knight; elite swordsman + trebuchet from 4. ~~the dragon~~ — dropped 2026-09-04, see `unit.dragon`'s row | `iber/fortress` · `rome/fortress` |
 | `building.monastery` | 3 | Monk | `pers` · `rome` `/temple` |
 | `building.university` | 3 | Upgrades | `iber/temple` · `mace/temple` |
 | `building.siege_workshop` | 3 | Ram, ballista, onager; trebuchet from 4 | `pers/arsenal` · `rome/arsenal` |
@@ -998,7 +1005,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `building.wall_stone` + `gate_stone` | 3 | | `pers/*` |
 | `building.wall_reinforced` + `gate_reinforced` | 4 | | `rome/*` |
 | `building.wonder` | 4 | Wonder victory (11.2) | `hellenic_epic_temple` |
-| `building.dragon_nest` | ✅ declared 2026-09-04 | **Not buildable** (`buildable: false`) — a map POI (13.2). 10×10, `blocks_movement: false`: the footprint stops a house being dropped on it, and you walk through a henge. **hp 1200 is provisional** — it is really a number about the 360 s window. Still needs MapGen placement | 22× `prop_nest_bush`, 12× `prop_standing_stone`, `prop_shrine_celtic` — **all three baked, staged AND now declared**. ⚠️ **The shrine is the CORE**, not a prop: `EntityView` draws a visual before its props, so "no core" would have painted a magenta placeholder inside its own decoration. The bush is `flora/trees/temperate_bush_biome.xml`, not the `bush_badlands` this row used to name |
+| `building.dragon_nest` | ✅ 2026-09-04 | **Not buildable** (`buildable: false`) — a map POI (13.2), placed by `MapGenerator._place_nest` since 13.2a. 10×10, `blocks_movement: false`: the footprint stops a house being dropped on it, and you walk through a henge. **`leaves_rubble: false`** (13.2b) — there is no rubble bake and a razed henge is an absence, not a pile; left as rubble, a rival who had just denied a dragon claim would watch an apparently untouched nest for a minute. **hp 1200 is provisional and wants the owner's eye** — it is a number about how defensible the 360 s window is, not about how sturdy stones are | 22× `prop_nest_bush`, 12× `prop_standing_stone`, `prop_shrine_celtic` — **all three baked, staged AND now declared**. ⚠️ **The shrine is the CORE**, not a prop: `EntityView` draws a visual before its props, so "no core" would have painted a magenta placeholder inside its own decoration. The bush is `flora/trees/temperate_bush_biome.xml`, not the `bush_badlands` this row used to name |
 
 **Units** — one hand-picked actor for all four ages, deliberately mixed-civ. Cavalry point at the
 `_m` mount, which carries its `_r` rider as a nested prop.
@@ -1035,7 +1042,7 @@ wall tower another, across all civs, so the max rule is a no-op for that set.
 | `unit.galleon` | 4 | Dock | `structures/ptolemies/quinquereme` — recipe written, unbaked |
 | `unit.trebuchet` | 4 | Siege Workshop **and** Castle | `units/han/siege_mangonel` + `siege_mangonel_pivot_packed`. The only entity exercising plural `trainable_at` |
 | `unit.dragon` | — | **Not trained — claimed.** ~~Castle~~, dropped 2026-09-04: the nest is the only route (13.2) | `fauna/dragon` ✅ rigged |
-| `unit.dragon_baby` | — | Dragon Nest, 360 s timer | `fauna/dragon` at **20% scale** (owner, 2026-09-04; this said 10%, and no new bake is needed either way). **Also what `Mode.TROPHY` needs** (11.2), for a different job — see 13.2 |
+| `unit.dragon_baby` | — | ✅ 2026-09-06. Spawned at the nest by `NestSystem` when the mother dies; 360 s later it is REPLACED by a `unit.dragon` owned by whoever killed her | `vis.dragon_baby` = `vis.dragon_rigged` at **`"scale": 0.2`** (owner, 2026-09-04; this said 10%). **No bake of its own, and there must never be one** — a 20% copy of the largest atlas in the game is 7.7 MB of identical frames. **Also what `Mode.TROPHY` needs** (11.2), for a different job — see 13.2 |
 
 **GAIA — and the split matters, because it moved on 2026-08-23.** This paragraph listed every
 animal as a `res.*` resource node and was the last place in the document still describing the world
@@ -2317,10 +2324,18 @@ attack" is indistinguishable from "nothing in this fixture would have".
 
 ### Phase 13 — Dragons
 
-13.1 Dragon unit: air domain, castle-tier stats, fire-breath AoE + cooldown.
-13.2 Dragon Nest POI: guardian dragon ✅ (13.2a), claim-on-defeat, 360 s baby-dragon timer, destructible.
+13.1 ✅ Dragon unit: air domain, castle-tier stats, fire-breath AoE + cooldown.
+13.2 ✅ Dragon Nest POI: guardian dragon (13.2a), claim-on-defeat + 360 s baby-dragon timer +
+destructible nest (13.2b).
 *(The nest is composed entirely from existing gaia props — all three staged. The dragon was never
 bespoke either: it is 0 A.D.'s own `fauna/dragon.xml`.)*
+
+**THE PHASE IS CODE-COMPLETE AS OF 2026-09-06.** What is left on it is two provisional numbers
+that want playing rather than writing — the nest's 1200 hp and the hatchling's 300/8-8 — and one
+row that was deliberately not built: **none of the claim reaches the wire**, so a player sees a
+hatchling appear and, six minutes later, a dragon, with nothing saying whose it will be or how
+long is left. See 13.2b's closing note for why that is a cost worth weighing rather than an
+oversight.
 
 #### 13.1 ✅ DONE 2026-09-04 — the adult dragon flies
 
@@ -2422,48 +2437,114 @@ obstacle a 64×64 board has ever had, and four test files scan that map for clea
 `test_walls`' own header already records that assuming a clear strip there *"cost two tests at
 once"*. `map_gen.gd` carries the note; `preview_dragon_nest` is where the art is looked at.
 
-**Still open, and none of it is art:**
+✅ **`building.dragon_nest` and `vis.dragon_nest` are declared (2026-09-04).** The three prop
+atlases were **already baked and staged, and nothing in `visuals.json` pointed at them** — which
+is indistinguishable from art that was never made, and is why this row read as blocked. The
+shrine is the core (see §9's row); the 34 props are sorted by **x+y**, because `Iso._project`
+puts screen y at `(x+y) * half.y` and `EntityView` splits behind-the-core from in-front at
+`at.y < 0` — sorting by world y gets both the split and the depth order wrong and looks like a
+renderer bug.
 
-- **The claim itself** — the baby, the timer, the ownership transfer. What exists now is the mother
-  and her nest standing on the map; killing her drops nothing yet.
-- `unit.dragon_baby` needs **no new bake** — it is `vis.dragon_rigged` at 20% — but nothing in
-  `EntityView` scales a sprite today. `_draw_frame` places the frame at `Rect2(at - anchor,
-  rect.size)` with the anchor unscaled, and the mirror transform would need the factor too.
-  Footprint, selection ring and placeholder metres have to scale with it or a baby gets a 9 m
-  footprint.
-- ✅ **`building.dragon_nest` and `vis.dragon_nest` are declared (2026-09-04).** The three prop
-  atlases were **already baked and staged, and nothing in `visuals.json` pointed at them** —
-  which is indistinguishable from art that was never made, and is why this row read as
-  blocked. The shrine is the core (see §9's row); the 34 props are sorted by **x+y**, because
-  `Iso._project` puts screen y at `(x+y) * half.y` and `EntityView` splits behind-the-core from
-  in-front at `at.y < 0` — sorting by world y gets both the split and the depth order wrong and
-  looks like a renderer bug. ~~What is left is MapGen placement~~ — done, see 13.2a. One wart
-  remains: `visual_rubble` points at the nest itself, so a destroyed nest looks identical to a
-  live one.
-- **The grow timer and the ownership transfer**, which is the first thing in this game to change
-  who owns a gaia unit. `HerdSystem` is the nearest shape and explicitly does *not* do this
-  (*"herding is not owning"*), so it is a new rule rather than an extension of that one.
-- Trophy (11.2) also wants `unit.dragon_baby`, but for a different job — one per player, as a thing
-  you protect. Sharing the def is fine; sharing the **spawn rule** is not.
+**ART STOPPED BEING THE BLOCKER ON 2026-09-04.** `vis.dragon_rigged` is staged and animating — 8
+directions × `idle`/`walk`/`attack`/`die`/`decay` — so 13.1's fire breath finally has a clip to
+draw, which §4.10 had recorded as missing. §12A A.9 has the full account. **One thing from that
+delivery is still open and it is not code: the rigging service's terms.** The mesh and texture
+are 0 A.D.'s and CC-BY-SA 3.0, and the baked frames are too — but the rig and the clips are not
+0 A.D., and §2.3's attribution table is narrower than that truth. Owner's call before this ships.
 
-**ART IS NO LONGER THE BLOCKER, as of 2026-09-04.** `vis.dragon_rigged` is staged and animating —
-8 directions × `idle`/`walk`/`attack`/`die`/`decay` — so **13.1's fire breath finally has a clip
-to draw**, which §4.10 records as missing. §12A A.9 has the full account. Three things remain and
-none of them are art:
+##### 13.2b ✅ DONE 2026-09-06 — the claim: kill the mother, hold the nest, grow the dragon
 
-- **`unit.dragon` carries `"speed": 0`, and `units.json:49` justifies it as *"no armature in the
-  source at all and cannot move until someone rigs it"*. That reason has expired.** §2.2's "AIR is
-  still unreachable — the dragon has no rig and `speed: 0`" is now half true: the rig exists, so
-  what remains is a balance call and a `visuals.json` entry.
-- ⚠️ **NO PLAYER COLOUR IS POSSIBLE ON THIS UNIT, AND IT IS NOT AN ART GAP.** Measured: white vs
-  blue render *identically* — the 0 A.D. dragon carries no playercolour mask at all. §1's palette
-  is described as the only thing distinguishing one player from another in v1, so **if two players
-  can field a dragon at once, nothing on screen says whose it is.** Nothing enforces one per map:
-  it trains at `building.castle` with no cap and no `unique_units` entry. Either cap it, or carry
-  the ownership cue in the selection ring or HUD.
-- **The rigging service's terms are unsettled.** The mesh and texture are 0 A.D.'s and CC-BY-SA
-  3.0, and the baked frames are too — but the rig and the clips are not 0 A.D., and §2.3's
-  attribution table is narrower than that truth. Owner's call before this ships.
+`NestSystem`, running **directly before `DeathSystem`** — after `CombatSystem` so a death is seen
+on the tick it happens, before `DeathSystem` because that is what retires the corpse and, for a
+nest, despawns the building outright. Four events, straight off the table above:
+
+| | |
+|---|---|
+| the mother dies to somebody | a `unit.dragon_baby` hatches at the nest, **gaia's** |
+| 3600 ticks | it is REPLACED by a `unit.dragon` owned by whoever landed the killing blow |
+| the nest is razed | the hatchling dies with it and the claim is void |
+| the hatchling is killed | the same, by the shorter road |
+
+⚠️ **THE HATCHLING IS GAIA'S UNTIL IT GROWS, AND THAT IS THE WHOLE TENSION.** The table says the
+GROWN dragon is *"owned by the claimant"*, and handing the baby over at spawn instead would end
+the feature on the tick it started: the claimant walks it out of reach, and then there is nothing
+to hold, nothing for a rival to deny, and no reason for the nest to be destructible.
+
+⚠️ **`claim_owner` IS NEVER CLEARED, AND THAT IS THE OTHER HALF OF "ONE DRAGON PER MAP."** 13.2a
+made the placement half (one nest, one mother); this is the record half — a second guardian dying
+at the same nest, for any reason, claims nothing. The `UnitDef.limit` / `UnitLimitSystem` deleted
+above stays deleted.
+
+**IT IS A SPAWN AND A DESPAWN, NOT A CHANGE OF OWNER**, which is why the paragraph above
+predicting *"the first thing in this game to change who owns a gaia unit"* turned out to be the
+wrong comparison. `HerdSystem` rules the idea out by name (*"herding is not owning"*) and there
+was nothing to extend — but nothing needed extending, because the hatchling is gaia's for its
+whole life and a **fresh** `unit.dragon` takes its place. Mutating `def_id` and `owner_id` would
+have left a 300 hp dragon that cannot fly: hp, armour, speed, domain and pop cost are copied off
+the def by `spawn_unit` and by nothing else.
+
+**THE PLUMBING IT NEEDED: the game did not record who killed anything.**
+`SimEntity.take_damage(amount, attack_type)` was handed a number and no attacker —
+`WildlifeSystem._check_flee`'s header says so and works around it by watching hp, which is the
+same information for the price of a field. *"Claim by killing her"* needs a name, and no delta
+can answer it. `attacker_owner` is now a **required** third argument with no default, the
+argument `Diplomacy.is_enemy(e, player_id, teams)` makes about its team table: a default would
+have compiled all four existing damage sources unchanged and left the one nobody updated
+crediting nobody — presenting as *a dragon you cannot claim if you use the wrong weapon*.
+⚠️ **`SimEntity.NO_ATTACKER` IS -1 AND NOT 0**, because owner 0 is gaia and gaia is a real
+attacker everywhere else in this sim; `NestSystem` tests `> 0`.
+
+**SPRITE SCALING, which had to exist first.** Nothing in `EntityView` could scale a sprite.
+`visuals.json` gained a `scale` field — the fourth axis of the asset seam and the only one that
+is not about *which* picture — and the scale rides the canvas transform `_draw_frame` already
+sets up for the mirror. `draw_set_transform` builds `T(position) * R * S`, so `draw_offset` is
+**not** scaled (a building's shift is a screen offset) while every local coordinate is, `at`
+included: the entity's own frame passes `at == ZERO`, so its anchor stays exactly on the
+projected origin at any size. Measured in `preview_dragon_nest`: one 209×85 source frame drawn
+209.0×85.0 and 41.8×17.0, feet at (0, 0) both times.
+
+⚠️ **`scale` MOVES THE SPRITE AND NOTHING MEASURED IN METRES.** The selection ring, the health
+dot's height and the placeholder box all read `placeholder.footprint_m`/`height_m`, which are
+**authored** at 20% rather than derived — deriving them would run the projection inversion on
+numbers it was never measured for (§12A A.4b's negative heights). The cost of that choice is two
+numbers that can drift into a 1.84 m dragon with a 9 m selection ring, so a test pins them
+against each other and the preview warns at runtime as well.
+
+**THREE THINGS FOUND ON THE WAY, AND NONE OF THEM LOOKED LIKE A DRAGON:**
+
+1. ⚠️ **A DEFEATED CLAIMANT WOULD HAVE UN-ENDED A FINISHED MATCH.** `SimPlayer.defeated` is a
+   one-way latch and `WinConditionSystem` decides who is standing by counting what a player
+   **owns** — so a dragon handed to somebody knocked out four minutes ago puts them back on the
+   board, 360 s after anybody was still watching that corner of the map. Perfectly reachable:
+   kill the mother, get wiped out inside six minutes. The claim is abandoned rather than held
+   open, because there is nobody left to hold the nest.
+2. **The claim lost its first tick.** Starting claims before advancing them decremented the
+   countdown in the same call, making the window 3599 ticks. Invisible in play and caught by the
+   boundary test, which is what boundary tests are for.
+3. **A razed nest stood there looking untouched** — the `visual_rubble` wart §9's row had flagged
+   when the nest was declared, and which that row *predicted* this fix for. Cosmetic until razing
+   the nest became how a rival denies a claim, at which point the attacker who had just succeeded
+   watches an apparently unharmed henge for a full minute. `BuildingDef.leaves_rubble` is false
+   for one def in the roster and true for the other 31.
+
+**THE BALANCE IS A PAIR OF NUMBERS AND BOTH ARE PROVISIONAL.** Hatchling **hp 300, armour 8/8**
+(the mother's hide) against the nest's **1200 hp and no armour**. Armour is subtractive with a
+floor of 1, so 8 takes a militia's swing to 1 and 300 hp is three hundred swings — **deliberately
+not a soft target**, because if it were, nobody would ever raze 1200 hp of stone and this
+section's headline denial would be decorative, which is 13.1's *"a declared row in a table is
+indistinguishable from a working one"* wearing a different hat. A determined player with the
+right army can still go straight at the hatchling, so no unit is told its damage does nothing.
+**Neither number is a statement about how tough a hatchling is; both are the length and
+defensibility of the 360 s window, and only playing it can settle them.**
+
+📝 **NOT BUILT, DELIBERATELY, AND IT IS THE ONE ROW THIS PHASE STILL OWES.** None of the claim
+reaches the wire. `SnapshotSystem` groups `updated` by sorted field names (§12.1f), so a
+countdown on `SimBuilding` costs two ints on **every** building in the game and splits nests into
+their own wire shape. **A nest selection panel saying whose claim it is and how long is left is a
+real feature**, and that cost is the first question it has to answer.
+
+Trophy (11.2) also wants `unit.dragon_baby`, but for a different job — one per player, as a thing
+you protect. Sharing the def is fine; sharing the **spawn rule** is not.
 
 ### Phase 14 — **NEEDS UPGRADE**: the AI cannot see what it is fighting
 
@@ -2682,11 +2763,16 @@ inverted it — they are never imported at all.)*
 says so at length — 12.1's terrain-is-a-transfer decision exists because `FastNoiseLite`'s float
 maths is not identical across CPUs, and 11.3 makes the same point for saved maps: *"the seed alone
 cannot reproduce a map, because any generator change makes the same seed produce something else."*
-So a scenario pinned by seed **will silently play a different map** after any `MapGenerator`
-change. That is acceptable for these three and only these three, because their objectives are
-about counting villagers and ages rather than about a place — and it is precisely why the second
-half of the owner's plan (a hand-built look, and "The Dragon Born") needs **2.4c's saved map
-format** underneath it. When a scenario names a *file*, this trap is gone.
+So a scenario pinned by seed **would silently play a different map** after any `MapGenerator`
+change, or on an ARM phone rather than an x86 desktop.
+
+✅ **THE TRAP IS RETIRED AND NO SCENARIO IS PINNED BY SEED ANY MORE (2026-09-01).** All five name
+a **file**: `ScenarioDef.build_config()` reads `MapFile` and never calls the generator, and a
+scenario with no saved map **refuses to launch** rather than falling back — a fallback is how an
+unpinned scenario would ship looking exactly like a pinned one. The seed still rides along inside
+`meta` as provenance, which is what that field is for. Kept here because the reasoning is the
+whole argument for 2.4c existing, and because the next thing tempted to pin a place by seed will
+make the same mistake.
 
 Progress is a single integer per campaign, and `campaign.json` declares its scenario order
 explicitly rather than sorting folder names — `scenario_10` sorts before `scenario_2`, and a
@@ -2891,18 +2977,18 @@ genuinely lost a scenario.
 
 **A separate Godot project in `MapMaker/`, PC only**, spec'd by
 [MapMaker/README.md](MapMaker/README.md) (the owner's). It authors maps and scenarios for the
-game; it is never shipped to a player and never runs on a phone. `MapMaker/README.md` is the only
-thing in that folder today.
+game; it is never shipped to a player and never runs on a phone.
 
 **Its purpose in the plan's order is the SECOND half of the owner's sequence:** Phase 15 shipped
 **five** scenarios on generated-then-saved maps, then this tool re-authors those maps for a custom
 look, and then a second campaign — **"The Dragon Born"** — is built with it. So Phase 16 is what
 turns scenarios from a mechanism into content, and nothing in Phase 15 waited on it.
 
-✅ **BOTH PREREQUISITES ARE NOW CLOSED AND THIS IS THE PHASE THE QUEUE POINTS AT** (2026-09-03):
-Phase 15 finished with 15.6 and 15.9, and 2.4c's format was confirmed in play on 2026-09-02, which
-is what decision 1 demanded. **What is NOT closed is the tool's own game-side seam — see 16.0**,
-which is new and is where this phase now starts.
+✅ **BOTH PREREQUISITES CLOSED 2026-09-03** — Phase 15 finished with 15.6 and 15.9, and 2.4c's
+format was confirmed in play on 2026-09-02, which is what decision 1 demanded. **16.0, 16.1, 16.2
+and 16.4b are done (2026-09-04) and the owner has authored a map in the tool.** Next is 16.4a
+(File ▸ Open), then 16.3 (the palette), in that order: 16.4a is what 16.10's re-authoring needs,
+and a palette that cannot reopen its own output is a one-shot tool.
 
 #### Eight decisions that bind everything below
 
@@ -3037,26 +3123,32 @@ the AI difficulty list (12.2b's list only), wall merging. 2026-08-23: tap target
 and small art (4.3), terrain transition blending (3.1), hostile wildlife and the carcass
 flow (4.13), roaming and fleeing (6.1b), herding (6.5), fishing (6.5).
 
+**Closed off this table since**, one line each, because a done row in a queue is a row somebody
+reads as work: **4.8 garrison + 4.9** (2026-08-27 — it did *not* close the walls hole it was
+billed as closing, the owner ruled walls out; what it did close was `garrison_cap`, declared on
+all 31 buildings since 0.4 and read by nothing, and it gave buildings an attack). **4.10
+abilities, 4.12 stances, 4.14 formations** (2026-08-29). **9.3 + 9.4 the tech tree**
+(2026-08-29). **2.4c the map save format** (2026-09-01, confirmed in play 2026-09-02).
+**Phase 15 scenarios and campaigns**, all nine rows (2026-09-03) — 12.3's one-line row was
+hiding a phase. **0.3 `AssetPacks`** (2026-09-03, hardware-verified under three network
+conditions, the last open Phase 0 item). **5.3 building upgrades** (2026-09-03), which closed
+Phase 5 with it. **13.1 + 13.2 dragons** (2026-09-04/06). Each names the phase item that holds
+its detail.
+
 **Still open, in the order it makes sense to take it:**
 
 | Candidate | Impact | Effort | Notes |
 |---|---|---|---|
 | **Unit-speed balancing pass** | High — it is how the game *feels* | Low in code, playing time | `BUGS.md`. Walls, wildlife and three predators have all changed what "too fast" means since it was raised. **Only the owner can judge it** |
-| ~~4.8 Garrison → 4.9 defensive bonus~~ | — | — | ✅ **DONE 2026-08-27.** It was billed as the largest hole in walls and it was not: the owner ruled walls out of garrison, so 0 A.D.'s eight turret points per medium wall stay unused by decision. It did close `garrison_cap` (declared on all 31 buildings since 0.4, read by nothing) and it gave buildings an **attack**, which nothing had |
 | 2.4d Archipelago | Medium | Medium | New map type; the validator's connectivity claim has to change rather than relax. §11.6 |
 | 12.2b AI decision flow | High | Medium-high | The difficulty *list* ships and the opponents behind it do not — Normal/Hard/Unfair are Easy wearing three names and say so on screen. Parked until the balancing pass has been played, because tuning an AI against unbalanced speeds tunes it against the wrong game |
 | 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
-| ~~**2.4c Save map**~~ | — | — | ✅ **DONE 2026-09-01, CONFIRMED IN PLAY 2026-09-02.** §11.3. It was the file format Phase 16 writes, so it blocked the MapMaker; `MapFile` is now fixed by use and not only by tests |
-| ~~**Phase 15 Scenarios & campaigns**~~ | — | — | ✅ **CLOSED 2026-09-03** with 15.6 and 15.9. All nine rows done; 12.3's one-line row was hiding a phase and the phase shipped in three days. What it left behind rather than closed: the `alert` row is tested and authored by nothing, and scenario 4's briefing promises a dragon the map has not got (15.8) |
-| ~~**0.3 AssetPacks**~~ | — | — | ✅ **DONE 2026-09-03**, hardware-verified under three network conditions, and it was the last open Phase 0 item. **The `.pck` packer for art is the half that is missing** and it has the only real deadline on this page — it is what keeps the APK under 300 MB |
 | **Phase 16 MapMaker** | High — it turns scenarios into content | High; a second Godot project | ⚠️ **NOW UNBLOCKED ON BOTH COUNTS AND THEREFORE UP NEXT** — it waited on Phase 15 and on 2.4c, and both closed. **It starts at 16.0**, which is new and is game-code rather than tool work: the skirmish saved-map picker and the pause-menu Save Map button are both specified in the owner's README, neither is built, and 16.2 cannot be verified without the first of them. 16.2 is still the row that proves the format contract; 16.7 (per-entity overrides) is the only row with real sim cost. **A 2026-09-04 review against the code changed six things in this phase before a line was written** — see §16's decision 2 and 7.<br><br>✅ **16.0, 16.1, 16.2 and 16.4b are done as of 2026-09-04, and the owner has authored a map in it.** What that first authored map taught is the row worth reading before picking the next one: it **saved without a murmur and was unplayable**, so 16.2's placement was hardened and 16.4b was pulled forward to sit behind the Save button. **Next is 16.4a (File ▸ Open), then 16.3 (the palette)** — in that order, because 16.4a is what 16.10's re-authoring needs and because a palette that cannot reopen its own output is a one-shot tool |
 | 12.1b reconnect | Medium | Medium | LAN **discovery** landed 2026-08-31 and closed the friction point (typing an IP). Getting back INTO a match after a drop is what is left, and it is the harder half: a returning peer needs the config, a full snapshot and its old player id |
-| ~~12.3 Campaign~~ | — | — | ➡️ **Now Phase 15, above.** The one-line row was hiding nine steps |
 | 12.4 Save/load and replays | Medium | Medium | Replay record/play already exists as a test fixture (0.7) |
-| **11.2 King of the Hill** | Medium — a second win condition is a second way to play | Low-medium, and lower than it was | **Both open design questions were settled by the owner on 2026-09-01 (§11.9)**: the scoring ladder, and the target as a *duration* — five minutes uncontested, worked back to `KOTH_TARGET_SCORE = 9000`. What is left is three known pieces of work: a zone centre (a line in `MapGenerator`, or 16.5's authored areas), `SimPlayer.score` written **by side**, and the minimap ring. ⚠️ **Trophy's blocker shrank on 2026-09-04 and is now precisely one thing.** It said *"a `unit.dragon_baby` with no def and no bake"*; **the bake was never needed** — it is `vis.dragon_rigged` at 20% — and the *placement* half is built, because 13.2a's `MapGenerator._place_nest` already sites a POI per map and could as easily site one per player. What is genuinely missing is **sprite scaling**: `EntityView._draw_frame` places a frame at `Rect2(at - anchor, rect.size)` with an unscaled anchor, the mirror transform would need the factor too, and footprint, selection ring and placeholder metres all have to scale with it or a baby gets a 9 m footprint. **That is a view change, not a bake and not a win condition** |
-| ~~4.12 Stances, 4.14 formations, 4.10 abilities, 5.3 upgrades~~ | — | — | ✅ **ALL FOUR DONE.** The first three closed 2026-08-29; **5.3 built 2026-09-03** and is with the owner to play-test. Eight tier upgrades across three wall tiers, with the wood spent credited 1:1 against the stone — see the 5.3 row. **PHASE 5 IS CLOSED WITH IT** |
-| **13.x Dragons** | The differentiator | ~~Medium (art exists; needs rigging)~~ — **the art is done and the rig with it** | ⚠️ **HALF SHIPPED 2026-09-04 AND THE PRIORITY LINE WAS WRONG, WHICH IS WORTH RECORDING.** *"Once the RTS is a game"* assumed dragons were a late luxury paced by rigging. `vis.dragon_rigged` arrived with all five clips, so **13.1 shipped in a day** and 13.2a the same day: every generated map now carries one nest and one gaia mother, and the air domain became real in the process. What is left is **not art and not rigging** — it is the CLAIM (kill her, hold the nest 360 s, receive the grown baby), which is a spawn rule, a timer and *the first thing in this game to change who owns a unit*. It is also what 11.2's Trophy row is blocked on. **Nothing about it needs the RTS to be finished first** |
+| **11.2 King of the Hill** | Medium — a second win condition is a second way to play | Low-medium, and lower than it was | **Both open design questions were settled by the owner on 2026-09-01 (§11.9)**: the scoring ladder, and the target as a *duration* — five minutes uncontested, worked back to `KOTH_TARGET_SCORE = 9000`. What is left is three known pieces of work: a zone centre (a line in `MapGenerator`, or 16.5's authored areas), `SimPlayer.score` written **by side**, and the minimap ring. ✅ **TROPHY IS NO LONGER BLOCKED ON ANYTHING.** Its blocker was *"a `unit.dragon_baby` with no def and no bake"*; the bake was never needed, the **def landed with 13.2b**, and **sprite scaling — the last genuinely missing piece — landed with it**. `MapGenerator._place_nest` already sites a POI per map and could as easily site one per player. ⚠️ **What Trophy must NOT reuse is the SPAWN RULE**: 13.2's hatchling is gaia's, is spawned by a death, and is replaced when it grows; Trophy's is a thing you own from the start and protect. Sharing the def is right, sharing `NestSystem` is not |
+| **13.x Dragons** | The differentiator | — | ✅ **CODE-COMPLETE 2026-09-04/06, AND THE PRIORITY LINE THIS ROW CARRIED WAS WRONG, WHICH IS THE PART WORTH KEEPING.** *"Once the RTS is a game"* assumed dragons were a late luxury paced by rigging. The rig arrived, and the whole phase went in over three days — 13.1 the flying unit, 13.2a the nest and her placement, 13.2b the claim. **None of it needed the RTS to be finished first**, and the air domain became real on the way. What remains is two provisional numbers wanting a playtest and one deliberately unbuilt row (the claim on the wire) — see §13.2b |
 | **Naval combat** | Medium | Medium | Newly *reachable* rather than newly wanted: ships float and path since 2026-08-23. Transports have no load/unload, and nothing has ever fought at sea. Archipelago is what would demand it |
 
 **Field yield, balanced against Age of Empires 2026-08-17.** It was 0/100/250/400 food per 100
@@ -3091,7 +3183,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.4 | Resource nodes: gold, stone, berry bush, deer + carcass, boar, sheep, wolf, fish, six extra tree species | ✅ except `vis.farm`. **The palms landed 2026-08-28**, and not as isobake variant selection: twelve new tree species were baked as separate ids and the GAME side picks between them, so the "no deterministic actor exists" problem was answered on the other side of the seam. `visuals.json` gained `variant_pools` — a per-map-type list keyed off the same tile seed the existing `variants` axis uses — and five palms now serve Island and River. Tree **size-class variants** stay open for the reason they always were. **`vis.farm` is NOT blocked** — corrected 2026-09-01, its recipe header had said so falsely since 2026-08-08. It was baked and staged on 2026-08-25 and the owner confirmed it in game. **0 A.D.'s "farm" is our "field"**, it attaches to the mill, and **fields do not age**: the game picks one of four at placement, `vis.field_1..4` → `field_age2` / `field_age3` / `field_age4` / `farm`. The 64-instance prop scatter really does collapse to one clump, and that is **accepted rather than open** — one clump reads fine at this camera and the four variants cover the variety it would have bought |
 | A.4a | **Animate the wildlife — now the single most visible gap in the game.** Every fauna atlas is one static rest pose, and as of 2026-08-23 **six species move**: wolf, boar and bear chase and bite, deer roam and bolt, sheep and cattle are driven home by hand. All six slide. This project's own convention is that anything without a walk clip carries `speed: 0` precisely so nothing slides (ships, dragon, all three siege engines) — wildlife is the first thing to break it, knowingly, on the owner's call. Wolf needs the richest set and the only attack; cattle has a **Feeding** clip, the one idle that reads as an animal doing something | ✅ **Delivered 2026-08-28.** All six species now carry `walk`, plus `attack` on the three that bite, `run` on the deer and `feeding` on the cattle. Nothing slides any more. Two clips arrived on one species and not its siblings, so `AtlasEntry._ANIM_ALIAS` rewords the request rather than guessing — `run` falls back to `walk` and `feeding` to `idle`, both synonyms rather than second guesses. **The deer was distorted and was fixed the same day** (`d0d14af`): 52 px wide head-on against a sheep's 14, and 41 to 83 px of height inside one standing clip. The cause was not `location_scale`'s VALUE but that any non-zero value is wrong — it multiplies pose-bone *location* curves, and between two rigs that merely share bone NAMES (the deer's clips carry 40 bones against its actor's 37) rotations transfer and locations do not, at any scale. **0.0 is the answer, and the original 0.0319 was found by probing 0.022 to 0.045 and eyeballing, so the search range never contained it** — judged at `directions = 1`, where a rigidly tilted animal looks fine, because the defect only shows as the silhouette changes with turning. 24 px head-on now. **The per-direction height spread is the check that catches this class** and is worth keeping as the standard one for fauna: healthy is x1.33–x1.48 (wolf x1.40, sheep x1.48), the deer was x2.09 and is now x1.51 |
 | A.4b | ✅ **Closed 2026-08-23** — this said `res.cattle` and `res.bear` had no art at all. Both are baked, staged and now declared; every fauna atlas the game names exists. What replaced it is a **carcass** gap: only `vis.deer_carcass` is baked, and five defs draw it (`res.deer_carcass` plus wolf / boar / bear / sheep). A dead deer where a dead bear should be is the wrong animal, and it beats the magenta unknown, but four bakes are owed. `asset_request.md` | ✅ **Closed again 2026-08-28.** All six carcasses are baked, staged and declared; every animal dies as itself. What is owed now is **measurement, not art**: the projection inversion returns NEGATIVE heights for a carcass — structural, and no choice of frame fixes it, because a body lying flat has no vertical extent to invert — so all five new `footprint_m`/`height_m` figures are the deer carcass's proportions scaled onto each animal's measured live figure. Filed as [P5] |
-| A.5 | UI chrome from the itch.io dragon packs | Largely in use |
+| A.5 | UI chrome | ✅ **REPLACED WHOLESALE 2026-08-30 and the itch.io packs are GONE.** This row said "from the itch.io dragon packs, largely in use", and their licence forbade redistributing the originals — so three directories under `game/assets/ui/` were gitignored and **a clean clone had no HUD at all**. [P8] delivered 130 project-owned pieces plus two OFL font families, `licence_audit.py` went from 129 problems to PASS, and `game/assets/ui/` is now committed in full |
 | A.6 | **Player colour — prerequisite, not polish** (§2.7 consequence 3). Bake untinted, emit the source alpha as a mask page, tint in a `canvas_item` shader. **Blend mode decided:** neither obvious option works — *multiply* (0 A.D.'s) makes white a no-op and crushes dark colours, compressing the lightness ladder; *luminance-preserving hue transfer* destroys the ladder outright, since every colour inherits the texture's lightness and all eight end up equally light. The answer is the palette colour setting the **base** level with the texture contributing only its **local deviation**: `lit = pc + (lum(tex) - 0.5) * k`, `out = mix(tex, lit, mask)`, `k ≈ 0.8` scaled by remaining headroom so a light colour does not clip flat. **The mask needs its own greyscale page** (~+12% atlas bytes) — the sprite's alpha is already the silhouette cutout, and those are different questions about the same texel. Do not smuggle it into intermediate alpha values, which bilinear filtering will smear | ⚠️ **DELIVERED, BUT NOT BY THIS MECHANISM — read the row above as history.** No mask page and no `canvas_item` shader was ever written. **Colour is baked in, one atlas per colour**: `vis.<id>.<colour>` from the eight words in `colours.json`, 21 colourable units × 8 = 168 generated recipes, and the game derives the path from a `"colours": true` flag. So §2.7's *"eight players cannot mean eight bakes of every unit"* was overruled in practice, and the cost it warned about is real and paid — a colour set is 16 sequential bakes, because the parallel-slot race (§4) makes them the worst case. **Not every actor can take colour and it cannot be read off the material** — always measure |
 | A.7 | Audio: take `audio/{actor,attack,resource,interface,ambient,music}` whole, plus **`audio/voice/latin` and nothing else** (§9.2.1). Nothing baked depends on it | ✅ **Done 2026-08-23, with two deliberate departures from "whole".** (1) **Five variations per sound group, not all of them** — `lumbering` ships 22 chop samples and `gathering` 66; the ear is listening for "not the same twice" and five is past that, so taking every one spent the audio pack's 50–100 MB budget (§3.2) on chopping noises. `--max-variations` raises it and re-fetches only the difference. (2) **8 of 62 music tracks**, chosen against the age ladder — the other 54 are 219 MB nothing selects. **And a hazard worth knowing:** the .ogg files in the 0 A.D. checkout are git-LFS *pointers*, that repo's index carries ~30k staged deletions so `git lfs pull` exits 0 having done nothing, and the host is behind an Anubis bot wall that a `git-lfs` User-Agent passes. `tools/stage_audio.py` goes round all three and **writes nothing into the art checkout** |
 | A.8 | Military unit art — ~22 bakes, one hand-picked actor per unit, no per-age variants. **A full re-bake is owed on two counts and they should be spent together:** the corrected actors (§9.2) and the ground-decal strip. `vis.trebuchet`/`vis.trade_cart` stay blocked on isobake's armature picking and its lack of particle support for impact VFX. ~22 against the ~88 four factions would have cost is where the single-civilisation decision actually pays | ✅ **DELIVERED.** The roster is baked, staged and colourable. **The two blockers named in this row are resolved and the note is out of date**: `vis.trebuchet` animates (the fix was one line of `[source].actor`, not the pipeline change the recipe predicted), and `vis.trade_cart` with it. Particle VFX for impacts was never needed — projectiles are their own atlases. **What is still open on siege is cosmetic**: the two packed engines carry no player colour ([P6]) and the owner has reported them as not looking right (board card `P9-packed-siege`) |
@@ -3214,7 +3306,7 @@ Live risks only. Retired ones are in `b904b76`.
 | **Accidentally shipping an unlicensed asset** — ⚠ **has MATERIALISED**: a 2026-08-15 run reported **FAIL, 89 problems** across 86 recipes and 44 files | **High** | `licence_audit.py --write` regenerates the recipe table idempotently and clears most of it; the UI assets need provenance decided by hand. The lesson is not that the tool failed but that **a manual gate with no CI degrades silently** — schedule a run once per art batch |
 | Scope creep | **High** | §12 governs what gets built |
 | **A SECOND GODOT PROJECT MEANS A SECOND COPY OF THE MAP FORMAT, AND COPIES DRIFT** | **High** | Phase 16 decision 2/3: the tool reads the game's *data* live from a configured path, carries only three pure-maths files as copies, and **hashes the originals as text at startup, refusing to save when they have moved on**. A tool that happily writes a stale format is the expensive failure — a map that loads and is subtly wrong, which is the class §12A's facing bug belongs to |
-| **A SCENARIO PINNED BY SEED PLAYS A DIFFERENT MAP AFTER ANY GENERATOR CHANGE** | Medium | §11.7. Provenance is not reproduction — 11.3 and 12.1 both already say so. Tolerated for the three "How To Play" placeholders because their objectives count villagers and ages rather than places; retired for good the moment 16.10 swaps their seeds for saved **files** |
+| ~~A scenario pinned by seed plays a different map after any generator change~~ | **Retired 2026-09-01** | ✅ **Closed by making it impossible rather than by tolerating it.** All five scenarios name a saved **file**; `ScenarioDef.build_config()` reads `MapFile` and never calls the generator, and one with no map refuses to launch instead of falling back. The general rule survives the row — **provenance is not reproduction**, which 11.3 and 12.1 both argue — so anything tempted to pin a *place* by seed reads §11.7 first |
 | **ANYTHING INSTALLABLE THAT LIVES IN `res://` WORKS ON A DESKTOP AND CANNOT WORK ON A PHONE** | Medium | ⚠ **CAUGHT BEFORE IT WAS BUILT, 2026-09-01**: the first draft of Phase 15 put campaigns in `game/scenarios/` and progress in `campaign.json`. `res://` is read-only once exported and baked into the APK, so that is unwritable *and* undownloadable *and* unshareable — three features lost to one directory choice. Both moved out (§3.3, owner's call). The general form: **ask whether content can arrive after the build ships**, and if it can, it never lives under `game/` |
 | **A CAMPAIGN CANNOT REACH A PHONE UNTIL 0.3 DOES** | Medium | The consequence of the move above, and §3.3 states it rather than burying it: `user://` on Android is not `adb push`-able and the dev override is editor-only, so `AssetPacks` — **the one Phase 0 item still open** — is the only delivery route to a device. All of Phase 15 is exercisable on Windows and headless; the first on-device campaign run is what waits. Two escapes that need no redesign: Godot's external-data-dir setting for a debug build, or a bundled root seeded into `user://content/` on first run, which stays one config line because the loader is a root **list** |
 | **The roster names entity templates and recipes want actors**, so a recipe can silently bake the wrong thing | **Medium** | Not hypothetical: one pass found **nine** wrong recipes plus the sheep and the cattle, every one a plausible-looking actor picked by NAME. Mitigation is the boxed rule in §9.2 — resolve the template to its `<VisualActor><Actor>` and paste **that**. The failure mode is quiet, so it needs a rule rather than care |
@@ -3227,264 +3319,109 @@ Live risks only. Retired ones are in `b904b76`.
 | Pathfinding stalls at scale | Medium | Per-tick budget from day one; flow fields in reserve |
 | GDScript too slow at 200 units | Medium | Measure on device; targeted GDExtension only if proven |
 | Mobile thermal throttling | Medium | 10 Hz sim, pooled views, draw-call budget, sustained-load testing |
-| ~~Asset pack download fails / user offline~~ | **Retired 2026-09-03** | ✅ **Tested rather than mitigated on paper.** The owner ran the built 0.3 with **no internet**, with internet, and at **125 kbps**, and all three reached the front door — the offline case being the one that mattered, since a boot that stalls on an unreachable manifest is the failure this row was written about. Placeholders remain the fallback and content packs remain skippable. **What replaces it:** an *interrupted* download cannot resume (see Known gaps), which is a different risk and only bites at art-pack sizes |
+| **An interrupted pack download restarts from zero** | Medium | Replaces *"download fails / user offline"*, which was **retired 2026-09-03 by being tested rather than mitigated on paper** — the owner ran the built 0.3 with no internet, with internet and at 125 kbps, and all three reached the front door. What survives is the narrower risk: the server answers Range with 206 (verified) but `HTTPRequest.set_download_file` cannot append. Invisible at 2.2 MB, and **nine hours at 125 kbps for a 400 MB art pack**, where one dropped connection means starting again. Only bites at art-pack sizes, so it wants its own card **before** art packs ship |
 | WSL/Docker fighting Android USB deploy | Low | §1.2 — native Windows for editor + deploy |
 
 ---
 
 ## 15. Immediate next actions
 
-*Rewritten 2026-08-23. This had grown into a numbered log of everything shipped since the
-MVP, with the actual next actions at the bottom — and the numbering had been renumbered
-twice, so cross-references inside it were drifting. The shipped list now lives in §12 as
-prose; what is left here is only what has not been done.*
+*Rewritten 2026-08-23, and **swept again 2026-09-06** for the same reason: it had grown back into
+a numbered log of everything shipped, with the actual next actions buried under it. **That is the
+second time**, so it is worth naming as a habit rather than a lapse — a "next actions" list is the
+one section where a completed item is actively harmful, because a reader has to finish the whole
+row to learn it is not work. **The board is the status now** (`AGENT_GAME_CODER.md` §2.1), the
+shipped list is one line each in §12, and what is left here is only what has not been done.*
 
-*This list's item 1 has been the AI twice running and is now **done both times**: the
-unit-speed pass (2026-08-23, `962b1c5`) and then the AI re-tune it damaged, which turned into
-**12.2b's rule engine** on 2026-08-27 rather than the piecemeal lever it was scoped as. The
-owner: *"i am happy with the results"*, and *"the update system support customization and
-supports random maps, thats the big win from this update."* What is left below is features.*
+*What was struck out of this section on the sweep, so nothing looks lost: 2.4d Archipelago, 8.8's
+[X] button, Phase 4's close, Phase 5 and 5.3, 9.3's tech tree, 4.13's pack/unpack machine, Phase
+15, 2.4c, 0.3, and 13.x — every one of them with a date and a phase row that holds its reasoning.*
 
-*Item 1 was 4.8 garrison and it is **done, with 4.9, on 2026-08-27** — see the Phase 4
-table. It settled §13.2 item 4b (one concept, `act_leave` left as the spare) and it did
-NOT close the wall hole it was billed as closing: the owner ruled walls out of garrison by
-name, so 0 A.D.'s eight turret points per medium wall stay unused on purpose. What it did
-close was `garrison_cap`, declared on all 31 buildings since 0.4 and read by nothing.*
+**THE QUEUE, in dependency order.**
 
-*It also left the AI ladder's tick counts stale — the AI builds towers and castles, so
-every rung now has to fight through one. Winners all held; `easy v normal` went from
-t11366 to t18351. BUGS.md carries the new table.*
+**1. PHASE 16, THE MAPMAKER — where the work currently is.** In its numbered order, and its own
+section carries the eight decisions that bind it. ✅ **16.0, 16.1, 16.2 and 16.4b are done
+(2026-09-04) and the owner has authored a map in it.** The prediction held — the format contract
+is proved by a map painted in the tool and played from the skirmish picker. **What was not
+predicted is what the first authored map taught, and it is why 16.4b jumped six rows:** it saved
+without a murmur and was *unplayable* — 48×48 with starts at (6,6) and (35,35), player 1 holding
+9 of 24 things and no stone. So 16.2's placement was hardened and a validator went behind the
+Save button. *A tool that cannot judge its own output ships unplayable content quietly*, now §16
+decision 8.
 
-*Nothing on the numbered list moved 2026-08-27/28 and a great deal else did, which is worth
-saying plainly: two days went on the art deliveries and on what the owner found by PLAYING.
-Wired: twelve trees behind `variant_pools`, six carcasses, the wildlife walk clips, and the
-packed engines' last blocker. Fixed from playtest reports: tower volleys (a garrisoned archer
-now adds an arrow to the salvo), predators retreating from a settlement so early villagers can
-be run home, spent projectiles lingering on the ground, villagers walking back to where the
-town centre stood after it falls, a Forest map you can actually walk through, and — over two
-attempts and three screenshots — **every wall being drawn ninety degrees across the run it was
-dragged on**. Two of those were mine to have caught: the forest hung the owner's session
-because I measured bandwidth and shipped without running the suite, and the wall report I
-explained away as a presentation problem was a real geometry bug. The counterweight is in §12A's
-third wall finding.*
+**Next is 16.4a (File ▸ Open), then 16.3 (the palette)**, in that order: 16.4a is what 16.10's
+re-authoring needs, and a palette that cannot reopen its own output is a one-shot tool.
 
-**1. 2.4d Archipelago** (§11.6). One island per player, a few sheep, nothing hostile. The
-content side is nearly free — `PREDATORS` is keyed by map type and read with `.get(type,
-{})`, so an unlisted type gets no predators without a line of code. The work is that
-`MapValidator` requires every start to reach every other by land, which an archipelago fails
-by definition, so that claim has to *change* rather than relax.
+**2. 16.10 — the content the tool exists for.** Re-author the five How To Play maps for a custom
+look, then **"The Dragon Born"**, the second campaign, authored entirely in the tool. Two facts
+make it cheaper than it reads: the three later maps are **byte-identical to scenario 3's**, so
+authoring one good duel map covers three rows; and **scenario 4's briefing promises a dragon its
+map has not got**, which is the content gap 15.8 flagged and this row is where it gets fixed.
+⚠️ **As of 13.2b the briefing may promise the whole thing** — kill the mother, hold the nest, the
+hatchling is yours — where before this row could only have promised a dragon to look at.
 
-*It also had a hole the other two do not: transports had no load/unload, so **an archipelago
-was a map on which no player could reach another** and no win condition could fire. **Both
-shipped together on 2026-08-29** rather than the type going out as a sandbox — see 11.6.
-What is still missing is naval COMBAT: a loaded transport crosses unopposed, which is what
-an archipelago will ask for next and not what makes it playable.*
+**Then, in no strongly forced order:**
 
-*~~2. 8.8, the [X] clear-selection button.~~ **Built 2026-08-28.** It was the only thing on
-this list the owner reported from actually playing a build, and it turned out to be a layout
-problem rather than a UI one: the HUD's left edge had exactly 40 px of unspent height between
-the control-group stack and the selection panel's own ceiling, so the button's size was
-decided by arithmetic rather than chosen. The gesture and right-click both stay.*
+- **Phase 14, the AI's enemy-blindness.** A rebuild of 12.2b's condition vocabulary, not a bug
+  fix, and it wants a game whose balance is settled first. **It gained its first MEASURED
+  consequence on 2026-09-04** (13.2a) rather than a predicted one: a bot walked eight villagers,
+  one at a time, into a 600 hp guardian on the far side of the map, because *"the last one died
+  there"* is not a fact any rule can read. It cost the bot the age it was saving for — the ceiling
+  §14 describes, arriving as an economy failure with no mention of a dragon anywhere in the log.
+- **The AI researches nothing.** Every `ai_profile` has declared `techs: true` against nothing
+  since 12.2b; `ResearchCommand` exists and no rule emits one. That is the same shape as the hole
+  4.11's population counter was in — a field read by something that nothing writes — and it is a
+  *balance* hole too, because a human who buys Blast Furnace fights an army that never will.
+  ⚠️ **The AI ladder's tick table in BUGS.md is not invalidated by this** (neither side
+  researches), and **the first rule that does research invalidates every row of it.**
+- **11.2 King of the Hill, and Trophy with it.** Both design questions were settled by the owner
+  on 2026-09-01 (§11.9), and **Trophy's last blocker went with 13.2b's sprite scaling.** See §12's
+  row for the three pieces of work left and for the one thing Trophy must not reuse.
+- **12.1b reconnect.** Discovery landed 2026-08-31 and closed the friction point (typing an IP).
+  Getting back *into* a match after a drop is the harder half: a returning peer needs the config,
+  a full snapshot and its old player id.
+- **12.4 save/load and replays**, which is also where §11.3's parked **Save Game** button lives.
+- **Naval combat.** Ships float and path since 2026-08-23 and transports load since 2026-08-29,
+  but nothing has ever fought at sea, so a loaded transport crosses unopposed. Archipelago is what
+  demands it, and it is not what makes that map playable.
+- **A resumable pack download**, which is the one item on this page with a date behind it rather
+  than a wish — see §14's row. It only bites at art-pack sizes and art packs are coming.
+- **13.2b's claim on the wire** — a nest panel saying whose claim it is and how long is left. Its
+  first question is a wire cost; §13.2b states it.
 
-*2026-08-29 moved a great deal and moved it OUT OF ORDER, which is the honest way to record
-it. **PHASE 4 CLOSED** — 4.10 abilities, 4.12 stances and 4.14 formations, on the owner's
-instruction to "close out the open steps". All three had sat open since 4.3 as UI placeholders,
-which turned out to be why they were cheap: the formations menu had named its four shapes for
-months, and 4.12 was a decision `CombatSystem`'s header had written down twice. **The dragon went
-to the art side the same day** (`asset_request.md` [P7]) — one clip, `static`, so PLAN.md 13
-cannot start until that changes. **Then item 2 below shipped ahead of item 1**, on a second
-instruction the same day: the tech tree is wired (9.3 + 9.4) while Phase 5 is still open.*
-
-*⚠️ **2026-09-03 CLOSED THREE THINGS THAT THIS SECTION SPENT WEEKS DESCRIBING AS OPEN**, and the
-board is where each of them moved — PLAN.md is being brought back into line with it rather than
-kept as a second status. **0.3 `AssetPacks`** (the last Phase 0 item, and the only route a campaign
-had to a phone) closed on the owner running it on hardware under three network conditions.
-**Phase 15 closed** with 15.6's objective tracker, confirmed by the owner in play, and 15.9's
-preview. **5.3 was built** and is in `Test` awaiting a play-test the owner asked for by name. The
-net effect on this list is that **Phase 16, the MapMaker, is up next and is now unblocked on both
-of the things it was waiting for** — Phase 15 and 2.4c. Everything under items 1 and 2 below is
-kept for its reasoning, struck where it has been overtaken.*
-
-**~~1.~~ ✅ PHASE 5, BUILDINGS — CLOSED 2026-09-03.** *(Was "up next, the owner's call on
-2026-08-29".)* Two rows were open and they
-were very different jobs. **5.7, the full roster, CLOSED 2026-09-01 with no code written** (see
-its own row): it was only ever paced by A.10 on the art side, and A.10 had in fact been finished
-for some time behind a card that still said otherwise. **5.3, building upgrades, was the code half
-and was half-built — the other half went in on 2026-09-03 (`673540b`) and the row carries the
-detail.** Two things settled there that this paragraph could not have predicted: the credit for
-what a building already cost **crosses resource kinds at 1:1**, read off `market.json` rather than
-chosen, and **the "TIME" requirement below died** — every upgrade that survived the footprint rule
-is a wall, and instant is right for a wall, because a timed tier upgrade would open your own
-defences for the length of it. What follows is the original reasoning:
-`BuildingDef.upgrades_to`, `UpgradeBuildingCommand` and `SimWorld.convert_building` all exist and
-have shipped a real upgrade since 5.8 — the wall-to-gate conversion, which mutates in place and
-keeps the entity id rather than respawning. What is missing is everything an upgrade that is not a
-gate needs: a COST (the gate inherits the wall's), a TIME (it is instantaneous), and a decision
-about whether an upgrade is a per-building action or a player-wide tech, which is the same
-question 9.3 asks and is the reason the two are worth sequencing together. **9.3 shipped first
-and answered it** — see the note under item 2: they are two mechanisms and an upgrade is the
-per-building one. A cost and a time are what is left.
-
-*~~**2. 9.3 `TechSystem`.**~~ **BUILT 2026-08-29**, on the owner's instruction to "wire up tech
-tree 9" — and it went in ahead of Phase 5 above, which is still open. See the 9.3 and 9.4 rows.
-Two things it left behind rather than closed:*
-
-  - **THE AI DOES NOT RESEARCH.** Every `ai_profile` has declared `techs: true` against nothing
-    since 12.2b, and it still does: `ResearchCommand` exists and no rule emits one. That is the
-    same shape as the hole 4.11's population counter was in — a field read by something that
-    nothing writes — and it is now a *balance* hole as well, because a human who buys Blast
-    Furnace is fighting an army that never will. **The AI ladder's tick table in BUGS.md was
-    measured before this and is not invalidated by it** (neither side researches), but the first
-    rule that does research invalidates every row.
-  - ~~**5.3, building upgrades, is still open**~~ — **✅ BUILT 2026-09-03**, and its open question
-    had already been answered here: §15's item 1 asked "per-building action or player-wide tech",
-    and the owner's ruling settled it — an upgrade is an action tile on a building, a *technology*
-    is the player-wide thing bought there. **They stayed two mechanisms** and the wall-to-gate
-    conversion stayed `UpgradeBuildingCommand`. The COST landed; **the TIME did not, and that was
-    right** — the only surviving upgrades are walls, so 9.3's queue is still where a timer goes the
-    day something that is not a wall upgrades, and it holds nothing today.
-
-*~~3. 4.13's pack/unpack state machine.~~ **Built 2026-08-28** — see the Phase 4 table's 4.13
-row. All three engines travel packed and fight deployed, automatically, on an order rather than
-on a button. The one thing left is cosmetic and is with the art side: the packed onager and
-trebuchet have no colour bakes, so a blue player's engine turns plain while it is rolling
-([P6] in `asset_request.md`). The original text is kept below because its reasoning about WHY
-it waited on art is the part worth re-reading.*
-
-**~~3.~~ 4.13's pack/unpack state machine — and it moved because the ART LANDED, 2026-08-28.**
-This was the last open item in 4.13 and it had been waiting on one thing since 2026-08-22:
-every siege atlas staged was the *unpacked* pose, so the machine had no way to show its two
-states apart and building it against a magenta placeholder would have proved the transition
-happened without proving it was the right way round. **All THREE packed atlases are now
-staged** — `vis.onager_packed`, `vis.trebuchet_packed` and `vis.ballista_packed`, which this
-item said was unbaked. **They are deliberately NOT declared in `visuals.json`** — an id
-referenced by nothing reads a year later as art that failed to land — so the declaration goes
-in with the machine, in one commit. Three things already known: the onager's packed actor
-**animates** (`idle`/`walk`, 120 frames) so it must not get `speed: 0`, the trebuchet's does
-too as of `c64ccef` (its wagon was rebaked one level down so the ox-cart rig wins the pick,
-at the cost of its four engineers), and colour is UNMEASURED on all three, so all start
-`"colours": false`. **Nothing is waiting on art here any more.**
-
-**AND THEN, THE SECOND STANDING ITEM: PHASES 15 AND 16 — SCENARIOS, THEN THE MAPMAKER.** *(No
-number, deliberately: the numbers on this list have been renumbered twice and this file's own
-header says the cross-references drifted both times. It sits after item 1 above.)* **The owner's
-call, 2026-09-01**, and the two
-new specs are theirs: [scenarios/README.md](scenarios/README.md) and
-[MapMaker/README.md](MapMaker/README.md). The sequence they asked for, which is also the
-dependency order:
-
-1. ~~**Phase 15, in its numbered order**~~ — ✅ **CLOSED 2026-09-03**, all nine rows, in three
-   days: 15.1 (data + loader) → 15.2 (the rule, headless-testable with no screen in existence) →
-   15.3 (the launch path) → 15.4/15.5 (the two screens) → 15.6 (message + tracker) → 15.7
-   (progress) → 15.8 (the scenarios, content only, and the owner wrote **five**) → 15.9 (preview +
-   tests that drive the sim to each win). The prediction that **scenario 3 is playable at 15.1 +
-   15.3 + 15.5** held exactly, and there was a working campaign in the middle of the list rather
-   than only at the end. **Two things it left rather than closed**, both recorded where they bind:
-   the `alert` row and its banner are tested and authored by nothing (16.6 writes the first one),
-   and scenario 4's briefing promises a dragon its map has not got — a content gap and the owner's
-   call, not a defect in 15.1–15.9.
-2. ~~**2.4c, the map save format**~~ — ✅ **DONE 2026-09-01, CONFIRMED IN PLAY 2026-09-02.** §11.3
-   carries both notes. The format is fixed by use now, which is why it went ahead of the tool.
-3. ⬅️ **PHASE 16, THE MAPMAKER — THIS IS WHERE THE QUEUE NOW POINTS, AND IT IS UNBLOCKED ON BOTH
-   PREREQUISITES.** In its numbered order, with **16.2 (paint → save → open it in the game) as the
-   row that proves the format contract** before anything is built on top of it.
-
-   ✅ **16.0, 16.1, 16.2 AND 16.4b ARE DONE (2026-09-04) AND THE OWNER HAS AUTHORED A MAP IN IT.**
-   The prediction held — the format contract is proved by a map painted in the tool and played
-   from the skirmish picker. **What was not predicted is what the first authored map taught, and
-   it is the reason 16.4b jumped the queue:** it saved without a murmur and was *unplayable*.
-   48x48 with starts at (6,6) and (35,35), player 1 holding 9 of 24 things and no stone. So 16.2's
-   placement was hardened and a **validator went behind the Save button**, which the numbered order
-   had put six rows later. *A tool that cannot judge its own output ships unplayable content
-   quietly*, which is now §16 decision 8.
-
-   **Next is 16.4a (File ▸ Open), then 16.3 (the palette)**, in that order: 16.4a is what 16.10's
-   re-authoring needs, and a palette that cannot reopen its own output is a one-shot tool.
-4. **16.10** — re-author the three placeholder maps for a custom look, which retires §11.7's seed
-   trap by giving each scenario a **file** rather than a seed, and then **"The Dragon Born"**, the
-   second campaign, authored entirely in the tool.
-
-**Two things settled on the owner's ruling the same day, both recorded where they bind rather than
-only here.** ✅ **Scenario 3 is `LAST_MAN_STANDING`** — *leave the enemy nothing* — because "0
-enemy units" is unreachable against an AI that never stops training villagers; Phase 15's opening
-keeps the reasoning. ✅ **`scenarios/` and `maps/` moved out of `game/`** to the repo root, because
-installable, shareable content cannot live in `res://`; §3.3 is the new content-delivery section
-and it named the one real cost — *a campaign cannot reach a phone until 0.3 `AssetPacks` does* —
-which promoted the last open Phase 0 item from "still open" to "on the path". ✅ **AND IT WALKED
-THAT PATH: 0.3 CLOSED 2026-09-03 AND A CAMPAIGN HAS REACHED A PHONE.** The promotion was the right
-call and the cost was real; what remains of it is the **art** `.pck`, which is a packer and not a
-client (see Phase 0's 0.3 row).
-
-**Then, in no strongly forced order:** 12.1b reconnect (discovery landed 2026-08-31); and **Phase
-14, the AI's enemy-blindness** (a rebuild of 12.2b's condition vocabulary, not a bug fix, and it
-wants a game whose balance is settled first).
-
-⚠️ ~~*and 13.x dragons once the RTS is a game.*~~ **THAT ORDERING WAS WRONG AND HALF THE PHASE HAS
-SHIPPED.** It assumed dragons were paced by rigging; the rig arrived, so 13.1 and 13.2a both landed
-on 2026-09-04 and the air domain became real on the way. **What is left is the CLAIM** — kill the
-mother, hold the nest 360 s, receive the grown baby — which is a spawn rule, a timer and the first
-rule in this game to change who owns a unit. It needs nothing from the rest of the RTS, and **11.2's
-Trophy row is blocked on it**, so it is nearer the front of the queue than the back.
-
-**Phase 14 also gained its first measured consequence rather than a predicted one** (13.2a): a bot
-walked eight villagers, one at a time, into a 600 hp guardian on the far side of the map, because
-*"the last one died there"* is not a fact any rule can read. It cost the bot the age it was saving
-for. That is the same ceiling §14 describes, arriving as an economy failure with no mention of a
-dragon anywhere in the log — which is what makes the phase worth doing eventually.
+**And the one thing with a real deadline: `pack_art_v1.pck` is not built.** `build_packs.py` does
+`campaign` and `map` zips only; the client already handles `art` and `audio`, so only the packer
+blocks art delivery. **This is what keeps the APK under 300 MB.** The three questions it needs
+from the art side are in `asset_request.md` — which directory is authoritative for a bake, one art
+pack or several, and what identifies a bake for a version bump.
 
 ### What is waiting on art, not on code
 
-*Swept again 2026-08-29 and it is now the SHORT version of `asset_request.md`, which is the
-authoritative queue — a second full list is a second thing to keep in step, and it did not
-get kept: the six delivered items that used to be spelled out here at length were all crossed
-off on 2026-08-28 and none of them said so. They are one line each below.*
+**`asset_request.md` IS THE AUTHORITATIVE QUEUE AND THIS IS NOT A SECOND COPY OF IT.** It was one
+for a while and it did not stay in step: six items spelled out here at length were all delivered
+on 2026-08-28 and none of them said so, then [P5], [P7] and A.10 went the same way. **What belongs
+here is the shape of the dependency**, one line each, with the queue itself one file over.
 
-**Delivered, and every one of them wired:** the six wildlife walk clips and their `attack`,
-`run` and `feeding` companions (A.4a); six carcasses, so every animal dies as itself; the
-`vis.tree_teak` replacement, which came back as **twelve species** wired through
-`variant_pools` (`vis.tree_banyan` was rejected on the teak's own grounds — the owner tested
-it in a live grove and confirmed the tap problem); the deer's per-direction distortion; the
-arrow and bolt pitch; and the packed siege actors. All 2026-08-28. **Nothing in `game/`
-changed for any of them** — a corrected bake is correct the moment it is staged, which is the
-whole point of never compensating for a bake defect in the game.
+- ⚠️ **`pack_art_v1.pck` — a QUESTION, not a bake, and the only art-side item with a deadline.**
+  See the queue above; the three answers it needs are in `asset_request.md`.
+- **[P8] 27 technology icons** — backlog by the owner's instruction, filed with 9.3. Every research
+  tile draws its name meanwhile; the wiring when they land is data, not code.
+- **[P6] Player colour on two packed siege actors** — a blue player's onager turns plain while it
+  rolls. 16 bakes, and the only thing 4.13 left behind. `P9-packed-siege` on the board is the
+  owner's separate report that the two do not look right.
 
-**~~The facing re-bake~~ (§13.2 item 10) — CLOSED 2026-08-29, and it took two goes and a
-wrong diagnosis.** The first delivery (2026-08-27) re-baked 242 atlases against a
-`yaw_offset_deg` specification that was **wrong**: the atlases were never 180° out, they were
-MIRRORED, and a half-turn only moved the mirror's axis. The pipeline fix was `isobake
-e6fc052`; the confirmation is in BUGS.md, and so is the lesson — **the agreed check read
-columns 0 and 4, which are exactly the two a mirror about N–S leaves alone.** It passed
-twice while the bug was there.
+**Nothing else is waiting on art.** The dragon rig ([P7]) was *"the only art gap that blocks a
+phase"* and it landed 2026-09-04, taking all of Phase 13 with it; **[P7-footprint] was answered
+from the game side on 2026-09-01 — it is the WINGSPAN**, safe because the sim never reads
+`footprint_m` (13 files do and every one is in `src/view/`, so collision and pathing come off the
+`SimUnit` rect instead); **A.10's building roster closed 2026-09-01** on the owner having played
+it, which unblocked 5.7 and 9.6; and **[P5]'s ten `footprint_m` figures** were measured and wired
+the same day.
 
-Still outstanding, in `asset_request.md`'s own priority order:
-
-- ⚠️ **NEW 2026-09-03, AND IT IS A QUESTION RATHER THAN A BAKE: what does `pack_art_v1.pck`
-  contain?** 0.3 shipped the whole client and the content packer; the art packer needs three
-  answers from the art side, all asked in `asset_request.md` — **which directory is
-  authoritative for a bake** (`art_work/out/` versus the staged copy under
-  `game/assets/atlases/`, which memory says is a stale manual copy), **whether one art pack is
-  right or it wants splitting**, and **what identifies a bake for a version bump**. This is the
-  piece that keeps the APK under 300 MB, so of everything on this list it is the one with a
-  deadline rather than a wish behind it. It is not blocked on a bake and no atlas needs
-  re-cutting for it.
-- ~~**[P7] `vis.dragon` cannot move**~~ — ✅ **DELIVERED AND SPENT, 2026-09-04.**
-  `vis.dragon_rigged` is the same mesh with a commissioned armature and bakes all five clips
-  (idle, Fly2, shootFire, die, decay). It was *"the only art gap that blocks a phase"* and it
-  unblocked two rows in one day: 13.1 flies her, and 13.2a puts her on every generated map.
-  **`vis.dragon` itself is unchanged and still static** — nothing points at it any more, and it
-  is kept as the record of the unrigged bake (see `visuals.json`'s `_note_dragon`).
-  **What P7 did NOT settle and still wants the art side's answer is [P7-footprint]:** whether a
-  dragon's footprint is the wingspan or the ground under her. 9.19 x 8.11 m is the wingspan, and
-  it is what the selection ring and the occlusion band currently draw.
-- **A.10, the building roster age by age** — running in the background rather than queued.
-  It paces **5.7** (23 buildings, ~70 bakes) and every age skin **9.6** will want.
-- **[P8] 27 technology icons** — backlog by the owner's instruction, filed with 9.3. Every
-  research tile draws its name; the wiring when they land is data, not code.
-- **[P5] Ten estimated `footprint_m` figures** — five animals and five carcasses, because a
-  carcass cannot be measured by the usual inversion at all (§12A A.4b). They feed the
-  selection ring and the occlusion band, not gameplay.
-- **[P6] Player colour on two packed siege actors** — a blue player's onager turns plain while
-  it is rolling. 16 bakes, and the only thing 4.13 left behind.
+⚠️ **THE ONE LESSON FROM THIS QUEUE WORTH KEEPING IN THE PLAN**, because it cost 242 atlases and
+two deliveries: **the agreed facing check read columns 0 and 4, which are exactly the two columns
+a mirror about N–S leaves alone.** It passed twice while every unit in the game was reflected. Any
+facing check reads columns **2 and 6** as well. §13.2 item 10 has the full account.
 
 ### Known gaps worth writing down rather than filing
 

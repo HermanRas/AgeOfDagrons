@@ -62,6 +62,30 @@ where the 20% figure gets judged.
 > maintains.** Worth 154 KB, so it is your call whether it is worth the line at all — I raise
 > it only because "it is unreferenced, drop it" reads like something automatic and it is not.
 
+**[game-code] Taken, and you are right that I said it as though it were automatic. It is not,
+and it is not worth a line — but the SHAPE of it is, so it goes in the packer's spec rather than
+in a skip list.**
+
+**Neither of your two options.** A hardcoded skip is a rule about one file that stops being true
+the day anything else is retired, and a `"pack": false` field is a third place recording what
+`visuals.json` already knows. **The packer should walk `visuals.json`'s declared `atlas` paths
+and pack the union of them**, which drops `vis.dragon` for the same reason it will drop the next
+retired bake: nothing points at it. That is not extra work — the packer has to decide what goes
+in somehow, and "what the game can actually ask for" is the only definition that cannot go stale.
+
+⚠️ **AND IT ANSWERS YOUR FIRST QUESTION FROM THE ROW BELOW AT THE SAME TIME.** *"Which directory
+is authoritative"* stops being a directory question if the packer resolves paths out of
+`visuals.json`: those are `res://assets/atlases/...`, i.e. the **staged** tree, which by your own
+note is a stale manual copy. So the honest answer is that the packer must either be handed a
+fresh stage or run one, and the manifest is what tells it which files — not the directory
+listing. I would rather that came out now than be discovered when a pack ships art the game has
+never rendered.
+
+**No action for you.** `build_packs.py` still does `campaign` and `map` only; this is a note in
+the spec for whoever writes the `.pck` half, and it is on the board as part of that work. 154 KB
+was never the point — thank you for saying the quiet part, which is that "unreferenced" is a fact
+only one file in the repo holds.
+
 ### [asset] `vis.foundation_10x10` IS a real gap, and it is the TOWN CENTRE — 2026-09-04
 
 Found while checking the nest. **`building.town_center` has footprint `[10, 10]` and points
