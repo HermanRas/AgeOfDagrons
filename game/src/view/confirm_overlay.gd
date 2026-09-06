@@ -1,7 +1,7 @@
 ## "Are you sure?" — a yes/no modal for an action that cannot be undone (owner request,
-## 2026-09-06; no PLAN.md row, see `CampaignProgress.reset_all`).
+## 2026-09-06; no PLAN.md row, see `CampaignProgress.reset`).
 ##
-## Built for the campaign screen's RESET PROGRESS button and deliberately generic, because
+## Built for the scenario screen's RESET PROGRESS button and deliberately generic, because
 ## it is the first of a shape this game will want again: quit-to-menu with a match running,
 ## deleting an installed pack, overwriting a save.
 ##
@@ -33,8 +33,8 @@
 ## colour, so the two options are told apart by more than their position.
 ##
 ## The root is `MOUSE_FILTER_STOP` and so is the dim behind it: while this is open, a press
-## that misses the frame must not reach the screen underneath. On the campaign screen that
-## screen is a list of rows that each change scene.
+## that misses the frame must not reach the screen underneath. On the scenario screen that
+## is a column of mission rows and a live PLAY button.
 class_name ConfirmOverlay
 extends Control
 
@@ -47,13 +47,13 @@ const _PANEL := Color(0.16862746, 0.11372549, 0.078431375, 1.0)
 const _PARCHMENT := Color(0.9372549, 0.8784314, 0.7529412, 1.0)
 const _GOLD := Color(0.8980392, 0.7215686, 0.25882354, 1.0)
 
-## The confirm button's ink, and the same colour `CampaignScreen` puts on the button that
+## The confirm button's ink, and the same colour `ScenarioScreen` puts on the button that
 ## opens this — so the control and the modal are visibly one action.
 ##
 ## Not a red FILL: a solid red block reads as an error that has already happened rather than
 ## as a choice about to be made. And a LIGHT coral rather than a saturated red, because the
 ## theme's button plate is itself dark red and a mid red on it reads as greyed out —
-## `CampaignScreen._DANGER` records what that looked like.
+## `ScenarioScreen._DANGER` records what that looked like.
 const _DANGER := Color(1.0, 0.61960787, 0.5176471, 1.0)
 
 ## Wide enough for a sentence of body text at 16 px without the panel becoming a column of
@@ -61,8 +61,9 @@ const _DANGER := Color(1.0, 0.61960787, 0.5176471, 1.0)
 ## dimmed screen still visible around it — which is what tells the player it is a modal.
 const PANEL_WIDTH := 560.0
 
-## Big enough to hit with a thumb (`ScenarioScreen` and the footer buttons use the same
-## 58 px height), and equal for both, so neither option is physically easier than the other.
+## Big enough to hit with a thumb — a shade taller than the 52–56 px the screens behind it
+## use, because this is the press that matters — and equal for both, so neither option is
+## physically easier to hit than the other.
 const BUTTON_SIZE := Vector2(200.0, 58.0)
 
 var _title: Label
@@ -183,7 +184,7 @@ func body_text() -> String:
 	return _body.text
 
 
-## The panel: the campaign screen's own ground colour with a gold edge, so the modal is
+## The panel: the menu screens' own ground colour with a gold edge, so the modal is
 ## recognisably part of the room it opened in rather than Godot's default grey.
 ##
 ## OPAQUE, deliberately. A translucent panel over a dimmed list is a paragraph with a

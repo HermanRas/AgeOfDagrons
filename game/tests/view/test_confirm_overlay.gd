@@ -1,4 +1,4 @@
-## The "are you sure" modal, built for the campaign screen's RESET PROGRESS button (owner
+## The "are you sure" modal, built for the scenario screen's RESET PROGRESS button (owner
 ## request, 2026-09-06; no PLAN.md row).
 ##
 ## THE POINT OF THIS FILE IS THAT THE MODAL CANNOT BE SKIPPED AND CANNOT FIRE BY ITSELF.
@@ -84,7 +84,7 @@ func test_reopening_replaces_the_question_rather_than_stacking_one() -> void:
 
 func test_the_backdrop_swallows_presses() -> void:
 	# While this is open, a press that misses the frame must not reach the screen
-	# underneath -- which on the campaign screen is a list of rows that each change scene.
+	# underneath -- which on the scenario screen is a column of rows that swap the panel.
 	# `mouse_filter` is per-node and does not inherit; `NoticeToast`'s header records a week
 	# of an invisible hole in the build grid learned from exactly that.
 	assert_eq(overlay.mouse_filter, Control.MOUSE_FILTER_STOP)

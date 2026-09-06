@@ -29,6 +29,29 @@
 ## `_init()` is what lets `ScenarioScreen.new()` be a whole screen with no `SceneTree`.
 ## Nothing here touches `get_tree()` except leaving and launching.
 ##
+## ## RESET PROGRESS LIVES HERE, AND IT CLEARS THIS CAMPAIGN ONLY
+##
+## Owner, 2026-09-06 (no PLAN.md row — Phase 15 had closed): *"add a reset button ... with an
+## alert asking the user if they are sure they want to reset the progress of all scenarios;
+## set progress back to 0"*, then, on seeing it built on `CampaignScreen`, *"the reset is per
+## campaign, so on the progress tree page not the campaigns page."*
+##
+## The two halves of that correction go together and they are the same point: **a control
+## belongs on the screen that shows the state it changes.** The campaign list shows a name
+## and a blurb, so a reset there is a button whose effect you take on trust. This screen is a
+## column of locks — that column *is* the progress — so a reset here visibly does the thing
+## it says, and the campaign it belongs to is not in question because there is exactly one on
+## screen.
+##
+## It follows that this screen must **redraw itself**, which `CampaignScreen` had nothing to
+## redraw for: `_progress` is read once in `open()`, and a screen that cleared the file
+## without rebuilding its rows would leave every mission looking unlocked until the player
+## left and came back. `_on_reset_confirmed` re-reads and rebuilds.
+##
+## The press does nothing but ask. Everything that touches the file is behind
+## `ConfirmOverlay`'s `confirmed` signal, so there is no path from one tap to a cleared
+## campaign.
+##
 ## ⚠️ **BOTH COLUMNS SCROLL, AND NEITHER IS DECORATION.** A `VBoxContainer` overflows — it
 ## does not clip, scroll or compress past its children's minimums — and the lobby shipped
 ## with its nav strip off the bottom of the screen for exactly that while every structural
@@ -44,6 +67,17 @@ const _GROUND := Color(0.16862746, 0.11372549, 0.078431375, 1.0)
 const _PARCHMENT := Color(0.9372549, 0.8784314, 0.7529412, 1.0)
 const _GOLD := Color(0.8980392, 0.7215686, 0.25882354, 1.0)
 const _DIM := Color(0.55, 0.5, 0.44, 1.0)
+
+## RESET PROGRESS' ink, and `ConfirmOverlay`'s confirm button wears the same one so the
+## button and the modal it opens are visibly one action.
+##
+## ⚠️ **A LIGHT CORAL, NOT A SATURATED RED, AND THAT WAS MEASURED RATHER THAN CHOSEN.** The
+## first version was `#E65C5C`, the obvious "danger" red, and it is nearly invisible here:
+## the theme's button plate is itself a dark red, so a mid red on it has almost no contrast
+## and the button reads as **greyed out** — the one thing a live control must never look
+## like, and the exact opposite of the warning intended. `campaign_reset_alert.png` from
+## `preview_campaign` is what showed it; nothing in the suite could have.
+const _DANGER := Color(1.0, 0.61960787, 0.5176471, 1.0)
 
 ## Scenario icons are authored 256×256 and drawn small — see `CampaignScreen.ICON_SIZE` for
 ## why the source is not shrunk instead.
@@ -71,11 +105,29 @@ var _title: Label
 var _blurb: Label
 var _note: Label
 var _play_button: Button
+var _reset_button: Button
+var _confirm: ConfirmOverlay
 var _toast: NoticeToast
 
 ## Set by `launch()` instead of changing scene when there is no tree — the suite's hook, and
 ## the reason `launch()` can be asserted on at all.
 var _launched: MatchConfig = null
+
+## Which progress file RESET PROGRESS clears. **A field with the real one as its default,
+## and it is not a nicety — it is the only thing between the suite and the developer's own
+## saved campaign.**
+##
+## `CampaignProgress` takes a `path` on every single function for exactly this reason, and
+## its header records what happened the one time real `user://` state leaked into a test: a
+## progress file written by hand for a play-test turned **this screen's** heading test into a
+## failure with nothing to do with what it tested. That was a test *reading* it. This button
+## **writes** it, so a test pressing the confirm button through the default would clear the
+## progress of whoever ran the suite — silently, and once per run.
+##
+## Production never sets this; `open()` still reads through the default, because a screen
+## that showed one file's locks and cleared another's would be worse than either.
+## `test_scenario_screen` sets it before it presses anything.
+var progress_path: String = CampaignProgress.USER_FILE
 
 
 func _init() -> void:
@@ -122,10 +174,43 @@ func _init() -> void:
 	back.pressed.connect(_on_back_pressed)
 	footer.add_child(back)
 
+	# RESET PROGRESS AT THE FAR END, not beside BACK. It is the only destructive control on
+	# this screen and BACK is pressed often and without looking; the width of the footer
+	# between them is the cheapest guard there is, and the modal is the real one. An
+	# expanding spacer rather than an anchor, because the footer is in the page's FLOW --
+	# a control pinned to the viewport can end up under the scenario column on a short one.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	footer.add_child(spacer)
+
+	_reset_button = Button.new()
+	_reset_button.text = "RESET PROGRESS"
+	_reset_button.custom_minimum_size = Vector2(280, 52)
+	UiFont.title(_reset_button, 20)
+	# NOT GATED ON THERE BEING PROGRESS TO CLEAR. Reading the file to decide would make this
+	# screen's construction depend on real `user://` state -- the trap this screen's own
+	# heading test fell into once already (see `progress_path`). A reset with nothing to
+	# reset is a no-op that says so.
+	_reset_button.add_theme_color_override("font_color", _DANGER)
+	_reset_button.add_theme_color_override("font_hover_color", _DANGER)
+	_reset_button.add_theme_color_override("font_pressed_color", _DANGER)
+	_reset_button.add_theme_color_override("font_focus_color", _DANGER)
+	_reset_button.pressed.connect(_on_reset_pressed)
+	footer.add_child(_reset_button)
+
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_toast.position = Vector2(-NoticeToast.SIZE.x / 2.0, 16.0)
 	add_child(_toast)
+
+	# LAST, so it draws over the toast as well as over the two columns. Nothing raises a
+	# banner while this is open today, but the ordering is the bug `GameScene` records paying
+	# for -- an alert raised after an overlay is drawn BEHIND it -- and a modal a banner can
+	# cover is a question the player cannot read.
+	_confirm = ConfirmOverlay.new()
+	_confirm.confirmed.connect(_on_reset_confirmed)
+	add_child(_confirm)
 
 	# ONE-SHOT, and cleared before `open()` rather than after: `open()` can push a warning,
 	# and a static left set through an error is a campaign that reopens itself on the next
@@ -227,8 +312,15 @@ func _build_panel() -> Control:
 ## Show `c`, read its progress, and select the furthest scenario the player may enter.
 func open(c: CampaignDef) -> void:
 	_campaign = c
-	_progress = CampaignProgress.completed(c.folder)
+	# THROUGH `progress_path`, the same file RESET PROGRESS clears. A screen that showed one
+	# file's locks and cleared another's would be worse than either.
+	_progress = CampaignProgress.completed(c.folder, progress_path)
 	_heading.text = c.name
+	# ⚠️ RE-ENABLED HERE, because `_init()` disables it when nothing is parked and `open()` is
+	# what arrives afterwards. Caught by `test_the_reset_button_is_on_the_screen`: a screen
+	# reached through `open()` rather than through `pending` had a permanently dead RESET
+	# button, which is the one failure mode a disabled-state guard can create by itself.
+	_reset_button.disabled = false
 
 	# ONCE PER CAMPAIGN, never per selection — `scenarios/README.md` is explicit that a
 	# 1920×1080 background costs a real decode and must not be loaded for a list.
@@ -416,6 +508,9 @@ func _show_no_campaign() -> void:
 			+ " campaign list. Go back and choose a campaign.")
 	_play_button.disabled = true
 	_note.visible = false
+	# There is no campaign to clear the progress OF. The button is otherwise never disabled;
+	# this is the one state where pressing it could not name a target.
+	_reset_button.disabled = true
 
 
 func _say(text: String) -> void:
@@ -427,6 +522,59 @@ func _say(text: String) -> void:
 
 func _on_back_pressed() -> void:
 	get_tree().change_scene_to_file(_CAMPAIGN_SCENE)
+
+
+## RESET PROGRESS -> ask first. The owner's words, 2026-09-06: *"with an alert asking the
+## user if they are sure they want to reset the progress of all scenarios"*.
+##
+## THE PRESS DOES NOTHING BUT ASK. Everything that touches the file is behind
+## `_on_reset_confirmed`, reachable only from the modal's own signal, so there is no path
+## from one tap to a cleared campaign and no second caller to keep in step.
+##
+## ⚠️ **THE MODAL NAMES THE CAMPAIGN**, which is the whole point of the button being on this
+## screen rather than the list. "Reset progress?" on a screen that may be one of nine
+## campaigns is a question the player cannot answer safely; *"This clears your progress
+## through How To Play"* is.
+##
+## And it says what is lost in the PLAYER'S terms, not the file's. "Progress" is a number in
+## a JSON file; what they have is unlocked missions, and the sentence that matters is that
+## those lock again — which is a claim this screen then makes good on visibly, because the
+## column beside them is those locks.
+func _on_reset_pressed() -> void:
+	if _campaign == null:
+		return
+	_confirm.open("RESET PROGRESS",
+			"This clears your progress through %s." % _campaign.name
+					+ " Every scenario but the first locks again, and this cannot be undone."
+					+ "\n\nAre you sure?",
+			"RESET")
+
+
+## The deed, and the only place in the game that calls `CampaignProgress.reset`.
+##
+## ⚠️ **IT REDRAWS, WHICH IS WHY THE BUTTON BELONGS ON THIS SCREEN.** `_progress` is read
+## once in `open()`, so clearing the file without rebuilding would leave every mission
+## looking unlocked until the player left and came back — a reset that appears to have done
+## nothing, on the one screen that can actually show it working. Re-read, rebuild the rows,
+## and select scenario 1, because after a reset that is the only one open.
+##
+## **IT SAYS SO EITHER WAY.** A reset that failed — a read-only `user://`, a file held open
+## by something else — looks exactly like one that worked. `CampaignProgress.reset` pushes a
+## warning for the developer; this is the half the player can see.
+func _on_reset_confirmed() -> void:
+	if _campaign == null:
+		return
+	var ok := CampaignProgress.reset(_campaign.folder, progress_path)
+	_progress = CampaignProgress.completed(_campaign.folder, progress_path)
+	_rebuild_rows()
+	select(0)
+	# Written out rather than as `"..." % x if ok else "..."` -- that parses the way it should
+	# and still reads like a bug every time somebody meets it, which `_why_not_playable`
+	# above says in the same words.
+	if ok:
+		_say("%s progress reset" % _campaign.name)
+	else:
+		_say("Could not reset progress")
 
 
 # ── readers, for the suite ───────────────────────────────────────────────────
@@ -457,6 +605,16 @@ func play_enabled() -> bool:
 
 func play_note() -> String:
 	return _note.text if _note.visible else ""
+
+
+func reset_button() -> Button:
+	return _reset_button
+
+
+## The "are you sure" modal, so a test can assert it opened and press one of its two buttons
+## rather than calling the handler it guards.
+func confirm_overlay() -> ConfirmOverlay:
+	return _confirm
 
 
 func panel_title() -> String:

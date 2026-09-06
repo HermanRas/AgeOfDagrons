@@ -12,7 +12,20 @@
 ## which is a test that passes for one person and fails for the next. Every test that cares
 ## about locking therefore **sets `_progress` directly** and never relies on the file. The
 ## one test that does read the file asserts only that reading it cannot throw.
+##
+## ## ⚠️ AND SINCE 2026-09-06 THIS SCREEN *WRITES* THAT FILE
+##
+## RESET PROGRESS lives here (the owner's correction: *"the reset is per campaign, so on the
+## progress tree page not the campaigns page"*), so the warning above stopped being about
+## flaky assertions and started being about **destroying the developer's own save**: a test
+## that pressed the confirm button through the default path would clear the progress of
+## whoever ran the suite, silently, once per run. `before_each` therefore repoints
+## `progress_path` at a file under this test's own directory **before `open()`**, which is
+## also what makes the reset tests below able to set up a campaign that is part-finished.
 extends TestCase
+
+const DIR := "user://test_scenario_screen"
+const PROGRESS := "user://test_scenario_screen/progress.json"
 
 var screen: ScenarioScreen
 var campaign: CampaignDef
@@ -21,7 +34,15 @@ var campaign: CampaignDef
 func before_each() -> void:
 	campaign = _how_to_play()
 	ScenarioScreen.pending = null
+	if not DirAccess.dir_exists_absolute(DIR):
+		DirAccess.make_dir_recursive_absolute(DIR)
+	# A missing file is the state most of these start from, so removing it IS the setup.
+	if FileAccess.file_exists(PROGRESS):
+		DirAccess.remove_absolute(PROGRESS)
 	screen = ScenarioScreen.new()
+	# BEFORE `open()`, which reads through this field. A screen that showed one file's locks
+	# and cleared another's would be worse than either.
+	screen.progress_path = PROGRESS
 	screen.open(campaign)
 
 
@@ -299,6 +320,142 @@ func test_reading_progress_off_disk_cannot_throw() -> void:
 	var n := CampaignProgress.completed("HowToPlay")
 	assert_true(n >= 0, "never negative, whatever the file says")
 	assert_eq(CampaignProgress.completed("NoSuchCampaign"), 0)
+
+
+# ── RESET PROGRESS (2026-09-06) ───────────────────────────────────────────────
+#
+# ⚠️ These are the tests that could not be written on `CampaignScreen`, and that is the
+# owner's correction made concrete: that screen had nothing to redraw, so all a test there
+# could assert was the contents of a file. Here the column of locks IS the progress, so
+# every one below checks the SCREEN and not just the JSON.
+
+func test_the_reset_button_is_on_the_screen_and_says_what_it_does() -> void:
+	assert_not_null(screen.reset_button())
+	assert_eq(screen.reset_button().text, "RESET PROGRESS")
+	assert_false(screen.reset_button().disabled,
+			"never gated on there being progress -- reading the file to decide would make"
+			+ " this screen's construction depend on user:// state, which is the trap this"
+			+ " file's header is about")
+
+
+func test_pressing_reset_only_asks() -> void:
+	# ⚠️ THE WHOLE POINT OF THE MODAL. There must be no path from a single tap to a cleared
+	# campaign.
+	CampaignProgress.record_completed("HowToPlay", 2, PROGRESS)
+	screen.open(campaign)
+	assert_eq(screen.progress(), 3)
+
+	assert_false(screen.confirm_overlay().is_open(), "no modal before the press")
+	screen.reset_button().pressed.emit()
+	assert_true(screen.confirm_overlay().is_open(), "the press opens the question")
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 3,
+			"and changes nothing until it is answered")
+	assert_eq(screen.progress(), 3, "nor does the screen move")
+
+
+func test_the_alert_names_the_campaign_it_is_about() -> void:
+	# ⚠️ THE REASON THE BUTTON IS ON THIS SCREEN. "Reset progress?" asked on a list of nine
+	# campaigns is a question the player cannot answer safely; naming the one campaign on
+	# screen is what makes it answerable.
+	screen.reset_button().pressed.emit()
+	assert_true(screen.confirm_overlay().body_text().contains(campaign.name),
+			"the alert says which campaign: " + screen.confirm_overlay().body_text())
+
+
+func test_the_alert_says_what_is_lost_in_the_players_terms() -> void:
+	# "Progress" is a number in a JSON file; what the player has is unlocked missions, and
+	# what they need told is that those lock again. "undone" is the word that stops a
+	# reflexive yes.
+	screen.reset_button().pressed.emit()
+	var body := screen.confirm_overlay().body_text().to_lower()
+	assert_true(body.contains("lock"), "it says the scenarios lock again: " + body)
+	assert_true(body.contains("undone"), "and that it cannot be undone: " + body)
+
+
+func test_cancelling_the_alert_leaves_every_unlocked_row_open() -> void:
+	CampaignProgress.record_completed("HowToPlay", 1, PROGRESS)
+	screen.open(campaign)
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().cancel_button().pressed.emit()
+
+	assert_false(screen.confirm_overlay().is_open())
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 2,
+			"CANCEL must leave the file exactly as it was")
+	assert_eq(screen.progress(), 2)
+	assert_false(screen.row(1).disabled, "and scenario 2 is still open")
+
+
+func test_confirming_relocks_the_column_and_not_just_the_file() -> void:
+	# ⚠️ THE ONE THAT CAUGHT THE REDRAW. `_progress` is read once in `open()`, so a handler
+	# that cleared the file without rebuilding leaves every mission looking unlocked until
+	# the player leaves and comes back -- a reset that appears to have done nothing, on the
+	# one screen that can show it working.
+	CampaignProgress.record_completed("HowToPlay", 3, PROGRESS)
+	screen.open(campaign)
+	assert_false(screen.row(3).disabled, "scenario 4 is open before the reset")
+
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 0, "the file is cleared")
+	assert_eq(screen.progress(), 0, "and the screen re-read it")
+	assert_false(screen.row(0).disabled, "scenario 1 is always available")
+	for i in range(1, screen.row_count()):
+		assert_true(screen.row(i).disabled, "row %d locked again" % i)
+
+
+func test_confirming_selects_the_only_scenario_left_open() -> void:
+	# Leaving the highlight on scenario 4 after locking it would put the player in front of
+	# a panel whose PLAY is dead, with no clue why.
+	CampaignProgress.record_completed("HowToPlay", 3, PROGRESS)
+	screen.open(campaign)
+	screen.select(3)
+
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+
+	assert_eq(screen.selected_index(), 0)
+	assert_true(screen.play_enabled(), "and PLAY works on it")
+
+
+func test_a_reset_spares_the_other_campaigns() -> void:
+	# ⚠️ THE OWNER'S CORRECTION, AS AN ASSERTION: *"the reset is per campaign"*. Somebody
+	# clearing How To Play to re-run the tutorial must not lose a nine-mission campaign they
+	# are eight missions into.
+	CampaignProgress.record_completed("HowToPlay", 2, PROGRESS)
+	CampaignProgress.record_completed("SomeOtherCampaign", 7, PROGRESS)
+	screen.open(campaign)
+
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+
+	assert_eq(CampaignProgress.completed("HowToPlay", PROGRESS), 0)
+	assert_eq(CampaignProgress.completed("SomeOtherCampaign", PROGRESS), 8,
+			"the other campaign is untouched")
+
+
+func test_resetting_with_nothing_to_reset_is_a_no_op_and_not_an_error() -> void:
+	# The ordinary state of a player who has just installed the game and pressed it out of
+	# curiosity, and of anybody who presses it twice.
+	assert_eq(screen.progress(), 0)
+	screen.reset_button().pressed.emit()
+	screen.confirm_overlay().confirm_button().pressed.emit()
+	assert_eq(screen.progress(), 0)
+	assert_eq(CampaignProgress.all(PROGRESS), {})
+	assert_false(screen.row(0).disabled, "and the screen is still usable")
+
+
+func test_a_screen_with_no_campaign_cannot_reset_anything() -> void:
+	# Reachable by loading `Scenario.tscn` directly. There is no campaign to clear the
+	# progress OF, so the button is the one thing here that IS disabled.
+	var empty := ScenarioScreen.new()
+	assert_null(empty.campaign())
+	assert_true(empty.reset_button().disabled)
+	# Belt to that braces: the handler refuses too, so a press that somehow arrived cannot
+	# ask a question with no subject.
+	empty._on_reset_pressed()
+	assert_false(empty.confirm_overlay().is_open())
+	empty.free()
 
 
 func _labels_of(node: Node) -> Array[String]:

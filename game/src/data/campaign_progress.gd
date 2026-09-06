@@ -136,14 +136,14 @@ static func record_completed(folder: String, scenario_index: int,
 	return _write(data, path)
 
 
-## Forget every campaign's progress. Returns whether the file is gone afterwards (true
-## also when there was nothing to forget).
+## Forget `folder`'s progress and leave every other campaign's alone. Returns whether the
+## file now records nothing for it (true also when it already recorded nothing).
 ##
-## ⚠️ **NO PLAN.md ROW YET.** Asked for by the owner on 2026-09-06 — *"add a reset button to
-## the campaign screen, with an alert asking the user if they are sure they want to reset
-## the progress of all scenarios; set progress back to 0"* — after Phase 15 had closed, and
-## PLAN.md is the owner's to add to. The date and the quotation are here so this is
-## attributable to a decision rather than to somebody's idea of a good feature.
+## ⚠️ **NO PLAN.md ROW YET.** Asked for by the owner on 2026-09-06 — *"add a reset button
+## ... with an alert asking the user if they are sure they want to reset the progress of all
+## scenarios; set progress back to 0"* — after Phase 15 had closed, and PLAN.md is the
+## owner's to add to. The date and the quotation are here so this is attributable to a
+## decision rather than to somebody's idea of a good feature.
 ##
 ## ## ⚠️ THIS IS THE ONE THING IN THIS FILE THAT GOES BACKWARDS
 ##
@@ -152,41 +152,66 @@ static func record_completed(folder: String, scenario_index: int,
 ## all about the game rewinding progress *behind the player's back*: a replay re-locking
 ## later missions, a second result screen counting twice. **A player asking for it is the
 ## opposite case**, and it is the only caller this is offered to. It is not reachable from
-## the sim, from `GameScene`, or from anything that runs during a match; the campaign screen
+## the sim, from `GameScene`, or from anything that runs during a match; `ScenarioScreen`
 ## puts a modal in front of it, and that modal is the actual safety.
 ##
 ## So the invariant is not "the number only goes up" — it is **"the number only goes up
 ## unless the player says otherwise"**, which is the same shape as every other destructive
 ## thing in a game's menu.
 ##
-## ## IT DELETES THE FILE RATHER THAN WRITING `{}`
+## ## ONE CAMPAIGN, BECAUSE OF WHERE THE BUTTON IS
 ##
-## Both read back identically through `all()`, so this is a choice about what is left on
-## disk. Deleting returns the player to the state a **fresh install** is in, byte for byte,
-## which means there is no fourth state for anything downstream to interpret — a file that
-## exists holds progress, and no file means none. It also disposes of a file that could not
-## be parsed, which `_write` cannot do: a corrupt file is exactly when somebody reaches for
-## this button, and "reset" that leaves the corruption in place would be the worst possible
-## time to preserve it.
+## ⚠️ The first version of this was `reset_all()` with the button on `CampaignScreen`, and
+## the owner corrected it the same hour: *"the reset is per campaign, so on the progress tree
+## page not the campaigns page."* The two go together and the correction is really about
+## **where the state is visible** — the campaign list shows a name and a blurb, so a reset
+## there is a button whose effect you have to take on trust; the scenario list is a column of
+## locks, which *is* the progress, so a reset there visibly does the thing it says.
 ##
-## ⚠️ **IT TAKES EVERY CAMPAIGN, not just the one on screen.** The button lives on the
-## screen that lists campaigns rather than inside one, its modal says "all scenarios", and
-## per-campaign reset would need a row-level control that does not exist. If one is ever
-## wanted, it is a new function — do not add a `folder` argument to this one and change what
-## an existing call means.
-static func reset_all(path: String = USER_FILE) -> bool:
-	if not FileAccess.file_exists(path):
-		# Already nothing, which is a fresh install and every player who has not finished a
-		# scenario. Success, not a failure to report: the caller asked for a state, not for
-		# a deletion.
-		return true
-	var err := DirAccess.remove_absolute(path)
-	if err != OK:
-		# SAID OUT LOUD for `_write`'s reason. A reset that silently did nothing would look
-		# exactly like a reset that worked until the player reopened the campaign.
-		push_warning("CampaignProgress: cannot delete %s (%s)" % [path, error_string(err)])
+## So `folder` is required and the other campaigns' rows are written back untouched. A
+## player clearing "How To Play" to re-run the tutorial must not lose a nine-mission campaign
+## they are eight missions into.
+##
+## ## IT DELETES THE FILE WHEN NOTHING IS LEFT IN IT
+##
+## Both an absent file and `{}` read back identically through `all()`, so this is a choice
+## about what is on disk: with the last row gone, deleting returns the player to the state a
+## **fresh install** is in, byte for byte, rather than leaving an empty object that means the
+## same thing in a fourth way. With other campaigns still in it the file is rewritten
+## normally.
+##
+## A file that could not be PARSED is a special case worth stating: `all()` has already
+## treated it as "every campaign unstarted", so from the player's chair the progress this was
+## asked to clear is gone before it is called. It reports success and leaves the file for
+## `record_completed` to replace, which is what that function's "a corrupt file is REPLACED"
+## note already commits to.
+static func reset(folder: String, path: String = USER_FILE) -> bool:
+	if folder.is_empty():
+		# `record_completed`'s guard, and for the same reason: an empty folder is not a
+		# campaign, and a reset with no target must not be allowed to mean "everything".
+		push_warning("CampaignProgress: reset was given no campaign")
 		return false
-	return true
+
+	var data := all(path)
+	if not data.has(folder):
+		# Nothing recorded for it, which is every player who has not finished one of its
+		# scenarios and anybody pressing the button twice. The caller asked for a state, not
+		# for a deletion.
+		return true
+	data.erase(folder)
+
+	if data.is_empty():
+		if not FileAccess.file_exists(path):
+			return true
+		var err := DirAccess.remove_absolute(path)
+		if err != OK:
+			# SAID OUT LOUD for `_write`'s reason. A reset that silently did nothing looks
+			# exactly like one that worked, until the player reopens the campaign.
+			push_warning("CampaignProgress: cannot delete %s (%s)"
+					% [path, error_string(err)])
+			return false
+		return true
+	return _write(data, path)
 
 
 static func _write(data: Dictionary, path: String) -> bool:

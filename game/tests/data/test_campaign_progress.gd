@@ -220,58 +220,79 @@ func test_the_file_it_writes_is_the_file_it_reads() -> void:
 
 # ── reset_all (2026-09-06): the one thing here that goes backwards ───────────
 
-func test_a_reset_forgets_every_campaign() -> void:
+func test_a_reset_forgets_the_campaign_it_was_given() -> void:
 	CampaignProgress.record_completed("HowToPlay", 3, _path())
-	CampaignProgress.record_completed("Other", 0, _path())
 	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 4)
 
-	assert_true(CampaignProgress.reset_all(_path()))
-	assert_eq(CampaignProgress.all(_path()), {})
+	assert_true(CampaignProgress.reset("HowToPlay", _path()))
 	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 0)
-	assert_eq(CampaignProgress.completed("Other", _path()), 0,
-			"every campaign, not the one that happened to be on screen")
 
 
-func test_a_reset_leaves_a_fresh_install_byte_for_byte() -> void:
-	# It DELETES rather than writing `{}`, so there is no fourth state downstream: a file
-	# that exists holds progress, and no file means none.
+func test_a_reset_spares_every_other_campaign() -> void:
+	# ⚠️ THE OWNER'S CORRECTION (2026-09-06): *"the reset is per campaign."* The first version
+	# of this function was `reset_all()`, and a player clearing the tutorial to re-run it
+	# would have lost a nine-mission campaign they were eight missions into.
+	CampaignProgress.record_completed("HowToPlay", 1, _path())
+	CampaignProgress.record_completed("Other", 4, _path())
+	CampaignProgress.record_completed("Third", 0, _path())
+
+	assert_true(CampaignProgress.reset("Other", _path()))
+	assert_eq(CampaignProgress.completed("Other", _path()), 0)
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 2, "untouched")
+	assert_eq(CampaignProgress.completed("Third", _path()), 1, "untouched")
+	assert_true(FileAccess.file_exists(_path()),
+			"and the file survives, because two campaigns still have rows in it")
+
+
+func test_clearing_the_last_campaign_leaves_a_fresh_install_byte_for_byte() -> void:
+	# With the last row gone it DELETES rather than leaving `{}`, so there is no fourth state
+	# downstream: a file that exists holds progress, and no file means none.
 	CampaignProgress.record_completed("HowToPlay", 0, _path())
 	assert_true(FileAccess.file_exists(_path()))
-	CampaignProgress.reset_all(_path())
+	CampaignProgress.reset("HowToPlay", _path())
 	assert_false(FileAccess.file_exists(_path()), "the file is gone, not emptied")
 
 
-func test_resetting_nothing_succeeds() -> void:
-	# The state of every player who has just installed the game, and of anybody who presses
-	# the button twice. The caller asked for a state, not for a deletion.
-	assert_false(FileAccess.file_exists(_path()))
-	assert_true(CampaignProgress.reset_all(_path()))
-	assert_true(CampaignProgress.reset_all(_path()), "and again")
+func test_resetting_a_campaign_with_no_progress_succeeds() -> void:
+	# Every player who has not finished one of its scenarios, and anybody pressing the button
+	# twice. The caller asked for a state, not for a deletion.
+	assert_true(CampaignProgress.reset("HowToPlay", _path()))
+	CampaignProgress.record_completed("Other", 0, _path())
+	assert_true(CampaignProgress.reset("HowToPlay", _path()),
+			"and a campaign that is not in a file that exists")
+	assert_eq(CampaignProgress.completed("Other", _path()), 1, "with nothing disturbed")
 
 
-func test_a_reset_disposes_of_a_file_that_could_not_be_read() -> void:
-	# ⚠️ A corrupt file is exactly when somebody reaches for this button, and `_write` cannot
-	# help them -- it would have to parse the thing first. Deleting can, which is half the
-	# reason this deletes.
+func test_a_reset_with_no_campaign_named_is_refused() -> void:
+	# ⚠️ `record_completed`'s guard and for the same reason: an empty folder is not a
+	# campaign, and a reset with no target must never come to mean "everything".
+	CampaignProgress.record_completed("HowToPlay", 2, _path())
+	assert_false(CampaignProgress.reset("", _path()))
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 3, "and nothing was cleared")
+
+
+func test_a_reset_of_a_file_that_cannot_be_read_is_not_an_error() -> void:
+	# `all()` has already treated it as "every campaign unstarted", so the progress this was
+	# asked to clear is gone from the player's chair before the call. It reports success and
+	# leaves the file for `record_completed` to replace, which is what that function's "a
+	# corrupt file is REPLACED" note already commits to.
 	_write_raw("{\"HowToPlay\": ")
-	assert_true(CampaignProgress.reset_all(_path()))
-	assert_false(FileAccess.file_exists(_path()))
+	assert_true(CampaignProgress.reset("HowToPlay", _path()))
+	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 0)
 
 
 func test_progress_can_be_recorded_again_after_a_reset() -> void:
-	# The reset must not leave the campaign unable to record anything -- which is the failure
-	# `record_completed`'s "a corrupt file is REPLACED" note exists to avoid, arrived at from
-	# the other direction.
+	# The reset must not leave the campaign unable to record anything again.
 	CampaignProgress.record_completed("HowToPlay", 2, _path())
-	CampaignProgress.reset_all(_path())
+	CampaignProgress.reset("HowToPlay", _path())
 	assert_true(CampaignProgress.record_completed("HowToPlay", 0, _path()))
 	assert_eq(CampaignProgress.completed("HowToPlay", _path()), 1,
 			"and it counts from one again, not from where it left off")
 
 
 func test_the_default_reset_path_is_the_players_own_file() -> void:
-	# ⚠️ ASSERTED WITHOUT CALLING IT. `reset_all()` on its default would delete the progress
-	# of whoever is running the suite; what can safely be checked is that the default is the
+	# ⚠️ ASSERTED WITHOUT CALLING IT. `reset()` on its default would clear the progress of
+	# whoever is running the suite; what can safely be checked is that the default is the
 	# same constant every other function here defaults to.
 	assert_eq(CampaignProgress.USER_FILE, "user://campaign_progress.json")
 
