@@ -1,0 +1,75 @@
+# Building site for the TOWN CENTRE -- and it is 9x9, not the 10x10 that was asked for.
+#
+# WHY THERE IS NO `vis.foundation_10x10`: 0 A.D. does not ship one. Its square
+# foundations stop at `fndn_9x9`; past that the set goes rectangular (10x12,
+# 10x18, 7x15, 8x15, 9x15). So a faithful 10x10 cannot be baked, and the two
+# ways of faking it are both worse than being half a tile short:
+#
+#   - `fndn_10x12` is right on one axis and two tiles long on the other, which
+#     on an isometric diamond reads as a lopsided site rather than a small one.
+#   - Scaling `fndn_9x9` by 10/9 would break the one invariant this pipeline has.
+#     `pixels_per_metre` is fixed for the whole project so a villager and a
+#     castle stay proportionate (isobake config.py); stretching a ground decal
+#     11% to fit a number is the "frame each model to fill its canvas" mistake
+#     that silently destroys relative scale.
+#
+# AND THE NUMBER IT WOULD HAVE BEEN MATCHING IS THE ONE THAT IS WRONG. Measured
+# rather than assumed, all three in metres:
+#
+#   vis.town_center, the ART        17.97 m   = 8.99 tiles
+#   vis.foundation_8x8, staged      17.00 m   = 8.50 tiles
+#   THIS recipe, fndn_9x9           19.00 m   = 9.50 tiles
+#   building.town_center, DECLARED  20.00 m   = 10 tiles
+#
+# `town_center.toml` already said so before this was ever looked at: "the art
+# says 8x8 and buildings.json should follow the art". The building's own mesh is
+# nine tiles across; the declared footprint reserves ten. So the old ghost was
+# 1.5 tiles short of the DECLARATION and only about half a tile short of the
+# BUILDING -- PLAN.md 5's "one tile small" and asset_request.md's "two tiles
+# small" were both measuring against the declaration and neither was exact.
+#
+# THIS BAKE IS THE RIGHT ANSWER EITHER WAY, which is why it did not wait on the
+# footprint decision. Every 0 A.D. foundation decal spreads to its nominal size
+# plus about half a tile of dirt, so 9x9 gives 19.0 m: half a tile short if the
+# footprint stays 10x10, and correct with a metre of dirt proud of the walls if
+# it comes down to 9x9 to match the art. Both beat 8x8's 17.0 m.
+id      = "vis.foundation_9x9"
+adapter = "zeroad"
+
+[source]
+actor = "structures/fndn_9x9.xml"
+# 112 objects, 52 meshes -- a construction site with scaffolding and tools, the
+# same shape as fndn_8x8. `isobake inspect` reports 38.000 x 38.000 x 6.286, and
+# THOSE ARE RAW 0 A.D. UNITS LABELLED `m` (AGENT_ASSET.md 4): the bake scales by
+# metres_per_tile / ZEROAD_UNITS_PER_TILE = 0.5, so the real figures are
+# 19.0 x 19.0 x 3.14 m. Do not quote inspect's numbers without halving them.
+
+[render]
+# Interpolated from foundation_8x8 rather than computed, per 4: that recipe is
+# calibrated at canvas [576, 352] for a 17.0 m decal measuring 522 x 288 px, and
+# this subject is 19.0/17.0 = 1.118x wider. 644 x 394 plus margin, rounded up.
+# Trust the CLIPPED line in the batch summary, not this arithmetic.
+canvas = [704, 448]
+supersample = 4
+# A ground decal has no facing. Also keeps base_yaw off, so the square projects
+# to the tile diamond instead of a screen-aligned rectangle.
+directions = 1
+# Matches foundation_8x8: the ground diamond is most of the subject, so the
+# anchor sits high in the frame.
+frame_origin_at = 0.45
+engine = "eevee"
+samples = 32
+# No ground_clip. foundation_8x8 does not use it either -- a building site is
+# authored AT ground level, and the skirt this exists for belongs to finished
+# structures.
+# The zeroad adapter renders every subject 180 deg from the direction the
+# atlas then labels it; this cancels it. Added 2026-08-25 -- asset_request.md P2.
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/actors/structures/fndn_9x9.xml"

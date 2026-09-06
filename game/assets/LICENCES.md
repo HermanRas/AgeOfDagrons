@@ -124,6 +124,7 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 | `vis.foundation_7x7` | `foundation_7x7.toml` | `art/actors/structures/fndn_7x7.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.foundation_8x8` | `foundation_8x8.toml` | `art/actors/structures/fndn_8x8.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.foundation_9x3_wall` | `foundation_9x3_wall.toml` | `art/actors/structures/fndn_9x3_wall.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.foundation_9x9` | `foundation_9x9.toml` | `art/actors/structures/fndn_9x9.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.galleon` | `galleon.toml` | `art/actors/structures/ptolemies/quinquereme.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.galley` | `galley.toml` | `art/actors/structures/athenians/trireme.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.gold_mine` | `gold_mine.toml` | `art/actors/geology/metal_aegean_round.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
