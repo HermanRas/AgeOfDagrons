@@ -125,7 +125,8 @@ static func _amount(w: SimWorld, u: SimUnit, def: UnitDef) -> int:
 			def.ability_effect)
 
 
-## Everything hostile within `ability_radius` of `aim` takes `ability_amount`, blunted by
+## Everything hostile within `ability_radius` of `aim` takes `ability_amount`, less
+## `ability_falloff_per_ring` for every ring it stands out from the aim tile, blunted by
 ## its own armour of the matching type.
 ##
 ## `CombatSystem._damage_after_armour` is CALLED rather than reimplemented -- a second
@@ -134,6 +135,27 @@ static func _amount(w: SimWorld, u: SimUnit, def: UnitDef) -> int:
 ##
 ## Radius 0 is a single tile and is a legitimate value, not a disabled ability: the rect
 ## below is 1x1 and the blast lands on exactly what is standing there.
+##
+## ## THE FALLOFF (owner, 2026-09-07, after play-testing scenario 5)
+##
+## *"the dragon special attack is weak, it needs a aoe o 5x5 with 250 damage to any unit or
+## building around the click with -50 damage every ring out."* The 5x5 was already
+## right -- `ability_radius` has been 2 since 4.10 -- so what changed is the number (40 ->
+## 250) and that it is no longer flat.
+##
+## RINGS ARE `CombatSystem.tile_gap`, WHICH IS THE ONLY HONEST CHOICE HERE and not merely
+## the convenient one. It is Chebyshev, so the rings are the concentric SQUARES the blast
+## rect already is -- the owner drew them as three nested squares -- and it measures to a
+## FOOTPRINT, so a town centre with any part of itself on the aim tile is in ring 0 and
+## takes the full 250. Measuring centre-to-centre would put an 8x8 town centre in ring 4
+## of its own doorstep and out of the blast entirely, which is the bug `tile_gap`'s own
+## header records having fixed for melee reach.
+##
+## ⚠️ **A RING WORTH NOTHING IS SKIPPED RATHER THAN FLOORED**, and that is not tidiness:
+## `_damage_after_armour` enforces `MIN_DAMAGE`, so passing it a 0 would deal the floor to
+## something the falloff had just said was out of reach. Unreachable at the dragon's own
+## numbers (the outermost ring is 150) and one line to be right about for any radius and
+## falloff a later ability picks.
 func _burn(w: SimWorld, u: SimUnit, def: UnitDef, aim: Vector2i) -> void:
 	var r := def.ability_radius
 	var span := r * 2 + 1
@@ -149,11 +171,16 @@ func _burn(w: SimWorld, u: SimUnit, def: UnitDef, aim: Vector2i) -> void:
 		if _is_hostile_to(w, e, u.owner_id):
 			ids.append(int(e.id))
 	ids.sort()
+	var full := _amount(w, u, def)
 	for id in ids:
 		var e := w.get_entity(id)
 		if e == null or not e.alive:
 			continue
-		e.take_damage(CombatSystem._damage_after_armour(w, e, _amount(w, u, def),
+		var ring := CombatSystem.tile_gap(aim, CombatSystem._rect_of(e))
+		var raw := full - ring * def.ability_falloff_per_ring
+		if raw <= 0:
+			continue
+		e.take_damage(CombatSystem._damage_after_armour(w, e, raw,
 				def.ability_damage_type), 0, u.owner_id)
 
 

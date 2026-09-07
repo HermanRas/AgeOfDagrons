@@ -195,6 +195,104 @@ func test_the_dragon_burns_everything_hostile_in_the_blast() -> void:
 	assert_eq(outside.hp, hp_before, "and nothing one tile beyond it")
 
 
+# ── the falloff: 250 at the centre, -50 a ring out (owner, 2026-09-07) ─────────
+
+## The owner's own numbers, pinned as data. *"it needs a aoe o 5x5 with 250 damage to any
+## unit or building around the click with -50 damage every ring out"* -- after play-testing
+## her in HowToPlay scenario 5 and finding the flat 40 weak.
+##
+## THE 5x5 WAS ALREADY RIGHT, which is why this asserts `radius` unchanged alongside the two
+## new numbers: `radius: 2` has meant `2 * 2 + 1 = 5` tiles across since 4.10, and it is
+## what `BlastEffects` is sized from, so the drawn fire still covers exactly the damaged
+## ground.
+func test_the_breath_is_250_at_the_centre_falling_50_a_ring_over_a_5x5() -> void:
+	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	assert_eq(d.ability_amount, 250, "what the centre ring takes")
+	assert_eq(d.ability_falloff_per_ring, 50, "and each ring out")
+	assert_eq(d.ability_radius, 2, "over a 5x5, which did not change")
+	assert_eq(d.ability_radius * 2 + 1, 5)
+	# THE OUTERMOST RING IS STILL WORTH SOMETHING. 250 - 2 * 50 = 150, so no ring of this
+	# ability is ever skipped by `_burn`'s "worth nothing" guard -- which matters, because a
+	# silently empty outer ring would still DRAW fire over those tiles.
+	assert_true(d.ability_amount - d.ability_radius * d.ability_falloff_per_ring > 0,
+			"the edge of the blast still burns")
+
+
+## ⚠️ **`_burn` IS CALLED DIRECTLY AND NOT THROUGH THE COMMAND, ON PURPOSE.** The targets
+## have to hold still: three living dragons given a tick would be re-homed by their own
+## stance and the ring each stands in is the whole measurement. This is the same reach-in
+## `test_garrison`'s stale-entry guard uses, for the same reason -- the unit under test is
+## the blast, not the walk, and the walk already has its own test above.
+##
+## **THE DIFFERENCES ARE ASSERTED, NOT THE ABSOLUTE HP**, because armour is subtracted after
+## the falloff (`_damage_after_armour`) and three identical targets subtract the identical
+## amount. So the gaps between them are exactly the falloff, and the test does not have to
+## restate the dragon's armour to know what 250 becomes.
+func test_each_ring_out_takes_fifty_less() -> void:
+	var caster := _dragon(Vector2i(10, 10))
+	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	var aim := Vector2i(30, 30)
+
+	# 600 hp each, so all three SURVIVE a 250 hit and their losses can be read. A militia
+	# would simply die at the centre and there would be nothing left to measure.
+	var ring0 := w.spawn_unit(&"unit.dragon", 2, aim)
+	var ring1 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(1, 0))
+	var ring2 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(2, 0))
+	var beyond := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(3, 0))
+
+	AbilitySystem.new()._burn(w, caster, d, aim)
+
+	var lost0 := ring0.max_hp - ring0.hp
+	var lost1 := ring1.max_hp - ring1.hp
+	var lost2 := ring2.max_hp - ring2.hp
+	assert_true(lost0 > 0, "the aim tile was hit at all")
+	assert_eq(lost0 - lost1, d.ability_falloff_per_ring, "ring 1 takes 50 less than centre")
+	assert_eq(lost1 - lost2, d.ability_falloff_per_ring, "and ring 2 takes 50 less again")
+	assert_eq(beyond.hp, beyond.max_hp, "and nothing a tile outside the 5x5")
+
+
+func test_the_centre_of_the_blast_is_worth_six_of_the_old_flat_forty() -> void:
+	# The change the owner actually asked for, stated as damage DEALT rather than as a
+	# field: 40 flat became 250 at the centre. Read through armour, which is why this is a
+	# `>` against the old number rather than an equality -- the point is the magnitude.
+	var caster := _dragon(Vector2i(10, 10))
+	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	var aim := Vector2i(30, 30)
+	var victim := w.spawn_unit(&"unit.dragon", 2, aim)
+
+	AbilitySystem.new()._burn(w, caster, d, aim)
+
+	assert_true(victim.max_hp - victim.hp > 200,
+			"a hit worth taking a 120 s cooldown for, which the flat 40 was not")
+
+
+## ⚠️ **A RING WORTH NOTHING IS SKIPPED, NOT FLOORED, and this is the only test that can
+## reach that branch** -- the dragon's own numbers never produce one (its outer ring is
+## 150). A synthetic def is the fixture, because the guard is about arithmetic rather than
+## about the dragon: `_damage_after_armour` enforces `MIN_DAMAGE`, so handing it a 0 would
+## deal the floor to something the falloff had just placed out of reach.
+func test_a_ring_the_falloff_has_reduced_to_nothing_is_not_hit_at_all() -> void:
+	var caster := _dragon(Vector2i(10, 10))
+	var steep := UnitDef.from_dict(&"unit.test_steep_blast", {
+		"name": "Steep", "visual": "vis.dragon_rigged", "hp": 1, "speed": 0,
+		"ability": {
+			"id": "steep", "name": "Steep", "effect": "damage", "target": "ground",
+			"range": 5, "radius": 3, "amount": 100, "falloff_per_ring": 50,
+			"damage_type": "melee", "cooldown_ticks": 10,
+		},
+	})
+	var aim := Vector2i(30, 30)
+	var ring1 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(1, 0))
+	var ring2 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(2, 0))
+	var ring3 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(3, 0))
+
+	AbilitySystem.new()._burn(w, caster, steep, aim)
+
+	assert_true(ring1.hp < ring1.max_hp, "100 - 50 = 50, which lands")
+	assert_eq(ring2.hp, ring2.max_hp, "100 - 100 = 0, which is not a hit for MIN_DAMAGE")
+	assert_eq(ring3.hp, ring3.max_hp, "and negative is not a heal either")
+
+
 func test_the_dragon_cannot_burn_its_own_army() -> void:
 	var dragon := _dragon(Vector2i(20, 20))
 	var aim := Vector2i(23, 20)

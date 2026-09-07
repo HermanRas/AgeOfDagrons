@@ -803,3 +803,88 @@ func test_an_entry_whose_unit_has_gone_stops_pricing_the_tower() -> void:
 	w.step()
 	assert_true(tower.garrison.is_empty(), "pruned")
 	assert_eq(tower.attack_bonus(w), 0)
+
+
+# ── who may go inside at all (PLAN.md 4.8c) ────────────────────────────────────
+
+## ⚠️ **THE SIX, BY NAME.** Owner: *"siege unit and dragon cannot garison"* (2026-09-06),
+## and again for the dragon on 2026-09-07 once a trophy could walk to a tower. Named
+## individually rather than swept up by a predicate, so a def that quietly loses the field
+## fails HERE with its own id in the message rather than becoming garrisonable again in
+## silence.
+func test_the_four_siege_engines_and_both_dragons_may_not_garrison() -> void:
+	for unit_id in [&"unit.siege_ram", &"unit.ballista", &"unit.onager", &"unit.trebuchet",
+			&"unit.dragon", &"unit.dragon_baby"]:
+		var def: UnitDef = GameDataRegistry.unit(unit_id)
+		assert_not_null(def, "%s is defined" % unit_id)
+		if def != null:
+			assert_false(def.can_garrison, "%s must not be able to garrison" % unit_id)
+
+
+func test_everything_else_still_can_and_that_is_the_default() -> void:
+	# The field is `default true`, so the risk runs the other way too: a typo that made it
+	# false everywhere would be a game in which nobody can garrison, and 4.8's own tests
+	# would still pass because they use archers.
+	for unit_id in [&"unit.archer", &"unit.militia", &"unit.villager", &"unit.monk",
+			&"unit.knight", &"unit.spearman"]:
+		assert_true(GameDataRegistry.unit(unit_id).can_garrison,
+				"%s garrisons, as it always has" % unit_id)
+
+
+func test_a_lone_dragon_ordered_into_a_tower_is_refused() -> void:
+	var tower := _tower()
+	var dragon := w.spawn_unit(&"unit.dragon", 1, Vector2i(21, 21))
+	assert_false(GarrisonCommand.new(1, [dragon.id], tower.id).validate(w),
+			"an order made up entirely of things that cannot go in is refused outright")
+
+
+## ⚠️ **THE ACTUAL WORK OF 4.8c, AND THE CASE A "TIDY" REWRITE WOULD BREAK.** Ten swordsmen
+## and one onager ordered into a tower must ADMIT THE TEN AND DROP THE ONAGER. A blanket
+## refusal would mean one siege engine caught in a box-select silently cancels a garrison
+## the player plainly meant -- and 4.8 already answers this shape the same way for a tower
+## that fills up mid-walk: *"the fifth is refused there rather than being promised a slot
+## here."*
+func test_a_mixed_order_admits_the_infantry_and_drops_the_siege() -> void:
+	var tower := _tower()
+	var archer := w.spawn_unit(&"unit.archer", 1, Vector2i(21, 22))
+	var onager := w.spawn_unit(&"unit.onager", 1, Vector2i(22, 22))
+	var ids: Array[int] = [archer.id, onager.id]
+
+	assert_true(GarrisonCommand.new(1, ids, tower.id).validate(w),
+			"the order stands for the archer")
+	w.queue_command(GarrisonCommand.new(1, ids, tower.id))
+	var ticks := _run_until(func(): return archer.garrisoned_in != 0, 600)
+
+	assert_true(ticks > 0, "the archer went in")
+	assert_eq(onager.garrisoned_in, 0, "and the onager did not")
+	assert_ne(onager.task, SimUnit.Task.GARRISON,
+			"nor was it left walking toward a building it can never enter")
+
+
+## ⚠️ **THE LAST GATE, ASKED DIRECTLY.** `GarrisonCommand` filters the order, but this is
+## what makes the rule true of the STATE rather than of one command: `GarrisonSystem`'s
+## arrival, a transport boarding, and anything written later all end up in
+## `SimWorld.garrison_unit`. 4.8's own tests reach in exactly this way (see the stale-entry
+## guard above), which is what proves the gate is reachable without a command at all.
+func test_garrison_unit_itself_refuses_a_dragon() -> void:
+	var tower := w.spawn_building(&"building.guard_tower", 1, Vector2i(20, 20))
+	var dragon := w.spawn_unit(&"unit.dragon", 1, Vector2i(21, 22))
+	assert_false(w.garrison_unit(tower, dragon), "refused at the gate that changes state")
+	assert_eq(dragon.garrisoned_in, 0)
+	assert_true(tower.garrison.is_empty())
+	# AND THE CONTROL, because a gate that refuses everything is the other way to fail.
+	var archer := w.spawn_unit(&"unit.archer", 1, Vector2i(21, 23))
+	assert_true(w.garrison_unit(tower, archer))
+
+
+func test_a_transport_is_still_refused_and_for_its_own_reason() -> void:
+	# **LEAVE THE TRANSPORT RULE ALONE** (4.8c's card). A carrier refuses to be cargo
+	# through `garrison_cap > 0` -- "A CARRIER IS NOT CARGO" -- which is a different rule
+	# for a different reason. Collapsing the two would have the game saying a boat cannot
+	# garrison BECAUSE IT IS SIEGE, and this is what says the two are still separate.
+	var boat: UnitDef = GameDataRegistry.unit(&"unit.transport_ship")
+	assert_not_null(boat)
+	if boat != null:
+		assert_true(boat.can_garrison,
+				"a transport is not siege -- it is refused for being a carrier")
+		assert_true(boat.garrison_cap > 0, "and that is the field that refuses it")

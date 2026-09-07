@@ -526,17 +526,17 @@ func test_gaias_claim_hatchling_still_does_not_move_now_that_the_def_has_a_speed
 	assert_eq(baby.tile(), from, "gaia's hatchling stays on its nest")
 
 
-## ⚠️ **HIDING YOUR TROPHY INSIDE A TOWER MUST NOT LOSE YOU THE MATCH, and being able to
-## move it is what made that reachable.** A garrisoned unit leaves the spatial index and its
-## `pos` goes stale, so a census that counted only what is on the ground would see no
-## trophy and defeat its owner **for protecting it** -- on the tick they did the safest
-## thing available. `_trophy_holders` walks `w.entities` and filters on `alive`, which is why
-## it survives; that is now a fact under test rather than a happy accident of which
-## collection it reads.
+## ⚠️ **A TROPHY CANNOT BE HIDDEN IN A TOWER, AND THIS MODE IS WHY THAT RULE EXISTS.**
 ##
-## 📝 Whether a dragon SHOULD be able to garrison at all is card #77 (4.8c) and not decided
-## here. This asserts only that the win condition does not punish it.
-func test_a_trophy_garrisoned_in_a_tower_still_counts_as_held() -> void:
+## This test asserted the OPPOSITE for about an hour, and the history is the point. Making
+## the trophy movable put "walk the dragon into the castle" on the table: 15 slots of stone,
+## untargetable until the stone falls, which would have made a mode about defending a place
+## into a mode about parking. It was reported as a play question the same afternoon and the
+## owner answered it -- *"dragon cannot garison"* -- which is PLAN.md 4.8c, and 4.8c is what
+## made the state this test was written around unreachable. **The failing test is what
+## reported the rule had landed**, and it is rewritten rather than deleted so the
+## interaction is still recorded where somebody hunting it would look.
+func test_a_trophy_cannot_be_hidden_inside_a_tower() -> void:
 	_build(MatchConfig.Mode.TROPHY, 2)
 	var mine := _trophies_of(1)
 	if mine.is_empty():
@@ -549,17 +549,37 @@ func test_a_trophy_garrisoned_in_a_tower_still_counts_as_held() -> void:
 		return
 	assert_true(tower.garrison_cap > 0, "the fixture really is a carrier")
 
+	assert_false(GarrisonCommand.new(1, [t.id], tower.id).validate(w),
+			"the order is refused outright")
 	w.queue_command(GarrisonCommand.new(1, [t.id], tower.id))
-	for i in range(200):
+	for i in range(60):
 		w.step()
-		if t.garrisoned_in != 0:
-			break
 
-	assert_ne(t.garrisoned_in, 0, "the trophy actually got inside")
+	assert_eq(t.garrisoned_in, 0, "and it never got inside")
+	assert_true(tower.garrison.is_empty())
+	assert_true(t.alive, "it is still standing in the open, where it can be defended")
+	assert_false(w.player_for(1).defeated, "and refusing the order is not losing")
+
+
+## ⚠️ **AND THE CENSUS STILL MUST NOT BE SPATIAL, which 4.8c did not make safe -- it only
+## made one route to it unreachable.** `_trophy_holders` walks `w.entities` and filters on
+## `alive`. If it counted what the SPATIAL INDEX can see instead, any trophy off the map but
+## alive would defeat its owner, and being garrisoned is not the only way a unit leaves that
+## index. `spatial.remove` is what garrisoning itself calls, so this is the same state by the
+## shortest honest road, without forging garrison bookkeeping no rule would have written.
+func test_a_trophy_that_is_alive_but_off_the_spatial_index_still_counts() -> void:
+	_build(MatchConfig.Mode.TROPHY, 2)
+	var mine := _trophies_of(1)
+	if mine.is_empty():
+		return
+	var t := mine[0]
+	w.spatial.remove(t.id)
 	for i in range(5):
 		w.step()
+
+	assert_true(t.alive)
 	assert_false(w.player_for(1).defeated,
-			"a trophy in a tower is still a trophy you hold")
+			"alive and owned is held, wherever the entity can be seen from")
 	assert_false(w.match_over)
 
 

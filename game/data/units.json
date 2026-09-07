@@ -512,6 +512,8 @@
     "name": "Battering Ram",
     "visual": "vis.siege_ram",
 
+    "can_garrison": false,
+
     "hp": 200,
     "speed": 63,
     "los": 3,
@@ -534,6 +536,8 @@
   "unit.ballista": {
     "name": "Ballista",
     "visual": "vis.ballista",
+
+    "can_garrison": false,
 
     "hp": 110,
     "speed": 0,
@@ -561,6 +565,8 @@
     "name": "Onager",
     "visual": "vis.onager",
 
+    "can_garrison": false,
+
     "hp": 130,
     "speed": 0,
     "los": 11,
@@ -586,6 +592,8 @@
   "unit.trebuchet": {
     "name": "Trebuchet",
     "visual": "vis.trebuchet",
+
+    "can_garrison": false,
 
     "hp": 65,
     "speed": 0,
@@ -885,6 +893,8 @@
     "name": "Dragon",
     "visual": "vis.dragon_rigged",
 
+    "can_garrison": false,
+
     "hp": 600,
     "speed": 220,
     "los": 12,
@@ -914,12 +924,33 @@
       "have needed a target SHAPE in `AbilitySystem` and integer swept tiles in the hash.",
       "`radius: 2` therefore still means the square `radius * 2 + 1 = 5` tiles across that",
       "`_burn` damages -- and `BlastEffects` is passed that same span so the fire is drawn",
-      "over exactly the ground the damage covered, rather than over a size the view chose."
+      "over exactly the ground the damage covered, rather than over a size the view chose.",
+      "",
+      "⚠️ `amount` WAS 40 AND FLAT UNTIL 2026-09-07. The owner play-tested her in HowToPlay",
+      "scenario 5 and reported the breath *\"weak\"*: 'it needs a aoe o 5x5 with 250 damage to",
+      "any unit or building around the click with -50 damage every ring out'. So 250 with",
+      "`falloff_per_ring: 50` over `radius: 2` -- 250 / 200 / 150 by Chebyshev ring, which is",
+      "the three nested squares of the owner's own diagram.",
+      "",
+      "THE SHAPE DID NOT CHANGE AND THAT IS WHY THIS IS THREE FIELDS. The 5x5 was already",
+      "right, so the view needs nothing: `BlastEffects` is sized off `radius` and still draws",
+      "exactly the ground the damage covers.",
+      "",
+      "IT IS A 6x CHANGE AT THE CENTRE, AND WHAT MAKES THAT SANE IS THE 120 s COOLDOWN ABOVE.",
+      "250 kills anything in the roster below a knight outright and takes a third off a town",
+      "centre, but she fires it about once a fight -- the two numbers were retuned in the same",
+      "week and neither reads correctly without the other. Her ordinary bite is still 30.",
+      "",
+      "STILL NO FRIENDLY FIRE. 'any unit or building' is read as 'both kinds of thing' rather",
+      "than 'including your own': `_burn` tests every entity against the caster's war",
+      "predicate, which is what `AbilitySystem`'s header calls a design choice rather than a",
+      "physical law. If the owner meant her fire should burn her own side too, that is one",
+      "predicate in `_is_hostile_to` and a different game."
     ],
     "ability": {
       "id": "fire_breath", "name": "Fire Breath", "effect": "damage", "target": "ground",
-      "range": 5, "radius": 2, "amount": 40, "damage_type": "melee",
-      "cooldown_ticks": 1200
+      "range": 5, "radius": 2, "amount": 250, "falloff_per_ring": 50,
+      "damage_type": "melee", "cooldown_ticks": 1200
     },
 
     "_note_not_trainable": [
@@ -1038,6 +1069,19 @@
   "unit.dragon_baby": {
     "name": "Dragon Hatchling",
     "visual": "vis.dragon_baby",
+
+    "_note_can_garrison": [
+      "⚠️ NO DRAGON GOES INSIDE ANYTHING (PLAN.md 4.8c, owner 2026-09-06 and again",
+      "2026-09-07). On the HATCHLING this is the one that had to be said out loud: it was",
+      "unreachable while `speed` was 0, and giving the trophy a speed the same day made",
+      "'put the dragon in the castle' the safest move in Mode.TROPHY -- a 300 hp trophy",
+      "inside 15 slots of stone, untargetable until the stone falls. The flag is what",
+      "keeps the mode about defending a place rather than about parking.",
+      "",
+      "The other five are the four siege engines and the mother. See `UnitDef.can_garrison`",
+      "for why this is an explicit field on six defs and NOT derived from `trainable_at`."
+    ],
+    "can_garrison": false,
 
     "hp": 300,
     "speed": 55,

@@ -917,7 +917,13 @@ func units_in_box(box: Rect2, owner: int) -> Array[int]:
 ## foundation, since that is the whole reason to tap it while builders are
 ## selected -- with nothing selected it still just selects, so the panel and
 ## its training row stay reachable when there is nothing to send.
-func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
+## ⚠️ **`has_garrisonable_selection` DEFAULTS TRUE, WHICH IS THE PRE-4.8c ANSWER.** It is a
+## fourth argument rather than a change to the third because "can be sent somewhere" and
+## "may go inside something" are different questions -- a dragon is perfectly movable -- and
+## because every existing caller and test that does not care about garrisoning should keep
+## reading exactly as it did.
+func tap_action(id: int, owner: int, has_movable_selection: bool,
+		has_garrisonable_selection: bool = true) -> TapAction:
 	if id == 0:
 		# BARE GROUND WITH ONE OF YOUR OWN BUILDINGS SELECTED SETS ITS RALLY POINT
 		# (project owner, 2026-08-27), the genre-standard gesture. It costs nothing: that
@@ -946,7 +952,8 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 			# It cannot fire on the boat itself: `_has_garrison_room` reads the cap off
 			# the def, and `GarrisonCommand.validate` refuses a passenger that is itself
 			# a carrier, so tapping a transport with a transport selected reselects.
-			if has_movable_selection and _has_garrison_room(f):
+			if has_movable_selection and has_garrisonable_selection \
+					and _has_garrison_room(f):
 				return TapAction.GARRISON
 			return TapAction.SELECT
 		if has_movable_selection and int(f["phase"]) != SimBuilding.Phase.COMPLETE:
@@ -970,7 +977,14 @@ func tap_action(id: int, owner: int, has_movable_selection: bool) -> TapAction:
 		# refuse, because a refused command is invisible -- the player taps, nothing
 		# happens, and nothing says why. A FULL tower reselects instead, which is also
 		# how the player gets at its Ungarrison button.
-		if has_movable_selection and _has_garrison_room(f):
+		#
+		# ⚠️ **AND THE SELECTION HAS TO CONTAIN SOMETHING THAT MAY GO IN** (4.8c). A lone
+		# dragon tapping its own castle used to issue a garrison the server now refuses --
+		# the invisible refusal this very comment warns about, arriving through the rule
+		# added to stop it. It RESELECTS instead, which is also how the player reaches
+		# that castle's own panel.
+		if has_movable_selection and has_garrisonable_selection \
+				and _has_garrison_room(f):
 			return TapAction.GARRISON
 		return TapAction.SELECT
 
@@ -1093,6 +1107,29 @@ func movable_selection() -> Array[int]:
 			continue
 		movable.append(id)
 	return movable
+
+
+## The selected units that may actually go inside something (PLAN.md 4.8c).
+##
+## A SUBSET OF `movable_selection()` AND ASKED SEPARATELY, because the two questions differ
+## on exactly one unit: a dragon is movable and may not garrison. Read by `tap_action` to
+## decide whether tapping your own tower is an order or a reselect.
+##
+## THE ORDER IS STILL SENT WHOLE. This answers "is there anybody to send", not "who" --
+## `GameScene` submits the entire movable selection and `GarrisonCommand` drops the ones
+## that cannot go, which is 4.8's own rule about not deciding here how many will fit
+## several seconds from now.
+func garrisonable_selection() -> Array[int]:
+	var out: Array[int] = []
+	for id in movable_selection():
+		var f: Dictionary = _facts.get(id, {})
+		var ud: UnitDef = GameDataRegistry.unit(StringName(f.get("def_id", &"")))
+		# A def the client cannot resolve answers YES, matching `UnitDef.can_garrison`'s
+		# default and `GarrisonCommand._may_garrison`: the pre-4.8c behaviour rather than a
+		# new refusal layered on top of whatever is already wrong.
+		if ud == null or ud.can_garrison:
+			out.append(id)
+	return out
 
 
 ## Currently alive members of a control group (PLAN.md 10.1/10.5) -- membership

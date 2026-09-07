@@ -1473,7 +1473,8 @@ func _on_tapped(screen_pos: Vector2, from_touch: bool = false) -> void:
 		_fire_ability(picked, tile)
 		return
 
-	match _view.tap_action(picked, owner, not movable.is_empty()):
+	match _view.tap_action(picked, owner, not movable.is_empty(),
+			not _view.garrisonable_selection().is_empty()):
 		GameView.TapAction.SELECT:
 			_view.select([picked] as Array[int])
 			_refresh_panel()

@@ -62,12 +62,22 @@ static func from_dict(d: Dictionary) -> GarrisonCommand:
 ## at issue time would mean a player with a nearly-full tower could not send anybody.
 ## `SimWorld.garrison_unit` is the gate, on arrival, where the answer is current.
 ##
-## Every named unit must qualify rather than being filtered, which is the opposite of
-## AttackCommand's rule and follows the same reasoning to a different answer: there
-## the filter exists because a mixed selection may contain a trade cart that cannot
-## fight, and dropping it is better than refusing the order. Here EVERY unit can
-## garrison -- there is no unit-side capability to fail -- so a bad id in the list is
-## a client bug or a stale selection, not a mixed group.
+## ⚠️ **THERE IS NOW EXACTLY ONE UNIT-SIDE CAPABILITY, AND IT IS FILTERED RATHER THAN
+## REFUSED** (PLAN.md 4.8c, 2026-09-07). This header used to say *"EVERY unit can garrison
+## -- there is no unit-side capability to fail"*, and `UnitDef.can_garrison` is that
+## capability: false on the four siege engines and both dragons.
+##
+## **Ten swordsmen and one onager ordered into a tower admit the ten and drop the onager.**
+## A blanket refusal would mean one siege engine caught in a box-select silently cancels a
+## garrison the player plainly meant -- and it is the same answer 4.8 already gives to a
+## tower that fills up mid-walk: *"the fifth is refused there rather than being promised a
+## slot here"*. So this is AttackCommand's filtering rule arriving here at last, for
+## AttackCommand's own reason: a mixed selection is the ordinary case, not a client bug.
+##
+## THE REST OF THE LIST IS STILL CHECKED RATHER THAN FILTERED, and the split is deliberate.
+## A named unit that is dead, somebody else's, already inside something or a carrier is a
+## client bug or a stale selection -- there is nothing for a player to have meant by it.
+## Being siege is a fact about the roster, which is different.
 func validate(w: SimWorld) -> bool:
 	if unit_ids.is_empty():
 		return false
@@ -83,6 +93,7 @@ func validate(w: SimWorld) -> bool:
 	if b is SimBuilding and not (b as SimBuilding).is_complete():
 		return false
 
+	var admitted := 0
 	for id in unit_ids:
 		var e := w.get_entity(id)
 		if e == null or not e.alive or e.owner_id != player_id or not (e is SimUnit):
@@ -97,7 +108,15 @@ func validate(w: SimWorld) -> bool:
 		# in two buildings at once is a garrison list that never balances.
 		if (e as SimUnit).garrisoned_in != 0:
 			return false
-	return true
+		# THE ONE FILTERED CASE. See the header: siege engines and dragons are dropped from
+		# the order rather than cancelling it for everybody selected alongside them.
+		if not _may_garrison(w, e as SimUnit):
+			continue
+		admitted += 1
+	# AT LEAST ONE, so an order made up ENTIRELY of siege still fails rather than being
+	# accepted and doing nothing. A command that validates and has no effect is the
+	# invisible refusal `GameView.tap_action`'s own comments keep warning about.
+	return admitted > 0
 
 
 func apply(w: SimWorld) -> void:
@@ -112,6 +131,23 @@ func apply(w: SimWorld) -> void:
 		var u := w.get_entity(id) as SimUnit
 		if u == null:
 			continue
+		# FILTERED AGAIN HERE, not just counted in `validate`. The two run at different
+		# times -- validate on submission, apply on the tick -- and a rule enforced only in
+		# the check is a rule that stops existing the day something applies a command it
+		# did not validate. It also has to be per-unit: `validate` answered one question
+		# about the whole order, and this is where each unit is actually sent.
+		if not _may_garrison(w, u):
+			continue
 		u.set_task_garrison(target_id, to)
 		if w.paths != null:
 			w.paths.request(id, to)
+
+
+## Whether `u`'s def allows it inside anything at all (PLAN.md 4.8c).
+##
+## A MISSING DEF ANSWERS TRUE, which is the default `UnitDef.can_garrison` carries and the
+## honest answer for a unit whose roster row cannot be read: the pre-4.8c behaviour, rather
+## than a silent new refusal on top of whatever is already wrong.
+static func _may_garrison(w: SimWorld, u: SimUnit) -> bool:
+	var def := w.unit_def(u.def_id)
+	return def == null or def.can_garrison

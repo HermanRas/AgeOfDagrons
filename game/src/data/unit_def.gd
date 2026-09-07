@@ -208,6 +208,28 @@ var is_herdable: bool = false
 ## one mechanism, and calling this `capacity` would have been two words for it.
 var garrison_cap: int = 0
 
+## Whether this unit may go INSIDE something (PLAN.md 4.8c). The opposite question from
+## `garrison_cap` above, which is how many it can carry.
+##
+## ⚠️ **DEFAULT TRUE, AND SET FALSE ON SIX DEFS: the four siege engines and the two
+## dragons** (owner, 2026-09-06: *"siege unit and dragon cannot garison"*, and again on
+## 2026-09-07 for the dragon once a trophy could walk to a tower). Before this,
+## `GarrisonCommand.validate`'s header said in as many words that *"EVERY unit can
+## garrison -- there is no unit-side capability to fail"*. This is that capability.
+##
+## ⚠️ **NOT DERIVED FROM `trainable_at == building.siege_workshop`, WHICH LOOKS LIKE THE
+## FREE VERSION AND IS WRONG TWICE.** The dragon trains NOWHERE -- `trainable_at` is `[]`
+## by design (13.2) -- so the derivation would miss exactly the half the owner named
+## second; and it would pin a rule to a TRAINING LOCATION, which is the shape
+## `MapGen.DEBUG_ENEMY_SQUAD` already paid for: a constant chosen against something that
+## later gets retuned, going quietly wrong. Six explicit `false`s cannot be wrong quietly.
+##
+## THE TRANSPORT IS NOT COVERED BY THIS and must not be. A carrier refuses to be cargo
+## through `garrison_cap > 0` ("A CARRIER IS NOT CARGO"), a different rule for a different
+## reason -- collapsing the two would have the game saying a boat cannot garrison
+## *because it is siege*.
+var can_garrison: bool = true
+
 ## SPECIAL ABILITIES (PLAN.md 4.10, IDEA.md 4.10). Two units carry one today: the monk
 ## heals and the dragon breathes fire.
 ##
@@ -234,8 +256,22 @@ var ability_range: int = 0
 ## Chebyshev radius of the effect in tiles: 0 for a single target, 2 for a breath that
 ## catches a 5x5. A radius is what makes the dragon's ability worth a cooldown.
 var ability_radius: int = 0
-## Hp restored, or damage dealt, as `ability_effect` decides.
+## Hp restored, or damage dealt, as `ability_effect` decides. For an area effect this is
+## what the CENTRE ring takes; see `ability_falloff_per_ring`.
 var ability_amount: int = 0
+
+## How much weaker each ring out from the aim tile is, for an area `damage` ability
+## (PLAN.md 4.10). 0 means a flat blast, which is what every ability had until 2026-09-07.
+##
+## THE RINGS ARE CHEBYSHEV, so they are the concentric SQUARES the blast rect already is,
+## and ring 0 is the aim tile itself. The dragon's 250 with a falloff of 50 over
+## `ability_radius: 2` is therefore 250 / 200 / 150 -- the owner's own diagram, drawn as
+## three nested squares, after play-testing scenario 5 and reporting the flat 40 as *"weak"*.
+##
+## MEASURED TO A FOOTPRINT rather than to a tile, because `CombatSystem.tile_gap` is what
+## computes the ring: a town centre with any part of itself on the aim tile is in ring 0 and
+## takes the full hit, which is the answer a player aiming at a building expects.
+var ability_falloff_per_ring: int = 0
 ## Which armour blunts it, for a `damage` ability. Ignored by `heal`.
 var ability_damage_type: StringName = &"melee"
 var ability_cooldown_ticks: int = 0
@@ -288,6 +324,9 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.armor_pierce = int(armor.get("pierce", 0))
 
 	u.garrison_cap = int(d.get("garrison_cap", 0))
+	# DEFAULT TRUE, so the field appears on the six defs that are refused and on no
+	# others -- adding a unit does not mean remembering to allow it.
+	u.can_garrison = bool(d.get("can_garrison", true))
 
 	var ability: Variant = d.get("ability")
 	if ability is Dictionary:
@@ -299,6 +338,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 		u.ability_range = int(ab.get("range", 0))
 		u.ability_radius = int(ab.get("radius", 0))
 		u.ability_amount = int(ab.get("amount", 0))
+		u.ability_falloff_per_ring = int(ab.get("falloff_per_ring", 0))
 		u.ability_damage_type = StringName(ab.get("damage_type", "melee"))
 		u.ability_cooldown_ticks = int(ab.get("cooldown_ticks", 0))
 

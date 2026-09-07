@@ -456,6 +456,15 @@ func garrison_unit(b: SimEntity, u: SimUnit) -> bool:
 		return false
 	if u.garrisoned_in != 0 or not b.has_garrison_room():
 		return false
+	# ⚠️ **THE LAST GATE, AND THE ONLY ONE EVERY ROUTE IN PASSES THROUGH** (PLAN.md 4.8c).
+	# `GarrisonCommand` filters siege and dragons out of the order, but this is the line
+	# that makes "no dragon goes inside anything" true of the STATE rather than of one
+	# command -- `GarrisonSystem`'s arrival, a transport boarding, and anything later that
+	# wants to put a unit inside something all end up here. Same argument the room check
+	# above makes for asking again: this is where the state actually changes.
+	var def := unit_def(u.def_id)
+	if def != null and not def.can_garrison:
+		return false
 
 	u.garrisoned_in = b.id
 	b.garrison.append({"id": u.id, "def_id": u.def_id})
