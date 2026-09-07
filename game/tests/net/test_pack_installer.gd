@@ -360,3 +360,42 @@ func test_the_entry_name_check_refuses_what_climbs_and_allows_what_does_not() ->
 	for good in ["campaign.json", "scenario_1/map.png", "a b/c d.png",
 			"CampaignBackground.png", "deep/a/b/c/d.json"]:
 		assert_true(PackInstaller._is_safe_entry(good), "'%s' must be allowed" % good)
+
+
+## ⚠️ **THE DELETED NUL CHECK, PINNED SO IT CANNOT COME BACK.** `_is_safe_entry` used to
+## carry `if name.contains(char(0))`, which printed an engine error on every editor startup
+## and -- because `String.chr(0)` returns U+FFFD rather than a NUL -- was really a check for
+## THE REPLACEMENT CHARACTER. `_is_safe_entry`'s comment has the full story.
+##
+## So the fact worth asserting is the one that was quietly wrong: a name carrying U+FFFD is
+## odd, but it does not climb, and refusing it is not this function's job. An old zip whose
+## entry names are CP437 rather than UTF-8 arrives here full of them.
+##
+## U+FFFD IS WRITTEN AS `String.chr(0xFFFD)` AND THAT IS SILENT -- it is a perfectly valid
+## code point. It is `chr(0)` that complains, which is the whole point.
+func test_a_replacement_character_in_a_name_is_not_a_reason_to_refuse_it() -> void:
+	var fffd := String.chr(0xFFFD)
+	assert_eq(fffd.unicode_at(0), 0xFFFD, "the needle is the replacement character")
+	assert_true(PackInstaller._is_safe_entry("dir/" + fffd + "file.png"),
+			"a repaired name still does not climb, so it is not refused here")
+	assert_true(PackInstaller._is_safe_entry(fffd),
+			"nor on its own")
+	# AND THE CLIMBING RULES STILL WIN over anything else in the name.
+	assert_false(PackInstaller._is_safe_entry("../" + fffd),
+			"U+FFFD does not excuse a climb")
+
+
+## A NUL never reaches `_is_safe_entry`, which is why it has no check for one: Godot's UTF-8
+## decode TRUNCATES at a NUL rather than carrying it, so `"a\0b"` arrives as `"a"`.
+##
+## ⚠️ **THIS TEST PRINTS ONE ENGINE `Unexpected NUL character` LINE and that is the engine's
+## decoder saying exactly what is under test.** It is the one place in the suite that says
+## so out loud, and it is what stops the dead `unicode_at(i) == 0` scan being reintroduced
+## as a "safety" measure.
+func test_a_NUL_in_an_entry_name_is_truncated_by_the_engine_not_carried() -> void:
+	var decoded := PackedByteArray([97, 0, 98]).get_string_from_utf8()
+	assert_eq(decoded, "a", "the NUL and everything after it is gone")
+	assert_eq(decoded.length(), 1, "not three characters with a hole in the middle")
+	# AND TRUNCATION CANNOT CREATE AN ESCAPE, which is why dropping the check costs nothing:
+	# a shorter name is not a climbing one.
+	assert_true(PackInstaller._is_safe_entry(decoded))

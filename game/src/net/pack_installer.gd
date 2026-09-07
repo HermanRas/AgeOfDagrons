@@ -458,10 +458,37 @@ static func _is_safe_entry(name: String) -> bool:
 		return false
 	if name.begins_with("/") or name.contains("\\") or name.contains(":"):
 		return false
-	# A NUL truncates a path in every C API underneath `FileAccess`, so a name carrying one
-	# means two different things to this check and to the write that follows it.
-	if name.contains(char(0)):
-		return false
+	# ⚠️ **THERE IS DELIBERATELY NO NUL CHECK HERE, AND THERE USED TO BE A BROKEN ONE.**
+	#
+	# This line was `if name.contains(char(0)): return false`, on the argument that a NUL
+	# truncates a path in every C API underneath `FileAccess`. The argument is sound and the
+	# code was wrong twice over. Owner-reported 2026-09-07 as an error on EVERY editor
+	# startup, and both halves came out of chasing it:
+	#
+	#   1. **IT PRINTED AN ENGINE ERROR AT COMPILE TIME.** `char(0)` is a constant
+	#      expression, so GDScript folds it while compiling THIS FILE -- and building that
+	#      string is what complains:
+	#          Unicode parsing error, some characters were replaced with <?> (U+FFFD):
+	#          Unexpected NUL character
+	#      Nothing was running an install. The message named no file and pointed at nothing
+	#      a reader could find; it took a line-bisect of the compile to land here.
+	#
+	#   2. **AND IT WAS NEVER CHECKING FOR A NUL.** `String.chr(0)` cannot return one. It
+	#      returns U+FFFD -- code point 65533, the replacement character -- which is what
+	#      that error is telling you. So the needle was a REPLACEMENT CHARACTER, and the
+	#      check refused any entry name carrying one (an old zip with CP437 names, say)
+	#      while catching exactly none of what it was written for.
+	#
+	# ⚠️ **AND A NUL CANNOT REACH THIS FUNCTION IN THE FIRST PLACE.** `ZIPReader` hands out
+	# entry names as `String`s, and Godot's UTF-8 decode TRUNCATES at a NUL:
+	# `PackedByteArray([97, 0, 98]).get_string_from_utf8()` is `"a"`, length 1, not three
+	# characters with a hole in the middle. A GDScript `String` cannot hold code point 0, so
+	# a scan for one -- `unicode_at(i) == 0`, which was the first fix -- is dead code that
+	# reads like a live rule.
+	#
+	# NOTHING IS LOST BY DROPPING IT: truncation makes a name SHORTER, and none of the shapes
+	# below become reachable by cutting characters off the end. `../` is still `../`.
+	# `test_a_replacement_character_in_a_name_is_not_a_reason_to_refuse_it` pins the removal.
 	for part in name.split("/", false):
 		if part == ".." or part == ".":
 			return false
