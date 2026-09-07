@@ -451,6 +451,118 @@ func test_a_conquest_match_KEEPS_its_nest_even_though_the_pass_ran() -> void:
 		assert_eq(_gaia_guardians(), 1, "mode %s keeps its mother" % mode)
 
 
+# ── you can move it (owner, 2026-09-07) ────────────────────────────────────────
+
+## ⚠️ **THE TROPHY IS A UNIT YOU SHEPHERD, NOT A STATUE YOU WALL IN.** Owner's call: *"it
+## can stay small but let me move it around."* `unit.dragon_baby` was `speed: 0` because
+## 13.2's hatchling is a prize sitting in a nest, and that zero was **belt and braces** on
+## top of the two things that actually keep that one still -- it is gaia's and every move
+## command is owner-gated, and its roam radius is 0 so `WildlifeSystem` has nowhere to send
+## it. Removing the braces is what makes a trophy movable without touching the claim.
+func test_the_owner_can_walk_their_trophy_across_the_map() -> void:
+	_build(MatchConfig.Mode.TROPHY, 2)
+	var mine := _trophies_of(1)
+	assert_eq(mine.size(), 1)
+	if mine.is_empty():
+		return
+	var t := mine[0]
+	assert_true(t.speed > 0, "a trophy that cannot move cannot be moved")
+	var from := t.tile()
+	var to := from + Vector2i(6, 6)
+
+	w.queue_command(MoveCommand.new(1, [t.id], to))
+	for i in range(200):
+		w.step()
+		if t.tile() == to:
+			break
+
+	assert_ne(t.tile(), from, "it left the tile it started on")
+	assert_true(t.alive, "and it is still alive, which the reap once was not")
+	assert_false(w.player_for(1).defeated, "and moving it is not losing it")
+
+
+func test_a_trophy_cannot_be_ordered_by_somebody_else() -> void:
+	# Owner-gating is what keeps 13.2's gaia hatchling still now that the def has a speed,
+	# so it is worth one assertion that the gate is real and not just conventional. Player 2
+	# ordering player 1's dragon must do nothing at all.
+	_build(MatchConfig.Mode.TROPHY, 2)
+	var mine := _trophies_of(1)
+	if mine.is_empty():
+		return
+	var t := mine[0]
+	var from := t.tile()
+	w.queue_command(MoveCommand.new(2, [t.id], from + Vector2i(8, 8)))
+	for i in range(20):
+		w.step()
+	assert_eq(t.tile(), from, "player 2 cannot walk player 1's trophy anywhere")
+
+
+func test_gaias_claim_hatchling_still_does_not_move_now_that_the_def_has_a_speed() -> void:
+	# ⚠️ **THE REGRESSION THE SPEED COULD HAVE CAUSED, asserted from the trophy side too.**
+	# 13.2's whole tension is that *what the claimant owns during the window is a promise and
+	# what they have to defend is a place* -- a hatchling that wanders off its nest is a
+	# claim nobody has to hold. It is gaia's, so no move command can name it, and its
+	# `roam_radius` is 0, so `WildlifeSystem` has nowhere to send it.
+	_build(MatchConfig.Mode.LAST_MAN_STANDING, 2)
+	var nest := w.spawn_building(NEST, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	if nest == null:
+		return
+	var baby := w.spawn_unit(TROPHY, 0, nest.tile())
+	if baby == null:
+		return
+	nest.claim_baby_id = baby.id
+	nest.claim_owner = 1
+	nest.claim_ticks_left = NestSystem.GROW_TICKS
+	var from := baby.tile()
+
+	# Both roads at once: an order from a player, and thirty ticks of the wildlife system
+	# having every chance to pick a destination.
+	w.queue_command(MoveCommand.new(1, [baby.id], from + Vector2i(9, 9)))
+	for i in range(30):
+		w.step()
+
+	assert_true(baby.alive, "it is still the nest's hatchling")
+	assert_eq(baby.tile(), from, "gaia's hatchling stays on its nest")
+
+
+## ⚠️ **HIDING YOUR TROPHY INSIDE A TOWER MUST NOT LOSE YOU THE MATCH, and being able to
+## move it is what made that reachable.** A garrisoned unit leaves the spatial index and its
+## `pos` goes stale, so a census that counted only what is on the ground would see no
+## trophy and defeat its owner **for protecting it** -- on the tick they did the safest
+## thing available. `_trophy_holders` walks `w.entities` and filters on `alive`, which is why
+## it survives; that is now a fact under test rather than a happy accident of which
+## collection it reads.
+##
+## 📝 Whether a dragon SHOULD be able to garrison at all is card #77 (4.8c) and not decided
+## here. This asserts only that the win condition does not punish it.
+func test_a_trophy_garrisoned_in_a_tower_still_counts_as_held() -> void:
+	_build(MatchConfig.Mode.TROPHY, 2)
+	var mine := _trophies_of(1)
+	if mine.is_empty():
+		return
+	var t := mine[0]
+	var tower := w.spawn_building(&"building.guard_tower", 1, t.tile() + Vector2i(3, 0),
+			SimBuilding.Phase.COMPLETE, true)
+	assert_not_null(tower)
+	if tower == null:
+		return
+	assert_true(tower.garrison_cap > 0, "the fixture really is a carrier")
+
+	w.queue_command(GarrisonCommand.new(1, [t.id], tower.id))
+	for i in range(200):
+		w.step()
+		if t.garrisoned_in != 0:
+			break
+
+	assert_ne(t.garrisoned_in, 0, "the trophy actually got inside")
+	for i in range(5):
+		w.step()
+	assert_false(w.player_for(1).defeated,
+			"a trophy in a tower is still a trophy you hold")
+	assert_false(w.match_over)
+
+
 # ── the trophy does not grow up, and must not ──────────────────────────────────
 
 func test_a_trophy_never_grows_up_even_after_the_full_claim_window() -> void:
