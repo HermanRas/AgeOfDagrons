@@ -76,6 +76,33 @@ const GARRISONS := {
 	],
 }
 
+## Board ROOM a scenario wants, counted in players, when it is more than the match seats.
+## Keyed like `GARRISONS`; absent means "size the board for the players standing on it".
+##
+## ## A DUEL ON A THREE-PLAYER BOARD IS A DESIGN CHOICE, NOT A MISCOUNT
+##
+## `MapGenerator.side_for` derives the side from `BASE_SIDE * sqrt(players)`, so two players
+## get 96x96 and three get 112x112. Room per player is the right default and it is not what
+## scenario 5 wants: the extra ground is what puts a river between the two starts with land
+## enough behind it to fortify, which is that mission's whole lesson. The owner picked this
+## board in the lobby and their screenshot reads *"River, 112 x 112 - 2 players on room for
+## 3"* -- which is this pair of numbers and not one number.
+##
+## **IT NEEDS NO NEW CODE.** `MapGenerator.generate`'s fourth parameter is exactly this:
+## `size_players` sizes the board, `players` decides how many starts get laid out. It is what
+## the lobby has always done with a CLOSED slot, and the generator records both in
+## `data.meta` (`players` and `size_players`), so the sidecar already says what happened and
+## no map format changes.
+##
+## ⚠️ **ROOM IS NOT OPPONENTS, AND REACHING FOR THE OTHER LEVER WOULD CHANGE THE MISSION.**
+## Padding the scenario's `opponents` list to get a bigger board would seat a THIRD PLAYER --
+## a second enemy in a mission authored as a duel, with a base and an army. `MapGenerator`
+## clamps `size_count` up to `count` and never down, so this can only ever grow a board and
+## can never quietly drop a player off one.
+const ROOM_FOR := {
+	"HowToPlay/scenario_5": 3,
+}
+
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -143,7 +170,13 @@ func _author(s: ScenarioDef, force: bool) -> String:
 	# One human plus the declared opponents, which is exactly what `build_config` will ask
 	# for. Derived from the same field rather than from a count written twice.
 	var players := 1 + s.opponents.size()
-	var data := MapGenerator.generate(s.seed, s.map_type, players)
+	# See `ROOM_FOR`. Defaulting to `players` is what keeps every other scenario's board
+	# exactly the size it has always been -- the generator treats the two as equal when
+	# `size_players` is 0 as well, and passing it explicitly means the print below can
+	# report the pair without a second lookup.
+	var room := maxi(int(ROOM_FOR.get("%s/%s" % [s.campaign_folder, s.folder], players)),
+			players)
+	var data := MapGenerator.generate(s.seed, s.map_type, players, room)
 	if data == null or data.size.x <= 0:
 		print("  ! %-14s generator produced nothing for seed %d" % [s.folder, s.seed])
 		return "failed"
@@ -194,9 +227,10 @@ func _author(s: ScenarioDef, force: bool) -> String:
 		print("  ! %-14s %s" % [s.folder, "; ".join(problems)])
 		return "failed"
 
-	print("  %s %-14s %dx%d, %d entities, %d starts, seed %d%s" % [
+	print("  %s %-14s %dx%d, %d entities, %d starts, seed %d%s%s" % [
 			"~" if was else "+", s.folder, data.size.x, data.size.y,
 			data.entities.size(), data.starts.size(), s.seed,
+			"  (room for %d)" % room if room != players else "",
 			"  (REPLACED)" if was else ""])
 
 	# READ IT BACK BEFORE CLAIMING IT IS WRITTEN. The point of this tool is a file the game

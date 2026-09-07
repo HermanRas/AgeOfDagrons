@@ -24,6 +24,22 @@
   "base_url": "https://aod.dragoon.co.za/downloads/",
   "packs": [
     {
+      "_note_v3": [
+        "V3, 2026-09-07: scenario 5 is the duel across one ford (PLAN.md 15.x / card #67).",
+        "New map -- seed 207152, River, 112x112, two players on room for three -- and the",
+        "mission changed shape with it: mode `scenario` carrying two ANDed win rows that",
+        "spell out the ordinary conquest condition, so 'destroy the enemy' can be READ on",
+        "screen at 0/1 instead of being an unstated rule. The owner's spec, and the reason",
+        "the mode moved is that `ScenarioDef` refuses `last_man_standing` carrying",
+        "objectives -- outside SCENARIO mode `ObjectiveSystem` never runs, so the rows would",
+        "have been dead text under a tracker stuck at 0/1 all match.",
+        "",
+        "V2 REACHED PHONES AND WAS PLAYED, which is why this is v3 and not a v2 rebuild: the",
+        "live manifest read version 2 when this was built (checked, 2026-09-07), and the",
+        "owner played scenarios 1-4 off it. Overwriting v2 in place would leave every",
+        "install that has it permanently on the old scenario 5 with nothing on screen to say",
+        "so. The guard refused the rebuild before the version was touched, as designed."
+      ],
       "_note_v2": [
         "V2, 2026-09-06: scenario 4 is the dragon claim (PLAN.md 13.2 / 15.8). New map with",
         "the nest, the mother and a 75-unit army; mode `scenario` with two win rows; starts",
@@ -41,7 +57,7 @@
       "kind": "campaign",
       "folder": "HowToPlay",
       "source": "scenarios/HowToPlay",
-      "version": 2,
+      "version": 3,
       "required": true,
       "author": "Age of Dragons"
     },
@@ -70,7 +86,13 @@
         "V2 FOR THE SAME REASON AND ON THE SAME DAY. It derives from the same folder, so its",
         "bytes moved when scenario 4 did and the guard refused it too. Bumped rather than",
         "left behind: two campaigns both called How To Play, holding two different scenario",
-        "4s, is precisely the confusion this entry's `folder` rule above is worried about."
+        "4s, is precisely the confusion this entry's `folder` rule above is worried about.",
+        "",
+        "V3, 2026-09-07, AND THE THIRD TIME THIS HAS HAPPENED FOR THE SAME STRUCTURAL REASON.",
+        "It derives from `scenarios/HowToPlay`, so every edit to that folder moves this pack's",
+        "bytes and the guard refuses it until the version follows. Worth naming as a standing",
+        "cost of `derive` rather than rediscovering it each time: this entry can never be left",
+        "on an older version than the campaign it copies."
       ],
       "id": "howtoplay_dummy",
       "kind": "campaign",
@@ -80,7 +102,7 @@
         "name": "How To Play (Dummy)",
         "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content."
       },
-      "version": 2,
+      "version": 3,
       "required": false,
       "author": "Age of Dragons"
     }

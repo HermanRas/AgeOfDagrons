@@ -133,6 +133,15 @@ func _satisfy(w: SimWorld, p: SimPlayer, o: ObjectiveDef) -> void:
 	if o.owner == ObjectiveDef.Owner.GAIA:
 		_kill_gaia_down_to(w, p, o)
 		return
+	# ⚠️ **AN `enemy` ROW IS THE SAME TRAP AS THE GAIA ONE AND IT ARRIVED WITH SCENARIO 5.**
+	# `_spawn_up_to` counts and spawns for the HERO, so *"the enemy has 0 units"* would find
+	# the hero's own count, compare it against a `value` of 0, decide the row was already
+	# satisfied and print "already N of" -- then the row would never tick and the driver
+	# would report a scenario that cannot be won. It is the OWNER that decides the verb
+	# here: your own things get spawned, somebody else's get killed.
+	if o.owner == ObjectiveDef.Owner.ENEMY:
+		_kill_enemy_down_to(w, p, o)
+		return
 	match o.subject:
 		ObjectiveDef.Subject.UNIT:
 			_spawn_up_to(w, p, o, true)
@@ -209,6 +218,75 @@ func _kill_gaia_down_to(w: SimWorld, p: SimPlayer, o: ObjectiveDef) -> void:
 	print("      killed %d of gaia's %s, credited to player %d (had %d, row wants %d)"
 			% [killed, o.id if not o.id.is_empty() else &"units", p.id, victims.size(),
 			o.value])
+
+
+## Bring the ENEMY's count of `o`'s subject down to `o.value` by killing them.
+##
+## SCENARIO 5's SHAPE, and PLAN.md 11.8's own worked example -- *leave the enemy nothing* --
+## which no shipped scenario used until 2026-09-07. It is conquest expressed as objectives,
+## so the driver has to be able to express it too.
+##
+## ## ONE SUBJECT AT A TIME, WHICH IS WHAT MAKES THE TWO ROWS INDEPENDENT
+##
+## Scenario 5 is two ANDed rows -- no units, no buildings -- and killing both on the first
+## row would tick the second one before the loop reached it, which is a driver that proves
+## the pair rather than each. So a `unit` row kills units and leaves the base standing.
+##
+## ⚠️ **THE LATCH IS WHY THIS WORKS AGAINST A LIVE AI.** An Easy opponent trains again the
+## moment its units are gone, so the enemy's live count is back above zero within a few
+## ticks -- and the row stays satisfied because `ObjectiveSystem` latches a win row one-way.
+## That is not the driver getting away with something; it is the rule a real player relies
+## on, and this is the one place it is exercised against an opponent that fights back.
+##
+## THROUGH `Diplomacy` RATHER THAN `owner_id != p.id`, which is what `_drive_conquest` two
+## functions down can afford to do because it is killing EVERYTHING. This has to agree with
+## `ObjectiveSystem._owners_for`, and that resolves the enemy set through `Diplomacy.allied`
+## with the team table -- so a future co-op scenario cannot have the driver killing an ally
+## to satisfy a row about an enemy.
+##
+## GAIA IS NOT IN THE SET, for `ObjectiveSystem`'s trap 1: the mother dragon, the deer and
+## the trees belong to owner 0 and *leave the enemy nothing* must never come to mean *shoot
+## every animal on the map*. `owner_id > 0` is the whole guard, and it is the same one the
+## system's own resolver gets for free by reading `w.players`.
+func _kill_enemy_down_to(w: SimWorld, p: SimPlayer, o: ObjectiveDef) -> void:
+	if o.compare == ObjectiveDef.Compare.AT_LEAST and o.value > 0:
+		print("      CANNOT SATISFY '%s >= %d' for the enemy -- that is a fact about the"
+				% [o.id, o.value] + " match, not something a driver arranges")
+		return
+	if o.subject != ObjectiveDef.Subject.UNIT \
+			and o.subject != ObjectiveDef.Subject.BUILDING:
+		print("      CANNOT SATISFY an enemy row about %s from here"
+				% ObjectiveDef.Subject.keys()[o.subject])
+		return
+
+	var want_units := o.subject == ObjectiveDef.Subject.UNIT
+	var victims: Array[SimEntity] = []
+	for e in w.entities.values():
+		if not e.alive or e.owner_id <= 0:
+			continue
+		if Diplomacy.allied(p.id, e.owner_id, w.teams):
+			continue
+		if want_units:
+			if not (e is SimUnit):
+				continue
+		elif not (e is SimBuilding):
+			continue
+		if o.id.is_empty() or e.def_id == o.id:
+			victims.append(e as SimEntity)
+	# A stable order for the same reason `_kill_gaia_down_to` sorts: two runs of this scene
+	# are only worth comparing if they killed the same things in the same order.
+	victims.sort_custom(func(a: SimEntity, b: SimEntity) -> bool: return a.id < b.id)
+
+	var killed := 0
+	while victims.size() - killed > o.value and killed < victims.size():
+		var v := victims[killed]
+		# `take_damage` and not `alive = false`, which is this file's rule -- the crudest
+		# means that is still the real mechanism. It costs nothing here (no claim reads the
+		# attacker off an enemy building) and it keeps one way of killing things in the file.
+		v.take_damage(v.hp, 0, p.id)
+		killed += 1
+	print("      killed %d of the enemy's %s (had %d, row wants %d)"
+			% [killed, "units" if want_units else "buildings", victims.size(), o.value])
 
 
 ## Step until nothing is mid-claim, up to the length of one claim plus the usual grace.

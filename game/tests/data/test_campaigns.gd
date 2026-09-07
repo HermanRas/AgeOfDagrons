@@ -405,6 +405,252 @@ func test_scenario_fours_map_carries_the_dragon_its_briefing_PROMISES() -> void:
 			"the saved map still validates with the garrison on it")
 
 
+# ── scenario 5, the duel across one ford ────────────────────────────────────────
+
+func test_scenario_five_is_conquest_written_as_objectives() -> void:
+	# ⚠️ **THE OWNER ASKED FOR "destroy the enemy 0/1" UNDER THE "standard (last man
+	# standing) condition", AND THAT PAIR IS REFUSED AT LOAD.**
+	# `ScenarioDef._read_objectives` rejects `last_man_standing` carrying objectives,
+	# because `ObjectiveSystem` returns early outside SCENARIO mode -- the rows would be
+	# dead text and the tracker would sit at 0/1 all match. So the mission is `scenario`
+	# mode with win rows that ARE the conquest condition, which is what that refusal's own
+	# message tells an author to do.
+	var s := _shipped("scenario_5")
+	assert_not_null(s)
+	if s == null:
+		return
+	assert_true(s.is_playable(), _joined(s.problems_or_self()))
+	assert_eq(s.mode, ScenarioDef.Mode.SCENARIO,
+			"the objective has to be readable on screen, which conquest mode cannot do")
+	assert_eq(s.opponents, [&"easy"] as Array[StringName],
+			"the campaign's only opponent that actually attacks")
+
+	# TWO ROWS, ANDed, AND ONE WOULD BE A DIFFERENT MISSION. PLAN.md 11.8's *leave the
+	# enemy nothing* is a single `{subject: unit, owner: enemy, == 0}` row -- which wins on
+	# the tick the enemy's last UNIT dies, with their town centre standing. A win row also
+	# LATCHES, so the AI retraining a villager the next tick would not take the win back:
+	# the player would have won having razed nothing.
+	var wins := s.win_objectives()
+	assert_eq(wins.size(), 2, "units AND buildings -- together that is conquest")
+
+	var subjects: Array[int] = []
+	for o in wins:
+		subjects.append(int(o.subject))
+		# EVERY ROW IS ABOUT THE ENEMY, GOING TO ZERO.
+		assert_eq(o.owner, ObjectiveDef.Owner.ENEMY,
+				"row '%s' must count the enemy's things" % o.describe())
+		assert_eq(o.compare, ObjectiveDef.Compare.EXACTLY)
+		assert_eq(o.value, 0)
+		# ⚠️ **NO `id`, WHICH IS WHAT MAKES IT "ANYTHING THEY OWN".** A row naming a def
+		# would quietly narrow the mission to "destroy their swordsmen" and leave the rest
+		# of the enemy standing -- and `ObjectiveSystem._sum` reads the per-def bucket
+		# instead of the total, so nothing else would report it.
+		assert_true(o.id.is_empty(),
+				"row '%s' must not name a def id" % o.describe())
+		# The tracker draws a zero-target row as a checkbox, which is the 0/1 the owner
+		# asked for -- so every row needs prose, or the player reads a bare number.
+		assert_false(o.text.is_empty(), "row %d has label text" % int(o.subject))
+
+	subjects.sort()
+	assert_eq(subjects, [int(ObjectiveDef.Subject.UNIT),
+			int(ObjectiveDef.Subject.BUILDING)] as Array[int],
+			"one row for what they can move, one for what they have built")
+
+	# THE MOTHER IS NOT PART OF THE WIN, and that is `ObjectiveSystem` trap 1 protecting
+	# the mission rather than a gap: `owner: enemy` resolves from `SimWorld.players`, which
+	# gaia has no row in, so a 600 hp guardian nobody owns cannot hold the match open.
+	for o in wins:
+		assert_ne(o.owner, ObjectiveDef.Owner.GAIA,
+				"killing the dragon is optional; the enemy is the mission")
+
+
+func test_scenario_fives_board_is_two_players_on_room_for_three() -> void:
+	# The owner's own lobby configuration -- *"map size 3 payer Player1 + AI, slot 3
+	# closed"* -- and it is the pair of numbers that cannot be recovered from the board
+	# size alone. `preview_author_maps.ROOM_FOR` is where the scenario asks for it and
+	# `MapGenerator` records both, so this asserts the record rather than re-deriving it.
+	#
+	# ⚠️ **ROOM IS NOT A THIRD OPPONENT.** Widening the board by padding `opponents` would
+	# seat a third player with a base and an army in a mission authored as a duel, so the
+	# start count is asserted beside the room.
+	var s := _shipped("scenario_5")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var data := s.map_data(problems)
+	assert_not_null(data, _joined(problems))
+	if data == null:
+		return
+
+	assert_eq(data.size, Vector2i(112, 112), "the board the owner picked")
+	assert_eq(data.starts.size(), 2, "two starts -- a duel, on a board built for three")
+	assert_eq(int(data.meta.get("players", 0)), 2)
+	assert_eq(int(data.meta.get("size_players", 0)), 3, "both counts recorded")
+	assert_eq(MapValidator.problems(data), [] as Array[String], "and it validates")
+
+
+func test_scenario_fives_river_has_exactly_ONE_crossing() -> void:
+	# ⚠️ **THE BRIEFING STATES THIS AS A FACT** -- *"there is exactly ONE way across it on
+	# foot: a sand ford at the very centre of the map"* -- and the whole mission is built on
+	# it: the owner's brief was a map that is *"easy to wall off"*, and a second ford makes
+	# that advice wrong rather than merely incomplete. Re-rolling the seed is what would
+	# break it, silently, leaving a briefing that lies about the ground.
+	#
+	# **COUNTED OFF THE TERRAIN, NOT OFF THE SEED.** The river is a diagonal band centred on
+	# x == y (measured: water fills x - y from -7 to +7), so ANY crossing of it must include
+	# a land tile where x == y. Two crossings would therefore be two separate runs along
+	# that diagonal. This walks it and counts the runs, which needs no knowledge of where
+	# the ford happens to be.
+	var s := _shipped("scenario_5")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var data := s.map_data(problems)
+	assert_not_null(data, _joined(problems))
+	if data == null:
+		return
+
+	var runs := 0
+	var run_tiles := 0
+	var was_land := false
+	for i in range(mini(data.size.x, data.size.y)):
+		var land := data.is_ground_passable(Vector2i(i, i))
+		if land:
+			run_tiles += 1
+			if not was_land:
+				runs += 1
+		was_land = land
+
+	assert_eq(runs, 1, "one ford and one only, or the briefing's central promise is false")
+	assert_true(run_tiles > 0 and run_tiles <= 8,
+			"a ford wide enough to walk and narrow enough to wall: %d tiles" % run_tiles)
+
+	# AND THE TWO BANKS ARE STILL JOINED. `MapValidator` refuses an unreachable start, so
+	# this is not the load-bearing check -- it is here because the run above could in
+	# principle be a puddle of sand that crosses nothing, and then "one crossing" would be
+	# true and useless.
+	assert_true(data.is_ground_passable(Vector2i(data.size.x / 2, data.size.y / 2)),
+			"the board's centre is walkable, which is where the ford was authored")
+
+
+func test_scenario_fives_dragon_is_across_the_water_and_off_the_ford() -> void:
+	# TWO PROMISES IN THE BRIEFING, both about geography and both breakable by a re-roll:
+	# the dragon is *"on the far bank, deep in the enemy's half"*, and the player is sent to
+	# stand on the ford, which had better not be inside her reach.
+	var s := _shipped("scenario_5")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var data := s.map_data(problems)
+	assert_not_null(data, _joined(problems))
+	if data == null:
+		return
+
+	var nest_centre := Vector2i(-1, -1)
+	var mothers := 0
+	var nests := 0
+	for e in data.entities:
+		var def_id: StringName = e.get("def_id", &"")
+		if int(e.get("player", -1)) != 0:
+			continue
+		if def_id == MapGenerator.NEST_DEF:
+			nests += 1
+			# ⚠️ **THE FILE STORES THE FOOTPRINT'S ORIGIN AND THE RULES ARE ABOUT ITS
+			# CENTRE.** A 10x10 nest read at its origin measures five tiles off, which is
+			# enough to fail `nest_start_clearance()` against a map that passes it.
+			var bd: BuildingDef = GameDataRegistry.building(def_id)
+			nest_centre = (e.get("tile", Vector2i.ZERO) as Vector2i) + bd.footprint / 2
+		elif def_id == MapGenerator.NEST_GUARDIAN_DEF:
+			mothers += 1
+
+	assert_eq(nests, 1, "one nest, gaia's")
+	assert_eq(mothers, 1, "one mother, gaia's -- 13.2a's uniqueness rule")
+	if nest_centre.x < 0:
+		return
+
+	# ACROSS THE WATER FROM PLAYER 1, expressed as the side of the diagonal band each one
+	# sits on. `starts[0]` is the human -- `build_config` numbers the human first and
+	# `MapGen.build_from` resolves a map's player index by position.
+	var p1: Vector2i = data.starts[0]
+	var p1_side := signi(p1.x - p1.y)
+	var nest_side := signi(nest_centre.x - nest_centre.y)
+	assert_ne(p1_side, 0)
+	assert_eq(nest_side, -p1_side,
+			"the nest is on the OTHER bank: player 1 at %s, nest centre at %s"
+			% [p1, nest_centre])
+	assert_true(absi(nest_centre.x - nest_centre.y) > 7,
+			"and clear of the river band itself, not sitting in the water")
+
+	# THE ENEMY IS OVER THERE TOO, which is the other half of the owner's description.
+	var p2: Vector2i = data.starts[1]
+	assert_eq(signi(p2.x - p2.y), nest_side, "the enemy shares the dragon's bank")
+
+	# ⚠️ **THE FORD IS OUTSIDE HER REACH.** Her aggro is measured from her POST -- the nest,
+	# not from her -- which is what `UnitDef.guards_post` exists for (13.2a), so this is the
+	# distance that decides whether a player walling the crossing gets a 600 hp flyer they
+	# were never warned about. Read off the roster so a retune of her `aggro_radius` fails
+	# here rather than in a playtest.
+	var ford := Vector2i(data.size.x / 2, data.size.y / 2)
+	var reach := MapGenerator.nest_guard_radius()
+	assert_true(Vector2(nest_centre).distance_to(Vector2(ford)) > float(reach),
+			"the ford is %.1f tiles from the nest against a guard radius of %d"
+			% [Vector2(nest_centre).distance_to(Vector2(ford)), reach])
+
+	# AND SHE CLEARS BOTH STARTS, which `_place_nest` guarantees and which this map is the
+	# first to reach through the `size_players` path -- a board sized for three with two
+	# players on it had never been generated with a nest on it before 2026-09-07.
+	for start in data.starts:
+		assert_true(Vector2(nest_centre).distance_to(Vector2(start))
+				>= float(MapGenerator.nest_start_clearance()),
+				"nest centre %s is %.1f from start %s, floor is %d"
+				% [nest_centre, Vector2(nest_centre).distance_to(Vector2(start)), start,
+				MapGenerator.nest_start_clearance()])
+
+
+func test_scenario_fives_briefing_does_not_recommend_what_age_1_cannot_build() -> void:
+	# ⚠️ **EVERY WALL, GATE AND TOWER IN THE GAME NEEDS AGE 2, AND THIS MISSION OPENS IN AGE
+	# 1.** The owner asked the briefing to recommend walls, gates and towers at the river
+	# crossing; recommending them without saying they have to be unlocked first is scenario
+	# 1's fifteenth-villager defect exactly -- prose promising what the rules do not offer,
+	# with only the prose on screen.
+	#
+	# So this asserts the SEQUENCING and derives the age from `buildings.json` rather than
+	# writing 2 into the test: if a wall ever becomes available in age 1, this fails and the
+	# briefing can be simplified rather than silently staying over-cautious.
+	var s := _shipped("scenario_5")
+	assert_not_null(s)
+	if s == null:
+		return
+
+	var earliest := 99
+	for id in [&"building.wall_wood_short", &"building.wall_wood_gate",
+			&"building.watch_tower"]:
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		assert_not_null(bd, "%s is in the roster" % id)
+		if bd != null:
+			earliest = mini(earliest, bd.age_required)
+
+	if s.starting_age >= earliest:
+		# The owner may yet move the start to age 2, which is one field. Then the briefing
+		# can name the buildings outright and this branch is what says so.
+		assert_true(true, "starts at or above the age its advice needs")
+		return
+
+	# The briefing must therefore tell the player to advance FIRST. Asserted on the age's
+	# display name out of `ages.json`, so a rename of the age fails here too rather than
+	# leaving the briefing naming an age the HUD no longer calls that.
+	var unlocks: AgeDef = GameDataRegistry.age(earliest)
+	assert_not_null(unlocks, "age %d is declared" % earliest)
+	if unlocks == null:
+		return
+	assert_true(s.message.contains(unlocks.name),
+			"the briefing has to name the age that unlocks its own advice ('%s'): %s"
+			% [unlocks.name, s.message])
+
+
 # ── the three subjects that must be REFUSED, not defaulted ──────────────────────
 
 func test_area_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_for() -> void:
