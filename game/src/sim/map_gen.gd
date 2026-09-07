@@ -330,6 +330,7 @@ static func build(w: SimWorld, cfg: MatchConfig) -> void:
 		build_debug_map(w)
 	_place_ai_handicaps(w)
 	_place_trophies(w, cfg)
+	_clear_dragon_nest(w)
 
 
 ## One trophy per player, for `Mode.TROPHY` (PLAN.md 11.2's *"a MapGen that gives every
@@ -390,6 +391,72 @@ static func _place_trophies(w: SimWorld, cfg: MatchConfig) -> void:
 	# ARMS THE RULE. See `SimWorld.trophy_def_id` for why the record is separate from the
 	# roster's flag, and why it is written last.
 	w.trophy_def_id = def_id
+
+
+## `Mode.TROPHY` gets ONE dragon PER PLAYER and no others: take the gaia nest and its
+## mother back off the map (owner's call, 2026-09-07).
+##
+## ## WHY THE MODE CANNOT SHARE A MAP WITH 13.2'S CLAIM
+##
+## Both features are about a dragon and they pull in opposite directions. Trophy says *the
+## dragon you own is the thing you must not lose*; the claim says *a dragon is a prize lying
+## in the middle of the map*. Played together, whoever kills the mother gets a free 600 hp
+## flyer -- and in a mode whose entire tension is a 300 hp hatchling that cannot move, that
+## is not a side quest, it is the match. Worse, the two hatchlings are the same def and the
+## same picture, so the board would show a player two identical dragons that mean completely
+## different things (see `SimWorld.trophy_def_id` on the ownership-cue problem).
+##
+## ⚠️ **GUARDED ON `w.trophy_def_id`, NOT ON `cfg.mode`, AND THE DIFFERENCE IS THE WHOLE
+## POINT.** `_place_trophies` above is all-or-nothing and leaves that field empty when it
+## could not arm the mode -- in which case the match is decided by CONQUEST, and a conquest
+## match has every reason to keep its nest. One flag therefore says both things: the trophy
+## rule is live, and the rival dragon is gone. Reading `cfg.mode` here would strip the nest
+## off a map that then played as an ordinary skirmish, which is a content change nobody
+## asked for and nothing would explain.
+##
+## RUNS AFTER PLACEMENT for that reason, and the ordering costs nothing: a trophy is placed
+## outward from its owner's town centre and a nest is kept clear of every start (13.2a), so
+## the tiles this frees are nowhere near the tiles that pass wanted.
+##
+## THE MOTHER GOES WITH THE NEST, and leaving her would be worse than either. She is
+## `guards_post`, so `WildlifeSystem` would re-home her on the nearest gaia building -- some
+## unrelated rock -- and `NestSystem._nest_for` would answer null, so killing her would drop
+## nothing at all. A 600 hp dragon guarding scenery and paying out nothing is a rule the
+## player cannot learn. Identified by the FLAG rather than by def id: `guards_post` is what
+## makes a gaia animal a guardian, and `MapGenerator.NEST_GUARDIAN_DEF` naming `unit.dragon`
+## today is not a promise it always will.
+##
+## ONLY GENERATED AND SAVED MAPS EVER CARRY ONE, so in practice this is a no-op on an
+## authored scenario -- and deliberately so: scenario 5 puts a dragon across the river and it
+## is `Mode.SCENARIO`, which never reaches this line.
+##
+## `despawn` RATHER THAN `take_damage`: this is map setup on tick 0, before any system has
+## run or any client has been sent a snapshot, so there is nothing to see it leave. Killing
+## it would leave a corpse lying on the map for `SimUnit.CORPSE_TOTAL_TICKS` and credit the
+## kill to nobody, which is `NestSystem._kill_baby`'s reasoning read backwards -- that one
+## kills BECAUSE the match is running and a death is what happened.
+static func _clear_dragon_nest(w: SimWorld) -> void:
+	if w.trophy_def_id.is_empty():
+		return
+	# COLLECTED BEFORE ANYTHING IS REMOVED, because `despawn` mutates `w.entities` and this
+	# is walking it. Sorted for the house rule (PLAN.md 7.1): dictionary order is not
+	# portable, and although a set of despawns is order-independent, nothing here is allowed
+	# to depend on that being noticed.
+	var ids: Array = w.entities.keys()
+	ids.sort()
+	var doomed: Array[int] = []
+	for id in ids:
+		var e: SimEntity = w.entities[id]
+		if e.owner_id != 0:
+			continue
+		if e is SimBuilding and (e as SimBuilding).def_id == MapGenerator.NEST_DEF:
+			doomed.append(id)
+		elif e is SimUnit:
+			var def := w.unit_def((e as SimUnit).def_id)
+			if def != null and def.guards_post:
+				doomed.append(id)
+	for id in doomed:
+		w.despawn(id)
 
 
 ## The rect to place `owner`'s trophy beside: their town centre, else any building of

@@ -361,6 +361,142 @@ func test_gaias_orphaned_hatchling_IS_still_reaped() -> void:
 	assert_false(orphan.alive, "gaia's unclaimed hatchling is still swept up")
 
 
+# ── one dragon per player, and no others ───────────────────────────────────────
+
+## A GENERATED map, which is the only kind that carries a nest. `_build` above uses the
+## fixed debug map deliberately (see its comment) and there is no nest on it at all, so
+## every test in this section needs the other fixture.
+func _build_generated(mode: MatchConfig.Mode, players: int = 2) -> MatchConfig:
+	var cfg := MatchConfig.debug_generated(7, MapGenerator.Type.FOREST, players)
+	cfg.mode = mode
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	return cfg
+
+
+func _gaia_nests() -> int:
+	var n := 0
+	for e in w.entities.values():
+		if e is SimBuilding and e.def_id == NEST and e.owner_id == 0 and e.alive:
+			n += 1
+	return n
+
+
+func _gaia_guardians() -> int:
+	var n := 0
+	for e in w.entities.values():
+		if not (e is SimUnit) or e.owner_id != 0 or not e.alive:
+			continue
+		var def := w.unit_def((e as SimUnit).def_id)
+		if def != null and def.guards_post:
+			n += 1
+	return n
+
+
+func test_the_fixture_really_does_put_a_nest_and_a_mother_on_a_generated_map() -> void:
+	# ⚠️ **THE CONTROL, AND WITHOUT IT THE NEXT TEST PROVES NOTHING.** "No nest in trophy
+	# mode" passes trivially on a map that never had one, which is exactly the trap the
+	# debug-map fixture would have set. This is the same seed and the same player count as
+	# the removal test below, in the mode that keeps its nest.
+	_build_generated(MatchConfig.Mode.LAST_MAN_STANDING, 2)
+	assert_eq(_gaia_nests(), 1, "13.2a puts one nest on a generated map")
+	assert_eq(_gaia_guardians(), 1, "and one mother guarding it")
+
+
+func test_a_trophy_match_has_no_gaia_nest_and_no_mother() -> void:
+	# The owner's call, 2026-09-07: *"no second dragon on trophy map type. only 1 per
+	# player."* A free 600 hp flyer to whoever kills the mother is a large swing in a mode
+	# whose whole subject is protecting a 300 hp one -- and the two hatchlings are the same
+	# def and the same picture, so the board would show one player two identical dragons
+	# that mean different things. `MapGen._clear_dragon_nest` has the argument.
+	_build_generated(MatchConfig.Mode.TROPHY, 2)
+	assert_eq(w.trophy_def_id, TROPHY, "the mode is armed")
+	assert_eq(_gaia_nests(), 0, "the nest is off the map")
+	assert_eq(_gaia_guardians(), 0, "and so is the mother")
+	# AND THE COUNT IS THE OWNER'S SENTENCE, stated as one number: every dragon on this map
+	# belongs to a player, and each player has exactly one.
+	var dragons := 0
+	for e in w.entities.values():
+		if e is SimUnit and e.alive and (e.def_id == TROPHY or e.def_id == &"unit.dragon"):
+			dragons += 1
+			assert_true(e.owner_id > 0, "every dragon on the map is somebody's")
+	assert_eq(dragons, w.players.size(), "one dragon per player, and no others")
+
+
+func test_the_mother_goes_with_the_nest_and_not_on_her_own() -> void:
+	# ⚠️ **LEAVING HER WOULD BE WORSE THAN LEAVING BOTH.** She is `guards_post`, so
+	# `WildlifeSystem` re-homes her on the nearest gaia building -- some unrelated rock --
+	# and `NestSystem._nest_for` then answers null, so killing her drops nothing at all. A
+	# 600 hp dragon guarding scenery and paying out nothing is a rule a player cannot learn.
+	# Ten ticks so `WildlifeSystem` has actually looked at whatever is left.
+	_build_generated(MatchConfig.Mode.TROPHY, 2)
+	for t in range(10):
+		w.step()
+	assert_eq(_gaia_guardians(), 0, "no guardian survived the removal")
+	assert_false(w.match_over, "and taking her off the map decided nothing")
+
+
+func test_a_conquest_match_KEEPS_its_nest_even_though_the_pass_ran() -> void:
+	# ⚠️ **GUARDED ON `w.trophy_def_id`, NOT ON `cfg.mode`.** Placement is all-or-nothing and
+	# leaves the field empty when it could not arm the mode, in which case the match is
+	# decided by CONQUEST -- and a conquest match has every reason to keep its nest. Reading
+	# the mode here would strip 13.2's whole feature off a map that then played as an
+	# ordinary skirmish, which nothing on screen would explain.
+	for mode in [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.KING_OF_THE_HILL,
+			MatchConfig.Mode.SCENARIO]:
+		before_each()
+		_build_generated(mode, 2)
+		assert_eq(w.trophy_def_id, &"")
+		assert_eq(_gaia_nests(), 1, "mode %s keeps its nest" % mode)
+		assert_eq(_gaia_guardians(), 1, "mode %s keeps its mother" % mode)
+
+
+# ── the trophy does not grow up, and must not ──────────────────────────────────
+
+func test_a_trophy_never_grows_up_even_after_the_full_claim_window() -> void:
+	# ⚠️ **OWNER-OBSERVED 2026-09-07 -- *"my dragon never grew up"* -- AND IT MUST NOT.**
+	# Growing means `NestSystem` replacing the hatchling with a `unit.dragon`, and that def
+	# does NOT carry `is_trophy`: the owner would be holding no trophy on the next tick and
+	# would be defeated on the spot, in a mode they were winning, by their own dragon
+	# succeeding. So "it never grew" is not a missing feature, it is the feature.
+	#
+	# TWO SEPARATE THINGS GUARANTEE IT and this asserts the outcome rather than either: the
+	# hatchling is player-owned so `NestSystem` does not collect it at all, and it is
+	# recorded on no nest so no claim can mature into it. Run past the FULL window, because
+	# a growth that happens at `GROW_TICKS` is invisible to the ten-tick tests above.
+	_build(MatchConfig.Mode.TROPHY, 2)
+	var mine := _trophies_of(2)
+	assert_eq(mine.size(), 1)
+	if mine.is_empty():
+		return
+	var id := mine[0].id
+
+	for t in range(NestSystem.GROW_TICKS + 20):
+		w.step()
+		if w.match_over:
+			break
+
+	assert_false(w.match_over, "six minutes of holding a trophy decides nothing")
+	var still := w.get_entity(id) as SimUnit
+	assert_not_null(still, "the same entity is still there -- growing REPLACES it")
+	if still != null:
+		assert_eq(still.def_id, TROPHY, "still a hatchling")
+		assert_true(still.alive)
+	assert_false(w.player_for(2).defeated, "and its owner is still in the match")
+
+
+func test_the_grown_dragon_is_not_a_trophy_which_is_why_growing_would_lose() -> void:
+	# The mechanism behind the test above, stated as a fact about the roster rather than as
+	# 3600 ticks. If somebody ever flags `unit.dragon` as a trophy to "fix" the hatchling not
+	# growing, `test_no_other_unit_in_the_roster_claims_to_be_a_trophy` fails and this says
+	# why that was the wrong fix.
+	var grown: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	assert_not_null(grown)
+	if grown != null:
+		assert_false(grown.is_trophy,
+				"a grown dragon is not a trophy, so growing one would end its owner's match")
+
+
 func test_gaias_hatchling_satisfies_nobodys_trophy() -> void:
 	# `_trophy_holders` filters `owner_id > 0`. Harmless today because gaia is never in
 	# `standing`, and written anyway: the day something puts gaia in a side, this would be
