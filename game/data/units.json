@@ -941,11 +941,13 @@
       "centre, but she fires it about once a fight -- the two numbers were retuned in the same",
       "week and neither reads correctly without the other. Her ordinary bite is still 30.",
       "",
-      "STILL NO FRIENDLY FIRE. 'any unit or building' is read as 'both kinds of thing' rather",
-      "than 'including your own': `_burn` tests every entity against the caster's war",
-      "predicate, which is what `AbilitySystem`'s header calls a design choice rather than a",
-      "physical law. If the owner meant her fire should burn her own side too, that is one",
-      "predicate in `_is_hostile_to` and a different game."
+      "✅ NO FRIENDLY FIRE, CONFIRMED BY THE OWNER 2026-09-07 -- *'confirm no friendly fire'* --",
+      "and it is a DECISION now rather than a reading. 'any unit or building' means both KINDS",
+      "of thing, not 'including your own': `_burn` tests every entity against the caster's war",
+      "predicate. It was worth asking precisely because 250 makes it expensive to be wrong",
+      "about -- a 5x5 that burned your own army would kill a stack of your own infantry in one",
+      "press, and at a 120 s cooldown you would find out once and not again for two minutes.",
+      "The switch, if it ever changes, is `_is_hostile_to` and nothing else."
     ],
     "ability": {
       "id": "fire_breath", "name": "Fire Breath", "effect": "damage", "target": "ground",

@@ -29,6 +29,13 @@
 ##   caster's own war predicate, so a dragon cannot burn its own army. That is a design
 ##   choice rather than a physical law and it is worth naming, because it is the reason
 ##   a breath weapon needs no aiming skill.
+##
+##   ✅ **CONFIRMED BY THE OWNER 2026-09-07 and no longer an assumption**, asked because the
+##   breath went to 250 with ring falloff that day and the phrasing of the ask (*"250 damage
+##   to any unit or building around the click"*) could have meant "including my own". It does
+##   not. At 250 across a 5x5 the cost of being wrong is a stack of your own infantry in one
+##   press, learned once and then not again for the 120 s cooldown -- which is why it was
+##   worth a question rather than a guess. `_is_hostile_to` is the only switch.
 class_name AbilitySystem
 extends SimSystem
 

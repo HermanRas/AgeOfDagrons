@@ -304,6 +304,13 @@ func test_the_dragon_cannot_burn_its_own_army() -> void:
 	assert_eq(friend.hp, friend.max_hp,
 			"a design choice rather than a physical law, and the reason a breath "
 			+ "weapon needs no aiming skill")
+	# ✅ **AND THE OWNER CONFIRMED IT 2026-09-07**, asked because the breath went to 250 that
+	# day and *"250 damage to any unit or building around the click"* could have meant "my
+	# own included". It does not. This test was already here; what changed is that it now
+	# pins a decision rather than an assumption -- and at 250 the difference is a stack of
+	# your own infantry per press.
+	assert_true(GameDataRegistry.unit(&"unit.dragon").ability_amount >= 250,
+			"and the stakes that made it worth asking are the amount itself")
 
 
 func test_the_dragon_cannot_burn_a_flock_of_sheep() -> void:
