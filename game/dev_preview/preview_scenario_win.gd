@@ -57,6 +57,27 @@ func _drive(c: CampaignDef, s: ScenarioDef) -> void:
 	print("    mode=%s  objectives=%d  objective_player_id=%d"
 			% [MatchConfig.mode_name(cfg.mode), cfg.objectives.size(),
 			cfg.objective_player_id])
+
+	# ⚠️ **WHO THE OPPONENT ACTUALLY IS, READ OFF THE CONFIG AND NOT OFF THE FILE.**
+	# `scenario.json` names a level as a STRING and `ScenarioDef._ai_level_of` converts it
+	# with `AIProfile.IDS.find()` -- a lookup coupled to `SimPlayer.AILevel` BY POSITION,
+	# which nothing at either end says. So "the file says easy" and "an easy bot is in this
+	# match" are two different facts, and only the second one decides whether the mission
+	# fights back. Printed per bot with the profile's own `attacks` flag beside it, because
+	# *passive versus anything else* is the distinction a play-test actually feels.
+	for i in range(cfg.ai_players.size()):
+		if not cfg.ai_players[i]:
+			continue
+		var level: int = cfg.ai_levels[i]
+		var id_name: String = AIProfile.IDS[level] if level >= 0 \
+				and level < AIProfile.IDS.size() else "?"
+		# `ai_profile()` FALLS BACK TO EASY for an out-of-range level rather than handing
+		# back null, so `id_name` above is the honest reading of what the config SAYS and
+		# this is what the match will actually run. They agree here; if they ever did not,
+		# printing both is what would show it.
+		var profile := GameDataRegistry.ai_profile(level)
+		print("      player %d: AI level %d = '%s'  ->  profile '%s', attacks=%s"
+				% [cfg.player_ids[i], level, id_name, profile.id, profile.attacks])
 	for o in cfg.objectives:
 		print("      row: %s" % _describe_row(o))
 
