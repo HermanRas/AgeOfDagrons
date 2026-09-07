@@ -1074,14 +1074,30 @@ func _build_game_setup() -> Control:
 	_mode_picker = OptionButton.new()
 	_mode_picker.custom_minimum_size = _PICKER_MIN
 	_mode_picker.clip_text = true
-	# Trophy and King of the Hill are DECLARED and inert (11.2), so they are listed and
-	# disabled -- a mode that silently decided nothing would be worse than one greyed.
-	for mode in [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.TROPHY,
-			MatchConfig.Mode.KING_OF_THE_HILL]:
+	# ⚠️ **TROPHY IS SELECTABLE AS OF 2026-09-07 AND KING OF THE HILL IS STILL NOT.** This
+	# loop used to grey everything but conquest, on the sound argument that *a mode which
+	# silently decided nothing would be worse than one greyed*. That argument expired for
+	# Trophy the moment `WinConditionSystem._trophy` and `MapGen._place_trophies` landed --
+	# leaving a finished mode greyed out is the same defect in the other direction, and it
+	# is the one that makes a feature look unbuilt when it is not.
+	#
+	# **KotH is still listed and disabled** on exactly the old reasoning: it wants the
+	# zone's position as map data, `SimPlayer.score`, and the minimap ring (11.9 settled
+	# every design question about it and none of the three pieces).
+	#
+	# THE ENABLED LIST IS WRITTEN OUT RATHER THAN DERIVED, because "which modes are
+	# finished" is not a fact any data file knows -- `MatchConfig.Mode` declares all four
+	# and `WinConditionSystem` decides three of them. A `_mode_is_built()` helper reading
+	# some flag would be a second place for this to be wrong.
+	const OFFERED := [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.TROPHY,
+			MatchConfig.Mode.KING_OF_THE_HILL]
+	const UNBUILT := [MatchConfig.Mode.KING_OF_THE_HILL]
+	for mode in OFFERED:
 		_mode_picker.add_item(MatchConfig.mode_name(mode), int(mode))
-		if mode != MatchConfig.Mode.LAST_MAN_STANDING:
+		if UNBUILT.has(mode):
 			_mode_picker.set_item_disabled(_mode_picker.item_count - 1, true)
 	_mode_picker.select(0)
+	_mode_picker.item_selected.connect(_on_mode_selected)
 	column.add_child(_setting_row("Victory", _mode_picker))
 
 	# WHICH AGE EVERYBODY OPENS IN (project owner, 2026-08-30).
@@ -1721,6 +1737,31 @@ func _on_type_selected(index: int) -> void:
 	if saved < 0:
 		_type = _type_picker.get_item_id(index) as MapGenerator.Type
 	regenerate()
+
+
+## The victory condition changed.
+##
+## ⚠️ **THIS HANDLER DID NOT EXIST UNTIL 2026-09-07 AND THE PICKER WAS COMPLETELY DEAD.**
+## `_mode` was written in exactly ONE place in this file -- `_adopt_lobby_config`, which is
+## a joined client taking the host's settings -- so a host selecting a victory condition
+## changed nothing at all and `build_config()` always returned LAST_MAN_STANDING.
+##
+## **IT COULD NOT BE NOTICED WHILE THE OTHER TWO ITEMS WERE DISABLED**: a dropdown with one
+## selectable entry cannot demonstrate that choosing does nothing, and `_mode`'s default is
+## the same value the only choice would have set. Enabling Trophy (11.2) is what exposed it,
+## and the test that found it is `test_picking_trophy_reaches_the_config_and_places_a_trophy_each`
+## -- it failed on `cfg.mode` before it ever reached the trophies. **Exactly the class of
+## defect the selected-units roster and the minimap corner buttons were**: a control that
+## draws correctly, takes the tap, plays the click and is wired to nothing.
+##
+## **NO `regenerate()`**, unlike the map and seed handlers around it: the victory condition
+## does not change the map. It DOES republish the lobby, which cancels every joined
+## player's READY -- deliberately, because the rule that decides the match is a term they
+## agreed to and it has just changed under them.
+func _on_mode_selected(index: int) -> void:
+	_mode = _mode_picker.get_item_id(index) as MatchConfig.Mode
+	_publish_lobby()
+	_refresh_lobby()
 
 
 func _on_seed_changed(value: float) -> void:

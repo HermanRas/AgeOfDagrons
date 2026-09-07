@@ -66,7 +66,27 @@ func process_tick(w: SimWorld) -> void:
 				nests.append(e as SimBuilding)
 		elif e is SimUnit:
 			var u: SimUnit = e
-			if u.def_id == BABY_DEF:
+			# ⚠️ **GAIA'S HATCHLINGS ONLY, AND `owner_id == 0` IS LOAD-BEARING RATHER THAN
+			# TIDY.** This header's own rule is that *the hatchling is gaia's until it
+			# grows* -- `_start_claims` spawns it with owner 0 and `_advance_claims`
+			# DESPAWNS it to pay out, so no claim of 13.2's ever produces a
+			# player-owned `unit.dragon_baby`. One therefore cannot be this system's
+			# business, and collecting it anyway is a live bug rather than a wasted check:
+			# `_reap_orphans` kills every hatchling that is not some nest's recorded
+			# `claim_baby_id`.
+			#
+			# **`Mode.TROPHY` IS EXACTLY THAT UNIT** (11.2). A trophy is a
+			# `unit.dragon_baby` a PLAYER owns from the first tick and must protect all
+			# match, standing at their base and recorded on no nest at all -- so without
+			# this clause every trophy in the game would be killed on tick 1 and, since
+			# losing your trophy is defeat, **every player would be eliminated
+			# immediately**. That is the "on a map with no trophies, defeats everybody on
+			# tick 1" failure PLAN.md 11.2 warns about, arriving through a door nobody was
+			# watching: not the rule getting it wrong, but a different system reaping the
+			# thing the rule is about. `11.x-trophy`'s card predicted the collision
+			# (*"reaching for NestSystem is not [right] -- it would hand a player's trophy
+			# to whoever killed something"*) and this is the line that prevents it.
+			if u.def_id == BABY_DEF and u.owner_id == 0:
 				babies.append(u)
 			elif not u.alive and u.owner_id == 0 and u.last_attacker_owner > 0:
 				fresh_kills.append(u)

@@ -43,6 +43,31 @@ var winner_id: int = 0
 var objectives: Array[ObjectiveDef] = []
 var objective_player_id: int = 0
 
+## THE DEF `Mode.TROPHY` WATCHES, and the record that every player actually got one
+## (PLAN.md 11.2). `&""` means the trophy rule is INERT and is the value in every other
+## mode, every test fixture and every debug factory.
+##
+## ## IT IS A PLACEMENT RECORD, NOT A COPY OF THE ROSTER'S FLAG
+##
+## `GameDataRegistry.trophy_def_id()` answers *"which unit is the trophy"* and this answers
+## the different and more important question: *"is there a trophy match here to decide"*.
+## `MapGen._place_trophies` sets it **only after giving a trophy to every player**, and
+## leaves it empty if it could not -- so the two states this field distinguishes are
+## "everybody has one" and "nobody does", never "some do".
+##
+## ⚠️ **THAT IS THE WHOLE GUARD AGAINST 11.2's NAMED FAILURE**, which is worth quoting
+## because it is the reason this mode shipped inert for so long: *"'you lose when your
+## trophy dies', on a map with no trophies, defeats everybody on tick 1."* A rule that read
+## the roster flag directly would fire on any map, including the debug map, where only the
+## first player has a base to put one beside.
+##
+## NOT IN `state_hash()`, on the same footing as `mode`, `teams`, `objectives` and
+## `objective_player_id` above: every client builds its own world from the same
+## `MatchConfig` and the same roster (2.4a), so this is identical by construction rather
+## than by agreement. What IS hashed is the trophies themselves -- they are ordinary
+## entities, in the entity loop, like anything else that can die.
+var trophy_def_id: StringName = &""
+
 ## WHICH SIDE WON (2026-08-31), 0 for a free-for-all win and for a draw. `winner_id`
 ## still names a player -- the lowest-id survivor of the winning side -- and this is
 ## what tells a teammate who was knocked out on tick 400 that their side went on to
@@ -92,6 +117,11 @@ func setup(cfg: MatchConfig) -> void:
 	# `ObjectiveDef` is parsed once and read thereafter.
 	objectives = cfg.objectives.duplicate()
 	objective_player_id = cfg.objective_player_id
+	# CLEARED HERE AND SET BY `MapGen._place_trophies`, which runs after this. Reset
+	# explicitly because `setup()` is called on a REUSED world by several dev_preview
+	# tools -- `preview_ai_match` steps four rungs through one -- and a trophy match
+	# followed by a skirmish would otherwise leave the rule armed with nothing to watch.
+	trophy_def_id = &""
 	# A carried map decides its own size; `cfg.map_size` is the debug-map default and
 	# the fallback. Taking the map's own size means a config cannot be half-applied --
 	# a 96x96 map into a 64x64 grid would silently crop a quarter of it off.

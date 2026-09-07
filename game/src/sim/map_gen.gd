@@ -329,6 +329,104 @@ static func build(w: SimWorld, cfg: MatchConfig) -> void:
 	else:
 		build_debug_map(w)
 	_place_ai_handicaps(w)
+	_place_trophies(w, cfg)
+
+
+## One trophy per player, for `Mode.TROPHY` (PLAN.md 11.2's *"a MapGen that gives every
+## player one"*).
+##
+## ## HERE RATHER THAN IN `MapData`, BECAUSE A TROPHY IS NOT MAP CONTENT
+##
+## It is a property of the MODE, so it must appear on every map the mode is played on --
+## generated, saved, authored or the fixed debug map -- and none of those files knows what
+## a win condition is. `_place_ai_handicaps` above is the exact precedent: a per-player,
+## per-config spawn pass that runs after the map has been laid out and adds what the
+## *match* needs rather than what the *map* lists.
+##
+## 11.2 expected this to be `MapGenerator`'s job and 13.2a's `_place_nest` to be the
+## machinery. It is not: a nest is a gaia POI that has to be kept clear of every start,
+## which is genuinely hard placement arithmetic. A trophy wants the opposite -- as close to
+## its owner's base as possible -- so it is `_next_free_tile` outward from their town
+## centre, which already exists for the AI's handicap squad.
+##
+## ⚠️ **ALL OR NOTHING, AND THAT IS THE SAFETY PROPERTY OF THE WHOLE MODE.** Every player
+## gets one or nobody does, and `w.trophy_def_id` -- which is what arms the rule -- is set
+## only on success. A partial placement would be strictly worse than none: the rule defeats
+## a player who owns no trophy, so the one player the ground ran out for would be
+## eliminated on tick 1 through no fault of their own, in a match everybody else plays
+## normally. Same reasoning as `preview_author_maps._garrison` refusing to place 94 of 100
+## swordsmen.
+##
+## **AN EMPTY ROSTER FLAG IS NOT AN ERROR.** A project with no `is_trophy` unit leaves the
+## mode inert, which is where it has been since it was declared, and 11.2 argues at length
+## that inert is the safe direction to be unfinished in.
+static func _place_trophies(w: SimWorld, cfg: MatchConfig) -> void:
+	if cfg == null or cfg.mode != MatchConfig.Mode.TROPHY:
+		return
+	var def_id := GameDataRegistry.trophy_def_id()
+	if def_id.is_empty():
+		push_warning("MapGen: Mode.TROPHY, but no unit declares is_trophy."
+				+ " The trophy rule stays inert and the match is decided by conquest.")
+		return
+	if w.players.is_empty():
+		return
+
+	# EVERY TILE CHOSEN BEFORE ANYTHING IS SPAWNED, so the all-or-nothing rule above can
+	# actually be honoured -- once a trophy is in the world, taking it back out again is a
+	# despawn that other systems may already have seen.
+	var taken: Array[Vector2i] = []
+	var tiles: Array[Vector2i] = []
+	for p in w.players:
+		var tile := _next_free_tile(w, _trophy_anchor(w, p.id), taken)
+		if tile.x < 0:
+			push_warning(("MapGen: no room for player %d's trophy, so NO trophies were"
+					+ " placed and the trophy rule stays inert.") % p.id)
+			return
+		taken.append(tile)
+		tiles.append(tile)
+
+	for i in range(w.players.size()):
+		w.spawn_unit(def_id, w.players[i].id, tiles[i])
+	# ARMS THE RULE. See `SimWorld.trophy_def_id` for why the record is separate from the
+	# roster's flag, and why it is written last.
+	w.trophy_def_id = def_id
+
+
+## The rect to place `owner`'s trophy beside: their town centre, else any building of
+## theirs, else whatever they have standing, else the map's fallback origin.
+##
+## THE LADDER EXISTS FOR THE DEBUG MAP, which has ONE start position -- so players 2..8
+## have no town centre at all and get the skirmish squad instead (see `build_debug_map`).
+## Anchoring on a unit is what lets the mode, and therefore its tests, run on that map
+## rather than only on a generated one.
+##
+## IDS ARE WALKED IN SORTED ORDER, unlike `_place_ai_handicaps` next door, which can get
+## away with insertion order because it breaks on a town centre and there is exactly one.
+## "Any building" and "anything standing" can both match several, and two clients
+## disagreeing about which one anchored a trophy would put it on a different tile on each
+## of them -- a desync in the entity loop of `state_hash()` on tick 0 (PLAN.md 7.1).
+static func _trophy_anchor(w: SimWorld, owner: int) -> Rect2i:
+	var ids := w.entities.keys()
+	ids.sort()
+	var any_building: Rect2i = Rect2i(-1, -1, 0, 0)
+	var anything: Rect2i = Rect2i(-1, -1, 0, 0)
+	for id in ids:
+		var e: SimEntity = w.entities[id]
+		if e.owner_id != owner or not e.alive:
+			continue
+		if e is SimBuilding:
+			var b: SimBuilding = e
+			if b.def_id == &"building.town_center":
+				return b.footprint_rect()
+			if any_building.position.x < 0:
+				any_building = b.footprint_rect()
+		elif anything.position.x < 0:
+			anything = Rect2i(e.tile(), Vector2i.ONE)
+	if any_building.position.x >= 0:
+		return any_building
+	if anything.position.x >= 0:
+		return anything
+	return Rect2i(_fallback_origin(w), Vector2i.ONE)
 
 
 ## Populate `w` from a `MapData` (2.4b): copy the terrain, then spawn everything the

@@ -270,19 +270,40 @@ func test_the_outcome_is_part_of_the_state_hash() -> void:
 	assert_ne(w.state_hash(), other.state_hash(), "and so is elimination on its own")
 
 
-# ── the two placeholders (11.2) ─────────────────────────────────────────────
+# ── one placeholder left (11.2) ─────────────────────────────────────────────
 
-func test_trophy_mode_decides_nothing_yet() -> void:
-	# It needs a `unit.dragon_baby` def and a MapGen that hands every player one
-	# (PLAN.md 13.2). Running the four-line rule today would defeat every player on
-	# tick 1, since nobody has a trophy to lose -- so it runs nothing, and this is
-	# what says so out loud.
+## ⚠️ **THIS TEST HAS BEEN REVERSED AND IS KEPT RATHER THAN DELETED**, which is the
+## convention 13.1's air-domain test set: a pinned assertion that turns out to be wrong is
+## worth more as a record of the reversal than as a gap.
+##
+## It used to be `test_trophy_mode_decides_nothing_yet` and asserted that a TROPHY match
+## ends nothing, because *"running the four-line rule today would defeat every player on
+## tick 1, since nobody has a trophy to lose"*. Trophy was built on 2026-09-07 and the
+## first half of that sentence is now false. **The second half is still exactly true**, and
+## it is what `SimWorld.trophy_def_id` exists for -- so this world, which has no trophies
+## anywhere and was never built by `MapGen`, is precisely the case the guard is written
+## against.
+##
+## WHAT CHANGED IN THE ANSWER: an unarmed trophy match now falls back to CONQUEST instead
+## of deciding nothing. Deciding nothing made a misconfigured match unendable -- two
+## players could wipe each other out and stand in an empty world forever -- and a hang is
+## not a safe direction, it is a slower way of being broken. `test_trophy.gd` owns the
+## armed mode; this owns the unarmed one.
+func test_an_unarmed_trophy_match_falls_back_to_conquest() -> void:
 	w.mode = MatchConfig.Mode.TROPHY
+	assert_eq(w.trophy_def_id, &"",
+			"nothing placed a trophy, so the trophy rule must not be the one deciding")
 	_both_armed()[1].alive = false
 	for i in range(10):
 		w.step()
-	assert_false(w.match_over, "declared but not implemented")
-	assert_false(_player(2).defeated, "and it eliminates nobody either")
+
+	# Player 2 owns nothing, so conquest puts them out -- ELIMINATED and NOT
+	# `TROPHY_LOST`, which is the assertion that says which rule answered.
+	assert_true(_player(2).defeated, "conquest still ends a match nobody armed")
+	assert_eq(_player(2).defeat_reason, SimPlayer.Defeat.ELIMINATED,
+			"and it was elimination, not a trophy they never had")
+	assert_true(w.match_over)
+	assert_eq(w.winner_id, 1)
 
 
 func test_king_of_the_hill_decides_nothing_yet() -> void:

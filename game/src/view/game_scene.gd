@@ -1165,6 +1165,13 @@ func _defeat_phrase(reason: int) -> String:
 		# was split out to stop telling.
 		SimPlayer.Defeat.OBJECTIVE_FAILED:
 			return "failed the objective"
+		# 11.2's Trophy mode, and this one is NOT barely reachable -- it is how every
+		# defeat in that mode happens, to everybody except the last side standing. A
+		# player whose hatchling dies may still own a town centre, an army and half the
+		# map, so "has been eliminated" would be visibly untrue to anybody looking at the
+		# minimap while they read it.
+		SimPlayer.Defeat.TROPHY_LOST:
+			return "has lost their dragon"
 		_:
 			return "has been eliminated"
 
@@ -1191,6 +1198,12 @@ func _own_defeat_text(reason: int) -> String:
 		# the player may still own an army and have failed "do not lose your town centre".
 		SimPlayer.Defeat.OBJECTIVE_FAILED:
 			return "You did not complete the objective"
+		# 11.2. It says what was lost rather than that you lost, because in Trophy mode
+		# the player is very often reading this with an army still on the field -- "You
+		# were eliminated" over a screen full of your own units is the sentence that makes
+		# a working rule look broken.
+		SimPlayer.Defeat.TROPHY_LOST:
+			return "Your dragon is dead"
 		_:
 			return "You were eliminated"
 

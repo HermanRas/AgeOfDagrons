@@ -202,6 +202,62 @@ func test_the_count_picker_offers_two_through_eight() -> void:
 		assert_false(screen._count_picker.is_item_disabled(item), "%d is selectable" % n)
 
 
+func test_the_victory_picker_offers_every_mode_that_is_BUILT() -> void:
+	# ⚠️ **A FINISHED MODE LEFT GREYED IS THE SAME DEFECT AS A HALF-BUILT ONE OFFERED**, and
+	# it is the quieter of the two: the feature simply looks unbuilt. Trophy became
+	# selectable on 2026-09-07 when `WinConditionSystem._trophy` and
+	# `MapGen._place_trophies` landed, and nothing would have reported it if the picker had
+	# been left behind -- which is what this test is for.
+	#
+	# ASSERTED PER MODE BY NAME rather than by counting enabled items, so the day King of
+	# the Hill lands this fails and names it instead of quietly passing at a new total.
+	var built := {
+		MatchConfig.Mode.LAST_MAN_STANDING: true,
+		MatchConfig.Mode.TROPHY: true,
+		MatchConfig.Mode.KING_OF_THE_HILL: false,
+	}
+	for mode in built:
+		var item := screen._mode_picker.get_item_index(int(mode))
+		assert_true(item >= 0, "%s is listed" % MatchConfig.mode_name(mode))
+		if item < 0:
+			continue
+		assert_eq(screen._mode_picker.is_item_disabled(item), not bool(built[mode]),
+				"%s selectable=%s" % [MatchConfig.mode_name(mode), built[mode]])
+
+	# SCENARIO IS NOT IN THE LIST AT ALL, and that is not an omission -- it is not a thing
+	# a lobby can choose. It arrives from a campaign file (15.3), and offering it here
+	# would be a victory condition with no objectives behind it.
+	assert_eq(screen._mode_picker.get_item_index(int(MatchConfig.Mode.SCENARIO)), -1,
+			"a scenario is launched from a campaign, never picked in a lobby")
+
+
+func test_picking_trophy_reaches_the_config_and_places_a_trophy_each() -> void:
+	# The lobby's job is to produce a `MatchConfig`; the mode has to survive that trip or
+	# the picker is decoration. Then `MapGen` is what turns it into hatchlings, so both
+	# halves are asserted here rather than trusting the enum to carry itself.
+	var item := screen._mode_picker.get_item_index(int(MatchConfig.Mode.TROPHY))
+	assert_true(item >= 0)
+	if item < 0:
+		return
+	screen._mode_picker.select(item)
+	screen._mode_picker.item_selected.emit(item)
+
+	var cfg := screen.build_config()
+	assert_eq(cfg.mode, MatchConfig.Mode.TROPHY, "the picker reaches the config")
+
+	var w := SimWorld.new()
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	assert_eq(w.trophy_def_id, GameDataRegistry.trophy_def_id(), "and the rule is armed")
+	for p in w.players:
+		var held := 0
+		for e in w.entities.values():
+			if e is SimUnit and e.owner_id == p.id and e.alive \
+					and e.def_id == w.trophy_def_id:
+				held += 1
+		assert_eq(held, 1, "player %d starts with one trophy" % p.id)
+
+
 func test_more_slots_is_a_bigger_map_and_not_more_opponents() -> void:
 	# Raising the count must widen the BOARD, not silently conjure six opponents.
 	_pick_slots(8)

@@ -10,13 +10,19 @@
 ## alive, and a player whose last building fell THIS tick has lost as of this tick,
 ## not the next one. PLAN.md 5.1's tick diagram puts it in the same place.
 ##
-## TWO OF THE FOUR MODES ARE BUILT. `MatchConfig.Mode` declares all four because
-## the lobby (1.6/11.3) needs a list and because a mode axis with one value on it
-## invites the next mode to be bolted on as a boolean. `_trophy()` and
-## `_king_of_the_hill()` end no matches at all, and each says what it is still
-## missing -- the safe direction to be unfinished in. The unsafe direction is a
-## half-built rule: "you lose when your trophy is gone" evaluated on a map with no
-## trophies on it defeats everybody on tick 1.
+## THREE OF THE FOUR MODES ARE BUILT (`_trophy()` landed 2026-09-07). `MatchConfig.Mode`
+## declares all four because the lobby (1.6/11.3) needs a list and because a mode axis with
+## one value on it invites the next mode to be bolted on as a boolean.
+## `_king_of_the_hill()` still ends no matches at all and says what it is missing -- the
+## safe direction to be unfinished in.
+##
+## ⚠️ **THE UNSAFE DIRECTION IS A HALF-BUILT RULE, AND TROPHY DID NOT STOP BEING EXPOSED TO
+## IT BY BEING FINISHED.** This paragraph's own example was *"'you lose when your trophy is
+## gone' evaluated on a map with no trophies on it defeats everybody on tick 1"*, and that
+## is still precisely what would happen in a match where placement failed. What makes the
+## mode safe is not that it is built -- it is `SimWorld.trophy_def_id`, which
+## `MapGen._place_trophies` sets only once **every** player has one, and which `_trophy()`
+## refuses to run without. The rule is finished; the guard is why it can be.
 ##
 ## SCENARIO (15.2) is the fourth, and it is the only mode whose WIN lives somewhere else:
 ## `ObjectiveSystem`, which runs directly before this one. What is here is the half of
@@ -34,10 +40,13 @@ extends SimSystem
 const KOTH_TARGET_SCORE := 1000
 const KOTH_ZONE_RADIUS_TILES := 6
 
-## Trophy: what losing loses you. PLACEHOLDER -- see `_trophy()`. `unit.dragon` is
-## the nearest thing that exists in units.json; the mode wants the BABY dragon of
-## PLAN.md 13.2, which has no def, no bake and no way onto a map.
-const TROPHY_DEF_ID := &"unit.dragon"
+## ⚠️ **`TROPHY_DEF_ID` IS GONE, AND ITS ABSENCE IS THE FEATURE** (11.2, 2026-09-07). It
+## was `&"unit.dragon"` -- *"the nearest thing that exists in units.json"* -- and PLAN.md
+## 11.2 asked for exactly its removal: *"an `is_trophy` flag rather than a hardcoded id"*.
+## The def now carries the flag, `GameDataRegistry.trophy_def_id()` answers which unit it
+## is, and `SimWorld.trophy_def_id` records that a match actually placed them. So this
+## system names no dragon at all, and regicide with one of §9.2's Celtic heroes is a line
+## of JSON rather than a second win condition.
 
 
 func process_tick(w: SimWorld) -> void:
@@ -77,8 +86,17 @@ func _last_man_standing(w: SimWorld) -> void:
 	if not _world_is_populated(w):
 		return
 
-	var standing := _eliminate_the_bankrupt(w)
+	_decide_by_sides(w, _eliminate_the_bankrupt(w))
 
+
+## End the match if `standing` holds one side or none.
+##
+## SHARED BY CONQUEST AND BY TROPHY (11.2), which is why it is a function rather than two
+## copies -- the same argument `_eliminate_the_bankrupt` makes one line below its own
+## header. The two modes differ ONLY in who they eliminate; what "one side left has won"
+## means is identical, and a second copy of it would be free to drift about draws, about
+## which survivor `winner_id` names, or about whether a team number can be negative.
+func _decide_by_sides(w: SimWorld, standing: Array[int]) -> void:
 	# STANDING SIDES, which is what actually decides the match. A player on no team is
 	# their own side -- keyed by the NEGATIVE of their id, so it can never collide with a
 	# real team number and two unaligned players stay two sides. That is what makes this
@@ -244,27 +262,103 @@ static func _owners_with_anything(w: SimWorld) -> Dictionary:
 	return owners
 
 
-## PLACEHOLDER (11.2). Every player would start with a baby dragon and lose the
-## moment it dies -- regicide with a nicer mascot.
+## TROPHY (11.2, built 2026-09-07): every player starts with a dragon hatchling and is out
+## the moment it dies. Conquest's rule with one more way to lose.
 ##
-## Deliberately decides nothing, because the piece it needs is not a rule but a
-## UNIT. It wants:
+## All three things this function waited for exist. Its own list, and what answered it:
 ##
-##   1. A `unit.dragon_baby` def (units.json) -- PLAN.md 13.2 describes it as what
-##      hatches from a claimed nest on a 360 s timer, so the mode and the nest want
-##      the same new unit.
-##   2. `MapGen` giving one to every player at their start position, which the debug
-##      map cannot do for a second player at all: it has ONE start position, and
-##      everyone after the first gets the skirmish squad instead (2.4b is where real
-##      per-player starts live).
-##   3. A `is_trophy` flag or a config field naming the def, so the rule reads
-##      "lose your trophy" rather than hardcoding a unit id in a system.
+##   1. *"a `unit.dragon_baby` def"* -- landed with 13.2b, and 20% sprite scaling with it,
+##      which PLAN.md 11.2 correctly identified as the last genuinely missing piece;
+##   2. *"MapGen giving one to every player"* -- `MapGen._place_trophies`, which is a
+##      post-build spawn pass beside `_place_ai_handicaps` and not, as 11.2 expected,
+##      `MapGenerator` placement arithmetic. A trophy wants to be NEAR its owner's base,
+##      which is the opposite problem from a nest wanting to be far from everybody's;
+##   3. *"an `is_trophy` flag rather than a hardcoded id"* -- `UnitDef.is_trophy`. This
+##      function names no dragon, and `TROPHY_DEF_ID` is deleted.
 ##
-## Until then this is inert on purpose. The rule itself is four lines -- defeated
-## when `_owns_none_of(TROPHY_DEF_ID)` -- and running those four lines today would
-## defeat every player on tick 1, since nobody has a dragon to lose.
-func _trophy(_w: SimWorld) -> void:
-	pass
+## ## ⚠️ INERT UNLESS EVERY PLAYER WAS ACTUALLY GIVEN ONE, WHICH IS THE OLD WARNING KEPT
+##
+## This header used to say: *"running those four lines today would defeat every player on
+## tick 1, since nobody has a dragon to lose."* That is still exactly true of a match where
+## the trophies did not get placed -- a roster with no `is_trophy` unit, or ground too tight
+## to seat one -- so the guard is `w.trophy_def_id`, which `_place_trophies` writes **only
+## after every player has one**. Reading the roster flag here instead would arm the rule on
+## any map, and the failure would be total, instant and identical for everybody.
+##
+## ## LOSING YOUR TROPHY IS NOT ELIMINATION AND IS NOT SCORED AS IT
+##
+## `Defeat.TROPHY_LOST` on OBJECTIVE_FAILED's argument: a player whose hatchling dies may
+## still own a town centre, an army and half the map, so ELIMINATED would be true about the
+## outcome and false about how it happened -- the forfeit defect BUGS.md recorded.
+##
+## ## OWNING NOTHING IS STILL DEFEAT, AND BOTH RULES APPLY AT ONCE
+##
+## `_eliminate_the_bankrupt` runs first and unchanged, so a player wiped out entirely is
+## ELIMINATED rather than credited with losing a trophy they no longer had. `defeat()`
+## keeps the FIRST reason, so the ordering of these two is the whole of that distinction.
+func _trophy(w: SimWorld) -> void:
+	# ⚠️ **UNARMED FALLS BACK TO CONQUEST RATHER THAN DECIDING NOTHING**, and the
+	# difference matters more than it looks. Deciding nothing was the first version and it
+	# makes a misconfigured trophy match **unendable**: with no trophy to lose and the
+	# elimination rule skipped along with it, two players can wipe each other out entirely
+	# and go on standing in an empty world forever. That is a hang, and a hang is not the
+	# safe direction -- it is just a slower way of being broken.
+	#
+	# Conquest is the honest fallback: it defeats nobody for a trophy they were never
+	# given, it ends the match the ordinary way, and it is what
+	# `MapGen._place_trophies`' own warning already promises out loud ("the trophy rule
+	# stays inert and the match is decided by conquest"). The code saying something
+	# different from the warning beside it was the actual defect.
+	if w.trophy_def_id.is_empty():
+		_last_man_standing(w)
+		return
+	if w.players.size() < 2:
+		return
+	# A world with nothing in it is not a match nobody has won -- it is a match that has
+	# not been stood up. Shared with conquest and with `ObjectiveSystem` so the three
+	# cannot disagree about it on the tick that matters.
+	if not _world_is_populated(w):
+		return
+
+	var standing := _eliminate_the_bankrupt(w)
+
+	# ONE PASS FOR EVERY TROPHY IN THE WORLD, not `_owns_none_of()` per player -- the same
+	# O(players x entities) cost `_owners_with_anything` and `PopulationSystem.census`
+	# were both rewritten to undo.
+	var holders := _trophy_holders(w)
+	var left: Array[int] = []
+	for pid in standing:
+		if holders.has(pid):
+			left.append(pid)
+			continue
+		var p := w.player_for(pid)
+		if p != null:
+			p.defeat(SimPlayer.Defeat.TROPHY_LOST)
+
+	_decide_by_sides(w, left)
+
+
+## Owner ids with at least one living trophy, in one pass.
+##
+## ALIVE, like every other census in this file: a trophy's corpse lies there for
+## `SimUnit.CORPSE_TOTAL_TICKS` and a player whose hatchling is cooling on the grass has
+## lost. Counting the body would give them ten more seconds for no reason anybody could
+## explain from the screen.
+##
+## ⚠️ **GAIA'S HATCHLINGS ARE EXCLUDED BY `owner_id > 0`, AND THIS IS THE SECOND HALF OF
+## THE 13.2 COLLISION.** The claim hatchling at a dragon nest is the same def, owned by
+## gaia -- so without this clause owner 0 would appear in `holders`, which is harmless
+## today only because gaia is never in `standing`. It is written anyway, because the day
+## something puts gaia in a side this would be a rule keeping the wildlife in the match.
+## `NestSystem`'s matching `owner_id == 0` filter is the other half.
+func _trophy_holders(w: SimWorld) -> Dictionary:
+	var holders: Dictionary = {}
+	for e in w.entities.values():
+		if not e.alive or e.owner_id <= 0:
+			continue
+		if e is SimUnit and e.def_id == w.trophy_def_id:
+			holders[e.owner_id] = true
+	return holders
 
 
 ## PLACEHOLDER (11.2). A zone on the map, ringed on the minimap; whoever has the

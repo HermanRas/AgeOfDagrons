@@ -88,6 +88,29 @@ var trainable_at: Array[StringName] = []
 ## from 2, crossbowmen from 3" is one number in one place.
 var age_required: int = 1
 
+## THE UNIT `Mode.TROPHY` HANDS EVERY PLAYER AND DEFEATS THEM FOR LOSING (PLAN.md 11.2).
+##
+## ## A FLAG RATHER THAN AN ID IN A SYSTEM, WHICH 11.2 ASKS FOR BY NAME
+##
+## That row's three requirements were *"a `unit.dragon_baby` def, a MapGen that gives every
+## player one, and an `is_trophy` flag rather than a hardcoded id"*. This is the third: the
+## rule reads *"the player owns no trophy"* and never names a dragon, so a future mode --
+## regicide with one of the Celtic heroes (§9.2), capture the flag -- changes one line of
+## JSON rather than a win condition.
+##
+## ⚠️ **AT MOST ONE UNIT IN THE ROSTER MAY CARRY IT, AND `GameDataRegistry.validate()`
+## ENFORCES THAT.** *"Your trophy"* has to be a single answerable question: with two trophy
+## defs a player holding either would survive, which is not a rule anybody authored and is
+## not one this flag can express.
+##
+## ⚠️ **THE DEF IT SITS ON IS ALSO 13.2's HATCHLING, AND THE TWO JOBS ARE OPPOSITES.** A
+## claim hatchling is **gaia's**, is spawned by a death, cannot leave its nest and is
+## REPLACED by a grown dragon on a timer. A trophy is **yours from tick 1** and has to
+## survive the whole match. Sharing the def is right -- it is the same small dragon and
+## there must never be a second bake of it -- but nothing else about them generalises, and
+## `NestSystem` filters on `owner_id == 0` precisely so it cannot reap one for the other.
+var is_trophy: bool = false
+
 ## GAIA WILDLIFE (PLAN.md 4.13's hostile wolf). Present on a unit nobody trains,
 ## nobody owns and nobody pays population for -- the wolf today, the bear next.
 ##
@@ -290,6 +313,11 @@ static func from_dict(p_id: StringName, d: Dictionary) -> UnitDef:
 	u.gather_rate = GameDefs.int_map(d.get("gather_rate", {}))
 	u.trainable_at = GameDefs.name_list(d.get("trainable_at", []))
 	u.age_required = int(d.get("age_required", 1))
+	# TOP-LEVEL AND NOT INSIDE THE `wildlife` BLOCK, unlike `guards`/`herdable` below.
+	# Being a trophy is a role a MODE gives a unit, not a behaviour the unit has -- a
+	# trophy neither roams, flees, nor bites, and a trophy in a Last Man Standing match is
+	# an ordinary hatchling.
+	u.is_trophy = bool(d.get("is_trophy", false))
 
 	var wild: Variant = d.get("wildlife")
 	if wild is Dictionary:

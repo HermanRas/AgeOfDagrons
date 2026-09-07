@@ -113,15 +113,23 @@ var defeated: bool = false
 ## The snapshot has carried the FACT of a defeat since 11.1 and never the reason, so a
 ## host whose opponent's phone went into a tunnel read **"All opponents eliminated"** --
 ## true about the outcome and untrue about how it happened, and with nothing said at the
-## moment it happened either. Four reasons is the whole list the game can tell apart:
+## moment it happened either. Five reasons is the whole list the game can tell apart:
 ## `WinConditionSystem` sets ELIMINATED, a player's own press sets RESIGNED, `Net` sets
 ## DISCONNECTED for the `ResignCommand` it queues on a vanished peer's behalf (12.1e),
-## and `ObjectiveSystem` sets OBJECTIVE_FAILED for a scenario's authored `lose` row
-## (15.2). Anything else would be a distinction nothing can make.
+## `ObjectiveSystem` sets OBJECTIVE_FAILED for a scenario's authored `lose` row (15.2),
+## and `WinConditionSystem._trophy` sets TROPHY_LOST (11.2). Anything else would be a
+## distinction nothing can make.
 ##
 ## ⚠️ **OBJECTIVE_FAILED IS APPENDED, NOT INSERTED.** It travels as an int in
 ## `player_state.defeat_reason` and is folded into `state_hash()`, so inserting a member
 ## would renumber the other three and relabel every recorded and in-flight defeat.
+##
+## ⚠️ **AND SO IS TROPHY_LOST** (11.2, 2026-09-07), for the identical reason -- it went on
+## the end even though it reads better beside ELIMINATED. **It is a reason of its own on
+## exactly OBJECTIVE_FAILED's argument**: a player whose trophy dies may still own a town
+## centre, an army and half the map, so *"eliminated"* would be a true statement about the
+## outcome and a false one about how it happened, which is the forfeit defect BUGS.md
+## recorded. It is the only defeat in the game that says nothing about what you still hold.
 ##
 ## IT IS A REASON OF ITS OWN AND NOT ELIMINATED WEARING A LABEL. A player who fails
 ## *"do not lose your town centre"* may still own an army, so calling that an
@@ -132,7 +140,7 @@ var defeated: bool = false
 ## two can never disagree about whether somebody is out, and never cleared for the same
 ## reason `defeated` is not -- a reason that could flicker would take the result screen's
 ## sentence with it.
-enum Defeat { NONE, ELIMINATED, RESIGNED, DISCONNECTED, OBJECTIVE_FAILED }
+enum Defeat { NONE, ELIMINATED, RESIGNED, DISCONNECTED, OBJECTIVE_FAILED, TROPHY_LOST }
 
 var defeat_reason: int = Defeat.NONE
 

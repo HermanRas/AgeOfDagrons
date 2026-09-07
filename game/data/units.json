@@ -1053,6 +1053,33 @@
       "herdable": false
     },
 
+    "_note_trophy": [
+      "⚠️ THIS DEF NOW DOES TWO JOBS AND THEY ARE OPPOSITES. As 13.2's hatchling it is",
+      "GAIA'S, spawned by the mother's death, unable to leave its nest, and REPLACED by a",
+      "grown `unit.dragon` after 360 s. As `Mode.TROPHY`'s trophy (PLAN.md 11.2) it is",
+      "YOURS from tick 1 and losing it is defeat.",
+      "",
+      "Sharing the def is deliberate and is the cheap half: it is the same small dragon,",
+      "and `vis.dragon_baby` is `vis.dragon_rigged` at 20% precisely so there is never a",
+      "second bake of the largest atlas in the game.",
+      "",
+      "WHAT KEEPS THE TWO APART IS `owner_id`, in two places, and neither is optional:",
+      "  - `NestSystem` collects only hatchlings with `owner_id == 0`. Without that its",
+      "    `_reap_orphans` sweep kills every hatchling no nest has recorded -- which is",
+      "    every trophy in the match, on tick 1, defeating everybody.",
+      "  - `WildlifeSystem` already skips any unit that is not gaia's, so a player's",
+      "    trophy never roams, flees or adopts a post. `speed: 0` says the same thing",
+      "    twice, and it is a thing you defend rather than move.",
+      "",
+      "`is_trophy` IS TOP-LEVEL AND NOT IN THE `wildlife` BLOCK, because being a trophy is",
+      "a role a MODE assigns, not a behaviour this unit has. In Last Man Standing this",
+      "flag is read by nothing and the unit is an ordinary hatchling.",
+      "",
+      "AT MOST ONE UNIT IN THE ROSTER MAY CARRY IT and `validate()` enforces it -- 'your",
+      "trophy' has to be one answerable question."
+    ],
+    "is_trophy": true,
+
     "trainable_at": [],
     "age_required": 1
   }

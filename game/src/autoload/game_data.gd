@@ -847,6 +847,34 @@ func age_count() -> int:
 	return _ages.size()
 
 
+## The unit `Mode.TROPHY` hands every player, or `&""` if the roster declares none
+## (PLAN.md 11.2's *"an `is_trophy` flag rather than a hardcoded id"*).
+##
+## ASKED OF THE DATA RATHER THAN WRITTEN IN A SYSTEM, which is the whole point of the flag:
+## `WinConditionSystem` never names a dragon, so regicide with one of §9.2's Celtic heroes
+## is a JSON edit and not a new win condition.
+##
+## `&""` IS A LEGITIMATE ANSWER AND EVERY CALLER MUST HANDLE IT. It is what a roster with
+## the mode unbuilt returns, and *inert* is the safe direction for a mode nobody has
+## selected -- `MapGen` places nothing and the rule decides nothing, rather than
+## "you lose when your trophy dies" defeating everybody on a map with no trophies.
+##
+## SORTED, so a roster that somehow declares two answers deterministically while
+## `validate()` complains about it. Two clients picking different trophies would be a
+## desync in the one system that ends the match.
+func trophy_def_id() -> StringName:
+	if not _loaded:
+		load_all()
+	var found: Array[StringName] = []
+	for id in _units:
+		if (_units[id] as UnitDef).is_trophy:
+			found.append(id)
+	if found.is_empty():
+		return &""
+	found.sort()
+	return found[0]
+
+
 ## "II. Ember" -- the numeral and the name, which is what `ages.json`'s own note says a
 ## place with room for prose should show (the HUD badge takes the numeral alone because
 ## it has no room for words).
@@ -1197,8 +1225,35 @@ func validate() -> void:
 		if u.trainable_at.is_empty():
 			load_warnings.append("unit '%s' is trainable at no building" % id)
 
+	_validate_trophy()
 	_validate_skins()
 	_validate_market()
+
+
+## At most one unit may be the trophy (PLAN.md 11.2).
+##
+## ⚠️ **"YOUR TROPHY" HAS TO BE ONE ANSWERABLE QUESTION.** `WinConditionSystem._trophy`
+## defeats a player who owns none of the trophy def; with two such defs a player holding
+## either would survive, which is not a rule anybody authored and not one the flag can
+## express. It is a warning rather than a refusal for this file's stated reason -- a bad
+## reference should fail the suite, not stop a developer's game booting mid-edit -- and
+## four separate tests assert `load_warnings.is_empty()`, so it fails the suite loudly.
+##
+## **ZERO IS NOT A PROBLEM HERE and must not become one.** A roster with no trophy is
+## every roster this project had until 2026-09-07, and the mode is *inert* without one
+## rather than broken: `MapGen` places nothing, `SimWorld.trophy_def_id` stays empty and
+## the rule decides nothing. Warning about zero would put a permanent complaint in a
+## project that had simply not built the mode yet.
+func _validate_trophy() -> void:
+	var found: Array[StringName] = []
+	for id in _units:
+		if (_units[id] as UnitDef).is_trophy:
+			found.append(id)
+	if found.size() > 1:
+		found.sort()
+		load_warnings.append(("%d units declare is_trophy (%s) -- Mode.TROPHY defeats a"
+				+ " player who owns none of ONE def, so two makes 'your trophy' ambiguous")
+				% [found.size(), ", ".join(found)])
 
 
 ## `market.json`'s two blocks, checked against the rest of the data rather than
