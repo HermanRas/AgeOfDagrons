@@ -23,8 +23,12 @@
 ##          editor_saved.png, editor_open.png, editor_reopened.png,
 ##          palette_buildings.png, palette_units.png, palette_resources.png,
 ##          palette_search.png, palette_terrain.png, palette_plates.png,
-##          palette_placed.png
+##          palette_placed.png, undo_ready.png, undo_undone.png
 extends Node
+
+## `Editor`'s script, for its `Tool` enum. `Editor.tscn`'s root has no `class_name`, so the
+## enum is reached through the script rather than by writing the tool's index.
+const EDITOR := preload("res://src/editor.gd")
 
 const SHOT_DIR := "user://"
 const SETTLE_FRAMES := 30
@@ -153,8 +157,21 @@ func _process(_delta: float) -> void:
 		16:
 			_report("after placing from the palette")
 			_shoot("palette_placed")
+			# ⚠️ **UNDO'S OWN VISUAL QUESTION (16.2a): CAN AN AUTHOR TELL THERE IS UNDO, AND
+			# TELL WHEN THERE IS NOT?** The tests prove the stack and both buttons' `disabled`
+			# flags. What they cannot judge is whether a greyed Undo is distinguishable from a
+			# live one at this theme's contrast -- and a shortcut nobody can see is a feature
+			# nobody uses, which is the whole of what 16.2a is about.
+			_drag_a_stroke()
+		17:
+			_report_history("after a drag along the bank")
+			_shoot("undo_ready")
+			_undo_once()
+		18:
+			_report_history("after pressing Undo")
+			_shoot("undo_undone")
 			print("")
-			print("OK — thirteen shots written. Look at them: the arithmetic is tested, the"
+			print("OK — fifteen shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -343,6 +360,51 @@ func _place_from_the_palette() -> void:
 	if _editor.document().data.entities.size() != after:
 		printerr("  an overlapping placement was ACCEPTED")
 	_hold(UI_FRAMES)
+
+
+## ── undo (16.2a) ────────────────────────────────────────────────────────────
+
+## Paint a run of sand along the river's east bank as ONE gesture.
+##
+## ⚠️ **THROUGH THE CANVAS'S OWN STROKE SIGNALS**, not by calling `begin_stroke()` on the
+## document. Those signals are the seam the mouse press and release actually use, so this is
+## the only check that the editor is listening to them at all — a preview that opened the
+## stroke itself would photograph a coalesced step whether or not a real drag produces one.
+func _drag_a_stroke() -> void:
+	_editor.set_brush(SimMap.Terrain.SAND)
+	_editor.set_tool(EDITOR.Tool.PAINT)
+	var before: int = _editor.document().history.depth()
+	(_editor._canvas as MapCanvas).stroke_began.emit()
+	for y in range(24, 60):
+		_editor.apply_tool(Vector2i(58, y))
+	(_editor._canvas as MapCanvas).stroke_ended.emit()
+	var after: int = _editor.document().history.depth()
+	if after != before + 1:
+		printerr("  a 36-tile drag became %d undo steps, not one" % (after - before))
+	_hold(UI_FRAMES)
+
+
+## Press Undo the way the button does.
+func _undo_once() -> void:
+	_editor.undo()
+	_hold(UI_FRAMES)
+
+
+## The stack, and both buttons' state.
+##
+## **PRINTED AS WELL AS PHOTOGRAPHED**, for the same reason the Open list is: the shot says
+## whether a disabled button LOOKS disabled, and this says whether it IS. Neither answers the
+## other's question, and the pair is what caught the palette's inert-but-blank tint dropdown in
+## 16.3 — where the blankness hid the inertness.
+func _report_history(what: String) -> void:
+	var history: UndoStack = _editor.document().history
+	print("%s: %d steps deep, %d redoable" % [what, history.depth(), history.redo_depth()])
+	print("  undo button: %s — \"%s\"" % [
+			"OFF" if (_editor._undo_button as Button).disabled else "live",
+			history.undo_label()])
+	print("  redo button: %s — \"%s\"" % [
+			"OFF" if (_editor._redo_button as Button).disabled else "live",
+			history.redo_label()])
 
 
 func _clean_up_the_saved_map() -> void:

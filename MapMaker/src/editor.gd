@@ -5,9 +5,12 @@
 ## 16.0's picker and play it. Everything that makes it a comfortable editor is a later row and
 ## is deliberately absent:
 ##
-##   - **undo is 16.2a**, and the whole of this screen's mutation already funnels through
+##   - ~~**undo is 16.2a**, and the whole of this screen's mutation already funnels through
 ##     `MapDocument`, which is what makes that row a stack of inverted calls rather than an
-##     archaeology exercise;
+##     archaeology exercise;~~
+##     ✅ **LANDED 2026-09-08.** Two buttons on the tool row, `Ctrl+Z` / `Ctrl+Y`, and a drag
+##     that counts as one step — see `_input()` for why the shortcut is here and not on the
+##     canvas, and `MapDocument.begin_stroke()` for why a stroke is one step;
 ##   - ~~**the object palette is 16.3** — there is no way to place a house or a tree here, only
 ##     a start, and `StartLayout` explains why a start had to come with its base;~~
 ##     ✅ **LANDED 2026-09-08.** `ObjectPalette` down the left, and with it the PLACE and ERASE
@@ -55,6 +58,11 @@ var _width: SpinBox = null
 var _height: SpinBox = null
 var _player_picker: OptionButton = null
 var _tool_buttons: Dictionary = {}
+
+## Undo and redo (16.2a). Held because their `disabled` and their tooltips both track the
+## stack, and `_refresh_undo()` is the one place that does it.
+var _undo_button: Button = null
+var _redo_button: Button = null
 
 ## The Open overlay (16.4a) and its parts.
 var _open_overlay_panel: Control = null
@@ -139,6 +147,133 @@ func show_document(doc: MapDocument) -> void:
 	_canvas.show_document(doc)
 	_refresh_players()
 	_refresh_status()
+
+
+# ── undo (PLAN.md 16.2a) ────────────────────────────────────────────────────
+
+## `Ctrl+Z`, `Ctrl+Y` and `Ctrl+Shift+Z`.
+##
+## ⚠️ **`_input` ON THE SCREEN — NOT `_gui_input` ON THE CANVAS, NOT `_shortcut_input`, NOT
+## `Button.shortcut`.** 16.2a's card names the trap (*"the palette's search `LineEdit` takes
+## focus and swallows it"*) and Godot's input order is the reason none of the other three work:
+## `Node._input` runs FIRST, before the GUI pass; `Control._gui_input` is the GUI pass; and
+## `_shortcut_input` — which is what a `Button.shortcut` is dispatched from — runs after it.
+## `LineEdit` handles `Ctrl+Z` itself as its own text undo, so anything at or after the GUI
+## pass gets nothing at all while that field has focus. Same shape as the HUD `Control` that
+## ate three build buttons (PLAN.md §8): the handler was fine and never ran.
+##
+## ⚠️ **AND THEN IT HANDS `Ctrl+Z` BACK when a text field really does have focus**, which is
+## the other half of being right rather than merely winning. The name field holds the map's
+## name and the size boxes hold numbers; an author mid-word in one of them means *undo my
+## typing*, and stealing it would make those fields feel broken while the map jumped behind
+## them. Clicking the canvas grabs focus (`MapCanvas._ready()` sets `FOCUS_CLICK`), so touching
+## the map is what gives the shortcut back to the map — there is no extra rule to remember.
+func _input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	# ECHOES DROPPED: a held Ctrl+Z would otherwise unwind the whole stack in a second, which
+	# is a keyboard repeat rate deciding how much work comes back.
+	if key == null or not key.pressed or key.echo or not key.ctrl_pressed:
+		return
+	# THE OPEN DIALOG IS MODAL, and that has to include the keyboard. Undoing behind a dialog
+	# would change the map the author is about to replace with a different one.
+	if _open_overlay_panel != null and _open_overlay_panel.visible:
+		return
+	if _typing():
+		return
+	match key.keycode:
+		KEY_Z:
+			# CTRL+SHIFT+Z IS REDO, the convention Ctrl+Y is the other half of. Both, because
+			# which one a person reaches for depends on what else they use.
+			if key.shift_pressed:
+				redo()
+			else:
+				undo()
+		KEY_Y:
+			redo()
+		_:
+			return
+	if is_inside_tree():
+		# CONSUMED, so the keystroke does not also reach anything behind this screen.
+		get_viewport().set_input_as_handled()
+
+
+## Whether a text field has the keyboard.
+##
+## A `SpinBox` holds a `LineEdit` as a child and that child is what takes focus, so this one
+## test covers the name field, the palette's search box and both size boxes.
+func _typing() -> bool:
+	if not is_inside_tree():
+		return false
+	var focused := get_viewport().gui_get_focus_owner()
+	return focused is LineEdit or focused is TextEdit
+
+
+## Take the last act back.
+func undo() -> void:
+	if _document == null:
+		return
+	var what := _document.undo()
+	if what.is_empty():
+		# ⚠️ **A KEYSTROKE THAT DOES NOTHING LOOKS LIKE A BROKEN TOOL**, and the bottom of the
+		# stack is exactly where an author presses hardest. Same argument as the `WILL NOT FIT`
+		# notice on a refused placement.
+		_notice("NOTHING TO UNDO", _TEXT)
+		return
+	_after_history("UNDID", what)
+
+
+func redo() -> void:
+	if _document == null:
+		return
+	var what := _document.redo()
+	if what.is_empty():
+		_notice("NOTHING TO REDO", _TEXT)
+		return
+	_after_history("REDID", what)
+
+
+## Everything on screen that an undo can have changed.
+##
+## ⚠️ **THE PLAYER PICKER IS THE ONE AN UNDO LEAVES STALE.** Undoing a `place_start` takes the
+## start off the map, and the picker's ✓ marks are the only place an author can see which
+## players have one — so a redraw without this shows P1 ticked over a map with no P1 start,
+## and the next `Place start` looks like it did nothing.
+func _after_history(verb: String, what: String) -> void:
+	_refresh_players()
+	_canvas.queue_redraw()
+	_notice("%s — %s" % [verb, what], _GOOD)
+	_refresh_status()
+
+
+## The two buttons, from the two stacks.
+##
+## ⚠️ **CALLED FROM `_refresh_status()` RATHER THAN FROM EACH MUTATION SITE**, deliberately.
+## There are nine places that change the stack — four tools, Clear start, New, Open, Save,
+## and undo itself — and the tenth would be the one that got forgotten, leaving a button
+## enabled with nothing behind it. That is §6's row about the server browser's JOIN, and the
+## fix that actually holds is one refresh point on the path everything already goes through.
+## `BaseButton.set_disabled` ignores a write that changes nothing, so the hover path pays
+## almost nothing for it.
+func _refresh_undo() -> void:
+	if _undo_button == null or _redo_button == null:
+		return
+	var history: UndoStack = _document.history if _document != null else null
+	# ⚠️ **`disabled` COMES FROM `can_undo()` AND THE TOOLTIP FROM THE LABEL — never one from
+	# the other.** Setting the button's state from "is there a sentence to print" is verbatim
+	# how the server browser's JOIN shipped enabled with nothing to join (§6). The two happen
+	# to agree today, and the point is that the button does not depend on their agreeing.
+	_undo_button.disabled = history == null or not history.can_undo()
+	_redo_button.disabled = history == null or not history.can_redo()
+	_undo_button.tooltip_text = _shortcut_hint("Ctrl+Z", "undo",
+			history.undo_label() if history != null else "")
+	_redo_button.tooltip_text = _shortcut_hint("Ctrl+Y", "redo",
+			history.redo_label() if history != null else "")
+
+
+static func _shortcut_hint(keys: String, verb: String, what: String) -> String:
+	if what.is_empty():
+		return "%s — nothing to %s" % [keys, verb]
+	return "%s — %s %s" % [keys, verb, what]
 
 
 # ── File ▸ Open (PLAN.md 16.4a) ─────────────────────────────────────────────
@@ -469,6 +604,18 @@ func _build_ui() -> void:
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.hovered.connect(_on_hovered)
 	_canvas.painted.connect(apply_tool)
+	# A DRAG IS ONE UNDO STEP (16.2a). `MapDocument.begin_stroke()` carries the argument; the
+	# canvas reports the two ends of the gesture and nothing about what it meant.
+	_canvas.stroke_began.connect(func() -> void:
+			if _document != null:
+				_document.begin_stroke())
+	_canvas.stroke_ended.connect(func() -> void:
+			if _document != null:
+				_document.end_stroke()
+			# THE BUTTONS ONLY COME ALIVE HERE for a drag, because nothing is on the stack until
+			# the stroke closes -- so without this refresh Undo stays greyed out until the next
+			# hover happens to run `_refresh_status()`.
+			_refresh_status())
 	# A wheel moves neither the pointer's tile nor the map, so without this the zoom in the
 	# status line stays at whatever it was the last time something else refreshed it. Found
 	# by reading a screenshot that said 0.23x while the canvas was at 1.20x.
@@ -542,6 +689,18 @@ func _tool_row() -> Control:
 	# the same name and the same `MapCanvas.TERRAIN_COLOURS` swatch, so nothing about the
 	# information went — only the always-visible part, and a tab is one click.
 
+	# ⚠️ **BUTTONS AS WELL AS A SHORTCUT, and the buttons are the half that matters more.** A
+	# `Ctrl+Z` with nothing on screen is undiscoverable -- an author who does not know the tool
+	# has undo behaves like an author who has none, which is the whole failure 16.2a is about --
+	# and a disabled button is also the only *visible* statement that there is nothing to take
+	# back. They carry the shortcut in their tooltip rather than in their label, so the row
+	# does not grow by forty pixels of parenthesis.
+	_undo_button = _button("Undo", func() -> void: undo())
+	_redo_button = _button("Redo", func() -> void: redo())
+	row.add_child(_undo_button)
+	row.add_child(_redo_button)
+	row.add_child(_separator())
+
 	# ONE BUTTON PER TOOL, from the enum's own members, so a fifth tool cannot be added
 	# without a button appearing -- the same argument as the brush row above, which builds
 	# itself from `SimMap.Terrain`.
@@ -598,6 +757,9 @@ func _on_hovered(_tile: Vector2i) -> void:
 
 
 func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
+	# BEFORE THE EARLY RETURNS, so the buttons are right even in the states this function has
+	# nothing to say about -- see `_refresh_undo()` on why the refresh lives here at all.
+	_refresh_undo()
 	if _status == null:
 		return
 	if not problems.is_empty():
@@ -624,8 +786,10 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		"zoom %.2fx" % _canvas.zoom(),
 	]
 	if hover.x >= 0:
+		# THE NAME COMES FROM `MapDocument.terrain_name()`, which is also what labels an undo
+		# step -- so "tile 40,12 — Water Deep" and "undo paint Water Deep" cannot disagree.
 		bits.append("tile %d,%d — %s" % [hover.x, hover.y,
-				str(SimMap.Terrain.keys()[_document.data.terrain_at(hover)]).capitalize()])
+				MapDocument.terrain_name(_document.data.terrain_at(hover))])
 	# ⚠️ **WHAT THE NEXT CLICK WILL DO, IN THE TOOL'S OWN WORDS.** With four tools and a
 	# palette, "click" means five different things and the toolbar shows only which button is
 	# down. `_document.entities.size()` going up by one is not something an author watching a
@@ -638,7 +802,13 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		Tool.ERASE:
 			bits.append("click to erase (starts are cleared with Clear start)")
 		Tool.PAINT:
-			bits.append(_palette.describe())
+			# ⚠️ **THE BRUSH, NOT THE PALETTE'S SELECTION — AND IT USED TO BE THE OTHER WAY.**
+			# This read `_palette.describe()`, which only says "brush: …" while the palette is on
+			# its Terrain tab. So an author who picked a building and then pressed `Brush` was
+			# told the next click would *"place: Town Center (P1)"* when it would paint grass.
+			# Found in `undo_ready.png`, which armed the two independently for the first time.
+			# The palette does not drive this tool, so it does not get to describe it.
+			bits.append("brush: %s" % MapDocument.terrain_name(_brush))
 	if not _document.dir.is_empty():
 		# ⚠️ **"FILE", NOT "SAVED TO", AND THE FOLDER'S PARENT WHEN IT IS NOT OURS.** Since
 		# 16.4a a document's directory can be one this tool never wrote -- a scenario's, most

@@ -80,6 +80,19 @@ signal hovered(tile: Vector2i)
 ## it; the canvas has no opinion and holds no tool state.
 signal painted(tile: Vector2i)
 
+## The left button went down, and came up again (PLAN.md 16.2a).
+##
+## ⚠️ **THE CANVAS IS THE ONLY THING THAT KNOWS WHERE A GESTURE BEGINS AND ENDS**, which is why
+## undo needed two more signals rather than being able to work it out downstream. `painted`
+## arrives per tile and a stroke across a coastline is hundreds of them — indistinguishable,
+## from the editor's side, from hundreds of separate clicks. So the pair of presses is reported
+## as such and `MapDocument.begin_stroke()` turns the run into one undo step.
+##
+## **STILL NO TOOL STATE HERE.** These say what the mouse did, not what it meant; the editor
+## goes on being the only thing that knows a tool is armed.
+signal stroke_began
+signal stroke_ended
+
 ## The pan or zoom moved.
 ##
 ## ⚠️ **THIS EXISTS BECAUSE THE STATUS LINE WAS LYING, and a screenshot is what caught it.**
@@ -235,7 +248,19 @@ func _button(e: InputEventMouseButton) -> void:
 				# Focus needs a tree; the suite drives presses on a canvas without one.
 				if is_inside_tree():
 					grab_focus()
+				# ⚠️ **BEFORE THE FIRST TILE, so the step is open when it arrives.** The press
+				# paints immediately (that is what makes a single click place a single thing),
+				# so a stroke announced afterwards would leave the first tile of every gesture
+				# in an undo step of its own -- and undoing a drag would leave one tile painted.
+				stroke_began.emit()
 				_emit_paint(e.position)
+			else:
+				# ⚠️ **A RELEASE REACHES THIS CONTROL EVEN WHEN THE POINTER HAS LEFT IT**, because
+				# the viewport keeps sending to whichever Control took the press until the button
+				# comes up. That is what makes closing the step here reliable -- and
+				# `MapDocument.begin_stroke()` still closes any stale one, for the cases the
+				# viewport cannot cover (a window losing focus mid-drag).
+				stroke_ended.emit()
 		MOUSE_BUTTON_MIDDLE:
 			# MIDDLE-DRAG PANS, not left-drag: left is the tool, and a canvas where the
 			# paint gesture and the pan gesture are the same one cannot do both.

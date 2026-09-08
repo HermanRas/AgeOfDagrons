@@ -9,14 +9,18 @@
 ##   - **where it saves**, so Save is not a file dialog every time;
 ##   - **whether it is dirty**, so a tool can eventually refuse to lose work;
 ##   - **one funnel for every mutation.** Every change to the map goes through a method
-##     here, which is what makes 16.2a's undo a list of inverted calls rather than an
+##     here, which is what makes 16.2a's undo a stack of recorded states rather than an
 ##     archaeology exercise across the whole editor. `Command`/`validate()`/apply is the
 ##     same shape the sim uses for exactly this reason (PLAN.md §4).
 ##
 ## ⚠️ **SO: NOTHING OUTSIDE THIS CLASS MAY WRITE TO `data` DIRECTLY.** Reading it is fine and
-## the canvas does nothing else. The day undo lands, a stray `document.data.set_terrain(...)`
-## is a change the stack never saw and cannot take back — and it will look like undo being
+## the canvas does nothing else. Since 16.2a a stray `document.data.set_terrain(...)` is a
+## change the undo stack never saw and cannot take back — and it will look like undo being
 ## broken rather than like a missed call site.
+##
+## **THE ONE OTHER WRITER IS `MapEdit`, and it is not an exception to the rule so much as the
+## rule running in reverse:** it only ever restores bytes and lists that a mutation here
+## recorded on the way past. Nothing hands it a change of its own.
 class_name MapDocument
 extends RefCounted
 
@@ -45,7 +49,25 @@ var dir: String = ""
 var map_name: String = ""
 
 ## True when there are changes `save()` has not written.
+##
+## Set by every mutation and cleared by `save()`, as it always was — and since 16.2a also
+## recomputed by `undo()`/`redo()` from `history.at_clean_point()`, because undoing back to
+## the last save genuinely does make the map match its file again. See `UndoStack`.
 var dirty := false
+
+## Undo and redo (PLAN.md 16.2a). One stack per document: you cannot undo past "this is a
+## different map", so `create()` and `open()` each start with an empty one.
+var history := UndoStack.new()
+
+## The step currently being recorded into, or null between acts.
+##
+## **A STEP IS OPENED AND CLOSED BY THE MUTATION ITSELF** unless a stroke is holding one open,
+## which is what makes a drag one undo entry and a single call from a test or a `dev/` script
+## also exactly one. See `_open()`.
+var _step: MapEdit = null
+
+## True while a mouse-drag is holding `_step` open. See `begin_stroke()`.
+var _step_held := false
 
 ## What was wrong with the map the last time it was SAVED — not what stopped it saving.
 ##
@@ -134,7 +156,108 @@ static func open(dir_path: String, out_problems: Array[String]) -> MapDocument:
 	doc.header = MapFile.read_header(dir_path, out_problems)
 	doc.map_name = MapSources.map_name_in(doc.header, dir_path.get_file())
 	doc.dirty = false
+	# THE FILE IS THE CLEAN POINT, at depth zero. Without this an author who opens a map, makes
+	# two edits and undoes both is told the map is still unsaved -- true of the flag's old
+	# meaning ("has anything been done") and false of the one that matters.
+	doc.history.mark_clean()
 	return doc
+
+
+# ── undo (PLAN.md 16.2a) ────────────────────────────────────────────────────
+
+## Begin a gesture: everything until `end_stroke()` becomes ONE undo step.
+##
+## ⚠️ **THIS IS THE HALF OF UNDO THAT MAKES IT USABLE RATHER THAN MERELY PRESENT.** A stroke
+## across a coastline is hundreds of `paint()` calls; one step each means taking back a
+## mis-drag is hundreds of Ctrl+Z presses, and `UndoStack.LIMIT` holds less than one gesture.
+## The card's own example — *"a mis-drag across a painted coastline is otherwise
+## unrecoverable"* — is unrecoverable in exactly that way.
+##
+## **IT CLOSES ANY STROKE ALREADY OPEN FIRST**, so a mouse-release that never arrives (the
+## pointer leaving the window, a dialog stealing the button) costs one over-large undo step
+## rather than a step that grows for the rest of the session.
+##
+## No label: the first mutation inside names the step. See `_open()`.
+func begin_stroke() -> void:
+	end_stroke()
+	_step = MapEdit.new("")
+	_step_held = true
+
+
+## End the gesture and put it on the stack. Idempotent — see `begin_stroke()`.
+func end_stroke() -> void:
+	_step_held = false
+	_flush()
+
+
+## Take the last step back. Returns what it undid, or "" when there was nothing.
+##
+## **THE OPEN STROKE IS CLOSED FIRST.** A keyboard event can arrive with the mouse button
+## still down — Ctrl+Z mid-drag — and undoing the step *before* the one still accumulating
+## would interleave the two: the open step lands on the stack afterwards, on top of a map it
+## was not recorded against.
+func undo() -> String:
+	end_stroke()
+	var step := history.take_undo()
+	if step == null:
+		return ""
+	step.undo_into(data)
+	dirty = not history.at_clean_point()
+	return step.describe()
+
+
+func redo() -> String:
+	end_stroke()
+	var step := history.take_redo()
+	if step == null:
+		return ""
+	step.redo_into(data)
+	dirty = not history.at_clean_point()
+	return step.describe()
+
+
+## Open a step for `p_label`, or join whichever is already open.
+##
+## Returns true when the CALLER owns the step and must `_flush()` it — false when a stroke or
+## an outer mutation is holding it, in which case that one will. `place_start()` calls
+## `remove_start()` inside its own step and relies on the second answer; a drag relies on the
+## first being false for every tile after the press.
+##
+## **THE FIRST ACT IN A STEP NAMES IT.** A stroke is opened by a mouse-press that does not yet
+## know whether the author is about to paint sand or place a dock, so the labels live in the
+## mutations — one place — rather than being computed a second time next to the tool enum.
+func _open(p_label: String) -> bool:
+	if _step != null:
+		if _step.label.is_empty():
+			_step.label = p_label
+		return false
+	_step = MapEdit.new(p_label)
+	return true
+
+
+## Close the open step and push it, unless a stroke is still holding it.
+func _flush() -> void:
+	if _step == null or _step_held:
+		return
+	var step := _step
+	_step = null
+	# SEALED HERE AND NOWHERE ELSE -- `MapEdit.close()` explains why the "after" snapshot cannot
+	# be left to the six mutations to remember.
+	step.close(data)
+	if step.changes_anything():
+		history.push(step)
+
+
+## `SimMap.Terrain`'s name for a kind, for a label a person reads.
+##
+## Shared with the editor's status line rather than written twice: `keys()` is indexed by the
+## enum's value, so a kind from outside it would be an out-of-bounds read — hence the guard,
+## which is also the only thing that makes this safe to call on a byte read from a file.
+static func terrain_name(kind: int) -> String:
+	var keys := SimMap.Terrain.keys()
+	if kind < 0 or kind >= keys.size():
+		return "terrain %d" % kind
+	return str(keys[kind]).capitalize()
 
 
 # ── mutation (the only writers) ─────────────────────────────────────────────
@@ -148,8 +271,15 @@ static func open(dir_path: String, out_problems: Array[String]) -> MapDocument:
 func paint(tile: Vector2i, kind: int) -> bool:
 	if not data.in_bounds(tile) or data.terrain_at(tile) == kind:
 		return false
+	# RECORDED BEFORE THE WRITE, obviously, but note that the early return above is what keeps
+	# the record honest as well as cheap: a repaint of the same kind never reaches here, so a
+	# step cannot fill with no-op diffs and `MapEdit`'s reverse-order rule has nothing to undo.
+	var mine := _open("paint %s" % terrain_name(kind))
+	_step.terrain_change(data.index_of(tile), data.terrain_at(tile), kind)
 	data.set_terrain(tile, kind)
 	dirty = true
+	if mine:
+		_flush()
 	return true
 
 
@@ -168,12 +298,20 @@ func paint(tile: Vector2i, kind: int) -> bool:
 func place_start(player: int, centre: Vector2i) -> bool:
 	if player < 1 or not data.in_bounds(centre):
 		return false
+	# ONE STEP FOR BOTH HALVES, which is the undo side of the same argument the comment above
+	# makes: `remove_start()` records into this step rather than opening its own, so taking back
+	# a re-placed start restores the cluster that was there instead of leaving the map with
+	# neither. `MapEdit.lists_before()`'s guard is what makes the nesting safe.
+	var mine := _open("place P%d's start" % player)
+	_step.lists_before(data)
 	remove_start(player)
 	while data.starts.size() < player:
 		data.starts.append(Vector2i(-1, -1))
 	data.starts[player - 1] = centre
 	StartLayout.place(data, player, centre)
 	dirty = true
+	if mine:
+		_flush()
 	return true
 
 
@@ -192,6 +330,8 @@ func place_start(player: int, centre: Vector2i) -> bool:
 ## the start" instead is the tempting alternative and is worse: it would eat the author's own
 ## trees the moment 16.3 lets them place any.
 func remove_start(player: int) -> void:
+	var mine := _open("clear P%d's start" % player)
+	_step.lists_before(data)
 	if player >= 1 and player <= data.starts.size():
 		data.starts[player - 1] = Vector2i(-1, -1)
 	var kept: Array[Dictionary] = []
@@ -207,11 +347,28 @@ func remove_start(player: int) -> void:
 	while not data.starts.is_empty() and data.starts[data.starts.size() - 1] == Vector2i(-1, -1):
 		data.starts.resize(data.starts.size() - 1)
 	dirty = true
+	if mine:
+		# **NOTHING IS PUSHED WHEN NOTHING WENT.** `Clear start` on a player who never had one
+		# still runs every line above, and `MapEdit.changes_anything()` is what stops that
+		# becoming an undo step the author cannot see the effect of taking back.
+		_flush()
 
 
+## Repaint the whole map. Not on a button today — `dev/author_map.gd` and the tests use it.
+##
+## The diff is the tiles that actually differ rather than the whole buffer, so a fill over a
+## map that is already mostly grass records almost nothing. On the largest map with the most
+## varied terrain it records 65,536 changes, which is 393 KB and one loop over the buffer —
+## paid on a deliberate act nothing calls in a drag.
 func fill_all(kind: int) -> void:
+	var mine := _open("fill with %s" % terrain_name(kind))
+	for i in data.terrain.size():
+		if data.terrain[i] != kind:
+			_step.terrain_change(i, data.terrain[i], kind)
 	data.fill_terrain(kind)
 	dirty = true
+	if mine:
+		_flush()
 
 
 ## Put one thing on the map at `tile` (PLAN.md 16.3). Returns true if it went down.
@@ -251,8 +408,15 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 		# run off the board -- and `MapGen.build_from()` would place it, half in the void.
 		if not data.in_bounds(t) or claimed.has(t):
 			return false
+	# OPENED AFTER THE REFUSALS, so a click on occupied ground records nothing at all rather
+	# than an empty step -- the author's next Ctrl+Z should reach the last thing that landed,
+	# not the last thing they tried.
+	var mine := _open("place %s" % GameDataRegistry.display_name(def_id))
+	_step.lists_before(data)
 	data.add_entity(def_id, player, tile, size_class)
 	dirty = true
+	if mine:
+		_flush()
 	return true
 
 
@@ -284,8 +448,14 @@ func remove_entity_at(tile: Vector2i) -> int:
 		else:
 			kept.append(e)
 	if removed > 0:
+		# THE SNAPSHOT IS TAKEN HERE, after `kept` is built and before it is assigned, which is
+		# the only window in which `data.entities` still holds the state to restore.
+		var mine := _open("erase %d thing%s" % [removed, "" if removed == 1 else "s"])
+		_step.lists_before(data)
 		data.entities = kept
 		dirty = true
+		if mine:
+			_flush()
 	return removed
 
 
@@ -320,6 +490,12 @@ func seats() -> int:
 ## installing content is the game's job.
 func save(maps_dir: String) -> Array[String]:
 	var problems: Array[String] = []
+	# ⚠️ **AN OPEN STROKE IS CLOSED BEFORE ANYTHING IS WRITTEN.** Save is reachable from the
+	# keyboard and from a button, so it can arrive with the mouse still down mid-drag -- and
+	# the tiles painted so far are about to be in the file. Leaving the step open would put
+	# them on the stack AFTER the save point, so the first Ctrl+Z would take back changes that
+	# are already saved while the tool reported no unsaved work.
+	end_stroke()
 	# CLEARED FIRST, so a stale warning from a previous save cannot outlive the fault it was
 	# about -- the same reason the editor's notice line is rewritten rather than appended to.
 	warnings = []
@@ -346,6 +522,11 @@ func save(maps_dir: String) -> Array[String]:
 	if problems.is_empty():
 		dir = target
 		dirty = false
+		# WHERE THE FILE NOW SITS ON THE STACK. The history is deliberately NOT cleared: an
+		# author can still take back what they just saved, which is the point of undo surviving
+		# a save at all -- they save, look at it, and change their mind. `UndoStack` explains
+		# what happens to this mark when the branch holding it is discarded.
+		history.mark_clean()
 		# AUDITED AFTER A SUCCESSFUL WRITE, not before it. An author who has been told their
 		# map is thin should still have the file: refusing to write is how you lose work over
 		# an opinion, and 16.3's palette is where a deliberate hand-built economy stops

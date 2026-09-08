@@ -462,7 +462,7 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 13 screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 15 screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
 
@@ -658,7 +658,89 @@ atlases, and the PLACE/ERASE tools that give its selection somewhere to go. **Ma
   it. And **six of those eleven are CARCASSES**, which are runtime spawns from hunting and carry
   no flag distinguishing them, so an author's Resource tab is majority things nobody would place.
   **Not filtered by a hardcoded id list** — that would be a second opinion about the roster; it is
-  a question for the owner instead.
+  a question for the owner instead. ✅ **BOTH RULED AND BUILT, same day** (`2a0535a`): eleven real
+  `name` fields, and `placeable: false` on the six carcasses (*"no placement of carcasses is
+  acceptable"*). The flag went in **`game/data/resources.json`, not in `ObjectPalette`** — a
+  `_carcass` pattern match in the tool would filter a future `res.horse_carcass` by luck and miss
+  `res.whale_meat` entirely, neither announcing itself. It is read off the raw JSON rather than
+  added to `ResourceDef`, because nothing in `game/src` needs it and that file is a hash-checked
+  copy. **`resource_ids()` is deliberately NOT filtered** — the roster's size and what an author
+  may place are two facts, and `Boot`'s report wants the first. Resource tab: 11 rows → 5.
+
+### 16.2a — UNDO/REDO, DONE 2026-09-08
+
+`MapEdit` (one step), `UndoStack` (two stacks and the save point), `MapDocument.undo()/redo()`,
+two buttons and `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z`. **MapMaker 206/206**, up 38.
+
+- ⚠️ **THE CARD'S ONE HARD CONSTRAINT HAS A LARGER SHAPE THAN IT LOOKS.** It says *"`Ctrl+Z` must
+  not be an `_input` handler on the canvas — the palette's search `LineEdit` takes focus and
+  swallows it"*. The three obvious alternatives are all **also** wrong, and for one reason:
+  Godot's order is `_input` → `Control._gui_input` → `_shortcut_input` → `_unhandled_input`, and
+  `LineEdit` eats `Ctrl+Z` in the GUI pass as its own text undo. So `_gui_input`, `_shortcut_input`
+  **and `BaseButton.shortcut`** (which is dispatched from `_shortcut_input`) all get nothing while
+  that field has focus. **The working answer is `_input` on the SCREEN** — first in the order, and
+  reached whatever has focus. The canvas was never the problem; being *after the GUI* was.
+- ⚠️ **AND THEN IT HANDS THE KEY BACK when a text field genuinely has focus** (`_typing()`:
+  `gui_get_focus_owner() is LineEdit or TextEdit`, which covers the name field, the search box and
+  both `SpinBox`es, since a `SpinBox`'s child `LineEdit` is what takes focus). Winning the key
+  unconditionally would undo the *map* while an author was mid-word in the map's *name*. Clicking
+  the canvas grabs focus, so touching the map is what returns the shortcut to the map.
+- ⚠️ **A DRAG IS ONE STEP, AND WITHOUT THAT THE FEATURE DOES NOT EXIST.** A stroke across a
+  coastline is hundreds of `paint()` calls; one step each means the card's own example (*"a
+  mis-drag across a painted coastline"*) needs hundreds of Ctrl+Z presses and **does not fit in
+  the stack at all** at `LIMIT = 100`. `MapCanvas` gained `stroke_began`/`stroke_ended` because
+  **it is the only thing that knows where a gesture begins** — `painted` per tile is
+  indistinguishable from separate clicks downstream.
+- ⚠️ **A STEP RECORDS STATE, NOT AN INVERTED COMMAND — the card's phrasing stops being true one
+  row up.** `paint`'s inverse is a paint; `place_start`'s is not an act the tool has (it removes a
+  cluster, then places a town centre, five villagers, a scout and a resource ring whose positions
+  `StartLayout` chooses), and deriving it would be a second copy of those layout rules. So: terrain
+  as a **diff** (6 bytes per changed tile), entities and starts as **whole snapshots** (tens to a
+  few hundred small dicts, rewritten in an unpredictable slice). That also makes undo indifferent
+  to 16.4 and 16.5 — a move, an area, a wall drag are all "some tiles and some entities differ".
+- ⚠️ **`data.terrain[i] = b` FROM ANOTHER OBJECT IS THE PACKED-ARRAY TRAP AND IS AVOIDED, NOT
+  TESTED.** A packed array is a value type, so depending on how the access compiles the write can
+  land on a temporary and vanish with no error. `MapEdit._write_terrain()` pulls the buffer into a
+  local, writes it, and assigns it back once — correct whichever way that goes, and one
+  copy-on-write per undo instead of per tile.
+- ⚠️ **UNDO WALKS THE DIFFS BACKWARDS AND REDO FORWARDS**, which buys duplicate-tile correctness
+  with no bookkeeping: the earliest `before` and the latest `after` win automatically. The
+  alternative was a dictionary of seen indices — 65,536 hash entries for a fill on the largest map
+  — to buy what the loop direction already guarantees. Nothing can record a tile twice today
+  (`paint()` returns early on a no-op, and the brush cannot change mid-stroke); the rule is there
+  so the day something can, it is already right.
+- ⚠️ **`Array.duplicate()` IS SHALLOW, AND THE SNAPSHOT IS FOR 16.4.** Without a per-dict copy the
+  step and the live map share dictionaries, so the move cursor — which will edit `e["tile"]` in
+  place — would rewrite the snapshot along with the map, and undo would restore the building to
+  where it had just been dragged. There is a test that does exactly that edit.
+- ⚠️ **"NO UNSAVED CHANGES" NEEDED MORE STATE THAN A BOOL, and a DEPTH IS NOT A STATE.**
+  `UndoStack._clean_at` is the depth at which the map matches the file, and it goes **unreachable
+  (-1)** in two cases that both silently claimed "saved" otherwise: the save point sitting in a
+  **redo branch a new act discards** (save, undo twice, make two different edits — the stack is two
+  deep again and the map has nothing to do with the file), and the save point **falling off the
+  front** of a full stack. Both have tests.
+- ⚠️ **SAVE AND UNDO BOTH CLOSE AN OPEN STROKE FIRST**, because both are reachable with the mouse
+  button still down. A step left open across a save lands on the stack *after* the save point, so
+  the first Ctrl+Z takes back changes that are already written while the tool reports no unsaved
+  work; an undo mid-drag would interleave the open step with the one below it.
+- ⚠️ **A NO-OP IS NOT A STEP.** `Clear start` on a player who has none, an erase on empty ground, a
+  refused placement: each is a real act and an invisible one, and a stack of them is a Ctrl+Z that
+  *appears* not to work. `MapEdit.changes_anything()` is the gate. **16.4's move must call
+  `mark_changed()`** — same entity count, same starts, different tile, so the size test cannot see
+  it, and a step discarded as a no-op is a dragged building that cannot be dragged back. Said in
+  the code where it will be read.
+- 📝 **THE HISTORY SURVIVES A SAVE ON PURPOSE.** An author saves, looks at the result, and changes
+  their mind; clearing the stack there would make Save a point of no return. It is cleared only by
+  New and Open — you cannot undo past "this is a different map".
+- 📝 **FOUND BY A SCREENSHOT TAKEN FOR SOMETHING ELSE:** the status line read
+  `_palette.describe()` for the PAINT tool, and that says "brush: …" only while the palette is on
+  its **Terrain** tab. So picking a building and then pressing `Brush` announced *"place: Town
+  Center (P1)"* over a tool that paints grass. `undo_ready.png` is the first shot that ever armed
+  the brush and the palette independently. Now `brush: <terrain>` from
+  `MapDocument.terrain_name()`, which is also what labels an undo step — so the two cannot
+  disagree. Fixed with a test.
+- 📝 **`MapMaker/README.md` STILL DOES NOT MENTION UNDO**, which is what the card opens by
+  observing. It is the owner's spec document, so it is not edited here — flagged instead.
 
 **`MapMaker/format/` IS NINE VERBATIM COPIES OF GAME FILES AND TWO STAND-INS. DO NOT EDIT ANY OF
 THEM.** `FormatGuard` reads the originals out of `game/` as text, hashes them, and the tool
@@ -903,6 +985,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **A `TextureRect` DEMANDS ITS TEXTURE'S FULL SIZE AS A MINIMUM, AND `STRETCH_KEEP_ASPECT_CENTERED` DOES NOT CHANGE THAT** | `expand_mode` defaults to `EXPAND_KEEP_SIZE`; the stretch mode says how to draw *inside* the rect and the expand mode says how big the rect may *be*. So a 96 px tile holding a baked battle sprite asked for several hundred pixels, the `VBoxContainer` round it overflowed (it does not clip, scroll or compress — see the row above), and 16.3's palette rendered with pictures spilling over each other and **every caption pushed clean out of its tile**: 32 buildings with one visible name between them. `EXPAND_IGNORE_SIZE` plus `custom_minimum_size` is the pair. **Only one of the two properties is the famous one**, which is why this looks like a container bug and is not. |
 | **AN `OptionButton` NOBODY HAS SELECTED DISPLAYS ITEM 0, AND `add_item(text, -1)` MEANS "USE THE INDEX AS THE ID"** | Two traps in one control, both found by a screenshot on 16.3. (1) The palette's owner picker lists **Gaia first** (every resource node in the game is gaia's), so a picker left unselected showed *Gaia* while the field behind it said *player 1* — an author would place a building for a player they never chose, and no test could see it. **Assign the control from the field unconditionally, not only when the value changes**, and expose the control's reading so a test can compare the two. (2) The natural id for "no colour" is `-1` — the value `atlas_for()` itself takes — and `add_item("none", -1)` silently stores id **0** instead, so `get_item_index(-1)` finds nothing, `select(-1)` **deselects** and the dropdown draws **blank**. Keep every id non-negative (shift by one). The blank box also hid that `item_selected` had never been connected, so the control was inert as well as empty: two faults reading as one, which is §6's volume-slider row wearing a dropdown. |
 | **`"%s" % some_array` TREATS THE ARRAY AS THE ARGUMENT LIST, NOT AS THE ARGUMENT** | So the single most natural way to put a problems list into an assertion message — `assert_true(problems.is_empty(), "%s" % problems)` — is **wrong in both directions and never in a way that mentions arrays**: an empty list raises *"not enough arguments for format string"* and a two-element list raises *"not all arguments converted"*. It cost a red suite on 16.4a with **eighteen engine errors** and one confusing formatting failure, all pointing at string formatting and none at the list. `% [problems]` is the fix (the array becomes one argument), and note the trap in the trap: the form is only wrong for the case that fires, so a message with exactly one element in the list passes and the same line fails the next time. **Any `%` whose right-hand side is a variable holding an `Array` wants brackets round it.** Same family as `some_array as Array[int]` silently failing on a variable — GDScript's `%` and `as` both behave differently for a literal than for a name. |
+| **`Ctrl+Z` CANNOT BE CAUGHT AFTER THE GUI PASS, WHICH RULES OUT `_gui_input`, `_shortcut_input` AND `Button.shortcut` TOGETHER** | Godot's order is `_input` → `Control._gui_input` → `_shortcut_input` → `_unhandled_input`/`_unhandled_key_input`, and `LineEdit` consumes `Ctrl+Z` in the GUI pass as its own **text** undo. So a focused search box or name field eats it before `_shortcut_input` runs — and a `BaseButton.shortcut` is dispatched from `_shortcut_input`, so the obvious "just put the shortcut on the Undo button" is the same bug wearing a resource. **The working binding is `_input` on the screen**, which is first in the order and reached whatever has focus. 16.2a's card blamed the canvas; the canvas was incidental — being *after the GUI* was the fault. **And then hand the key back**: `get_viewport().gui_get_focus_owner() is LineEdit or TextEdit` (a `SpinBox`'s child `LineEdit` is what takes focus, so one test covers the number boxes too), or you undo the map while somebody is mid-word in the map's name. |
+| **WRITING INTO ANOTHER OBJECT'S PACKED ARRAY THROUGH THE PROPERTY CAN VANISH WITH NO ERROR** | `data.terrain[i] = b` is the classic form: a packed array is a **value type**, so depending on how the access compiles the write can land on a temporary copy. Fine inside the class (`MapData.set_terrain` writes its own member); not something to rely on from outside. **Pull the buffer into a local, write it, assign it back once** — correct whichever way it compiles, and one copy-on-write per operation instead of per element. `MapEdit._write_terrain()` is the pattern, and it was written this way rather than probed because the failure is silent and the probe would only have answered for 4.7.1. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -2186,13 +2270,15 @@ back into a log of everything shipped, which is the one section where a complete
 costs a reader something. **Do not re-grow it here either.** What follows is a pointer, not a
 copy:
 
-1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b, **16.4a and 16.3
-   (both 2026-09-08)** are done and the owner has authored a map in it. **Next is 16.4** —
+1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b, **16.4a, 16.3 and
+   16.2a (all 2026-09-08)** are done and the owner has authored a map in it. **Next is 16.4** —
    select / move / edit cursors and drag-to-place walls; single-click placement already landed
    with the palette, so what is left is the three cursors and `WallPlan`'s axis rule.
-   ⚠️ **16.2a (undo) is still open and the last two rows both raised its price**: the tool can
-   now overwrite committed campaign content in place *and* place and erase entities, and git is
-   the only undo there is. It is worth taking before 16.5.
+   ⚠️ **16.4's MOVE MUST CALL `MapEdit.mark_changed()`.** It is the first act that edits an
+   entity entry **in place** — same count, same starts, different tile — so the size test that
+   decides whether a step is a no-op cannot see it, and a discarded step is a dragged building
+   that cannot be dragged back. Undo otherwise needs nothing from 16.4: a step records state,
+   so a move, an area and a wall run are all "some tiles and some entities differ".
 2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
    share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
    scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep
