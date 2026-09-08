@@ -105,9 +105,11 @@ Total: **15 prompts** — 14 generated and sliced on 2026-08-30, plus the splash
 
 > **Two more sheets were added 2026-09-08 for the MapMaker** — `sheet_h_mapmaker_tools`
 > and `sheet_i_mapmaker_cursors`, in **Part two** at the end of this file. They are
-> counted separately and they **deliberately break every style rule above**: the
-> MapMaker is a different program, its toolbar draws icons at **16 px** against a flat
-> `#212129`, and gold bevelled ornament at that size is mud. Part two opens with why.
+> counted separately but they are **the same art**: same canvas contract, same palette,
+> same 256 px cells, same 100 × 100 delivery. The MapMaker's grey chrome is alpha
+> scaffolding and it is going to be reskinned to the game's panels and fonts, so its
+> icons are game icons that happen to live in the editor. Part two opens with the one
+> consequence that has for the code.
 
 ### What is deliberately NOT in here
 
@@ -1389,35 +1391,42 @@ Everything above is the **game's** UI, batched for [P8] on 2026-08-30. These two
 sheets are for the **MapMaker**, a separate Godot project and a separate program,
 requested by the owner on 2026-09-08.
 
-## ⚠️ THESE DO NOT FOLLOW THE HOUSE STYLE, AND THAT IS THE WHOLE DESIGN DECISION
+## THESE FOLLOW THE HOUSE STYLE, AND THE SIZE IS THE GAME'S SIZE
 
-Every prompt above asks for burnished gold, bevelled depth, soft studio lighting and
-a contact shadow. **Reusing that here would fail twice over**, and both reasons were
-read off the MapMaker's code rather than guessed:
+**Owner's ruling, 2026-09-08:** *"the map maker as it stands is in alpha / design
+phase, it will look like the game, same panels same fonts, render the icons and
+cursors the same size as game icons (tech tree) we will scale them in game."*
 
-**Wrong scale.** `ToolIcons.SIZE` is **16 px** — the toolbar's icons are drawn at the
-label's font size, deliberately, because *"an icon taller than the text makes the row
-grow, and the toolbar is already four rows of chrome above a canvas that wants every
-pixel."* Every glyph above was authored at 256 px for a **52–72 px** tile. Downsampled
-16:1, a bevel, a gradient and a contact shadow are all sub-pixel — they do not
-"become subtle", they become grey mud that eats the silhouette.
+So Part two is not a second art style. **Same canvas contract, same palette, same
+smooth-painted burnished gold, same 4 × 4 grid of 256 px cells, same 100 × 100 RGBA
+delivery** as `sheet_d_military_techs` and every other sheet above. Read §"The canvas
+contract" and §"Palette" as binding here too — the prompts below quote them in full
+because Gemini keeps nothing between prompts, not because anything differs.
 
-**Wrong context.** The MapMaker's toolbar panel is `#212129` flat grey, not the
-game's chocolate `#2B1D14` and gold. It is an authoring tool, mouse-and-keyboard only
-by PLAN.md §16 decision 6, and it should look like a tool. Gold dragons on a tile
-palette would be costume jewellery on a spanner.
+**Author for the target, not for today's scaffolding.** The MapMaker's `#212129`
+panels and default font are placeholder chrome from PLAN.md §16; the icons outlive
+them. Authoring flat grey glyphs to match scaffolding would mean re-rolling both
+sheets the day the reskin lands — and a sheet is regenerated whole.
 
-**So both sheets below ask for FLAT, SOLID, SINGLE-INK glyphs** — and monochrome is
-not a simplification, it is a requirement `tool_icons.gd` already discovered: *"a
-`Button`'s icon is tinted by the theme's `icon_normal_color` in some themes and left
-alone in others, and this tool sets neither … a two-colour icon would come out with
-one of its colours invisible on exactly the machine nobody checked."*
+### ⚠️ ONE CONSEQUENCE FOR THE CODE, AND IT IS THE GAME SIDE'S CALL
 
-**SOLID SILHOUETTES, NOT LINE ART.** The single most important instruction in both
-prompts. A stroke needs ~2 px to read at final size; at 16 px that is a **32 px stroke
-in a 256 px cell**, which is 12.5% of the cell and thicker than any illustrator would
-draw unprompted. A filled shape survives the same reduction with no such constraint.
-Where a prompt below says "thick" it means it.
+`ToolIcons.SIZE` is **16 px** today — the toolbar draws icons at the label's font
+size, deliberately, because *"an icon taller than the text makes the row grow, and the
+toolbar is already four rows of chrome above a canvas that wants every pixel."*
+
+**A bevelled gold glyph does not survive 100 → 16.** A bevel, a gradient and a contact
+shadow are all sub-pixel at that reduction; they do not become subtle, they become
+grey mud that eats the silhouette. Part one's glyphs are authored at 256 for a
+**52–72 px** tile and that ratio is why they read.
+
+That is not a reason to change this art — it is a number the reskin has to move.
+**When these land, the toolbar wants icons at 24–32 px minimum**, which means either a
+larger font on that row or icons allowed to exceed the label height. Both are choices
+the game side owns; naming it here so it is not discovered as "the new icons look
+worse than the drawn ones".
+
+Until then `tool_icons.gd`'s code-drawn 16 px glyphs remain correct for the alpha, and
+these sheets are the thing that replaces them at the reskin, not before.
 
 ## Two corrections to the request, both from the code
 
@@ -1452,15 +1461,24 @@ missing import is a null plus three engine errors rather than an honest failure.
 is 16.3's recorded finding and it is the trap these files walk into. Import once after
 adding them.
 
+⚠️ **THE THEME MUST NOT TINT THESE.** `tool_icons.gd` drew one near-white ink partly
+because *"a `Button`'s icon is tinted by the theme's `icon_normal_color` in some themes
+and left alone in others, and this tool sets neither."* A monochrome glyph survived
+that; **full-colour gold art does not** — a theme that tints would recolour the
+buildings, the plume and the grass tile alike. When the reskin lands, set
+`icon_normal_color` to opaque white explicitly on the toolbar and palette buttons
+rather than leaving it to the theme's default.
+
 ---
 
 ## sheet_h_mapmaker_tools
 
 **12 glyphs, 3 spare cells. `assets/UI_Gen/sheet_h_mapmaker_tools.png`.**
 
-Seven toolbar buttons and five palette categories. Delivered at **64 px** rather than
-the icon set's 100 px: the buttons draw at 16 px and a 64 px master gives clean
-half-steps at 16, 24 and 32 if the toolbar ever grows.
+Seven toolbar buttons and five palette categories. **Delivered at 100 × 100 RGBA,
+identical to the game's icons**, and the MapMaker scales them down at load — the
+owner's ruling, and the reason is that the reskin will want them at tile size, not at
+today's 16 px.
 
 | cell | id | for | today |
 |---|---|---|---|
@@ -1482,149 +1500,184 @@ Cells 3, 5, 6 and 7 replace shapes that already exist in `tool_icons.gd`. **Keep
 same shape language** — a marquee for Select, a four-way for Move, a minus badge for
 Erase — because an author who has used the tool for a week has learned those, and the
 code's own note explains the minus: *"an X on a cursor means 'cannot' in every other
-tool an author has used, and this button removes rather than refuses."*
+tool an author has used, and this button removes rather than refuses."* The rendering
+changes; the reading does not.
+
+**The four category glyphs are the sheet's one internal grammar.** Cells 8–12 sit
+side by side as tabs, so they are asked for as *one object each on a matching gold
+plinth* rather than four unrelated illustrations — the same trick `sheet_d` uses down
+its columns.
 
 ```
-A 1024x1024 sprite sheet of 12 flat monochrome software-tool icons, arranged on a
-strict 4x4 grid of 256x256 cells with no gutters. The last three cells of the bottom
-row are completely empty.
+A 1024x1024 sprite sheet of 12 medieval-fantasy game UI symbols for a map editor's
+toolbar, arranged on a strict 4x4 grid of 256x256 cells with no gutters. The last
+three cells of the bottom row are completely empty.
 
-STYLE: flat, solid, single-colour interface icons in the manner of a professional
-desktop application toolbar. Every icon is a bold filled silhouette in one flat
-near-white colour #DBDBE6. NO gradients. NO bevel. NO three-dimensional depth. NO
-drop shadow. NO ambient occlusion. NO outline in a second colour. NO gold, NO
-brown, NO medieval ornament of any kind. This is deliberately NOT the ornate
-fantasy style - it is a plain modern tool icon set.
+STYLE: richly rendered semi-realistic mobile-game icon art. Smooth gradients, soft
+studio lighting from the upper left, bevelled three-dimensional depth, subtle
+ambient occlusion, crisp anti-aliased edges, warm specular sheen on metal.
+NOT pixel art. NOT flat vector.
 
-CRITICAL - SOLID SHAPES, NOT THIN LINES: these are displayed at 16 pixels. Every
-stroke, stem and gap must be at least 32 pixels wide in this 1024 image. Prefer a
-filled solid form over an outlined one everywhere. Any detail finer than that
-disappears completely at display size, so the icons must be blunt and chunky.
+PALETTE: burnished gold, highlight #F2D06B through mid #E5B842 to shadow #8A6A1E;
+aged blued steel; warm oak; tan leather; cream parchment #F0E2C0.
 
-COMPOSITION: each icon centred in its cell, filling about 70% of the cell, with a
-clear even margin. Each has a simple, blunt, instantly readable silhouette that
-survives being shrunk to a thumbnail. Consistent stroke weight and visual weight
-across all 12 cells.
+BOLD SILHOUETTE, NO FRAME: each symbol is a bare object with no border, ring, badge
+or plate around it - a reusable frame is drawn separately by the game. The shape must
+read on its own, so favour one big blunt form over fine detail, and keep every stroke
+and gap generous.
 
-BACKGROUND: flat pure black #000000 everywhere. No grid lines, no cell borders, no
-frames, no panels behind the icons.
+CONSISTENCY: the last five symbols are category tabs seen side by side, so give each
+of them the same small polished gold plinth or base to stand on, at the same scale
+and the same angle. The first seven are toolbar tools and stand alone with no plinth.
+
+COMPOSITION: each symbol floats alone, centred in its cell, filling about 76% of the
+cell. Soft dark contact shadow. Consistent scale, lighting and detail across all 12
+cells.
+
+BACKGROUND: flat pure black #000000. No gradient, no vignette, no texture, no glow,
+no grid lines, no borders around cells or symbols.
 
 ABSOLUTELY NO TEXT of any kind: no labels, no captions, no numbers, no letters.
 
-The 12 icons, left to right, top to bottom:
-1. A thick arrow curving anticlockwise back on itself to the left, solid, blunt head.
-2. The exact mirror image of icon 1: a thick arrow curving clockwise back on itself
-   to the right, solid, blunt head.
-3. A chunky decorator's paintbrush seen at a diagonal, thick handle and a broad solid
-   ferrule and bristle block, tip pointing to the lower left.
-4. A solid mouse pointer arrow in the lower left with a bold thick plus sign in the
-   upper right, the two clearly separated.
-5. A solid mouse pointer arrow in the lower left with a bold thick minus bar in the
-   upper right, the two clearly separated.
-6. A square selection marquee: a chunky dashed square outline with a solid filled
-   square handle at each of its four corners.
-7. A four-way arrow cross: four thick solid arms with blunt triangular heads pointing
-   up, down, left and right from a common centre.
-8. A simple solid building: a squat rectangular block with a broad triangular roof and
-   one dark door opening punched out of it.
-9. A solid standing human figure: round head and a broad simple body, no limbs
-   detailed, like a restroom pictogram but heavier.
-10. Three solid oak logs stacked in a pyramid, seen end on, thick and blunt.
-11. A solid diamond, a rhombus standing on its point, filled, with a single thick
-    horizontal band across its middle - an isometric ground tile.
-12. A large closed loop of thick dashed segments forming a rounded rectangle, empty
-    inside - the outline of a marked-out region.
+The 12 symbols, left to right, top to bottom:
+1. A broad polished gold arrow curving anticlockwise back on itself to the left, thick
+   and three-dimensional, blunt head.
+2. The mirror image of symbol 1: a broad polished gold arrow curving clockwise back on
+   itself to the right.
+3. A decorator's paintbrush at a diagonal, warm oak handle, gold ferrule, broad dark
+   bristle block, tip pointing to the lower left, a smear of green paint at the tip.
+4. A polished gold mouse pointer arrow in the lower left with a bold gold plus sign
+   floating clear of it in the upper right.
+5. A polished gold mouse pointer arrow in the lower left with a bold gold minus bar
+   floating clear of it in the upper right.
+6. A selection marquee: a gold dashed square outline with a small solid polished gold
+   cube handle at each of its four corners.
+7. A four-way arrow cross in polished gold: four thick arms with blunt heads pointing
+   up, down, left and right from a common boss.
+8. A small stone keep with a tiled roof and one dark arched door, standing on a
+   polished gold plinth.
+9. A helmed soldier's head and shoulders in blued steel with a red plume, standing on
+   a matching polished gold plinth.
+10. A heap of three oak logs and one gold nugget together, on a matching polished gold
+    plinth.
+11. An isometric diamond ground tile, grass green on top with a band of brown earth
+    below it, on a matching polished gold plinth.
+12. A closed loop of gold surveyor's rope pegged out over bare ground into a rounded
+    rectangle, empty inside, on a matching polished gold plinth.
 ```
 
 ---
 
 ## sheet_i_mapmaker_cursors
 
-**5 cursors, 2 × 3 layout at 341 px. `assets/UI_Gen/sheet_i_mapmaker_cursors.png`.**
+**5 cursors, cells 1–5 of the standard 4 × 4 at 256 px.
+`assets/UI_Gen/sheet_i_mapmaker_cursors.png`.**
 
-⚠️ **THIS IS THE PROMPT MOST LIKELY TO FAIL, AND IT FAILS FOR A STRUCTURAL REASON.**
-A mouse cursor is the hardest thing in this whole file to generate: it is tiny, it
-must be pixel-crisp, and it needs a **hard two-tone keyline** that diffusion models
-soften. If three rolls come back mushy, **stop and code-draw them** — `tool_icons.gd`
-already proves that route works, its header gives the three reasons it was chosen for
-the toolbar, and every one of them applies harder to a 32 px cursor. Losing an hour to
-a fourth roll is the expensive outcome, not the code.
+Same grid as every other sheet, so `slice_ui_sheets.py` needs no special case for the
+lattice. **Delivered at 100 × 100 like the icons**, and the game scales at load — the
+owner's ruling, and it is the right one here for a second reason: a cursor is the one
+asset whose display size the OS and the window scale factor argue over, so keeping a
+generous master and resizing in code beats baking a 32 px file we cannot re-derive.
 
-**A CURSOR IS TWO-TONE AND THE TOOLBAR ICONS ARE ONE-TONE, and that is not an
-inconsistency.** A toolbar icon sits on one known colour (`#212129`) so one ink is
-enough. A cursor floats over grass, water, dark rock and bright sand, so **white fill
-with a hard black keyline** is the only combination that reads on all of them. This is
-the one place in this document where an outline is required rather than forbidden.
+⚠️ **A CURSOR IS THE ONE PLACE IN THIS DOCUMENT WHERE AN OUTLINE IS REQUIRED RATHER
+THAN FORBIDDEN.** Every glyph above sits in a panel of known colour and gets a *dark
+contact shadow*; a cursor floats over grass, water, dark rock and bright sand, and
+burnished gold on bright sand is invisible. So these keep the house rendering and add
+**a hard dark keyline all the way round** — the gold body reads on the dark half of
+the map, the keyline reads on the light half. Losing the keyline is the failure that
+makes the whole sheet a re-roll.
 
 **Hotspots, because nobody else will decide them and `Input.set_custom_mouse_cursor`
-demands one.** Given at 32 × 32, the delivery size:
+demands one.** Given as **fractions of the texture**, since the game resizes these and
+an absolute pixel hotspot would drift with whatever size it picks:
 
-| id | shape | hotspot | why |
-|---|---|---|---|
-| `cur_brush` | pointer + ring badge | **(1, 1)** | the arrow tip is what the author aims |
-| `cur_place` | pointer + plus badge | **(1, 1)** | same |
-| `cur_erase` | pointer + minus badge | **(1, 1)** | same |
-| `cur_select` | crosshair + corner ticks | **(16, 16)** | a crosshair aims from its centre or it lies |
-| `cur_move` | four-way arrow | **(16, 16)** | grabs from the middle |
+| id | shape | hotspot | at 100 px | at 32 px |
+|---|---|---|---|---|
+| `cur_brush` | pointer + ring badge | **(0.02, 0.02)** | (2, 2) | (1, 1) |
+| `cur_place` | pointer + plus badge | **(0.02, 0.02)** | (2, 2) | (1, 1) |
+| `cur_erase` | pointer + minus badge | **(0.02, 0.02)** | (2, 2) | (1, 1) |
+| `cur_select` | crosshair + corner ticks | **(0.5, 0.5)** | (50, 50) | (16, 16) |
+| `cur_move` | four-way arrow | **(0.5, 0.5)** | (50, 50) | (16, 16) |
 
 Three share the pointer so the arm reads the same in every mode and only the badge
 changes; two are centred because a crosshair or a grab handle that aims from its
-corner is simply wrong. **Deliver at 32 × 32.** Godot accepts up to 256 but the OS
-draws a cursor at system scale, and a large texture is resampled by the compositor
-rather than by us.
+corner is simply wrong. **The three pointers must have their tip in the cell's extreme
+top-left corner** or the fraction above points at empty pixels — that is the single
+thing to check on this sheet before slicing.
+
+⚠️ **STOP RULE, KEPT FROM THE FLAT VERSION OF THIS PROMPT.** A cursor is still the
+hardest thing in this file to generate — it needs a hard even keyline that diffusion
+models soften, and it needs the tip pinned to a corner rather than composed nicely in
+the middle. **If three rolls come back with a soft rim or a floating tip, code-draw
+them instead.** `tool_icons.gd` already proves that route works and its header gives
+the three reasons. A fourth roll is the expensive outcome, not the code.
 
 ```
-A 1024x1024 sheet containing exactly 5 mouse-cursor shapes for a desktop map editor,
-arranged in a grid of 3 columns and 2 rows of 341x341 cells. The sixth cell, bottom
-right, is completely empty.
+A 1024x1024 sprite sheet of 5 medieval-fantasy game mouse-cursor symbols, arranged on
+a strict 4x4 grid of 256x256 cells with no gutters. Only the first five cells are
+used, filled left to right along the top row and then the first cell of the second
+row. ALL ELEVEN REMAINING CELLS ARE COMPLETELY EMPTY.
 
-STYLE: crisp two-tone cursor art. Every shape is a SOLID PURE WHITE #FFFFFF fill
-surrounded by a HARD PURE BLACK #000000 outline of even thickness all the way round.
-Nothing else. NO grey, NO gradient, NO soft edge, NO glow, NO drop shadow, NO
-anti-aliased fade, NO third colour, NO gold, NO texture. Flat white shape, flat
-black keyline, nothing in between.
+STYLE: richly rendered semi-realistic mobile-game icon art. Smooth gradients, soft
+studio lighting from the upper left, bevelled three-dimensional depth, crisp
+anti-aliased edges, warm specular sheen on metal. NOT pixel art. NOT flat vector.
 
-WHY: these float over grass, water, dark rock and bright sand, so the white body
-reads on dark ground and the black keyline reads on light ground. If either is
-missing the cursor vanishes over half the map.
+PALETTE: burnished gold, highlight #F2D06B through mid #E5B842 to shadow #8A6A1E,
+with cream #F0E2C0 catching the brightest faces.
 
-CRITICAL - CHUNKY, BECAUSE THESE DISPLAY AT 32 PIXELS: every arm, stroke and gap
-must be at least 40 pixels thick in this 1024 image, and the black keyline at least
-16 pixels. Anything finer disappears. The shapes must be blunt and simple.
+CRITICAL - EVERY SHAPE HAS A HARD DARK KEYLINE: a clean, even, very dark brown-black
+outline follows the whole outer edge of every cursor, at least 10 pixels thick and
+the same thickness all the way round. Hard edged, not a glow, not a soft shadow, not
+a blur. WHY: these float over grass, water, dark rock and bright sand, so the gold
+body reads on dark ground and the dark keyline reads on light ground. Without the
+keyline the cursor vanishes over half the map.
 
-COMPOSITION: each cursor sits in the TOP-LEFT AREA of its own cell for the three
-pointer shapes, and dead centre of its cell for the two symmetrical ones, as noted
-below. Consistent outline thickness and visual weight across all five.
+CRITICAL - CHUNKY AND BLUNT: every arm, stroke and gap must be at least 40 pixels
+thick in this 1024 image. These get shrunk hard, so favour one big simple form and
+no fine detail.
 
-BACKGROUND: flat pure black #000000 is NOT used here - the background of the whole
-canvas is FLAT MID GREY #808080, so the black keylines can be seen against it. No
+COMPOSITION: the three pointer-arrow cursors have their sharp tip touching the
+EXTREME TOP-LEFT CORNER of their own cell, with the arrow running down and to the
+right from it. The two symmetrical cursors are centred exactly in the middle of their
+cell. Consistent keyline thickness, scale and lighting across all five.
+
+BACKGROUND: flat mid grey #808080 across the whole canvas - NOT black, because the
+dark keylines must be visible against it. No gradient, no vignette, no texture, no
 grid lines, no cell borders.
 
-ABSOLUTELY NO TEXT of any kind: no labels, no letters, no numbers.
+ABSOLUTELY NO TEXT of any kind: no labels, no captions, no numbers, no letters.
 
-The 5 cursors, left to right, top to bottom:
-1. A classic slanted mouse pointer arrow, tip at the very top-left of the cell,
-   with a small round ring outline beside its upper right - a paint radius.
-2. The identical pointer arrow, tip at the very top-left, with a bold thick plus
-   sign beside its upper right.
-3. The identical pointer arrow, tip at the very top-left, with a bold thick minus
-   bar beside its upper right.
-4. A large symmetrical crosshair centred exactly in the middle of the cell: two
-   thick bars crossing at right angles with a small open square gap at their centre,
-   and four short right-angled corner ticks set out from it like selection handles.
-5. A large symmetrical four-way arrow centred exactly in the middle of the cell:
-   four thick arms with blunt triangular heads pointing up, down, left and right.
+The 5 cursors, left to right along the top row then the start of the second row:
+1. A classic slanted mouse pointer arrow in polished gold, tip at the extreme
+   top-left of the cell, with a small gold ring floating clear of its upper right -
+   a paint radius.
+2. The identical gold pointer arrow, tip at the extreme top-left, with a bold gold
+   plus sign floating clear of its upper right.
+3. The identical gold pointer arrow, tip at the extreme top-left, with a bold gold
+   minus bar floating clear of its upper right.
+4. A large symmetrical crosshair in polished gold, centred exactly in the middle of
+   the cell: two thick bars crossing at right angles with a small open square gap at
+   their centre, and four short right-angled corner ticks set out from it like
+   selection handles.
+5. A large symmetrical four-way arrow in polished gold, centred exactly in the middle
+   of the cell: four thick arms with blunt heads pointing up, down, left and right
+   from a common boss.
 ```
 
-### After slicing, three things this set needs that the game's icons did not
+### After slicing, two things the cursor sheet needs that no other sheet does
 
-- **Do not key the background to alpha the usual way.** `slice_ui_sheets.py` floods
-  from the border to find the ground, which is right for black sheets and wrong here:
-  the ground is `#808080` on purpose and the artwork's own keyline is `#000000`. The
-  flood still works — it is "reachable from the border", not "dark" — but the
-  threshold is derived per sheet from the border, and a grey border will derive a grey
-  threshold. **Check this sheet's cut by eye before trusting it.**
-- **No downsample filter that softens the keyline.** Everything else in this file goes
-  256 → 100 through a smooth resample. Cursors go to 32 and want the hard edge kept.
-- **`TEXTURE_FILTER_NEAREST` is right here** and wrong everywhere in §"15 places" — a
-  32 px cursor drawn at 1:1 wants no filtering at all.
+`sheet_h_mapmaker_tools` slices exactly like `sheet_d` — same lattice, same black key,
+same 256 → 100 resample. Nothing below applies to it.
+
+- **The grey ground breaks the key threshold.** `slice_ui_sheets.py` floods from the
+  border to find the ground and derives its threshold *per sheet from that border*.
+  Every other sheet's border is near-black; this one's is `#808080` by design, so the
+  derived threshold will be grey and the flood may eat the artwork's own dark keyline
+  from the outside in. **Cut this sheet with an explicit threshold and check it by
+  eye** — a cursor that loses its keyline on one side looks fine in the review strip
+  and disappears over sand in the tool.
+- **Keep the keyline through the downsample.** 256 → 100 is a smooth resample and the
+  keyline is the one edge in this document that must stay hard. If the game side
+  resizes further at load — and it will, to something like 32 — that second step is
+  the one that matters: **resize the `Image` with `INTERPOLATE_LANCZOS` and check the
+  rim, or accept `INTERPOLATE_NEAREST` and a slightly ragged edge over a soft one.**
