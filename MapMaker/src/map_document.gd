@@ -85,6 +85,28 @@ var _step_held := false
 ## rather than within a radius, and the sea-map rules. Appended in that order, narrow to fatal.
 var warnings: Array[String] = []
 
+## Which entity the author has picked, as an index into `data.entities`, or -1 (PLAN.md 16.4).
+##
+## ## AN INDEX, AND THEREFORE SOMETHING THAT HAS TO BE INVALIDATED
+##
+## ⚠️ **A STALE INDEX EDITS THE WRONG ENTITY AND SAYS NOTHING.** Entities are appended and
+## dropped, so any act that REBUILDS the list can leave this pointing at a different thing —
+## erase, `remove_start` (which filters the whole list), and undo/redo (which replace it from a
+## snapshot that may be a completely different shape). Every one of those clears it, and the
+## clearing lives beside the mutation rather than in a `_validate()` somebody has to remember
+## to call.
+##
+## **`add_entity` is the exception and it is safe by construction**: it appends, so every
+## existing index still names what it named. That is worth stating because it looks like an
+## oversight next to the others.
+##
+## The alternative was an id per entity, and it was rejected: `MapData`'s entity record is four
+## keys the game reads, `MapFile` writes exactly those, and an id would either reach the file —
+## a format change for a selection highlight — or be session-only metadata like
+## `StartLayout.ORIGIN_KEY`, which is a second thing to strip. **A cleared selection is a
+## visible, harmless failure; a stale one is an invisible, destructive one.**
+var selected := -1
+
 ## The sidecar of the file this map was OPENED from, verbatim, or `{}` for a new map (16.4a).
 ##
 ## ## WHY A RE-SAVE MUST NOT SIMPLY FORGET IT
@@ -202,6 +224,11 @@ func undo() -> String:
 	if step == null:
 		return ""
 	step.undo_into(data)
+	# ⚠️ **THE SELECTION GOES, because a step replaces the entity list from a snapshot** that may
+	# be a different length and a different order. Keeping the index would point the inspector at
+	# whatever now sits at that position -- and the author's next owner change would land on it,
+	# silently. Losing a highlight is the cheap failure of the two. See `selected`.
+	clear_selection()
 	dirty = not history.at_clean_point()
 	return step.describe()
 
@@ -212,6 +239,7 @@ func redo() -> String:
 	if step == null:
 		return ""
 	step.redo_into(data)
+	clear_selection()                     # same reason as `undo()`
 	dirty = not history.at_clean_point()
 	return step.describe()
 
@@ -341,6 +369,9 @@ func remove_start(player: int) -> void:
 		if not owned and not from_this_start:
 			kept.append(e)
 	data.entities = kept
+	# THE LIST WAS FILTERED, so every index past the first removal now names something else.
+	# See `selected`: this is one of the three acts that can leave it stale.
+	clear_selection()
 	# TRAILING PLACEHOLDERS TRIMMED, so `player_count()` -- which IS `starts.size()` -- does
 	# not count a slot nobody is in. An untrimmed tail would make a two-player map claim four
 	# and the picker would offer seats that lead nowhere.
@@ -453,10 +484,233 @@ func remove_entity_at(tile: Vector2i) -> int:
 		var mine := _open("erase %d thing%s" % [removed, "" if removed == 1 else "s"])
 		_step.lists_before(data)
 		data.entities = kept
+		clear_selection()                 # the list shrank; see `selected`
 		dirty = true
 		if mine:
 			_flush()
 	return removed
+
+
+# ── select, move, edit: the three cursors (PLAN.md 16.4) ────────────────────
+
+## Which entity is standing on `tile`, or -1.
+##
+## **BY CLAIMED TILES AND NOT BY ORIGIN**, `remove_entity_at()`'s rule and for its reason: an
+## author clicking the middle of a 10x10 town centre is pointing at the town centre, and a
+## picker that only matched the origin tile would miss it ninety-nine times in a hundred.
+##
+## ⚠️ **THE LAST MATCH WINS, WHICH IS THE ONE DRAWN ON TOP.** `_draw_entities` walks the list in
+## order, so a later entity is painted over an earlier one — and a picker that returned the
+## first match would hand back the thing underneath the thing the author can see. Overlaps are
+## not supposed to happen (`add_entity` refuses them and `MapValidator` reports them) but an
+## OPENED map can carry them, because 16.4b's rule is that a bad map still saves.
+func entity_index_at(tile: Vector2i) -> int:
+	var found := -1
+	for i in data.entities.size():
+		for t in MapData.footprint_rect_of(data.entities[i]):
+			if t == tile:
+				found = i
+				break
+	return found
+
+
+## The selected entity's record, or `{}`.
+##
+## Returns the LIVE dictionary rather than a copy, deliberately: the editor's inspector reads
+## fields off it to fill its controls, and a copy would go stale the moment anything moved.
+## Nothing outside this class writes through it — that is `set_selected_*` below, which have to
+## record an undo step.
+func selected_entity() -> Dictionary:
+	if selected < 0 or selected >= data.entities.size():
+		return {}
+	return data.entities[selected]
+
+
+## Pick whatever is on `tile`. Returns true when the selection CHANGED.
+##
+## **A CLICK ON EMPTY GROUND CLEARS IT**, which is the behaviour every editor has and the only
+## one that lets an author get *out* of a selection without another tool. It is not an undo
+## step: selecting is not a change to the map, so `dirty` is untouched and Ctrl+Z reaches past
+## it to the last real act.
+func select_at(tile: Vector2i) -> bool:
+	var was := selected
+	selected = entity_index_at(tile)
+	return selected != was
+
+
+func clear_selection() -> void:
+	selected = -1
+
+
+## Move the selected entity so its footprint's origin lands on `to`. True if it moved.
+##
+## ## THE OVERLAP CHECK SKIPS THE THING BEING MOVED, AND THAT IS THE WHOLE DIFFICULTY
+##
+## `data.claimed_tiles()` includes the mover's own tiles, so asking it directly means a building
+## can never be nudged one tile — it collides with where it already is. The tempting fix is to
+## take the full set and `erase()` the mover's tiles from it, and that is subtly wrong: on a map
+## with a pre-existing overlap (an opened map may have one) erasing frees tiles a DIFFERENT
+## entity still claims, so the move lands on top of it.
+##
+## So the set is built from the other entities. ⚠️ **THAT IS NOT A SECOND FOOTPRINT TEST** —
+## 16.4's row forbids one and it would be right to — because every rect still comes from
+## `MapData.footprint_rect_of()`, the function the generator and the validator agree on. What is
+## re-walked is the LIST, not the arithmetic.
+##
+## ⚠️ **IT CALLS `mark_changed()`, WHICH 16.2a's ROW REQUIRES IN SO MANY WORDS.** This is the
+## first act in the tool that edits an entry **in place**: same entity count, same starts,
+## different tile. `MapEdit.close()`'s size test cannot see that, so the step would be discarded
+## as a no-op and **a dragged building could not be dragged back.**
+func move_selected(to: Vector2i) -> bool:
+	var e := selected_entity()
+	if e.is_empty() or not data.in_bounds(to):
+		return false
+	var from: Vector2i = e.get("tile", Vector2i.ZERO)
+	if from == to:
+		# NOT A STEP AND NOT A FAILURE. A drag delivers the same tile many times over; recording
+		# each one would fill the stack with acts whose effect nobody can see.
+		return false
+	if not _fits(e, to, selected):
+		return false
+
+	# ⚠️ **WHICH STARTS THIS ENTITY CARRIES, WORKED OUT BEFORE IT MOVES.** See `_starts_inside()`:
+	# a start is the footprint's CENTRE and an entity's `tile` is its ORIGIN, so the two are only
+	# equal for a 1x1 thing — the first version of this compared them directly and could never
+	# match a town centre, which is a five-tile error and exactly the one `preview_saved_map`'s
+	# second red run is the record of. Found by `test_cursors`.
+	var carried := _starts_inside(e) if _is_town_centre(e) else ([] as Array[int])
+
+	var mine := _open("move %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
+	_step.lists_before(data)
+	# THE LIVE DICTIONARY IS EDITED IN PLACE, which is safe only because `MapEdit._copied()`
+	# duplicates each entity DICTIONARY and not just the array. Without that the snapshot and
+	# the map would share this dictionary and undo would restore the building to where it had
+	# just been dragged -- `test_undo` performs exactly this edit against the guard.
+	e["tile"] = to
+	# ⚠️ **A START MOVES WITH ITS OWN TOWN CENTRE.** `MapData.starts` is a separate field and
+	# `MapGen.build_from()` never derives a base from a start, so dragging a town centre off its
+	# marker authors a player whose start is bare ground -- 16.0's `can_start()` rule 7 exactly.
+	#
+	# **SHIFTED BY THE SAME DELTA rather than set to the new origin**, so a marker that sat
+	# off-centre inside the footprint stays where it was relative to the building. Only a town
+	# centre carries a start: an author dragging a villager out of the opening is doing something
+	# ordinary and must not drag the player's whole beginning with it.
+	for i in carried:
+		data.starts[i] = data.starts[i] + (to - from)
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Change who owns the selected entity. True if it changed.
+##
+## **GAIA (0) IS A LEGITIMATE OWNER AND NOT A CLEAR.** Every resource node on every map is
+## gaia's, and so is the dragon and her nest (13.2), so an owner picker that treated 0 as
+## "none" could not author half the things a map needs.
+func set_selected_owner(player: int) -> bool:
+	var e := selected_entity()
+	if e.is_empty() or player < 0 or player > 8:
+		return false
+	if int(e.get("player", 0)) == player:
+		return false
+	var mine := _open("owner of %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
+	_step.lists_before(data)
+	e["player"] = player
+	# IN PLACE AGAIN, so the same rule as `move_selected` applies: the size test is blind to it.
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Change the selected entity's size class — the resource axis. True if it changed.
+##
+## ⚠️ **SIZE IS A FOOTPRINT, SO THIS CAN BE REFUSED FOR THE SAME REASON A PLACEMENT CAN.**
+## `ResourceDef.footprint_for_size` makes a large gold mine bigger than a small one, so growing
+## one can run off the map or into a neighbour — and a size change that silently overlapped
+## would author exactly the map `MapValidator` refuses. Checked with `_fits()`, the same test
+## the move uses.
+func set_selected_size_class(size_class: int) -> bool:
+	var e := selected_entity()
+	if e.is_empty() or size_class < 0:
+		return false
+	if int(e.get("size_class", 0)) == size_class:
+		return false
+	# ASKED OF A COPY, because `_fits` reads `size_class` to work out the footprint and the whole
+	# question is whether the NEW one fits. Editing the live record first and undoing it on
+	# refusal would leave a step half-open.
+	var probe := e.duplicate()
+	probe["size_class"] = size_class
+	if not _fits(probe, e.get("tile", Vector2i.ZERO), selected):
+		return false
+	var mine := _open("size of %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
+	_step.lists_before(data)
+	e["size_class"] = size_class
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Would `e`'s footprint, placed with its origin at `origin`, be on the map and on clear ground?
+##
+## `skip` is an index in `data.entities` to ignore — the entity being moved or resized. See
+## `move_selected()` for why the set is built rather than taken from `claimed_tiles()` and
+## reduced.
+##
+## **IT DOES NOT REFUSE IMPASSABLE GROUND**, `add_entity()`'s rule: a dock belongs on water and
+## a fish is in it.
+func _fits(e: Dictionary, origin: Vector2i, skip: int) -> bool:
+	var probe := e.duplicate()
+	probe["tile"] = origin
+	var claimed: Dictionary = {}
+	for i in data.entities.size():
+		if i == skip:
+			continue
+		for t in MapData.footprint_rect_of(data.entities[i]):
+			claimed[t] = true
+	for t in MapData.footprint_rect_of(probe):
+		# THE WHOLE FOOTPRINT ON THE MAP, not just the origin -- `add_entity()`'s comment has
+		# the argument: a 10x10 building dropped two tiles from the edge would otherwise be
+		# placed half in the void by `MapGen.build_from()`.
+		if not data.in_bounds(t) or claimed.has(t):
+			return false
+	return true
+
+
+## Which player indices have their start marker standing on `e`'s footprint.
+##
+## ⚠️ **A START IS A CENTRE AND AN ENTITY'S `tile` IS AN ORIGIN, AND CONFUSING THE TWO IS A
+## FIVE-TILE ERROR.** `MapData.starts` is documented as *"the CENTRE tile of that player's
+## start"*; every entity record holds the minimum corner of its footprint. For a villager those
+## coincide and for a 10x10 town centre they are five tiles apart — which is why this asks
+## `footprint_rect_of()` whether the marker is INSIDE the building rather than comparing the two
+## tiles. `preview_saved_map`'s second red run is this project's standing record of that
+## distinction being expensive; `test_cursors` caught it here.
+func _starts_inside(e: Dictionary) -> Array[int]:
+	var out: Array[int] = []
+	var tiles := MapData.footprint_rect_of(e)
+	for i in data.starts.size():
+		var s: Vector2i = data.starts[i]
+		if s.x < 0:
+			continue
+		if tiles.has(s):
+			out.append(i)
+	return out
+
+
+## Whether this entity is the thing a start marker sits inside.
+##
+## **AGAINST `StartLayout.TOWN_CENTRE` and not against "is it a building with a big
+## footprint"**, because the identity is what matters: `StartLayout.place()` is what put the
+## marker and the town centre on the same tile, so that constant is the one fact tying them
+## together. A castle dragged onto a start is not the start's base.
+static func _is_town_centre(e: Dictionary) -> bool:
+	return StringName(e.get("def_id", &"")) == StartLayout.TOWN_CENTRE
 
 
 # ── how many players this map can really seat ───────────────────────────────

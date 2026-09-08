@@ -170,12 +170,148 @@ func _process(_delta: float) -> void:
 		18:
 			_report_history("after pressing Undo")
 			_shoot("undo_undone")
+			# ⚠️ **16.4's CURSORS ARE ALMOST ENTIRELY A PICTURE, and one of them cannot be
+			# checked any other way.** `test_cursors` proves the arithmetic — what a click
+			# selects, what a move refuses, that the start follows its base. **None of that says
+			# an author can SEE what is selected.** A cyan outline round a 10x10 town centre at
+			# 0.19x, on a canvas that already draws orange start markers, straw buildings and a
+			# white hover cursor, is a question for eyes.
+			_select_a_town_centre()
+		19:
+			_report_selection("after clicking a town centre with Select")
+			_shoot("cursor_selected")
+			_drag_the_selection()
+		20:
+			_report_selection("after dragging it north, across its own resource ring")
+			_shoot("cursor_moved")
+			_edit_the_selection()
+		21:
+			_report_selection("after changing the owner in the inspector")
+			_shoot("cursor_edited")
+			_deselect()
+		22:
+			_report_selection("after clicking empty ground")
+			_shoot("cursor_none")
 			print("")
-			print("OK — fifteen shots written. Look at them: the arithmetic is tested, the"
+			print("OK — nineteen shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
 	_step += 1
+
+
+## ── the three cursors (16.4) ────────────────────────────────────────────────
+
+## Zoom in on player 1's start and click their town centre with the SELECT tool.
+##
+## **THROUGH `apply_tool()`, which is what the canvas's `painted` signal reaches**, so this
+## exercises the tool a press actually arms — `_place_from_the_palette`'s rule, for the same
+## reason.
+func _select_a_town_centre() -> void:
+	# CLOSE ENOUGH TO SEE A TILE. At fit-to-view a tile is ~5 px and the whole question is
+	# whether an outline is distinguishable from the things next to it.
+	_zoom_to(_editor.document().data.starts[0], 1.1)
+	_editor.set_tool(EDITOR.Tool.SELECT)
+	_editor.apply_tool(_editor.document().data.starts[0])
+	_hold(UI_FRAMES)
+
+
+## Drag it, the way the mouse does: a stroke, a run of samples, a release.
+##
+## ⚠️ **THROUGH THE CANVAS'S OWN STROKE SIGNALS**, `_drag_a_stroke()`'s rule: those are the
+## seam a real press and release use, so this is the only check that the editor is listening to
+## them for MOVE as well as for PAINT. A preview that called `begin_stroke()` itself would
+## photograph a coalesced step whether or not a drag produces one.
+func _drag_the_selection() -> void:
+	var doc: MapDocument = _editor.document()
+	var from: Vector2i = doc.data.starts[0]
+	var was: Vector2i = doc.selected_entity().get("tile", Vector2i.ZERO)
+	var before: int = doc.history.depth()
+	# ⚠️ **FRAMED SO BOTH ENDS OF THE DRAG ARE ON SCREEN, and the first version was not.** At
+	# 1.1x the destination is twenty-seven rows off the top of the canvas, so the shot showed an
+	# empty field while the status line correctly reported a building at 14,25 — a picture of
+	# nothing, taken to prove a move. The camera does not follow an entity (nor should it: a real
+	# drag keeps the pointer on screen, so the building cannot leave it).
+	_zoom_to(from + Vector2i(0, -14), 0.55)
+	_editor.set_tool(EDITOR.Tool.MOVE)
+	(_editor._canvas as MapCanvas).stroke_began.emit()
+	# THE FIRST SAMPLE IS THE GRAB and moves nothing -- see `Editor._move_to`. So the run has to
+	# start on the entity and then go somewhere.
+	#
+	# ⚠️ **IT DRAGS ACROSS ITS OWN START'S VILLAGERS, WHICH IS THE CASE THAT FOUND
+	# `_grab_intent`.** The first version of this stopped after two tiles: every intermediate
+	# sample was refused by the units standing round the town centre, and the clear ground beyond
+	# them was unreachable. So the path deliberately crosses them.
+	# ⚠️ **NORTH, AND THE DIRECTION IS MEASURED RATHER THAN CHOSEN.** A diagonal drag ended two
+	# tiles from where it started and looked like the retry not working: the destination was
+	# inside the start's own resource ring, which reaches about twelve tiles out, so it was
+	# refused for a perfectly good reason and proved nothing. Straight up clears the ring and
+	# lands on open grass short of the rock patch at y 6..14.
+	for step in range(0, 28):
+		_editor.apply_tool(from + Vector2i(0, -step))
+	(_editor._canvas as MapCanvas).stroke_ended.emit()
+	# THE DELTA AND NOT THE DEPTH. The stack already has the placement and the sand stroke on it,
+	# so an absolute figure says nothing about what the drag added -- which is the one number
+	# 16.2a's rule is about.
+	print("  the drag added %d step(s) to the stack" % (doc.history.depth() - before))
+	print("  origin %s -> %s" % [was, doc.selected_entity().get("tile", Vector2i.ZERO)])
+	_hold(UI_FRAMES)
+
+
+## Change the owner through the inspector's own control, not through the document.
+##
+## The point is the CONTROL: `_filling_inspector` exists because assigning an `OptionButton`
+## emits `item_selected`, and the failure that guard prevents — selecting a thing silently
+## reassigning it — is only reachable by driving the widget.
+func _edit_the_selection() -> void:
+	var picker: OptionButton = _editor._entity_owner
+	if picker.disabled:
+		printerr("  the inspector is disabled with something selected")
+		_hold(UI_FRAMES)
+		return
+	# P4, chosen because it is neither the current owner (P1) nor Gaia (item 0) -- so a shot
+	# that shows P1 or Gaia is a shot of the bug rather than of the feature.
+	var at := picker.get_item_index(4)
+	picker.select(at)
+	# `select()` DOES NOT EMIT. Assigning the control is what `_refresh_inspector` does, so a
+	# preview that only assigned it would photograph a panel the document never heard about --
+	# the signal is emitted by hand for that reason, which is what a real click does.
+	picker.item_selected.emit(at)
+	_hold(UI_FRAMES)
+
+
+func _deselect() -> void:
+	_editor.set_tool(EDITOR.Tool.SELECT)
+	# A CORNER OF THE MAP NOTHING IS STANDING ON.
+	_editor.apply_tool(Vector2i(1, 1))
+	_hold(UI_FRAMES)
+
+
+## What the tool thinks is selected, and what the inspector is showing.
+##
+## ⚠️ **BOTH, BECAUSE THEY ARE THE PAIR THAT CAN DISAGREE** — 16.3's row records that exact
+## fault three times in one file (*"a control's value and the field behind it are one fact"*),
+## where an `OptionButton` nobody had assigned showed item 0, which is Gaia, over a selection
+## that said player 1. A screenshot shows the panel; only this print shows both.
+func _report_selection(what: String) -> void:
+	var doc: MapDocument = _editor.document()
+	var e := doc.selected_entity()
+	if e.is_empty():
+		print("%s: nothing selected — inspector says \"%s\""
+				% [what, _editor._entity_label.text.strip_edges()])
+	else:
+		var tile: Vector2i = e.get("tile", Vector2i.ZERO)
+		print("%s: %s (P%d) at %d,%d — inspector says \"%s\", owner picker P%d"
+				% [what, e.get("def_id", &""), int(e.get("player", 0)), tile.x, tile.y,
+				_editor._entity_label.text.strip_edges(),
+				_editor._entity_owner.get_item_id(_editor._entity_owner.selected)])
+		if _editor._entity_owner.get_item_id(_editor._entity_owner.selected) \
+				!= int(e.get("player", 0)):
+			printerr("  the panel and the entity disagree about who owns it")
+	# THE START, because a town centre is the one entity that carries one and a marker left
+	# behind by its own base is 16.0's `can_start()` rule 7 authored by accident.
+	print("  P1's start is at %s" % [doc.data.starts[0]])
+	_hold(UI_FRAMES)
 
 
 ## The same map `dev/author_map.tscn` writes, painted through the same document API.

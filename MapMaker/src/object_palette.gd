@@ -214,7 +214,7 @@ func describe() -> String:
 	var who := "gaia" if _player == GAIA else "P%d" % _player
 	var size := ""
 	if _category == Category.RESOURCE:
-		size = ", %s" % _SIZE_LABELS[clampi(_size_class, 0, _SIZE_LABELS.size() - 1)]
+		size = ", %s" % SIZE_LABELS[clampi(_size_class, 0, SIZE_LABELS.size() - 1)]
 	return "place: %s (%s%s)" % [GameDataRegistry.display_name(_def_id), who, size]
 
 
@@ -676,8 +676,8 @@ func _build() -> void:
 	(_size_row as HBoxContainer).add_theme_constant_override("separation", 4)
 	_size_row.add_child(_label("Size"))
 	_size_picker = OptionButton.new()
-	for i in _SIZE_LABELS.size():
-		_size_picker.add_item(str(_SIZE_LABELS[i]), i)
+	for i in SIZE_LABELS.size():
+		_size_picker.add_item(str(SIZE_LABELS[i]), i)
 	_size_picker.item_selected.connect(func(at: int) -> void: set_size_class(at))
 	_size_row.add_child(_size_picker)
 	# HIDDEN UNTIL THE RESOURCE TAB IS CHOSEN, because `size_class` means nothing to a building
@@ -754,7 +754,12 @@ func _label(text: String) -> Label:
 ## `ResourceDef`'s own arrays and the game names the classes nowhere. Three because
 ## `resources.json` declares three; if that changes, `_size_picker` shows the wrong number of
 ## rows and the trap is silent, so `test_object_palette` asserts the count against the roster.
-const _SIZE_LABELS := ["Small", "Medium", "Large"]
+## 📝 **PUBLIC SINCE 16.4, because the inspector needs the same three words.** An entity's size
+## class is editable after the fact (`MapDocument.set_selected_size_class`), and a panel that
+## called them 0/1/2 while the palette called them Small/Medium/Large would be two vocabularies
+## for one field — §6's *"mirroring a layout is not sharing one"* with a label instead of a
+## width. One list, two readers.
+const SIZE_LABELS := ["Small", "Medium", "Large"]
 
 
 ## The enum value behind a terrain tile's id (`"GRASS"` -> `SimMap.Terrain.GRASS`).

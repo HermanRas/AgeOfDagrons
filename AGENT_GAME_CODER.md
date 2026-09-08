@@ -462,7 +462,7 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 15 screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 19 screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
 
@@ -523,6 +523,69 @@ WRONG** — measured 2026-09-08, the shots are written to `AOD_MapMaker`. Both f
 the owner's machine, which is what makes the mistake survivable and worth naming: an old one
 from before the project was renamed sits beside the live one, so a session looking in the
 wrong place finds a directory with plausibly stale pictures in it rather than nothing.
+
+### 16.4 — THE CURSORS, BUILT 2026-09-08. THE WALL DRAG IS BLOCKED ON THE FORMAT
+
+`Tool.SELECT` and `Tool.MOVE`, the inspector row, and `MapDocument.select_at()` /
+`move_selected()` / `set_selected_owner()` / `set_selected_size_class()`. **MapMaker 237/237**,
+up 27, and four new screenshots (`cursor_selected`, `cursor_moved`, `cursor_edited`,
+`cursor_none`).
+
+- ⛔ **DRAG-TO-PLACE-WALLS IS NOT BUILT, AND IT IS THE FORMAT AND NOT THE CODE.** `WallPlan` is
+  ready to copy — pure integer arithmetic, `format/`-shaped — but a wall is **the one building
+  whose footprint is not a property of its def**, and an entity record is
+  `{def_id, player, tile, size_class}`. It hands `spawn_building` two things a map cannot carry:
+  a **`footprint_override`** (`[9,2]` east-west, `[2,9]` north-south) and a **`facing`** from
+  `WallPlan.FACING_FOR_AXIS`. `MapData`'s own header rules footprints out *on purpose* —
+  *"a map that recorded them would go stale the day a building is resized"* — which is right for
+  every other building and wrong for this one. ⚠️ **And `MapGen.build_from()` passes neither**,
+  so both default: the def's east-west footprint with facing 0, which `FACING_FOR_AXIS` says is
+  the **north-south** wall. **Ninety degrees wrong, in both directions at once, on every wall of
+  every authored map** — the exact fault the owner reported on 2026-08-28 that cost six days and
+  a re-measurement of twelve atlases. **No shipped map has a wall** (checked: `sample_duel` and
+  all five campaign maps), so nothing is broken while this waits.
+  `test_the_format_still_cannot_express_a_walls_axis` is the mechanical reminder, on 16.3's Area
+  precedent. Card **`16.4c-wall-axis`**; it needs a decision-7 ruling, not a slice of this row.
+- 📝 **THERE IS NO `Tool.EDIT` AND "THREE CURSORS" IS STILL SATISFIED.** A third mode whose click
+  did what SELECT's does is a mode an author cannot tell they are in, and the two would have to
+  agree about what a click means. Select and move are gestures; **the edit is the inspector
+  row**, reachable from either. What it can edit is exactly the two fields the format holds —
+  owner and size class. A name, hp, attack or speed are **16.7's**, and offering them would let
+  an author type into a field `MapFile` drops.
+- ⚠️ **`MapData.starts` IS A CENTRE AND AN ENTITY'S `tile` IS AN ORIGIN — FIVE TILES APART FOR A
+  TOWN CENTRE, AND I GOT IT WRONG FIRST.** A start must follow its own base (`MapGen.build_from`
+  never derives a base from a start, so a marker left on bare ground authors a player who owns
+  nothing — 16.0's `can_start()` rule 7). The first version compared `starts[i] == entity.tile`
+  and **could never match**. `_starts_inside()` asks `footprint_rect_of()` whether the marker is
+  INSIDE the building and shifts it by the move's delta. **Caught by the test, not by review** —
+  the same distinction `preview_saved_map`'s second red run is the standing record of.
+- ⚠️ **A DRAG COLLIDED WITH ITS OWN PATH INSTEAD OF ITS DESTINATION, AND ONLY THE PREVIEW COULD
+  SEE IT.** A nine-tile drag of a town centre advanced **two tiles**: every intermediate sample
+  was refused by the villagers of its own start, and the clear ground beyond was unreachable. An
+  author reads that as the tool refusing a legal move. `Editor._grab_intent` remembers what the
+  pointer asked for and `_finish_move()` retries it on release — ⚠️ **before
+  `MapDocument.end_stroke()`, which is the only order that works**: after the seal it would be a
+  second undo step, so one drag would need two Ctrl+Z presses.
+- ⚠️ **`_grab_offset`: GRABBING A 10x10 BUILDING BY ITS MIDDLE TELEPORTS IT** without one, because
+  `tile` is the origin — the corner jumps to the pointer on the first pixel. **That is the
+  owner's "top right not centre" note met from the other side**, and the two are one fact: the
+  origin is not where the author is pointing.
+- ⚠️ **THE SELECTION IS AN INDEX, SO THREE ACTS HAVE TO INVALIDATE IT** — erase, `remove_start`
+  (both filter the list) and undo/redo (which replace it from a snapshot of any shape). A stale
+  index means the author's next owner change lands on a different entity **silently**.
+  `add_entity` is the deliberate exception: it appends, so every index still holds. Five tests.
+- ⚠️ **`_filling_inspector` EXISTS BECAUSE ASSIGNING AN `OptionButton` EMITS `item_selected`.**
+  Filling the owner picker from the entity would fire the handler that writes the owner back —
+  and since item 0 is **Gaia**, *selecting a villager would reassign it to gaia*. This is the
+  price of 16.3's fix (*"assign the control from the field unconditionally"*) and it has to be
+  paid deliberately.
+- 📝 **`ObjectPalette.SIZE_LABELS` IS PUBLIC NOW.** The inspector names size classes with the
+  same three words the palette does; 0/1/2 in one panel and Small/Medium/Large in the other is
+  two vocabularies for one field.
+- 📝 **THE SELECTION IS DRAWN ON THE CURSOR LAYER, NOT WITH THE ENTITIES.** It belongs with them,
+  except that a MOVE drag changes it many times a second and 16.x-slow-place's whole rule is that
+  the map layer is invalidated only when the MAP changes. `MapCanvas.redraw_overlay()` is the
+  named seam so a caller cannot invalidate the expensive layer by accident.
 
 ### 16.x-slow-place — THE CANVAS WAS THE WHOLE COST, MEASURED 2026-09-08
 

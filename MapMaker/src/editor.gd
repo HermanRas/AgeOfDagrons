@@ -43,7 +43,23 @@ const _BAD := Color(0.95, 0.45, 0.40)
 ## see `save()`.
 const _WARN := Color(0.95, 0.78, 0.35)
 
-enum Tool { PAINT, START, PLACE, ERASE }
+## Present but with nothing to say — the inspector with no selection (16.4). `Boot` and
+## `ObjectPalette` both carry their own; a fourth copy of a grey is cheaper than a shared
+## constant that has to live somewhere neither of them owns.
+const _DIM := Color(0.55, 0.55, 0.60)
+
+## ⚠️ **`SELECT` AND `MOVE` ARE APPENDED, NEVER INSERTED.** `_tool_buttons` is keyed by the
+## enum's integer and `test_startup` drives `set_tool(0)` by number, but the real reason is
+## `dev/preview_editor.gd` and the tests naming `EDITOR.Tool.PAINT` — renumbering PAINT would
+## be silent everywhere those are compared against an int.
+##
+## 📝 **THERE IS NO `Tool.EDIT`, AND 16.4's "THREE CURSORS" IS STILL SATISFIED.** Editing an
+## entity is not a gesture on the canvas: a third mode whose click did what SELECT's does is a
+## mode an author cannot tell they are in, and the two would have to stay in step about what a
+## click means. So select and move are cursors, and **the edit is the inspector row** —
+## `_entity_row()`, which acts on whatever is selected and is reachable from either cursor.
+## Said here because the row's wording implies three buttons and there are two.
+enum Tool { PAINT, START, PLACE, ERASE, SELECT, MOVE }
 
 var _canvas: MapCanvas = null
 var _palette: ObjectPalette = null
@@ -63,6 +79,23 @@ var _tool_buttons: Dictionary = {}
 ## stack, and `_refresh_undo()` is the one place that does it.
 var _undo_button: Button = null
 var _redo_button: Button = null
+
+## The inspector — 16.4's "edit" (see `Tool`). Its controls act on `_document.selected`.
+var _entity_label: Label = null
+var _entity_owner: OptionButton = null
+var _entity_size: OptionButton = null
+var _entity_size_label: Label = null
+
+## True while the inspector is being filled FROM the selection, so the writes it makes to its
+## own controls do not come back as edits.
+##
+## ⚠️ **WITHOUT THIS, SELECTING A GAIA TREE REASSIGNS IT.** Setting `OptionButton.selected`
+## emits `item_selected`, so filling the owner picker from the entity fires the handler that
+## writes the owner back — harmless when they agree and an actual edit when the control was
+## showing something else, which it always is on the first click. 16.3's row records the mirror
+## image of this trap (a picker showing Gaia while `selection()` said player 1); this is what it
+## costs to fix that by assigning the control unconditionally.
+var _filling_inspector := false
 
 ## The Open overlay (16.4a) and its parts.
 var _open_overlay_panel: Control = null
@@ -130,6 +163,7 @@ func _new_map() -> void:
 	_document = MapDocument.create(wanted, _name_field.text)
 	_canvas.show_document(_document)
 	_refresh_players()
+	_refresh_inspector()                  # see `show_document()`
 	_refresh_status()
 
 
@@ -146,6 +180,10 @@ func show_document(doc: MapDocument) -> void:
 	_height.set_value_no_signal(doc.data.size.y)
 	_canvas.show_document(doc)
 	_refresh_players()
+	# A DIFFERENT MAP HAS A DIFFERENT ENTITY LIST, so an inspector still describing the last
+	# map's selection would be showing a thing that is not on screen. `MapDocument.selected`
+	# starts at -1 on a created or opened document, so this reads that rather than clearing it.
+	_refresh_inspector()
 	_refresh_status()
 
 
@@ -241,6 +279,12 @@ func redo() -> void:
 func _after_history(verb: String, what: String) -> void:
 	_refresh_players()
 	_canvas.queue_redraw()
+	# ⚠️ **AND THE INSPECTOR, because `MapDocument.undo()` CLEARS THE SELECTION** — a step
+	# replaces the entity list from a snapshot and an index into the old one names something
+	# else. Without this refresh the panel goes on describing an entity the author can no longer
+	# see outlined, and its owner dropdown would be live over nothing.
+	_canvas.redraw_overlay()
+	_refresh_inspector()
 	_notice("%s — %s" % [verb, what], _GOOD)
 	_refresh_status()
 
@@ -486,12 +530,136 @@ func apply_tool(tile: Vector2i) -> void:
 						% [GameDataRegistry.display_name(pick["def_id"]), tile.x, tile.y], _WARN)
 		Tool.ERASE:
 			changed = _document.remove_entity_at(tile) > 0
+		Tool.SELECT:
+			# NOT A CHANGE TO THE MAP, so it does not go down the `changed` path: the expensive
+			# layer is not invalidated, `dirty` is untouched, and Ctrl+Z reaches past it to the
+			# last real act. Only the cheap overlay and the inspector are refreshed.
+			if _document.select_at(tile):
+				_after_selection_changed()
+		Tool.MOVE:
+			changed = _move_to(tile)
 	if changed:
 		# REDRAWN AND RE-REPORTED ONLY ON A REAL CHANGE, which is why `paint()` returns a
 		# bool: a drag delivers the same tile dozens of times and repainting the canvas on
 		# every one of them would make a stroke stutter on a big map.
 		_canvas.queue_redraw()
+		# ⚠️ **AND THE OVERLAY AND THE INSPECTOR, because two of these tools change the
+		# SELECTION as a side effect.** A move edits the selected entity's tile, so its outline
+		# has to follow; an erase makes `MapDocument` clear the selection outright, so the panel
+		# has to stop describing something that is gone. Refreshed on the `changed` path rather
+		# than in each branch, for `_refresh_undo()`'s reason: nine mutation sites and the tenth
+		# is the one that gets forgotten.
+		_canvas.redraw_overlay()
+		_refresh_inspector()
 		_refresh_status()
+
+
+# ── the move drag (PLAN.md 16.4) ────────────────────────────────────────────
+
+## Where the pointer was when the MOVE gesture began, and the offset from it to the grabbed
+## entity's origin. `_grab_offset` is the whole reason a big building does not jump.
+##
+## ⚠️ **WITHOUT THE OFFSET, GRABBING A 10x10 TOWN CENTRE BY ITS MIDDLE TELEPORTS IT.** The
+## entity's `tile` is its footprint's ORIGIN, so moving it to the tile under the pointer puts
+## the corner where the finger is — the building leaps five tiles up-left on the first pixel of
+## the drag. That is also the shape of the note the owner left on this row (*"it places the
+## building using top right not centre"*) met from the other side, and it is worth seeing that
+## the two are the same fact: the origin is not where the author is pointing.
+var _grab_offset := Vector2i.ZERO
+
+## True once a MOVE press has grabbed something, so the tiles that follow are a drag and not a
+## fresh grab. Cleared on release.
+var _grabbing := false
+
+## The origin the pointer last ASKED for, whether or not the entity could go there.
+##
+## ⚠️ **WITHOUT THIS A DRAG COLLIDES WITH ITS OWN PATH INSTEAD OF WITH ITS DESTINATION**, and
+## `dev/preview_editor.tscn` is what found it: a nine-tile drag of a town centre advanced **two
+## tiles** and stopped, because the villagers of its own start were in the way — every
+## intermediate sample was refused, and the perfectly clear ground beyond them was unreachable.
+## An author would read that as the tool refusing a move that is plainly legal.
+##
+## So the intent is remembered and **retried once when the button comes up** (`_finish_move()`).
+## Live feedback keeps working — the building follows the pointer as far as it legally can — and
+## the destination is judged on its own merits. It is still one undo step, because the retry
+## happens before the stroke closes.
+var _grab_intent := Vector2i(-1, -1)
+
+
+## One sample of a MOVE gesture. True when the map changed.
+##
+## **THE FIRST SAMPLE GRABS AND THE REST DRAG.** `MapCanvas` reports a press and then a tile per
+## motion sample (interpolated, so a fast drag is continuous), and none of them says which was
+## the press — `_grabbing` is what distinguishes them, cleared by `stroke_ended`.
+##
+## ⚠️ **A GRAB ALSO SELECTS**, which is not a convenience: MOVE with nothing selected would be a
+## tool that does nothing on its first click, and an author cannot tell that from a broken tool.
+## Pressing empty ground clears the selection, the same as SELECT.
+func _move_to(tile: Vector2i) -> bool:
+	if not _grabbing:
+		_grabbing = true
+		var changed_selection := _document.select_at(tile)
+		var e := _document.selected_entity()
+		# THE OFFSET FROM THE POINTER TO THE ORIGIN, measured once at the press. Re-measuring it
+		# per sample would make it zero after the first move and the building would slide out
+		# from under the pointer.
+		_grab_offset = Vector2i.ZERO if e.is_empty() \
+				else (e.get("tile", Vector2i.ZERO) as Vector2i) - tile
+		if changed_selection:
+			_after_selection_changed()
+		# NOTHING MOVES ON THE PRESS ITSELF. A click without a drag should select, not nudge.
+		return false
+	if _document.selected < 0:
+		return false
+	# REMEMBERED WHETHER OR NOT IT WORKS -- see `_grab_intent`: this is the tile `_finish_move()`
+	# retries, and it is the whole reason a drag can cross an obstacle.
+	_grab_intent = tile + _grab_offset
+	return _try_move(_grab_intent)
+
+
+## Apply one move and report it. True when the map changed.
+func _try_move(origin: Vector2i) -> bool:
+	if not _document.move_selected(origin):
+		return false
+	_notice("MOVED — %s to %d,%d" % [
+			GameDataRegistry.display_name(_document.selected_entity().get("def_id", &"")),
+			origin.x, origin.y], _GOOD)
+	return true
+
+
+## The release: one last attempt at wherever the pointer actually ended up.
+##
+## ⚠️ **CALLED BEFORE `MapDocument.end_stroke()`, WHICH IS THE ONLY ORDER THAT WORKS.**
+## `end_stroke()` seals the gesture's undo step, so a move applied after it would land on the
+## stack as a SECOND step — and taking the drag back would then need two Ctrl+Z presses, which
+## is 16.2a's whole complaint. See `_grab_intent` for why the retry exists at all.
+func _finish_move() -> void:
+	if not _grabbing or _document == null or _document.selected < 0:
+		return
+	if _grab_intent.x < 0:
+		return
+	var e := _document.selected_entity()
+	if not e.is_empty() and e.get("tile", Vector2i.ZERO) != _grab_intent:
+		if not _try_move(_grab_intent):
+			# ⚠️ **SAID OUT LOUD.** The entity is sitting somewhere along the path rather than
+			# where the author let go, and a building that stops short with no explanation is
+			# `apply_tool`'s refused placement seen mid-gesture.
+			_notice("WILL NOT FIT — %s cannot go to %d,%d" % [
+					GameDataRegistry.display_name(e.get("def_id", &"")),
+					_grab_intent.x, _grab_intent.y], _WARN)
+		_canvas.queue_redraw()
+		_canvas.redraw_overlay()
+		_refresh_inspector()
+	_grab_intent = Vector2i(-1, -1)
+
+
+## Everything on screen that a change of selection affects.
+##
+## The overlay and the inspector, and **not** the map layer: see `apply_tool`'s SELECT branch.
+func _after_selection_changed() -> void:
+	_canvas.redraw_overlay()
+	_refresh_inspector()
+	_refresh_status()
 
 
 func save() -> Array[String]:
@@ -580,6 +748,7 @@ func _build_ui() -> void:
 
 	rows.add_child(_file_row())
 	rows.add_child(_tool_row())
+	rows.add_child(_entity_row())
 
 	# THE PALETTE AND THE CANVAS SHARE A ROW (16.3). The canvas expands and the palette does
 	# not, so the map takes every pixel the panel does not want -- and `MapCanvas` already sets
@@ -610,8 +779,19 @@ func _build_ui() -> void:
 			if _document != null:
 				_document.begin_stroke())
 	_canvas.stroke_ended.connect(func() -> void:
+			# ⚠️ **BEFORE `end_stroke()`, WHICH SEALS THE UNDO STEP.** `_finish_move()` retries
+			# the destination the pointer ended on, and a move applied after the seal would be a
+			# second step -- two Ctrl+Z presses for one drag.
+			if _tool == Tool.MOVE:
+				_finish_move()
 			if _document != null:
 				_document.end_stroke()
+			# ⚠️ **THE GRAB IS RELEASED HERE AND NOWHERE ELSE.** `MapCanvas._button` guarantees
+			# this fires even when the pointer has left the control -- the viewport keeps
+			# sending to whoever took the press -- so a drag that ends off the map still lets
+			# go. A `_grabbing` left true would make the author's next click a DRAG of the old
+			# entity instead of a grab of a new one.
+			_grabbing = false
 			# THE BUTTONS ONLY COME ALIVE HERE for a drag, because nothing is on the stack until
 			# the stroke closes -- so without this refresh Undo stays greyed out until the next
 			# hover happens to run `_refresh_status()`.
@@ -709,6 +889,10 @@ func _tool_row() -> Control:
 		{"tool": Tool.PLACE, "label": "Place"},
 		{"tool": Tool.ERASE, "label": "Erase"},
 		{"tool": Tool.START, "label": "Place start"},
+		# 16.4's two cursors. **Select before Move**, because that is the order they are used in
+		# and a toolbar is read left to right.
+		{"tool": Tool.SELECT, "label": "Select"},
+		{"tool": Tool.MOVE, "label": "Move"},
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])
@@ -730,12 +914,167 @@ func _tool_row() -> Control:
 	return box
 
 
+## The inspector: 16.4's "edit", acting on whatever is selected.
+##
+## ## IT IS ALWAYS PRESENT AND SAYS SO WHEN THERE IS NOTHING
+##
+## The obvious design is a row that appears when something is selected, and it is worse for two
+## reasons. **A row that appears resizes the canvas**, so the map jumps and re-culls on every
+## first click — and an author who has never selected anything would never see that the tool can
+## edit an entity at all. So it holds a sentence instead, and the controls are disabled.
+##
+## ## WHAT IT CAN EDIT IS EXACTLY WHAT THE FORMAT HOLDS, AND NOT ONE FIELD MORE
+##
+## ⚠️ An entity is `{def_id, player, tile, size_class}`. So: the owner, and the size class. **A
+## name, hit points, attack or speed are 16.7's** — *"the expensive row, and the only one with
+## real sim cost"* — and offering them here would let an author type a hero's name into a field
+## `MapFile` silently drops. That is 16.3's Area-tab argument applied to a panel instead of a
+## tab: *work lost behind a successful save* is the worst of the available failures.
+##
+## The tile is shown and is not editable here: dragging is what moves a thing, and a pair of
+## spin boxes for x and y would be a second way to do it that has to agree with the first.
+func _entity_row() -> Control:
+	var box := _panel()
+	var row := box.get_child(0) as HBoxContainer
+
+	_entity_label = Label.new()
+	_entity_label.add_theme_color_override("font_color", _TEXT)
+	# ⚠️ **A FIXED MINIMUM WIDTH, because this label's TEXT is what changes width.** Without it
+	# every control to the right slides as the selection changes — "nothing selected" is shorter
+	# than "Town Center at 41,38" — and a dropdown that moves under the pointer between clicks is
+	# §6's row about two controls for one fact seen as a moving target.
+	_entity_label.custom_minimum_size = Vector2(260, 0)
+	row.add_child(_entity_label)
+
+	row.add_child(_label("Owner"))
+	_entity_owner = OptionButton.new()
+	# GAIA FIRST AND AS AN ID OF ITS OWN. Every resource node, the dragon and her nest are
+	# gaia's, so 0 is a real owner here rather than "none" -- `MapDocument.set_selected_owner()`
+	# says the same thing from the other end.
+	#
+	# ⚠️ **IDS ARE THE PLAYER NUMBER, WHICH IS SAFE ONLY BECAUSE GAIA IS 0 AND NOT -1.** 16.3's
+	# palette had to store colour + 1 for exactly this reason: `add_item(text, -1)` means "use
+	# the index as the id", so an id of -1 is never stored and `get_item_index(-1)` finds
+	# nothing. Nothing here needs a negative id, so nothing here needs the offset.
+	_entity_owner.add_item("Gaia", 0)
+	for p in range(1, 9):
+		_entity_owner.add_item("P%d" % p, p)
+	_entity_owner.item_selected.connect(_on_inspector_owner_chosen)
+	row.add_child(_entity_owner)
+
+	# SIZE IS THE RESOURCE AXIS AND ONLY THE RESOURCE AXIS (16.3's row): a small gold mine and a
+	# large one are one def at two sizes. The label is hidden with the control so a disabled box
+	# does not sit beside a live caption.
+	_entity_size_label = _label("Size")
+	row.add_child(_entity_size_label)
+	_entity_size = OptionButton.new()
+	# ⚠️ **`ObjectPalette.SIZE_LABELS` AND NOT A SPIN BOX OF 0..2.** The palette already names
+	# these three Small/Medium/Large, and a panel that called the same field by its index would
+	# be two vocabularies for one fact -- §6's "mirroring a layout is not sharing one" with a
+	# label instead of a width. The constant was made public for this; there is one list.
+	for i in ObjectPalette.SIZE_LABELS.size():
+		_entity_size.add_item(str(ObjectPalette.SIZE_LABELS[i]), i)
+	_entity_size.item_selected.connect(_on_inspector_size_chosen)
+	row.add_child(_entity_size)
+
+	_refresh_inspector()
+	return box
+
+
+## Fill the inspector from the selection.
+##
+## ⚠️ **THE CONTROLS ARE ASSIGNED UNCONDITIONALLY, NOT ONLY WHEN THE VALUE CHANGES** — 16.3's
+## row states the general form after it came apart three times in one file: *"a control's value
+## and the field behind it are one fact."* An `OptionButton` nobody has assigned shows item 0,
+## which here is **Gaia**, so a panel that skipped the write would claim a villager belongs to
+## gaia. `_filling_inspector` is what stops the write coming back as an edit.
+func _refresh_inspector() -> void:
+	if _entity_label == null:
+		return
+	var e: Dictionary = _document.selected_entity() if _document != null else {}
+	_filling_inspector = true
+	if e.is_empty():
+		_entity_label.text = "  nothing selected — pick something with Select"
+		_entity_label.add_theme_color_override("font_color", _DIM)
+		_entity_owner.disabled = true
+		_entity_size.disabled = true
+		_entity_size_label.visible = false
+		_entity_size.visible = false
+	else:
+		var tile: Vector2i = e.get("tile", Vector2i.ZERO)
+		_entity_label.text = "  %s at %d,%d" % [
+				GameDataRegistry.display_name(e.get("def_id", &"")), tile.x, tile.y]
+		_entity_label.add_theme_color_override("font_color", _TEXT)
+		_entity_owner.disabled = false
+		_entity_owner.select(_entity_owner.get_item_index(int(e.get("player", 0))))
+		# THE SIZE BOX IS ONLY THERE FOR A RESOURCE. Asking the registry rather than testing the
+		# id's prefix: `res.` is a naming convention and `resource_def()` is the answer.
+		var is_resource := GameDataRegistry.resource_def(e.get("def_id", &"")) != null
+		_entity_size_label.visible = is_resource
+		_entity_size.visible = is_resource
+		_entity_size.disabled = not is_resource
+		# CLAMPED, because `size_class` comes off a FILE. A map written by something else -- or by
+		# hand -- can name a class the roster does not have, and `OptionButton.select()` with an
+		# out-of-range index deselects the control and draws it blank, which reads as the panel
+		# being broken rather than as the map being odd.
+		_entity_size.select(clampi(int(e.get("size_class", 0)), 0,
+				ObjectPalette.SIZE_LABELS.size() - 1))
+	_filling_inspector = false
+
+
+func _on_inspector_owner_chosen(at: int) -> void:
+	if _filling_inspector or _document == null:
+		return
+	if _document.set_selected_owner(_entity_owner.get_item_id(at)):
+		_after_entity_edited("OWNER")
+	else:
+		# ⚠️ **SAID OUT LOUD, `apply_tool`'s rule for a refused placement.** The only way this
+		# fails with something selected is a value the document rejects, and a dropdown that
+		# snapped back with no explanation is indistinguishable from a broken control.
+		_refresh_inspector()
+
+
+func _on_inspector_size_chosen(at: int) -> void:
+	if _filling_inspector or _document == null:
+		return
+	var value: int = _entity_size.get_item_id(at)
+	if _document.set_selected_size_class(value):
+		_after_entity_edited("SIZE")
+		return
+	# ⚠️ **A REFUSED SIZE IS THE ONE THAT REALLY NEEDS A SENTENCE.** `set_selected_size_class`
+	# refuses when the bigger footprint would run off the map or into a neighbour, and the box
+	# has already moved to the value the author typed -- so without the notice AND the refill,
+	# the panel shows a size the map does not have.
+	_notice("WILL NOT FIT — %s cannot be %s there" % [
+			GameDataRegistry.display_name(_document.selected_entity().get("def_id", &"")),
+			str(ObjectPalette.SIZE_LABELS[clampi(value, 0,
+					ObjectPalette.SIZE_LABELS.size() - 1)]).to_lower()], _WARN)
+	_refresh_inspector()
+
+
+## After an edit that came from the inspector rather than from the canvas.
+##
+## The MAP layer is redrawn here, unlike a change of selection: an owner change repaints the
+## footprint (gaia green against a player's straw) and a size change resizes it.
+func _after_entity_edited(what: String) -> void:
+	var e := _document.selected_entity()
+	_notice("%s — %s" % [what, GameDataRegistry.display_name(e.get("def_id", &""))], _GOOD)
+	_canvas.queue_redraw()
+	_canvas.redraw_overlay()
+	_refresh_inspector()
+	_refresh_status()
+
+
 func _clear_selected_start() -> void:
 	if _document == null:
 		return
 	_document.remove_start(_player_picker.get_selected_id())
 	_refresh_players()
 	_canvas.queue_redraw()
+	# `remove_start` FILTERS THE WHOLE ENTITY LIST and therefore clears the selection -- see
+	# `MapDocument.selected`. Same three refreshes as an erase.
+	_canvas.redraw_overlay()
+	_refresh_inspector()
 	_refresh_status()
 
 
@@ -750,6 +1089,24 @@ func _refresh_players() -> void:
 		# an author is checking, and a picker that hid the answer would need a second widget
 		# to show it.
 		_player_picker.set_item_text(i, "P%d%s" % [p, " ✓" if placed else ""])
+
+
+## What the selection is, for the status line, or `fallback` when there is none.
+##
+## **THE DEF ID AND NOT THE PRETTY NAME**, unlike the inspector's caption: the status line is
+## where an author checks *which* thing they picked when two look alike at 0.19x, and
+## `res.gold_mine` beside "Gold Mine" in the panel is the pair that answers it. The palette's
+## tooltips make the same choice for the same reason.
+func _selection_sentence(fallback: String) -> String:
+	var e: Dictionary = _document.selected_entity() if _document != null else {}
+	if e.is_empty():
+		return fallback
+	var tile: Vector2i = e.get("tile", Vector2i.ZERO)
+	var player := int(e.get("player", 0))
+	# GAIA BY NAME. "P0" is not a player and reads as an off-by-one in the numbering rather than
+	# as the owner every resource node on every map actually has.
+	return "selected: %s (%s) at %d,%d" % [e.get("def_id", &""),
+			"Gaia" if player == 0 else "P%d" % player, tile.x, tile.y]
 
 
 func _on_hovered(_tile: Vector2i) -> void:
@@ -801,6 +1158,13 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 			bits.append(_palette.describe())
 		Tool.ERASE:
 			bits.append("click to erase (starts are cleared with Clear start)")
+		Tool.SELECT:
+			# WHAT IS SELECTED, or how to select something. The alternative -- saying nothing when
+			# nothing is picked -- leaves the one tool whose whole job is invisible with no
+			# feedback at all.
+			bits.append(_selection_sentence("click something to select it"))
+		Tool.MOVE:
+			bits.append(_selection_sentence("press something and drag it"))
 		Tool.PAINT:
 			# ⚠️ **THE BRUSH, NOT THE PALETTE'S SELECTION — AND IT USED TO BE THE OTHER WAY.**
 			# This read `_palette.describe()`, which only says "brush: …" while the palette is on

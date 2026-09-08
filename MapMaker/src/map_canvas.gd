@@ -80,6 +80,15 @@ const _GAIA := Color(0.55, 0.75, 0.45)
 const _START := Color(1.0, 0.45, 0.35)
 const _OUT_OF_BOUNDS := Color(0.07, 0.07, 0.09)
 
+## The selected entity's outline (PLAN.md 16.4).
+##
+## ⚠️ **CYAN, WHICH IS THE ONE HUE NOTHING ELSE ON THIS CANVAS USES.** `_START` is orange-red,
+## buildings are straw, units white, gaia green and the hover cursor white — so a selection in
+## any of those would be a highlight an author has to work out rather than see. It is also drawn
+## **thicker than the hover cursor and on the overlay**, so it survives being under a start
+## marker and does not disappear the instant the pointer moves off it.
+const _SELECTED := Color(0.35, 0.90, 0.95)
+
 ## ⚠️ **THE FLOOR IS DERIVED FROM THE BIGGEST MAP, NOT CHOSEN — AND THE FIRST VALUE WAS WRONG.**
 ##
 ## It was 0.25 on the reasoning that below it a tile is unreadably small, and a test caught
@@ -433,10 +442,33 @@ func _draw() -> void:
 ## The hover cursor, and nothing else. Cheap on purpose: this is what repaints on every
 ## mouse-move.
 func _draw_overlay() -> void:
-	if document == null or _hover.x < 0:
+	if document == null:
+		return
+	# ⚠️ **THE SELECTION IS ON THIS LAYER AND NOT IN `_draw()`, WHICH IS NOT WHERE IT WANTS TO
+	# BE.** It belongs with the entities it outlines — except that a MOVE drag changes it many
+	# times a second, and this file's whole performance story (16.x-slow-place) is that the map
+	# layer must be invalidated only when the MAP changes. Selecting is not a change to the map.
+	# So the cheap layer draws it, and `MapDocument.selected` is read here rather than cached,
+	# because a cached copy is the third thing that would need invalidating.
+	if document.selected >= 0 and document.selected < document.data.entities.size():
+		for t in MapData.footprint_rect_of(document.data.entities[document.selected]):
+			var sel := _diamond(t)
+			_overlay.draw_polyline(sel + PackedVector2Array([sel[0]]), _SELECTED, 2.5)
+	if _hover.x < 0:
 		return
 	var poly := _diamond(_hover)
 	_overlay.draw_polyline(poly + PackedVector2Array([poly[0]]), _CURSOR, 2.0)
+
+
+## Redraw the cursor layer, which is where the selection is drawn.
+##
+## Public because the EDITOR is what changes the selection and the canvas cannot see it happen —
+## `document.selected` is a field, not a signal. Named rather than exposing `_overlay` so a
+## caller cannot invalidate the expensive layer by accident, which is the mistake this file's
+## header is about.
+func redraw_overlay() -> void:
+	if _overlay != null:
+		_overlay.queue_redraw()
 
 
 ## Every visible tile, as ONE triangle array and ONE multiline.

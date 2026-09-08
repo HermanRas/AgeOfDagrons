@@ -320,7 +320,7 @@ func test_the_size_class_is_zero_for_anything_that_is_not_a_resource() -> void:
 
 
 ## ⚠️ **THE PICKER HAS AS MANY ROWS AS THE ROSTER HAS CLASSES, AND NOTHING ELSE CHECKS THAT.**
-## `_SIZE_LABELS` is a written-out list of three because `resources.json` declares three and
+## `SIZE_LABELS` is a written-out list of three because `resources.json` declares three and
 ## the game names them nowhere. If that changes, the picker offers the wrong number of options
 ## and the failure is silent — an author picks "Large" and gets whatever index 2 means now.
 func test_the_size_picker_offers_one_row_per_declared_size_class() -> void:
@@ -328,7 +328,7 @@ func test_the_size_picker_offers_one_row_per_declared_size_class() -> void:
 		return
 	var rd: ResourceDef = GameDataRegistry.resource_def(_a_placeable_resource())
 	assert_not_null(rd)
-	assert_eq(ObjectPalette._SIZE_LABELS.size(), rd.size_class_count(),
+	assert_eq(ObjectPalette.SIZE_LABELS.size(), rd.size_class_count(),
 			"the labels and the roster disagree about how many size classes there are")
 
 

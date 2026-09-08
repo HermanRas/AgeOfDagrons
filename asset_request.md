@@ -343,3 +343,37 @@ outlived it has been written into the code or data it describes.
 ```
 
 Delete the entry once it is delivered and wired, and add one line to Delivered.
+
+---
+
+## [game-code] 16.4's cursors are in, and one thing the art side may want to know
+
+**2026-09-08.** MapMaker has Select and Move cursors and a per-entity inspector (owner, size
+class). Nothing here needs a bake and nothing is asked of the art pipeline — this note is one
+finding that touches the wall art, recorded because it is the pipeline's measurement that settled
+it and it is about to matter again.
+
+⛔ **A WALL CANNOT BE PUT ON A SAVED MAP TODAY, AND IT WOULD COME OUT NINETY DEGREES WRONG.**
+`MapData`'s entity record is `{def_id, player, tile, size_class}`, so there is nowhere to write
+the `footprint_override` (`[9,2]` vs `[2,9]`) or the `facing` that `WallPlan.plan()` produces.
+`MapGen.build_from()` passes neither, so a wall from a file gets the def's **east-west** footprint
+with facing **0** — which `WallPlan.FACING_FOR_AXIS` says is the **north-south** wall.
+
+**Why this is the art side's business at all:** `FACING_FOR_AXIS` was derived by *measuring the
+staged atlases* — regressing mean opaque-pixel y against x per direction across twelve wall and
+gate bakes, plus the foundations and the rubble, which all agreed. That measurement is what
+settled the 2026-08-28 report (*"i am dragging NE to SW, the walls look like NW to SE"*) after six
+days of it being got wrong twice. **If the walls are ever re-baked, `test_wall_facing`
+re-measures and will fail** — and the fix would then also have to reach whatever the map format
+ends up storing. Card `16.4c-wall-axis` carries the game-side half; nothing is being asked of you
+now.
+
+✅ **No shipped map has a wall** (checked: `maps/sample_duel` and all five
+`scenarios/HowToPlay/scenario_*/map.json`), so nothing is broken while this waits.
+
+📝 **Unrelated but worth one line, since you read the atlases from the other end:**
+`IconAtlas` in the MapMaker reads `game/assets/atlases/` with `Image.load_from_file` and never
+`load()`, because a staged PNG's `.import` sidecar redirects into the GAME's
+`res://.godot/imported/`, which does not exist from a second project. **`ResourceLoader.exists()`
+answers TRUE for those files and `load()` still returns null with three engine errors.** If
+anything on your side ever loads a staged atlas from outside `game/`, that is the trap.
