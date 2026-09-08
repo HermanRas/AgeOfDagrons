@@ -6,7 +6,26 @@ A Godot Tool for creating maps and levels for games. This tool allows you to des
 root folder: `./MapMaker/` — a **second Godot project**, PC only, never shipped to a player and
 never run on a phone. Pinned to the same Godot **4.7.1** as the game.
 
-Planned as `PLAN.md` **Phase 16**, which carries the build order and the six decisions behind it.
+Planned as `PLAN.md` **Phase 16**, which carries the build order and the eight decisions behind it.
+
+## What is built today
+
+*Kept short on purpose — this is a spec, and `PLAN.md` §16's table is the status. Here so that
+somebody reading the screens below knows which parts exist.*
+
+| | |
+|---|---|
+| ✅ **Built** | the project and its self-checking format copies (16.1); the iso canvas and terrain painting, saved into repo-root `maps/` and played from the game's skirmish picker (16.2); **undo and redo** (16.2a); the object palette with icons cropped from the game's own atlases (16.3); **File ▸ Open** and Save As (16.4a); a map validated on save (16.4b) |
+| 🚧 **Next** | select / move / edit cursors and drag-to-place walls (16.4) |
+| ⏳ **Not yet** | areas (16.5), the Map Conditions editor (16.6), per-entity overrides and named units (16.7), scenario export (16.8), `HOW-To.md` (16.9), and the content the tool exists for (16.10) |
+
+⚠️ **UNDO WAS MISSING FROM THIS DOCUMENT AND FROM THE PHASE TABLE**, and was added as `PLAN.md`
+16.2a after a pre-kickoff review — *an editor without undo is not a tool anybody will author a
+campaign in*, because a mis-drag across a painted coastline is otherwise unrecoverable and the
+person using it stops experimenting, which is the one thing the tool exists to let them do. It is
+`Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z`, and two buttons on the tool row. **A whole mouse-drag counts
+as one step**, so taking back a stroke is one keypress and not three hundred; a text field keeps
+`Ctrl+Z` for its own typing while it has focus.
 
 ## Functions
 uses standard map structure and metadata to create a map and scenario. The tool allows you to build maps by placing objects, defining areas, and customizing win conditions. It also provides a way to save and load maps, making it easy to share your creations with others.
@@ -55,6 +74,50 @@ writes a stale format is worse than one that will not start.
  - the object panel has a dropdown for Player1-8 + Gaia, followed by a color picker.. the 1 player can have multiple color units depending on the map designers needs. The object panel has a 3rd drop down Unit, Building, Area, Terrain, followed by a search bar to filter the list of objects. The object panel displays the object icon.
  - the top of the screen has a menu bar with options for File, The File menu allows you to create a new map, open an existing map, save the current map, and export the map to a file. there is 3 cursors for selecting, moving, and editing objects on the map, and a button to open "Map Conditions". 
  - the main panel displays the map being created, with a grid overlay to help with object placement. The player can click to place and drag to place walls objects on the map, same as in game.. changing the cursor to edit and clicking a unit will allow you to edit the unit. move tool will allow you to move the unit and buildings.
+
+> **Four corrections from building it (16.3 and 16.4a, 2026-09-08).** The spec above is otherwise
+> what shipped; these four came out of the code rather than out of a preference, so they are marked
+> here rather than silently differing.
+>
+> - **There is a fifth category, RESOURCES, and without it no map in this game is playable.** Every
+>   tree, bush, mine and fish is a `ResourceDef` placed as a gaia entity, and the game's own
+>   validator **fails a map with no resources near a start**. It is also the only category with a
+>   **size** selector — a small gold mine and a large one are the same thing at different sizes,
+>   and a placement that leaves it unset silently authors the small one.
+> - ⚠️ **THE COLOUR PICKER IS LABELLED "ICON TINT", because a map file has no colour field.** An
+>   entity on disk is `{def_id, player, x, y, size_class}`; the **lobby** assigns colours in join
+>   order out of `colours.json`. So the picker changes which baked art the *palette* shows you and
+>   nothing about the saved map — calling it the player's colour would be a promise the format
+>   cannot keep. *"One player can have multiple colour units"* is therefore a `PLAN.md` §16.7
+>   question (per-entity overrides), not a palette one.
+> - **AREA IS DELIBERATELY NOT A TAB YET.** The map file has no area field until 16.5, so an Area
+>   tab would let you draw a region the save then throws away without saying so. It arrives with
+>   the field, and a test fails the day the field exists so it cannot be forgotten.
+> - **Terrain is chosen on the palette's Terrain tab and nowhere else.** There was briefly a row of
+>   named terrain buttons on the toolbar as well; two controls for one brush only ever agreed in one
+>   direction, so the buttons were deleted rather than kept.
+>
+> **Carcasses are not placeable** (owner's ruling, 2026-09-08) — the six of them are what hunting
+> leaves behind, so the Resource tab lists five things and not eleven. The flag lives in
+> `game/data/resources.json`, so the roster decides and the tool obeys.
+
+### File ▸ Open, and the one rule worth knowing before you press Save
+
+**Open lists three places**, and the third is not in the table above because it is not somewhere
+the tool *writes*: repo-root `maps/`, the player's own `user://maps/`, and **`../scenarios/`** —
+walked one level deeper, since a campaign's maps sit at `<campaign>/<scenario>/map.json`. That
+third root is what makes `PLAN.md` 16.10 possible at all: the five How To Play maps are in there,
+and re-authoring them means opening them.
+
+⚠️ **SO: OPEN THEN SAVE REPLACES; SAVE AS CREATES.** `Save` writes back to wherever a map came
+from — which is exactly what re-authoring means, and exactly what you do not want after merely
+looking at somebody else's map. The status line always shows which file `Save` is about to
+replace. **`Save As` refuses a name that is already taken** rather than overwriting it, because a
+window has no `--force` to offer and without that refusal the box you type a title into is a
+delete button.
+
+A map that will not load is **reported and does not open** — the canvas keeps whatever was on it.
+A partial load showing an empty canvas over your authored map is how a file gets saved as nothing.
 
 ### Map Conditions
  - The Map Conditions screen allows the player to define win conditions for the map. The player can set trigger conditions, objectives, and other parameters that determine how the map is played. The player can also set the starting resources and units for each player.
