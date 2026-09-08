@@ -53,6 +53,19 @@ func _has_game() -> bool:
 	return root != null and not root.path.is_empty()
 
 
+## A resource an author is actually allowed to place.
+##
+## ⚠️ **NOT `resource_ids()[0]`, WHICH IS NOW A CARCASS.** Alphabetically first is
+## `res.bear_carcass`, and the six carcasses are flagged unplaceable — so a fixture reaching for
+## index 0 would exercise a placement the palette cannot make, which is §5's *"beware fixtures
+## that agree with the bug"* pointed at a rule instead of at a defect.
+func _a_placeable_resource() -> StringName:
+	for id in GameDataRegistry.resource_ids():
+		if GameDataRegistry.placeable(id):
+			return id
+	return &""
+
+
 # ── the categories ──────────────────────────────────────────────────────────
 
 ## ⚠️ **AREA IS SPEC'D IN 16.3's ROW AND MUST NOT BE HERE UNTIL 16.5.** `MapData.to_dict()`
@@ -88,10 +101,79 @@ func test_each_category_lists_its_own_roster() -> void:
 	assert_eq(palette.listed_ids().size(), GameDataRegistry.building_ids().size())
 	palette.set_category(ObjectPalette.Category.UNIT)
 	assert_eq(palette.listed_ids().size(), GameDataRegistry.unit_ids().size())
-	palette.set_category(ObjectPalette.Category.RESOURCE)
-	assert_eq(palette.listed_ids().size(), GameDataRegistry.resource_ids().size())
 	palette.set_category(ObjectPalette.Category.TERRAIN)
 	assert_eq(palette.listed_ids().size(), SimMap.Terrain.size())
+
+
+# ── what an author may place ────────────────────────────────────────────────
+
+## ⚠️ **A CARCASS IS WHAT HUNTING LEAVES, NOT A THING AN AUTHOR PLACES** (owner, 2026-09-08:
+## *"no placement of carcasses is acceptable"*). `DeathSystem` spawns them and they decay, so
+## six of the Resource tab's eleven rows were things nobody would ever put on a map.
+##
+## **Driven off the `placeable` flag in `resources.json`, never off the id spelling.** Matching
+## `_carcass` inside the tool fails in both directions as the roster grows — a future
+## `res.horse_carcass` filtered by luck, a `res.whale_meat` not filtered at all — and neither
+## failure announces itself. So this test asserts the MECHANISM: everything the tab offers is
+## flagged placeable, and everything the roster hides is flagged not.
+func test_the_resource_tab_offers_only_what_the_roster_says_is_placeable() -> void:
+	if not _has_game():
+		return
+	palette.set_category(ObjectPalette.Category.RESOURCE)
+	var offered := palette.listed_ids()
+	assert_true(offered.size() < GameDataRegistry.resource_ids().size(),
+			"nothing is being filtered -- is the flag in resources.json?")
+	for id in offered:
+		assert_true(GameDataRegistry.placeable(id), "'%s' should not be offered" % id)
+	for id in GameDataRegistry.resource_ids():
+		if not GameDataRegistry.placeable(id):
+			assert_false(offered.has(id), "'%s' is flagged unplaceable and is offered" % id)
+
+
+## And the six are the carcasses, asserted by their flag rather than by counting to six: the
+## number is data and would change the day a seventh animal is baked.
+func test_every_carcass_in_the_roster_is_flagged_unplaceable() -> void:
+	if not _has_game():
+		return
+	var carcasses := 0
+	for id in GameDataRegistry.resource_ids():
+		if not String(id).ends_with("_carcass"):
+			continue
+		carcasses += 1
+		assert_false(GameDataRegistry.placeable(id), "'%s' is still placeable" % id)
+	assert_true(carcasses > 0, "no carcasses in the roster -- the fixture proved nothing")
+
+
+## ⚠️ **ABSENT MEANS PLACEABLE**, so nothing had to be edited for the other ten files. A flag
+## that had to be spelled out everywhere is a flag somebody forgets on the next entry, and the
+## failure would be a new building missing from the palette.
+func test_absent_means_placeable() -> void:
+	if not _has_game():
+		return
+	for id in GameDataRegistry.building_ids():
+		assert_true(GameDataRegistry.placeable(id), "'%s' vanished from the palette" % id)
+	assert_true(GameDataRegistry.placeable(&"nothing.at.all"),
+			"an unknown id must not be hidden -- a typo would look like the flag working")
+
+
+## ⚠️ **`resource_ids()` IS NOT FILTERED AND MUST NOT BE.** *What the roster holds* and *what an
+## author may place* are two facts: `Boot`'s report says "resources 11" because there are
+## eleven, and a report reading 5 would make a reader think six failed to load. Same split as
+## the server browser's JOIN button, where one variable answering two questions shipped a
+## control enabled with nothing to join.
+##
+## Asserted as a PROPERTY and not against the number eleven: §6's rule about a figure written
+## into an assertion is that it fails the day the owner asks for a change, and a resource added
+## to the roster is exactly that day.
+func test_the_roster_count_still_reports_every_resource() -> void:
+	if not _has_game():
+		return
+	var hidden := 0
+	for id in GameDataRegistry.resource_ids():
+		if not GameDataRegistry.placeable(id):
+			hidden += 1
+	assert_true(hidden > 0,
+			"resource_ids() has been filtered -- Boot's report would under-count the roster")
 
 
 ## ⚠️ **SORTED AS TEXT.** `Array[StringName].sort()` orders by identity and not stably between
@@ -157,7 +239,7 @@ func test_the_resource_category_defaults_the_owner_to_gaia() -> void:
 	palette.set_category(ObjectPalette.Category.BUILDING)
 	palette.set_player(3)
 	palette.set_category(ObjectPalette.Category.RESOURCE)
-	palette.pick(GameDataRegistry.resource_ids()[0])
+	palette.pick(_a_placeable_resource())
 	assert_eq(int(palette.selection()["player"]), ObjectPalette.GAIA)
 
 
@@ -219,7 +301,7 @@ func test_the_size_class_rides_the_selection_for_a_resource() -> void:
 	if not _has_game():
 		return
 	palette.set_category(ObjectPalette.Category.RESOURCE)
-	palette.pick(GameDataRegistry.resource_ids()[0])
+	palette.pick(_a_placeable_resource())
 	palette.set_size_class(2)
 	assert_eq(int(palette.selection()["size_class"]), 2)
 
@@ -244,7 +326,7 @@ func test_the_size_class_is_zero_for_anything_that_is_not_a_resource() -> void:
 func test_the_size_picker_offers_one_row_per_declared_size_class() -> void:
 	if not _has_game():
 		return
-	var rd: ResourceDef = GameDataRegistry.resource_def(GameDataRegistry.resource_ids()[0])
+	var rd: ResourceDef = GameDataRegistry.resource_def(_a_placeable_resource())
 	assert_not_null(rd)
 	assert_eq(ObjectPalette._SIZE_LABELS.size(), rd.size_class_count(),
 			"the labels and the roster disagree about how many size classes there are")
@@ -490,7 +572,7 @@ func test_a_resources_size_class_reaches_the_map() -> void:
 	if not _has_game():
 		return
 	var doc := MapDocument.create(Vector2i(48, 48), "Sizes")
-	var id := GameDataRegistry.resource_ids()[0]
+	var id := _a_placeable_resource()
 	assert_true(doc.add_entity(id, ObjectPalette.GAIA, Vector2i(10, 10), 2))
 	assert_eq(int(doc.data.entities[0]["size_class"]), 2)
 
@@ -531,7 +613,7 @@ func test_a_hand_placed_node_beside_a_start_is_still_erasable() -> void:
 	var doc := MapDocument.create(Vector2i(48, 48), "Beside")
 	assert_true(doc.place_start(1, Vector2i(20, 20)))
 	var before := doc.data.entities.size()
-	var id := GameDataRegistry.resource_ids()[0]
+	var id := _a_placeable_resource()
 	var free_tile := Vector2i(40, 40)
 	assert_true(doc.add_entity(id, ObjectPalette.GAIA, free_tile), "fixture placement failed")
 	assert_eq(doc.remove_entity_at(free_tile), 1)

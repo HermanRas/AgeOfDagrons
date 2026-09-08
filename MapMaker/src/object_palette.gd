@@ -321,8 +321,36 @@ func set_tint(colour: int) -> void:
 func listed_ids() -> Array[StringName]:
 	var out: Array[StringName] = []
 	var needle := _search.text.strip_edges().to_lower() if _search != null else ""
-	for id in _ids_for(_category):
+	for id in available_ids():
 		if needle.is_empty() or _matches(id, needle):
+			out.append(id)
+	return out
+
+
+## Everything this category OFFERS, before the search box narrows it.
+##
+## ⚠️ **THE `placeable` FLAG IS HONOURED HERE AND NOWHERE ELSE**, which is why
+## `GameDataRegistry.resource_ids()` still returns all eleven: the roster's SIZE and what an
+## author may place are two different facts, and `Boot`'s report wants the first — a report
+## reading "resources 5" would make somebody think six failed to load.
+##
+## The flag is false on the six carcasses (owner, 2026-09-08: *"no placement of carcasses is
+## acceptable"*) — a carcass is what hunting LEAVES, so it is a runtime spawn wearing a
+## `ResourceDef`'s clothes.
+##
+## **Two totals, not one, and that is the reason this is a separate function**: the count line
+## under the grid says *"none of 5 match"* rather than *"none of 11"*, because 11 would name a
+## filter the author did not set and send them looking for six missing rows.
+##
+## Terrain is exempt: its ids are enum key names rather than roster entries, so asking the
+## registry about "GRASS" would search three JSON files and land on the unknown-id answer —
+## true, and for the wrong reason.
+func available_ids() -> Array[StringName]:
+	if _category == Category.TERRAIN:
+		return _ids_for(_category)
+	var out: Array[StringName] = []
+	for id in _ids_for(_category):
+		if GameDataRegistry.placeable(id):
 			out.append(id)
 	return out
 
@@ -387,7 +415,10 @@ func _rebuild() -> void:
 
 
 func _count_text(shown: int) -> String:
-	var total := _ids_for(_category).size()
+	# AGAINST WHAT THE CATEGORY OFFERS, not against the whole roster -- `available_ids()` has
+	# the argument. The Resource tab offers 5 of 11 and the other 6 are not a filter the
+	# author set.
+	var total := available_ids().size()
 	if total == 0:
 		# NAMES THE ROSTER, not the search. "0 of 0" under an unloaded roster would send
 		# somebody to clear a search box that is already empty.

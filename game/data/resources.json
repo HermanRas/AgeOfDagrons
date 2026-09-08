@@ -1,4 +1,39 @@
 {
+  "_note_name_and_placeable": [
+    "TWO KEYS ADDED 2026-09-08 FOR PHASE 16.3's PALETTE, AND NOTHING IN game/src READS",
+    "EITHER OF THEM. Both are here rather than in the tool because this file is the one",
+    "source of truth about the roster -- MapMaker/README.md's whole argument is that",
+    "'nothing is duplicated, so the palette cannot drift out of step with the game's",
+    "roster', and a list of exclusions living in a second Godot project is exactly that",
+    "drift with an extra step.",
+    "",
+    "`name` -- the label a person reads. NOT ONE ENTRY IN THIS FILE HAD ONE until now,",
+    "which buildings.json and units.json both do, so the MapMaker's Resource tab came",
+    "out as a column of `res.bear_carcass`-shaped code sitting beside a properly named",
+    "Archery Range. The tool falls back to formatting the id when a name is absent, so",
+    "this is an improvement rather than a fix -- but a formatted id can never be",
+    "overridden, and `res.stone` is the proof: the thing is a quarry and the id is not.",
+    "",
+    "`placeable` -- may a MAP AUTHOR put this on a map by hand? Absent means yes.",
+    "",
+    "IT IS FALSE ON THE SIX CARCASSES AND ONLY ON THEM (owner's ruling, 2026-09-08:",
+    "'no placement of carcasses is acceptable'). A carcass is what hunting LEAVES --",
+    "DeathSystem spawns it, it decays, and 6.6's rule is that a hunter eats what it",
+    "killed. So it is a runtime thing wearing a ResourceDef's clothes, and offering six",
+    "of them among eleven rows made the palette's Resource tab majority junk for the",
+    "person using it.",
+    "",
+    "THE FLAG IS HERE BECAUSE THE ALTERNATIVE WAS PATTERN-MATCHING `_carcass` INSIDE",
+    "THE TOOL, and that fails in both directions the moment the roster grows: a new",
+    "`res.horse_carcass` would be filtered by luck, and a `res.whale_meat` would not be",
+    "filtered at all. Neither failure announces itself.",
+    "",
+    "NOTHING IN THE GAME NEEDS TO READ `placeable`, and that is not an oversight: no",
+    "generator places a carcass (MapGenerator names its resource ids explicitly) and no",
+    "screen lists resource defs for a player to choose from. If one ever does -- a",
+    "scenario editor, a cheat menu -- this is the field to ask."
+  ],
+
   "_note": [
     "PLAN.md 9. All numbers are STARTING VALUES to be tuned by playtest.",
     "",
@@ -166,6 +201,7 @@
   ],
 
   "res.tree": {
+    "name": "Tree",
     "kind": "wood",
     "visual": "vis.tree",
     "pick_footprints": [[2, 2]],
@@ -174,6 +210,7 @@
   },
 
   "res.gold_mine": {
+    "name": "Gold Mine",
     "kind": "gold",
     "visual": "vis.gold_mine",
     "visuals": ["vis.gold_mine_small", "vis.gold_mine", "vis.gold_mine_large"],
@@ -183,6 +220,7 @@
   },
 
   "res.fish": {
+    "name": "Fish",
     "kind": "food",
     "visual": "vis.fish",
     "domain": "water",
@@ -191,6 +229,8 @@
   },
 
   "res.deer_carcass": {
+    "name": "Deer Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.deer_carcass",
     "amounts": [140, 140, 140],
@@ -198,6 +238,8 @@
   },
 
   "res.wolf_carcass": {
+    "name": "Wolf Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.wolf_carcass",
     "amounts": [30, 30, 30],
@@ -205,6 +247,8 @@
   },
 
   "res.boar_carcass": {
+    "name": "Boar Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.boar_carcass",
     "amounts": [150, 150, 150],
@@ -212,6 +256,8 @@
   },
 
   "res.bear_carcass": {
+    "name": "Bear Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.bear_carcass",
     "amounts": [300, 300, 300],
@@ -219,6 +265,7 @@
   },
 
   "res.berry_bush": {
+    "name": "Berry Bush",
     "kind": "food",
     "visual": "vis.berry_bush",
     "amounts": [80, 150, 220],
@@ -226,6 +273,7 @@
   },
 
   "res.stone": {
+    "name": "Stone Quarry",
     "kind": "stone",
     "visual": "vis.stone_mine",
     "visuals": ["vis.stone_mine", "vis.stone_mine_large", "vis.stone_mine_large"],
@@ -235,6 +283,8 @@
   },
 
   "res.sheep_carcass": {
+    "name": "Sheep Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.sheep_carcass",
     "amounts": [100, 100, 100],
@@ -242,6 +292,8 @@
   },
 
   "res.cattle_carcass": {
+    "name": "Cattle Carcass",
+    "placeable": false,
     "kind": "food",
     "visual": "vis.cattle_carcass",
     "amounts": [500, 500, 500],

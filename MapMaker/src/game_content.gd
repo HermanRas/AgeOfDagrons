@@ -190,6 +190,48 @@ static func prettify(id: StringName) -> String:
 	return text.replace("_", " ").capitalize()
 
 
+## May a map author put this on a map by hand? **Absent means yes** (PLAN.md 16.3).
+##
+## False on the six carcasses in `resources.json` and nothing else: a carcass is what hunting
+## LEAVES — `DeathSystem` spawns it and it decays — so it is a runtime thing wearing a
+## `ResourceDef`'s clothes, and six of the Resource tab's eleven rows were things nobody would
+## ever place. The owner's ruling, 2026-09-08: *"no placement of carcasses is acceptable"*.
+##
+## ⚠️ **READ OFF THE RAW JSON, AND `ResourceDef` DELIBERATELY DOES NOT CARRY IT.** Two reasons,
+## and the second is the load-bearing one:
+##
+##   - **nothing in `game/src` needs it.** No generator places a carcass (`MapGenerator` names
+##     its resource ids explicitly) and no screen lists resource defs for a player to choose
+##     from. A field on the def that only one caller in another project reads is a field that
+##     invites a second reader with a different opinion.
+##   - **`format/resource_def.gd` is a HASH-CHECKED VERBATIM COPY.** Adding a property there
+##     means editing the game's original, re-copying, and `FormatGuard` correctly complaining
+##     until somebody does — a real chore, paid to carry a flag the format has no interest in.
+##     `display_name()` above already reads raw for exactly this shape of reason.
+##
+## ⚠️ **AND THE FLAG IS IN THE GAME'S DATA RATHER THAN IN THIS TOOL, WHICH IS THE POINT.** An
+## exclusion list living in `MapMaker/` is the drift `MapMaker/README.md` argues against —
+## *"nothing is duplicated, so the palette cannot drift out of step with the game's roster"* —
+## and pattern-matching `_carcass` in the palette fails in **both** directions as the roster
+## grows: a future `res.horse_carcass` would be filtered by luck and a `res.whale_meat` would
+## not be filtered at all, neither announcing itself.
+func placeable(id: StringName) -> bool:
+	for path in _read_raw_cache:
+		var entry: Variant = (_read_raw_cache[path] as Dictionary).get(id)
+		if entry is Dictionary:
+			return bool((entry as Dictionary).get("placeable", true))
+	# AN UNKNOWN ID IS PLACEABLE, because the alternative hides things. A typo'd id that
+	# vanished from the palette would look like the flag working.
+	return true
+
+
+## ⚠️ **`resource_ids()` AND FRIENDS ARE NOT FILTERED BY THIS, DELIBERATELY.** *What the roster
+## holds* and *what an author may place* are two facts, and only one of them belongs in a count:
+## `Boot`'s report says "resources 11" because there are eleven, and a report that said 5 would
+## make a reader think six failed to load. The palette filters at the point of listing. Same
+## split as the server browser's JOIN button, where one variable answering two questions shipped
+## a control that was enabled with nothing to join.
+##
 ## The terrain kinds a brush can paint, in `SimMap.Terrain` order.
 ##
 ## FROM THE ENUM, never a written-out list: `sim_map.gd` is the authority on its own terrain
