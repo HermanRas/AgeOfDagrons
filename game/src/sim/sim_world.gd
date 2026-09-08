@@ -74,6 +74,44 @@ var trophy_def_id: StringName = &""
 ## take it. Written only by `WinConditionSystem`, beside the other two.
 var winner_team: int = 0
 
+## ── the dragon claim, as one fact about the MATCH (PLAN.md 13.2c) ───────────
+##
+## The same three numbers `SimBuilding` carries per nest, summarised for the one running
+## claim so `SnapshotSystem` can put them on the wire without touching a building's shape.
+## Written ONLY by `NestSystem`, every tick, beside `match_over`'s arrangement above.
+##
+## ⚠️ **A MIRROR, NOT A SECOND SOURCE OF TRUTH, AND THE DIRECTION IS THE WHOLE SAFETY
+## PROPERTY.** `SimBuilding.claim_ticks_left` is the claim; this is a copy published at the
+## end of the tick that computed it. Nothing reads these to decide anything — the rule is
+## `NestSystem._advance_claims` and it reads the nest — so a stale mirror can only ever
+## draw a wrong ring, never pay out a wrong dragon. Four trackers have been deleted on
+## this project for being a second copy of something that moved on; this one is rewritten
+## from scratch every tick, which is the only version of that arrangement that holds.
+##
+## **WHY IT IS HERE AND NOT THREE FIELDS ON `to_snapshot()`.** 13.2c's card names the cost:
+## `SnapshotSystem` groups `updated` by sorted field names (12.1f), so a field on ONE
+## building splits that building into its own wire shape and costs bytes on every other
+## building in the game. Match-level, beside `winner_id`, is three ints and three field
+## names ONCE per snapshot — cheaper than `player_state` (which would pay per player) and
+## cheaper than the entity by a wide margin.
+##
+## `claim_ticks_left` is **-1 for "no claim running"**, matching the nest's own sentinel,
+## and `claim_owner` is 0 then. `claim_total_ticks` is `NestSystem.GROW_TICKS` while a
+## claim runs, sent rather than assumed for `advance_total_ticks`' reason: the HUD draws a
+## fraction and should not hold its own copy of how long a claim takes.
+##
+## ⚠️ **ONE RUNNING CLAIM, LOWEST NEST ID WINS.** `MapGenerator` places exactly one nest,
+## but a hand-authored map (16.3) will be able to place two, and one ring cannot report
+## two countdowns. The tie-break is `NestSystem._nest_for`'s — lowest id — so it is
+## determinism rather than a judgement, and the nests themselves each keep their own full
+## claim state regardless of which one is being reported.
+##
+## NOT IN `state_hash()`: these are derived from nest state that IS hashed (see the
+## building branch there), so hashing both would report one divergence twice.
+var claim_owner: int = 0
+var claim_ticks_left: int = -1
+var claim_total_ticks: int = 0
+
 var players: Array[SimPlayer] = []
 
 ## player id -> team number, the argument every `Diplomacy` predicate takes.
@@ -1256,9 +1294,19 @@ func state_hash() -> int:
 			# every unit leaving this building walks to, so two hosts disagreeing about
 			# it send the same trained army to two different places. `pos` reports that
 			# several seconds later, as a divergence with no visible cause.
+			# THE DRAGON CLAIM (13.2, folded in 13.2c), for `rubble_ticks_left`'s reason
+			# one comment up and a stronger version of it: that timer ends in a DESPAWN
+			# and this one ends in a SPAWN. Two hosts a tick apart on the countdown hand
+			# out a 600 hp dragon on different ticks, and `pos` and `hp` cannot report
+			# that at all until the dragon is already standing there -- six minutes after
+			# they parted, with nothing to say when. `claim_owner` is in it because it
+			# decides WHOSE dragon, which no other hashed field can express, and
+			# `claim_baby_id` because it is the link `_reap_orphans` kills a hatchling for
+			# not having.
 			parts.append([e.phase, e.build_progress, q, e.rubble_ticks_left,
 					e.gather_amount, e.facing, e.gate_locked, g, e.attack_cooldown,
-					e.waypoint.x, e.waypoint.y])
+					e.waypoint.x, e.waypoint.y,
+					e.claim_owner, e.claim_ticks_left, e.claim_baby_id])
 		elif e is SimResourceNode:
 			# GatherSystem (6.4) depletes this at runtime; without it two clients
 			# whose villagers gathered at different rates would hash identically

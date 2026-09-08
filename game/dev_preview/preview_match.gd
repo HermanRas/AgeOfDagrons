@@ -405,6 +405,34 @@ func _advance_script() -> void:
 			_report_roster("after tapping the third portrait")
 			_shoot("match_roster_picked")
 		70:
+			# THE DRAGON CLAIM ON THE AGE BADGE (13.2c). `preview_age_badge` photographs
+			# the widget in every state it has; what is in doubt HERE is the wiring, which
+			# is the half this project keeps getting caught by -- a control that draws
+			# right, takes the tap and is connected to nothing (the selected-units roster,
+			# the minimap corners, the lobby's own victory picker three cards ago).
+			#
+			# So the whole chain runs: a nest and a mother go into the host world, she is
+			# killed by the LOCAL PLAYER, `NestSystem` opens a claim, three ints ride the
+			# snapshot, `GameView` inverts the countdown and `GameScene._refresh_hud` puts
+			# it on the badge in that player's colour. Nothing here touches the badge.
+			_stand_up_a_nest_and_kill_the_mother()
+			_wait_until(_the_badge_has_a_claim_on_it)
+		71:
+			# ⚠️ **AND THEN THE CLOCK IS WOUND FORWARD, OR THE SHOT IS OF NOTHING.** A
+			# claim that has just opened is a ring 0.1% round, which photographs as no ring
+			# at all -- the same trap `_wait_for_progress` exists for on the age side. The
+			# difference is that an advance is tens of seconds and a claim is 360, so
+			# waiting it out would add six minutes to every run of this preview.
+			#
+			# THE NEST'S OWN FIELD IS MOVED, not the badge's: everything downstream of it
+			# still has to work for the picture to change, so this shortens the claim
+			# rather than faking its report.
+			_wind_the_claim_forward(0.55)
+			_wait_until(_the_claim_ring_is_past_half)
+		72:
+			_report_claim_ring()
+			_shoot("match_dragon_claim")
+		73:
 			# RESIGNING (12.1e). Left until last on purpose: it ends the match, so nothing
 			# after it would have a match to photograph.
 			#
@@ -414,7 +442,7 @@ func _advance_script() -> void:
 			# as a defeat. Pressed through `pressed.emit()` on the real button for the same
 			# reason the cancel-build one is.
 			_resign_the_match()
-		71:
+		74:
 			_report_resigned()
 			_shoot("match_resigned")
 		_:
@@ -571,6 +599,96 @@ func _stand_up_a_market() -> void:
 	var p := world.player_for(me)
 	for kind in [&"food", &"wood", &"stone", &"gold"]:
 		p.stock[kind] = maxi(int(p.stock.get(kind, 0)), 2000)
+
+
+## ── the dragon claim on the age badge (13.2c) ──────────────────────────────
+
+## Far from everything else this script builds, and clear of `MARKET_SITE` and the house
+## spots. A nest is 10x10 -- the largest obstacle the debug map ever carries, which is what
+## `test_dragon_claim`'s own header records paying for -- so it goes in a corner nothing
+## reaches.
+const NEST_SITE := Vector2i(46, 46)
+
+
+## A nest, a mother, and the local player landing the killing blow.
+##
+## THROUGH THE HOST WORLD, which is the documented solo-only exception `_stand_up_a_market`
+## already takes: neither a nest nor a gaia dragon is placeable by any command a player has,
+## and `MapGen` puts them on GENERATED maps only -- the debug map has neither.
+##
+## SHE IS KILLED WITH AN OWNER RATHER THAN DESPAWNED. `_start_claims` reads
+## `last_attacker_owner` and a mother killed by nobody drops nothing at all, so a
+## `despawn()` here would produce no claim and read as the wire being broken.
+func _stand_up_a_nest_and_kill_the_mother() -> void:
+	var world: SimWorld = Net.host().world
+	var me := Net.local_player_id()
+	if world.spawn_building(NestSystem.NEST_DEF, 0, NEST_SITE,
+			SimBuilding.Phase.COMPLETE, true) == null:
+		push_warning("preview_match: no room for a dragon nest at %s" % NEST_SITE)
+		return
+	# ONE TILE OFF THE FOOTPRINT, exactly as `MapGenerator._place_guardian` does it: a unit
+	# sharing a tile with a building is an overlap `MapValidator` rejects.
+	var mother := world.spawn_unit(&"unit.dragon", 0, NEST_SITE + Vector2i(-1, 5))
+	if mother == null:
+		push_warning("preview_match: the mother could not be placed")
+		return
+	mother.take_damage(mother.hp, 0, me)
+	print("  killed the mother at %s for player %d" % [mother.tile(), me])
+
+
+func _the_badge_has_a_claim_on_it() -> bool:
+	return _game._age_badge.claim_active
+
+
+## Shorten the running claim so `fraction` of it has already elapsed.
+##
+## Found by the DEF ID rather than by remembering which building was spawned, because the
+## thing under test is the chain from the nest to the badge and a cached reference would
+## short-circuit the first link of it.
+func _wind_the_claim_forward(fraction: float) -> void:
+	var world: SimWorld = Net.host().world
+	for e in world.entities.values():
+		if e is SimBuilding and e.def_id == NestSystem.NEST_DEF:
+			var nest: SimBuilding = e
+			if nest.claim_ticks_left < 0:
+				continue
+			nest.claim_ticks_left = int(NestSystem.GROW_TICKS * (1.0 - fraction))
+			print("  wound the claim to %d ticks left of %d"
+					% [nest.claim_ticks_left, NestSystem.GROW_TICKS])
+			return
+	push_warning("preview_match: no nest is carrying a claim to wind forward")
+
+
+func _the_claim_ring_is_past_half() -> bool:
+	return _game._age_badge.claim_progress > 0.5
+
+
+## What the badge is drawing, and where the fact came from.
+##
+## PRINTED FROM BOTH ENDS, because a screenshot of a 4 px arc cannot say whose colour it is
+## and the whole feature is "whose claim is this". The sim's answer, the view's answer and
+## the widget's answer on three lines: if they disagree, the disagreement names the link.
+func _report_claim_ring() -> void:
+	var world: SimWorld = Net.host().world
+	var badge: AgeBadge = _game._age_badge
+	var view: GameView = _game._view
+	print("  sim:   claim_owner %d, ticks_left %d of %d"
+			% [world.claim_owner, world.claim_ticks_left, world.claim_total_ticks])
+	print("  view:  running %s, owner %d, progress %.4f, %d s left"
+			% [view.claim_running(), view.claim_owner(), view.claim_progress(),
+			view.claim_seconds_left()])
+	print("  badge: active %s, progress %.4f, colour %s (arc %s), age ring wins %s"
+			% [badge.claim_active, badge.claim_progress, badge.claim_colour.to_html(false),
+			AgeBadge.claim_arc_color(badge.claim_colour).to_html(false),
+			badge._age_ring_wins()])
+	if not badge.claim_active:
+		push_warning("preview_match: a claim is running and the badge does not show it")
+	var mine := GameDataRegistry.colour(
+			int(view.skin_for(view.claim_owner()).get("colour", -1)))
+	if badge.claim_colour != mine:
+		push_warning("preview_match: the ring is not the claimant's colour -- %s, want %s"
+				% [badge.claim_colour.to_html(false), mine.to_html(false)])
+	print("  (the arc is %.1f%% round)" % (badge.claim_progress * 100.0))
 
 
 ## Press one of the four corner buttons -- the REAL TextureButton, found by name on

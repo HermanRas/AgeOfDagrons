@@ -374,3 +374,136 @@ func test_a_soldiers_swing_credits_the_soldiers_owner() -> void:
 	_run(40)
 	assert_eq(wolf.last_attacker_owner, 1, "the militia's owner, off a real exchange")
 	assert_true(wolf.hp < wolf.max_hp, "and it really was hit")
+
+
+# ── the claim on the wire (13.2c) ──────────────────────────────────────────
+#
+# Three ints at the TOP of the snapshot, not on the nest and not per player. `SimWorld`'s
+# own header carries the costing; what is asserted here is that the mirror tracks the nest
+# through every one of the claim's four endings, because a mirror that goes stale draws a
+# countdown for a claim that is over.
+
+func _claim_wire() -> Dictionary:
+	var snap := SnapshotSystem.build(w, 1)
+	return {
+		"owner": int(snap["claim_owner"]),
+		"left": int(snap["claim_ticks_left"]),
+		"total": int(snap["claim_total_ticks"]),
+	}
+
+
+func test_a_world_with_no_nest_advertises_no_claim() -> void:
+	# The state every skirmish, every test fixture and every trophy match is in. -1 is
+	# `SimBuilding.claim_ticks_left`'s own sentinel, deliberately, so one reading means
+	# the same thing at both ends of the wire.
+	_run(1)
+	var wire := _claim_wire()
+	assert_eq(wire["left"], -1, "no claim is running")
+	assert_eq(wire["owner"], 0)
+
+
+func test_a_running_claim_reaches_the_wire_with_its_owner_and_its_clock() -> void:
+	var pair := _nest_and_mother()
+	(pair[1] as SimUnit).take_damage(9999, 0, 1)
+	w.step()
+
+	var wire := _claim_wire()
+	assert_eq(wire["owner"], 1, "whose claim it is, as a player id")
+	assert_eq(wire["total"], NestSystem.GROW_TICKS,
+			"and how long a claim takes, sent rather than assumed by the HUD")
+	assert_true(wire["left"] > 0 and wire["left"] <= NestSystem.GROW_TICKS,
+			"with time still on it, got %d" % wire["left"])
+
+	# IT COUNTS DOWN, which is the direction `GameView.claim_progress` has to invert. A
+	# ring handed this unchanged would start full and empty itself.
+	var first: int = wire["left"]
+	_run(10)
+	assert_true(_claim_wire()["left"] < first, "the clock is running")
+
+
+func test_the_wire_says_nothing_the_tick_the_nest_falls() -> void:
+	# ⚠️ THE ONE CASE `_publish_claim` IS ORDERED FOR. The nest is despawned on the tick
+	# it dies (`leaves_rubble: false`), so this is also the tick `NestSystem` stops having
+	# any nest to publish from -- and a mirror cleared at the BOTTOM of the pass would
+	# freeze the last countdown on the badge forever, on the one event a rival most needs
+	# to see end.
+	var pair := _nest_and_mother()
+	var nest: SimBuilding = pair[0]
+	(pair[1] as SimUnit).take_damage(9999, 0, 1)
+	w.step()
+	assert_true(_claim_wire()["left"] >= 0, "a claim is running before the nest falls")
+
+	nest.take_damage(99999, 0, 2)
+	w.step()
+	assert_eq(_claim_wire()["left"], -1, "and nothing is advertised after it")
+
+
+func test_a_paid_out_claim_advertises_nothing_even_though_the_nest_remembers_it() -> void:
+	# ⚠️ `claim_owner` IS NEVER CLEARED -- it is the "this nest has given up its dragon"
+	# record and the whole of the one-dragon-per-map guarantee. So a mirror keyed off it
+	# would leave a full ring on the badge for the rest of the match. `claim_ticks_left`
+	# is the RUNNING test.
+	var pair := _nest_and_mother()
+	var nest: SimBuilding = pair[0]
+	(pair[1] as SimUnit).take_damage(9999, 0, 1)
+	_run(NestSystem.GROW_TICKS + 2)
+
+	assert_eq(_count(&"unit.dragon"), 1, "the claim really did mature")
+	assert_eq(nest.claim_owner, 1, "and the nest still remembers whose it was")
+	assert_eq(_claim_wire()["left"], -1, "but nothing is counting any more")
+	assert_eq(_claim_wire()["owner"], 0)
+
+
+func test_every_player_is_told_about_a_rivals_claim() -> void:
+	# ⚠️ A DESIGN RULING AND NOT A PLUMBING DEFAULT (owner, 2026-09-07). 13.2c's card left
+	# it open, with the rally point as the precedent for filtering an enemy's INTENTION off
+	# the wire; asking for the CLAIMANT'S COLOUR on the badge settled it, because a colour
+	# is only information if the claim can be somebody else's. Pinned so that a later fog
+	# pass has to change a test rather than quietly narrow it.
+	var cfg := MatchConfig.debug_single_player()
+	cfg.player_ids = [1, 2] as Array[int]
+	cfg.colours = [0, 1] as Array[int]
+	var two := SimWorld.new()
+	two.setup(cfg)
+	# ⚠️ PLAYER 2 IS GIVEN A VILLAGER, AND WITHOUT IT THIS FIXTURE DOES NOT MEAN WHAT IT
+	# SAYS. `WinConditionSystem` decides who is standing by counting what a player OWNS,
+	# so a second seat with nothing in it is eliminated on tick 1 -- and `_advance_claims`
+	# abandons a defeated claimant's claim, which would make this a test about defeat
+	# wearing a claim's clothes.
+	two.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	var nest := two.spawn_building(NEST_DEF, 0, NEST_ORIGIN, SimBuilding.Phase.COMPLETE, true)
+	var mother := two.spawn_unit(&"unit.dragon", 0, NEST_ORIGIN + Vector2i(-1, 5))
+	mother.take_damage(9999, 0, 2)
+	two.step()
+	assert_eq(nest.claim_owner, 2, "player 2 landed the blow")
+	assert_false(two.player_for(2).defeated, "and player 2 is still in the match")
+
+	for viewer in [1, 2]:
+		var snap := SnapshotSystem.build(two, viewer)
+		assert_eq(int(snap["claim_owner"]), 2,
+				"player %d is told whose claim it is" % viewer)
+		assert_true(int(snap["claim_ticks_left"]) > 0,
+				"and how long is left, player %d" % viewer)
+
+
+func test_the_countdown_is_in_the_state_hash() -> void:
+	# ⚠️ IT WAS NOT, AND THE ARGUMENT `rubble_ticks_left` MAKES FOR ITSELF IS STRONGER
+	# HERE: that timer ends in a despawn and this one ends in a SPAWN. Two hosts a tick
+	# apart on the claim hand out a 600 hp dragon on different ticks, and `hp` and `pos`
+	# cannot report it until the dragon is already standing there -- six minutes after they
+	# parted, with nothing to say when.
+	var pair := _nest_and_mother()
+	(pair[1] as SimUnit).take_damage(9999, 0, 1)
+	w.step()
+	var nest: SimBuilding = pair[0]
+
+	var before := w.state_hash()
+	nest.claim_ticks_left -= 1
+	assert_ne(w.state_hash(), before, "a tick's difference in the countdown is visible")
+
+	nest.claim_ticks_left += 1
+	assert_eq(w.state_hash(), before, "and the hash is a function of the state, not a counter")
+
+	var owner_same := w.state_hash()
+	nest.claim_owner = 2
+	assert_ne(w.state_hash(), owner_same, "and so is WHOSE dragon it will be")

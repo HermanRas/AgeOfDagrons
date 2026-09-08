@@ -983,3 +983,82 @@ func test_a_north_south_wall_is_traced_on_its_transposed_footprint() -> void:
 	assert_eq(v.ground_m,
 			Vector2(def.footprint.y, def.footprint.x) * Iso.METRES_PER_TILE,
 			"turned with the drag, not left at the axis the art was baked on")
+
+
+# ── the dragon claim, off the top of the snapshot (13.2c) ──────────────────
+
+func _with_claim(owner: int, left: int, total: int) -> void:
+	view.apply_snapshot({"tick": 1, "updated": [], "removed": [],
+			"claim_owner": owner, "claim_ticks_left": left, "claim_total_ticks": total})
+
+
+func test_no_claim_is_the_default_and_the_readers_all_say_so() -> void:
+	assert_false(view.claim_running())
+	assert_eq(view.claim_owner(), 0)
+	assert_almost_eq(view.claim_progress(), 0.0, 0.001)
+	assert_eq(view.claim_seconds_left(), 0)
+
+
+func test_a_claim_off_the_wire_fills_the_ring_UP_as_the_clock_runs_DOWN() -> void:
+	# ⚠️ THE ONE INVERSION IN THIS FEATURE. `claim_ticks_left` is time REMAINING, so a
+	# fresh claim is 3600 and a matured one is 0 -- handed to a ring unchanged it would
+	# start full and empty itself, which is a perfectly plausible-looking progress bar
+	# running backwards.
+	_with_claim(2, 3600, 3600)
+	assert_true(view.claim_running())
+	assert_eq(view.claim_owner(), 2)
+	assert_almost_eq(view.claim_progress(), 0.0, 0.001, "a fresh claim has matured by nothing")
+
+	_with_claim(2, 900, 3600)
+	assert_almost_eq(view.claim_progress(), 0.75, 0.001, "three quarters of the way there")
+
+	_with_claim(2, 0, 3600)
+	assert_almost_eq(view.claim_progress(), 1.0, 0.001, "and the last tick is a full ring")
+
+
+func test_the_tick_a_claim_starts_is_progress_zero_and_the_ring_is_already_there() -> void:
+	# `claim_running` and `claim_progress > 0` are different questions for the reason
+	# `is_advancing` and `age_progress_of` are: six minutes would otherwise read as five
+	# and a half followed by a ring appearing out of nowhere.
+	_with_claim(1, 3600, 3600)
+	assert_true(view.claim_running())
+	assert_almost_eq(view.claim_progress(), 0.0, 0.001)
+
+
+func test_a_spent_claim_names_nobody_even_if_the_wire_still_carries_an_owner() -> void:
+	# The nest never forgets whose claim it was -- that record is the whole of the
+	# one-dragon-per-map guarantee -- so `claim_ticks_left` is the only thing that says
+	# whether one is RUNNING. Belt and braces on the sim's own publish rule.
+	_with_claim(3, -1, 0)
+	assert_false(view.claim_running())
+	assert_eq(view.claim_owner(), 0, "nobody is claiming anything")
+	assert_almost_eq(view.claim_progress(), 0.0, 0.001)
+
+
+func test_a_zero_total_cannot_divide_by_it() -> void:
+	# Reachable from a host built before 13.2c, which sends no total at all -- and the
+	# default is 0. A ring at NaN draws nothing and reports no error.
+	_with_claim(1, 500, 0)
+	assert_almost_eq(view.claim_progress(), 0.0, 0.001)
+
+
+func test_seconds_left_rounds_UP_so_a_countdown_never_shows_zero_while_it_runs() -> void:
+	# `SimClock.TICK_HZ`, not a literal 10, and ceil rather than round: a claim with two
+	# ticks on it saying "0 seconds" for a fifth of a second is the one reading a player
+	# would call a bug.
+	_with_claim(1, 3600, 3600)
+	assert_eq(view.claim_seconds_left(), 360)
+	_with_claim(1, 2, 3600)
+	assert_eq(view.claim_seconds_left(), 1)
+
+
+func test_a_snapshot_that_says_nothing_about_the_claim_keeps_the_last_one() -> void:
+	# `_last_tick`'s rule, and not `_read_player_skins`' early return: a top-level int has
+	# no "empty" to test. Every test and preview in this repo hands over a bare
+	# {"updated": [...]}, and clearing the ring on each of those would make the countdown
+	# flicker for anybody who ever sends a partial snapshot.
+	_with_claim(2, 1800, 3600)
+	view.apply_snapshot({"tick": 2, "updated": [], "removed": []})
+	assert_true(view.claim_running(), "still running")
+	assert_eq(view.claim_owner(), 2)
+	assert_almost_eq(view.claim_progress(), 0.5, 0.001)

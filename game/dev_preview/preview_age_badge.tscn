@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_age_badge.gd" id="1_agebadge"]
+
+[node name="PreviewAgeBadge" type="Node"]
+script = ExtResource("1_agebadge")

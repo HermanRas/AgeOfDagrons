@@ -91,6 +91,15 @@ func process_tick(w: SimWorld) -> void:
 			elif not u.alive and u.owner_id == 0 and u.last_attacker_owner > 0:
 				fresh_kills.append(u)
 
+	# ⚠️ **CLEARED BEFORE THE EARLY RETURN, NOT AFTER IT.** `SimWorld.claim_*` is the
+	# HUD's mirror (13.2c) and the tick a nest is despawned is exactly the tick this
+	# function stops having any nests to publish from -- so leaving the clear at the
+	# bottom would freeze the last countdown on the badge forever, on the one event the
+	# ring most needs to report. Clear, then republish from what is actually there.
+	w.claim_owner = 0
+	w.claim_ticks_left = -1
+	w.claim_total_ticks = 0
+
 	if nests.is_empty() and babies.is_empty():
 		return
 
@@ -104,6 +113,46 @@ func process_tick(w: SimWorld) -> void:
 	_advance_claims(w, nests)
 	_start_claims(w, nests, fresh_kills)
 	_reap_orphans(w, nests, babies)
+	# LAST, so it reports the claim as it stands at the END of the tick -- a claim that
+	# started, matured or was denied in the three calls above has already had its effect
+	# and this publishes the result rather than the state it was found in.
+	_publish_claim(w, nests)
+
+
+## Copy the one running claim onto the world, for the HUD (13.2c).
+##
+## `SimWorld.claim_*`'s own header carries the reasoning: why the claim goes on the wire as
+## a match-level fact rather than on the nest, and why this is a mirror that can only draw
+## a wrong ring and never pay out a wrong dragon.
+##
+## LOWEST NEST ID WINS, which is `_nest_for`'s tie-break and is here for the same reason:
+## `MapGenerator` places one nest, a hand-authored map (16.3) will be able to place two,
+## and one ring cannot report two countdowns. Determinism rather than a judgement about
+## which claim matters more -- and every nest keeps its own full state either way.
+##
+## ⚠️ **A SPENT CLAIM PUBLISHES NOTHING, WHICH IS NOT THE SAME AS AN UNCLAIMED NEST.**
+## `claim_owner` is never cleared on the nest -- it is the "this nest has given up its
+## dragon" record and the whole of the one-dragon-per-map guarantee -- so keying off it
+## here would leave the badge showing a full ring for a claim that paid out four minutes
+## ago. `claim_ticks_left >= 0` is the RUNNING test, and it is the nest's own.
+func _publish_claim(w: SimWorld, nests: Array[SimBuilding]) -> void:
+	var best: SimBuilding = null
+	for n in nests:
+		if n.claim_ticks_left < 0:
+			continue
+		# ALIVE, checked rather than assumed: `_advance_claims` abandons a dead nest's
+		# claim above, so this is belt and braces on the one path where the two could
+		# ever disagree -- and a razed nest advertising a countdown is precisely the
+		# frame a rival needs to see end.
+		if not n.alive:
+			continue
+		if best == null or n.id < best.id:
+			best = n
+	if best == null:
+		return
+	w.claim_owner = best.claim_owner
+	w.claim_ticks_left = best.claim_ticks_left
+	w.claim_total_ticks = GROW_TICKS
 
 
 ## A guardian has fallen to somebody: begin the claim on the nest she was standing over.

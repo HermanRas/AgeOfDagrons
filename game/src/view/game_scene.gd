@@ -1426,6 +1426,23 @@ func _refresh_hud(snap: Dictionary) -> void:
 	_age_badge.advancing = _view.is_advancing(player_id)
 	_age_badge.progress = _view.age_progress_of(player_id)
 
+	# THE DRAGON CLAIM ON THE SAME RING (13.2c, owner's ask 2026-09-07). Not filtered to
+	# the local player: the claim can be a RIVAL'S, which is the whole reason it is drawn
+	# in the claimant's colour rather than in gold.
+	#
+	# Index -> Color through the registry, the two-step `_refresh_waypoint_flag` makes and
+	# for its reason: `SimPlayer.colour` is an index into `colours.json` and the palette is
+	# data, not a Color. The INDEX comes off the wire per player, so a claim by a player
+	# this client has not been sent a `player_state` row for reads -1 and
+	# `GameDataRegistry.colour` answers its wrap -- which is why `claim_active` is gated on
+	# the sim's answer and not on the colour lookup succeeding.
+	_age_badge.claim_active = _view.claim_running()
+	_age_badge.claim_progress = _view.claim_progress()
+	if _age_badge.claim_active:
+		var claimant := _view.claim_owner()
+		_age_badge.claim_colour = GameDataRegistry.colour(
+				int(_view.skin_for(claimant).get("colour", -1)))
+
 	# A control group only ever holds the local player's units, so the whole
 	# stack shares one skin. Set before the per-slot signals below so a slot
 	# filling this tick crops in the right colour on its first draw.

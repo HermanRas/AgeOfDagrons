@@ -187,6 +187,30 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 		# a defeated client is still being sent one snapshot per tick and should not
 		# have to join two fields to learn whether it won.
 		"winner_team": w.winner_team,
+		# ── THE DRAGON CLAIM (PLAN.md 13.2c) ──
+		#
+		# Three ints and three field names, ONCE per snapshot. `SimWorld.claim_*` carries
+		# why they live at match level: on a building they would split the nest into its
+		# own wire shape (12.1f) and cost bytes on every other building in the game, and
+		# in `player_state` they would be paid for once per player to say the same thing
+		# eight times.
+		#
+		# ⚠️ **SENT TO EVERYBODY, INCLUDING THE RIVALS**, and that is a design ruling and
+		# not a plumbing default. 13.2c's card flagged it as the open question: a rival
+		# who can read the timer knows exactly when to come, and the rally point is the
+		# precedent for filtering an enemy's INTENTION off the wire
+		# (`_without_the_rally_point` below). The owner settled it by asking for the
+		# claimant's own COLOUR on the badge (2026-09-07) -- a colour is only information
+		# if the claim can be somebody else's. It reads as a public event rather than a
+		# secret plan, which is what it is: the mother died where anybody could see it.
+		#
+		# WHOSE claim travels as a player id, not as a colour. The client already holds
+		# every player's colour in `player_state` and `colours.json` is indexed the same
+		# way on both sides -- sending the Color would be sending a view type from the
+		# sim, which `src/sim/` may not name at all.
+		"claim_owner": w.claim_owner,
+		"claim_ticks_left": w.claim_ticks_left,
+		"claim_total_ticks": w.claim_total_ticks,
 	}
 
 

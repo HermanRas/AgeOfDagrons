@@ -84,6 +84,19 @@ var variant_pool: StringName = &""
 
 var _last_tick: int = -1
 
+## THE DRAGON CLAIM, off the top of the snapshot (13.2c). Three ints about the MATCH, not
+## about any one player, so they sit here beside `_last_tick` rather than in
+## `_player_skins` -- and `claim_owner` is a player id, which is what `claim_colour_of`
+## turns into one of `colours.json`'s eight.
+##
+## -1 IS "NO CLAIM RUNNING", the sentinel `SimBuilding.claim_ticks_left` uses, so a match
+## with no nest on it and a match whose claim has already paid out read the same here.
+## They are not distinguishable and nothing needs them to be: the ring is either drawn or
+## it is not.
+var _claim_owner: int = 0
+var _claim_ticks_left: int = -1
+var _claim_total_ticks: int = 0
+
 ## What GAIA gets: no age skin and no player tint. Owner 0 is nobody, and
 ## colours.json's note is explicit that the tint must key off who owns a thing
 ## rather than off whether its art carries a playercolor mask -- 0 A.D.'s sheep
@@ -184,6 +197,14 @@ func apply_snapshot(snap: Dictionary) -> void:
 	# skin would render one frame of the wrong player's colour -- which, colour
 	# being the only thing telling players apart, reads as the wrong player's unit.
 	_read_player_skins(snap)
+
+	# THE CLAIM, kept from the last snapshot that mentioned it -- `_last_tick`'s rule and
+	# not `_read_player_skins`' early return, because a top-level int has no "empty" to
+	# test. A test or a preview handing over a bare {"updated": [...]} therefore keeps
+	# whatever it last set rather than silently clearing the ring.
+	_claim_owner = int(snap.get("claim_owner", _claim_owner))
+	_claim_ticks_left = int(snap.get("claim_ticks_left", _claim_ticks_left))
+	_claim_total_ticks = int(snap.get("claim_total_ticks", _claim_total_ticks))
 
 	# Gathered up front so a unit's adjacency check below (any tile order)
 	# never depends on whether its own entry happened to arrive before or
@@ -613,6 +634,46 @@ func age_progress_of(owner_id: int) -> float:
 	if total <= 0:
 		return 0.0
 	return clampf(float(skin.get("advance_ticks", 0)) / float(total), 0.0, 1.0)
+
+
+## ── the dragon claim (PLAN.md 13.2c) ───────────────────────────────────────
+
+## Whether a claim on a nest is running RIGHT NOW, anybody's.
+##
+## The badge draws its ring from this rather than from `claim_progress() > 0.0`, for the
+## reason `is_advancing` is separate from `age_progress_of`: the tick a claim starts is
+## progress 0.0 and the ring has to be there already, or the six minutes read as five and
+## a half followed by a ring appearing out of nowhere.
+func claim_running() -> bool:
+	return _claim_ticks_left >= 0
+
+
+## Who is claiming, as a player id, or 0 when nothing is.
+func claim_owner() -> int:
+	return _claim_owner if claim_running() else 0
+
+
+## How far a claim has MATURED, 0.0 to 1.0. `age_progress_of`'s companion and the second
+## place in this file where the sim's int ticks become a float.
+##
+## ⚠️ **THE WIRE COUNTS DOWN AND THE RING FILLS UP.** `claim_ticks_left` is time
+## REMAINING, so a fresh claim is 3600 and a matured one is 0 -- handed to a ring
+## unchanged it would start full and empty itself, which is a perfectly plausible-looking
+## progress bar running backwards. The one subtraction is here so no caller has to know.
+func claim_progress() -> float:
+	if not claim_running() or _claim_total_ticks <= 0:
+		return 0.0
+	var left := clampf(float(_claim_ticks_left) / float(_claim_total_ticks), 0.0, 1.0)
+	return 1.0 - left
+
+
+## Seconds left on the running claim, or 0. For anything that wants to SAY the number
+## rather than draw it -- `SimClock.TICK_HZ` is the sim's rate and the divide belongs on
+## this side of the boundary with the fraction above.
+func claim_seconds_left() -> int:
+	if not claim_running():
+		return 0
+	return int(ceil(float(_claim_ticks_left) / float(SimClock.TICK_HZ)))
 
 
 ## True while an advance is in flight, which is NOT the same as progress > 0 --
