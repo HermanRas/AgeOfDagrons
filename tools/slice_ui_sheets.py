@@ -111,7 +111,50 @@ GRID_SHEETS: dict[str, tuple[int, int, list[str]]] = {
         "radio_off", "radio_on", "arrow_down", "arrow_up",
         "arrow_left", "arrow_right", "tab_plate",
     ]),
+    # THIRTEEN, NOT THE TWELVE THE PROMPT ASKED FOR, and the extra one is kept.
+    # Gemini drew two buildings -- a crenellated keep in cell 8 and a tiled house
+    # in cell 9 -- which pushed the rest of the categories along by one and swapped
+    # terrain ahead of resources. The order below is what is ON THE SHEET rather
+    # than what was asked for, checked against `review/sheet_h_mapmaker_tools.png`.
+    #
+    # The house is `cat_buildings` because a generic dwelling is what a Buildings
+    # tab means; the keep ships as `cat_buildings_keep`, unwired, because a spare
+    # fortification glyph in the house style costs nothing to keep and cannot be
+    # re-rolled identically.
+    "sheet_h_mapmaker_tools": (4, 4, [
+        "mm_undo", "mm_redo", "mm_brush", "mm_place",
+        "mm_erase", "mm_select", "mm_move", "cat_buildings_keep",
+        "cat_buildings", "cat_units", "cat_terrain", "cat_resources",
+        "cat_areas",
+    ]),
 }
+
+# ── the one sheet whose ground is grey, and why it needs its own cutter ─────
+#
+# `sheet_i_mapmaker_cursors` is flat #7C7C7C on purpose: a cursor carries a hard
+# DARK keyline so it reads over bright sand, and a dark keyline on a black ground
+# cannot be keyed -- the flood would eat the rim from the outside in and the
+# cursor would vanish over half the map, which is the failure the keyline exists
+# to prevent. So the ground is grey and the artwork owns every dark pixel.
+#
+# THAT INVERTS `key_background` COMPLETELY. Its background is "dark and reachable
+# from the border"; here the background is "grey and reachable from the border",
+# and dark is foreground. Reusing it would key out the keylines and keep the
+# ground -- exactly backwards.
+#
+# GEMINI ALSO DREW THE CELL GRID, which the prompt forbade twice. Measured, the
+# lines sit at x,y = 0-1, 254-257, 510-513, 766-769, 1022-1023: a true 4 px
+# lattice with no drift, and NO artwork pixel comes within 8 px of any of them.
+# So an inset crop removes them exactly, and that is cheaper and more certain
+# than a re-roll that would have to reproduce five cursors and a keyline.
+GREY_GRID_SHEETS: dict[str, tuple[int, int, int, list[tuple[str, str]]]] = {
+    # sheet: (rows, cols, inset px, [(id, hotspot mode)])
+    "sheet_i_mapmaker_cursors": (4, 4, 10, [
+        ("cur_brush", "tip"), ("cur_place", "tip"), ("cur_erase", "tip"),
+        ("cur_select", "centre"), ("cur_move", "centre"),
+    ]),
+}
+CURSOR_PX = 100
 
 # `sheet_bars` IS NOT A LATTICE AND CANNOT BE TREATED AS ONE. The prompt asked
 # for seven 128 px rows with an empty band at the bottom; Gemini spread seven
@@ -138,6 +181,10 @@ ICON_SHEETS = {
     "sheet_c_formations_stances_ages", "sheet_d_military_techs",
     "sheet_e_economy_techs", "sheet_f_multiplayer_and_voice",
     "sheet_g_system_and_modes",
+    # The MapMaker's are the same 100x100 contract on the owner's ruling: the
+    # editor's grey chrome is alpha scaffolding, it gets reskinned to the game's
+    # panels, and the tool scales these down at load.
+    "sheet_h_mapmaker_tools",
 }
 
 # Full-canvas pieces. `keyed` says whether the background is removed: a panel
@@ -461,6 +508,111 @@ def slice_grid(src: Path, rows: int, cols: int, ids: list[str], out: Path,
     return pieces
 
 
+def slice_grey_grid(src: Path, rows: int, cols: int, inset: int,
+                    ids: list[tuple[str, str]], out: Path,
+                    report: list[dict]) -> tuple[list[Image.Image], dict]:
+    """Cut a sheet whose ground is flat mid grey and whose artwork owns the dark.
+
+    Three things differ from `slice_grid`, and each is forced by the grey:
+
+      the ground is found by COLOUR DISTANCE, not by darkness. The measured
+      ground is #7C7C7C at std 0.8 -- flatter than any of the black sheets --
+      so a fixed tolerance around the image median separates it cleanly, and
+      the dark keyline falls on the artwork side where it belongs.
+
+      the cell is cropped INSET before anything else, which is what removes
+      the grid lines Gemini drew. They are 4 px on the boundary and no artwork
+      comes within 8 px of one, so the inset is exact rather than a guess.
+
+      the edge pixels are UN-COMPOSITED AGAINST GREY. Every other sheet was
+      painted over black, so `key_background` divides the colour back out by
+      the coverage. Doing that here would treat a half-covered pixel's grey
+      contribution as artwork and put a pale halo around every cursor, so the
+      ground is subtracted first: fg = (seen - ground*(1-a)) / a.
+
+    ENCLOSED GROUND IS ALSO GROUND HERE, which reverses the rule the rest of
+    this file is built on. `fill_from_border`'s whole point is that a dark
+    pixel surrounded by artwork is artwork -- `act_repair`'s black anvil. That
+    holds because those sheets contain black SUBJECT MATTER. This one does not
+    contain grey subject matter: the cursors are gold with a brown keyline, and
+    measured, every ground-coloured pixel on the sheet is neutral (saturation
+    p99.9 = 9 against the gold's 40+). So the 1,492 enclosed pixels are holes,
+    not paint -- the brush cursor's ring interior, the crosshair's centre gap
+    and the slots between its corner ticks. Keeping them shipped a grey disc
+    inside the ring that showed up as a blob over grass.
+
+    The saturation guard is what keeps that safe rather than merely true today:
+    a ground-coloured pixel with real colour in it is artwork and is never cut.
+    """
+    rgb = np.asarray(Image.open(src).convert("RGB")).astype(np.int16)
+    h, w = rgb.shape[:2]
+    ch, cw = h // rows, w // cols
+
+    ground = np.median(rgb.reshape(-1, 3), axis=0)
+    sat = rgb.max(axis=2) - rgb.min(axis=2)
+    is_ground = (np.abs(rgb - ground).max(axis=2) < 26) & (sat <= 20)
+
+    pieces: list[Image.Image] = []
+    hotspots: dict[str, dict] = {}
+
+    for i, (ident, mode) in enumerate(ids):
+        r, c = divmod(i, cols)
+        y0, x0 = r * ch + inset, c * cw + inset
+        y1, x1 = (r + 1) * ch - inset, (c + 1) * cw - inset
+
+        sub = rgb[y0:y1, x0:x1]
+        bg = is_ground[y0:y1, x0:x1]
+        alpha = box_blur3((~bg).astype(np.float32))
+
+        box = content_bbox(alpha > 0.5)
+        if box is None:
+            report.append({"id": ident, "sheet": src.stem, "status": "EMPTY"})
+            continue
+
+        safe = np.maximum(alpha, 1e-3)[..., None]
+        fg_rgb = np.clip(
+            (sub.astype(np.float32) - ground * (1.0 - alpha)[..., None]) / safe,
+            0, 255)
+
+        piece_full = to_image(fg_rgb, alpha)
+        crop = crop_padded(piece_full, square_pad(box, x1 - x0, y1 - y0, PAD_FRAC))
+        crop.resize((MASTER_PX, MASTER_PX), Image.LANCZOS).save(
+            out / "masters" / f"{ident}.png")
+        # LANCZOS, NOT NEAREST, and the keyline is the reason it is worth saying:
+        # the rim is the one edge in this set that must survive, and a hard
+        # decimation of a 236 px cell to 100 drops whole pixels out of a 10 px
+        # line. The ringing LANCZOS adds is invisible against a keyline.
+        piece = crop.resize((CURSOR_PX, CURSOR_PX), Image.LANCZOS)
+        piece.save(out / "cursors" / f"{ident}.png")
+        pieces.append(piece)
+
+        # THE HOTSPOT IS MEASURED, NOT ASSUMED. ART_PROMPT.md gives (0.02, 0.02)
+        # for the three pointers on the assumption their tip sits in the cell's
+        # corner; Gemini inset them and the crop is taken from the content bbox
+        # anyway, so the fraction has to come off the pixels that shipped. The
+        # tip is the foreground pixel minimising x+y -- the outer corner of the
+        # keyline, which is what the author is pointing with.
+        pa = np.asarray(piece)[..., 3] > 128
+        if mode == "tip":
+            ys, xs = np.nonzero(pa)
+            k = int(np.argmin(xs + ys))
+            hx, hy = int(xs[k]), int(ys[k])
+        else:
+            hx = hy = CURSOR_PX // 2
+        hotspots[ident] = {
+            "mode": mode,
+            "fraction": [round(hx / CURSOR_PX, 4), round(hy / CURSOR_PX, 4)],
+            "at_100": [hx, hy],
+            "at_32": [round(hx * 32 / CURSOR_PX), round(hy * 32 / CURSOR_PX)],
+        }
+        report.append({
+            "id": ident, "sheet": src.stem, "status": "ok",
+            "bbox": list(box), "w": box[2] - box[0], "h": box[3] - box[1],
+            "threshold": None, "cell": [cw - 2 * inset, ch - 2 * inset],
+        })
+    return pieces, hotspots
+
+
 def slice_bands(src: Path, ids: list[str], out: Path,
                 report: list[dict]) -> list[Image.Image]:
     """Cut a sheet of full-width horizontal pieces by row projection.
@@ -549,10 +701,11 @@ def main() -> int:
     args = ap.parse_args()
 
     src_dir, out = Path(args.src), Path(args.out)
-    for sub in ("icons", "masters", "chrome", "review"):
+    for sub in ("icons", "masters", "chrome", "review", "cursors"):
         (out / sub).mkdir(parents=True, exist_ok=True)
 
     report: list[dict] = []
+    hotspots: dict[str, dict] = {}
 
     for sheet, (rows, cols, ids) in GRID_SHEETS.items():
         path = src_dir / f"{sheet}.jpg"
@@ -565,6 +718,32 @@ def main() -> int:
                             sheet in ICON_SHEETS, report)
         contact_sheet(pieces, cols, 256).save(out / "review" / f"{sheet}.png")
         print(f"  {sheet:36s} {len(pieces):2d} pieces")
+
+    for sheet, (rows, cols, inset, ids) in GREY_GRID_SHEETS.items():
+        path = src_dir / f"{sheet}.jpg"
+        if not path.exists():
+            path = src_dir / f"{sheet}.png"
+        if not path.exists():
+            print(f"  MISSING {sheet}")
+            continue
+        pieces, hs = slice_grey_grid(path, rows, cols, inset, ids, out, report)
+        hotspots.update(hs)
+        # THE REVIEW STRIP FOR THIS SHEET IS NOT A CHECKERBOARD. A cursor is
+        # judged by whether its keyline survives on BOTH grounds at once, and a
+        # 170/210 checker is two light greys -- it can only show half the answer.
+        if pieces:
+            board = Image.new("RGBA", (len(pieces) * 128, 256), (0, 0, 0, 0))
+            for half, bg in enumerate(((30, 90, 30, 255), (235, 214, 170, 255))):
+                strip = Image.new("RGBA", (len(pieces) * 128, 128), bg)
+                for i, p in enumerate(pieces):
+                    strip.alpha_composite(p, (i * 128 + 14, 14))
+                board.paste(strip, (0, half * 128))
+            board.save(out / "review" / f"{sheet}.png")
+        print(f"  {sheet:36s} {len(pieces):2d} pieces")
+
+    if hotspots:
+        (out / "cursors" / "hotspots.json").write_text(
+            json.dumps(hotspots, indent=2), encoding="utf-8")
 
     for sheet, ids in BAND_SHEETS.items():
         path = src_dir / f"{sheet}.jpg"

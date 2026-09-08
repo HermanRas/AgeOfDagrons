@@ -1664,20 +1664,111 @@ The 5 cursors, left to right along the top row then the start of the second row:
    from a common boss.
 ```
 
-### After slicing, two things the cursor sheet needs that no other sheet does
+---
+
+# PART TWO GENERATED AND SLICED — 2026-09-08
+
+Both sheets came back on the first roll and both are in. **18 pieces cut, 0 flagged**,
+which takes the whole document to 148. Masters committed as `.jpg`; `sliced/` is
+derived and gitignored, so re-cut with:
+
+```powershell
+<venv>\python.exe tools\slice_ui_sheets.py      # -> assets/UI_Gen/sliced/
+```
+
+`sheet_h`'s 13 land in `sliced/icons/` at 100 × 100 with 256 px masters beside them,
+exactly like the game's. `sheet_i`'s 5 land in `sliced/cursors/` with
+**`hotspots.json`**, and the review strip for that sheet composites each cursor over
+**dark grass and pale sand** rather than the usual checkerboard — a checker is two
+light greys and can only answer half the question a keyline exists to answer.
+
+## Three things came back different from the ask, and all three were kept
+
+**`sheet_h` has THIRTEEN glyphs, not twelve.** Gemini drew two buildings — a
+crenellated keep and a tiled house — which pushed the categories along by one and put
+terrain ahead of resources. The reading order in `slice_ui_sheets.py` is what is *on
+the sheet*, not what was asked for. The house is `cat_buildings` because a dwelling is
+what a Buildings tab means; the keep ships as **`cat_buildings_keep`, unwired** — a
+spare fortification glyph in the house style costs nothing to keep and cannot be
+re-rolled identically.
+
+**`sheet_h`'s reserved corner came back WHITE, not empty.** The watermark block fills
+cells 15–16 solid white instead of leaving flat black. It does not matter: white is
+not background to a flood that keys *dark reachable from the border*, so it stays
+opaque and is simply never sliced — no id points at it. It sits 8 px below cell 12's
+boundary and did not contaminate it, because `own_components` assigns a blob by its
+centroid and that block's centroid is in row 4.
+
+⚠️ **`sheet_i` came back WITH THE CELL GRID DRAWN**, which the prompt forbade twice.
+Measured, the lines sit at x,y = 0–1, 254–257, 510–513, 766–769, 1022–1023 — a true
+4 px lattice with no drift — and **no artwork pixel comes within 8 px of one**. So a
+10 px inset removes them exactly. That is a better outcome than the re-roll the
+checklist would otherwise call for, because a re-roll would have to reproduce five
+cursors *and* a keyline; but it is only safe because it was measured first, and a
+sheet whose art touched a grid line would still be a re-roll.
+
+## What the cursor sheet needed that no other sheet has needed
+
+**The key is inverted, and it is its own cutter** (`slice_grey_grid`). The ground is
+flat `#7C7C7C` and the artwork owns every dark pixel, so `key_background`'s "dark
+reachable from the border" would have keyed out the keylines and kept the ground —
+exactly backwards. Ground is found by colour distance instead.
+
+**Enclosed ground is ground here, which reverses this file's oldest rule.** A dark
+pixel surrounded by artwork is artwork — that is `act_repair`'s black anvil, and it is
+why the fill exists. It holds because those sheets contain black *subject matter*.
+This one contains no grey subject matter: measured, every ground-coloured pixel on the
+sheet is neutral (saturation p99.9 = **9**, against the gold's 40+). The 1,492 enclosed
+pixels are holes — the brush ring's interior, the crosshair's centre gap, the slots
+between its corner ticks — and the first cut shipped them as **a grey disc inside the
+ring that read as a blob over grass**. A saturation guard keeps that safe rather than
+merely true today.
+
+**Edges are un-composited against grey, not black.** Every other sheet was painted
+over black, so the slicer divides colour back out by coverage. Doing that here would
+count a half-covered pixel's grey contribution as artwork and put a pale halo round
+every cursor, so the ground is subtracted first: `fg = (seen − ground·(1−a)) / a`.
+
+## The hotspots are MEASURED, and they are not the numbers above
+
+The table earlier in this section gives `(0.02, 0.02)` for the three pointers on the
+assumption their tip sits in the cell's corner. **Gemini inset them, and the crop is
+taken from the content bounding box anyway**, so the fraction has to come off the
+pixels that shipped. `hotspots.json` holds what was measured — the foreground pixel
+minimising *x + y*, which is the outer corner of the keyline:
+
+| id | fraction | at 100 px | at 32 px |
+|---|---|---|---|
+| `cur_brush` | (0.10, 0.07) | (10, 7) | (3, 2) |
+| `cur_place` | (0.08, 0.09) | (8, 9) | (3, 3) |
+| `cur_erase` | (0.07, 0.05) | (7, 5) | (2, 2) |
+| `cur_select` | (0.50, 0.50) | (50, 50) | (16, 16) |
+| `cur_move` | (0.50, 0.50) | (50, 50) | (16, 16) |
+
+**The three pointers differ from each other and that is correct, not drift.** Each
+hotspot is measured on its own image, so each aims at its own tip; the picture shifts a
+pixel or two under the pointer when the tool changes, and the aim does not move. Read
+these from the JSON rather than copying them — a re-cut re-measures.
+
+### The two slicing notes this section was written against, both now settled
 
 `sheet_h_mapmaker_tools` slices exactly like `sheet_d` — same lattice, same black key,
-same 256 → 100 resample. Nothing below applies to it.
+same 256 → 100 resample. Neither note below applies to it.
 
-- **The grey ground breaks the key threshold.** `slice_ui_sheets.py` floods from the
-  border to find the ground and derives its threshold *per sheet from that border*.
-  Every other sheet's border is near-black; this one's is `#808080` by design, so the
-  derived threshold will be grey and the flood may eat the artwork's own dark keyline
-  from the outside in. **Cut this sheet with an explicit threshold and check it by
-  eye** — a cursor that loses its keyline on one side looks fine in the review strip
-  and disappears over sand in the tool.
-- **Keep the keyline through the downsample.** 256 → 100 is a smooth resample and the
-  keyline is the one edge in this document that must stay hard. If the game side
-  resizes further at load — and it will, to something like 32 — that second step is
-  the one that matters: **resize the `Image` with `INTERPOLATE_LANCZOS` and check the
-  rim, or accept `INTERPOLATE_NEAREST` and a slightly ragged edge over a soft one.**
+- **"The grey ground breaks the key threshold."** It did, and worse than predicted:
+  the derived threshold clamps at 40, a `#7C7C7C` border is nowhere near it, so the
+  flood found nothing and the whole canvas came out opaque. Fixed by giving the sheet
+  its own cutter rather than a threshold override, for the reasons above.
+- **"Keep the keyline through the downsample."** Settled at the slicer: the 236 px
+  inset cell goes to 100 through LANCZOS, because a hard decimation drops whole pixels
+  out of a 10 px rim. **The second resize is still the game side's**, and it is the one
+  that matters — going 100 → 32 at load, prefer `INTERPOLATE_LANCZOS` and check the
+  rim, or accept `INTERPOLATE_NEAREST` and a slightly ragged edge over a soft one.
+
+### Still open, and it belongs to the game side
+
+Nothing in the art is blocked. What is left is wiring, and the three things it has to
+get right are recorded above rather than here: `--import` before `load()`,
+`icon_normal_color` set to white so the theme cannot tint gold art, and
+`ToolIcons.SIZE` growing past 16 px at the reskin. `ToolIcons.for_tool()` is the whole
+seam.
