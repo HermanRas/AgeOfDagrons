@@ -181,8 +181,20 @@ func test_a_resource_label_is_not_an_object_name() -> void:
 		assert_ne(label, "ResourceDef", String(id))
 
 
-func test_an_unknown_id_is_labelled_by_itself() -> void:
-	assert_eq(GameDataRegistry.display_name(&"nothing.at.all"), "nothing.at.all")
+## ⚠️ **THE FALLBACK IS NO LONGER THE RAW ID — IT IS THE ID FORMATTED** (16.3, 2026-09-08), and
+## this test used to assert the old contract. `prettify()` exists because **not one entry in
+## `resources.json` has a `name` field**, so the palette's Resource tab came out as a column of
+## `res.bear_capture`-shaped code beside properly named buildings. It formats and invents
+## nothing: namespace prefix dropped, underscores to spaces, title case.
+##
+## A label nobody can read is still the failure this test is about; what changed is which
+## unreadable output counts.
+func test_an_unknown_id_is_labelled_by_a_formatted_version_of_itself() -> void:
+	assert_eq(GameDataRegistry.display_name(&"nothing.at.all"), "At.all")
+	assert_eq(GameDataRegistry.display_name(&"res.berry_bush"), "Berry Bush")
+	# AND NEVER EMPTY, which is the property the palette depends on: a tile with no caption is
+	# a tile nobody can identify. `SavedMaps._name_in` guards the same thing for map rows.
+	assert_false(GameDataRegistry.display_name(&"unit.villager").is_empty())
 
 
 # ── failure modes, because this reads somebody else's machine ───────────────

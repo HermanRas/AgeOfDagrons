@@ -462,7 +462,7 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 6 canvas screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 13 screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
 
@@ -586,7 +586,81 @@ about project settings belongs in a script header or here.
 GAME's `--import` refreshes the wrong cache, and the failure looks identical to the game's:
 "Identifier not declared in the current scope".
 
-**`MapMaker/format/` IS SEVEN VERBATIM COPIES OF GAME FILES AND ONE STAND-IN. DO NOT EDIT ANY OF
+### 16.3 — THE OBJECT PALETTE, DONE 2026-09-08
+
+`ObjectPalette` down the left of the editor, `IconAtlas` cropping icons out of the game's staged
+atlases, and the PLACE/ERASE tools that give its selection somewhere to go. **MapMaker 164/164.**
+
+- ⚠️ **`load()` CANNOT OPEN THE GAME'S ATLASES FROM HERE, AND THE REASON IS NOT THE OBVIOUS
+  ONE.** Measured on 4.7.1: `FileAccess.file_exists` true, **`ResourceLoader.exists` TRUE**,
+  `load()` **null plus three engine errors**, `Image.load_from_file` fine. Phase 15's note says
+  *"outside `res://` there is no `.import` sidecar"* — **that is not what happens here.** These
+  PNGs are inside the GAME's `res://` and the game imported them, so a sidecar exists; it
+  redirects to `res://.godot/imported/<name>-<hash>.ctex`, and `res://` from MapMaker is
+  MapMaker, whose cache has no such file. **That is worse than a missing sidecar**: a file with
+  no loader fails quietly, this one pushes three ERRORs *per page per attempt*, and a palette
+  redraws on every keystroke. `IconAtlas` uses `Image.load_from_file` + `ImageTexture` and
+  **never calls `AtlasEntry.texture()`** — it reads `AtlasEntry.pages`, which are paths.
+  `ResourceLoader.exists` must not be used as a guard here; it lies.
+- ⚠️ **A `TextureRect`'s MINIMUM SIZE IS ITS TEXTURE'S, and that wrecked the first render.**
+  `expand_mode` defaults to `EXPAND_KEEP_SIZE`, so a tile holding a baked battle sprite demanded
+  several hundred pixels, the `VBoxContainer` round it **overflowed** (§6: no clip, no scroll, no
+  compress), pictures spilled over each other and **every name label was pushed out of its tile**
+  — 32 buildings with one visible caption. **`STRETCH_KEEP_ASPECT_CENTERED` does not fix it**:
+  the stretch mode says how to draw inside the rect, `expand_mode` says how big the rect may be.
+  Both are needed and only one of them is famous.
+- ⚠️ **`OptionButton.add_item(text, -1)` MEANS "ASSIGN THE INDEX AS THE ID".** So the natural id
+  for "no colour" — `-1`, the value `atlas_for()` itself takes — was never stored,
+  `get_item_index(-1)` found nothing, `select(-1)` **deselected the control**, and the dropdown
+  drew **blank**. Ids in that picker are now the colour index **plus one**. The blankness also
+  hid a second fault reading as one: `item_selected` had never been connected, so the control was
+  **completely inert** — §6's volume sliders again, shipped green.
+- ⚠️ **A CONTROL'S VALUE AND THE FIELD BEHIND IT ARE ONE FACT, AND THEY CAME APART THREE TIMES
+  IN ONE FILE.** An `OptionButton` nobody has selected displays **item 0** — and item 0 of the
+  owner picker is **Gaia**, because every resource node in the game is gaia's. So the panel said
+  Gaia while `selection()` said player 1, and **only the screenshot could see it.** The readings
+  are now methods (`shown_player()`, `shown_tint()`) and the tests assert they agree with the
+  fields. The general form: **assign the control from the field unconditionally, not only when
+  the value changes.**
+- ⚠️ **`atlas_entry.gd` + `placeholder_spec.gd` ARE IN A NEW `FormatGuard.PRESENTATION` LIST,
+  NOT IN `COPIES`, AND THAT IS A DELIBERATE DEPARTURE FROM PLAN.md §16 DECISION 2's LETTER.**
+  Decision 2 says `atlas_entry.gd` *"joins `FormatGuard.COPIES` on the day the palette does"* —
+  and `passed()` is the permission to SAVE. **The two rules contradict**: 16.3's own row requires
+  the tool to survive having **no atlases at all**, so refusing to save because the icon *reader*
+  drifted cannot be right. A map written by a drifted tool here is **byte-identical**; drift costs
+  a wrong picture. 16.4b already priced this class — *"a stale format is a corrupt file, an
+  unreachable start is a bad map, and the two deserve different answers"* — and the failure mode
+  of getting it wrong is the guard's own header: **a check that cries wolf is a check somebody
+  disables.** Moving the two rows into `COPIES` is the whole change if the owner disagrees.
+- ⚠️ **AREA IS SPEC'D IN 16.3 AND IS DELIBERATELY ABSENT UNTIL 16.5.** `MapData.to_dict()` writes
+  five keys and none is an area, so an Area tab would let an author draw a region `MapFile`
+  silently drops — work lost behind a successful save. Phase 15's wording: *"inert is the safe
+  direction for a mode nobody has selected; it is the wrong direction for the mode a PLAY button
+  is about to select."* A test asserts the field is still missing, so it will say when the tab may
+  follow.
+- **THE COLOUR PICKER IS LABELLED "ICON TINT" BECAUSE A MAP FILE HAS NO COLOUR FIELD.** Entities
+  are `{def_id, player, x, y, size_class}`; the LOBBY assigns colour in join order out of
+  `colours.json`. Calling it the player's colour would be a promise the format cannot keep.
+- **THE TOOLBAR'S SEVEN TERRAIN BUTTONS WERE DELETED, not kept beside the palette's Terrain
+  tab.** Two controls for one brush, synced ONE WAY: the palette lit the toolbar, a toolbar press
+  left the palette highlighting something else. §6's *"mirroring a layout is not sharing one"*
+  with a selection instead of a width. `set_brush` survives as the seam.
+- 📝 **PLACE AND ERASE CAME WITH THE PALETTE, WHICH IS A SLICE OF 16.4.** Without them 16.3 is a
+  panel that cannot do anything and `selection()` has no consumer. Still 16.4's: drag-to-place
+  walls, select, move, per-entity edit.
+- 📝 **`IconAtlas.ignore_atlases` EXISTS FOR THE PREVIEW AND NOTHING ELSE** (`LanBrowser.include_self`'s
+  precedent). The owner's machine has all 139 atlases staged, so **the lettered-plate path every
+  other developer sees first is the one nobody here can look at** — and 16.3 requires it. The
+  setter clears the entry cache, or the flip would report a fallback that never ran.
+- 📝 **TWO DATA FINDINGS.** **Not one of the eleven entries in `resources.json` has a `name`
+  field**, so the Resource tab was the only category labelled in code — `GameDataRegistry.prettify()`
+  formats the id (`res.berry_bush` → "Berry Bush") and a real `name` added to the data wins over
+  it. And **six of those eleven are CARCASSES**, which are runtime spawns from hunting and carry
+  no flag distinguishing them, so an author's Resource tab is majority things nobody would place.
+  **Not filtered by a hardcoded id list** — that would be a second opinion about the roster; it is
+  a question for the owner instead.
+
+**`MapMaker/format/` IS NINE VERBATIM COPIES OF GAME FILES AND TWO STAND-INS. DO NOT EDIT ANY OF
 THEM.** `FormatGuard` reads the originals out of `game/` as text, hashes them, and the tool
 **refuses to save** when a copy has drifted (PLAN.md §16 decision 3). Editing a copy to fix
 something is how the check gets turned off on the file that decides what a map means. If the
@@ -826,6 +900,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **THE SHIPPED BODY FACE HAS NO CHECK MARK, AND A MISSING GLYPH IS SILENT** | New Rocker (`UiFont.BODY_PATH`) answers `Font.has_char` **false** for U+2713, U+2714 and U+2717 — and for every geometric substitute worth trying: ● ○ ■ ▪ ★ √. What it does have is `•`, `»`, `†`, `§`, `·` and ASCII. Measured with a throwaway probe, which is the only reason it is known: a glyph the face lacks does not fail, it draws a **tofu box**, and in a screenshot that reads as a broken icon rather than as a missing font. 15.6's first render put a literal `*` beside a completed objective (the fallback firing, correctly). **Draw a mark rather than typing one** — `ObjectiveTracker.TickMark` is twelve lines of `draw_polyline`, cannot be broken by a font swap, and is the mark the player expects. Same family as the `assets/UI_Gen/font_comparison.png` lesson: a face is chosen on the characters this game actually prints. |
 | **A WIDGET THAT RESIZES ITSELF, UNDER AN OFFSET ITS CALLER WROTE ONCE** | `NoticeToast` is anchored CENTER_TOP at `-SIZE.x / 2` and `show_long_message` swaps a 320 px banner for a 720 px one — so the long banner kept the short one's left edge and hung **200 px right of centre**, with nothing in `GameScene` to blame. It survived from 2026-08-30 to 15.6 because `show_long_message` **had never had a caller**, and a mode nobody calls has never been positioned by anybody. The fix belongs in the widget (it holds its own centre across a resize, by the HALF-DELTA so it keeps wherever the caller put it) and not in the caller. **When a widget can change its own size, ask who owns its position** — and treat "nothing calls this yet" in a header as a warning that the first caller will find something. |
 | **`set_process(false)` IN `_init` DOES NOT STICK, AND NO HEADLESS TEST CAN SEE THAT IT DID NOT** | Declaring `_process` at all is what makes Godot process a node, and it is **re-applied when the node enters a tree** — so a per-frame gate set in `_init` is off in a test and on in the game. `AgeBadge` gated its spark animation that way for 13.2c and every badge in the game redrew 60 times a second for the whole match, including the ~99% of it with no countdown running. **`test_the_claim_ring_is_animated_and_a_quiet_badge_is_not` passed throughout and could not have failed**: a bare `.new()` never enters a tree, so `_init` is the last word there. Re-assert the gate in `_ready`, and expect the PREVIEW to be what catches it — `preview_age_badge` prints `(animating)` per row and said it on the first run. The general form is §5's: **a gate whose two states are "in a tree" and "not in a tree" is untestable by a harness that has no tree**, so the test has to say which failure it is blind to. |
+| **A `TextureRect` DEMANDS ITS TEXTURE'S FULL SIZE AS A MINIMUM, AND `STRETCH_KEEP_ASPECT_CENTERED` DOES NOT CHANGE THAT** | `expand_mode` defaults to `EXPAND_KEEP_SIZE`; the stretch mode says how to draw *inside* the rect and the expand mode says how big the rect may *be*. So a 96 px tile holding a baked battle sprite asked for several hundred pixels, the `VBoxContainer` round it overflowed (it does not clip, scroll or compress — see the row above), and 16.3's palette rendered with pictures spilling over each other and **every caption pushed clean out of its tile**: 32 buildings with one visible name between them. `EXPAND_IGNORE_SIZE` plus `custom_minimum_size` is the pair. **Only one of the two properties is the famous one**, which is why this looks like a container bug and is not. |
+| **AN `OptionButton` NOBODY HAS SELECTED DISPLAYS ITEM 0, AND `add_item(text, -1)` MEANS "USE THE INDEX AS THE ID"** | Two traps in one control, both found by a screenshot on 16.3. (1) The palette's owner picker lists **Gaia first** (every resource node in the game is gaia's), so a picker left unselected showed *Gaia* while the field behind it said *player 1* — an author would place a building for a player they never chose, and no test could see it. **Assign the control from the field unconditionally, not only when the value changes**, and expose the control's reading so a test can compare the two. (2) The natural id for "no colour" is `-1` — the value `atlas_for()` itself takes — and `add_item("none", -1)` silently stores id **0** instead, so `get_item_index(-1)` finds nothing, `select(-1)` **deselects** and the dropdown draws **blank**. Keep every id non-negative (shift by one). The blank box also hid that `item_selected` had never been connected, so the control was inert as well as empty: two faults reading as one, which is §6's volume-slider row wearing a dropdown. |
 | **`"%s" % some_array` TREATS THE ARRAY AS THE ARGUMENT LIST, NOT AS THE ARGUMENT** | So the single most natural way to put a problems list into an assertion message — `assert_true(problems.is_empty(), "%s" % problems)` — is **wrong in both directions and never in a way that mentions arrays**: an empty list raises *"not enough arguments for format string"* and a two-element list raises *"not all arguments converted"*. It cost a red suite on 16.4a with **eighteen engine errors** and one confusing formatting failure, all pointing at string formatting and none at the list. `% [problems]` is the fix (the array becomes one argument), and note the trap in the trap: the form is only wrong for the case that fires, so a message with exactly one element in the list passes and the same line fails the next time. **Any `%` whose right-hand side is a variable holding an `Array` wants brackets round it.** Same family as `some_array as Array[int]` silently failing on a variable — GDScript's `%` and `as` both behave differently for a literal than for a name. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
@@ -2110,13 +2186,13 @@ back into a log of everything shipped, which is the one section where a complete
 costs a reader something. **Do not re-grow it here either.** What follows is a pointer, not a
 copy:
 
-1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b **and 16.4a
-   (2026-09-08)** are done and the owner has authored a map in it. **Next is 16.3 (the
-   palette)**, which is the row that makes the tool able to place anything at all — today the
-   only gesture is paint and the only object is a start. `atlas_entry.gd` joins
-   `FormatGuard.COPIES` on the day it lands (decision 2 says so, and it is one row in a table).
-   **16.2a (undo) is still open and 16.4a raised its price**: the tool can now overwrite
-   committed campaign content in place, and git is the only undo there is.
+1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b, **16.4a and 16.3
+   (both 2026-09-08)** are done and the owner has authored a map in it. **Next is 16.4** —
+   select / move / edit cursors and drag-to-place walls; single-click placement already landed
+   with the palette, so what is left is the three cursors and `WallPlan`'s axis rule.
+   ⚠️ **16.2a (undo) is still open and the last two rows both raised its price**: the tool can
+   now overwrite committed campaign content in place *and* place and erase entities, and git is
+   the only undo there is. It is worth taking before 16.5.
 2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
    share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
    scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep

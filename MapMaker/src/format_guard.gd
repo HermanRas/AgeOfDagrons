@@ -82,6 +82,37 @@ const COPIES := [
 	{"copy": "res://format/map_validator.gd", "origin": "src/sim/map_validator.gd"},
 ]
 
+## Copies that decide what a map LOOKS LIKE in this tool, not what it MEANS on disk.
+## Checked, reported and named exactly like `COPIES` — and **deliberately outside
+## `passed()`**, so drift here does not disable saving (PLAN.md 16.3, added 2026-09-08).
+##
+## ## WHY THIS LIST EXISTS RATHER THAN TWO MORE ROWS ABOVE
+##
+## PLAN.md §16 decision 2 says `atlas_entry.gd` *"joins `FormatGuard.COPIES` on the day the
+## palette does"*, and the palette is 16.3. Putting it there literally would have made a
+## drifted **icon parser** refuse to save a map — and 16.3's own row forbids the stronger
+## version of exactly that: *"a palette that finds no atlases must draw lettered plates and
+## carry on"*, because `game/assets/atlases/` is gitignored staged art that a clean clone does
+## not have.
+##
+## ⚠️ **THE TWO RULES CONTRADICT EACH OTHER IF THIS IS ONE LIST.** No atlases at all → carry
+## on. A slightly old atlas *reader* → refuse to save. There is no version of that pair worth
+## defending: a map written by a tool with a drifted `atlas_entry.gd` is **byte-identical** to
+## one written without, because nothing here reaches the file. What drift costs is a wrong
+## picture, and 16.4b already settled how to price that class — *"a stale format is a corrupt
+## file, an unreachable start is a bad map, and the two deserve different answers."*
+##
+## And the failure mode of getting it wrong is the one this file's own header names: **a check
+## that cries wolf is a check somebody disables**, which would leave the format unguarded to
+## protect an icon.
+##
+## 📝 **THIS IS A DEVIATION FROM DECISION 2 AND IS FLAGGED RATHER THAN QUIET.** If the owner
+## wants icon drift to be fatal, moving these two rows into `COPIES` is the whole change.
+const PRESENTATION := [
+	{"copy": "res://format/atlas_entry.gd", "origin": "src/view/atlas_entry.gd"},
+	{"copy": "res://format/placeholder_spec.gd", "origin": "src/view/placeholder_spec.gd"},
+]
+
 ## Single declarations depended on from files too big to copy. `prefix` locates the line in
 ## the original; `expected` is what our own stand-in says, and the two must match verbatim
 ## once whitespace is squeezed.
@@ -111,11 +142,29 @@ enum Status { OK, DRIFTED, ORIGIN_MISSING, COPY_MISSING }
 ## is what a person would go and look at.
 var results: Array[Dictionary] = []
 
+## The `PRESENTATION` rows, in the same shape and kept in a separate list for one reason:
+## `passed()` must not see them. See that constant for the argument.
+var presentation_results: Array[Dictionary] = []
 
-## True when every copy matches. **The permission to save**, and the only question callers
-## should ask -- see `refusal()` for the sentence to show when it is false.
+
+## True when every copy that decides what a map MEANS matches. **The permission to save**, and
+## the only question callers should ask -- see `refusal()` for the sentence to show when it is
+## false.
+##
+## ⚠️ **IT DOES NOT LOOK AT `presentation_results`, ON PURPOSE.** A drifted icon reader draws a
+## wrong picture and writes an identical file; `presentation_ok()` is the separate question, and
+## `Editor` shows its answer as a note rather than as a refusal.
 func passed() -> bool:
 	for r in results:
+		if int(r["status"]) != int(Status.OK):
+			return false
+	return true
+
+
+## True when the icon copies match too. **A different question with a different answer**, and
+## the caller that reads it is a status line, never a Save button.
+func presentation_ok() -> bool:
+	for r in presentation_results:
 		if int(r["status"]) != int(Status.OK):
 			return false
 	return true
@@ -127,7 +176,22 @@ static func check(root: GameRoot) -> FormatGuard:
 		g.results.append(g._check_copy(root, str(entry["copy"]), str(entry["origin"])))
 	for entry in DECLARATIONS:
 		g.results.append(g._check_declaration(root, entry))
+	for entry in PRESENTATION:
+		g.presentation_results.append(
+				g._check_copy(root, str(entry["copy"]), str(entry["origin"])))
 	return g
+
+
+## What to say about drifted ICON copies: a note, in the same words a person can act on, and
+## never a refusal. Empty when they match, so it doubles as a check.
+func presentation_note() -> String:
+	var bad: Array[String] = []
+	for r in presentation_results:
+		if int(r["status"]) != int(Status.OK):
+			bad.append(str(r["name"]))
+	if bad.is_empty():
+		return ""
+	return "palette icons may be wrong — re-copy %s" % ", ".join(PackedStringArray(bad))
 
 
 ## What to put in front of a person, naming every file that is wrong.
@@ -149,11 +213,15 @@ func refusal() -> String:
 			+ " that\nnothing in the tool depended on the old shape.")
 
 
-## A one-line-per-file report for the console.
+## A one-line-per-file report for the console. Presentation rows are marked `note` rather than
+## `FAIL` when they drift, because that is what they cost.
 func report() -> String:
 	var lines: Array[String] = []
 	for r in results:
 		var mark := "ok  " if int(r["status"]) == int(Status.OK) else "FAIL"
+		lines.append("  [%s] %-28s %s" % [mark, r["name"], r["detail"]])
+	for r in presentation_results:
+		var mark := "ok  " if int(r["status"]) == int(Status.OK) else "note"
 		lines.append("  [%s] %-28s %s" % [mark, r["name"], r["detail"]])
 	return "\n".join(PackedStringArray(lines))
 

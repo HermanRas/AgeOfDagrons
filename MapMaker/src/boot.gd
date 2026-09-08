@@ -33,6 +33,9 @@ const _OK := Color(0.55, 0.80, 0.55)
 const _BAD := Color(0.95, 0.45, 0.40)
 const _DIM := Color(0.70, 0.70, 0.74)
 
+## Worth reading, not worth stopping for: a drifted icon copy, or no staged art (16.3).
+const _WARN := Color(0.95, 0.78, 0.35)
+
 var _startup: Startup = null
 var _root: GameRoot = null
 var _guard: FormatGuard = null
@@ -127,6 +130,10 @@ func _report() -> Array[String]:
 	lines.append_array(_format_lines())
 	lines.append("")
 
+	# ── the palette's icons (16.3) ──
+	lines.append_array(_icon_lines())
+	lines.append("")
+
 	# ── what there is to open (16.4a) ──
 	lines.append_array(_openable_lines())
 	lines.append("")
@@ -184,10 +191,50 @@ func _format_lines() -> Array[String]:
 				_OK.to_html(false) if good else _BAD.to_html(false),
 				"ok  " if good else "FAIL",
 				r["name"], r["detail"]])
+	# ⚠️ **`note` AND NOT `FAIL`, and the word is the report.** These two decide what a map
+	# LOOKS LIKE in the palette, not what it means on disk, so drift here does not disable
+	# saving -- `FormatGuard.PRESENTATION` carries the full argument and flags it as a
+	# deliberate departure from PLAN.md §16 decision 2's letter.
+	for r in _guard.presentation_results:
+		var good := int(r["status"]) == int(FormatGuard.Status.OK)
+		lines.append("  [color=%s]%s[/color] %-30s [color=#b3b3bb]%s[/color]" % [
+				_OK.to_html(false) if good else _WARN.to_html(false),
+				"ok  " if good else "note",
+				r["name"], r["detail"]])
 	if not _guard.passed():
 		lines.append("")
 		for line in _guard.refusal().split("\n"):
 			lines.append("  [color=#f27366]%s[/color]" % line)
+	return lines
+
+
+## What the palette will find to draw with (16.3).
+##
+## ⚠️ **TWO NUMBERS, BECAUSE ONE OF THEM BEING ZERO IS FINE AND THE OTHER IS NOT.** `declared`
+## is how many visual ids `visuals.json` names — zero means the file was not read and every
+## icon in the tool will be a lettered plate for the wrong reason. `staged` is how many of
+## those have an atlas on THIS machine, and **zero is the correct, expected state of a clean
+## clone**: `game/assets/atlases/` is gitignored art. So the second is reported as a note in
+## the author's own words rather than as a fault, which is 16.3's *"a palette that finds no
+## atlases must draw lettered plates and carry on"* made visible before the editor opens.
+##
+## **It does not affect the exit code.** A tool with no art is a working tool.
+func _icon_lines() -> Array[String]:
+	var lines: Array[String] = []
+	var icons := IconAtlas.new()
+	icons.load_from(_root)
+	var counts := icons.counts()
+	var declared := int(counts["declared"])
+	var staged := int(counts["staged"])
+	lines.append("[b]palette icons[/b]  (16.3 — cropped live from the game's staged atlases)")
+	lines.append("  declared  %4d   [color=#b3b3bb]visuals.json entries[/color]" % declared)
+	lines.append("  staged    %4d   [color=%s]%s[/color]" % [staged,
+			(_DIM if staged > 0 else _WARN).to_html(false),
+			"atlases on this machine" if staged > 0
+			else "no staged art — the palette will draw lettered plates, which is correct"])
+	if declared == 0:
+		lines.append("  [color=#f27366]visuals.json was not read[/color] — every icon will be a"
+				+ " plate, and not because the art is missing")
 	return lines
 
 

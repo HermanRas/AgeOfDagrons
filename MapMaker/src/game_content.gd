@@ -165,7 +165,29 @@ func display_name(id: StringName) -> String:
 			var label := str((entry as Dictionary).get("name", "")).strip_edges()
 			if not label.is_empty():
 				return label
-	return String(id)
+	return prettify(id)
+
+
+## An id with no `name` in the roster, formatted for a person: `res.berry_bush` -> "Berry Bush".
+##
+## ⚠️ **THIS IS FORMATTING AND NOT NAMING, and the distinction is the reason it is a separate
+## function.** It invents nothing — it drops the namespace prefix and title-cases what is left,
+## so the day somebody adds a real `name` to the entry, that wins and this is never reached.
+##
+## **It exists because NOT ONE of the eleven entries in `resources.json` has a `name` field**
+## (measured 2026-09-08; `ResourceDef` has no such property either, which `display_name`'s
+## header already recorded). So 16.3's palette came out with a column reading `res.bear_carcass`
+## / `res.berry_bush` / `res.boar_carcass` — the only category in the tool labelled in code
+## rather than in English, sitting next to buildings and units that both have proper names.
+## Found by looking at the screenshot; no test could have had an opinion about it.
+static func prettify(id: StringName) -> String:
+	var text := String(id)
+	# THE PREFIX, NOT EVERY DOT. `res.`, `unit.`, `building.` and `vis.` are namespaces; a dot
+	# later in an id would be part of the name and splitting on all of them would eat it.
+	var at := text.find(".")
+	if at >= 0 and at < text.length() - 1:
+		text = text.substr(at + 1)
+	return text.replace("_", " ").capitalize()
 
 
 ## The terrain kinds a brush can paint, in `SimMap.Terrain` order.

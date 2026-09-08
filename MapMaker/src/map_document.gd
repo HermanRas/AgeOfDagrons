@@ -214,6 +214,81 @@ func fill_all(kind: int) -> void:
 	dirty = true
 
 
+## Put one thing on the map at `tile` (PLAN.md 16.3). Returns true if it went down.
+##
+## ## IT ASKS `claimed_tiles()` AND NEVER A SECOND OPINION
+##
+## ⚠️ 16.4's row is explicit: *"use `MapData.claimed_tiles()` and `footprint_rect_of()` rather
+## than writing a second collision test — they are what the generator and the validator already
+## agree on, and a third opinion about what is in the way is a map that validates and cannot be
+## built."* So the overlap check here is those two functions and nothing else, which also means
+## it uses the **sim's** footprint rather than the visual's measured extent: §6's row explains
+## that they are two different rects and both are right, and the one that decides whether a
+## thing can be built is the sim's.
+##
+## ## WHAT IT REFUSES, AND WHY EACH REFUSAL IS NOT A VALIDATOR RULE
+##
+## Off the map and on top of something else — those are the two a *placement* can be sure
+## about. **Everything else is `MapValidator`'s and stays there** (16.4b): whether a start can
+## reach another start, whether a player has resources in walking distance, whether a sea map's
+## players can build a dock. Deciding any of that here would be the second opinion decision 3
+## exists to prevent, and it would refuse work an author is halfway through.
+##
+## ⚠️ **IT DOES NOT REFUSE IMPASSABLE GROUND, AND THAT IS DELIBERATE.** A dock belongs on
+## water, a fish is in it, and `StartLayout` already declines to put *units* on ground they
+## cannot stand on. A placement tool that second-guessed the author about terrain would make
+## the two things this game most needs on a coast unplaceable.
+func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0) -> bool:
+	if def_id.is_empty() or not data.in_bounds(tile):
+		return false
+	var wanted := MapData.footprint_rect_of({
+		"def_id": def_id, "tile": tile, "size_class": size_class,
+	})
+	var claimed := data.claimed_tiles()
+	for t in wanted:
+		# THE WHOLE FOOTPRINT MUST BE ON THE MAP, not just its origin tile. A 10x10 town centre
+		# dropped two tiles from the edge would otherwise author a building whose claimed tiles
+		# run off the board -- and `MapGen.build_from()` would place it, half in the void.
+		if not data.in_bounds(t) or claimed.has(t):
+			return false
+	data.add_entity(def_id, player, tile, size_class)
+	dirty = true
+	return true
+
+
+## Take whatever is standing on `tile` back off the map. Returns how many entries went.
+##
+## **BY CLAIMED TILES AND NOT BY ORIGIN**, because an author clicking the middle of a 10x10
+## town centre is pointing at the town centre — a delete that only matched the origin tile
+## would do nothing nine times out of ten and read as a broken tool.
+##
+## ⚠️ **IT REFUSES TO TOUCH A START'S OWN CLUSTER**, and `remove_start()` is why: that function
+## deletes by owner AND by the `StartLayout.ORIGIN_KEY` tag, precisely so a start's base and
+## its opening resources go together. Letting this pick one villager out of a start would leave
+## a cluster the tag no longer describes, which is the state that took the entity count 24 → 40
+## the first time it was got wrong. Clearing a start is `Clear start`.
+func remove_entity_at(tile: Vector2i) -> int:
+	var kept: Array[Dictionary] = []
+	var removed := 0
+	for e in data.entities:
+		if int(e.get(StartLayout.ORIGIN_KEY, 0)) > 0:
+			kept.append(e)
+			continue
+		var covers := false
+		for t in MapData.footprint_rect_of(e):
+			if t == tile:
+				covers = true
+				break
+		if covers:
+			removed += 1
+		else:
+			kept.append(e)
+	if removed > 0:
+		data.entities = kept
+		dirty = true
+	return removed
+
+
 # ── how many players this map can really seat ───────────────────────────────
 
 ## The same arithmetic `SavedMaps._players_in()` does on the game side, so the number the

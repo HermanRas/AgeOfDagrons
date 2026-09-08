@@ -8,9 +8,13 @@
 ##   - **undo is 16.2a**, and the whole of this screen's mutation already funnels through
 ##     `MapDocument`, which is what makes that row a stack of inverted calls rather than an
 ##     archaeology exercise;
-##   - **the object palette is 16.3** — there is no way to place a house or a tree here, only
-##     a start, and `StartLayout` explains why a start had to come with its base;
-##   - **select / move / edit cursors are 16.4**. The only gesture is paint;
+##   - ~~**the object palette is 16.3** — there is no way to place a house or a tree here, only
+##     a start, and `StartLayout` explains why a start had to come with its base;~~
+##     ✅ **LANDED 2026-09-08.** `ObjectPalette` down the left, and with it the PLACE and ERASE
+##     tools — see `apply_tool()` on why single-click placement came with the palette rather
+##     than waiting for 16.4;
+##   - **select / move / edit cursors are 16.4**, and so is DRAG to place a run of walls. What
+##     landed with the palette is one click, one thing;
 ##   - ~~**File ▸ Open is 16.4a.** This screen can create and save, and cannot read back — so a
 ##     map is authored in one sitting until that lands.~~ ✅ **LANDED** — Open, and the Save As
 ##     that had to come with it. See `_open_overlay()`.
@@ -36,16 +40,20 @@ const _BAD := Color(0.95, 0.45, 0.40)
 ## see `save()`.
 const _WARN := Color(0.95, 0.78, 0.35)
 
-enum Tool { PAINT, START }
+enum Tool { PAINT, START, PLACE, ERASE }
 
 var _canvas: MapCanvas = null
+var _palette: ObjectPalette = null
+
+## The icon reader, handed to the palette. Held here because it caches parsed atlases and
+## decoded pages, and one per editor is one decode of each page rather than one per redraw.
+var _icons := IconAtlas.new()
 var _status: Label = null
 var _notice_label: Label = null
 var _name_field: LineEdit = null
 var _width: SpinBox = null
 var _height: SpinBox = null
 var _player_picker: OptionButton = null
-var _brush_buttons: Array[Button] = []
 var _tool_buttons: Dictionary = {}
 
 ## The Open overlay (16.4a) and its parts.
@@ -86,6 +94,11 @@ func _ready() -> void:
 	# the work here is what makes both routes behave the same.
 	if _startup == null:
 		_startup = Startup.check()
+	# THE ROSTER IS ALREADY LOADED BY `Startup` -- this reads `visuals.json` and `colours.json`,
+	# which nothing before 16.3 needed. **Its failure is never fatal**: a clean clone has no
+	# staged atlases at all and the palette draws lettered plates, which is 16.3's own rule.
+	_icons.load_from(_startup.root)
+	_palette.setup(_icons)
 	_new_map()
 
 
@@ -261,10 +274,33 @@ func save_as() -> Array[String]:
 	return problems
 
 
+## The terrain the PAINT tool writes.
+##
+## Still a public seam with the toolbar's buttons gone, and for two reasons: the palette's
+## Terrain tab calls it, and `dev/author_map.tscn` and the tests drive the brush without a
+## mouse. What it no longer does is light a row of buttons — see `_tool_row()`.
 func set_brush(kind: int) -> void:
 	_brush = kind
-	for i in _brush_buttons.size():
-		_brush_buttons[i].button_pressed = (i == kind)
+
+
+## The palette's Terrain tab chose a kind: take it as the brush AND arm the brush tool.
+##
+## **BOTH, because a tab that arms nothing reads as broken.** An author who clicks Terrain and
+## then Water has said what they want twice; making them also find the Brush button is a third
+## click for a decision already made.
+func _on_terrain_picked(kind: int) -> void:
+	set_brush(kind)
+	set_tool(Tool.PAINT)
+
+
+## Something was chosen off the palette's grid: arm PLACE.
+##
+## ⚠️ **ONLY FROM `entry_picked`, NEVER FROM `selection_changed`.** The palette's header has
+## the argument: the second signal also fires when the owner, tint or size class moves, so
+## arming a tool from it would silently swap the tool out from under an author who had pressed
+## `Place start` and then changed the owner.
+func _on_entry_picked(_def_id: StringName) -> void:
+	set_tool(Tool.PLACE)
 
 
 func set_tool(t: Tool) -> void:
@@ -275,6 +311,17 @@ func set_tool(t: Tool) -> void:
 
 
 ## Apply the current tool to `tile`. What the canvas's `painted` signal reaches.
+##
+## ## WHY PLACE AND ERASE CAME WITH THE PALETTE RATHER THAN WITH 16.4
+##
+## PLAN.md 16.4 owns *"select / move / edit, click to place, drag to place walls"*, and three
+## of those four are still 16.4's. **The one click that puts one thing down came here because
+## without it 16.3 delivers a panel that cannot do anything** — `selection()` would have had no
+## consumer, and 16.4 would have had to build `MapDocument.add_entity` anyway to acquire one.
+## An author handed a palette that only highlights things has been handed a picture of a tool.
+##
+## What is deliberately NOT here, so 16.4 is still a row: no drag (a stroke of walls needs
+## `WallPlan`'s axis rule), no select, no move, no per-entity edit.
 func apply_tool(tile: Vector2i) -> void:
 	if _document == null:
 		return
@@ -286,6 +333,24 @@ func apply_tool(tile: Vector2i) -> void:
 			changed = _document.place_start(_player_picker.get_selected_id(), tile)
 			if changed:
 				_refresh_players()
+		Tool.PLACE:
+			var pick := _palette.selection()
+			if pick.is_empty():
+				# NOTHING SELECTED IS NOT A FAILURE TO REPORT ON EVERY CLICK. The status line
+				# already says "nothing selected"; a notice per click would bury whatever the
+				# author last actually did.
+				return
+			changed = _document.add_entity(pick["def_id"], int(pick["player"]), tile,
+					int(pick["size_class"]))
+			if not changed:
+				# ⚠️ **THE REFUSAL IS SAID OUT LOUD, because a click that does nothing looks
+				# like a broken tool.** `add_entity` refuses two things and the author can see
+				# neither: a footprint running off the map (the origin tile is plainly on it)
+				# and an overlap with a footprint that may be ten tiles wide.
+				_notice("WILL NOT FIT — %s needs clear ground at %d,%d"
+						% [GameDataRegistry.display_name(pick["def_id"]), tile.x, tile.y], _WARN)
+		Tool.ERASE:
+			changed = _document.remove_entity_at(tile) > 0
 	if changed:
 		# REDRAWN AND RE-REPORTED ONLY ON A REAL CHANGE, which is why `paint()` returns a
 		# bool: a drag delivers the same tile dozens of times and repainting the canvas on
@@ -381,15 +446,34 @@ func _build_ui() -> void:
 	rows.add_child(_file_row())
 	rows.add_child(_tool_row())
 
+	# THE PALETTE AND THE CANVAS SHARE A ROW (16.3). The canvas expands and the palette does
+	# not, so the map takes every pixel the panel does not want -- and `MapCanvas` already sets
+	# `clip_contents`, which is what stops a panned map painting over the panel the way it once
+	# painted over the toolbar.
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 6)
+	rows.add_child(body)
+
+	_palette = ObjectPalette.new()
+	_palette.terrain_picked.connect(_on_terrain_picked)
+	_palette.entry_picked.connect(_on_entry_picked)
+	# THE LABEL ONLY. Arming a tool from this would mean changing the owner re-armed PLACE
+	# over whatever the author had actually pressed -- the palette's own header on why there
+	# are two signals.
+	_palette.selection_changed.connect(func() -> void: _refresh_status())
+	body.add_child(_palette)
+
 	_canvas = MapCanvas.new()
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.hovered.connect(_on_hovered)
 	_canvas.painted.connect(apply_tool)
 	# A wheel moves neither the pointer's tile nor the map, so without this the zoom in the
 	# status line stays at whatever it was the last time something else refreshed it. Found
 	# by reading a screenshot that said 0.23x while the canvas was at 1.20x.
 	_canvas.view_changed.connect(func() -> void: _refresh_status())
-	rows.add_child(_canvas)
+	body.add_child(_canvas)
 
 	_status = Label.new()
 	_status.add_theme_color_override("font_color", _TEXT)
@@ -444,34 +528,36 @@ func _tool_row() -> Control:
 	var box := _panel()
 	var row := box.get_child(0) as HBoxContainer
 
-	row.add_child(_label("Paint"))
-	# ONE BUTTON PER `SimMap.Terrain`, FROM THE ENUM. `sim_map.gd` is the authority on its own
-	# terrain kinds and it is a hash-checked copy, so an eighth kind appears here with no
-	# edit -- and a written-out list would be the drift `FormatGuard` exists to prevent.
-	for kind in SimMap.Terrain.values():
+	# ⚠️ **THE ROW OF SEVEN TERRAIN BUTTONS THAT USED TO BE HERE IS GONE, AND IT WAS DELETED
+	# RATHER THAN KEPT ALONGSIDE THE PALETTE.** 16.3's row makes Terrain a palette category, so
+	# for about an hour there were two controls for one fact — and the sync was ONE WAY: the
+	# palette's terrain tab called `set_brush()` and lit the toolbar, while a toolbar press
+	# changed the brush and left the palette highlighting something else. That is §6's row
+	# about two rows built from the same constants ("mirroring a layout is not sharing one")
+	# with a selection instead of a width, and the cheap version of the fix is to have one
+	# control. `set_brush` survives as the seam both the palette and the tests drive.
+	#
+	# What was lost is worth naming: the toolbar's buttons were NAMED and colour-coded and
+	# always visible, where the palette's are swatches behind a tab. The palette's tiles carry
+	# the same name and the same `MapCanvas.TERRAIN_COLOURS` swatch, so nothing about the
+	# information went — only the always-visible part, and a tab is one click.
+
+	# ONE BUTTON PER TOOL, from the enum's own members, so a fifth tool cannot be added
+	# without a button appearing -- the same argument as the brush row above, which builds
+	# itself from `SimMap.Terrain`.
+	for entry in [
+		{"tool": Tool.PAINT, "label": "Brush"},
+		{"tool": Tool.PLACE, "label": "Place"},
+		{"tool": Tool.ERASE, "label": "Erase"},
+		{"tool": Tool.START, "label": "Place start"},
+	]:
 		var b := Button.new()
-		b.text = str(SimMap.Terrain.keys()[kind]).capitalize()
+		b.text = str(entry["label"])
 		b.toggle_mode = true
-		b.add_theme_color_override("font_color",
-				MapCanvas.TERRAIN_COLOURS.get(kind, Color.WHITE))
-		b.pressed.connect(func() -> void: set_brush(kind))
-		_brush_buttons.append(b)
+		var t: int = int(entry["tool"])
+		b.pressed.connect(func() -> void: set_tool(t as Tool))
+		_tool_buttons[t] = b
 		row.add_child(b)
-
-	row.add_child(_separator())
-	var start_button := Button.new()
-	start_button.text = "Place start"
-	start_button.toggle_mode = true
-	start_button.pressed.connect(func() -> void: set_tool(Tool.START))
-	_tool_buttons[int(Tool.START)] = start_button
-	row.add_child(start_button)
-
-	var paint_button := Button.new()
-	paint_button.text = "Brush"
-	paint_button.toggle_mode = true
-	paint_button.pressed.connect(func() -> void: set_tool(Tool.PAINT))
-	_tool_buttons[int(Tool.PAINT)] = paint_button
-	row.add_child(paint_button)
 
 	_player_picker = OptionButton.new()
 	# EIGHT, matching the lobby's maximum. A ninth start is a map the game cannot seat.
@@ -540,8 +626,19 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	if hover.x >= 0:
 		bits.append("tile %d,%d — %s" % [hover.x, hover.y,
 				str(SimMap.Terrain.keys()[_document.data.terrain_at(hover)]).capitalize()])
-	if _tool == Tool.START:
-		bits.append("click to place P%d's start" % _player_picker.get_selected_id())
+	# ⚠️ **WHAT THE NEXT CLICK WILL DO, IN THE TOOL'S OWN WORDS.** With four tools and a
+	# palette, "click" means five different things and the toolbar shows only which button is
+	# down. `_document.entities.size()` going up by one is not something an author watching a
+	# 96x96 map at 0.22x can see, so the sentence is how a placement is confirmed at all.
+	match _tool:
+		Tool.START:
+			bits.append("click to place P%d's start" % _player_picker.get_selected_id())
+		Tool.PLACE:
+			bits.append(_palette.describe())
+		Tool.ERASE:
+			bits.append("click to erase (starts are cleared with Clear start)")
+		Tool.PAINT:
+			bits.append(_palette.describe())
 	if not _document.dir.is_empty():
 		# ⚠️ **"FILE", NOT "SAVED TO", AND THE FOLDER'S PARENT WHEN IT IS NOT OURS.** Since
 		# 16.4a a document's directory can be one this tool never wrote -- a scenario's, most
@@ -555,6 +652,11 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		# THE REASON, not a generic banner. Three different faults with three different
 		# fixes, and the playtest that found this had the one message blaming the wrong one.
 		bits.append("SAVING DISABLED — %s" % _startup.reason)
+	elif _startup.guard != null and not _startup.guard.presentation_ok():
+		# ⚠️ **A NOTE AND NOT A REFUSAL, which is the whole point of `PRESENTATION`.** A
+		# drifted icon reader writes a byte-identical map file; what it costs is a wrong
+		# picture in the palette. Saving stays on. `FormatGuard.PRESENTATION` has the argument.
+		bits.append(_startup.guard.presentation_note())
 	_status.text = "  " + "   ".join(PackedStringArray(bits))
 	_status.add_theme_color_override("font_color",
 			_BAD if (not _startup.can_save() or seats < 2) else _GOOD)

@@ -20,7 +20,10 @@
 ## Usage:
 ##   Godot --path MapMaker res://dev/preview_editor.tscn
 ##       -- writes user://editor_fit.png, editor_zoomed.png, editor_start.png,
-##          editor_saved.png, editor_open.png, editor_reopened.png
+##          editor_saved.png, editor_open.png, editor_reopened.png,
+##          palette_buildings.png, palette_units.png, palette_resources.png,
+##          palette_search.png, palette_terrain.png, palette_plates.png,
+##          palette_placed.png
 extends Node
 
 const SHOT_DIR := "user://"
@@ -105,8 +108,53 @@ func _process(_delta: float) -> void:
 			_report("after opening the saved map")
 			_shoot("editor_reopened")
 			_clean_up_the_saved_map()
+			# ⚠️ **THE PALETTE IS MOSTLY A PICTURE (16.3), so this is the half that matters.**
+			# `test_object_palette` proves the lists, the search, the size class and the crop
+			# arithmetic. **None of that says an icon is recognisable.** Whether a villager
+			# cropped from a 1024x2048 page reads as a person at 88x78, whether a lettered
+			# plate is legible on the colour `visuals.json` declares, and whether four tabs
+			# and three dropdowns fit a 330 px column are questions for eyes.
+			_show_palette(ObjectPalette.Category.BUILDING)
+		9:
+			_report_palette("buildings")
+			_shoot("palette_buildings")
+			_show_palette(ObjectPalette.Category.UNIT)
+		10:
+			_report_palette("units")
+			_shoot("palette_units")
+			# RESOURCES, because it is the one category with a size selector and the one the
+			# original spec left out -- and because trees and mines are the icons an author
+			# looks at most while laying out a map.
+			_show_palette(ObjectPalette.Category.RESOURCE)
+		11:
+			_report_palette("resources")
+			_shoot("palette_resources")
+			_search_palette("mine")
+		12:
+			_report_palette("resources filtered by \"mine\"")
+			_shoot("palette_search")
+			# ⚠️ **THE ONE CATEGORY WHOSE CONTROL WAS REPLACED RATHER THAN ADDED.** 16.3 deleted
+			# the toolbar's seven named terrain buttons, because two controls for one brush had
+			# a one-way sync (`_tool_row()` carries the argument). So this tab is now the ONLY
+			# way to choose a brush, and a shot of it is the check that the swatches are
+			# tellable apart -- the toolbar's version had the terrain's name in its own colour.
+			_show_palette(ObjectPalette.Category.TERRAIN)
+		13:
+			_report_palette("terrain")
+			print("  brush armed: tool %d" % _editor._tool)
+			_shoot("palette_terrain")
+			_show_the_clean_clone()
+		14:
+			_report_palette("buildings with NO staged art")
+			_shoot("palette_plates")
+			_restore_the_art()
+		15:
+			_place_from_the_palette()
+		16:
+			_report("after placing from the palette")
+			_shoot("palette_placed")
 			print("")
-			print("OK — six shots written. Look at them: the arithmetic is tested, the"
+			print("OK — thirteen shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -202,6 +250,98 @@ func _open_what_was_just_saved() -> void:
 		_hold(UI_FRAMES)
 		return
 	printerr("  the map Save just wrote is NOT in the Open list: %s" % want)
+	_hold(UI_FRAMES)
+
+
+## ── the palette (16.3) ──────────────────────────────────────────────────────
+
+func _palette() -> ObjectPalette:
+	return _editor._palette as ObjectPalette
+
+
+func _show_palette(category: int) -> void:
+	_palette().set_search("")
+	_palette().set_category(category as ObjectPalette.Category)
+	_hold(UI_FRAMES)
+
+
+func _search_palette(needle: String) -> void:
+	_palette().set_search(needle)
+	_hold(UI_FRAMES)
+
+
+## What the palette is showing, and **how many of those got a real picture rather than a
+## plate**.
+##
+## ⚠️ **THE PLATE COUNT IS THE NUMBER WORTH PRINTING, and a screenshot cannot supply it.** A
+## plate and a very dark sprite look similar at 88x78, so a category where the crop silently
+## failed for half its entries would photograph as *"some of the art is dark"*. On the owner's
+## machine, with all 139 atlases staged, anything above zero is a visual id whose `idle` clip
+## did not resolve — which is a finding, not a rendering detail.
+func _report_palette(what: String) -> void:
+	var ids := _palette().listed_ids()
+	if _palette().category() == ObjectPalette.Category.TERRAIN:
+		# ⚠️ **TERRAIN DRAWS SWATCHES, NOT CROPS OR PLATES**, so counting crops here reported
+		# "7 lettered plates" for a tab that has none — a number that would send somebody
+		# hunting for missing art. A tile is a flat diamond on the canvas too (`MapCanvas`'s
+		# header is emphatic that those colours are presentational), so a swatch in the same
+		# colours IS the honest picture and there is nothing to count.
+		print("palette %s: %d swatches in MapCanvas.TERRAIN_COLOURS" % [what, ids.size()])
+		return
+	var with_art := 0
+	for id in ids:
+		if not _editor._icons.crop_for(id, 0, _palette().tint()).is_empty():
+			with_art += 1
+	print("palette %s: %d shown, %d with a cropped icon, %d lettered plates"
+			% [what, ids.size(), with_art, ids.size() - with_art])
+	if not ids.is_empty():
+		print("  first three: %s" % ", ".join(PackedStringArray([
+				String(ids[0]),
+				String(ids[1]) if ids.size() > 1 else "",
+				String(ids[2]) if ids.size() > 2 else ""])))
+
+
+## Photograph the palette as a CLEAN CLONE sees it: no staged art, every tile a lettered plate.
+##
+## ⚠️ **THIS IS THE ONE SHOT ON THIS MACHINE THAT SHOWS A REQUIREMENT RATHER THAN A FEATURE.**
+## 16.3's row insists a palette with no atlases must draw plates and carry on, because
+## `game/assets/atlases/` is gitignored and absent from a fresh checkout. The owner has all 139
+## staged — so **the view every other developer gets first is the only one nobody here can
+## see**, and §5's rule is that a check blind to a fault ends the investigation. The plate
+## arithmetic has tests; whether a two-letter monogram is centred and legible on the colour
+## `visuals.json` declares for each subject is a question for eyes.
+func _show_the_clean_clone() -> void:
+	(_editor._icons as IconAtlas).ignore_atlases = true
+	_show_palette(ObjectPalette.Category.BUILDING)
+
+
+## And put it back, so the shot after this one is not photographing a crippled tool.
+func _restore_the_art() -> void:
+	(_editor._icons as IconAtlas).ignore_atlases = false
+	_show_palette(ObjectPalette.Category.BUILDING)
+
+
+## Pick a town centre off the palette and place it through the real click path.
+##
+## **Through `apply_tool()`, which is what the canvas's `painted` signal reaches**, so this
+## exercises the tool the palette arms rather than calling `MapDocument.add_entity` directly.
+## The second press on the SAME tile is the point: it must be refused and the refusal must be
+## on screen, because a click that does nothing is indistinguishable from a broken tool.
+func _place_from_the_palette() -> void:
+	_show_palette(ObjectPalette.Category.BUILDING)
+	_palette().pick(StartLayout.TOWN_CENTRE)
+	var before: int = _editor.document().data.entities.size()
+	var tile := Vector2i(70, 70)
+	_editor.apply_tool(tile)
+	var after: int = _editor.document().data.entities.size()
+	print("placed %s at %d,%d: %d -> %d entities"
+			% [StartLayout.TOWN_CENTRE, tile.x, tile.y, before, after])
+	if after == before:
+		printerr("  the palette's selection did not reach the map")
+	# AND AGAIN, ON THE SAME GROUND. `_notice` is what the shot is for.
+	_editor.apply_tool(tile)
+	if _editor.document().data.entities.size() != after:
+		printerr("  an overlapping placement was ACCEPTED")
 	_hold(UI_FRAMES)
 
 
