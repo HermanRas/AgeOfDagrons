@@ -373,6 +373,110 @@ func test_a_resize_redraws_the_map() -> void:
 	fresh.free()
 
 
+# ── the batched projection (16.x-slow-place) ────────────────────────────────
+#
+# ⚠️ **THESE EXIST BECAUSE THE FIX FOR THE SLOWNESS TOUCHED THE ONE THING THIS FILE'S HEADER
+# SAYS MUST NOT BE RE-DERIVED.** `MapCanvas`'s class comment: every tile-to-screen conversion
+# goes through the game's own hash-checked `Iso`, and *"re-deriving the projection with a local
+# `TILE_SIZE` would have been four lines and would have made the canvas a lie that nothing
+# could detect."*
+#
+# Batching the terrain into one draw command means the corners are computed as
+# `o + ex * x + ey * y` rather than by four `Iso` calls a tile — 439 ms of draw calls down to
+# ~28 ms, measured by `dev/profile_editor.tscn`. `projection_basis()` takes `o`, `ex` and `ey`
+# as **differences of `Iso` projections**, which is exact because `Iso._project` is linear, so
+# nothing is written down. **These tests are what make that claim checkable** rather than a
+# sentence in a header: the day somebody replaces the basis with `Vector2(32, 16)` for speed,
+# or `Iso.TILE_SIZE` changes, this fails instead of the map quietly drawing at the wrong
+# proportions in a tool whose whole job is judging proportions.
+
+## The batched corners are `Iso`'s corners, tile by tile.
+##
+## Checked at the extremes as well as the middle, for the round trip's reason: an error in a
+## projection scales with distance from the origin and is invisible where you happen to look.
+func test_the_batched_corners_are_the_projections_they_replace() -> void:
+	var basis := canvas.projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+	for t in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(48, 48),
+			Vector2i(95, 95), Vector2i(95, 0), Vector2i(0, 95)]:
+		var batched := o + ex * float(t.x) + ey * float(t.y)
+		# `_to_screen_f` IS THE ROUTE THE REST OF THIS FILE DRAWS BY, and it ends in
+		# `Iso.tile_to_world_f` -- so comparing against it compares against the game's copy.
+		assert_almost_eq(batched.x, canvas._to_screen_f(Vector2(t)).x, 0.01,
+				"tile %s corner x" % t)
+		assert_almost_eq(batched.y, canvas._to_screen_f(Vector2(t)).y, 0.01,
+				"tile %s corner y" % t)
+
+
+## And the other three corners of a tile, which is what the two triangles are wound from.
+##
+## A basis that had `ex` and `ey` the wrong way round would put every corner in the right PLACE
+## and every diamond in the wrong ORIENTATION -- which at fit-to-view is a map that looks
+## subtly like a different map, and is exactly the class of fault a screenshot argues about.
+func test_a_tiles_four_corners_come_out_in_the_same_order_as_the_diamond() -> void:
+	var basis := canvas.projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+	for t in [Vector2i(2, 3), Vector2i(70, 12)]:
+		var a := o + ex * float(t.x) + ey * float(t.y)
+		var batched := PackedVector2Array([a, a + ex, a + ex + ey, a + ey])
+		var expected := canvas._diamond(t)
+		for i in 4:
+			assert_almost_eq(batched[i].x, expected[i].x, 0.01, "tile %s corner %d x" % [t, i])
+			assert_almost_eq(batched[i].y, expected[i].y, 0.01, "tile %s corner %d y" % [t, i])
+
+
+## The basis tracks the view, so a zoom or a pan cannot leave it stale.
+##
+## ⚠️ **THIS IS THE FAILURE THE BASIS INVITES AND THE PER-TILE VERSION COULD NOT HAVE.** Three
+## values computed once and used nine thousand times are three values that could be computed at
+## the wrong moment -- cached across a wheel-zoom, say -- and the result is a whole map drawn at
+## the previous view while the cursor overlay is at the current one. `_draw_terrain` takes them
+## inside the draw for that reason, and this pins it.
+func test_the_basis_follows_a_zoom_and_a_pan() -> void:
+	canvas._zoom = 2.35
+	canvas._pan = Vector2(-317.0, 148.0)
+	var basis := canvas.projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+	for t in [Vector2i(3, 7), Vector2i(50, 12), Vector2i(80, 80)]:
+		var batched := o + ex * float(t.x) + ey * float(t.y)
+		var expected := canvas._to_screen_f(Vector2(t))
+		assert_almost_eq(batched.x, expected.x, 0.01, "tile %s x after pan/zoom" % t)
+		assert_almost_eq(batched.y, expected.y, 0.01, "tile %s y after pan/zoom" % t)
+	# AND THE EDGE VECTORS SCALE WITH THE ZOOM, which is the half a corner comparison at one
+	# zoom cannot distinguish from a coincidence.
+	assert_almost_eq(ex.length(), canvas._to_screen_f(Vector2(1.0, 0.0)).distance_to(o), 0.01)
+
+
+## The small marker's corners are `_diamond_scaled()`'s corners.
+##
+## `_draw_entities` reproduces that function's arithmetic from the basis (`factor * 0.5` is the
+## 0.275 in the code), so a unit's diamond and the terrain under it are projected by the same
+## three vectors. **The two numbers agreeing is the whole check**: a marker drawn from a
+## slightly different centre is a unit that does not sit on its tile, which reads as a
+## placement bug rather than as a drawing one.
+func test_the_small_marker_matches_the_scaled_diamond() -> void:
+	var basis := canvas.projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+	var t := Vector2i(40, 22)
+	var centre := o + ex * (float(t.x) + 0.5) + ey * (float(t.y) + 0.5)
+	var hx := ex * 0.275
+	var hy := ey * 0.275
+	var batched := PackedVector2Array([centre - hx - hy, centre + hx - hy,
+			centre + hx + hy, centre - hx + hy])
+	var expected := canvas._diamond_scaled(t, 0.55)
+	for i in 4:
+		assert_almost_eq(batched[i].x, expected[i].x, 0.01, "marker corner %d x" % i)
+		assert_almost_eq(batched[i].y, expected[i].y, 0.01, "marker corner %d y" % i)
+
+
 ## A canvas that has run `_ready()`, without a tree -- which `add_child` does not need. The
 ## suite's other tests deliberately use one that has NOT, since the projection maths is pure
 ## and testing it without a window is the point.

@@ -23,6 +23,35 @@
 ## a performance bug — it looks like tiles missing from two edges of the screen while panning,
 ## which reads as a drawing fault.
 ##
+## ## THE WHOLE MAP IS ONE DRAW COMMAND, AND THAT IS MEASURED RATHER THAN ASSUMED
+##
+## ⚠️ **9,216 `draw_colored_polygon` CALLS COST 439 ms AND THE SAME 9,216 DIAMONDS COST 54 ms
+## TO WORK OUT.** Measured by `dev/profile_editor.tscn` on `maps/sample_duel` at fit-to-view,
+## 2026-09-08, after the owner reported *"3 sec between click and place of buildings"*: the
+## projection was 12% of the redraw and the **draw commands were the other 88%**, at ~42
+## microseconds each. The renderer here is the OpenGL compatibility backend on an Intel Iris
+## Xe, where a filled polygon is its own batch.
+##
+## So the terrain is assembled into ONE triangle array and issued as **one command**
+## (`RenderingServer.canvas_item_add_triangle_array`), the grid as **one** `draw_multiline`,
+## and the entity footprints as **one** more. Click-to-drawn on that map went from ~1,400 ms to
+## the figure `dev/profile_editor.tscn` prints today.
+##
+## ⚠️ **AND THE HALF THAT IS NOT ABOUT CLICKING.** A `CanvasItem`'s commands are re-rendered
+## **every frame**, not once per `_draw` — so nine thousand of them made the tool run at 22 fps
+## sitting still, with nothing happening and no redraw in flight. That is why the owner's report
+## opens with *"the tool is very very slow"* and only then names one operation: every click,
+## drag and keystroke was waiting behind the same command list.
+##
+## ⚠️ **THE PROJECTION IS STILL `Iso`'s — THE BASIS IS READ OUT OF IT, NEVER WRITTEN DOWN.**
+## Batching means the four corners of tile (x, y) are computed as `o + ex * x + ey * y` rather
+## than by four calls, and the temptation is to write `ex = Vector2(32, 16)` and be done. That
+## is exactly the *"lie that nothing could detect"* this file's header warns about one section
+## up. Instead `o`, `ex` and `ey` are **differences of `Iso` projections** — which is exact,
+## because `Iso._project` is linear — so the geometry still comes from the game's own file, and
+## `test_map_canvas` compares the batched corners against `Iso.tile_to_world_f()` tile by tile
+## so a drift in either direction fails the suite.
+##
 ## ## TERRAIN COLOURS HERE ARE PRESENTATIONAL AND ARE NOT THE FILE'S
 ##
 ## `MapFile` writes the terrain KIND into the PNG's red channel and a cosmetic tint into
@@ -104,6 +133,34 @@ signal stroke_ended
 signal view_changed
 
 var document: MapDocument = null
+
+## What the last `_draw()` cost, in microseconds, split by phase, plus how many tiles the cull
+## covered. Written on every redraw and read by `dev/profile_editor.gd`.
+##
+## ⚠️ **THIS IS INSTRUMENTATION IN PRODUCTION CODE AND IT IS DELIBERATE.** Two slowness reports
+## have now come off the owner's machine (2026-09-04, *"the tool is very slow"*; 2026-09-08,
+## *"3 sec between click and place"*) and **neither could be answered by reading this file** —
+## every candidate is cheap on paper at these sizes, and the first diagnosis that sounded right
+## was wrong about which item was being invalidated. The project has also paid for optimising
+## without a number: reordering two checks in `SimMap.is_terrain_passable` blew the tick budget
+## in three tests to fix one domain.
+##
+## So the cost of a redraw is a **reading the tool takes of itself**, not an inference. It is
+## four `Time.get_ticks_usec()` calls and two integer stores per redraw, against ~9,000
+## `draw_colored_polygon` calls in the same function — unmeasurable next to the thing it
+## measures, and the reason a third report can be answered in one command.
+##
+## **Nothing draws from these and nothing branches on them.** A counter the tool reacted to
+## would be a second, invisible input to what an author sees.
+var last_draw_usec := 0
+var last_terrain_usec := 0
+var last_entities_usec := 0
+var last_tiles_culled := 0
+
+## How many times `_draw()` has run. **A COUNT IS THE HALF A DURATION CANNOT REPORT:** ten cheap
+## redraws for one click is a different fault from one expensive one, wants a different fix, and
+## looks identical from the outside.
+var draws := 0
 
 var _zoom := 1.0
 var _pan := Vector2.ZERO
@@ -354,13 +411,23 @@ func _zoom_at(anchor: Vector2, factor: float) -> void:
 ## **REDRAWN ONLY WHEN THE MAP OR THE VIEW CHANGES.** The cursor is `_draw_overlay`'s, on a
 ## child item, so a mouse-move does not come through here -- see `_ready()`.
 func _draw() -> void:
+	var t0 := Time.get_ticks_usec()
+	draws += 1
 	draw_rect(Rect2(Vector2.ZERO, size), _OUT_OF_BOUNDS)
 	if document == null:
 		return
 	var range_rect := _visible_tile_bounds()
+	last_tiles_culled = range_rect.size.x * range_rect.size.y
 	_draw_terrain(range_rect)
+	var t1 := Time.get_ticks_usec()
 	_draw_entities()
+	var t2 := Time.get_ticks_usec()
 	_draw_starts()
+	# THE PHASES, so a slow redraw says WHICH half is slow. Terrain scales with the cull and
+	# entities with the map's contents, and the two want opposite fixes.
+	last_terrain_usec = t1 - t0
+	last_entities_usec = t2 - t1
+	last_draw_usec = Time.get_ticks_usec() - t0
 
 
 ## The hover cursor, and nothing else. Cheap on purpose: this is what repaints on every
@@ -372,21 +439,115 @@ func _draw_overlay() -> void:
 	_overlay.draw_polyline(poly + PackedVector2Array([poly[0]]), _CURSOR, 2.0)
 
 
+## Every visible tile, as ONE triangle array and ONE multiline.
+##
+## See the class comment for the measurement that made this batched rather than a call per
+## tile. The arrays are sized once and written by index — `push_back` per corner is a
+## reallocation check per corner, and there are four corners a tile.
 func _draw_terrain(range_rect: Rect2i) -> void:
 	var data := document.data
 	var show_grid := _zoom >= 0.5          # below this the outlines are all you would see
+	var basis := projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+
+	# EVERY TILE IN THE RANGE IS IN BOUNDS -- `_visible_tile_bounds()` clamps to the map -- so
+	# the arrays are sized exactly and the loop never has to grow them. The `in_bounds` guard
+	# below stays anyway, and `used` is what gets kept: a range that ever stopped being clamped
+	# would draw fewer tiles rather than read off the end of the arrays.
+	var tiles := range_rect.size.x * range_rect.size.y
+	if tiles <= 0:
+		return
+	var points := PackedVector2Array()
+	var colours := PackedColorArray()
+	var indices := PackedInt32Array()
+	points.resize(tiles * 4)
+	colours.resize(tiles * 4)
+	indices.resize(tiles * 6)
+	var lines := PackedVector2Array()
+	if show_grid:
+		lines.resize(tiles * 8)
+	var used := 0
+
 	for y in range(range_rect.position.y, range_rect.end.y):
 		for x in range(range_rect.position.x, range_rect.end.x):
 			var t := Vector2i(x, y)
 			if not data.in_bounds(t):
 				continue
-			var poly := _diamond(t)
-			draw_colored_polygon(poly, TERRAIN_COLOURS.get(data.terrain_at(t), Color.MAGENTA))
+			# THE FOUR CORNERS, from the basis rather than from four `Iso` calls. Multiplied
+			# rather than accumulated along the row: an accumulation drifts, and drift in a
+			# projection shows up as tiles that do not meet.
+			var a := o + ex * float(x) + ey * float(y)
+			var b := a + ex
+			var c := b + ey
+			var d := a + ey
+			var v := used * 4
+			points[v] = a
+			points[v + 1] = b
+			points[v + 2] = c
+			points[v + 3] = d
+			var colour: Color = TERRAIN_COLOURS.get(data.terrain_at(t), Color.MAGENTA)
+			colours[v] = colour
+			colours[v + 1] = colour
+			colours[v + 2] = colour
+			colours[v + 3] = colour
+			# TWO TRIANGLES, wound the same way for every tile. A diamond is convex, so any
+			# fan works and this is the cheapest one to write.
+			var i := used * 6
+			indices[i] = v
+			indices[i + 1] = v + 1
+			indices[i + 2] = v + 2
+			indices[i + 3] = v
+			indices[i + 4] = v + 2
+			indices[i + 5] = v + 3
 			if show_grid:
-				# Closed explicitly: `draw_polyline` does not close a loop, so without the
-				# repeated first point every diamond is missing one of its four edges --
-				# which reads as a grid with holes in it rather than as an unclosed path.
-				draw_polyline(poly + PackedVector2Array([poly[0]]), _GRID, 1.0)
+				# ALL FOUR EDGES PER TILE, which draws the shared ones twice and is still one
+				# command. `draw_multiline` takes point PAIRS, so there is no closing-point
+				# problem here -- unlike `draw_polyline`, which left every diamond missing an
+				# edge until the first point was repeated.
+				var l := used * 8
+				lines[l] = a
+				lines[l + 1] = b
+				lines[l + 2] = b
+				lines[l + 3] = c
+				lines[l + 4] = c
+				lines[l + 5] = d
+				lines[l + 6] = d
+				lines[l + 7] = a
+			used += 1
+
+	if used < tiles:
+		points.resize(used * 4)
+		colours.resize(used * 4)
+		indices.resize(used * 6)
+		if show_grid:
+			lines.resize(used * 8)
+	if used == 0:
+		return
+	# ONE COMMAND FOR THE WHOLE MAP. `RenderingServer` rather than a `CanvasItem` method because
+	# there is no `draw_triangle_array` -- `draw_colored_polygon` is the per-polygon call this
+	# exists to stop making. The item is this control's own, so clipping and the canvas
+	# transform apply exactly as they did.
+	RenderingServer.canvas_item_add_triangle_array(
+			get_canvas_item(), indices, points, colours)
+	if show_grid:
+		draw_multiline(lines, _GRID, 1.0)
+
+
+## The iso projection as an origin and two edge vectors, in this control's local space.
+##
+## ⚠️ **DIFFERENCES OF `Iso` PROJECTIONS, NEVER A WRITTEN-DOWN BASIS.** `Iso._project` is
+## linear, so `f(x, y) == f(0,0) + x*(f(1,0) - f(0,0)) + y*(f(0,1) - f(0,0))` is exact rather
+## than approximate — and taking it this way means the batched draw is still using the game's
+## own projection, at the current zoom and pan, with no second copy of `TILE_SIZE` anywhere.
+## The class comment explains why that mattered enough to be a named function.
+##
+## Public so `test_map_canvas` can compare it against `Iso.tile_to_world_f()` tile by tile,
+## which is the check that makes the batching safe to have done at all.
+func projection_basis() -> Array:
+	var o := _to_screen_f(Vector2.ZERO)
+	return [o, _to_screen_f(Vector2(1.0, 0.0)) - o, _to_screen_f(Vector2(0.0, 1.0)) - o]
 
 
 ## Buildings as their footprint, units and resources as a small diamond.
@@ -395,18 +556,79 @@ func _draw_terrain(range_rect: Rect2i) -> void:
 ## the same function the generator and the validator use. Drawing a building as one tile, or
 ## as a size this file decided, would make the canvas disagree with what the map actually
 ## claims, and overlap would be invisible until the game refused to build the world.
+## ⚠️ **ONE COMMAND FOR EVERY FOOTPRINT ON THE MAP, for the same measured reason the terrain is
+## batched — and this half is worse per entity than it looks.** A 10x10 town centre is a hundred
+## filled diamonds, so `sample_duel`'s 154 entities were ~400 polygon calls and 30 ms of the
+## redraw. The outlines stay individual `draw_polyline` calls: there is one per *multi-tile*
+## entity, which is tens rather than thousands, and batching those would mean a colour per line
+## segment for no measurable gain.
+## ⚠️ **THE QUADS ARE COLLECTED FIRST AND WRITTEN INTO THE PACKED ARRAYS IN ONE PLACE, and that
+## shape is not stylistic.** The obvious version is an `_add_quad(points, colours, indices, …)`
+## helper called from both branches — and it would be **silently wrong**: a `PackedVector2Array`
+## argument is a copy-on-write value, so appends inside the helper land on the callee's copy and
+## the caller's array stays empty. Nothing errors; the entities simply do not draw. That is the
+## same trap `MapEdit._write_terrain()` is written around, met from the argument side rather
+## than the assignment side, so the arrays are only ever touched by the function that owns them.
 func _draw_entities() -> void:
+	var basis := projection_basis()
+	var o: Vector2 = basis[0]
+	var ex: Vector2 = basis[1]
+	var ey: Vector2 = basis[2]
+	# Each entry is `[a, b, c, d, colour]` in screen space. The outlines cannot share the fills'
+	# array and have to be drawn after it, so they are collected separately.
+	var quads: Array = []
+	var outlines: Array = []
+
 	for e in document.data.entities:
 		var tiles := MapData.footprint_rect_of(e)
 		var player := int(e.get("player", 0))
 		var is_building := GameDataRegistry.building(e.get("def_id", &"")) != null
 		var colour := _GAIA if player == 0 else (_BUILDING if is_building else _UNIT)
 		if tiles.size() > 1:
+			var faded := Color(colour, 0.55)
 			for t in tiles:
-				draw_colored_polygon(_diamond(t), Color(colour, 0.55))
-			_outline(tiles[0], colour, 1.0)
+				var a := o + ex * float(t.x) + ey * float(t.y)
+				quads.append([a, a + ex, a + ex + ey, a + ey, faded])
+			outlines.append([tiles[0], colour])
 		else:
-			draw_colored_polygon(_diamond_scaled(tiles[0], 0.55), colour)
+			# THE SMALL MARKER, shrunk about the tile's CENTRE -- `_diamond_scaled()`'s
+			# arithmetic, reproduced from the basis so a unit and the terrain under it are
+			# projected by the same three vectors. 0.275 is that function's `factor * 0.5`.
+			var centre := o + ex * (float(tiles[0].x) + 0.5) + ey * (float(tiles[0].y) + 0.5)
+			var hx := ex * 0.275
+			var hy := ey * 0.275
+			quads.append([centre - hx - hy, centre + hx - hy, centre + hx + hy,
+					centre - hx + hy, colour])
+
+	if not quads.is_empty():
+		var points := PackedVector2Array()
+		var colours := PackedColorArray()
+		var indices := PackedInt32Array()
+		points.resize(quads.size() * 4)
+		colours.resize(quads.size() * 4)
+		indices.resize(quads.size() * 6)
+		for n in quads.size():
+			var q: Array = quads[n]
+			var v := n * 4
+			points[v] = q[0]
+			points[v + 1] = q[1]
+			points[v + 2] = q[2]
+			points[v + 3] = q[3]
+			colours[v] = q[4]
+			colours[v + 1] = q[4]
+			colours[v + 2] = q[4]
+			colours[v + 3] = q[4]
+			var i := n * 6
+			indices[i] = v
+			indices[i + 1] = v + 1
+			indices[i + 2] = v + 2
+			indices[i + 3] = v
+			indices[i + 4] = v + 2
+			indices[i + 5] = v + 3
+		RenderingServer.canvas_item_add_triangle_array(
+				get_canvas_item(), indices, points, colours)
+	for row in outlines:
+		_outline(row[0], row[1], 1.0)
 
 
 ## A start marker, with the player's number beside it.

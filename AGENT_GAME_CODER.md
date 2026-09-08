@@ -469,7 +469,36 @@ Remove-Item -Recurse -Force maps\river_demo                              # ⚠�
 # 16.4a's check: open every REAL map on this machine and round-trip it. EXIT CODE IS THE ANSWER.
 & $godot --headless --path MapMaker res://dev/open_map.tscn
 & $godot --headless --path MapMaker res://dev/open_map.tscn -- --folder sample_duel
+
+# 16.x-slow-place: HOW FAST IS IT? A window, not headless -- it measures frames. EXIT CODE IS THE ANSWER.
+& $godot --path MapMaker res://dev/profile_editor.tscn
+& $godot --path MapMaker res://dev/profile_editor.tscn -- --folder river_demo --budget 250
 ```
+
+⚠️ **A SLOWNESS REPORT IS ANSWERED WITH `dev/profile_editor.tscn` AND NOT BY READING THE CODE.**
+Two have now come off the owner's machine and **the second could not be diagnosed by reading**:
+every candidate on the click path is cheap on paper (`claimed_tiles()` 0.6 ms, `add_entity()`
+1.5 ms, `Startup.can_save()` a field read, the palette does not rebuild), and the cost was
+somewhere nothing pointed. It prints four things that fail in different directions — the idle
+frame, the redraw split into terrain and entities, the document ops with no drawing in them, and
+click-to-a-drawn-frame — and exits non-zero over a 100 ms budget.
+
+⚠️ **THE ONE IT WOULD BE NATURAL TO LEAVE OUT IS THE IDLE FRAME, AND IT IS HALF THE ANSWER.** A
+`CanvasItem`'s draw commands are re-rendered **every frame**, not once per `_draw`, so 9,216
+`draw_colored_polygon` calls ran the tool at **22 fps sitting still**. That is why the report
+opens *"the tool is very very slow"* and only then names one operation: everything was queued
+behind the same command list. A script that timed only the click would have called the click
+fixed and left the tool slow.
+
+📝 **AND THE PROFILER'S OWN TRAP, PAID FOR ON THE FIRST RUN:** it printed
+`Performance.TIME_PROCESS` beside the frame time as *"of which N ms in script"* and reported
+**276.9 ms against a 42.8 ms frame** — a figure that cannot be true of the thing beside it,
+because the script spends its own frames inside `await`. Removed rather than explained. §6's rule
+about the status line's stale zoom applies harder to a profiler: **a number that is quietly wrong
+is worse than no number, because it gets believed.** Same shape a second time ten minutes later —
+the geometry benchmark went on calling `_diamond()` per tile after `_draw_terrain` had stopped,
+and reported 78 ms against a 28 ms whole redraw. It now times **both** routes and labels which is
+which.
 
 ⚠️ **`maps/` IS AUTHORED CONTENT, NOT A SCRATCH DIRECTORY — DELETE YOUR TEST MAPS** (project
 owner, 2026-09-04: *"don't commit random test maps to the repo, always delete test maps unless
@@ -494,6 +523,59 @@ WRONG** — measured 2026-09-08, the shots are written to `AOD_MapMaker`. Both f
 the owner's machine, which is what makes the mistake survivable and worth naming: an old one
 from before the project was renamed sits beside the live one, so a session looking in the
 wrong place finds a directory with plausibly stale pictures in it rather than nothing.
+
+### 16.x-slow-place — THE CANVAS WAS THE WHOLE COST, MEASURED 2026-09-08
+
+The owner: *"the tool is very very slow.. like 3 sec between click and place of buildings on sample
+map"*. **`MapMaker 210/210`**, and on `maps/sample_duel` at fit-to-view:
+
+| | before | after |
+|---|---|---|
+| idle frame | 45 ms — **22 fps doing nothing** | 16.6 ms (60 fps, vsync-capped) |
+| one full redraw | 477 ms | 29 ms |
+| ⤷ of which terrain | 439 ms | 28 ms |
+| ⤷ of which entities | 31 ms | 1.4 ms |
+| click → drawn frame | **1,280–1,630 ms** | 24–65 ms |
+| `apply_tool()` alone | 1.9 ms | 2.3 ms |
+
+- ⚠️ **THE DOCUMENT WAS NEVER SLOW AND THAT IS THE FINDING.** `claimed_tiles()` is 0.6 ms,
+  `add_entity()` 1.5 ms, `apply_tool()` under 3 ms — **1,600 ms of a 1,630 ms click was the tool
+  waiting for its own picture.** Every suspect a read through the code produces is on the wrong
+  side of that line, which is why the fix arrived only after the measurement.
+- ⚠️ **9,216 DRAW COMMANDS COST 439 ms; THE SAME 9,216 DIAMONDS COST 54 ms TO WORK OUT.** So the
+  projection was 12% and the **commands were 88%**, at ~42 µs each — the OpenGL compatibility
+  backend on an Intel Iris Xe gives a filled polygon its own batch. The terrain is now ONE
+  `RenderingServer.canvas_item_add_triangle_array`, the grid ONE `draw_multiline`, the entity
+  footprints ONE more. **A 10×10 town centre was a hundred filled diamonds**, which is why 154
+  entities cost 31 ms.
+- ⚠️ **BATCHING MEANT TOUCHING THE ONE THING `MapCanvas`'s HEADER FORBIDS RE-DERIVING**, and the
+  tempting shortcut is the exact *"lie that nothing could detect"* it warns about. Corners are now
+  `o + ex * x + ey * y`, and `projection_basis()` takes those three **as differences of `Iso`
+  projections** — exact, because `Iso._project` is linear — so the geometry still comes from the
+  game's hash-checked copy with no local `TILE_SIZE` anywhere. **Four tests compare the batched
+  corners against `Iso.tile_to_world_f()` tile by tile**, including after a pan and zoom, so the
+  claim is checkable rather than a sentence in a header.
+- ⚠️ **`_add_quad(points, colours, indices, …)` WAS WRITTEN AND THROWN AWAY BEFORE IT RAN.** A
+  `Packed*Array` **argument** is a copy-on-write value, so appends inside a helper land on the
+  callee's copy and the caller's array stays empty — **nothing errors and the entities simply do
+  not draw.** Same trap as `MapEdit._write_terrain()`, met from the argument side. The arrays are
+  now only ever touched by the function that owns them; `_draw_entities` collects quads into a
+  plain `Array` first and writes them in one place.
+- 📝 **`MapCanvas` NOW RECORDS WHAT ITS OWN REDRAW COST** (`last_draw_usec`, `last_terrain_usec`,
+  `last_entities_usec`, `last_tiles_culled`, `draws`). Instrumentation in production code,
+  deliberately: four `Time.get_ticks_usec()` calls against ~9,000 draw calls in the same function.
+  **`draws` is the half a duration cannot report** — ten cheap redraws for one click is a different
+  fault from one expensive one and looks identical from outside.
+- ⚠️ **THE OWNER'S OPEN→SAVE TEST REWROTE `maps/sample_duel` IN PLACE**, found in `git status`
+  while doing this. **That is 16.4a working as documented** — *Open then Save replaces* — and git
+  was the undo, as that row said it would be; restored. 📝 **But it exposed something the round
+  trip cannot see: the re-save is not byte-identical.** Every integer in the preserved `meta`
+  block comes back a **float** (`"seed": 424242.0`, `"type": 2.0`), because `read_header()` parses
+  JSON where every number is a float and `_preserved_header()` carries them straight out again.
+  Nothing breaks — the top-level `format_version` is set by `MapFile.save()` and stays an int, and
+  all six maps still round-trip — and `dev/open_map.tscn` is **blind to it** because it compares a
+  float against a float. It matters for **16.10**: re-authoring five campaign maps writes five
+  noisy diffs. Not fixed; flagged.
 
 ### 16.4a — FILE ▸ OPEN, DONE 2026-09-08
 
