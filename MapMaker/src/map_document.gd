@@ -514,6 +514,40 @@ func entity_index_at(tile: Vector2i) -> int:
 	return found
 
 
+## Which player's start marker is on `tile`, or inside the base standing there. 0 for none.
+##
+## ## WHY ERASE NEEDS THIS AND `entity_index_at()` IS NOT ENOUGH
+##
+## The owner's ruling of 2026-09-08 made the start a palette entry placed with PLACE and cleared
+## with ERASE, which retired the toolbar's `Place start` / `Clear start` pair. So ERASE has to
+## recognise a start — and a start is **not an entity**: it is a `MapData.starts` slot, and the
+## thing an author can actually see and click is the **town centre `StartLayout` put on it**.
+##
+## Two lookups, because there are two ways to be pointing at one:
+##
+##   1. the marker tile itself, for a start whose base has been erased or was never there
+##      (`place_start` always lays one down, but `MapFile` can load a map that has none);
+##   2. **any tile of the base that carries it**, which is the case that matters — a 10x10 town
+##      centre is what fills the screen, and `starts` holds its CENTRE, so a click three tiles
+##      from the middle is a click on the start and matches neither tile directly.
+##
+## **1-based, because `starts` is indexed by player number - 1** and `place_start`/`remove_start`
+## both take the player. Zero means none, which is also gaia's owner id and cannot collide here:
+## there is no player 0 with a start.
+func start_owner_at(tile: Vector2i) -> int:
+	for i in data.starts.size():
+		if data.starts[i] == tile:
+			return i + 1
+	var at := entity_index_at(tile)
+	if at < 0:
+		return 0
+	var e := data.entities[at]
+	if not _is_town_centre(e):
+		return 0
+	var inside := _starts_inside(e)
+	return inside[0] + 1 if not inside.is_empty() else 0
+
+
 ## The selected entity's record, or `{}`.
 ##
 ## Returns the LIVE dictionary rather than a copy, deliberately: the editor's inspector reads

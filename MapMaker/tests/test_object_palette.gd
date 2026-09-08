@@ -98,11 +98,81 @@ func test_each_category_lists_its_own_roster() -> void:
 	if not _has_game():
 		return
 	palette.set_category(ObjectPalette.Category.BUILDING)
-	assert_eq(palette.listed_ids().size(), GameDataRegistry.building_ids().size())
+	# ⚠️ **PLUS ONE, AND THE ONE IS NOT A BUILDING.** The player start became a palette entry on
+	# the owner's ruling of 2026-09-08, and it goes in this tab — so the Building list is the
+	# roster **and** `START_ID`. Written as `+ 1` against the roster rather than as a number,
+	# because the roster grows and the point of this test is that nothing else creeps in.
+	assert_eq(palette.listed_ids().size(), GameDataRegistry.building_ids().size() + 1,
+			"the buildings, plus the player start")
 	palette.set_category(ObjectPalette.Category.UNIT)
 	assert_eq(palette.listed_ids().size(), GameDataRegistry.unit_ids().size())
 	palette.set_category(ObjectPalette.Category.TERRAIN)
 	assert_eq(palette.listed_ids().size(), SimMap.Terrain.size())
+
+
+## ── the player start as a palette entry (owner's ruling, 2026-09-08) ────────
+
+## ⚠️ **IT IS IN THE BUILDING TAB AND IT IS NOT A DEF, and both halves matter.**
+##
+## `START_ID` is in a `start.` namespace no roster file uses, so every registry lookup answers
+## "unknown" for it — which is what stops `Editor.apply_tool` from ever handing it to
+## `add_entity()` and authoring an entity the game would spawn nothing for. A start is a
+## `MapData.starts` slot, and placing one runs `StartLayout`.
+func test_the_start_is_offered_in_the_building_tab_and_is_not_a_def() -> void:
+	if not _has_game():
+		return
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	assert_true(ObjectPalette.START_ID in palette.listed_ids(),
+			"the start has to be pickable or the toolbar's button was removed for nothing")
+	# NOT A DEF, asserted through all three registry doors rather than described.
+	assert_eq(GameDataRegistry.building(ObjectPalette.START_ID), null)
+	assert_eq(GameDataRegistry.resource_def(ObjectPalette.START_ID), null)
+	assert_true(GameDataRegistry.unit_raw(ObjectPalette.START_ID).is_empty())
+
+
+## It goes LAST, where the owner's own sketch put it.
+##
+## The list is sorted as text and `START_ID` is not a def, so sorting it in among the buildings
+## would put a tool between two of them and make the sort a lie about what the list is.
+func test_the_start_is_the_last_row_of_the_building_tab() -> void:
+	if not _has_game():
+		return
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	var ids := palette.listed_ids()
+	assert_eq(ids[ids.size() - 1], ObjectPalette.START_ID)
+
+
+## And it reaches `selection()`, which is what the PLACE tool reads.
+##
+## With the palette's own Owner box supplying the player — the deduplication the owner asked
+## for, and the reason the toolbar's P1..P8 dropdown could go.
+func test_picking_the_start_puts_it_in_the_selection_with_the_palettes_owner() -> void:
+	if not _has_game():
+		return
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	palette.set_player(3)
+	palette.pick(ObjectPalette.START_ID)
+	var pick := palette.selection()
+	assert_eq(StringName(pick["def_id"]), ObjectPalette.START_ID)
+	assert_eq(int(pick["player"]), 3, "the palette's Owner box is now the only place whose")
+
+
+## It is labelled in words, not by its id.
+##
+## `GameDataRegistry.display_name()` would prettify `start.player` into "Player" — it strips the
+## namespace as a prefix — which on the one tile an author hunts for first is worse than useless.
+func test_the_start_is_labelled_player_start() -> void:
+	if not _has_game():
+		return
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	assert_eq(palette._label_for(ObjectPalette.START_ID), ObjectPalette.START_LABEL)
+	assert_true(ObjectPalette.START_LABEL.to_lower().contains("start"),
+			"whatever it is called, an author has to be able to search for 'start'")
+	# AND IT IS FINDABLE BY THAT WORD, which is `_matches`' job and the thing a label change
+	# could silently break.
+	palette.set_search("start")
+	assert_true(ObjectPalette.START_ID in palette.listed_ids(),
+			"searching 'start' has to find it")
 
 
 # ── what an author may place ────────────────────────────────────────────────

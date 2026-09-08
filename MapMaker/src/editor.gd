@@ -48,18 +48,26 @@ const _WARN := Color(0.95, 0.78, 0.35)
 ## constant that has to live somewhere neither of them owns.
 const _DIM := Color(0.55, 0.55, 0.60)
 
-## ⚠️ **`SELECT` AND `MOVE` ARE APPENDED, NEVER INSERTED.** `_tool_buttons` is keyed by the
-## enum's integer and `test_startup` drives `set_tool(0)` by number, but the real reason is
-## `dev/preview_editor.gd` and the tests naming `EDITOR.Tool.PAINT` — renumbering PAINT would
-## be silent everywhere those are compared against an int.
+## ⚠️ **NEVER COMPARE A TOOL AGAINST A LITERAL INT.** `_tool_buttons` is keyed by the enum's
+## integer, so every member's value is load-bearing outside this file — and `Tool.START` was
+## **removed** on 2026-09-08 (see below), which renumbered everything after it. Anything that
+## had written `set_tool(4)` would have silently changed tool. The tests and
+## `dev/preview_editor.gd` all name `EDITOR.Tool.X` for that reason.
 ##
-## 📝 **THERE IS NO `Tool.EDIT`, AND 16.4's "THREE CURSORS" IS STILL SATISFIED.** Editing an
-## entity is not a gesture on the canvas: a third mode whose click did what SELECT's does is a
+## ⛔ **THERE IS NO `Tool.START` ANY MORE, AND THAT IS THE OWNER'S RULING** (2026-09-08:
+## *"can we add the start location as a building option ... we can use the same select and erase
+## as normal buildings and remove duplicates"*). The start is `ObjectPalette.START_ID`, placed
+## with PLACE and cleared with ERASE, so the toolbar lost a tool button, a player dropdown and a
+## `Clear start` button — **three controls that existed for one thing that now needs none of
+## them**, because the palette already has an Owner picker and the map already has an eraser.
+## `apply_tool` branches on the id; `MapDocument.place_start`/`remove_start` are untouched.
+##
+## 📝 **THERE IS NO `Tool.EDIT` EITHER, AND 16.4's "THREE CURSORS" IS STILL SATISFIED.** Editing
+## an entity is not a gesture on the canvas: a third mode whose click did what SELECT's does is a
 ## mode an author cannot tell they are in, and the two would have to stay in step about what a
 ## click means. So select and move are cursors, and **the edit is the inspector row** —
 ## `_entity_row()`, which acts on whatever is selected and is reachable from either cursor.
-## Said here because the row's wording implies three buttons and there are two.
-enum Tool { PAINT, START, PLACE, ERASE, SELECT, MOVE }
+enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE }
 
 var _canvas: MapCanvas = null
 var _palette: ObjectPalette = null
@@ -72,7 +80,6 @@ var _notice_label: Label = null
 var _name_field: LineEdit = null
 var _width: SpinBox = null
 var _height: SpinBox = null
-var _player_picker: OptionButton = null
 var _tool_buttons: Dictionary = {}
 
 ## Undo and redo (16.2a). Held because their `disabled` and their tooltips both track the
@@ -162,7 +169,6 @@ func _new_map() -> void:
 	var wanted := Vector2i(int(_width.value), int(_height.value))
 	_document = MapDocument.create(wanted, _name_field.text)
 	_canvas.show_document(_document)
-	_refresh_players()
 	_refresh_inspector()                  # see `show_document()`
 	_refresh_status()
 
@@ -179,7 +185,6 @@ func show_document(doc: MapDocument) -> void:
 	_width.set_value_no_signal(doc.data.size.x)
 	_height.set_value_no_signal(doc.data.size.y)
 	_canvas.show_document(doc)
-	_refresh_players()
 	# A DIFFERENT MAP HAS A DIFFERENT ENTITY LIST, so an inspector still describing the last
 	# map's selection would be showing a thing that is not on screen. `MapDocument.selected`
 	# starts at -1 on a created or opened document, so this reads that rather than clearing it.
@@ -272,12 +277,14 @@ func redo() -> void:
 
 ## Everything on screen that an undo can have changed.
 ##
-## ⚠️ **THE PLAYER PICKER IS THE ONE AN UNDO LEAVES STALE.** Undoing a `place_start` takes the
-## start off the map, and the picker's ✓ marks are the only place an author can see which
-## players have one — so a redraw without this shows P1 ticked over a map with no P1 start,
-## and the next `Place start` looks like it did nothing.
+## 📝 **THIS USED TO REFRESH THE PLAYER PICKER TOO, and the note is worth keeping because the
+## fault it describes is still live.** Undoing a `place_start` takes the start off the map, and
+## the dropdown's ✓ marks were the only place an author could see which players had one — so a
+## redraw without them showed P1 ticked over a map with no P1 start. The dropdown went with the
+## owner's 2026-09-08 ruling and **the information moved to the status line**, which
+## `_refresh_status()` below rewrites unconditionally, so the same staleness cannot occur: there
+## is no cached copy left to forget.
 func _after_history(verb: String, what: String) -> void:
-	_refresh_players()
 	_canvas.queue_redraw()
 	# ⚠️ **AND THE INSPECTOR, because `MapDocument.undo()` CLEARS THE SELECTION** — a step
 	# replaces the entity list from a snapshot and an index into the old one names something
@@ -508,10 +515,6 @@ func apply_tool(tile: Vector2i) -> void:
 	match _tool:
 		Tool.PAINT:
 			changed = _document.paint(tile, _brush)
-		Tool.START:
-			changed = _document.place_start(_player_picker.get_selected_id(), tile)
-			if changed:
-				_refresh_players()
 		Tool.PLACE:
 			var pick := _palette.selection()
 			if pick.is_empty():
@@ -519,9 +522,15 @@ func apply_tool(tile: Vector2i) -> void:
 				# already says "nothing selected"; a notice per click would bury whatever the
 				# author last actually did.
 				return
-			changed = _document.add_entity(pick["def_id"], int(pick["player"]), tile,
-					int(pick["size_class"]))
-			if not changed:
+			# THE START IS A PALETTE ENTRY AND NOT A DEF (owner, 2026-09-08). `ObjectPalette.START_ID`
+			# says why the branch is here rather than inside `add_entity`: placing a start runs
+			# `StartLayout` and writes a field the entity list does not have.
+			if StringName(pick["def_id"]) == ObjectPalette.START_ID:
+				changed = _place_start_from_palette(int(pick["player"]), tile)
+			else:
+				changed = _document.add_entity(pick["def_id"], int(pick["player"]), tile,
+						int(pick["size_class"]))
+			if not changed and StringName(pick["def_id"]) != ObjectPalette.START_ID:
 				# ⚠️ **THE REFUSAL IS SAID OUT LOUD, because a click that does nothing looks
 				# like a broken tool.** `add_entity` refuses two things and the author can see
 				# neither: a footprint running off the map (the origin tile is plainly on it)
@@ -529,7 +538,22 @@ func apply_tool(tile: Vector2i) -> void:
 				_notice("WILL NOT FIT — %s needs clear ground at %d,%d"
 						% [GameDataRegistry.display_name(pick["def_id"]), tile.x, tile.y], _WARN)
 		Tool.ERASE:
-			changed = _document.remove_entity_at(tile) > 0
+			# ⚠️ **A START IS CHECKED FOR FIRST, because `remove_entity_at()` REFUSES its
+			# cluster** — deliberately, so an author cannot pick one villager out of a start and
+			# leave a `StartLayout.ORIGIN_KEY` tag describing something that is no longer there.
+			# So without this branch, erasing a base would do nothing at all, and the owner's
+			# ruling retired the `Clear start` button that used to be the only way.
+			var whose := _document.start_owner_at(tile)
+			if whose > 0:
+				_document.remove_start(whose)
+				# **THE WHOLE START GOES, AND IT IS SAID LOUDLY.** A click that deletes a town
+				# centre, five villagers, a scout and a ring of resources is not a click whose
+				# result should have to be inferred from the entity count.
+				_notice("CLEARED P%d's START — the base and its opening went with it"
+						% whose, _WARN)
+				changed = true
+			else:
+				changed = _document.remove_entity_at(tile) > 0
 		Tool.SELECT:
 			# NOT A CHANGE TO THE MAP, so it does not go down the `changed` path: the expensive
 			# layer is not invalidated, `dirty` is untouched, and Ctrl+Z reaches past it to the
@@ -552,6 +576,31 @@ func apply_tool(tile: Vector2i) -> void:
 		_canvas.redraw_overlay()
 		_refresh_inspector()
 		_refresh_status()
+
+
+## Place a start for the palette's current owner. True when one landed.
+##
+## ⚠️ **GAIA IS A LEGITIMATE OWNER IN THAT PICKER AND IS NOT A PLAYER.** The palette defaults to
+## Gaia on the Resource tab and every node on every map is gaia's — so an author who places a
+## forest and then picks the start tile arrives here with owner 0, `place_start()` refuses it
+## (`player < 1`), and without this sentence the click would do nothing with no explanation.
+## **That is the most likely way to meet this feature for the first time**, which is why it gets
+## the loudest message rather than a shrug.
+func _place_start_from_palette(player: int, tile: Vector2i) -> bool:
+	if player < 1:
+		_notice("A START NEEDS A PLAYER — pick P1..P8 in the palette's Owner box, not Gaia",
+				_WARN)
+		return false
+	if not _document.place_start(player, tile):
+		_notice("WILL NOT PLACE P%d's START at %d,%d — the base needs room there"
+				% [player, tile.x, tile.y], _WARN)
+		return false
+	# ⚠️ **RE-PLACING A START MOVES IT RATHER THAN DOUBLING IT** — `place_start()` clears whatever
+	# the player had first, which is what made `StartLayout.ORIGIN_KEY` necessary. Worth saying,
+	# because the alternative reading of a second click is "now I have two bases".
+	_notice("PLACED P%d's START — town centre, villagers, scout and an opening ring"
+			% player, _GOOD)
+	return true
 
 
 # ── the move drag (PLAN.md 16.4) ────────────────────────────────────────────
@@ -888,7 +937,6 @@ func _tool_row() -> Control:
 		{"tool": Tool.PAINT, "label": "Brush"},
 		{"tool": Tool.PLACE, "label": "Place"},
 		{"tool": Tool.ERASE, "label": "Erase"},
-		{"tool": Tool.START, "label": "Place start"},
 		# 16.4's two cursors. **Select before Move**, because that is the order they are used in
 		# and a toolbar is read left to right.
 		{"tool": Tool.SELECT, "label": "Select"},
@@ -896,18 +944,29 @@ func _tool_row() -> Control:
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])
+		# ⚠️ **THE ICON IS BESIDE THE WORD AND DOES NOT REPLACE IT.** The owner supplied four
+		# placeholder glyphs; an icon-only toolbar would be prettier and less usable, which is
+		# 16.2a's own argument about `Ctrl+Z` — *"a shortcut nobody can see is a feature nobody
+		# uses"* — applied to a picture instead of a keystroke. `ToolIcons` draws them.
+		b.icon = ToolIcons.for_tool(int(entry["tool"]))
 		b.toggle_mode = true
 		var t: int = int(entry["tool"])
 		b.pressed.connect(func() -> void: set_tool(t as Tool))
 		_tool_buttons[t] = b
 		row.add_child(b)
 
-	_player_picker = OptionButton.new()
-	# EIGHT, matching the lobby's maximum. A ninth start is a map the game cannot seat.
-	for p in range(1, 9):
-		_player_picker.add_item("P%d" % p, p)
-	row.add_child(_player_picker)
-	row.add_child(_button("Clear start", func() -> void: _clear_selected_start()))
+	# ⛔ **THE PLAYER DROPDOWN AND `Clear start` USED TO BE HERE AND ARE GONE** (owner,
+	# 2026-09-08). They existed solely for `Tool.START`: the picker said whose start the next
+	# click would place, and the button was the only way to take one back. The start is now
+	# `ObjectPalette.START_ID`, so the palette's **Owner** box says whose and the **eraser** takes
+	# it back — which is the deduplication the owner asked for. §6's rule about two controls for
+	# one fact, met for the third time in this tool: the toolbar's seven terrain buttons went the
+	# same way when Terrain became a palette tab.
+	#
+	# ⚠️ **WHAT THE PICKER ALSO CARRIED WAS THE ✓ MARKS — which players already have a start —
+	# and that is real information the dropdown was the only home for.** It is now on the status
+	# line (`_starts_sentence()`), where it is visible without opening anything rather than
+	# visible only while the dropdown is down.
 
 	set_brush(SimMap.Terrain.GRASS)
 	set_tool(Tool.PAINT)
@@ -1065,30 +1124,24 @@ func _after_entity_edited(what: String) -> void:
 	_refresh_status()
 
 
-func _clear_selected_start() -> void:
-	if _document == null:
-		return
-	_document.remove_start(_player_picker.get_selected_id())
-	_refresh_players()
-	_canvas.queue_redraw()
-	# `remove_start` FILTERS THE WHOLE ENTITY LIST and therefore clears the selection -- see
-	# `MapDocument.selected`. Same three refreshes as an erase.
-	_canvas.redraw_overlay()
-	_refresh_inspector()
-	_refresh_status()
-
-
-func _refresh_players() -> void:
-	if _document == null:
-		return
-	for i in _player_picker.item_count:
-		var p := _player_picker.get_item_id(i)
-		var placed := p <= _document.data.starts.size() \
-				and _document.data.starts[p - 1].x >= 0
-		# A TICK RATHER THAN A DISABLED ROW: which players already have a start is the thing
-		# an author is checking, and a picker that hid the answer would need a second widget
-		# to show it.
-		_player_picker.set_item_text(i, "P%d%s" % [p, " ✓" if placed else ""])
+## Which players have a start, for the status line.
+##
+## ⚠️ **THIS IS THE ✓ MARKS' NEW HOME, and it is the one piece of information the retired player
+## dropdown was carrying that nothing else showed.** *"Which players already have a start"* is
+## what an author checks constantly while laying out a map — it is the difference between a
+## two-player map and a two-player map with one seat — and `seats N` beside it is not the same
+## fact: `seats()` is `min(starts, highest owner)`, so a start with no base contributes to this
+## and not to that.
+##
+## **Named rather than ticked, because a status line has no rows.** The dropdown could show
+## `P3 ✓`; a line has to say `starts P1,P3`, which is shorter to read and does not need opening.
+func _starts_sentence() -> String:
+	var placed: Array[String] = []
+	for i in _document.data.starts.size():
+		if _document.data.starts[i].x >= 0:
+			placed.append("P%d" % (i + 1))
+	return "starts %s" % ", ".join(PackedStringArray(placed)) if not placed.is_empty() \
+			else "no starts yet"
 
 
 ## What the selection is, for the status line, or `fallback` when there is none.
@@ -1140,6 +1193,9 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		# showing "4 starts" that the lobby will only seat two players on is a map whose
 		# author finds out in the game.
 		"seats %d" % seats,
+		# WHICH PLAYERS HAVE ONE, which used to be the ✓ marks in a dropdown that no longer
+		# exists. `_starts_sentence()` explains why it is not the same fact as `seats`.
+		_starts_sentence(),
 		"zoom %.2fx" % _canvas.zoom(),
 	]
 	if hover.x >= 0:
@@ -1152,12 +1208,15 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	# down. `_document.entities.size()` going up by one is not something an author watching a
 	# 96x96 map at 0.22x can see, so the sentence is how a placement is confirmed at all.
 	match _tool:
-		Tool.START:
-			bits.append("click to place P%d's start" % _player_picker.get_selected_id())
 		Tool.PLACE:
 			bits.append(_palette.describe())
 		Tool.ERASE:
-			bits.append("click to erase (starts are cleared with Clear start)")
+			# ⚠️ **THIS SENTENCE NAMED A BUTTON THAT NO LONGER EXISTS** — it read *"starts are
+			# cleared with Clear start"* for about an hour after the owner's ruling deleted that
+			# button, which is worse than saying nothing: it sends an author looking round the
+			# toolbar for a control that is not there. Found by a preview print. The eraser IS
+			# the way now, and a click on a base takes the whole opening, so it says both.
+			bits.append("click to erase — a base clears that player's whole start")
 		Tool.SELECT:
 			# WHAT IS SELECTED, or how to select something. The alternative -- saying nothing when
 			# nothing is picked -- leaves the one tool whose whole job is invisible with no

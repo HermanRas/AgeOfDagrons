@@ -77,12 +77,12 @@ const _CURSOR := Color(1, 1, 1, 0.85)
 const _BUILDING := Color(0.90, 0.85, 0.55)
 const _UNIT := Color(0.95, 0.95, 0.95)
 const _GAIA := Color(0.55, 0.75, 0.45)
-const _START := Color(1.0, 0.45, 0.35)
+const START_COLOUR := Color(1.0, 0.45, 0.35)
 const _OUT_OF_BOUNDS := Color(0.07, 0.07, 0.09)
 
 ## The selected entity's outline (PLAN.md 16.4).
 ##
-## ⚠️ **CYAN, WHICH IS THE ONE HUE NOTHING ELSE ON THIS CANVAS USES.** `_START` is orange-red,
+## ⚠️ **CYAN, WHICH IS THE ONE HUE NOTHING ELSE ON THIS CANVAS USES.** `START_COLOUR` is orange-red,
 ## buildings are straw, units white, gaia green and the hover cursor white — so a selection in
 ## any of those would be a highlight an author has to work out rather than see. It is also drawn
 ## **thicker than the hover cursor and on the overlay**, so it survives being under a start
@@ -674,13 +674,13 @@ func _draw_starts() -> void:
 		var s: Vector2i = document.data.starts[i]
 		if s.x < 0:
 			continue
-		_outline(s, _START, 3.0)
+		_outline(s, START_COLOUR, 3.0)
 		# The label ABOVE the marker, clear of it. Drawn at the tile's top corner rather than
 		# its centre plus an offset: at low zoom a centre-relative nudge lands inside the
 		# diamond and the text sits on top of the outline it is labelling.
 		var at := _to_screen_f(Vector2(s))
 		draw_string(font, at + Vector2(4.0, -6.0), "P%d" % (i + 1),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, _START)
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, START_COLOUR)
 
 
 func _outline(t: Vector2i, colour: Color, width: float) -> void:

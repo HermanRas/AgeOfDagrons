@@ -494,18 +494,32 @@ func test_the_button_state_does_not_come_from_the_tooltip() -> void:
 			editor._redo_button.tooltip_text)
 
 
-## ⚠️ **THE PLAYER PICKER IS WHAT AN UNDO LEAVES STALE.** The ✓ marks are the only place an
-## author can see which players have a start, so a redraw without `_refresh_players()` shows
-## P1 ticked over a map with no P1 start — and the next `Place start` then looks inert.
-func test_undoing_a_start_untick_the_player_picker() -> void:
+## ⚠️ **WHICH PLAYERS HAVE A START IS WHAT AN UNDO LEAVES STALE**, and the display it goes stale
+## in changed on 2026-09-08 without the fault changing at all.
+##
+## It used to be the ✓ marks in the toolbar's player dropdown, refreshed by `_refresh_players()`
+## — miss that call and the tool showed `P1 ✓` over a map with no P1 start, so the next attempt
+## to place one looked inert. **The dropdown went when the start became a palette entry** (the
+## owner's ruling: one Owner box, one eraser, no duplicate controls), and the information moved
+## to the status line, which `_refresh_status()` rewrites unconditionally.
+##
+## **So this drives the start through the PALETTE and reads the status line.** Same question —
+## *does the tool still claim P1 has a start after undoing the act that gave them one?* — asked
+## of the control that answers it today.
+func test_undoing_a_start_stops_the_tool_claiming_the_player_has_one() -> void:
 	var editor := _open_editor()
-	editor.set_tool(EDITOR.Tool.START)
+	editor._palette.set_player(1)
+	editor._palette.pick(ObjectPalette.START_ID)
+	editor.set_tool(EDITOR.Tool.PLACE)
 	editor.apply_tool(Vector2i(24, 24))
-	assert_true(editor._player_picker.get_item_text(0).contains("✓"),
-			editor._player_picker.get_item_text(0))
+	assert_true(editor._status.text.contains("starts P1"),
+			"the status line is where the ticks went: %s" % editor._status.text)
 	editor.undo()
-	assert_false(editor._player_picker.get_item_text(0).contains("✓"),
-			"the tick has to go with the start: %s" % editor._player_picker.get_item_text(0))
+	assert_false(editor._status.text.contains("starts P1"),
+			"the claim has to go with the start: %s" % editor._status.text)
+	# AND IT SAYS SO IN WORDS rather than by the absence of a phrase, which is what an author
+	# reads and what an assertion on absence alone would not pin.
+	assert_true(editor._status.text.contains("no starts yet"), editor._status.text)
 
 
 ## The canvas is the only thing that knows where a gesture begins and ends, which is why undo

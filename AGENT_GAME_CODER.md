@@ -462,7 +462,7 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 19 screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 21 screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
 
@@ -523,6 +523,60 @@ WRONG** — measured 2026-09-08, the shots are written to `AOD_MapMaker`. Both f
 the owner's machine, which is what makes the mistake survivable and worth naming: an old one
 from before the project was renamed sits beside the live one, so a session looking in the
 wrong place finds a directory with plausibly stale pictures in it rather than nothing.
+
+### 16.4b(ii) — THE START IS A PALETTE ENTRY NOW, AND THREE CONTROLS WENT (owner, 2026-09-08)
+
+The owner's ruling: *"can we add the start location as a building option ... we can use the same
+select and erase as normal buildings and remove duplicates."* **MapMaker 247/247**, up 10.
+`ObjectPalette.START_ID` is the last row of the Building tab; PLACE lays a start down and ERASE
+clears one.
+
+- ✅ **THE IMPACT WAS SMALL AND THE REASON IS WORTH KNOWING FOR NEXT TIME:** `Tool.START`,
+  `_player_picker`, `Clear start` and `_refresh_players()` all lived **only in `editor.gd`**.
+  `MapDocument.place_start()` / `remove_start()` did not change at all, and neither did the
+  format. So the whole change is one `apply_tool` branch each way, one palette entry, and three
+  controls deleted.
+- ⛔ **THREE CONTROLS FOR ONE THING BECAME NONE.** The dropdown said whose start the next click
+  placed and the button was the only way to take one back — the palette's **Owner** box and the
+  **eraser** already do both. That is §6's *"two controls for one fact"* for the **third** time
+  in this tool: the toolbar's seven terrain buttons went the same way when Terrain became a tab.
+- ⚠️ **`START_ID` IS `&"start.player"`, IN A NAMESPACE NO ROSTER FILE USES, AND THAT IS LOAD-
+  BEARING.** All three registry doors answer "unknown" for it, which is what stops a click
+  falling through to `add_entity()` — that would append `{def_id: "start.player"}` to the entity
+  list, **save, reload, and spawn nothing**: a map with a start the game does not know about. A
+  test asserts the id never reaches the entity list.
+- ⚠️ **ERASE HAS TO CHECK FOR A START *BEFORE* `remove_entity_at()`, WHICH REFUSES A CLUSTER.**
+  That refusal is deliberate (an author must not pick one villager out of a start and orphan an
+  `ORIGIN_KEY` tag), so without the branch, erasing a base would silently do nothing and there
+  would be no way to clear a start at all now the button is gone. `start_owner_at()` finds one
+  from **any tile of the base**, because `starts` holds a CENTRE and `tile` an ORIGIN — the same
+  distinction that broke the move's start-following rule an hour earlier.
+- ⚠️ **GAIA CANNOT OWN A START AND IS THE MOST LIKELY FIRST ENCOUNTER.** The palette defaults to
+  Gaia on the Resource tab, so an author who lays out trees and then picks the start arrives with
+  owner 0, which `place_start()` refuses. It now says *"A START NEEDS A PLAYER — pick P1..P8 in
+  the palette's Owner box, not Gaia"* rather than doing nothing.
+- ⚠️ **THE ✓ MARKS WERE REAL INFORMATION AND NEEDED A NEW HOME.** *Which players already have a
+  start* only existed inside the dropdown. It is on the status line now (`starts P1, P2, P3`),
+  which is better than it was — visible without opening anything. **It is not the same fact as
+  `seats N`**: `seats()` is `min(starts, highest owner)`, so a start with no base counts for one
+  and not the other.
+- ⚠️ **REMOVING AN ENUM MEMBER RENUMBERED EVERY TOOL AFTER IT, AND `test_cursors` WAS DRIVING
+  TOOLS BY NUMBER.** It had `set_tool(4)`/`set_tool(5)` for SELECT and MOVE, written an hour
+  before; dropping `Tool.START` shifted both, so the tests went on passing **while exercising the
+  wrong tools**. Named `EDITOR.Tool.X` everywhere now, and the enum's own header says never to
+  compare a tool against a literal.
+- 📝 **THE TOOLBAR HAS ICONS** — the owner supplied four placeholder glyphs (marquee, four-way
+  arrow, pointer-with-minus, pointer-with-ring). They arrived as pictures in a message rather
+  than files, so `src/tool_icons.gd` **draws them**: no `--import` step, no file-or-fallback
+  second path that never gets looked at, and they scale with the button. **`for_tool()` is the
+  whole seam** if real PNGs ever replace them. Icon *beside* the word, never instead of it —
+  16.2a's *"a shortcut nobody can see is a feature nobody uses"* applied to a picture.
+- 📝 **TWO STALE SENTENCES, BOTH CAUGHT BY A PREVIEW PRINT AND NEITHER BY A TEST.** The status
+  line said *"starts are cleared with Clear start"* for an hour after that button was deleted —
+  worse than silence, because it sends an author hunting the toolbar for it. And
+  `ObjectPalette.describe()` read `display_name(&"start.player")`, which strips the namespace and
+  prettifies the rest, so it announced **"place: Player (P3)"**. `describe()` goes through
+  `_label_for()` now.
 
 ### 16.4 — THE CURSORS, BUILT 2026-09-08. THE WALL DRAG IS BLOCKED ON THE FORMAT
 

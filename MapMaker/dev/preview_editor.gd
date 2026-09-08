@@ -192,8 +192,22 @@ func _process(_delta: float) -> void:
 		22:
 			_report_selection("after clicking empty ground")
 			_shoot("cursor_none")
+			# ⚠️ **THE START AS A PALETTE ENTRY IS TWO PICTURES AND NOTHING ELSE** (owner's
+			# ruling, 2026-09-08). The tests prove that picking `START_ID` and clicking lays a
+			# real start down. **What they cannot judge:** whether the tile at the bottom of the
+			# Building tab is recognisable as a start rather than as a building nobody baked, and
+			# whether the toolbar still reads as a toolbar now that three controls have been
+			# taken out of it and four placeholder glyphs put in.
+			_place_a_start_from_the_palette()
+		23:
+			_report_start_row("after placing P3's start from the palette")
+			_shoot("start_from_palette")
+			_erase_that_start()
+		24:
+			_report_start_row("after erasing its base with the eraser")
+			_shoot("start_erased")
 			print("")
-			print("OK — nineteen shots written. Look at them: the arithmetic is tested, the"
+			print("OK — twenty-one shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -311,6 +325,52 @@ func _report_selection(what: String) -> void:
 	# THE START, because a town centre is the one entity that carries one and a marker left
 	# behind by its own base is 16.0's `can_start()` rule 7 authored by accident.
 	print("  P1's start is at %s" % [doc.data.starts[0]])
+	_hold(UI_FRAMES)
+
+
+## ── the start as a palette entry (owner's ruling, 2026-09-08) ───────────────
+
+## Scroll the Building tab to the start tile, pick it, and place P3's start with PLACE.
+##
+## **Through the palette and the PLACE tool**, which is the whole point of the change: there is
+## no `Place start` button, no player dropdown and no `Clear start` in the toolbar any more, so
+## if any part of this needs a control that is gone the preview cannot reach it either.
+func _place_a_start_from_the_palette() -> void:
+	_show_palette(ObjectPalette.Category.BUILDING)
+	# **P3, NOT P1 OR P2** -- the demo map already has starts for those two, and re-placing one
+	# would photograph a MOVED start rather than a new one. P3 also proves the status line names
+	# the right player rather than counting.
+	_palette().set_player(3)
+	_palette().pick(ObjectPalette.START_ID)
+	# ⚠️ **SEARCHED FOR RATHER THAN SCROLLED TO.** The start is the last of 33 rows in a
+	# scrolling grid, so it is off-screen at rest and a shot of the palette would not contain the
+	# tile this step exists to photograph. Typing "start" is also what an author does.
+	_palette().set_search("start")
+	_editor.set_tool(EDITOR.Tool.PLACE)
+	_zoom_to(Vector2i(70, 70), 0.7)
+	_editor.apply_tool(Vector2i(70, 70))
+	_hold(UI_FRAMES)
+
+
+## Erase it again, with the ordinary eraser, by clicking the middle of its base.
+func _erase_that_start() -> void:
+	_editor.set_tool(EDITOR.Tool.ERASE)
+	_editor.apply_tool(Vector2i(70, 70))
+	_hold(UI_FRAMES)
+
+
+## What the map thinks the starts are, and what the status line says about them.
+##
+## ⚠️ **BOTH, BECAUSE THE STATUS LINE IS NOW THE ONLY DISPLAY OF IT.** The retired player
+## dropdown carried ✓ marks for which players had a start; that moved here, and a line that
+## disagrees with `MapData.starts` is the same class of fault as the owner picker that said Gaia
+## over a selection that said player 1 (16.3).
+func _report_start_row(what: String) -> void:
+	var doc: MapDocument = _editor.document()
+	print("%s: starts %s, seats %d, %d entities"
+			% [what, doc.data.starts, doc.seats(), doc.data.entities.size()])
+	print("  status line: %s" % _editor._status.text.strip_edges())
+	print("  notice line: %s" % _editor._notice_label.text.strip_edges())
 	_hold(UI_FRAMES)
 
 

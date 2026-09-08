@@ -28,6 +28,15 @@
 ## allowed** (a dock belongs on water).
 extends TestCase
 
+## `Editor`'s script, for its `Tool` enum — `Editor.tscn`'s root has no `class_name`.
+##
+## ⚠️ **NAMED AND NEVER NUMBERED.** The first version of this file drove `set_tool(4)` and
+## `set_tool(5)` for SELECT and MOVE, and `Tool.START`'s removal on 2026-09-08 renumbered both —
+## so the tests went on passing while driving the *wrong tools*. That is the exact failure the
+## enum's own comment now warns about, and it took ten minutes to find because a raw int cannot
+## be wrong in a way the compiler can see.
+const EDITOR := preload("res://src/editor.gd")
+
 var doc: MapDocument = null
 
 
@@ -404,8 +413,8 @@ func test_a_drag_can_cross_an_obstacle_to_reach_clear_ground() -> void:
 	doc.select_at(Vector2i(10, 10))
 	var before := doc.history.depth()
 
-	editor.set_tool(4 as int)              # Tool.SELECT, by value -- see the enum's comment
-	editor.set_tool(5 as int)              # Tool.MOVE
+	editor.set_tool(EDITOR.Tool.SELECT)
+	editor.set_tool(EDITOR.Tool.MOVE)
 	var canvas: MapCanvas = editor._canvas
 	canvas.stroke_began.emit()
 	for step in range(0, 30):
@@ -429,7 +438,7 @@ func test_a_drag_that_ends_on_something_leaves_the_entity_where_it_reached() -> 
 	assert_true(doc.add_entity(&"unit.villager", 1, Vector2i(10, 10)))
 	assert_true(doc.add_entity(&"unit.scout", 2, Vector2i(14, 10)))
 	doc.select_at(Vector2i(10, 10))
-	editor.set_tool(5 as int)              # Tool.MOVE
+	editor.set_tool(EDITOR.Tool.MOVE)
 	var canvas: MapCanvas = editor._canvas
 	canvas.stroke_began.emit()
 	for x in range(10, 15):
@@ -448,6 +457,143 @@ func _open_editor() -> Node:
 	var editor: Node = load("res://Editor.tscn").instantiate()
 	editor._ready()
 	return editor
+
+
+# ── the start as a palette entry (owner's ruling, 2026-09-08) ───────────────
+#
+# *"can we add the start location as a building option ... we can use the same select and erase
+# as normal buildings and remove duplicates."* So `Tool.START`, the toolbar's P1..P8 dropdown and
+# the `Clear start` button are gone, and PLACE and ERASE do the work. These tests drive the
+# EDITOR rather than the document, because the branch that makes it work is `apply_tool`'s and
+# `MapDocument.place_start`/`remove_start` did not change at all.
+
+## Placing the palette's start entry lays down a real start, not an entity called "start".
+##
+## ⚠️ **THE FAILURE THIS RULES OUT IS THE QUIET ONE.** `START_ID` is not a def, so if
+## `apply_tool` ever stopped branching on it the click would fall through to `add_entity()` —
+## which would happily append `{def_id: "start.player", ...}` to the entity list. It would save,
+## it would reload, and `MapGen.build_from()` would spawn **nothing** for it: a map with a start
+## the game does not know about and a player who owns the ground and no town centre.
+func test_placing_the_palette_start_creates_a_real_start() -> void:
+	var editor := _open_editor()
+	editor.show_document(doc)
+	editor._palette.set_player(2)
+	editor._palette.pick(ObjectPalette.START_ID)
+	editor.set_tool(EDITOR.Tool.PLACE)
+	editor.apply_tool(Vector2i(30, 30))
+
+	assert_eq(doc.data.starts.size(), 2, "P2 means two slots, P1's empty")
+	assert_eq(doc.data.starts[1], Vector2i(30, 30), "the marker is in the starts field")
+	# AND THE CLUSTER, which is what `place_start` is for -- a bare marker authors a player who
+	# owns nothing (16.0's `can_start()` rule 7).
+	assert_true(doc.data.entities.size() > 5,
+			"a start brings a base and an opening: got %d entities" % doc.data.entities.size())
+	# NOT AN ENTITY, asserted directly: this is the fall-through the branch prevents.
+	for e in doc.data.entities:
+		assert_true(StringName(e.get("def_id", &"")) != ObjectPalette.START_ID,
+				"the start id must never reach the entity list")
+	editor.free()
+
+
+## ⚠️ **GAIA IS THE MOST LIKELY WAY TO MEET THIS FEATURE FOR THE FIRST TIME, AND IT CANNOT OWN A
+## START.** The palette defaults to Gaia on the Resource tab and every node on every map is
+## gaia's, so an author who lays out some trees and then picks the start tile arrives with owner
+## 0 — `place_start()` refuses `player < 1`. Without the notice the click does nothing at all and
+## reads as the new palette entry being broken.
+func test_a_start_owned_by_gaia_is_refused_with_a_sentence() -> void:
+	var editor := _open_editor()
+	editor.show_document(doc)
+	editor._palette.set_player(ObjectPalette.GAIA)
+	editor._palette.pick(ObjectPalette.START_ID)
+	editor.set_tool(EDITOR.Tool.PLACE)
+	editor.apply_tool(Vector2i(30, 30))
+	assert_true(doc.data.starts.is_empty(), "gaia has no start to place")
+	assert_true(editor._notice_label.text.to_lower().contains("needs a player"),
+			"the refusal has to say what to do about it: %s" % editor._notice_label.text)
+	editor.free()
+
+
+## The eraser clears a start, which is what retired the `Clear start` button.
+##
+## ⚠️ **AND IT HAS TO BE CHECKED BEFORE `remove_entity_at()`, because that function REFUSES a
+## start's cluster** — deliberately, so an author cannot pick one villager out of a start and
+## leave an `ORIGIN_KEY` tag describing something that is no longer there. Without the branch,
+## erasing a base would do nothing and there would be no way to clear a start at all.
+func test_erasing_a_base_clears_the_whole_start() -> void:
+	var editor := _open_editor()
+	editor.show_document(doc)
+	assert_true(doc.place_start(1, Vector2i(30, 30)))
+	var with_start := doc.data.entities.size()
+	assert_true(with_start > 5)
+
+	editor.set_tool(EDITOR.Tool.ERASE)
+	# A CLICK IN THE MIDDLE OF THE TOWN CENTRE, which is what an author does -- not the marker
+	# tile, which they cannot see the coordinates of.
+	editor.apply_tool(Vector2i(30, 30))
+	assert_true(doc.data.starts.is_empty(), "the marker went")
+	assert_true(doc.data.entities.size() < with_start,
+			"and the cluster with it: %d -> %d" % [with_start, doc.data.entities.size()])
+	# ⚠️ **SAID LOUDLY, because one click removed a town centre, five villagers, a scout and a
+	# ring of resources.** That is not a result an author should have to infer from a count.
+	assert_true(editor._notice_label.text.to_upper().contains("CLEARED"),
+			editor._notice_label.text)
+	editor.free()
+
+
+## An ordinary building is still erased by the eraser, and the start branch does not swallow it.
+##
+## The regression this rules out: `start_owner_at()` answering "yes" too eagerly and turning
+## every erase into a clear-start.
+func test_erasing_an_ordinary_building_still_just_erases_it() -> void:
+	var editor := _open_editor()
+	editor.show_document(doc)
+	assert_true(doc.add_entity(&"building.house", 1, Vector2i(40, 40)))
+	assert_true(doc.place_start(1, Vector2i(20, 20)))
+	var starts_before := doc.data.starts.duplicate()
+	editor.set_tool(EDITOR.Tool.ERASE)
+	editor.apply_tool(Vector2i(40, 40))
+	assert_eq(doc.data.starts, starts_before, "the start was nowhere near it")
+	for e in doc.data.entities:
+		assert_true(StringName(e.get("def_id", &"")) != &"building.house", "the house went")
+	editor.free()
+
+
+## `start_owner_at()` finds a start from anywhere on the base that carries it.
+##
+## ⚠️ **A START IS A CENTRE AND AN ENTITY'S `tile` IS AN ORIGIN**, so neither the marker tile nor
+## the town centre's origin is where an author clicks — they click the middle of a 10x10
+## building. This is the same centre/origin distinction that broke the move's start-following
+## rule, asked of the eraser.
+func test_a_start_is_found_from_any_tile_of_its_base() -> void:
+	assert_true(doc.place_start(1, Vector2i(30, 30)))
+	assert_eq(doc.start_owner_at(Vector2i(30, 30)), 1, "the marker tile")
+	var at := doc.entity_index_at(Vector2i(30, 30))
+	var origin: Vector2i = doc.data.entities[at]["tile"]
+	assert_eq(doc.start_owner_at(origin), 1, "the base's origin corner")
+	assert_true(origin != Vector2i(30, 30),
+			"if these are equal the test proves nothing -- a town centre is not 1x1")
+	# AND SOMEWHERE IN THE MIDDLE that is neither.
+	assert_eq(doc.start_owner_at(origin + Vector2i(1, 1)), 1)
+	# NOT ANYWHERE ELSE.
+	assert_eq(doc.start_owner_at(Vector2i(80, 80)), 0)
+
+
+## A building that is not a town centre never carries a start, even standing on the marker.
+##
+## `_is_town_centre` is the identity test rather than "a big building near the marker", because
+## `StartLayout.place()` is what put the two on the same tile and that constant is the only fact
+## tying them together. A castle dropped on a start is not the start's base.
+func test_another_building_on_the_marker_does_not_count_as_the_start() -> void:
+	assert_true(doc.place_start(1, Vector2i(30, 30)))
+	var at := doc.entity_index_at(Vector2i(30, 30))
+	# THE TOWN CENTRE REMOVED FROM THE LIST BY HAND, leaving the marker with no base -- which is
+	# a state `MapFile` can load even though `place_start` never creates it.
+	doc.data.entities.remove_at(at)
+	doc.data.add_entity(&"building.castle", 1, Vector2i(28, 28))
+	assert_eq(doc.start_owner_at(Vector2i(28, 28)), 0, "a castle is not a start's base")
+	# THE MARKER TILE ITSELF STILL ANSWERS, which is the first of `start_owner_at`'s two lookups
+	# and the reason it has two.
+	assert_eq(doc.start_owner_at(Vector2i(30, 30)), 1)
 
 
 # ── the wall drag, and why it is not here (PLAN.md 16.4) ────────────────────

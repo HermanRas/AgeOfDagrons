@@ -84,6 +84,35 @@ const CATEGORIES := [
 ## Gaia. `MapData` writes `player: 0` for every resource node, and `StartLayout` relies on it.
 const GAIA := 0
 
+## The player start, as a palette entry rather than a toolbar tool (owner's ruling, 2026-09-08:
+## *"can we add the start location as a building option ... we can use the same select and erase
+## as normal buildings and remove duplicates"*).
+##
+## ## IT IS NOT A DEF, AND THE NAMESPACE IS WHAT KEEPS THAT HONEST
+##
+## ⚠️ **A START IS A `MapData.starts` ENTRY, NOT AN ENTITY** — it is *"the CENTRE tile of that
+## player's start"* in a field of its own, and placing one runs `StartLayout` to lay down a town
+## centre, five villagers, a scout and a ring of resources. So this id names a **tool**, and it
+## is deliberately in a `start.` namespace that no roster file uses: `GameDataRegistry.building()`,
+## `.resource_def()` and `.unit_raw()` all answer "unknown" for it, which is what stops it being
+## mistaken for something placeable through `add_entity`.
+##
+## **`Editor.apply_tool` is the one place that branches on it.** Everything else treats it as an
+## ordinary selection, which is the whole point of the owner's request: one PLACE tool, one
+## ERASE tool, one Owner picker, instead of a second set of controls in the toolbar for the one
+## thing that had them.
+##
+## 📝 **AND IT IS WHY THE PALETTE'S BUILDING TAB HAS ONE ROW THE ROSTER DOES NOT.** The
+## alternative was a fifth category holding a single tile, which is a tab an author has to find
+## to do the first thing they do on a new map. It goes LAST in the tab, after Wonder, because the
+## list is sorted as text and appending is the only position that is not a lie about the sort.
+const START_ID := &"start.player"
+
+## What the palette calls it. `GameDataRegistry.display_name()` would prettify the id into
+## "Player" — the namespace is stripped as a prefix — which is worse than useless on a tile whose
+## whole job is to be recognised.
+const START_LABEL := "Player Start"
+
 ## The "no tint" row's id in the tint picker.
 ##
 ## ⚠️ **IT IS 0 AND THE COLOUR INDICES ARE SHIFTED UP BY ONE, because `OptionButton` treats
@@ -215,7 +244,13 @@ func describe() -> String:
 	var size := ""
 	if _category == Category.RESOURCE:
 		size = ", %s" % SIZE_LABELS[clampi(_size_class, 0, SIZE_LABELS.size() - 1)]
-	return "place: %s (%s%s)" % [GameDataRegistry.display_name(_def_id), who, size]
+	# ⚠️ **`_label_for()` AND NOT `display_name()` DIRECTLY**, which is the one line the start
+	# entry needed here and did not get first time: `display_name(&"start.player")` strips the
+	# namespace as a prefix and prettifies what is left, so the status line read
+	# **"place: Player (P3)"**. `_label_for` is the function that knows a start is called "Player
+	# Start", and it is now the only route to a row's words — found by a preview print, because
+	# nothing about it is wrong enough to fail a test.
+	return "place: %s (%s%s)" % [_label_for(_def_id), who, size]
 
 
 # ── choosing ────────────────────────────────────────────────────────────────
@@ -352,6 +387,11 @@ func available_ids() -> Array[StringName]:
 	for id in _ids_for(_category):
 		if GameDataRegistry.placeable(id):
 			out.append(id)
+	# THE START GOES LAST IN THE BUILDING TAB. Appended after the roster rather than sorted into
+	# it: the list is ordered as text and `START_ID` is not a def, so inserting it alphabetically
+	# would put a tool between two buildings and make the sort a lie. See `START_ID`.
+	if _category == Category.BUILDING:
+		out.append(START_ID)
 	return out
 
 
@@ -382,6 +422,8 @@ func _matches(id: StringName, needle: String) -> bool:
 
 
 func _label_for(id: StringName) -> String:
+	if id == START_ID:
+		return START_LABEL
 	if _category == Category.TERRAIN:
 		return _terrain_label(_kind_of(id))
 	return GameDataRegistry.display_name(id)
@@ -481,6 +523,13 @@ func _tile_for(id: StringName) -> Button:
 ## a wall of grey squares.
 func _picture_for(id: StringName) -> Control:
 	var box := Vector2(TILE.x - 8, TILE.y - 26)
+	# ⚠️ **THE START'S TILE IS THE COLOUR THE MARKER IS DRAWN IN ON THE CANVAS**, which is the
+	# same argument the terrain swatches make one branch down: an author matching what they picked
+	# to what appeared has to be able to do it by colour. It is NOT a lettered plate — that path
+	# ends in `PlaceholderSpec.UNKNOWN_COLOR`, which is magenta and means *"this is a bug"*, and a
+	# deliberate tool drawn in the bug colour is the one thing worse than no icon.
+	if id == START_ID:
+		return _swatch(MapCanvas.START_COLOUR, box)
 	if _category == Category.TERRAIN:
 		# TERRAIN HAS NO SPRITE IN THIS TOOL AND SHOULD NOT PRETEND TO. `MapCanvas` draws flat
 		# diamonds in its own presentational colours (its header is emphatic that they are
