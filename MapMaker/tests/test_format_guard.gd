@@ -36,11 +36,22 @@ func _fake_game(overrides: Dictionary = {}) -> GameRoot:
 		var text: String = overrides.get(origin,
 				FileAccess.get_file_as_string(str(entry["copy"])))
 		_write(dir.path_join(origin), text)
+	# ⚠️ **GROUPED BY ORIGIN, BECAUSE ONE FILE CAN HOLD SEVERAL CHECKED DECLARATIONS.** This
+	# loop used to write a file per row, which was true while every shim watched one line —
+	# and the moment `wall_plan.gd` arrived with three (`AXIS_X`, `AXIS_Y`, `FACING_FOR_AXIS`)
+	# each write **overwrote the last**, so the fixture contained only the third and the guard
+	# correctly reported the other two missing. A fixture that cannot hold what the real file
+	# holds tests something that does not exist.
+	var by_origin: Dictionary = {}
 	for entry in FormatGuard.DECLARATIONS:
 		var origin := str(entry["origin"])
-		var text: String = overrides.get(origin,
-				"extends RefCounted\n\n%s\n" % entry["expected"])
-		_write(dir.path_join(origin), text)
+		var lines: Array = by_origin.get(origin, [])
+		lines.append(str(entry["expected"]))
+		by_origin[origin] = lines
+	for origin in by_origin:
+		var text: String = overrides.get(origin, "extends RefCounted\n\n%s\n"
+				% "\n".join(PackedStringArray(by_origin[origin])))
+		_write(dir.path_join(str(origin)), text)
 
 	var root := GameRoot.new()
 	root.path = ProjectSettings.globalize_path(dir)
@@ -274,7 +285,23 @@ func test_the_shims_say_what_the_guard_expects() -> void:
 					names.append(str(key))
 				assert_eq(str(entry["expected"]),
 						"enum Type { %s }" % ", ".join(PackedStringArray(names)))
+			"const AXIS_X":
+				assert_eq(str(entry["expected"]), "const AXIS_X := %d" % WallPlan.AXIS_X)
+			"const AXIS_Y":
+				assert_eq(str(entry["expected"]), "const AXIS_Y := %d" % WallPlan.AXIS_Y)
+			"const FACING_FOR_AXIS":
+				# ⚠️ **REBUILT FROM THE SHIM'S OWN ARRAY**, `enum Type`'s reason: comparing the
+				# two as text would pass if both sides carried the same transposition, and a
+				# swapped facing table draws every authored wall ninety degrees out while every
+				# footprint stays right. **The index is the `axis` written into map files**, so
+				# this pair is a file format and not just a pair of numbers.
+				assert_eq(str(entry["expected"]),
+						"const FACING_FOR_AXIS := [%d, %d]"
+						% [WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_X],
+						WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y]])
 			_:
 				fail("declaration '%s' has no agreement test" % prefix)
-	assert_true(seen.has("const SUBTILE") and seen.has("enum Type"),
-			"both shims are in the guard's table, got %s" % [seen])
+	for wanted in ["const SUBTILE", "enum Type", "const AXIS_X", "const AXIS_Y",
+			"const FACING_FOR_AXIS"]:
+		assert_true(seen.has(wanted),
+				"%s is missing from the guard's table, got %s" % [wanted, seen])

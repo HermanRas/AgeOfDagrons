@@ -75,6 +75,7 @@ func _ready() -> void:
 
 	_paint(doc)
 	_place_starts(doc)
+	_place_walls(doc)
 
 	var problems := doc.save(maps_dir)
 	if not problems.is_empty():
@@ -131,6 +132,36 @@ func _place_starts(doc: MapDocument) -> void:
 	doc.place_start(2, Vector2i(side * 4 / 5, side * 2 / 5))
 
 
+## One wall on each axis, which is the only thing on this map that exercises 16.4c.
+##
+## ⚠️ **A WALL IS THE ONE BUILDING WHOSE FOOTPRINT DEPENDS ON THE AUTHOR'S CHOICE**, and until
+## 2026-09-08 a map file could not say which. So `axis` is the newest thing in the format and it
+## is the thing most worth carrying through the two-command round trip: this script writes the
+## file and `preview_saved_map --folder river_demo` builds a real world from it and compares
+## **every terrain tile and every building**. Neither process can check the other, which is
+## decision 2's whole point — the FILE is the contract.
+##
+## ⚠️ **BOTH AXES, because one would not catch a transposition.** A tool that wrote `AXIS_X` for
+## everything would pass a check that only ever looked at east-west walls, and the fault it hides
+## is the ninety-degree one that cost six days in August.
+##
+## Placed on the ridge's own side of the river and clear of both starts' openings —
+## `add_entity()` refuses an overlap, and a refused wall here would be a silent hole in the
+## check rather than a failure.
+func _place_walls(doc: MapDocument) -> void:
+	var short_wall := &"building.wall_stone_short"
+	if GameDataRegistry.building(short_wall) == null:
+		printerr("no %s in the roster — the axis round trip is not being checked" % short_wall)
+		return
+	var placed := 0
+	if doc.add_entity(short_wall, 1, Vector2i(8, 30), 0, WallPlan.AXIS_X):
+		placed += 1
+	if doc.add_entity(short_wall, 1, Vector2i(14, 30), 0, WallPlan.AXIS_Y):
+		placed += 1
+	if placed != 2:
+		printerr("only %d of 2 walls went down — the axis round trip is incomplete" % placed)
+
+
 # ── verification ────────────────────────────────────────────────────────────
 
 ## Read it back and say whether it is the map we wrote. **The point of the file is that the
@@ -172,6 +203,33 @@ func _verify(doc: MapDocument) -> bool:
 	if counts.size() < 4:
 		printerr("only %d terrain kinds in the file — the paint did not reach it"
 				% counts.size())
+		ok = false
+
+	# ⚠️ **THE AXIS KEY, READ BACK OFF THE FILE** (16.4c). This is the newest field in the format
+	# and the one whose absence used to be invisible: a wall whose `axis` did not survive the
+	# JSON comes back as an east-west footprint with a north-south sprite, and every other
+	# assertion above would still pass.
+	var axes: Array[int] = []
+	for e in back.entities:
+		if e.has("axis"):
+			axes.append(int(e["axis"]))
+	axes.sort()
+	print("  wall axes in the file: %s" % [axes])
+	# ⚠️ **PARENTHESISED, because `!=` BINDS TIGHTER THAN `as`.** Written as
+	# `axes != [...] as Array[int]` this parses as `(axes != [...]) as Array[int]` — casting a
+	# bool to a typed array — and GDScript rejects it at PARSE time. **The scene then fails to
+	# load, `_ready()` never runs, nothing reaches `get_tree().quit()`, and a headless Godot
+	# spins forever**: the first sign of it was a 300-second timeout with an empty stdout, which
+	# reads as a hung map generation rather than as a syntax error.
+	var wanted_axes: Array[int] = [WallPlan.AXIS_X, WallPlan.AXIS_Y]
+	if axes != wanted_axes:
+		printerr("expected one wall on each axis, got %s" % [axes])
+		ok = false
+	# AND NOTHING ELSE GAINED ONE. `add_entity` writes no key for an entity with no orientation,
+	# which is what keeps a map with no walls byte-identical to one written before the field.
+	var without := back.entities.size() - axes.size()
+	if without != back.entities.size() - 2:
+		printerr("%d entities carry an axis and only the two walls should" % axes.size())
 		ok = false
 	if doc.seats() != 2:
 		printerr("expected a 2-seat map, got %d" % doc.seats())

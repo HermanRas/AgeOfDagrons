@@ -524,6 +524,64 @@ the owner's machine, which is what makes the mistake survivable and worth naming
 from before the project was renamed sits beside the live one, so a session looking in the
 wrong place finds a directory with plausibly stale pictures in it rather than nothing.
 
+### 16.4c — A WALL'S AXIS REACHES THE FILE. ONE OPTIONAL FIELD, DONE 2026-09-08
+
+The owner asked for both rotations as palette variants and asked *"or is there a deeper data
+structure problem?"* **There was exactly one**, and it took one field. **Game 2369/2369, MapMaker
+254/254.**
+
+- ⛔ **THE GAP: an entity record was `{def_id, player, tile, size_class}`**, so two palette rows
+  differing only in rotation wrote **identical file rows**. `MapData` now carries an optional
+  `axis`; **absent means no orientation and `format_version` does not move** (decision 7), so a
+  map with no walls is byte-identical to one written before the field existed.
+- ⚠️ **THE TWO HALVES ARE `map_data.gd` AND `map_gen.gd`, AND SHIPPING ONE IS WORSE THAN
+  SHIPPING NEITHER.** `footprint_rect_of()` transposes on the key (so the validator, the
+  generator's placement and the tool's collision test all agree), and `build_from()` passes
+  `footprint_override` **and** `WallPlan.FACING_FOR_AXIS[axis]`. Writing the key without reading
+  it changes nothing on screen: the tool would draw a wall one way and the match build it the
+  other, with the file agreeing with the tool.
+- ⚠️ **`format/wall_plan.gd` IS THE THIRD DECLARATION STAND-IN**, after `sim_world.gd` and
+  `map_generator.gd`. The verbatim `map_data.gd` reads `WallPlan.AXIS_Y`, and `WallPlan` itself is
+  the sim's drag logic the tool must not carry. **All three constants are checked, including
+  `FACING_FOR_AXIS`, which nothing in the tool reads** — swapping its two entries would draw every
+  authored wall on the wrong axis while every footprint stayed right, and `axis` in a map file is
+  an index into it. ⚠️ **`test_format_guard`'s fixture wrote one file per declaration ROW**, so
+  three rows sharing one origin each overwrote the last; grouped by origin now.
+- ⚠️ **"NON-SQUARE" IS NOT "DIRECTIONAL": IT IS TWENTY BUILDINGS, NOT TWELVE.** The first cut
+  offered rotations to the archery range, the dock, the field and the mill — all oblong, none with
+  art that rotates, so they would have transposed their footprint while the sprite stayed put.
+  Caught by a test counting **53 palette rows where 33 were wanted.** The flag is
+  `axis_variants: true` in `buildings.json`, on 16.3's carcass precedent, and the script that
+  added it found the twelve **by `wall_lengths` membership and `is_gate`, never by spelling.**
+- ⚠️ **THE PER-AXIS-DEF ROUTE WOULD HAVE BROKEN IN-GAME WALL DRAGS.** `WallPlan.lengths_of()`
+  keys by `footprint.x`, so a transposed `[2, 9]` def in a tier's `wall_lengths` collapses three
+  lengths into one and sets `_shortest()` to 2. Priced and rejected in the card; the owner chose
+  the field.
+- 📝 **THREE ROWS SHARED EACH NAME** — `wall_stone_short/medium/long` were all `"Stone Wall"`,
+  which is why the owner's screenshot showed three identical rows. The game never showed it
+  because `WallPlan` picks lengths itself. Now `Stone Wall (Short/Medium/Long)`.
+- ⚠️ **THE LABEL DID NOT FIT, AND ONLY THE SCREENSHOT COULD SAY SO.** `"Stone Wall (Medium)
+  NW-SE"` is 25 characters in an 88 px `clip_text` label, and **centred clipping trims both
+  ends** — so both medium rows read `"e Wall (Medium) N"` and the direction, the only thing that
+  differed, was the part cut off. Every test passed. The direction now has its own line, in amber,
+  and `TILE` grew to 118. **Both rows of a wall share one picture** (`_ICON_FACING` is south and
+  south is a diagonal bake no axis-aligned footprint can ask for), so the label is *all* there is.
+- ⚠️ **A PARSE ERROR IN A `dev/` SCRIPT HANGS INSTEAD OF EXITING.** `axes != [...] as Array[int]`
+  parses as `(axes != [...]) as Array[int]` — `!=` binds tighter than `as` — and the scene then
+  fails to load, `_ready()` never runs, nothing reaches `get_tree().quit()`, and headless Godot
+  spins. **It presented as a 300-second timeout with empty stdout**, which reads as a hung map
+  generation. `2>&1` on the run is what showed the one-line cause.
+- 📝 **`preview_saved_map` NOW CHECKS THE SHAPE A BUILDING WAS BUILT IN, not just that it is
+  there** — a wall authored north-south and built east-west stands on the tile the file names and
+  claims different ground, so "all present: true" passed. ✅ **Verified against the bug**: dropping
+  the facing in `build_from` makes it exit 1 with *"facing should be 6 and is 0"*. It is the only
+  place either project checks the whole chain — tool → JSON → `load_map` → `build_from` →
+  `spawn_building`. `dev/author_map.tscn` lays one wall on each axis for it.
+- 📝 **THE PREVIEW'S OWN ICON COUNTER LIED IN THE SAME WAY THE CODE MIGHT HAVE.** It called
+  `crop_for()` on the suffixed id and reported *"20 with a cropped icon, 25 lettered plates"* for
+  a palette rendering all 24 wall rows from real art — sending me hunting a regression that was
+  not there. **A checker wrong in the same way as the code is worse than no checker.**
+
 ### 16.4b(ii) — THE START IS A PALETTE ENTRY NOW, AND THREE CONTROLS WENT (owner, 2026-09-08)
 
 The owner's ruling: *"can we add the start location as a building option ... we can use the same

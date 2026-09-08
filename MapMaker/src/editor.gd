@@ -528,8 +528,11 @@ func apply_tool(tile: Vector2i) -> void:
 			if StringName(pick["def_id"]) == ObjectPalette.START_ID:
 				changed = _place_start_from_palette(int(pick["player"]), tile)
 			else:
+				# THE AXIS RIDES WITH THE SELECTION (16.4c). `ObjectPalette.selection()` has
+				# already split the variant suffix off, so `def_id` is a real def and `axis` is
+				# `MapData.AXIS_NONE` for everything that has no orientation.
 				changed = _document.add_entity(pick["def_id"], int(pick["player"]), tile,
-						int(pick["size_class"]))
+						int(pick["size_class"]), int(pick.get("axis", MapData.AXIS_NONE)))
 			if not changed and StringName(pick["def_id"]) != ObjectPalette.START_ID:
 				# ⚠️ **THE REFUSAL IS SAID OUT LOUD, because a click that does nothing looks
 				# like a broken tool.** `add_entity` refuses two things and the author can see

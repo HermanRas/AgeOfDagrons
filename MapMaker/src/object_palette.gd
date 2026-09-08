@@ -113,6 +113,35 @@ const START_ID := &"start.player"
 ## whole job is to be recognised.
 const START_LABEL := "Player Start"
 
+## The two axes a wall can be laid on, as the author sees them on screen (PLAN.md 16.4c, owner
+## 2026-09-08: *"add both direction options, ne-sw, nw-se as variants long, medium, short,
+## gate"*).
+##
+## ⚠️ **THE SCREEN NAMES ARE DERIVED FROM `Iso._project`, NOT CHOSEN.** That function is
+## `((x - y) * 32, (x + y) * 16)`, so **+x goes right-and-down (screen SE)** and **+y goes
+## left-and-down (screen SW)**. A wall lying ALONG tile axis X therefore spans **NW–SE** on
+## screen, and one along axis Y spans **NE–SW**. Getting these two labels the wrong way round
+## would be a tool that offers both rotations and names them backwards — which is worse than
+## offering one, because an author would trust the label. `dev/preview_editor.tscn` photographs
+## both so the names can be checked against the picture rather than against this comment.
+##
+## **Keyed by `WallPlan.AXIS_X` / `AXIS_Y`**, which are what `MapData`'s `axis` key holds and
+## what `MapGen.build_from()` reads. There is no third naming of an axis anywhere.
+const AXIS_LABELS := {
+	0: "NW-SE",                            # WallPlan.AXIS_X
+	1: "NE-SW",                            # WallPlan.AXIS_Y
+}
+
+## Suffix on a wall variant's id, so the two rotations are two rows with one def behind them.
+##
+## ⚠️ **THE ID THE MAP SEES IS THE DEF ID WITH THIS STRIPPED OFF.** `selection()` returns the
+## real `def_id` plus a separate `axis`, exactly as `MapData.add_entity()` takes them — the
+## suffix never reaches the file. **That is the whole difference between this and adding twelve
+## more defs to `buildings.json`**: the roster stays twelve walls, `WallPlan.lengths_of()` keeps
+## keying them by `footprint.x` without a transposed entry collapsing three lengths into one, and
+## a north-south wall has exactly one representation in the sim.
+const AXIS_SUFFIX := "@axis"
+
 ## The "no tint" row's id in the tint picker.
 ##
 ## ⚠️ **IT IS 0 AND THE COLOUR INDICES ARE SHIFTED UP BY ONE, because `OptionButton` treats
@@ -123,9 +152,23 @@ const START_LABEL := "Player Start"
 ## one fault rather than two: the box was blank *and* the control had never been connected.
 const _TINT_NONE_ID := 0
 
-## One tile in the icon grid. 96 rather than the game's 64, because this list carries a NAME
+## One tile in the icon grid. 96 wide rather than the game's 64, because this list carries a NAME
 ## under the picture and a control-group slot does not.
-const TILE := Vector2i(96, 104)
+##
+## ⚠️ **118 TALL AND NOT 104: THERE ARE TWO LABEL LINES, AND THE SECOND ONE IS NOT DECORATION.**
+## 16.4c gives a wall two rows that share one icon — `_ICON_FACING` is south for every tile here,
+## and `WallPlan`'s measurement says south is a diagonal bake no axis-aligned footprint can ask
+## for, so **the two rows cannot be told apart by their picture at all.** Only the label
+## distinguishes them.
+##
+## On one line it did not fit. `palette_walls.png` is the record: "Stone Wall (Medium) NW-SE" is
+## 25 characters in an 88 px `clip_text` label, and centred clipping trims BOTH ends — so both
+## medium rows read **"e Wall (Medium) N"** and the direction, the only thing that differed, was
+## the part that got cut. Every test passed. So the direction gets a line of its own, where five
+## characters fit with room to spare, and every tile reserves it (blank on the rows that have no
+## direction) because a `GridContainer` row is as tall as its tallest child and ragged rows read
+## as a broken layout.
+const TILE := Vector2i(96, 118)
 
 ## How wide the panel wants to be. Three tiles plus the scrollbar, measured rather than
 ## guessed: at two per row a 32-building roster is sixteen rows of scrolling.
@@ -195,10 +238,17 @@ func setup(icons: IconAtlas) -> void:
 func selection() -> Dictionary:
 	if _category == Category.TERRAIN or _def_id.is_empty():
 		return {}
+	# ⚠️ **THE VARIANT SUFFIX IS SPLIT OFF HERE AND NOWHERE ELSE**, so the id the editor hands to
+	# `MapData.add_entity()` is a real def id. A `def_id` of `building.wall_stone_long@axis1`
+	# reaching the map would be an entity `GameDataRegistry` cannot resolve: no footprint, no
+	# visual, and `MapGen.build_from()` would fall through to `spawn_resource_node()` and spawn
+	# nothing. **`axis` rides beside it**, which is exactly the shape `add_entity` takes.
+	var split := split_variant(_def_id)
 	return {
-		"def_id": _def_id,
+		"def_id": split[0],
 		"player": _player,
 		"size_class": _size_class if _category == Category.RESOURCE else 0,
+		"axis": int(split[1]),
 	}
 
 
@@ -385,14 +435,57 @@ func available_ids() -> Array[StringName]:
 		return _ids_for(_category)
 	var out: Array[StringName] = []
 	for id in _ids_for(_category):
-		if GameDataRegistry.placeable(id):
-			out.append(id)
+		if not GameDataRegistry.placeable(id):
+			continue
+		# ⚠️ **A WALL IS TWO ROWS, ONE PER AXIS** (16.4c). The def itself is NOT offered: it
+		# carries no orientation, and a row that placed one without an axis would write the
+		# entity the game builds ninety degrees wrong. So the plain id is replaced by its two
+		# variants rather than joined by them -- an author must choose a direction, because the
+		# map has to record one.
+		if _is_directional(id):
+			for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y]:
+				out.append(variant_id(id, axis))
+			continue
+		out.append(id)
 	# THE START GOES LAST IN THE BUILDING TAB. Appended after the roster rather than sorted into
 	# it: the list is ordered as text and `START_ID` is not a def, so inserting it alphabetically
 	# would put a tool between two buildings and make the sort a lie. See `START_ID`.
 	if _category == Category.BUILDING:
 		out.append(START_ID)
 	return out
+
+
+## Does this def need the author to choose a direction?
+##
+## ⚠️ **ASKED OF THE ROSTER, NOT OF THE FOOTPRINT AND NOT OF THE ID's SPELLING.**
+## `GameDataRegistry.axis_variants()` has the full argument and the measurement behind it: a
+## non-square test offered rotations to **twenty** buildings rather than twelve — an archery
+## range, a dock, a field and a mill are all oblong and none of them has art that rotates — and
+## an id-spelling test is the second opinion about the roster that 16.3 ruled out. The flag is
+## `axis_variants: true` in `game/data/buildings.json`, on the twelve walls and gates.
+static func _is_directional(id: StringName) -> bool:
+	return GameDataRegistry.axis_variants(id)
+
+
+## `building.wall_stone_long` + `AXIS_Y` -> `building.wall_stone_long@axis1`.
+##
+## A palette row's identity, and nothing else's: `selection()` splits it again. See `AXIS_SUFFIX`.
+static func variant_id(def_id: StringName, axis: int) -> StringName:
+	return StringName("%s%s%d" % [def_id, AXIS_SUFFIX, axis])
+
+
+## The real def id behind a palette row, and the axis it asked for.
+##
+## Returns `[def_id, axis]` with `axis` = `MapData.AXIS_NONE` for every ordinary row — which is
+## what `add_entity()` wants for anything that has no orientation, so the caller never has to
+## branch on whether a row was a variant.
+static func split_variant(id: StringName) -> Array:
+	var text := String(id)
+	var at := text.rfind(AXIS_SUFFIX)
+	if at < 0:
+		return [id, MapData.AXIS_NONE]
+	return [StringName(text.substr(0, at)),
+			int(text.substr(at + AXIS_SUFFIX.length()))]
 
 
 ## ⚠️ **SORTED AS TEXT BY `GameDataRegistry`, AND NEVER RE-SORTED HERE.**
@@ -426,6 +519,14 @@ func _label_for(id: StringName) -> String:
 		return START_LABEL
 	if _category == Category.TERRAIN:
 		return _terrain_label(_kind_of(id))
+	var split := split_variant(id)
+	if int(split[1]) != MapData.AXIS_NONE:
+		# THE DIRECTION IS THE HALF THAT DISTINGUISHES THE ROW, so it goes on the end where the
+		# label is clipped from -- `_tile_for()` sets `clip_text`, and the tile is 88 px wide.
+		# ⚠️ Which is why the DEF's own name had to grow a length: "Stone Wall NW-SE" three times
+		# over would have been three identical rows again with a direction stuck on.
+		return "%s %s" % [GameDataRegistry.display_name(split[0]),
+				str(AXIS_LABELS.get(int(split[1]), "?"))]
 	return GameDataRegistry.display_name(id)
 
 
@@ -497,8 +598,11 @@ func _tile_for(id: StringName) -> Button:
 
 	column.add_child(_picture_for(id))
 
+	# THE NAME, WITHOUT THE DIRECTION. `_label_for()` is the full row name and is what the search
+	# and the status line use; the tile splits it over two lines because the direction is the half
+	# that must survive clipping. See `TILE`.
 	var label := Label.new()
-	label.text = _label_for(id)
+	label.text = _name_line(id)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", _TEXT)
 	label.add_theme_font_size_override("font_size", 11)
@@ -508,7 +612,40 @@ func _tile_for(id: StringName) -> Button:
 	label.clip_text = true
 	label.custom_minimum_size = Vector2(TILE.x - 8, 0)
 	column.add_child(label)
+
+	# ⚠️ **THE DIRECTION, ON ITS OWN LINE, AND PRESENT EVEN WHEN EMPTY.** Two rows of a wall share
+	# one picture, so this is the only thing that tells them apart — and a tile that omitted the
+	# line when there is no direction would be shorter than its neighbours, which in a
+	# `GridContainer` means the whole row grows to the tallest and the pictures stop lining up.
+	var axis_line := Label.new()
+	axis_line.text = _axis_line(id)
+	axis_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# BRIGHTER THAN THE NAME, not dimmer: it is the distinguishing half, and `_DIM` here would
+	# make the one word an author is scanning for the hardest one to read.
+	axis_line.add_theme_color_override("font_color", _SELECTED)
+	axis_line.add_theme_font_size_override("font_size", 11)
+	axis_line.clip_text = true
+	axis_line.custom_minimum_size = Vector2(TILE.x - 8, 14)
+	column.add_child(axis_line)
 	return b
+
+
+## The tile's first line: the row's name with the direction taken off it.
+##
+## Not `static`, because `_label_for()` reads the category to name a terrain kind — and every
+## other row on every other tab goes through this too, so it has to answer for all of them and
+## not just for a wall.
+func _name_line(id: StringName) -> String:
+	var split := split_variant(id)
+	if int(split[1]) != MapData.AXIS_NONE:
+		return GameDataRegistry.display_name(split[0])
+	return _label_for(id)
+
+
+## The tile's second line: the direction, or nothing.
+static func _axis_line(id: StringName) -> String:
+	var axis := int(split_variant(id)[1])
+	return str(AXIS_LABELS.get(axis, "")) if axis != MapData.AXIS_NONE else ""
 
 
 ## The picture, or the lettered plate that stands in for one.
@@ -522,7 +659,9 @@ func _tile_for(id: StringName) -> Button:
 ## rather than from a guess, so a clone with no art gets green trees and pale houses instead of
 ## a wall of grey squares.
 func _picture_for(id: StringName) -> Control:
-	var box := Vector2(TILE.x - 8, TILE.y - 26)
+	# TWO LABEL LINES BELOW IT NOW, not one -- see `TILE`. Derived from the tile rather than
+	# written out, so the picture and the caption cannot both claim the same pixels.
+	var box := Vector2(TILE.x - 8, TILE.y - 42)
 	# ⚠️ **THE START'S TILE IS THE COLOUR THE MARKER IS DRAWN IN ON THE CANVAS**, which is the
 	# same argument the terrain swatches make one branch down: an author matching what they picked
 	# to what appeared has to be able to do it by colour. It is NOT a lettered plate — that path
@@ -530,6 +669,18 @@ func _picture_for(id: StringName) -> Control:
 	# deliberate tool drawn in the bug colour is the one thing worse than no icon.
 	if id == START_ID:
 		return _swatch(MapCanvas.START_COLOUR, box)
+	# ⚠️ **A VARIANT ROW ASKS FOR ITS DEF's PICTURE, and the split has to happen before the
+	# crop.** `IconAtlas.visual_for()` would answer `&""` for `...@axis1` — no building, no
+	# resource, no unit, not a declared visual — and every wall row would come out as a **magenta
+	# UNKNOWN plate**, which is the colour reserved for *"this is a bug"*. It would have looked
+	# like the atlases had stopped resolving rather than like an id with a suffix on it.
+	#
+	# 📝 **BOTH ROWS OF A WALL SHOW THE SAME PICTURE**, and that is honest rather than lazy:
+	# `_ICON_FACING` is 0 (south) for every icon in this palette, and `WallPlan`'s measurement
+	# says S and N are the two **diagonal** wall bakes, which no axis-aligned footprint can ever
+	# ask for. So neither row's icon is the sprite that will be drawn, the LABEL is what
+	# distinguishes them, and cropping facing 6 for one row would show a picture that is only
+	# arguably more right while implying the other is wrong.
 	if _category == Category.TERRAIN:
 		# TERRAIN HAS NO SPRITE IN THIS TOOL AND SHOULD NOT PRETEND TO. `MapCanvas` draws flat
 		# diamonds in its own presentational colours (its header is emphatic that they are
@@ -537,8 +688,13 @@ func _picture_for(id: StringName) -> Control:
 		# picture -- an author matching a brush to what they see on the canvas.
 		return _swatch(MapCanvas.TERRAIN_COLOURS.get(_kind_of(id), Color.MAGENTA), box)
 
-	var crop := _icons.crop_for(id, 0, _tint, _size_class) if _icons != null else {}
+	# THE REAL DEF, so a variant row crops its own def's art. See the comment above.
+	var def_id: StringName = split_variant(id)[0]
+	var crop := _icons.crop_for(def_id, 0, _tint, _size_class) if _icons != null else {}
 	if crop.is_empty():
+		# ⚠️ **THE PLATE TAKES THE VARIANT ID AND NOT THE DEF ID**, deliberately and unlike the
+		# crop: its letters come from `_label_for()`, and on a clean clone with no atlases both
+		# rows of a wall would otherwise be the same two letters with no way to tell them apart.
 		return _plate(id, box)
 
 	var rect: Rect2 = crop["rect"]
@@ -576,7 +732,12 @@ func _plate(id: StringName, box: Vector2) -> Control:
 	# TOTAL, so there is no second drawing path here -- `IconAtlas.plate_colour` always
 	# answers, and the fallback below is only for the no-roster case where there is no
 	# `IconAtlas` at all.
-	style.bg_color = _icons.plate_colour(id, _size_class) if _icons != null else _TILE_BG
+	# THE DEF's COLOUR, split off the variant suffix -- `plate_colour` reads `visuals.json`, which
+	# knows nothing about a palette row's identity and would answer the loud magenta for a
+	# suffixed id. The LETTERS come from the variant's label, one line down, so the two rows of a
+	# wall are still tellable apart on a clone with no atlases.
+	var colour_id: StringName = split_variant(id)[0]
+	style.bg_color = _icons.plate_colour(colour_id, _size_class) if _icons != null else _TILE_BG
 	style.corner_radius_top_left = 3
 	style.corner_radius_top_right = 3
 	style.corner_radius_bottom_left = 3

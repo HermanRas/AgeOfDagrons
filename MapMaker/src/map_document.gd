@@ -426,11 +426,17 @@ func fill_all(kind: int) -> void:
 ## water, a fish is in it, and `StartLayout` already declines to put *units* on ground they
 ## cannot stand on. A placement tool that second-guessed the author about terrain would make
 ## the two things this game most needs on a coast unplaceable.
-func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0) -> bool:
+func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0,
+		axis := MapData.AXIS_NONE) -> bool:
 	if def_id.is_empty() or not data.in_bounds(tile):
 		return false
+	# ⚠️ **THE PROBE CARRIES THE AXIS, or a wall laid north-south is collision-checked against
+	# the footprint of one laid east-west.** `footprint_rect_of()` transposes on this key, so
+	# leaving it out here would test `[9, 2]` and then write an entity the world builds as
+	# `[2, 9]` — a placement the tool accepted, on ground it never looked at. Same key, same
+	# function, one opinion.
 	var wanted := MapData.footprint_rect_of({
-		"def_id": def_id, "tile": tile, "size_class": size_class,
+		"def_id": def_id, "tile": tile, "size_class": size_class, "axis": axis,
 	})
 	var claimed := data.claimed_tiles()
 	for t in wanted:
@@ -444,7 +450,7 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 	# not the last thing they tried.
 	var mine := _open("place %s" % GameDataRegistry.display_name(def_id))
 	_step.lists_before(data)
-	data.add_entity(def_id, player, tile, size_class)
+	data.add_entity(def_id, player, tile, size_class, axis)
 	dirty = true
 	if mine:
 		_flush()

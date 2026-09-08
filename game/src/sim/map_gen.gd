@@ -525,10 +525,32 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 		if GameDataRegistry.unit(def_id) != null:
 			w.spawn_unit(def_id, owner, tile)
 		elif GameDataRegistry.building(def_id) != null:
-			# Forced: the map has already decided this is where the building goes, and
-			# `can_place_building()` would refuse a town centre whose own clearing the
-			# generator laid out for it.
-			w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true)
+			# ⚠️ **A MAP MAY NAME AN AXIS, AND THIS IS THE HALF THAT MAKES THE KEY MEAN
+			# ANYTHING** (16.4c, 2026-09-08). `MapData.AXIS_NONE`'s comment has the full
+			# argument; what matters here is that **writing `axis` into the file and not reading
+			# it here changes nothing on screen**, which is the worst possible half to ship: the
+			# tool would show a wall one way and the match would build it the other, with the
+			# file agreeing with the tool.
+			#
+			# Both are passed together and neither alone: `footprint_override` decides the tiles
+			# claimed and `facing` decides which of the eight baked directions draws, and a wall
+			# with one and not the other is precisely the ninety-degree fault of 2026-08-28.
+			var axis := int(e.get("axis", MapData.AXIS_NONE))
+			if axis == MapData.AXIS_NONE:
+				# Forced: the map has already decided this is where the building goes, and
+				# `can_place_building()` would refuse a town centre whose own clearing the
+				# generator laid out for it.
+				w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true)
+			else:
+				# THE OVERRIDE COMES FROM `MapData.footprint_rect_of`'s OWN RULE, not from a
+				# second transposition written here: one `axis` key, two readers, and the
+				# validator's opinion about what is in the way therefore matches what gets built.
+				var bd: BuildingDef = GameDataRegistry.building(def_id)
+				var footprint := bd.footprint
+				if axis == WallPlan.AXIS_Y:
+					footprint = Vector2i(footprint.y, footprint.x)
+				w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true,
+						footprint, WallPlan.FACING_FOR_AXIS[axis])
 		else:
 			w.spawn_resource_node(def_id, tile, int(e.get("size_class", 0)))
 

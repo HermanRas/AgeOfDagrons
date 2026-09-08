@@ -134,6 +134,39 @@ const DECLARATIONS := [
 		"expected": "enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST, ARCHIPELAGO }",
 		"used_by": "res://format/map_generator.gd",
 	},
+	# ⚠️ **THE THIRD STAND-IN, AND THE TWO NUMBERS IN IT ARE WRITTEN INTO MAP FILES** (16.4c,
+	# 2026-09-08). The verbatim `map_data.gd` reads `WallPlan.AXIS_Y` to decide whether an
+	# entity's footprint is transposed, and `MapGen.build_from()` indexes `FACING_FOR_AXIS` with
+	# the same key — so `axis` in a saved `map.json` is **an index into that table**.
+	#
+	# `WallPlan` itself is the sim's drag logic: `plan()` turns a gesture into a run of segments,
+	# and a map-authoring tool has no business carrying it (`format/sim_world.gd`'s rule —
+	# *"something needing more of it than a constant means the tool is reaching into the
+	# simulation"*). Two constants is what the copy needs.
+	#
+	# **BOTH AXIS CONSTANTS ARE CHECKED AND SO IS THE FACING TABLE**, for `enum Type`'s reason
+	# one row up: swapping the two entries of `FACING_FOR_AXIS` would silently draw every
+	# authored wall on the wrong axis while every footprint stayed right — and that is the
+	# ninety-degree fault of 2026-08-28, which cost six days and a re-measurement of twelve
+	# atlases. A check that watched only `AXIS_X` would not see it.
+	{
+		"origin": "src/sim/wall_plan.gd",
+		"prefix": "const AXIS_X",
+		"expected": "const AXIS_X := 0",
+		"used_by": "res://format/wall_plan.gd",
+	},
+	{
+		"origin": "src/sim/wall_plan.gd",
+		"prefix": "const AXIS_Y",
+		"expected": "const AXIS_Y := 1",
+		"used_by": "res://format/wall_plan.gd",
+	},
+	{
+		"origin": "src/sim/wall_plan.gd",
+		"prefix": "const FACING_FOR_AXIS",
+		"expected": "const FACING_FOR_AXIS := [6, 0]",
+		"used_by": "res://format/wall_plan.gd",
+	},
 ]
 
 enum Status { OK, DRIFTED, ORIGIN_MISSING, COPY_MISSING }

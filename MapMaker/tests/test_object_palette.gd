@@ -98,12 +98,19 @@ func test_each_category_lists_its_own_roster() -> void:
 	if not _has_game():
 		return
 	palette.set_category(ObjectPalette.Category.BUILDING)
-	# ⚠️ **PLUS ONE, AND THE ONE IS NOT A BUILDING.** The player start became a palette entry on
-	# the owner's ruling of 2026-09-08, and it goes in this tab — so the Building list is the
-	# roster **and** `START_ID`. Written as `+ 1` against the roster rather than as a number,
-	# because the roster grows and the point of this test is that nothing else creeps in.
-	assert_eq(palette.listed_ids().size(), GameDataRegistry.building_ids().size() + 1,
-			"the buildings, plus the player start")
+	# ⚠️ **THE BUILDING TAB IS NOT ONE ROW PER DEF ANY MORE, AND THE ARITHMETIC IS WRITTEN OUT
+	# RATHER THAN COUNTED.** Every def gets a row, **a directional def gets two** (16.4c: a wall
+	# is offered per axis, because the map records one), and the player start adds one that is
+	# not a def at all. Derived from the roster so it survives a building being added; the point
+	# of the test is that nothing ELSE creeps in.
+	var directional := 0
+	for id in GameDataRegistry.building_ids():
+		if GameDataRegistry.axis_variants(id):
+			directional += 1
+	assert_true(directional > 0, "no directional buildings -- has the flag gone from the data?")
+	assert_eq(palette.listed_ids().size(),
+			GameDataRegistry.building_ids().size() + directional + 1,
+			"one row per building, two per directional one, plus the player start")
 	palette.set_category(ObjectPalette.Category.UNIT)
 	assert_eq(palette.listed_ids().size(), GameDataRegistry.unit_ids().size())
 	palette.set_category(ObjectPalette.Category.TERRAIN)

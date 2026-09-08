@@ -206,8 +206,18 @@ func _process(_delta: float) -> void:
 		24:
 			_report_start_row("after erasing its base with the eraser")
 			_shoot("start_erased")
+			# ⚠️ **16.4c's WHOLE VISIBLE SURFACE IS THIS ONE SHOT.** The tests prove that the
+			# `axis` key survives the file and that the world builds on it. **What they cannot
+			# judge is whether an author can tell the two rows apart** — three lengths, a gate
+			# and two directions is twenty-four wall rows in one tab, and the label is the only
+			# thing that distinguishes a pair. If "Stone Wall (Short) NW-SE" clips to
+			# "Stone Wall (Sho…" the feature is unusable and every test still passes.
+			_show_the_wall_rows()
+		25:
+			_report_wall_rows()
+			_shoot("palette_walls")
 			print("")
-			print("OK — twenty-one shots written. Look at them: the arithmetic is tested, the"
+			print("OK — twenty-two shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -374,6 +384,43 @@ func _report_start_row(what: String) -> void:
 	_hold(UI_FRAMES)
 
 
+## ── the wall rows, one per axis (16.4c) ─────────────────────────────────────
+
+func _show_the_wall_rows() -> void:
+	_show_palette(ObjectPalette.Category.BUILDING)
+	# "STONE" RATHER THAN "WALL": searching wall brings back twenty-four rows and the tile grid
+	# scrolls, so the shot would show the top of a list rather than a pair. One tier is eight
+	# rows -- three lengths and a gate, twice -- which fits.
+	_palette().set_search("stone wall")
+	_hold(UI_FRAMES)
+
+
+## Every wall row, its label, and what it would place.
+##
+## ⚠️ **THE LABEL AND THE `selection()` ARE PRINTED TOGETHER, because they are the pair that can
+## disagree** and the whole feature is the claim that they do not: a row saying NE-SW that places
+## `axis 0` is a tool that lies about the one thing an author cannot see until they play the map.
+func _report_wall_rows() -> void:
+	var palette := _palette()
+	var ids := palette.listed_ids()
+	print("the Stone Wall rows: %d" % ids.size())
+	for id in ids:
+		palette.pick(id)
+		var pick := palette.selection()
+		var axis := int(pick["axis"])
+		print("  %-28s label %-34s places %s axis %d (%s)" % [
+				String(id).replace("building.", ""), "\"%s\"" % palette._label_for(id),
+				String(pick["def_id"]).replace("building.", ""), axis,
+				str(ObjectPalette.AXIS_LABELS.get(axis, "none"))])
+		# THE ROW'S NAME AND THE AXIS IT PLACES MUST AGREE, checked rather than eyeballed: the
+		# label is the only place the direction is stated and the key is the only place it is
+		# recorded.
+		if axis != MapData.AXIS_NONE \
+				and not palette._label_for(id).ends_with(str(ObjectPalette.AXIS_LABELS[axis])):
+			printerr("    the label and the axis it places disagree")
+	_hold(UI_FRAMES)
+
+
 ## The same map `dev/author_map.tscn` writes, painted through the same document API.
 func _build_map() -> MapDocument:
 	var doc := MapDocument.create(Vector2i(96, 96), "River Demo")
@@ -503,7 +550,15 @@ func _report_palette(what: String) -> void:
 		return
 	var with_art := 0
 	for id in ids:
-		if not _editor._icons.crop_for(id, 0, _palette().tint()).is_empty():
+		# ⚠️ **THE VARIANT SUFFIX HAS TO COME OFF HERE TOO, and forgetting it made this line
+		# LIE about the tool.** 16.4c splits a wall into two palette rows (`...@axis0` /
+		# `...@axis1`), and `crop_for` on a suffixed id resolves no visual at all — so this
+		# reported *"20 with a cropped icon, 25 lettered plates"* for a palette that was
+		# rendering all 24 wall rows from real art. **A checker that is wrong in the same way
+		# the code might be is worse than no checker**: it sent me looking for a regression in
+		# `_picture_for` that was not there.
+		var def_id: StringName = ObjectPalette.split_variant(id)[0]
+		if not _editor._icons.crop_for(def_id, 0, _palette().tint()).is_empty():
 			with_art += 1
 	print("palette %s: %d shown, %d with a cropped icon, %d lettered plates"
 			% [what, ids.size(), with_art, ids.size() - with_art])

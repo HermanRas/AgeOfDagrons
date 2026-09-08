@@ -215,6 +215,43 @@ static func prettify(id: StringName) -> String:
 ## and pattern-matching `_carcass` in the palette fails in **both** directions as the roster
 ## grows: a future `res.horse_carcass` would be filtered by luck and a `res.whale_meat` would
 ## not be filtered at all, neither announcing itself.
+## May this building be laid on either axis? **Absent means no** (PLAN.md 16.4c).
+##
+## True on the twelve walls and gates and nothing else. A wall is the one building whose
+## footprint is not a property of its def — `[9, 2]` one way, `[2, 9]` the other — so the
+## palette offers it as two rows and `MapData`'s optional `axis` key records which the author
+## chose.
+##
+## ## ⚠️ WHY THIS IS A FLAG IN THE DATA AND NOT A TEST IN THIS FILE
+##
+## The first cut asked whether the footprint was **non-square**, and that is **twenty** of the
+## thirty-two buildings rather than twelve: an archery range, a dock, a field and a mill are all
+## oblong and none of them has art that rotates. Offering them a rotation would transpose the
+## footprint — which the format now supports — while the sprite stayed put, so the building
+## would occupy ground its picture does not cover. Caught by `test_object_palette`, which
+## counted 53 rows where 33 were wanted.
+##
+## Matching `wall` in the id was the other tempting answer and is the one 16.3 ruled out in so
+## many words: a future `building.palisade_run` would silently get one row and a
+## `building.seawall_tower` would wrongly get two, and **neither failure announces itself**. So
+## the roster says — exactly as `resources.json` says `placeable: false` for the six carcasses.
+##
+## **Read off the raw JSON, and `BuildingDef` deliberately does not carry it**, for
+## `placeable()`'s two reasons: nothing in `game/src` needs it (the game's own wall placement
+## gets its axis from `WallPlan` and the player's drag), and `format/building_def.gd` is a
+## hash-checked verbatim copy that would have to be re-copied to hold a field the format has no
+## interest in.
+func axis_variants(id: StringName) -> bool:
+	for path in _read_raw_cache:
+		var entry: Variant = (_read_raw_cache[path] as Dictionary).get(id)
+		if entry is Dictionary:
+			return bool((entry as Dictionary).get("axis_variants", false))
+	# ⚠️ **AN UNKNOWN ID GETS NO VARIANTS, which is the opposite default to `placeable()`** and
+	# deliberately so: that function hides things when it guesses wrong, this one would INVENT a
+	# row. A typo'd id offering two rotations of nothing is a worse answer than one offering one.
+	return false
+
+
 func placeable(id: StringName) -> bool:
 	for path in _read_raw_cache:
 		var entry: Variant = (_read_raw_cache[path] as Dictionary).get(id)

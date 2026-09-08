@@ -380,9 +380,13 @@ func _report_match() -> bool:
 	# the top-left. The two differ by half a footprint, which for a 10x10 town centre is five
 	# tiles -- far enough to look like the map having been ignored entirely.
 	var got: Dictionary = {}
+	var shapes: Dictionary = {}
 	for e in world.entities.values():
 		if e is SimBuilding:
-			got[(e as SimBuilding).origin_tile()] = String(e.def_id)
+			var b := e as SimBuilding
+			got[b.origin_tile()] = String(b.def_id)
+			# THE FOOTPRINT AND THE FACING AS BUILT, for the axis check below.
+			shapes[b.origin_tile()] = {"footprint": b.footprint, "facing": b.facing}
 
 	var ok := true
 	for tile in want:
@@ -395,6 +399,38 @@ func _report_match() -> bool:
 					% [want[tile], tile, got[tile]])
 			ok = false
 	print("  buildings the file named: %d, all present: %s" % [want.size(), ok])
+
+	# ⚠️ **AND THE SHAPE THEY WERE BUILT IN, WHICH "ALL PRESENT" CANNOT SEE** (16.4c). A wall
+	# authored north-south and built east-west stands on the tile the file named and claims
+	# **different ground**, so every assertion above passes. That is the ninety-degree fault of
+	# 2026-08-28 arriving through a file instead of through a drag, and this is the only place in
+	# either project where the whole chain — tool, JSON, `MapFile.load_map`, `MapGen.build_from`,
+	# `spawn_building` — is checked end to end.
+	var axial := 0
+	for e in _from_file.entities:
+		if not e.has("axis"):
+			continue
+		axial += 1
+		var tile: Vector2i = e["tile"]
+		if not shapes.has(tile):
+			continue                      # already reported as missing above
+		var bd: BuildingDef = GameDataRegistry.building(e["def_id"])
+		var axis := int(e["axis"])
+		var wanted := bd.footprint if axis == WallPlan.AXIS_X \
+				else Vector2i(bd.footprint.y, bd.footprint.x)
+		var built: Dictionary = shapes[tile]
+		if built["footprint"] != wanted:
+			push_error("%s at %s is axis %d in the file: footprint should be %s and is %s"
+					% [e["def_id"], tile, axis, wanted, built["footprint"]])
+			ok = false
+		if int(built["facing"]) != int(WallPlan.FACING_FOR_AXIS[axis]):
+			push_error("%s at %s is axis %d in the file: facing should be %d and is %d"
+					% [e["def_id"], tile, axis, int(WallPlan.FACING_FOR_AXIS[axis]),
+					int(built["facing"])])
+			ok = false
+	if axial > 0:
+		print("  directional buildings: %d, built on the axis the file names: %s"
+				% [axial, ok])
 
 	# And the terrain, which is the other half of a map and the half a building test would
 	# not notice was wrong.

@@ -825,13 +825,14 @@
   },
 
   "building.wall_wood_short": {
-    "name": "Palisade Wall",
+    "name": "Palisade Wall (Short)",
     "visual": "vis.wall_wood_short",
     "visual_foundation": "vis.foundation_3x3_wall",
     "visual_rubble": "vis.rubble_wall_short",
 
     "hp": 400,
     "footprint": [3, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "wood": 12 },
@@ -851,13 +852,14 @@
   },
 
   "building.wall_wood_medium": {
-    "name": "Palisade Wall",
+    "name": "Palisade Wall (Medium)",
     "visual": "vis.wall_wood_medium",
     "visual_foundation": "vis.foundation_6x3_wall",
     "visual_rubble": "vis.rubble_wall_medium",
 
     "hp": 800,
     "footprint": [6, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "wood": 24 },
@@ -875,13 +877,14 @@
   },
 
   "building.wall_wood_long": {
-    "name": "Palisade Wall",
+    "name": "Palisade Wall (Long)",
     "visual": "vis.wall_wood_long",
     "visual_foundation": "vis.foundation_9x3_wall",
     "visual_rubble": "vis.rubble_wall_long",
 
     "hp": 1200,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "wood": 36 },
@@ -906,6 +909,7 @@
 
     "hp": 1000,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 5,
 
     "cost": { "wood": 50 },
@@ -924,13 +928,14 @@
   },
 
   "building.wall_stone_short": {
-    "name": "Stone Wall",
+    "name": "Stone Wall (Short)",
     "visual": "vis.wall_stone_short",
     "visual_foundation": "vis.foundation_3x3_wall",
     "visual_rubble": "vis.rubble_wall_short",
 
     "hp": 600,
     "footprint": [3, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 15 },
@@ -950,13 +955,14 @@
   },
 
   "building.wall_stone_medium": {
-    "name": "Stone Wall",
+    "name": "Stone Wall (Medium)",
     "visual": "vis.wall_stone_medium",
     "visual_foundation": "vis.foundation_6x3_wall",
     "visual_rubble": "vis.rubble_wall_medium",
 
     "hp": 1200,
     "footprint": [6, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 30 },
@@ -974,13 +980,14 @@
   },
 
   "building.wall_stone_long": {
-    "name": "Stone Wall",
+    "name": "Stone Wall (Long)",
     "visual": "vis.wall_stone_long",
     "visual_foundation": "vis.foundation_9x3_wall",
     "visual_rubble": "vis.rubble_wall_long",
 
     "hp": 1800,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 45 },
@@ -1005,6 +1012,7 @@
 
     "hp": 1500,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 5,
 
     "cost": { "wood": 30, "stone": 45 },
@@ -1023,13 +1031,14 @@
   },
 
   "building.wall_reinforced_short": {
-    "name": "Reinforced Wall",
+    "name": "Reinforced Wall (Short)",
     "visual": "vis.wall_reinforced_short",
     "visual_foundation": "vis.foundation_3x3_wall",
     "visual_rubble": "vis.rubble_wall_short",
 
     "hp": 900,
     "footprint": [3, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 25 },
@@ -1047,13 +1056,14 @@
   },
 
   "building.wall_reinforced_medium": {
-    "name": "Reinforced Wall",
+    "name": "Reinforced Wall (Medium)",
     "visual": "vis.wall_reinforced_medium",
     "visual_foundation": "vis.foundation_6x3_wall",
     "visual_rubble": "vis.rubble_wall_medium",
 
     "hp": 1800,
     "footprint": [6, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 50 },
@@ -1070,13 +1080,14 @@
   },
 
   "building.wall_reinforced_long": {
-    "name": "Reinforced Wall",
+    "name": "Reinforced Wall (Long)",
     "visual": "vis.wall_reinforced_long",
     "visual_foundation": "vis.foundation_9x3_wall",
     "visual_rubble": "vis.rubble_wall_long",
 
     "hp": 2700,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 3,
 
     "cost": { "stone": 75 },
@@ -1101,6 +1112,7 @@
 
     "hp": 2250,
     "footprint": [9, 2],
+    "axis_variants": true,
     "los": 5,
 
     "cost": { "wood": 40, "stone": 75 },

@@ -813,6 +813,78 @@ func test_two_worlds_given_the_same_drag_stay_identical() -> void:
 		assert_eq(a.state_hash(), b.state_hash(), "diverged on tick %d" % (i + 1))
 
 
+# ── a wall that came from a MAP FILE (PLAN.md 16.4c) ────────────────────────
+#
+# The MapMaker can author a wall on either axis, and `MapData` carries the choice in an optional
+# `axis` key. **`MapGen.build_from()` is the half that makes the key mean anything** — and the
+# failure if it does not read it is the quiet kind: the file is right, the tool draws it right,
+# and the match builds it ninety degrees out.
+#
+# ⚠️ **BOTH HALVES ARE ASSERTED, because a wall with one and not the other is exactly the fault
+# the owner reported on 2026-08-28** (*"i am dragging NE to SW, the walls look like NW to SE"*),
+# which took six days and a regression of the mean opaque-pixel slope across twelve atlases to
+# settle. The FOOTPRINT decides the tiles claimed; the FACING decides which of the eight baked
+# directions draws. Neither alone is a wall on the right axis.
+
+## An east-west wall from a map file keeps its def's footprint and gets axis X's facing.
+##
+## ⚠️ **THE FACING IS THE HALF THAT WAS WRONG BEFORE THE KEY EXISTED**, and this is the assertion
+## that pins it: `spawn_building`'s default facing is **0**, which `WallPlan.FACING_FOR_AXIS` says
+## is the NORTH-SOUTH wall. So an east-west wall from a file used to draw across its own run with
+## nothing failing anywhere.
+func test_a_wall_from_a_map_keeps_the_axis_it_was_authored_on() -> void:
+	var bd: BuildingDef = GameDataRegistry.building(WOOD)
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y]:
+		var w := _world_from_map(WOOD, Vector2i(20, 20), axis)
+		var walls := _buildings_of(w, WOOD)
+		assert_eq(walls.size(), 1, "axis %d: the wall was spawned" % axis)
+		var b: SimBuilding = walls[0]
+		var wanted := bd.footprint if axis == WallPlan.AXIS_X \
+				else Vector2i(bd.footprint.y, bd.footprint.x)
+		assert_eq(b.footprint, wanted, "axis %d: the footprint it claims" % axis)
+		assert_eq(b.facing, int(WallPlan.FACING_FOR_AXIS[axis]),
+				"axis %d: the direction it draws" % axis)
+
+
+## And a map that names no axis behaves exactly as it did before the key existed.
+##
+## **THIS IS THE COMPATIBILITY ASSERTION.** Five committed campaign maps and the published
+## `howtoplay` pack were written before `axis` existed and carry no such key, and decision 7's
+## rule is that absent means the old behaviour. A `get("axis", 0)` on the read path would turn
+## every entity on all of them into a directional one — which for a wall would be a silent
+## rotation and for a town centre a facing nobody asked for.
+func test_a_map_with_no_axis_builds_exactly_as_it_used_to() -> void:
+	var w := _world_from_map(WOOD, Vector2i(20, 20), MapData.AXIS_NONE)
+	var walls := _buildings_of(w, WOOD)
+	assert_eq(walls.size(), 1)
+	var bd: BuildingDef = GameDataRegistry.building(WOOD)
+	assert_eq(walls[0].footprint, bd.footprint, "the def's own footprint, untransposed")
+	assert_eq(walls[0].facing, 0, "and `spawn_building`'s default facing, unchanged")
+
+
+## A world built from a hand-made one-entity map, the way an authored file reaches a match.
+##
+## **Through `MapGen.build_from()` and not `spawn_building` directly**, which is the whole point:
+## the seam under test is the one a saved map goes through.
+func _world_from_map(def_id: StringName, tile: Vector2i, axis: int) -> SimWorld:
+	var cfg := MatchConfig.debug_skirmish()
+	var w := SimWorld.new()
+	w.setup(cfg)
+	var data := MapData.create(Vector2i(48, 48), SimMap.Terrain.GRASS)
+	data.add_entity(def_id, 1, tile, 0, axis)
+	MapGen.build_from(w, data)
+	return w
+
+
+func _buildings_of(w: SimWorld, def_id: StringName) -> Array:
+	var out: Array = []
+	for id in w.entities:
+		var e: Variant = w.entities[id]
+		if e is SimBuilding and StringName((e as SimBuilding).def_id) == def_id:
+			out.append(e)
+	return out
+
+
 ## A world set up exactly as `before_each` does, so two of them are genuinely equal.
 func _fresh() -> SimWorld:
 	var cfg := MatchConfig.debug_skirmish()

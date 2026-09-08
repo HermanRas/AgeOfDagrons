@@ -598,46 +598,173 @@ func test_another_building_on_the_marker_does_not_count_as_the_start() -> void:
 
 # ── the wall drag, and why it is not here (PLAN.md 16.4) ────────────────────
 
-## ⚠️ **DRAG-TO-PLACE-WALLS IS THE HALF OF 16.4 THE FORMAT CANNOT EXPRESS YET, AND THIS TEST IS
-## THE MECHANICAL REMINDER.** `test_object_palette`'s Area test is the model: it fails the day
-## `MapData` gains the field, which is the day the feature may follow.
+# ── the wall's axis (PLAN.md 16.4c, owner's ruling 2026-09-08) ──────────────
+#
+# The owner asked for both rotations as palette variants and asked whether there was a deeper
+# data-structure problem. **There was exactly one**: an entity record is
+# `{def_id, player, tile, size_class}`, so two palette rows differing only in rotation wrote
+# identical file rows. `MapData` now carries an optional `axis`, absent meaning "no orientation"
+# and `format_version` unmoved (decision 7).
+#
+# ⚠️ **THE FAILURE THESE GUARD IS THE ONE THAT REPORTS SUCCESS.** Without the key, a wall saved
+# from the tool came back with the def's east-west footprint and facing 0 — which
+# `WallPlan.FACING_FOR_AXIS` says is the NORTH-SOUTH wall — so it was wrong in both directions at
+# once, in a file that loaded cleanly and a tool that drew it correctly.
+
+## A wall placed on the Y axis claims transposed ground, and the tool's collision test agrees.
 ##
-## **What is missing.** A wall is the one building whose footprint is not a property of its def.
-## `WallPlan` snaps a drag to an axis and hands `spawn_building` two things a map file has
-## nowhere to put:
+## ⚠️ **`add_entity` PROBES WITH THE AXIS, or the check tests `[9, 2]` and the map records a
+## `[2, 9]`.** That is a placement the tool accepted on ground it never looked at — and
+## `MapValidator` would then report an overlap in a map the tool called fine, which is the
+## "validates and cannot be built" failure 16.4's row forbids a second collision test for.
+func test_a_wall_on_the_y_axis_claims_transposed_ground() -> void:
+	var wall := _a_wall()
+	var bd: BuildingDef = GameDataRegistry.building(wall)
+	assert_true(bd.footprint.x != bd.footprint.y, "a wall has to be oblong for this to mean much")
+
+	assert_true(doc.add_entity(wall, 1, Vector2i(20, 20), 0, WallPlan.AXIS_Y))
+	var tiles := MapData.footprint_rect_of(doc.data.entities[0])
+	# THE LONG SIDE RUNS DOWN THE Y AXIS NOW.
+	var span := Vector2i.ZERO
+	for t in tiles:
+		span.x = maxi(span.x, t.x - 20 + 1)
+		span.y = maxi(span.y, t.y - 20 + 1)
+	assert_eq(span, Vector2i(bd.footprint.y, bd.footprint.x), "transposed, from the axis key")
+
+	# AND THE COLLISION TEST USES IT: a second wall placed where only the TRANSPOSED footprint
+	# reaches must be refused, and one where only the untransposed footprint reached must not be.
+	assert_false(doc.add_entity(wall, 1, Vector2i(20, 20 + bd.footprint.x - 1), 0,
+			WallPlan.AXIS_Y), "that tile is inside the first wall's transposed footprint")
+	assert_true(doc.add_entity(wall, 1, Vector2i(20 + bd.footprint.y, 20), 0, WallPlan.AXIS_Y),
+			"and clear of it sideways, where the untransposed footprint would have reached")
+
+
+## Both rotations survive a save and a reload, which is the whole point of the field.
 ##
-##   - a **`footprint_override`** — `[9, 2]` lying east-west, `[2, 9]` north-south. `MapData`'s
-##     own header rules footprints out on purpose: *"they are a property of the def, and a map
-##     that recorded them would go stale the day a building is resized"*, which is right for
-##     every other building in the game and wrong for this one;
-##   - a **`facing`**, from `WallPlan.FACING_FOR_AXIS`.
+## **THE FILE IS THE CONTRACT** (§16 decision 2), so this goes through `to_dict`/`from_dict`
+## rather than trusting the in-memory record.
+func test_both_axes_survive_the_wire_form() -> void:
+	var wall := _a_wall()
+	doc.add_entity(wall, 1, Vector2i(10, 10), 0, WallPlan.AXIS_X)
+	doc.add_entity(wall, 1, Vector2i(30, 30), 0, WallPlan.AXIS_Y)
+	# AND ONE ORDINARY THING, whose absence of an axis has to survive just as exactly.
+	doc.add_entity(&"unit.villager", 1, Vector2i(50, 50))
+
+	var back := MapData.from_dict(doc.data.to_dict())
+	assert_eq(int(back.entities[0]["axis"]), WallPlan.AXIS_X)
+	assert_eq(int(back.entities[1]["axis"]), WallPlan.AXIS_Y)
+	# ⚠️ **ABSENT MUST COME BACK ABSENT, not as axis 0.** `AXIS_X` is a real answer meaning "a
+	# wall, laid east-west, tell the world so"; absent means "this has no orientation, behave
+	# exactly as before". `MapGen.build_from()` reads that difference to decide whether to force
+	# a facing at all, so a `get("axis", 0)` anywhere on the read path would turn every villager
+	# on every old map into a directional entity.
+	assert_false(back.entities[2].has("axis"), "a villager has no axis and must not gain one")
+
+
+## And an entity with no axis writes NO KEY — decision 7's rule, and what keeps five committed
+## campaign maps byte-identical to what they were before the field existed.
+func test_an_entity_with_no_axis_writes_no_key() -> void:
+	doc.add_entity(&"unit.villager", 1, Vector2i(10, 10))
+	var row: Dictionary = (doc.data.to_dict()["entities"] as Array)[0]
+	assert_false(row.has("axis"),
+			"an absent axis must stay absent in the wire form, or every old map's diff is noise")
+	# THE VERSION DOES NOT MOVE EITHER. `MapFile.load_map` refuses a mismatch with no migration
+	# and five committed `map.json` files plus the published howtoplay pack are on version 1.
+	assert_eq(int(MapFile.FORMAT_VERSION), 1,
+			"if this is not 1 any more, decision 7's whole argument needs re-reading")
+
+
+## The palette offers a wall as two rows and neither of them is the bare def.
 ##
-## **What would happen without them.** `MapGen.build_from()` calls
-## `spawn_building(def_id, owner, tile, COMPLETE, true)` — no override, no facing — so both
-## default: the def's own east-west footprint, and facing 0, which `FACING_FOR_AXIS` says is the
-## **north-south** wall. So every wall on every authored map would come out with an east-west
-## footprint and a north-south sprite: **ninety degrees wrong, and wrong in both directions at
-## once.** That is the exact error the owner reported on 2026-08-28 (*"i am dragging NE to SW,
-## the walls look like NW to SE"*) and it took six days and a re-measurement of twelve atlases
-## to settle; reintroducing it through the file would cost that again.
+## An author must CHOOSE, because the map has to record one — a row that placed a wall with no
+## axis would write the entity the game builds ninety degrees wrong.
+func test_a_wall_is_offered_per_axis_and_never_bare() -> void:
+	var palette := ObjectPalette.new()
+	palette.setup(IconAtlas.new())
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	var ids := palette.listed_ids()
+	var wall := _a_wall()
+	assert_false(wall in ids, "the bare def must not be placeable: it carries no direction")
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y]:
+		assert_true(ObjectPalette.variant_id(wall, axis) in ids,
+				"%s on axis %d" % [wall, axis])
+	palette.free()
+
+
+## `selection()` splits the suffix off, so what reaches the map is a real def id.
 ##
-## **Why a test rather than a fix.** Adding the two keys is a FORMAT change, and §16 decision 7
-## has a checklist for one — optional field, absent means the old behaviour, the version does
-## not move — plus a game-side reader in `MapGen.build_from()` and a re-copy of the hash-checked
-## `map_data.gd`. That is a deliberate change with the owner's name on it, not a slice of a
-## cursor row. **No shipped map has a wall today** (checked across `maps/sample_duel` and all
-## five campaign maps), so nothing is broken while this waits — and a drag that authored one
-## would break it silently, which is 16.3's Area argument exactly: *work lost behind a
-## successful save*.
-func test_the_format_still_cannot_express_a_walls_axis() -> void:
-	doc.add_entity(&"building.wall_stone_short", 1, Vector2i(10, 10))
-	var written: Dictionary = doc.data.to_dict()
-	var entity: Dictionary = (written["entities"] as Array)[0]
-	for key in ["facing", "footprint", "axis"]:
-		assert_false(entity.has(key),
-				("`%s` is in the entity record now — the format can carry a wall's axis, so"
-				+ " 16.4's drag can be built. Read this test's comment first: `MapGen.build_from`"
-				+ " has to pass it to `spawn_building` too, or nothing changes on screen.") % key)
+## ⚠️ **A `def_id` OF `building.wall_stone_long@axis1` REACHING THE MAP WOULD RESOLVE TO
+## NOTHING**: no footprint, no visual, and `MapGen.build_from()` would fall past its building
+## branch into `spawn_resource_node()` and spawn nothing at all.
+func test_the_variant_suffix_never_reaches_the_map() -> void:
+	var palette := ObjectPalette.new()
+	palette.setup(IconAtlas.new())
+	palette.set_category(ObjectPalette.Category.BUILDING)
+	var wall := _a_wall()
+	palette.pick(ObjectPalette.variant_id(wall, WallPlan.AXIS_Y))
+	var pick := palette.selection()
+	assert_eq(StringName(pick["def_id"]), wall, "the suffix is the palette's, not the map's")
+	assert_eq(int(pick["axis"]), WallPlan.AXIS_Y)
+	assert_true(GameDataRegistry.building(pick["def_id"]) != null,
+			"and what comes out is a def the roster knows")
+	palette.free()
+
+
+## An ordinary selection carries `AXIS_NONE`, so the caller never has to branch on variants.
+func test_an_ordinary_selection_carries_no_axis() -> void:
+	var palette := ObjectPalette.new()
+	palette.setup(IconAtlas.new())
+	palette.set_category(ObjectPalette.Category.UNIT)
+	palette.pick(&"unit.villager")
+	assert_eq(int(palette.selection()["axis"]), MapData.AXIS_NONE)
+	palette.free()
+
+
+## The two axis names are the two the projection produces, not a pair of guesses.
+##
+## ⚠️ **`Iso._project` IS `((x - y) * 32, (x + y) * 16)`**, so +x goes right-and-down (screen SE)
+## and +y left-and-down (screen SW). A wall along axis X therefore spans **NW–SE** and one along
+## axis Y spans **NE–SW**. Labelling them backwards would be worse than offering one rotation,
+## because an author would trust the label — so the names are checked against the projection
+## itself rather than against a comment.
+func test_the_axis_labels_match_the_projection() -> void:
+	# WHERE TILE (1, 0) LANDS RELATIVE TO THE ORIGIN, asked of the game's own copy of `Iso`.
+	var along_x := Iso.tile_to_world_f(Vector2(1.0, 0.0)) - Iso.tile_to_world_f(Vector2.ZERO)
+	var along_y := Iso.tile_to_world_f(Vector2(0.0, 1.0)) - Iso.tile_to_world_f(Vector2.ZERO)
+	assert_true(along_x.x > 0.0 and along_x.y > 0.0, "+x goes right and down: screen SE")
+	assert_true(along_y.x < 0.0 and along_y.y > 0.0, "+y goes left and down: screen SW")
+	# SO THE LABELS ARE THESE WAY ROUND.
+	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_X]), "NW-SE")
+	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_Y]), "NE-SW")
+
+
+## Only the twelve walls and gates are offered per axis.
+##
+## ⚠️ **THE FIRST CUT ASKED WHETHER THE FOOTPRINT WAS NON-SQUARE AND CAUGHT TWENTY BUILDINGS** —
+## an archery range, a dock, a field and a mill are all oblong and none of them has art that
+## rotates, so they would have transposed their footprint while their sprite stayed put. The
+## flag is `axis_variants` in `game/data/buildings.json`; this asserts the MECHANISM rather than
+## a list, so a wall added to the roster is covered and a mill is not.
+func test_only_flagged_buildings_are_offered_per_axis() -> void:
+	var flagged := 0
+	for id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		if GameDataRegistry.axis_variants(id):
+			flagged += 1
+			assert_true(bd.footprint.x != bd.footprint.y,
+					"%s is flagged directional and is square, which cannot be right" % id)
+	assert_eq(flagged, 12, "the twelve walls and gates, and nothing else")
+
+
+## Any flagged wall from the roster, found rather than named.
+##
+## §5's rule: a test pinned to whichever def happens to be handy has an expiry date, and
+## `building.wall_stone_long` is not guaranteed to outlive the roster.
+func _a_wall() -> StringName:
+	for id in GameDataRegistry.building_ids():
+		if GameDataRegistry.axis_variants(id):
+			return id
+	return &""
 
 
 ## Nothing selected is answered rather than crashed on, from every entry point.

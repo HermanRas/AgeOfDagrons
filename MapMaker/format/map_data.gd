@@ -110,9 +110,45 @@ func is_ground_passable(t: Vector2i) -> bool:
 
 # ── entities ────────────────────────────────────────────────────────────────
 
-func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class: int = 0) -> void:
-	entities.append({"def_id": def_id, "player": player, "tile": tile,
-			"size_class": size_class})
+## What an entity with no orientation writes: nothing at all. See `add_entity()`.
+##
+## ## WHY A MAP NEEDED AN AXIS, WHEN FOOTPRINTS ARE DELIBERATELY NOT STORED
+##
+## `claimed_tiles()` below is emphatic that a footprint is *"a property of the def, and a map
+## that recorded them would go stale the day a building is resized"*. That is true of all
+## thirty-one buildings in the roster **and false of the twelve walls and gates**, whose
+## footprint depends on which way the author laid them: `[9, 2]` running one way, `[2, 9]` the
+## other. `SimWorld.spawn_building` has always taken a `footprint_override` and a `facing` for
+## exactly that reason — its own comment says *"the caller that decided the axis is the caller
+## that knows"* — and **a map file is a caller.** Until 2026-09-08 it had no way to say.
+##
+## ⚠️ **WHAT IT COST TO HAVE NO WAY TO SAY:** `MapGen.build_from()` passed neither, so both
+## defaulted — the def's own east-west footprint with facing 0, which `WallPlan.FACING_FOR_AXIS`
+## says is the **north-south** wall. Every wall on every authored map would have come out ninety
+## degrees wrong in both directions at once, saved cleanly, with the tool showing it correctly.
+## That is the fault the owner reported on 2026-08-28 (*"i am dragging NE to SW, the walls look
+## like NW to SE"*) which took six days and a re-measurement of twelve atlases to settle.
+##
+## **The values are `WallPlan.AXIS_X` and `AXIS_Y`** and are not re-declared here: that class is
+## the authority on what an axis means for a building and it is already in `src/sim/`.
+const AXIS_NONE := -1
+
+## ⚠️ **`axis` IS OPTIONAL AND ITS ABSENCE IS PART OF THE FORMAT** (PLAN.md §16 decision 7,
+## added 2026-09-08 for 16.4c). Pass `AXIS_NONE` — the default — and no `axis` key is written,
+## which is what every map ever saved before today looks like and what every non-directional
+## thing goes on looking like. **`format_version` does not move**, because five committed
+## `map.json` files and the published `howtoplay` pack are on version 1 and `MapFile.load_map`
+## refuses a mismatch with no migration.
+func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class: int = 0,
+		axis: int = AXIS_NONE) -> void:
+	var e := {"def_id": def_id, "player": player, "tile": tile, "size_class": size_class}
+	# STORED ONLY WHEN IT MEANS SOMETHING. An `axis: 0` on every villager in a 170-entity map is
+	# 170 keys saying "not applicable", and it would make `axis` look like a field with a default
+	# rather than a field that is either there or not -- which is the distinction `build_from()`
+	# reads to decide whether to override a footprint at all.
+	if axis != AXIS_NONE:
+		e["axis"] = axis
+	entities.append(e)
 
 
 func player_count() -> int:
@@ -134,6 +170,12 @@ func claimed_tiles() -> Dictionary:
 
 
 ## The tiles one entity entry covers.
+##
+## ⚠️ **AN `axis` OF `WallPlan.AXIS_Y` TRANSPOSES THE FOOTPRINT**, which is what makes the
+## validator, the generator's placement check and the MapMaker's collision test all agree about a
+## wall laid the other way. Without it the three of them would claim `[9, 2]` for a wall the
+## world builds as `[2, 9]`: a map that validates and cannot be built, which is the exact failure
+## 16.4's row forbids a second collision test for.
 static func footprint_rect_of(e: Dictionary) -> Array[Vector2i]:
 	var def_id: StringName = e.get("def_id", &"")
 	var origin: Vector2i = e.get("tile", Vector2i.ZERO)
@@ -142,6 +184,11 @@ static func footprint_rect_of(e: Dictionary) -> Array[Vector2i]:
 	var bd: BuildingDef = GameDataRegistry.building(def_id)
 	if bd != null:
 		footprint = bd.footprint
+		# TRANSPOSED HERE AND IN `build_from()`, from the same key -- there is no third place to
+		# forget. `WallPlan.footprint_for()` is the same transposition expressed for a length,
+		# and it stays the authority for an in-game drag.
+		if int(e.get("axis", AXIS_NONE)) == WallPlan.AXIS_Y:
+			footprint = Vector2i(footprint.y, footprint.x)
 	else:
 		var rd: ResourceDef = GameDataRegistry.resource_def(def_id)
 		if rd != null:
@@ -168,8 +215,15 @@ func to_dict() -> Dictionary:
 	var out: Array[Dictionary] = []
 	for e in entities:
 		var t: Vector2i = e["tile"]
-		out.append({"def_id": String(e["def_id"]), "player": int(e["player"]),
-				"x": t.x, "y": t.y, "size_class": int(e.get("size_class", 0))})
+		var row := {"def_id": String(e["def_id"]), "player": int(e["player"]),
+				"x": t.x, "y": t.y, "size_class": int(e.get("size_class", 0))}
+		# ABSENT STAYS ABSENT, which is decision 7's rule and the reason no version number moved:
+		# a map with no directional entities is byte-identical to one written before `axis`
+		# existed. `MapDocument._preserved_header()` on the tool side computes its filter FROM
+		# this function, so re-saving an opened map needed no edit for this key.
+		if e.has("axis"):
+			row["axis"] = int(e["axis"])
+		out.append(row)
 	var starts_out: Array[Dictionary] = []
 	for s in starts:
 		starts_out.append({"x": s.x, "y": s.y})
@@ -229,9 +283,15 @@ static func from_dict(d: Dictionary) -> MapData:
 	m.terrain = _terrain_from(d.get("terrain", PackedByteArray()))
 	m.meta = d.get("meta", {})
 	for e in d.get("entities", []):
+		# ⚠️ **`has()` AND NOT A DEFAULT, because absent and `AXIS_X` are different things.**
+		# Absent means "this entity has no orientation, behave exactly as before"; `AXIS_X` means
+		# "a wall, laid east-west, and the caller must be told so" -- and `build_from()` reads
+		# that difference to decide whether to force a facing at all. A `get("axis", 0)` here
+		# would quietly turn every villager on every old map into a directional entity.
 		m.add_entity(StringName(e.get("def_id", "")), int(e.get("player", 0)),
 				Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
-				int(e.get("size_class", 0)))
+				int(e.get("size_class", 0)),
+				int(e.get("axis", AXIS_NONE)) if e.has("axis") else AXIS_NONE)
 	for s in d.get("starts", []):
 		m.starts.append(Vector2i(int(s.get("x", 0)), int(s.get("y", 0))))
 	return m
