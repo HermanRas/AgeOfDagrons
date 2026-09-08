@@ -32,6 +32,10 @@ const MIN_SIZE := 48
 ## this size is already 36,000 tiles -- past here the tool is slow for maps nobody asked for.
 const MAX_SIZE := 256
 
+## What goes in the sidecar's `authored_by`. Read by nothing and written for a person, so it
+## names the TOOL and not a phase — see `save()`.
+const AUTHORED_BY := "MapMaker"
+
 var data: MapData = null
 
 ## Absolute directory this map saves to, or empty if it has never been saved.
@@ -59,6 +63,26 @@ var dirty := false
 ## rather than within a radius, and the sea-map rules. Appended in that order, narrow to fatal.
 var warnings: Array[String] = []
 
+## The sidecar of the file this map was OPENED from, verbatim, or `{}` for a new map (16.4a).
+##
+## ## WHY A RE-SAVE MUST NOT SIMPLY FORGET IT
+##
+## `map.json` carries provenance nothing in `game/src` reads — `map_type`, `seed`,
+## `authored_by`, `created`. It is there for a person: 2.4c's rule is that **the PNG is
+## authoritative and the seed is provenance**, so a seed is the only record of how a map
+## originally came to exist. Re-authoring the five How To Play maps (16.10) through a tool that
+## dropped those keys would erase, one map at a time, the only note saying where they came
+## from — and nothing would fail, which is what makes it worth defending against here.
+##
+## ⚠️ **AND THE TRAP ON THE OTHER SIDE, WHICH IS MUCH WORSE THAN LOSING PROVENANCE.**
+## `MapFile.save()` merges its `header` argument **over** the fields it derives from the map,
+## so handing this dictionary back unfiltered would write the OPENED file's `entities`,
+## `starts`, `w`, `h` and `meta` on top of the edited ones: every change made in the tool
+## silently discarded, in a save that reports success. `_preserved_header()` is the filter, and
+## it computes what to drop from `to_dict()` itself rather than from a written-out list —
+## 16.5's areas are a new key in there, and a list would have to be remembered on that day.
+var header: Dictionary = {}
+
 
 static func create(size: Vector2i, p_name: String) -> MapDocument:
 	var doc := MapDocument.new()
@@ -73,6 +97,44 @@ static func create(size: Vector2i, p_name: String) -> MapDocument:
 
 static func _clamped(size: Vector2i) -> Vector2i:
 	return Vector2i(clampi(size.x, MIN_SIZE, MAX_SIZE), clampi(size.y, MIN_SIZE, MAX_SIZE))
+
+
+## Read a map back off disk (PLAN.md 16.4a). Null on anything it cannot trust, with the
+## reason appended to `out_problems`.
+##
+## ## THE PROBLEMS ARE THE RETURN VALUE THAT MATTERS
+##
+## ⚠️ **A PARTIAL LOAD THAT SILENTLY SHOWS AN EMPTY CANVAS OVER SOMEBODY'S AUTHORED MAP IS HOW
+## A FILE GETS OVERWRITTEN WITH NOTHING** — 16.4a's card says exactly that, and it is the one
+## failure this function is arranged around. So there is no partial: `MapFile.load_map()`
+## returns null on a version it cannot read, a PNG whose dimensions disagree with the sidecar,
+## or a terrain byte outside the enum, and **null here leaves the caller's current document
+## untouched**. `Editor.open_map()` puts the sentence on the notice line and keeps the dialog
+## open; nothing replaces what is on the canvas until there is a map to replace it with.
+##
+## ## NOT DIRTY, AND THAT IS THE OPPOSITE OF `create()`
+##
+## A new map is dirty from the first frame because it exists nowhere on disk. An opened one is
+## byte-for-byte what is in the file, so the honest answer is clean — and the flag is what an
+## "unsaved work" prompt will read when one exists.
+##
+## `MapFile.load_map()` re-parses the sidecar `read_header()` reads a line later. That is one
+## small JSON parse of a file measured in kilobytes, paid once per Open, and the alternative is
+## a second entry point into `MapFile` — a hash-checked verbatim copy of the game's, which
+## this tool does not get to add a method to.
+static func open(dir_path: String, out_problems: Array[String]) -> MapDocument:
+	var data := MapFile.load_map(dir_path, out_problems)
+	if data == null:
+		return null
+	var doc := MapDocument.new()
+	doc.data = data
+	doc.dir = dir_path
+	# READ AFTER `load_map` SUCCEEDED, so a bad sidecar is reported once rather than twice:
+	# both functions share `_parse_sidecar`, and reaching here means it has already passed.
+	doc.header = MapFile.read_header(dir_path, out_problems)
+	doc.map_name = MapSources.map_name_in(doc.header, dir_path.get_file())
+	doc.dirty = false
+	return doc
 
 
 # ── mutation (the only writers) ─────────────────────────────────────────────
@@ -196,11 +258,16 @@ func save(maps_dir: String) -> Array[String]:
 
 	# THE SIDECAR'S `name` IS THE AUTHOR'S, and `players` is what the map can really seat --
 	# not how many starts were dropped. 16.0's picker labels its rows from these two.
-	problems = MapFile.save(data, target, {
-		"name": map_name,
-		"players": seats(),
-		"authored_by": "MapMaker 16.2",
-	})
+	# PROVENANCE FIRST, THE TOOL'S OWN THREE KEYS OVER THE TOP. `_preserved_header()` explains
+	# why the base is filtered and what happens if it is not.
+	var side := _preserved_header()
+	side["name"] = map_name
+	side["players"] = seats()
+	# ⚠️ **NOT A VERSION NUMBER, DELIBERATELY.** It used to read "MapMaker 16.2" and was
+	# already a row out of date by 16.4a -- a hardcoded phase number in a written file is a
+	# lie with a delay on it, and nothing reads this but a person wondering who wrote the map.
+	side["authored_by"] = AUTHORED_BY
+	problems = MapFile.save(data, target, side)
 	if problems.is_empty():
 		dir = target
 		dirty = false
@@ -227,6 +294,64 @@ func save(maps_dir: String) -> Array[String]:
 		# from "your start is short" to "nobody can reach anybody" -- narrow to fatal.
 		warnings.append_array(MapValidator.problems(data))
 	return problems
+
+
+## Save this map as a NEW one in `maps_dir`, leaving whatever it was opened from alone
+## (PLAN.md 16.4a).
+##
+## ## WHY OPEN NEEDED THIS, AND WHY IT IS NOT JUST `save()` WITH THE DIRECTORY CLEARED
+##
+## Before Open existed, `dir` was only ever a directory this tool had written, so `save()`
+## re-using it was simply Save. Open makes `dir` point at **files the author did not create**
+## — the shipped campaign's five maps most of all — and re-using it is then a replace. That is
+## exactly what 16.10 wants and exactly what an author looking at a map does not, so the two
+## intentions need two buttons. The rule the tool teaches is one sentence: **Open then Save
+## replaces; Save As creates.**
+##
+## ⚠️ **IT REFUSES TO LAND ON AN EXISTING MAP RATHER THAN REPLACING ONE.**
+## `dev/author_map.tscn` already draws this line (*"an authored map is content under version
+## control, and a silent re-roll would replace something somebody may have balanced a scenario
+## against"*) and a GUI has no `--force` to offer. So: a name that is already taken is
+## reported, nothing is written, and the author changes the name — and replacing a map on
+## purpose is Open followed by Save, which is the sentence above read the other way. **Without
+## this the field an author types a title into would be a delete button**, and 16.2a's undo
+## does not exist yet and would not cover the filesystem when it does.
+func save_as(maps_dir: String) -> Array[String]:
+	if map_name.is_empty():
+		return ["the map needs a name before it can be saved"] as Array[String]
+	var target := maps_dir.path_join(slug())
+	if target != dir and MapFile.exists_in(target):
+		return ["there is already a map in %s — change the name" % target] as Array[String]
+	# CLEARED, so `save()` derives the target from the name. Restored on failure: a Save As
+	# that could not write must not have quietly detached the document from its own file.
+	var was := dir
+	dir = ""
+	var problems := save(maps_dir)
+	if not problems.is_empty():
+		dir = was
+	return problems
+
+
+## The sidecar's provenance keys and nothing the map itself decides.
+##
+## ⚠️ **THE FILTER IS COMPUTED FROM `to_dict()`, NOT WRITTEN OUT**, and that is the point.
+## `MapFile.save()` merges a header **over** the fields it derives, so any key both sides
+## carry would be written from the OPENED file rather than from the edited map — `entities`
+## and `starts` most destructively, `w`/`h` in a way that makes the sidecar disagree with the
+## PNG and the map unloadable. Asking `to_dict()` what it produces means the day 16.5 adds
+## areas to the wire form, this drops them from the stale header with no edit here.
+##
+## `format_version` and `created` are the two `MapFile.save()` sets itself, so they are named:
+## carrying an old `format_version` forward would label a file written in the new shape with
+## the old number, which is decision 7's checklist defeated by a copied dictionary.
+func _preserved_header() -> Dictionary:
+	var out: Dictionary = {}
+	var derived := data.to_dict()
+	for k in header:
+		if derived.has(k) or k == "format_version" or k == "created":
+			continue
+		out[k] = header[k]
+	return out
 
 
 ## A directory name from the map's name: lower case, underscores, nothing exotic.

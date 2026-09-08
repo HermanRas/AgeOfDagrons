@@ -127,6 +127,10 @@ func _report() -> Array[String]:
 	lines.append_array(_format_lines())
 	lines.append("")
 
+	# ── what there is to open (16.4a) ──
+	lines.append_array(_openable_lines())
+	lines.append("")
+
 	if ready_to_work():
 		lines.append("[color=#8ccc8c]READY[/color] — the roster loaded and every format copy"
 				+ " is current.")
@@ -184,6 +188,38 @@ func _format_lines() -> Array[String]:
 		lines.append("")
 		for line in _guard.refusal().split("\n"):
 			lines.append("  [color=#f27366]%s[/color]" % line)
+	return lines
+
+
+## What File ▸ Open would offer, and the directories it looked in (16.4a).
+##
+## **HERE FOR 16.1's REASON, ONE ROW LATER**: *"if that number is wrong, nothing built on top
+## of it can be right."* Three roots, one of them **derived** from the game's project name and
+## one walked a level deeper than the others, is three ways for the dialog to come up empty —
+## and an empty list inside the editor cannot distinguish "no maps" from "looking in the wrong
+## place". Printing the paths beside the count makes that answerable before the editor opens,
+## and it makes the headless startup check say it too.
+##
+## ⚠️ **IT DOES NOT AFFECT THE EXIT CODE.** A machine with no authored maps is a perfectly
+## ready tool — that is the state a clean clone is in — so this is a report and not a gate.
+func _openable_lines() -> Array[String]:
+	var lines: Array[String] = []
+	var sources := MapSources.new()
+	var rows := sources.discover(_root)
+	lines.append("[b]maps to open[/b]  (16.4a — File ▸ Open)")
+	for entry in sources.roots(_root):
+		var path := str(entry["path"])
+		var here := 0
+		for row in rows:
+			if str(row["dir"]).begins_with(path):
+				here += 1
+		lines.append("  %-9s %3d   [color=#b3b3bb]%s%s[/color]" % [
+				MapSources.source_name(int(entry["source"])), here, path,
+				"" if DirAccess.dir_exists_absolute(path) else "   (absent)"])
+	for w in sources.warnings:
+		# UNREADABLE, NOT MISSING. A folder on disk holding a map pair this build cannot
+		# parse is the one fault an author cannot diagnose by looking at the list.
+		lines.append("  [color=#f27366]unreadable[/color] %s" % w)
 	return lines
 
 

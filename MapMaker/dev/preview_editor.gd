@@ -20,7 +20,7 @@
 ## Usage:
 ##   Godot --path MapMaker res://dev/preview_editor.tscn
 ##       -- writes user://editor_fit.png, editor_zoomed.png, editor_start.png,
-##          editor_saved.png
+##          editor_saved.png, editor_open.png, editor_reopened.png
 extends Node
 
 const SHOT_DIR := "user://"
@@ -89,9 +89,24 @@ func _process(_delta: float) -> void:
 			# frame later; this shot can.
 			_report("after pressing Save")
 			_shoot("editor_saved")
+			# ⚠️ **AND THE 16.4a EQUIVALENT: IS THE DIALOG ACTUALLY ON TOP OF THE CANVAS?**
+			# `test_map_open` proves what the list CONTAINS and nothing more. Whether the
+			# overlay covers the map, whether a row's five figures fit on one line at 900 px,
+			# and whether the dimmed canvas still shows through enough to be recognisable are
+			# questions for eyes -- and §6's row about the `Control` that swallowed every
+			# minimap tap is the same fault seen from underneath.
+			_editor.open_dialog()
+			_hold(UI_FRAMES)
+		7:
+			_report_open_list()
+			_shoot("editor_open")
+			_open_what_was_just_saved()
+		8:
+			_report("after opening the saved map")
+			_shoot("editor_reopened")
 			_clean_up_the_saved_map()
 			print("")
-			print("OK — four shots written. Look at them: the arithmetic is tested, the"
+			print("OK — six shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -148,6 +163,45 @@ func _save_for_the_shot() -> void:
 		print("saved to %s" % _editor.document().dir)
 	else:
 		printerr("save failed: %s" % "; ".join(PackedStringArray(problems)))
+	_hold(UI_FRAMES)
+
+
+## What the Open dialog is offering, and where it looked (16.4a).
+##
+## **PRINTED AS WELL AS PHOTOGRAPHED**, because the two answer different questions: the shot
+## says whether a row is legible, and this says whether the row is the right map. A screenshot
+## of a list cannot be checked against a path.
+func _report_open_list() -> void:
+	var rows: Array = _editor.listed_maps()
+	print("open dialog: %d maps" % rows.size())
+	for row in rows:
+		print("  %-28s \"%s\"  %s  %d players  (%s)" % [row["label"], row["name"],
+				row["size"], int(row["players"]), MapSources.source_name(int(row["source"]))])
+
+
+## Pick the map Save just wrote and open it through the real button.
+##
+## ⚠️ **IT IS THE SHOT BEFORE THIS ONE'S OUTPUT, AND THAT IS THE POINT.** The list is re-read
+## on every Open (`Editor.open_dialog`), so a map written seconds ago by the Save button must
+## appear in it — a cached list would show every map on the machine except the one the author
+## just made, which is the single most confusing thing a picker can do. Nothing but a preview
+## can check that: a test writes into `user://` and never into the root the dialog reads.
+func _open_what_was_just_saved() -> void:
+	var want: String = _editor.document().dir
+	var rows: Array = _editor.listed_maps()
+	for at in rows.size():
+		if str(rows[at]["dir"]) != want:
+			continue
+		(_editor._open_list as ItemList).select(at)
+		var problems: Array = _editor.open_selected()
+		if problems.is_empty():
+			print("  reopened %s — %d entities, seats %d" % [_editor.document().dir.get_file(),
+					_editor.document().data.entities.size(), _editor.document().seats()])
+		else:
+			printerr("  could not reopen it: %s" % "; ".join(PackedStringArray(problems)))
+		_hold(UI_FRAMES)
+		return
+	printerr("  the map Save just wrote is NOT in the Open list: %s" % want)
 	_hold(UI_FRAMES)
 
 

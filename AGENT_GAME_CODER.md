@@ -462,9 +462,13 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 4 canvas screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 6 canvas screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
+
+# 16.4a's check: open every REAL map on this machine and round-trip it. EXIT CODE IS THE ANSWER.
+& $godot --headless --path MapMaker res://dev/open_map.tscn
+& $godot --headless --path MapMaker res://dev/open_map.tscn -- --folder sample_duel
 ```
 
 ⚠️ **`maps/` IS AUTHORED CONTENT, NOT A SCRATCH DIRECTORY — DELETE YOUR TEST MAPS** (project
@@ -484,8 +488,76 @@ tidy it away.**
 needs both projects: `author_map` writes the file, `preview_saved_map --folder` plays it and
 compares **every terrain tile** of the running world against the file. Neither process can
 check the other, which is decision 2's whole point — the FILE is the contract, not the code.
-MapMaker screenshots land in `%APPDATA%\Godot\app_userdata\AOD MapMaker\` (note the space),
-NOT in the game's `AgeOfDragons` folder.
+MapMaker screenshots land in `%APPDATA%\Godot\app_userdata\AOD_MapMaker\`, NOT in the game's
+`AgeOfDragons` folder. ⚠️ **THIS FILE SAID `AOD MapMaker`, "note the space", AND THAT WAS
+WRONG** — measured 2026-09-08, the shots are written to `AOD_MapMaker`. Both folders exist on
+the owner's machine, which is what makes the mistake survivable and worth naming: an old one
+from before the project was renamed sits beside the live one, so a session looking in the
+wrong place finds a directory with plausibly stale pictures in it rather than nothing.
+
+### 16.4a — FILE ▸ OPEN, DONE 2026-09-08
+
+The tool can read a map back. `MapSources` enumerates, `MapDocument.open()` loads,
+`Editor.open_dialog()` is the list. **MapMaker 125/125**, and `dev/open_map.tscn` opens all
+six real maps on the machine — `maps/sample_duel` and the five campaign maps — and round-trips
+each one through Save As into `user://`, comparing terrain, starts, entities and provenance.
+
+- ⚠️ **THE CARD NAMED TWO SOURCE DIRECTORIES AND NEITHER HELD THE FIVE MAPS THE ROW EXISTS TO
+  REOPEN.** Its justification is 16.10 — *"re-author the five existing How To Play maps"* — and
+  those five are in `scenarios/HowToPlay/scenario_1..5/`, beside their `scenario.json`, not in
+  `maps/` and not in `user://maps/`. **`scenarios/` is therefore a third root, walked one level
+  deeper** (`<campaign>/<scenario>/map.json` against `<map>/map.json`), which is the only
+  reason `depth` is data in `MapSources.roots()` rather than assumed. Same class of correction
+  as 16.2's acceptance turning out to belong to 16.0 — **flagged to the owner rather than
+  slipped in.**
+- ⚠️ **`user://` MEANS A DIFFERENT DIRECTORY IN EACH GODOT PROJECT, AND THAT IS THE THIRD
+  ROOT.** 16.0's `SavedMaps.SAVE_ROOT` is the GAME's `user://maps/`
+  (`app_userdata/AgeOfDragons/maps`); this tool's own `user://` is `AOD_MapMaker`. A tool
+  listing its own would have shipped a root **empty by construction** that looks, from the
+  outside, exactly like the root that is empty because nothing has written to it yet — and
+  nothing has: the pause-menu Save Map button is parked. `GameRoot.game_user_dir()` derives it
+  by reading `config/name` out of the game's `project.godot` and swapping the leaf, with
+  `game_user_dir` in `mapmaker.local.json` as the override. **It cannot see
+  `use_custom_user_dir` and does not reimplement Godot's name sanitising** — both fail the same
+  safe way, as a root that is absent.
+- ⚠️ **OPEN THEN SAVE REPLACES; SAVE AS CREATES**, and Open is what made the second button
+  necessary. `MapDocument.save()` re-uses the directory a map came from, which is exactly what
+  re-authoring means — so after opening scenario 4, Save rewrites shipped campaign content.
+  Three things make that acceptable: the round trip is lossless (`dev/open_map.tscn` proves it
+  on the real files), the content is committed so **git is the undo the tool has not got yet**
+  (16.2a), and the notice line prints the full destination path on open. `save_as()` **refuses
+  a name that is already taken** rather than replacing it, on `dev/author_map.tscn`'s rule and
+  because a GUI has no `--force`: without that the Name field would be a delete button.
+- ⚠️ **A RE-SAVE THAT HANDS THE OPENED SIDECAR BACK UNFILTERED DISCARDS EVERY EDIT AND REPORTS
+  SUCCESS.** `MapFile.save()` merges its `header` argument **over** the fields it derives from
+  the map, so a preserved `entities`/`starts`/`w`/`h` would be written from the file instead of
+  from the canvas. `MapDocument._preserved_header()` computes what to drop **from `to_dict()`
+  itself** rather than from a written-out list — so 16.5's areas are handled on the day they
+  land, with no edit here. `format_version` and `created` are named separately, because
+  carrying an old version number forward would label a new shape with the old number and defeat
+  decision 7's whole checklist.
+- **The provenance being preserved is `map_type` and `seed`, and nothing in `game/src` reads
+  either.** They are written for a person: 2.4c's rule is that the PNG is authoritative and the
+  seed is provenance, so it is the only record of how a map came to exist. Re-authoring five
+  maps through a tool that dropped them would erase that one map at a time **with nothing
+  failing**, which is why `dev/open_map.tscn` checks it explicitly.
+- **The dialog is an overlay `Control`, not a `Window` or a `Popup`** — half this tool's checks
+  have no viewport (the suite drives `Editor` outside the tree), so a popup would answer
+  nothing there and `preview_editor` would be photographing a window the screenshot does not
+  contain. Measured that it is genuinely modal rather than assumed: the toolbar pixels go
+  `#212129` → `#0f0f12` with the dialog up, so the dim covers the whole screen and a click
+  cannot reach Save behind it.
+- 📝 **`preview_editor` NOW REOPENS THE MAP IT JUST SAVED, THROUGH THE REAL BUTTONS.** That is
+  the one thing no test can reach: a test writes into `user://` and never into the root the
+  dialog reads, so *"does a map written seconds ago appear in the list"* — the single most
+  confusing thing a picker can get wrong — is only answerable from a preview. It also found the
+  one real defect in the first render: scenario 5's row **clipped** at a 900 px dialog
+  (`(112x112, 2 players, cam…`), and an `ItemList` clips the tail, which is where the figures
+  are. Widened to 1200 **off the longest real row**, not chosen.
+- 📝 **SCENARIO 5's MAP ALSO CARRIES A NEST AND A MOTHER**, which `dev/open_map.tscn` printed on
+  its first run and nothing had said. That is the generator placing one by map type, not 15.8's
+  scenario-4 content work — so **two** maps have dragons to preserve through 16.10, not one, and
+  `test_campaigns` asserts about only one of them.
 
 ⚠️ **`run/main_scene` IS `Editor.tscn`, AND A SCREEN THAT NEEDS ANOTHER SCREEN TO HAVE RUN
 FIRST IS A BUG WAITING FOR THAT CHANGE.** 16.2 shipped with the startup work in `Boot.gd`,
@@ -754,6 +826,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **THE SHIPPED BODY FACE HAS NO CHECK MARK, AND A MISSING GLYPH IS SILENT** | New Rocker (`UiFont.BODY_PATH`) answers `Font.has_char` **false** for U+2713, U+2714 and U+2717 — and for every geometric substitute worth trying: ● ○ ■ ▪ ★ √. What it does have is `•`, `»`, `†`, `§`, `·` and ASCII. Measured with a throwaway probe, which is the only reason it is known: a glyph the face lacks does not fail, it draws a **tofu box**, and in a screenshot that reads as a broken icon rather than as a missing font. 15.6's first render put a literal `*` beside a completed objective (the fallback firing, correctly). **Draw a mark rather than typing one** — `ObjectiveTracker.TickMark` is twelve lines of `draw_polyline`, cannot be broken by a font swap, and is the mark the player expects. Same family as the `assets/UI_Gen/font_comparison.png` lesson: a face is chosen on the characters this game actually prints. |
 | **A WIDGET THAT RESIZES ITSELF, UNDER AN OFFSET ITS CALLER WROTE ONCE** | `NoticeToast` is anchored CENTER_TOP at `-SIZE.x / 2` and `show_long_message` swaps a 320 px banner for a 720 px one — so the long banner kept the short one's left edge and hung **200 px right of centre**, with nothing in `GameScene` to blame. It survived from 2026-08-30 to 15.6 because `show_long_message` **had never had a caller**, and a mode nobody calls has never been positioned by anybody. The fix belongs in the widget (it holds its own centre across a resize, by the HALF-DELTA so it keeps wherever the caller put it) and not in the caller. **When a widget can change its own size, ask who owns its position** — and treat "nothing calls this yet" in a header as a warning that the first caller will find something. |
 | **`set_process(false)` IN `_init` DOES NOT STICK, AND NO HEADLESS TEST CAN SEE THAT IT DID NOT** | Declaring `_process` at all is what makes Godot process a node, and it is **re-applied when the node enters a tree** — so a per-frame gate set in `_init` is off in a test and on in the game. `AgeBadge` gated its spark animation that way for 13.2c and every badge in the game redrew 60 times a second for the whole match, including the ~99% of it with no countdown running. **`test_the_claim_ring_is_animated_and_a_quiet_badge_is_not` passed throughout and could not have failed**: a bare `.new()` never enters a tree, so `_init` is the last word there. Re-assert the gate in `_ready`, and expect the PREVIEW to be what catches it — `preview_age_badge` prints `(animating)` per row and said it on the first run. The general form is §5's: **a gate whose two states are "in a tree" and "not in a tree" is untestable by a harness that has no tree**, so the test has to say which failure it is blind to. |
+| **`"%s" % some_array` TREATS THE ARRAY AS THE ARGUMENT LIST, NOT AS THE ARGUMENT** | So the single most natural way to put a problems list into an assertion message — `assert_true(problems.is_empty(), "%s" % problems)` — is **wrong in both directions and never in a way that mentions arrays**: an empty list raises *"not enough arguments for format string"* and a two-element list raises *"not all arguments converted"*. It cost a red suite on 16.4a with **eighteen engine errors** and one confusing formatting failure, all pointing at string formatting and none at the list. `% [problems]` is the fix (the array becomes one argument), and note the trap in the trap: the form is only wrong for the case that fires, so a message with exactly one element in the list passes and the same line fails the next time. **Any `%` whose right-hand side is a variable holding an `Array` wants brackets round it.** Same family as `some_array as Array[int]` silently failing on a variable — GDScript's `%` and `as` both behave differently for a literal than for a name. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -2037,9 +2110,13 @@ back into a log of everything shipped, which is the one section where a complete
 costs a reader something. **Do not re-grow it here either.** What follows is a pointer, not a
 copy:
 
-1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2 and 16.4b are done and the
-   owner has authored a map in it. **Next is 16.4a (File ▸ Open), then 16.3 (the palette)**, in
-   that order.
+1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b **and 16.4a
+   (2026-09-08)** are done and the owner has authored a map in it. **Next is 16.3 (the
+   palette)**, which is the row that makes the tool able to place anything at all — today the
+   only gesture is paint and the only object is a start. `atlas_entry.gd` joins
+   `FormatGuard.COPIES` on the day it lands (decision 2 says so, and it is one row in a table).
+   **16.2a (undo) is still open and 16.4a raised its price**: the tool can now overwrite
+   committed campaign content in place, and git is the only undo there is.
 2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
    share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
    scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep
