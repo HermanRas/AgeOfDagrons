@@ -273,6 +273,61 @@ func test_the_status_and_notice_lines_share_the_inspectors_plate() -> void:
 	assert_eq((box as StyleBoxTexture).texture_margin_left, float(UiChrome.MARGIN))
 
 
+## ⛔ THE FIRST TWO PLATES SHARE ONE ROW — the owner, 2026-09-09, with a mock: *"map relestate
+## lets go 50/50 on the 1st 2 pannels."*
+##
+## Each was a full-width strip with a third of its width empty, and the MAP is what that cost:
+## two strips at ~48 px are 96 px of a 900 px window.
+##
+## ⚠️ **WHAT IS ASSERTED IS THE RATIO, NOT THE PIXELS, AND THAT IS NOT A DODGE.** A
+## `BoxContainer` gives every child its combined minimum first and divides only what remains —
+## §6's *"a stretch ratio only divides what is left after every minimum is honoured"*, the same
+## rule that put the palette's third tile column six pixels over. So the halves are equal while
+## their contents' minimums are, and a test that demanded 800 px each would be asserting the font
+## metrics of seven buttons. The decision here is "equal share of the row"; that is what this
+## reads.
+func test_the_first_two_plates_share_a_row_at_the_same_ratio() -> void:
+	var editor := _open_editor()
+	var file_panel := _plate_over(editor._file_menu)
+	var tool_panel := _plate_over(editor._undo_button)
+	assert_true(file_panel != null and tool_panel != null, "one of the two plates is missing")
+	assert_false(file_panel == tool_panel, "the file fields and the tools are one panel again")
+	assert_eq(file_panel.get_parent(), tool_panel.get_parent(),
+			"the two plates are not side by side — they are still stacked rows")
+	assert_true(file_panel.get_parent() is HBoxContainer, "side by side means a row")
+	for panel in [file_panel, tool_panel]:
+		assert_eq(panel.size_flags_horizontal, int(Control.SIZE_EXPAND_FILL),
+				"a plate that does not expand takes only what its contents need")
+	assert_eq(file_panel.size_flags_stretch_ratio, tool_panel.size_flags_stretch_ratio,
+			"the two halves are not sharing the row evenly")
+
+
+## ⛔ AND THE THIRD PLATE SPLITS ITS CONTENT — same mock: *"split the content in panel 3 50/50
+## aswell."*
+##
+## The inspector on the left, the status lines on the right, flush right. ⚠️ **THE ALIGNMENT IS
+## PART OF THE ASK AND NOT A FLOURISH:** `_refresh_status()` rebuilds its line on every mouse move
+## and the sentence changes length with the tool, the hover and the selection — left-aligned in the
+## right half, the text would sit against the inspector with a ragged right edge and no clear seam
+## between the two halves. Anchored right, the part that moves is the empty middle.
+func test_the_inspector_plate_splits_its_content_in_two() -> void:
+	var editor := _open_editor()
+	var left: Node = editor._entity_owner.get_parent()
+	var right: Node = editor._status.get_parent()
+	assert_false(left == right, "the inspector and the status lines are in one undivided row")
+	assert_eq(left.get_parent(), right.get_parent(), "the two halves are not siblings")
+	assert_eq(editor._notice_label.get_parent(), right, "the notice line left the right half")
+	for half in [left, right]:
+		assert_eq((half as Control).size_flags_horizontal, int(Control.SIZE_EXPAND_FILL),
+				"a half that does not expand is not a half")
+	assert_eq((left as Control).size_flags_stretch_ratio,
+			(right as Control).size_flags_stretch_ratio, "the split is not even")
+	# FLUSH RIGHT, both lines.
+	for line in [editor._status, editor._notice_label]:
+		assert_eq((line as Label).horizontal_alignment, int(HORIZONTAL_ALIGNMENT_RIGHT),
+				"this line does not sit against the plate's right edge")
+
+
 ## The nearest `PanelContainer` at or above a control, or null.
 func _plate_over(node: Node) -> PanelContainer:
 	var at := node

@@ -1022,8 +1022,31 @@ func _build_ui() -> void:
 	rows.add_theme_constant_override("separation", 0)
 	add_child(rows)
 
-	rows.add_child(_file_row())
-	rows.add_child(_tool_row())
+	# ⚠️ **THE FIRST TWO PLATES SHARE ONE ROW** (owner, 2026-09-09, with a mock: *"map relestate
+	# lets go 50/50 on the 1st 2 pannels"*). Each was a full-width strip with a third of its width
+	# empty, and the map is what the missing rows were costing: two strips at ~48 px are 96 px of
+	# a 900 px window, which at a 96 x 96 map's fitted zoom is about ten tiles of vertical view.
+	#
+	# ⚠️ **"50/50" IS AN EVEN SPLIT OF THE *LEFTOVER*, NOT OF THE ROW, and that is a `BoxContainer`
+	# fact rather than a choice made here.** Godot gives every child its combined minimum first and
+	# only then divides what remains by stretch ratio — the same rule §6 records as *"a stretch
+	# ratio only divides what is left after every minimum is honoured"*, which is what put the
+	# palette's third tile column six pixels over. So the two halves are equal only while their
+	# CONTENTS' minimums are, and today they are close: the file row's fields against seven tool
+	# buttons. **Forcing an exact half would mean a `custom_minimum_size` on both** — a typed number
+	# that goes stale the moment either row grows a control, and which clips rather than wraps when
+	# the window is narrow. Equal ratios are the thing actually decided; the pixel split is the
+	# engine honouring both rows' contents.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 0)
+	rows.add_child(top)
+	var file_panel := _file_row()
+	var tool_panel := _tool_row()
+	for panel in [file_panel, tool_panel]:
+		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		panel.size_flags_stretch_ratio = 1.0
+		top.add_child(panel)
+
 	rows.add_child(_entity_row())
 
 	# THE PALETTE AND THE CANVAS SHARE A ROW (16.3). The canvas expands and the palette does
@@ -1283,7 +1306,16 @@ func _tool_row() -> Control:
 ## spin boxes for x and y would be a second way to do it that has to agree with the first.
 func _entity_row() -> Control:
 	var box := _panel()
-	var row := box.get_child(0) as HBoxContainer
+	var plate_row := box.get_child(0) as HBoxContainer
+
+	# ⚠️ **THE PLATE'S CONTENT IS SPLIT DOWN THE MIDDLE** (owner, 2026-09-09, with a mock:
+	# *"split the content in panel 3 50/50 aswell"*). The inspector takes the left half and the
+	# status lines the right, both `SIZE_EXPAND_FILL` at the same stretch ratio — see
+	# `_build_ui()`'s note on what "50/50" can and cannot mean in a `BoxContainer`.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plate_row.add_child(row)
 
 	_entity_label = Label.new()
 	_entity_label.add_theme_color_override("font_color", _TEXT)
@@ -1339,17 +1371,17 @@ func _entity_row() -> Control:
 	# it; `_refresh_status()` is what the palette's `selection_changed` drives, and
 	# `_refresh_inspector()` is driven by the same selection. One plate, one subject.
 	#
-	# **A COLUMN, NOT MORE CONTROLS IN THE ROW.** The status line is a dozen facts joined by
-	# spaces — "96 x 96   3 entities   seats 0   no starts yet   zoom 0.42x   selected: …" — and it
-	# is already capped at two warnings because it does not fit a 1600 px window with anything
-	# beside it. `_panel()` gives the plate and its gutter; the stacking inside is this row's.
-	box.remove_child(row)
+	# **A COLUMN IN THE RIGHT HALF, NOT MORE CONTROLS IN THE ROW.** The status line is a dozen
+	# facts joined by spaces — "96 x 96   3 entities   seats 0   no starts yet   zoom 0.42x
+	# selected: …" — and it is already capped at two warnings for not fitting a 1600 px window.
+	# It gets half a row and two lines of it. `_panel()` gives the plate and its gutter; the
+	# division inside is this row's.
 	var column := VBoxContainer.new()
-	# TIGHTER THAN A TOOLBAR'S 6, because these three lines are one paragraph rather than three
-	# groups of controls.
+	# TIGHTER THAN A TOOLBAR'S 6, because these two lines are one paragraph rather than two groups
+	# of controls.
 	column.add_theme_constant_override("separation", 2)
-	box.add_child(column)
-	column.add_child(row)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plate_row.add_child(column)
 
 	_status = Label.new()
 	_status.add_theme_color_override("font_color", _TEXT)
@@ -1362,6 +1394,31 @@ func _entity_row() -> Control:
 	_notice_label.add_theme_color_override("font_color", _TEXT)
 	column.add_child(_notice_label)
 
+	# ⚠️ **FLUSH RIGHT, WHICH IS THE OWNER'S MOCK AND ALSO THE ONLY STABLE EDGE THESE TWO HAVE.**
+	# `_refresh_status()` rebuilds its line on every mouse move and the sentence changes length as
+	# the tool, the hover and the selection change — left-aligned, the text would sit against the
+	# inspector with a ragged right edge and a hard-to-read seam between the two halves. Anchored
+	# to the plate's right edge instead, the half that moves is the empty middle.
+	for line in [_status, _notice_label]:
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	# ⚠️ **A `Label`'S MINIMUM WIDTH IS ITS TEXT, WHICH IS WHY THE SEAM IS NOT A FIXED HALF — AND
+	# WHY THE INSPECTOR IS SAFE ANYWAY.** The right half asks for the whole sentence, the left half
+	# asks for its controls, and the row honours both before dividing anything: the split lands near
+	# even for the lines this tool actually writes (measured off `cursor_selected.png`: a 1028 px
+	# status line in a 1096 px half) and the controls never move, because each half is anchored to
+	# its own outer edge.
+	#
+	# 📝 **THE ONE CASE THAT WOULD OVERDRAW, LEFT UNGUARDED ON PURPOSE.** When the two minimums
+	# exceed the row — eight starts named in `_starts_sentence()` **and** a
+	# `SAVING DISABLED — <reason>` tail, about 1475 px against the inspector's 560 — the label is
+	# handed a rect narrower than its text and draws the overflow leftward, over the inspector.
+	# Every cure costs something worse: `clip_text` cuts the sentence's HEAD off (the map's size and
+	# entity count) and collapses the minimum so the half shrinks to 560 px; `autowrap` would wrap
+	# the ordinary 925 px line too, so the plate's height would change on every mouse move and the
+	# canvas would jump — which is the failure `_entity_row()`'s own header rejects an appearing row
+	# for. `_summarised()`'s cap is the existing mitigation and it is the right shape: shorten the
+	# sentence, do not fight the layout.
 	_refresh_inspector()
 	return box
 
