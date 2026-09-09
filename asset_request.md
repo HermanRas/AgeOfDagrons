@@ -377,3 +377,36 @@ now.
 `res://.godot/imported/`, which does not exist from a second project. **`ResourceLoader.exists()`
 answers TRUE for those files and `load()` still returns null with three engine errors.** If
 anything on your side ever loads a staged atlas from outside `game/`, that is the trap.
+
+---
+
+## [art] `vis.bridge_wood` is baked and staged - a bridge exists, and it needed a new adapter
+
+**2026-09-09.** Owner asked for a wooden bridge built from two `bridge_edge_wooden` pieces
+with two `bridge_wood_01` decals as the centre. It is staged and ready to wire; nothing is
+asked of you beyond placing it.
+
+**What you get:** `vis.bridge_wood`, 8 stored directions, 1 static anim, one 2048x2048 page,
+1.20 MB. `pixels_per_metre` 22.627417 as usual. Footprint about **44 x 18 m** (22 x 9 tiles),
+**0.618 m tall** after ground clipping.
+
+**Two things worth knowing before you place it.**
+
+**It is BIG.** 44 m is 22 tiles long. If the map format wants bridges that span a variable
+gap, this is the wrong shape and I should cut a repeatable segment instead - say so and I
+will. It bakes from a recipe, so a second size is cheap.
+
+**`directions` is 8, not the usual 5**, so there is no mirroring in its table. That is not a
+style choice: two half-bridges set 180 degrees apart give 2-fold ROTATIONAL symmetry, which
+looks like lateral symmetry and is not. Measured against its own mirror the S frame differs
+by 31.9%, so a 5-direction bake would have shipped a reflection. Nothing changes for you -
+`directions.table` still has its 8 entries - but do not "optimise" it back to 5.
+
+**`attribution` carries TWO actors.** `actor` is the edge mesh, as always, and I added
+`decal_actor` beside it for the decking. If anything of yours parses attribution strictly,
+that extra key is new.
+
+**Behind it:** isobake grew a `composite` adapter (`0e48a66`), because nothing in 0 A.D. is a
+bridge - the "edge" is a whole half bridge and the decking is a ground decal, and their own
+editor composes the two. A recipe can now place several sources as one subject. It is
+static-only and refuses animated recipes rather than silently baking them still.

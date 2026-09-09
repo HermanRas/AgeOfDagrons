@@ -883,6 +883,55 @@ or count DISTINCT frame indices in the table.** The general lesson is the one th
 entry above teaches too — before quoting a number as evidence, check it is capable of
 varying with the thing you are claiming.
 
+**ROTATIONAL SYMMETRY IS NOT MIRROR SYMMETRY, AND `directions = 5` ONLY EVER ASKED ABOUT
+THE SECOND.** 5 stored directions cover 8 facings by MIRRORING, so the question a recipe
+has to answer is "does this subject equal its own reflection", and the thing that gets
+eyeballed instead is "does it look symmetric". Those are different questions and the
+wooden bridge separates them cleanly: it is two identical halves set 180° apart, opposite
+views differ by only **5.6% (S/N) to 8.2% (W/E)** of their opaque pixels with *identical
+silhouettes* — textbook 2-fold rotational symmetry — and compared against its own
+left-right mirror the same S frame differs by **34.1%**. It would have baked visibly wrong
+at 5 and nobody would have predicted it by looking.
+
+**So measure it, because it is three lines and it settles a decision this project has been
+taking by eye.** Bake one direction, flip it horizontally, count pixels differing by more
+than the noise floor:
+
+```python
+S = Image.open(frame).convert("RGBA")
+diff = ImageChops.difference(S, S.transpose(Image.FLIP_LEFT_RIGHT))
+```
+
+Low means 5 is safe; high means pay for 8. **The reflection is the one error no
+`yaw_offset_deg` can undo**, and the agreed front/back check cannot see it (indices 0 and 4
+are a reflection's fixed points), so this is the cheap way to not need that check.
+
+> ⚠️ **AND READ THE COROLLARY THE OTHER WAY: A NEARLY-SYMMETRIC SUBJECT IS A USELESS
+> CHIRALITY TEST.** The same bridge whose 34% mirror score demands 8 directions has indices
+> 0/4 and 2/6 that barely differ, so it can never *fail* the four-column compass check — the
+> same blindness §4 already records for the walls. An asset can need 8 directions and still
+> be incapable of proving the compass runs the right way. Verify a pipeline change on a
+> horse; verify a recipe's own `directions` with the mirror test.
+
+**A MESH BOUND IS NOT A SURFACE YOU CAN PUT ANYTHING ON.** `bridge_edge_wooden`'s maximum Y
+is −2.882 raw, and sizing the bridge's centre decking to meet it left a 0.14 m slot open
+down the whole 43 m span. The verts at that Y sit at **z = −6.866** — a support post, not
+decking. Geometry at deck height stops at −3.240. **Filter to the height you actually care
+about before reading an extent off it**, and expect the answer to differ: an extreme of a
+bounding box is by definition contributed by whatever sticks out furthest, which is rarely
+the part you meant. It rendered as a 2–3 px black hairline — small, and the one thing in
+the frame that could not have been anything but a bug.
+
+**A `<unit>` TAG CAN BE A LIE, AND A SIBLING ASSET IS HOW YOU CATCH IT.**
+`bridge_edge_wooden.dae` declares `<unit name="centimeter" meter="0.01">` where every other
+0 A.D. mesh declares metre, which predicts it importing 100× too small. It does not:
+`bridge_edge_hele.dae` declares metre and has a near-identical raw Z extent (14.381 against
+14.581), so two meshes built for the same job are in the same space and the tag is
+spurious — and the importer's `import_units=True` happens to neutralise it. **Probed in
+Blender on a COPY of the .dae** (which costs nothing and cannot dirty the checkout, since
+it is `MaxColladaFixer` that rewrites in place): `True` gives the raw 86.660, `False` gives
+0.867. Do not "correct" the tag and do not add a compensating scale.
+
 **`isobake inspect` PRINTS RAW 0 A.D. UNITS AND LABELS THEM `m`. EVERY FIGURE IT HAS EVER
 GIVEN IS OUT BY TWO.** The bake scales by `metres_per_tile / ZEROAD_UNITS_PER_TILE` =
 2.0 / 4.0 = **0.5** (`zeroad.py`), and `inspect` on a bare actor never applies it — so a
@@ -1038,7 +1087,7 @@ with WinError 5. Delete contents, not the directory.
   value to write: today's build would assert code that did not run, and would erase
   the only honest signal on disk. Absence already *is* the sentinel.
 
-### isobake: repo `blender_3d_to_2d_isobake`, HEAD `878eb40`, build 39, clean
+### isobake: repo `blender_3d_to_2d_isobake`, HEAD `0e48a66`, clean
 
 Its history is a list of silent defects, and every lesson worth re-reading is
 already in §4 rather than here. What that history is FOR is calibration: **six
@@ -1062,6 +1111,39 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
+- ✅ **`adapters/composite.py` IS WRITTEN — isobake `0e48a66`, 2026-09-09.** A recipe can
+  place several sources as one subject: `[[source.parts]]`, each naming an `adapter` and
+  that adapter's own source keys plus `offset_m` / `yaw_deg`. Written for the bridge,
+  because **nothing in 0 A.D. is a bridge** — `bridge_edge_wooden` is a *half* bridge and
+  the decking is a separate ground decal, and their own editor composes the two (see
+  `maps/scenarios/bridge_demo`). **The composition is the asset**, and no recipe could say
+  so before this.
+  > ⚠️ **STATIC ONLY, AND IT REFUSES RATHER THAN DEGRADES.** No part's clip is resolved and
+  > no armature is driven; a recipe naming an anim other than `static` gets an error saying
+  > exactly that. Baking a moving subject as a still one is the failure class that reports
+  > `ok` six times over in this file.
+  >
+  > ⚠️ **`preserve_sources()` CLEARS ITS STASH ON ENTRY, SO IT IS NOT RE-ENTRANT.** Parts
+  > load strictly sequentially and the composite must never wrap them in another one — a
+  > nested one strands the `.dae` files the first part rewrote, which is the 30–45 minute
+  > mistake. And **a part's transform goes on an empty its roots are parented to, never on
+  > the meshes**: props here are attached by COPY_LOCATION, not by parenting, so moving a
+  > mesh directly leaves its props behind at the old position.
+  >
+  > `terrain` grew `size_metres` (a rectangle) and `decal = "<actor>"`, which resolves a
+  > 0 A.D. decal actor's baseTex **and the world size it declares**, so planks come out the
+  > size 0 A.D. draws them. Built there rather than by unlocking the zeroad adapter's
+  > `_drop_ground_decals`, which keeps the two cases apart — a gravel apron under a building
+  > is still never wanted. **`terrain.grass` rebakes pixel-identical to its staged atlas**,
+  > which is the control that this was a no-op for the eight existing terrain recipes.
+  >
+  > ⚠️ **`load_pyrogenesis` WAS NOT IDEMPOTENT AND ITS BARE `except` LIED ABOUT IT.** It
+  > registered its operator unconditionally, so the *second* zeroad part died claiming the
+  > Pyrogenesis importer was not installed — having just imported the first part's mesh with
+  > it. Fixed by catching the duplicate registration (there is no reliable identity to test:
+  > the addon's own reload hands back a different class object for the same registered name,
+  > which is how the first attempt at the guard failed) and by printing any other failure
+  > instead of disguising it as "the importer is missing".
 - ✅ **`adapters/generic.py` IS WRITTEN — isobake `5592f23`, 2026-09-04.** The pipeline can
   bake a `.blend`/glTF/FBX. Two probes render: the rest pose, and `idle` through the full
   clip path. `paths.models` is the new machine-local root (`isobake.local.toml`), so a

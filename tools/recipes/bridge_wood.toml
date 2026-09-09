@@ -1,0 +1,160 @@
+# Wooden trestle bridge -- two half-bridges back to back with plank decking
+# down the middle.
+#
+# NOTHING IN 0 A.D. IS A BRIDGE. `props/special/eyecandy/bridge_edge_wooden`
+# is a *half* bridge -- deck, trestle piers, rail and approach ramp, 43.33 m of
+# it -- and `props/structures/decals/bridge_wood_01` is a flat ground decal of
+# planking. Their own scenario editor builds a bridge by placing two halves 180
+# degrees apart and painting decking between them, which is what
+# `maps/scenarios/bridge_demo` does with the Hellenic edge: two actors at
+# orientations 3.13555 and -0.00602. So the composition IS the asset, and this
+# is the first recipe to use the `composite` adapter.
+#
+# ------------------------------------------------------------------ measured
+# Read straight off the COLLADA (no importer, so nothing was rewritten), raw
+# 0 A.D. units halved to metres. The bake agrees: it reports 7.291 m tall.
+#
+#   whole piece   -21.958 .. 21.373 m (X)   -9.007 .. -1.441 m (Y)
+#                  -6.673 ..  0.618 m (Z), only 8.1% of it above z = 0
+#   deck surface   z = 0.415 raw = 0.208 m, flat over X -16.265 .. 15.730 m
+#   deck inner Y  -3.240 raw = -1.620 m
+#
+# TWO NUMBERS HERE ARE TRAPS AND BOTH CAUGHT ME.
+#
+# The mesh's max Y is -2.882 raw, and it is NOT the edge of the deck -- the
+# verts there sit at z = -6.866, a support post. Sizing the centre panels off
+# the mesh bounds left a 0.14 m slot open down the whole span, which rendered
+# as a 2-3 px black hairline: small, and the only thing in the frame that could
+# not be anything but a bug. The channel is measured at DECK HEIGHT and is
+# 3.240 m.
+#
+# And the flat deck is NOT centred: -16.265 .. 15.730. The 180 degree copy's
+# flat run is therefore -15.730 .. 16.265, so the panels span the intersection,
+# +/-15.730, or they float over a ramp at one end.
+#
+# The mesh also declares <unit name="centimeter" meter="0.01"> where every other
+# 0 A.D. mesh declares metre. It is spurious -- bridge_edge_hele.dae declares
+# metre and has a near-identical raw Z extent, 14.381 against 14.581 -- and the
+# importer's `import_units=True` neutralises it. Probed both ways in Blender on
+# a COPY of the .dae: True gives the raw 86.660, False gives 0.867. Do not
+# "fix" the unit tag and do not add a scale here.
+id      = "vis.bridge_wood"
+adapter = "composite"
+
+[[source.parts]]
+name    = "edge_a"
+adapter = "zeroad"
+actor   = "props/special/eyecandy/bridge_edge_wooden.xml"
+
+# 180, exactly as bridge_demo places its pair. The piece ramps at both ends and
+# is close to 2-fold symmetric, so the copy's ramps land on the far bank rather
+# than on top of this one's.
+[[source.parts]]
+name    = "edge_b"
+adapter = "zeroad"
+actor   = "props/special/eyecandy/bridge_edge_wooden.xml"
+yaw_deg = 180.0
+
+# The centre decking, two panels end to end.
+#
+# `decal` resolves the actor's baseTex AND its declared 15 x 30 (0 A.D. units)
+# = 7.5 x 15 m footprint, so the planks come out the size 0 A.D. draws them
+# instead of at a guessed repeat.
+#
+# yaw 90 turns the quad so its U axis -- the direction the planks RUN in the
+# texture -- lies across the bridge. A plank that crosses a deck is one
+# continuous board; without this they run lengthways and it reads as floorboards
+# in a corridor.
+#
+# 3.6 m against the 3.240 m channel puts 0.18 m under the edge pieces each
+# side, and z = 0.203 is 5 mm below their deck at 0.208 so the overlap resolves
+# to the edge geometry instead of z-fighting with it.
+[[source.parts]]
+name        = "deck_1"
+adapter     = "terrain"
+decal       = "props/structures/decals/bridge_wood_01.xml"
+size_metres = [3.6, 15.73]
+yaw_deg     = 90.0
+offset_m    = [-7.865, 0.0, 0.203]
+
+[[source.parts]]
+name        = "deck_2"
+adapter     = "terrain"
+decal       = "props/structures/decals/bridge_wood_01.xml"
+size_metres = [3.6, 15.73]
+yaw_deg     = 90.0
+offset_m    = [7.865, 0.0, 0.203]
+
+[render]
+# 44 x 18 m of footprint, but only 0.618 m tall once ground_clip has run, so the
+# frame is much shorter than the unclipped bake wanted: about 613 x 320 px due S
+# at the fixed 22.627 px/m. The margin is for the directions that swing the long
+# axis closer to the screen horizontal. Read the batch summary for CLIPPED rather
+# than trusting this -- canvas is calibrated, not computed.
+canvas = [960, 512]
+supersample = 4
+
+# 8 STORED, NOT 5, AND IT IS MEASURED RATHER THAN ASSUMED. `directions = 5`
+# covers the compass by MIRRORING, which is only sound on a laterally symmetric
+# subject, and section 4 is explicit that a reflection is the one error no yaw
+# can undo.
+#
+# Two halves set 180 degrees apart LOOK symmetric, and that is the trap: opposite
+# views of this bake differ by only 16.7% (S/N) and 15.8% (W/E) of their opaque
+# pixels, with identical silhouettes -- 2-fold ROTATIONAL symmetry. Rotational
+# symmetry is not mirror symmetry. Compared against its own left-right mirror,
+# the S frame differs by 31.9%, so the subject is strongly chiral and a
+# 5-direction bake would have mirrored it into something visibly wrong.
+#
+# MEASURED ON THE CLIPPED GEOMETRY, WHICH IS THE ONLY VERSION THAT MEANS
+# ANYTHING. The first reading (34.1% / 5.6%) was taken before `ground_clip` went
+# on, i.e. on a shape 92% of which no longer exists. Same conclusion, but that
+# was luck: a figure quoted about a subject the pipeline has since cut down is
+# not evidence about what ships.
+#
+# Note the corollary, which is why this asset cannot police the pipeline: a
+# subject this close to 2-fold symmetric makes a WEAK chirality test, because
+# indices 0/4 and 2/6 barely differ. It cannot confirm the compass runs the
+# right way -- it can only fail to notice. Verify a compass change on a horse.
+directions = 8
+
+frame_origin_at = 0.5
+
+# ON -- owner's call, 2026-09-09, on seeing the unclipped bake: "the below
+# ground part is visible, like we had on house and wall".
+#
+# I ARGUED THE OPPOSITE HERE AND I WAS WRONG, so the reasoning is worth keeping.
+# 92% of this mesh is below z = 0 and all of it is trestle pier, so I read it as
+# the legs the bridge stands on rather than as the buried skirt `ground_clip`
+# exists to remove, and expected clipping to saw the bridge off and leave the
+# deck floating. **The fraction was never the test.** The test is whether the
+# geometry is below the GROUND the sprite gets drawn on, and a baked sprite has
+# no river to span -- our terrain is flat and `TerrainLayer`'s job, so the piers
+# would be drawn straight over our own tiles exactly as the Athenian civic
+# centre's skirt was. Being structural does not make it visible.
+#
+# It cuts 2 meshes (the deck quads already sit at z = 0.203) and takes the
+# subject from 7.291 m to 0.618 m: a plank causeway with the pier tops coming
+# through the decking and the edge beams intact. That is a bridge on flat
+# ground, and it reads better than the version I was defending.
+ground_clip = true
+
+engine = "eevee"
+samples = 32
+
+# Cancels the zeroad adapter's own 180, same as every other recipe sourcing a
+# 0 A.D. actor. It rotates the whole pivot, so the parts keep their relative
+# placement and the deck panels stay where they were put.
+yaw_offset_deg = 180.0
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+# TWO actors, and `actor` stays a single string because the game side reads it
+# to tell which actor is staged. It names the one that carries the geometry;
+# `decal_actor` records the other so provenance is not lost.
+actor = "art/actors/props/special/eyecandy/bridge_edge_wooden.xml"
+decal_actor = "art/actors/props/structures/decals/bridge_wood_01.xml"
