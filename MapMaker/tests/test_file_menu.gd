@@ -93,6 +93,30 @@ func test_the_menu_is_keyed_by_id_and_a_separator_does_not_shift_them() -> void:
 			"index and id happen to coincide — this test would not catch a shift")
 
 
+## ⛔ FIRST IN THE ROW, WITH A DIVIDER AFTER IT — the owner, off a screenshot, 2026-09-09:
+## *"File needs to be the 1st button on panel with a devider."*
+##
+## It shipped sixth, after `Name` and the two size boxes, which put the tool's only menu somewhere
+## no application has ever put one. ⚠️ **AND THE DIVIDER IS NOT DECORATION:** with nothing between
+## them, `File` sits immediately left of the `Name` field and reads as its CAPTION — exactly the
+## way `Size` captions the spin boxes two controls along. The row teaches that pattern and then
+## breaks it.
+##
+## Asserted on the menu's own parent rather than by walking down from the screen, so the check
+## survives a reshuffle of the rows above it.
+func test_the_file_menu_leads_its_row_and_a_divider_follows_it() -> void:
+	var editor := _open_editor()
+	var row: Node = editor._file_menu.get_parent()
+	assert_true(row != null, "the menu is not in a row at all")
+	assert_eq(row.get_child(0), editor._file_menu,
+			"File is at index %d, not first" % editor._file_menu.get_index())
+	assert_true(row.get_child(1) is VSeparator,
+			"nothing divides the menu from the fields — File reads as the Name box's caption")
+	# AND THE FIELDS ARE STILL THERE, after it. A row that lost its name box would pass the two
+	# assertions above.
+	assert_true(editor._name_field.get_index() > 1, "the name field moved out of this row")
+
+
 # ── the dialogs' configuration ──────────────────────────────────────────────
 
 ## ⚠️ `FILE_MODE_OPEN_DIR`, BECAUSE A MAP IS A DIRECTORY OF TWO FILES.

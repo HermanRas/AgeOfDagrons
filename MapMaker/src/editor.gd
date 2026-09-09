@@ -1007,7 +1007,19 @@ func _build_ui() -> void:
 
 	var rows := VBoxContainer.new()
 	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rows.add_theme_constant_override("separation", 6)
+	# ⚠️ **NO SEPARATION BETWEEN THE PLATES** (owner, 2026-09-09: *"the gaps (margin / padding)
+	# between the pannels needs to be removed"*). The plates butt against each other and against
+	# the window's edges, so what shows between two rows is the two plates' own moulding and
+	# nothing else.
+	#
+	# 📝 **WHAT THIS DOES NOT REMOVE, because a container constant cannot.** Measured on the
+	# committed `panel_hud.png`: an edge is 3 px of dark rim, a gold bead to 6, a dark channel to
+	# 9, an inner bead to 11 — and then flat interior. `UiChrome.MARGIN` is 18 because the CORNER
+	# stud reaches 17, so each border band carries about 6 px of plain fill outside its moulding
+	# and two stacked panels show roughly 36 px of frame between their contents. That is the art,
+	# not a gap; the only lever on it is the prepared source size. Said out loud here because the
+	# obvious next move — shrinking the margin — is the one that brings the smeared corners back.
+	rows.add_theme_constant_override("separation", 0)
 	add_child(rows)
 
 	rows.add_child(_file_row())
@@ -1020,7 +1032,8 @@ func _build_ui() -> void:
 	# painted over the toolbar.
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 6)
+	# THE SAME RULING, HORIZONTALLY: the palette's plate touches the canvas.
+	body.add_theme_constant_override("separation", 0)
 	rows.add_child(body)
 
 	_palette = ObjectPalette.new()
@@ -1073,16 +1086,9 @@ func _build_ui() -> void:
 	_canvas.view_changed.connect(func() -> void: _refresh_status())
 	body.add_child(_canvas)
 
-	_status = Label.new()
-	_status.add_theme_color_override("font_color", _TEXT)
-	rows.add_child(_status)
-
-	# THE ACTION LINE, below the live status. Two lines rather than one because they have
-	# different lifetimes: the status describes the map *now* and is rewritten constantly,
-	# while this holds the last thing the author DID until they do something else.
-	_notice_label = Label.new()
-	_notice_label.add_theme_color_override("font_color", _TEXT)
-	rows.add_child(_notice_label)
+	# THE STATUS AND NOTICE LINES ARE NOT BUILT HERE ANY MORE — they are inside the inspector's
+	# plate, which `_entity_row()` has the argument for. They used to be two bare `Label`s added
+	# to `rows` after `body`, so they sat under the canvas on the raw surround.
 
 	# ADDED LAST, SO IT IS ON TOP. A sibling later in the child order draws over the ones
 	# before it, and this one has to cover the canvas rather than be laid out beside it --
@@ -1097,19 +1103,6 @@ func _file_row() -> Control:
 	var box := _panel()
 	var row := box.get_child(0) as HBoxContainer
 
-	row.add_child(_label("Name"))
-	_name_field = LineEdit.new()
-	_name_field.text = "New Map"
-	_name_field.custom_minimum_size = Vector2(220, 0)
-	row.add_child(_name_field)
-
-	row.add_child(_label("Size"))
-	_width = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
-	row.add_child(_width)
-	row.add_child(_label("x"))
-	_height = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
-	row.add_child(_height)
-
 	# ⛔ **FOUR BUTTONS BECAME ONE MENU** (owner's card #93 with a mock of it, 2026-09-09). New,
 	# Open, Save and Save As were four toolbar buttons and are five menu items, because a File
 	# menu is where a person looks for them and because **Exit had nowhere to live**: see
@@ -1122,6 +1115,14 @@ func _file_row() -> Control:
 	#
 	# **`Fit` STAYS A BUTTON.** It is a view command, not a file command — filing it under File
 	# would be the sort of menu nobody can predict.
+	#
+	# ⚠️ **FIRST IN THE ROW, WITH A DIVIDER AFTER IT** (owner, 2026-09-09: *"File needs to be the
+	# 1st button on panel with a devider"*). It was sixth, after the name and the two size boxes,
+	# which put the only menu in the tool where nothing else has ever put one — every application
+	# with a File menu has it at the leading edge, and a person looking for Save scans there first
+	# and gives up rather than reading the row. The `VSeparator` is what says the menu is a
+	# different kind of thing from the fields beside it: without it "File" reads as a caption for
+	# the `Name` box the way `Size` is a caption for the spin boxes.
 	_file_menu = MenuButton.new()
 	_file_menu.text = "File"
 	_file_menu.flat = false
@@ -1135,6 +1136,24 @@ func _file_row() -> Control:
 	menu.add_item("Exit", FileAction.EXIT)
 	menu.id_pressed.connect(_on_file_action)
 	row.add_child(_file_menu)
+	row.add_child(_separator())
+
+	row.add_child(_label("Name"))
+	_name_field = LineEdit.new()
+	_name_field.text = "New Map"
+	_name_field.custom_minimum_size = Vector2(220, 0)
+	row.add_child(_name_field)
+
+	row.add_child(_label("Size"))
+	_width = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
+	row.add_child(_width)
+	row.add_child(_label("x"))
+	_height = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
+	row.add_child(_height)
+
+	# `Fit` KEEPS THE FAR END, with its own divider: it acts on the view rather than on the map's
+	# identity, so it belongs beside neither the menu nor the size boxes.
+	row.add_child(_separator())
 	row.add_child(_button("Fit", func() -> void: _canvas.fit_to_view()))
 	return box
 
@@ -1306,6 +1325,43 @@ func _entity_row() -> Control:
 	_entity_size.item_selected.connect(_on_inspector_size_chosen)
 	row.add_child(_entity_size)
 
+	# ── the status and notice lines, inside this plate ──
+	#
+	# ⛔ **THEY WERE TWO BARE LABELS AT THE BOTTOM OF THE SCREEN** and the owner asked for them
+	# here, 2026-09-09: *"can we move the status details at the bottom into the selected pannel."*
+	# They were the only text in the tool with **no plate under it** — cream and green on the raw
+	# canvas surround, below the map rather than beside anything — which is the same complaint the
+	# game's age panel drew: chrome that reads as a different family because it is on a different
+	# surface.
+	#
+	# 📝 **AND THEY BELONG WITH THIS ROW ON CONTENT, not just on looks.** The inspector says WHAT
+	# is selected and the status line's `_selection_sentence()` says what the next click will do to
+	# it; `_refresh_status()` is what the palette's `selection_changed` drives, and
+	# `_refresh_inspector()` is driven by the same selection. One plate, one subject.
+	#
+	# **A COLUMN, NOT MORE CONTROLS IN THE ROW.** The status line is a dozen facts joined by
+	# spaces — "96 x 96   3 entities   seats 0   no starts yet   zoom 0.42x   selected: …" — and it
+	# is already capped at two warnings because it does not fit a 1600 px window with anything
+	# beside it. `_panel()` gives the plate and its gutter; the stacking inside is this row's.
+	box.remove_child(row)
+	var column := VBoxContainer.new()
+	# TIGHTER THAN A TOOLBAR'S 6, because these three lines are one paragraph rather than three
+	# groups of controls.
+	column.add_theme_constant_override("separation", 2)
+	box.add_child(column)
+	column.add_child(row)
+
+	_status = Label.new()
+	_status.add_theme_color_override("font_color", _TEXT)
+	column.add_child(_status)
+
+	# THE ACTION LINE, below the live status. Two lines rather than one because they have
+	# different lifetimes: the status describes the map *now* and is rewritten constantly,
+	# while this holds the last thing the author DID until they do something else.
+	_notice_label = Label.new()
+	_notice_label.add_theme_color_override("font_color", _TEXT)
+	column.add_child(_notice_label)
+
 	_refresh_inspector()
 	return box
 
@@ -1452,8 +1508,12 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	# THERE IS NOT ALWAYS A POINTER TO ASK ABOUT. `get_local_mouse_position()` needs a
 	# viewport, and this screen is built and driven outside a tree by the suite -- which
 	# printed an engine error per test until this was guarded. Off-map is the honest answer.
+	# ⚠️ **AND THERE IS NOT ALWAYS A CANVAS EITHER, SINCE THE STATUS LINE MOVED INTO THE INSPECTOR
+	# PLATE.** `_status` is now built by `_entity_row()`, which runs BEFORE `_canvas` exists — so
+	# the null check is load-bearing where it used to be impossible. Today the `_document == null`
+	# return above catches every such call; that is an accident of build order and not a guarantee.
 	var hover := Vector2i(-1, -1)
-	if _canvas.is_inside_tree():
+	if _canvas != null and _canvas.is_inside_tree():
 		hover = _canvas.tile_at(_canvas.get_local_mouse_position())
 	var seats := _document.seats()
 	var bits: Array[String] = [
@@ -1669,8 +1729,12 @@ func _refresh_root_buttons(row: HBoxContainer) -> void:
 ##
 ## THE THREE TOOLBAR ROWS ARE ALL THIS FUNCTION, which is why the owner's *"the same panel_hud for
 ## all the panels"* was one edit here and one in the palette rather than a sweep. The gutter is
-## `UiChrome`'s default; the plate's 12 px moulding is added to it there, because content has to
+## `UiChrome`'s default; the plate's 18 px moulding is added to it there, because content has to
 ## clear the border before it starts having padding.
+##
+## 📝 **THE ROW IS `get_child(0)` AND THE INSPECTOR REPLACES IT WITH A COLUMN.** Two callers take
+## the `HBoxContainer` as it comes; `_entity_row()` re-parents it under a `VBoxContainer` so the
+## status lines can share the plate. The plate and its gutter are decided here either way.
 func _panel() -> PanelContainer:
 	var box := PanelContainer.new()
 	box.add_theme_stylebox_override("panel", UiChrome.panel_style())

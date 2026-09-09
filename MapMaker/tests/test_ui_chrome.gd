@@ -2,10 +2,11 @@
 ##
 ## ## THE ONE FAULT HERE THAT NO SCREENSHOT WOULD HAVE CAUGHT IN TIME
 ##
-## The `panel_hud` plate adds 12 px of moulding to each side of every panel, and content has to
-## clear it. `ObjectPalette.PANEL_WIDTH` was **measured** at 330 as three 96 px tiles plus two
-## separations plus a scrollbar — so the moulding took the inner width from 314 to 290 and put a
-## grid needing 296 **six pixels over**. `_grid.columns` is a fixed 3 and the container's
+## The `panel_hud` plate adds `UiChrome.MARGIN` px of moulding to each side of every panel — 12
+## when this was written, 18 since the corner stud was measured — and content has to clear it.
+## `ObjectPalette.PANEL_WIDTH` was **measured** at 330 as three 96 px tiles plus two separations
+## plus a scrollbar — so the moulding took the inner width from 314 to 290 and put a grid needing
+## 296 **six pixels over**. `_grid.columns` is a fixed 3 and the container's
 ## horizontal scrolling is DISABLED, so the third column would have been **clipped rather than
 ## wrapped**: two and a half tiles per row, and nothing in the suite counts pixels.
 ##
@@ -21,6 +22,8 @@
 ## that one file is now the only place a panel colour is decided.
 extends TestCase
 
+var _editors: Array[Node] = []
+
 
 func before_each() -> void:
 	UiChrome.ignore_art = false
@@ -30,6 +33,17 @@ func before_each() -> void:
 func after_each() -> void:
 	UiChrome.ignore_art = false
 	UiChrome.forget()
+	for e in _editors:
+		e.free()
+	_editors.clear()
+
+
+## `_ready()` by hand — this harness has no tree. `test_startup.gd` has the argument.
+func _open_editor() -> Node:
+	var editor: Node = load("res://Editor.tscn").instantiate()
+	editor._ready()
+	_editors.append(editor)
+	return editor
 
 
 # ── the plate ───────────────────────────────────────────────────────────────
@@ -207,3 +221,63 @@ func test_the_canvas_surround_stays_neutral() -> void:
 	assert_true(spread < 0.05,
 			"the map's surround has taken on a hue (%.3f spread) — see this test's note" % spread)
 	assert_false(bg == UiChrome.PANEL, "the surround and the plates are different surfaces")
+
+
+# ── the plates touch, and the status lines are on one ───────────────────────
+
+## ⛔ NO SEPARATION BETWEEN THE PLATES — the owner, 2026-09-09: *"the gaps (margin / padding)
+## between the pannels needs to be removed."*
+##
+## ⚠️ **AND THE OBVIOUS FOLLOW-UP FIX IS THE ONE THAT BREAKS THE CORNERS AGAIN.** Setting this to
+## zero takes 6 px out; what remains between two rows is each plate's own border band, which is
+## `UiChrome.MARGIN` = 18 because the corner stud measures 17. Anybody who reads the render as
+## still-gappy will reach for the margin next, and shrinking it puts 5 px of boss back inside the
+## stretched region — see `test_the_margin_clears_the_corner_ornament`. The lever is the prepared
+## source size and nothing else.
+##
+## Reached through the palette's own parents rather than by child index, so a fourth toolbar row
+## does not turn this into a test of counting.
+func test_the_panels_butt_against_each_other_with_no_gap() -> void:
+	var editor := _open_editor()
+	var body: Node = editor._palette.get_parent()
+	assert_true(body is HBoxContainer, "the palette and the canvas still share a row")
+	assert_eq((body as Container).get_theme_constant("separation"), 0,
+			"the palette's plate does not touch the canvas")
+	var rows: Node = body.get_parent()
+	assert_true(rows is VBoxContainer, "the rows are still a column")
+	assert_eq((rows as Container).get_theme_constant("separation"), 0,
+			"there is still a gap between the toolbar plates")
+
+
+## ⛔ THE STATUS LINES LIVE ON THE INSPECTOR'S PLATE — the owner, same review: *"can we move the
+## status details at the bottom into the selected pannel."*
+##
+## They were two bare `Label`s added to the screen's column after the canvas: the only text in the
+## tool with **no plate under it**, which is the complaint the game's age panel drew — chrome that
+## reads as a different family because it is on a different surface.
+##
+## Asserted as *the same panel as the inspector's controls*, not merely "has a `PanelContainer`
+## ancestor": wrapping them in a plate of their own would satisfy the weaker check and would be a
+## fourth panel where the owner asked for one fewer.
+func test_the_status_and_notice_lines_share_the_inspectors_plate() -> void:
+	var editor := _open_editor()
+	var plate := _plate_over(editor._entity_owner)
+	assert_true(plate != null, "the inspector's controls are not on a plate at all")
+	assert_eq(_plate_over(editor._status), plate,
+			"the status line is not on the inspector's plate")
+	assert_eq(_plate_over(editor._notice_label), plate,
+			"the notice line is not on the inspector's plate")
+	# AND IT IS THE SHARED PLATE, not a `PanelContainer` carrying the engine's default stylebox.
+	var box := plate.get_theme_stylebox("panel")
+	assert_true(box is StyleBoxTexture, "this panel is not drawing `panel_hud`")
+	assert_eq((box as StyleBoxTexture).texture_margin_left, float(UiChrome.MARGIN))
+
+
+## The nearest `PanelContainer` at or above a control, or null.
+func _plate_over(node: Node) -> PanelContainer:
+	var at := node
+	while at != null:
+		if at is PanelContainer:
+			return at as PanelContainer
+		at = at.get_parent()
+	return null
