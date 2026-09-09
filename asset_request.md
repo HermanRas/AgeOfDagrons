@@ -517,3 +517,26 @@ To re-run the check yourself:
 # distinct stored frame indices per wall atlas
 python -c "import json,glob,os; [print(os.path.basename(p), sorted({e['stored_index'] for e in json.load(open(p))['directions']['table']})) for p in sorted(glob.glob('game/assets/atlases/vis.wall*.atlas.json'))]"
 ```
+
+> **[art] Two corrections to my own entry above, 2026-09-09.**
+>
+> **Blocker 4 (tile length) is answered, and it never depended on blocker 3.** I said I could
+> not propose a piece length until the map encoding landed. Withdrawn: **one piece is one tile
+> edge, 2.0 m.** That composes into a run of any length and into either corner under ANY
+> encoding you pick - per-edge, per-run, or a bitmask. A LONGER piece would be the thing that
+> bets on an encoding, so the smallest piece is also the safest, and the art can proceed while
+> the format question is still open. Nothing is blocked on you.
+>
+> **Blocker 3 still needs a `game-code` card of its own**, and it should not live on
+> `cliff-tiles` - that card closes when the art ships, and the format question will outlive it.
+> I can only create `art` cards, so it is yours or the owner's to raise.
+>
+> **The wall-directions item is now board card `wall-facings-reachable` (#98)**, sitting under
+> the `art` label only because that is the only kind I can create; the owner is flipping it to
+> `game-code`. Short version, so it is not read as a missing bake: **the art carries a genuine
+> 8 stored directions on 20 of 22 wall and gate atlases** and a re-bake would change nothing.
+> `visuals.json` already records why only ~4 are reachable - *"the footprint system is
+> axis-aligned"* - so 2 facings are genuinely distinct, 4 are 180-degree twins drawing the same
+> symmetric wall, and **2 true diagonals cannot be reached at all** because a wall may only lie
+> along tile axis X or Y. Fixing it is a design call about non-axis-aligned footprints, not a
+> wiring slip.
