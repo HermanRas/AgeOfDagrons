@@ -33,20 +33,28 @@ extends Control
 ## game's job).
 const MAPS_SUBDIR := "../maps"
 
-const _BG := Color(0.09, 0.09, 0.11)
-const _PANEL := Color(0.13, 0.13, 0.16)
-const _TEXT := Color(0.82, 0.82, 0.86)
-const _GOOD := Color(0.55, 0.80, 0.55)
-const _BAD := Color(0.95, 0.45, 0.40)
+## ⛔ **THESE WERE SEVEN LITERAL COLOURS AND ARE NOW SEVEN ALIASES** (16.4f). They are kept as
+## local names because the file reads them thirty-odd times and `UiChrome.TEXT` at every call site
+## would be churn for nothing — but the VALUES now live in one place.
+##
+## 📝 **AND THIS REVERSES A NOTE THAT WAS RIGHT WHEN IT WAS WRITTEN.** `_DIM`'s old comment read:
+## *"`Boot` and `ObjectPalette` both carry their own; a fourth copy of a grey is cheaper than a
+## shared constant that has to live somewhere neither of them owns."* That was a fair trade for a
+## grey. It stopped being one when the panels gained a plate: three files each deciding what
+## "panel" and "text" mean is how one panel goes brown and the other two stay grey, each correct
+## according to its own file. `UiChrome` is the somewhere.
+const _BG := UiChrome.BG
+const _PANEL := UiChrome.PANEL
+const _TEXT := UiChrome.TEXT
+const _GOOD := UiChrome.GOOD
+const _BAD := UiChrome.BAD
 
 ## Saved, and worth reading anyway (16.4b). A third colour because there is a third outcome --
 ## see `save()`.
-const _WARN := Color(0.95, 0.78, 0.35)
+const _WARN := UiChrome.WARN
 
-## Present but with nothing to say — the inspector with no selection (16.4). `Boot` and
-## `ObjectPalette` both carry their own; a fourth copy of a grey is cheaper than a shared
-## constant that has to live somewhere neither of them owns.
-const _DIM := Color(0.55, 0.55, 0.60)
+## Present but with nothing to say — the inspector with no selection (16.4).
+const _DIM := UiChrome.DIM
 
 ## ⚠️ **NEVER COMPARE A TOOL AGAINST A LITERAL INT.** `_tool_buttons` is keyed by the enum's
 ## integer, so every member's value is load-bearing outside this file — and `Tool.START` was
@@ -803,6 +811,13 @@ func _notice(text: String, colour: Color) -> void:
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# THE TOOL'S TEXT COLOUR, IN ONE ASSIGNMENT (16.4f). A `Control`'s theme propagates to every
+	# descendant, so this reaches the palette, the dialog and every control built below without
+	# any of them asking. ⚠️ **It carries font colours ONLY** — `gui/theme/custom_font` changes
+	# the face and not the colour, so `Button`s and `LineEdit`s were coming out in the engine
+	# default's cold grey beside cream `Label`s. Invisible on the old flat greys; on a brown plate
+	# it reads as two different families. `UiChrome.theme()` has the measurement.
+	theme = UiChrome.theme()
 	var bg := ColorRect.new()
 	bg.color = _BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1335,13 +1350,9 @@ func _open_overlay() -> Control:
 	overlay.add_child(dim)
 
 	var frame := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = _PANEL
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	frame.add_theme_stylebox_override("panel", style)
+	# A WIDER GUTTER THAN A TOOLBAR ROW, because this is a page rather than a strip -- the same
+	# 14/12 it had when it was flat, now inside the plate's 12 px moulding.
+	frame.add_theme_stylebox_override("panel", UiChrome.panel_style(14, 12))
 	# CENTRED BY ANCHORS AND SIZED BY A MINIMUM, never by assigning `size`: §6's row about
 	# `PRESET_FULL_RECT` applies to every non-equal-anchor Control, and an assigned size here
 	# would be overridden after `_ready()` with a runtime warning and no visible cause.
@@ -1401,15 +1412,15 @@ func _open_overlay() -> Control:
 
 # ── small builders ──────────────────────────────────────────────────────────
 
+## One toolbar row: the `panel_hud` plate with a row inside it (16.4f).
+##
+## THE THREE TOOLBAR ROWS ARE ALL THIS FUNCTION, which is why the owner's *"the same panel_hud for
+## all the panels"* was one edit here and one in the palette rather than a sweep. The gutter is
+## `UiChrome`'s default; the plate's 12 px moulding is added to it there, because content has to
+## clear the border before it starts having padding.
 func _panel() -> PanelContainer:
 	var box := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = _PANEL
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	box.add_theme_stylebox_override("panel", style)
+	box.add_theme_stylebox_override("panel", UiChrome.panel_style())
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	box.add_child(row)

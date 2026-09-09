@@ -177,13 +177,34 @@ const TILE := Vector2i(96, 118)
 
 ## How wide the panel wants to be. Three tiles plus the scrollbar, measured rather than
 ## guessed: at two per row a 32-building roster is sixteen rows of scrolling.
-const PANEL_WIDTH := 330
+##
+## ⚠️ **IT GREW BY THE PLATE'S TWO MOULDINGS IN 16.4f, AND WRITING 354 HERE WOULD HAVE BEEN THE
+## WRONG FIX.** The panel used to be a flat fill with an 8 px gutter, so 330 left 314 px of content
+## for a grid that needs 296 (three 96 px tiles plus two separations) and a scrollbar. The
+## `panel_hud` plate adds 12 px of moulding on each side — content has to clear it — which takes
+## the inner width to 290 and puts the grid **6 px over**. `_grid.columns` is a fixed 3 and
+## `horizontal_scroll_mode` is DISABLED, so the third column would have been **silently clipped**:
+## a palette showing two and a half tiles per row, with every test still passing because nothing
+## counts pixels.
+##
+## So the width is DERIVED from the margin rather than re-typed. Change `UiChrome.MARGIN` and this
+## follows; the 330 keeps meaning what it was measured to mean.
+const PANEL_WIDTH := 330 + 2 * UiChrome.MARGIN
 
-const _TEXT := Color(0.82, 0.82, 0.86)
-const _DIM := Color(0.55, 0.55, 0.60)
-const _PANEL := Color(0.13, 0.13, 0.16)
+## ALIASES SINCE 16.4f — the values live in `UiChrome`, which is what stops this panel and the
+## toolbar's three drifting apart now that both draw a plate.
+const _TEXT := UiChrome.TEXT
+const _DIM := UiChrome.DIM
+const _PANEL := UiChrome.PANEL
+
+## ⚠️ **THE TILE BACKGROUND STAYS ITS OWN COLOUR AND IS NOT `UiChrome.PANEL`.** A tile sits ON a
+## plate, so it has to be distinguishable FROM one — and the whole point of the lettered-plate
+## fallback is that a tile reads as a tile when there is no icon in it. Kept a shade lighter than
+## the panel it sits on, as it was.
 const _TILE_BG := Color(0.17, 0.17, 0.21)
-const _SELECTED := Color(0.95, 0.78, 0.35)
+
+## The selection highlight, which is the plate's own gold. One accent for the tool.
+const _SELECTED := UiChrome.GOLD
 
 var _icons: IconAtlas = null
 
@@ -804,13 +825,12 @@ func _repaint_tiles() -> void:
 
 func _init() -> void:
 	custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = _PANEL
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	add_theme_stylebox_override("panel", style)
+	# THE `panel_hud` PLATE (16.4f), the same one the toolbar rows draw. ⚠️ **`PANEL_WIDTH` IS
+	# UNCHANGED AND THAT IS WORTH CHECKING RATHER THAN ASSUMING**: 330 was measured as three tiles
+	# plus a scrollbar, and the plate's moulding now eats 12 px off each side. The tiles are laid
+	# out inside the content box, so the arithmetic still holds — `test_object_palette` counts the
+	# tiles per row and `preview_editor` photographs it, which is what says whether it went to two.
+	add_theme_stylebox_override("panel", UiChrome.panel_style(8, 8))
 	_build()
 
 

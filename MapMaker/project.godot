@@ -26,6 +26,10 @@ GameDataRegistry="*res://src/game_content.gd"
 window/size/viewport_width=1600
 window/size/viewport_height=900
 
+[gui]
+
+theme/custom_font="res://assets/ui/fonts/NewRocker-Regular.ttf"
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

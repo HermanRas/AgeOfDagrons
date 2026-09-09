@@ -277,6 +277,28 @@ func _icon_lines() -> Array[String]:
 		lines.append("  [color=#f27366]no measured hotspot[/color] %s — these aim at their own"
 				% ", ".join(PackedStringArray(_as_strings(no_aim)))
 				+ " centre, which looks correct and is not")
+
+	# ── the chrome (16.4f) ──
+	#
+	# TWO FACTS AGAIN, and again because they fail differently. A missing PLATE falls back to the
+	# flat panels the tool had until today -- unstyled, entirely usable, and the state a person
+	# would describe as "it looks like the old one". A missing FONT is not a fallback anybody
+	# chose: `gui/theme/custom_font` naming a file that is not there leaves every label in the
+	# engine default, which looks deliberate and is how a font swap silently does not happen.
+	lines.append("  plate     %4s   [color=%s]%s[/color]" % [
+			"yes" if UiChrome.has_plate() else "no",
+			(_DIM if UiChrome.has_plate() else _WARN).to_html(false),
+			"%s, %d px border at every panel size" % [UiChrome.PANEL_PATH.get_file(),
+					UiChrome.MARGIN]
+			if UiChrome.has_plate()
+			else "%s is missing — panels draw flat, which is the old look and still works"
+					% UiChrome.PANEL_PATH])
+	var font_path: String = ProjectSettings.get_setting("gui/theme/custom_font", "")
+	lines.append("  font      %4s   [color=%s]%s[/color]" % [
+			"ok" if FileAccess.file_exists(font_path) else "MISS",
+			(_DIM if FileAccess.file_exists(font_path) else _BAD).to_html(false),
+			font_path.get_file() if FileAccess.file_exists(font_path)
+			else "gui/theme/custom_font names %s and it is not there" % font_path])
 	return lines
 
 
