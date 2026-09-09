@@ -117,6 +117,99 @@ func test_the_file_menu_leads_its_row_and_a_divider_follows_it() -> void:
 	assert_true(editor._name_field.get_index() > 1, "the name field moved out of this row")
 
 
+# ── what the owner's testing pass found ─────────────────────────────────────
+
+## ⛔ **THE FAVOURITES PANEL WAS EMPTY.** The owner, testing card #93, 2026-09-09: *"Open Map fav
+## does not show the standard 3 locations."*
+##
+## Nothing had ever written to it. The tool's answer to "where are the maps" was the `Go to` row at
+## the BOTTOM of the dialog, and **Favorites is the panel Godot puts at the top left with a star on
+## it** — the first place a person looks. One control in the place nobody looks is worse than two
+## controls for one job.
+##
+## ⚠️ **MERGED, NOT ASSIGNED, AND THAT IS THE HALF WORTH A TEST.** `set_favorite_list()` replaces
+## the whole list and the dialog has its own star button, so seeding on every open could silently
+## delete a folder the author had favourited — the same class of thing as the start wiping a wall
+## across the map, which this same testing pass found an hour earlier.
+func test_the_dialogs_offer_the_map_roots_as_favourites_without_eating_the_authors() -> void:
+	var editor := _open_editor()
+	var mine := "C:/somewhere/the/author/starred"
+	editor._open_win.set_favorite_list(PackedStringArray([mine]))
+	editor._seed_favourites(editor._open_win)
+	var got: PackedStringArray = editor._open_win.get_favorite_list()
+	# ⚠️ **GODOT STORES A FAVOURITE WITH A TRAILING SLASH**, measured here: this assertion read
+	# `got.has(mine)` and failed against `"C:/somewhere/the/author/starred/"`. That is precisely
+	# why `_seed_favourites()` compares on a stripped path — a plain `in` test would re-add every
+	# root on every open and grow the list forever. Kept as a note because the naive form looks
+	# correct and passes nothing.
+	assert_true(_favourited(got, mine), "the author's own favourite was deleted: %s" % [got])
+	# EVERY ROOT THAT EXISTS IS THERE. A root that does not exist is deliberately absent -- see
+	# the test below.
+	var roots := 0
+	for entry in editor._sources.roots(editor._startup.root):
+		var path := str(entry["path"]).simplify_path().trim_suffix("/")
+		if not DirAccess.dir_exists_absolute(path):
+			continue
+		roots += 1
+		assert_true(_favourited(got, path), "%s is a map root and is not in Favorites" % path)
+	assert_true(roots >= 2, "this machine should have at least the authored and campaign roots")
+	# AND SEEDING TWICE DOES NOT DUPLICATE, because it runs on every open.
+	var before: int = got.size()
+	editor._seed_favourites(editor._open_win)
+	var again: PackedStringArray = editor._open_win.get_favorite_list()
+	assert_eq(again.size(), before,
+			"a second open added the roots again")
+
+
+## Is `path` in the list, ignoring the trailing slash Godot adds when it stores one?
+func _favourited(list: PackedStringArray, path: String) -> bool:
+	var want := path.simplify_path().trim_suffix("/")
+	for f in list:
+		if str(f).simplify_path().trim_suffix("/") == want:
+			return true
+	return false
+
+
+## ⚠️ A FAVOURITE POINTING AT A MISSING DIRECTORY IS A DEAD ENTRY NOBODY CAN TELL FROM A LIVE ONE.
+##
+## The game's `user://maps/` does not exist until somebody saves a map from a match, and Godot's
+## favourites list has no disabled state — so the root is omitted rather than listed dead. That is
+## the same answer the `Go to` buttons give by being DISABLED with the path in their tooltip: both
+## controls say "this root is not available", in the only way each can.
+func test_a_root_that_does_not_exist_is_not_offered_as_a_favourite() -> void:
+	var editor := _open_editor()
+	editor._open_win.set_favorite_list(PackedStringArray())
+	editor._seed_favourites(editor._open_win)
+	var got: PackedStringArray = editor._open_win.get_favorite_list()
+	assert_true(got.size() > 0, "nothing was seeded at all")
+	for f in got:
+		assert_true(DirAccess.dir_exists_absolute(str(f).trim_suffix("/")),
+				"%s is favourited and is not there" % f)
+
+
+## ⛔ **`map.png` WAS LISTED BESIDE `map.json` IN EVERY MAP FOLDER.** The owner, same pass: *"does
+## not filter to .json files only."*
+##
+## 📝 **IT IS A LEGIBILITY FIX AND NOT A SELECTION FIX.** In `FILE_MODE_OPEN_DIR` the files are
+## listed for context and cannot be picked — the OK button returns the DIRECTORY. So the filter
+## changes what an author reads, and the surviving `map.json` is the signal wanted: a folder showing
+## one is a map. Verified in a photograph of the dialog inside `maps/sample_duel`, because whether
+## `add_filter` reaches the list in a directory mode is an engine behaviour and not a promise.
+##
+## Asserted on BOTH dialogs, so they read alike.
+func test_both_dialogs_list_only_a_maps_own_data_file() -> void:
+	var editor := _open_editor()
+	for win in [editor._open_win, editor._save_win]:
+		var filters: PackedStringArray = (win as FileDialog).filters
+		assert_eq(filters.size(), 1, "expected one filter, got %s" % [filters])
+		assert_true(str(filters[0]).begins_with("*.json"),
+				"the filter is not the map's data file: %s" % filters[0])
+		# AND THE MODE IS STILL A DIRECTORY MODE, which is what makes the filter cosmetic. A
+		# switch to OPEN_FILE to make the filter "do something" is the tempting wrong fix.
+		assert_eq((win as FileDialog).file_mode, FileDialog.FILE_MODE_OPEN_DIR,
+				"a map is a directory of two files — see `_on_dir_chosen`")
+
+
 # ── the dialogs' configuration ──────────────────────────────────────────────
 
 ## ⚠️ `FILE_MODE_OPEN_DIR`, BECAUSE A MAP IS A DIRECTORY OF TWO FILES.

@@ -410,6 +410,7 @@ func open_dialog() -> void:
 		_open_hint.add_theme_color_override("font_color",
 				_WARN if not _sources.warnings.is_empty() else _DIM)
 	_refresh_root_buttons(_open_roots)
+	_seed_favourites(_open_win)
 	_start_in_the_maps_root(_open_win)
 	if is_inside_tree():
 		# ⚠️ **ONLY WITH A TREE.** `popup_centered_ratio` needs a parent viewport, and the suite
@@ -604,6 +605,7 @@ func save_as_dialog() -> void:
 	# author has no idea the toolbar's Name box is what decides the folder.
 	_save_win.title = "Save \"%s\" into which folder?" % _document.slug()
 	_refresh_root_buttons(_save_roots)
+	_seed_favourites(_save_win)
 	_start_in_the_maps_root(_save_win)
 	if is_inside_tree():
 		_save_win.popup_centered_ratio(0.7)
@@ -1702,6 +1704,19 @@ func _build_dialogs() -> void:
 	# dialog can see none of them.
 	_open_win.access = FileDialog.ACCESS_FILESYSTEM
 	_open_win.use_native_dialog = false
+	# ⛔ **THE OWNER, TESTING, 2026-09-09: *"does not filter to .json files only."*** The listing
+	# showed `map.json` **and** `map.png` inside every map folder — two rows of noise per map, in a
+	# dialog whose whole job is to make one folder recognisable as a map.
+	#
+	# ⚠️ **IT IS A LEGIBILITY FIX AND NOT A SELECTION FIX, WHICH IS WORTH KNOWING BEFORE SOMEBODY
+	# "COMPLETES" IT.** In `FILE_MODE_OPEN_DIR` the files are listed for context and **cannot be
+	# picked** — what the OK button returns is the directory. So the filter changes what an author
+	# READS, not what they can choose, and the remaining `map.json` is exactly the signal wanted:
+	# a folder showing one is a map, a folder showing nothing is not. Anyone tempted to switch to
+	# `FILE_MODE_OPEN_FILE` so the filter "does something" should read `_on_dir_chosen`'s note
+	# first — a map is a DIRECTORY of two files, and picking `map.json` means trimming a path and
+	# means any stray `map.json` looks openable.
+	_open_win.add_filter("*.json", "Map data")
 	_open_win.dir_selected.connect(_on_dir_chosen)
 	_open_win.canceled.connect(close_dialog)
 	_open_roots = _add_root_buttons(_open_win)
@@ -1718,6 +1733,9 @@ func _build_dialogs() -> void:
 	_save_win.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	_save_win.access = FileDialog.ACCESS_FILESYSTEM
 	_save_win.use_native_dialog = false
+	# THE SAME FILTER, so the two dialogs read alike: an author browsing for a parent folder is
+	# looking at the same directories with the same question. See the Open dialog's note.
+	_save_win.add_filter("*.json", "Map data")
 	# AFTER THE MODE — see the Open dialog's note. `save_as_dialog()` rewrites the title per save
 	# (it names the folder about to be created); this is the button, which does not change.
 	_save_win.ok_button_text = "Save here"
@@ -1755,6 +1773,48 @@ func _build_dialogs() -> void:
 			_quit_now())
 	_exit_win.canceled.connect(close_dialog)
 	add_child(_exit_win)
+
+
+## Put the three map roots in the dialog's own **Favorites** list.
+##
+## ⛔ **THE OWNER FOUND THIS EMPTY WHILE TESTING, 2026-09-09:** *"Open Map fav does not show the
+## standard 3 locations."* It did not, because nothing had ever written to it — the `Go to` buttons
+## at the bottom of the dialog were the tool's answer to "where are the maps", and **Favorites is
+## where a person looks first**, being the panel Godot puts at the top left with a star on it.
+## Two controls for one job is bad; one control in the place nobody looks is worse.
+##
+## ⚠️ **MERGED, NEVER ASSIGNED, BECAUSE THE AUTHOR CAN STAR THINGS TOO.** The dialog has its own
+## star button and `set_favorite_list()` replaces the whole list, so writing the three roots over
+## it on every open would silently delete a folder the author had favourited themselves — a small
+## destruction of their setup, in the class of thing this project keeps finding: *the start wiping
+## a wall across the map* was the same mistake with entities.
+##
+## **Re-seeded on every open rather than at construction**, for `_refresh_root_buttons`' reason:
+## `MapSources.roots()` needs `_startup.root`, which `_ready()` resolves after `_build_ui()`, and
+## a root can appear while the tool runs — the game's `user://maps/` does not exist until somebody
+## saves a map from a match.
+func _seed_favourites(win: FileDialog) -> void:
+	if win == null or _startup == null:
+		return
+	var have := win.get_favorite_list()
+	var out := PackedStringArray(have)
+	for entry in _sources.roots(_startup.root):
+		var path := str(entry["path"]).simplify_path().trim_suffix("/")
+		# ⚠️ **ONLY ROOTS THAT EXIST.** A favourite pointing at a missing directory is a dead entry
+		# a person cannot tell from a live one until they click it — the same argument as the `Go
+		# to` buttons being DISABLED with the path in their tooltip rather than silently doing
+		# nothing.
+		if not DirAccess.dir_exists_absolute(path):
+			continue
+		var known := false
+		for existing in out:
+			if str(existing).simplify_path().trim_suffix("/") == path:
+				known = true
+				break
+		if not known:
+			out.append(path)
+	if out.size() != have.size():
+		win.set_favorite_list(out)
 
 
 ## The row the root buttons live in. Empty until a dialog is opened — see `_refresh_root_buttons`.
