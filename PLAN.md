@@ -3453,6 +3453,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.9 | **Dragon + nest** — not bespoke after all: `fauna/dragon.xml` ships with 0 A.D., complete and textured, 9.2 m wingspan; the nest composes from existing gaia props | ✅ **BAKED AND STAGED 2026-09-04 as `vis.dragon_rigged`** — 408 frames, 8 directions × 5 clips (`idle`, `walk`, `attack`, `die`, `decay`), one 4096×4096 page, **7.4 MB and the largest single asset in the game**. `vis.dragon` stays as the static fallback. All three nest props were already staged. **The blocker was the pipeline, not the art:** `adapters/generic.py` is now written (isobake `5592f23`), so isobake can bake a `.blend`/glTF/FBX, and it shares ONE import path with `isobake inspect` — which had used `wm.open_mainfile` for `.blend`, something the bake can never do. ⚠️ **THE "UPRIGHT ON TWO LEGS, 5.44 m" READING WAS A MEASUREMENT ARTEFACT AND IS WITHDRAWN** — that is the REST POSE and the walk clip; four of the five clips measure **9.19 × 8.11 × 3.76 m on z = 0**, the source's own figures to three decimals, so the creature came back correct and **the owner decision this row carried never had to be made**. Two asset defects found by looking rather than reading: the rigger **discarded `animal_dragon.dds` for a green striped placeholder** (UVs survived; `dragon_rigged.blend` is the retextured copy — use it, not `Untitled.blend`), and **every clip is a ping-pong**, so `Death` ends standing and needed a new `AnimSpec.end` (isobake `bac2ac0`) or the corpse stands up. `walk` is the **fly cycle** by the owner's call, at 16 @ 12 because `Fly2` holds two wingbeats. **Zero player colours are missing and that is measured** — white vs blue renders *identically* (0 of 5,567 px moved), so there is no mask; the generic adapter has no `player_colour` path either. `footprint_m` unchanged at `[9.19, 8.11] / 3.76`. Open on `P7`, now `Test`: the owner looking, and the rigging service's terms |
 | A.10 | **Building roster, age by age** — ~70 bakes. **The first batch is five buildings, not seventy**: age 1 unlocks only town centre, house, mill, mining camp and lumber camp, which is a complete playable settlement. Age 2 adds eight. Two free savings: composite props are the same gaia assets in all four ages, so bake once and reuse; the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2 (both Celtic, so similar) — it saves ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of the age axis. **Measure all four skins before declaring a footprint** — it is the max across ages and cannot be read off the age-1 bake | ✅ **CLOSED 2026-09-01** on the owner having played it: *"all assets excluding dragon, packed engines looks good."* Every declared building carries a staged atlas and a four-age map. **It had been finished for some time while its card said "running in the background"**, which is what blocked 5.7 and 9.6 for longer than the art did. **Not closed by the facing/colour/clip pass**, so a building bug reopens it rather than contradicting the closure. Fields turned out NOT to age — one of four picked at placement, and `field_age2.toml` records why those three must never be given a `variant_seed` |
 | A.11 | **Walls and gates** — ~16 pieces across three tiers. Unblocked from the footprint side (all pieces share one footprint, all towers another, across every civ) | See the two findings below |
+| A.12 | **Wooden bridge** — owner request 2026-09-09, not previously on this track | ✅ **BAKED AND STAGED as `vis.bridge_wood`** — 8 directions, one static anim, one 2048×2048 page, 1.20 MB, isobake `0e48a66`, `dirty=false`. ~44 × 18 m (22 × 9 tiles), 0.618 m tall. **Nothing in 0 A.D. is a bridge:** `bridge_edge_wooden` is a whole *half* bridge (deck, trestle piers, rail, ramp) and `bridge_wood_01` is a flat ground **decal** with no mesh at all, and their own editor composes the two — `maps/scenarios/bridge_demo` places two halves 180° apart with decking painted between. **The composition IS the asset**, which is what the new `composite` adapter exists for. Two placement numbers were traps: the mesh's max Y is a **support post at z = −6.866**, not the edge of the deck, so sizing the centre panels to the bounding box left a 0.14 m slot open down the whole span (a 2–3 px black hairline); and the flat deck is **not centred** (−16.265 … 15.730), so the 180° copy's flat run is the mirror of that and the panels must span the intersection or float over a ramp. **`ground_clip` is ON and I had argued it must be off** — 92% of the mesh is below z = 0 and all of it is structural trestle, so I read it as legs rather than skirt. The fraction was never the test: a baked sprite has no river to span, so the piers draw over our own terrain tiles exactly as a buried wall skirt does. Owner's call on seeing it; 7.291 m → 0.618 m, and it reads better |
 
 **Three art findings that cost real time and would cost it again.**
 
@@ -3502,9 +3503,34 @@ that only a human eye can check is a convention that will be wrong for as long a
 `WallPlan`'s header said "VERIFY THESE BY LOOKING" and `preview_walls` took the photographs, and
 that was not enough. Atlas frames are pixels; measure them.
 
+**"Does this need 5 directions or 8" is now a MEASUREMENT, and it settles A.11's open turntable
+question.** The wall note above says *"`5` would probably work for a symmetric segment but waits
+for someone to look at a turntable"* — but the question `directions = 5` actually asks is not "is
+this symmetric", it is **"does this equal its own reflection"**, and those come apart. The bridge
+is the demonstration: two identical halves 180° apart, opposite views differing by only 16.7% with
+*identical silhouettes* — textbook 2-fold **rotational** symmetry, which is exactly what a glance
+at a turntable reads as "symmetric enough to mirror" — yet the S frame differs from its own
+left-right mirror by **31.9%**. At 5 it would have shipped a reflection.
+
+The test is three lines on a single baked frame (`ImageChops.difference(S, S.transpose(FLIP_LEFT_RIGHT))`,
+count pixels above the sampling noise floor), so **any recipe considering 5 can answer this
+without a turntable and without a human eye** — which is the same lesson the wall-facing finding
+above ends on. Note the corollary, because it cuts the other way: a subject that scores *low* is
+also a **useless chirality test** for the pipeline itself, since it cannot fail the four-column
+compass check. Verify a compass change on a horse; verify a recipe's `directions` with the mirror.
+
 **Still unbaked:** the composite props — 3× `wood_lumber` (lumber camp), 3× `stone_pile_granite`
-(mining camp) — need a `[source.extras]` feature in isobake to compose props onto a building. The
-dragon nest needs the same one, so it is **one feature serving three entries**.
+(mining camp) — need a way to compose props onto a building. The dragon nest needs the same one,
+so it is **one feature serving three entries**.
+
+⚠️ **`adapters/composite.py` (isobake `0e48a66`) is most of that feature but not all of it, and
+the difference matters.** It places several sources as one subject — `[[source.parts]]`, each
+naming an adapter and its own source keys plus `offset_m` / `yaw_deg` — which is what built the
+bridge. What it does **not** do is resolve a 0 A.D. **attach point**: a part is placed at
+coordinates the recipe states, not at the `prop_*` bone the actor nominates. For the lumber camp's
+wood piles that is probably fine (hand-place three offsets and look). For anything that should sit
+where the *source* says it sits, the attach-point lookup is still owed. It is also **static-only**
+and refuses animated recipes outright rather than baking a moving subject as a still one.
 
 **Batches run 2-wide** (`-Parallel 2`), not 4 — the ceiling is RAM, since every slot holds a full
 Blender scene, and 4 saturates the owner's workstation while they are using it.
