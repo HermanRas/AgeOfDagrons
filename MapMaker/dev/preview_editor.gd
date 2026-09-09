@@ -283,6 +283,16 @@ func _report_exit_question() -> void:
 	print("    ok:     %s" % win.ok_button_text)
 	print("    cancel: %s" % win.get_cancel_button().text)
 	print("    up:     %s" % win.visible)
+	# ⚠️ **WHICH BUTTON HAS THE KEYBOARD, WHICH IS THE HALF A SCREENSHOT SHOWS AND NO TEST CAN.**
+	# An `AcceptDialog` focuses OK, so Enter discarded the map -- caught by the focus ring in
+	# `exit_unsaved.png` after a comment had already claimed the opposite. Printed as well as
+	# photographed, because a focus ring is two pixels and this is the one keystroke that matters.
+	var focused := win.get_viewport().gui_get_focus_owner() if win.is_inside_tree() else null
+	print("    focus:  %s" % ("<none>" if focused == null else str((focused as Button).text
+			if focused is Button else focused.name)))
+	if focused is Button and (focused as Button).text == win.ok_button_text:
+		printerr("  ENTER WOULD DISCARD THE MAP -- focus belongs on \"%s\""
+				% win.get_cancel_button().text)
 	if not win.visible:
 		printerr("  the exit question is NOT on screen -- the shot below shows nothing")
 

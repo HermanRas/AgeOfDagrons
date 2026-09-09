@@ -640,6 +640,13 @@ func request_exit() -> void:
 			% _document.map_name
 	_dialog_open = true
 	_exit_win.popup_centered()
+	# ⚠️ **FOCUS ON `Keep editing`, AND THIS LINE IS WHY THE COMMENT IN `_build_dialogs()` IS TRUE.**
+	# An `AcceptDialog` focuses its OK button, so Enter discarded the map — and `_build_dialogs()`
+	# claimed the opposite in a comment for about ten minutes, which is worse than not saying it:
+	# a sentence in the code that gets believed and is wrong. **Found in `exit_unsaved.png`**, by
+	# the focus ring sitting on "Discard and exit". Nothing headless can see a focus ring, and
+	# `grab_focus()` needs the window up — so it is here and not in the builder.
+	_exit_win.get_cancel_button().grab_focus()
 
 
 func _quit_now() -> void:
