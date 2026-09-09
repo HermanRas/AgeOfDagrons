@@ -757,7 +757,14 @@ func apply_tool(tile: Vector2i) -> void:
 				# **THE WHOLE START GOES, AND IT IS SAID LOUDLY.** A click that deletes a town
 				# centre, five villagers, a scout and a ring of resources is not a click whose
 				# result should have to be inferred from the entity count.
-				_notice("CLEARED P%d's START — the base and its opening went with it"
+					#
+					# ⚠️ **"AND ANYTHING OF THEIRS STANDING IN IT" IS NOT PADDING.** Since the
+					# 2026-09-09 fix, `remove_start()` takes that player's entities within
+					# `StartLayout.owned_reach()` of the centre — which on a decorated map includes
+					# buildings THE AUTHOR placed. A notice naming only "the base and its opening"
+					# would understate what just happened, and that function's header carries both
+					# why the bound exists and why it cannot narrow to the tag alone.
+				_notice("CLEARED P%d's START — the base, its opening, and anything of theirs standing in it"
 						% whose, _WARN)
 				changed = true
 			else:

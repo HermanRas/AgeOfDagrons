@@ -345,28 +345,69 @@ func place_start(player: int, centre: Vector2i) -> bool:
 
 ## Take a player's start and everything placed for them back off the map.
 ##
-## **BY OWNER, AND BY THE TAG `StartLayout` LEAVES — never by proximity.** Two rules because
-## a start has two kinds of thing in it:
+## **BY THE TAG `StartLayout` LEAVES, AND BY OWNER *WITHIN THE CLUSTER'S REACH*.** Two rules
+## because a start has two kinds of thing in it:
 ##
-##   - the base and its units are `player`-owned, so the owner is enough;
+##   - the base and its units are `player`-owned, so the owner finds them — **but only near the
+##     start**, see the ⛔ below;
 ##   - **every resource node is gaia (`player: 0`)** and is indistinguishable from a tree an
 ##     author placed deliberately. `StartLayout.ORIGIN_KEY` says which start put it there.
 ##
 ## A test caught what happens without the second rule: placing a start twice left the first
 ## cluster behind and the entity count went 24 → 40, so a mis-clicked start littered the map
-## permanently — and 16.2 has no delete tool to clean it up with. Deleting "gaia things near
-## the start" instead is the tempting alternative and is worse: it would eat the author's own
-## trees the moment 16.3 lets them place any.
+## permanently. Deleting "gaia things near the start" instead is the tempting alternative and is
+## worse: it would eat the author's own trees the moment 16.3 lets them place any.
+##
+## ⛔ **THE OWNER CLAUSE HAD NO BOUND AND THAT WIPED THE MAP. THE PROJECT OWNER FOUND IT IN THE
+## TOOL, 2026-09-09:** *"the start wipes the entire map when placed, even a wall on the opposite
+## side of the map?"* It did, and `place_start()` calls this first, so **placing P1's start deleted
+## every P1-owned entity anywhere on the map.**
+##
+## ⚠️ **THE RULE WAS RIGHT WHEN IT WAS WRITTEN AND 16.3 EXPIRED IT.** "Owned by P1" meant "part of
+## P1's start" only while a start was the *only* way a player-owned entity could reach a map. The
+## palette's **Owner** dropdown broke that premise and nothing came back to re-read the rule
+## resting on it. The bound is `StartLayout.owned_reach()`, derived from the ring the units are
+## actually placed on, so this is now **a strict subset of what it deleted before**: everything it
+## used to take within the cluster it still takes, and nothing outside it.
+##
+## ⚠️ **A FIRST PLACEMENT NOW SWEEPS NOTHING OWNED AT ALL**, which is the strongest form of the fix
+## rather than a special case: there is no previous centre to measure from, so the owner clause
+## does not apply. The old code never consulted position, so a first start on a decorated map was
+## the exact gesture that wiped it.
+##
+## 📝 **WHAT IS LEFT, AND WHY IT IS THE RIGHT RESIDUE.** `MapFile` drops `ORIGIN_KEY` on save, so
+## on a REOPENED map the tag is gone and the owner clause is all there is — which is exactly why it
+## cannot simply be deleted in favour of the tag. The two residual cases are both visible and both
+## undoable, which is the trade this project keeps making: an author's own P1 building **inside**
+## the cluster goes with the start (deliberate: re-placing a start is an act on that ground), and a
+## start's villager the author has since dragged **outside** the reach survives a re-place on a
+## reopened map as one stray unit. `StartLayout.audit()` reports the second. Silent destruction of
+## work sixty tiles away is not in that category.
 func remove_start(player: int) -> void:
 	var mine := _open("clear P%d's start" % player)
 	_step.lists_before(data)
+	# ⚠️ **READ BEFORE IT IS CLEARED.** The centre below is the OLD one — what the owner clause
+	# measures distance from — and the next three lines are what erase it. `place_start()` writes
+	# the new centre only after this function returns, so this is the one window it is readable in.
+	var was := Vector2i(-1, -1)
 	if player >= 1 and player <= data.starts.size():
+		was = data.starts[player - 1]
 		data.starts[player - 1] = Vector2i(-1, -1)
+	var reach := StartLayout.owned_reach()
 	var kept: Array[Dictionary] = []
 	for e in data.entities:
-		var owned := int(e.get("player", 0)) == player
 		var from_this_start := int(e.get(StartLayout.ORIGIN_KEY, 0)) == player
-		if not owned and not from_this_start:
+		var owned_near := false
+		if not from_this_start and int(e.get("player", 0)) == player and was.x >= 0:
+			# ⚠️ `tile`, NOT `x`/`y`. An in-memory entity carries a `Vector2i` under `tile`; `x`
+			# and `y` exist only in the SAVED dictionary. `StartLayout._tally` has the scar: it
+			# read `x`, got 0 for everything, and attributed every gaia node to whichever start
+			# was nearest (0,0).
+			var t: Vector2i = e.get("tile", Vector2i.ZERO)
+			# CHEBYSHEV, which is the metric the whole cluster is laid out on and the one the sim
+			# measures range in. Euclidean here would spare the corners of a ring built as a square.
+			owned_near = maxi(absi(t.x - was.x), absi(t.y - was.y)) <= reach
+		if not owned_near and not from_this_start:
 			kept.append(e)
 	data.entities = kept
 	# THE LIST WAS FILTERED, so every index past the first removal now names something else.
@@ -464,8 +505,8 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 ## would do nothing nine times out of ten and read as a broken tool.
 ##
 ## ⚠️ **IT REFUSES TO TOUCH A START'S OWN CLUSTER**, and `remove_start()` is why: that function
-## deletes by owner AND by the `StartLayout.ORIGIN_KEY` tag, precisely so a start's base and
-## its opening resources go together. Letting this pick one villager out of a start would leave
+## deletes by the `StartLayout.ORIGIN_KEY` tag and by owner within the cluster's reach, precisely
+## so a start's base and its opening resources go together. Letting this pick one villager out of a start would leave
 ## a cluster the tag no longer describes, which is the state that took the entity count 24 → 40
 ## the first time it was got wrong. Clearing a start is `Clear start`.
 func remove_entity_at(tile: Vector2i) -> int:

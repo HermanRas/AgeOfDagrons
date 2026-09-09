@@ -83,6 +83,31 @@ const _ECONOMY := [
 const RADIUS_SLACK := 6
 
 
+## How far from the centre a player-OWNED entity this places can end up.
+##
+## ⛔ **IT EXISTS BECAUSE `remove_start()` USED TO DELETE BY OWNER WITH NO BOUND AT ALL, AND THE
+## OWNER FOUND IT IN THE TOOL, 2026-09-09:** *"the start wipes the entire map when placed, even a
+## wall on the opposite side of the map?"* It did. `remove_start()` kept only entities that were
+## neither tagged nor owned by that player, so placing P1's start deleted **every P1-owned entity
+## anywhere on the map** — a wall the author had laid an hour ago, sixty tiles away.
+##
+## ⚠️ **THE RULE WAS CORRECT WHEN IT WAS WRITTEN AND 16.3 MADE IT WRONG.** *"A base and its units
+## are `player`-owned, so `remove_start()` can find them by owner"* was true while a start was the
+## **only** way a player-owned entity could get onto a map. The palette's **Owner** dropdown made
+## "owned by P1" stop meaning "part of P1's start", and nothing went back to re-read the rule that
+## had depended on it. Same shape as `_tally`'s `x`-versus-`tile` bug: a premise that quietly
+## expired.
+##
+## **Derived, not typed.** `_place_units` walks `_candidates(centre, UNIT_RING_RADIUS, …)`, whose
+## radius order runs out to `RADIUS_SLACK`, so a villager or scout can land at 13 and no further;
+## the town centre's footprint reaches 5. The gaia ring goes out to 21 (`_ECONOMY`'s 15 plus the
+## slack) and is **deliberately not covered here** — gaia nodes are matched by `ORIGIN_KEY` alone,
+## because proximity would eat the author's own trees, which is the argument that put the tag here
+## in the first place.
+static func owned_reach() -> int:
+	return UNIT_RING_RADIUS + RADIUS_SLACK
+
+
 ## The key every entity this places is tagged with, naming the player whose start put it
 ## there.
 ##

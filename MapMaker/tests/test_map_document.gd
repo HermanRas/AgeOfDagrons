@@ -185,8 +185,9 @@ func test_the_start_tag_is_editing_metadata_and_never_reaches_the_file() -> void
 	assert_eq(back.entities.size(), doc.data.entities.size())
 
 
-## Cleared BY OWNER, not by proximity: sweeping "what is near the start" would also take the
-## gaia trees an author had put there on purpose.
+## Cleared by the `ORIGIN_KEY` tag and by owner **within `StartLayout.owned_reach()`** — never by
+## proximity for the gaia half, since sweeping "what is near the start" would also take the trees
+## an author had put there on purpose. See the test below for the bound on the owned half.
 func test_clearing_a_start_takes_that_players_things_and_nobody_elses() -> void:
 	doc.place_start(1, Vector2i(30, 30))
 	doc.place_start(2, Vector2i(70, 70))
@@ -198,6 +199,96 @@ func test_clearing_a_start_takes_that_players_things_and_nobody_elses() -> void:
 		if int(e["player"]) == 2:
 			p2 += 1
 	assert_eq(p2, StartLayout.VILLAGERS + 2, "player 2 keeps their base and units")
+
+
+## ⛔ **THE TEST FOR THE BUG THE PROJECT OWNER FOUND IN THE TOOL, 2026-09-09:** *"the start wipes
+## the entire map when placed, even a wall on the opposite side of the map?"*
+##
+## It did. `remove_start()` kept only what was neither tagged nor owned by that player, and
+## `place_start()` calls it first — so placing P1's start deleted **every P1-owned entity anywhere
+## on the map**, including work an author had laid an hour earlier sixty tiles away.
+##
+## ⚠️ **AND THE RULE WAS CORRECT WHEN IT WAS WRITTEN.** "Owned by P1" meant "part of P1's start"
+## while a start was the only way a player-owned entity could reach a map. **16.3's palette Owner
+## dropdown expired that premise** and nothing came back to re-read the rule resting on it — the
+## same shape as `StartLayout._tally` reading `x` on an in-memory entity. This test is the
+## premise's replacement: it fails if the bound is ever dropped again.
+func test_placing_a_start_does_not_touch_the_authors_own_buildings_elsewhere() -> void:
+	# THREE OWNED BUILDINGS THE AUTHOR PLACED, at three distances from where the start goes.
+	var centre := Vector2i(20, 20)
+	var reach := StartLayout.owned_reach()
+	var far := Vector2i(90, 90)                        # the owner's wall, across the map
+	var outside := centre + Vector2i(reach + 3, 0)     # just past the cluster
+	var inside := centre + Vector2i(reach - 3, 0)      # inside it, and expected to go
+	for t in [far, outside, inside]:
+		assert_true(doc.add_entity(&"building.blacksmith", 1, t),
+				"the author's building went down at %s" % t)
+	assert_eq(doc.data.entities.size(), 3)
+
+	# ⚠️ **A FIRST PLACEMENT SWEEPS NOTHING OWNED AT ALL**, and that is the strongest form of the
+	# fix rather than a special case: there is no previous centre to measure from, so the owner
+	# clause does not apply. The old code did not consult position, so this was the exact gesture
+	# that wiped the map.
+	doc.place_start(1, centre)
+	assert_eq(_blacksmiths(), 3, "a FIRST start deleted buildings it never placed")
+
+	# NOW THE BOUND MATTERS: re-placing the start has a previous cluster to clear.
+	doc.place_start(1, centre)
+	var survived := _blacksmith_tiles()
+	assert_true(survived.has(far),
+			"the building on the far side of the map was deleted — this is the reported bug")
+	assert_true(survived.has(outside),
+			"a building %d tiles out was deleted, and the cluster only reaches %d"
+			% [reach + 3, reach])
+	# AND THE BOUND IS A REAL BOUND rather than "nothing is ever taken": inside the cluster the
+	# owner clause still applies, because re-placing a start is an act on that ground, and on a
+	# reopened map it is the only rule left.
+	assert_false(survived.has(inside),
+			"nothing was cleared within the cluster — the owner clause has stopped working")
+
+
+func _blacksmiths() -> int:
+	return _blacksmith_tiles().size()
+
+
+func _blacksmith_tiles() -> Dictionary:
+	var out := {}
+	for e in doc.data.entities:
+		if StringName(e.get("def_id", &"")) == &"building.blacksmith":
+			out[e["tile"]] = true
+	return out
+
+
+## Reopening a map drops `ORIGIN_KEY`, so the owner clause is the ONLY rule left — which is why it
+## is bounded rather than deleted.
+##
+## ⚠️ **THIS IS THE CASE THAT MAKES THE TAG-ONLY FIX WRONG**, and it is worth a test rather than a
+## comment: with the tag gone, tag-only matching would remove nothing, so re-placing a start on a
+## reopened map would leave the whole previous base standing and stack a second one on it.
+func test_a_reopened_map_can_still_have_its_start_replaced() -> void:
+	doc.place_start(1, Vector2i(30, 30))
+	assert_eq(doc.save(_dir()), [] as Array[String])
+	var problems: Array[String] = []
+	var reopened := MapDocument.open(doc.dir, problems)
+	assert_eq(problems, [] as Array[String])
+	assert_not_null(reopened)
+	if reopened == null:
+		return
+	# THE TAG IS GONE, which the test above pins independently.
+	for e in reopened.data.entities:
+		assert_false(e.has(StartLayout.ORIGIN_KEY))
+	var before := reopened.data.entities.size()
+	reopened.place_start(1, Vector2i(31, 31))
+	# The base and units of the first placement went; only the untagged gaia ring is left over,
+	# which `StartLayout.audit()` is what reports.
+	var owned := 0
+	for e in reopened.data.entities:
+		if int(e.get("player", 0)) == 1:
+			owned += 1
+	assert_eq(owned, StartLayout.VILLAGERS + 2,
+			"a reopened map stacked a second base: %d owned entities, not one base's worth" % owned)
+	assert_true(reopened.data.entities.size() <= before + 24,
+			"the replacement doubled the map instead of replacing a start")
 
 
 ## A trailing placeholder would make `player_count()` -- which IS `starts.size()` -- count a
