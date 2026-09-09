@@ -410,3 +410,63 @@ that extra key is new.
 bridge - the "edge" is a whole half bridge and the decking is a ground decal, and their own
 editor composes the two. A recipe can now place several sources as one subject. It is
 static-only and refuses animated recipes rather than silently baking them still.
+
+---
+
+## [art -> game-code] Cliffs are coming, and TWO of the four answers they need are yours
+
+**2026-09-09.** Owner asked whether 0 A.D. has anything we can use as a cliff, against an
+Age of Empires II reference (a connected rock edge with a grassy top, straight runs and
+corners). Answer: raw material yes, tile set no. Owner's call is to build our own. Board
+card `cliff-tiles`, PLAN.md 12A A.13.
+
+**Nothing is baked and nothing is asked of you today.** This is here early because two of
+the four blockers are game-side decisions, and I would rather they were known now than
+discovered when I have geometry to place.
+
+### Why we are not reusing 0 A.D.'s cliff art - measured, not assumed
+
+0 A.D. renders a cliff as steep **heightmap terrain** with one of its **78 cliff textures**
+painted on. The `geology/*cliff*` actors are decorative rock **curtains** you embed in that
+slope: no flat top (the heightmap was the top), open hanging bottoms, no matching ends. I
+baked three `temp_cliffs_a` segments end to end through the new composite adapter and they
+do not butt - the four meshes are 10.99 / 9.20 / 11.18 / 6.59 m long with top heights
+7.81 / 7.81 / 5.00 / 9.25 m. Not a tileset.
+
+**AoE2 needs pre-rendered cliff tiles precisely because it has no true 3D terrain.** 0 A.D.
+never needed them, so it never made them. This is structural, not an oversight, and no
+amount of searching their tree will turn one up.
+
+FYI: **`vis.cliff` is already baked and staged** (899 KB) and may be worth knowing about -
+but it is a 11.5 x 25.6 x 27.8 m rock **spire**, a formation rather than an edge. It will
+not make the reference picture.
+
+### What I would build
+
+A cliff tile = a **top quad** (our terrain texture) + a **face quad** battered down to
+z = 0 (one of their 78 cliff textures). Same trick 0 A.D. uses, with geometry we control.
+Pieces: straight, outer corner, inner corner, probably an end cap. Expect **8 directions
+per piece**, for the same reason walls need 8 - a cliff RUNS, so every piece must place
+along either diagonal facing either way.
+
+### The four blockers, and which are yours
+
+1. **Cliff HEIGHT in metres.** OWNER/GAME. This is the one that decides whether a unit
+   standing behind a cliff is occluded by it, which is a draw-order question on your side
+   before it is an art question on mine.
+2. **Is a cliff impassable sim terrain, or pure decoration?** **YOURS.** It decides whether
+   this thing needs a footprint, a collision story and a pathfinding story at all - or
+   whether it is scenery the map author drapes around the edges. I can bake either; they
+   are different assets.
+3. **How does a map MARK a cliff edge?** **YOURS.** `MapData`'s entity record is
+   `{def_id, player, tile, size_class}` - there is no edge concept, and a cliff is an edge
+   between tiles rather than a thing standing on one. This is the same shape as the wall
+   `footprint_override`/`facing` gap you flagged on 2026-09-08, and probably wants solving
+   once for both.
+4. **Tile length** - one 2 m tile per piece, or longer runs with corners. **Mine**, but I
+   cannot propose it until 1-3 land, because occlusion height and map encoding constrain
+   it.
+
+⚠️ **NOTHING HERE IS PROTOTYPED.** The survey above is measured; the build plan is not. Do
+not read the piece list as verified - if the battered-face primitive turns out to look
+wrong at this camera, the shape of the answer changes.
