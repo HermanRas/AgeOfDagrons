@@ -12,14 +12,14 @@
   <a href="LICENSE"><img alt="Code licence: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
   <a href="LICENSE-ART.md"><img alt="Art licence: CC BY-SA 3.0" src="https://img.shields.io/badge/art-CC--BY--SA%203.0-lightgrey"></a>
   <img alt="Engine: Godot 4.7.1" src="https://img.shields.io/badge/engine-Godot%204.7.1-478cbf">
-  <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha%20(phase%200.9%2F13)-orange">
+  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta%20(v0.9.8)-orange">
 </p>
 
 ---
 
 > ### ⚠️ Read this first
 >
-> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.0 — the first
+> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.8 — the seventh
 > beta.** The MVP is achieved and the game is played on a phone: a map, units that gather
 > and fight, buildings, five ages, a 27-entry tech tree, control groups, win conditions,
 > multiplayer and five AI difficulties.
