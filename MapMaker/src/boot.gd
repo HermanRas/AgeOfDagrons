@@ -235,6 +235,26 @@ func _icon_lines() -> Array[String]:
 	if declared == 0:
 		lines.append("  [color=#f27366]visuals.json was not read[/color] — every icon will be a"
 				+ " plate, and not because the art is missing")
+
+	# ── the toolbar's own art (16.4d) ──
+	#
+	# ⚠️ **A DIFFERENT KIND OF MISSING FROM THE TWO NUMBERS ABOVE, AND THAT IS WHY IT IS REPORTED
+	# SEPARATELY.** `staged` being zero is the correct state of a clean clone; these 13 files are
+	# COMMITTED into this project, so zero means a broken checkout or a skipped `--import` — and
+	# the second is by far the likelier, because a `.ctex` lives in `.godot/` which is gitignored.
+	#
+	# ⚠️ **IT DOES NOT GATE `ready_to_work()`, DELIBERATELY.** A map authored with a blank button
+	# is byte-identical to one authored with a gold one, so refusing to save over it would be
+	# `FormatGuard`'s own *"a check that cries wolf is a check somebody disables"* — the same
+	# tiebreak `PRESENTATION` is the standing example of. Loud line, no gate.
+	var gone := ToolIcons.missing()
+	lines.append("  toolbar   %4d   [color=%s]%s[/color]" % [
+			ToolIcons.IDS.size() - gone.size(),
+			(_DIM if gone.is_empty() else _BAD).to_html(false),
+			"of %d committed glyphs, drawn at %d px" % [ToolIcons.IDS.size(), ToolIcons.SIZE]
+			if gone.is_empty()
+			else "MISSING %s — run: godot --headless --path MapMaker --import" % ", ".join(
+					PackedStringArray(_as_strings(gone)))])
 	return lines
 
 

@@ -929,6 +929,12 @@ func _tool_row() -> Control:
 	# does not grow by forty pixels of parenthesis.
 	_undo_button = _button("Undo", func() -> void: undo())
 	_redo_button = _button("Redo", func() -> void: redo())
+	# THE TWO TOOLBAR ACTIONS THAT ARE NOT TOOLS, so they ask by id rather than through
+	# `for_tool()`. ⚠️ **A DISABLED BUTTON DIMS ITS ICON THROUGH `icon_disabled_color`**, which is
+	# a separate theme entry from the one `_paint_icon` sets — left alone deliberately: greying is
+	# exactly what these two should do when there is nothing to take back.
+	_paint_icon(_undo_button, ToolIcons.texture(ToolIcons.UNDO))
+	_paint_icon(_redo_button, ToolIcons.texture(ToolIcons.REDO))
 	row.add_child(_undo_button)
 	row.add_child(_redo_button)
 	row.add_child(_separator())
@@ -947,11 +953,13 @@ func _tool_row() -> Control:
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])
-		# ⚠️ **THE ICON IS BESIDE THE WORD AND DOES NOT REPLACE IT.** The owner supplied four
-		# placeholder glyphs; an icon-only toolbar would be prettier and less usable, which is
-		# 16.2a's own argument about `Ctrl+Z` — *"a shortcut nobody can see is a feature nobody
-		# uses"* — applied to a picture instead of a keystroke. `ToolIcons` draws them.
-		b.icon = ToolIcons.for_tool(int(entry["tool"]))
+		# ⚠️ **THE ICON IS BESIDE THE WORD AND DOES NOT REPLACE IT.** An icon-only toolbar would be
+		# prettier and less usable, which is 16.2a's own argument about `Ctrl+Z` — *"a shortcut
+		# nobody can see is a feature nobody uses"* — applied to a picture instead of a keystroke.
+		# It held for the drawn placeholders and it holds harder for these: `mm_select` and
+		# `mm_move` are a marquee and a four-way arrow, which are the two glyphs every editor
+		# draws slightly differently.
+		_paint_icon(b, ToolIcons.for_tool(int(entry["tool"])))
 		b.toggle_mode = true
 		var t: int = int(entry["tool"])
 		b.pressed.connect(func() -> void: set_tool(t as Tool))
@@ -1408,6 +1416,13 @@ func _button(text: String, on_press: Callable) -> Button:
 	b.text = text
 	b.pressed.connect(on_press)
 	return b
+
+
+## Put one of `ToolIcons`' pictures on a button. A thin call, kept as a name because three of the
+## four call sites read better for it — the tint rule itself lives in `ToolIcons.apply()`, which
+## is where a second caller (the palette's tabs) can not forget it.
+func _paint_icon(b: Button, tex: Texture2D) -> void:
+	ToolIcons.apply(b, tex)
 
 
 func _separator() -> Control:

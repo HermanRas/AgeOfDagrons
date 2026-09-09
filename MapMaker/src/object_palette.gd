@@ -72,13 +72,18 @@ enum Category { BUILDING, UNIT, RESOURCE, TERRAIN }
 ## outside-in** — the ground, then the resources that decide where a base can go, then the
 ## bases, then whatever else. Buildings lead because a start's town centre is the first thing
 ## an author places by hand once 16.4's cursors exist.
+## ⚠️ **THE `icon` KEY IS DATA HERE RATHER THAN A LOOKUP IN `ToolIcons`, AND THAT IS DELIBERATE**
+## (16.4d). A `Category` → id table in the icon file would be a second list that has to agree with
+## this one, and this file's header promises that 16.5's Areas tab is *"one entry in
+## `CATEGORIES`"* — which stops being true the moment adding a tab means editing two files.
+## `cat_areas` is already cut and committed for exactly that row.
 const CATEGORIES := [
-	{"id": Category.BUILDING, "label": "Buildings"},
-	{"id": Category.UNIT, "label": "Units"},
-	{"id": Category.RESOURCE, "label": "Resources"},
-	{"id": Category.TERRAIN, "label": "Terrain"},
-	# 16.5 adds {"id": Category.AREA, "label": "Areas"} here, and `MapData` gains the field in
-	# the same change. See the class comment on why it is not here yet.
+	{"id": Category.BUILDING, "label": "Buildings", "icon": &"cat_buildings"},
+	{"id": Category.UNIT, "label": "Units", "icon": &"cat_units"},
+	{"id": Category.RESOURCE, "label": "Resources", "icon": &"cat_resources"},
+	{"id": Category.TERRAIN, "label": "Terrain", "icon": &"cat_terrain"},
+	# 16.5 adds {"id": Category.AREA, "label": "Areas", "icon": &"cat_areas"} here, and `MapData`
+	# gains the field in the same change. See the class comment on why it is not here yet.
 ]
 
 ## Gaia. `MapData` writes `player: 0` for every resource node, and `StartLayout` relies on it.
@@ -823,6 +828,10 @@ func _build() -> void:
 	for entry in CATEGORIES:
 		var b := Button.new()
 		b.text = str(entry["label"])
+		# THE ICON BESIDE THE WORD, on the toolbar's rule (16.4d) and with one extra reason here:
+		# these four tabs WRAP -- `HFlowContainer`, see below -- so an icon-only row would reflow
+		# into a grid of unlabelled pictures at some panel widths and not at others.
+		ToolIcons.apply(b, ToolIcons.texture(entry["icon"]))
 		b.toggle_mode = true
 		var id: int = int(entry["id"])
 		b.pressed.connect(func() -> void: set_category(id as Category))
