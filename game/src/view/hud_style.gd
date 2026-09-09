@@ -42,6 +42,28 @@ const PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 ## STRETCHED, NOT TILED. The same tool reports this plate's edge is plain moulding
 ## (period 1); the one piece in the set that repeats is `banner_alert`, which
 ## `NoticeToast` draws whole rather than patching at all.
+##
+## ⛔ **12 IS THE EDGE AND 17 IS THE CORNER, AND THIS NUMBER IS THE EDGE ON PURPOSE. DO NOT
+## RAISE IT.** Everything above is about the painted EDGE moulding, and it is right about it:
+## at 267 px the bead band ends at 12. But `panel_hud`'s CORNER carries a round stud whose
+## disc reaches **17 px** — measured on the byte-identical plate committed into `MapMaker/`,
+## by walking in from a corner and taking the regime change rather than a threshold. So 12
+## leaves **5 px of boss inside the stretched region**, pulled along every edge. The MapMaker
+## uses **18** for exactly this reason and its `UiChrome.MARGIN` carries the measurement.
+##
+## ✅ **THE OWNER RULED THE GAME STAYS AT 12, 2026-09-09:** *"game is on mobile, leave the game
+## alone."* That is a better argument than the one I brought him, and it is the reason to write
+## it down rather than just the decision: **the two projects are judged on different screens.**
+## The tool is read on a 1600 px desktop monitor, where a 5 px smear repeated round every plate
+## is what he spotted in a screenshot within a minute. The game is played on a phone, where the
+## HUD panels are small and dense at high DPI and nobody has ever reported it — while the cure
+## costs 36 of the 152 px resource panel in border, on all 29 call sites, visibly. **Identical
+## art, identical defect, different verdict, because the viewing distance is part of the
+## defect.**
+##
+## If this is ever revisited the fix is NOT this constant: it is an `EXTRA_SIZES` entry in
+## `tools/prepare_ui_chrome.py` on `panel_ornate_small`'s precedent, so the stud draws at a
+## thickness a 152 px panel can afford. Card 16.4f prices all three options.
 const PANEL_MARGIN := 12
 
 ## The ORNATE plate, at the size the resource counter draws it (project owner,

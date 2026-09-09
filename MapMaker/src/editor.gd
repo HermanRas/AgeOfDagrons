@@ -1131,10 +1131,11 @@ func _file_row() -> Control:
 	# menu is where a person looks for them and because **Exit had nowhere to live**: see
 	# `request_exit()` on why that mattered more than the tidiness.
 	#
-	# 📝 **THE OWNER'S MOCK SHOWED FOUR ITEMS — Open, Save, SaveAs, Exit — AND `New` IS HERE
-	# ANYWAY**, which is a departure worth naming rather than slipping in. Dropping it would leave
-	# **no way to start a map at all**; it was a toolbar button until this change. If the menu
-	# should be exactly the mock, `New` is the line to delete and the button to put back.
+	# ✅ **THE OWNER'S MOCK SHOWED FOUR ITEMS — Open, Save, SaveAs, Exit — AND `New` STAYS, BY HIS
+	# RULING** (2026-09-09; asked because a fifth item was a departure worth naming rather than
+	# slipping in). Dropping it would leave **no way to start a map at all** — it was a toolbar
+	# button until this change — so the mock was a sketch of where things go rather than an
+	# inventory of what is in them. Five items, settled.
 	#
 	# **`Fit` STAYS A BUTTON.** It is a view command, not a file command — filing it under File
 	# would be the sort of menu nobody can predict.
@@ -1638,6 +1639,12 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		# picture in the palette. Saving stays on. `FormatGuard.PRESENTATION` has the argument.
 		bits.append(_startup.guard.presentation_note())
 	_status.text = "  " + "   ".join(PackedStringArray(bits))
+	# ✅ **GREEN WHEN SAVEABLE, RED WHEN NOT, AND THE OWNER RULED IT STAYS THAT WAY**, 2026-09-09.
+	# Asked because 16.4f's plate left this the one thing on screen outside the brown-and-gold
+	# family — the same complaint he made about the game's age panel — and the answer was to keep
+	# it: **it is a health signal, not decoration**, and reading the tool's state without parsing
+	# the sentence is worth more than the palette matching. So a later "make it all match" tidy-up
+	# has a ruling to argue with rather than an oversight to correct.
 	_status.add_theme_color_override("font_color",
 			_BAD if (not _startup.can_save() or seats < 2) else _GOOD)
 

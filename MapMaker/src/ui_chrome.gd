@@ -70,9 +70,15 @@ const PANEL_PATH := "res://assets/ui/chrome/panel_hud.png"
 ##
 ## 18 rather than 17, for a pixel of slack against the stud's antialiased rim.
 ##
-## ⚠️ **`HudStyle.PANEL_MARGIN` IN THE GAME IS STILL 12 ON THIS SAME ART**, so every `panel_hud`
-## plate in the game has the same smeared stud. Not changed from here — that is a visible change to
-## every HUD panel and the owner reviews those by screenshot. Raised on card 16.4f instead.
+## ✅ **`HudStyle.PANEL_MARGIN` IN THE GAME STAYS 12 ON THIS SAME ART, BY THE OWNER'S RULING**,
+## 2026-09-09: *"game is on mobile, leave the game alone."* So the two projects draw the identical
+## plate at two different margins, deliberately, and **the reason is the screen rather than the
+## art**: this tool is read on a 1600 px desktop monitor, where a 5 px smear round every plate was
+## spotted in a screenshot within a minute; the game is played on a phone, where the panels are
+## small and dense and the cure would cost 36 of the 152 px resource counter in border. Identical
+## defect, different verdict, because the viewing distance is part of the defect. `HudStyle`'s own
+## comment carries the full argument so a reader of THAT file cannot mistake its 12 for an
+## oversight.
 const MARGIN := 18
 
 ## What the stud actually measures, so the number above is checkable rather than asserted.
