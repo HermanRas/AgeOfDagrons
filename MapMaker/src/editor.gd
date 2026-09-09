@@ -150,6 +150,17 @@ func _ready() -> void:
 	_new_map()
 
 
+## Hand back the one piece of application-wide state this screen claims (16.4e).
+##
+## ⚠️ **`Input.set_custom_mouse_cursor` IS NOT SCOPED TO THIS SCREEN AND `mouse_default_cursor_shape`
+## IS.** Half the pair goes away with the canvas; the other half is a texture the `DisplayServer`
+## keeps holding. `GameScene` does exactly this for `emulate_mouse_from_touch`, and its note is
+## the rule: state claimed by a screen has to be given back on **every** path out, or the leak is
+## whatever the next screen inherits. Here it presented as a leaked GPU texture at process exit.
+func _exit_tree() -> void:
+	ToolCursors.release()
+
+
 func document() -> MapDocument:
 	return _document
 
@@ -493,6 +504,11 @@ func set_tool(t: Tool) -> void:
 	_tool = t
 	for key in _tool_buttons:
 		(_tool_buttons[key] as Button).button_pressed = (int(key) == int(t))
+	# THE MOUSE CURSOR FOLLOWS THE TOOL (16.4e), and it is armed HERE rather than in
+	# `_tool_row()`'s press handler because this function is the one door -- the tests, `dev/` and
+	# the keyboard all come through it, so a tool set any other way would leave the pointer
+	# showing the last tool that happened to be *clicked*. `ToolCursors` is a no-op headless.
+	ToolCursors.arm(int(t))
 	_refresh_status()
 
 
@@ -823,6 +839,13 @@ func _build_ui() -> void:
 	_canvas = MapCanvas.new()
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# ⚠️ **THIS ONE LINE IS WHAT KEEPS THE TOOL CURSORS OFF THE TOOLBAR** (16.4e).
+	# `Input.set_custom_mouse_cursor` is application-wide state keyed on a built-in SHAPE, so the
+	# art is registered against `CURSOR_CROSS` and only the control that asks for that shape gets
+	# it. Registering against `CURSOR_ARROW` instead would put a paintbrush over the Save button.
+	# `ToolCursors`' header carries the whole argument, including why the no-art fallback -- a
+	# system crosshair over the map -- is the right one.
+	_canvas.mouse_default_cursor_shape = ToolCursors.CANVAS_SHAPE
 	_canvas.hovered.connect(_on_hovered)
 	_canvas.painted.connect(apply_tool)
 	# A DRAG IS ONE UNDO STEP (16.2a). `MapDocument.begin_stroke()` carries the argument; the

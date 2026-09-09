@@ -255,6 +255,28 @@ func _icon_lines() -> Array[String]:
 			if gone.is_empty()
 			else "MISSING %s — run: godot --headless --path MapMaker --import" % ", ".join(
 					PackedStringArray(_as_strings(gone)))])
+
+	# ── the mouse cursors (16.4e) ──
+	#
+	# ⚠️ **TWO FACTS, BECAUSE THEY FAIL IN OPPOSITE DIRECTIONS.** Missing ART means the canvas
+	# falls back to the system crosshair, which is a sensible map pointer and visibly not ours.
+	# A missing HOTSPOT means the cursor is drawn correctly and **aims at its own middle** — so
+	# every click lands a tile or two off where the author pointed, and nothing looks wrong. The
+	# second is the one worth a line of its own on a startup report.
+	var no_art := ToolCursors.missing()
+	var no_aim := ToolCursors.unmeasured()
+	lines.append("  cursors   %4d   [color=%s]%s[/color]" % [
+			ToolCursors.IDS.size() - no_art.size(),
+			(_DIM if no_art.is_empty() else _BAD).to_html(false),
+			"of %d, drawn at %d px, aiming by measured hotspot"
+					% [ToolCursors.IDS.size(), ToolCursors.SIZE]
+			if no_art.is_empty()
+			else "MISSING %s — the canvas falls back to a system crosshair" % ", ".join(
+					PackedStringArray(_as_strings(no_art)))])
+	if not no_aim.is_empty():
+		lines.append("  [color=#f27366]no measured hotspot[/color] %s — these aim at their own"
+				% ", ".join(PackedStringArray(_as_strings(no_aim)))
+				+ " centre, which looks correct and is not")
 	return lines
 
 

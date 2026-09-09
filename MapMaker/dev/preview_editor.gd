@@ -216,6 +216,7 @@ func _process(_delta: float) -> void:
 		25:
 			_report_wall_rows()
 			_shoot("palette_walls")
+			_report_mouse_cursors()
 			print("")
 			print("OK — twenty-two shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
@@ -418,6 +419,63 @@ func _report_wall_rows() -> void:
 		if axis != MapData.AXIS_NONE \
 				and not palette._label_for(id).ends_with(str(ObjectPalette.AXIS_LABELS[axis])):
 			printerr("    the label and the axis it places disagree")
+	_hold(UI_FRAMES)
+
+
+## ⚠️ **16.4e's CURSORS CANNOT BE PHOTOGRAPHED AND THIS IS THE NEXT BEST THING.**
+##
+## A custom mouse cursor is drawn by the WINDOWING SYSTEM, not into the viewport, so it is absent
+## from every `get_texture().get_image()` capture this file takes — `_shoot()` is structurally
+## blind to it. That is the same class of gap as `preview_lan_discovery`'s
+## `set_broadcast_enabled(true)`: **one line the suite cannot reach and no screenshot can show.**
+##
+## So this arms all five tools in a WINDOWED process — the suite is headless and `ToolCursors.arm`
+## returns early there — and prints the three facts that decide whether the cursor is right:
+##
+##   - **did `Input` take it**, which is what `arm()` returning true means. False for all five is
+##     a missing `--import`; false for one is a missing file;
+##   - **the drawn size**, because Godot draws a hardware cursor at the texture's own pixel size
+##     and the source art is 100 px — three times too big, and it would not be obviously wrong on
+##     a large monitor;
+##   - **the hotspot**, next to the fraction it came from, so the one fault a picture cannot show
+##     is at least written down beside the tool that owns it.
+##
+## **What is still the owner's to judge:** whether each cursor aims where its tip appears to, and
+## whether the keyline holds over pale sand. That wants a hand on the mouse.
+func _report_mouse_cursors() -> void:
+	print("")
+	print("mouse cursors (16.4e) — armed in a windowed process, which the headless suite cannot do")
+	print("  registered against shape %d (Input.CURSOR_CROSS), which only MapCanvas asks for"
+			% int(ToolCursors.SHAPE))
+	var refused: Array[String] = []
+	for entry in [
+		{"tool": EDITOR.Tool.PAINT, "label": "Brush"},
+		{"tool": EDITOR.Tool.PLACE, "label": "Place"},
+		{"tool": EDITOR.Tool.ERASE, "label": "Erase"},
+		{"tool": EDITOR.Tool.SELECT, "label": "Select"},
+		{"tool": EDITOR.Tool.MOVE, "label": "Move"},
+	]:
+		var tool_value := int(entry["tool"])
+		# THROUGH `Editor.set_tool()` AND NOT `ToolCursors.arm()` DIRECTLY, so this exercises the
+		# route a button press takes. Arming the cursor from the press handler instead of from
+		# `set_tool` is the mistake this would catch: every other caller — the tests, `dev/`, a
+		# future keyboard shortcut — would leave the pointer on the last tool that was clicked.
+		_editor.set_tool(tool_value)
+		var armed := ToolCursors.arm(tool_value)
+		var id := ToolCursors.for_tool(tool_value)
+		var tex := ToolCursors.texture(id)
+		var size := "no texture" if tex == null else "%dx%d" % [tex.get_width(), tex.get_height()]
+		print("  %-7s %-11s %-9s hotspot %-9s %s" % [
+				entry["label"], id, size, ToolCursors.hotspot(id),
+				"armed" if armed else "REFUSED — falls back to the system crosshair"])
+		if not armed:
+			refused.append(str(entry["label"]))
+	if not refused.is_empty():
+		printerr("  %d of 5 cursors did not arm: %s" % [refused.size(), ", ".join(refused)])
+		printerr("  run: godot --headless --path MapMaker --import")
+	# LEFT ON THE BRUSH, because that is what the tool opens with and a preview should not leave
+	# the editor in whatever state its last loop iteration happened to reach.
+	_editor.set_tool(EDITOR.Tool.PAINT)
 	_hold(UI_FRAMES)
 
 
