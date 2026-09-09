@@ -217,12 +217,74 @@ func _process(_delta: float) -> void:
 			_report_wall_rows()
 			_shoot("palette_walls")
 			_report_mouse_cursors()
+			# ⚠️ **THE FILE MENU AND THE EXIT QUESTION ARE THE TWO NEW SURFACES WITH NO OTHER
+			# CHECK** (card #93). The tests assert the menu's ids and the dialogs' configuration;
+			# what they cannot judge is whether an embedded `PopupMenu` is readable over the
+			# canvas, and whether the unsaved-changes question makes its three buttons' answers
+			# obvious. The first render of the Open dialog is why this step exists at all: it came
+			# out titled *"Open a Directory"* with a *"Select Current Folder"* button, opening in
+			# the tool's own source tree, and **all three passed every test**.
+			_show_file_menu()
+		26:
+			_shoot("file_menu")
+			_provoke_the_exit_question()
+		27:
+			_report_exit_question()
+			_shoot("exit_unsaved")
 			print("")
-			print("OK — twenty-two shots written. Look at them: the arithmetic is tested, the"
+			print("OK — twenty-four shots written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
 	_step += 1
+
+
+## ── the File menu and the exit guard (card #93) ─────────────────────────────
+
+## Drop the File menu open, the way a press on the `MenuButton` does.
+##
+## `MenuButton.show_popup()` rather than a synthetic click: the click path is Godot's and the
+## thing worth photographing is the popup.
+func _show_file_menu() -> void:
+	var menu: PopupMenu = _editor._file_menu.get_popup()
+	var labels: Array[String] = []
+	for i in menu.item_count:
+		labels.append("---" if menu.is_item_separator(i) else menu.get_item_text(i))
+	print("")
+	print("File menu: %s" % " | ".join(PackedStringArray(labels)))
+	_editor._file_menu.show_popup()
+	_hold(UI_FRAMES)
+
+
+## Make the map dirty and ask to leave, so the unsaved-changes question is on screen.
+##
+## ⚠️ **IT DIRTIES THE MAP FIRST ON PURPOSE.** `request_exit()` on a clean document QUITS, and a
+## preview that quit here would take its own screenshot away — and report success while doing it.
+func _provoke_the_exit_question() -> void:
+	_editor._file_menu.get_popup().hide()
+	_editor.set_tool(EDITOR.Tool.PAINT)
+	_editor.set_brush(SimMap.Terrain.ROCK)
+	_editor.apply_tool(Vector2i(40, 40))
+	if not _editor.document().dirty:
+		printerr("  the map is not dirty, so Exit would simply quit and this shot is worthless")
+		return
+	_editor.request_exit()
+	_hold(UI_FRAMES)
+
+
+## What the three buttons say, printed beside the shot.
+##
+## **The wording IS the feature here.** A dialog whose buttons read OK and Cancel does not tell an
+## author which one keeps their work, and this is the last thing standing between them and a lost
+## afternoon of re-authoring — see `Editor.request_exit()`.
+func _report_exit_question() -> void:
+	var win: ConfirmationDialog = _editor._exit_win
+	print("  exit question: \"%s\"" % win.dialog_text.replace("\n", " "))
+	print("    ok:     %s" % win.ok_button_text)
+	print("    cancel: %s" % win.get_cancel_button().text)
+	print("    up:     %s" % win.visible)
+	if not win.visible:
+		printerr("  the exit question is NOT on screen -- the shot below shows nothing")
 
 
 ## ── the three cursors (16.4) ────────────────────────────────────────────────
@@ -558,13 +620,18 @@ func _open_what_was_just_saved() -> void:
 	for at in rows.size():
 		if str(rows[at]["dir"]) != want:
 			continue
-		(_editor._open_list as ItemList).select(at)
-		var problems: Array = _editor.open_selected()
-		if problems.is_empty():
+		# ⚠️ **THROUGH `_on_dir_chosen()`, WHICH IS WHAT THE `FileDialog` EMITS INTO** (card #93).
+		# This used to `select()` a row in the tool's own `ItemList` and press its Open button;
+		# there is no list any more, and the dialog's `dir_selected` carries a PATH. Driving
+		# `open_map()` directly would skip the "is there a `map.json` in here" check that is now
+		# the only thing between an author and a folder that is not a map.
+		_editor._on_dir_chosen(want)
+		if _editor.document().dir == want:
 			print("  reopened %s — %d entities, seats %d" % [_editor.document().dir.get_file(),
 					_editor.document().data.entities.size(), _editor.document().seats()])
 		else:
-			printerr("  could not reopen it: %s" % "; ".join(PackedStringArray(problems)))
+			printerr("  could not reopen it — the document is still %s"
+					% _editor.document().dir)
 		_hold(UI_FRAMES)
 		return
 	printerr("  the map Save just wrote is NOT in the Open list: %s" % want)

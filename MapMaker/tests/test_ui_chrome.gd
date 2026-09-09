@@ -58,6 +58,28 @@ func test_the_plate_is_the_prepared_copy_and_not_the_master() -> void:
 	assert_true(UiChrome.MARGIN * 2 < tex.get_width())
 
 
+## ⛔ THE MARGIN MUST CLEAR THE CORNER STUD, WHICH IS NOT THE SAME AS THE STRETCHABLE RUN.
+##
+## The owner, off a screenshot on 2026-09-09: *"the 9 patch panels corners are stretched, not set
+## correctly."* The margin was 12 — `measure_ninepatch.py`'s stretchable-run figure — and
+## `panel_hud`'s corner carries a round stud reaching **17 px**, so 5 px of boss sat in the
+## stretched region and was pulled along every edge.
+##
+## ⚠️ **THE SAME TOOL ANSWERED THE SAME WRONG QUESTION ON `panel_ornate` AND THE OWNER USED ALMOST
+## THE SAME WORDS** (*"the left side of main menu is stretched, the 9 patch did not slice
+## correctly"*, 2026-08-30). That is why this is a test and not a corrected number: the next piece
+## of chrome anybody nine-patches will be measured by the same tool.
+func test_the_margin_clears_the_corner_ornament() -> void:
+	assert_true(UiChrome.MARGIN >= UiChrome.CORNER_EXTENT,
+			"a margin of %d cuts through a %d px corner stud, and the offcut smears along every"
+			% [UiChrome.MARGIN, UiChrome.CORNER_EXTENT]
+			+ " edge — the margin says where the border ENDS, so shrinking it makes this worse")
+	# AND IT IS NOT ABSURDLY LARGE EITHER: two corners plus a stretchable middle have to fit the
+	# smallest panel the tool draws, which is a toolbar row.
+	assert_true(UiChrome.MARGIN * 2 < 80, "two %d px corners leave nothing for a toolbar row"
+			% UiChrome.MARGIN)
+
+
 ## The gutter is ON TOP of the border, not inside it.
 ##
 ## Content clears the moulding first and only then starts having padding. Getting this backwards

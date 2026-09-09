@@ -112,15 +112,44 @@ var _entity_size_label: Label = null
 ## costs to fix that by assigning the control unconditionally.
 var _filling_inspector := false
 
-## The Open overlay (16.4a) and its parts.
-var _open_overlay_panel: Control = null
-var _open_list: ItemList = null
-var _open_problems: Label = null
-var _open_confirm: Button = null
+## The File menu and Godot's stock dialogs (the owner's ruling on card #93, 2026-09-09).
+##
+## ⛔ **THESE REPLACED 16.4a's HAND-BUILT OVERLAY — THEY DO NOT SIT BESIDE IT.** The owner was
+## offered "keep the rich list" and "keep both" and chose the fully-standard route, and a second
+## Open path would be §5's *"the second rendering never gets looked at"* on the one screen that
+## can overwrite shipped campaign content. `git show 2e1db33:MapMaker/src/editor.gd` has the
+## overlay, its `ItemList` and its summary line.
+##
+## ⚠️ **A `FileDialog` AND A `PopupMenu` ARE `Window`s, AND 16.4a's OVERLAY WAS A `Control`
+## DELIBERATELY** — *"half this tool's checks have no viewport (the suite drives `Editor` outside
+## the tree), so a popup would answer nothing there."* That argument still holds for the tests, and
+## `_dialog_open` is the answer: **the tool's own notion of "a dialog is up" is a bool**, and the
+## `Window` is its presentation. So the suite can open and close the dialog outside a tree, the
+## `Ctrl+Z` guard has something to read, and a click on the dialog's own X still updates the bool
+## through `canceled`. Measured for the previews: an embedded subwindow DOES render into the
+## parent viewport, so `preview_editor` can still photograph it.
+var _file_menu: MenuButton = null
+var _open_win: FileDialog = null
+var _save_win: FileDialog = null
+var _exit_win: ConfirmationDialog = null
 
-## What `refresh_open_list()` last found, parallel to `_open_list`'s rows. The rows carry a
-## label; **this carries the `dir`, which is the identity** — an `ItemList` index is the only
-## thing a selection gives back and a label is not a path.
+## The line under the Open dialog's file list: where it looked, and what is unreadable there.
+## **This is what carries 16.4a's third requirement across** — `MapSources` collects a sentence
+## per folder holding a map pair it cannot parse, and a folder an author can see on disk and
+## cannot see in the dialog is the one fault they cannot diagnose by looking.
+var _open_hint: Label = null
+
+## The Go to rows inside each dialog. Filled on open -- see _refresh_root_buttons().
+var _open_roots: HBoxContainer = null
+var _save_roots: HBoxContainer = null
+
+## Is a modal up? See the note above on why this is a field and not `_open_win.visible`.
+var _dialog_open := false
+
+## What `refresh_open_list()` last found. **It no longer backs a list widget** — the `FileDialog`
+## browses the filesystem itself — but it is still the answer to *"what could be opened"*, which
+## `Boot`, `profile_editor` and `preview_editor` all report and which the dialog's hint line
+## summarises. The `dir` is the identity; a label is not a path.
 var _listed: Array[Dictionary] = []
 
 var _sources := MapSources.new()
@@ -156,6 +185,13 @@ func _ready() -> void:
 	_icons.load_from(_startup.root)
 	_palette.setup(_icons)
 	_new_map()
+	# ⚠️ **THE WINDOW'S X MUST REACH `request_exit()` AND BY DEFAULT IT DOES NOT.** Without this,
+	# Godot closes the window itself and `NOTIFICATION_WM_CLOSE_REQUEST` is a courtesy notice
+	# rather than a question — so the unsaved-changes guard would exist on the menu item and be
+	# absent from the gesture people actually use. It does NOT affect `get_tree().quit()`, which
+	# is how the previews and the suite leave.
+	if is_inside_tree():
+		get_tree().set_auto_accept_quit(false)
 
 
 ## Hand back the one piece of application-wide state this screen claims (16.4e).
@@ -236,9 +272,15 @@ func _input(event: InputEvent) -> void:
 	# is a keyboard repeat rate deciding how much work comes back.
 	if key == null or not key.pressed or key.echo or not key.ctrl_pressed:
 		return
-	# THE OPEN DIALOG IS MODAL, and that has to include the keyboard. Undoing behind a dialog
-	# would change the map the author is about to replace with a different one.
-	if _open_overlay_panel != null and _open_overlay_panel.visible:
+	# A DIALOG IS MODAL, and that has to include the keyboard. Undoing behind one would change the
+	# map the author is about to replace with a different one -- or, worse, behind the
+	# unsaved-changes question, whose whole subject is how much unsaved work there is.
+	#
+	# ⚠️ **ASKED OF `dialog_is_up()` AND NOT OF A WINDOW'S `visible`.** The dialogs are `Window`s
+	# now (card #93) and the suite drives this screen outside a tree, where a `Window` can neither
+	# be popped nor report itself visible. The bool is the tool's own notion of modality; see
+	# `_dialog_open`.
+	if dialog_is_up():
 		return
 	if _typing():
 		return
@@ -356,16 +398,84 @@ static func _shortcut_hint(keys: String, verb: String, what: String) -> String:
 ## no way to tell that from the map not having been written.
 func open_dialog() -> void:
 	refresh_open_list()
-	if _open_overlay_panel != null:
-		_open_overlay_panel.visible = true
+	_dialog_open = true
+	if _open_win == null:
+		return
+	# THE HINT LINE IS REBUILT ON EVERY OPEN, not once at construction. It counts what is on disk
+	# and a `FileDialog` shows folder NAMES only, so this is where the three roots and their
+	# counts survive the move off the `ItemList` -- and the count genuinely changes while the tool
+	# runs, because the other half of this repo writes maps.
+	if _open_hint != null:
+		_open_hint.text = "  " + _open_summary()
+		_open_hint.add_theme_color_override("font_color",
+				_WARN if not _sources.warnings.is_empty() else _DIM)
+	_refresh_root_buttons(_open_roots)
+	_start_in_the_maps_root(_open_win)
+	if is_inside_tree():
+		# ⚠️ **ONLY WITH A TREE.** `popup_centered_ratio` needs a parent viewport, and the suite
+		# drives this screen outside one. `_dialog_open` is what a test and the `Ctrl+Z` guard
+		# read, so both work either way -- see the field's note.
+		_open_win.popup_centered_ratio(0.7)
 
 
 func close_dialog() -> void:
-	if _open_overlay_panel != null:
-		# HIDDEN RATHER THAN EMPTIED. A `Control` over the canvas hit-tests first -- §6's row
-		# about the four corner buttons that ate every minimap tap -- and `visible = false` is
-		# what takes it out of hit testing as well as out of the picture.
-		_open_overlay_panel.visible = false
+	_dialog_open = false
+	if _open_win != null and _open_win.visible:
+		_open_win.hide()
+	if _save_win != null and _save_win.visible:
+		_save_win.hide()
+
+
+## Is a modal up? What the `Ctrl+Z` guard asks, and the reason it is a bool — see `_dialog_open`.
+func dialog_is_up() -> bool:
+	return _dialog_open
+
+
+## Which dialogs have already been given a starting directory, by their own name.
+var _dir_initialised: Dictionary = {}
+
+
+## Open a dialog in `maps/` the FIRST time, and leave it wherever the author left it after that.
+##
+## ⛔ **FOUND IN THE FIRST SCREENSHOT OF THIS DIALOG, AND NOTHING ELSE COULD HAVE FOUND IT.** A
+## `FileDialog` with no `current_dir` starts in the **project directory**, so the first Open
+## presented an author with `.godot`, `assets`, `dev`, `format`, `src`, `tests`, `Boot.tscn` and
+## `project.godot` — the tool's own source, with not a map in sight, and `maps/` two levels up and
+## sideways. Every test passed: there is nothing wrong with a dialog that opens somewhere.
+##
+## ⚠️ **ONCE, NOT EVERY TIME, AND THAT IS THE DECISION IN THIS FUNCTION.** Re-pointing it on every
+## open would throw away wherever the author had browsed to — which is worse than the bug for
+## anybody working outside `maps/`, and 16.10's whole job is re-authoring maps that live under
+## `scenarios/`. So the default is set once and the dialog remembers after that, which is how every
+## file dialog a person has used behaves. `jump_to_root()` is the deliberate way back.
+func _start_in_the_maps_root(win: FileDialog) -> void:
+	if win == null or _dir_initialised.has(win.get_instance_id()):
+		return
+	_dir_initialised[win.get_instance_id()] = true
+	var dir := maps_dir()
+	if DirAccess.dir_exists_absolute(dir):
+		win.current_dir = dir
+
+
+## Point the Open dialog at one of `MapSources`' roots.
+##
+## ⚠️ **THIS IS WHAT THE `FileDialog` COSTS AND THIS IS THE REFUND.** 16.4a's list showed every
+## map from **three** roots at once — repo-root `maps/`, the game's `user://maps/`, and
+## `scenarios/<campaign>/<scenario>/` walked a level deeper. A `FileDialog` starts in ONE
+## directory, so scenario 4's map — the thing 16.10 exists to re-author — went from a row in a
+## list to four levels of browsing. Three buttons in the dialog's own box put it back.
+func jump_to_root(source: int) -> bool:
+	if _open_win == null:
+		return false
+	for entry in _sources.roots(_startup.root):
+		if int(entry["source"]) != source:
+			continue
+		var path := str(entry["path"])
+		if not DirAccess.dir_exists_absolute(path):
+			return false
+		_open_win.current_dir = path
+		return true
+	return false
 
 
 ## Every map the dialog can offer, in the order it lists them. Public for the tests and for
@@ -383,22 +493,6 @@ func listed_maps() -> Array[Dictionary]:
 ## panel says so rather than the list quietly being shorter.
 func refresh_open_list() -> void:
 	_listed = _sources.discover(_startup.root if _startup != null else null)
-	if _open_list == null:
-		return
-	_open_list.clear()
-	for row in _listed:
-		var size: Vector2i = row["size"]
-		_open_list.add_item("%s   —   %s   (%dx%d, %d players, %s)"
-				% [row["name"], row["label"], size.x, size.y, row["players"],
-				MapSources.source_name(int(row["source"]))])
-	# ⚠️ **TWO FACTS, COMPUTED SEPARATELY** -- §6's row about the server browser's JOIN, which
-	# shipped ENABLED WITH NOTHING TO JOIN because its `disabled` was set from "is there a
-	# sentence to print". Whether anything is selected and whether there is anything worth
-	# saying are different questions, and only the first one is always answerable.
-	_refresh_open_confirm()
-	_open_problems.text = "  " + _open_summary()
-	_open_problems.add_theme_color_override("font_color",
-			_BAD if not _sources.warnings.is_empty() else _TEXT)
 
 
 ## What the panel says under the list: the complaints if there are any, else where it looked.
@@ -419,20 +513,21 @@ func _open_summary() -> String:
 	return _open_summary_for(_listed.size(), _sources.warnings, paths)
 
 
-func _refresh_open_confirm() -> void:
-	if _open_confirm != null:
-		_open_confirm.disabled = _open_list == null \
-				or _open_list.get_selected_items().is_empty()
-
-
-## Open whichever row is selected. Nothing happens with no selection — the button is off.
-func open_selected() -> Array[String]:
-	if _open_list == null or _open_list.get_selected_items().is_empty():
-		return ["nothing selected"] as Array[String]
-	var at: int = _open_list.get_selected_items()[0]
-	if at < 0 or at >= _listed.size():
-		return ["that row is no longer in the list"] as Array[String]
-	return open_map(str(_listed[at]["dir"]))
+## Open the map in `dir` if the dialog handed back a directory that holds one.
+##
+## ⚠️ **A `FileDialog` IN `FILE_MODE_OPEN_DIR` WILL HAND BACK ANY DIRECTORY AT ALL**, which is the
+## other half of what the stock dialog costs: 16.4a's list could only offer folders `MapSources`
+## had already parsed, so *"that is not a map"* was unreachable by construction. Now it is one
+## click, and the message has to say which of the two it is — an empty folder and a folder holding
+## a `map.json` this build cannot parse want different reactions from whoever reads it.
+func _on_dir_chosen(dir: String) -> void:
+	if not FileAccess.file_exists(dir.path_join("map.json")):
+		# NAMES WHAT IT LOOKED FOR. "Not a map" sends an author hunting; "no map.json here" tells
+		# them they are one level too high, which is the actual mistake nine times in ten.
+		_notice("NOT A MAP — no map.json in %s" % dir, _BAD)
+		return
+	if open_map(dir).is_empty():
+		close_dialog()
 
 
 ## Read `dir` and put it on the canvas. Problems back as sentences; empty means opened.
@@ -446,10 +541,11 @@ func open_map(dir_path: String) -> Array[String]:
 	var problems: Array[String] = []
 	var doc := MapDocument.open(dir_path, problems)
 	if doc == null:
+		# ⚠️ **THE DIALOG STAYS UP ON A FAILURE**, which is `_on_dir_chosen`'s doing rather than
+		# this function's: it only closes on an empty problem list. An author who picked the wrong
+		# folder is one click from the right one, and the reason is on the notice line where it
+		# outlives the next mouse move.
 		_notice("OPEN FAILED — %s" % "; ".join(PackedStringArray(problems)), _BAD)
-		if _open_problems != null:
-			_open_problems.text = "  " + "; ".join(PackedStringArray(problems))
-			_open_problems.add_theme_color_override("font_color", _BAD)
 		return problems
 	show_document(doc)
 	close_dialog()
@@ -469,14 +565,92 @@ func open_map(dir_path: String) -> Array[String]:
 ## made a second button necessary, and why a name that is already taken is refused rather
 ## than replaced.
 func save_as() -> Array[String]:
+	return save_as_into(maps_dir())
+
+
+## Save As into a chosen parent directory. What the dialog's `dir_selected` reaches.
+##
+## ⚠️ **THE PARENT, NOT THE MAP FOLDER.** `MapDocument.save_as()` creates `<parent>/<slug>` from
+## the name field, so handing it the map's own folder would nest a map inside a map — and the
+## refusal that stops Save As replacing an existing map would not fire, because the new path is
+## one nobody has taken. The dialog runs in `FILE_MODE_OPEN_DIR` for exactly this reason: what an
+## author is choosing is **where a new folder goes**, and a save-file dialog would have asked them
+## to name a file that does not exist.
+func save_as_into(parent_dir: String) -> Array[String]:
 	if _document == null:
 		return ["nothing to save"] as Array[String]
 	if not _startup.can_save():
 		return [_startup.reason] as Array[String]
 	_document.map_name = _name_field.text
-	var problems := _document.save_as(maps_dir())
+	var problems := _document.save_as(parent_dir)
 	_report_save(problems)
 	return problems
+
+
+## Ask where to put a new copy of this map.
+##
+## 📝 **IT DEFAULTS TO `maps/` AND THAT IS THE POINT OF STILL HAVING A DEFAULT.** Save As used to
+## write there with no question asked; the dialog's gain is that an author can put a map somewhere
+## else, not that they must decide every time.
+func save_as_dialog() -> void:
+	if _document == null:
+		_notice("NOTHING TO SAVE — there is no map open", _WARN)
+		return
+	_dialog_open = true
+	if _save_win == null:
+		return
+	# THE NAME FIELD IS THE FOLDER NAME AND THE DIALOG DOES NOT ASK FOR IT, so the notice has to
+	# say what is about to be created -- otherwise "Save As" pops a directory browser and an
+	# author has no idea the toolbar's Name box is what decides the folder.
+	_save_win.title = "Save \"%s\" into which folder?" % _document.slug()
+	_refresh_root_buttons(_save_roots)
+	_start_in_the_maps_root(_save_win)
+	if is_inside_tree():
+		_save_win.popup_centered_ratio(0.7)
+
+
+# ── Exit (the owner's card #93) ─────────────────────────────────────────────
+
+## Leave, but not over unsaved work.
+##
+## ⛔ **THERE WAS NO GUARD AT ALL BEFORE THIS, AND `dirty` HAD BEEN CORRECT AND UNREAD FOR A DAY.**
+## 16.2a computes it properly — `UndoStack._clean_at`, with both of the cases that otherwise go on
+## claiming "saved" (a save point in a discarded redo branch, and one that falls off the front of a
+## full stack) tested by name — and the **only** thing reading it was the status line's UNSAVED
+## word. So the window's X was the cheapest way to lose work in this project, and since 16.4a made
+## Save replace shipped campaign content in place, the same gesture could lose an afternoon of
+## re-authoring.
+##
+## ⚠️ **THE MENU ITEM AND THE WINDOW'S X GO THROUGH THE SAME FUNCTION.** Guarding only the menu
+## item would be a guard on the route nobody takes — the exact shape of
+## `if Net.host() != null and <rule>`, which shipped three dead refusals in the game because solo
+## play never takes the branch that matters. `_ready()` turns off `auto_accept_quit` and
+## `_notification` routes the close request here.
+func request_exit() -> void:
+	if _document == null or not _document.dirty:
+		_quit_now()
+		return
+	if _exit_win == null or not is_inside_tree():
+		# NO DIALOG TO ASK WITH: refuse rather than quit. **The safe direction for a guard is the
+		# one that keeps the work**, and this branch is only reachable from a test or a headless
+		# run, neither of which has anything to lose by staying.
+		_notice("UNSAVED CHANGES — save first, or discard them from the File menu", _WARN)
+		return
+	_exit_win.dialog_text = "\"%s\" has unsaved changes.\n\nLeave without saving?" \
+			% _document.map_name
+	_dialog_open = true
+	_exit_win.popup_centered()
+
+
+func _quit_now() -> void:
+	if is_inside_tree():
+		get_tree().quit(0)
+
+
+## The window's X. Routed to `request_exit()` — see its note on why both routes are one function.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		request_exit()
 
 
 ## The terrain the PAINT tool writes.
@@ -906,7 +1080,10 @@ func _build_ui() -> void:
 	# ADDED LAST, SO IT IS ON TOP. A sibling later in the child order draws over the ones
 	# before it, and this one has to cover the canvas rather than be laid out beside it --
 	# hence a direct child of the screen and not a row in `rows`.
-	add_child(_open_overlay())
+	# THE DIALOGS ARE `Window`s, so they are children rather than siblings in `rows` and their
+	# stacking is the viewport's business rather than the child order's. Built last only because
+	# `_add_root_buttons` reads `_startup`.
+	_build_dialogs()
 
 
 func _file_row() -> Control:
@@ -926,19 +1103,56 @@ func _file_row() -> Control:
 	_height = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
 	row.add_child(_height)
 
-	# NEW IS NOT A FILE DIALOG AND SAVE IS NOT EITHER. A tool for one person with one output
-	# directory does not need a browser; the name becomes the folder (`MapDocument.slug()`).
-	# **OPEN IS THE ONE THAT GENUINELY NEEDS A LIST** and `MapSources`' header says why a
-	# `FileDialog` is the wrong shape for it: a map is a directory of two files.
-	row.add_child(_button("New", func() -> void: _new_map()))
-	row.add_child(_button("Open", func() -> void: open_dialog()))
+	# ⛔ **FOUR BUTTONS BECAME ONE MENU** (owner's card #93 with a mock of it, 2026-09-09). New,
+	# Open, Save and Save As were four toolbar buttons and are five menu items, because a File
+	# menu is where a person looks for them and because **Exit had nowhere to live**: see
+	# `request_exit()` on why that mattered more than the tidiness.
+	#
+	# 📝 **THE OWNER'S MOCK SHOWED FOUR ITEMS — Open, Save, SaveAs, Exit — AND `New` IS HERE
+	# ANYWAY**, which is a departure worth naming rather than slipping in. Dropping it would leave
+	# **no way to start a map at all**; it was a toolbar button until this change. If the menu
+	# should be exactly the mock, `New` is the line to delete and the button to put back.
+	#
+	# **`Fit` STAYS A BUTTON.** It is a view command, not a file command — filing it under File
+	# would be the sort of menu nobody can predict.
+	_file_menu = MenuButton.new()
+	_file_menu.text = "File"
+	_file_menu.flat = false
+	var menu := _file_menu.get_popup()
+	menu.add_item("New", FileAction.NEW)
+	menu.add_item("Open…", FileAction.OPEN)
+	menu.add_item("Save", FileAction.SAVE)
+	menu.add_item("Save As…", FileAction.SAVE_AS)
+	# A SEPARATOR BEFORE EXIT, because it is the one item that cannot be undone by another item.
+	menu.add_separator()
+	menu.add_item("Exit", FileAction.EXIT)
+	menu.id_pressed.connect(_on_file_action)
+	row.add_child(_file_menu)
 	row.add_child(_button("Fit", func() -> void: _canvas.fit_to_view()))
-	row.add_child(_button("Save", func() -> void: save()))
-	# **THE SECOND BUTTON OPEN MADE NECESSARY.** Save writes back to wherever a map came from,
-	# which is what re-authoring means; this is the way out for an author who opened somebody
-	# else's map. `MapDocument.save_as()` carries the argument.
-	row.add_child(_button("Save As", func() -> void: save_as()))
 	return box
+
+
+## What the File menu's items mean.
+##
+## ⚠️ **IDS, NOT INDEXES.** `add_item`'s id is what `id_pressed` carries, and a separator occupies
+## an INDEX while carrying no id — so anything keyed on position would shift the moment the menu
+## grows a divider. Same hazard as `Tool.START`'s removal renumbering every tool after it, with a
+## menu instead of an enum.
+enum FileAction { NEW, OPEN, SAVE, SAVE_AS, EXIT }
+
+
+func _on_file_action(id: int) -> void:
+	match id:
+		FileAction.NEW:
+			_new_map()
+		FileAction.OPEN:
+			open_dialog()
+		FileAction.SAVE:
+			save()
+		FileAction.SAVE_AS:
+			save_as_dialog()
+		FileAction.EXIT:
+			request_exit()
 
 
 func _tool_row() -> Control:
@@ -1312,102 +1526,134 @@ func _short_file(dir_path: String) -> String:
 	return "%s/%s" % [dir_path.get_base_dir().get_file(), dir_path.get_file()]
 
 
-## The Open dialog: a dimmed screen, a list of maps, what is wrong with the ones missing
-## from it, and two buttons (PLAN.md 16.4a).
+## Godot's three stock dialogs: Open, Save As, and the unsaved-changes question (card #93).
 ##
-## ## AN OVERLAY `Control` AND NOT A `Window` OR A `Popup`
+## ⛔ **THIS REPLACED A 95-LINE HAND-BUILT OVERLAY, ON THE OWNER'S RULING.** 16.4a's dialog was an
+## `ItemList` of every map from three roots, each row carrying its size, player count and source,
+## with the width **measured off the longest real row** (1200, after scenario 5 clipped at 900).
+## `git show 2e1db33:MapMaker/src/editor.gd` has it. What the stock dialog trades:
 ##
-## Three reasons, in the order they mattered:
+## | lost | how it is paid for |
+## |---|---|
+## | a row's size / players / source | `_open_hint` summarises the roots and their counts; the notice line names the map on open |
+## | three roots visible at once | `jump_to_root()` — three buttons in the dialog's own box |
+## | "that folder is not a map" being unreachable | `_on_dir_chosen()` checks for `map.json` and says which level is wrong |
+## | Save As refusing a taken name | still `MapDocument.save_as()`'s refusal — the dialog chooses the PARENT, so the refusal is untouched |
 ##
-##   - **a `Window` needs a real viewport, and half this tool's checks have none.** The suite
-##     drives `Editor` outside the tree (`add_child` does not require one) and asserts
-##     structure; a popup would answer nothing there, and `preview_editor` would be
-##     photographing a second window the screenshot does not contain. §3's rule about a
-##     `RefCounted` harness having no tree is the same rule one level up.
-##   - **it is the shape the rest of the tool is built in** — every control here is code, on
-##     `CampaignScreen`'s precedent, because the lists are data.
-##   - **a popup steals focus and hands it back where it likes.** There is nothing to focus
-##     here yet; there will be the day 16.3's search field exists, and 16.2a's card already
-##     names that collision (`Ctrl+Z` swallowed by a focused `LineEdit`).
-##
-## ⚠️ **IT IS INVISIBLE UNTIL ASKED FOR, AND THAT IS A HIT-TEST FACT AS WELL AS A VISUAL ONE.**
-## §6: a `Control` laid over the minimap swallowed every tap while looking absent, and the
-## four corner buttons it hid were reported as unimplemented features. `visible = false` takes
-## this out of hit testing too; a transparent backdrop would not.
-func _open_overlay() -> Control:
-	var overlay := Control.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.visible = false
-	# STOP, so a click meant for the dialog cannot land on the canvas behind it and paint a
-	# tile the author never meant to touch. That is what makes this modal without a `Popup`.
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_open_overlay_panel = overlay
+## ⚠️ **AND WHAT IT BUYS IS THE THING 16.4a's LIST COULD NOT DO: reach a map in a folder
+## `MapSources` does not walk.** Every root is hard-coded in `MapSources.roots()`, so a map
+## anywhere else was unopenable — by construction, with no error.
+func _build_dialogs() -> void:
+	# ── Open ──
+	_open_win = FileDialog.new()
+	# ⚠️ **`FILE_MODE_OPEN_DIR`, BECAUSE A MAP IS A DIRECTORY OF TWO FILES** (`map.json` and
+	# `map.png`). A file-mode dialog filtered to `*.json` would have an author picking the
+	# `map.json` INSIDE the folder, and `MapDocument.open()` takes the folder — so every pick
+	# would need its path trimming, and a `map.json` that is not a map's would look openable.
+	_open_win.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+	# ⚠️ **THE TITLE AND THE OK BUTTON ARE SET *AFTER* THE MODE, AND THE FIRST SCREENSHOT IS WHY.**
+	# Assigning `file_mode` **overwrites both** with Godot's generic wording for that mode, so a
+	# title set beforehand is silently replaced: the dialog came out headed *"Open a Directory"*
+	# with a button reading *"Select Current Folder"*, which describes the widget rather than the
+	# job. Every test passed — there is nothing wrong with a `FileDialog` titled by its mode.
+	_open_win.title = "Open a map"
+	_open_win.ok_button_text = "Open this map"
+	# ⚠️ **`ACCESS_FILESYSTEM` AND NOT `ACCESS_RESOURCES`.** The maps this tool exists to open are
+	# **outside `res://`** — repo-root `maps/`, `scenarios/`, and the GAME's `user://maps/`, which
+	# is a different directory from this project's `user://` (16.4a's third root). A resource-mode
+	# dialog can see none of them.
+	_open_win.access = FileDialog.ACCESS_FILESYSTEM
+	_open_win.use_native_dialog = false
+	_open_win.dir_selected.connect(_on_dir_chosen)
+	_open_win.canceled.connect(close_dialog)
+	_open_roots = _add_root_buttons(_open_win)
+	_open_hint = Label.new()
+	_open_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_open_win.get_vbox().add_child(_open_hint)
+	add_child(_open_win)
 
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.add_child(dim)
+	# ── Save As ──
+	_save_win = FileDialog.new()
+	# OPEN_DIR HERE TOO, and `save_as_into()`'s note says why: what an author picks is the PARENT
+	# a new folder goes into, not a file to name. The folder's name comes from the toolbar's Name
+	# field, which is why `save_as_dialog()` puts the slug in the title.
+	_save_win.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+	_save_win.access = FileDialog.ACCESS_FILESYSTEM
+	_save_win.use_native_dialog = false
+	# AFTER THE MODE — see the Open dialog's note. `save_as_dialog()` rewrites the title per save
+	# (it names the folder about to be created); this is the button, which does not change.
+	_save_win.ok_button_text = "Save here"
+	_save_win.dir_selected.connect(func(dir: String) -> void:
+			# CLOSED FIRST, then saved. `_report_save` writes the notice line, and a dialog still
+			# up over it would hide the one sentence that says whether the save worked -- which is
+			# the owner's *"i clicked save, not sure if it worked"* with a modal on top of it.
+			close_dialog()
+			save_as_into(dir))
+	_save_win.canceled.connect(close_dialog)
+	_save_roots = _add_root_buttons(_save_win)
+	add_child(_save_win)
 
-	var frame := PanelContainer.new()
-	# A WIDER GUTTER THAN A TOOLBAR ROW, because this is a page rather than a strip -- the same
-	# 14/12 it had when it was flat, now inside the plate's 12 px moulding.
-	frame.add_theme_stylebox_override("panel", UiChrome.panel_style(14, 12))
-	# CENTRED BY ANCHORS AND SIZED BY A MINIMUM, never by assigning `size`: §6's row about
-	# `PRESET_FULL_RECT` applies to every non-equal-anchor Control, and an assigned size here
-	# would be overridden after `_ready()` with a runtime warning and no visible cause.
-	frame.set_anchors_preset(Control.PRESET_CENTER)
-	# ⚠️ **THE WIDTH IS MEASURED OFF THE LONGEST REAL ROW, NOT CHOSEN.** At 900 the first shot
-	# of this dialog clipped scenario 5 to `(112x112, 2 players, cam…` -- and an `ItemList`
-	# clips rather than wrapping or scrolling sideways, so the part that goes is the tail,
-	# which is where the figures are. The longest row on the machine today is scenario 5's
-	# 53-character name plus its label and figures, ~115 characters at ~9 px in the fallback
-	# font. 1200 fits it inside a 1600 px window with room for a longer name.
+	# ── the unsaved-changes question ──
 	#
-	# **If a map with a much longer name clips again, this is the number to move** -- the
-	# alternative, `clip_text` or a shorter format, is what §6's row about the server
-	# browser's headings warns against: clipping is unconditional, not "shrink if crowded".
-	frame.custom_minimum_size = Vector2(1200, 480)
-	frame.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	frame.grow_vertical = Control.GROW_DIRECTION_BOTH
-	overlay.add_child(frame)
+	# ⚠️ **THE DEFAULT BUTTON IS CANCEL, NOT OK.** A `ConfirmationDialog`'s OK takes Enter, and the
+	# whole point of this dialog is that somebody reached it by accident; "leave without saving"
+	# is not the answer to give a stray keystroke. `Save and exit` is the third button because the
+	# two-button form makes an author cancel, save, and then find Exit again.
+	_exit_win = ConfirmationDialog.new()
+	_exit_win.title = "Unsaved changes"
+	_exit_win.ok_button_text = "Discard and exit"
+	_exit_win.get_cancel_button().text = "Keep editing"
+	var save_and_go := _exit_win.add_button("Save and exit", true, "save_and_exit")
+	save_and_go.pressed.connect(func() -> void:
+			_exit_win.hide()
+			_dialog_open = false
+			# ⚠️ **ONLY QUITS IF THE SAVE WORKED.** `save()` refuses when the format copies have
+			# drifted or a map has no name, and quitting anyway would throw away the work this
+			# dialog exists to protect *while the author was choosing to keep it*.
+			if save().is_empty():
+				_quit_now())
+	_exit_win.confirmed.connect(func() -> void:
+			_dialog_open = false
+			_quit_now())
+	_exit_win.canceled.connect(close_dialog)
+	add_child(_exit_win)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	frame.add_child(column)
 
-	var title := _label("Open a map")
-	title.add_theme_font_size_override("font_size", 20)
-	column.add_child(title)
+## The row the root buttons live in. Empty until a dialog is opened — see `_refresh_root_buttons`.
+func _add_root_buttons(win: FileDialog) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	win.get_vbox().add_child(row)
+	return row
 
-	_open_list = ItemList.new()
-	_open_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_open_list.allow_reselect = true
-	_open_list.item_selected.connect(func(_at: int) -> void: _refresh_open_confirm())
-	# DOUBLE-CLICK OPENS, because a list is a thing people double-click and a row that did
-	# nothing would read as a broken list rather than as a missing shortcut.
-	_open_list.item_activated.connect(func(_at: int) -> void: open_selected())
-	column.add_child(_open_list)
 
-	# UNDER THE LIST, NOT INSTEAD OF IT. The complaints are about folders that are NOT rows,
-	# so they cannot be shown as rows -- 16.4a's third requirement is that they be shown at
-	# all, and the list going quietly shorter is exactly what it is against.
-	_open_problems = Label.new()
-	_open_problems.add_theme_color_override("font_color", _TEXT)
-	_open_problems.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_open_problems)
-
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 6)
-	buttons.alignment = BoxContainer.ALIGNMENT_END
-	_open_confirm = _button("Open", func() -> void: open_selected())
-	# OFF UNTIL SOMETHING IS SELECTED, and that is the only thing it is off for -- see
-	# `refresh_open_list()` on the two facts.
-	_open_confirm.disabled = true
-	buttons.add_child(_open_confirm)
-	buttons.add_child(_button("Cancel", func() -> void: close_dialog()))
-	column.add_child(buttons)
-	return overlay
+## Fill a dialog's root buttons, from the roots as they are NOW.
+##
+## ⚠️ **CALLED ON OPEN AND NOT AT CONSTRUCTION, WHICH IS AN ORDERING BUG AVOIDED RATHER THAN
+## FIXED.** `_ready()` runs `_build_ui()` **before** `_startup` is resolved — deliberately, so a
+## screen opened directly still builds — and `MapSources.roots()` needs `_startup.root` to derive
+## the GAME's `user://maps/` (16.4a's third root, found by reading `config/name` out of the game's
+## `project.godot`). Building these buttons in `_build_dialogs()` would have asked for the roots
+## with a null root and produced a permanently disabled button for the one root that is hardest to
+## reach by browsing. **Rebuilt each time**, because a root can appear while the tool is running:
+## the game's `user://maps/` does not exist until somebody saves a map from a match.
+func _refresh_root_buttons(row: HBoxContainer) -> void:
+	if row == null:
+		return
+	for child in row.get_children():
+		child.queue_free()
+		row.remove_child(child)
+	row.add_child(_label("Go to"))
+	for entry in _sources.roots(_startup.root if _startup != null else null):
+		var source := int(entry["source"])
+		var b := _button(MapSources.source_name(source), func() -> void: jump_to_root(source))
+		# ⚠️ **DISABLED WHEN THE ROOT IS NOT THERE, AND THE TOOLTIP IS WHY.** The game's
+		# `user://maps/` does not exist until a player saves a map from a match, and `scenarios/`
+		# is absent from an export's neighbourhood. A button that silently does nothing is §6's
+		# server-browser JOIN; a disabled one with the path in its tooltip is an answer.
+		b.disabled = not DirAccess.dir_exists_absolute(str(entry["path"]))
+		b.tooltip_text = str(entry["path"])
+		row.add_child(b)
 
 
 # ── small builders ──────────────────────────────────────────────────────────

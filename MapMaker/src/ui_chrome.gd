@@ -46,8 +46,41 @@ extends RefCounted
 
 const PANEL_PATH := "res://assets/ui/chrome/panel_hud.png"
 
-## The drawn border, in screen pixels. **Not the 46 the art measures** — see the class comment.
-const MARGIN := 12
+## The drawn border, in screen pixels.
+##
+## ⛔ **IT WAS 12 AND THAT SMEARED EVERY CORNER. THE OWNER SPOTTED IT IN A SCREENSHOT, 2026-09-09:**
+## *"the 9 patch panels corners are stretched, not set correctly."* They were.
+##
+## ⚠️ **12 IS THE STRETCHABLE RUN AND 17 IS THE CORNER. THOSE ARE DIFFERENT QUESTIONS AND ONLY ONE
+## OF THEM IS THE MARGIN.** `tools/measure_ninepatch.py` finds the longest run of identical
+## columns — the plain middle of an EDGE — and reports 46 on the 1024 px master, which
+## `prepare_ui_chrome.py` scaled to 12 at 267 px. But `panel_hud`'s corner carries a **round
+## STUD**, and measured on the committed art the stud's disc reaches **17 px**. A margin of 12 cut
+## straight through it, so **5 px of boss sat inside the stretched region** and got pulled along
+## every edge: a smear that reads as a stretched corner, which is exactly what it is.
+##
+## ⚠️ **THIS IS THE `panel_ornate` MISTAKE ON A SECOND PIECE, AND THE GAME ALREADY PAID FOR IT
+## ONCE.** From `prepare_ui_chrome.py`: *"That tool looks for a STRETCHABLE RUN, and on this frame
+## it finds the bead band and stops at its outer edge — 183 px on the left. But a nine-patch margin
+## has to clear the CORNER, and the corner here is a dragon whose head and neck reach about 250 px
+## in ... the project owner reported it as 'the left side of main menu is stretched, the 9 patch did
+## not slice correctly'."* Same tool, same wrong question, same words back from the owner. The
+## general form is in AGENT_GAME_CODER §7: **a number measured by a tool that was answering a
+## slightly different question.**
+##
+## 18 rather than 17, for a pixel of slack against the stud's antialiased rim.
+##
+## ⚠️ **`HudStyle.PANEL_MARGIN` IN THE GAME IS STILL 12 ON THIS SAME ART**, so every `panel_hud`
+## plate in the game has the same smeared stud. Not changed from here — that is a visible change to
+## every HUD panel and the owner reviews those by screenshot. Raised on card 16.4f instead.
+const MARGIN := 18
+
+## What the stud actually measures, so the number above is checkable rather than asserted.
+##
+## Re-measure if the art is re-cut: walk in from a corner comparing each column's top strip against
+## the middle of the same edge, and take the regime change — **not** a fixed threshold, because the
+## edge carries its own gradient and a threshold keeps "finding" ornament 60 px in.
+const CORNER_EXTENT := 17
 
 # ── the palette ─────────────────────────────────────────────────────────────
 #
