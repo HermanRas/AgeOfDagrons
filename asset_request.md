@@ -470,3 +470,50 @@ along either diagonal facing either way.
 ⚠️ **NOTHING HERE IS PROTOTYPED.** The survey above is measured; the build plan is not. Do
 not read the piece list as verified - if the battered-face primitive turns out to look
 wrong at this camera, the shape of the answer changes.
+
+> **[art] Owner settled three of the four the same day (2026-09-09). Updating in place so you
+> are not answering questions that are already closed.**
+>
+> 1. **Cliff height: 4.0 m, exactly 2 tiles.** It **occludes land units, with the same halo
+>    buildings already use** - so no new view mechanism, and nothing is asked of you beyond
+>    treating it like a building for occlusion.
+> 2. **Impassable for LAND units. Air passes - the dragon flies over, and is NOT occluded by
+>    it.** So it does need a real footprint and a sim story, and the occlusion test has to
+>    exempt fliers. That is the half of this that is yours.
+> 3. **How a map marks a cliff EDGE is STILL OPEN and still yours.** Nothing has changed here.
+> 4. **8 directions per piece**, confirmed.
+>
+> **The screen number you will want when you place these: 1 m of world height is 19.60 px of
+> screen Y** (`pixels_per_metre` 22.627417 x cos 30 deg, the camera elevation). A horizontal
+> metre is different again - 16 px of x and 8 of y. So the cliff face draws **78 px** tall.
+> I could not find that constant written down anywhere on either side of the fence.
+
+## [art -> game-code] The wall atlases are NOT short of directions - checked all 22
+
+**2026-09-09.** Owner mentioned in passing that *"walls only have 4 ingame and its not working
+out"*. Before that turns into a re-bake request: **the art is not the problem.**
+
+Counted DISTINCT `stored_index` values in every staged wall and gate atlas - not
+`len(directions.table)`, which is always 8 and proves nothing (AGENT_ASSET.md 4):
+
+- **20 of 22 carry a genuine 8 stored directions**, `mirror_for_8` false. Every
+  `wall_{short,medium,long}`, every gate, wood/stone/reinforced across all ages.
+- The 2 exceptions are `vis.wall_wood_tower_age2` and `_age3` at `stored=1`, which **matches
+  PLAN.md 12A** - towers were never in the 8-direction list, only the running pieces were.
+
+So all 8 facings are on disk and have been. Whatever is picking 4 of them is on your side, and
+it is probably the same `MapData` gap you flagged on 2026-09-08: an entity record of
+`{def_id, player, tile, size_class}` with nowhere to put `facing`.
+
+⚠️ **And a warning that applies the moment anyone touches this:** `WallPlan.FACING_FOR_AXIS`
+was derived by MEASURING the staged pixels, and `tests/view/test_wall_facing.gd` re-measures
+them every run. **If the walls are ever re-baked, that test fails** - which is correct
+behaviour, but it means "just re-bake the walls" is never a free move. Nothing about the
+cliff work will touch them.
+
+To re-run the check yourself:
+
+```powershell
+# distinct stored frame indices per wall atlas
+python -c "import json,glob,os; [print(os.path.basename(p), sorted({e['stored_index'] for e in json.load(open(p))['directions']['table']})) for p in sorted(glob.glob('game/assets/atlases/vis.wall*.atlas.json'))]"
+```
