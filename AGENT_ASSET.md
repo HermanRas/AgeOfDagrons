@@ -913,6 +913,21 @@ are a reflection's fixed points), so this is the cheap way to not need that chec
 > be incapable of proving the compass runs the right way. Verify a pipeline change on a
 > horse; verify a recipe's own `directions` with the mirror test.
 
+**`variant_seed` DOES NOTHING ON AN ACTOR WHOSE VARIANTS DECLARE `frequency`, AND IT FAILS
+SILENTLY.** `_import_actor`'s own docstring says it plainly — *"the importer takes the first
+variant of each group, but falls back to `random.randint` when that variant declares **no**
+frequency"* — so seeding the RNG only reaches actors that left frequency off. Every variant of
+`geology/temp_cliffs_a.xml` carries `frequency="1"`, so all four of its cliff meshes are
+unreachable except the first: I baked four probes with four different `variant_seed` values and
+diffed them, and all four were **pixel-identical**. Nothing warned, and the log happily printed
+`1 object(s) imported` each time.
+
+**The tell is that the bake summary is IDENTICAL, not merely similar** — same page size, same fill
+percentage. Read the actor's XML for `frequency=` before reaching for `variant_seed`, and diff two
+probes before believing it worked. Note this is the *opposite* failure to the colour-variant bug in
+this file: there the RNG varied when it must not, here it cannot vary when you want it to. **Both
+come from the same one line**, and neither is visible without comparing two bakes.
+
 **A MESH BOUND IS NOT A SURFACE YOU CAN PUT ANYTHING ON.** `bridge_edge_wooden`'s maximum Y
 is −2.882 raw, and sizing the bridge's centre decking to meet it left a 0.14 m slot open
 down the whole 43 m span. The verts at that Y sit at **z = −6.866** — a support post, not
