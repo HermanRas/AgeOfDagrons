@@ -511,6 +511,12 @@ func _king_of_the_hill(w: SimWorld) -> void:
 	# the owner's table overlap, so a `match` would have to pick an order and *"the order is where
 	# the bug goes"*. The three terms below produce every row of it instead.
 	var alone := by_side.size() == 1
+	# ⚠️ **CLEARED FOR EVERY PLAYER FIRST, INCLUDING THE ELIMINATED.** `koth_rate` is what the HUD
+	# turns into a countdown, and a stale one is a clock that goes on running for somebody who
+	# walked off the hill -- or for a defeated player, whose row would keep promising a win. The
+	# loop below only ever writes the players it pays, so without this the last value would stick.
+	for p in w.players:
+		p.koth_rate = 0
 	for pid in standing:
 		var side := _side_of(w, pid)
 		if int(by_side.get(side, 0)) <= 0:
@@ -523,7 +529,8 @@ func _king_of_the_hill(w: SimWorld) -> void:
 		#   leader, others present    1 + 1     = 2
 		#   present, not leading      1         = 1
 		#   every side tied for most  1         = 1 each  (`_leading_side` answers 0, so no bonus)
-		p.score += 1 + (1 if side == leader else 0) + (1 if alone else 0)
+		p.koth_rate = 1 + (1 if side == leader else 0) + (1 if alone else 0)
+		p.score += p.koth_rate
 
 	# THE TALLY DECIDES IT FIRST, and only then conquest. Both can be true on one tick -- a last
 	# surviving side that also just reached the target -- and the score is the mode's own answer,

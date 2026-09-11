@@ -130,6 +130,27 @@ var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], o
 ## forever after and declare a winner on different ticks.
 var score: int = 0
 
+## WHAT THIS PLAYER EARNED ON THE MOST RECENT TICK — 0, 1, 2 or 3 (11.x-koth-hud). The rung of
+## §11.9's ladder they are currently on, and therefore how fast their tally is moving.
+##
+## ⚠️ **IT EXISTS BECAUSE THE CLIENT CANNOT WORK IT OUT AND MUST NOT TRY.** The rate is
+## `1 + unique leader + only side there`; a client has `koth_holder` for the middle term and
+## **nothing for the other two** — it would have to count units in the zone, which
+## `GameView.koth_holder`'s header forbids in as many words, because half a contested zone is in
+## fog for every player but its owner. Two clients counting would show two different clocks for a
+## rule the server has already decided. Same argument `koth_holder` and `score` both already won.
+##
+## 📝 **A RATE AND NOT A TIME.** The seconds a player reads off the HUD are
+## `(target - score) / (rate * TICK_HZ)`, computed in the view where `SimClock.TICK_HZ` lives —
+## `src/sim/` may not name a view class and a duration in the sim would be a second opinion about
+## the tick rate. 0 means *no finite time*: they have nobody on the hill and are not approaching
+## anything.
+##
+## **NOT IN `state_hash()`, ON `koth_holder`'s RULE.** It is a pure function of entity positions
+## that are all hashed already, so folding it in would report one divergence twice. `score` is the
+## hashed half, and it is hashed because it is a running TOTAL that nothing recomputes.
+var koth_rate: int = 0
+
 var defeated: bool = false
 
 ## WHY they are out (project owner, 2026-08-30: *"when a player disconnects or resigns

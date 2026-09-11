@@ -146,6 +146,17 @@ var _player_techs: Dictionary = {}
 ## that has not been told otherwise, and the behaviour of every match before teams.
 var _player_teams: Dictionary = {}
 
+## owner_id -> King of the Hill tally, and owner_id -> the rung it moved at last tick (0-3).
+## Both from that same `player_state` block, and both for EVERY player rather than the local
+## one: this is a standings table, and `SnapshotSystem` sends them unfiltered deliberately.
+##
+## ⚠️ **THE RATE IS SENT AND NEVER DERIVED, WHICH IS `koth_holder`'s RULE ONE STEP ON.** It is
+## `1 + unique leader + only side there`; this client has the middle term and would have to
+## COUNT UNITS IN THE ZONE for the other two -- half of which are in fog for every player but
+## their owner. Two clients counting would run two different clocks for one rule.
+var _koth_scores: Dictionary = {}
+var _koth_rates: Dictionary = {}
+
 ## Last known snapshot facts per entity, keyed by id: {tile, owner_id, def_id,
 ## hp, max_hp, footprint}. Kept because picking and the detail panel both need to
 ## answer questions about an entity that the *view* nodes do not carry -- who owns
@@ -760,6 +771,48 @@ func _read_player_skins(snap: Dictionary) -> void:
 		# existed, which reads as 0 -- no team, so a free-for-all, which is the match
 		# that host is running.
 		_player_teams[int(pid)] = int(ps.get("team", 0))
+		# KING OF THE HILL's tally and the rung it is moving at (11.x-koth-hud). Kept apart
+		# from the skin for `_player_stock`'s reason, and kept for EVERY player rather than
+		# only the local one because the panel is a standings table -- `SnapshotSystem` sends
+		# both unfiltered on purpose, which its own note argues at length.
+		_koth_scores[int(pid)] = int(ps.get("score", 0))
+		_koth_rates[int(pid)] = int(ps.get("koth_rate", 0))
+
+
+## A player's King of the Hill tally, as the last snapshot reported it. 0 for a player not in it.
+func koth_score(owner_id: int) -> int:
+	return int(_koth_scores.get(owner_id, 0))
+
+
+## What rung of §11.9's ladder a player scored at on the last tick: 3 alone, 2 leading with
+## company, 1 present or tied, **0 not on the hill at all**.
+func koth_rate(owner_id: int) -> int:
+	return int(_koth_rates.get(owner_id, 0))
+
+
+## SECONDS UNTIL THIS PLAYER WINS **AT THE RATE THEY ARE SCORING NOW**, or -1 for no finite time.
+##
+## The owner's ruling, 2026-09-11, chosen over a best-rate reading: *"time at current rate"*. So a
+## side alone on the hill reads 5:00 and the same side contested reads 15:00, and **the number
+## moving when the hill contests is information rather than noise** -- it is the whole of what the
+## ladder does. The alternative was stable and optimistic, which is the kind of number that gets
+## believed.
+##
+## ⚠️ **-1 IS "NEVER", AND IT IS NOT THE SAME AS 0.** A player with nobody on the hill approaches
+## nothing, and dividing by their rate would be a division by zero *and* a lie -- so the panel
+## draws a dash. 0 seconds means they have arrived.
+##
+## 📝 **THE ARITHMETIC IS HERE AND NOT IN THE SIM**, because it needs `SimClock.TICK_HZ` and
+## `src/sim/` may not hand out a duration -- that would be a second opinion about the tick rate.
+## `SimPlayer.koth_rate`'s note records the split.
+func koth_seconds_remaining(owner_id: int) -> float:
+	var rate := koth_rate(owner_id)
+	if rate <= 0:
+		return -1.0
+	var left := WinConditionSystem.KOTH_TARGET_SCORE - koth_score(owner_id)
+	if left <= 0:
+		return 0.0
+	return float(left) / (float(rate) * float(SimClock.TICK_HZ))
 
 
 ## The team table, in the shape every `Diplomacy` predicate takes.

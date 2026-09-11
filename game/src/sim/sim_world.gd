@@ -143,9 +143,16 @@ var koth_zone: Rect2i = Rect2i()
 ## client would compute a different holder and draw a different ring for a rule the server has
 ## already decided. One int, once per snapshot, beside `claim_owner`.
 ##
-## **0 IS "NOBODY", AND A TIE IS NOBODY.** Most units in the zone holds it, so a contested hill has
-## no holder and pays no score — which is `_king_of_the_hill()`'s stated rule, and it means this
-## field flickers to 0 in a real fight rather than alternating between two players.
+## **0 IS "NOBODY", AND A TIE IS NOBODY.** This names the side with strictly the MOST units, so a
+## contested hill has no holder — which means the field flickers to 0 in a real fight rather than
+## alternating between two players.
+##
+## ⛔ **IT DOES NOT MEAN NOBODY IS SCORING, AND IT SAID SO UNTIL 2026-09-11.** This note read
+## *"a contested hill has no holder and pays no score"*, which was the flat rule PLAN.md had
+## already reversed. Under §11.9's ladder **every side present scores** and a tie simply awards no
+## leader bonus — so *"nobody is ahead"* and *"nobody is progressing"* stopped being the same fact.
+## The ring going neutral is the first, never the second, and that is the thing most likely to be
+## misread next. `11.x-koth-hud`'s standings panel is what makes the difference visible.
 ##
 ## NOT IN `state_hash()`: it is derived from entity positions that are all hashed already, so
 ## folding it in would report one divergence twice. `SimPlayer.score` is the hashed half.

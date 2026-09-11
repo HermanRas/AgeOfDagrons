@@ -55,6 +55,12 @@ var _briefing: ScenarioBriefing
 ## stalled on a scenario that was winnable throughout.
 var _tracker: ObjectiveTracker
 
+## THE SAME QUESTION AGAIN, FOR THE MODE THAT HAD NO ANSWER AT ALL (11.x-koth-hud). The owner
+## played King of the Hill and reported it: *"the objective pannel from Campaign, is missing
+## showing time to win, players has not idea how far they are, but win and lose is working
+## correctly."* Shares `_tracker`'s slot -- the two modes are mutually exclusive.
+var _koth_panel: KothStandings
+
 ## The scenario's rules, kept here because two things need them every tick and neither
 ## should re-read `Net.match_config()` at 10 Hz: the tracker's row labels and the alert
 ## toast's text. Empty in every non-scenario match, which is the guard both readers use.
@@ -387,6 +393,15 @@ func _build_hud() -> void:
 	_tracker.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_tracker.position = Vector2(12 + ControlGroupSlot.SIZE + 10, 12)
 	hud.add_child(_tracker)
+
+	# THE SAME SLOT, because the two can never both be on screen: the tracker is SCENARIO-only
+	# and this is KING_OF_THE_HILL-only, and both stay hidden until their own `setup()` finds
+	# rows. Sharing the position rather than stacking them is what keeps a player's eye in one
+	# place for "how am I doing" across the two modes that answer it.
+	_koth_panel = KothStandings.new()
+	_koth_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_koth_panel.position = _tracker.position
+	hud.add_child(_koth_panel)
 
 	# A fixed footprint a little larger than the rotated diamond's own bounding
 	# box (SIZE * sqrt(2)) so its tips have room to reach almost to the edges
@@ -1014,6 +1029,13 @@ func _on_snapshot(snap: Dictionary) -> void:
 ## `setup()` latches, so the client path that runs this a second time when a late config
 ## lands is free.
 func _setup_objectives(cfg: MatchConfig) -> void:
+	# KING OF THE HILL GETS THE OTHER PANEL IN THE SAME SLOT (11.x-koth-hud). The two modes are
+	# mutually exclusive, so `KothStandings` and `ObjectiveTracker` can share a position without
+	# either needing to know the other exists -- and each is hidden until its own `setup()` finds
+	# something to show, so a plain skirmish sees neither.
+	if cfg.mode == MatchConfig.Mode.KING_OF_THE_HILL:
+		_koth_panel.setup(cfg.player_ids, Net.local_player_id())
+		return
 	if cfg.mode != MatchConfig.Mode.SCENARIO:
 		return
 	_scenario_objectives = cfg.objectives
@@ -2475,6 +2497,12 @@ func _refresh_minimap() -> void:
 	if holder > 0:
 		ring = GameDataRegistry.colour(int(_view.skin_for(holder).get("colour", -1)))
 	_minimap.set_koth_zone(_view.koth_zone(), ring)
+	# THE STANDINGS PANEL IS FED FROM THE SAME `holder` (11.x-koth-hud), in the same function and
+	# off the same call, so the gold row and the coloured ring cannot disagree about who is ahead.
+	# They are the two halves of one answer and were split across two widgets; reading the field
+	# twice in two places is how they would come apart. A no-op in every other mode, because
+	# `setup()` left the panel empty and hidden.
+	_koth_panel.show_standings(_view, holder)
 
 
 ## Tap the minimap to move the camera there (PLAN.md 3.8) -- or, with units

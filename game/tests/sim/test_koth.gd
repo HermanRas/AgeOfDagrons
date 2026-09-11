@@ -251,6 +251,53 @@ func test_two_unaligned_players_are_two_sides() -> void:
 	assert_eq(w.koth_holder, 0)
 
 
+# ── the rate the HUD reads (11.x-koth-hud) ──────────────────────────────────
+
+## `koth_rate` is the rung a player is on THIS tick, and the HUD turns it into a countdown. It
+## exists because a client cannot work it out: it has `koth_holder` for the leader term and would
+## have to count units in a half-fogged zone for the other two.
+func test_the_rate_reports_which_rung_each_side_is_on() -> void:
+	_keep_everyone_alive(w)
+	_on_hill(w, 1, 3)
+	_on_hill(w, 2, 2, Vector2i(21, 23))
+	w.step()
+	assert_eq(w.player_for(1).koth_rate, 2, "leading, with company")
+	assert_eq(w.player_for(2).koth_rate, 1, "present and losing")
+	assert_eq(w.player_for(1).score, 2, "and it is the same number the tally moved by")
+	assert_eq(w.player_for(2).score, 1)
+
+
+func test_the_rate_is_three_for_a_side_alone_and_zero_for_one_that_is_absent() -> void:
+	_keep_everyone_alive(w)
+	_on_hill(w, 1, 1)
+	w.step()
+	assert_eq(w.player_for(1).koth_rate, 3)
+	assert_eq(w.player_for(2).koth_rate, 0, "nobody on the hill approaches nothing")
+
+
+## ⚠️ **A STALE RATE IS A CLOCK THAT GOES ON RUNNING FOR SOMEBODY WHO WALKED AWAY.** The scoring
+## loop only ever writes the players it pays, so without clearing every player first the last
+## value would stick and the HUD would promise a win to a row that had left the hill — or to a
+## defeated player, whose countdown would keep ticking down after they were out.
+func test_losing_the_hill_clears_the_rate_and_keeps_the_progress() -> void:
+	_keep_everyone_alive(w)
+	var men := _on_hill(w, 1, 2)
+	w.step()
+	assert_eq(w.player_for(1).koth_rate, 3)
+	var banked := w.player_for(1).score
+
+	# CLEARED OFF IT. `garrisoned_in` is this file's idiom for "off the map but still alive and
+	# still yours" and is a real mechanism rather than a poke at `pos` -- `_zone_strength` skips
+	# them for the reason `test_garrisoned_units_do_not_hold_the_hill` pins.
+	for u in men:
+		u.garrisoned_in = 999
+	w.step()
+	assert_eq(w.player_for(1).koth_rate, 0, "the rate stops")
+	assert_eq(w.player_for(1).score, banked,
+			"and the TALLY does not -- §11.9: losing the hill costs the RATE, not the progress. "
+			+ "A tally that decayed would punish the one thing the mode wants to encourage")
+
+
 # ── winning ─────────────────────────────────────────────────────────────────
 
 func test_reaching_the_target_ends_the_match() -> void:

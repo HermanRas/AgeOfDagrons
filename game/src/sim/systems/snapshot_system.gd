@@ -159,6 +159,11 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# filtering it would break the single `player_state` shape to hide a number the mode
 			# exists to race towards.
 			"score": p.score,
+			# HOW FAST THAT TALLY IS MOVING (11.x-koth-hud): 0-3, this player's rung of §11.9's
+			# ladder on the last tick. Unfiltered for `score`'s reason and no weaker: it says only
+			# what `koth_holder` beside it already implies -- that somebody is contesting -- and a
+			# client cannot derive it without counting units in a zone that is half in fog.
+			"koth_rate": p.koth_rate,
 		}
 
 	return {
