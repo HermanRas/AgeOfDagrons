@@ -22,9 +22,9 @@ extends RefCounted
 ##                      player left wins. The classic conquest rule.
 ##   TROPHY             every player starts with a baby dragon; lose it and you
 ##                      are out.
-##   KING_OF_THE_HILL   hold a zone on the map with more units than anybody else
-##                      to score; first to WinConditionSystem.KOTH_TARGET_SCORE
-##                      wins.
+##   KING_OF_THE_HILL   stand in a zone on the map to score, and hold it ALONE to
+##                      score three times as fast (PLAN.md 11.9's ladder); first
+##                      to WinConditionSystem.KOTH_TARGET_SCORE wins.
 ##   SCENARIO           an authored objective list decides it (15.2). Won by
 ##                      `objectives` below; LOST by elimination like every other
 ##                      mode, which is the half of conquest a scenario keeps.

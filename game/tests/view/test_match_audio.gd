@@ -388,10 +388,14 @@ func test_resetting_forgets_the_previous_match() -> void:
 #
 # ⚠️ **THE HAZARD HERE IS NOT "DOES IT PLAY", IT IS "DOES IT SHUT UP".** The owner's ask
 # carried its own warning -- *"short subtile sound, it will play often"* -- and the rule it
-# sits on is worse than that warning knew: a tie pays nobody, so `koth_holder` drops to 0
-# whenever a fight on the hill is even and returns the moment one side is a single unit
+# sits on is worse than that warning knew: a tie has no UNIQUE leader, so `koth_holder` drops
+# to 0 whenever a fight on the hill is even and returns the moment one side is a single unit
 # ahead. A real 5-v-5 is `1 -> 0 -> 1 -> 0` several times a second. So the load-bearing
 # tests below are the SILENT ones.
+#
+# 📝 **UNAFFECTED BY THE SAME DAY'S LADDER FIX**, and worth saying so: under PLAN.md §11.9 a
+# contested hill pays both sides rather than nobody, but `koth_holder` still names the unique
+# leader, so the cadence these tests are about did not move an inch.
 
 const _HILL := Rect2i(40, 40, 13, 13)
 
@@ -477,8 +481,9 @@ func test_a_holder_that_changes_one_tick_short_of_the_dwell_is_not_believed() ->
 
 func test_losing_the_hill_to_a_contested_fight_is_silent() -> void:
 	# ⛔ **THE OWNER'S RULING, 2026-09-11: taken and stolen sound, lost does not.** It is
-	# the transition that fires most and means least -- a tie pays nobody, so this is
-	# what every even fight on the hill looks like.
+	# the transition that fires most and means least -- a tie has no unique leader, so this
+	# is what every even fight on the hill looks like, and both sides are still scoring
+	# through it.
 	_hold(0)
 	_hold(1)
 	_spy.calls.clear()

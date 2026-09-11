@@ -54,9 +54,15 @@ var _announced_result := false
 ## HOW LONG A HOLDER MUST HOLD BEFORE IT IS ANNOUNCED, in snapshots (PLAN.md 11.2,
 ## `11.x-koth-control-sound`). The owner's ask carried its own warning -- *"short subtile
 ## sound, it will play often"* -- and the rule built under it is worse than that warning
-## knew: **a tie pays nobody**, so `koth_holder` drops to 0 the instant a fight is even and
-## returns the instant one side is one unit ahead. A real 5-v-5 on the hill is therefore
+## knew: **a tie has no UNIQUE leader**, so `koth_holder` drops to 0 the instant a fight is even
+## and returns the instant one side is one unit ahead. A real 5-v-5 on the hill is therefore
 ## `1 -> 0 -> 1 -> 0` several times a second, not `1 -> 2 -> 1`.
+##
+## 📝 **THIS SAID "a tie pays NOBODY" UNTIL THE LADDER FIX LATER THE SAME DAY, AND THE FLICKER IS
+## UNCHANGED.** Under PLAN.md §11.9 a tie pays everybody present 1 — but `koth_holder` names the
+## unique leader either way, so every word about the cadence below still holds. The old phrasing
+## is corrected rather than dropped because it is the reasoning a reader would otherwise re-derive
+## from a rule the game no longer has.
 ##
 ## ⚠️ **AN INTERVAL ALONE DOES NOT FIX THAT, WHICH IS WHY THERE ARE TWO GUARDS.** Throttling
 ## turns a machine gun into a metronome: still a sound every few seconds, still saying
@@ -373,9 +379,11 @@ func _player_transitions(snap: Dictionary, me: int) -> void:
 ## | **stolen** | someone -> someone else | ✅ sounds |
 ## | **lost** | someone -> 0 (contested, or the hill emptied) | ⛔ **silent** |
 ##
-## ⛔ **`lost` IS THE ONE THAT FIRES MOST AND MEANS LEAST**, because a tie pays nobody: the
-## holder drops to 0 every time a fight on the hill is even. Announcing it is how a short
-## subtle sound becomes a stutter during the one moment the player is busiest. Offered to the
+## ⛔ **`lost` IS THE ONE THAT FIRES MOST AND MEANS LEAST**, because a tie has no unique leader:
+## the holder drops to 0 every time a fight on the hill is even, **while both sides go on
+## scoring**. Announcing it is how a short subtle sound becomes a stutter during the one moment
+## the player is busiest — and it would be announcing a loss of the LEAD, not of progress.
+## Offered to the
 ## owner with that argument and with the case against (losing the hill is arguably the most
 ## actionable thing to hear); they chose taken + stolen.
 ##

@@ -349,7 +349,13 @@ func test_the_declared_modes_are_the_four_that_were_asked_for() -> void:
 			["LAST_MAN_STANDING", "TROPHY", "KING_OF_THE_HILL", "SCENARIO"])
 	assert_eq(int(MatchConfig.Mode.LAST_MAN_STANDING), 0)
 	assert_eq(int(MatchConfig.Mode.SCENARIO), 3, "appended, so the older three keep their ints")
-	assert_eq(WinConditionSystem.KOTH_TARGET_SCORE, 1000)
+	# 9,000, worked back from PLAN.md §11.9's five minutes of uncontested control at three points
+	# a tick. ⛔ **IT WAS 1000 FROM 2026-09-09 TO 2026-09-11** -- 33 seconds under the ladder --
+	# and this assertion pinned the defect rather than catching it, because it was written from
+	# the same wrong source as the constant.
+	assert_eq(WinConditionSystem.KOTH_TARGET_SCORE, 9000)
+	assert_eq(WinConditionSystem.KOTH_TARGET_SCORE % 3, 0,
+			"it must divide by all three rungs, or a side steps over the line rather than onto it")
 
 
 func test_every_mode_has_a_name_for_a_player_to_read() -> void:

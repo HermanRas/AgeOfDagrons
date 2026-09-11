@@ -43,16 +43,31 @@ extends SimSystem
 ## rules, not per-match settings; the zone's PLACE on the map is the part that became map data
 ## (`SimWorld.koth_zone`), which is what this note used to be waiting for.
 ##
-## ⚠️ **`KOTH_TARGET_SCORE` IS A DURATION IN DISGUISE AND IS WORTH READING AS ONE.** A point a tick
-## at `SimClock`'s 10 Hz makes 1000 **a hundred seconds of uncontested control** — not a hundred
-## seconds of match. Contested ticks pay nobody, so a hill that changes hands takes far longer, and
-## that is the number to move if the mode plays too fast rather than the radius.
+## ⚠️ **`KOTH_TARGET_SCORE` IS A DURATION IN DISGUISE AND THE DURATION IS THE DESIGN FIGURE.** The
+## owner gave five minutes (*"total time required in the area is 5 min.. we can work it back"*,
+## 2026-09-01) and PLAN.md §11.9 carries the arithmetic. At `SimClock`'s 10 Hz and the top of the
+## ladder below:
+##
+##   | held as | points/tick | ticks | time to 9,000 |
+##   |---|---|---|---|
+##   | the only side there | 3 | 3,000 | **5:00** — the design figure |
+##   | leader, with company | 2 | 4,500 | 7:30 |
+##   | present, not leading or tied | 1 | 9,000 | 15:00 |
+##
+## **Re-tune the MINUTES and re-derive**, rather than nudging the constant and guessing what it
+## means. 9,000 also divides cleanly by all three rates, which is why the win check below can be
+## `>=` and still usually land exactly.
+##
+## ⛔ **IT WAS 1000 FROM 2026-09-09 TO 2026-09-11 AND THAT WAS A DEFECT, NOT A TUNING.** Under the
+## ladder 1000 is **thirty-three seconds**; under the flat rule that shipped with it, a hundred.
+## PLAN.md called it *"a placeholder that happens to look like a plausible number, which is the
+## worst kind"* before either was written. Found by the owner playing it.
 ##
 ## ⚠️ **AND `KOTH_ZONE_RADIUS_TILES` IS A HALF-EXTENT, NOT A RADIUS, DESPITE THE NAME.** The zone is
 ## a `Rect2i` because its other source is an authored rectangle, so the generated hill is a square
 ## `2r+1` on a side. `MapGen._place_koth_zone()` carries the argument for one shape; the name is
 ## kept because it is what 11.2 declared and renaming it would lose the thread.
-const KOTH_TARGET_SCORE := 1000
+const KOTH_TARGET_SCORE := 9000
 const KOTH_ZONE_RADIUS_TILES := 6
 
 ## ⚠️ **`TROPHY_DEF_ID` IS GONE, AND ITS ABSENCE IS THE FEATURE** (11.2, 2026-09-07). It
@@ -392,20 +407,53 @@ func _trophy_holders(w: SimWorld) -> Dictionary:
 ##   3. *"the minimap ring"* -- `Minimap.set_koth_zone()`, fed from the snapshot's `koth_zone` and
 ##      `koth_holder`. *"A scored zone the player cannot see is a rule they can only lose to."*
 ##
-## ## THE SCORING RULE, WHICH WAS ALREADY DECIDED AND IS NOT RE-LITIGATED
+## ## THE SCORING RULE IS A LADDER, AND IT IS PLAN.md §11.9's — the owner's, 2026-09-01
 ##
-## **MOST units in the zone scores, not merely presence** -- so a contested hill pays nobody and
-## one unit is enough to hold an empty one. A tie pays nobody, which is what makes `koth_holder`
-## drop to 0 in a real fight rather than alternating between two players.
+## Per tick, per side standing in the zone:
+##
+##   | situation | points |
+##   |---|---|
+##   | the only side in the zone | **3** |
+##   | the side with the most units, others present | **2** |
+##   | any other side present | **1** |
+##   | every side tied for the most | **1 each** |
+##   | nobody in it | 0 |
+##
+## Written as **one formula, not four arms**: 1 for presence, +1 for the unique leader, +1 more for
+## being the only side there. §11.9 requires that shape because the rows overlap and *"the order is
+## where the bug goes"*.
+##
+## ⛔ **THIS HEADER SAID THE OPPOSITE FROM 2026-09-09 TO 2026-09-11, AND THE CODE BELOW OBEYED IT.**
+## It read *"MOST units in the zone scores, not merely presence -- so a contested hill pays nobody"*
+## and called the point settled. **PLAN.md had already reversed that**, and §11.9 named this very
+## comment as the thing to correct in the change that built the rule: *"that comment is currently
+## the only place in the repo that contradicts this section"*. It was built from the comment instead
+## of from the plan, and the owner found it by playing the mode.
+##
+## **WHY PRESENCE PAYS, which is the point the reversal turns on.** Under winner-takes-all two
+## evenly matched armies on the hill advance **nobody**, so the mode's clock stops and the match is
+## decided somewhere else entirely -- and with eight players a sole uncontested spell is near
+## impossible to get, so the mode barely runs. Paying presence means a contested hill still runs,
+## three times slower than an uncontested one, and **that 3x ratio is the whole design**: clearing
+## the hill is worth more than crowding it.
+##
+## 📝 **`koth_holder` IS UNAFFECTED AND STILL DROPS TO 0 ON A TIE.** It names the *unique leader*,
+## which is the formula's middle term, so the ring and `11.x-koth-control-sound` read exactly as
+## before. What changed is that a tie now pays everybody present 1 rather than paying nobody.
 ##
 ## ## ⚠️ IT COUNTS SIDES, NOT PLAYERS, FOR `_last_man_standing`'s REASON
 ##
 ## Two allies each holding four units in the zone against one enemy's six hold it **between them**,
 ## and a rule that compared players would hand the tick to the enemy. So units are tallied by side
 ## -- team, or the negative of the player id for the unaligned, which is `_decide_by_sides`' own
-## keying and cannot collide -- and every standing member of the leading side scores. That also
+## keying and cannot collide -- and every standing member of a scoring side scores. That also
 ## means a 2v2's allies carry identical numbers, which is correct and is what lets `winner_id`
 ## name a player the way every other mode does.
+##
+## ✅ **AND THE LADDER PAYS FOR OCCUPANCY, NOT HEADCOUNT** (§11.9): a side of two holding the hill
+## scores at the same rate as a side of one. Numbers still matter, and they matter where they
+## should -- through *"most units"*, which is how a side takes the leader bonus and how it clears
+## the hill to reach 3.
 ##
 ## ## ⚠️ GARRISONED UNITS DO NOT HOLD GROUND
 ##
@@ -458,13 +506,24 @@ func _king_of_the_hill(w: SimWorld) -> void:
 	# still have units standing on the hill -- their corpses are in `entities` for ten seconds and
 	# `_zone_strength` counts only the living, but a player whose last BUILDING fell is bankrupt
 	# with an army intact. Paying them would tick a defeated player towards a win.
-	if leader != 0:
-		for pid in standing:
-			if _side_of(w, pid) != leader:
-				continue
-			var p := w.player_for(pid)
-			if p != null:
-				p.score += 1
+	#
+	# ⚠️ **ONE FORMULA, NOT FOUR ARMS, AND PLAN.md §11.9 IS EXPLICIT ABOUT WHY:** the four rows of
+	# the owner's table overlap, so a `match` would have to pick an order and *"the order is where
+	# the bug goes"*. The three terms below produce every row of it instead.
+	var alone := by_side.size() == 1
+	for pid in standing:
+		var side := _side_of(w, pid)
+		if int(by_side.get(side, 0)) <= 0:
+			continue                                    # not on the hill, nothing to pay
+		var p := w.player_for(pid)
+		if p == null:
+			continue
+		# 1 for PRESENCE, +1 for being the UNIQUE leader, +1 more for being the ONLY side there.
+		#   alone                     1 + 1 + 1 = 3   (a sole occupant is trivially unique leader)
+		#   leader, others present    1 + 1     = 2
+		#   present, not leading      1         = 1
+		#   every side tied for most  1         = 1 each  (`_leading_side` answers 0, so no bonus)
+		p.score += 1 + (1 if side == leader else 0) + (1 if alone else 0)
 
 	# THE TALLY DECIDES IT FIRST, and only then conquest. Both can be true on one tick -- a last
 	# surviving side that also just reached the target -- and the score is the mode's own answer,
@@ -508,10 +567,17 @@ func _zone_strength(w: SimWorld) -> Dictionary:
 
 ## The side with strictly the most units, or 0 for an empty or tied zone.
 ##
-## **STRICTLY, WHICH IS THE WHOLE RULE.** A draw pays nobody: two sides with four units each are
-## contesting the hill, not sharing it, and paying both would make a stalemate the fastest way to
-## the target. 0 is safe as "nobody" because `_side_of` never returns it — a team is positive and
-## an unaligned player is the negative of an id that starts at 1.
+## **STRICTLY, AND THAT IS THE LADDER'S MIDDLE TERM.** This answers *"is there a UNIQUE leader"*,
+## which is worth +1 on top of presence — so two sides with four units each are contesting the hill
+## rather than leading it, and neither takes the bonus. 0 is safe as "nobody" because `_side_of`
+## never returns it: a team is positive and an unaligned player is the negative of an id that
+## starts at 1.
+##
+## 📝 **ITS BEHAVIOUR IS UNCHANGED BY THE 2026-09-11 LADDER FIX AND ONLY ITS REASON MOVED.** This
+## note used to say *"a draw pays nobody"*, which was the flat rule's justification; under the
+## ladder a draw pays everybody present 1 and simply awards no bonus. Worth keeping, because a
+## function whose comment argues for a rule it no longer implements is how the flat rule got built
+## in the first place — see `_king_of_the_hill()`'s header.
 func _leading_side(by_side: Dictionary) -> int:
 	var best := 0
 	var best_count := 0

@@ -80,41 +80,71 @@ func _on_hill(world: SimWorld, owner: int, count: int, from := Vector2i(21, 21))
 
 # ── the scoring rule ────────────────────────────────────────────────────────
 
+## ⚠️ **THE WHOLE LADDER IN ONE TEST, ASSERTED AS AN ORDERING RATHER THAN AS THREE NUMBERS.**
+## §11.9's design is the RATIO — clearing the hill is worth three times crowding it — so what must
+## hold is `alone > leading > merely present`, and the literals below are the current rungs of it.
+## A retune that keeps the shape keeps this test.
+func test_the_ladder_pays_three_two_one() -> void:
+	_keep_everyone_alive(w)
+	_on_hill(w, 1, 1)
+	w.step()
+	var alone := w.player_for(1).score
+
+	var w2 := _world([0, 0])
+	_keep_everyone_alive(w2)
+	_on_hill(w2, 1, 3)
+	_on_hill(w2, 2, 2, Vector2i(21, 23))
+	w2.step()
+	var leading := w2.player_for(1).score
+	var trailing := w2.player_for(2).score
+
+	assert_eq(alone, 3, "the only side there: presence + unique leader + sole occupancy")
+	assert_eq(leading, 2, "leader with company: presence + unique leader")
+	assert_eq(trailing, 1, "present and losing still earns the base point")
+	assert_true(alone > leading and leading > trailing,
+			"the ORDERING is the design; clearing the hill must beat crowding it")
+
+
 func test_holding_the_hill_alone_scores_every_tick() -> void:
 	_keep_everyone_alive(w)
 	_on_hill(w, 1, 1)
 	for i in range(5):
 		w.step()
-	assert_eq(w.player_for(1).score, 5, "one point a tick")
+	assert_eq(w.player_for(1).score, 15, "three a tick for the only side there")
 	assert_eq(w.player_for(2).score, 0, "and nothing for the player who is not there")
 	assert_eq(w.koth_holder, 1)
 
 
-## **MOST units, not merely presence** — the rule's own sentence, and the half a presence test
-## would pass while getting completely wrong.
+## **MOST units takes the leader bonus** — but the side it takes it from is still present, and
+## presence is still worth a point. The half a winner-takes-all test would get exactly backwards.
 func test_the_larger_force_holds_a_shared_hill() -> void:
 	_keep_everyone_alive(w)
 	_on_hill(w, 1, 3)
 	_on_hill(w, 2, 2, Vector2i(21, 23))
 	for i in range(4):
 		w.step()
-	assert_eq(w.player_for(1).score, 4)
-	assert_eq(w.player_for(2).score, 0)
+	assert_eq(w.player_for(1).score, 8, "two a tick while somebody else is on it")
+	assert_eq(w.player_for(2).score, 4, "one a tick for being there at all")
 	assert_eq(w.koth_holder, 1)
 
 
-## ⚠️ **A TIE PAYS NOBODY.** Two sides with equal numbers are CONTESTING the hill, not sharing it —
-## and paying both would make a stalemate the fastest way to `KOTH_TARGET_SCORE`, which is the
-## version of this rule that gets played by parking two armies on a square and waiting.
-func test_a_contested_hill_pays_nobody_and_has_no_holder() -> void:
+## ⚠️ **A TIE PAYS EVERYBODY PRESENT, AND THAT IS THE POINT OF THE LADDER.** PLAN.md §11.9: under
+## winner-takes-all two evenly matched armies advance NOBODY, so the mode's clock stops and the
+## match is decided somewhere else — and with eight players a sole uncontested spell is near
+## impossible to get. A contested hill still runs, three times slower than an uncontested one.
+##
+## ⛔ **THIS TEST ASSERTED 0 AND 0 UNTIL 2026-09-11**, which is how the flat rule survived: it was
+## written from the same header comment the rule was, so the test and the defect agreed with each
+## other. §5's *"beware fixtures that agree with the bug"*, at the level of a whole rule.
+func test_a_contested_hill_pays_everyone_on_it_and_has_no_holder() -> void:
 	_keep_everyone_alive(w)
 	_on_hill(w, 1, 2)
 	_on_hill(w, 2, 2, Vector2i(21, 23))
 	for i in range(6):
 		w.step()
-	assert_eq(w.player_for(1).score, 0)
-	assert_eq(w.player_for(2).score, 0)
-	assert_eq(w.koth_holder, 0, "nobody holds a contested hill")
+	assert_eq(w.player_for(1).score, 6, "one a tick each: present, and no unique leader")
+	assert_eq(w.player_for(2).score, 6)
+	assert_eq(w.koth_holder, 0, "a tie still has no holder — the ring goes neutral")
 
 
 func test_an_empty_hill_pays_nobody() -> void:
@@ -137,10 +167,11 @@ func test_a_unit_outside_the_zone_is_not_on_the_hill() -> void:
 
 	w.spawn_unit(&"unit.villager", 1, Vector2i(20, 20))
 	w.step()
-	assert_eq(w.player_for(1).score, 1, "and the near corner is inside")
+	assert_eq(w.player_for(1).score, 3, "and the near corner is inside")
 	w.spawn_unit(&"unit.villager", 1, Vector2i(27, 27))
 	w.step()
-	assert_eq(w.player_for(1).score, 2, "as is the far one")
+	assert_eq(w.player_for(1).score, 6, "as is the far one — and the RATE is unchanged, "
+			+ "because the ladder pays for occupancy and not for headcount")
 
 
 ## ⚠️ **A GARRISONED UNIT IS OFF THE MAP AND HOLDS NO GROUND.** `SimUnit.garrisoned_in` leaves
@@ -151,12 +182,12 @@ func test_garrisoned_units_do_not_hold_the_hill() -> void:
 	_keep_everyone_alive(w)
 	var men := _on_hill(w, 1, 2)
 	w.step()
-	assert_eq(w.player_for(1).score, 1)
+	assert_eq(w.player_for(1).score, 3)
 
 	for u in men:
 		u.garrisoned_in = 999          # a tower id; nothing here reads it back
 	w.step()
-	assert_eq(w.player_for(1).score, 1, "hiding indoors is not holding the ground")
+	assert_eq(w.player_for(1).score, 3, "hiding indoors is not holding the ground")
 	assert_eq(w.koth_holder, 0)
 
 
@@ -168,7 +199,8 @@ func test_gaia_wildlife_neither_holds_the_hill_nor_denies_it() -> void:
 	_on_hill(w, 0, 5)
 	_on_hill(w, 1, 1, Vector2i(21, 24))
 	w.step()
-	assert_eq(w.player_for(1).score, 1, "one villager outnumbers any number of deer")
+	assert_eq(w.player_for(1).score, 3, "one villager outnumbers any number of deer — and is "
+			+ "ALONE on the hill, because gaia is not a side that can be present on it")
 	assert_eq(w.koth_holder, 1)
 
 
@@ -197,9 +229,9 @@ func test_allies_pool_their_strength_on_the_hill() -> void:
 	_on_hill(world, 3, 3, Vector2i(21, 25))
 	world.step()
 
-	assert_eq(world.player_for(1).score, 1, "four between the allies beats three")
-	assert_eq(world.player_for(2).score, 1, "and BOTH of them score it")
-	assert_eq(world.player_for(3).score, 0)
+	assert_eq(world.player_for(1).score, 2, "four between the allies beats three")
+	assert_eq(world.player_for(2).score, 2, "and BOTH of them score it, identically")
+	assert_eq(world.player_for(3).score, 1, "the enemy is losing the hill and still on it")
 	# THE LOWEST-ID SURVIVOR OF THE LEADING SIDE, `_decide_by_sides`' own convention.
 	assert_eq(world.koth_holder, 1)
 
@@ -211,8 +243,12 @@ func test_two_unaligned_players_are_two_sides() -> void:
 	_on_hill(w, 1, 1)
 	_on_hill(w, 2, 1, Vector2i(21, 23))
 	w.step()
-	assert_eq(w.player_for(1).score, 0, "one each is contested, not shared")
-	assert_eq(w.player_for(2).score, 0)
+	# ONE EACH IS A TIE, so neither takes the leader bonus and both keep the base point. If 0 is
+	# the absence of a team rather than one everybody shares, these are two sides -- and if it
+	# were NOT, they would be one side of two, alone on the hill, scoring 3 apiece.
+	assert_eq(w.player_for(1).score, 1, "contested, not shared, and not allied")
+	assert_eq(w.player_for(2).score, 1)
+	assert_eq(w.koth_holder, 0)
 
 
 # ── winning ─────────────────────────────────────────────────────────────────
@@ -228,6 +264,27 @@ func test_reaching_the_target_ends_the_match() -> void:
 	assert_eq(w.winner_id, 1)
 	assert_eq(w.winner_team, 0, "a free-for-all has no winning team")
 	assert_false(w.player_for(1).defeated)
+
+
+## ⚠️ **THE WIN CHECK IS `>=` AND THE LADDER IS WHAT MAKES THAT MATTER.** PLAN.md §11.9 names this
+## hazard: a side's score steps by 1, 2 or 3, so it can step **over** an exact target — 8,998 →
+## 9,001 never equals 9,000 and an `==` check would leave a side sitting on the hill past the line
+## with the match running forever.
+##
+## 📝 **IT WAS UNREACHABLE UNDER THE FLAT RULE AND IS REACHABLE NOW.** A step of exactly 1 can never
+## skip a value, so before 2026-09-11 an `==` here would have been wrong and untestable. 9,000
+## divides cleanly by all three rates, which makes an exact landing LIKELY and would therefore have
+## made the bug rare rather than absent — the shape that ships. Same family as `ProjectileSystem`'s
+## `elapsed_ticks > total_ticks`.
+func test_a_score_that_steps_over_the_target_still_wins() -> void:
+	_keep_everyone_alive(w)
+	_on_hill(w, 1, 1)                       # alone: three a tick
+	w.player_for(1).score = WinConditionSystem.KOTH_TARGET_SCORE - 2
+	w.step()
+	assert_true(w.player_for(1).score > WinConditionSystem.KOTH_TARGET_SCORE,
+			"the premise: it landed PAST the target, never on it")
+	assert_true(w.match_over, "and won anyway, because the check is >= and not ==")
+	assert_eq(w.winner_id, 1)
 
 
 func test_a_teams_win_names_the_team_as_well_as_a_player() -> void:
@@ -418,7 +475,7 @@ func test_the_hill_and_the_tally_ride_the_snapshot() -> void:
 	assert_eq(int(snap["koth_h"]), w.koth_zone.size.y)
 	assert_eq(int(snap["koth_holder"]), 1)
 	var state: Dictionary = snap["player_state"]
-	assert_eq(int((state[1] as Dictionary)["score"]), 3)
+	assert_eq(int((state[1] as Dictionary)["score"]), 9, "three ticks alone at three a tick")
 	assert_eq(int((state[2] as Dictionary)["score"]), 0)
 
 

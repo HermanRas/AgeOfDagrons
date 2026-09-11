@@ -105,8 +105,13 @@ var tech_mods: Dictionary = {}
 
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
 
-## KING OF THE HILL's tally (11.x-koth): one point per tick this player's SIDE leads the zone,
-## first to `WinConditionSystem.KOTH_TARGET_SCORE` wins. 0 in every other mode.
+## KING OF THE HILL's tally (11.x-koth): per tick, **3 while this player's SIDE is the only one in
+## the zone, 2 while it leads with company, 1 while it is merely present or tied** — PLAN.md
+## §11.9's ladder. First to `WinConditionSystem.KOTH_TARGET_SCORE` wins. 0 in every other mode.
+##
+## ⛔ **THIS SAID "one point per tick this player's SIDE LEADS the zone" UNTIL 2026-09-11**, which
+## was the flat rule PLAN.md had already reversed — under it a contested hill paid nobody and the
+## mode's clock stopped during exactly the fights it exists to cause.
 ##
 ## ⚠️ **IT LANDED WITH THE RULE THAT WRITES IT, AND THAT IS WHY IT WAS NOT DECLARED EARLIER.**
 ## `_king_of_the_hill()`'s own placeholder note refused to add it ahead of time: *"an unwritten

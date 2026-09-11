@@ -25,9 +25,11 @@
 ##
 ## ## THREE STATES, BECAUSE THE RING MEANS THREE THINGS
 ##
-## Empty, held, and CONTESTED — and the third is the one nobody would think to look at. Most units
-## holds the hill, so a tie pays nobody and `koth_holder` drops to 0: the ring goes neutral in the
-## middle of a fight, which is correct and is the state most likely to be read as a bug.
+## Empty, held, and CONTESTED — and the third is the one nobody would think to look at. A tie has
+## no UNIQUE leader, so `koth_holder` drops to 0 and the ring goes neutral in the middle of a
+## fight, which is correct and is the state most likely to be read as a bug. ⚠️ **Both sides are
+## still SCORING there** (PLAN.md §11.9's ladder, 1 each) — the neutral ring means "nobody is
+## ahead", never "nobody is progressing", and those were the same thing until 2026-09-11.
 ##
 ## Usage:
 ##   Godot --path game res://dev_preview/preview_koth.tscn
@@ -127,10 +129,16 @@ func _report_zone() -> bool:
 			world.koth_zone.size.x, world.koth_zone.size.y])
 	print("  map:      %d x %d" % [world.map.size.x, world.map.size.y])
 	print("  holder:   %d (0 is nobody)" % world.koth_holder)
-	print("  target:   %d points = %.0fs of uncontested control at %d Hz"
-			% [WinConditionSystem.KOTH_TARGET_SCORE,
-			float(WinConditionSystem.KOTH_TARGET_SCORE) / float(SimClock.TICK_HZ),
-			SimClock.TICK_HZ])
+	# ⚠️ **DIVIDED BY THE RATE AS WELL AS BY THE TICK RATE.** This printed
+	# `target / TICK_HZ` until 2026-09-11, which was right only while the ladder did not exist
+	# and every tick paid 1 -- it would now report 900s for a five-minute design figure.
+	# All three rungs, because "time to win" is not one number once the rate varies.
+	print("  target:   %d points" % WinConditionSystem.KOTH_TARGET_SCORE)
+	for rung in [[3, "alone on it"], [2, "leading, with company"], [1, "present or tied"]]:
+		print("              %.0fs %s (%d/tick at %d Hz)"
+				% [float(WinConditionSystem.KOTH_TARGET_SCORE)
+				/ (float(int(rung[0])) * float(SimClock.TICK_HZ)),
+				rung[1], int(rung[0]), SimClock.TICK_HZ])
 
 	# ⚠️ **THE VIEW'S COPY AND THE SIM'S, PRINTED TOGETHER, BECAUSE THEY ARE THE PAIR THAT CAN
 	# DISAGREE.** The zone crosses the wire as five ints; a client that read them wrongly would
@@ -167,14 +175,32 @@ func _report_holding(what: String, expect_holder: int) -> bool:
 		push_error("expected the holder to be %d and it is %d"
 				% [expect_holder, world.koth_holder])
 		return false
-	# THE TIE IS THE CASE WORTH CHECKING OUT LOUD: nobody holds it, so nobody may score.
+	# ⚠️ **THE TIE IS THE CASE WORTH CHECKING OUT LOUD, AND IT INVERTED ON 2026-09-11.** Under the
+	# flat rule nobody could score here and this asserted exactly that -- *"P%d scored on a
+	# contested hill"*. Under PLAN.md §11.9's ladder a tie has no UNIQUE leader, so every side
+	# present takes the base point and nobody takes the bonus: **"the ring is neutral" and "nobody
+	# is progressing" stopped being the same fact.** ✅ This guard is what caught the stale
+	# assertion when the ladder landed, which is the preview earning its place -- the flat rule had
+	# survived a green suite for two days.
+	#
+	# 📝 One point EACH and not more, which is the half that matters: a bug paying the bonus to
+	# both sides of a tie would make parking two armies on a square the fastest route to the
+	# target, and that is the failure the ladder is most likely to be broken into.
 	if expect_holder == 0:
+		var before: Dictionary = {}
 		for p in world.players:
-			var before := p.score
-			world.step()
-			if p.score != before:
-				push_error("P%d scored on a contested hill" % p.id)
+			before[p.id] = p.score
+		world.step()
+		for p in world.players:
+			# PER PLAYER IS SOUND HERE because this preview is a two-player free-for-all, so
+			# every player is their own side. The rule itself scores by side.
+			var want := 1 if _in_zone(world, p.id) > 0 else 0
+			var gained := p.score - int(before[p.id])
+			if gained != want:
+				push_error("P%d gained %d a tick on a contested hill, expected %d"
+						% [p.id, gained, want])
 				return false
+		print("  contested pays:  1 a tick each — the hill is still running")
 	return true
 
 
