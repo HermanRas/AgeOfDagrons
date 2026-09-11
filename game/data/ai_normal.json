@@ -58,13 +58,13 @@
     {"do": "advance_age",
      "when": {"age": 1, "at_least": {"unit.villager": 5}}},
 
-    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 3,
-     "when": {"fewer_than": {"unit.villager": 9}}},
-
     {"do": "build", "def": "building.mill", "near": "self", "units": 1,
      "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
     {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
-     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 2}}},
+     "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 3}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 3,
+     "when": {"fewer_than": {"unit.villager": 9}}},
 
     {"do": "build", "def": "building.house", "near": "self", "units": 1,
      "when": {"fewer_than": {"building.house": 2}}},

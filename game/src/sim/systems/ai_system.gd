@@ -991,17 +991,39 @@ func _has_queue(w: SimWorld, p: SimPlayer, def_id: StringName) -> bool:
 
 
 ## The nearest gatherable node of `kind` to `from_unit`, ties broken by lowest id.
+## ⛔ **IT ASKS `GatherSystem`, AND FOR TWO YEARS' WORTH OF MATCHES IT DID NOT.** This used to
+## test `n is SimResourceNode` itself -- a third answer to *"can this be gathered?"* beside the
+## system's and `GatherCommand`'s, which is the exact thing `is_harvestable` is public to prevent,
+## and it was the wrong answer: **a FIELD is a building.** So every bot built a farm (`ai_easy`
+## rule 10) and then could never send anybody to it.
+##
+## What that cost, measured across four seeds on 2026-09-11: berries hold 80 and are stripped in
+## the first minute, after which the only renewable food is the farm nobody could see. Bots
+## finished matches holding **wood 725-1,635, gold 840-1,792, stone 75-1,555 and food 0-46** --
+## every resource that comes from a NODE in four figures, and the one that comes from a BUILDING
+## at zero. A villager costs 50 food and a swordsman 60, so the army was never affordable in any
+## mode, which is why `14a`'s hill bot and `14b`'s clock had nothing to send. The owner watched
+## the whole chain from the other end: *"I killed the scout, waited 20min, no more units was
+## sent."*
+##
+## 📝 **AND `_bankable_kind` MADE IT A DEAD STOP RATHER THAN A SLOWDOWN.** Food stays poorest, a
+## mill or town centre means it is bankable, so the standing order keeps choosing food -- and then
+## finds no node and issues nothing at all. It never falls through to wood. An idle villager in
+## that state stands still for the rest of the match.
 func _nearest_node(w: SimWorld, kind: StringName, from_unit: int) -> int:
 	var from = w.entities.get(from_unit)
 	if from == null:
 		return 0
+	# A FIELD IS OWNED and a tree is not, so the question needs to be asked on behalf of
+	# the villager: `is_harvestable` refuses a neighbour's crop.
+	var worker := int(from.owner_id)
 	var best := 0
 	var best_d := 1 << 40
 	for id in _sorted_ids(w):
 		var n = w.entities[id]
-		if not (n is SimResourceNode) or not n.alive:
+		if not GatherSystem.is_harvestable(n, worker):
 			continue
-		if (n as SimResourceNode).kind != kind or (n as SimResourceNode).is_depleted():
+		if GatherSystem.harvest_kind(n) != kind:
 			continue
 		var d: int = (n.tile() - from.tile()).length_squared()
 		if d < best_d:

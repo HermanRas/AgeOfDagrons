@@ -44,6 +44,14 @@
     "is gated on age 3 for the same reason the archery range is -- a third production",
     "building is worth more than a bigger number at one of them.",
     "",
+    "SO MUST THE MILL AND THE FIELD, which is the same lesson collected a second time on",
+    "2026-09-11 and is why they now sit above the train rule in all four files. A villager",
+    "costs 50 food and a swordsman 60; the farm is the only renewable food once the",
+    "berries are gone, and training more mouths before building the thing that feeds them",
+    "is how four measured seeds ended with four figures of wood, gold and stone and two",
+    "digits of food. The owner's words: they 'need to age up and build a mill + field at a",
+    "higher priority'.",
+    "",
     "AN advance_age RULE MUST SIT ABOVE THE TRAIN RULES THAT SHARE ITS RESOURCE, and",
     "this file learned it the expensive way. Reservation only protects a goal from the",
     "rules BELOW it, so with 'train villagers to 10' above the advance, villagers ate",
@@ -90,13 +98,13 @@
     {"do": "advance_age",
      "when": {"age": 1, "at_least": {"unit.villager": 8}}},
 
-    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
-     "when": {"fewer_than": {"unit.villager": 10}}},
-
     {"do": "build", "def": "building.mill", "near": "self", "units": 1,
      "when": {"age_min": 2, "fewer_than": {"building.mill": 1}}},
     {"do": "build", "def": "building.field", "near": "building.mill", "units": 1,
      "when": {"at_least": {"building.mill": 1}, "fewer_than": {"building.field": 3}}},
+
+    {"do": "train", "at": "building.town_center", "unit": "unit.villager", "count": 4,
+     "when": {"fewer_than": {"unit.villager": 10}}},
     {"do": "build", "def": "building.house", "near": "self", "units": 1,
      "when": {"fewer_than": {"building.house": 3}}},
 
