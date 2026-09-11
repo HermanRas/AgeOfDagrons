@@ -28,7 +28,12 @@
     "hard, the villagers are the number to move.",
     "",
     "lag_ticks IS [0, 0] -- it acts on the tick its conditions come true. Every other",
-    "level draws a delay to model a human noticing late; this one does not pretend."
+    "level draws a delay to model a human noticing late; this one does not pretend.",
+    "",
+    "NO `mode_after_ticks`, FOR HARD'S REASON: that key moves the attack clock per game",
+    "type, and like Hard this file has no clock to move -- the eco gate is the gate, in",
+    "every mode. On the two modes where the army holds ground rather than attacks, the",
+    "start_units head start is what gets Unfair onto the hill first."
   ],
 
   "id": "unfair",

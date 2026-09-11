@@ -25,7 +25,10 @@
     "and would otherwise fight the standing orders for the rest of the match.",
     "",
     "DIFFICULTY, per AI_Player_difficulty.md: focus on building and defending; attacks",
-    "after 10 minutes of game time, then keeps going; ages to 2; one tower.",
+    "after 5 minutes of game time, then keeps going; ages to 2; one tower.",
+    "",
+    "THE CLOCK WAS HALVED ON 2026-09-11, 6000 ticks to 3000, on the owner's ruling that",
+    "'bots are too slow over all'. Ten minutes is a long time to wait to be played with.",
     "",
     "ARMY CAPS RISE WITH DIFFICULTY (project owner, 2026-08-27), and every one of them",
     "is bounded by POPULATION rather than by taste. A unit is 1 pop, a town centre",
@@ -34,11 +37,21 @@
     "swordsmen. Raise a cap without raising the houses and TrainCommand simply refuses",
     "-- a bot that stops training for no visible reason.",
     "",
-    "THE 10-MINUTE TRIGGER IS A CLOCK, AND THAT IS NOT THE THING THE OWNER RULED OUT.",
+    "THE 5-MINUTE TRIGGER IS A CLOCK, AND THAT IS NOT THE THING THE OWNER RULED OUT.",
     "A per-step timeout ABANDONS A GOAL because the world was slower than a number",
     "somebody guessed -- that is the defect. A global clock that decides when aggression",
     "unlocks abandons nothing and does not depend on how far the gold is; it is a",
-    "handicap, deliberately expressed in time, and it is what makes Easy easy."
+    "handicap, deliberately expressed in time, and it is what makes Easy easy.",
+    "",
+    "BUT IT IS A CONQUEST CLOCK, AND THREE OF THE FOUR GAME TYPES ARE NOT CONQUEST, so",
+    "`mode_after_ticks` moves it per game type. Trophy is 0: standing on your own dragon",
+    "is defending, this profile's whole stated focus, and waiting five minutes to start",
+    "means five minutes of the one unit whose death loses the match standing alone. King",
+    "of the Hill is 900 -- a KotH match is won at 9,000 points and a side holding the",
+    "hill alone scores 3 a tick, so the FASTEST POSSIBLE MATCH IS 3,000 TICKS and a bot",
+    "on the conquest clock arrives after the trophy has been handed out. It stays a",
+    "handicap: the army-size condition below is untouched, so the bot still cannot go",
+    "until it owns five swordsmen, and what moved is only the earliest it may."
   ],
 
   "id": "easy",
@@ -46,6 +59,8 @@
   "max_age": 2,
   "attacks": true,
   "techs": true,
+
+  "mode_after_ticks": {"trophy": 0, "king_of_the_hill": 900},
 
   "rules": [
     {"do": "gather", "kind": "food", "units": 2,
@@ -88,6 +103,6 @@
      "when": {"at_least": {"building.barracks": 1}, "fewer_than": {"unit.swordsman": 10}}},
 
     {"do": "attack", "units": "military",
-     "when": {"after_ticks": 6000, "at_least": {"unit.swordsman": 5}}}
+     "when": {"after_ticks": 3000, "at_least": {"unit.swordsman": 5}}}
   ]
 }

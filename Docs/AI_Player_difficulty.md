@@ -9,7 +9,7 @@
 
 ## Easy (default)
  - Focus on building and defending.
- - can attacks after 10min game time followed by random follow-up attacks.
+ - can attacks after 5min game time followed by random follow-up attacks.
  - can age up to age 2.
  - can use tech tree upgrades.
  - can build gates and walls.
@@ -17,7 +17,7 @@
 
 ## Normal
  - Focus on building and defending.
- - can attacks after 7min game time followed by random follow-up attacks.
+ - can attacks after 3.5min game time followed by random follow-up attacks.
  - can age up to age 3.
  - can use tech tree upgrades.
  - can build gates and walls.
@@ -68,30 +68,44 @@ what match this is.
    unarmed match is decided by elimination, so turtling would mean standing still in
    a match being settled by a rule it was ignoring.
 
-## The attack clock is longer than a King of the Hill match
+## When the army commits — the clock, per game type
 
-**Open question as of 2026-09-11, no decision taken.** A bot goes to its station only
-once its attack rule has fired, so the difficulty clock above currently gates the
-turtle and the hill as well as the attack:
+The army is committed by the attack rule, so the clock in each difficulty above is
+what decides when the bot leaves home. **That is a conquest clock, and three of the
+four game types are not conquest**, so a difficulty may give a game type its own.
 
-| Difficulty | First commit | Guards its dragon | Contests a 5-minute hill |
+| Difficulty | Last Man Standing / Scenario | Trophy | King of the Hill |
 |---|---|---|---|
-| Passive | never — it has no attack rule | never | never |
-| Easy (default) | 10 min | after 10 min | no |
-| Normal | 7 min | after 7 min | no |
-| Hard | when the eco is up — 12 villagers, mill, barracks, 8 swordsmen | when that lands | unlikely |
-| Unfair | when the eco is up — 10 villagers, barracks, 6 swordsmen | when that lands | unlikely |
+| Passive | never — it has no attack rule, and never trains a soldier | — | — |
+| Easy (default) | 5 min | at once | 1.5 min |
+| Normal | 3.5 min | at once | 1 min |
+| Hard | when the eco is up — 12 villagers, mill, barracks, 8 swordsmen | ← same | ← same |
+| Unfair | when the eco is up — 10 villagers, barracks, 6 swordsmen | ← same | ← same |
 
-King of the Hill is won at 9,000 points and a player holding the hill alone scores 3
-a tick, so **the fastest possible match is 5 minutes** — half of Easy's first commit.
-A playtest on 2026-09-11 ended 9,000 to 0: the bot never set foot in the zone for a
-single tick, because it was still waiting for ten o'clock.
+ - The game-type clock **replaces** the difficulty's own, rather than being added to
+   it: a game type is allowed to commit *earlier* than the opening, which is the
+   whole reason it exists.
+ - **The army-size condition is untouched by any of this.** Easy still needs five
+   swordsmen in hand before it goes anywhere, so "at once" means *as soon as it has
+   an army*, not "send the starting scout".
+ - Hard and Unfair have no clock to move — they commit when the economy gate lands,
+   in every mode — so they declare none, and their table row is the same in all four.
+ - It only moves **aggression**. Everything else a bot does — gathering, building,
+   ageing — is untouched by the game type.
 
-Trophy has the sharper version of the same problem. Passive's stated focus is
-*"building and defending"* and it never attacks, so under the current rule it never
-guards its dragon at all — the one unit whose death loses it the game.
+**Why Trophy is "at once" at every level.** The thing it guards can be killed in the
+first minute, so a handicap expressed as *"leaves its dragon alone for five minutes"*
+is not a difficulty, it is a different loss condition. Guarding is defending, which is
+the stated focus of every level on this page.
 
-The reading that resolves both: **walking onto neutral ground is not an attack, and
-standing on your own dragon is not an attack.** The clock is about aggression against
-another player, so it should gate the Last Man Standing branch and not the other two.
-That would let a Passive bot turtle, which is what Passive means.
+**Why King of the Hill needed its own number at all.** A hill match is won at 9,000
+points and a side holding the hill alone scores 3 a tick, so **the fastest possible
+match is 5 minutes** — which was Easy's first commit *after* the halving, and half of
+it before. A playtest on 2026-09-11 ended 9,000 to 0: the bot never set foot in the
+zone for a single tick, because it was still waiting for ten o'clock. A bot whose
+clock is longer than the match cannot lose the hill — it can only fail to turn up.
+
+*Ruled by the project owner on 2026-09-11: halve every attack clock, then a per-mode
+clock in each profile for granular tuning. The knob is `mode_after_ticks` in
+`game/data/ai_<level>.json`, and a test refuses any value that would let a bot arrive
+after its own hill match can be over.*

@@ -8,7 +8,9 @@
     "",
     "  lag_ticks   20-60 -> 10-40   noticing sooner is most of what 'better' means",
     "  max_age     2 -> 3",
-    "  attack      6000 ticks (10 min) -> 4200 (7 min)",
+    "  attack      3000 ticks (5 min) -> 2100 (3.5 min)",
+    "  mode clock  KotH 900 -> 600; Trophy is 0 at both, because guarding is not a",
+    "              handicap dial -- an undefended dragon is a lost match at any level",
     "  towers      max 1 -> max 5",
     "  army        10 swordsmen -> 15, plus 6 archers once the range is up",
     "  houses      3 -> 5, because 15 + 6 + 9 villagers is 30 pop and a house is 5",
@@ -28,6 +30,8 @@
   "max_age": 3,
   "attacks": true,
   "techs": true,
+
+  "mode_after_ticks": {"trophy": 0, "king_of_the_hill": 600},
 
   "rules": [
     {"do": "gather", "kind": "food", "units": 2,
@@ -85,6 +89,6 @@
      "when": {"at_least": {"building.archery_range": 1}, "fewer_than": {"unit.archer": 6}}},
 
     {"do": "attack", "units": "military",
-     "when": {"after_ticks": 4200, "at_least": {"unit.swordsman": 4}}}
+     "when": {"after_ticks": 2100, "at_least": {"unit.swordsman": 4}}}
   ]
 }

@@ -87,6 +87,48 @@ var techs := false
 ## `AISystem._matches` for the condition vocabulary.
 var rules: Array[Dictionary] = []
 
+## `MatchConfig.Mode` -> the tick an `attack` rule may first fire in that game type.
+## **REPLACES the rule's own `after_ticks` rather than adding to it**, so a mode listed
+## here can commit the army EARLIER than the profile's opening, which is the whole
+## point of it.
+##
+## ## Why a clock per game type at all, when timers are the thing this class replaced
+##
+## Because `after_ticks` is a **conquest** clock and three of the four modes are not
+## conquest. Easy's opening is 5 minutes *"followed by random follow-up attacks"* --
+## a promise about how long you get before a bot comes at YOU. In King of the Hill the
+## same number said how long before the bot bothered to turn up at all, and since a
+## KotH match is won at 9,000 points and the ladder pays 3 a tick to a side holding
+## alone, **the fastest possible match is 3,000 ticks.** The owner's playtest of
+## 2026-09-11 finished 9,000 to 0 with the bot still at home waiting for its clock.
+##
+## The class header's argument against timers still stands and this does not weaken it:
+## it is an argument about timers that ABANDON a goal because a villager walked further
+## than expected. This one gates when aggression unlocks, which is the one thing on the
+## board that genuinely is measured in match time rather than in distance -- and a hill
+## you must hold for five minutes is match time on both sides of the comparison.
+##
+## ⚠️ **IT APPLIES TO `attack` RULES AND NOTHING ELSE.** `AISystem._matches` checks the
+## verb before it looks here, because a profile-wide clock applied to every rule would
+## stop a bot GATHERING for the first minute of a Trophy match.
+var mode_after_ticks: Dictionary = {}
+
+## Lowercase game-type spellings a profile may use, the same boundary idiom as
+## `ScenarioDef._MODES`. **The enum is the authority and this is only the spelling**, so
+## a new mode gets a row here in front of you rather than being silently unnameable.
+const _MODES := {
+	"last_man_standing": MatchConfig.Mode.LAST_MAN_STANDING,
+	"trophy": MatchConfig.Mode.TROPHY,
+	"king_of_the_hill": MatchConfig.Mode.KING_OF_THE_HILL,
+	"scenario": MatchConfig.Mode.SCENARIO,
+}
+
+
+## The tick an attack rule may first fire, given what the rule itself asked for. A mode
+## with no entry is unchanged -- which is what keeps Last Man Standing exactly as it was.
+func attack_clock(mode: int, rule_after_ticks: int) -> int:
+	return int(mode_after_ticks.get(mode, rule_after_ticks))
+
 
 static func from_dict(d: Dictionary) -> AIProfile:
 	var a := AIProfile.new()
@@ -107,6 +149,18 @@ static func from_dict(d: Dictionary) -> AIProfile:
 			# JSON has no StringName, so everything off the wire is a String and
 			# `&"unit.villager" == "unit.villager"` is FALSE. Convert at the boundary.
 			a.start_units[StringName(str(k))] = maxi(0, int((starts as Dictionary)[k]))
+
+	var clocks: Variant = d.get("mode_after_ticks", {})
+	if clocks is Dictionary:
+		for k in (clocks as Dictionary):
+			var name := str(k)
+			if not _MODES.has(name):
+				# LOUDLY, because the failure is otherwise invisible: a bot with a typo'd
+				# game type quietly keeps its conquest clock and loses hills for a week.
+				push_warning("AIProfile %s: '%s' is not a game type; the clock is ignored"
+						% [a.id, name])
+				continue
+			a.mode_after_ticks[int(_MODES[name])] = maxi(0, int((clocks as Dictionary)[k]))
 
 	for entry in d.get("rules", []):
 		if entry is Dictionary:

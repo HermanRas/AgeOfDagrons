@@ -202,7 +202,7 @@ func _advance(w: SimWorld, p: SimPlayer) -> void:
 	var reserved: Dictionary = {}
 	for index in range(profile.rules.size()):
 		var rule: Dictionary = profile.rules[index]
-		if not _matches(w, p, profile, rule.get("when", {}) as Dictionary, census):
+		if not _matches(w, p, profile, rule, census):
 			continue
 
 		# AN ATTACK RULE FIRES ONCE. It is the one verb with no self-limiting condition
@@ -308,8 +308,14 @@ func _census(w: SimWorld, p: SimPlayer) -> Dictionary:
 	return {"owned": owned, "gathering": gathering}
 
 
-func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary,
+## ⚠️ **TAKES THE WHOLE RULE, NOT JUST ITS `when`**, because one condition -- the clock --
+## now depends on the VERB: an `attack` rule's clock can be overridden per game type
+## (`AIProfile.mode_after_ticks`) and no other rule's can. Passing only `when` would have
+## meant either applying a conquest clock to Trophy or applying a Trophy clock to
+## gathering, and both were wrong in ways nothing would have said out loud.
+func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, rule: Dictionary,
 		census: Dictionary) -> bool:
+	var when: Dictionary = rule.get("when", {}) as Dictionary
 	if when.has("age") and p.age != int(when["age"]):
 		return false
 	if when.has("age_min") and p.age < int(when["age_min"]):
@@ -318,7 +324,22 @@ func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, when: Dictionary,
 		return false
 	# Ticks since the match began. The ONLY clock in the design, and it gates when
 	# aggression unlocks rather than abandoning anything -- see `ai_easy.json`.
-	if when.has("after_ticks") and w.tick < int(when["after_ticks"]):
+	#
+	# ⚠️ **AND FOR AN ATTACK RULE THE GAME TYPE GETS THE LAST WORD ON IT**, because this
+	# is a conquest clock and the army's job is not conquest in every mode: a bot whose
+	# whole plan is to stand on a hill for five minutes cannot start after ten. The mode
+	# REPLACES the number rather than adding to it, so a game type can commit earlier
+	# than the opening -- see `AIProfile.mode_after_ticks`. A rule with no clock and a
+	# mode with no entry is 0, which is "now", which is what no clock already meant.
+	#
+	# ⚠️ **THE EMPTY-DICTIONARY CHECK COMES FIRST AND IS NOT TIDINESS.** This runs for
+	# every rule of every bot every think -- the loop `_census` exists to keep cheap --
+	# and three of the five profiles declare no mode clock at all, so for them this is
+	# one `is_empty()` instead of building a String per rule to compare against a literal.
+	var clock := int(when.get("after_ticks", 0))
+	if not profile.mode_after_ticks.is_empty() and String(rule.get("do", "")) == "attack":
+		clock = profile.attack_clock(int(w.mode), clock)
+	if w.tick < clock:
 		return false
 
 	var owned: Dictionary = census["owned"]

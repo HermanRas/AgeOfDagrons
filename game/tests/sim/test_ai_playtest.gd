@@ -112,7 +112,8 @@ func test_a_passive_bot_still_builds_an_economy() -> void:
 ## attacked -- and it passed with the gate REMOVED, because the attack condition is not
 ## reached inside 1200 ticks and the branch under test was never entered. A test that
 ## cannot fail is worse than no test: it is a claim nobody will re-check. Playing
-## honestly to an Easy bot's 10-minute unlock is 6000 ticks (see `RUN_TICKS`).
+## honestly to an Easy bot's 5-minute unlock is 3000 ticks (see `RUN_TICKS`) -- halved
+## from 6000 on 2026-09-11 and still more than twice this file's cap.
 ##
 ## Sets the flag the ATTACK RULE would have set. Under the old script this reached in
 ## and completed the script, for the same reason and with the same honesty problem.
