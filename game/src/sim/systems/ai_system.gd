@@ -332,12 +332,15 @@ func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, rule: Dictionary,
 	# than the opening -- see `AIProfile.mode_after_ticks`. A rule with no clock and a
 	# mode with no entry is 0, which is "now", which is what no clock already meant.
 	#
-	# ⚠️ **THE EMPTY-DICTIONARY CHECK COMES FIRST AND IS NOT TIDINESS.** This runs for
-	# every rule of every bot every think -- the loop `_census` exists to keep cheap --
-	# and three of the five profiles declare no mode clock at all, so for them this is
-	# one `is_empty()` instead of building a String per rule to compare against a literal.
+	# ⚠️ **THE `tuned` CHECK COMES FIRST AND IS NOT TIDINESS.** This runs for every rule of
+	# every bot every think -- the loop `_census` exists to keep cheap -- so a profile that
+	# overrides nothing pays one `is_empty()` rather than a String built per rule to be
+	# compared against a literal. `Passive` is the one that still declares neither.
+	var tuned := not (profile.mode_after_ticks.is_empty() and profile.mode_at_least.is_empty())
+	var is_attack := tuned and String(rule.get("do", "")) == "attack"
+
 	var clock := int(when.get("after_ticks", 0))
-	if not profile.mode_after_ticks.is_empty() and String(rule.get("do", "")) == "attack":
+	if is_attack:
 		clock = profile.attack_clock(int(w.mode), clock)
 	if w.tick < clock:
 		return false
@@ -350,8 +353,18 @@ func _matches(w: SimWorld, p: SimPlayer, profile: AIProfile, rule: Dictionary,
 	for def_id in when.get("fewer_than", {}):
 		if int(owned.get(def_id, 0)) >= int((when["fewer_than"] as Dictionary)[def_id]):
 			return false
-	for def_id in when.get("at_least", {}):
-		if int(owned.get(def_id, 0)) < int((when["at_least"] as Dictionary)[def_id]):
+	# ⚠️ **AND THE GAME TYPE GETS THE LAST WORD ON THE ARMY TOO, for the clock's reason.**
+	# Five swordsmen is a number about surviving a fight at somebody's base; the hill is
+	# empty ground that pays by the tick, so a lone scout standing on it out-scores an army
+	# still in the barracks. Measured before this existed: an Easy bot put soldiers on the
+	# hill at t5621 with the clock already down at 900 -- it was the ARMY it was waiting
+	# for. An empty override means "whatever you have", and what stops that being "nothing"
+	# is `_issue_attack` refusing to issue with no military to send.
+	var at_least: Dictionary = when.get("at_least", {})
+	if is_attack:
+		at_least = profile.attack_at_least(int(w.mode), at_least)
+	for def_id in at_least:
+		if int(owned.get(def_id, 0)) < int(at_least[def_id]):
 			return false
 	for kind in when.get("gathering_fewer_than", {}):
 		if int(gathering.get(kind, 0)) \

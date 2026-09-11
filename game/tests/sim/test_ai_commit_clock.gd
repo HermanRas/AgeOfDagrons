@@ -9,7 +9,16 @@
 ## the army commits only once the attack rule has fired, Easy's attack rule waited 6,000 ticks, and
 ## a King of the Hill match can be over in 3,000.
 ##
-## So the fix is not in the branch, it is in the clock, and this file is about the clock.
+## So the fix is not in the branch, it is in front of it — and it turned out to be **two** gates,
+## which is why this file covers both.
+##
+## ## ⛔ THE CLOCK WAS ONLY HALF, AND THE MEASUREMENT IS WHAT SAID SO
+##
+## With the hill clock down at 900, `preview_ai_match --mode koth` still put an Easy bot's soldiers
+## on the hill at **t5621 — 9.4 minutes**: barracks t4030, fifth swordsman t5540, attack t5580. The
+## clock was never what bound. The rule wanted **five swordsmen** and the economy does not make five
+## swordsmen before nine minutes, so `mode_at_least` moves that too — and the same sentence carries
+## both: **standing on ground that pays by the tick is not an attack.**
 ##
 ## ## ⚠️ THE TWO SHAPES OF WRONG, AND WHY BOTH ARE TESTED
 ##
@@ -26,11 +35,14 @@ extends TestCase
 const FASTEST_KOTH_TICKS := WinConditionSystem.KOTH_TARGET_SCORE / 3
 
 
-## A profile with one attack rule on a 3,000-tick opening, and a hill clock well inside it.
-func _profile(mode_clocks: Dictionary = {"trophy": 0, "king_of_the_hill": 900}) -> AIProfile:
+## A profile with one attack rule on a 3,000-tick opening and five swordsmen, a hill clock
+## well inside it, and a hill army size of "whatever you have".
+func _profile(mode_clocks: Dictionary = {"trophy": 0, "king_of_the_hill": 900},
+		mode_armies: Dictionary = {"trophy": {}, "king_of_the_hill": {}}) -> AIProfile:
 	return AIProfile.from_dict({
 		"id": "test",
 		"mode_after_ticks": mode_clocks,
+		"mode_at_least": mode_armies,
 		"rules": [
 			{"do": "gather", "kind": "food", "units": 1,
 			 "when": {"gathering_fewer_than": {"food": 2}}},
@@ -212,3 +224,101 @@ func test_the_two_clocked_levels_open_at_five_minutes_and_three_and_a_half() -> 
 	for level in [SimPlayer.AILevel.HARD, SimPlayer.AILevel.UNFAIR]:
 		assert_eq(_shipped_opening(GameDataRegistry.ai_profile(level)), 0,
 				"%s gates on an economy, not a clock" % AIProfile.IDS[level])
+
+
+# ── the army size, the other gate in front of the same decision ─────────────
+
+## The same shape as `_profile`, plus the thing that actually held the bot back: an attack rule that
+## wants five swordsmen in hand, and a train rule that wants a barracks.
+func _army_profile(mode_armies: Dictionary = {"trophy": {}, "king_of_the_hill": {}}) -> AIProfile:
+	return AIProfile.from_dict({
+		"id": "test",
+		"mode_at_least": mode_armies,
+		"rules": [
+			{"do": "train", "at": "building.barracks", "unit": "unit.swordsman", "count": 5,
+			 "when": {"at_least": {"building.barracks": 1}}},
+			{"do": "attack", "units": "military",
+			 "when": {"at_least": {"unit.swordsman": 5}}},
+		],
+	})
+
+
+func test_a_profile_reads_an_army_size_for_a_game_type() -> void:
+	var profile := _army_profile({"king_of_the_hill": {"unit.swordsman": 2}})
+	var want: Dictionary = profile.mode_at_least[int(MatchConfig.Mode.KING_OF_THE_HILL)]
+	# ⚠️ **StringName KEYS, OR IT COUNTS NOTHING.** `_census` keys `owned` by the entity's own
+	# `def_id`, and this file's own header records that `&"unit.villager" == "unit.villager"` is
+	# false for a dictionary lookup. A String key here is a condition that is always unmet.
+	assert_true(want.has(&"unit.swordsman"), "the def id survived as a StringName")
+	assert_eq(int(want[&"unit.swordsman"]), 2)
+
+
+## ⚠️ **AN EMPTY DICTIONARY IS A VALUE, NOT AN ABSENCE**, and the whole feature is that distinction:
+## "this mode asks for nothing" and "this mode says nothing" have to be different answers.
+func test_an_empty_army_size_is_a_real_value_and_not_a_missing_one() -> void:
+	var profile := _army_profile()
+	var rule_wants := {&"unit.swordsman": 5}
+	assert_true(profile.attack_at_least(int(MatchConfig.Mode.KING_OF_THE_HILL),
+			rule_wants).is_empty(), "the hill asks for whatever you have")
+	assert_eq(profile.attack_at_least(int(MatchConfig.Mode.LAST_MAN_STANDING), rule_wants),
+			rule_wants, "and a mode that said nothing keeps the rule's own five")
+
+
+## The measured defect, in one assertion: a bot with no army at all may commit to the hill.
+func test_a_koth_bot_commits_with_whatever_army_it_has() -> void:
+	var profile := _army_profile()
+	var w := _world(MatchConfig.Mode.KING_OF_THE_HILL, 0)
+	assert_true(_clock_allows(w, profile, _rule(profile, "attack")),
+			"five swordsmen is a number about attacking a base, not about standing on a hill")
+
+
+## ⛔ **AND CONQUEST STILL WANTS THE WHOLE ARMY**, which is the half that keeps the difficulty
+## meaning something. Without this, "go with whatever you have" would be a bot feeding you its
+## starting scout in every ordinary skirmish — `_keep_busy`'s own note calls that *"giving away a
+## unit before the first house is up"*.
+func test_a_conquest_bot_still_waits_for_the_whole_army() -> void:
+	var profile := _army_profile()
+	var w := _world(MatchConfig.Mode.LAST_MAN_STANDING, 0)
+	var attack := _rule(profile, "attack")
+	assert_false(_clock_allows(w, profile, attack), "one scout is not five swordsmen")
+	for i in range(5):
+		w.spawn_unit(&"unit.swordsman", 1, Vector2i(4 + i, 4))
+	assert_true(_clock_allows(w, profile, attack), "and with five of them it goes")
+
+
+## The army override's version of the clock's trap: it must not reach a rule that is not an attack.
+## A train rule freed of "I need a barracks" would order swordsmen out of open ground forever.
+func test_a_mode_army_size_does_not_reach_another_rule() -> void:
+	var profile := _army_profile()
+	var w := _world(MatchConfig.Mode.KING_OF_THE_HILL, 0)
+	assert_false(_clock_allows(w, profile, _rule(profile, "train")),
+			"there is no barracks, and the hill does not excuse one")
+
+
+## ⛳ **THE SHIPPED DATA, AND THE OTHER HALF OF THE 9.4-MINUTE FINDING.** Every bot that fights must
+## be willing to hold ground with whatever it owns, in both modes where the army holds ground. This
+## fails on the data as it stood before the measurement: Easy wanted 5 swordsmen, Hard wanted 8.
+func test_no_bot_waits_for_an_army_before_holding_ground() -> void:
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		var attack := _rule(profile, "attack")
+		if attack.is_empty():
+			continue          # Passive never trains a soldier, so it has nothing to send
+		var rule_wants: Dictionary = (attack.get("when", {}) as Dictionary).get("at_least", {})
+		for mode in [MatchConfig.Mode.TROPHY, MatchConfig.Mode.KING_OF_THE_HILL]:
+			assert_true(profile.attack_at_least(int(mode), rule_wants).is_empty(),
+					"%s waits for %s before holding ground in %s"
+							% [profile.id, rule_wants, MatchConfig.mode_name(mode)])
+
+
+## And the guard on the other side of it: conquest is untouched, so a level that fights still has to
+## say what it fights with. A blanket "go with anything" would pass the test above and gut the ladder.
+func test_conquest_still_names_an_army_for_every_level_that_fights() -> void:
+	for level in range(AIProfile.IDS.size()):
+		var profile := GameDataRegistry.ai_profile(level)
+		var attack := _rule(profile, "attack")
+		if attack.is_empty():
+			continue
+		var rule_wants: Dictionary = (attack.get("when", {}) as Dictionary).get("at_least", {})
+		assert_false(profile.attack_at_least(int(MatchConfig.Mode.LAST_MAN_STANDING),
+				rule_wants).is_empty(), "%s would attack with nothing" % profile.id)

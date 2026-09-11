@@ -32,8 +32,13 @@
     "",
     "NO `mode_after_ticks`, FOR HARD'S REASON: that key moves the attack clock per game",
     "type, and like Hard this file has no clock to move -- the eco gate is the gate, in",
-    "every mode. On the two modes where the army holds ground rather than attacks, the",
-    "start_units head start is what gets Unfair onto the hill first."
+    "every mode.",
+    "",
+    "`mode_at_least` IS PRESENT, FOR HARD'S REASON TOO: on the two modes where the army",
+    "holds ground rather than attacks, waiting for 6 swordsmen and a barracks means",
+    "arriving after a hill can already have been won. It goes with what it has -- and what",
+    "it has, uniquely, is the two swordsmen start_units gave it, so Unfair is on the hill",
+    "before anybody has a barracks. That is the head start doing exactly what it is for."
   ],
 
   "id": "unfair",
@@ -41,6 +46,8 @@
   "max_age": 4,
   "attacks": true,
   "techs": true,
+
+  "mode_at_least": {"trophy": {}, "king_of_the_hill": {}},
 
   "start_units": {
     "unit.villager": 3,

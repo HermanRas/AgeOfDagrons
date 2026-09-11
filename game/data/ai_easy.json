@@ -50,8 +50,17 @@
     "of the Hill is 900 -- a KotH match is won at 9,000 points and a side holding the",
     "hill alone scores 3 a tick, so the FASTEST POSSIBLE MATCH IS 3,000 TICKS and a bot",
     "on the conquest clock arrives after the trophy has been handed out. It stays a",
-    "handicap: the army-size condition below is untouched, so the bot still cannot go",
-    "until it owns five swordsmen, and what moved is only the earliest it may."
+    "handicap on the two modes that are still conquest.",
+    "",
+    "AND `mode_at_least` IS THE HALF THAT ACTUALLY MAKES THE HILL A CONTEST, added after",
+    "the clock alone changed nothing measurable. An easy v easy King of the Hill run put",
+    "soldiers on the hill at t5621 -- 9.4 minutes -- with the clock already down at 900:",
+    "barracks at t4030, the fifth swordsman at t5540, attack at t5580. It was never the",
+    "clock, it was the FIVE SWORDSMEN below. That number is about surviving a fight at",
+    "somebody's base; the hill is empty ground that pays by the tick, where a lone scout",
+    "out-scores an army still in the barracks and can walk away again. So both modes ask",
+    "for {} -- go with whatever you have -- and 'whatever you have' cannot be 'nothing',",
+    "because _issue_attack refuses to issue with no military to send."
   ],
 
   "id": "easy",
@@ -61,6 +70,7 @@
   "techs": true,
 
   "mode_after_ticks": {"trophy": 0, "king_of_the_hill": 900},
+  "mode_at_least": {"trophy": {}, "king_of_the_hill": {}},
 
   "rules": [
     {"do": "gather", "kind": "food", "units": 2,

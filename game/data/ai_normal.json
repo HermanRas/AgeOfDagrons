@@ -11,6 +11,8 @@
     "  attack      3000 ticks (5 min) -> 2100 (3.5 min)",
     "  mode clock  KotH 900 -> 600; Trophy is 0 at both, because guarding is not a",
     "              handicap dial -- an undefended dragon is a lost match at any level",
+    "  mode army   {} at both levels for Trophy and KotH: holding ground is not an",
+    "              attack, so it goes with whatever it has rather than with 4 swordsmen",
     "  towers      max 1 -> max 5",
     "  army        10 swordsmen -> 15, plus 6 archers once the range is up",
     "  houses      3 -> 5, because 15 + 6 + 9 villagers is 30 pop and a house is 5",
@@ -32,6 +34,7 @@
   "techs": true,
 
   "mode_after_ticks": {"trophy": 0, "king_of_the_hill": 600},
+  "mode_at_least": {"trophy": {}, "king_of_the_hill": {}},
 
   "rules": [
     {"do": "gather", "kind": "food", "units": 2,

@@ -124,10 +124,43 @@ const _MODES := {
 }
 
 
+## `MatchConfig.Mode` -> what the army must contain before an `attack` rule may fire in
+## that game type, replacing the rule's own `at_least`. **An empty dictionary is a real
+## value and the common one**: it means "go with whatever you have".
+##
+## ## Why the clock alone was not enough, measured rather than argued
+##
+## `mode_after_ticks` moved Easy's King of the Hill commit to tick 900 and nothing
+## changed, because the clock was never what bound. An Easy v Easy match on 2026-09-11
+## put five soldiers on the hill at **t5621 -- 9.4 minutes** -- and the decision log shows
+## why: barracks at t4030, the fifth swordsman at t5540, attack at t5580. The rule wanted
+## **five swordsmen**, and the economy does not make five swordsmen before nine minutes.
+## A hill is won in five.
+##
+## Five swordsmen is a number about surviving a fight at somebody's base. The hill is
+## empty ground that pays by the tick: a lone scout standing on it out-scores an army
+## still in the barracks, and unlike a committed attack it can walk away again. So the
+## same sentence that justified the clock justifies this -- **standing on ground that
+## pays is not an attack** -- and it is the half that actually makes the mode a contest.
+##
+## ⚠️ **"WHATEVER YOU HAVE" CANNOT MEAN "NOTHING".** With no minimum the rule matches on
+## tick 0, and what stops a bot committing an army it does not own is `_issue_attack`
+## finding no military to send and refusing to issue -- so the rule simply does not fire
+## until there IS something. The floor is real, it just lives in the verb rather than in
+## a number somebody guessed.
+var mode_at_least: Dictionary = {}
+
+
 ## The tick an attack rule may first fire, given what the rule itself asked for. A mode
 ## with no entry is unchanged -- which is what keeps Last Man Standing exactly as it was.
 func attack_clock(mode: int, rule_after_ticks: int) -> int:
 	return int(mode_after_ticks.get(mode, rule_after_ticks))
+
+
+## What the army must contain before an attack rule may fire, given what the rule itself
+## asked for. As with the clock, a mode with no entry is left exactly as written.
+func attack_at_least(mode: int, rule_at_least: Dictionary) -> Dictionary:
+	return mode_at_least.get(mode, rule_at_least) as Dictionary
 
 
 static func from_dict(d: Dictionary) -> AIProfile:
@@ -161,6 +194,23 @@ static func from_dict(d: Dictionary) -> AIProfile:
 						% [a.id, name])
 				continue
 			a.mode_after_ticks[int(_MODES[name])] = maxi(0, int((clocks as Dictionary)[k]))
+
+	var minimums: Variant = d.get("mode_at_least", {})
+	if minimums is Dictionary:
+		for k in (minimums as Dictionary):
+			var name := str(k)
+			if not _MODES.has(name):
+				push_warning("AIProfile %s: '%s' is not a game type; the army size is"
+						% [a.id, name] + " ignored")
+				continue
+			var counts: Variant = (minimums as Dictionary)[k]
+			var m: Dictionary = {}
+			if counts is Dictionary:
+				for def_id in (counts as Dictionary):
+					# StringName at the boundary, for `_census`'s reason: `owned` is keyed
+					# by the entity's own `def_id`, and a String key would count nothing.
+					m[StringName(str(def_id))] = int((counts as Dictionary)[def_id])
+			a.mode_at_least[int(_MODES[name])] = m
 
 	for entry in d.get("rules", []):
 		if entry is Dictionary:

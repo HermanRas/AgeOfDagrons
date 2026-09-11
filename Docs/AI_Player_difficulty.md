@@ -68,44 +68,58 @@ what match this is.
    unarmed match is decided by elimination, so turtling would mean standing still in
    a match being settled by a rule it was ignoring.
 
-## When the army commits — the clock, per game type
+## When the army commits — two gates, both per game type
 
-The army is committed by the attack rule, so the clock in each difficulty above is
-what decides when the bot leaves home. **That is a conquest clock, and three of the
-four game types are not conquest**, so a difficulty may give a game type its own.
+The army is committed by the attack rule, and **two** conditions stand in front of it:
+a clock, and an army size. Both were written for conquest, and three of the four game
+types are not conquest, so a difficulty may give a game type its own value for each.
 
 | Difficulty | Last Man Standing / Scenario | Trophy | King of the Hill |
 |---|---|---|---|
-| Passive | never — it has no attack rule, and never trains a soldier | — | — |
-| Easy (default) | 5 min | at once | 1.5 min |
-| Normal | 3.5 min | at once | 1 min |
-| Hard | when the eco is up — 12 villagers, mill, barracks, 8 swordsmen | ← same | ← same |
-| Unfair | when the eco is up — 10 villagers, barracks, 6 swordsmen | ← same | ← same |
+| Passive | never — no attack rule, and it never trains a soldier | — | — |
+| Easy (default) | 5 min **and** 5 swordsmen | at once, with anything | 1.5 min, with anything |
+| Normal | 3.5 min **and** 4 swordsmen | at once, with anything | 1 min, with anything |
+| Hard | 12 villagers, mill, barracks, 8 swordsmen | at once, with anything | at once, with anything |
+| Unfair | 10 villagers, barracks, 6 swordsmen | at once, with anything | at once, with anything |
 
- - The game-type clock **replaces** the difficulty's own, rather than being added to
-   it: a game type is allowed to commit *earlier* than the opening, which is the
-   whole reason it exists.
- - **The army-size condition is untouched by any of this.** Easy still needs five
-   swordsmen in hand before it goes anywhere, so "at once" means *as soon as it has
-   an army*, not "send the starting scout".
- - Hard and Unfair have no clock to move — they commit when the economy gate lands,
-   in every mode — so they declare none, and their table row is the same in all four.
- - It only moves **aggression**. Everything else a bot does — gathering, building,
-   ageing — is untouched by the game type.
+ - Each game-type value **replaces** the difficulty's own rather than adding to it — a
+   game type is allowed to commit *earlier* and *lighter* than the opening, which is
+   the whole reason both knobs exist.
+ - **"With anything" cannot mean "with nothing".** The floor is that the bot must have
+   a military unit to send at all; with none, no order is issued and the rule simply
+   has not fired yet.
+ - Hard and Unfair have no clock to move — they commit when the economy gate lands —
+   so they set only the army size.
+ - Both knobs move **aggression only**. Gathering, building and ageing are untouched
+   by the game type.
 
-**Why Trophy is "at once" at every level.** The thing it guards can be killed in the
-first minute, so a handicap expressed as *"leaves its dragon alone for five minutes"*
-is not a difficulty, it is a different loss condition. Guarding is defending, which is
+**Why holding ground is not attacking.** Five swordsmen is a number about surviving a
+fight at somebody's base. The hill is empty ground that pays by the tick, so a lone
+scout standing on it out-scores an army still in the barracks — and unlike a committed
+attack, it can walk away again. The same sentence covers Trophy: the thing it guards
+can be killed in the first minute, so *"leaves its dragon alone for five minutes"* is
+not a difficulty, it is a different loss condition. Guarding is defending, which is
 the stated focus of every level on this page.
 
-**Why King of the Hill needed its own number at all.** A hill match is won at 9,000
+**The measurements this came from, both on 2026-09-11.** A hill match is won at 9,000
 points and a side holding the hill alone scores 3 a tick, so **the fastest possible
-match is 5 minutes** — which was Easy's first commit *after* the halving, and half of
-it before. A playtest on 2026-09-11 ended 9,000 to 0: the bot never set foot in the
-zone for a single tick, because it was still waiting for ten o'clock. A bot whose
-clock is longer than the match cannot lose the hill — it can only fail to turn up.
+match is 5 minutes.**
 
-*Ruled by the project owner on 2026-09-11: halve every attack clock, then a per-mode
-clock in each profile for granular tuning. The knob is `mode_after_ticks` in
-`game/data/ai_<level>.json`, and a test refuses any value that would let a bot arrive
-after its own hill match can be over.*
+| | bot first on the hill |
+|---|---|
+| conquest clock, conquest army | **never** — a playtest ended 9,000 to 0 |
+| hill clock, conquest army | **t5621 — 9.4 min** (barracks t4030, 5th swordsman t5540) |
+| hill clock, hill army | **t941 — 1.6 min**, and the match resolved at t4084 |
+
+The middle row is the one worth remembering: the clock was fixed, nothing visibly
+changed, and the reason was the *other* gate. A bot whose gates outlast the match
+cannot lose the hill — it can only fail to turn up.
+
+*Ruled by the project owner on 2026-09-11: halve every attack clock, then per-mode
+values in each profile for granular tuning. The knobs are `mode_after_ticks` and
+`mode_at_least` in `game/data/ai_<level>.json`; tests refuse a clock that would let a
+bot arrive after its own hill match can be over, refuse any level that waits for an
+army before holding ground, and refuse any level that would attack a base with
+nothing.*
+
+*To watch it yourself:* `preview_ai_match.tscn -- --mode koth --levels easy,easy`
