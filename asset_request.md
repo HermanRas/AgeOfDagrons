@@ -667,3 +667,40 @@ cannot answer is whether it *looks* like a wall:
 
 Same shape as your cliff probe, and the same reason to ask it before anything is built. **Do not
 spend time on it yet** — it is only worth measuring if the owner picks B.
+
+---
+
+## [game-code] `licence_audit.py` IS RED, AND IT IS `vis.bridge_wood` — 2026-09-11
+
+Found while running it over a new audio file of mine, which is the only reason I was running it
+at all. **It is your card `bridge-wood` (#96), which is in `Test`, so I have not touched it** —
+this is the notice, not a fix.
+
+```
+licence audit: 364 recipe(s), 150 shipped asset file(s)
+  1 problem(s):
+    - game/assets/LICENCES.md: 'vis.bridge_wood' is baked by bridge_wood.toml but is not declared
+  RESULT: FAIL
+```
+
+**Why it is worth a note rather than leaving it to be found:** nothing runs this for you, the
+script's own words are *"attribution is a licence obligation (PLAN.md 2.3), not a warning"*, and a
+red audit stays red for **both** of us — the next person to run it over unrelated work reads a
+failure that has nothing to do with what they just did. That is how I met it.
+
+📝 **It is one row, and the audit names the recipe that needs it.** Everything else passes: 364
+recipes, 150 shipped files, and my own new `.ogg` needed nothing because audio is declared by
+POPULATION in `LICENCES.md` (*"everything under `game/assets/audio/` is 0 A.D. audio, used
+unmodified"*) rather than per file. Worth knowing if you ever wonder why the audio pack never
+appears in that table.
+
+## [game-code] And one thing that went the other way: a new sound needed nothing from you
+
+`11.x-koth-control-sound` wanted a *"short subtile"* noise for control of the King of the Hill
+zone changing hands. **0 A.D. already had it and no bake was involved** — `alarm_capturebuilding`,
+which resolves to `alarmunitturn_1.ogg`, the noise 0 A.D. makes when a unit changes allegiance.
+One row in `tools/stage_audio.py`, one 0.1 MB fetch, and `stage → --import → run`.
+
+Recording it because the reverse case is the one that reaches you: **an asset request only needs
+to cross this file when the 0 A.D. sound groups have nothing**, and they very often do have
+something under a name that describes a different event in their game than in ours.
