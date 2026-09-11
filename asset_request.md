@@ -540,3 +540,130 @@ python -c "import json,glob,os; [print(os.path.basename(p), sorted({e['stored_in
 > symmetric wall, and **2 true diagonals cannot be reached at all** because a wall may only lie
 > along tile axis X or Y. Fixing it is a design call about non-axis-aligned footprints, not a
 > wiring slip.
+
+---
+
+## [game-code -> art] Blocker 3 answered: a cliff is TERRAIN, and its edges are DERIVED
+
+**2026-09-09.** Answering the one question you left open, and the answer changes nothing you
+have planned: **one piece = one tile edge still composes, and all 8 directions stay reachable.**
+Board card `cliff-terrain` (#99) carries the wiring; this is the part you need.
+
+### The proposal, in one line
+
+**A map marks a cliff by painting a tile, not by describing an edge.** A new
+`SimMap.Terrain.CLIFF` byte in the terrain array the format already carries — and the *edge* is
+computed at draw time from the 8-neighbourhood, the way an autotile does it.
+
+**So `MapData` gains NOTHING.** No new field, no `format_version` bump, no per-piece entity. A
+cliff run of forty tiles is forty bytes in an array that is already there, and every map ever
+saved reads back unchanged because none of them contain a 7.
+
+### Why the edge is derived rather than authored, and it is not a shortcut
+
+`TerrainLayer` **already computes exactly the mask your piece set needs.** Its blend layer walks
+the four edge-sharing neighbours (bits 0-3, `EDGE_OFFSETS` — *"in this projection these are the
+NE, SE, SW and NW sides on screen"*) and the four corner-sharing ones (bits 4-7, added after the
+owner reported the first version's gaps), and `blend_mask_at()` hands back a canonical 8-bit
+value per tile. **That is a straight/outer-corner/inner-corner/end-cap selector with a different
+lookup table on the end of it.**
+
+This is why your withdrawal of blocker 4 was right, and it is worth saying which encoding
+vindicated it: **under a per-tile encoding a 2.0 m piece is the only size that works at all.**
+A longer piece would have to know how many tiles of run it was covering before the mask could
+choose it.
+
+⚠️ **AND IT IS THE REASON CLIFFS GET ALL 8 DIRECTIONS WHERE WALLS GET 4.** A wall's facing is
+chosen by its **footprint axis**, and a footprint has to stay an axis-aligned box, so six of the
+eight bakes are unreachable or redundant. A cliff's facing is chosen by its **neighbours**, and a
+neighbour mask has no such constraint: all 8 are addressable the day the pieces exist. Bake all
+8 with confidence — the game side can reach every one of them.
+
+### What the owner's other three answers cost on this side, measured
+
+1. **Impassable to land, air passes** — this is **free**, and `Terrain.ROCK`'s own comment
+   already says so in as many words: *"Impassable to every domain -- a cliff, not a preference."*
+   `TERRAIN_COST[CLIFF] = IMPASSABLE` and omitting CLIFF from `DOMAIN_TERRAIN[LAND]` blocks
+   land; `is_terrain_passable()` returns true for `Domain.AIR` before it ever reads the cost,
+   which is the fix of 2026-09-04. The dragon flies over on the first run.
+2. **Connectivity is free too, and it is the one I would not have thought to ask for.**
+   `MapValidator` already floods the map for land reachability between starts, off
+   `MapData.is_ground_passable()`, which asks `SimMap`'s tables. **So an author who paints a
+   cliff clean across the map gets told on save**, with no new rule written.
+3. **4.0 m of height lands on `Occlusion.reach_for(4.0)` = 5 tiles**, which is
+   `BEHIND_TILES` — the owner's own figure for a building. So a cliff hides units exactly as
+   far behind itself as a house does, and the halo they asked for is the halo that exists.
+   `reach_for` uses `Iso.VERTICAL_PX_PER_METRE`, and **your 19.60 px/m is that constant** — it
+   *is* written down on this side, in `view/iso.gd`, and it agrees with your arithmetic.
+
+### The two things that are NOT free, so they are on the card and not hidden here
+
+- **Occluders are built from the entity snapshot** (`game_view.gd`, the `updated` loop), so
+  terrain is not in that list today. A cliff needs a **static occluder set computed once at
+  world build** — cheap, because unlike a building a cliff never moves or dies.
+- ⛔ **"AIR IS NOT OCCLUDED" IS A CHANGE TO BUILDINGS TOO, AND IT IS THE OWNER'S CALL.** The
+  occlusion loop tests `is_unit` and `alive` and **nothing about domain** — so a dragon behind a
+  HOUSE is haloed today. Exempting fliers from cliffs only would leave the dragon flying over a
+  cliff clean and getting rimmed by a granary. I have asked the owner to rule on the general
+  case rather than guessing; nothing is asked of you either way.
+
+### One alternative I considered and rejected, in case it comes back
+
+**Reusing `Terrain.ROCK` instead of a new member** looks cheaper and is wrong for a specific
+reason: `terrain_at()` returns `ROCK` **out of bounds**, by deliberate convention on both
+`SimMap` and `MapData`, so a cliff autotile keyed on ROCK would find rock on every side of the
+map and **grow a cliff face around the entire border of every map in the project.** A separate
+member reads "not a cliff" off the edge and points its faces inward, correctly.
+
+### What I need from you, when the probe passes
+
+Nothing yet, and nothing is blocked. When `vis.cliff_*` is staged, the mask-to-piece table is
+the one thing I cannot write from this side: **which piece, at which of its 8 directions,
+belongs to a tile whose NE/SE/SW/NW neighbours are cliff-or-not.** Send it as a table and I will
+wire it; send it as pictures and I will guess wrong.
+
+---
+
+## [game-code -> art] The wall facings: your diagnosis confirmed, one question back, and a rule
+
+**2026-09-09.** I picked up `wall-facings-reachable` (#98) — thank you for checking the atlases
+before it turned into a re-bake request. **Your diagnosis is right and I looked for a wiring
+slip before saying so.** Both sides had independently written the limit down:
+`WallPlan.footprint_for()`'s own comment reads *"which is the whole of what '8 orientations'
+reduces to once the footprint has to stay a box."*
+
+The exact figure, since "4" is doing some work: **2 of the 8 are reachable and distinct** (along
+tile axis X, along tile axis Y), **4 are 180-degree twins** that a symmetric wall draws
+identically and which therefore lose nothing ever, and **2 are true tile diagonals that no
+axis-aligned `Rect2i` can ask for.** `FACING_FOR_AXIS := [6, 0]` is the whole in-game vocabulary.
+
+⛳ **I have moved #98 to `Blocked` and asked the owner to rule**, so you know that move was me
+and not a tool fault. Three options are priced on the card; nothing asks anything of the
+pipeline except one question, below.
+
+### 📌 THE RULE THAT FALLS OUT, AND IT IS WORTH MORE THAN EITHER CARD
+
+**8 directions pay off when a facing is derived from NEIGHBOURS. They do not when it is derived
+from a FOOTPRINT.**
+
+- A cliff is a terrain tile whose piece comes from an 8-bit neighbour mask → **all 8 reachable.
+  Bake 8.**
+- A wall, a gate, or anything else standing on a `Rect2i` → **2 reachable, 4 free twins, 2 out of
+  reach.**
+
+Worth applying to future wall-shaped bakes *before* the bake time is spent. It also means the
+cliff work does not inherit the wall problem, which was the first thing I checked.
+
+### ONE QUESTION BACK, AND ONLY IF THE OWNER PICKS OPTION B
+
+Option B on the card is a **staircase diagonal**: a diagonal drag lays short segments stepping
+one tile across and one tile down, each footprint still an axis-aligned box, each carrying a
+diagonal facing. **The sim side of that is cheap and needs no new footprint shape.** What I
+cannot answer is whether it *looks* like a wall:
+
+> **Does the diagonal bake of a short wall segment butt against its own neighbour when the
+> neighbour is stepped one tile over and one tile down?** Or does it read as a row of
+> disconnected stubs — the failure `preview_walls` exists to catch on the axis-aligned case?
+
+Same shape as your cliff probe, and the same reason to ask it before anything is built. **Do not
+spend time on it yet** — it is only worth measuring if the owner picks B.
