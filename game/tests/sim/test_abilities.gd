@@ -195,27 +195,46 @@ func test_the_dragon_burns_everything_hostile_in_the_blast() -> void:
 	assert_eq(outside.hp, hp_before, "and nothing one tile beyond it")
 
 
-# ── the falloff: 250 at the centre, -50 a ring out (owner, 2026-09-07) ─────────
+# ── the falloff: 500 at the centre, -100 a ring out (owner, 2026-09-11) ────────
 
 ## The owner's own numbers, pinned as data. *"it needs a aoe o 5x5 with 250 damage to any
-## unit or building around the click with -50 damage every ring out"* -- after play-testing
-## her in HowToPlay scenario 5 and finding the flat 40 weak.
+## unit or building around the click with -50 damage every ring out"* (2026-09-07, after
+## play-testing her in HowToPlay scenario 5 and finding the flat 40 weak), then *"confirmed
+## dragon atteck looks good bad damage is still low, double the special attack damage"*
+## (2026-09-11, after 13.4's particles landed). So 500 / 400 / 300 by Chebyshev ring.
 ##
-## THE 5x5 WAS ALREADY RIGHT, which is why this asserts `radius` unchanged alongside the two
-## new numbers: `radius: 2` has meant `2 * 2 + 1 = 5` tiles across since 4.10, and it is
-## what `BlastEffects` is sized from, so the drawn fire still covers exactly the damaged
-## ground.
-func test_the_breath_is_250_at_the_centre_falling_50_a_ring_over_a_5x5() -> void:
+## ⚠️ **BOTH NUMBERS DOUBLED, AND THAT IS WHAT "DOUBLE THE DAMAGE" MEANS.** Doubling
+## `amount` alone would have given 500 / 450 / 400 -- MORE than double at the edge, and a
+## flatter blast than the owner's own diagram of three nested squares. Doubling the falloff
+## with it keeps the shape and makes every ring take exactly twice what it took.
+##
+## THE 5x5 HAS NEVER CHANGED, which is why this asserts `radius` alongside the numbers that
+## do move: `radius: 2` has meant `2 * 2 + 1 = 5` tiles across since 4.10, and it is what
+## `BlastEffects` is sized from, so the drawn fire still covers exactly the damaged ground.
+func test_the_breath_is_500_at_the_centre_falling_100_a_ring_over_a_5x5() -> void:
 	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
-	assert_eq(d.ability_amount, 250, "what the centre ring takes")
-	assert_eq(d.ability_falloff_per_ring, 50, "and each ring out")
+	assert_eq(d.ability_amount, 500, "what the centre ring takes")
+	assert_eq(d.ability_falloff_per_ring, 100, "and each ring out")
 	assert_eq(d.ability_radius, 2, "over a 5x5, which did not change")
 	assert_eq(d.ability_radius * 2 + 1, 5)
-	# THE OUTERMOST RING IS STILL WORTH SOMETHING. 250 - 2 * 50 = 150, so no ring of this
+	# THE OUTERMOST RING IS STILL WORTH SOMETHING. 500 - 2 * 100 = 300, so no ring of this
 	# ability is ever skipped by `_burn`'s "worth nothing" guard -- which matters, because a
-	# silently empty outer ring would still DRAW fire over those tiles.
+	# silently empty outer ring would still DRAW fire over those tiles. ⚠️ This is the
+	# assertion that fails if a later tune raises the falloff without raising the amount.
 	assert_true(d.ability_amount - d.ability_radius * d.ability_falloff_per_ring > 0,
 			"the edge of the blast still burns")
+
+
+## ⚠️ **THE BLAST MUST NOT ONE-SHOT ANOTHER DRAGON**, which at 500 against 600 hp is now a
+## question rather than a given. It matters for the test below this one, which reads the
+## losses of three dragons standing in three rings and needs all three alive to do it -- and
+## it matters in play, because a mother that kills a mother in one press makes the 120 s
+## cooldown the entire dragon fight.
+func test_the_breath_does_not_kill_another_dragon_outright() -> void:
+	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	var victim: UnitDef = GameDataRegistry.unit(&"unit.dragon")
+	assert_true(d.ability_amount < victim.hp,
+			"500 against 600 hp, before her 8 melee armour is even subtracted")
 
 
 ## ⚠️ **`_burn` IS CALLED DIRECTLY AND NOT THROUGH THE COMMAND, ON PURPOSE.** The targets
@@ -233,8 +252,9 @@ func test_each_ring_out_takes_fifty_less() -> void:
 	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
 	var aim := Vector2i(30, 30)
 
-	# 600 hp each, so all three SURVIVE a 250 hit and their losses can be read. A militia
-	# would simply die at the centre and there would be nothing left to measure.
+	# 600 hp each, so all three SURVIVE the hit and their losses can be read. A militia would
+	# simply die at the centre and there would be nothing left to measure. ⚠️ At 500 the
+	# centre one now survives on 108 hp, which is why the test above pins that it can.
 	var ring0 := w.spawn_unit(&"unit.dragon", 2, aim)
 	var ring1 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(1, 0))
 	var ring2 := w.spawn_unit(&"unit.dragon", 2, aim + Vector2i(2, 0))
@@ -246,15 +266,16 @@ func test_each_ring_out_takes_fifty_less() -> void:
 	var lost1 := ring1.max_hp - ring1.hp
 	var lost2 := ring2.max_hp - ring2.hp
 	assert_true(lost0 > 0, "the aim tile was hit at all")
-	assert_eq(lost0 - lost1, d.ability_falloff_per_ring, "ring 1 takes 50 less than centre")
-	assert_eq(lost1 - lost2, d.ability_falloff_per_ring, "and ring 2 takes 50 less again")
+	assert_eq(lost0 - lost1, d.ability_falloff_per_ring, "ring 1 takes a falloff less")
+	assert_eq(lost1 - lost2, d.ability_falloff_per_ring, "and ring 2 a falloff less again")
 	assert_eq(beyond.hp, beyond.max_hp, "and nothing a tile outside the 5x5")
 
 
-func test_the_centre_of_the_blast_is_worth_six_of_the_old_flat_forty() -> void:
+func test_the_centre_of_the_blast_is_worth_twelve_of_the_old_flat_forty() -> void:
 	# The change the owner actually asked for, stated as damage DEALT rather than as a
-	# field: 40 flat became 250 at the centre. Read through armour, which is why this is a
-	# `>` against the old number rather than an equality -- the point is the magnitude.
+	# field: 40 flat became 250 on 2026-09-07 and 500 on 2026-09-11. Read through armour,
+	# which is why this is a `>` against a floor rather than an equality -- the point is the
+	# magnitude, and an equality here would restate the dragon's armour in a second place.
 	var caster := _dragon(Vector2i(10, 10))
 	var d: UnitDef = GameDataRegistry.unit(&"unit.dragon")
 	var aim := Vector2i(30, 30)
@@ -262,13 +283,13 @@ func test_the_centre_of_the_blast_is_worth_six_of_the_old_flat_forty() -> void:
 
 	AbilitySystem.new()._burn(w, caster, d, aim)
 
-	assert_true(victim.max_hp - victim.hp > 200,
+	assert_true(victim.max_hp - victim.hp > 400,
 			"a hit worth taking a 120 s cooldown for, which the flat 40 was not")
 
 
 ## ⚠️ **A RING WORTH NOTHING IS SKIPPED, NOT FLOORED, and this is the only test that can
 ## reach that branch** -- the dragon's own numbers never produce one (its outer ring is
-## 150). A synthetic def is the fixture, because the guard is about arithmetic rather than
+## 300). A synthetic def is the fixture, because the guard is about arithmetic rather than
 ## about the dragon: `_damage_after_armour` enforces `MIN_DAMAGE`, so handing it a 0 would
 ## deal the floor to something the falloff had just placed out of reach.
 func test_a_ring_the_falloff_has_reduced_to_nothing_is_not_hit_at_all() -> void:
@@ -307,8 +328,8 @@ func test_the_dragon_cannot_burn_its_own_army() -> void:
 	# ✅ **AND THE OWNER CONFIRMED IT 2026-09-07**, asked because the breath went to 250 that
 	# day and *"250 damage to any unit or building around the click"* could have meant "my
 	# own included". It does not. This test was already here; what changed is that it now
-	# pins a decision rather than an assumption -- and at 250 the difference is a stack of
-	# your own infantry per press.
+	# pins a decision rather than an assumption -- and at 500, after the 2026-09-11 doubling,
+	# the difference is a stack of your own infantry AND most of a building per press.
 	assert_true(GameDataRegistry.unit(&"unit.dragon").ability_amount >= 250,
 			"and the stakes that made it worth asking are the amount itself")
 

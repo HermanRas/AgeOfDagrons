@@ -2699,6 +2699,29 @@ was three fields and no view work: `radius: 2` was already the 5×5, and `BlastE
 from it. Full account in §4.10's row; the 120 s cooldown is untouched and is what keeps 250
 sane.
 
+⚠️ **AND IT DOUBLED AGAIN ON 2026-09-11, AFTER THE THIRD PLAYTEST — 500 / 400 / 300.** With
+§13.4's particles finally on screen the owner played her and ruled: *"confirmed dragon atteck
+looks good bad damage is still low, double the special attack damage."* So `amount` **250 → 500**
+and `ability_falloff_per_ring` **50 → 100**.
+
+**BOTH NUMBERS MOVED, AND THAT IS WHAT "DOUBLE THE DAMAGE" MEANS.** Doubling `amount` alone would
+have given **500 / 450 / 400** — *more* than double at the edge, and a flatter blast than the
+owner's three nested squares. Doubling the falloff with it keeps the shape and makes **every ring
+take exactly twice what it took**. The 5×5 and the 120 s cooldown are untouched for the third
+time running; the only thing that has ever moved here is how hard one press hits.
+
+📝 **500 AGAINST 600 HP IS NOW A DESIGN EDGE WORTH NAMING.** The blast no longer kills only *"the
+roster below a knight"* — it kills everything in the game outright except another dragon, which
+survives on 108 hp after her 8 melee armour. A test pins that it stays that way: a mother who
+one-shots a mother would make the 120 s cooldown the entire dragon fight.
+
+📝 **A STALE NOTE WAS CORRECTED IN THE SAME CHANGE.** `units.json`'s general `ability` section
+still read *"40 damage … on a 15 second cooldown"* — a description of a weapon that had not
+existed for five days, sitting where somebody would go to learn what the ability does. The live
+values now live only beside the fields they describe, in `unit.dragon`'s own `_note_fire_breath`,
+and that section says why it no longer repeats them. **The header of a thing is not an authority
+on the thing**, which this project has now paid for twice: §11.9 records the other one.
+
 **ONE FIELD WENT ON THE WIRE AND IT WAS FREE.** `SnapshotSystem` carried `ability_cooldown` and
 nothing else — enough to grey an action slot, not enough to say where anything landed — so
 `SimUnit.to_snapshot` now sends `ability_aim` **inside the same `if ability_cooldown > 0`**. That
