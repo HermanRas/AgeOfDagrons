@@ -146,6 +146,79 @@ func test_a_conquest_still_reads_as_a_conquest() -> void:
 			"All opponents eliminated")
 
 
+# ── the rule that decided it, not the body count (PLAN.md 11.3) ─────────────
+#
+# ⛳ **THE OWNER'S 2026-09-11 PLAYTEST IS WHY THESE EXIST.** They won a King of the Hill match
+# on a tally that read exactly 9,000 and the panel said *"Player 2 has been eliminated"* —
+# true about the opponent, and not what decided the match.
+#
+# ⚠️ **THE MODE ALONE CANNOT NAME THE REASON**, which is the whole subtlety: a KotH match is
+# still winnable by wiping the enemy out, so "held the hill" printed off `mode` would be a lie
+# on every conquest win in that mode. The tally's own threshold is the discriminator.
+
+func _koth(players: Dictionary, winner: int) -> Dictionary:
+	var snap := _snapshot(players, true, winner)
+	snap["mode"] = int(MatchConfig.Mode.KING_OF_THE_HILL)
+	return snap
+
+
+func _scorer(score: int) -> Dictionary:
+	var row := _player(SimPlayer.Defeat.NONE, false)
+	row["score"] = score
+	return row
+
+
+func test_winning_on_the_tally_names_the_hill() -> void:
+	assert_eq(scene._victory_subtitle(_koth({
+			1: _scorer(WinConditionSystem.KOTH_TARGET_SCORE),
+			2: _scorer(0)}, 1), 1),
+			"You held the hill")
+
+
+## ⚠️ **THE SAME MODE, WON THE OTHER WAY, MUST STILL READ AS A CONQUEST.** Without this the fix
+## would be "print the mode", which is wrong every time a KotH match ends in a massacre —
+## `_king_of_the_hill()` runs the elimination rule too and its own note says both can be true.
+func test_winning_a_koth_match_by_conquest_still_reads_as_a_conquest() -> void:
+	var loser := _player(SimPlayer.Defeat.ELIMINATED)
+	loser["score"] = 120
+	assert_eq(scene._victory_subtitle(_koth({
+			1: _scorer(400), 2: loser}, 1), 1),
+			"Player 2 has been eliminated")
+
+
+## The losing half, and it matters more than the winning one: "Player 2 won" tells somebody who
+## just lost a five-minute race nothing about why, and the hill is the one thing they could have
+## done something about.
+##
+## 📝 **ASSERTED ON `_koth_tally_winner` RATHER THAN THROUGH `_refresh_result`**, which is where
+## the loser's sentence is chosen. That function stops the clock, records campaign progress and
+## reads `Net.local_player_id()` — three things this file's header exists to avoid, since it
+## instantiates `GameScene` **without entering the tree** precisely so everything under test is a
+## pure function of a snapshot. The discriminator is the part that can be wrong.
+func test_the_discriminator_names_the_winner_the_loser_will_be_shown() -> void:
+	assert_eq(scene._koth_tally_winner(
+			_koth({1: _scorer(0), 2: _scorer(WinConditionSystem.KOTH_TARGET_SCORE)}, 2)), 2)
+
+
+## ⚠️ **A SCORE PAST THE TARGET IS STILL A TALLY WIN.** §11.9's ladder steps by 1, 2 or 3, so a
+## side can land on 9,001 — and a threshold test written as `==` would call that a conquest and
+## print the wrong sentence. Same family as the win check itself being `>=`.
+func test_a_score_past_the_target_still_names_the_hill() -> void:
+	assert_eq(scene._victory_subtitle(_koth({
+			1: _scorer(WinConditionSystem.KOTH_TARGET_SCORE + 2),
+			2: _scorer(0)}, 1), 1),
+			"You held the hill")
+
+
+## Every other mode is untouched, including one carrying scores it should ignore — a
+## `last_man_standing` match on a generated map has a hill on it since 13.2a.
+func test_another_mode_ignores_the_tally_entirely() -> void:
+	var snap := _snapshot({1: _scorer(WinConditionSystem.KOTH_TARGET_SCORE),
+			2: _player(SimPlayer.Defeat.ELIMINATED)}, true, 1)
+	snap["mode"] = int(MatchConfig.Mode.LAST_MAN_STANDING)
+	assert_eq(scene._victory_subtitle(snap, 1), "Player 2 has been eliminated")
+
+
 func test_several_opponents_are_counted_rather_than_listed() -> void:
 	# A 340 px panel cannot hold four names, and "two eliminated, one resigned" is a
 	# sentence nobody needs.

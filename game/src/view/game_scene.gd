@@ -1308,6 +1308,11 @@ func _refresh_result(snap: Dictionary) -> void:
 		_result.show_result(false, _own_defeat_text(reason))
 	elif winner == 0:
 		_result.show_result(false, "Nobody was left standing")
+	elif _koth_tally_winner(snap) == winner and winner != 0:
+		# THE LOSING HALF OF THE SAME FIX, and it matters more than the winning one: "Player 2
+		# won" tells somebody who just lost a five-minute race nothing about WHY, and the hill
+		# is the one thing they could have done something about.
+		_result.show_result(false, "Player %d held the hill" % winner)
 	else:
 		_result.show_result(false, "Player %d won" % winner)
 
@@ -1325,6 +1330,35 @@ func _refresh_result(snap: Dictionary) -> void:
 ## 340 px panel -- and a mixed ending ("two eliminated, one resigned") is a sentence
 ## nobody needs. Elimination stays the default wording, which is what an all-conquest
 ## match still gets.
+## Did the King of the Hill TALLY decide this match, rather than conquest? The winning player id,
+## or 0 for "not a KotH match, or one the hill did not settle".
+##
+## ⚠️ **THE MODE ALONE CANNOT NAME THE REASON, WHICH IS THE WHOLE SUBTLETY HERE.** A KotH match is
+## still endable by wiping the enemy out — `_king_of_the_hill()` runs the elimination rule too,
+## and its own note says *"both can be true on one tick"*. So "held the hill" printed off the mode
+## would be a lie on every conquest win in that mode.
+##
+## **THE TALLY'S OWN THRESHOLD IS THE DISCRIMINATOR AND IT IS EXACT, NOT A HEURISTIC.** The sim
+## checks `score >= KOTH_TARGET_SCORE` every tick for every standing player and records the tally
+## **in preference** when both rules fire. So a winner at or past the target is precisely the
+## branch that fired, and a winner below it is precisely the branch that did not. It cannot be
+## reached any other way: nothing else writes `score`.
+##
+## 📝 **A TEAMMATE'S SCORE IS THE SAME NUMBER**, so reading the winner's is safe in a 2v2 —
+## §11.9 pays every standing member of a side identically, which is what lets `winner_id` name one
+## player at all.
+func _koth_tally_winner(snap: Dictionary) -> int:
+	if int(snap.get("mode", -1)) != int(MatchConfig.Mode.KING_OF_THE_HILL):
+		return 0
+	var winner := int(snap.get("winner_id", 0))
+	if winner == 0:
+		return 0
+	var ws: Dictionary = (snap.get("player_state", {}) as Dictionary).get(winner, {})
+	if int(ws.get("score", 0)) < WinConditionSystem.KOTH_TARGET_SCORE:
+		return 0
+	return winner
+
+
 func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
 	# ⚠️ **A SCENARIO IS NOT WON BY BEATING ANYBODY (15.2).** Every sentence below is about
 	# what happened to the OPPONENTS, and in a scenario nothing did: `ObjectiveSystem`
@@ -1341,6 +1375,13 @@ func _victory_subtitle(snap: Dictionary, player_id: int) -> String:
 	# future caller has to remember to get right; `snap` carries `mode` and always has.
 	if _is_scenario(snap):
 		return "Objectives complete"
+	# ⛳ **KING OF THE HILL NAMES ITS OWN RULE (PLAN.md 11.3).** The owner's 2026-09-11 playtest
+	# ended on a tally that read exactly 9,000 and the panel said *"Player 2 has been
+	# eliminated"* -- true of the opponent, and not what decided the match. Every other sentence
+	# in this function is about what happened to the OPPONENTS; this one is about what the
+	# winner did, which is the whole difference between a mode and a body count.
+	if _koth_tally_winner(snap) == player_id:
+		return "You held the hill"
 	var state: Dictionary = snap.get("player_state", {})
 	var ids: Array = state.keys()
 	ids.sort()
