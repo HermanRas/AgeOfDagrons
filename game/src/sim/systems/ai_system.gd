@@ -454,10 +454,36 @@ func _keep_busy(w: SimWorld, p: SimPlayer, attack: bool) -> void:
 	if not attack:
 		return
 	var loiterers := _idle_military(w, p)
-	if not loiterers.is_empty():
-		var target := _nearest_enemy(w, p, loiterers[0])
-		if target != 0:
-			w.queue_command(AttackCommand.new(p.id, loiterers, target))
+	if loiterers.is_empty():
+		return
+
+	# ⚠️ **THE STANDING ORDER OBEYS THE SAME MODE RULE AS THE COMMIT, OR THE TURTLE UNDOES
+	# ITSELF.** One `attack` rule sends the army to the trophy, and the very next idle sweep --
+	# five ticks later -- would send it straight back out at the enemy, so the bot would walk
+	# away from the thing it is supposed to be defending and never stop. This function's own
+	# division of labour is *"the rule set decides WHEN to commit, the standing orders keep it
+	# going"*, and keeping it going has to mean the same thing the commitment did.
+	var station := _army_station(w, p)
+	if station.size.x > 0:
+		# ONLY THE ONES NOT ALREADY THERE. A soldier standing on station is idle by
+		# definition, so re-ordering the whole garrison every interval would issue a command
+		# per unit per five ticks for the rest of the match, each one re-entering the path
+		# service -- the same pathological re-issue `THINK_INTERVAL`'s note is about, arriving
+		# through the other door. Inside the rect IS holding it: for KotH that is exactly the
+		# scoring test, and for Trophy the rect is already the radius a defensive unit fights
+		# from.
+		var away: Array[int] = []
+		for id in loiterers:
+			var u: SimUnit = w.entities[id]
+			if CombatSystem.tile_gap(u.tile(), station) > 0:
+				away.append(int(id))
+		if not away.is_empty():
+			w.queue_command(MoveCommand.new(p.id, away, station.get_center()))
+		return
+
+	var target := _nearest_enemy(w, p, loiterers[0])
+	if target != 0:
+		w.queue_command(AttackCommand.new(p.id, loiterers, target))
 
 
 ## The player's own building that still needs work, lowest id first, or 0.
@@ -685,17 +711,86 @@ func _issue_train(w: SimWorld, p: SimPlayer, step: Dictionary) -> bool:
 ## Every military unit at the nearest enemy town centre, else any enemy building, else
 ## any enemy unit. Buildings first on purpose: it is the win condition that matters
 ## here (11.1's last-man-standing), and a town centre does not run away.
+## THE ARMY COMMITS -- and **what it commits to depends on the game type** (owner, 2026-09-11:
+## *"follow the same blue print for current AI but instead of attacking player get a guard command
+## on dragon"* for Trophy, and *"instead of attacking player move to area"* for King of the Hill).
+##
+## ⚠️ **ONE RULE WITH THREE TERMINAL ACTIONS, AND THAT IS DELIBERATELY NOT THREE RULE SETS.** The
+## conditions are identical in every mode -- `after_ticks` and a minimum army -- and so is the
+## whole economy above them, so per-mode files would be four copies of one blueprint differing in
+## a single line. **This project has deleted four trackers for being a second copy of something
+## that moved on**; a fifth living in `data/ai_*.json` would drift exactly the same way, and the
+## owner's own words for what they wanted were *"the same blue print"*.
+##
+## 📝 **THE MODE IS ASKED OF THE WORLD, NOT WRITTEN INTO THE RULE.** A `mode: "trophy"` key would
+## put the game type in five data files and make a bot loaded into the wrong match silently do
+## nothing at all. `MapGen`'s arming convention is that the WORLD knows what match this is.
 func _issue_attack(w: SimWorld, p: SimPlayer) -> bool:
 	var army := _military(w, p)
 	if army.is_empty():
-		_why = "no military unit to attack with"
+		_why = "no military unit to commit"
 		return false
+	var station := _army_station(w, p)
+	if station.size.x > 0:
+		w.queue_command(MoveCommand.new(p.id, army, station.get_center()))
+		return true
 	var target := _nearest_enemy(w, p, army[0])
 	if target == 0:
 		_why = "no enemy entity found"
 		return false
 	w.queue_command(AttackCommand.new(p.id, army, target))
 	return true
+
+
+## THE GROUND THIS MODE WANTS THE ARMY STANDING ON, or an empty rect for a mode that wants it
+## attacking somebody. A RECT rather than a tile because both answers already are one: King of the
+## Hill's zone is a `Rect2i`, and "near the trophy" is a box around it.
+##
+## **TROPHY TURTLES** (owner: *"for Trophy the ai must turtle"*). The station is a `GUARD_RADIUS`
+## box around the bot's OWN trophy, and **that is a guard order in the vocabulary the sim already
+## has**: a military unit defaults to DEFENSIVE (4.12), `StanceSystem` makes a defensive unit
+## engage anything within `GUARD_RADIUS` of where it stands, and the leash walks it back
+## afterwards. ⚠️ **There is no `GuardCommand` and none is needed** -- standing somewhere defensive
+## IS guarding, and inventing a command for it would be a second way to express a rule the stance
+## system already owns.
+##
+## **KING OF THE HILL GOES TO THE HILL**, which is not an approximation of the win condition but
+## literally it: §11.9 pays for occupancy, so a bot that marched on the enemy instead was playing
+## conquest in a mode nobody wins that way. `11.x-koth` flagged this as the reason a solo KotH
+## match against a bot was a walkover.
+##
+## ⚠️ **AN UNARMED MODE FALLS BACK TO ATTACKING, WHICH IS `_king_of_the_hill()`'s OWN RULING.** A
+## trophy match whose placement failed has no `trophy_def_id` and a KotH map with no hill has an
+## empty zone; both then play as ordinary conquest and the WIN CONDITION says so. An AI that stood
+## still in those matches would be losing to a rule nobody was playing.
+func _army_station(w: SimWorld, p: SimPlayer) -> Rect2i:
+	match w.mode:
+		MatchConfig.Mode.TROPHY:
+			var trophy := _own_trophy(w, p)
+			if trophy == SimUnit.NO_POST:
+				return Rect2i()
+			var r := StanceSystem.GUARD_RADIUS
+			return Rect2i(trophy - Vector2i(r, r), Vector2i(r * 2 + 1, r * 2 + 1))
+		MatchConfig.Mode.KING_OF_THE_HILL:
+			return w.koth_zone
+	return Rect2i()
+
+
+## Where this bot's own trophy stands, or `SimUnit.NO_POST`.
+##
+## ⚠️ **GATED ON `w.trophy_def_id` AND NOT ON THE ROSTER FLAG**, which is `_trophy_holders`'
+## distinction and 11.2's: the flag answers *which unit is a trophy*, the world field answers
+## *did this match actually place them*. Reading the flag would send the army to guard a
+## `unit.dragon_baby` on any map that happened to contain one -- including 13.2's hatchling at a
+## nest, which is gaia's and is not a trophy at all.
+func _own_trophy(w: SimWorld, p: SimPlayer) -> Vector2i:
+	if w.trophy_def_id == &"":
+		return SimUnit.NO_POST
+	for id in _sorted_ids(w):
+		var e = w.entities[id]
+		if e is SimUnit and e.alive and e.owner_id == p.id and e.def_id == w.trophy_def_id:
+			return (e as SimUnit).tile()
+	return SimUnit.NO_POST
 
 
 # ── completion ──────────────────────────────────────────────────────────────
