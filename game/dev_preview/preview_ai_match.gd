@@ -21,10 +21,25 @@
 ## the balance is working, so an UNRESOLVED line is data rather than a bug. What would
 ## be a finding is the WRONG side winning, or a level that cannot get an economy up.
 ##
+## ## ⚠️ `--mode` IS HOW YOU ASK WHETHER A BOT PLAYS THE GAME TYPE, AND IT IS A DIFFERENT
+## ## QUESTION FROM WHETHER IT PLAYS WELL
+##
+## Everything above is about conquest, because until `14a` a bot played conquest in every
+## mode. It now goes to a station instead -- its own dragon in Trophy, the hill in King of
+## the Hill -- and `14b` found that the clock in front of that decision was longer than a
+## hill match, so the bot never arrived and the tests could not see it: they ask the
+## decision directly and it was correct.
+##
+## **This is the only thing in the repo that watches a bot actually walk there.** In a
+## King of the Hill run it prints who is standing in the zone on every timeline line, and
+## the summary says **the tick each side first got a unit onto the hill** -- which is the
+## number that was infinity on the morning of 2026-09-11.
+##
 ## Usage:
 ##   Godot --headless --path game res://dev_preview/preview_ai_match.tscn
 ##   ... -- --seed 7 --type forest --ticks 20000
 ##   ... -- --levels easy,unfair      one specific pairing instead of the ladder
+##   ... -- --mode koth               or `trophy`; default is last man standing
 extends Node
 
 ## Ceiling on the run. A match that has not resolved by here has stalled, and saying so
@@ -34,6 +49,10 @@ const DEFAULT_TICKS := 20000
 const REPORT_EVERY := 1500
 ## How often to check for foundations nobody is raising (see `_report_stuck_foundations`).
 const STUCK_EVERY := 300
+## How often to ask who is standing on the station, in a mode that has one. One second of
+## game time: fine enough that "when did it first arrive" is an answer rather than a
+## bucket, coarse enough that it is not an entity walk per tick for 20,000 ticks.
+const STATION_EVERY := 10
 
 
 ## Each rung of the ladder: player 1's level against player 2's. Adjacent pairs only --
@@ -52,10 +71,12 @@ func _ready() -> void:
 	var ticks := _int_arg("--ticks", DEFAULT_TICKS)
 	var type := _type_arg()
 
+	var mode := _mode_arg()
+
 	var pairs := _levels_arg()
 	var summary: Array[String] = []
 	for pair in pairs:
-		summary.append(_run_one(p_seed, type, ticks, pair[0], pair[1]))
+		summary.append(_run_one(p_seed, type, ticks, pair[0], pair[1], mode))
 
 	print("")
 	print("=== THE LADDER, seed %d ===" % p_seed)
@@ -84,13 +105,23 @@ func _levels_arg() -> Array:
 
 
 ## One rung. Returns the one-line verdict for the summary table at the end.
-func _run_one(p_seed: int, type: int, ticks: int, level_a: int, level_b: int) -> String:
+func _run_one(p_seed: int, type: int, ticks: int, level_a: int, level_b: int,
+		mode: MatchConfig.Mode) -> String:
 	var cfg := MatchConfig.debug_generated(p_seed, type, 2)
 	cfg.ai_players = [true, true] as Array[bool]
 	cfg.ai_levels = [level_a, level_b] as Array[int]
+	# BEFORE `MapGen.build`, and that ordering is the whole feature: the generator places
+	# the hill and the trophies off the MODE, so setting it afterwards would build a
+	# conquest map and then declare it a King of the Hill match -- which plays as conquest
+	# and says nothing, the exact silent failure `preview_koth` exists to catch.
+	cfg.mode = mode
 	var w := SimWorld.new()
 	w.setup(cfg)
 	MapGen.build(w, cfg)
+
+	# player id -> the first tick it had a unit on its station. Absent means never, which
+	# is the answer this whole reporting path was added to be able to give out loud.
+	var arrived: Dictionary = {}
 
 	print("")
 	print("=== %s (p1) vs %s (p2) -- %s %dx%d, seed %d, %s"
@@ -102,8 +133,11 @@ func _run_one(p_seed: int, type: int, ticks: int, level_a: int, level_b: int) ->
 	var resolved_at := -1
 	for i in range(ticks):
 		w.step()
+		if i % STATION_EVERY == 0:
+			_note_arrivals(w, arrived)
 		if i % REPORT_EVERY == 0:
 			_report_line(w)
+			_report_station(w)
 			_report_armies(w)
 		# Finer than the timeline: a foundation can be placed and destroyed well
 		# inside one 1,500-tick reporting gap, which is how the barracks slipped
@@ -116,6 +150,8 @@ func _run_one(p_seed: int, type: int, ticks: int, level_a: int, level_b: int) ->
 	var elapsed := Time.get_ticks_msec() - started
 
 	_report_line(w)
+	_report_station(w)
+	_report_arrivals(w, arrived, ticks)
 	print("")
 	if resolved_at > 0:
 		print("MATCH OVER on tick %d (%.1f minutes of game time, %.1f s of wall clock)"
@@ -312,6 +348,93 @@ func _report_line(w: SimWorld) -> void:
 	print("  t%-6d %s" % [w.tick, "  |  ".join(parts)])
 
 
+# ── the station: does the bot actually walk to it ───────────────────────────
+#
+# ⚠️ **THE GROUND IS ASKED OF `AISystem` RATHER THAN WORKED OUT HERE.** `_army_station()`
+# is what the bot itself aims at, so reading `w.koth_zone` independently would let this
+# page report a bot standing on the hill while the bot was walking somewhere else -- a
+# preview agreeing with the world instead of with the code under observation, which is
+# the one way it could be confidently wrong.
+
+func _has_station(w: SimWorld) -> bool:
+	return w.mode == MatchConfig.Mode.TROPHY \
+			or w.mode == MatchConfig.Mode.KING_OF_THE_HILL
+
+
+## `[units, military]` of `owner`'s standing on `rect`. Garrisoned units are off the map
+## and do not hold ground, which is `WinConditionSystem`'s rule for the hill too.
+func _on_station(w: SimWorld, owner: int, rect: Rect2i) -> Array[int]:
+	var units := 0
+	var military := 0
+	for e in w.entities.values():
+		if not (e is SimUnit) or not e.alive or e.owner_id != owner:
+			continue
+		var u: SimUnit = e
+		if u.garrisoned_in != 0 or not rect.has_point(u.tile()):
+			continue
+		units += 1
+		if u.def_id != &"unit.villager":
+			military += 1
+	return [units, military] as Array[int]
+
+
+## The first tick each side got anything onto its station, recorded once and never
+## revised. **A unit that arrives and dies still arrived**, which is the distinction that
+## matters: "it never came" and "it came and lost the fight" are different findings and a
+## sample of the current state cannot tell them apart.
+func _note_arrivals(w: SimWorld, arrived: Dictionary) -> void:
+	if not _has_station(w):
+		return
+	var ai := _ai(w)
+	for p in w.players:
+		if arrived.has(p.id):
+			continue
+		var station: Rect2i = ai._army_station(w, p)
+		if station.size.x <= 0:
+			continue
+		if _on_station(w, p.id, station)[0] > 0:
+			arrived[p.id] = w.tick
+
+
+## One timeline line's worth of who is holding what, printed beside the economy so a bot
+## that is winning the hill while losing the match reads as one picture.
+func _report_station(w: SimWorld) -> void:
+	if not _has_station(w):
+		return
+	var ai := _ai(w)
+	var parts: Array[String] = []
+	for p in w.players:
+		var station: Rect2i = ai._army_station(w, p)
+		if station.size.x <= 0:
+			# NOT NOTHING TO SAY. An unarmed match falls back to conquest by design, and a
+			# reader seeing this on every line has found the real answer to "why is nobody
+			# on the hill" -- there is no hill.
+			parts.append("p%d has no station" % p.id)
+			continue
+		var held := _on_station(w, p.id, station)
+		parts.append("p%d on station %d (%d mil), score %d"
+				% [p.id, held[0], held[1], p.score])
+	print("         %s" % "  |  ".join(parts))
+
+
+## ⛳ **THE ANSWER TO "DO THEY EVER GO".** On the morning of 2026-09-11 this was NEVER for
+## both sides of a King of the Hill match, and every unit test still passed -- the bot's
+## decision was right and it was gated behind a clock longer than the match (`14b`).
+func _report_arrivals(w: SimWorld, arrived: Dictionary, ticks: int) -> void:
+	if not _has_station(w):
+		return
+	print("")
+	print("── the station, %s ──" % MatchConfig.mode_name(w.mode))
+	for p in w.players:
+		if not arrived.has(p.id):
+			print("  p%d NEVER put a unit on it in %d ticks (%.1f min of game time)"
+					% [p.id, ticks, float(ticks) / 600.0])
+			continue
+		var at := int(arrived[p.id])
+		print("  p%d first stood on it at t%d (%.1f min), score %d"
+				% [p.id, at, float(at) / 600.0, w.player_for(p.id).score])
+
+
 ## The last thing each AI decided. What turns "it stopped" into "it stopped HERE".
 func _report_ai_log(w: SimWorld) -> void:
 	var ai := _ai(w)
@@ -335,6 +458,23 @@ func _int_arg(name: String, fallback: int) -> int:
 		if args[i] == name:
 			return int(args[i + 1])
 	return fallback
+
+
+## ⚠️ **AN UNKNOWN SPELLING WARNS AND FALLS BACK TO CONQUEST RATHER THAN FAILING**, and it
+## has to say so: `--mode kothh` would otherwise run a perfectly ordinary skirmish and the
+## reader would conclude the bots ignore the hill.
+func _mode_arg() -> MatchConfig.Mode:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		if args[i] != "--mode":
+			continue
+		match String(args[i + 1]).to_lower():
+			"koth", "king_of_the_hill": return MatchConfig.Mode.KING_OF_THE_HILL
+			"trophy": return MatchConfig.Mode.TROPHY
+			"lms", "last_man_standing": return MatchConfig.Mode.LAST_MAN_STANDING
+		push_warning("preview_ai_match: unknown mode '%s' -- running conquest"
+				% args[i + 1])
+	return MatchConfig.Mode.LAST_MAN_STANDING
 
 
 func _type_arg() -> MapGenerator.Type:
