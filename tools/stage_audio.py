@@ -168,6 +168,17 @@ SFX: dict[str, tuple[str, str, int, int]] = {
     "ui.under_attack": ("interface/alarm/alarm_attackplayer", "UI", 4000, 4000),
     "ui.victory": ("interface/alarm/alarm_victory", "UI", 0, 0),
     "ui.defeat": ("interface/alarm/alarm_defeated", "UI", 0, 0),
+    # Control of the King of the Hill zone changing hands (11.x-koth-control-sound).
+    # 0 A.D.'s capture-building group, which resolves to `alarmunitturn_1.ogg` -- the
+    # noise it makes when a unit changes allegiance. That is the same event wearing a
+    # different skin, and the owner asked for "short subtile" rather than a fanfare, so
+    # the victory/phase alarms are all wrong for it.
+    #
+    # THE 3 s THROTTLE IS A BACKSTOP AND NOT THE RATE LIMIT. `MatchAudio` debounces the
+    # holder for `_KOTH_DWELL_TICKS` before announcing anything, which is what actually
+    # keeps a contested hill quiet; this is here so the sound still cannot machine-gun
+    # if that ever regresses.
+    "ui.koth_control": ("interface/alarm/alarm_capturebuilding", "UI", 3000, 3000),
     # A trained unit reporting for duty, by broad class. 0 A.D. keys these by
     # role rather than by unit, which is exactly the granularity we want -- 28
     # unit defs do not need 28 sounds.

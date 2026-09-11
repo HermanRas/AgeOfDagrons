@@ -1251,6 +1251,18 @@
       "crowd_ms": 120,
       "source_group": "interface/alarm/alarm_invalid_building_placement"
     },
+    "ui.koth_control": {
+      "streams": [
+        "res://assets/audio/interface/alarm/alarmunitturn_1.ogg"
+      ],
+      "bus": "UI",
+      "gain_db": 0.0,
+      "pitch_min": 1.0,
+      "pitch_max": 1.0,
+      "throttle_ms": 3000,
+      "crowd_ms": 3000,
+      "source_group": "interface/alarm/alarm_capturebuilding"
+    },
     "ui.no_idle_unit": {
       "streams": [
         "res://assets/audio/interface/alarm/alarm_no_idle_unit_01.ogg"

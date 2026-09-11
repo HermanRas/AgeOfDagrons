@@ -384,6 +384,172 @@ func test_resetting_forgets_the_previous_match() -> void:
 			"after a reset the next snapshot primes again, got %s" % [_sfx()])
 
 
+# ── King of the Hill: control changing hands (11.x-koth-control-sound) ──────
+#
+# ⚠️ **THE HAZARD HERE IS NOT "DOES IT PLAY", IT IS "DOES IT SHUT UP".** The owner's ask
+# carried its own warning -- *"short subtile sound, it will play often"* -- and the rule it
+# sits on is worse than that warning knew: a tie pays nobody, so `koth_holder` drops to 0
+# whenever a fight on the hill is even and returns the moment one side is a single unit
+# ahead. A real 5-v-5 is `1 -> 0 -> 1 -> 0` several times a second. So the load-bearing
+# tests below are the SILENT ones.
+
+const _HILL := Rect2i(40, 40, 13, 13)
+
+
+func _koth_snap(holder: int, zone: Rect2i = _HILL) -> Dictionary:
+	var s := _snap([])
+	s["koth_x"] = zone.position.x
+	s["koth_y"] = zone.position.y
+	s["koth_w"] = zone.size.x
+	s["koth_h"] = zone.size.y
+	s["koth_holder"] = holder
+	return s
+
+
+## Feed one holder for long enough that the dwell believes it.
+##
+## DERIVED FROM THE CONSTANT, never a literal 12: the dwell is a tuning number and the
+## thing these tests are about is the ORDERING (a flicker must not survive it, a real
+## capture must), which stays true whatever it is retuned to.
+func _hold(holder: int, ticks: int = MatchAudio._KOTH_DWELL_TICKS) -> void:
+	for _i in range(ticks):
+		audio.observe(_koth_snap(holder), ME)
+
+
+func test_a_match_with_no_hill_never_mentions_one() -> void:
+	# The five koth fields ride EVERY snapshot, so a conquest match reaches this code
+	# on every tick with a holder of 0. An empty rect is the arming convention -- the
+	# same one the minimap reads -- and without it every non-KotH match in the game
+	# would be running this differ for nothing.
+	for _i in range(MatchAudio._KOTH_DWELL_TICKS * 3):
+		audio.observe(_koth_snap(1, Rect2i()), ME)
+	assert_true(_sfx().is_empty(), "no zone, no sound, got %s" % [_sfx()])
+
+
+func test_the_first_holder_seen_is_recorded_rather_than_announced() -> void:
+	# Joining a match in progress, or simply the first snapshot after the mode arms:
+	# whoever happens to be standing on the hill has not just taken it. Same swallow as
+	# `_primed` does for entity events, and the reason `_koth_announced` starts at -1
+	# rather than 0 -- 0 is a real state the wire sends.
+	_hold(3)
+	assert_true(_sfx().is_empty(), "got %s" % [_sfx()])
+
+
+func test_taking_an_empty_hill_sounds_once() -> void:
+	_hold(0)
+	_hold(1)
+	assert_eq(_sfx(), ["ui.koth_control"])
+
+
+func test_a_hill_nobody_is_fighting_over_stays_quiet() -> void:
+	# The sound is a CHANGE of control, so a player who holds the hill for the rest of
+	# the match hears it once. Without the announced-holder test this would fire on every
+	# snapshot for as long as they held it -- which at 10 Hz is the loudest possible
+	# reading of "it will play often".
+	_hold(0)
+	_hold(1)
+	_hold(1)
+	_hold(1)
+	assert_eq(_sfx(), ["ui.koth_control"], "held, not re-taken")
+
+
+func test_a_contested_hill_flickering_every_tick_announces_nothing() -> void:
+	# ⚠️ **THE CARD'S CENTRAL CASE, AND THE ONE AN INTERVAL ALONE DOES NOT FIX.** A
+	# throttle would turn this into a metronome -- a sound every few seconds, saying
+	# nothing, during the exact moment the player is busiest. A value has to SURVIVE to
+	# count, so a hill changing hands faster than the dwell settles on neither.
+	_hold(0)
+	_spy.calls.clear()
+	for i in range(MatchAudio._KOTH_DWELL_TICKS * 8):
+		audio.observe(_koth_snap(1 if i % 2 == 0 else 0), ME)
+	assert_true(_sfx().is_empty(),
+			"a 5-v-5 standoff is silent, got %s" % [_sfx()])
+
+
+func test_a_holder_that_changes_one_tick_short_of_the_dwell_is_not_believed() -> void:
+	# The dwell's own boundary, and the test that fails if somebody deletes it: without
+	# the counter this is a capture, with it it is noise.
+	_hold(0)
+	_hold(1, MatchAudio._KOTH_DWELL_TICKS - 1)
+	_hold(0)
+	assert_true(_sfx().is_empty(), "one tick short is not a capture, got %s" % [_sfx()])
+
+
+func test_losing_the_hill_to_a_contested_fight_is_silent() -> void:
+	# ⛔ **THE OWNER'S RULING, 2026-09-11: taken and stolen sound, lost does not.** It is
+	# the transition that fires most and means least -- a tie pays nobody, so this is
+	# what every even fight on the hill looks like.
+	_hold(0)
+	_hold(1)
+	_spy.calls.clear()
+	_hold(0)
+	assert_true(_sfx().is_empty(), "going contested is not news, got %s" % [_sfx()])
+
+
+func test_stealing_a_hill_from_the_side_holding_it_sounds() -> void:
+	_hold(0)
+	_hold(1)
+	_spy.calls.clear()
+	_hold(2)
+	assert_eq(_sfx(), ["ui.koth_control"])
+
+
+func test_retaking_your_own_hill_after_a_long_fight_sounds_again() -> void:
+	# The consequence of `lost` still MOVING the announced holder even though it makes no
+	# noise. Holding the old winner through a sustained contest instead would make
+	# retaking your own hill silent -- a capture the player is never told about.
+	_hold(0)
+	_hold(1)
+	_spy.calls.clear()
+	_hold(0)          # a long, genuinely contested spell -- silent
+	_hold(1)          # and then P1 takes it back
+	assert_eq(_sfx(), ["ui.koth_control"])
+
+
+func test_the_differ_reads_the_keys_the_real_snapshot_system_writes() -> void:
+	# ⚠️ **EVERY OTHER TEST IN THIS SECTION HANDS `observe()` A DICTIONARY THIS FILE WROTE**,
+	# so all ten would go on passing if `SnapshotSystem` renamed `koth_holder` tomorrow and
+	# the feature stopped working completely. This is the one that fails instead.
+	#
+	# `test_koth` pins the other half -- that the five fields reach the wire at all -- and
+	# **neither test can see what the other covers**: that one builds a snapshot and never
+	# plays a sound, this one plays a sound and never checks a rect. A rename breaks this
+	# one; a dropped field breaks that one.
+	var world := SimWorld.new()
+	var cfg := MatchConfig.new()
+	cfg.player_ids = [1, 2]
+	cfg.teams = [0, 0]
+	cfg.map_size = Vector2i(48, 48)
+	cfg.mode = MatchConfig.Mode.KING_OF_THE_HILL
+	world.setup(cfg)
+	world.map.fill_terrain(SimMap.Terrain.GRASS)
+	world.koth_zone = Rect2i(20, 20, 8, 8)
+
+	# An empty hill first, so the recorded-not-announced swallow is spent on it, and then
+	# player 1 taking it. Set directly rather than by marching units on: what is under test
+	# here is the wire vocabulary, and `test_koth` is where the rule that writes it lives.
+	for _i in range(MatchAudio._KOTH_DWELL_TICKS):
+		audio.observe(SnapshotSystem.build(world, ME), ME)
+	world.koth_holder = 1
+	for _i in range(MatchAudio._KOTH_DWELL_TICKS):
+		audio.observe(SnapshotSystem.build(world, ME), ME)
+
+	assert_eq(_sfx(), ["ui.koth_control"],
+			"announced off a snapshot the real SnapshotSystem built, not one written here")
+
+
+func test_resetting_forgets_which_hill_was_held() -> void:
+	# A MatchAudio outliving its match would read the new match's first hill as a THEFT
+	# from whoever held the last one's, and announce it to everybody.
+	_hold(0)
+	_hold(1)
+	audio.reset()
+	_spy.calls.clear()
+	_hold(2)
+	assert_true(_sfx().is_empty(),
+			"after a reset the first holder primes again, got %s" % [_sfx()])
+
+
 # ── fixtures ────────────────────────────────────────────────────────────────
 
 func _snap(updated: Array) -> Dictionary:

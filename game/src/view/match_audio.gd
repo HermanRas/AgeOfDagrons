@@ -51,6 +51,35 @@ var _prev_age: Dictionary = {}      # player_id -> int
 var _primed := false
 var _announced_result := false
 
+## HOW LONG A HOLDER MUST HOLD BEFORE IT IS ANNOUNCED, in snapshots (PLAN.md 11.2,
+## `11.x-koth-control-sound`). The owner's ask carried its own warning -- *"short subtile
+## sound, it will play often"* -- and the rule built under it is worse than that warning
+## knew: **a tie pays nobody**, so `koth_holder` drops to 0 the instant a fight is even and
+## returns the instant one side is one unit ahead. A real 5-v-5 on the hill is therefore
+## `1 -> 0 -> 1 -> 0` several times a second, not `1 -> 2 -> 1`.
+##
+## ⚠️ **AN INTERVAL ALONE DOES NOT FIX THAT, WHICH IS WHY THERE ARE TWO GUARDS.** Throttling
+## turns a machine gun into a metronome: still a sound every few seconds, still saying
+## nothing, and still fired during the exact moment the player is busiest. The card's word
+## for the second guard is hysteresis, and this is its cheapest honest form -- a value has to
+## SURVIVE to count, so a flickering hill announces nothing at all and a hill somebody
+## actually took announces once.
+##
+## 📝 **IT IS A DWELL RATHER THAN A LEAD MARGIN, AND THAT IS FORCED BY THE WIRE.** The card
+## asks for hysteresis "about the LEAD, not about the holder id" -- correct, and the lead is
+## not on the snapshot: `koth_holder` is one int and deriving a margin here would mean
+## counting units in the zone, which is the client-side counting `GameView.koth_holder`'s own
+## header forbids (half a contested zone is in fog). A dwell buys the same property off the
+## field we are actually sent: an oscillating lead cannot hold a value still.
+const _KOTH_DWELL_TICKS := 12
+
+## The last holder we ANNOUNCED, the candidate currently under observation, and how many
+## consecutive snapshots that candidate has survived. `-1` means nothing has been announced
+## yet, which is distinct from 0 -- see `_koth_transitions`.
+var _koth_announced := -1
+var _koth_candidate := -1
+var _koth_dwell := 0
+
 ## Everything a villager could be working, rebuilt each snapshot: resource nodes
 ## and buildings, as {tile, def_id}. See `_work_sound` for why this exists rather
 ## than the unit naming its own target.
@@ -118,6 +147,7 @@ func observe(snap: Dictionary, local_player_id: int, listener: Vector2 = Vector2
 			_prev.erase(id)
 
 	_player_transitions(snap, local_player_id)
+	_koth_transitions(snap)
 	_primed = true
 
 
@@ -129,6 +159,12 @@ func reset() -> void:
 	_work_candidates.clear()
 	_primed = false
 	_announced_result = false
+	# A carried-over holder would announce the new match's first hill as a THEFT from
+	# whoever held the old one's -- and `-1` rather than `0` because `0` is a real state
+	# the wire sends (nobody, or contested) and would swallow the first genuine capture.
+	_koth_announced = -1
+	_koth_candidate = -1
+	_koth_dwell = 0
 
 
 # ── per-entity ──────────────────────────────────────────────────────────────
@@ -309,3 +345,82 @@ func _player_transitions(snap: Dictionary, me: int) -> void:
 			or (winning_team > 0 and winning_team == int(mine.get("team", 0))))
 	_out().play_sfx(&"ui.victory" if won else &"ui.defeat")
 	_out().play_music(&"match.victory" if won else &"match.defeat")
+
+
+## Control of the King of the Hill zone changing hands (PLAN.md 11.2,
+## `11.x-koth-control-sound`). Owner's ask, 2026-09-08: *"sound on change of most units in
+## area of KOTH for all payers (short subtile sound, it will play often)"*.
+##
+## **EVERY PLAYER HEARS IT, which is the ask and is also the only thing that can be true.**
+## `koth_holder` is a fact about the MATCH and rides the top of the snapshot beside
+## `claim_owner`, not in `player_state` -- so unlike an age landing or a finished building,
+## there is no "ours only" clause to apply and nothing here reads `me`. The hill is a rule
+## both sides are playing to.
+##
+## ⚠️ **READ OFF THE WIRE, NEVER COUNTED HERE**, and that is `GameView.koth_holder`'s rule
+## rather than a preference: half the units in a contested zone are in fog for every player
+## but their owner, so a client that counted would hear a different match from its opponent
+## for a question the server has already answered. 13.2c's claim is on the wire for the same
+## reason.
+##
+## ## WHICH TRANSITIONS MAKE A NOISE -- THE OWNER'S RULING, 2026-09-11
+##
+## There are three, not one, and only two of them sound:
+##
+## | | | |
+## |---|---|---|
+## | **taken** | 0 -> someone | ✅ sounds |
+## | **stolen** | someone -> someone else | ✅ sounds |
+## | **lost** | someone -> 0 (contested, or the hill emptied) | ⛔ **silent** |
+##
+## ⛔ **`lost` IS THE ONE THAT FIRES MOST AND MEANS LEAST**, because a tie pays nobody: the
+## holder drops to 0 every time a fight on the hill is even. Announcing it is how a short
+## subtle sound becomes a stutter during the one moment the player is busiest. Offered to the
+## owner with that argument and with the case against (losing the hill is arguably the most
+## actionable thing to hear); they chose taken + stolen.
+##
+## 📝 **SO A HILL RETAKEN AFTER A LONG CONTESTED SPELL DOES SOUND AGAIN**, because the
+## silence on `lost` still MOVES the announced holder to 0. That is deliberate: the
+## alternative -- holding the announced value at the old winner through the contest -- makes
+## retaking your own hill silent, which is a capture the player is never told about.
+func _koth_transitions(snap: Dictionary) -> void:
+	# NO HILL, NO SOUND. An empty rect is `SimWorld.koth_zone`'s arming convention carried
+	# across the wire, and it is how every non-KotH match in the game reaches this function
+	# -- the field is sent unconditionally, so without this clause a conquest match would
+	# announce a permanent holder of 0 on its first snapshot.
+	if not snap.has("koth_holder") or Rect2i(
+			int(snap.get("koth_x", 0)), int(snap.get("koth_y", 0)),
+			int(snap.get("koth_w", 0)), int(snap.get("koth_h", 0))).size == Vector2i.ZERO:
+		return
+
+	var holder := int(snap["koth_holder"])
+
+	# THE DWELL. A candidate has to survive `_KOTH_DWELL_TICKS` consecutive snapshots before
+	# it is believed, so a hill flickering between two sides settles on neither and stays
+	# silent. Resetting the counter on any change is what makes that true -- a candidate that
+	# merely APPEARS often is not a candidate that held.
+	if holder != _koth_candidate:
+		_koth_candidate = holder
+		_koth_dwell = 1
+		return
+	_koth_dwell += 1
+	if _koth_dwell < _KOTH_DWELL_TICKS:
+		return
+
+	# Believed. Nothing to say if it is what we already announced -- which is also what stops
+	# a stable hill re-announcing itself on every snapshot for the rest of the match.
+	if holder == _koth_announced:
+		return
+
+	# ⚠️ **THE FIRST BELIEVED READING IS RECORDED AND NOT ANNOUNCED.** `_koth_announced`
+	# starts at -1, so a player joining a match in progress -- or simply the first snapshot
+	# after the mode arms -- would otherwise be told the hill had just been taken by whoever
+	# happened to be standing on it. Same swallow as `_primed`, for the same reason.
+	var first := _koth_announced == -1
+	_koth_announced = holder
+	if first:
+		return
+	# `lost` is silent: see the table above.
+	if holder == 0:
+		return
+	_out().play_sfx(&"ui.koth_control")
