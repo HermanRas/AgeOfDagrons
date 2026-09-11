@@ -1,5 +1,7 @@
 ## Phase 4.8's view half: the tap that issues a garrison order, and the building
-## panel's Garrison action with its roster.
+## panel's Garrison action with its roster. **And 4.8c's view half in the last
+## section** -- which units may go inside at all, and the tap that must therefore
+## reselect rather than order.
 ##
 ## `SelectionActions` is pure and static, so all of this is assertable without a
 ## panel -- the same division that file's header draws. The one case worth naming as
@@ -196,3 +198,102 @@ func test_a_tower_foundation_is_a_build_assist_and_not_a_garrison() -> void:
 func test_somebody_elses_tower_is_a_thing_to_attack() -> void:
 	_apply(_building_facts(&"building.watch_tower", 2))
 	assert_eq(view.tap_action(10, 1, true), GameView.TapAction.ATTACK)
+
+
+# ── 4.8c: the selection has to contain something that may go in ─────────────
+#
+# ⚠️ **NONE OF THIS WAS COVERED WHEN 4.8c SHIPPED.** The sim half is pinned six ways in
+# `tests/sim/test_garrison.gd`, and the client half -- `garrisonable_selection()` and the
+# fourth argument to `tap_action` -- had no test at all: every call site in the suite used
+# the three-argument form, so the false branch this feature exists for was never taken.
+# That is §6's *"a rule that can be left out is a rule that is off somewhere"* wearing a
+# default value, and the default here is the pre-4.8c answer.
+
+func _unit_facts(id: int, def_id: StringName, owner: int = 1,
+		garrison_count: int = 0) -> Dictionary:
+	return {
+		"id": id, "owner_id": owner, "def_id": def_id, "is_unit": true,
+		"phase": SimBuilding.Phase.COMPLETE, "alive": true, "tile": Vector2i(10, 10),
+		"garrison_count": garrison_count, "garrison": [] as Array[StringName],
+		"waypoint": SimBuilding.NO_WAYPOINT, "herded_by": 0, "remembered": false,
+	}
+
+
+## BUILT ELEMENT BY ELEMENT, not `ids as Array[int]` -- that cast works on a literal and
+## silently produces an untyped array from a variable, which `select()` then rejects at
+## runtime. Same conversion every `Command.from_dict` does.
+func _select(ids: Array) -> void:
+	var typed: Array[int] = []
+	for id in ids:
+		typed.append(int(id))
+	view.select(typed)
+
+
+func test_a_dragon_is_movable_and_is_not_garrisonable() -> void:
+	# The one unit the two questions differ on, which is the whole reason
+	# `garrisonable_selection()` is asked separately instead of folded into
+	# `movable_selection()`.
+	_apply(_unit_facts(1, &"unit.dragon"))
+	_select([1])
+	assert_eq(view.movable_selection(), [1] as Array[int], "a dragon is perfectly movable")
+	assert_true(view.garrisonable_selection().is_empty(), "and may not go inside anything")
+
+
+func test_every_def_the_roster_refuses_is_refused_on_the_client_too() -> void:
+	# By NAME, the same way `test_garrison` pins the sim half: a def quietly losing
+	# `can_garrison` fails with its own id rather than becoming garrisonable again in
+	# the one place a player actually taps.
+	for def_id in [&"unit.siege_ram", &"unit.ballista", &"unit.onager",
+			&"unit.trebuchet", &"unit.dragon", &"unit.dragon_baby"]:
+		view._facts.clear()
+		_apply(_unit_facts(1, def_id))
+		_select([1])
+		assert_true(view.garrisonable_selection().is_empty(), String(def_id))
+
+
+func test_an_ordinary_unit_is_still_garrisonable() -> void:
+	# The inverse, and it is not redundant: a typo making the default false everywhere
+	# would be a game in which nobody can garrison, and every test above would pass.
+	_apply(_unit_facts(1, &"unit.swordsman"))
+	_select([1])
+	assert_eq(view.garrisonable_selection(), [1] as Array[int])
+
+
+func test_a_mixed_selection_still_has_somebody_to_send() -> void:
+	# This answers "is there anybody", not "who" -- `GarrisonCommand` drops the onager on
+	# arrival. A blanket refusal here would cancel a garrison the player plainly meant
+	# because one siege engine was caught in a box-select.
+	_apply(_unit_facts(1, &"unit.swordsman"))
+	_apply(_unit_facts(2, &"unit.onager"))
+	_select([1, 2])
+	assert_eq(view.garrisonable_selection(), [1] as Array[int])
+
+
+func test_a_def_the_client_cannot_resolve_is_let_through() -> void:
+	# Matches `UnitDef.can_garrison`'s default and `GarrisonCommand._may_garrison`: an
+	# unresolvable id gets the pre-4.8c answer rather than a new refusal layered on top of
+	# whatever is already wrong. The server is the trust boundary either way.
+	_apply(_unit_facts(1, &"unit.no_such_thing"))
+	_select([1])
+	assert_eq(view.garrisonable_selection(), [1] as Array[int])
+
+
+func test_a_lone_dragon_tapping_its_own_castle_reselects() -> void:
+	# ⚠️ **THE FOURTH ARGUMENT'S FALSE BRANCH, and nothing exercised it until this test.**
+	# Issuing the order instead would be the invisible refusal `tap_action`'s own comments
+	# keep warning about, arriving through the rule added to stop it -- the player taps,
+	# the server drops every id, and nothing says why. Reselecting is also how they reach
+	# that castle's own panel.
+	_apply(_building_facts(&"building.castle"))
+	assert_eq(view.tap_action(10, 1, true, false), GameView.TapAction.SELECT)
+	assert_eq(view.tap_action(10, 1, true, true), GameView.TapAction.GARRISON,
+			"and the same tap with an infantryman in hand is still an order")
+
+
+func test_a_dragon_tapping_your_own_transport_reselects_too() -> void:
+	# THE SECOND FALSE BRANCH, twenty lines above the tower's in the same function and
+	# easy to fix one of. A boat is boarded by the same gesture, so without it a dragon
+	# tapping one issues a command `GarrisonCommand` refuses for a reason nobody can see.
+	_apply(_unit_facts(10, &"unit.transport_ship"))
+	assert_eq(view.tap_action(10, 1, true, false), GameView.TapAction.SELECT)
+	assert_eq(view.tap_action(10, 1, true, true), GameView.TapAction.GARRISON)
