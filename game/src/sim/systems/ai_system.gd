@@ -1128,10 +1128,34 @@ func _anchor_tile(w: SimWorld, p: SimPlayer, near: StringName, from_unit: int) -
 ## Asks the same two questions the placement ghost does -- `adjacency_allows()` for a
 ## field's mill, `can_place_building()` for the ground -- rather than guessing, which is
 ## why a field lands beside its mill without the script having to say where.
+## ⛳ **TWO PASSES, AND THE FIRST ONE IS WHY A BOT EATS.** A mill exists to carry farms
+## and nothing else; a mill with no room beside it is a mill that will never carry one,
+## and since the rule set builds exactly one (`fewer_than: {building.mill: 1}`) a badly
+## sited mill starves that bot for the rest of the match. Measured on 2026-09-11: no
+## field was placed AT ALL on three seeds in four, and the bots that could not farm
+## finished holding four figures of wood, gold and stone against two digits of food.
+##
+## So the first pass asks for a spot that ALSO has room for what this building carries,
+## which pushes the mill out of the crowded ground beside the town centre and into the
+## open the way a person puts their farms. The second pass is the old behaviour exactly:
+## **a mill somewhere beats no mill**, and a bot that refused to build one because the
+## farm would not fit would be worse off than before this existed.
 func _find_spot(w: SimWorld, p: SimPlayer, def_id: StringName, anchor: Vector2i) -> Vector2i:
 	var bd: BuildingDef = GameDataRegistry.building(def_id)
 	if bd == null:
 		return Vector2i(-1, -1)
+	var carries: Array = GameDataRegistry.hosted_by(def_id)
+	if not carries.is_empty():
+		var roomy := _scan_for_spot(w, p, def_id, bd, anchor, carries)
+		if roomy.x >= 0:
+			return roomy
+	return _scan_for_spot(w, p, def_id, bd, anchor, [])
+
+
+## The ring scan. `carries` non-empty adds "and something that needs to abut this could
+## go beside it" to the test; empty is the plain legality question.
+func _scan_for_spot(w: SimWorld, p: SimPlayer, def_id: StringName, bd: BuildingDef,
+		anchor: Vector2i, carries: Array) -> Vector2i:
 	var footprint := bd.footprint
 	# `adjacency_allows()` COUNTS ABUTTING BUILDINGS, so it walks the entity list. Only
 	# a field needs it (`requires_adjacent`), and asking it per candidate tile for
@@ -1148,5 +1172,53 @@ func _find_spot(w: SimWorld, p: SimPlayer, def_id: StringName, anchor: Vector2i)
 					continue
 				if needs_adjacency and not w.adjacency_allows(def_id, p.id, origin):
 					continue
+				if not carries.is_empty() \
+						and not _has_room_beside(w, SimMap.footprint_rect(origin, footprint),
+								carries):
+					continue
 				return origin
 	return Vector2i(-1, -1)
+
+
+## Could any of `carries` be placed against `host_rect`, on ground that is clear today?
+##
+## ⚠️ **IT CANNOT ASK `adjacency_allows`, AND THAT IS NOT A SHORTCUT.** That function
+## needs a COMPLETE host building to abut, and the host here is a rectangle nobody has
+## placed yet -- so the abutment is tested geometrically, against the same
+## `footprint_rect().grow(1)` rule `_adjacent_host` uses, and the overlap with the host
+## itself is excluded by hand because the ground under it is still empty.
+##
+## 📝 **IT SLIDES THE GUEST ALL THE WAY ALONG EACH SIDE, ONE TILE AT A TIME.** A first cut
+## tried three offsets a side -- flush at each end and centred -- on the theory that a site
+## where only one exact offset fits is not really open ground. That was wrong twice over:
+## it is exactly how a farm fits between two trees, and on seed 11 it left both bots with a
+## mill and no field. The cost is affordable because this runs when a building is PLACED,
+## which is a handful of times a match, not on the tick.
+func _has_room_beside(w: SimWorld, host_rect: Rect2i, carries: Array) -> bool:
+	var touching := host_rect.grow(1)
+	for guest_id in carries:
+		var gd: BuildingDef = GameDataRegistry.building(guest_id)
+		if gd == null:
+			continue
+		var size := Vector2i(maxi(1, gd.footprint.x), maxi(1, gd.footprint.y))
+		# Left and right of the host, sliding down; then above and below, sliding across.
+		# The slide spans every offset where the guest still overlaps the host's extent.
+		for dy in range(host_rect.position.y - size.y + 1, host_rect.end.y):
+			for x in [host_rect.end.x, host_rect.position.x - size.x]:
+				if _fits_beside(w, Vector2i(x, dy), size, host_rect, touching):
+					return true
+		for dx in range(host_rect.position.x - size.x + 1, host_rect.end.x):
+			for y in [host_rect.end.y, host_rect.position.y - size.y]:
+				if _fits_beside(w, Vector2i(dx, y), size, host_rect, touching):
+					return true
+	return false
+
+
+func _fits_beside(w: SimWorld, origin: Vector2i, size: Vector2i, host_rect: Rect2i,
+		touching: Rect2i) -> bool:
+	var rect := SimMap.footprint_rect(origin, size)
+	if rect.intersects(host_rect):
+		return false          # the host's own ground, which is not free
+	if not rect.intersects(touching):
+		return false          # not actually abutting, so placement would refuse it
+	return w.map.can_place_building(rect)

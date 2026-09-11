@@ -74,6 +74,9 @@ var _buildings: Dictionary = {}                   # StringName -> BuildingDef
 ## Wall segment id -> the id of the tier that lists it. Derived from the defs on
 ## first use by `wall_tier()`, and cleared with them on reload.
 var _wall_tier_of: Dictionary = {}
+## Host building id -> the building ids that declare `requires_adjacent` on it. The
+## reverse of that field, derived on first use by `hosted_by()` and cleared with the defs.
+var _hosted_by: Dictionary = {}
 var _resources: Dictionary = {}                   # StringName -> ResourceDef
 var _techs: Dictionary = {}                       # StringName -> TechDef
 ## Building id -> the techs it offers, in menu order. Derived from the defs on first
@@ -129,6 +132,7 @@ func load_all(force := false) -> void:
 	_units = _read_defs(UNITS_PATH, UnitDef.from_dict)
 	_buildings = _read_defs(BUILDINGS_PATH, BuildingDef.from_dict)
 	_wall_tier_of.clear()          # derived from _buildings; see wall_tier()
+	_hosted_by.clear()             # derived from _buildings; see hosted_by()
 	_resources = _read_defs(RESOURCES_PATH, ResourceDef.from_dict)
 	_techs = _read_defs(TECHS_PATH, TechDef.from_dict)
 	_techs_at.clear()              # derived from _techs; see techs_at()
@@ -818,6 +822,30 @@ func wall_tier(id: StringName) -> BuildingDef:
 				_wall_tier_of[segment] = tier_id
 	var owner: Variant = _wall_tier_of.get(id)
 	return _buildings.get(owner) if owner != null else null
+
+
+## What `id` exists to CARRY: the buildings that declare `requires_adjacent` on it. For
+## `building.mill` that is `[building.field]`, and for almost everything else it is empty.
+##
+## The reverse of `requires_adjacent`, derived rather than declared for `wall_tier`'s
+## reason -- a `carries` field on the mill would be the same fact written twice, and the
+## day they disagreed a mill would be sited with room for a farm that no longer wants to
+## be there. Built once and cached, with the same lifecycle: cleared when the defs are.
+##
+## ⚠️ **IT EXISTS SO A MILL CAN BE PLACED SOMEWHERE ITS FARMS FIT.** A mill with no room
+## beside it is a mill that will never carry a field, and a bot that sites one is starved
+## for the rest of the match -- `14d`, measured as no field at all on three seeds in four.
+func hosted_by(id: StringName) -> Array:
+	if not _loaded:
+		load_all()
+	if _hosted_by.is_empty():
+		for guest_id in _buildings:
+			var guest: BuildingDef = _buildings[guest_id]
+			for host_id in guest.requires_adjacent:
+				var guests: Array = _hosted_by.get(host_id, [])
+				guests.append(guest_id)
+				_hosted_by[host_id] = guests
+	return _hosted_by.get(id, [])
 
 
 func resource_def(id: StringName) -> ResourceDef:
