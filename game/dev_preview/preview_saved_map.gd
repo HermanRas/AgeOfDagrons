@@ -444,6 +444,44 @@ func _report_match() -> bool:
 	if mismatched != 0:
 		push_error("the world's terrain is not the file's")
 		ok = false
+
+	# ⚠️ **AND THE NAMED REGIONS, WHICH ARE THE ONE THING IN A MAP FILE NOTHING ON SCREEN CAN
+	# SHOW** (16.5). A region is not drawn in the game at all — it is how a *scenario author* asks
+	# a question, and what the player reads is the objective's own text. So a region that got as
+	# far as the file and no further would leave an `area` objective counting nothing forever,
+	# with the map looking completely correct and every check above green. **This is the only
+	# place either project checks that half of the chain**: tool → JSON → `MapFile.load_map` →
+	# `MapGen.build_from` → `SimWorld.areas`. Same argument as the axis block above, and the same
+	# reason it earns a place here rather than in a test — no test builds a world from a FILE.
+	var named := _from_file.area_names()
+	var listed: Array[String] = []
+	for name in named:
+		listed.append("%s x%d" % [name, _from_file.area_rects(name).size()])
+	print("  areas in the file: %s" % ["none" if listed.is_empty()
+			else ", ".join(PackedStringArray(listed))])
+	for name in named:
+		if not world.areas.has(name):
+			push_error("the file declares area '%s' and the world has no such region"
+					% name + " — MapGen.build_from() is not reading them")
+			ok = false
+			continue
+		# THE RECTANGLES AND NOT JUST THE NAME. A collapse that kept one entry per name would
+		# halve a two-rectangle region, which is exactly the shape `dev/author_map.gd` writes and
+		# exactly the fault a name-only check cannot see.
+		var wanted_rects := _from_file.area_rects(name)
+		var built_rects: Array = world.areas[name]
+		if built_rects.size() != wanted_rects.size():
+			push_error("area '%s' is %d rectangles in the file and %d in the world"
+					% [name, wanted_rects.size(), built_rects.size()])
+			ok = false
+			continue
+		for i in wanted_rects.size():
+			if built_rects[i] != wanted_rects[i]:
+				push_error("area '%s' rectangle %d is %s in the file and %s in the world"
+						% [name, i, wanted_rects[i], built_rects[i]])
+				ok = false
+	if not named.is_empty():
+		print("  regions the file named: %d, all reached the world: %s" % [named.size(), ok])
 	return ok
 
 

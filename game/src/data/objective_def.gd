@@ -31,22 +31,40 @@
 ## everybody immediately. So `from_dict` returns **null** for anything it cannot promise
 ## to evaluate, and says why.
 ##
-## Three of the six subjects are rejected today, and the message distinguishes them from
+## Two of the seven subjects are rejected today, and the message distinguishes them from
 ## a typo on purpose -- "not built yet" and "you misspelled `bulding`" want different
 ## reactions from whoever reads the log:
 ##
-##   `area`        needs 16.5's named regions, a new `MapData` field and a FORMAT_VERSION bump
 ##   `named_unit`  needs 16.7's per-entity overrides, which `state_hash()` must fold in
 ##   `ticks`       16.6's time limit. Nothing evaluates it yet
 ##
 ## A subject that silently evaluated as zero would be worse than a refusal: `== 0` is a
 ## comparison an unimplemented subject PASSES, so an unwinnable scenario would announce
 ## victory on tick 1.
+##
+## ✅ **`area` WAS THE THIRD AND IS EVALUABLE AS OF 16.5 (2026-09-09).** `MapData.areas` gives
+## a map named regions, `MapGen.build_from()` puts them on `SimWorld.areas`, and
+## `ObjectiveSystem` counts what is standing in one. The row this class carried for the whole
+## of Phase 15 -- *"needs 16.5's named regions, a new `MapData` field and a FORMAT_VERSION
+## bump"* -- was right about the field and wrong about the bump: the field is optional and
+## absent means no areas, so neither `FORMAT_VERSION` moved (PLAN.md §16 decision 7).
+##
+## ⚠️ **AND THE TRAP MOVED RATHER THAN CLOSED.** A refused subject cannot be got wrong; an
+## `area` row naming a region the map has not got is the `stock.get(&"foood", 0)` failure
+## exactly -- a rule that counts 0 forever, on an unwinnable scenario whose only symptom is
+## that nothing happens. Two defences, because neither is enough on its own:
+##
+##   - **`ScenarioDef.build_config()` refuses it at launch**, naming the regions the map DOES
+##     have. That is the first moment both halves exist -- this class parses on the front
+##     door's thread and has never seen a map -- and it is the one that reaches a person.
+##   - **`ObjectiveSystem._count` answers -1**, not 0, for a region the world does not carry.
+##     Which covers a config built by hand in a test, or by 16.6's editor.
 class_name ObjectiveDef
 extends RefCounted
 
-## What is being counted. `AREA`, `NAMED_UNIT` and `TICKS` parse but are refused --
-## they are named here so the refusal can say "not yet" rather than "unknown".
+## What is being counted. `NAMED_UNIT` and `TICKS` parse but are refused -- they are named
+## here so the refusal can say "not yet" rather than "unknown". `AREA` joined the evaluated
+## ones at 16.5 by having a line DELETED from `_NOT_YET`, which is the whole mechanism.
 ##
 ## ⚠️ **`RESOURCE` IS APPENDED, NOT INSERTED, AND THAT IS A WIRE RULE.** `subject`
 ## travels as an int in `to_dict()`, so slipping a member in beside `AGE` -- where it
@@ -113,7 +131,10 @@ const RESOURCE_KINDS := ["food", "wood", "gold", "stone"]
 ## in this map is what makes a subject refused; adding the evaluator means deleting a
 ## line here, which is a smaller and more obvious change than finding a guard.
 const _NOT_YET := {
-	Subject.AREA: "16.5, named regions (a new MapData field and a FORMAT_VERSION bump)",
+	# `Subject.AREA` WAS HERE AND ITS REMOVAL IS 16.5's FIRST COMMIT. Kept as a comment rather
+	# than deleted silently, because the pattern is the contract: an evaluator arriving means one
+	# line goes from this map, and `test_objectives` has a case asserting the subject is no longer
+	# refused -- so the two halves cannot land apart.
 	Subject.NAMED_UNIT: "16.7, per-entity overrides (state_hash must fold them in)",
 	Subject.TICKS: "16.6, the authored time limit",
 }
@@ -141,9 +162,17 @@ const _OUTPUTS := {"win": Output.WIN, "lose": Output.LOSE, "alert": Output.ALERT
 ## sign the author meant something else.
 ##
 ## `RESOURCE` is in here and is the one that REQUIRES one -- see `_read_id`. The other
-## two are optional, because "any unit" is a real question and "500 of any resource"
+## three are optional, because "any unit" is a real question and "500 of any resource"
 ## would add food to stone.
-const _NAMES_AN_ID: Array[Subject] = [Subject.UNIT, Subject.BUILDING, Subject.RESOURCE]
+##
+## ⚠️ **`AREA` IS IN HERE AND THAT IS WHY THE REGION HAS ITS OWN FIELD** (16.5). The obvious
+## spelling for *"five villagers in the north pass"* is to put the region in `id` -- and it
+## would have made `id` mean a def id on three subjects and a place name on a fourth, so
+## `_NAMES_AN_ID` would have become a lie and this row could not also filter by def. Instead
+## `area` is a key of its own and `id` goes on meaning exactly what it means everywhere else:
+## empty is *"anything of mine standing there"*, and `unit.villager` narrows it.
+const _NAMES_AN_ID: Array[Subject] = [Subject.UNIT, Subject.BUILDING, Subject.RESOURCE,
+	Subject.AREA]
 
 var subject: Subject = Subject.UNIT
 
@@ -151,6 +180,14 @@ var subject: Subject = Subject.UNIT
 ## bearing: PLAN.md 11.8's own example of *leave the enemy nothing* is
 ## `{"subject": "unit", "owner": "enemy", "compare": "==", "value": 0}` with no id.
 var id: StringName = &""
+
+## WHICH NAMED REGION (16.5), for `Subject.AREA` and for nothing else. `&""` everywhere else,
+## and a row carrying one on another subject is refused -- see `_read_area`.
+##
+## Matched VERBATIM against `MapData.areas`' names. There is no folding, no trimming and no
+## fuzzy match at either end: a near-miss must be a refusal an author can read rather than a
+## region that quietly contains nothing.
+var area: StringName = &""
 
 var owner: Owner = Owner.SELF
 
@@ -216,8 +253,46 @@ static func from_dict(d: Dictionary, problems: Array[String]) -> ObjectiveDef:
 	if not o._read_id(d, subject_key, problems):
 		return null
 
+	if not o._read_area(d, subject_key, problems):
+		return null
+
 	o.text = str(d.get("text", ""))
 	return o
+
+
+## The `area` half of a row: which named region (16.5).
+##
+## TWO REFUSALS, and they are `_read_id`'s two read the other way round:
+##
+##   - an `area` row with NO region, which cannot be measured at all. The `id` field does not
+##     stand in for it: *"five villagers"* with no place is `subject: "unit"`, and an author who
+##     wrote `area` meant somewhere.
+##   - a region named on a subject that has no place in it, which means the author meant
+##     `subject: "area"` and did not say so. Silently ignoring the key is the alternative and it
+##     is how *"ten villagers in the north pass"* ships as *"ten villagers"* -- a scenario that
+##     is winnable the wrong way and looks correct in the file.
+##
+## ⚠️ **THE REGION IS *NOT* CHECKED AGAINST A MAP HERE, AND CANNOT BE.** This class is read by
+## the front door, which has a `scenario.json` and no `map.png`; `ScenarioDef.build_config()` is
+## the first place both exist and is where an unknown region is refused by name. Same division
+## `_read_id` already makes for unit and building ids, and for the same stated reason: this class
+## must not need the registry -- or, here, the map -- to parse a file.
+func _read_area(d: Dictionary, subject_key: String, problems: Array[String]) -> bool:
+	# JSON has no StringName; convert at the boundary, `_read_id`'s rule.
+	area = StringName(str(d.get("area", "")).strip_edges())
+
+	if subject == Subject.AREA:
+		if area.is_empty():
+			problems.append("an 'area' objective must name the region in 'area'"
+					+ " -- the region a MapMaker map declares, spelled exactly")
+			return false
+		return true
+
+	if not area.is_empty():
+		problems.append("subject '%s' is not measured in a place, so it cannot name area '%s'"
+				% [subject_key, area] + " -- did you mean subject 'area'?")
+		return false
+	return true
 
 
 ## The `id` half of a row: which unit, which building, which resource.
@@ -298,6 +373,10 @@ func to_dict() -> Dictionary:
 	return {
 		"subject": int(subject),
 		"id": String(id),
+		# THE REGION TRAVELS AS A STRING, like `id`, and `MatchConfig` needed no edit for it --
+		# `_objectives_to_wire()` calls this function. A joining client builds its own world from
+		# the same `MapData` (2.4a), so both ends resolve the same name to the same rectangles.
+		"area": String(area),
 		"owner": int(owner),
 		"owner_index": owner_index,
 		"compare": int(compare),
@@ -311,6 +390,10 @@ static func from_wire(d: Dictionary) -> ObjectiveDef:
 	var o := ObjectiveDef.new()
 	o.subject = int(d.get("subject", Subject.UNIT)) as Subject
 	o.id = StringName(str(d.get("id", "")))
+	# Absent from a host built before 16.5, which reads as no region -- and such a host has no
+	# `area` subject to select either, so the pair is consistent. `MatchConfig.from_dict`'s
+	# forward-compatibility shape, one level down.
+	o.area = StringName(str(d.get("area", "")))
 	o.owner = int(d.get("owner", Owner.SELF)) as Owner
 	o.owner_index = int(d.get("owner_index", 0))
 	o.compare = int(d.get("compare", Compare.AT_LEAST)) as Compare
@@ -345,4 +428,10 @@ func describe() -> String:
 			how = "at most"
 		Compare.EXACTLY:
 			how = "exactly"
+	# THE REGION IS PART OF THE SENTENCE, not an afterthought: "units at least 5" and "units in
+	# north_pass at least 5" are different objectives, and this string is what the tracker draws
+	# when an author wrote no `text`. `what` is already "units" or the def id, so the place slots
+	# in between it and the comparison, which is where it reads.
+	if subject == Subject.AREA and not area.is_empty():
+		what = "%s in %s" % [what, area]
 	return "%s %s %d" % [what, how, value]

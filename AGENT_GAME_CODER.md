@@ -582,6 +582,169 @@ structure problem?"* **There was exactly one**, and it took one field. **Game 23
   a palette rendering all 24 wall rows from real art — sending me hunting a regression that was
   not there. **A checker wrong in the same way as the code is worse than no checker.**
 
+### 11.x-koth — KING OF THE HILL, THE LAST PLACEHOLDER IN `WinConditionSystem`, 2026-09-09
+
+Split out of `11.2` on the owner's ruling — that card is titled *"Regicide"* and carried three
+modes, which is why there was **no card for the KotH game type to find**. `11.2` keeps Regicide;
+`11.x-trophy`, `11.x-wonder-victory` and now `11.x-koth` are the splits. **All four
+`MatchConfig.Mode` members are now built** and `SkirmishScreen.UNBUILT` is empty.
+
+- ⚠️ **THE ZONE HAS TWO SOURCES AND ONE RESOLUTION, AND THAT IS THE OWNER'S RULING RATHER THAN A
+  DRIFT.** Asked because 16.5's regions are **rectangles** and `KOTH_ZONE_RADIUS_TILES` is a
+  **radius**; the answer was *"both — region if authored, generated otherwise"*. Two sources for
+  one fact is the shape this project has deleted four trackers over, so what makes it acceptable
+  is written into `MapGen._place_koth_zone()`: **they never both apply** (a fallback chain, not two
+  copies), **the resolution happens once at world build and the result is one field** nothing
+  downstream can see the provenance of, and **each alternative fails visibly in the other's case** —
+  region-only leaves every skirmish inert, generator-only ignores a hill an author dragged out.
+- ⚠️ **`KOTH_ZONE_RADIUS_TILES` IS NOW A HALF-EXTENT DESPITE ITS NAME.** The zone is a `Rect2i`
+  because its other source is a rectangle, so the generated hill is a square `2r+1` on a side. A
+  radius would be a **second shape** in one rule, and then *"is this unit in the zone"* would have
+  two answers depending on how the hill came to exist. The name is kept because it is what 11.2
+  declared and renaming it loses the thread.
+- ⛔ **`MapData.KOTH_AREA` IS A CONTRACT WITH A PERSON, AND IT IS DECLARED IN THE HASH-COPIED
+  FILE.** An author types `koth` into the MapMaker's Area box and a win condition reads it. It is
+  in `map_data.gd` **precisely because that is the file MapMaker carries a verbatim copy of**, so
+  the two projects cannot drift and `FormatGuard` fails if they do. Any future rule that reads a
+  region by name goes in the same place for the same reason.
+- ⚠️ **AN UNARMED KotH MATCH FALLS BACK TO CONQUEST, WHICH IS `_trophy()`'s RULING AND NOT A
+  DEFAULT.** Deciding nothing was the old placeholder's behaviour and is exactly wrong once the
+  mode is armed: nobody can score, the elimination rule is skipped with it, and two players can
+  wipe each other out and stand in an empty world forever. **A hang is not the safe direction, it
+  is a slower way of being broken.** `w.koth_zone` empty is the guard, the way `trophy_def_id`
+  empty is.
+- ⚠️ **IT COUNTS SIDES, NOT PLAYERS** — `_last_man_standing`'s 2026-08-31 lesson arriving through a
+  second rule. Two allies with four units each against one enemy's six hold it *between them*, and
+  a per-player comparison hands the tick to the enemy. `_side_of()` is now one function and
+  `_decide_by_sides` calls it too; it was two lines in one place and KotH needed the same answer in
+  three more.
+- ⚠️ **A TIE PAYS NOBODY, AND THAT IS WHY `koth_holder` FLICKERS TO 0 IN A FIGHT.** Most units
+  holds it, so a 5-v-5 standoff scores nothing — otherwise parking two armies on a square is the
+  fastest route to the target. The ring goes neutral mid-fight, which is correct and is the state
+  most likely to be reported as a bug. `11.x-koth-control-sound`'s hysteresis note is about exactly
+  this.
+- ⚠️ **GARRISONED UNITS AND BUILDINGS HOLD NOTHING.** `garrisoned_in` takes a unit off the map with
+  a deliberately stale `pos`, so a tower inside the zone full of archers would otherwise hold the
+  hill with five men nobody can see, target or shoot. Gaia's wildlife is excluded by
+  `owner_id > 0`, `_trophy_holders`' clause — without it a herd of deer is a side and a wolf can
+  deny the zone to everybody.
+- ⚠️ **SCORED OFF `standing`, NOT OFF THE ZONE TALLY.** A player whose last BUILDING fell is
+  bankrupt with an army intact, so paying the tally would tick a defeated player towards a win.
+- 📝 **`SimPlayer.score` LANDED WITH THE RULE THAT WRITES IT**, which is what its own placeholder
+  warning asked for: *"one field nothing writes is how it starts."* It is in `state_hash()` because
+  it is a **running total** — one tick of disagreement is permanent, and two hosts would then agree
+  about every entity forever and hand the match over several seconds apart.
+- 📝 **THE ZONE IS SENT ON THE SNAPSHOT EVEN THOUGH THE CLIENT HAS THE MAP.** An *authored* hill is
+  in `cfg.map_data.areas` already; a *generated* one is worked out on the host, and a client
+  re-deriving it would be a second implementation of a rule that decides a match — `MatchConfig`'s
+  own argument for sending the map instead of the seed. Five ints once per snapshot, the price the
+  claim block already paid. `koth_holder` rides with it, which is what `11.x-koth-control-sound`
+  needs and the reason that card is now a small job.
+- 📝 **THE RING IS DRAWN OVER THE FOG, WHICH IS THE OPPOSITE OF EVERY BLIP.** A blip under fog is
+  hidden because showing it would hand back what the snapshot filter withheld. **A zone is not a
+  secret**: it is a rule of the match, the same on every client, and 11.2 asked for the ring in the
+  words *"a scored zone the player cannot see is a rule they can only lose to."*
+- ✅ **TWO DEFERRAL TESTS WENT RED ON THE RUN IT LANDED IN AND BOTH NAMED IT** —
+  `test_win_condition::test_king_of_the_hill_decides_nothing_yet` and
+  `test_skirmish_screen::test_the_victory_picker_offers_every_mode_that_is_BUILT`, whose own
+  comment predicted it (*"the day King of the Hill lands this fails and names it"*). Third time in
+  two days a deferral written as a test has paid; `named_unit` (16.7) and `ticks` (16.6) are the
+  two left.
+- 📝 **`preview_koth.tscn` IS THE EYE, AND IT STARTS A REAL MATCH** rather than photographing the
+  widget. The ring's position crosses four places — `MapGen`, the snapshot, `GameView`, `GameScene`
+  — and a widget preview would exercise none of them. Three shots (empty, held, contested) plus 6×
+  nearest-neighbour crops, because a 13-tile zone on a 96-tile map is sixteen pixels square on the
+  minimap and at 1:1 *"I cannot see it"* and *"it is not drawn"* are the same picture.
+
+### 16.5 — NAMED REGIONS, BOTH ENDS. `subject: "area"` IS EVALUABLE, DONE 2026-09-09
+
+The row that unblocked the objective vocabulary's last countable subject, and the palette's fifth
+tab it had owed since 16.3. **`MapData.areas`, `SimWorld.areas`, an `ObjectPalette` Areas tab and
+an `Editor.Tool.AREA` drag.**
+
+- ⛔ **THE CARD SAID "A NEW FIELD AND THEREFORE A FORMAT_VERSION BUMP" AND THE OWNER RULED A BUMP
+  AFFORDABLE — AND IT STILL DID NOT BUMP.** Both are on the card and neither is wrong: bumping is
+  *allowed*, and decision 7's closing rule is *"prefer an optional field where it is free"*. It is
+  free here (`from_dict`'s `d.get`), so the five committed campaign maps and the published
+  `howtoplay` pack are untouched and the four-step checklist was skipped. **`axis` set that
+  precedent one row earlier and this followed it.** Read the *permission* to bump as a permission,
+  not an instruction.
+- ⚠️ **`areas` IS A FLAT LIST OF `{name, rect}` AND A REGION IS THE UNION OF THE ENTRIES SHARING A
+  NAME.** The obvious shape — `{name, rects: [...]}` — would have broken something silent:
+  **`MapEdit._copied()` duplicates each dictionary ONE level deep** and its own note says there is
+  no nested container to reach, so a `rects` array inside a record would have shared it with the
+  live map and undo would restore a region to wherever it had just been re-dragged. Flat also
+  gives L-shaped regions for free, makes erase per-rectangle, and reuses `entities`' snapshot,
+  JSON and drawing code wholesale.
+- ⚠️ **`to_dict()` WRITES `areas` EVEN WHEN EMPTY, UNLIKE THE PER-ENTITY `axis`, AND THAT IS
+  LOAD-BEARING.** `MapDocument._preserved_header()` decides which of an opened sidecar's keys to
+  carry forward by asking `to_dict()` what it produces — so a key that vanished when the author
+  deleted their last region would stop being filtered, the stale header's `areas` would be written
+  back, and **the deletion would not reach the file**: the region returns on reopen after a save
+  that reported success. Cost: `"areas": []` in a re-saved sidecar. Three files promise that
+  function needs no edit for new fields; this is the one line that made the promise true.
+- ⛔ **THE TRAP DID NOT CLOSE, IT MOVED — AND `area` IS THE FIRST SUBJECT WHERE TRAP 3 SURVIVES
+  BEING IMPLEMENTED.** A refused subject cannot be got wrong. An `area` row naming a region the
+  map has not got is `stock.get(&"foood", 0)` wearing a place: *"nothing is in a region that does
+  not exist"* is **0**, which PASSES `== 0` and `<= n`. Three defences, and none is redundant:
+  `ObjectiveSystem._in_area` answers **-1**; `MapData.has_area()` exists so *"no such region"* and
+  *"a region with nothing in it"* stay different questions; and **`ScenarioDef.build_config()`
+  refuses the launch and names the regions the map DOES declare**, which is the only one that
+  reaches a person. That last check is where the two halves first exist — `ObjectiveDef` parses on
+  the front door's thread and has never seen a map.
+- ⚠️ **THE REGION IS ITS OWN `ObjectiveDef` FIELD AND NOT `id`.** Putting it in `id` would have
+  made `_NAMES_AN_ID` a lie on one subject of four and left *"five VILLAGERS in the ford"*
+  inexpressible. So `area` is a new key, `id` keeps meaning a def id everywhere, and both
+  directions are refused at load: an `area` row with no region, and a region named on any other
+  subject (which would otherwise ship *"ten villagers in the north pass"* as *"ten villagers"*).
+- ⚠️ **UNITS AND BUILDINGS SHARE ONE BUCKET, AND THAT IS THE ANSWER TO "WHAT DOES AN AREA
+  COUNT".** Splitting them would make *"the enemy has nothing in the crossing"* true of a crossing
+  with an enemy fortress in it. And **a building is in a region if any of its FOOTPRINT is** — an
+  origin test puts a 10×10 town centre outside a region its middle sits in, which is the
+  origin-versus-centre five-tile error `preview_saved_map`'s second red run is the record of.
+- ⚠️ **`Tool.AREA` IS A TOOL WHERE `Tool.START` STOPPED BEING ONE, AND THE DIFFERENCE IS THE
+  GESTURE.** A start became a palette entry because placing one is a CLICK, so PLACE could carry
+  it and three controls went away. A region is a **drag**, which no other tool's click can
+  express. The tab arms it the way the Terrain tab arms `PAINT`, and **the drag writes once, on
+  release** — writing per sample would append a rectangle per mouse-move, all sealed into one
+  undo step.
+- ⚠️ **THE ERASER TAKES A REGION LAST AND ONLY OVER GROUND THAT IS OTHERWISE EMPTY.** One eraser
+  is the owner's stated preference, so only the ORDER was open: start → entity → region, most
+  solid first. A region can cover a quarter of the map at a 10% fill, so region-first would delete
+  it on every erase inside it instead of the tree the author was aiming at — silent destruction of
+  the thing they cannot see, which is `remove_start()`'s ⛔ note again. The residual case (erasing
+  bare ground inside a region takes it) is announced and is one Ctrl+Z.
+- 📝 **THE AREAS TAB IS THE ONLY PALETTE TAB WHOSE ROWS COME FROM THE DOCUMENT**, pushed in by
+  `set_area_names()` from `_refresh_status()` — the one place every mutation path already ends up
+  (`_refresh_undo()`'s argument). It is also the only tab whose emptiness is **healthy**, so its
+  count line says *"no areas yet — type a name and drag"* rather than blaming the roster. **The
+  name field IS the selection**: typing an existing name extends that region, so there is no
+  rename control and no "new area" button.
+- 📝 **ONE TRAP FIXED IN PASSING: `CATEGORIES[int(_category)]` WAS POSITIONAL COUPLING NOTHING
+  DECLARED.** Appending `AREA` to both the enum and the array would have got away with it; the
+  next row to insert one in the middle would have labelled every tab after it with its
+  neighbour's word. `ObjectPalette.label_of()` matches on the id now.
+- 📝 **`Tool.AREA` HAS NO CURSOR ART AND THAT IS BETTER THAN BORROWING SOME.** `ToolCursors`
+  answers `&""`, `arm()` clears the custom cursor, and the canvas falls back to the **system
+  crosshair** — the conventional cursor for dragging out a rectangle. `preview_editor` gained a
+  `want_art` flag so it does not print that as "REFUSED" beside four real failures. The toolbar
+  button shares `cat_areas` with the tab, which is the opposite call for the opposite reason: one
+  picture for one concept reached two ways.
+- ✅ **`test_there_is_no_area_category_until_the_format_has_a_field_for_one` DID ITS JOB AND WENT
+  RED ON THE RUN THE FIELD LANDED IN**, naming the reason. So did
+  `test_campaigns::test_area_named_unit_and_ticks_are_refused...`. **A deferral is a test, not a
+  comment** — that is the shape to copy for `named_unit` (16.7) and `ticks` (16.6).
+- 📝 **NOTHING IN THE GAME DRAWS A REGION AND NOTHING SHOULD.** It is how a scenario *author* asks
+  a question; what a player reads is the objective's own `text`. That is exactly why
+  `preview_saved_map` had to grow a region check: a region that reached the file and no further
+  would leave an `area` objective counting nothing forever, with the map looking perfect and every
+  other check green. It is the only place either project walks tool → JSON → `load_map` →
+  `build_from` → `SimWorld.areas`, and `dev/author_map.tscn` writes a **two-rectangle** region for
+  it because a loader keeping one entry per name would pass a single-rect check.
+- 📝 **`MapMaker/README.md` STILL SAYS AREAS "NEED A FORMAT VERSION BUMP"** (its *Placeable Areas*
+  section). It is the owner's spec document, so it is flagged rather than edited — the same way
+  16.2a flagged that it does not mention undo.
+
 ### 16.4b(ii) — THE START IS A PALETTE ENTRY NOW, AND THREE CONTROLS WENT (owner, 2026-09-08)
 
 The owner's ruling: *"can we add the start location as a building option ... we can use the same

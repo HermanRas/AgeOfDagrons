@@ -54,6 +54,73 @@ var starts: Array[Vector2i] = []
 ## how it came to be).
 var meta: Dictionary = {}
 
+## NAMED REGIONS (PLAN.md 16.5): `{name, rect}` per entry, in authoring order.
+##
+## ## A FLAT LIST OF NAMED RECTS, AND A REGION IS THE UNION OF EVERY ENTRY SHARING A NAME
+##
+## So "north_pass" may be one rectangle or five, and an L-shaped or split region needs no
+## new shape in the format. Three things fall out of keeping it flat that a
+## `{name, rects: [...]}` record would each have cost something for:
+##
+##   - **it is `entities`' own shape** -- a list of small dictionaries of scalars -- so it
+##     snapshots, copies, serialises and round-trips through exactly the code that already
+##     exists for that field. ⚠️ In particular `MapEdit._copied()` on the tool side
+##     duplicates each dictionary ONE level deep and says in so many words that there is no
+##     nested container to reach; a `rects` array inside a record would have made that
+##     sentence false, silently, and undo would have shared its rects with the live map.
+##   - **erase is per rect.** An author who mis-drags one rectangle of a five-rect region
+##     takes back that rectangle, not the region.
+##   - **`Rect2i` is a value type**, like the `Vector2i` in `tile`, so nothing here needs a
+##     deep copy anywhere.
+##
+## ## WHAT THIS FIELD IS *FOR*, WHICH IS NOT DRAWING
+##
+## `subject: "area"` in PLAN.md 11.8's objective vocabulary, and nothing else. It was
+## **refused at load** by `ObjectiveDef` for the whole of Phase 15 precisely because the map
+## had no way to say where a region was. Nothing in the player's HUD draws an area and
+## nothing should: a region is how a *scenario author* asks a question, and what the player
+## reads is the objective's own `text`.
+##
+## ## ⚠️ ONE REGION NAME MEANS SOMETHING TO A RULE, AND IT IS DECLARED HERE
+##
+## `KOTH_AREA` below. Every other region is a name an author invented and only an objective they
+## also wrote refers to; that one is read by `MapGen` to site the King of the Hill zone, so the
+## spelling is a contract between a person typing in the MapMaker and a win condition in the sim.
+## **Declared in this file precisely because this file is the one the tool carries a verbatim copy
+## of** — so the two projects cannot come to disagree about it, and `FormatGuard` fails if they do.
+##
+## ⚠️ **NEITHER `FORMAT_VERSION` MOVED, AND THAT IS DECISION 7 RATHER THAN LUCK.** The owner
+## ruled a bump affordable (2026-09-04) and PLAN.md §16 decision 7's closing rule still says
+## to prefer an optional field where it is free: `from_dict` treats an absent `areas` as no
+## areas, so all six committed maps go on loading unchanged and the published `howtoplay`
+## pack needs no re-download. `axis` set the precedent one row earlier.
+##
+## 📝 **BUT `to_dict()` WRITES THE KEY EVEN WHEN THE LIST IS EMPTY, UNLIKE `axis`.** That is
+## not an inconsistency, it is what makes the tool's re-save correct --
+## `MapDocument._preserved_header()` decides which of an opened sidecar's keys to carry
+## forward by asking `to_dict()` what it produces, so a key that vanished when the last area
+## was deleted would be carried over from the stale header and the deletion would not reach
+## the file. The cost is `"areas": []` in a re-saved sidecar; the alternative is a
+## written-out key list, which is the thing that function exists not to have.
+var areas: Array[Dictionary] = []
+
+## The region name King of the Hill sites its zone on (11.x-koth).
+##
+## ⚠️ **THE ONE REGION NAME THE SIM KNOWS, AND IT IS A CONTRACT WITH A PERSON.** An author types
+## it into the MapMaker's Area box; `MapGen._place_koth_zone()` looks for exactly this and uses the
+## bounding rect of every rectangle carrying it. Everything else in `areas` is between an author
+## and their own objectives.
+##
+## **Lower case and unprefixed on purpose.** It is typed by hand into a text field, so it is short
+## and there is nothing to get subtly wrong — no namespace, no capital, no underscore. `add_area()`
+## strips surrounding whitespace at both ends of the contract and nothing else is normalised, so
+## `Koth` is a different region and correctly does not arm the mode.
+##
+## 📝 **A MAP WITH NO SUCH REGION IS NOT A BROKEN MAP.** KotH falls back to a generated hill and
+## every other mode ignores this entirely — see `MapGen._place_koth_zone()` for why the pair is
+## deliberately two sources with one resolution rather than a default.
+const KOTH_AREA := &"koth"
+
 
 static func create(p_size: Vector2i, fill: int = SimMap.Terrain.GRASS) -> MapData:
 	var d := MapData.new()
@@ -155,6 +222,69 @@ func player_count() -> int:
 	return starts.size()
 
 
+# ── areas (PLAN.md 16.5) ────────────────────────────────────────────────────
+
+## Add one rectangle to the region called `name`. False when there is nothing to add.
+##
+## **THE TWO REFUSALS ARE THE ONES A RECORD CAN BE SURE ABOUT**, `MapDocument.add_entity()`'s
+## rule: a nameless region cannot be asked about, and an empty rect contains nothing. Whether
+## the rect is ON the map is the CALLER's question -- the tool refuses it there, where there is
+## a person to tell -- because a loaded file may carry a region that hangs off the edge of a map
+## somebody later shrank, and dropping it on load would silently change what a scenario counts.
+##
+## ⚠️ **THE NAME IS TAKEN VERBATIM AND IS NOT CASE-FOLDED.** It is matched against an
+## objective's `area` field by `ObjectiveSystem`, and folding here without folding there -- or
+## folding in the tool and not in the game -- is the `stock.get(&"foood", 0)` trap wearing a
+## region: a region nothing can ever be inside, whose only symptom is that the objective never
+## ticks. `ScenarioDef.build_config()` is where a name that does not match is caught, and it
+## says which names the map does have.
+func add_area(name: StringName, rect: Rect2i) -> bool:
+	if String(name).strip_edges().is_empty():
+		return false
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		return false
+	areas.append({"name": name, "rect": rect})
+	return true
+
+
+## Every distinct region name, in the order it first appears.
+##
+## FIRST-APPEARANCE ORDER AND NOT SORTED, because it is what the tool's palette lists and an
+## author reads it as the order they authored in. Nothing depends on it being stable across a
+## save -- `to_dict()` writes the entries, not this -- so it is a presentation answer.
+func area_names() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for a in areas:
+		var name: StringName = a.get("name", &"")
+		if not out.has(name):
+			out.append(name)
+	return out
+
+
+## The rectangles making up one region. Empty for a name no entry carries, which is a
+## DIFFERENT answer from a region that happens to contain nothing -- see `has_area()`.
+func area_rects(name: StringName) -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	for a in areas:
+		if StringName(a.get("name", &"")) == name:
+			out.append(a.get("rect", Rect2i()))
+	return out
+
+
+## Is there a region by this name at all?
+##
+## ⚠️ **ASKED SEPARATELY FROM `area_rects()` BEING EMPTY, AND THE DIFFERENCE IS TRAP 3.**
+## "No such region" must not be answered as "a region with nothing in it": `ObjectiveSystem`
+## returns its unmeasurable -1 for the first and a real 0 for the second, and 0 is a value that
+## PASSES `== 0` and `<= n`. A scenario naming a misspelled region would otherwise announce
+## victory on tick 1.
+func has_area(name: StringName) -> bool:
+	for a in areas:
+		if StringName(a.get("name", &"")) == name:
+			return true
+	return false
+
+
 ## Every tile an entity's footprint claims, as a set (tile -> true).
 ##
 ## Needed by the validator and by the generator's own placement, both of which have
@@ -227,8 +357,18 @@ func to_dict() -> Dictionary:
 	var starts_out: Array[Dictionary] = []
 	for s in starts:
 		starts_out.append({"x": s.x, "y": s.y})
+	# FLAT INTS, exactly as an entity's tile becomes `x`/`y`: `Rect2i` is not JSON either, and
+	# one shape for "a place on the map" across the whole file is one shape to get right.
+	var areas_out: Array[Dictionary] = []
+	for a in areas:
+		var r: Rect2i = a.get("rect", Rect2i())
+		areas_out.append({"name": String(a.get("name", &"")),
+				"x": r.position.x, "y": r.position.y, "w": r.size.x, "h": r.size.y})
 	return {"w": size.x, "h": size.y, "terrain": terrain,
-			"entities": out, "starts": starts_out, "meta": meta}
+			# WRITTEN EVEN WHEN EMPTY -- see the `areas` field's own note. This is the key
+			# `MapDocument._preserved_header()` filters an opened sidecar against, and a key that
+			# disappeared with the last area would leave the deletion out of the saved file.
+			"entities": out, "starts": starts_out, "areas": areas_out, "meta": meta}
 
 
 ## Terrain arrives in one of three shapes, so it is READ rather than assigned straight.
@@ -294,4 +434,12 @@ static func from_dict(d: Dictionary) -> MapData:
 				int(e.get("axis", AXIS_NONE)) if e.has("axis") else AXIS_NONE)
 	for s in d.get("starts", []):
 		m.starts.append(Vector2i(int(s.get("x", 0)), int(s.get("y", 0))))
+	# ABSENT MEANS NO AREAS, which is what every map written before 16.5 looks like and is the
+	# whole reason neither FORMAT_VERSION had to move (decision 7). `add_area()` rather than a
+	# direct append, so a file carrying a nameless or empty region is dropped by the same rule
+	# that refuses one in the tool -- there is one definition of a region worth having.
+	for a in d.get("areas", []):
+		m.add_area(StringName(str(a.get("name", ""))),
+				Rect2i(int(a.get("x", 0)), int(a.get("y", 0)),
+						int(a.get("w", 0)), int(a.get("h", 0))))
 	return m

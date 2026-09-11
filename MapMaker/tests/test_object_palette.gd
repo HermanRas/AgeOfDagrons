@@ -7,9 +7,9 @@
 ##
 ##   - **the lists.** Sorted as text and not by `StringName` identity (§6: identity order is
 ##     not stable between runs, so a palette that reshuffles itself between launches looks
-##     broken); the right roster per category; and **no Area category**, because `MapData`
-##     has no field for one until 16.5 and a tab that drops an author's work on save is worse
-##     than an absent tab.
+##     broken); the right roster per category; and **the Areas tab, whose rows come from the
+##     DOCUMENT rather than from the roster** — the only tab that does, which makes it the only
+##     one whose emptiness is a healthy state rather than an unreadable game project.
 ##   - **`size_class`.** 16.3's amendment: *"a placement that leaves it 0 silently authors the
 ##     small variant."* Nothing on screen distinguishes a small gold mine from a large one at
 ##     0.22x zoom.
@@ -68,21 +68,47 @@ func _a_placeable_resource() -> StringName:
 
 # ── the categories ──────────────────────────────────────────────────────────
 
-## ⚠️ **AREA IS SPEC'D IN 16.3's ROW AND MUST NOT BE HERE UNTIL 16.5.** `MapData.to_dict()`
-## writes five keys and none of them is an area, so an Area tab would let an author draw a
-## region `MapFile` silently drops — work lost behind a successful save. Phase 15's wording:
-## *"inert is the safe direction for a mode nobody has selected; it is the wrong direction for
-## the mode a PLAY button is about to select."*
-func test_there_is_no_area_category_until_the_format_has_a_field_for_one() -> void:
+## ⚠️ **THIS REPLACES `test_there_is_no_area_category_until_the_format_has_a_field_for_one`, AND
+## THE OLD TEST DID ITS JOB.** It asserted `CATEGORIES` was four long AND that
+## `MapData.to_dict()` had no `areas` key, with the message *"MapData has an areas field now --
+## 16.5 has landed and the tab can be added"* — so deleting `Subject.AREA` from `_NOT_YET` and
+## adding the field turned the suite red on the run it happened in, naming the reason. That is
+## the shape worth copying: **a deferral is a test, not a comment.**
+##
+## What it becomes is the same claim inverted — the tab exists **and** the format can carry what
+## it draws — because the failure it guarded against has not gone away, it has only changed
+## direction: a tab whose output `MapFile` drops is still *work lost behind a successful save*,
+## and that is now a thing a regression could reintroduce rather than a thing waiting to be
+## built.
+func test_the_areas_tab_exists_and_the_format_can_carry_what_it_draws() -> void:
 	var labels: Array[String] = []
 	for entry in ObjectPalette.CATEGORIES:
 		labels.append(str(entry["label"]))
-	assert_eq(labels.size(), 4, "got %s" % [labels])
-	assert_false("Areas" in labels, "got %s" % [labels])
-	# AND THE FORMAT IS THE REASON, asserted rather than described: the day this key appears,
-	# this test is the one that says the tab may follow.
-	assert_false(MapData.create(Vector2i(48, 48)).to_dict().has("areas"),
-			"MapData has an areas field now -- 16.5 has landed and the tab can be added")
+	assert_eq(labels.size(), 5, "got %s" % [labels])
+	assert_true("Areas" in labels, "got %s" % [labels])
+	# THE FORMAT HALF, asserted rather than described -- a tab with no field behind it is the
+	# thing the old test existed to prevent, and this is what would notice it coming back.
+	assert_true(MapData.create(Vector2i(48, 48)).to_dict().has("areas"),
+			"the Areas tab has nothing to write into")
+
+
+## ⚠️ **AND THE KEY IS WRITTEN EVEN WHEN THERE ARE NO AREAS, WHICH IS NOT AN ACCIDENT.**
+## `MapDocument._preserved_header()` filters an opened sidecar by asking `to_dict()` which keys
+## it produces — so a key that vanished when the author deleted their last region would stop
+## being filtered, the stale header's `areas` would be carried forward, and **the deletion would
+## not reach the file**: the region would come back on reopen, after a save that reported
+## success. `MapData`'s own field note carries the argument; this is what checks it.
+func test_the_areas_key_is_written_even_for_a_map_with_none() -> void:
+	var empty := MapData.create(Vector2i(48, 48))
+	assert_true(empty.to_dict().has("areas"))
+	assert_eq((empty.to_dict()["areas"] as Array).size(), 0)
+	# AND THE FILTER IT EXISTS FOR REALLY DOES DROP IT. A header carrying somebody else's areas
+	# must not survive a re-save of a map that has none.
+	var doc := MapDocument.create(Vector2i(48, 48), "no regions")
+	doc.header = {"areas": [{"name": "stale", "x": 0, "y": 0, "w": 4, "h": 4}], "seed": 7}
+	var kept := doc._preserved_header()
+	assert_false(kept.has("areas"), "a stale header's areas must not outlive the map's: %s" % [kept])
+	assert_eq(int(kept.get("seed", 0)), 7, "and real provenance still survives")
 
 
 ## Resources are the category the original spec left out, and `MapValidator` fails a map with

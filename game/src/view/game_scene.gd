@@ -2463,6 +2463,18 @@ func _refresh_minimap() -> void:
 	_minimap.update_entities(_view.all_facts(), Net.local_player_id(),
 			_damage.flashing(), _view.teams())
 	_minimap.set_fog(_last_vision)
+	# THE KING OF THE HILL RING (11.x-koth). An empty rect in every other mode, so this is one
+	# unconditional call rather than a mode check on the view side -- `GameView.koth_zone()`'s own
+	# note on why the sentinel travels all the way here.
+	#
+	# THE HOLDER IS RESOLVED TO A COLOUR HERE, exactly as the age badge's claim ring is a few
+	# hundred lines down: `colours.json`'s order is load-bearing, and a widget looking it up itself
+	# would be a second place indexing into it. 0 -- nobody, or a CONTESTED hill -- is the neutral.
+	var holder := _view.koth_holder()
+	var ring := Minimap.KOTH_NEUTRAL_COLOR
+	if holder > 0:
+		ring = GameDataRegistry.colour(int(_view.skin_for(holder).get("colour", -1)))
+	_minimap.set_koth_zone(_view.koth_zone(), ring)
 
 
 ## Tap the minimap to move the camera there (PLAN.md 3.8) -- or, with units

@@ -382,6 +382,14 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	# carries would build a world the wrong shape.
 	cfg.map_size = cfg.map_data.size
 
+	# ⚠️ **THE ONE CHECK THAT NEEDS BOTH HALVES, AND THIS IS THE FIRST PLACE THEY MEET** (16.5).
+	# See `_unknown_areas`. Its own findings decide the refusal rather than `out_problems` being
+	# non-empty, because that array belongs to the caller and may already hold something.
+	var bad_areas := _unknown_areas(cfg.map_data)
+	if not bad_areas.is_empty():
+		out_problems.append_array(bad_areas)
+		return null
+
 	# ⚠️ **THE SCENARIO'S OWN MODE NOW REACHES THE MATCH (15.2).** Until 2026-09-02 this
 	# line was `LAST_MAN_STANDING` unconditionally, above a guard that refused SCENARIO
 	# outright -- which was honest while nothing could evaluate an objective, and is a
@@ -432,6 +440,55 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 	# lobby's fallback and does not belong here.
 	cfg.host_name = ""
 	return cfg
+
+
+## Every `area` objective naming a region `map` has not got, as sentences. Empty is healthy.
+##
+## ## WHY THIS IS HERE AND NOT IN `ObjectiveDef.from_dict`
+##
+## `ObjectiveDef` is read by the front door off a `scenario.json` and **has never seen a map** —
+## its own header says it must not need the registry to parse a file, and a map is the same kind
+## of dependency one step further out. `build_config()` is the first moment both halves exist:
+## the objectives are parsed and `map_data()` has just come back. So the region names are checked
+## here, once, at launch.
+##
+## ## AND WHY IT IS A REFUSAL RATHER THAN A WARNING
+##
+## ⚠️ **A MISSPELLED REGION IS AN UNWINNABLE SCENARIO WHOSE ONLY SYMPTOM IS THAT NOTHING
+## HAPPENS.** It is `ObjectiveDef.RESOURCE_KINDS`' trap exactly — `stock.get(&"foood", 0)` is 0
+## and never rises — with a place instead of a resource kind, and it is worse in one direction:
+## an `at_most` or `== 0` row about a region that does not exist would be **satisfied on tick 1**
+## if the count were 0, which is why `ObjectiveSystem._in_area` answers -1. That second defence
+## makes the scenario merely unwinnable rather than instantly won; this one makes it say so.
+##
+## Decision 4 of PLAN.md 15 is the rule being followed: *a malformed objective list must make the
+## scenario refuse to start, not start and evaluate to true on tick 1.*
+##
+## **THE MESSAGE NAMES WHAT THE MAP DOES HAVE**, because the fault is almost always a spelling
+## and the fix is almost always in the other file. A bare *"unknown area"* leaves an author
+## opening the map in MapMaker to find out what they called it; this line has it in front of them.
+## The empty case is worded apart for the same reason `_count_text` distinguishes "none match" from
+## "the roster is empty": *"this map declares no regions"* sends somebody to the MapMaker, and
+## *"this map declares north_pass, ford"* sends them to their own typo.
+func _unknown_areas(map: MapData) -> Array[String]:
+	var out: Array[String] = []
+	if map == null:
+		return out
+	for o in objectives:
+		if o.subject != ObjectiveDef.Subject.AREA:
+			continue
+		if map.has_area(o.area):
+			continue
+		var names := map.area_names()
+		var have := "this map declares no regions at all"
+		if not names.is_empty():
+			var spellings := PackedStringArray()
+			for n in names:
+				spellings.append(String(n))
+			have = "this map declares %s" % ", ".join(spellings)
+		out.append("objective '%s' counts things in area '%s', but %s"
+				% [o.describe(), o.area, have])
+	return out
 
 
 ## The scenario's saved map, read off disk. Null with a reason when there is not one.

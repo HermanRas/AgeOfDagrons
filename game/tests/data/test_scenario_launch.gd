@@ -492,6 +492,84 @@ func test_the_objective_list_survives_the_wire_field_by_field() -> void:
 		assert_eq(got.value, sent.value, "row %d value" % i)
 		assert_eq(got.output, sent.output, "row %d output" % i)
 		assert_eq(got.text, sent.text, "row %d text" % i)
+		# 16.5's field. Empty on every shipped row today, which is exactly the case a
+		# dictionary comparison would pass on while both sides had lost the key.
+		assert_eq(got.area, sent.area, "row %d area" % i)
+		assert_eq(typeof(got.area), TYPE_STRING_NAME, "row %d area stays a StringName" % i)
+
+
+# ── areas: the one check that needs the scenario AND its map (PLAN.md 16.5) ────
+
+## ⛔ **A MISSPELLED REGION IS AN UNWINNABLE SCENARIO WHOSE ONLY SYMPTOM IS THAT NOTHING
+## HAPPENS**, and this is the refusal that says so. `ObjectiveDef` parses on the front door's
+## thread and has never seen a map, so `build_config()` is the first moment both halves exist —
+## the objectives are parsed and `map_data()` has just come back off disk.
+##
+## Decision 4 of PLAN.md 15 is the rule: *a malformed objective list must make the scenario
+## refuse to start, not start and evaluate to true on tick 1.*
+func test_an_objective_naming_a_region_the_map_has_not_got_refuses_to_launch() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "area", "area": "north_pass", "compare": ">=", "value": 1,
+			"output": "win"},
+	]})
+	assert_true(s.is_playable(), "the row itself parses: %s" % [s.problems])
+
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems), "a region that does not exist must not launch")
+	assert_eq(problems.size(), 1, "%s" % [problems])
+	assert_true(problems[0].contains("north_pass"), problems[0])
+	# ⚠️ **AND IT SAYS WHAT THE MAP DOES HAVE, because the fault is almost always a spelling and
+	# the fix is almost always in the other file.** A bare "unknown area" leaves an author
+	# opening the map in MapMaker to find out what they called it.
+	assert_true(problems[0].contains("no regions at all"),
+			"the empty case is worded apart: %s" % problems[0])
+
+
+func test_the_refusal_names_the_regions_the_map_really_declares() -> void:
+	var dir := _map_with_regions([&"ford", &"the hill"])
+	var s := ScenarioDef.from_dict("scenario_r", {
+		"name": "R", "mode": "scenario", "map": {"type": "river", "seed": 1},
+		"opponents": ["passive"],
+		"objectives": [{"subject": "area", "area": "fjord", "compare": ">=", "value": 1,
+			"output": "win"}],
+	}, dir)
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems))
+	assert_true(problems[0].contains("ford"), problems[0])
+	assert_true(problems[0].contains("the hill"), problems[0])
+
+
+func test_a_region_the_map_does_declare_launches_and_reaches_the_config() -> void:
+	var dir := _map_with_regions([&"ford"])
+	var s := ScenarioDef.from_dict("scenario_r", {
+		"name": "R", "mode": "scenario", "map": {"type": "river", "seed": 1},
+		"opponents": ["passive"],
+		"objectives": [{"subject": "area", "area": "ford", "compare": ">=", "value": 1,
+			"output": "win"}],
+	}, dir)
+	var problems: Array[String] = []
+	var cfg := s.build_config(problems)
+	assert_not_null(cfg, "%s" % [problems])
+	if cfg == null:
+		return
+	assert_eq(cfg.objectives[0].area, &"ford")
+	# THE MAP TRAVELS WITH ITS REGIONS, which is what `MapGen.build_from()` turns into
+	# `SimWorld.areas` on every client -- so a joining peer resolves the same name to the same
+	# rectangles rather than building a world the host's objective cannot be evaluated against.
+	assert_true(cfg.map_data.has_area(&"ford"))
+
+
+## A saved map under `user://` carrying `names` as one-tile regions. Written fresh per call
+## because the region list is what varies; `_ensure_test_map()`'s cached map has none.
+func _map_with_regions(names: Array[StringName]) -> String:
+	var dir := "user://test_scenario_maps/scenario_r_%d" % names.size()
+	var data := MapData.create(Vector2i(16, 16), SimMap.Terrain.GRASS)
+	for i in names.size():
+		data.add_area(names[i], Rect2i(i, i, 2, 2))
+	var problems := MapFile.save(data, dir, {"name": "regions", "players": 2})
+	if not problems.is_empty():
+		fail("could not write the region map: %s" % " | ".join(problems))
+	return dir
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────

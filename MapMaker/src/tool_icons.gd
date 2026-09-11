@@ -118,6 +118,17 @@ static func for_tool(tool_value: int) -> Texture2D:
 			return texture(&"mm_select")
 		tools.MOVE:
 			return texture(&"mm_move")
+		tools.AREA:
+			# ⚠️ **`cat_areas` SERVES BOTH THE PALETTE TAB AND THIS BUTTON, AND THAT IS A CHOICE
+			# RATHER THAN A GAP** (16.5). There is no `mm_area` in the cut — the art side's 13
+			# pieces predate the row — and the two candidates were this and `cat_buildings_keep`,
+			# the spare this file's `IDS` note says *"16.5 may want"*. It does not: a keep is a
+			# building, and putting a fortification on the region tool would name it wrongly to
+			# make it unique. **The tab and the tool are the same concept reached two ways**, so
+			# one picture is the honest answer and an author who arms the tool from the tab sees
+			# the glyph they just pressed light up in the toolbar. If a dedicated glyph is ever
+			# cut, this is the one line that changes.
+			return texture(&"cat_areas")
 	return null
 
 

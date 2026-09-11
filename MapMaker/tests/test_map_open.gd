@@ -222,8 +222,14 @@ func test_provenance_survives_a_re_save_and_the_derived_fields_do_not() -> void:
 
 
 ## ⚠️ **THE FILTER IS COMPUTED FROM `to_dict()` RATHER THAN FROM A WRITTEN-OUT LIST**, so a
-## field added to the wire form (16.5's areas are next) is dropped from a stale header with no
-## edit. This asserts the mechanism and not today's five names.
+## field added to the wire form is dropped from a stale header with no edit here. This asserts
+## the mechanism and not today's names.
+##
+## ✅ **16.5's `areas` was the first one to arrive and it needed no edit** — which is the promise
+## working, with one caveat this test is blind to: it holds only because `MapData.to_dict()`
+## writes `areas` even when the list is EMPTY. A key that vanished with the last region would
+## stop being filtered and the deletion would not reach the file.
+## `test_areas.test_the_areas_key_is_written_even_for_a_map_with_none` is what covers that half.
 func test_every_key_the_map_itself_decides_is_dropped_from_a_stale_header() -> void:
 	var root := _root()
 	var dir := _write(root, "stale")

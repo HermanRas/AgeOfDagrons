@@ -10,11 +10,14 @@
 ## alive, and a player whose last building fell THIS tick has lost as of this tick,
 ## not the next one. PLAN.md 5.1's tick diagram puts it in the same place.
 ##
-## THREE OF THE FOUR MODES ARE BUILT (`_trophy()` landed 2026-09-07). `MatchConfig.Mode`
-## declares all four because the lobby (1.6/11.3) needs a list and because a mode axis with
-## one value on it invites the next mode to be bolted on as a boolean.
-## `_king_of_the_hill()` still ends no matches at all and says what it is missing -- the
-## safe direction to be unfinished in.
+## ✅ **ALL FOUR MODES ARE BUILT** — `_trophy()` landed 2026-09-07 and `_king_of_the_hill()` on
+## 2026-09-09, which was the last placeholder in this file. `MatchConfig.Mode` declares all four
+## because the lobby (1.6/11.3) needs a list and because a mode axis with one value on it invites
+## the next mode to be bolted on as a boolean.
+##
+## 📝 **THE "SAFE DIRECTION TO BE UNFINISHED IN" ARGUMENT DID NOT LEAVE WITH THE PLACEHOLDER**, it
+## moved into the guards. `Mode.REGICIDE` is not declared at all yet (card 11.2), and when it is,
+## this is the paragraph that applies to it.
 ##
 ## ⚠️ **THE UNSAFE DIRECTION IS A HALF-BUILT RULE, AND TROPHY DID NOT STOP BEING EXPOSED TO
 ## IT BY BEING FINISHED.** This paragraph's own example was *"'you lose when your trophy is
@@ -34,9 +37,21 @@ class_name WinConditionSystem
 extends SimSystem
 
 ## King of the Hill: the score to reach, and how big the contested zone is.
-## PLACEHOLDER -- see `_king_of_the_hill()`. Here rather than in `MatchConfig`
-## because they are rules, not per-match settings; the zone's PLACE on the map is
-## the part that will have to become map data.
+##
+## **NO LONGER PLACEHOLDERS** — `_king_of_the_hill()` reads the first and
+## `MapGen._place_koth_zone()` reads the second. Here rather than in `MatchConfig` because they are
+## rules, not per-match settings; the zone's PLACE on the map is the part that became map data
+## (`SimWorld.koth_zone`), which is what this note used to be waiting for.
+##
+## ⚠️ **`KOTH_TARGET_SCORE` IS A DURATION IN DISGUISE AND IS WORTH READING AS ONE.** A point a tick
+## at `SimClock`'s 10 Hz makes 1000 **a hundred seconds of uncontested control** — not a hundred
+## seconds of match. Contested ticks pay nobody, so a hill that changes hands takes far longer, and
+## that is the number to move if the mode plays too fast rather than the radius.
+##
+## ⚠️ **AND `KOTH_ZONE_RADIUS_TILES` IS A HALF-EXTENT, NOT A RADIUS, DESPITE THE NAME.** The zone is
+## a `Rect2i` because its other source is an authored rectangle, so the generated hill is a square
+## `2r+1` on a side. `MapGen._place_koth_zone()` carries the argument for one shape; the name is
+## kept because it is what 11.2 declared and renaming it would lose the thread.
 const KOTH_TARGET_SCORE := 1000
 const KOTH_ZONE_RADIUS_TILES := 6
 
@@ -103,8 +118,10 @@ func _decide_by_sides(w: SimWorld, standing: Array[int]) -> void:
 	# identical to the old rule for every free-for-all: one side per standing player.
 	var sides: Dictionary = {}          # side key -> lowest standing player id on it
 	for pid in standing:
-		var p := w.player_for(pid)
-		var key: int = p.team if p != null and p.team > 0 else -pid
+		# THROUGH `_side_of()` SINCE 11.x-koth, which is where this keying now lives. It was two
+		# lines here and KotH needed the same answer in three more places; a second copy would be
+		# free to drift about whether team 0 is a team everybody shares.
+		var key := _side_of(w, pid)
 		if not sides.has(key) or pid < int(sides[key]):
 			sides[key] = pid
 
@@ -361,23 +378,161 @@ func _trophy_holders(w: SimWorld) -> Dictionary:
 	return holders
 
 
-## PLACEHOLDER (11.2). A zone on the map, ringed on the minimap; whoever has the
-## most units inside it scores each tick, and the first to KOTH_TARGET_SCORE wins.
+## KING OF THE HILL (11.x-koth, built 2026-09-09): hold the zone, score every tick you lead it,
+## and the first side to `KOTH_TARGET_SCORE` wins.
 ##
-## Deliberately decides nothing. What it needs, in the order it needs it:
+## All three things this function waited for exist. Its own list, and what answered it:
 ##
-##   1. WHERE THE ZONE IS. That is map data, not a rule -- it belongs beside the
-##      start positions in `MapGen`/`SimMap`, and a hill hardcoded at the centre of
-##      the debug map would be a promise this system cannot keep for any other map.
-##      `KOTH_ZONE_RADIUS_TILES` is the shape; the centre is the missing half.
-##   2. A per-player score on `SimPlayer`, in `state_hash()` and the snapshot. NOT
-##      added yet, on purpose: an unwritten field that reaches the HUD is precisely
-##      the hole 4.11's counter was, and one field nothing writes is how it starts.
-##   3. The minimap ring (view side, `Minimap`). A scored zone the player cannot see
-##      is a rule they can only lose to.
+##   1. *"WHERE THE ZONE IS"* -- `SimWorld.koth_zone`, resolved once by `MapGen._place_koth_zone()`
+##      from an authored `MapData.KOTH_AREA` region or, failing that, a square at the map's centre.
+##      The owner's *"both"* ruling; that function carries the argument for two sources.
+##   2. *"a per-player score"* -- `SimPlayer.score`, in `state_hash()` and on `player_state`. It
+##      landed **with this rule**, which is what its own warning asked for: *"one field nothing
+##      writes is how it starts."*
+##   3. *"the minimap ring"* -- `Minimap.set_koth_zone()`, fed from the snapshot's `koth_zone` and
+##      `koth_holder`. *"A scored zone the player cannot see is a rule they can only lose to."*
 ##
-## The scoring rule itself is the easy part and is worth stating so it is not
-## re-litigated: MOST units in the zone scores, not merely presence, so a contested
-## hill pays nobody and one unit is enough to hold an empty one.
-func _king_of_the_hill(_w: SimWorld) -> void:
-	pass
+## ## THE SCORING RULE, WHICH WAS ALREADY DECIDED AND IS NOT RE-LITIGATED
+##
+## **MOST units in the zone scores, not merely presence** -- so a contested hill pays nobody and
+## one unit is enough to hold an empty one. A tie pays nobody, which is what makes `koth_holder`
+## drop to 0 in a real fight rather than alternating between two players.
+##
+## ## ⚠️ IT COUNTS SIDES, NOT PLAYERS, FOR `_last_man_standing`'s REASON
+##
+## Two allies each holding four units in the zone against one enemy's six hold it **between them**,
+## and a rule that compared players would hand the tick to the enemy. So units are tallied by side
+## -- team, or the negative of the player id for the unaligned, which is `_decide_by_sides`' own
+## keying and cannot collide -- and every standing member of the leading side scores. That also
+## means a 2v2's allies carry identical numbers, which is correct and is what lets `winner_id`
+## name a player the way every other mode does.
+##
+## ## ⚠️ GARRISONED UNITS DO NOT HOLD GROUND
+##
+## `SimUnit.garrisoned_in` takes a unit off the map without despawning it -- it leaves `SpatialHash`
+## and is skipped by `SnapshotSystem` entirely -- and its `pos` is deliberately stale, frozen
+## wherever it stood when it entered. So a tower inside the zone stuffed with archers would
+## otherwise hold the hill with five men nobody can see, target or shoot, which is the opposite of
+## a contested zone. Buildings do not count either: this is a rule about who is STANDING there.
+##
+## ## AND CONQUEST STILL ENDS IT
+##
+## `_decide_by_sides` runs on the survivors as well, so wiping out the opposition wins a KotH match
+## without waiting out the tally. That is not a fallback, it is both rules at once: `_trophy` does
+## the same, and without it two players who annihilated each other would leave a match nobody can
+## score and nobody can end.
+func _king_of_the_hill(w: SimWorld) -> void:
+	# ⚠️ **UNARMED FALLS BACK TO CONQUEST, `_trophy`'s RULING AND ITS EXACT WORDS.** Deciding
+	# nothing makes a hill-less KotH match **unendable**: nobody can score, the elimination rule is
+	# skipped with it, and two players can wipe each other out and stand in an empty world forever.
+	# A hang is not the safe direction, it is a slower way of being broken -- and
+	# `_place_koth_zone`'s own warning already promises out loud that the match is decided by
+	# conquest, so the code saying otherwise would be the defect.
+	if w.koth_zone.size.x <= 0 or w.koth_zone.size.y <= 0:
+		_last_man_standing(w)
+		return
+	if w.players.size() < 2:
+		return
+	# A world with nothing in it is not a match nobody has won -- it is a match that has not been
+	# stood up. Shared with conquest, trophy and `ObjectiveSystem` so the four cannot disagree
+	# about it on the tick that matters.
+	if not _world_is_populated(w):
+		return
+
+	var standing := _eliminate_the_bankrupt(w)
+
+	# ONE PASS OVER THE ENTITY LIST FOR EVERY SIDE, not a `_units_in_zone(pid)` per player -- the
+	# same O(players x entities) cost `_owners_with_anything` and `PopulationSystem.census` were
+	# both rewritten to undo, and this one runs every tick of every KotH match.
+	var by_side := _zone_strength(w)
+	var leader := _leading_side(by_side)
+
+	# WHO HOLDS IT, PUBLISHED BEFORE THE SCORING so the mirror is right even on a tick nobody
+	# scores. 0 for an empty or contested zone -- see `SimWorld.koth_holder`.
+	w.koth_holder = 0
+	for pid in standing:
+		if _side_of(w, pid) == leader and (w.koth_holder == 0 or pid < w.koth_holder):
+			w.koth_holder = pid
+
+	# ⚠️ **SCORED OFF `standing` AND NOT OFF THE ZONE TALLY.** A player eliminated this tick can
+	# still have units standing on the hill -- their corpses are in `entities` for ten seconds and
+	# `_zone_strength` counts only the living, but a player whose last BUILDING fell is bankrupt
+	# with an army intact. Paying them would tick a defeated player towards a win.
+	if leader != 0:
+		for pid in standing:
+			if _side_of(w, pid) != leader:
+				continue
+			var p := w.player_for(pid)
+			if p != null:
+				p.score += 1
+
+	# THE TALLY DECIDES IT FIRST, and only then conquest. Both can be true on one tick -- a last
+	# surviving side that also just reached the target -- and the score is the mode's own answer,
+	# so it is the one that should be recorded.
+	for pid in standing:
+		var p := w.player_for(pid)
+		if p != null and p.score >= KOTH_TARGET_SCORE:
+			w.match_over = true
+			# THE LOWEST-ID SURVIVOR OF THE WINNING SIDE, `_decide_by_sides`' own convention: a
+			# real player rather than a sentinel, deterministic, and what two screens already read.
+			w.winner_id = w.koth_holder if w.koth_holder > 0 else pid
+			var winner := w.player_for(w.winner_id)
+			w.winner_team = winner.team if winner != null and winner.team > 0 else 0
+			return
+
+	_decide_by_sides(w, standing)
+
+
+## Living, ungarrisoned units in the zone, tallied by side. Side key -> count.
+##
+## See `_king_of_the_hill()` for why garrisoned units and buildings are both excluded, and why the
+## key is the side rather than the player.
+func _zone_strength(w: SimWorld) -> Dictionary:
+	var by_side: Dictionary = {}
+	for e in w.entities.values():
+		if not e.alive or not (e is SimUnit):
+			continue
+		var u := e as SimUnit
+		# GAIA'S WILDLIFE HOLDS NOTHING. A herd of deer standing on the hill would otherwise be a
+		# side -- `_side_of` would key them at 0, which is not a player's side at all -- and a wolf
+		# could deny the zone to everybody. Same clause `_trophy_holders` carries, for the same
+		# reason: gaia is not in the match.
+		if u.owner_id <= 0 or u.garrisoned_in != 0:
+			continue
+		if not w.koth_zone.has_point(u.tile()):
+			continue
+		var key := _side_of(w, u.owner_id)
+		by_side[key] = int(by_side.get(key, 0)) + 1
+	return by_side
+
+
+## The side with strictly the most units, or 0 for an empty or tied zone.
+##
+## **STRICTLY, WHICH IS THE WHOLE RULE.** A draw pays nobody: two sides with four units each are
+## contesting the hill, not sharing it, and paying both would make a stalemate the fastest way to
+## the target. 0 is safe as "nobody" because `_side_of` never returns it — a team is positive and
+## an unaligned player is the negative of an id that starts at 1.
+func _leading_side(by_side: Dictionary) -> int:
+	var best := 0
+	var best_count := 0
+	var tied := false
+	for key in by_side:
+		var n := int(by_side[key])
+		if n > best_count:
+			best_count = n
+			best = int(key)
+			tied = false
+		elif n == best_count:
+			tied = true
+	return 0 if tied or best_count <= 0 else best
+
+
+## Which side a player is on: their team, or the negative of their id when they have none.
+##
+## `_decide_by_sides`' keying, pulled out because three places in this file now need it and a
+## second copy would be free to drift about whether team 0 is a team everybody shares. It is not —
+## 0 is the ABSENCE of a team, which is why an unaligned player is keyed by `-id` and two of them
+## stay two sides.
+func _side_of(w: SimWorld, player_id: int) -> int:
+	var p := w.player_for(player_id)
+	return p.team if p != null and p.team > 0 else -player_id

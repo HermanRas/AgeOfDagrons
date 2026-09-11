@@ -11,20 +11,36 @@
 ## lists are DATA, read live out of the game's `data/*.json`, so a scene file could not hold
 ## them even in principle without going stale the day a building is added.
 ##
-## ## FIVE CATEGORIES, AND **AREA IS DELIBERATELY NOT ONE OF THEM**
+## ## FIVE CATEGORIES, AND **AREAS IS THE FIFTH AS OF 16.5**
 ##
 ## 16.3's row spells the dropdown *Unit / Building / Area / Terrain*, and the 2026-09-04
 ## amendment added **Resource** — without which no map in this game is playable, because
 ## `MapValidator` requires resources within reach of every start and every node is a
 ## `ResourceDef` placed as gaia.
 ##
-## ⚠️ **AREA IS LEFT OUT BECAUSE `MapData` HAS NO FIELD FOR ONE UNTIL 16.5.** An Area category
-## would let an author draw a region that `MapData.to_dict()` cannot write and `MapFile` then
-## silently drops — work lost with a successful save on screen. Phase 15 settled exactly this
-## shape and its wording transfers: *"inert is the safe direction for a mode nobody has
-## selected; it is the wrong direction for the mode a PLAY button is about to select."* A tab
-## in a palette is a thing a person selects. It arrives with 16.5, which is one entry in
-## `CATEGORIES`.
+## ✅ **AREA WAS LEFT OUT UNTIL `MapData` HAD A FIELD FOR ONE, AND IT LANDED 2026-09-09** with
+## `MapData.areas`. The deferral is worth keeping written down because it was the right call and
+## the reasoning generalises: an Area tab shipped early would have let an author draw a region
+## `MapData.to_dict()` could not write and `MapFile` then silently dropped — *work lost with a
+## successful save on screen*. Phase 15's wording is what settled it: *"inert is the safe
+## direction for a mode nobody has selected; it is the wrong direction for the mode a PLAY
+## button is about to select."* **A tab in a palette is a thing a person selects.** The promise
+## this header made — that the tab would be *one entry in `CATEGORIES`* — held for the tab; what
+## it did not cover is that a region is authored by a DRAG and named in a field, so the tab also
+## brought `_area_field` and `Editor.Tool.AREA` with it.
+##
+## ## ⚠️ THE AREAS TAB LISTS THE *DOCUMENT*, WHICH IS THE ONE THING NO OTHER TAB DOES
+##
+## Every other tab's rows come from the game's roster, which this panel reads once and holds.
+## Regions belong to the map being edited, so they arrive through `set_area_names()` — **pushed
+## in, exactly as `setup()` pushes the `IconAtlas`, and never by this panel holding a
+## `MapDocument`.** A palette that could reach the document would be a second writer to it, and
+## `MapDocument`'s header is emphatic that there is one funnel for every mutation.
+##
+## **THE NAME FIELD IS THE SELECTION.** Typing a name that already exists adds a rectangle to
+## that region; typing a new one starts a region on the first drag. That is why there is no
+## "new area" button and no rename control: one field answers both questions, and a row in the
+## grid simply fills it in.
 ##
 ## ## ⚠️ THE COLOUR PICKER CHANGES WHAT YOU SEE AND NOT WHAT YOU SAVE
 ##
@@ -66,7 +82,22 @@ signal terrain_picked(kind: int)
 ## thing off the grid arms placement.
 signal entry_picked(def_id: StringName)
 
-enum Category { BUILDING, UNIT, RESOURCE, TERRAIN }
+## The Areas tab is live, with the region name the next drag will add to (16.5).
+##
+## ⚠️ **`terrain_picked`'s SHAPE AND NOT `entry_picked`'s, AND THE REASON IS THE GESTURE.** An
+## area is not placed by a click on a tile — it is DRAGGED out as a rectangle — so it needs its
+## own `Editor.Tool` the way Terrain needs `Tool.PAINT`, and the editor arms that tool from this.
+## Routing it through `entry_picked` would have armed `Tool.PLACE`, whose click puts one entity
+## on one tile: an author would draw a region and get nothing, with the toolbar showing a tool
+## that was working perfectly.
+##
+## It carries the name because that is the only thing an area selection IS. Emitted when the tab
+## is chosen, when a row is picked, and on every keystroke in the name field — the last of those
+## matters, because an author who types a name and drags without pressing anything must not be
+## drawing into whatever region was selected before.
+signal area_picked(name: StringName)
+
+enum Category { BUILDING, UNIT, RESOURCE, TERRAIN, AREA }
 
 ## The tab order, which is placement order and not alphabetical: **a map is authored
 ## outside-in** — the ground, then the resources that decide where a base can go, then the
@@ -82,8 +113,12 @@ const CATEGORIES := [
 	{"id": Category.UNIT, "label": "Units", "icon": &"cat_units"},
 	{"id": Category.RESOURCE, "label": "Resources", "icon": &"cat_resources"},
 	{"id": Category.TERRAIN, "label": "Terrain", "icon": &"cat_terrain"},
-	# 16.5 adds {"id": Category.AREA, "label": "Areas", "icon": &"cat_areas"} here, and `MapData`
-	# gains the field in the same change. See the class comment on why it is not here yet.
+	# ✅ **AREAS, 16.5, AND IT REALLY WAS ONE ENTRY HERE** — the promise this file made. It goes
+	# LAST rather than in the README's *Unit / Building / Area / Terrain* order, on the same
+	# outside-in argument the other four are ordered by: a region is drawn over ground that
+	# already has bases and resources on it, because what it is FOR is asking a question about
+	# them ("is a villager in the ford yet"). Nothing is authored before the thing it describes.
+	{"id": Category.AREA, "label": "Areas", "icon": &"cat_areas"},
 ]
 
 ## Gaia. `MapData` writes `player: 0` for every resource node, and `StartLayout` relies on it.
@@ -214,6 +249,15 @@ var _player := 1
 var _size_class := 0
 var _tint := -1
 
+## The region the next area drag adds to (16.5), and the field that holds it. See `area_name()`.
+var _area := &""
+var _area_field: LineEdit = null
+var _area_row: Control = null
+
+## Region names in the document being edited, pushed in by `set_area_names()`. Held rather than
+## asked for, because this panel must not reach a `MapDocument` — see the class comment.
+var _area_names: Array[StringName] = []
+
 var _tabs: Dictionary = {}                        # int -> Button
 var _search: LineEdit = null
 var _grid: GridContainer = null
@@ -262,7 +306,12 @@ func setup(icons: IconAtlas) -> void:
 ## the small variant."* Returning it in every selection rather than as an optional extra is
 ## what stops a caller forgetting it exists.
 func selection() -> Dictionary:
-	if _category == Category.TERRAIN or _def_id.is_empty():
+	# AREA JOINS TERRAIN IN PLACING NO ENTITY. A region is not in `MapData.entities` at all, so a
+	# selection here would be a `def_id` `add_entity()` could not resolve — `GameDataRegistry`
+	# answers "unknown" and `MapGen.build_from()` would fall through to `spawn_resource_node()`
+	# and spawn nothing. `Editor.apply_tool` reads `area_name()` for this tab instead, exactly as
+	# it reads `_brush` for Terrain.
+	if _category == Category.TERRAIN or _category == Category.AREA or _def_id.is_empty():
 		return {}
 	# ⚠️ **THE VARIANT SUFFIX IS SPLIT OFF HERE AND NOWHERE ELSE**, so the id the editor hands to
 	# `MapData.add_entity()` is a real def id. A `def_id` of `building.wall_stone_long@axis1`
@@ -280,6 +329,21 @@ func selection() -> Dictionary:
 
 func category() -> Category:
 	return _category
+
+
+## One category's label, lower case, for a sentence.
+##
+## ⚠️ **BY ID AND NOT BY `CATEGORIES[int(c)]`, WHICH IS WHAT THIS USED TO BE.** That worked only
+## while the array's ORDER matched the enum's VALUES, and nothing said so at either end — the
+## exact shape of coupling `AIProfile.IDS`-against-`SimPlayer.AILevel` is the standing record of
+## in this project, and `Tool.START`'s removal is the standing record of it going wrong. 16.5
+## appended `AREA` to both and would have got away with it; the next row to insert one in the
+## middle would have labelled every tab after it with its neighbour's word.
+static func label_of(c: Category) -> String:
+	for entry in CATEGORIES:
+		if int(entry["id"]) == int(c):
+			return str(entry["label"]).to_lower()
+	return "entries"
 
 
 ## The icon tint, as a `colours.json` index or -1. **Presentation only** — see the class
@@ -310,10 +374,47 @@ func shown_player() -> int:
 	return _owner_picker.get_item_id(_owner_picker.selected)
 
 
+## The region the next area drag adds to, or `&""` when the author has not named one (16.5).
+##
+## **THE FIELD'S TEXT, STRIPPED, AND NOT A SEPARATELY REMEMBERED VALUE.** `shown_player()` exists
+## because a control and the field behind it are one fact that came apart three times in this
+## file; the cheapest way not to repeat that is for there to be no second copy. `_area` mirrors
+## the box only so a headless test and `dev/` can set one without a `LineEdit` in a tree.
+##
+## Stripped here as well as in `MapDocument.add_area()`, deliberately: a trailing space is
+## invisible in a text box and would otherwise be a different region every time.
+func area_name() -> StringName:
+	if _area_field != null:
+		return StringName(_area_field.text.strip_edges())
+	return StringName(String(_area).strip_edges())
+
+
+## Type a region name. The public door for a test, `dev/`, and a row in the grid.
+func set_area_name(name: StringName) -> void:
+	_area = name
+	if _area_field != null and _area_field.text != String(name):
+		_area_field.text = String(name)
+	# THE ROWS REPAINT so the tile matching what is typed lights up -- the grid is the list of
+	# regions that exist and the field is which one is selected, and an author needs to see when
+	# those two have met. `_repaint_tiles()` keys on `_def_id`, so the name doubles as it here.
+	_def_id = name
+	_repaint_tiles()
+	area_picked.emit(area_name())
+	selection_changed.emit()
+
+
 ## A sentence for the status line: what is selected, in the words the author picked it by.
 func describe() -> String:
 	if _category == Category.TERRAIN:
 		return "brush: %s" % _terrain_label(_terrain_kind())
+	if _category == Category.AREA:
+		# ⚠️ **IT SAYS WHAT IS MISSING RATHER THAN NAMING NOTHING.** An unnamed region is the
+		# only way an area drag can be refused, and a drag that does nothing reads as a broken
+		# tool -- `_place_start_from_palette`'s "A START NEEDS A PLAYER" is the same lesson, met
+		# by the same route (the most likely first encounter with the feature).
+		var name := area_name()
+		return "drag out area: %s" % name if not name.is_empty() \
+				else "drag out an area — TYPE A NAME first"
 	if _def_id.is_empty():
 		return "nothing selected"
 	var who := "gaia" if _player == GAIA else "P%d" % _player
@@ -354,14 +455,22 @@ func set_category(c: Category) -> void:
 	else:
 		_select_owner(1 if _player == GAIA else _player)
 	_size_row.visible = (c == Category.RESOURCE)
-	# ⚠️ **OWNER AND TINT MEAN NOTHING TO A TERRAIN TILE, so they go away with it.** Terrain is
-	# a byte in `map.png`'s red channel and has no owner at all; leaving an Owner dropdown on
-	# screen while painting grass invites somebody to set it and wonder why nothing happened.
-	# Same rule the size row already follows: **a control that is present and inert is worse
-	# than an absent one**, because its presence is a claim.
-	var places_an_entity := (c != Category.TERRAIN)
+	# ⚠️ **OWNER AND TINT MEAN NOTHING TO A TERRAIN TILE OR A REGION, so they go away with
+	# both.** Terrain is a byte in `map.png`'s red channel and has no owner at all, and an
+	# area is a named rectangle in a field of its own — **`MapData`'s area record is
+	# `{name, rect}` and has no `player` key**, so an Owner box on this tab would be a promise
+	# the format cannot keep, which is exactly the trap the tint picker's label is named after.
+	# The question an author actually asks about a region ("whose things are in it?") belongs to
+	# the OBJECTIVE, not to the region: that is `ObjectiveDef.owner`, and 16.6 is where it is
+	# typed in. Leaving a dropdown here would invite somebody to set it and wonder why nothing
+	# happened. **A control that is present and inert is worse than an absent one**, because its
+	# presence is a claim.
+	var places_an_entity := (c != Category.TERRAIN and c != Category.AREA)
 	_owner_row.visible = places_an_entity
 	_tint_row.visible = places_an_entity
+	# WHAT A REGION NEEDS INSTEAD OF AN OWNER: a name. 16.5's card asked for *"a name field at
+	# minimum"* and that is what this is; it is also the whole selection (see `area_name()`).
+	_area_row.visible = (c == Category.AREA)
 	# THE SELECTION DOES NOT SURVIVE A CATEGORY CHANGE, deliberately: a def id from another
 	# category would still be a legal `selection()` while the grid showed something else, and
 	# the editor's status line would name a building under the Units tab.
@@ -372,6 +481,19 @@ func set_category(c: Category) -> void:
 		# than arming nothing -- there is no "no terrain" and a tab that does nothing until
 		# clicked twice reads as broken.
 		pick(StringName(SimMap.Terrain.keys()[SimMap.Terrain.GRASS]))
+	elif c == Category.AREA:
+		# ⚠️ **THE TAB ARMS THE TOOL EVEN WITH NO NAME TYPED, WHICH IS TERRAIN'S RULE AND NOT
+		# PLACE'S.** A tab that armed nothing until a name existed would leave an author looking
+		# for the tool button that turns drawing on — and there is no such button to find, since
+		# `Tool.AREA`'s only door is this tab. So the tool is armed and the refusal moves to the
+		# drag, where `describe()` and `Editor.apply_tool` both say the name is what is missing.
+		# ⚠️ **AND `_def_id` IS RESTORED FROM `_area`**, because the line above cleared it and the
+		# grid keys its highlight on it: without this, coming back to the tab shows every region
+		# unlit while the field still holds one of their names.
+		_def_id = area_name()
+		_repaint_tiles()
+		area_picked.emit(area_name())
+		selection_changed.emit()
 	else:
 		selection_changed.emit()
 
@@ -384,6 +506,12 @@ func pick(id: StringName) -> void:
 		_repaint_tiles()
 		terrain_picked.emit(_terrain_kind())
 		selection_changed.emit()
+		return
+	if _category == Category.AREA:
+		# A ROW IS A REGION THAT ALREADY EXISTS, and picking it FILLS THE FIELD -- which is the
+		# whole interaction: the field is the selection, so a row is a shortcut for typing a name
+		# the author has already used. `set_area_name` repaints and emits.
+		set_area_name(id)
 		return
 	_def_id = id
 	_repaint_tiles()
@@ -457,7 +585,11 @@ func listed_ids() -> Array[StringName]:
 ## registry about "GRASS" would search three JSON files and land on the unknown-id answer —
 ## true, and for the wrong reason.
 func available_ids() -> Array[StringName]:
-	if _category == Category.TERRAIN:
+	# TERRAIN AND AREAS BOTH SKIP THE ROSTER, for the same reason and by two different routes:
+	# terrain ids are enum key names and area names are the document's, so asking
+	# `GameDataRegistry.placeable("GRASS")` or `.placeable("north_pass")` searches three JSON
+	# files and lands on the unknown-id answer -- true, and for the wrong reason.
+	if _category == Category.TERRAIN or _category == Category.AREA:
 		return _ids_for(_category)
 	var out: Array[StringName] = []
 	for id in _ids_for(_category):
@@ -524,7 +656,31 @@ func _ids_for(c: Category) -> Array[StringName]:
 		Category.UNIT: return GameDataRegistry.unit_ids()
 		Category.RESOURCE: return GameDataRegistry.resource_ids()
 		Category.TERRAIN: return GameDataRegistry.terrain_kinds()
+		# ⚠️ **THE ONLY CATEGORY WHOSE ROWS COME FROM THE MAP AND NOT FROM THE ROSTER** (16.5).
+		# Pushed in by `set_area_names()` rather than read off a `MapDocument` this panel holds --
+		# see the class comment on why the palette must not be able to reach the document. It is
+		# also why this list is legitimately EMPTY on a fresh map, which is a different state from
+		# an unreadable roster and `_count_text()` words them apart.
+		Category.AREA: return _area_names.duplicate()
 	return [] as Array[StringName]
+
+
+## Hand over the region names in the document being edited (16.5).
+##
+## ⚠️ **PUSHED, NOT PULLED, AND `Editor` OWES THIS CALL ON EVERY ACT THAT CAN CHANGE THE LIST.**
+## Adding an area, erasing one, undo, redo, New and Open all move it — which is the "nine
+## mutation sites and the tenth is the one that gets forgotten" hazard `Editor._refresh_undo()`
+## is arranged around, so the editor calls this from the same one place it refreshes the status.
+##
+## Rebuilds the grid only when the list actually differs, because this is called from that
+## refresh path: a rebuild drops and recreates every tile, and doing it on every hover would be
+## the cost 16.x-slow-place was spent removing.
+func set_area_names(names: Array[StringName]) -> void:
+	if _area_names == names:
+		return
+	_area_names = names.duplicate()
+	if _category == Category.AREA:
+		_rebuild()
 
 
 ## The search matches the DISPLAY NAME and the ID, not one or the other.
@@ -545,6 +701,13 @@ func _label_for(id: StringName) -> String:
 		return START_LABEL
 	if _category == Category.TERRAIN:
 		return _terrain_label(_kind_of(id))
+	if _category == Category.AREA:
+		# THE AUTHOR'S OWN NAME, VERBATIM. `GameDataRegistry.display_name()` prettifies an id --
+		# it would turn `north_pass` into "North Pass" -- and that is exactly wrong here: the
+		# string an objective has to match is the one in the field, so showing a tidied version
+		# would send an author to type the tidy one into `scenario.json`. Same class of trap as
+		# `describe()` announcing "place: Player (P3)" for the start entry.
+		return String(id)
 	var split := split_variant(id)
 	if int(split[1]) != MapData.AXIS_NONE:
 		# THE DIRECTION IS THE HALF THAT DISTINGUISHES THE ROW, so it goes on the end where the
@@ -589,10 +752,16 @@ func _count_text(shown: int) -> String:
 	# author set.
 	var total := available_ids().size()
 	if total == 0:
+		# ⚠️ **AN EMPTY AREAS TAB IS THE HEALTHY STATE OF A FRESH MAP AND MUST NOT BLAME THE
+		# ROSTER** (16.5). Regions come from the document, not from `data/*.json`, so "is the
+		# game project readable?" would send an author to check a config file over a map they
+		# have simply not drawn a region on yet. Every other tab's emptiness really is the
+		# roster's, which is why this is one branch and not a rewording.
+		if _category == Category.AREA:
+			return "  no areas yet — type a name above and drag a rectangle on the map"
 		# NAMES THE ROSTER, not the search. "0 of 0" under an unloaded roster would send
 		# somebody to clear a search box that is already empty.
-		return "  the roster has no %s — is the game project readable?" \
-				% str(CATEGORIES[int(_category)]["label"]).to_lower()
+		return "  the roster has no %s — is the game project readable?" % label_of(_category)
 	if shown == 0:
 		return "  none of %d match \"%s\"" % [total, _search.text.strip_edges()]
 	return "  %d of %d" % [shown, total] if shown < total else "  %d" % total
@@ -613,7 +782,11 @@ func _tile_for(id: StringName) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	# THE FULL NAME AND THE ID, because the label under the picture is clipped and the tooltip
 	# is where the thing an author is hunting for can be read in full.
-	b.tooltip_text = "%s\n%s" % [_label_for(id), id]
+	# AN AREA's LABEL *IS* ITS ID, so the pair would be the same string twice. The tooltip says
+	# what the row does instead, which is the half an author cannot guess: clicking it selects
+	# the region rather than placing anything.
+	b.tooltip_text = "area \"%s\"\nclick to add the next rectangle to it" % id \
+			if _category == Category.AREA else "%s\n%s" % [_label_for(id), id]
 	b.pressed.connect(func() -> void: pick(id))
 
 	var column := VBoxContainer.new()
@@ -695,6 +868,14 @@ func _picture_for(id: StringName) -> Control:
 	# deliberate tool drawn in the bug colour is the one thing worse than no icon.
 	if id == START_ID:
 		return _swatch(MapCanvas.START_COLOUR, box)
+	# ⚠️ **A REGION HAS NO ART AND MUST NOT PRETEND TO** — the Terrain tab's argument one branch
+	# down, and here it is not a judgement call: an area name is not a def id, so `crop_for()`
+	# resolves nothing and `_plate()` would paint it `PlaceholderSpec.UNKNOWN_COLOR`, which is
+	# the magenta reserved for *"this is a bug"*. A swatch in the colour `MapCanvas` outlines
+	# regions in is the honest picture, and it is what lets an author match a row to the
+	# rectangle on the map.
+	if _category == Category.AREA:
+		return _swatch(MapCanvas.AREA_COLOUR, box)
 	# ⚠️ **A VARIANT ROW ASKS FOR ITS DEF's PICTURE, and the split has to happen before the
 	# crop.** `IconAtlas.visual_for()` would answer `&""` for `...@axis1` — no building, no
 	# resource, no unit, not a declared visual — and every wall row would come out as a **magenta
@@ -909,6 +1090,30 @@ func _build() -> void:
 			set_tint(_tint_picker.get_item_id(at) - 1))
 	tint_row.add_child(_tint_picker)
 	column.add_child(tint_row)
+
+	# ── the region name, areas only (16.5) ──
+	#
+	# ⚠️ **WHAT AN AREA HAS INSTEAD OF AN OWNER AND A SIZE.** 16.5's card asked for *"a name
+	# field at minimum"*, and it turns out to be the maximum too: a region's whole content is a
+	# name and some rectangles, the rectangles come from the drag, and every other property the
+	# owner's README imagines ("size, shape, and properties") is either the drag or 16.7's.
+	var area_row := HBoxContainer.new()
+	_area_row = area_row
+	area_row.add_theme_constant_override("separation", 4)
+	area_row.add_child(_label("Area"))
+	_area_field = LineEdit.new()
+	_area_field.placeholder_text = "region name"
+	_area_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# ⚠️ **ON EVERY KEYSTROKE, NOT ON `text_submitted`.** An author types a name and drags; if the
+	# name only took effect on Enter, that drag would land in whatever region was selected before
+	# — silently, since both are legal states. `text_changed` is also why `_typing()` in
+	# `Editor._input` matters more now: this is a third `LineEdit` that must keep `Ctrl+Z`.
+	_area_field.text_changed.connect(func(t: String) -> void: set_area_name(StringName(t)))
+	area_row.add_child(_area_field)
+	# HIDDEN UNTIL THE AREAS TAB IS CHOSEN, the size row's rule: a control that is present and
+	# inert invites somebody to set it.
+	area_row.visible = false
+	column.add_child(area_row)
 
 	# ── size class, resources only ──
 	_size_row = HBoxContainer.new()

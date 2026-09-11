@@ -211,10 +211,16 @@ func test_the_victory_picker_offers_every_mode_that_is_BUILT() -> void:
 	#
 	# ASSERTED PER MODE BY NAME rather than by counting enabled items, so the day King of
 	# the Hill lands this fails and names it instead of quietly passing at a new total.
+	#
+	# ✅ **AND IT DID, ON 2026-09-09** — this table said `KING_OF_THE_HILL: false` and went red on
+	# the run `_king_of_the_hill` and `_place_koth_zone` landed, which is the whole reason the
+	# assertion was written per mode. `SkirmishScreen.UNBUILT` is now empty and every offered mode
+	# is selectable; the table stays because `Mode.REGICIDE` (card 11.2) is the next one to arrive
+	# and it will arrive greyed.
 	var built := {
 		MatchConfig.Mode.LAST_MAN_STANDING: true,
 		MatchConfig.Mode.TROPHY: true,
-		MatchConfig.Mode.KING_OF_THE_HILL: false,
+		MatchConfig.Mode.KING_OF_THE_HILL: true,
 	}
 	for mode in built:
 		var item := screen._mode_picker.get_item_index(int(mode))

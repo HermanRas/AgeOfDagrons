@@ -123,8 +123,15 @@ var selected := -1
 ## so handing this dictionary back unfiltered would write the OPENED file's `entities`,
 ## `starts`, `w`, `h` and `meta` on top of the edited ones: every change made in the tool
 ## silently discarded, in a save that reports success. `_preserved_header()` is the filter, and
-## it computes what to drop from `to_dict()` itself rather than from a written-out list —
-## 16.5's areas are a new key in there, and a list would have to be remembered on that day.
+## it computes what to drop from `to_dict()` itself rather than from a written-out list.
+##
+## ✅ **THAT PAID OFF ON 2026-09-09 AND NOT QUITE FOR FREE.** 16.5's `areas` is a new key in
+## `to_dict()` and this function needed no edit — but it is also the reason `MapData.to_dict()`
+## writes `areas` **even when the list is empty**, unlike the per-entity `axis`: a key that
+## vanished when the author deleted their last region would stop being filtered out of the stale
+## header, so the deletion would not reach the file and the region would come back on reopen. The
+## filter being derived is what makes that a property of one line in `MapData` rather than a
+## remembered exception here.
 var header: Dictionary = {}
 
 
@@ -538,6 +545,96 @@ func remove_entity_at(tile: Vector2i) -> int:
 	return removed
 
 
+# ── areas: named regions (PLAN.md 16.5) ─────────────────────────────────────
+
+## Add one rectangle to the region called `name`. True when it went down.
+##
+## ## AN AREA IS NOT AN ENTITY, AND EVERY DIFFERENCE FALLS OUT OF THAT
+##
+## It claims no tiles, so it collides with nothing: **regions may overlap each other, entities
+## and the map's own furniture freely**, which is not a slip — *"the crossing"* and *"the north
+## bank"* genuinely share ground, and a region drawn over a town centre is how *"hold the base"*
+## is asked. `add_entity()`'s overlap test therefore has no counterpart here, and
+## `MapData.claimed_tiles()` is untouched by areas on purpose.
+##
+## ## WHAT IT DOES REFUSE, AND WHY THE BOUNDS CHECK IS HERE RATHER THAN IN `MapData`
+##
+## Off the map, unnamed, and empty. `MapData.add_area()` already refuses the last two — it is the
+## format's own definition of a region — and deliberately does **not** refuse the first, because
+## a loaded file may carry a region hanging off the edge of a map somebody later shrank and
+## dropping it on load would silently change what a scenario counts. **The tool is where there is
+## a person to tell**, so this is the layer that says no. Same division `add_entity()` makes: the
+## whole footprint must be on the map, checked where a notice can be shown.
+##
+## ⚠️ **THE NAME IS TAKEN VERBATIM.** `ObjectiveSystem` matches it against an objective's `area`
+## with no folding at either end, so trimming here and not there — or lower-casing in the tool and
+## not in the game — would author a region the scenario can never find. Whitespace is stripped
+## because a trailing space is invisible in a text field and is otherwise a different region; that
+## strip is the one normalisation, it happens in `MapData.add_area()`'s own refusal test too, and
+## `ObjectiveDef._read_area` strips the objective's end identically.
+func add_area(name: StringName, rect: Rect2i) -> bool:
+	var clean := StringName(String(name).strip_edges())
+	if clean.is_empty() or rect.size.x <= 0 or rect.size.y <= 0:
+		return false
+	# THE WHOLE RECTANGLE ON THE MAP. `end` is exclusive, so the last tile is `end - ONE`.
+	if not data.in_bounds(rect.position) or not data.in_bounds(rect.end - Vector2i.ONE):
+		return false
+	var mine := _open("area %s" % clean)
+	_step.lists_before(data)
+	if not data.add_area(clean, rect):
+		# UNREACHABLE THROUGH THE GUARDS ABOVE, and it still puts the step back rather than
+		# leaving one open: `_flush()` on an empty step pushes nothing (`changes_anything()`),
+		# so this is the same shape as `add_entity()` refusing before it opens.
+		if mine:
+			_flush()
+		return false
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Take the region rectangle under `tile` off the map. Returns how many entries went.
+##
+## **THE TOPMOST ONE ONLY, WHICH IS ONE RECTANGLE AND NOT A WHOLE REGION.** `entity_index_at()`'s
+## rule — the last match wins, because that is the one drawn over the others — and the reason it
+## is one rather than all is the same reason an area is a flat list: an author who mis-drags the
+## fourth rectangle of a five-rectangle region wants that rectangle back, not the region deleted.
+## Clearing a whole region is as many clicks as it has parts, which is visible; deleting four
+## rectangles the author still wanted is not.
+func remove_area_at(tile: Vector2i) -> int:
+	var at := area_index_at(tile)
+	if at < 0:
+		return 0
+	var mine := _open("erase area %s" % data.areas[at].get("name", &""))
+	_step.lists_before(data)
+	data.areas.remove_at(at)
+	dirty = true
+	if mine:
+		_flush()
+	return 1
+
+
+## Which region rectangle covers `tile`, or -1.
+##
+## **THE LAST MATCH WINS**, `entity_index_at()`'s rule and for its reason: `MapCanvas` draws the
+## list in order, so a later rectangle is painted over an earlier one and a picker returning the
+## first would hand back the region underneath the one the author can see. Regions overlapping is
+## normal here rather than a fault, which makes this matter more than it does for entities.
+func area_index_at(tile: Vector2i) -> int:
+	var found := -1
+	for i in data.areas.size():
+		var rect: Rect2i = data.areas[i].get("rect", Rect2i())
+		if rect.has_point(tile):
+			found = i
+	return found
+
+
+## Every region name on the map, in first-appearance order. What the palette's Areas tab lists.
+func area_names() -> Array[StringName]:
+	return data.area_names()
+
+
 # ── select, move, edit: the three cursors (PLAN.md 16.4) ────────────────────
 
 ## Which entity is standing on `tile`, or -1.
@@ -929,8 +1026,10 @@ func save_as(maps_dir: String) -> Array[String]:
 ## `MapFile.save()` merges a header **over** the fields it derives, so any key both sides
 ## carry would be written from the OPENED file rather than from the edited map — `entities`
 ## and `starts` most destructively, `w`/`h` in a way that makes the sidecar disagree with the
-## PNG and the map unloadable. Asking `to_dict()` what it produces means the day 16.5 adds
-## areas to the wire form, this drops them from the stale header with no edit here.
+## PNG and the map unloadable. Asking `to_dict()` what it produces meant that when 16.5 added
+## `areas` to the wire form, this dropped them from the stale header with no edit here — ✅ which
+## it did, on 2026-09-09, and see the `header` field's note for the one line in `MapData` that
+## the promise turned out to rest on.
 ##
 ## `format_version` and `created` are the two `MapFile.save()` sets itself, so they are named:
 ## carrying an old `format_version` forward would label a file written in the new shape with

@@ -76,6 +76,7 @@ func _ready() -> void:
 	_paint(doc)
 	_place_starts(doc)
 	_place_walls(doc)
+	_place_areas(doc)
 
 	var problems := doc.save(maps_dir)
 	if not problems.is_empty():
@@ -162,6 +163,32 @@ func _place_walls(doc: MapDocument) -> void:
 		printerr("only %d of 2 walls went down — the axis round trip is incomplete" % placed)
 
 
+## Two named regions, one of them in two pieces (PLAN.md 16.5).
+##
+## ⚠️ **THE MULTI-RECTANGLE ONE IS THE HALF WORTH CARRYING THROUGH THE ROUND TRIP.** A region of
+## one rectangle survives any loader that reads a list at all; a region of two proves that
+## `MapData.areas`' flat shape really does collapse back to one region by name on the other side,
+## which is what `MapGen.build_from()` has to get right for `subject: "area"` to mean anything.
+## A loader that keyed regions by name and kept only the last entry would pass a single-rect check.
+##
+## `crossing` sits on the river so it is over ground that is visibly not grass — a region drawn
+## over a uniform field cannot show that the wash is in the right place — and `banks` takes a
+## piece of each side, which is the L-shape case in its simplest form.
+func _place_areas(doc: MapDocument) -> void:
+	var side := doc.data.size.x
+	var mid := side / 2
+	var placed := 0
+	if doc.add_area(&"crossing", Rect2i(mid - 6, side / 2 - 4, 13, 9)):
+		placed += 1
+	if doc.add_area(&"banks", Rect2i(mid - 14, 20, 6, 6)):
+		placed += 1
+	if doc.add_area(&"banks", Rect2i(mid + 9, 20, 6, 6)):
+		placed += 1
+	if placed != 3:
+		printerr("only %d of 3 area rectangles went down — the region round trip is incomplete"
+				% placed)
+
+
 # ── verification ────────────────────────────────────────────────────────────
 
 ## Read it back and say whether it is the map we wrote. **The point of the file is that the
@@ -233,6 +260,31 @@ func _verify(doc: MapDocument) -> bool:
 		ok = false
 	if doc.seats() != 2:
 		printerr("expected a 2-seat map, got %d" % doc.seats())
+		ok = false
+
+	# ⚠️ **THE REGIONS, READ BACK OFF THE FILE** (16.5) — the newest field in the format, and the
+	# one whose absence is invisible in exactly the way `axis`' was: a region that does not survive
+	# the JSON leaves an `area` objective counting nothing forever, and every assertion above still
+	# passes. **The two-rectangle region is the assertion that matters**: a loader keeping only the
+	# last entry per name would satisfy a single-rect check and silently halve `banks`.
+	var region_names := back.area_names()
+	var shapes: Array[String] = []
+	for name in region_names:
+		shapes.append("%s x%d" % [name, back.area_rects(name).size()])
+	print("  areas in the file: %s" % ", ".join(PackedStringArray(shapes)))
+	if back.areas.size() != doc.data.areas.size():
+		printerr("%d area rectangles written, %d read back"
+				% [doc.data.areas.size(), back.areas.size()])
+		ok = false
+	if region_names.size() != 2:
+		printerr("expected two regions, got %s" % [region_names])
+		ok = false
+	if back.area_rects(&"banks").size() != 2:
+		printerr("'banks' is two rectangles and came back as %d — a loader keeping one entry"
+				% back.area_rects(&"banks").size() + " per name would look exactly like this")
+		ok = false
+	if back.area_rects(&"crossing") != doc.data.area_rects(&"crossing"):
+		printerr("'crossing' came back somewhere else: %s" % [back.area_rects(&"crossing")])
 		ok = false
 
 	print("")

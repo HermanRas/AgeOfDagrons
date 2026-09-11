@@ -89,6 +89,24 @@ const _OUT_OF_BOUNDS := Color(0.07, 0.07, 0.09)
 ## marker and does not disappear the instant the pointer moves off it.
 const _SELECTED := Color(0.35, 0.90, 0.95)
 
+## A named region's outline and its fill (PLAN.md 16.5).
+##
+## ⚠️ **MAGENTA, WHICH IS THE LAST FREE HUE ON THIS CANVAS AND IS NOT THE GAME'S MAGENTA.** Every
+## other colour here is taken: terrain is green/brown/blue/grey, buildings straw, units white,
+## gaia green, a start orange-red, a selection cyan. A region has to be tellable from all of them
+## **while drawn over them**, which is stricter than the selection's requirement — a selection is
+## one outline and a region can cover a quarter of the map. Worth naming that this is *not* the
+## game's `PlaceholderSpec.UNKNOWN_COLOR`: there, magenta means *"this is a bug"*; here it means a
+## deliberate authoring overlay, and the two never appear in the same window.
+##
+## **THE FILL IS DELIBERATELY FAINT (0.10) AND THE EDGE IS NOT.** A region is drawn over ground an
+## author still has to read — the whole point of it is to say something about what is standing
+## there — so a wash that obscured the terrain would make regions and map editing exclusive. At
+## 0.10 an overlap of two regions is still visibly darker than one, which is how an author sees
+## that they have two.
+const AREA_COLOUR := Color(0.95, 0.35, 0.85)
+const _AREA_FILL := Color(0.95, 0.35, 0.85, 0.10)
+
 ## ⚠️ **THE FLOOR IS DERIVED FROM THE BIGGEST MAP, NOT CHOSEN — AND THE FIRST VALUE WAS WRONG.**
 ##
 ## It was 0.25 on the reasoning that below it a tile is unreadably small, and a test caught
@@ -142,6 +160,16 @@ signal stroke_ended
 signal view_changed
 
 var document: MapDocument = null
+
+## The rectangle an AREA drag is currently describing, drawn on the overlay (PLAN.md 16.5).
+## An empty rect means no drag is running.
+##
+## ⚠️ **THE EDITOR OWNS THE GESTURE AND THIS CANVAS ONLY DRAWS IT**, which is why this is a
+## field rather than the canvas working the rectangle out for itself. `MapCanvas` reports tiles
+## and knows nothing about tools — the same division that keeps `painted` from having to say
+## whether a sample was a press. `MapDocument.selected` is read the same way, and
+## `redraw_overlay()`'s note explains why both live on the cheap layer.
+var pending_area := Rect2i()
 
 ## What the last `_draw()` cost, in microseconds, split by phase, plus how many tiles the cull
 ## covered. Written on every redraw and read by `dev/profile_editor.gd`.
@@ -431,6 +459,13 @@ func _draw() -> void:
 	var t1 := Time.get_ticks_usec()
 	_draw_entities()
 	var t2 := Time.get_ticks_usec()
+	# AREAS BETWEEN THE ENTITIES AND THE STARTS, and the order is the whole design of the
+	# overlay: a region is drawn OVER the things it describes (so an author can see that the
+	# villagers are inside it) and UNDER the start markers, which `_draw_starts()` explains must
+	# stay on top of everything. Not folded into `_draw_entities`' phase timer either -- it is a
+	# handful of quads against that function's hundreds, and a figure that lumped them would hide
+	# which half a slow redraw was in.
+	_draw_areas()
 	_draw_starts()
 	# THE PHASES, so a slow redraw says WHICH half is slow. Terrain scales with the cull and
 	# entities with the map's contents, and the two want opposite fixes.
@@ -454,6 +489,14 @@ func _draw_overlay() -> void:
 		for t in MapData.footprint_rect_of(document.data.entities[document.selected]):
 			var sel := _diamond(t)
 			_overlay.draw_polyline(sel + PackedVector2Array([sel[0]]), _SELECTED, 2.5)
+	# THE AREA DRAG'S LIVE RECTANGLE (16.5). On this layer for the selection's reason — it moves
+	# many times a second and nothing about the map has changed — and drawn as the same
+	# parallelogram `_draw_areas()` produces, so what an author sees while dragging is what they
+	# get on release rather than an approximation of it.
+	if pending_area.size.x > 0 and pending_area.size.y > 0:
+		var box := _area_quad(pending_area)
+		_overlay.draw_colored_polygon(box, _AREA_FILL)
+		_overlay.draw_polyline(box + PackedVector2Array([box[0]]), AREA_COLOUR, 2.0)
 	if _hover.x < 0:
 		return
 	var poly := _diamond(_hover)
@@ -663,6 +706,43 @@ func _draw_entities() -> void:
 		_outline(row[0], row[1], 1.0)
 
 
+## The named regions (PLAN.md 16.5): a faint wash, an outline, and the name once per rectangle.
+##
+## ## FOUR CORNERS OF THE WHOLE RECT, NOT A DIAMOND PER TILE
+##
+## ⚠️ **A REGION IS A `Rect2i` IN TILE SPACE AND ITS PROJECTION IS A PARALLELOGRAM**, because
+## `Iso._project` is linear: the four screen corners of the rect ARE the four corners of the
+## drawn shape, and every tile inside it is inside them. So one quad draws a 20x20 region rather
+## than 400 diamonds — which is not a micro-optimisation but 16.x-slow-place's actual finding
+## applied before it can bite: 9,216 `draw_colored_polygon` calls cost 439 ms on this machine,
+## and a handful of regions on a large map is that order again.
+##
+## The corners go through `_to_screen_f()` like everything else here, so the geometry still comes
+## from the game's hash-checked `Iso` and there is no second projection in this file.
+##
+## ## THE NAME IS DRAWN PER RECTANGLE, AND THAT IS THE HONEST CHOICE
+##
+## A region can be several rectangles (`MapData.areas` is flat, and a region is the union of the
+## entries sharing a name), so "once per region" would mean picking one rectangle to label and
+## leaving the others anonymous — and an author looking at an unlabelled magenta box would have
+## no way to tell which region it belongs to, or that it belongs to one at all. Repeating the
+## name is noisier and answers the question every box raises.
+func _draw_areas() -> void:
+	var font := ThemeDB.fallback_font
+	for a in document.data.areas:
+		var rect: Rect2i = a.get("rect", Rect2i())
+		if rect.size.x <= 0 or rect.size.y <= 0:
+			continue
+		var quad := _area_quad(rect)
+		draw_colored_polygon(quad, _AREA_FILL)
+		draw_polyline(quad + PackedVector2Array([quad[0]]), AREA_COLOUR, 2.0)
+		# AT THE REGION'S TOP CORNER, which in this projection is the tile-space origin -- the
+		# same anchor `_draw_starts()` labels from, and for its reason: a centre-relative offset
+		# lands inside the shape at low zoom and the text sits on the fill it is naming.
+		draw_string(font, quad[0] + Vector2(6.0, -6.0), String(a.get("name", &"")),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AREA_COLOUR)
+
+
 ## A start marker, with the player's number beside it.
 ##
 ## Drawn ON TOP of everything, including the town centre it sits inside, because "where does
@@ -681,6 +761,27 @@ func _draw_starts() -> void:
 		var at := _to_screen_f(Vector2(s))
 		draw_string(font, at + Vector2(4.0, -6.0), "P%d" % (i + 1),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, START_COLOUR)
+
+
+## A tile-space rect as its four screen corners, in order.
+##
+## Shared by `_draw_areas()` and the overlay's drag preview so the two cannot disagree about what
+## a rectangle looks like — the live shape under the pointer IS the shape that gets saved.
+##
+## ⚠️ **`end` IS EXCLUSIVE, SO THE FAR CORNER IS `end` AND NOT `end - ONE`.** In TILE space the
+## region covers tiles up to `end - ONE`, and its screen outline runs to the far edge of those
+## tiles, which is the fractional coordinate `end`. Using `end - ONE` here would draw a box one
+## tile short on both axes — visibly wrong at high zoom and invisible at low, which is the worse
+## of the two ways to get it wrong.
+func _area_quad(rect: Rect2i) -> PackedVector2Array:
+	var lo := Vector2(rect.position)
+	var hi := Vector2(rect.end)
+	return PackedVector2Array([
+		_to_screen_f(lo),
+		_to_screen_f(Vector2(hi.x, lo.y)),
+		_to_screen_f(hi),
+		_to_screen_f(Vector2(lo.x, hi.y)),
+	])
 
 
 func _outline(t: Vector2i, colour: Color, width: float) -> void:

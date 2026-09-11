@@ -89,6 +89,20 @@ const ALLY_COLOR := Color("#87CEEB")
 ## this one**, not only against the terrain.
 const DAMAGE_FLASH_COLOR := Color.WHITE
 const FRAME_COLOR := Color("#E5B842")   # HudStyle.GOLD -- not a constant expression to reference directly
+
+## The King of the Hill zone's outline when NOBODY holds it — empty, or contested (11.x-koth).
+##
+## ⚠️ **WHITE IS RESERVED BY `DAMAGE_FLASH_COLOR` AND THIS IS DELIBERATELY NOT IT.** The unheld
+## hill has to be visible against seven terrain colours and must not be mistaken for the
+## under-attack flash, which is the one thing on this map that goes white. A pale warm grey reads
+## as "a place" rather than as anybody's blip: `OWN_COLOR` is green, `OTHER_COLOR` red,
+## `ALLY_COLOR` sky blue and `GAIA_COLOR` olive, so the free axis is lightness without saturation.
+const KOTH_NEUTRAL_COLOR := Color(0.85, 0.83, 0.78, 0.9)
+
+## How thick the zone outline is drawn. Thicker than `_FRAME_INNER_WIDTH`'s hairline, because at
+## `SIZE` (about 118 px) a 13-tile zone on a 96-tile map is roughly sixteen pixels square and a
+## one-pixel box inside it would read as a smudge rather than as a boundary.
+const _KOTH_WIDTH := 2.0
 ## The hairline around the map itself.
 ##
 ## With `SIZE` derived from the aperture it lands directly under the frame's own bar
@@ -120,6 +134,11 @@ var _double_tap := DoubleTapDetector.new()
 ## what the snapshot filter withheld from the map.
 var _fog_tex: ImageTexture = null
 var _fog: PackedByteArray = PackedByteArray()
+
+## The King of the Hill zone in TILES and the colour to outline it in (11.x-koth). An empty rect
+## means no hill, which is every match in every other mode — see `set_koth_zone()`.
+var _koth_zone: Rect2i = Rect2i()
+var _koth_color: Color = KOTH_NEUTRAL_COLOR
 
 
 func _init() -> void:
@@ -247,6 +266,24 @@ func update_entities(facts: Dictionary, local_owner: int,
 	queue_redraw()
 
 
+## Where the contested zone is and who holds it (PLAN.md 11.2, card 11.x-koth).
+##
+## An EMPTY rect takes the ring off, which is what every non-KotH match sends —
+## `SimWorld.koth_zone`'s arming convention carried all the way from the sim to the pixel, so this
+## control never has to know what mode is being played.
+##
+## ⚠️ **THE COLOUR IS THE CALLER'S, BECAUSE THE PLAYER COLOURS ARE.** `GameScene` resolves a holder
+## id through `GameDataRegistry.colour()` exactly as it does for the age badge's claim ring; a
+## minimap that looked colours up itself would be a second place `colours.json`'s load-bearing
+## order is indexed into. `KOTH_NEUTRAL_COLOR` for nobody, which includes a CONTESTED hill.
+func set_koth_zone(zone: Rect2i, colour: Color) -> void:
+	if _koth_zone == zone and _koth_color == colour:
+		return
+	_koth_zone = zone
+	_koth_color = colour
+	queue_redraw()
+
+
 func _terrain_color(kind: int) -> Color:
 	var visual_id: StringName = TerrainLayer.TERRAIN_VISUALS.get(kind, &"")
 	if visual_id == &"":
@@ -284,6 +321,19 @@ func _draw() -> void:
 	# withheld from the map. Under the frame, so the gold border stays crisp.
 	if _fog_tex != null:
 		draw_texture_rect(_fog_tex, rect, false)
+
+	# ⚠️ **THE HILL IS DRAWN OVER THE FOG, WHICH IS THE OPPOSITE OF EVERY BLIP** (11.x-koth).
+	# A blip under the fog is hidden because seeing an enemy through unexplored black would hand
+	# back exactly what the snapshot filter withheld. **The zone is not a secret**: it is a rule of
+	# the match, the same on every client, announced in the lobby, and a player who cannot see
+	# where the scoring ground is can only lose to it — which is what 11.2 asked the ring for in
+	# those words. Under the frame, so the gold border stays crisp.
+	if _koth_zone.size.x > 0 and _koth_zone.size.y > 0:
+		var lo := _map_to_local(Vector2(_koth_zone.position))
+		# `end` IS EXCLUSIVE, so the far corner is the fractional tile coordinate `end` and not
+		# `end - ONE` -- 16.5's `_area_quad()` carries the same warning about the same rect.
+		var hi := _map_to_local(Vector2(_koth_zone.end))
+		draw_rect(Rect2(lo, hi - lo), _koth_color, false, _KOTH_WIDTH)
 
 	# ONE LINE NOW, NOT TWO. The double stroke was standing in for a frame that did
 	# not exist -- an outer band with a thinner inner line set apart from it was the

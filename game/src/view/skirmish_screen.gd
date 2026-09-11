@@ -1074,24 +1074,24 @@ func _build_game_setup() -> Control:
 	_mode_picker = OptionButton.new()
 	_mode_picker.custom_minimum_size = _PICKER_MIN
 	_mode_picker.clip_text = true
-	# ⚠️ **TROPHY IS SELECTABLE AS OF 2026-09-07 AND KING OF THE HILL IS STILL NOT.** This
-	# loop used to grey everything but conquest, on the sound argument that *a mode which
-	# silently decided nothing would be worse than one greyed*. That argument expired for
-	# Trophy the moment `WinConditionSystem._trophy` and `MapGen._place_trophies` landed --
-	# leaving a finished mode greyed out is the same defect in the other direction, and it
-	# is the one that makes a feature look unbuilt when it is not.
+	# ✅ **ALL THREE OFFERED MODES ARE SELECTABLE AS OF 2026-09-09, AND `UNBUILT` IS NOW EMPTY.**
+	# This loop used to grey everything but conquest, on the sound argument that *a mode which
+	# silently decided nothing would be worse than one greyed*. That argument expired for Trophy
+	# when `_trophy` landed (2026-09-07) and for King of the Hill when `_king_of_the_hill` and
+	# `MapGen._place_koth_zone` did — leaving a finished mode greyed out is the same defect in the
+	# other direction, and it is the one that makes a feature look unbuilt when it is not.
 	#
-	# **KotH is still listed and disabled** on exactly the old reasoning: it wants the
-	# zone's position as map data, `SimPlayer.score`, and the minimap ring (11.9 settled
-	# every design question about it and none of the three pieces).
+	# ⚠️ **THE EMPTY LIST STAYS RATHER THAN THE LOOP LOSING ITS BRANCH.** `Mode.REGICIDE` is card
+	# 11.2 and is not declared yet; when it is, it arrives greyed by adding one entry here, which
+	# is a smaller and more obvious change than re-deriving how a mode gets disabled.
 	#
 	# THE ENABLED LIST IS WRITTEN OUT RATHER THAN DERIVED, because "which modes are
 	# finished" is not a fact any data file knows -- `MatchConfig.Mode` declares all four
-	# and `WinConditionSystem` decides three of them. A `_mode_is_built()` helper reading
+	# and `WinConditionSystem` decides all four of them. A `_mode_is_built()` helper reading
 	# some flag would be a second place for this to be wrong.
 	const OFFERED := [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.TROPHY,
 			MatchConfig.Mode.KING_OF_THE_HILL]
-	const UNBUILT := [MatchConfig.Mode.KING_OF_THE_HILL]
+	const UNBUILT: Array[MatchConfig.Mode] = []
 	for mode in OFFERED:
 		_mode_picker.add_item(MatchConfig.mode_name(mode), int(mode))
 		if UNBUILT.has(mode):

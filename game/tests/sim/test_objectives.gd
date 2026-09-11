@@ -442,10 +442,13 @@ func test_exactly_stops_being_satisfied_when_the_count_passes_it() -> void:
 func test_at_most_zero_is_not_satisfied_by_an_unmeasurable_subject() -> void:
 	# `_count` returns -1 for a subject it cannot measure and `_satisfied` refuses it,
 	# because 0 is a value that PASSES `== 0` and `<= n`. Reached here through a def built
-	# by hand: `ObjectiveDef.from_dict` refuses `area`/`named_unit`/`ticks` outright, so
-	# this covers a future subject added to the enum without a case in `_count`.
+	# by hand: `ObjectiveDef.from_dict` refuses `named_unit`/`ticks` outright, so this covers
+	# a future subject added to the enum without a case in `_count`.
+	# ⚠️ **THE SUBJECT USED TO BE `AREA` AND 16.5 MADE IT MEASURABLE**, so it is `NAMED_UNIT`
+	# now — a test whose premise is "this subject cannot be counted" has an expiry date, which
+	# is §5's rule about a behaviour test tied to whichever piece of data happens to fit today.
 	var o := ObjectiveDef.new()
-	o.subject = ObjectiveDef.Subject.AREA
+	o.subject = ObjectiveDef.Subject.NAMED_UNIT
 	o.compare = ObjectiveDef.Compare.EXACTLY
 	o.value = 0
 	o.output = ObjectiveDef.Output.WIN
@@ -453,6 +456,234 @@ func test_at_most_zero_is_not_satisfied_by_an_unmeasurable_subject() -> void:
 			"an unmeasurable rule must not pass '== 0'")
 	o.compare = ObjectiveDef.Compare.AT_MOST
 	assert_false(ObjectiveSystem._satisfied(o, -1), "nor '<= 0'")
+
+
+# ── areas: named regions (PLAN.md 16.5) ───────────────────────────────────────
+
+## A world whose map declares one region, so `MapGen.build_from()` puts it on `SimWorld.areas`.
+##
+## ⚠️ **THROUGH `MapGen.build_from()` AND NOT BY ASSIGNING `w.areas`, WHICH IS THE HALF THAT
+## COULD SILENTLY NOT EXIST.** Writing regions into `MapData` and not reading them there is the
+## exact shape of 16.4c's wall-axis gap — the tool would draw a region, save it, and hand the
+## match a world in which the objective counting it can never tick, with the file agreeing with
+## the tool. So the fixture carries a real `MapData` and lets the generator do the collapse.
+func _world_with_area(rows: Array, regions: Array) -> SimWorld:
+	var data := MapData.create(Vector2i(48, 48), SimMap.Terrain.GRASS)
+	for r in regions:
+		data.add_area(r[0], r[1])
+
+	var cfg := MatchConfig.new()
+	cfg.player_ids = [1, 2]
+	cfg.teams = [0, 0]
+	cfg.map_size = data.size
+	cfg.map_data = data
+	cfg.mode = MatchConfig.Mode.SCENARIO
+	cfg.objective_player_id = 1
+	var problems: Array[String] = []
+	var objectives: Array[ObjectiveDef] = []
+	for r in rows:
+		var o := ObjectiveDef.from_dict(r, problems)
+		if o == null:
+			fail("fixture row was refused by the loader: %s" % " | ".join(problems))
+			continue
+		objectives.append(o)
+	cfg.objectives = objectives
+
+	var world := SimWorld.new()
+	world.setup(cfg)
+	MapGen.build_from(world, data)
+	return world
+
+
+func test_a_map_declaring_a_region_reaches_the_world_that_evaluates_it() -> void:
+	var world := _world_with_area([], [[&"ford", Rect2i(10, 10, 4, 4)]])
+	assert_true(world.areas.has(&"ford"), "%s" % [world.areas.keys()])
+	assert_eq((world.areas[&"ford"] as Array).size(), 1)
+	# THE FLAT LIST COLLAPSES BY NAME: two entries sharing one are one region of two rects.
+	var two := _world_with_area([], [[&"pass", Rect2i(4, 4, 2, 2)],
+			[&"pass", Rect2i(20, 20, 2, 2)]])
+	assert_eq((two.areas[&"pass"] as Array).size(), 2)
+
+
+func test_an_area_row_counts_what_is_standing_in_the_region_and_not_outside_it() -> void:
+	var world := _world_with_area(
+			[_row({"subject": "area", "area": "ford", "value": 2})],
+			[[&"ford", Rect2i(10, 10, 4, 4)]])
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))     # populates the world
+	world.spawn_unit(&"unit.villager", 1, Vector2i(30, 30))     # mine, and nowhere near it
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "outside does not count")
+	assert_false(world.match_over)
+
+	world.spawn_unit(&"unit.villager", 1, Vector2i(10, 10))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(13, 13))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 2, "both corners are inside")
+	assert_true(world.match_over)
+
+
+## Two rectangles under one name are ONE region, so a unit in either counts — which is the whole
+## reason `MapData.areas` is flat rather than one rect per region.
+func test_a_region_of_two_rectangles_counts_a_unit_in_either() -> void:
+	var world := _world_with_area(
+			[_row({"subject": "area", "area": "pass", "value": 2})],
+			[[&"pass", Rect2i(4, 4, 3, 3)], [&"pass", Rect2i(30, 30, 3, 3)]])
+	world.spawn_unit(&"unit.villager", 2, Vector2i(20, 20))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(5, 5))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(31, 31))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 2)
+
+
+## ⚠️ **`id` STILL MEANS A DEF ID ON AN AREA ROW, WHICH IS WHY THE REGION HAS ITS OWN FIELD.**
+## Putting the region in `id` would have made `_NAMES_AN_ID` a lie and left "five VILLAGERS in
+## the ford" inexpressible — an author would have had to count everything they owned there.
+func test_an_area_row_can_filter_by_def_or_count_everything() -> void:
+	var world := _world_with_area([
+		_row({"subject": "area", "area": "ford", "id": "unit.villager", "value": 2}),
+		_row({"subject": "area", "area": "ford", "value": 3}),
+	], [[&"ford", Rect2i(10, 10, 6, 6)]])
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(10, 10))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(11, 11))
+	world.spawn_unit(&"unit.scout_cavalry", 1, Vector2i(12, 12))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 2, "two villagers")
+	assert_eq(world.player_for(1).objective_progress[1], 3, "three things")
+
+
+## ⚠️ **A BUILDING IS IN A REGION IF ANY OF ITS FOOTPRINT IS, AND AN ORIGIN TEST WOULD BE WRONG
+## BY UP TO NINE TILES.** `SimBuilding.tile()` is the footprint's ORIGIN, so a 10x10 town centre
+## whose middle sits in a region has its origin outside it — the same origin-versus-centre error
+## `MapDocument._starts_inside()` and `preview_saved_map`'s second red run are the records of.
+func test_a_building_overlapping_a_region_is_in_it() -> void:
+	var world := _world_with_area(
+			[_row({"subject": "area", "area": "base", "id": "building.town_center", "value": 1})],
+			[[&"base", Rect2i(14, 14, 2, 2)]])
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	# ORIGIN AT 8,8 AND 10x10, so the region at 14,14 is inside the footprint and nowhere near
+	# the origin. An origin test would count zero.
+	var tc := world.spawn_building(&"building.town_center", 1, Vector2i(8, 8),
+			SimBuilding.Phase.COMPLETE, true)
+	assert_not_null(tc)
+	# THE FIXTURE'S OWN PREMISE, ASSERTED: the region must NOT contain the origin, or this test
+	# would pass under the origin test it exists to rule out.
+	assert_false(Rect2i(14, 14, 2, 2).has_point(tc.tile()),
+			"the region must miss the origin for this test to mean anything")
+	assert_true(tc.footprint_rect().intersects(Rect2i(14, 14, 2, 2)),
+			"and it must overlap the footprint")
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 1,
+			"the town centre covers the region even though its origin does not")
+
+
+## `_census`' two rules carried over, because both are ways a region reads as held when it is not:
+## a pegged-out foundation is not a building on the ground, and rubble lingers a minute.
+##
+## THE TARGET IS 2 SO NOTHING EVER WINS, deliberately: the latch stops `process_tick` updating
+## progress once a match is over, so a row that could be satisfied would freeze the very number
+## this test is watching go down again.
+func test_a_foundation_and_a_corpse_are_not_holding_a_region() -> void:
+	var world := _world_with_area(
+			[_row({"subject": "area", "area": "hill", "value": 2})],
+			[[&"hill", Rect2i(20, 20, 4, 4)]])
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	var pegged := world.spawn_building(&"building.house", 1, Vector2i(20, 20),
+			SimBuilding.Phase.FOUNDATION, true)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0,
+			"pegging one out is not holding the ground")
+
+	pegged.phase = SimBuilding.Phase.COMPLETE
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 1)
+
+	pegged.alive = false
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "and rubble holds nothing")
+
+
+## ⚠️ **UNITS AND BUILDINGS SHARE ONE BUCKET, AND THAT IS THE ANSWER TO "WHAT DOES AN AREA
+## COUNT".** Splitting them would make *"the enemy has nothing in the crossing"* true of a
+## crossing with an enemy fortress in it, which is the reading nobody wants and the one an author
+## would never guess they had asked for.
+func test_leave_the_enemy_nothing_here_is_not_satisfied_by_their_castle() -> void:
+	var world := _world_with_area(
+			[{"subject": "area", "area": "crossing", "owner": "enemy",
+				"compare": "==", "value": 0, "output": "win"}],
+			[[&"crossing", Rect2i(20, 20, 6, 6)]])
+	world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	world.spawn_building(&"building.house", 2, Vector2i(21, 21),
+			SimBuilding.Phase.COMPLETE, true)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 1, "their house is holding it")
+	assert_false(world.match_over)
+
+
+## ⛔ **THE TRAP THIS SUBJECT BROUGHT WITH IT, AND THE REASON `MapData.has_area()` EXISTS.** An
+## area row is evaluable and can still name a region the map has not got — a misspelling, or a
+## scenario pointed at a re-authored map whose regions were renamed. "Nothing is in a region that
+## does not exist" is **0**, which PASSES `== 0` and `<= n`, so an unwinnable scenario would
+## announce victory on tick 1. `_in_area` answers -1 instead.
+func test_a_region_the_map_has_not_got_is_unmeasurable_and_not_zero() -> void:
+	var world := _world_with_area(
+			[{"subject": "area", "area": "nowhere", "owner": "enemy",
+				"compare": "==", "value": 0, "output": "win"}],
+			[[&"somewhere_else", Rect2i(4, 4, 2, 2)]])
+	world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], -1,
+			"unmeasurable, so no comparison passes")
+	assert_false(world.match_over, "and above all it did not win on tick 1")
+
+
+## The other half of that: a region that DOES exist and happens to be empty is a real 0, and an
+## `at_most` row about it is genuinely satisfied. Conflating the two would make one of these two
+## tests impossible to write.
+func test_a_region_that_exists_and_is_empty_really_counts_zero() -> void:
+	var world := _world_with_area(
+			[{"subject": "area", "area": "crossing", "owner": "enemy",
+				"compare": "==", "value": 0, "output": "win"}],
+			[[&"crossing", Rect2i(20, 20, 4, 4)]])
+	world.spawn_unit(&"unit.villager", 1, Vector2i(2, 2))
+	world.spawn_unit(&"unit.villager", 2, Vector2i(40, 40))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "nobody there, and that is a count")
+	assert_true(world.match_over)
+
+
+## ⚠️ **A REUSED WORLD MUST NOT KEEP THE LAST MATCH'S REGIONS.** `preview_ai_match` steps four
+## rungs through one world and every `dev_preview` tool reuses a config, so a scenario followed by
+## a skirmish would otherwise leave the skirmish holding regions and an area row measuring a map
+## nobody is playing. `SimWorld.setup()` clears them for `trophy_def_id`'s reason.
+func test_setting_a_world_up_again_forgets_the_last_maps_regions() -> void:
+	var world := _world_with_area([], [[&"ford", Rect2i(10, 10, 4, 4)]])
+	assert_true(world.areas.has(&"ford"))
+	var plain := MatchConfig.new()
+	plain.player_ids = [1, 2]
+	plain.teams = [0, 0]
+	plain.map_size = Vector2i(48, 48)
+	world.setup(plain)
+	assert_true(world.areas.is_empty(), "%s" % [world.areas.keys()])
+
+
+## One walk of the entity list however many area rows there are — `_census`' own argument applied
+## to the second question. Four rows about the same place must not be four walks.
+func test_the_area_census_is_one_pass_for_every_region_any_row_names() -> void:
+	var world := _world_with_area([
+		_row({"subject": "area", "area": "a", "value": 1}),
+		_row({"subject": "area", "area": "a", "id": "unit.villager", "value": 1}),
+		_row({"subject": "area", "area": "b", "value": 1}),
+	], [[&"a", Rect2i(4, 4, 4, 4)], [&"b", Rect2i(20, 20, 4, 4)]])
+	assert_eq(ObjectiveSystem._areas_named(world).size(), 2,
+			"two distinct regions from three rows")
+	# AND NO CENSUS AT ALL WHEN NOTHING ASKS, which is every match in the game today.
+	var plain := _world([_row({"subject": "unit", "id": "unit.villager", "value": 1})])
+	assert_true(ObjectiveSystem._areas_named(plain).is_empty())
+	assert_true(ObjectiveSystem._area_census(plain, {}).is_empty())
 
 
 # ── conquest's loss without conquest's win (11.8's fork) ───────────────────────

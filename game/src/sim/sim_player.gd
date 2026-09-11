@@ -104,6 +104,27 @@ var researched: Dictionary = {}
 var tech_mods: Dictionary = {}
 
 var control_groups: Array = [[], [], [], [], []]          # Array[Array[int]], one per CONTROL_GROUP_COUNT slot
+
+## KING OF THE HILL's tally (11.x-koth): one point per tick this player's SIDE leads the zone,
+## first to `WinConditionSystem.KOTH_TARGET_SCORE` wins. 0 in every other mode.
+##
+## ⚠️ **IT LANDED WITH THE RULE THAT WRITES IT, AND THAT IS WHY IT WAS NOT DECLARED EARLIER.**
+## `_king_of_the_hill()`'s own placeholder note refused to add it ahead of time: *"an unwritten
+## field that reaches the HUD is precisely the hole 4.11's counter was, and one field nothing
+## writes is how it starts."* `garrison_cap` is the standing example — declared on all 31 buildings
+## at 0.4 and read by nothing until 4.8.
+##
+## **PER PLAYER AND NOT PER TEAM, though a team scores together.** Every standing member of the
+## leading side gets the same +1, so two allies hold identical numbers — which is correct and is
+## what lets `winner_id` name a player the way every other mode does. A per-team tally would be a
+## second place teams are recorded, beside `SimWorld.teams`.
+##
+## IN `state_hash()`, unlike `pop_used`: it is not derivable from anything else hashed. WHICH units
+## are in the zone depends on positions that are hashed, but the running TOTAL is state nothing
+## recomputes — so two hosts that disagreed for a single tick would agree about the whole world
+## forever after and declare a winner on different ticks.
+var score: int = 0
+
 var defeated: bool = false
 
 ## WHY they are out (project owner, 2026-08-30: *"when a player disconnects or resigns

@@ -154,6 +154,11 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 			# the bot that cannot read them.
 			"objective_progress": p.objective_progress,
 			"objective_done": p.objective_done,
+			# THE KING OF THE HILL TALLY (11.x-koth). Per player and unfiltered, on `researched`'s
+			# rule: a score is what every RTS in the genre puts on screen for everybody, and
+			# filtering it would break the single `player_state` shape to hide a number the mode
+			# exists to race towards.
+			"score": p.score,
 		}
 
 	return {
@@ -211,6 +216,27 @@ static func build(w: SimWorld, player_id: int) -> Dictionary:
 		"claim_owner": w.claim_owner,
 		"claim_ticks_left": w.claim_ticks_left,
 		"claim_total_ticks": w.claim_total_ticks,
+		# THE KING OF THE HILL ZONE AND WHO HOLDS IT (11.x-koth), beside the claim above and for
+		# its reasons: both are facts about the MATCH rather than about any one player, so they sit
+		# here rather than costing a copy per player in `player_state`.
+		#
+		# ⚠️ **THE ZONE IS SENT RATHER THAN DERIVED, EVEN THOUGH IT IS MAP DATA THE CLIENT HAS.**
+		# An AUTHORED hill is in `cfg.map_data.areas` on every client already — but a GENERATED one
+		# is worked out by `MapGen._place_koth_zone()` on the host, and a client re-deriving it
+		# would be a second implementation of a rule that decides a match. Same argument
+		# `MatchConfig` makes for sending the map instead of the seed. Five ints once per snapshot
+		# is what the claim block already priced.
+		#
+		# **AN EMPTY RECT MEANS NO HILL**, which is `SimWorld.koth_zone`'s own arming convention —
+		# so the minimap draws no ring in every other mode without a second flag to check.
+		"koth_x": w.koth_zone.position.x,
+		"koth_y": w.koth_zone.position.y,
+		"koth_w": w.koth_zone.size.x,
+		"koth_h": w.koth_zone.size.y,
+		# WHOSE it is travels as a player id and not as a colour, for `claim_owner`'s reason: the
+		# client holds every player's colour already, and a Color out of the sim would be a view
+		# type `src/sim/` may not name at all.
+		"koth_holder": w.koth_holder,
 	}
 
 

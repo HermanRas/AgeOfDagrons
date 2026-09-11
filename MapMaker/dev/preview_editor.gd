@@ -216,6 +216,25 @@ func _process(_delta: float) -> void:
 		25:
 			_report_wall_rows()
 			_shoot("palette_walls")
+			# ⚠️ **16.5's WHOLE VISIBLE SURFACE IS THE NEXT SHOT, AND IT IS A COLOUR JUDGEMENT
+			# NO TEST CAN MAKE.** A region is a magenta wash over ground an
+			# author still has to read — the fill is 0.10 for exactly that reason — so *"can you
+			# still see the river under it, and can you tell two overlapping regions apart"* is a
+			# question for an eye. The tests prove the rectangle's arithmetic and that the name
+			# reaches the file; they cannot see a wash that hides the map or a label lost against
+			# the terrain.
+			_drag_out_some_areas()
+		26:
+			_report_areas()
+			# ⛔ **ONE SHOT, NOT TWO. THERE WAS A `palette_areas` HERE AND IT WAS A DUPLICATE.**
+			# `_drag_out_some_areas()` selects the Areas tab in order to drag, so the panel is
+			# already in this frame with its rows, its name field and its three hidden controls —
+			# a second shot of "the Areas tab" came out **pixel-for-pixel the same picture** bar
+			# the hovered tile in the status line. §5's rule about a second rendering nobody looks
+			# at, arriving as a second screenshot nobody compares: the report below carries what
+			# the extra shot was supposed to add, and it can say things a picture cannot.
+			_report_the_area_tab()
+			_shoot("areas_drawn")
 			_report_mouse_cursors()
 			# ⚠️ **THE FILE MENU AND THE EXIT QUESTION ARE THE TWO NEW SURFACES WITH NO OTHER
 			# CHECK** (card #93). The tests assert the menu's ids and the dialogs' configuration;
@@ -225,14 +244,14 @@ func _process(_delta: float) -> void:
 			# out titled *"Open a Directory"* with a *"Select Current Folder"* button, opening in
 			# the tool's own source tree, and **all three passed every test**.
 			_show_file_menu()
-		26:
+		27:
 			_shoot("file_menu")
 			_provoke_the_exit_question()
-		27:
+		28:
 			_report_exit_question()
 			_shoot("exit_unsaved")
 			print("")
-			print("OK — twenty-four shots written. Look at them: the arithmetic is tested, the"
+			print("OK — the shots are written. Look at them: the arithmetic is tested, the"
 					+ " picture is not.")
 			get_tree().quit(0)
 			return
@@ -494,6 +513,103 @@ func _report_wall_rows() -> void:
 	_hold(UI_FRAMES)
 
 
+## ── the named regions (16.5) ────────────────────────────────────────────────
+
+## Drag out three region rectangles through the REAL gesture, and make two of them overlap.
+##
+## ⚠️ **THE OVERLAP IS THE POINT OF THE THIRD ONE.** Regions are allowed to overlap — *"the
+## crossing"* and *"the north bank"* genuinely share ground, and a region drawn over a base is
+## how *"hold the base"* is asked — so the fill is 0.10 partly so two of them stacked read as
+## darker than one. Whether they actually do is a question for an eye, and this is the shot that
+## puts it in front of one.
+##
+## Driven through `Editor.apply_tool()` and `_finish_area()` rather than `MapDocument.add_area()`,
+## the same reason `_drag_the_selection()` drives the editor: the anchor, the normalisation and
+## the one-write-on-release are the editor's, and a preview that called the document would
+## photograph a rectangle no gesture had produced.
+func _drag_out_some_areas() -> void:
+	_palette().set_search("")
+	_show_palette(ObjectPalette.Category.AREA)
+	var doc: MapDocument = _editor.document()
+	var side := doc.data.size.x
+	var middle := Vector2i(side / 2, side / 2)
+	# ⛔ **THE CAMERA IS AIMED AT THE REGIONS BEFORE THEY ARE DRAWN, AND THE FIRST VERSION OF THIS
+	# FUNCTION DID NOT DO IT.** The previous step zooms in on player 1's start at (19, 30); the
+	# regions go in the middle of a 96x96 map, which at 0.70x is **just off the bottom edge of the
+	# canvas**. So `areas_drawn.png` came out with no region in it at all — and it did not read as
+	# an empty shot, because a straw entity footprint happened to be in frame and looked like a
+	# wash. It cost a pixel sample to rule out: a magenta blend cannot RAISE the green channel,
+	# and that one measured (149,158,100) against grass's (92,140,71).
+	#
+	# **§5's rule, met from the instrument side: an instrument that answers a slightly different
+	# question is worse than no instrument, because it is believed.** A preview that photographs
+	# the wrong part of the map reports a feature as broken with nothing wrong with it.
+	(_editor._canvas as MapCanvas).center_on(middle, 0.8)
+	for run in [
+		{"name": &"crossing", "from": middle + Vector2i(-6, -4),
+			"to": middle + Vector2i(6, 4)},
+		{"name": &"north_bank", "from": middle + Vector2i(-16, -14),
+			"to": middle + Vector2i(-6, -4)},
+		# OVERLAPPING THE FIRST, deliberately -- see the note above.
+		{"name": &"north_bank", "from": middle + Vector2i(-2, -8),
+			"to": middle + Vector2i(4, 0)},
+	]:
+		_palette().set_area_name(run["name"])
+		doc.begin_stroke()
+		_editor.apply_tool(run["from"])
+		_editor.apply_tool(run["to"])
+		_editor._finish_area()
+		doc.end_stroke()
+	# THE CANVAS IS THE THING BEING PHOTOGRAPHED, so it has to have redrawn before the shot --
+	# `_finish_area()` queues it, and the hold is what lets the frame land.
+	_editor._canvas.queue_redraw()
+	_hold(UI_FRAMES)
+
+
+## What the regions are, and what the tool says about them.
+##
+## ⚠️ **THE COUNTS ARE PRINTED AS TWO NUMBERS BECAUSE THE SCREEN CANNOT TELL THEM APART.** Two
+## magenta boxes with the same label look exactly like two regions that happen to share a name,
+## and the difference decides what an `area` objective counts — so the region count, the rectangle
+## count and the status line's own claim about both are printed side by side. A checker that
+## agreed with the code in the same way as the code would be worse than none (16.4c's icon-counter
+## lesson), so this reads `MapData` and the status line separately and lets them disagree.
+func _report_areas() -> void:
+	var doc: MapDocument = _editor.document()
+	print("")
+	print("areas (16.5): %d region(s) in %d rectangle(s)"
+			% [doc.area_names().size(), doc.data.areas.size()])
+	for a in doc.data.areas:
+		var rect: Rect2i = a.get("rect", Rect2i())
+		print("  %-12s %dx%d at %d,%d" % [a.get("name", &""), rect.size.x, rect.size.y,
+				rect.position.x, rect.position.y])
+	print("  status line: %s" % _editor._status.text.strip_edges())
+	print("  notice line: %s" % _editor._notice_label.text.strip_edges())
+	# THE PALETTE'S ROWS ARE THE DOCUMENT'S REGIONS, and they are pushed in from
+	# `_refresh_status()` rather than asked for -- so a row that failed to appear here is a
+	# refresh call site nobody made, which is the fault that arrangement exists to prevent.
+	print("  palette rows: %s" % [_palette().listed_ids()])
+	if _palette().listed_ids().size() != doc.area_names().size():
+		printerr("    the palette's rows and the map's regions disagree")
+	_hold(UI_FRAMES)
+
+
+## Which of the palette's rows the Areas tab shows, in the same frame `areas_drawn.png` catches.
+##
+## ⚠️ **WHAT NO TEST CAN JUDGE IS WHETHER THE TAB LOOKS FINISHED.** Owner, tint and size all hide
+## themselves here because an area record is `{name, rect}` and has no field for any of them — and
+## a panel with three controls taken out and one put in is exactly the kind of layout that comes
+## out with a hole in it. **That is a question for the shot**; this is the half a shot cannot
+## answer, which is *why* each control is hidden rather than merely that the panel looks tidy.
+func _report_the_area_tab() -> void:
+	print("  area name field: \"%s\"" % _palette().area_name())
+	print("  rows visible — owner %s, tint %s, size %s, area %s"
+			% [_palette()._owner_row.visible, _palette()._tint_row.visible,
+			_palette()._size_row.visible, _palette()._area_row.visible]
+			+ "   (a region has no owner, no colour and no size class in the format)")
+	_hold(UI_FRAMES)
+
+
 ## ⚠️ **16.4e's CURSORS CANNOT BE PHOTOGRAPHED AND THIS IS THE NEXT BEST THING.**
 ##
 ## A custom mouse cursor is drawn by the WINDOWING SYSTEM, not into the viewport, so it is absent
@@ -520,12 +636,18 @@ func _report_mouse_cursors() -> void:
 	print("  registered against shape %d (Input.CURSOR_CROSS), which only MapCanvas asks for"
 			% int(ToolCursors.SHAPE))
 	var refused: Array[String] = []
+	# ⚠️ **`want_art` IS WHAT KEEPS THE TALLY HONEST NOW THAT ONE TOOL DELIBERATELY HAS NO
+	# CURSOR** (16.5). `Tool.AREA` falls back to the system crosshair on purpose — that is the
+	# conventional cursor for dragging out a rectangle, and `ToolCursors.for_tool()` carries the
+	# argument. Printing it as "REFUSED" beside four real ones, and counting it, would be a
+	# checker that cries wolf: the class of instrument this project has twice paid for believing.
 	for entry in [
-		{"tool": EDITOR.Tool.PAINT, "label": "Brush"},
-		{"tool": EDITOR.Tool.PLACE, "label": "Place"},
-		{"tool": EDITOR.Tool.ERASE, "label": "Erase"},
-		{"tool": EDITOR.Tool.SELECT, "label": "Select"},
-		{"tool": EDITOR.Tool.MOVE, "label": "Move"},
+		{"tool": EDITOR.Tool.PAINT, "label": "Brush", "want_art": true},
+		{"tool": EDITOR.Tool.PLACE, "label": "Place", "want_art": true},
+		{"tool": EDITOR.Tool.ERASE, "label": "Erase", "want_art": true},
+		{"tool": EDITOR.Tool.SELECT, "label": "Select", "want_art": true},
+		{"tool": EDITOR.Tool.MOVE, "label": "Move", "want_art": true},
+		{"tool": EDITOR.Tool.AREA, "label": "Area", "want_art": false},
 	]:
 		var tool_value := int(entry["tool"])
 		# THROUGH `Editor.set_tool()` AND NOT `ToolCursors.arm()` DIRECTLY, so this exercises the
@@ -535,15 +657,27 @@ func _report_mouse_cursors() -> void:
 		_editor.set_tool(tool_value)
 		var armed := ToolCursors.arm(tool_value)
 		var id := ToolCursors.for_tool(tool_value)
-		var tex := ToolCursors.texture(id)
+		# ⚠️ **NOT ASKED FOR AN EMPTY ID.** `Tool.AREA` deliberately has no cursor, and
+		# `ToolCursors.texture(&"")` dutifully looks for `assets/ui/cursors/.png` and pushes a
+		# warning about it — a preview that manufactured its own warning about a file nobody
+		# expects would be one more thing to diagnose in an otherwise clean run.
+		var tex: Texture2D = ToolCursors.texture(id) if not id.is_empty() else null
 		var size := "no texture" if tex == null else "%dx%d" % [tex.get_width(), tex.get_height()]
-		print("  %-7s %-11s %-9s hotspot %-9s %s" % [
-				entry["label"], id, size, ToolCursors.hotspot(id),
-				"armed" if armed else "REFUSED — falls back to the system crosshair"])
+		var want: bool = entry["want_art"]
+		var said := "armed"
 		if not armed:
+			said = "REFUSED — falls back to the system crosshair" if want \
+					else "system crosshair, which is the intended cursor here"
+		print("  %-7s %-11s %-9s hotspot %-9s %s" % [
+				entry["label"], "(none)" if id.is_empty() else id, size,
+				ToolCursors.hotspot(id), said])
+		if not armed and want:
 			refused.append(str(entry["label"]))
+		if armed and not want:
+			printerr("    %s was not supposed to have art -- ToolCursors.for_tool() has the"
+					% entry["label"] + " argument, and a cursor here is a decision to revisit")
 	if not refused.is_empty():
-		printerr("  %d of 5 cursors did not arm: %s" % [refused.size(), ", ".join(refused)])
+		printerr("  %d cursor(s) did not arm: %s" % [refused.size(), ", ".join(refused)])
 		printerr("  run: godot --headless --path MapMaker --import")
 	# LEFT ON THE BRUSH, because that is what the tool opens with and a preview should not leave
 	# the editor in whatever state its last loop iteration happened to reach.

@@ -75,7 +75,20 @@ const _DIM := UiChrome.DIM
 ## mode an author cannot tell they are in, and the two would have to stay in step about what a
 ## click means. So select and move are cursors, and **the edit is the inspector row** —
 ## `_entity_row()`, which acts on whatever is selected and is reachable from either cursor.
-enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE }
+##
+## 📝 **`Tool.AREA` (16.5) IS APPENDED, AND THE PARAGRAPH ABOUT LITERALS IS WHY.** It goes on the
+## END rather than beside PLACE where it reads better, for the same reason `MatchConfig.Mode` and
+## `ObjectiveDef.Subject` append: the value is load-bearing outside this file. Here it is only
+## `_tool_buttons`' keys and the tests rather than a wire format, so the cost of inserting would
+## be a renumbering rather than a corruption — and that is exactly the cost `Tool.START`'s removal
+## already charged once, silently, with the tests still passing.
+##
+## ⚠️ **AND IT IS A TOOL RATHER THAN A PALETTE BRANCH BECAUSE THE GESTURE IS DIFFERENT.** A start
+## could become `ObjectPalette.START_ID` and lose its tool precisely because placing one is a
+## CLICK, exactly like placing a building — so PLACE could carry it and three controls went away.
+## A region is a **drag** that produces a rectangle, which is not something any other tool's click
+## can express. `Category.AREA` arms this the way `Category.TERRAIN` arms `PAINT`.
+enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE, AREA }
 
 var _canvas: MapCanvas = null
 var _palette: ObjectPalette = null
@@ -221,6 +234,9 @@ func new_map() -> void:
 
 
 func _new_map() -> void:
+	# `show_document()`'s rule -- this path does not go through it, which is exactly the kind of
+	# second door a state-clearing line gets forgotten at.
+	_cancel_area_drag()
 	var wanted := Vector2i(int(_width.value), int(_height.value))
 	_document = MapDocument.create(wanted, _name_field.text)
 	_canvas.show_document(_document)
@@ -235,6 +251,9 @@ func _new_map() -> void:
 ## it over so there is a screenshot to look at. Adding it later would have meant either a
 ## preview that could not show a real map or a private field poked from outside.
 func show_document(doc: MapDocument) -> void:
+	# A DIFFERENT MAP HAS DIFFERENT REGIONS, so a half-drawn one is abandoned rather than carried
+	# across -- committing it would put a rectangle from one map's gesture onto another's.
+	_cancel_area_drag()
 	_document = doc
 	_name_field.text = doc.map_name
 	_width.set_value_no_signal(doc.data.size.x)
@@ -691,7 +710,29 @@ func _on_entry_picked(_def_id: StringName) -> void:
 	set_tool(Tool.PLACE)
 
 
+## The Areas tab is showing, or the region name changed: arm the AREA tool (16.5).
+##
+## ⚠️ **ARMED EVEN WHEN THE NAME IS EMPTY, which is `_on_terrain_picked`'s rule and not
+## `_on_entry_picked`'s.** There is no other door to `Tool.AREA` — the tab IS the door — so
+## waiting for a name would leave an author hunting the toolbar for a button that arms drawing,
+## and the one they would find is the tool button this arms. The refusal therefore lives on the
+## DRAG, where `_finish_area()` says which of the two things is missing.
+##
+## It also fires on every keystroke in the name field, so `set_tool` runs more often than it does
+## for any other tool. That is free: it repaints five toggle buttons and re-arms a cursor.
+func _on_area_picked(_name: StringName) -> void:
+	set_tool(Tool.AREA)
+
+
 func set_tool(t: Tool) -> void:
+	# ⚠️ **ANY TOOL CHANGE ABANDONS A HALF-DRAWN REGION** (16.5). `_finish_area()` is reached only
+	# while `Tool.AREA` is armed, so a tool swapped mid-drag would leave `_area_from` set and the
+	# preview rectangle painted — and the author's next area drag would anchor on the tile they
+	# pressed several gestures ago. `_grabbing` has the same shape and is cleared by
+	# `stroke_ended`; this one is cleared here because the tool is the thing that can change under
+	# it. Abandoning rather than committing is the right direction: a gesture interrupted by
+	# picking a different tool is not a gesture the author finished.
+	_cancel_area_drag()
 	_tool = t
 	for key in _tool_buttons:
 		(_tool_buttons[key] as Button).button_pressed = (int(key) == int(t))
@@ -771,6 +812,36 @@ func apply_tool(tile: Vector2i) -> void:
 				changed = true
 			else:
 				changed = _document.remove_entity_at(tile) > 0
+				# ⚠️ **A REGION IS ERASED LAST AND ONLY WHEN THERE IS NOTHING SOLID UNDER THE
+				# CLICK** (16.5). One eraser is the owner's stated preference — *"we can use the
+				# same select and erase as normal buildings and remove duplicates"* — so a second
+				# tool for regions was not on the table; what had to be decided is the ORDER, and
+				# it is start, then entity, then region, most solid first.
+				#
+				# **Why not region-first, or region-with-the-AREA-tool:** a region can cover a
+				# quarter of the map at a 10% fill, so it is by far the easiest thing here to
+				# forget is under the pointer. If it went first, every erase inside a big region
+				# would delete the region instead of the tree the author was aiming at — silent
+				# destruction of the thing they cannot see, which is the failure `remove_start()`'s
+				# ⛔ note is this tool's standing record of. Last means the region only goes when
+				# the author clicked ground that is otherwise empty.
+				#
+				# 📝 **THE RESIDUAL CASE IS REAL AND IS ANSWERED WITH A NOTICE.** Erasing bare
+				# ground inside a region does take the region, which an author may not have
+				# intended — so it is said loudly and it is one Ctrl+Z. A refusal instead would
+				# leave the only way to delete a region unbuilt, which is the state the
+				# `Clear start` button's removal already taught: the eraser has to be enough.
+				if not changed:
+					# THE NAME IS READ BEFORE THE REMOVAL, which is the only window it is
+					# readable in -- `remove_area_at()` takes the entry out of the list, so
+					# asking afterwards would name whatever moved up into that index.
+					var at := _document.area_index_at(tile)
+					if at >= 0:
+						var region := String(_document.data.areas[at].get("name", &""))
+						_document.remove_area_at(tile)
+						_notice("ERASED ONE RECTANGLE OF AREA \"%s\"" % region
+								+ " — the region keeps whatever other parts it had", _WARN)
+						changed = true
 		Tool.SELECT:
 			# NOT A CHANGE TO THE MAP, so it does not go down the `changed` path: the expensive
 			# layer is not invalidated, `dirty` is untouched, and Ctrl+Z reaches past it to the
@@ -779,6 +850,12 @@ func apply_tool(tile: Vector2i) -> void:
 				_after_selection_changed()
 		Tool.MOVE:
 			changed = _move_to(tile)
+		Tool.AREA:
+			# NOT A CHANGE TO THE MAP UNTIL THE BUTTON COMES UP -- see `_area_sample()`. The
+			# rectangle is a live preview on the CHEAP overlay while the drag runs and the
+			# document is written once, on release, by `_finish_area()`. Same reason SELECT is
+			# not on the `changed` path: nothing about the map has changed yet.
+			_area_sample(tile)
 	if changed:
 		# REDRAWN AND RE-REPORTED ONLY ON A REAL CHANGE, which is why `paint()` returns a
 		# bool: a drag delivers the same tile dozens of times and repainting the canvas on
@@ -818,6 +895,101 @@ func _place_start_from_palette(player: int, tile: Vector2i) -> bool:
 	_notice("PLACED P%d's START — town centre, villagers, scout and an opening ring"
 			% player, _GOOD)
 	return true
+
+
+# ── the area drag (PLAN.md 16.5) ────────────────────────────────────────────
+
+## The two ends of the rectangle being dragged out, or `(-1, -1)` when no drag is running.
+##
+## ⚠️ **THE CANVAS REPORTS TILES AND NEVER "THIS ONE IS THE PRESS"**, which is the same fact
+## `_grabbing` exists for one section down: `painted` fires once per sample and the interpolated
+## fill-ins are indistinguishable from the first. So the anchor is whichever tile arrives while
+## `_area_from` is unset, and `stroke_ended` is what clears it.
+var _area_from := Vector2i(-1, -1)
+var _area_last := Vector2i(-1, -1)
+
+
+## Throw away a half-drawn region and its preview. Idempotent.
+func _cancel_area_drag() -> void:
+	if _area_from.x < 0 and _area_last.x < 0:
+		return
+	_area_from = Vector2i(-1, -1)
+	_area_last = Vector2i(-1, -1)
+	if _canvas != null:
+		_canvas.pending_area = Rect2i()
+		_canvas.redraw_overlay()
+
+
+## One sample of an AREA gesture: anchor on the first, stretch the preview on the rest.
+##
+## ⚠️ **NOTHING IS WRITTEN TO THE DOCUMENT HERE, AND THAT IS THE WHOLE ARRANGEMENT.** Writing per
+## sample would append a rectangle per mouse-move — dozens of one-tile regions all called the
+## same thing — and `MapEdit`'s stroke would seal them into one undo step, so a single Ctrl+Z
+## would take back a mess the author never asked to make. So the drag paints a PREVIEW on the
+## cheap overlay and `_finish_area()` writes exactly one rectangle on release. That is why this
+## tool is not on `apply_tool`'s `changed` path.
+func _area_sample(tile: Vector2i) -> void:
+	if _document == null:
+		return
+	if _area_from.x < 0:
+		_area_from = tile
+	_area_last = tile
+	# THE PREVIEW GOES ON THE OVERLAY, not the map layer: this changes many times a second and
+	# 16.x-slow-place's rule is that the expensive layer is invalidated only when the MAP changes.
+	_canvas.pending_area = _area_rect()
+	_canvas.redraw_overlay()
+
+
+## The rectangle the two ends describe, normalised so a drag works in any direction.
+##
+## ⚠️ **`+ ONE` ON THE SIZE, BECAUSE BOTH ENDS ARE TILES THE AUTHOR POINTED AT.** A press and a
+## release on the same tile is a 1x1 region, not an empty one — and an empty one is refused by
+## `MapData.add_area()`, so getting this wrong would make a single click do nothing at all while
+## looking exactly like a region that failed to save.
+func _area_rect() -> Rect2i:
+	if _area_from.x < 0 or _area_last.x < 0:
+		return Rect2i()
+	var lo := Vector2i(mini(_area_from.x, _area_last.x), mini(_area_from.y, _area_last.y))
+	var hi := Vector2i(maxi(_area_from.x, _area_last.x), maxi(_area_from.y, _area_last.y))
+	return Rect2i(lo, hi - lo + Vector2i.ONE)
+
+
+## The release: write the one rectangle the gesture asked for.
+##
+## ⚠️ **CALLED BEFORE `MapDocument.end_stroke()`, WHICH IS THE ONLY ORDER THAT WORKS** —
+## `_finish_move()`'s rule, and here it is stronger rather than weaker: the stroke's step is the
+## ONLY step this gesture has, so writing after the seal would put the rectangle in a second step
+## and Ctrl+Z would appear to do nothing on the first press.
+##
+## **THE TWO REFUSALS BOTH GET A SENTENCE**, because a drag that leaves nothing behind is
+## indistinguishable from a broken tool. An unnamed region is the likely first encounter with
+## this feature — the tab arms the tool before anything has been typed, deliberately — and a
+## rectangle running off the map is the other, which `MapDocument.add_area()` is what refuses.
+func _finish_area() -> void:
+	if _document == null or _area_from.x < 0:
+		return
+	var rect := _area_rect()
+	var name := _palette.area_name()
+	# READ BEFORE THE STATE GOES, and cleared before either refusal returns: a gesture that was
+	# refused is still finished, and leaving the anchor set would make the next drag start from
+	# the tile this one did.
+	_cancel_area_drag()
+	if name.is_empty():
+		_notice("AN AREA NEEDS A NAME — type one in the palette's Area box, then drag", _WARN)
+		return
+	if not _document.add_area(name, rect):
+		_notice("WILL NOT FIT — area \"%s\" at %d,%d %dx%d runs off the map"
+				% [name, rect.position.x, rect.position.y, rect.size.x, rect.size.y], _WARN)
+		return
+	# ⚠️ **"ADDED TO" AND NOT "PLACED", because a second drag on the same name EXTENDS the
+	# region rather than replacing it.** That is `MapData.areas`' flat shape working as intended —
+	# a region is the union of the entries sharing its name — and it is the one thing about this
+	# feature an author cannot infer from the screen: two magenta boxes with the same label look
+	# equally like two regions that happen to share a name.
+	_notice("AREA \"%s\" — added a %dx%d rectangle at %d,%d (drag again to extend it)"
+			% [name, rect.size.x, rect.size.y, rect.position.x, rect.position.y], _GOOD)
+	_canvas.queue_redraw()
+	_refresh_status()
 
 
 # ── the move drag (PLAN.md 16.4) ────────────────────────────────────────────
@@ -1071,6 +1243,10 @@ func _build_ui() -> void:
 	_palette = ObjectPalette.new()
 	_palette.terrain_picked.connect(_on_terrain_picked)
 	_palette.entry_picked.connect(_on_entry_picked)
+	# THE AREAS TAB ARMS `Tool.AREA` (16.5), on `terrain_picked`'s precedent rather than
+	# `entry_picked`'s -- the palette's own signal comment has the argument, and the short version
+	# is that a region is dragged rather than clicked, so PLACE cannot carry it.
+	_palette.area_picked.connect(_on_area_picked)
 	# THE LABEL ONLY. Arming a tool from this would mean changing the owner re-armed PLACE
 	# over whatever the author had actually pressed -- the palette's own header on why there
 	# are two signals.
@@ -1100,6 +1276,12 @@ func _build_ui() -> void:
 			# second step -- two Ctrl+Z presses for one drag.
 			if _tool == Tool.MOVE:
 				_finish_move()
+			# THE AREA DRAG'S ONE WRITE, AND IT IS BEFORE THE SEAL FOR A STRONGER VERSION OF
+			# `_finish_move()`'s REASON: this is the gesture's ONLY write, so landing it after
+			# `end_stroke()` would put the rectangle in a step of its own and the author's first
+			# Ctrl+Z would appear to do nothing at all.
+			if _tool == Tool.AREA:
+				_finish_area()
 			if _document != null:
 				_document.end_stroke()
 			# ⚠️ **THE GRAB IS RELEASED HERE AND NOWHERE ELSE.** `MapCanvas._button` guarantees
@@ -1261,6 +1443,9 @@ func _tool_row() -> Control:
 		# and a toolbar is read left to right.
 		{"tool": Tool.SELECT, "label": "Select"},
 		{"tool": Tool.MOVE, "label": "Move"},
+		# 16.5's region tool. LAST, matching the palette's tab order and for its reason: a region
+		# is drawn over ground that already has things on it.
+		{"tool": Tool.AREA, "label": "Area"},
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])
@@ -1563,6 +1748,14 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	# BEFORE THE EARLY RETURNS, so the buttons are right even in the states this function has
 	# nothing to say about -- see `_refresh_undo()` on why the refresh lives here at all.
 	_refresh_undo()
+	# ⚠️ **THE PALETTE'S AREAS TAB IS FED FROM HERE, FOR `_refresh_undo()`'s EXACT REASON**
+	# (16.5). Its rows are the DOCUMENT's region names rather than the roster's, so they move on
+	# add, erase, undo, redo, New and Open -- six call sites, and the seventh is the one that
+	# would get forgotten. This function is already the one place every one of those ends up, so
+	# it is where the push lives. `ObjectPalette.set_area_names()` rebuilds only on a real change,
+	# which is what makes it safe to call from a path a hover also takes.
+	if _palette != null and _document != null:
+		_palette.set_area_names(_document.area_names())
 	if _status == null:
 		return
 	if not problems.is_empty():
@@ -1595,6 +1788,16 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		_starts_sentence(),
 		"zoom %.2fx" % _canvas.zoom(),
 	]
+	# ⚠️ **REGIONS AND RECTANGLES ARE TWO NUMBERS AND ONLY SHOWN WHEN THERE ARE ANY** (16.5).
+	# Two because a region is the union of the entries sharing its name, so "3 areas" would be
+	# ambiguous between three regions and three rectangles of one — and the whole thing an author
+	# cannot see on screen is which of those they have just made. Absent on a map with none,
+	# because a status line that always says "0 areas" spends a slot on nothing: the same
+	# reasoning as `tile x,y` and `file` appearing only when they have something to report.
+	if not _document.data.areas.is_empty():
+		var regions := _document.area_names().size()
+		bits.append("%d area%s in %d rect%s" % [regions, "" if regions == 1 else "s",
+				_document.data.areas.size(), "" if _document.data.areas.size() == 1 else "s"])
 	if hover.x >= 0:
 		# THE NAME COMES FROM `MapDocument.terrain_name()`, which is also what labels an undo
 		# step -- so "tile 40,12 — Water Deep" and "undo paint Water Deep" cannot disagree.
@@ -1613,7 +1816,13 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 			# button, which is worse than saying nothing: it sends an author looking round the
 			# toolbar for a control that is not there. Found by a preview print. The eraser IS
 			# the way now, and a click on a base takes the whole opening, so it says both.
-			bits.append("click to erase — a base clears that player's whole start")
+			# ⚠️ **AND IT NAMES THE THIRD THING THE ERASER CAN TAKE** (16.5). The sentence used to
+			# list two; a region is the one an author is least likely to know is under the
+			# pointer, so leaving it out would repeat the fault this line already carries a scar
+			# from — it named the deleted `Clear start` button for an hour and sent people
+			# hunting the toolbar.
+			bits.append("click to erase — a base clears that player's whole start,"
+					+ " empty ground clears the area rectangle under it")
 		Tool.SELECT:
 			# WHAT IS SELECTED, or how to select something. The alternative -- saying nothing when
 			# nothing is picked -- leaves the one tool whose whole job is invisible with no
@@ -1629,6 +1838,12 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 			# Found in `undo_ready.png`, which armed the two independently for the first time.
 			# The palette does not drive this tool, so it does not get to describe it.
 			bits.append("brush: %s" % MapDocument.terrain_name(_brush))
+		Tool.AREA:
+			# THE PALETTE DESCRIBES THIS ONE, unlike PAINT and for the opposite reason: the
+			# region name lives in the palette's own field, so the palette is the only thing that
+			# can say what the next drag will do. `describe()` also carries the refusal --
+			# "TYPE A NAME first" -- which is the half an author needs before the drag, not after.
+			bits.append(_palette.describe())
 	if not _document.dir.is_empty():
 		# ⚠️ **"FILE", NOT "SAVED TO", AND THE FOLDER'S PARENT WHEN IT IS NOT OURS.** Since
 		# 16.4a a document's directory can be one this tool never wrote -- a scenario's, most

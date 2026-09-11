@@ -78,11 +78,20 @@
 ## guard for it, so this reuses it rather than growing a second one.
 ##
 ## **3. `== 0` IS A COMPARISON AN UNIMPLEMENTED SUBJECT PASSES.** Which is why
-## `ObjectiveDef.from_dict` REFUSES `area`, `named_unit` and `ticks` rather than letting
+## `ObjectiveDef.from_dict` REFUSES `named_unit` and `ticks` rather than letting
 ## them count as zero, and why nothing here has a default branch that returns 0 for a
 ## subject it does not know. `_count` returns **-1** for a subject it cannot measure and
 ## `_satisfied` fails every comparison against it -- so a fourth subject added to the
 ## enum without a case here makes its rules fail loudly instead of winning on tick 1.
+##
+## ⚠️ **AND `area` (16.5) IS THE FIRST SUBJECT WHERE TRAP 3 SURVIVES BEING IMPLEMENTED.** The
+## other six either count something or are refused at load. An `area` row is evaluable and can
+## still name a region **this map does not have** -- a misspelling, or a scenario pointed at a
+## re-authored map whose regions were renamed -- and "nothing is in a region that does not
+## exist" is 0, which passes `== 0` and `<= n`. So `_in_area` answers -1 for an unknown region
+## and never 0, `MapData.has_area()` exists to keep that distinction askable, and
+## `ScenarioDef.build_config()` refuses the row outright at launch where there is somebody to
+## tell. Three defences for one trap because it is the trap that ends investigations.
 class_name ObjectiveSystem
 extends SimSystem
 
@@ -121,6 +130,13 @@ func process_tick(w: SimWorld) -> void:
 		p.objective_done.resize(count)
 
 	var census := _census(w)
+	# ONE EXTRA WALK, AND ONLY WHEN A ROW ASKS FOR A PLACE (16.5). `_census` throws positions
+	# away -- it is keyed by owner and def and nothing else -- so an area row cannot be answered
+	# from it. This is the same argument `_census` makes for existing at all, applied to the
+	# second question: one pass buckets EVERY region every area row names, so the cost is one
+	# walk of the entity list per tick however many area rows there are, rather than one per row.
+	# `{}` when there are none, which is every match in the game today.
+	var areas := _area_census(w, _areas_named(w))
 	var wins_met := true
 	var win_rows := 0
 	var lost := false
@@ -130,7 +146,7 @@ func process_tick(w: SimWorld) -> void:
 	# learning what a toast is.
 	for i in range(count):
 		var o: ObjectiveDef = w.objectives[i]
-		var measured := _count(w, o, census, _owners_for(w, p, o))
+		var measured := _count(w, o, census, areas, _owners_for(w, p, o))
 		p.objective_progress[i] = measured
 		var met := _satisfied(o, measured)
 
@@ -217,7 +233,7 @@ static func _satisfied(o: ObjectiveDef, measured: int) -> bool:
 ## is the second line of the same defence and it is what makes adding a subject to the
 ## enum safe: forget the case here and every rule using it fails, loudly, instead of
 ## quietly winning the match on tick 1.
-static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary,
+static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary, areas: Dictionary,
 		ids: Array[int]) -> int:
 	match o.subject:
 		ObjectiveDef.Subject.UNIT:
@@ -228,8 +244,128 @@ static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary,
 			return _age_of(w, ids)
 		ObjectiveDef.Subject.RESOURCE:
 			return _stock_of(w, ids, o.id)
+		ObjectiveDef.Subject.AREA:
+			return _in_area(w, o, areas, ids)
 		_:
 			return -1
+
+
+## Every region an objective names, so `_area_census` walks the world once for all of them.
+##
+## A SET RATHER THAN A LIST, because two rows about the same place are common -- *"get five
+## villagers to the ford"* and *"leave the enemy nothing there"* -- and bucketing a region twice
+## would double the work the census exists to do once.
+static func _areas_named(w: SimWorld) -> Dictionary:
+	var wanted: Dictionary = {}
+	for o in w.objectives:
+		if o.subject == ObjectiveDef.Subject.AREA and not o.area.is_empty():
+			wanted[o.area] = true
+	return wanted
+
+
+## One pass of the entity list, bucketed by region and then by owner:
+## `region -> owner_id -> {defs: {def_id: n}, total: n}`.
+##
+## `{}` when nothing asks for a region, which is every match that is not an authored scenario.
+##
+## ## UNITS AND BUILDINGS SHARE ONE BUCKET, UNLIKE `_census`
+##
+## ⚠️ **THAT IS THE ANSWER TO "WHAT DOES AN AREA COUNT", AND IT IS A DECISION.** An area row
+## asks *who holds this ground*, and a castle standing on it holds it at least as firmly as a
+## villager. Splitting them would make `{"subject": "area", "owner": "enemy", "==": 0}` -- *"the
+## enemy has nothing in the crossing"* -- true of a crossing with an enemy fortress in it, which
+## is the reading nobody wants and the one an author would never guess they had asked for. Where
+## the distinction matters, `id` narrows the row to one def, which is finer than "units" anyway.
+##
+## `_census`' two rules are kept exactly: **a building counts only when COMPLETE** (a pegged-out
+## foundation is not a tower) and **dead things count for nothing** (a corpse lingers ten seconds
+## and rubble a minute, so counting them would hold a region "held" after it was lost).
+##
+## ## A BUILDING IS IN A REGION IF ANY OF ITS FOOTPRINT IS
+##
+## Its `tile()` is the footprint's ORIGIN, so an origin test would put a 10x10 town centre
+## *outside* a region its middle sits in -- the same origin-versus-centre five-tile error
+## `MapDocument._starts_inside()` is the standing record of. `footprint_rect()` is asked instead,
+## and a unit is its one tile.
+static func _area_census(w: SimWorld, wanted: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	if wanted.is_empty():
+		return out
+	# THE RECTANGLES RESOLVED ONCE, before the entity walk rather than inside it: a region named
+	# by a row the map has no region for contributes nothing to this and is caught by `_in_area`
+	# asking `w.areas` directly.
+	var regions: Dictionary = {}
+	for name in wanted:
+		if w.areas.has(name):
+			regions[name] = w.areas[name]
+			out[name] = {}
+	if regions.is_empty():
+		return out
+
+	for e in w.entities.values():
+		if not e.alive:
+			continue
+		var is_unit := e is SimUnit
+		if not is_unit and not (e is SimBuilding):
+			continue
+		if not is_unit and not (e as SimBuilding).is_complete():
+			continue
+		var covers: Array[Vector2i] = []
+		if is_unit:
+			covers.append(e.tile())
+		else:
+			var r := (e as SimBuilding).footprint_rect()
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					covers.append(Vector2i(x, y))
+		for name in regions:
+			if not _any_inside(regions[name], covers):
+				continue
+			var by_owner: Dictionary = out[name]
+			var entry: Dictionary = by_owner.get(e.owner_id, {})
+			if entry.is_empty():
+				entry = {"defs": {}, "total": 0}
+				by_owner[e.owner_id] = entry
+			var defs: Dictionary = entry["defs"]
+			defs[e.def_id] = int(defs.get(e.def_id, 0)) + 1
+			entry["total"] = int(entry["total"]) + 1
+	return out
+
+
+## Does any of `tiles` fall inside any of `rects`?
+##
+## Both loops are short -- a region is a handful of rectangles and an entity's footprint is at
+## most 100 tiles -- and it stops on the first hit, which for a unit is the first test.
+static func _any_inside(rects: Array, tiles: Array[Vector2i]) -> bool:
+	for r in rects:
+		var rect: Rect2i = r
+		for t in tiles:
+			if rect.has_point(t):
+				return true
+	return false
+
+
+## What `ids` have standing in `o.area` right now, or -1 when there is no such region.
+##
+## ⚠️ **-1 AND NEVER 0 FOR A REGION THE MAP HAS NOT GOT** -- trap 3 in the header, and the one
+## place in this file where an implemented subject can still be unmeasurable. A misspelled
+## region would otherwise count 0 forever and satisfy *"the enemy has nothing here"* on tick 1
+## of a scenario nobody could lose. `w.areas` is asked rather than the census, because a region
+## that exists and is empty is a real 0 and must not be confused with this.
+static func _in_area(w: SimWorld, o: ObjectiveDef, areas: Dictionary, ids: Array[int]) -> int:
+	if o.area.is_empty() or not w.areas.has(o.area):
+		return -1
+	var by_owner: Dictionary = areas.get(o.area, {})
+	var total := 0
+	for owner_id in ids:
+		var entry: Dictionary = by_owner.get(owner_id, {})
+		if entry.is_empty():
+			continue
+		if o.id.is_empty():
+			total += int(entry["total"])
+		else:
+			total += int((entry["defs"] as Dictionary).get(o.id, 0))
+	return total
 
 
 ## One entity census for the whole tick: `owner_id -> {units, unit_total, buildings,

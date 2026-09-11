@@ -111,6 +111,15 @@ static func for_tool(tool_value: int) -> StringName:
 			return &"cur_select"
 		tools.MOVE:
 			return &"cur_move"
+	# ⚠️ **`Tool.AREA` (16.5) DELIBERATELY HAS NONE, AND THAT IS BETTER THAN BORROWING ONE.** The
+	# empty answer makes `arm()` clear the custom cursor, so the canvas's `CURSOR_CROSS` falls back
+	# to the SYSTEM CROSSHAIR — which is the conventional cursor for dragging out a rectangle in
+	# every editor there is, and is more right for this tool than any of the five pointers above.
+	# There is no `cur_area` in the art side's cut and none is wanted.
+	#
+	# 📝 The general shape is `ToolIcons.for_tool()`'s inverted: there, one picture shared between
+	# the tab and the button was the honest answer; here, the ABSENCE of one is. Both are choices
+	# rather than gaps, and both say so where somebody would otherwise file a bug.
 	return &""
 
 

@@ -330,6 +330,7 @@ static func build(w: SimWorld, cfg: MatchConfig) -> void:
 		build_debug_map(w)
 	_place_ai_handicaps(w)
 	_place_trophies(w, cfg)
+	_place_koth_zone(w, cfg)
 	_clear_dragon_nest(w)
 
 
@@ -391,6 +392,103 @@ static func _place_trophies(w: SimWorld, cfg: MatchConfig) -> void:
 	# ARMS THE RULE. See `SimWorld.trophy_def_id` for why the record is separate from the
 	# roster's flag, and why it is written last.
 	w.trophy_def_id = def_id
+
+
+## THE KING OF THE HILL ZONE (11.x-koth): the ground `WinConditionSystem` scores.
+##
+## ## ⚠️ TWO SOURCES AND ONE RESOLUTION — THE OWNER'S RULING, 2026-09-09
+##
+## Asked because 16.5's authored regions are **rectangles** and `KOTH_ZONE_RADIUS_TILES` is a
+## **radius**, so one of the two had to give. The answer was *"both — region if authored, generated
+## otherwise"*: a `MapData.KOTH_AREA` region wins, and a map without one gets a square at the
+## centre.
+##
+## **THAT IS TWO SOURCES FOR ONE FACT, WHICH THIS PROJECT HAS PAID FOR FOUR TIMES**, so what makes
+## it acceptable here is written down rather than assumed:
+##
+##   - **they never both apply.** The authored region is checked first and the generated square is
+##     computed only when there is none, so any given match has exactly one hill and there is no
+##     reconciliation step. It is a fallback chain, not two copies of a value;
+##   - **the resolution happens ONCE, here, and the result is one field.** Nothing downstream can
+##     see which branch produced `w.koth_zone`, so no rule can come to disagree about the hill;
+##   - **each alternative fails visibly in the other's case.** Region-only leaves every generated
+##     map — which is every skirmish — with no hill and the mode inert. Generator-only means an
+##     author drags a hill out in the MapMaker and watches it be ignored, which is 16.3's *work
+##     lost behind a successful save* wearing a win condition.
+##
+## ## THE GENERATED HILL IS A SQUARE, AND `KOTH_ZONE_RADIUS_TILES` IS ITS HALF-EXTENT
+##
+## ⚠️ A radius would be a **second shape** in a rule whose other source is a rectangle, and then
+## "is this unit in the zone" would have two answers depending on how the hill came to exist. One
+## `Rect2i` for both is what keeps `_in_zone()` a single `has_point`. So the constant is read as a
+## half-extent and the square is `2r+1` on a side — slightly more ground than a disc of the same
+## radius, in a mode where the exact area is a tuning number and the SHAPE agreeing with itself is
+## not.
+##
+## ## ⚠️ ALL OR NOTHING, LIKE THE TROPHIES, AND FOR A SHARPER REASON
+##
+## `w.koth_zone` is left empty when a hill cannot be sited, and `_king_of_the_hill()` falls back to
+## conquest rather than scoring nothing forever. `_place_trophies`' failure defeats everybody
+## instantly; this one's would hang the match, which is slower and no better. A map smaller than
+## the zone is the case that reaches it.
+##
+## RUNS FOR EVERY MODE'S CONFIG AND ARMS ONLY KotH. A hill on a conquest map is ground nothing
+## reads, and computing it anyway would put a ring on the minimap of a match with no hill in it.
+static func _place_koth_zone(w: SimWorld, cfg: MatchConfig) -> void:
+	if cfg == null or cfg.mode != MatchConfig.Mode.KING_OF_THE_HILL:
+		return
+
+	# THE AUTHORED REGION FIRST. `w.areas` is what `build_from()` collapsed out of the map file, so
+	# this reads the same data an author dragged out in the tool -- and the BOUNDING RECT of every
+	# rectangle sharing the name, because a region is their union and the zone is one rect.
+	var authored := _bounding_rect(w.areas.get(MapData.KOTH_AREA, []) as Array)
+	if authored.size.x > 0 and authored.size.y > 0:
+		w.koth_zone = authored.intersection(Rect2i(Vector2i.ZERO, w.map.size))
+		# CLIPPED RATHER THAN REFUSED. A region hanging off the edge of a map somebody later shrank
+		# is still a hill; what is left of it on the board is the ground that can be stood on.
+		if w.koth_zone.size.x <= 0 or w.koth_zone.size.y <= 0:
+			push_warning("MapGen: the '%s' region is entirely off the map, so the hill"
+					% MapData.KOTH_AREA + " is unplaced and the match is decided by conquest.")
+			w.koth_zone = Rect2i()
+		return
+
+	# THE GENERATED HILL: a square at the middle of the board.
+	#
+	# ⚠️ **THE CENTRE IS ON EVERY ROAD AND THAT IS CORRECT HERE** (13.2a's finding, which 11.2
+	# recorded for this row to inherit). Starts sit on a ring, so a two-player pair is diametrically
+	# opposite through the centre and anything at the centre sits on the only path between them.
+	# For a dragon nest that cost an AI its economy (card 14); for a contested hill it is the whole
+	# point, and **a zone is not an entity** -- nothing stands in it, nothing blocks it and nothing
+	# in it can kill a villager walking past.
+	# THE RULE'S OWN CONSTANT, read rather than copied. `WinConditionSystem`'s header says why it
+	# lives there and not in `MatchConfig` -- it is a rule, not a per-match setting -- and a second
+	# copy here would be a zone the placer and the scorer could come to disagree about the size of.
+	var r := WinConditionSystem.KOTH_ZONE_RADIUS_TILES
+	var side := 2 * r + 1
+	if w.map.size.x < side or w.map.size.y < side:
+		push_warning(("MapGen: a %dx%d map has no room for a %dx%d King of the Hill zone,"
+				+ " so the rule stays inert and the match is decided by conquest.")
+				% [w.map.size.x, w.map.size.y, side, side])
+		return
+	var centre := w.map.size / 2
+	w.koth_zone = Rect2i(centre - Vector2i(r, r), Vector2i(side, side)) \
+			.intersection(Rect2i(Vector2i.ZERO, w.map.size))
+
+
+## The smallest rect covering every rect in `rects`, or an empty one for an empty list.
+##
+## `Rect2i.merge()` rather than min/max by hand -- it is the same arithmetic and it cannot get the
+## exclusive `end` wrong, which is the off-by-one 16.5's `_area_quad()` carries a warning about.
+static func _bounding_rect(rects: Array) -> Rect2i:
+	var out := Rect2i()
+	var first := true
+	for r in rects:
+		var rect: Rect2i = r
+		if rect.size.x <= 0 or rect.size.y <= 0:
+			continue
+		out = rect if first else out.merge(rect)
+		first = false
+	return out
 
 
 ## `Mode.TROPHY` gets ONE dragon PER PLAYER and no others: take the gaia nest and its
@@ -503,6 +601,21 @@ static func _trophy_anchor(w: SimWorld, owner: int) -> Rect2i:
 ## because a map is written long before anybody knows what ids a match will hand out.
 ## Resolving it here is the whole reason that indirection exists -- see `MapData`.
 static func build_from(w: SimWorld, data: MapData) -> void:
+	# ⚠️ **THE NAMED REGIONS, AND THIS IS THE HALF THAT MAKES `subject: "area"` MEAN ANYTHING**
+	# (16.5). `MapData.areas` is a flat list of `{name, rect}`; `SimWorld.areas` is the collapsed
+	# form the evaluator asks once per tick. Same shape of gap as `axis` below: writing regions
+	# into the file and not reading them here would give an author a tool that draws a region,
+	# saves it, and then hands the match a world in which the objective counting it can never
+	# tick -- with the file agreeing with the tool. `ScenarioDef.build_config()` is what catches
+	# a name that has no region; this is what gives the names something to be.
+	var regions: Dictionary = {}
+	for a in data.areas:
+		var name: StringName = a.get("name", &"")
+		var rects: Array[Rect2i] = regions.get(name, [] as Array[Rect2i])
+		rects.append(a.get("rect", Rect2i()))
+		regions[name] = rects
+	w.areas = regions
+
 	for y in range(w.map.size.y):
 		for x in range(w.map.size.x):
 			var t := Vector2i(x, y)

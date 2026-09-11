@@ -1,8 +1,12 @@
 ## PLAN.md 11.1: the match ends, somebody wins, and the losers are told.
 ##
-## Only Last Man Standing is implemented (`MatchConfig.Mode`), and the last two
-## tests here are what pin the other two modes as INERT rather than half-built --
-## a placeholder that quietly decided matches would be worse than no mode at all.
+## ✅ **ALL FOUR MODES ARE IMPLEMENTED** as of 2026-09-09 (`MatchConfig.Mode`). The two tests near
+## the bottom that used to pin Trophy and King of the Hill as INERT now pin the thing that replaced
+## that safety: **each falls back to conquest when its own rule was never armed.** A placeholder
+## that quietly decided matches would have been worse than no mode at all; an armed rule with
+## nothing to decide is worse still, because it hangs.
+##
+## `test_trophy.gd` and `test_koth.gd` own the armed modes.
 extends TestCase
 
 var w: SimWorld
@@ -306,15 +310,31 @@ func test_an_unarmed_trophy_match_falls_back_to_conquest() -> void:
 	assert_eq(w.winner_id, 1)
 
 
-func test_king_of_the_hill_decides_nothing_yet() -> void:
-	# It needs the zone's position as map data, a per-player score, and the minimap
-	# ring. Same reasoning as Trophy above.
+## ⚠️ **THIS REPLACES `test_king_of_the_hill_decides_nothing_yet`, AND THAT TEST DID ITS JOB.**
+## It pinned the mode as inert — *"it needs the zone's position as map data, a per-player score,
+## and the minimap ring"* — and went red on the run those three landed (2026-09-09), which is what
+## a deferral written as a test buys over a deferral written as a comment.
+##
+## What it becomes is Trophy's unarmed case one mode over, because the hazard did not go away with
+## the placeholder: **a KotH match on a map with no hill must fall back to conquest rather than
+## deciding nothing.** Deciding nothing is what the old test asserted, and once the mode is armed
+## that same behaviour is a HANG — nobody can score, the elimination rule is skipped with it, and
+## two players can wipe each other out and stand in an empty world forever. `test_koth.gd` owns
+## the armed mode; this owns the unarmed one.
+func test_an_unarmed_king_of_the_hill_match_falls_back_to_conquest() -> void:
 	w.mode = MatchConfig.Mode.KING_OF_THE_HILL
+	assert_eq(w.koth_zone, Rect2i(),
+			"nothing placed a hill, so the KotH rule must not be the one deciding")
 	_both_armed()[1].alive = false
 	for i in range(10):
 		w.step()
-	assert_false(w.match_over)
-	assert_false(_player(2).defeated)
+
+	assert_true(_player(2).defeated, "conquest still ends a match nobody armed")
+	assert_eq(_player(2).defeat_reason, SimPlayer.Defeat.ELIMINATED)
+	assert_true(w.match_over)
+	assert_eq(w.winner_id, 1)
+	# AND NOBODY SCORED A POINT for a hill that was never there.
+	assert_eq(_player(1).score, 0)
 
 
 func test_the_declared_modes_are_the_four_that_were_asked_for() -> void:

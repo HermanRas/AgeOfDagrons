@@ -112,6 +112,66 @@ var claim_owner: int = 0
 var claim_ticks_left: int = -1
 var claim_total_ticks: int = 0
 
+## ── King of the Hill (11.x-koth) ────────────────────────────────────────────
+##
+## The contested zone, in tiles. **An empty rect means the mode is UNARMED**, which is
+## `trophy_def_id`'s arrangement and not a coincidence: it is one field that answers both *"where
+## is the hill"* and *"is there a hill match here to decide"*, and `_king_of_the_hill()` refuses to
+## run without it. Written once by `MapGen._place_koth_zone()` and never again.
+##
+## ⚠️ **THE ARMING GUARD IS THE WHOLE SAFETY ARGUMENT, FOR `_trophy()`'s REASON.** A scoring rule
+## on a map with no hill is a match nobody can ever win — the mirror of *"'you lose when your
+## trophy dies' on a map with no trophies defeats everybody immediately"*, and just as unplayable.
+## An unarmed KotH match falls back to conquest rather than deciding nothing, because deciding
+## nothing is a hang and a hang is not the safe direction.
+##
+## NOT IN `state_hash()`, on `areas`' footing: every client builds its own world from the same
+## `MatchConfig` and the same `MapData` (2.4a), and nothing in the sim writes it after `MapGen`.
+var koth_zone: Rect2i = Rect2i()
+
+## Who holds the hill right now: the lowest-id standing player of the leading side, 0 for nobody.
+##
+## Written every tick by `WinConditionSystem._king_of_the_hill()`, beside `claim_owner` above and
+## for its reasons — a **mirror**, published at the end of the tick that computed it, that nothing
+## reads to decide anything. The rule reads the entity list; this is what it announces.
+##
+## ## ⚠️ IT IS A MATCH FACT AND MUST BE SENT, NOT COUNTED CLIENT-SIDE
+##
+## The obvious implementation of the minimap ring — and of `11.x-koth-control-sound` after it — is
+## to count units in the zone on the client. **It is wrong for the reason 13.2c's claim is on the
+## wire**: half the units in a contested zone are in fog for every player but their owner, so each
+## client would compute a different holder and draw a different ring for a rule the server has
+## already decided. One int, once per snapshot, beside `claim_owner`.
+##
+## **0 IS "NOBODY", AND A TIE IS NOBODY.** Most units in the zone holds it, so a contested hill has
+## no holder and pays no score — which is `_king_of_the_hill()`'s stated rule, and it means this
+## field flickers to 0 in a real fight rather than alternating between two players.
+##
+## NOT IN `state_hash()`: it is derived from entity positions that are all hashed already, so
+## folding it in would report one divergence twice. `SimPlayer.score` is the hashed half.
+var koth_holder: int = 0
+
+## THE MAP'S NAMED REGIONS (PLAN.md 16.5): region name -> the rectangles making it up.
+##
+## Filled by `MapGen.build_from()` out of `MapData.areas`, read by `ObjectiveSystem` and by
+## nothing else. A generated map, the fixed debug map and every hand-built fixture carry none,
+## which is why `setup()` clears it explicitly rather than leaving whatever the last match had.
+##
+## ## COLLAPSED FROM THE FILE'S FLAT LIST, ON PURPOSE
+##
+## `MapData.areas` is a flat list of `{name, rect}` because that is the shape a file and an
+## undo snapshot want. What the evaluator wants is *"which rectangles is region R"*, asked once
+## per tick, so the collapse happens once at world build rather than by walking the list per
+## objective per tick.
+##
+## ## NOT IN `state_hash()`, ON THE SAME FOOTING AS `objectives` AND `teams`
+##
+## Every client builds its own world from the same `MatchConfig` (2.4a), and `MatchConfig`
+## carries the `MapData` itself rather than a seed -- so this is identical by construction and
+## cannot drift mid-match: nothing in the sim writes it after `MapGen`. What IS hashed is the
+## OUTCOME the objectives reach, which is where a disagreement about a region would surface.
+var areas: Dictionary = {}
+
 var players: Array[SimPlayer] = []
 
 ## player id -> team number, the argument every `Diplomacy` predicate takes.
@@ -160,6 +220,18 @@ func setup(cfg: MatchConfig) -> void:
 	# tools -- `preview_ai_match` steps four rungs through one -- and a trophy match
 	# followed by a skirmish would otherwise leave the rule armed with nothing to watch.
 	trophy_def_id = &""
+	# CLEARED HERE AND FILLED BY `MapGen.build_from`, which runs after this and only for a match
+	# that carries a map. Reset explicitly for `trophy_def_id`'s reason -- several `dev_preview`
+	# tools call `setup()` on a REUSED world, and `preview_ai_match` steps four rungs through
+	# one, so an authored scenario followed by a skirmish would otherwise leave the skirmish
+	# holding the scenario's regions and an `area` objective measuring a map nobody is playing.
+	areas = {}
+	# CLEARED FOR `trophy_def_id`'s REASON, and this one is sharper: a reused world that kept the
+	# last match's hill would arm KotH on a map that never declared one, and score it — the exact
+	# state `koth_zone`'s own note says the emptiness exists to prevent. `preview_ai_match` steps
+	# four rungs through one world.
+	koth_zone = Rect2i()
+	koth_holder = 0
 	# A carried map decides its own size; `cfg.map_size` is the debug-map default and
 	# the fallback. Taking the map's own size means a config cannot be half-applied --
 	# a 96x96 map into a 64x64 grid would silently crop a quarter of it off.
@@ -1369,10 +1441,16 @@ func state_hash() -> int:
 		# reason that flag is in this list), so two hosts that ticked the same row on
 		# different ticks would go on agreeing about the live count for the rest of the
 		# match while carrying different verdicts about it.
+		# `score` (11.x-koth) is in here for `objective_progress`' reason and one more: it is a
+		# RUNNING TOTAL, so a single tick of disagreement is permanent. Two hosts that counted the
+		# zone differently for one tick would agree about every entity in the world from then on
+		# and hand the match to the same player several seconds apart — with nothing in the hash
+		# to say when they parted. The zone itself stays out beside `mode` and the team numbers:
+		# it is written once by `MapGen` from map data every client already has.
 		parts.append([p.id, p.pop_used, p.pop_cap, p.age, stock, p.control_groups,
 				p.advancing_to, p.advance_ticks, p.advance_total_ticks, p.defeated,
 				p.defeat_reason, p.researched_ids(), p.vision, p.objective_progress,
-				p.objective_done])
+				p.objective_done, p.score])
 
 	# The outcome itself, which is the single most important thing in the hash to get
 	# right: two clients that disagree about who won have diverged about the only

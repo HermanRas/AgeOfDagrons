@@ -19,10 +19,16 @@
 ##   - **terrain as a diff.** A 96x96 map is 9,216 bytes and a paint stroke touches maybe 200
 ##     of them, so a whole-buffer snapshot would be 9 KB per step of which 200 bytes matter.
 ##     Three parallel packed arrays cost 6 bytes per changed tile and nothing per unchanged one.
-##   - **entities and starts as whole snapshots.** The list is tens to a few hundred small
-##     dictionaries, and `place_start` rewrites an unpredictable slice of it — recording *which*
-##     entries moved would be more code than copying the list, and the code would have to be
-##     right about a slice nothing else in the tool computes.
+##   - **entities, starts and areas as whole snapshots.** The lists are tens to a few hundred
+##     small dictionaries, and `place_start` rewrites an unpredictable slice of the entities —
+##     recording *which* entries moved would be more code than copying the list, and the code
+##     would have to be right about a slice nothing else in the tool computes.
+##
+## ✅ **AREAS (16.5) ARRIVED AS A THIRD SNAPSHOT AND NEEDED NOTHING ELSE**, which is what the
+## claim above was written to predict: *"a move cursor, an area brush, a wall drag are all 'some
+## tiles and some entities are different now'"*. It held. The one thing it did NOT cover is the
+## `_copied()` note at the bottom of this file — see the ⚠️ there, and see why `MapData.areas` is
+## a flat list of `{name, rect}` rather than a name with a list of rects.
 ##
 ## ⚠️ **UNDO WALKS THE TERRAIN DIFFS BACKWARDS, AND THAT IS LOAD-BEARING RATHER THAN TIDY.**
 ## Nothing today can record the same tile twice in one step — `MapDocument.paint()` returns
@@ -50,7 +56,7 @@ var _index := PackedInt32Array()
 var _was := PackedByteArray()
 var _now := PackedByteArray()
 
-# ── entities and starts, as snapshots ───────────────────────────────────────
+# ── entities, starts and areas, as snapshots ────────────────────────────────
 
 ## True once `lists_before()` has taken the "before"; `_closed` once `close()` has taken the
 ## "after". Both are needed: a step with a before and no after would, on REDO, assign an empty
@@ -61,6 +67,17 @@ var _entities_was: Array[Dictionary] = []
 var _entities_now: Array[Dictionary] = []
 var _starts_was: Array[Vector2i] = []
 var _starts_now: Array[Vector2i] = []
+
+## The named regions (16.5), snapshotted with the other two.
+##
+## ⚠️ **THEY RIDE `lists_before()`/`close()` RATHER THAN A FLAG OF THEIR OWN, AND THAT IS WHAT
+## MAKES A MIXED STEP CORRECT.** One act can touch two of the three — erasing a region and
+## erasing an entity are separate acts today, but `_open()` joins whatever step is already open,
+## so a stroke can hold both. Three parallel `_lists`-style flags would mean a step that recorded
+## areas and not entities, and undoing it would assign an empty entity list. One gate, three
+## snapshots, taken and sealed together.
+var _areas_was: Array[Dictionary] = []
+var _areas_now: Array[Dictionary] = []
 
 ## Whether anything actually happened. See `changes_anything()`.
 var _changed := false
@@ -97,6 +114,7 @@ func lists_before(data: MapData) -> void:
 	_lists = true
 	_entities_was = _copied(data.entities)
 	_starts_was = data.starts.duplicate()
+	_areas_was = _copied(data.areas)
 
 
 ## Seal the step: take the "after" of anything it took a "before" of.
@@ -110,12 +128,18 @@ func close(data: MapData) -> void:
 	_closed = true
 	_entities_now = _copied(data.entities)
 	_starts_now = data.starts.duplicate()
+	_areas_now = _copied(data.areas)
 	# ⚠️ **A CHANGE THE SIZES CANNOT SEE MUST SAY SO ITSELF.** This test catches everything
-	# today: entities are only ever appended or dropped, and a start moving changes `starts`.
-	# **16.4's move cursor is the first act that will edit an entry IN PLACE** -- same count,
-	# same starts, different tile -- and it has to call `mark_changed()`, or its step is
+	# today: entities and areas are only ever appended or dropped, and a start moving changes
+	# `starts`. **16.4's move cursor is the first act that edits an entry IN PLACE** -- same
+	# count, same starts, different tile -- and it has to call `mark_changed()`, or its step is
 	# discarded as a no-op and a dragged building cannot be dragged back.
-	if _entities_now.size() != _entities_was.size() or _starts_now != _starts_was:
+	#
+	# 📝 **AREAS ARE COUNTED HERE AND NOTHING RENAMES ONE IN PLACE YET.** A rename would be the
+	# same trap as the move -- same count, different name -- so if 16.6 or the Map Conditions
+	# screen ever grows one, it owes `mark_changed()` exactly as the move does.
+	if _entities_now.size() != _entities_was.size() or _starts_now != _starts_was \
+			or _areas_now.size() != _areas_was.size():
 		_changed = true
 
 
@@ -146,6 +170,7 @@ func undo_into(data: MapData) -> void:
 	if _lists and _closed:
 		data.entities = _copied(_entities_was)
 		data.starts = _starts_was.duplicate()
+		data.areas = _copied(_areas_was)
 
 
 ## Do it again.
@@ -154,6 +179,7 @@ func redo_into(data: MapData) -> void:
 	if _lists and _closed:
 		data.entities = _copied(_entities_now)
 		data.starts = _starts_now.duplicate()
+		data.areas = _copied(_areas_now)
 
 
 ## Apply one side of the diff.
@@ -197,8 +223,17 @@ func describe() -> String:
 ## rewrite the snapshot along with the map. Undo would then restore the building to where it
 ## had just been dragged, which reads as undo being ignored rather than as aliasing.
 ##
-## `tile` is a `Vector2i` and every other field is a scalar, so one level is enough; there is
-## no nested container in an entity entry to reach.
+## ⚠️ **ONE LEVEL IS ENOUGH AND THAT IS A PROPERTY OF THE FORMAT, NOT AN ASSUMPTION.** An
+## entity's `tile` is a `Vector2i` and an area's `rect` is a `Rect2i` — both value types — and
+## every other field in either record is a scalar. So there is **no nested container to reach**
+## in anything this copies.
+##
+## ⛔ **THAT SENTENCE IS LOAD-BEARING AND 16.5 WAS ABLE TO BREAK IT.** The natural shape for a
+## named region is `{name, rects: [...]}`, and one of those inside a snapshot would share its
+## `rects` array with the live map: `data.areas` is a flat list of `{name, rect}` **partly for
+## this reason**, and its own header says so. Anything added to either list from here on has to
+## be checked against this paragraph — a nested array would make undo restore a region to
+## wherever it had just been re-dragged, with nothing failing and no error anywhere near it.
 static func _copied(list: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for e in list:

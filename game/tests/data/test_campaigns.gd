@@ -11,10 +11,11 @@
 ## "it complained about something" is not the same as "it complained about the right
 ## thing".
 ##
-## The unimplemented subjects matter most. `area`, `named_unit` and `ticks` cannot be
-## evaluated yet, and **`== 0` is a comparison an unimplemented subject PASSES** -- so a
-## subject that silently counted zero would announce victory on tick 1 of an unwinnable
-## scenario. That is the failure these tests exist for.
+## The unimplemented subjects matter most. `named_unit` and `ticks` cannot be evaluated yet,
+## and **`== 0` is a comparison an unimplemented subject PASSES** -- so a subject that
+## silently counted zero would announce victory on tick 1 of an unwinnable scenario. That is
+## the failure these tests exist for. `area` was the third until 16.5 and its cases are still
+## here, testing the shape the trap took once the subject became evaluable.
 ##
 ## ## IT WRITES REAL FIXTURES INTO `user://content/scenarios/`
 ##
@@ -651,13 +652,19 @@ func test_scenario_fives_briefing_does_not_recommend_what_age_1_cannot_build() -
 			% [unlocks.name, s.message])
 
 
-# ── the three subjects that must be REFUSED, not defaulted ──────────────────────
+# ── the subjects that must be REFUSED, not defaulted ────────────────────────────
 
-func test_area_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_for() -> void:
+func test_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_for() -> void:
 	# The most important test in this file. `== 0` is a comparison an unimplemented
 	# subject PASSES, so a subject that silently counted zero would announce victory on
 	# tick 1 of a scenario nobody could win.
-	for subject in ["area", "named_unit", "ticks"]:
+	#
+	# ⚠️ **`area` WAS THE THIRD MEMBER OF THIS LIST AND WAS REMOVED BY 16.5** (2026-09-09),
+	# which is the mechanical reminder working as designed: deleting `Subject.AREA` from
+	# `ObjectiveDef._NOT_YET` turned this test red on the run it landed in. Its replacement is
+	# the pair below -- the subject now parses, and the trap moved from "cannot be evaluated" to
+	# "names a region the map has not got".
+	for subject in ["named_unit", "ticks"]:
 		var problems: Array[String] = []
 		var o := ObjectiveDef.from_dict(
 				{"subject": subject, "compare": "==", "value": 0, "output": "win"}, problems)
@@ -665,6 +672,68 @@ func test_area_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_fo
 		assert_eq(problems.size(), 1, "'%s' reports exactly one reason" % subject)
 		assert_true(problems[0].contains("not evaluable yet"),
 				"'%s' says it is unbuilt rather than unknown: %s" % [subject, problems[0]])
+
+
+func test_area_parses_now_and_is_no_longer_refused_as_unbuilt() -> void:
+	# The other half of the test above. 16.5 gave `MapData` named regions, so `area` counts
+	# something -- and if it is ever put back in `_NOT_YET` this fails rather than a scenario
+	# quietly stopping working.
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "area", "area": "north_pass",
+			"compare": ">=", "value": 1, "output": "win"}, problems)
+	assert_not_null(o, "an area objective must parse: %s" % [problems])
+	assert_true(problems.is_empty(), "%s" % [problems])
+	assert_eq(o.subject, ObjectiveDef.Subject.AREA)
+	assert_eq(o.area, &"north_pass")
+	# THE REGION IS ITS OWN FIELD AND `id` STILL MEANS A DEF ID. Putting the region in `id`
+	# would have made `_NAMES_AN_ID` a lie and this row unable to filter by def.
+	assert_eq(o.id, &"", "no def named means anything of mine standing there")
+
+
+func test_an_area_objective_must_name_a_region_and_nothing_else_may() -> void:
+	# ⚠️ Both directions, because both are silent failures. An `area` row with no region cannot
+	# be measured at all; a region named on `subject: "unit"` would be IGNORED, which ships
+	# "ten villagers in the north pass" as "ten villagers" -- a scenario winnable the wrong way
+	# that looks completely correct in the file.
+	var missing: Array[String] = []
+	assert_null(ObjectiveDef.from_dict(
+			{"subject": "area", "compare": ">=", "value": 1}, missing))
+	assert_eq(missing.size(), 1, "%s" % [missing])
+	assert_true(missing[0].contains("must name the region"), missing[0])
+
+	var stray: Array[String] = []
+	assert_null(ObjectiveDef.from_dict(
+			{"subject": "unit", "area": "north_pass", "compare": ">=", "value": 1}, stray))
+	assert_eq(stray.size(), 1, "%s" % [stray])
+	assert_true(stray[0].contains("not measured in a place"), stray[0])
+	assert_true(stray[0].contains("subject 'area'"),
+			"and it says what the author probably meant: %s" % stray[0])
+
+
+func test_an_area_survives_the_wire_and_describes_itself_with_its_place_in_it() -> void:
+	# `area` travels because `MatchConfig._objectives_to_wire()` calls `to_dict()`; a region
+	# that did not survive the round trip would leave a joining client evaluating "five
+	# villagers anywhere" against a host evaluating "five villagers in the ford".
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "area", "area": " the ford ",
+			"id": "unit.villager", "compare": ">=", "value": 5, "output": "win"}, problems)
+	assert_not_null(o, "%s" % [problems])
+	assert_eq(o.area, &"the ford", "the name is stripped, since a trailing space is invisible")
+
+	var back := ObjectiveDef.from_wire(o.to_dict())
+	assert_eq(back.area, o.area)
+	assert_eq(back.id, o.id)
+	assert_eq(back.subject, o.subject)
+	# THE PLACE IS IN THE SENTENCE. "unit.villager at least 5" and "... in the ford at least 5"
+	# are different objectives, and this string is what 15.6's tracker draws with no `text`.
+	assert_true(o.describe().contains("the ford"), o.describe())
+
+	# AND A ROW FROM A HOST THAT PREDATES 16.5 CARRIES NO `area` KEY AT ALL, which must read as
+	# no region rather than as a parse failure -- `MatchConfig.from_dict`'s forward-compatibility
+	# shape, one level down.
+	var old := ObjectiveDef.from_wire({"subject": int(ObjectiveDef.Subject.UNIT),
+			"id": "unit.villager", "compare": 0, "value": 3})
+	assert_eq(old.area, &"")
 
 
 func test_an_unknown_subject_reads_as_a_typo_and_not_as_unbuilt() -> void:

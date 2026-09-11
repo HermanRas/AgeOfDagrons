@@ -97,6 +97,21 @@ var _claim_owner: int = 0
 var _claim_ticks_left: int = -1
 var _claim_total_ticks: int = 0
 
+## THE KING OF THE HILL ZONE AND ITS HOLDER (11.x-koth), off the top of the snapshot beside the
+## claim above and for its reasons: facts about the MATCH, not about any one player.
+##
+## **AN EMPTY RECT MEANS NO HILL**, which is `SimWorld.koth_zone`'s own arming convention carried
+## verbatim across the wire — so the minimap asks one question rather than checking a mode as well.
+## `_koth_holder` is a player id that `skin_for()` turns into one of `colours.json`' eight, exactly
+## as `claim_owner` is.
+##
+## ⚠️ **READ FROM THE WIRE AND NEVER COUNTED HERE.** Half the units in a contested zone are in fog
+## for every player but their owner, so a client tallying the hill itself would draw a different
+## ring from the server's verdict — and `11.x-koth-control-sound` would then fire at different
+## moments on different machines. 13.2c's claim is on the wire for the identical reason.
+var _koth_zone: Rect2i = Rect2i()
+var _koth_holder: int = 0
+
 ## What GAIA gets: no age skin and no player tint. Owner 0 is nobody, and
 ## colours.json's note is explicit that the tint must key off who owns a thing
 ## rather than off whether its art carries a playercolor mask -- 0 A.D.'s sheep
@@ -205,6 +220,15 @@ func apply_snapshot(snap: Dictionary) -> void:
 	_claim_owner = int(snap.get("claim_owner", _claim_owner))
 	_claim_ticks_left = int(snap.get("claim_ticks_left", _claim_ticks_left))
 	_claim_total_ticks = int(snap.get("claim_total_ticks", _claim_total_ticks))
+	# THE HILL (11.x-koth). Defaulted to what is already held, on the same rule as the claim two
+	# lines up: a test or a preview handing over a bare `{"updated": [...]}` keeps whatever it last
+	# set rather than silently clearing the ring off the minimap.
+	_koth_zone = Rect2i(
+			int(snap.get("koth_x", _koth_zone.position.x)),
+			int(snap.get("koth_y", _koth_zone.position.y)),
+			int(snap.get("koth_w", _koth_zone.size.x)),
+			int(snap.get("koth_h", _koth_zone.size.y)))
+	_koth_holder = int(snap.get("koth_holder", _koth_holder))
 
 	# Gathered up front so a unit's adjacency check below (any tile order)
 	# never depends on whether its own entry happened to arrive before or
@@ -651,6 +675,25 @@ func claim_running() -> bool:
 ## Who is claiming, as a player id, or 0 when nothing is.
 func claim_owner() -> int:
 	return _claim_owner if claim_running() else 0
+
+
+## The King of the Hill zone in tiles, or an empty rect when this match has no hill (11.x-koth).
+##
+## ONE QUESTION AND NOT TWO. A caller asks for the rect and gets `Rect2i()` in every other mode, so
+## nothing on the view side has to know what `MatchConfig.Mode` the match was started in — which is
+## the same reason `claim_running()` is a sentinel read rather than a mode check.
+func koth_zone() -> Rect2i:
+	return _koth_zone
+
+
+## Who holds the hill, as a player id, or 0 for nobody — which a CONTESTED zone also answers.
+##
+## **A TIE IS NOBODY**, because most units holds it and a draw pays no score. So this flickers to 0
+## during a real fight rather than alternating between two players, and a ring drawn from it goes
+## neutral while the hill is being fought over. That is the truth and it is also the behaviour
+## `11.x-koth-control-sound` will want to put hysteresis in front of.
+func koth_holder() -> int:
+	return _koth_holder
 
 
 ## How far a claim has MATURED, 0.0 to 1.0. `age_progress_of`'s companion and the second
