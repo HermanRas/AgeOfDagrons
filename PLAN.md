@@ -1194,7 +1194,7 @@ the day it matters.
 | Preview | The generated or loaded map, start positions marked, and a **validation badge** from 2.4b's connectivity gate. **A map that fails validation disables Start** rather than being launched |
 | Colour | Per slot, offering **all eight** — every colour bake has been current since the 2026-08-16 rebake, so restricting to two costs work rather than saving it. Default Yellow against Red |
 | Players | Read from the generator's own 2–8 clamp, shown **disabled at 2** rather than hidden, so the limit is visible instead of invented |
-| Win condition | 11.3 — Last Man Standing and **Trophy** (11.2, built 2026-09-07), with King of the Hill still greyed |
+| Win condition | 11.3 — all three live: Last Man Standing, **Trophy** (11.2, built 2026-09-07) and **King of the Hill** (§11.9, built 2026-09-09, rule corrected and confirmed in play 2026-09-11). Nothing is greyed any more |
 
 Everything it collects **is** a `MatchConfig` — `build_config()` returns one, so the
 screen has no vocabulary of its own to translate out of and a test can assert what it
@@ -2060,9 +2060,9 @@ constant and guessing what it means:
 | leader, with company | 2 | 4,500 | 7:30 |
 | present, not leading (or tied) | 1 | 9,000 | 15:00 |
 
-⚠️ **The shipped `KOTH_TARGET_SCORE = 1000` is thirty-three seconds** and is a placeholder that
-happens to look like a plausible number, which is the worst kind: 3 points a tick is 30 a second, so
-nothing about it reads as wrong until somebody plays it.
+⚠️ **The placeholder `KOTH_TARGET_SCORE = 1000` was thirty-three seconds** and looked like a
+plausible number, which is the worst kind: 3 points a tick is 30 a second, so nothing about it
+reads as wrong until somebody plays it. ✅ **It is 9,000 as of 2026-09-11**, derived as above.
 
 **"TOTAL" IS LOAD-BEARING AND MEANS CUMULATIVE.** The score accumulates and **never decays**, so the
 five minutes need not be consecutive: a side that takes the hill, is pushed off, and comes back
@@ -2113,6 +2113,52 @@ player cannot see is a rule they can only lose to. The scores need somewhere on 
 `AgeBadge`'s precedent (progress drawn as the ring around the thing it belongs to, rather than as a
 separate bar) is the one to reach for before inventing a scoreboard.
 
+##### ✅ BUILT 2026-09-09, and the ladder above was got WRONG on the first attempt
+
+The mode shipped: the zone from `MapGen` or a 16.5 authored area, the ring on the minimap, scoring
+on the wire, the win check. ⛔ **And it shipped the rule this section had already reversed.**
+
+The 2026-09-09 build read `_king_of_the_hill()`'s placeholder header — *"MOST units in the zone
+scores, not merely presence, so a contested hill pays nobody"* — quoted it on the card as *already
+decided and not re-litigated*, and implemented it, together with the placeholder `1000`. The
+paragraph four screens above had said in capitals that this comment **is the only place in the
+repo that contradicts this section** and *"wants correcting in the same change that builds this"*.
+It was read as authority instead of as the thing to correct.
+
+⚠️ **A PLACEHOLDER'S OWN HEADER IS NOT AN AUTHORITY ON THE FEATURE**, and that is the lesson to
+carry off this section — §13.4's stale *"40 damage on a 15 second cooldown"* note is the second
+instance of the same thing, and cross-references here. **PLAN.md wins every disagreement**; when a
+comment and this document differ, the comment is the defect, not the evidence.
+
+📝 **THE TESTS AGREED WITH THE DEFECT**, which is why nothing caught it. `test_koth.gd` was written
+from the same header — `test_a_contested_hill_pays_nobody` asserted `0` and `0` — so the fixture
+and the fault confirmed each other, at the level of a whole rule rather than a value. It was
+caught by the **owner's memory** on 2026-09-11: *"we documented the score system somewhere… there
+was a score based on most units, some units and no units."*
+
+##### ✅ The rest of the mode, 2026-09-11 — the panel, the sound, and naming the rule
+
+- **A standings panel.** `KothStandings`, a sibling of `ObjectiveTracker` in the same slot and
+  chrome: a row per side with its tally and **time to win at its current rate**, from
+  `GameView.koth_seconds_remaining()`. Rows do not re-sort, because a scoreboard that reorders
+  itself under a finger is unreadable on a phone. A side scoring nothing shows `--` rather than a
+  fabricated forecast. The rate reaches the client as `SimPlayer.koth_rate` (0–3), which is **not**
+  in `state_hash()` — it is derived from the same tick's positions and adding it would put a
+  presentational number in the desync check.
+- **A sound on a change of control**, `ui.koth_control`: taken (nobody → somebody) and stolen
+  (somebody → somebody else) both play; **lost** (somebody → nobody) is deliberately silent, since
+  walking off your own hill is not news. `MatchAudio` dwells 12 ticks before announcing, because
+  the lead is not on the wire and a unit stepping over a boundary should not chime.
+- ⚠️ **AND THE VICTORY SCREEN NOW NAMES THE RULE THAT DECIDED THE MATCH.** It said *"Player 2 has
+  been eliminated"* on a hill win — true about the opponent and not what ended the match. **The
+  mode alone cannot name the reason**, which is the subtlety: a KotH match is still winnable by
+  wiping the enemy out, so *"held the hill"* printed off `mode` would be a lie on every conquest
+  win in that mode. The discriminator is exact rather than heuristic — the sim records the tally
+  **in preference** when both fire on one tick, so a winner at or past `KOTH_TARGET_SCORE` is
+  precisely that branch and nothing else writes `score`. Both halves shipped: *"You held the
+  hill"*, and *"Player 2 held the hill"* for the loser, because *"Player 2 won"* tells somebody who
+  just lost a five-minute race nothing about why.
+
 ### Phase 12 — Multiplayer & AI
 
 | # | Item | Tag |
@@ -2120,7 +2166,7 @@ separate bar) is the one to reach for before inventing a scoreboard.
 | 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
 | 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is still open.** *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
-| 12.2b | AI difficulty levels and real decision flow — **the list exists, the behaviour behind it does not.** Human / Passive / Easy / Normal / Hard / Unfair / Open / Closed are selectable; Passive is real and Easy is the PlayTest AI unchanged, and Normal / Hard / Unfair are wired to Easy and **say so on screen** ("AI (Normal) — as Easy") rather than being three names for one opponent. The decision flow behind them is still deliberately parked until the game's balance has been played.<br><br>**The spec now exists: `AI_Player_difficulty.md`**, committed 2026-08-23. It is the owner's, and it settles what each tier does rather than leaving it to be invented later — five tiers, separated along four axes that are all data or existing systems rather than new cleverness: **when it attacks** (never / 10 min / 7 min / once its economy is up), **how far it ages up** (2 / 2 / 3 / 4 / 4), **how many towers it may build** (0 / 1 / 5 / unlimited + castles), and **what it starts with** (Unfair opens with 8 villagers, 2 swordsmen and a scout).<br><br>Two things to know before building it. **The phase-9 gate LIFTED on 2026-08-29:** every tier from Easy up says "can use tech tree upgrades", and 9.3 built them — 27 technologies and a `ResearchCommand` waiting to be emitted. So a tier's tech behaviour is now a rule to write rather than a system to build, and ⚠️ **the first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching. And **Passive is already real**, so the spec's cheapest win is `Normal`, which differs from the shipped Easy only in an attack timer, an age cap and a tower count | |
+| 12.2b | ✅ **The AI rule engine — five real difficulties, 2026-08-27.** Five `data/ai_<level>.json` rule sets replacing `AIPlaytest.SCRIPT`, each a flat list of `{do, when}` rules evaluated in order, first match wins, with no step pointer: **the AI's state is the world.** Conditions rather than timeouts, costs read from the real defs, reservation so an expensive goal can save up past a cheap one, and a deterministic hashed reaction delay as the difficulty knob. The owner's spec is `Docs/AI_Player_difficulty.md` and it is the authority on what each tier does.<br><br>⚠️ **AND THE LIST'S PROMISES TOOK UNTIL 2026-09-11 TO BECOME TRUE IN PLAY**, in four rounds against the same complaint. See §12.2's *"The AI plays the game type it was put in"* — a bot that marched on the nearest enemy in every mode; then a clock longer than the match it was in; then an army it could not afford; then a farm it had built and could not work. **Four fixes, and the first three were individually unobservable.** Confirmed by the owner on King of the Hill and Trophy, easy and normal.<br><br>Still open on this row: ⚠️ **no rule researches anything.** Every tier from Easy up says *"can use tech tree upgrades"*, 9.3 built the 27 technologies and `ResearchCommand` waits to be emitted — a rule to write rather than a system to build (card `9.x-ai-research`). ⚠️ **The first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 for the front-door decision. ➡️ **GROWN INTO PHASE 15, 2026-09-01**, on the owner's two new specs (`scenarios/README.md`, `MapMaker/README.md`): this row is one line and the work is nine. Read Phase 15 instead of this row; what stays here is only the fact that PLAY already leads to the frame | |
 | 12.4 | **Save GAME**, and replays *(replay record/play already exists as a test fixture, 0.7)*.<br><br>⚠️ **THE OWNER GAVE THIS ROW ITS PURPOSE ON 2026-09-04 AND IT IS NOT WHAT "save/load" SOUNDED LIKE:** *"Save Game - when a map is interupted by IRL so you can pick it back up with your friends or vs AI later."* So the case that defines the feature is a **multiplayer** match resumed on another day — not a solo autosave — and that is materially harder than the row's one line implies, because everything that makes the sim deterministic has to come back identical on **every** peer: the tick, the full `SimWorld`, each `SimPlayer.id` and its colour index, the AI rungs and their rule state, and `state_hash()` agreeing across all of them on the first tick after the reload. **`colours.json` order being load-bearing (§4) is a save-file constraint, not only a replay one.** Two things already point the way: `Replay` (0.7) proves a match is reproducible from a seed plus a command list, which is one legitimate shape for a save file, and 12.1b's reconnect needs *"the config, a full snapshot and its old player id"* — **the same three things**, so whichever lands first should build them for both.<br><br>**Distinct from Save MAP (11.3), and the two must never be blurred:** a saved *map* is the terrain and start layout a match was STARTED with; a saved *game* is a half-built settlement with rubble in it. 11.3's third bullet has said so since it was written and the owner's 2026-09-04 ruling reaffirms it | |
 
@@ -2323,6 +2369,116 @@ Closed**, with Easy the default. Two of the five AI entries do something distinc
 script, and sabotaged it reports "passive attacked on tick 6". It ships with a **control** — an
 Easy bot in the identical fixture that does attack — because otherwise "the passive one did not
 attack" is indistinguishable from "nothing in this fixture would have".
+
+##### ✅ The AI plays the game type it was put in — four fixes, 2026-09-11, CONFIRMED IN PLAY
+
+**The owner's ask:** *"for Trophy the ai must turtle, follow the same blue print for current AI
+but instead of attacking player get a gaurd command on dragon. and for koth, follow the same blue
+print for current ai but insread of attacking player move to area."* Until then a bot played
+**conquest in every mode** — it marched on the nearest enemy whatever the match was about, which
+is why a solo King of the Hill game against a bot was a walkover and why a Trophy bot wandered
+away from the one unit whose death loses it the game.
+
+It took four changes, and **the shape of that is the most reusable thing on this page.**
+
+| | what it was | what it turned out to be |
+|---|---|---|
+| `14a` | the army was sent to the wrong ground | fixed — and **never the problem anybody could see** |
+| `14b` | it was then held behind a **conquest clock longer than the match it was in** | Easy first attacked at 6,000 ticks; a hill is won in 3,000 |
+| `14c` | and behind **an army it could not afford** | it could not work a field it had built |
+| `14d` | because it had **sited the mill where the field would never fit** | no farm at all on three starts in four |
+
+⛳ **EACH FIX LOOKED LIKE IT DID NOTHING UNTIL THE ONE BELOW IT LANDED.** `14a` passed eleven tests
+and changed no observable behaviour. `14b` moved the hill clock to 900 and the bot still arrived
+at **t5621 — 9.4 minutes**. `14c` taught it to work a farm it mostly could not build. Only with
+`14d` did a bot feed itself, train an army and turn up. **Anybody debugging a quiet AI should
+expect a stack of gates rather than a bug**, and should measure at the outermost one first.
+
+**Two knobs on the rule set, and they are per GAME TYPE rather than per difficulty.** Both replace
+the attack rule's own value rather than adding to it, because every value worth writing is
+*shorter* or *smaller* than the one it corrects:
+
+- `mode_after_ticks` — when the army may commit. Trophy 0 at every level (the thing it guards can
+  be killed in the first minute, so *"leaves its dragon alone for five minutes"* is not a
+  difficulty, it is a different loss condition); King of the Hill 900 for Easy, 600 for Normal.
+- `mode_at_least` — what the army must contain first. `{}` for Trophy and King of the Hill: **five
+  swordsmen is a number about surviving a fight at somebody's base**, and the hill is empty ground
+  that pays by the tick, where a lone scout out-scores an army still in the barracks and can walk
+  away again. Conquest is untouched, so Easy still needs its five to march on you.
+
+📝 **NO `GuardCommand` WAS BUILT AND NONE WAS NEEDED.** Military units default to `DEFENSIVE`
+(4.12), and a defensive unit fights anything within `GUARD_RADIUS` of where it stands and returns
+there — so **moving the army onto the trophy IS the guard order**, in vocabulary the sim already
+owns. A new command would have been a second way to express a rule `StanceSystem` already has, and
+the two would have been free to disagree.
+
+📝 **NO PER-MODE RULE FILES EITHER.** The conditions are identical in every mode and so is the
+whole economy above them, so four copies of one blueprint differing in a line would have been
+four trackers to drift — and the owner's own words were *"the same blue print"*. `_army_station()`
+asks the **world** what match this is; `MapGen`'s arming convention already works that way.
+
+⚠️ **THE HALF THAT WOULD HAVE SILENTLY UNDONE ALL OF IT.** `_keep_busy` throws idle soldiers at
+the nearest enemy every five ticks. One attack rule sends the army to the hill and the next idle
+sweep would send it straight back out — the bot walking away from its station forever, while every
+direct test of the commit still passed. It now obeys the same mode rule and **skips anyone already
+on station**, which is a cost fix as much as a behaviour one: a soldier standing on the hill is
+idle *by definition*, so re-ordering the garrison every interval would be a command per unit per
+five ticks for the rest of the match, each re-entering the path service.
+
+###### The two economy defects underneath, and both were older than this work
+
+⛔ **`AISystem._nearest_node` COULD NOT SEE A FIELD, BECAUSE A FIELD IS A BUILDING.** It tested
+`n is SimResourceNode` itself — **a third answer to "can this be gathered?" beside `GatherSystem`'s
+and `GatherCommand`'s.** `is_harvestable()` is public precisely to stop that and its own header
+says so: *"two answers to 'can this be gathered?' would disagree the first time either changed."*
+They disagreed. **Every profile built a farm and could never send a villager to it.**
+
+Berries hold 80 and are stripped in the first minute, so past the opening **the farm is the only
+renewable food there is**. A villager costs 50 food and a swordsman 60 — so no army was ever
+affordable in any mode, and four measured seeds ended with **wood 725–1,635, gold 840–1,792, stone
+75–1,555 and food 0–46**: every resource that comes from a node in four figures, the one that
+comes from a building at zero. 📝 And `_bankable_kind` made it a **dead stop** rather than a
+slowdown: food stays poorest, a mill makes it bankable, so the standing order keeps choosing food,
+finds no node and issues *nothing at all* — never falling through to wood. An idle villager in
+that state stands still for the rest of the match.
+
+⛔ **AND A MILL WAS SITED WITHOUT EVER ASKING WHETHER ITS FARMS WOULD FIT.** A field is **6×6** and
+must abut a **5×4** mill, so a farm needs 36 clear tiles against it — and `_find_spot` took the
+first legal ring position near the town centre, which on a wooded map is whatever gap happened to
+be nearest. The rule set builds exactly one mill and never moves it, so a bad site starved that
+bot for the match. `_find_spot` now runs **two passes**: prefer a site that also has room for what
+this building *carries*, then fall back to the old behaviour exactly — **a mill somewhere beats no
+mill**, and refusing to build one would have been strictly worse than the defect.
+
+📝 **What a building carries is DERIVED, not declared.** `GameDataRegistry.hosted_by()` is the
+reverse of `requires_adjacent`, built and cached the way `wall_tier()` already does it. A
+`carries:` key on the mill would be the same fact written twice, and the day they disagreed a mill
+would be sited with room for a farm that no longer wanted to be there.
+
+**Measured, easy v easy, 9,000 ticks — fields standing and final food:** seed 1 p1 0 → 1 field,
+food 40 → **1,340**; seed 5 p1 0 → 1, food 20 → **932**; seed 11 p2 0 → 1, food 40 → **3,040**.
+Five of eight bots now farm against two before.
+
+###### ⚠️ A DECISION TEST CANNOT SEE A GATE IN FRONT OF THE DECISION
+
+This is the methodological lesson and it cost most of the day. `test_ai_game_types` asks
+`_issue_attack` directly and its eleven assertions were **correct throughout** — the bot's
+decision was right from the first commit. What no unit test in the repo could answer was the
+owner's actual question, *"do they ever send units to the area?"*
+
+So `preview_ai_match` grew `--mode koth|trophy|lms`, which sets the mode **before `MapGen.build`**
+(the generator places the hill and the trophies off it, so the other order builds a conquest map
+and calls it a hill match — which plays as conquest and says nothing). Every timeline line now
+carries who is standing on the station, and a run ends with **the tick each side first got a unit
+onto it, or NEVER**. The ground is asked of `AISystem._army_station()` rather than read off
+`w.koth_zone` independently, so the page cannot report a bot standing somewhere the bot was not
+aiming at.
+
+⛔ **STILL KNOWN-IMPERFECT, WRITTEN UP RATHER THAN FIXED.** On eight measured starts, **two bots
+found no roomy mill site anywhere in range** — the honest answer there is clearing trees, which no
+bot can do — and **one never left age 1 at all**, finishing 9,000 ticks with 1,342 gold and 0 food,
+which is a different failure and makes that bot a non-opponent. Neither stopped the modes playing
+correctly on easy and normal.
 
 ### Phase 13 — Dragons
 
@@ -2838,6 +2994,21 @@ now keeps its distance from the roads between starts and nothing is grown inside
 reach, so no bot has a *reason* to walk in. That is a content fix for a code ceiling, it is
 recorded as such in 13.2a, and **it does not generalise**: the next hazard placed anywhere near a
 route will do this again.
+
+#### What 2026-09-11's game-type work deliberately left here
+
+§12.2's four fixes taught a bot **where** to send its army in each mode and got it fed well enough
+to have one. They did **not** touch this phase, and one row of it is now the obvious next thing a
+player will notice: **a King of the Hill bot walks to the hill and then holds it no harder than
+`DEFENSIVE` stance already does.** It cannot mass more army once the hill is contested, because
+*"somebody else is standing on my scoring ground"* is not a fact any condition can read — which
+is the third bullet of the list above, *it cannot defend a place*, arriving through a new door.
+
+📝 **AND THE SAME RUN PRODUCED A SECOND CANDIDATE THAT IS NOT ENEMY-BLINDNESS AT ALL.** One
+measured bot finished 9,000 ticks **in age 1 holding 1,342 gold and 0 food**. Nothing about the
+opponent would have helped it; it could see its own stock the whole time and had no rule that
+reads *"I am starving"* and reorders its own priorities. **The vocabulary is blind in both
+directions**, and a rebuild that only adds an enemy census would fix one of these two.
 
 ### Phase 15 — Scenarios & campaigns
 
@@ -3427,7 +3598,7 @@ owner's instruction. Each names the phase item that holds its detail.
 |---|---|---|---|
 | **Unit-speed balancing pass** | High — it is how the game *feels* | Low in code, playing time | `BUGS.md`. Walls, wildlife and three predators have all changed what "too fast" means since it was raised. **Only the owner can judge it** |
 | 2.4d Archipelago | Medium | Medium | New map type; the validator's connectivity claim has to change rather than relax. §11.6 |
-| 12.2b AI decision flow | High | Medium-high | The difficulty *list* ships and the opponents behind it do not — Normal/Hard/Unfair are Easy wearing three names and say so on screen. Parked until the balancing pass has been played, because tuning an AI against unbalanced speeds tunes it against the wrong game |
+| 12.2b AI decision flow | ~~High~~ **Retired 2026-08-27, re-measured 2026-09-11** | — | Five real rule sets shipped, and the game types they play were confirmed by the owner on 2026-09-11. **What the risk turned into is worth keeping:** the list was never the hard part — four separate gates stood between a correct decision and a bot that could act on it, and three of them were individually invisible (§12.2). The residual risk is now *measurement*, not behaviour: `preview_ai_match --mode` is the only thing in the repo that can see a bot walk somewhere, and a decision test cannot see a gate in front of the decision |
 | 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | **Phase 16 MapMaker** | High — it turns scenarios into content | High; a second Godot project | ⚠️ **NOW UNBLOCKED ON BOTH COUNTS AND THEREFORE UP NEXT** — it waited on Phase 15 and on 2.4c, and both closed. **It starts at 16.0**, which is new and is game-code rather than tool work: the skirmish saved-map picker and the pause-menu Save Map button are both specified in the owner's README, neither is built, and 16.2 cannot be verified without the first of them. 16.2 is still the row that proves the format contract; 16.7 (per-entity overrides) is the only row with real sim cost. **A 2026-09-04 review against the code changed six things in this phase before a line was written** — see §16's decision 2 and 7.<br><br>✅ **16.0, 16.1, 16.2 and 16.4b are done as of 2026-09-04, and the owner has authored a map in it.** What that first authored map taught is the row worth reading before picking the next one: it **saved without a murmur and was unplayable**, so 16.2's placement was hardened and 16.4b was pulled forward to sit behind the Save button. **Next is 16.4a (File ▸ Open), then 16.3 (the palette)** — in that order, because 16.4a is what 16.10's re-authoring needs and because a palette that cannot reopen its own output is a one-shot tool |
@@ -3794,11 +3965,10 @@ same way.
   *balance* hole too, because a human who buys Blast Furnace fights an army that never will.
   ⚠️ **The AI ladder's tick table in BUGS.md is not invalidated by this** (neither side
   researches), and **the first rule that does research invalidates every row of it.**
-- **11.2 King of the Hill.** ✅ **Trophy is no longer part of this row — it was built 2026-09-07**
-  and is selectable in the lobby (which is where a picker that had never been connected turned up;
-  see the row). KotH's design questions were settled by the owner on 2026-09-01 (§11.9), so what
-  is left is three known pieces of work and no decisions: the zone as map data, `SimPlayer.score`
-  written **by side**, and the minimap ring.
+- ~~**11.2 King of the Hill.**~~ ✅ **DONE — Trophy 2026-09-07, King of the Hill 2026-09-09**, with
+  its scoring rule corrected and the whole mode confirmed in play on 2026-09-11 (§11.9). All three
+  win conditions are live and none is greyed. What is left of §11 is the **wonder** as a fourth
+  (card `11.x-wonder-victory`) and **Regicide**, which is still declared and inert.
 - **12.1b reconnect.** Discovery landed 2026-08-31 and closed the friction point (typing an IP).
   Getting back *into* a match after a drop is the harder half: a returning peer needs the config,
   a full snapshot and its old player id.
