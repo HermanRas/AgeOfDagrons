@@ -401,18 +401,36 @@ func _unpack(pack: PackDef, archive: String) -> String:
 	return ""
 
 
-## Mount a verified `.pck`. Returns "" or the complaint.
+## Mount a verified pack. Returns "" or the complaint.
 ##
 ## The scratch file becomes the pack's permanent home, because a mount READS the file for
 ## as long as the process lives and again on every boot -- so it is moved out of
 ## `SCRATCH_DIR` (which is for unverified payloads) into a kept directory first.
+##
+## ⚠️ **"AND AGAIN ON EVERY BOOT" WAS NOT TRUE OF ANYTHING UNTIL 2026-09-12.** This function
+## was the only `load_resource_pack()` call in the project, so a mount lasted exactly one
+## process while `PackIndex` recorded the pack as installed forever -- art that vanished on
+## the first restart and was never re-fetched. `MountedPacks.mount_all()`, from
+## `GameDataRegistry._ready()`, is the boot half; its header has the full account. Nothing
+## could have found it before an art pack existed, because `campaign` and `map` packs do not
+## mount.
+##
+## ⚠️ **THE EXTENSION IS THE SOURCE'S, NOT `.pck`.** It was hardcoded `%s.pck` and the art
+## pack is a **zip** (the owner's call, and the engine takes either). A zip named `.pck`
+## still mounts -- `load_resource_pack` sniffs the container rather than trusting the name --
+## so this is not a bug that was fixed but a lie that was removed: `user://packs/` is a
+## directory somebody will one day list while diagnosing a device.
 func _mount(pack: PackDef, archive: String, owned: bool) -> String:
-	var kept_dir := "user://packs/"
+	var kept_dir := MountedPacks.KEPT_DIR
 	DirAccess.make_dir_recursive_absolute(kept_dir)
-	var kept := kept_dir.path_join("%s.pck" % pack.id)
+	var kept := kept_dir.path_join("%s%s" % [pack.id, _container_suffix(pack, archive)])
 
-	if FileAccess.file_exists(kept):
-		_delete_file(kept)
+	# EVERY suffix, not just the one about to be written. An upgrade that changes container --
+	# `art_base.pck` replaced by `art_base.zip` -- would otherwise leave the old file behind,
+	# and `MountedPacks.mount_all()` mounts whatever it finds: the previous version of the art
+	# would be mounted at every boot alongside the new one, first-wins, silently.
+	for suffix in MountedPacks.SUFFIXES:
+		_delete_file(kept_dir.path_join("%s%s" % [pack.id, suffix]))
 	# MOVE what is ours, COPY what is not. A caller who handed us a path did not agree to
 	# have that file disappear -- and a sideloaded pack the player still has in their
 	# downloads folder vanishing would look like the install ate it.
@@ -426,13 +444,44 @@ func _mount(pack: PackDef, archive: String, owned: bool) -> String:
 	if moved != OK:
 		return "cannot store the pack (error %d)" % moved
 
-	# `replace_files = false`: a pack must not shadow anything shipped in the APK. The seam
-	# resolves a real atlas over a placeholder by NAME, not by overwrite -- see
-	# `GameDataRegistry.atlas_for()`, which is total precisely so a missing file is a
-	# magenta placeholder rather than a crash.
-	if not ProjectSettings.load_resource_pack(kept, false):
+	# ⚠️ REPLACING A PACK THAT IS ALREADY MOUNTED IS A SUCCESS, NOT A REFUSAL. Godot has no
+	# `unload_resource_pack()`, so a second version of the same pack downloaded in one session
+	# cannot take effect until a restart -- the bytes are on disk and `mount_all()` will find
+	# them next boot. Treating it as a failure would leave `PackIndex` un-recorded and the
+	# client re-downloading the pack on every visit to the browser, forever.
+	if MountedPacks.is_mounted(kept):
+		push_warning("PackInstaller: '%s' is already mounted; the new version takes effect"
+				% pack.id + " on the next start")
+		return ""
+
+	# `replace_files = false` lives in `MountedPacks.mount_one()` now -- ONE call site for the
+	# engine call, shared with the boot-time mount, so the two cannot disagree about whether a
+	# pack may shadow the APK.
+	if not MountedPacks.mount_one(kept):
 		return "the pack downloaded but the engine refused to mount it"
+
+	# AND THEN MAKE IT VISIBLE. A mount adds files under `res://`; it does not tell the asset
+	# seam to look again, and `GameDataRegistry` caches a resolved entry per skin forever.
+	# Without this the player finishes an 85 MB download, plays a match, sees the same
+	# placeholders, and it comes right only after restarting the game.
+	MountedPacks.refresh_seam()
 	return ""
+
+
+## `.zip` or `.pck`, from whichever of the two names actually carries one.
+##
+## The downloaded payload is `<id>.part`, so the container is named by the URL; a sideloaded
+## file (`install_from_file`) names itself. Neither is trusted beyond the two words we
+## publish -- anything else keeps `.pck`, because the checksum has already passed and the
+## ENGINE is the judge of the format, not the filename.
+func _container_suffix(pack: PackDef, archive: String) -> String:
+	var candidates := PackedStringArray([archive])
+	candidates.append_array(pack.urls)
+	for candidate in candidates:
+		var suffix := "." + candidate.get_file().get_extension().to_lower()
+		if MountedPacks.SUFFIXES.has(suffix):
+			return suffix
+	return ".pck"
 
 
 ## The file that proves an unpacked archive is what it says it is. Empty means "no check

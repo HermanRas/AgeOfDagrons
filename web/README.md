@@ -120,8 +120,14 @@ that stops "content edited, script re-run, every existing install silently stale
 
 ```powershell
 scp web\server\app\downloads\campaign_*.zip 100.96.0.2:/opt/aod/app/downloads/   # 1. payloads
+scp web\server\app\downloads\art_*.zip      100.96.0.2:/opt/aod/app/downloads/   # 1. payloads
 scp web\server\app\downloads\packs.json     100.96.0.2:/opt/aod/app/downloads/   # 2. manifest LAST
 ```
+
+⚠️ **THE ART PAYLOADS ARE 316 MB AND THE UPLOAD IS THE SLOW STEP**, so the ordering rule
+below stops being a formality: there is now a window of minutes, not seconds, between the
+first payload landing and the manifest being right. Upload art once and leave it — the
+filename carries the version, so a published pack is never overwritten.
 
 The local and remote halves of each line are now the same path, which is the mirror doing
 its job: `web\server\` + the rest is `/opt/aod/` + the rest.
@@ -137,10 +143,18 @@ No automation — uploaded by hand, like everything else here (there is no CI, P
 | File | Fetched by | Notes |
 |---|---|---|
 | `packs.json` | the game | Must never move. Served `no-cache` — a stale copy means the publish did not happen |
-| `campaign_howtoplay_v1.zip` | the game | The tutorial. `required` |
-| `campaign_howtoplay_dummy_v1.zip` | the game | **A TEST PACK.** Optional content that exists only so the browse-and-pick path has something to exercise on a device; delete it once there is a real optional campaign |
-| `pack_art_v1.pck` | the game | **Not built yet** — `build_packs.py` does zips only; see `asset_request.md` |
+| `campaign_howtoplay_v4.zip` | the game | The tutorial. `required` |
+| `campaign_howtoplay_dummy_v4.zip` | the game | **A TEST PACK.** Optional content that exists only so the browse-and-pick path has something to exercise on a device; delete it once there is a real optional campaign |
+| `art_base_v1.zip` | the game | **The art, 80 MB, `required` and MOUNTED.** Every unit, building, terrain and prop. Without it the game runs on placeholders |
+| `art_colours_v1.zip` | the game | **Player colours, 236 MB, optional.** 21 units × 8 colours. Without it units show untinted, which the seam falls back to on its own |
 | `AoD_v*.apk` / `.exe` | humans | Game builds |
+
+⚠️ **THE ART PACK IS A `.zip`, NOT THE `.pck` THIS TABLE PROMISED FOR A WEEK.** A `.pck` is
+Godot's own container and would need a Godot export step in the publish pipeline;
+`ProjectSettings.load_resource_pack()` takes a **zip** just as happily, which was measured on
+4.7.1 rather than taken from the docs. So the packer stays pure Python and the manifest's
+`kind: art` is what tells the client to mount rather than install — never the filename.
+PLAN.md §3.2 still calls it `pack_art_v1.pck` and that name is history.
 
 The `.pck` and `.zip` files are **not** committed (`.gitignore`), and neither are the
 builds. They are upload artefacts, rebuildable from `tools/build_packs.py`.

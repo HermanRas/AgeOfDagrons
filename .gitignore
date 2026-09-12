@@ -78,14 +78,20 @@ build/
 packs/
 game/assets/atlases/
 
-# Built content packs (tools/build_packs.py, phase 0.3). `*.pck` above already covers
-# the art half; these are the zips. 2.2 MB each and rebuildable byte-for-byte from
-# `scenarios/` — the builder is deterministic precisely so that holds.
+# Built packs (tools/build_packs.py, phase 0.3). Rebuildable byte-for-byte from `scenarios/`
+# and the staged atlases — the builder is deterministic precisely so that holds.
+#
+# ⚠️ **THE ART PACKS ARE `.zip` TOO, AND THE `*.pck` RULE ABOVE NO LONGER COVERS THE ART.**
+# `art_base_v1.zip` is 80 MB and `art_colours_v1.zip` is 236 MB; both match the pattern
+# below, which is the only thing keeping 316 MB of build output out of a repo on Google
+# Drive. A `.pck` is Godot's own container and the art pack is not one — see web/README.md.
 #
 # ⚠️ THE PATH MOVED ON 2026-09-04 and the old pattern did not stop matching — it simply
 # matched nothing, so every built zip reappeared as untracked. `web/` was reorganised so
 # `web/server/` mirrors `/opt/aod/` exactly, which puts the site under `web/server/app/`.
 web/server/app/downloads/*.zip
+# The packer's temporary, if a build is ever interrupted between writing and promoting it.
+web/server/app/downloads/*.building
 
 # ⚠️ `web/server/app/downloads/packs.json` IS COMMITTED, AND IT IS THE ONE ARTEFACT THAT MUST BE.
 # It is generated, so the reflex is to ignore it — but `build_packs.py` reads it as the

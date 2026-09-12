@@ -20,6 +20,62 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [game-code] The art packer is written and published. Your three answers were all load-bearing — 2026-09-12
+
+**Nothing is asked of you.** This closes the row below it, and there is one thing in it that
+changes what a rebake costs you, so it is not only a courtesy.
+
+**Two packs, on your split.** `art_base_v1.zip` 80.0 MB `required`, `art_colours_v1.zip`
+236.0 MB optional — within a rounding error of the 80.1 / 224.4 you measured on 2026-09-04,
+which is two independent counts of the same tree agreeing and is worth saying. Your
+`base`-against-`colour` axis was taken over `terrain / units / UI` for exactly the reason you
+gave.
+
+⚠️ **AND THE THING YOU COULD NOT SEE, ANSWERED: a missing colour atlas falls back to the
+UNTINTED bake, not to the magenta placeholder.** `_atlas_path_for_skin` only takes a tinted
+path `if FileAccess.file_exists(tinted)`. So a player without the colours pack is grey and
+plays perfectly well — which is the whole reason the 236 MB half could be made optional. Had
+it failed, this would have been one 314 MB required download and the first boot on a handset
+would have been brutal. **You were right to make the split conditional on that.**
+
+**Your "hash the content" answer is the version key, and it is the one with a cost for you.**
+Neither `attribution.actor` nor `generator.isobake_commit` was used, for the reasons you gave.
+The packer's digest is the identity — which means **any rebake that moves a staged byte moves
+the pack digest, and the build then refuses to publish until the version is bumped by hand.**
+That is correct and it is also a new step in your loop: a rebake is no longer finished when
+the atlas is staged; somebody has to publish. It has already fired once for a reason neither
+of us would have predicted (a compression change in the packer), so treat a refusal as routine
+rather than as a bug.
+
+**The packer reads `visuals.json`, never your directory**, which is the design you talked me
+into. Three consequences for your side:
+
+- **Nothing about staging changed and nothing about it can break the pack.** The packer does
+  not glob `game/assets/atlases/`, does not know your naming, and does not run
+  `stage_atlases.py` — your warning about `--clean` deleting 363 atlases against an empty
+  `out/` is noted and nothing here goes near it.
+- ✅ **`vis.dragon` is dropped, exactly as you said it would have to be.** No skip list, no
+  `"pack": false`. The build prints the count every run: **26 staged atlases are declared by
+  nothing and are in no pack.** ⚠️ **That number is yours to glance at** — dropping an
+  unreferenced bake is the design, but it is also precisely what a wiring mistake looks like
+  from here, and the packer cannot tell them apart. If it jumps, something stopped being
+  referenced that should be.
+- **The guard you asked for is in**: an atlas named in `visuals.json` and absent from disk
+  **fails the build**, naming up to eight of them, and says that a gitignored tree is what a
+  fresh clone looks like. An empty selection fails too.
+
+**One question of yours I am answering NO to, with a reason that is not about bytes.** You
+asked whether the colours should split eight ways, a device fetching only what it plays.
+**They should not, and it is a gameplay fact rather than a size one:** a player does not choose
+their opponents' colours, a skirmish hands them out, and an eight-player lobby can reach all
+eight. The set a device needs is not knowable at download time. One pack.
+
+**Ownership, since I flagged this one as the exception that does not justify itself:** it did
+not arise. The packer never touches your output as *your output* — it resolves seam paths and
+takes the files that answer, so it knows nothing about bakes, colours or staleness. **The
+trigger you named is still the right one**: if which atlas belongs in which pack ever becomes a
+judgement rather than a path lookup, that is the moment to raise the fence, not before.
+
 ### [game-code] The dragon HATCHLING needs no bake, and `vis.dragon_rigged` now has two readers — 2026-09-06
 
 **Nothing is asked of the art side here.** This is a heads-up, because 13.2's remaining rows

@@ -234,6 +234,103 @@ func test_a_clean_run_offers_no_button_because_it_advances_on_its_own() -> void:
 	screen.free()
 
 
+# ── SKIP FOR NOW (2026-09-12, the art pack) ─────────────────────────────────
+
+## ⚠️ **THE ESCAPE EXISTED, WAS DOCUMENTED, AND WAS UNREACHABLE.**
+## `PackInstaller._download()`'s comment has called `cancel()` *"the player's escape"* since
+## 0.3 and **nothing had ever called it**. It did not matter while the entire required set
+## was one 2.2 MB campaign -- the screen was over before anybody could want out. It matters
+## now: `art_base_v1.zip` is 80 MB, and on the 125 kbps connection 0.3 was deliberately
+## tested against that is well over an hour with no way back to the game.
+func test_a_download_in_progress_offers_a_way_out() -> void:
+	var screen := DownloadScreen.new()
+	screen.auto_advance = false
+	screen.index_path = PATH
+
+	assert_false(screen.showing_skip(),
+			"nothing to skip before a download starts -- the screen may yet have no work")
+	screen._on_started(PackDef.from_dict(_entry({"title": "Game art"})))
+	assert_true(screen.showing_skip(), "a running download must be escapable")
+	screen.free()
+
+
+## The size is the whole basis on which somebody decides to skip, and the manifest has known
+## it all along. "Downloading Game art..." gives a player nothing to weigh.
+func test_the_player_is_told_how_big_it_is_before_deciding() -> void:
+	var screen := DownloadScreen.new()
+	screen.auto_advance = false
+	var pack := PackDef.from_dict(_entry({"title": "Game art", "size": 80041115}))
+
+	screen._on_started(pack)
+	assert_true(screen.status_text().contains("MB"),
+			"the size is on screen from the first frame: %s" % screen.status_text())
+	# Derived from the manifest rather than typed here, so a change to `size_text()` moves
+	# the test with the code instead of against it.
+	assert_true(screen.status_text().contains(pack.size_text()),
+			"and it is the browser's own formatting: %s" % screen.status_text())
+	screen.free()
+
+
+## Pressing SKIP must not land the player on "SOME CONTENT DID NOT DOWNLOAD". The installer
+## reports a cancelled pack as `ok == false` with "cancelled", which is right for the
+## installer and wrong here -- it would present the player's own decision as a fault.
+func test_skipping_is_not_reported_as_a_failure() -> void:
+	var screen := DownloadScreen.new()
+	screen.auto_advance = false
+	screen.index_path = PATH
+	var pack := PackDef.from_dict(_entry({"title": "Game art"}))
+
+	screen._on_started(pack)
+	screen.press_skip()
+	assert_true(screen.skipped())
+	assert_false(screen.showing_skip(), "the button goes once it has been pressed")
+
+	screen._on_finished(pack, false, "cancelled")
+	screen._finish()
+
+	assert_true(screen.failures().is_empty(),
+			"a download somebody chose to stop is not something that went wrong")
+	assert_false(screen.showing_continue(),
+			"and there is nothing to acknowledge -- it goes straight to the menu")
+	screen.free()
+
+
+## A real failure arriving AFTER a skip is still not the player's business: they have already
+## asked to leave. The guard is on `_skipped`, not on the message, so this holds whatever the
+## installer says.
+func test_a_failure_after_a_skip_is_still_not_shown() -> void:
+	var screen := DownloadScreen.new()
+	screen.auto_advance = false
+	screen.index_path = PATH
+	var pack := PackDef.from_dict(_entry({"title": "Player colours"}))
+
+	screen._on_started(pack)
+	screen.press_skip()
+	screen._on_finished(pack, false, "checksum does not match")
+	screen._finish()
+
+	assert_true(screen.failures().is_empty())
+	screen.free()
+
+
+## And the reverse, so the skip does not become a blanket excuse: a genuine failure with
+## nobody having pressed anything is reported exactly as it was before.
+func test_a_failure_without_a_skip_is_reported_as_it_always_was() -> void:
+	var screen := DownloadScreen.new()
+	screen.auto_advance = false
+	screen.index_path = PATH
+	var pack := PackDef.from_dict(_entry({"title": "Game art"}))
+
+	screen._on_started(pack)
+	screen._on_finished(pack, false, "checksum does not match")
+	screen._finish()
+
+	assert_eq(screen.failures().size(), 1)
+	assert_true(screen.showing_continue())
+	assert_false(screen.showing_skip(), "two buttons on a finished screen is one too many")
+	screen.free()
+
+
 ## `total` is 0 until `Content-Length` arrives, and a percentage of an unknown total is the
 ## classic divide-by-zero in a progress UI.
 func test_progress_before_a_content_length_reports_megabytes_and_not_zero_percent() -> void:

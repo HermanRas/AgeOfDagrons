@@ -114,6 +114,16 @@ var load_warnings: Array[String] = []
 
 
 func _ready() -> void:
+	# ⛔ **MOUNT BEFORE READING, AND THIS AUTOLOAD IS FIRST IN project.godot FOR IT.** A
+	# downloaded art pack is mounted over `res://` and the seam decides whether an atlas
+	# exists with `FileAccess.file_exists()` -- `_atlas_path_for_skin` asks that of every
+	# tinted path. So a pack mounted one line later is a pack every colour has already been
+	# recorded as missing from. `MountedPacks`' header has why the mount lives here at all.
+	#
+	# Deliberately NOT inside `load_all()`: that is called directly by tests on a bare
+	# instance, and mounting the developer's own `user://packs/` from a unit test is
+	# developer state leaking into the suite.
+	MountedPacks.mount_all()
 	load_all()
 
 

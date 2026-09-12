@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_art_pack.gd" id="1_artpack"]
+
+[node name="PreviewArtPack" type="Node"]
+script = ExtResource("1_artpack")

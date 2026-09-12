@@ -18,7 +18,7 @@ I am the game-code agent. **I own `game/`** — the Godot project: `src/`, `data
 
 | Not mine | Why |
 |---|---|
-| `tools/` | isobake recipes + bake/stage scripts — the art agent's. **Four things in it are MINE and that is by agreement, not by drift**: `stage_audio.py` and `licence_audit.py` (settled in `asset_request.md`, 2026-08-23 — *"leave it exactly where it is, and keep owning it"*, on the principle that ownership follows who can maintain a thing), `prepare_ui_chrome.py` (added 2026-08-30, same arrangement: it decides what size a WIDGET wants, which is a layout question), and **`build_packs.py` + `packs.source.json` (added 2026-09-03, phase 0.3)** — the owner was offered the narrower split, where I write only the content packer and request the art `.pck` packer from the art side, and chose *"Assign build_packs.py to me too"*. ⚠️ **THAT ONE IS THE EXCEPTION THAT IS NOT SELF-JUSTIFYING.** The other three are things only I can maintain; this one will eventually read the art pipeline's bake output to build `pack_art_v1.pck`, which is the art side's business, so it is mine because the owner said so and not because the principle points here. **It only builds `campaign` and `map` packs today** — the `.pck` half is unwritten, and if it starts needing to know how atlases are staged, raise the ownership again rather than quietly learning. Everything else in `tools/` I read and never edit |
+| `tools/` | isobake recipes + bake/stage scripts — the art agent's. **Four things in it are MINE and that is by agreement, not by drift**: `stage_audio.py` and `licence_audit.py` (settled in `asset_request.md`, 2026-08-23 — *"leave it exactly where it is, and keep owning it"*, on the principle that ownership follows who can maintain a thing), `prepare_ui_chrome.py` (added 2026-08-30, same arrangement: it decides what size a WIDGET wants, which is a layout question), and **`build_packs.py` + `packs.source.json` (added 2026-09-03, phase 0.3)** — the owner was offered the narrower split, where I write only the content packer and request the art `.pck` packer from the art side, and chose *"Assign build_packs.py to me too"*. ⚠️ **THAT ONE IS THE EXCEPTION THAT IS NOT SELF-JUSTIFYING.** The other three are things only I can maintain; this one reads the art pipeline's bake output to build the art pack, which is the art side's business, so it is mine because the owner said so and not because the principle points here. ⚠️ **THE ART HALF LANDED 2026-09-12 AND THE OWNERSHIP QUESTION IT WAS FLAGGED FOR DID NOT ACTUALLY ARISE** — and the reason is worth keeping, because it is what would make it arise later. The packer reads **`game/data/visuals.json`**, which is mine, and never the staged directory: it resolves what the SEAM can ask for and takes the files that answer. So it knows nothing about how atlases are staged, named or baked. **If it ever needs to — if which atlas goes in which pack becomes a colour or staleness judgement rather than a path lookup — that is the moment to raise the fence again**, and the art side said the same thing in `asset_request.md`. Everything else in `tools/` I read and never edit |
 | `art_work/out/` | baked atlases; build output. **It is not in this repo** — the path is machine-local and declared in `tools/isobake.local.toml`, today `C:\Users\herman.ras\Downloads\AOD_game\art_work\out`. Read it to tell staged art from fresh |
 | the isobake source | its own repo, `Downloads\AOD_game\blender_3d_to_2d_isobake` |
 | `ASSET_MISSING.md` | the art agent's tracker |
@@ -300,6 +300,18 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --force   # re-roll the sample map
 & $godot --path game res://dev_preview/preview_dragon_nest.tscn    # 13.2: the nest, and the 20% hatchling
 
+# The FIRST BOOT, in its four states -- offline, downloading, skipped, failed. Four
+# screenshots plus every control's rect measured against the viewport.
+& $godot --path game res://dev_preview/preview_download_screen.tscn
+
+# 0.3's ART PACK. EXIT CODE IS THE ANSWER. Headless, no screenshots -- it compares the
+# built zips against what the SEAM can ask for, which is a question no picture answers.
+& $godot --headless --path game res://dev_preview/preview_art_pack.tscn
+& $godot --headless --path game res://dev_preview/preview_art_pack.tscn -- --pack <path>
+# ⚠️ AND THE ONE RUN THAT PROVES THE PACK RATHER THAN THE STAGED TREE -- see §6:
+& $godot --headless --path game --export-pack "Windows Desktop" out.pck   # atlases EXCLUDED
+& $godot --headless --main-pack out.pck res://dev_preview/preview_art_pack.tscn -- --pack <abs zip>
+
 # LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag.
 # Start the beacon first; it waits. The exit code is the answer.
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
@@ -417,6 +429,16 @@ worth copying out of it:
 - **It shoots the panel one phase AFTER pressing the button.** §5's rule is not only about
   commands: pressing an `expands` action and photographing the same frame produced a panel
   with an **empty detail grid** while the log correctly listed four slots in it.
+
+`preview_art_pack` is 0.3's art half and it exists because **this workstation cannot fail the
+obvious test.** `game/assets/atlases/` is staged here and `res://` beats a mounted pack, so a
+check that mounted the pack and asked the seam to draw would pass with no pack on disk at all.
+So it asks three things a staged tree cannot answer for: every path `atlas_path_for()` can
+produce is in a zip (the SEAM's derivation against the PACKER's, independently computed);
+member names are shaped so `PackInstaller` would accept them; and pages decode. **The fourth
+section, `seam:`, is the only end-to-end proof available without an APK** — run under
+`--main-pack` off an export with `assets/atlases/` excluded, every id that comes back real
+came out of the mounted zip.
 
 Screenshots land in `%APPDATA%\Godot\app_userdata\AgeOfDragons\`.
 
@@ -700,6 +722,12 @@ carry `age_required`, which is a *gate*, not a skin.
 | **`"%s" % some_array` TREATS THE ARRAY AS THE ARGUMENT LIST, NOT AS THE ARGUMENT** | So the single most natural way to put a problems list into an assertion message — `assert_true(problems.is_empty(), "%s" % problems)` — is **wrong in both directions and never in a way that mentions arrays**: an empty list raises *"not enough arguments for format string"* and a two-element list raises *"not all arguments converted"*. It cost a red suite on 16.4a with **eighteen engine errors** and one confusing formatting failure, all pointing at string formatting and none at the list. `% [problems]` is the fix (the array becomes one argument), and note the trap in the trap: the form is only wrong for the case that fires, so a message with exactly one element in the list passes and the same line fails the next time. **Any `%` whose right-hand side is a variable holding an `Array` wants brackets round it.** Same family as `some_array as Array[int]` silently failing on a variable — GDScript's `%` and `as` both behave differently for a literal than for a name. |
 | **`Ctrl+Z` CANNOT BE CAUGHT AFTER THE GUI PASS, WHICH RULES OUT `_gui_input`, `_shortcut_input` AND `Button.shortcut` TOGETHER** | Godot's order is `_input` → `Control._gui_input` → `_shortcut_input` → `_unhandled_input`/`_unhandled_key_input`, and `LineEdit` consumes `Ctrl+Z` in the GUI pass as its own **text** undo. So a focused search box or name field eats it before `_shortcut_input` runs — and a `BaseButton.shortcut` is dispatched from `_shortcut_input`, so the obvious "just put the shortcut on the Undo button" is the same bug wearing a resource. **The working binding is `_input` on the screen**, which is first in the order and reached whatever has focus. 16.2a's card blamed the canvas; the canvas was incidental — being *after the GUI* was the fault. **And then hand the key back**: `get_viewport().gui_get_focus_owner() is LineEdit or TextEdit` (a `SpinBox`'s child `LineEdit` is what takes focus, so one test covers the number boxes too), or you undo the map while somebody is mid-word in the map's name. |
 | **WRITING INTO ANOTHER OBJECT'S PACKED ARRAY THROUGH THE PROPERTY CAN VANISH WITH NO ERROR** | `data.terrain[i] = b` is the classic form: a packed array is a **value type**, so depending on how the access compiles the write can land on a temporary copy. Fine inside the class (`MapData.set_terrain` writes its own member); not something to rely on from outside. **Pull the buffer into a local, write it, assign it back once** — correct whichever way it compiles, and one copy-on-write per operation instead of per element. `MapEdit._write_terrain()` is the pattern, and it was written this way rather than probed because the failure is silent and the probe would only have answered for 4.7.1. |
+| ⛔ **A FILE INSIDE A MOUNTED PACK IS NOT AN IMPORTED RESOURCE, SO `load()` CANNOT OPEN IT — AND THE FAILURE IS INVISIBLE ART, NOT A MAGENTA PLACEHOLDER** | Measured on 4.7.1 against a real mounted zip: `load_resource_pack()` returns **true**, `FileAccess` and `DirAccess` see the files, `Image` decodes them — and `ResourceLoader.exists()` is **false** while `load()` pushes an engine error, because a hand-built zip carries no `.import` sidecar. `AtlasEntry.texture()` was `if ResourceLoader.exists(p): load(p)` and would have returned null for every pack-delivered page. ⚠️ **The reason that is worse than it sounds:** `GameDataRegistry._resolve` chooses the placeholder branch on whether the **`.atlas.json` parsed**, and the JSON parses perfectly out of the zip — so the seam would have reported a real atlas and every unit in the game would have drawn *nothing at all*, with no warning anywhere. The route is `FileAccess.get_file_as_bytes` + `Image.load_png_from_buffer`. |
+| ⚠️ **`Image.load_from_file()` ON A `res://` PATH WARNS *"this will not work on export"* — ON A DEVELOPER MACHINE ONLY** | The engine warns whenever `ResourceLoader::exists()` is true of the path, i.e. whenever an `.import` sits beside it. With the atlases staged that is **every page: 170 warnings a run**, each naming a hazard that does not apply, burying anything that does. On a device it never fires, because a zip member has no sidecar. **So the two environments disagreed about the log while agreeing about the pixels** — the worst place for a difference to live. `FileAccess` + a buffer decode has no such heuristic and reads a staged file and a packed one identically. |
+| ⛔ **A COMMENT ASSERTING A BEHAVIOUR THAT NOTHING IMPLEMENTS, AND THE HALF THAT MAKES IT UNRECOVERABLE** | `PackInstaller._mount()` said a mounted pack *"reads it for the life of the process and on every boot after"*. `ProjectSettings.load_resource_pack()` was called in **exactly one place, at install time**, so a mount lasted one process. On its own that is "art disappears after a restart"; what makes it permanent is that `PackIndex` records the install the moment it succeeds and `needs_download()` is the only question boot asks — so the art is not mounted, is recorded as installed, and **is never fetched again**. Nothing could have caught it: `campaign` and `map` packs are INSTALLED, not mounted, and they were the only two kinds that had ever shipped. **A suite cannot find a hole in a code path nothing takes.** `MountedPacks.mount_all()` from `GameDataRegistry._ready()` is the boot half. Its sibling: a mount alone changes nothing on screen, because `_resolved` pins every id to the placeholder it resolved to before the download — `refresh_seam()`. |
+| **`res://../anything` DOES NOT RESOLVE, AND `DirAccess.open` JUST RETURNS NULL** | So a preview reaching out of the Godot project into the repo reports "not found" for a directory that is plainly there. The route that works is `Campaigns._dev_root()`'s: `ProjectSettings.globalize_path("res://").path_join("../x").simplify_path()`. Cost one confused run against a freshly built pack. |
+| ⚠️ **A CHANGE TO THE BUILD SCRIPT MOVED PUBLISHED BYTES, AND THE VERSION GUARD CANNOT TELL THAT FROM EDITED CONTENT** | Making `build_packs.py` **store** already-compressed formats instead of deflating them (PNG is deflated already; the art agent measured 99% of original, and deflating 320 MB for 1% costs minutes a build) changed the digest of both **campaign** zips, whose content had not moved at all. The guard refused the rebuild and was right to — it compares digests. **Bumping is the safe direction**; the alternative is freezing the old encoding for one kind of pack forever so two kinds get built two ways. Worth knowing as a class: *the guard protects the player, not your afternoon, and a packer refactor is a version bump for everything it touches.* |
+| ⚠️ **AN ESCAPE HATCH THAT IS WRITTEN, DOCUMENTED, AND CALLED BY NOTHING** | `PackInstaller.cancel()` has been described in its own neighbour's comment as *"the player's escape"* since 0.3, and **no code ever called it**. It cost nothing while the whole `required` set was one 2.2 MB campaign — the download screen was over before anybody could want out of it — and became a first boot with no way back to the game the moment `art_base_v1.zip` (80 MB) was marked required. `DownloadScreen`'s own header even said *"there is deliberately no way to get stuck here"*, which was written about downloads that **fail** and silently did not cover one that merely takes an hour. ➡️ **When a size changes by 40×, re-read the sentences that were true at the old size** — the header, the timeout policy, and the absence of a resume are all the same assumption. Same family as the `MAX_PUSH` row: a comment that is true of the case it was written for. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -960,11 +988,27 @@ tagged `owner-decision`**; its own description asks the owner to flip the tag to
 it needs an A/B/C ruling before anything can be done. **Never move or edit an `art` or
 `owner-decision` card** (§2.1).
 
-⚠️ **AND THE ONE ITEM WITH A DEADLINE RATHER THAN A WISH: `pack_art_v1.pck` is not built.**
-`build_packs.py` does `campaign` and `map` zips only. The client already handles `art` and
-`audio`, so **only the packer blocks art delivery, and it is what keeps the APK under 300 MB.**
-Three questions are with the art side in `asset_request.md`. See §1 on why that file is mine and
-why that ownership is the one that does not justify itself.
+✅ **THE ART PACK IS BUILT AND PUBLISHED (2026-09-12), AND IT IS A `.zip`.** The owner's call —
+*"if pck is just a zip, rather leave it zip"* — and a `.pck` is **not** a zip, but
+`load_resource_pack()` takes either, measured on 4.7.1. So the packer stayed pure Python with no
+Godot export step in it. **Two packs, on the split the art side's figures forced:**
+`art_base_v1.zip` 80 MB `required`, `art_colours_v1.zip` 236 MB optional — the colour variants
+are 74% of the bytes, and the split is only safe because `_atlas_path_for_skin` already falls
+back to the untinted bake, which was verified before it was chosen. `exclude_filter` now keeps
+`res://assets/atlases/*` out of both export presets, which is the half that actually shrinks the
+APK: a measured export-pack went to **66 MB**.
+
+**What it packs is `visuals.json`, not a directory** — the union of every declared `atlas`, every
+`ages` value and every tinted sibling of those. That is the art side's own suggestion inverted
+into the design it should have been: a retired bake leaves the pack the moment nothing points at
+it, with no skip list to maintain (26 staged atlases are in no pack today, and the build says so
+every run). ⚠️ **The packer's selection and `GameDataRegistry`'s resolution are two independent
+derivations of one set, and `preview_art_pack` exists to compare them** — 1,535 paths, and if
+they ever drift the pack ships art nothing renders while missing art everything asks for.
+
+⚠️ **STILL OPEN, AND IT MATTERS MORE NOW THAN IT DID:** there is **no resumable download**.
+`HTTPRequest.set_download_file` cannot append, so an interrupted pack restarts at zero — which
+was irrelevant at 2.2 MB and is nine hours of 125 kbps for the colours pack. PLAN.md 0.3a.
 
 ---
 
