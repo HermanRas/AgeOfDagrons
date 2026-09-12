@@ -1250,6 +1250,47 @@ func test_the_dev_override_shadows_an_installed_campaign_of_the_same_name() -> v
 	assert_true(_joined(c.warnings).contains("shadowed"), _joined(c.warnings))
 
 
+func test_an_empty_folder_sharing_a_campaigns_name_shadows_nothing_and_says_nothing() -> void:
+	# ⛔ THE REGRESSION. A leftover directory with no `campaign.json` is NOT A CAMPAIGN --
+	# `_read_campaign` has always said so and skipped it in silence -- but the shadow branch
+	# returned before ever asking, so a folder holding nothing announced that the repo's own
+	# campaign was shadowing it. That warning failed `test_campaign_screen`'s shipped-content
+	# contract on every single run, and the "broken commit" it was reporting was four empty
+	# folders in appdata.
+	#
+	# They got there because an uninstall deleted a pack's FILES and could not delete its
+	# FOLDERS: Google Drive marks every directory in this repo read-only, a copy carried the
+	# attribute along, and Windows will not remove a read-only directory even when it is
+	# empty. `PackInstaller._cleared()` is the other half of this fix.
+	var dir := _FIXTURE_ROOT.path_join(_SHADOW_FIXTURE)
+	DirAccess.make_dir_recursive_absolute(dir.path_join("scenario_1"))
+
+	var c := Campaigns.new()
+	var found := _by_folder(c.discover())
+
+	assert_eq(c.warnings, [] as Array[String],
+			"an empty leftover is not a shadowed campaign: %s" % _joined(c.warnings))
+	# And the real one is untouched by its namesake husk -- read from the repo, not skipped
+	# because something with the same name was seen first.
+	var campaign: CampaignDef = found.get(_SHADOW_FIXTURE)
+	assert_not_null(campaign)
+	if campaign == null:
+		return
+	assert_ne(campaign.root, Campaigns.USER_ROOT)
+	assert_true(campaign.scenarios.size() >= 3, "the real HowToPlay, not the husk")
+
+
+func test_a_folder_with_no_campaign_json_is_skipped_even_when_nothing_shadows_it() -> void:
+	# The same rule on the ordinary path, so the two branches are pinned to one answer.
+	# Named differently from any real campaign, so it is the ABSENCE of `campaign.json`
+	# doing the work rather than the shadow.
+	DirAccess.make_dir_recursive_absolute(_FIXTURE_ROOT.path_join(_ORDER_FIXTURE))
+
+	var c := Campaigns.new()
+	assert_false(_by_folder(c.discover()).has(_ORDER_FIXTURE), "not a campaign")
+	assert_eq(c.warnings, [] as Array[String], _joined(c.warnings))
+
+
 func test_malformed_json_under_the_user_root_is_one_warning_and_not_a_crash() -> void:
 	# A campaign is downloadable, shareable content, so these bytes are as untrusted as a
 	# network packet -- which is why the loader uses JSON.new().parse() rather than
@@ -1328,6 +1369,12 @@ func _write_text(path: String, text: String) -> void:
 		f.close()
 
 
+## ⚠️ THE READ-ONLY CLEAR IS LOAD-BEARING AND IT IS NOT DEFENSIVE PROGRAMMING. This repo
+## sits on Google Drive, which marks every directory in the tree read-only, and Windows
+## refuses to remove a read-only directory even when it is empty. Without the clear, these
+## fixtures delete their FILES and leave their FOLDERS in a directory the whole suite
+## shares -- which is how `user://content/scenarios/HowToPlay/` came to hold five empty
+## folders and fail `test_campaign_screen` on every run.
 func _rm_rf(path: String) -> void:
 	var dir := DirAccess.open(path)
 	if dir == null:
@@ -1335,5 +1382,11 @@ func _rm_rf(path: String) -> void:
 	for sub in dir.get_directories():
 		_rm_rf(path.path_join(sub))
 	for file in dir.get_files():
-		DirAccess.remove_absolute(path.path_join(file))
-	DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(_cleared(path.path_join(file)))
+	DirAccess.remove_absolute(_cleared(path))
+
+
+func _cleared(path: String) -> String:
+	var global := ProjectSettings.globalize_path(path)
+	FileAccess.set_read_only_attribute(global, false)
+	return global

@@ -332,6 +332,37 @@ func test_uninstall_removes_the_content_and_forgets_it() -> void:
 	assert_true(PackIndex.needs_download(pack, _index()))
 
 
+func test_uninstall_removes_a_read_only_directory_rather_than_leaving_the_folders() -> void:
+	# ⛔ THE FAILURE THIS EXISTS FOR HAPPENED, and it was not on a player's machine. Windows
+	# refuses to remove a READ-ONLY directory even when it is completely empty, and this repo
+	# lives on Google Drive, which sets that attribute on every directory in the tree -- so a
+	# campaign copied out of `scenarios/` by anything that preserves attributes cannot be
+	# uninstalled. The FILES went, the FOLDERS stayed, and the husk left in
+	# `user://content/scenarios/HowToPlay/` then made `Campaigns.discover()` report a
+	# shadowed campaign and failed the shipped-content test on every run for two days.
+	#
+	# Asserted through the PUBLIC verb, not `_remove_tree`: `uninstall()` returning false is
+	# the part a caller can act on, and the preview that created the husk ignored it.
+	var zip := WORK.path_join("good.zip")
+	_write_campaign_zip(zip)
+	var pack := _pack_for(zip)
+	assert_true(_installer.install_from_file(pack, zip, _index()))
+
+	# Mark the tree the way a copy off this repo arrives -- the directories, which is the
+	# case that fails; a read-only FILE deletes without complaint.
+	_set_read_only(TARGET)
+	for sub in DirAccess.open(TARGET).get_directories():
+		_set_read_only(TARGET.path_join(sub))
+
+	assert_true(_installer.uninstall(pack, _index()), "a read-only tree still uninstalls")
+	assert_false(DirAccess.dir_exists_absolute(TARGET),
+			"the FOLDERS go too, not only the files inside them")
+
+
+func _set_read_only(path: String) -> void:
+	FileAccess.set_read_only_attribute(ProjectSettings.globalize_path(path), true)
+
+
 func test_uninstalling_something_that_is_not_there_is_not_a_crash() -> void:
 	var zip := WORK.path_join("good.zip")
 	_write_campaign_zip(zip)

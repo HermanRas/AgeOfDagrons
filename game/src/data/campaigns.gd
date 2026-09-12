@@ -154,6 +154,21 @@ func discover() -> Array[CampaignDef]:
 		var folders := dir.get_directories()
 		folders.sort()
 		for folder in folders:
+			if not _is_campaign_dir(root.path_join(folder)):
+				# ⚠️ ASKED HERE AS WELL AS IN `_read_campaign`, AND THAT DUPLICATION IS THE
+				# POINT: the shadow branch below returns before `_read_campaign` is ever
+				# called, so without this line the loader could call a thing a shadowing
+				# campaign WITHOUT EVER ASKING WHETHER IT IS A CAMPAIGN. "Is this a
+				# campaign" and "is it shadowed" are two facts and only one of them is
+				# always knowable from a folder name -- the `ServerBrowserPanel` JOIN-button
+				# lesson in `AGENT_GAME_CODER.md`, in a different file.
+				#
+				# It went wrong for real: a FAILED UNINSTALL left `HowToPlay/scenario_1..5`
+				# in `user://content/scenarios/` as empty directories with no `campaign.json`
+				# between them, and `discover()` warned that the repo's own campaign was
+				# shadowing them -- which failed `test_the_shipped_campaign_loads_without_
+				# complaint` on every run, for a folder holding nothing at all.
+				continue
 			if seen.has(folder):
 				# First match wins, PLAN.md 3.3. Said out loud because a developer with
 				# both an override and an installed copy is otherwise editing a file the
@@ -171,13 +186,20 @@ func discover() -> Array[CampaignDef]:
 	return out
 
 
+## What makes a directory a campaign, in one place so `discover()` and `_read_campaign`
+## cannot disagree about it.
+##
+## A directory with no `campaign.json` is not a campaign. Silent rather than warned: an
+## installed pack may keep sibling directories, and warning about every one of them trains
+## people to ignore the warnings.
+static func _is_campaign_dir(dir_path: String) -> bool:
+	return FileAccess.file_exists(dir_path.path_join(CampaignDef.JSON_FILE))
+
+
 func _read_campaign(root: String, folder: String) -> CampaignDef:
 	var dir_path := root.path_join(folder)
 	var json_path := dir_path.path_join(CampaignDef.JSON_FILE)
-	if not FileAccess.file_exists(json_path):
-		# A directory with no campaign.json is not a campaign. Silent rather than warned:
-		# an installed pack may keep sibling directories, and warning about every one of
-		# them trains people to ignore the warnings.
+	if not _is_campaign_dir(dir_path):
 		return null
 
 	var parsed: Variant = _parse_json(json_path)

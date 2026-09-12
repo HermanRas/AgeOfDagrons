@@ -519,6 +519,14 @@ static func _delete_file(path: String) -> void:
 ## Written out rather than reached for, because Godot has no recursive remove and
 ## `DirAccess.remove_absolute` refuses a non-empty directory -- silently, by returning an
 ## error nobody checks.
+##
+## ⚠️ **A READ-ONLY DIRECTORY CANNOT BE REMOVED ON WINDOWS**, and that is not a theoretical
+## case here: this whole repo lives on Google Drive, which sets the read-only attribute on
+## EVERY directory in the tree, so any copy of `scenarios/` made with a tool that preserves
+## attributes arrives read-only. `RemoveDirectory` then fails with ACCESS DENIED on a
+## directory that is completely empty -- so the FILES of an uninstalled pack go and the
+## FOLDERS stay, which is exactly the leftover that made `Campaigns.discover()` warn about
+## a campaign nobody had installed. `_cleared()` is the one line that stops it recurring.
 static func _remove_tree(path: String) -> String:
 	var dir := DirAccess.open(path)
 	if dir == null:
@@ -529,10 +537,19 @@ static func _remove_tree(path: String) -> String:
 		if not problem.is_empty():
 			return problem
 	for name in dir.get_files():
-		var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(path.path_join(name)))
+		var err := DirAccess.remove_absolute(_cleared(path.path_join(name)))
 		if err != OK:
 			return "cannot delete %s (error %d)" % [path.path_join(name), err]
-	var last := DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var last := DirAccess.remove_absolute(_cleared(path))
 	if last != OK:
 		return "cannot delete %s (error %d)" % [path, last]
 	return ""
+
+
+## The globalized path, with any read-only attribute taken off it first. Returns the path
+## either way: a platform that cannot clear the attribute still gets its delete attempted,
+## and the error it returns is the honest one.
+static func _cleared(path: String) -> String:
+	var global := ProjectSettings.globalize_path(path)
+	FileAccess.set_read_only_attribute(global, false)
+	return global
