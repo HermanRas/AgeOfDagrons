@@ -144,6 +144,23 @@ func _open_and_report(row: Dictionary) -> bool:
 		# SAID OUT LOUD, because 16.10 must not lose them and a count would not name them.
 		print("    carries: %s" % ", ".join(PackedStringArray(named)))
 
+	# ⛔ **THE CONDITIONS, AND WHICH FILE THEY CAME OUT OF (16.6, corrected 2026-09-12).** This is
+	# the one place the fix is checkable against REAL content: the owner's report was that the
+	# editor *"does not work with howToPlay scenario"*, and the cause was that a scenario's
+	# conditions live in the `scenario.json` beside its map while the tool only ever read the map
+	# sidecar. A count alone would not say it — **the file name is the finding**, because the
+	# failure was reading the right number out of the wrong place.
+	if not doc.scenario_path.is_empty():
+		print("    conditions: %d from %s (%d win)"
+				% [doc.objectives.size(), doc.scenario_path.get_file(), doc.win_count()])
+	elif not doc.objectives.is_empty():
+		print("    conditions: %d in the map's own sidecar (%d win)"
+				% [doc.objectives.size(), doc.win_count()])
+	for problem in doc.objective_problems():
+		# NOT A FAILURE. These are opinions about authored content -- `MapDocument`'s warnings
+		# rather than its problems -- so they are reported and the exit code is left alone.
+		print("    conditions warn: %s" % problem)
+
 	if not _round_trip(doc, named):
 		ok = false
 	return ok

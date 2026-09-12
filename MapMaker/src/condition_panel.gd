@@ -82,6 +82,7 @@ var _editing := -1
 
 var _rows_box: VBoxContainer = null
 var _summary: Label = null
+var _home: Label = null
 var _message: Label = null
 var _subject: OptionButton = null
 var _owner: OptionButton = null
@@ -302,9 +303,12 @@ func refresh() -> void:
 		_rows_box.add_child(_row_control(i, descriptions[i]))
 
 	if _summary != null:
-		_summary.text = _summary_text()
+		_summary.text = summary_text()
 		_summary.add_theme_color_override("font_color",
 				UiChrome.WARN if not _problems().is_empty() else UiChrome.DIM)
+	if _home != null:
+		_home.text = home_text()
+		_home.add_theme_color_override("font_color", UiChrome.DIM)
 	_refresh_form_state()
 
 
@@ -322,17 +326,45 @@ func _problems() -> Array[String]:
 ## declares. So the empty state explains what empty MEANS rather than blaming the author — the
 ## Areas tab's *"no areas yet — type a name and drag"* precedent, which is the only other panel in
 ## this tool whose emptiness is correct.
-func _summary_text() -> String:
+## Public for the same reason `home_text()` is: what this LINE says is a fact a test has to be
+## able to compare against `objective_problems()`, and a screenshot cannot make that comparison.
+func summary_text() -> String:
 	if _document == null:
 		return "no map open"
 	var total := _document.objectives.size()
+	var problems := _problems()
+	# ⛔ **THE PROBLEMS ARE CHECKED BEFORE THE EMPTY STATE, AND THE OTHER ORDER WAS A LIE.** The
+	# first version returned the cheerful *"won by conquest"* line whenever the list was empty and
+	# never reached this test — so a `scenario`-mode file with no win row, which `ScenarioDef`
+	# REFUSES TO START, was described as a map that needs no rows at all. The label went amber
+	# (the colour is set from `_problems()` in `refresh()`) while the words said everything was
+	# fine, which is worse than either alone. **Exactly the class of fault the owner found in this
+	# panel on the day it shipped**: a summary asserting something false about real content.
+	if not problems.is_empty():
+		var head := "no conditions" if total == 0 \
+				else "%d condition(s), %d win" % [total, _document.win_count()]
+		return "%s — %s" % [head, " | ".join(PackedStringArray(problems))]
 	if total == 0:
 		return "no conditions — this map is won by conquest, which needs no rows at all"
-	var problems := _problems()
-	if not problems.is_empty():
-		return "%d condition(s), %d win — %s" % [total, _document.win_count(),
-				" | ".join(PackedStringArray(problems))]
 	return "%d condition(s), %d win" % [total, _document.win_count()]
+
+
+## Which file a Save will put these rows in. Public, because it is what a test asserts and what
+## `preview_editor` prints — the fault it guards against is invisible in a screenshot of the rows.
+##
+## ⛔ **THE TWO HOMES AND WHY THE SENTENCE IS DIFFERENT FOR EACH.** A scenario's conditions are
+## read by the GAME from that `scenario.json`, so saying so is saying "this is live". A standalone
+## map's are parked until 16.8 promotes it into a scenario, and an author who is not told that
+## will reasonably expect a skirmish from this map to obey them — so the second sentence says
+## plainly that nothing reads them yet. **The inert case is the one that needs the words**, which
+## is the opposite of what it looks like.
+func home_text() -> String:
+	if _document == null:
+		return ""
+	if not _document.scenario_path.is_empty():
+		return "saved into %s beside this map — the game reads its objectives from there" \
+				% _document.scenario_path.get_file()
+	return "saved with the map — nothing plays them yet, until 16.8 writes this map a scenario"
 
 
 func _say(text: String, colour: Color) -> void:
@@ -377,6 +409,18 @@ func _build() -> void:
 	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_summary.custom_minimum_size = Vector2(720, 0)
 	column.add_child(_summary)
+
+	# ⛔ **WHERE THE ROWS ARE GOING, ON ITS OWN LINE, AND IT IS THE HALF THE FIRST CUT OF 16.6 GOT
+	# WRONG.** Conditions live either in a `scenario.json` beside the map or in the map's own
+	# sidecar, and **an author cannot tell which by looking at anything else** — the panel is
+	# identical either way. Without this line the tool would be silently authoring into one of two
+	# files, which is how the owner found the original fault in the first place. A different kind
+	# of fact from the summary above (that one changes as rows are added; this one changes only
+	# when a different map is opened), so it gets a line rather than a clause.
+	_home = Label.new()
+	_home.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_home.custom_minimum_size = Vector2(720, 0)
+	column.add_child(_home)
 
 	column.add_child(_list_area())
 	column.add_child(HSeparator.new())

@@ -350,6 +350,79 @@ func test_scenario_four_wins_by_the_claim_and_not_by_conquest() -> void:
 		assert_false(o.text.is_empty(), "the tracker has a line to draw for every row")
 
 
+## ⛔ **THE LOSE ROW, ADDED 2026-09-12, AND IT CLOSES A MATCH THAT COULD BE NEITHER WON NOR
+## LOST.** `NestSystem` voids a claim FOR GOOD when the nest falls — the hatchling dies with it
+## and `claim_owner` is never cleared, so there is no second claim. Row 2 could then never be
+## satisfied, row 1 stayed latched, and the opponent is `passive` so elimination never fired
+## either. `11.x-koth`'s rule: a hang is not the safe direction, it is a slower way of being
+## broken. The briefing even tells the player it can happen.
+func test_scenario_four_can_be_lost_when_the_nest_falls() -> void:
+	var s := _shipped("scenario_4")
+	assert_not_null(s)
+	if s == null:
+		return
+
+	var losses: Array[ObjectiveDef] = []
+	for o in s.objectives:
+		if o.output == ObjectiveDef.Output.LOSE:
+			losses.append(o)
+	assert_eq(losses.size(), 1, "one lose row: the nest is what has to survive")
+	assert_eq(losses[0].subject, ObjectiveDef.Subject.BUILDING)
+	assert_eq(losses[0].id, &"building.dragon_nest")
+	# GAIA'S. The nest is never re-owned — `_advance_claims` records `claim_owner` on it and
+	# hands over a UNIT, so a row counting the player's nests would count zero forever and
+	# defeat them on tick 1.
+	assert_eq(losses[0].owner, ObjectiveDef.Owner.GAIA)
+	assert_eq(losses[0].value, 0)
+	assert_false(losses[0].text.is_empty())
+
+
+## ⚠️ **THE HALF THAT MAKES THE ROW ABOVE SAFE RATHER THAN CATASTROPHIC, AND IT IS A PROPERTY OF
+## THE MAP.** `building.dragon_nest == 0` is a comparison that PASSES on a map with no nest, so
+## a scenario 4 whose map lost its nest would defeat the player on tick 1 — `ObjectiveSystem`'s
+## trap 3 arriving through authored content, which is exactly what the `== 0` win row above is
+## already guarded against one test up.
+##
+## **ASSERTED THROUGH `MapGen.build_from()` AND A REAL WORLD, not off the map file.** The file
+## having a nest in it is necessary and not sufficient: the row counts COMPLETE buildings
+## (`_census`), so a nest spawned as a foundation would count zero and lose the match on tick 1
+## with the map looking perfect. This is the only place either half is checked.
+func test_scenario_fours_nest_is_standing_and_complete_from_the_first_tick() -> void:
+	var s := _shipped("scenario_4")
+	assert_not_null(s)
+	if s == null:
+		return
+	var problems: Array[String] = []
+	var cfg := s.build_config(problems)
+	assert_not_null(cfg, _joined(problems))
+	if cfg == null:
+		return
+
+	var w := SimWorld.new()
+	w.setup(cfg)
+	# ⚠️ **`setup()` DOES NOT BUILD THE MAP, AND THE FIRST VERSION OF THIS TEST DID NOT KNOW IT.**
+	# `SimWorld.setup()` clears the world and configures the players; `MapGen.build()` is what
+	# copies a `MapData`'s entities, starts and regions into it, and `setup()`'s own comments say
+	# so twice (*"CLEARED HERE AND FILLED BY `MapGen.build_from`, which runs after this"*).
+	# Without this line the world is EMPTY, the nest count is 0, and the test reports exactly the
+	# catastrophe it was written to detect — which is the most misleading way for a fixture to be
+	# wrong, and is §5's *"beware fixtures that agree with the bug"* inverted: a fixture that
+	# manufactures one.
+	MapGen.build(w, cfg)
+	w.step()
+
+	var standing := 0
+	for e in w.entities.values():
+		if e is SimBuilding and e.def_id == &"building.dragon_nest" and e.owner_id == 0:
+			if e.alive and (e as SimBuilding).is_complete():
+				standing += 1
+	assert_eq(standing, 1, "one complete gaia nest, or the lose row fires on tick 1")
+	# AND THE MATCH IS STILL RUNNING, which is the assertion that would actually have caught
+	# the mistake: everything above can be true of a world the objective system never looked at.
+	assert_false(w.match_over, "nobody has won or lost anything on the first tick")
+	assert_false(w.player_for(1).defeated)
+
+
 func test_scenario_fours_map_carries_the_dragon_its_briefing_PROMISES() -> void:
 	# ⚠️ **THE MOST IMPORTANT TEST FOR THIS SCENARIO, AND IT READS THE MAP RATHER THAN THE
 	# ROSTER.** Every figure below is a promise the briefing makes to the player in prose,

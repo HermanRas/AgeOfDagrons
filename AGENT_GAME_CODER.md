@@ -290,6 +290,11 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --path game res://dev_preview/preview_scenario_hud.tscn    # briefing + objective tracker
 & $godot --path game res://dev_preview/preview_scenario_hud.tscn -- --scenario 2
 & $godot --path game res://dev_preview/preview_campaign.tscn        # list -> scenarios -> PLAY -> match
+# EVERY SHIPPED SCENARIO DRIVEN TO ITS WIN, headless, through the real launch path. The one
+# check that can say an authored objective is both REACHABLE and not satisfied on tick 1 --
+# it prints each row and the per-tick progress array. Settled 16.6's scenario-4 lose row in
+# one run after a unit test had reported the opposite (see §7).
+& $godot --headless --path game res://dev_preview/PreviewScenarioWin.tscn
 & $godot --path game res://dev_preview/preview_campaign.tscn -- --scenario 1
 & $godot --path game res://dev_preview/preview_saved_map.tscn       # 16.0: pick a SAVED map, play it
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --force   # re-roll the sample map
@@ -542,6 +547,40 @@ owner's data, not a code fault) and **MapMaker 377/377**, up 123.
   `game/src` reads objectives off a `map.json`; `ScenarioDef` is where the game gets them. A
   `MapData.objectives` would give the game two sources for one fact — **the two dialects the whole
   row exists to prevent**, arrived at from the storage side instead of the vocabulary side.
+- ⛔ **AND THAT WAS ONLY HALF RIGHT. THE OWNER FOUND THE OTHER HALF THE SAME DAY: *"does not work
+  with howToPlay scenario"*.** The sidecar is right for a **standalone** map and wrong for the
+  five shipped campaign maps — `scenarios/HowToPlay/scenario_1/` holds `map.json` **and**
+  `scenario.json` side by side, and the conditions are in the second. So the panel announced *"no
+  conditions"* for a scenario with two win rows, and a row added there would have landed in
+  `map.json` where nothing in `game/src` reads it. **Two sources for one fact, created for the
+  case that matters most, by the design that was arguing against two sources.**
+
+  ⚠️ **THE FIX IS A FALLBACK CHAIN, NOT TWO COPIES** — KotH's zone precedent: a `scenario.json`
+  beside the map wins, a map without one parks its rows in its sidecar until 16.8 promotes it.
+  They never both apply, it is resolved **once at open**, and `save()` **re-resolves from the
+  target** so a Save As into `maps/` moves the conditions with the copy instead of writing them
+  back into the original scenario. `ScenarioFile` replaces one key and preserves everything else,
+  `_note` blocks included — a writer that rebuilt the file from the fields it understands would
+  eat the most valuable thing in it, in a save that reported success.
+
+  ⚠️ **`side.erase("objectives")` IS LOAD-BEARING**: `_preserved_header()` carries forward every
+  key `to_dict()` does not derive, so without it a sidecar that ever held rows keeps writing a
+  stale second copy beside the authoritative one.
+
+  ⚠️ **AND THE `warnings` ARRAY IS REASSIGNED HALFWAY DOWN `save()`** (`warnings =
+  StartLayout.audit(data)`), so an append made before that line is silently thrown away. The
+  scenario-write failure is held in a local and appended after. Found by reading the order; the
+  only symptom would have been an absence.
+- ⚠️ **JSON HAS ONE NUMBER TYPE AND GODOT PARSES IT AS A FLOAT, WHICH MAKES A PLAIN ROUND TRIP
+  UNACCEPTABLE ON SHIPPED CONTENT.** `"seed": 815101` comes back `815101.0` and goes out
+  `815101.0`, on **every number in the file**. `ScenarioFile._ints_restored()` puts integral
+  floats back. This is the same trait `16.x-slow-place` flagged in the map sidecar's `meta` block
+  and left for 16.10 — **still open there**, and now fixed for `scenario.json`.
+- ⛔ **SCENARIO 3 IS `last_man_standing` AND IS ONE OF THE FIVE THE TOOL EXISTS TO RE-AUTHOR.**
+  `ScenarioDef._read_objectives` refuses such a file outright once it carries objectives, so an
+  author adding a condition by doing the obvious thing authors a mission that will not start. The
+  tool cannot fix it (the `mode` is the scenario's, not the map's) so `objective_problems()` says
+  so by name.
 - ⛔ **`save()` WRITES `"objectives"` EVEN WHEN THE LIST IS EMPTY, AND THE SAVE IS WRONG WITHOUT
   IT.** `_preserved_header()` filters by what `MapData.to_dict()` derives and it never derives
   `objectives` — so the OPENED file's rows are sitting in the header at save time. A conditional
@@ -583,6 +622,37 @@ owner's data, not a code fault) and **MapMaker 377/377**, up 123.
   `>=` + `lose`, *"survive that long"* is `>=` + `win`, and the refusal names both. This is the
   first refusal in that class about the COMPARISON rather than a field; deleting the function is
   the whole change if the owner would rather have the footgun.
+- ⛔ **SCENARIO 4 COULD BE NEITHER WON NOR LOST, AND THE REVIEW THAT FOUND IT WAS THE OWNER
+  ASKING FOR ONE.** `NestSystem` voids a claim **for good** when the nest falls or the hatchling
+  dies — `claim_owner` is never cleared, so there is no second claim. Its two win rows were both
+  correct; what it had no lose row, and the opponent is `passive` so elimination never fires
+  either. The player stood in a match with no exit, and the briefing *tells them* the claim can be
+  lost. A lose row on `building.dragon_nest` owner gaia `== 0` closes the likelier half. **It is
+  safe because the nest is spawned `Phase.COMPLETE` and survives the payout** (`_advance_claims`
+  despawns only the hatchling), so it can neither fire on tick 1 nor on the winning tick — both
+  checked, the second by a test that steps a real world.
+
+  ⚠️ **THE OTHER HALF IS NOT EXPRESSIBLE AND THAT IS A LIMIT OF THE VOCABULARY, NOT A CHOICE.**
+  *"The hatchling was killed"* would be `unit.dragon_baby == 0`, which is **true from tick 1,
+  before the hatchling exists** — instant defeat. A count that reads 0 because a thing has not
+  happened yet is indistinguishable from 0 because it is over; the language has no notion of
+  history. Same shape as the `ticks <= N` trap. Carded as **`13.x-claim-dead-end`** rather than
+  covered.
+
+  ⛔ **AND THE TEST THAT PROVED IT FIRST PROVED THE OPPOSITE, BECAUSE `SimWorld.setup()` DOES NOT
+  BUILD THE MAP.** `setup()` clears the world and configures the players; **`MapGen.build(w, cfg)`
+  is what copies a `MapData`'s entities, starts and regions in**, and `setup()`'s own comments say
+  so twice. Without it the world is EMPTY — so a test counting the nest found zero and reported
+  *"the lose row fires on tick 1"*, which is precisely the catastrophe it was written to detect.
+  **A fixture that MANUFACTURES the bug is worse than one that agrees with it**, because it sends
+  you to rip out correct code. The pattern to copy is `test_objectives._world()` and every
+  `dev_preview` that stands up a real match: `setup()` then `MapGen.build()`.
+
+  ✅ **WHAT ACTUALLY SETTLED IT IS `dev_preview/PreviewScenarioWin.tscn`**, which drives every
+  shipped scenario to its win through the real launch path and prints the rows and the per-tick
+  progress. Scenario 4 reads `progress=[1, 0, 1]` on tick 1 (the nest counts 1, so the lose row is
+  false) and `WON on tick 3602 ... done=[1, 1, 0]` (both wins latched, the lose row never fired).
+  **That is one run and it answers both halves**; the unit test answers neither on its own.
 - 📝 **THE EVALUATOR IS ONE LINE (`w.tick`) AND THAT IS WHY THIS DEFERRAL WAS THE CHEAPEST OF THE
   THREE.** No new state, nothing on the wire, nothing in `state_hash()`. `named_unit` is the last
   one left and is genuinely expensive for the opposite reason. ✅ **Two deferral tests went red on

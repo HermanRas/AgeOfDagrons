@@ -182,6 +182,31 @@ var header: Dictionary = {}
 ## save. Flagged on the card rather than assumed to be obvious.
 var objectives: Array[Dictionary] = []
 
+## The `scenario.json` these conditions belong to, or `""` when they live in the map's sidecar.
+##
+## ⛔ **THIS FIELD IS THE CORRECTION THE OWNER FOUND ON 2026-09-12, AND IT IS WORTH KEEPING THE
+## MISTAKE.** 16.6 shipped storing conditions in the map sidecar full stop — which is right for a
+## standalone map and **wrong for the five shipped campaign maps**, the first thing anybody would
+## try. `scenarios/HowToPlay/scenario_1/` holds `map.json` and `scenario.json` side by side and
+## the conditions are in the second; the panel therefore announced *"no conditions"* for a
+## scenario with two win rows, and a row added there would have gone into `map.json` where
+## **nothing in `game/src` reads it.** Two sources for one fact, created for the case that
+## matters most, by the design that was arguing against two sources.
+##
+## ⚠️ **RESOLVED ONCE, FROM WHERE THE MAP IS SAVED — NOT FROM WHERE IT WAS OPENED.** `save_as()`
+## into `maps/` genuinely moves the conditions into the new map's sidecar, because the new
+## location has no scenario beside it; `save()` re-resolves for the same reason. A field fixed at
+## open would write a scenario's objectives into a copy's `scenario.json` that is not there.
+var scenario_path: String = ""
+
+## What that scenario says decides it (`"scenario"` / `"last_man_standing"`), or `""`.
+##
+## Read only so `objective_problems()` can warn about the one combination `ScenarioDef` refuses at
+## load: a `last_man_standing` scenario carrying objectives, whose rows *"would never be read"*.
+## **Scenario 3 is exactly that shape**, so an author adding a condition to it would author a
+## campaign mission that refuses to start — and the tool is where there is somebody to tell.
+var scenario_mode: String = ""
+
 
 static func create(size: Vector2i, p_name: String) -> MapDocument:
 	var doc := MapDocument.new()
@@ -232,7 +257,18 @@ static func open(dir_path: String, out_problems: Array[String]) -> MapDocument:
 	# both functions share `_parse_sidecar`, and reaching here means it has already passed.
 	doc.header = MapFile.read_header(dir_path, out_problems)
 	doc.map_name = MapSources.map_name_in(doc.header, dir_path.get_file())
-	doc.objectives = _objectives_in(doc.header)
+	# ⛔ **THE SCENARIO FILE WINS WHEN THERE IS ONE, AND THAT IS A FALLBACK CHAIN RATHER THAN TWO
+	# SOURCES.** See `objectives` for the whole argument: a map in
+	# `scenarios/<campaign>/<scenario>/` keeps its conditions in the `scenario.json` beside it,
+	# because that is the file the GAME reads them from. A map without one parks them in its own
+	# sidecar until 16.8 promotes it into a scenario. They never both apply.
+	doc.scenario_path = ScenarioFile.path_beside(dir_path)
+	if doc.scenario_path.is_empty():
+		doc.objectives = _objectives_in(doc.header)
+	else:
+		var scenario := ScenarioFile.read(doc.scenario_path, out_problems)
+		doc.objectives = ScenarioFile.objectives_in(scenario)
+		doc.scenario_mode = ScenarioFile.mode_in(scenario)
 	doc.dirty = false
 	# THE FILE IS THE CLEAN POINT, at depth zero. Without this an author who opens a map, makes
 	# two edits and undoes both is told the map is still unsaved -- true of the flag's old
@@ -857,7 +893,36 @@ func win_count() -> int:
 ## reached from two places rather than a second implementation.
 func objective_problems() -> Array[String]:
 	var out: Array[String] = []
-	if not objectives.is_empty() and win_count() == 0:
+	# ⛔ **THE THIRD CHECK, AND IT ONLY EXISTS ONCE THE CONDITIONS LIVE IN A SCENARIO** (2026-09-12).
+	# `ScenarioDef._read_objectives` refuses a `last_man_standing` scenario that carries objectives
+	# outright — *"its objective(s) would never be read"* — so adding one to such a file authors a
+	# campaign mission that will not start. **Scenario 3 is exactly that shape**, and it is one of
+	# the five this tool exists to re-author, so this is a trap an author walks into by doing the
+	# obvious thing. The tool cannot fix it (the `mode` is the scenario's, not the map's, and
+	# changing it would rewrite what decides the mission) so it says so.
+	if not objectives.is_empty() and scenario_mode == "last_man_standing":
+		out.append("%s says mode 'last_man_standing', which is decided by conquest"
+				% scenario_path.get_file()
+				+ " -- these %d condition(s) would never be read," % objectives.size()
+				+ " and the scenario will refuse to start. Change its mode to 'scenario'")
+	# ⚠️ **AND THE MIRROR OF IT, WHICH IS THE ONE CASE WHERE AN EMPTY LIST IS NOT HEALTHY.**
+	# `ScenarioDef` refuses BOTH directions — a `last_man_standing` carrying rows, and a
+	# `scenario` with no win row, which *"can never be won"*. So "no conditions is fine" is true
+	# of a map and of a conquest scenario, and false of a scenario that declares it is decided by
+	# objectives. Without this the tool would cheerfully report *"won by conquest"* about a file
+	# the front door will not open.
+	#
+	# ⚠️ **THE TWO ARE EXCLUSIVE, AND THE SCENARIO ONE WINS BECAUSE IT KNOWS MORE.** Both describe
+	# "there is no way to win", and a map beside a `scenario.json` can satisfy both at once — two
+	# sentences for one fault is how a warning list stops being read. The scenario version names
+	# the file and says it will refuse to START, which is the fact that changes what the author
+	# does next; the generic one is what a standalone map gets.
+	if win_count() == 0 and scenario_mode == "scenario":
+		out.append("%s says mode 'scenario', which is decided by its objectives"
+				% scenario_path.get_file()
+				+ " -- with no win condition it can never be won, and it will refuse to start."
+				+ " Add one, or change its mode to 'last_man_standing'")
+	elif not objectives.is_empty() and win_count() == 0:
 		out.append("this map has %d condition(s) and none of them is a win"
 				% objectives.size()
 				+ " -- a scenario with no win row can never be won."
@@ -1211,9 +1276,44 @@ func save(maps_dir: String) -> Array[String]:
 	# file: the stale row would be written straight back and would return on reopen, after a save
 	# that reported success. See the `objectives` field, and `MapData.to_dict()`'s `areas`, which
 	# is unconditional for the mirror image of this reason.
-	side["objectives"] = objectives
+	# ⛔ **RE-RESOLVED FROM `target`, NOT FROM THE FIELD SET AT OPEN.** `save_as()` into `maps/`
+	# moves the map somewhere with no scenario beside it, and its conditions genuinely become the
+	# new map's own; keeping the opened path would write a copy's objectives into the ORIGINAL
+	# scenario, which is a save that edits a file the author did not open.
+	scenario_path = ScenarioFile.path_beside(target)
+	if scenario_path.is_empty():
+		side["objectives"] = objectives
+	else:
+		# ⚠️ **ERASED, NOT MERELY LEFT OUT.** `_preserved_header()` carries forward every key
+		# `to_dict()` does not derive, and `objectives` is one of them — so a map whose sidecar
+		# picked one up (a standalone map later given a scenario, or one saved by 16.6's first
+		# cut before this correction) would keep writing a stale second copy beside the
+		# authoritative one. One home at a time is the whole rule.
+		side.erase("objectives")
 	problems = MapFile.save(data, target, side)
 	if problems.is_empty():
+		# ⚠️ **THE SCENARIO IS WRITTEN AFTER THE MAP AND ONLY IF THE MAP WROTE.** A scenario whose
+		# objectives were updated beside a `map.png` that failed to write is the two files
+		# disagreeing about the same save — and of the two orders, this one leaves the pair
+		# consistent on the failure that actually happens (a full disk, a read-only directory).
+		#
+		# ⚠️ **A FAILURE HERE IS A WARNING AND NOT A `problems` ENTRY**, which is deliberate and is
+		# 16.4b's line again: the MAP was written, so the author has not lost their terrain, their
+		# entities or their regions. Reporting this as a failed save would tell them the opposite
+		# of what happened. What they need to know is that their CONDITIONS did not land, in the
+		# amber "SAVED, BUT LOOK" state that exists for exactly this shape.
+		#
+		# ⛔ **HELD IN A LOCAL AND APPENDED BELOW, NOT PUT ON `warnings` HERE.**
+		# `warnings = StartLayout.audit(data)` a few lines down **REPLACES** the array, so an
+		# append made at this point is silently thrown away — a save that dropped the author's
+		# conditions and then reported no warning at all. Found by reading the order rather than
+		# by a test, because the only symptom is an absence.
+		var lost_conditions := ""
+		if not scenario_path.is_empty():
+			var wrote: Array[String] = []
+			if not ScenarioFile.write_objectives(scenario_path, objectives, wrote):
+				lost_conditions = "the map saved but its conditions did not reach %s -- %s" \
+						% [scenario_path.get_file(), " | ".join(PackedStringArray(wrote))]
 		dir = target
 		dirty = false
 		# WHERE THE FILE NOW SITS ON THE STACK. The history is deliberately NOT cleared: an
@@ -1226,6 +1326,11 @@ func save(maps_dir: String) -> Array[String]:
 		# an opinion, and 16.3's palette is where a deliberate hand-built economy stops
 		# looking thin.
 		warnings = StartLayout.audit(data)
+		# ⛔ **FIRST, BECAUSE IT IS THE ONLY ONE THAT IS ABOUT THE SAVE ITSELF.** Everything else
+		# in this list is an opinion about the map; this says a file the author asked to be
+		# written was not. See where it is computed, and why it could not be appended there.
+		if not lost_conditions.is_empty():
+			warnings.append(lost_conditions)
 		# THE CONDITIONS GO BETWEEN THE TWO, which is where they sit on the narrow-to-fatal run
 		# this list is ordered by: an unwinnable scenario is worse than a thin start and better
 		# than a map the lobby will not start at all. See `objective_problems()` for why these

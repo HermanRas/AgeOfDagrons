@@ -450,6 +450,278 @@ func test_a_refused_row_leaves_the_form_alone_and_says_why() -> void:
 	assert_eq(int(p.form_record()["value"]), 500)
 
 
+# ── a map that sits beside a scenario.json (the 2026-09-12 correction) ──────
+
+## Write a map plus a `scenario.json` into a fresh directory, the way the five shipped campaign
+## maps are laid out. `extra` is merged over the scenario's fields.
+func _scenario_folder(objectives: Array, extra: Dictionary = {}) -> String:
+	var dir := _dir()
+	assert_true(MapFile.save(doc.data, dir, {"name": "Scenario Map"}).is_empty())
+	var scenario: Dictionary = {
+		"_note": ["A NOTE THE TOOL MUST NOT EAT.", "Second line."],
+		"name": "A Test Scenario",
+		"message": "Do the thing.",
+		"mode": "scenario",
+		"map": {"type": "river", "seed": 815101},
+		"opponents": ["passive"],
+		"starting_age": 4,
+		"objectives": objectives,
+	}
+	scenario.merge(extra, true)
+	var f := FileAccess.open(dir.path_join(ScenarioFile.FILE_NAME), FileAccess.WRITE)
+	f.store_string(JSON.stringify(scenario, "  ", false))
+	f.close()
+	return dir
+
+
+## ⛔ **THE CORRECTION THE OWNER FOUND, AND THE MOST IMPORTANT TEST IN THIS FILE.** 16.6's first
+## cut stored conditions in the map sidecar full stop — so opening a HowToPlay scenario reported
+## *"no conditions"* for a scenario with two win rows, because they live in the `scenario.json`
+## beside it. The panel was stating something false about shipped content.
+func test_a_map_beside_a_scenario_reads_that_scenarios_conditions() -> void:
+	var dir := _scenario_folder([
+		{"subject": "building", "id": "building.house", "owner": "self", "compare": ">=",
+			"value": 1, "output": "win", "text": "Build a house"},
+		{"subject": "unit", "id": "unit.villager", "owner": "self", "compare": ">=",
+			"value": 14, "output": "win", "text": "Reach 14 villagers"},
+	])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_not_null(back, "%s" % [problems])
+	assert_eq(back.objectives.size(), 2, "the scenario's rows, not the map sidecar's absence")
+	assert_eq(str(back.objectives[1]["text"]), "Reach 14 villagers")
+	assert_true(back.scenario_path.ends_with(ScenarioFile.FILE_NAME), back.scenario_path)
+
+
+## ⚠️ **AND THE AUTHOR IS TOLD WHICH FILE THEY ARE EDITING.** The panel is identical either way,
+## so without this line the tool silently authors into one of two places — which is how the
+## original fault went unnoticed.
+func test_the_panel_says_which_file_the_conditions_go_in() -> void:
+	var standalone := ConditionPanel.new()
+	standalone.set_document(doc)
+	assert_true(standalone.home_text().contains("with the map"), standalone.home_text())
+	assert_true(standalone.home_text().contains("16.8"),
+			"and that nothing plays them yet: %s" % standalone.home_text())
+	standalone.free()
+
+	var dir := _scenario_folder([])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	panel = ConditionPanel.new()
+	panel.set_document(back)
+	assert_true(panel.home_text().contains(ScenarioFile.FILE_NAME), panel.home_text())
+
+
+## ⛔ **THE WRITE-BACK, AND WHAT IT MUST NOT DESTROY.** A `scenario.json` carries a `_note` block
+## that is often the most valuable thing in the file, plus fields the tool knows nothing about. A
+## writer that rebuilt the file from what it understands would delete the rest in a save that
+## reported success — `_preserved_header()`'s lesson with much more to lose.
+func test_saving_writes_the_conditions_back_and_keeps_the_rest_of_the_scenario() -> void:
+	var dir := _scenario_folder([
+		{"subject": "unit", "id": "unit.villager", "owner": "self", "compare": ">=",
+			"value": 3, "output": "win"},
+	])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_not_null(back, "%s" % [problems])
+	assert_true(back.add_objective({"subject": "ticks", "compare": ">=", "value": 6000,
+			"output": "lose", "text": "Ten minutes"}, problems), "%s" % [problems])
+	assert_true(back.save(dir).is_empty())
+
+	var read_back: Array[String] = []
+	var d := ScenarioFile.read(dir.path_join(ScenarioFile.FILE_NAME), read_back)
+	assert_eq(ScenarioFile.objectives_in(d).size(), 2, "%s" % [read_back])
+	assert_eq(str(ScenarioFile.objectives_in(d)[1]["subject"]), "ticks")
+	# EVERYTHING ELSE SURVIVED, including the block nothing in the tool reads.
+	assert_eq((d["_note"] as Array).size(), 2, "the note must not be eaten")
+	assert_eq(str(d["message"]), "Do the thing.")
+	assert_eq(str(d["name"]), "A Test Scenario")
+	assert_eq(str((d["map"] as Dictionary)["type"]), "river")
+
+
+## ⛔ **ONE HOME AT A TIME: THE MAP SIDECAR MUST NOT KEEP A SECOND COPY.** Two files carrying the
+## same rows is the exact failure this correction is about, and it is reachable — a sidecar can
+## already hold an `objectives` key from a standalone map that was later given a scenario, and
+## `_preserved_header()` carries forward every key `to_dict()` does not derive.
+func test_a_scenarios_map_sidecar_carries_no_conditions_of_its_own() -> void:
+	var dir := _dir()
+	# THE SIDECAR IS SEEDED WITH ROWS ON PURPOSE, so this tests the ERASE rather than an absence.
+	assert_true(MapFile.save(doc.data, dir, {"name": "Scenario Map", "objectives": [
+		{"subject": "unit", "compare": ">=", "value": 99, "output": "win"},
+	]}).is_empty())
+	var f := FileAccess.open(dir.path_join(ScenarioFile.FILE_NAME), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"mode": "scenario", "objectives": []}, "  ", false))
+	f.close()
+
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_true(back.objectives.is_empty(), "the scenario is authoritative and it has none")
+	assert_true(back.add_objective(_row({"value": 5}), problems), "%s" % [problems])
+	assert_true(back.save(dir).is_empty())
+
+	var header := MapFile.read_header(dir, problems)
+	assert_false(header.has("objectives"),
+			"the stale sidecar copy has to go, or two files disagree: %s" % [header])
+	var d := ScenarioFile.read(dir.path_join(ScenarioFile.FILE_NAME), problems)
+	assert_eq(ScenarioFile.objectives_in(d).size(), 1, "and the scenario has the real one")
+
+
+## ⚠️ **JSON HAS ONE NUMBER TYPE AND GODOT PARSES IT AS A FLOAT**, so a plain round trip turns
+## `"seed": 815101` into `815101.0` on every number in the file. Nothing breaks (`ScenarioDef`
+## reads through `int()`), but five noisy diffs across shipped campaign content is a real cost
+## paid for nothing and makes a genuine change impossible to see in a review. `16.x-slow-place`
+## found this in the map sidecar and flagged it for 16.10.
+func test_the_write_back_does_not_widen_every_integer_into_a_float() -> void:
+	var dir := _scenario_folder([
+		{"subject": "unit", "owner": "self", "compare": ">=", "value": 14, "output": "win"},
+	])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_true(back.save(dir).is_empty())
+
+	var text := FileAccess.get_file_as_string(dir.path_join(ScenarioFile.FILE_NAME))
+	assert_false(text.contains("815101.0"), "the seed must not widen: %s" % text)
+	assert_false(text.contains("14.0"), "nor a nested objective value: %s" % text)
+	assert_false(text.contains("4.0"), "nor starting_age: %s" % text)
+	assert_true(text.contains("815101"), "and it is still there: %s" % text)
+
+
+## ⛔ **AGAINST A REAL SHIPPED FILE, BECAUSE EVERY OTHER TEST HERE USES A FIXTURE THIS FILE WROTE
+## WITH `JSON.stringify` — AND A FIXTURE IN THE WRITER'S OWN FORMAT ROUND-TRIPS PERFECTLY BY
+## CONSTRUCTION.** §5's rule: beware fixtures that agree with the bug. `scenario_1.json` is
+## hand-written, hand-indented, packs several keys onto a line and carries a 40-line `_note`, so
+## it is the only input that can say whether a real file survives.
+##
+## ⚠️ **WHAT IT ASSERTS IS CONTENT, NOT BYTES, AND THAT IS A LIMITATION WORTH KNOWING.**
+## `JSON.stringify` has one layout and it is not the author's, so **the first save of any shipped
+## scenario reformats the whole file** — one key per line, throughout. Nothing is lost and the diff
+## is large. Acceptable because 16.10 re-authors these five anyway, and because the alternative is
+## splicing the objectives array into the text by hand. **Said out loud rather than discovered in
+## a review.**
+func test_a_real_shipped_scenario_survives_the_write_with_everything_it_carries() -> void:
+	# THE SAME `..`-RESOLVED REPO PATH `MapSources._repo_dir()` BUILDS, rather than a second
+	# opinion about where `scenarios/` is. `simplify_path()` is what makes the `..` a real path.
+	var source := ProjectSettings.globalize_path("res://") \
+			.path_join(MapSources.SCENARIOS_SUBDIR).simplify_path() \
+			.path_join("HowToPlay/scenario_1")
+	var original := source.path_join(ScenarioFile.FILE_NAME)
+	if not FileAccess.file_exists(original):
+		# SKIPPED RATHER THAN FAILED on a checkout without the campaign, `test_map_open`'s rule
+		# for the real maps. It is present in this repo, so this is a guard and not an excuse.
+		return
+	var problems: Array[String] = []
+	var before := ScenarioFile.read(original, problems)
+	assert_false(before.is_empty(), "%s" % [problems])
+
+	# COPIED FIRST. Writing to the real file would be this suite editing shipped content, which
+	# `test_map_document`'s rule forbids outright.
+	var dir := _dir()
+	var copy := dir.path_join(ScenarioFile.FILE_NAME)
+	var f := FileAccess.open(copy, FileAccess.WRITE)
+	f.store_string(FileAccess.get_file_as_string(original))
+	f.close()
+
+	var rows := ScenarioFile.objectives_in(before)
+	assert_eq(rows.size(), 2, "scenario 1 is two ANDed win rows")
+	assert_true(ScenarioFile.write_objectives(copy, rows, problems), "%s" % [problems])
+
+	var after := ScenarioFile.read(copy, problems)
+	# EVERY TOP-LEVEL KEY, and the same ones. A writer that dropped one would otherwise only be
+	# caught by whichever field a later test happened to name.
+	assert_eq(after.keys().size(), before.keys().size(),
+			"before %s / after %s" % [before.keys(), after.keys()])
+	for k in before:
+		assert_true(after.has(k), "'%s' went missing" % k)
+	# THE NOTE, WHICH IS THE LONGEST AND MOST VALUABLE THING IN THE FILE and the one a rebuilt
+	# writer would silently drop.
+	assert_eq((after["_note"] as Array).size(), (before["_note"] as Array).size())
+	assert_eq(str(after["message"]), str(before["message"]))
+	assert_eq(str(after["mode"]), str(before["mode"]))
+	# AND THE NESTED NUMBER THAT PROVES THE INT RESTORATION REACHES TWO LEVELS DOWN.
+	var seed_text := FileAccess.get_file_as_string(copy)
+	assert_true(seed_text.contains("\"seed\": 815101"), "the seed must not widen")
+	assert_false(seed_text.contains("815101.0"), seed_text.substr(0, 200))
+
+
+## ⛔ **SCENARIO 3 IS `last_man_standing` AND IS ONE OF THE FIVE THIS TOOL EXISTS TO RE-AUTHOR.**
+## `ScenarioDef._read_objectives` refuses such a file outright when it carries objectives, so an
+## author adding one by doing the obvious thing would author a mission that will not start. The
+## tool cannot fix it — the mode is the scenario's, not the map's — so it says so.
+func test_conditions_on_a_conquest_scenario_are_warned_about() -> void:
+	var dir := _scenario_folder([], {"mode": "last_man_standing"})
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_true(back.objective_problems().is_empty(),
+			"a conquest scenario with no rows is perfectly normal")
+
+	assert_true(back.add_objective(_row({"value": 5}), problems), "%s" % [problems])
+	var found := back.objective_problems()
+	assert_eq(found.size(), 1, "%s" % [found])
+	assert_true(found[0].contains("last_man_standing"), found[0])
+	assert_true(found[0].contains("refuse to start"), found[0])
+
+
+## ⚠️ **THE MIRROR, AND THE ONE CASE WHERE AN EMPTY LIST IS NOT HEALTHY.** `ScenarioDef` refuses a
+## `scenario`-mode file with no win row — *"can never be won"* — so "no conditions is fine" is
+## true of a map and of a conquest scenario and false here. Without it the tool would report
+## *"won by conquest"* about a file the front door will not open.
+func test_a_scenario_mode_file_with_no_win_row_is_warned_about() -> void:
+	var dir := _scenario_folder([])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	var found := back.objective_problems()
+	assert_eq(found.size(), 1, "%s" % [found])
+	assert_true(found[0].contains("refuse to start"), found[0])
+	assert_true(found[0].contains(ScenarioFile.FILE_NAME), "it names the file: %s" % found[0])
+
+	# ⛔ **AND THE PANEL MUST NOT SAY THE OPPOSITE.** The first version of `_summary_text()`
+	# returned its cheerful "won by conquest, which needs no rows at all" line whenever the list
+	# was empty, before it ever looked at the problems — so this file, which `ScenarioDef` refuses
+	# to start, was described as a map that is fine. The label went amber while the words said
+	# otherwise, which is worse than either alone and is the same class of fault the owner found
+	# in this panel on the day it shipped.
+	panel = ConditionPanel.new()
+	panel.set_document(back)
+	assert_true(panel.summary_text().contains("refuse to start"),
+			"the summary cannot contradict the warning: %s" % panel.summary_text())
+	assert_false(panel.summary_text().contains("needs no rows at all"),
+			"and it must not also say the map is fine: %s" % panel.summary_text())
+
+	# ⚠️ **AND ONE SENTENCE, NOT TWO, WHEN BOTH RULES APPLY.** A lose row with no win row
+	# satisfies the generic "none of them is a win" test as well; two complaints about one fault
+	# is how a warning list stops being read.
+	assert_true(back.add_objective(_row({"value": 1, "output": "lose"}), problems), "%s" % [problems])
+	var both := back.objective_problems()
+	assert_eq(both.size(), 1, "the scenario version wins because it knows more: %s" % [both])
+	assert_true(both[0].contains("refuse to start"), both[0])
+
+
+## ⚠️ **THE HOME IS RE-RESOLVED FROM WHERE THE MAP IS BEING SAVED, NOT FROM WHERE IT WAS OPENED.**
+## A Save As into `maps/` genuinely moves the conditions into the new map's own sidecar, because
+## the copy has no scenario beside it. Resolving once at open would write the copy's objectives
+## into the ORIGINAL scenario — a save that edits a file the author did not open.
+func test_saving_a_scenarios_map_elsewhere_takes_its_conditions_with_it() -> void:
+	var dir := _scenario_folder([
+		{"subject": "unit", "owner": "self", "compare": ">=", "value": 7, "output": "win"},
+	])
+	var problems: Array[String] = []
+	var back := MapDocument.open(dir, problems)
+	assert_eq(back.objectives.size(), 1)
+
+	back.map_name = "Copied Out"
+	assert_true(back.save_as(_dir()).is_empty())
+	assert_true(back.scenario_path.is_empty(), "the copy is not a scenario's map any more")
+
+	var header := MapFile.read_header(back.dir, problems)
+	assert_true(header.has("objectives"), "so its conditions ride in its own sidecar: %s" % [header])
+	assert_eq((header["objectives"] as Array).size(), 1)
+
+	# AND THE ORIGINAL SCENARIO IS UNTOUCHED, which is the half that would be destructive.
+	var d := ScenarioFile.read(dir.path_join(ScenarioFile.FILE_NAME), problems)
+	assert_eq(ScenarioFile.objectives_in(d).size(), 1)
+	assert_eq(int(ScenarioFile.objectives_in(d)[0]["value"]), 7)
+
+
 # ── the guard ───────────────────────────────────────────────────────────────
 
 ## ⚠️ **`objective_def.gd` IS IN `COPIES`, NOT IN `PRESENTATION`, AND THE TEST IS WHETHER DRIFT
