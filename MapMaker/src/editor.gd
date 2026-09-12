@@ -169,6 +169,9 @@ var _dialog_open := false
 ## dismissing a file picker silently close a half-written condition.
 var _conditions: ConditionPanel = null
 
+## 16.8's Export Scenario dialog. A sibling of `_conditions` and built beside it.
+var _export: ExportPanel = null
+
 ## What `refresh_open_list()` last found. **It no longer backs a list widget** — the `FileDialog`
 ## browses the filesystem itself — but it is still the answer to *"what could be opened"*, which
 ## `Boot`, `profile_editor` and `preview_editor` all report and which the dialog's hint line
@@ -243,15 +246,26 @@ func new_map() -> void:
 	_new_map()
 
 
+## ⛔ **IT GOES THROUGH `show_document()` NOW, AND THE SECOND DOOR ITS OWN COMMENT WARNED ABOUT HAD
+## ALREADY COST SOMETHING** (found while wiring 16.8, 2026-09-12).
+##
+## This function used to set `_document` itself and then repeat the three lines of `show_document()`
+## it happened to need, above a comment saying that was *"exactly the kind of second door a
+## state-clearing line gets forgotten at"*. It was right, and one had already been forgotten:
+## 16.6's `_conditions.set_document(doc)` is only on the other path, so **File ▸ New left the
+## Conditions panel holding the previous map** — and at startup, where `_ready()` reaches here,
+## holding none at all. Opening it on a freshly created map reported *"no map open"* about the map
+## filling the screen, and a condition added after an Open would have been written into whichever
+## document the panel was still pointing at.
+##
+## Nothing in the suite could see it: every conditions test hands the panel a document directly,
+## which is the right way to test a panel and the exact reason the wiring was the untested half.
+##
+## The two lines that are still here are the two that are genuinely this function's: a new map's
+## size and name come FROM the toolbar, where an opened map's go TO it.
 func _new_map() -> void:
-	# `show_document()`'s rule -- this path does not go through it, which is exactly the kind of
-	# second door a state-clearing line gets forgotten at.
-	_cancel_area_drag()
 	var wanted := Vector2i(int(_width.value), int(_height.value))
-	_document = MapDocument.create(wanted, _name_field.text)
-	_canvas.show_document(_document)
-	_refresh_inspector()                  # see `show_document()`
-	_refresh_status()
+	show_document(MapDocument.create(wanted, _name_field.text))
 
 
 ## Put an existing document on screen.
@@ -274,6 +288,11 @@ func show_document(doc: MapDocument) -> void:
 	# class of stale reference `_refresh_inspector()` below is here to clear.
 	if _conditions != null:
 		_conditions.set_document(doc)
+	# AND A DIFFERENT MAP EXPORTS TO A DIFFERENT PLACE (16.8), for the reason one line up: the
+	# panel's defaults are derived from the document — its name, its seats, its conditions — so a
+	# panel still holding the last map's would offer an opponent count the new map cannot seat.
+	if _export != null:
+		_export.set_document(doc)
 	# A DIFFERENT MAP HAS A DIFFERENT ENTITY LIST, so an inspector still describing the last
 	# map's selection would be showing a thing that is not on screen. `MapDocument.selected`
 	# starts at -1 on a created or opened document, so this reads that rather than clearing it.
@@ -469,7 +488,9 @@ func close_dialog() -> void:
 ## something else — which is this function's existing argument, reached by a control that is not a
 ## `LineEdit`.
 func dialog_is_up() -> bool:
-	return _dialog_open or (_conditions != null and _conditions.is_open())
+	return _dialog_open \
+			or (_conditions != null and _conditions.is_open()) \
+			or (_export != null and _export.is_open())
 
 
 ## Open the Map Conditions editor (PLAN.md 16.6).
@@ -479,9 +500,40 @@ func conditions_dialog() -> void:
 	_conditions.open()
 
 
+## Open the Export Scenario dialog (PLAN.md 16.8).
+##
+## ⚠️ **THE `Startup` IS HANDED OVER HERE AND NOT IN `_build_ui()`**, because `_ready()` builds the
+## UI *before* it resolves one — an editor launched directly as the main scene has no `Startup`
+## until line four of `_ready()`. Passing it at open time means the panel can never be holding the
+## null that the 2026-09-04 main-scene bug was made of, and it costs one assignment per open.
+func export_dialog() -> void:
+	if _export == null:
+		return
+	_export.set_startup(_startup)
+	_export.open()
+
+
 ## The panel, for the tests and `preview_editor`. Null before `_build_ui()` has run.
 func conditions_panel() -> ConditionPanel:
 	return _conditions
+
+
+## 16.8's panel, same contract as `conditions_panel()`.
+func export_panel() -> ExportPanel:
+	return _export
+
+
+## What the notice line says after an export.
+##
+## ⛔ **IT NAMES THE NEW HOME, BECAUSE THE EXPORT MOVED THE DOCUMENT.** `ScenarioExport` re-points
+## the document at the scenario folder it just wrote — deliberately, so the Conditions panel edits
+## the `scenario.json` the game actually reads — and that changes **where the next Save goes**. The
+## status line carries the directory and would say it eventually; a notice is what says it at the
+## moment it becomes true. Same reason `open_map()` announces `OPENED ← <dir>`.
+func _on_exported(paths: Array) -> void:
+	_notice("EXPORTED %d FILE(S) → %s — Save now writes here"
+			% [paths.size(), _short_file(_document.dir if _document != null else "")], _GOOD)
+	_refresh_status()
 
 
 ## Which dialogs have already been given a starting directory, by their own name.
@@ -1355,6 +1407,18 @@ func _build_ui() -> void:
 	_conditions.changed.connect(func() -> void: _refresh_status())
 	add_child(_conditions)
 
+	# 16.8's export, a sibling of the conditions panel and after it for the same reason — the child
+	# order is what stacks a `Control`. Only one of the two is ever open, so which is on top is a
+	# statement about nothing; it is added last because adding it first would put it *under* a panel
+	# that is invisible when this one is up, which is the sort of thing that is only wrong later.
+	_export = ExportPanel.new()
+	# TWO SIGNALS BECAUSE THEY MEAN DIFFERENT THINGS. `changed` is *the status line is stale*; an
+	# export also re-points the document at the scenario folder it just wrote, which is a fact the
+	# notice line has to carry because it changes where the next Save goes.
+	_export.changed.connect(func() -> void: _refresh_status())
+	_export.exported.connect(_on_exported)
+	add_child(_export)
+
 
 func _file_row() -> Control:
 	var box := _panel()
@@ -1389,6 +1453,13 @@ func _file_row() -> Control:
 	menu.add_item("Open…", FileAction.OPEN)
 	menu.add_item("Save", FileAction.SAVE)
 	menu.add_item("Save As…", FileAction.SAVE_AS)
+	# ⚠️ **EXPORT IS A FILE COMMAND AND IT SITS WITH THE OTHER FILE COMMANDS**, which is the
+	# opposite call from `Conditions…` two dozen lines down and for the reason given there: those
+	# three controls say what the map IS, and this one WRITES it — to a second place, in a second
+	# format, alongside a `campaign.json`. A separator marks it off because it is the one item that
+	# writes outside `maps/`.
+	menu.add_separator()
+	menu.add_item("Export Scenario…", FileAction.EXPORT)
 	# A SEPARATOR BEFORE EXIT, because it is the one item that cannot be undone by another item.
 	menu.add_separator()
 	menu.add_item("Exit", FileAction.EXIT)
@@ -1440,7 +1511,12 @@ func _file_row() -> Control:
 ## an INDEX while carrying no id — so anything keyed on position would shift the moment the menu
 ## grows a divider. Same hazard as `Tool.START`'s removal renumbering every tool after it, with a
 ## menu instead of an enum.
-enum FileAction { NEW, OPEN, SAVE, SAVE_AS, EXIT }
+## ⚠️ **`EXPORT` IS APPENDED RATHER THAN SLOTTED IN BESIDE `SAVE_AS`**, which is the same rule the
+## comment above states one level up: these are ids, and an id is what `id_pressed` carries. The
+## enum's ORDER is free — the menu decides where an item appears — but its VALUES are not, and
+## inserting a name in the middle renumbers every one after it. That is the `enum Type` hazard in
+## `format/map_generator.gd`, in a menu, and it is cheap to avoid by always adding at the end.
+enum FileAction { NEW, OPEN, SAVE, SAVE_AS, EXIT, EXPORT }
 
 
 func _on_file_action(id: int) -> void:
@@ -1453,6 +1529,8 @@ func _on_file_action(id: int) -> void:
 			save()
 		FileAction.SAVE_AS:
 			save_as_dialog()
+		FileAction.EXPORT:
+			export_dialog()
 		FileAction.EXIT:
 			request_exit()
 

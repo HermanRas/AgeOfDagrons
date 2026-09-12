@@ -256,11 +256,23 @@ func _process(_delta: float) -> void:
 			_report_conditions()
 			_shoot("conditions")
 			_close_the_conditions_editor()
-			_show_file_menu()
+			# ⚠️ **16.8's PANEL IS DENSER STILL, AND IT IS THE ONE WHOSE CONTENT CHANGES SHAPE.**
+			# Four text fields, a multi-line briefing box, a picker, a SpinBox, THREE ICON ROWS and
+			# a row of opponent dropdowns **whose number the author controls** — which is the
+			# `VBoxContainer`-overflows hazard with a variable in it, the exact shape that put the
+			# lobby's bottom nav strip off the screen at eight player slots with every structural
+			# test passing. It is inside a `ScrollContainer` for that reason and the shot is what
+			# says the scroll is doing its job.
+			_open_the_export_panel()
 		28:
+			_report_export()
+			_shoot("export")
+			_close_the_export_panel()
+			_show_file_menu()
+		29:
 			_shoot("file_menu")
 			_provoke_the_exit_question()
-		29:
+		30:
 			_report_exit_question()
 			_shoot("exit_unsaved")
 			print("")
@@ -352,6 +364,113 @@ func _report_conditions() -> void:
 ## Put it away, so the shots after this one are not photographing a tool with a modal over it.
 func _close_the_conditions_editor() -> void:
 	var panel: ConditionPanel = _editor.conditions_panel()
+	if panel != null:
+		panel.close()
+	_hold(UI_FRAMES)
+
+
+## ── the Export Scenario panel (PLAN.md 16.8) ────────────────────────────────
+
+## Open it and fill it in the way an author would, with more than one opponent.
+##
+## ⚠️ **THROUGH `fill_request()` AND THE REAL CONTROLS**, `_open_the_conditions_editor()`'s rule:
+## the question a shot of this panel answers is whether the CONTROLS say what the request says, and
+## a preview that drove `ScenarioExport` directly would photograph a panel nobody had touched.
+##
+## ⛔ **IT DOES NOT PRESS EXPORT, AND THAT IS DELIBERATE.** `preview_editor` runs on a developer's
+## machine against the real repo, and pressing it would write a campaign into `scenarios/` — the
+## shipped content directory — every time somebody looked at the tool's chrome. Proving the export
+## is `dev/export_scenario.tscn`'s job, which writes to a folder it also tells you to delete. This
+## shot is about the picture.
+##
+## **THREE OPPONENTS**, because the opponent row is the one control whose WIDTH the author
+## controls: one picker fits anywhere and the question is whether several still do.
+func _open_the_export_panel() -> void:
+	_editor._file_menu.get_popup().hide()
+	# DECLARED, NOT INFERRED -- `Editor.tscn`'s root has no `class_name`. See
+	# `_open_the_conditions_editor()` for what a parse error here looks like (nothing at all).
+	var panel: ExportPanel = _editor.export_panel()
+	if panel == null:
+		printerr("  there is no export panel -- the shot below is of nothing")
+		return
+	_editor.export_dialog()
+	panel.fill_request({
+		"campaign_folder": "TheDragonBorn",
+		"campaign_name": "The Dragon Born",
+		"campaign_description": "Six missions, and a dragon at the end of them.",
+		"folder": "scenario_1",
+		"name": "The Ford",
+		"description": "A duel across a river with one crossing.",
+		"message": "Objective: hold the ford.\n\nOverview: the crossing is the only way over,"
+				+ " so whoever holds it decides where the fight happens.",
+		"opponents": ["passive", "easy", "hard"],
+		"starting_age": 2,
+		"icons": {},
+	})
+	_hold(UI_FRAMES)
+
+
+## The half a screenshot cannot settle, printed beside it.
+##
+## ⛔ **THE DERIVED MODE IS THE READING THAT MATTERS.** It is the one field of the schema with no
+## control, so the summary line is the only place an author can see it — and a shot shows that the
+## line is there without showing that it agrees with the condition list. Printed against the
+## document's own count, which is what `ScenarioExport` will read.
+func _report_export() -> void:
+	var panel: ExportPanel = _editor.export_panel()
+	var doc: MapDocument = _editor.document()
+	if panel == null or doc == null:
+		return
+	var request := panel.request()
+	print("")
+	print("Export: %s" % panel.summary_text())
+	print("  campaign=%s  scenario=%s  opponents=%s  age=%d"
+			% [request["campaign_folder"], request["folder"], request["opponents"],
+			int(request["starting_age"])])
+	print("  the map declares %d condition(s), %d win -> mode will be '%s'"
+			% [doc.objectives.size(), doc.win_count(),
+			"scenario" if not doc.objectives.is_empty() else "last_man_standing"])
+	print("  campaigns on disk: %d" % panel.campaign_rows().size())
+	# ⚠️ **THE SHOT IS OF AN OVER-FILLED PANEL ON PURPOSE AND THAT HAS TO BE SAID HERE**, or the
+	# summary line's *"4 of 2 seat(s)"* reads as a bug in the picture rather than as the panel doing
+	# its job. Three opponents is the layout case — the opponent row is the one control whose WIDTH
+	# the author controls — and this map has two starts, so pressing Export would correctly refuse.
+	print("  (three opponents on a two-seat map, deliberately: the row's width is the point,"
+			+ " and the summary saying '4 of 2' is it working)")
+	if not panel.message().is_empty():
+		print("  says: %s" % panel.message())
+	# WHETHER THE PLATE FITS, `_report_conditions()`'s measurement and the reason it exists: a panel
+	# taller than the window is cropped by the viewport, so the Export button simply is not in the
+	# picture -- and a cropped screenshot looks like a design decision.
+	# ⚠️ **THE PLATE AND THE FORM'S VIEWPORT ARE TWO DIFFERENT HEIGHTS AND ONLY ONE OF THEM IS WHAT
+	# AN AUTHOR CAN SEE.** A plate that fits the window perfectly can still hide half its form
+	# behind a scroll, which is the fault the first two renders of this panel had — and by eye the
+	# two shots were indistinguishable, which is §6's whole point about measuring rather than
+	# looking. Both numbers, so a change to either is visible in the log.
+	# ⛔ **`plate_height()`, NEVER `panel.size.y`.** The panel is `PRESET_FULL_RECT` — it is the dim
+	# behind the plate — so asking IT how tall it is hands back the viewport's own height, and a
+	# *"does it fit?"* test built on that can never fail. It reported `900 px in a 900 px window` on
+	# the first run and would have gone on reporting it whatever the plate did.
+	var height := panel.plate_height()
+	var window := float(_editor.size.y)
+	var viewport := panel._form_viewport()
+	var content := panel._form_content()
+	print("  plate %d px in a %d px window; the form is %d px in a %d px viewport"
+			% [int(height), int(window), int(content.y), int(viewport.y)])
+	if window > 0.0 and height > window:
+		printerr("  the export plate is %d px in a %d px window -- the bottom of it is"
+				% [int(height), int(window)] + " off the screen")
+	# ⚠️ **AND THE FOLD, WHICH IS THE FAULT A SHOT OF THIS PANEL ACTUALLY HAS.** The plate fitting
+	# says nothing about whether the form does: at 360 px of viewport the three icon slots were
+	# behind a scroll bar with nothing on screen saying they existed, and the render was
+	# indistinguishable by eye from the one where they were not.
+	if content.y > viewport.y:
+		printerr("  %d px of the form is behind the scroll -- something down there is"
+				% int(content.y - viewport.y) + " undiscoverable")
+
+
+func _close_the_export_panel() -> void:
+	var panel: ExportPanel = _editor.export_panel()
 	if panel != null:
 		panel.close()
 	_hold(UI_FRAMES)

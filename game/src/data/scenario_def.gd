@@ -197,6 +197,28 @@ func _read_map(raw: Variant) -> void:
 				% [type_key, ", ".join(_MAP_TYPES.keys())])
 
 	if not m.has("seed"):
+		# ⛔ **A MAP AUTHORED IN THE MAPMAKER WAS NEVER GENERATED, SO IT HAS NO SEED** (16.8,
+		# 2026-09-12), and this refusal predates the map being a file.
+		#
+		# The message below is still the right one for what it was written about. When it was
+		# written the seed WAS the map: `build_config()` generated from it at launch, so a
+		# scenario without one really did regenerate its ground every run. The owner's ruling of
+		# 2026-09-01 ended that — *"generating is a one-off authoring step"* — and since then the
+		# saved `map.png` beside this file has been the map, with `seed` recording only how the
+		# ground first came to exist. **A thing that cannot happen any more was still being
+		# refused.**
+		#
+		# ⚠️ **AND THE ALTERNATIVE WAS WORSE THAN A RELAXED RULE.** The export's only other option
+		# is to write `"seed": 0` into every authored scenario — a field that reads as provenance,
+		# is not, and would be believed by the next person to open the file. That is the class of
+		# untrue field `build_config()`'s `objectives` comment already refuses to write.
+		#
+		# **THE MAP IS STILL REQUIRED, BY THE ONE CHECK THAT CAN SEE IT.** A scenario with neither
+		# a seed nor a saved map keeps the complaint, and one with no map at all is refused by
+		# `map_data()` at launch whatever its seed says. So nothing that used to be caught stops
+		# being caught; what changes is that a pinned FILE is now a complete answer on its own.
+		if MapFile.exists_in(dir):
+			return
 		problems.append("map has no 'seed' -- a scenario that regenerates its map every"
 				+ " run is not a scenario")
 		return

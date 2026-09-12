@@ -489,9 +489,20 @@ points at it instead of at `game/`**, and it has its own suite:
 # 16.2's two checks. The first authors a map WITHOUT a mouse; the second plays it IN THE GAME.
 & $godot --headless --path MapMaker res://dev/author_map.tscn            # writes maps/river_demo
 & $godot --headless --path MapMaker res://dev/author_map.tscn -- --force # re-roll it
-& $godot --path MapMaker res://dev/preview_editor.tscn                   # 21 screenshots
+& $godot --path MapMaker res://dev/preview_editor.tscn                   # 27 screenshots
 & $godot --path game res://dev_preview/preview_saved_map.tscn -- --folder river_demo
 Remove-Item -Recurse -Force maps\river_demo                              # ⚠️ AND THEN DELETE IT
+
+# 16.8's ROUND TRIP — TWO PROJECTS, AND NEITHER CAN PROVE THE CONTRACT ALONE. EXIT CODE IS THE
+# ANSWER for both. The first writes a campaign; the second is the GAME's own loader reading it.
+& $godot --headless --path MapMaker res://dev/export_scenario.tscn            # writes scenarios/ExportCheck
+& $godot --headless --path MapMaker res://dev/export_scenario.tscn -- --force # re-write it
+& $godot --headless --path game res://dev_preview/preview_exported_campaign.tscn -- --campaign ExportCheck
+# ⚠️ AND THEN DELETE IT — `scenarios/` is shipped content, and a leftover campaign shows up in the
+# game's own campaign list. A plain `Remove-Item -Recurse` leaves the FOLDERS (every directory in
+# this repo is read-only); clear the attribute first:
+Get-ChildItem scenarios\ExportCheck -Recurse -Force | ForEach-Object { $_.Attributes = $_.Attributes -band -bnot [IO.FileAttributes]::ReadOnly }
+Remove-Item -Recurse -Force scenarios\ExportCheck
 
 # 16.4a's check: open every REAL map on this machine and round-trip it. EXIT CODE IS THE ANSWER.
 & $godot --headless --path MapMaker res://dev/open_map.tscn
@@ -560,6 +571,18 @@ handful of facts that are about *working on the tool* rather than about what it 
   re-copy from `game/` instead. Drift in `COPIES` **disables saving**; drift in `PRESENTATION` is
   only a status-line note. The test for which list a new copy belongs in is **does the drift reach
   the file?** A map written by a drifted *icon* reader is byte-identical.
+  ⚠️ **THERE IS A THIRD LIST AS OF 16.8 AND IT ANSWERS A THIRD QUESTION: `FormatGuard.SCHEMA`
+  REFUSES THE EXPORT AND NOTHING ELSE.** It guards the words an exported `scenario.json` /
+  `campaign.json` are written in — the two mode names, `AIProfile.IDS`, the three icon filenames,
+  `MAX_PLAYERS` — none of which reaches `map.json` at all. So schema drift must not disable saving
+  a map (crying wolf) and must not be a note somebody scrolls past (what it costs is a **campaign
+  mission that will not start**, whose only symptom is a greyed PLAY button in the other project).
+  `Startup.can_export()` is the narrower permission; `can_save()` is unchanged.
+  📝 **AND `format/scenario_def.gd`, `campaign_def.gd` AND `ai_profile.gd` ARE STAND-INS, NOT
+  COPIES** — they carry declarations only. A verbatim `ScenarioDef` is impossible: `build_config()`
+  reaches for `MatchConfig`, `SimPlayer` and `AIProfile`, and GDScript compiles a whole file or
+  none of it, so copying it would drag the net layer's config object into `format/`. Those three
+  ARE edited when the game's declaration moves — that is what a shim is — unlike the nine copies.
 - ⛔ **`--import` EACH PROJECT SEPARATELY.** Two Godot projects, two class caches, two `user://`
   directories, two suites. A new `class_name` in MapMaker is invisible until **MapMaker** is
   imported, and importing the game does not help.
@@ -728,6 +751,7 @@ carry `age_required`, which is a *gate*, not a skin.
 | **`res://../anything` DOES NOT RESOLVE, AND `DirAccess.open` JUST RETURNS NULL** | So a preview reaching out of the Godot project into the repo reports "not found" for a directory that is plainly there. The route that works is `Campaigns._dev_root()`'s: `ProjectSettings.globalize_path("res://").path_join("../x").simplify_path()`. Cost one confused run against a freshly built pack. |
 | ⚠️ **A CHANGE TO THE BUILD SCRIPT MOVED PUBLISHED BYTES, AND THE VERSION GUARD CANNOT TELL THAT FROM EDITED CONTENT** | Making `build_packs.py` **store** already-compressed formats instead of deflating them (PNG is deflated already; the art agent measured 99% of original, and deflating 320 MB for 1% costs minutes a build) changed the digest of both **campaign** zips, whose content had not moved at all. The guard refused the rebuild and was right to — it compares digests. **Bumping is the safe direction**; the alternative is freezing the old encoding for one kind of pack forever so two kinds get built two ways. Worth knowing as a class: *the guard protects the player, not your afternoon, and a packer refactor is a version bump for everything it touches.* |
 | ⚠️ **AN ESCAPE HATCH THAT IS WRITTEN, DOCUMENTED, AND CALLED BY NOTHING** | `PackInstaller.cancel()` has been described in its own neighbour's comment as *"the player's escape"* since 0.3, and **no code ever called it**. It cost nothing while the whole `required` set was one 2.2 MB campaign — the download screen was over before anybody could want out of it — and became a first boot with no way back to the game the moment `art_base_v1.zip` (80 MB) was marked required. `DownloadScreen`'s own header even said *"there is deliberately no way to get stuck here"*, which was written about downloads that **fail** and silently did not cover one that merely takes an hour. ➡️ **When a size changes by 40×, re-read the sentences that were true at the old size** — the header, the timeout policy, and the absence of a resume are all the same assumption. Same family as the `MAX_PUSH` row: a comment that is true of the case it was written for. |
+| ⛔ **TWO FUNCTIONS THAT BOTH INSTALL A NEW DOCUMENT, WHERE ONE OF THEM IS THE "REAL" ONE** | `Editor._new_map()` set `_document` itself and repeated the three lines of `show_document()` it happened to need — above a comment saying that was *"exactly the kind of second door a state-clearing line gets forgotten at"*. It was right, and one already had been: 16.6's `_conditions.set_document(doc)` is only on the other path, so **File ▸ New left the Conditions panel holding the previous map**, and at startup holding none — the panel reported *"no map open"* about the map filling the screen. Found on 2026-09-12 while wiring 16.8's panel into the same two places. ➡️ **Nothing in the suite could see it**: every conditions test hands the panel a document directly, which is the right way to test a panel and the exact reason the WIRING was the untested half. The fix is one call site, not a third line in the second door. |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -962,10 +986,13 @@ everything shipped, which is the one section where a completed item actively cos
 something. **Do not re-grow it here either.** What follows is a pointer, not a copy:
 
 1. **Phase 16, the MapMaker** — where the work is, and **the board is the status, not this list**
-   (§2.1). 16.0 through 16.6 are done. What is left in the phase is **16.7** (per-entity overrides
-   and named units — the expensive row, and the only one with real sim cost, since `state_hash()`
-   must fold the overrides in), **16.8** (scenario export, where 15.1's schema gets its second
-   consumer), **16.9** (the HOW-To, written last on purpose) and **16.10**.
+   (§2.1). 16.0 through 16.6 are done, and **16.8 landed 2026-09-12**. What is left in the phase is
+   **16.7** (per-entity overrides and named units — the expensive row, and the only one with real
+   sim cost, since `state_hash()` must fold the overrides in), **16.9** (the HOW-To, written last
+   on purpose) and **16.10**.
+   ⚠️ **16.8 WAS TAKEN BEFORE 16.7 DELIBERATELY**, against PLAN.md's numbering: 16.6 authored
+   conditions that **nothing in the game could read** — its own panel said so on screen — and 16.8
+   is the row that closes that loop. 16.7's card says *"DO NOT START HERE"* in its own description.
    ⚠️ **`MapEdit.mark_changed()` HAS NOW BEEN OWED TWICE** — by 16.4's move cursor and 16.6's
    condition edit — and will be owed again. Any act that edits an entry **in place** (same list
    length, same starts) is invisible to `close()`'s size test, and a discarded step is a change

@@ -41,7 +41,7 @@
 ## `int()` and `str()`), but five noisy diffs across shipped campaign content is a real cost paid
 ## for nothing, and it makes a genuine change impossible to see in a review.
 ##
-## `_ints_restored()` is the fix, and it is narrow on purpose: a float with no fractional part
+## `ints_restored()` is the fix, and it is narrow on purpose: a float with no fractional part
 ## becomes an int. **The one thing it would get wrong is a field that genuinely wants `2.0` to be
 ## a float**, and the scenario schema has none — every number in it is a count, an age, a seed or
 ## a comparison value. Said out loud rather than assumed, because the day somebody adds a
@@ -142,17 +142,24 @@ static func write_objectives(path: String, objectives: Array[Dictionary],
 	if f == null:
 		out_problems.append("could not write %s (error %d)" % [path, FileAccess.get_open_error()])
 		return false
-	f.store_string(JSON.stringify(_ints_restored(d), "  ", false) + "\n")
+	f.store_string(JSON.stringify(ints_restored(d), "  ", false) + "\n")
 	f.close()
 	return true
 
 
 ## Every integral float in `value`, recursively, back to an int. See the class comment.
 ##
+## **PUBLIC SINCE 16.8**, because `ScenarioExport` writes a whole `scenario.json` and a
+## `campaign.json` rather than replacing one key, and every number it carries forward out of an
+## opened file has been through `JSON.parse` — so the widening this defends against is the same
+## widening, reached by a second door. A private copy there would be the two-dialects failure in
+## miniature: one of the two would gain the carve-out the class comment predicts and the other
+## would not.
+##
 ## **THE RECURSION IS NOT DECORATION**: the numbers that matter are nested two deep
 ## (`map.seed`, and `value` inside each objective), so a top-level-only pass would leave exactly
 ## the fields this exists to protect.
-static func _ints_restored(value: Variant) -> Variant:
+static func ints_restored(value: Variant) -> Variant:
 	if value is float:
 		var f: float = value
 		# `is_equal_approx` is the wrong test here and `f == floor(f)` is the right one: this is
@@ -165,11 +172,11 @@ static func _ints_restored(value: Variant) -> Variant:
 	if value is Array:
 		var list: Array = []
 		for item in (value as Array):
-			list.append(_ints_restored(item))
+			list.append(ints_restored(item))
 		return list
 	if value is Dictionary:
 		var out: Dictionary = {}
 		for k in (value as Dictionary):
-			out[k] = _ints_restored((value as Dictionary)[k])
+			out[k] = ints_restored((value as Dictionary)[k])
 		return out
 	return value

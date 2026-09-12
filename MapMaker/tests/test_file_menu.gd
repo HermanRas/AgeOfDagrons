@@ -45,12 +45,20 @@ func _open_editor() -> Node:
 
 # ── the menu ────────────────────────────────────────────────────────────────
 
-## Five items, and `New` is one of them.
+## Six items, and `New` is one of them.
 ##
 ## 📝 **THE OWNER'S MOCK SHOWED FOUR — Open, Save, SaveAs, Exit.** `New` is here anyway because
 ## dropping it would leave **no way to start a map**; it was a toolbar button until this change.
 ## Asserted by name so the departure is visible rather than implied, and so putting the button
 ## back is a decision somebody makes on purpose.
+##
+## ⚠️ **`Export Scenario…` IS THE SIXTH (16.8), AND IT IS A DEPARTURE FROM THE MOCK TOO.** It is a
+## file command — it writes, to a second place, in a second format — so it belongs with the others
+## rather than beside `Conditions…`, which is one of the three controls that say what the map *is*.
+##
+## ⛔ **THE COUNT IS ASSERTED AS WELL AS THE NAMES, AND THAT IS WHY THIS TEST EARNED ITS KEEP
+## TODAY**: it is what turned adding a menu item into a decision rather than a diff nobody read.
+## A names-only test would have gone green on a menu with two Exits in it.
 func test_the_file_menu_offers_every_file_action() -> void:
 	var editor := _open_editor()
 	var menu: PopupMenu = editor._file_menu.get_popup()
@@ -58,8 +66,9 @@ func test_the_file_menu_offers_every_file_action() -> void:
 	for i in menu.item_count:
 		if not menu.is_item_separator(i):
 			labels.append(menu.get_item_text(i))
-	assert_eq(labels.size(), 5, "New, Open, Save, Save As, Exit — got %s" % [labels])
-	for want in ["New", "Open", "Save", "Save As", "Exit"]:
+	assert_eq(labels.size(), 6,
+			"New, Open, Save, Save As, Export Scenario, Exit — got %s" % [labels])
+	for want in ["New", "Open", "Save", "Save As", "Export Scenario", "Exit"]:
 		var found := false
 		for got in labels:
 			if got.begins_with(want):

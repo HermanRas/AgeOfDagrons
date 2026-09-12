@@ -83,8 +83,8 @@ var warnings: Array[String] = []
 ## and the derivation with no filesystem at all. Same seam `SavedMaps.roots()` keeps.
 func roots(root: GameRoot) -> Array[Dictionary]:
 	var out: Array[Dictionary] = [
-		{"path": _repo_dir(AUTHORED_SUBDIR), "source": Source.AUTHORED, "depth": 1},
-		{"path": _repo_dir(SCENARIOS_SUBDIR), "source": Source.SCENARIO, "depth": 2},
+		{"path": repo_dir(AUTHORED_SUBDIR), "source": Source.AUTHORED, "depth": 1},
+		{"path": repo_dir(SCENARIOS_SUBDIR), "source": Source.SCENARIO, "depth": 2},
 	]
 	# LAST, AND ONLY WHEN THE GAME PROJECT IS RESOLVED. Its path is derived from the game's
 	# project name, so without a game root there is nothing to derive it from -- and a tool
@@ -242,5 +242,13 @@ static func source_name(source: int) -> String:
 
 ## A sibling of this Godot project. `simplify_path` resolves the `..` so a path printed in a
 ## warning is one somebody can paste.
-func _repo_dir(subdir: String) -> String:
+##
+## ⚠️ **`res://../anything` DOES NOT RESOLVE AND `DirAccess.open` JUST RETURNS NULL** on it, so
+## this globalize-then-join is the route rather than a longer spelling of the same thing.
+##
+## **STATIC AND PUBLIC SINCE 16.8**, because `ScenarioExport` writes into repo-root `scenarios/`
+## and had to derive the same path. A second copy of this one-liner would be *"mirroring a layout
+## is not sharing one"* with a filesystem instead of a row of controls: the day the tool's
+## relationship to the repo changes, one of the two would be updated.
+static func repo_dir(subdir: String) -> String:
 	return ProjectSettings.globalize_path("res://").path_join(subdir).simplify_path()

@@ -927,13 +927,33 @@ func objective_problems() -> Array[String]:
 				% objectives.size()
 				+ " -- a scenario with no win row can never be won."
 				+ " Add one, or remove them all to mean 'beat them'")
+	out.append_array(unknown_area_problems())
+	return out
+
+
+## Every `area` condition naming a region this map has not got, as sentences. Empty is healthy.
+##
+## ## SPLIT OUT OF `objective_problems()` FOR 16.8, AND THE ALTERNATIVE WAS STRING MATCHING
+##
+## `ScenarioExport` needs exactly this half and must not have the other one: the two list-level
+## complaints above are about the MODE, and an export **derives** the mode, so neither can apply to
+## the file it is about to write — worse, a map opened from a scenario carries that scenario's mode
+## and would raise a complaint about a file the export is not touching.
+##
+## The first cut filtered `objective_problems()` on the sentences that begin `"condition "`, which
+## works and is a **second place the two lists are related**: re-wording a message would silently
+## change which problems reach the export. Splitting the function is the same fix
+## `ConditionPanel._subject_keys()` makes one level down — derive it, do not re-describe it.
+##
+## ⚠️ **THE NAME IS STRIPPED THE WAY `ObjectiveDef._read_area` STRIPS IT, and matched verbatim
+## after that.** Folding or trimming differently at either end would author a region the scenario
+## can never find — `add_area()`'s note is the other half of the same rule.
+func unknown_area_problems() -> Array[String]:
+	var out: Array[String] = []
 	for i in objectives.size():
 		var record: Dictionary = objectives[i]
 		if str(record.get("subject", "")).to_lower() != "area":
 			continue
-		# STRIPPED THE WAY `ObjectiveDef._read_area` STRIPS IT, and matched verbatim after that.
-		# Folding or trimming differently at either end would author a region the scenario can
-		# never find -- `MapDocument.add_area()`'s note is the other half of this rule.
 		var name := StringName(str(record.get("area", "")).strip_edges())
 		if data.has_area(name):
 			continue

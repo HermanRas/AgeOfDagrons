@@ -77,3 +77,17 @@ static func check() -> Startup:
 ## a drifted tool is one the game cannot read.
 func can_save() -> bool:
 	return state == State.OK
+
+
+## May the tool write a SCENARIO? (16.8)
+##
+## ⚠️ **A SECOND QUESTION WITH A DIFFERENT ANSWER, AND THE DIFFERENCE IS A WHOLE LIST.** Saving a
+## map is gated by `FormatGuard.passed()` — the copies that decide what `map.json` MEANS. Exporting
+## is gated by `schema_ok()` as well, because it writes a `scenario.json` in a vocabulary
+## (`mode`, the AI level words, the three icon filenames) that reaches no map file at all.
+##
+## **Strictly narrower than `can_save()`**, never the other way: a tool that cannot write a map has
+## no business writing a scenario naming one. `FormatGuard.SCHEMA` has the argument for why schema
+## drift does not work in reverse and must not disable saving.
+func can_export() -> bool:
+	return can_save() and guard != null and guard.schema_ok()

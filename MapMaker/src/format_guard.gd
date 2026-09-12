@@ -76,6 +76,13 @@
 ## would be meaningless. It is checked by pulling the `const SUBTILE := ...` line out of the
 ## game's source and comparing it. Narrower, and exactly as loud when it breaks.
 ##
+## ## THREE LISTS, THREE ANSWERS — AND THE THIRD ARRIVED WITH 16.8
+##
+## `COPIES` + `DECLARATIONS` **refuse a map save**. `PRESENTATION` is **a note**. `SCHEMA` —
+## the scenario vocabulary an export writes — **refuses the export and nothing else**, because
+## none of it reaches `map.json`. Each list has its own section below; what is worth reading here
+## is that the question is always the same one: *what does drift in this actually break?*
+##
 ## `format/map_generator.gd` is the second, and it exists for the same reason one level down:
 ## the verbatim `map_validator.gd` reads `MapGenerator.Type.ARCHIPELAGO`, and the generator
 ## itself is 1,500 lines of noise fields this tool must never carry — **authoring a map by
@@ -191,6 +198,90 @@ const DECLARATIONS := [
 	},
 ]
 
+## 16.8's schema: the words an exported `scenario.json` and `campaign.json` are written in.
+##
+## ## ⚠️ A THIRD LIST, BECAUSE THESE GUARD A DIFFERENT FILE FROM EVERY ROW ABOVE
+##
+## `COPIES` and `DECLARATIONS` decide what a **map file** means, which is why drift in them
+## disables saving. Nothing here reaches `map.json` at all: a drifted mode word, AI level or icon
+## filename produces a byte-identical map and a broken **scenario**. So these are checked, named,
+## and deliberately **outside `passed()`** — `PRESENTATION`'s argument, reached from the other
+## direction, and 16.4b's rule a fourth time: *a stale format is a corrupt file, an unreachable
+## start is a bad map, and the two deserve different answers.*
+##
+## ⛔ **BUT THEY ARE NOT A NOTE EITHER — THEY REFUSE THE EXPORT**, which `PRESENTATION` does not
+## do to anything. A drifted icon reader costs a wrong picture in a panel; a drifted mode word
+## costs a **campaign mission that will not start**, authored by a tool that reported success,
+## whose only symptom is a greyed PLAY button on a screen in a different project. That is worth
+## refusing the one act it breaks and nothing else. `ScenarioExport` asks `schema_ok()`.
+##
+## ## WHY THESE ARE DECLARATIONS AND NOT A COPY OF `ScenarioDef`
+##
+## A copy was the first choice and it is impossible: `ScenarioDef.build_config()` reaches for
+## `MatchConfig`, `SimPlayer` and `AIProfile`, and GDScript compiles a whole file or none of it,
+## so a verbatim copy would drag the net layer's config object into `format/`. The three
+## stand-ins say so at length. What is genuinely at risk between two projects is the **spelling**,
+## and a spelling is exactly what `_check_declaration` compares.
+const SCHEMA := [
+	{
+		"origin": "src/data/scenario_def.gd",
+		"prefix": "const _MODES",
+		"expected": "const _MODES := {\"last_man_standing\": Mode.LAST_MAN_STANDING,"
+				+ " \"scenario\": Mode.SCENARIO}",
+		"used_by": "res://format/scenario_def.gd",
+	},
+	{
+		"origin": "src/data/scenario_def.gd",
+		"prefix": "const ICON_FILE",
+		"expected": "const ICON_FILE := \"scenarioIcon.png\"",
+		"used_by": "res://format/scenario_def.gd",
+	},
+	{
+		"origin": "src/data/scenario_def.gd",
+		"prefix": "const JSON_FILE",
+		"expected": "const JSON_FILE := \"scenario.json\"",
+		"used_by": "res://format/scenario_def.gd",
+	},
+	# ⚠️ **THE CAPITAL IN `CampaignBackground.png` IS THE REASON THIS ONE IS WORTH A ROW.** Its two
+	# siblings are camelCase and it is not; a case difference is invisible on Windows, where this
+	# tool runs, and fatal on the phone the campaign is played on.
+	{
+		"origin": "src/data/campaign_def.gd",
+		"prefix": "const ICON_FILE",
+		"expected": "const ICON_FILE := \"campaignIcon.png\"",
+		"used_by": "res://format/campaign_def.gd",
+	},
+	{
+		"origin": "src/data/campaign_def.gd",
+		"prefix": "const BACKGROUND_FILE",
+		"expected": "const BACKGROUND_FILE := \"CampaignBackground.png\"",
+		"used_by": "res://format/campaign_def.gd",
+	},
+	{
+		"origin": "src/data/campaign_def.gd",
+		"prefix": "const JSON_FILE",
+		"expected": "const JSON_FILE := \"campaign.json\"",
+		"used_by": "res://format/campaign_def.gd",
+	},
+	# ⛔ **THE WHOLE LIST AND ITS ORDER**, `enum Type`'s reason wearing difficulties:
+	# `ScenarioDef._ai_level_of` converts a word to a `SimPlayer.AILevel` with `IDS.find()`, so the
+	# two are coupled BY POSITION and the game's own comment records that nothing at either end
+	# says so. A level inserted in the middle would silently play every scenario below it against a
+	# different bot.
+	{
+		"origin": "src/data/ai_profile.gd",
+		"prefix": "const IDS",
+		"expected": "const IDS := [\"passive\", \"easy\", \"normal\", \"hard\", \"unfair\"]",
+		"used_by": "res://format/ai_profile.gd",
+	},
+	{
+		"origin": "src/sim/map_generator.gd",
+		"prefix": "const MAX_PLAYERS",
+		"expected": "const MAX_PLAYERS := 8",
+		"used_by": "res://format/map_generator.gd",
+	},
+]
+
 enum Status { OK, DRIFTED, ORIGIN_MISSING, COPY_MISSING }
 
 ## One row per check: `{name, status, detail}`. `name` is the original's relative path, which
@@ -200,6 +291,10 @@ var results: Array[Dictionary] = []
 ## The `PRESENTATION` rows, in the same shape and kept in a separate list for one reason:
 ## `passed()` must not see them. See that constant for the argument.
 var presentation_results: Array[Dictionary] = []
+
+## The `SCHEMA` rows, kept apart for `presentation_results`' reason and answered differently:
+## they refuse the EXPORT rather than the save. See `SCHEMA`.
+var schema_results: Array[Dictionary] = []
 
 
 ## True when every copy that decides what a map MEANS matches. **The permission to save**, and
@@ -225,6 +320,20 @@ func presentation_ok() -> bool:
 	return true
 
 
+## True when the scenario schema's spellings still match the game's. **The permission to EXPORT**
+## (16.8), and the only question `ScenarioExport` should ask -- see `SCHEMA`, and `schema_refusal()`
+## for the sentence to show when it is false.
+##
+## ⚠️ **NEITHER `passed()` NOR `presentation_ok()` LOOKS AT THESE**, on purpose and in both
+## directions: schema drift must not stop an author saving a map, and it must not be reported as a
+## note somebody scrolls past either.
+func schema_ok() -> bool:
+	for r in schema_results:
+		if int(r["status"]) != int(Status.OK):
+			return false
+	return true
+
+
 static func check(root: GameRoot) -> FormatGuard:
 	var g := FormatGuard.new()
 	for entry in COPIES:
@@ -234,7 +343,30 @@ static func check(root: GameRoot) -> FormatGuard:
 	for entry in PRESENTATION:
 		g.presentation_results.append(
 				g._check_copy(root, str(entry["copy"]), str(entry["origin"])))
+	for entry in SCHEMA:
+		g.schema_results.append(g._check_declaration(root, entry))
 	return g
+
+
+## What to say about a drifted scenario schema, naming every declaration that has moved. Empty
+## when they match, so it doubles as a check.
+##
+## **IT NAMES THE ACT IT IS REFUSING**, unlike `refusal()`, because the author is standing in an
+## Export dialog and everything else in the tool still works: told only that "the schema has
+## drifted" they would reasonably try Save, find it fine, and conclude the message was noise.
+func schema_refusal() -> String:
+	var bad: Array[String] = []
+	for r in schema_results:
+		if int(r["status"]) != int(Status.OK):
+			bad.append("  %s — %s" % [r["name"], r["detail"]])
+	if bad.is_empty():
+		return ""
+	return ("The game's scenario schema has moved on and this tool's stand-ins have not.\n"
+			+ "EXPORTING IS DISABLED until they are brought back into step. Saving a map is\n"
+			+ "unaffected — nothing below reaches map.json.\n\n"
+			+ "\n".join(PackedStringArray(bad))
+			+ "\n\nBring each stand-in named above into line with the game's own declaration,"
+			+ "\nre-run, and check that nothing in the tool depended on the old spelling.")
 
 
 ## What to say about drifted ICON copies: a note, in the same words a person can act on, and
@@ -277,6 +409,12 @@ func report() -> String:
 		lines.append("  [%s] %-28s %s" % [mark, r["name"], r["detail"]])
 	for r in presentation_results:
 		var mark := "ok  " if int(r["status"]) == int(Status.OK) else "note"
+		lines.append("  [%s] %-28s %s" % [mark, r["name"], r["detail"]])
+	# MARKED `xprt` RATHER THAN `FAIL` OR `note`, because it is neither: drift here stops one act
+	# and leaves the rest of the tool working. A report that spelled it `FAIL` would say the tool
+	# is broken, and one that spelled it `note` would say it does not matter.
+	for r in schema_results:
+		var mark := "ok  " if int(r["status"]) == int(Status.OK) else "xprt"
 		lines.append("  [%s] %-28s %s" % [mark, r["name"], r["detail"]])
 	return "\n".join(PackedStringArray(lines))
 

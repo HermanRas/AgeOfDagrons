@@ -313,6 +313,42 @@ func test_the_briefing_reaches_the_config_because_the_hud_has_never_heard_of_a_c
 	assert_false(cfg.scenario_message.is_empty(), "a scenario explains itself before tick 1")
 
 
+# ── a map that was AUTHORED rather than generated has no seed (16.8) ──────────
+
+## ⛔ **THE SEED REQUIREMENT PREDATES THE MAP BEING A FILE.**
+##
+## When `_read_map`'s refusal was written the seed WAS the map: `build_config()` generated from it
+## at launch, so a scenario without one really did regenerate its ground every run. The owner's
+## ruling of 2026-09-01 ended that — *"generating is a one-off authoring step"* — and since then
+## the saved `map.png` beside the file has been the map. A thing that can no longer happen was
+## still being refused, and it blocked the first scenario the MapMaker ever wrote (16.8), because
+## a map authored by hand has no generator seed to record.
+##
+## ⚠️ **THE ALTERNATIVE WAS WORSE THAN A RELAXED RULE**: the export's only other option is to write
+## `"seed": 0` into every authored scenario — a field that reads as provenance, is not, and would
+## be believed by the next person to open the file.
+func test_a_scenario_with_a_saved_map_and_no_seed_is_playable() -> void:
+	var s := _scenario({"map": {}})
+	assert_true(s.is_playable(), "%s" % [s.problems])
+	var cfg := _config(s)
+	assert_not_null(cfg)
+	if cfg == null:
+		return
+	assert_not_null(cfg.map_data, "the saved map is still what travels")
+	assert_eq(cfg.seed, 0, "and nothing pretends there was a seed")
+
+
+## ⚠️ **NOTHING THAT USED TO BE CAUGHT STOPS BEING CAUGHT.** The complaint survives for the case it
+## was written about — a scenario with neither a seed nor a map — and the check that answers it is
+## the one that can actually see the difference.
+func test_a_scenario_with_neither_a_seed_nor_a_map_still_complains() -> void:
+	var s := ScenarioDef.from_dict("homeless", {
+		"name": "T", "map": {}, "opponents": ["passive"],
+	}, "user://test_scenario_launch_nowhere")
+	assert_false(s.is_playable())
+	assert_true(" | ".join(s.problems).contains("no 'seed'"), "%s" % [s.problems])
+
+
 # ── an unplayable scenario refuses, and says what the loader already knew ──────
 
 func test_an_unplayable_scenario_refuses_and_forwards_its_own_problems() -> void:

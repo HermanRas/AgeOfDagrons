@@ -31,6 +31,12 @@
 ##
 ## ⚠️ **DO NOT GROW THIS FILE.** If something here starts needing the generator itself, that is
 ## the tool reaching into content generation. Raise it rather than adding a second stub.
+##
+## 📝 **IT GREW BY ONE LINE FOR 16.8 AND THAT RULE WAS NOT BENT.** `MAX_PLAYERS` is a
+## DECLARATION, which is the only kind of thing this file is for; what the warning above forbids
+## is the generator's *behaviour*. The alternative was putting the cap in the export's own file,
+## which would have been a second opinion about how many players this game supports living one
+## directory from the stand-in that exists to prevent exactly that.
 class_name MapGenerator
 extends RefCounted
 
@@ -39,3 +45,14 @@ extends RefCounted
 ## **MUST MATCH the game's `src/sim/map_generator.gd`, ORDER INCLUDED.** Checked at startup by
 ## declaration, not by hash — see the class comment.
 enum Type { RANDOM, ISLAND, RIVER, DESERT, FOREST, ARCHIPELAGO }
+
+## The most players a map can seat, and therefore the most a scenario may name (16.8).
+##
+## `ScenarioDef._read_opponents` refuses `opponents.size() + 1 > MapGenerator.MAX_PLAYERS`
+## outright, so an export that wrote a ninth player would author a scenario the front door will
+## not open. **Checked rather than assumed to be 8 forever**: the palette offers P1..P8 and
+## `MapDocument.place_start()` puts no upper bound on the player number at all, so the UI is not
+## the guard it looks like.
+##
+## **MUST MATCH the game's `src/sim/map_generator.gd`.**
+const MAX_PLAYERS := 8
