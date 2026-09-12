@@ -243,11 +243,24 @@ func _process(_delta: float) -> void:
 			# obvious. The first render of the Open dialog is why this step exists at all: it came
 			# out titled *"Open a Directory"* with a *"Select Current Folder"* button, opening in
 			# the tool's own source tree, and **all three passed every test**.
-			_show_file_menu()
+			# ⚠️ **16.6's WHOLE VISIBLE SURFACE IS THE NEXT SHOT, AND IT IS THE DENSEST PANEL
+			# IN THE TOOL.** Seven controls, a scrolling list and three lines of prose, on a
+			# plate that has to fit a 900 px window — and every one of its failure modes is a
+			# LAYOUT failure the tests are blind to by construction: a `VBoxContainer` that
+			# overflows rather than scrolling, a summary line that runs off the plate, a form
+			# whose two columns do not line up, a row whose Edit and Remove buttons push the
+			# description out of sight. §6 carries all four as paid-for lessons and not one of
+			# them fails an assertion.
+			_open_the_conditions_editor()
 		27:
+			_report_conditions()
+			_shoot("conditions")
+			_close_the_conditions_editor()
+			_show_file_menu()
+		28:
 			_shoot("file_menu")
 			_provoke_the_exit_question()
-		28:
+		29:
 			_report_exit_question()
 			_shoot("exit_unsaved")
 			print("")
@@ -256,6 +269,92 @@ func _process(_delta: float) -> void:
 			get_tree().quit(0)
 			return
 	_step += 1
+
+
+## ── the Map Conditions editor (PLAN.md 16.6) ────────────────────────────────
+
+## Author three conditions and leave the panel open with one of them loaded for editing.
+##
+## ⚠️ **THROUGH `press_add()` AND THE REAL FORM, NOT BY APPENDING TO `document.objectives`.** The
+## whole question a shot of this panel answers is whether the CONTROLS say what the record says —
+## 16.3's Gaia-versus-player-1 fault, which only a screenshot could see — and a preview that
+## wrote the list directly would photograph a panel nobody had driven.
+##
+## **THE THREE ROWS ARE CHOSEN TO EXERCISE THE WIDEST PART OF EACH CONTROL:** a long `text` for
+## the row list's wrapping, a `ticks` row for the value box's six digits, and an `area` row naming
+## a region the map does not have — which puts `objective_problems()`'s amber sentence in the shot
+## beside the rows it is about.
+func _open_the_conditions_editor() -> void:
+	_editor._file_menu.get_popup().hide()
+	# ⚠️ **DECLARED, NOT INFERRED.** `Editor.tscn`'s root has no `class_name`, so `_editor` is a
+	# bare `Node` here and every call on it returns an untyped Variant — `:=` then fails to parse.
+	# ⛔ **AND A PARSE ERROR IN A `dev/` SCRIPT DOES NOT REPORT ITSELF AS ONE**: the scene fails to
+	# load, `_ready()` never runs, and a headless run spins until the timeout while a windowed one
+	# exits 0 having photographed nothing. 16.4c's `!=`-binds-tighter-than-`as` row is the same
+	# trap; `2>&1` on the run is what shows the one-line cause.
+	var panel: ConditionPanel = _editor.conditions_panel()
+	if panel == null:
+		printerr("  there is no conditions panel -- the shot below is of nothing")
+		return
+	panel.open()
+	for record in [
+		{"subject": "unit", "id": "unit.villager", "owner": "self", "compare": ">=",
+			"value": 10, "output": "win", "text": "Reach ten villagers and hold the crossing"},
+		{"subject": "ticks", "owner": "self", "compare": ">=", "value": 6000,
+			"output": "lose"},
+		{"subject": "area", "area": "the_ford", "owner": "enemy", "compare": "==",
+			"value": 0, "output": "win"},
+	]:
+		panel.fill_form(record)
+		if not panel.press_add():
+			printerr("  the panel refused a row this preview is built on: %s" % panel.message())
+	# ONE ROW LOADED FOR EDITING, so the shot contains the state an author spends most of their
+	# time in -- the Add button reading "Update" and Cancel edit live. A panel photographed only
+	# in its compose state would never show either.
+	panel.press_edit(0)
+	_hold(UI_FRAMES)
+
+
+## The half a screenshot cannot settle, printed beside it.
+##
+## ⚠️ **THE ROW LIST AND THE RECORDS ARE TWO DIFFERENT FACTS AND ONLY THIS CAN COMPARE THEM.** A
+## shot shows sentences; it cannot show that the sentence came from the record the file will
+## carry. `16.4c`'s 📝 note is the standing lesson — *"a checker wrong in the same way as the code
+## is worse than no checker"* — so this prints the stored `subject`/`compare`/`value` beside the
+## rendered line rather than re-rendering the line a second way.
+func _report_conditions() -> void:
+	var panel: ConditionPanel = _editor.conditions_panel()
+	var doc: MapDocument = _editor.document()
+	if panel == null or doc == null:
+		return
+	print("")
+	print("Map conditions: %d row(s), %d win" % [doc.objectives.size(), doc.win_count()])
+	var lines: Array[String] = panel.rows()
+	for i in lines.size():
+		var record: Dictionary = doc.objectives[i]
+		print("  %d. %s" % [i + 1, lines[i]])
+		print("      stored: subject=%s compare=%s value=%s output=%s"
+				% [record.get("subject", ""), record.get("compare", ""),
+				record.get("value", ""), record.get("output", "")])
+	for problem in doc.objective_problems():
+		print("  warns: %s" % problem)
+	# ⚠️ **WHETHER THE PLATE FITS, WHICH IS THE ONE FAULT A SHOT SHOWS AND CANNOT MEASURE.** A
+	# panel taller than the window is cropped by the viewport, so the Done button simply is not in
+	# the picture -- and a cropped screenshot looks like a design decision. Same class as 16.4a's
+	# scenario-5 row clipping at a 900 px dialog.
+	var height: float = panel.size.y
+	var window := float(_editor.size.y)
+	if window > 0.0 and height > window:
+		printerr("  the conditions plate is %d px in a %d px window -- the bottom of it is"
+				% [int(height), int(window)] + " off the screen")
+
+
+## Put it away, so the shots after this one are not photographing a tool with a modal over it.
+func _close_the_conditions_editor() -> void:
+	var panel: ConditionPanel = _editor.conditions_panel()
+	if panel != null:
+		panel.close()
+	_hold(UI_FRAMES)
 
 
 ## ── the File menu and the exit guard (card #93) ─────────────────────────────

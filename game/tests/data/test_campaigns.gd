@@ -11,11 +11,12 @@
 ## "it complained about something" is not the same as "it complained about the right
 ## thing".
 ##
-## The unimplemented subjects matter most. `named_unit` and `ticks` cannot be evaluated yet,
-## and **`== 0` is a comparison an unimplemented subject PASSES** -- so a subject that
+## The unimplemented subjects matter most. `named_unit` cannot be evaluated yet, and
+## **`== 0` is a comparison an unimplemented subject PASSES** -- so a subject that
 ## silently counted zero would announce victory on tick 1 of an unwinnable scenario. That is
-## the failure these tests exist for. `area` was the third until 16.5 and its cases are still
-## here, testing the shape the trap took once the subject became evaluable.
+## the failure these tests exist for. `area` and `ticks` were the other two until 16.5 and
+## 16.6, and both sets of cases are still here, testing the shape the trap took once each
+## subject became evaluable -- a region the map has not got, and a clock that only rises.
 ##
 ## ## IT WRITES REAL FIXTURES INTO `user://content/scenarios/`
 ##
@@ -654,17 +655,22 @@ func test_scenario_fives_briefing_does_not_recommend_what_age_1_cannot_build() -
 
 # ── the subjects that must be REFUSED, not defaulted ────────────────────────────
 
-func test_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_for() -> void:
+func test_named_unit_is_refused_and_says_what_it_is_waiting_for() -> void:
 	# The most important test in this file. `== 0` is a comparison an unimplemented
 	# subject PASSES, so a subject that silently counted zero would announce victory on
 	# tick 1 of a scenario nobody could win.
 	#
-	# ⚠️ **`area` WAS THE THIRD MEMBER OF THIS LIST AND WAS REMOVED BY 16.5** (2026-09-09),
-	# which is the mechanical reminder working as designed: deleting `Subject.AREA` from
-	# `ObjectiveDef._NOT_YET` turned this test red on the run it landed in. Its replacement is
-	# the pair below -- the subject now parses, and the trap moved from "cannot be evaluated" to
-	# "names a region the map has not got".
-	for subject in ["named_unit", "ticks"]:
+	# ⚠️ **THIS LIST HAS NOW LOST TWO OF ITS THREE MEMBERS, EACH TO THE ROW THAT BUILT IT, AND
+	# BOTH TIMES THIS TEST WENT RED AND NAMED IT.** `area` went at 16.5 (2026-09-09) and `ticks`
+	# at 16.6 (2026-09-12), each by one line being deleted from `ObjectiveDef._NOT_YET`. That is
+	# the mechanical reminder working exactly as designed, twice. Each has a replacement pair
+	# below: the subject now parses, and the trap MOVED rather than closing --
+	# to "names a region the map has not got" for `area`, and to "the clock only rises, so `<=`
+	# is true on tick 1" for `ticks`.
+	#
+	# **`named_unit` is the last one left**, and it waits on 16.7 because it is the only one of
+	# the three that needs new per-entity state folded into `state_hash()`.
+	for subject in ["named_unit"]:
 		var problems: Array[String] = []
 		var o := ObjectiveDef.from_dict(
 				{"subject": subject, "compare": "==", "value": 0, "output": "win"}, problems)
@@ -672,6 +678,53 @@ func test_named_unit_and_ticks_are_refused_and_say_what_they_are_waiting_for() -
 		assert_eq(problems.size(), 1, "'%s' reports exactly one reason" % subject)
 		assert_true(problems[0].contains("not evaluable yet"),
 				"'%s' says it is unbuilt rather than unknown: %s" % [subject, problems[0]])
+
+
+func test_ticks_parses_now_and_is_no_longer_refused_as_unbuilt() -> void:
+	# The other half of the test above, and `area`'s counterpart one row down. 16.6 gave
+	# `ObjectiveSystem` the match clock, so `ticks` counts something -- and if it is ever put
+	# back in `_NOT_YET` this fails rather than every authored time limit quietly stopping work.
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "ticks", "compare": ">=", "value": 6000,
+			"output": "lose", "text": "Ten minutes"}, problems)
+	assert_not_null(o, "a ticks objective must parse: %s" % [problems])
+	assert_true(problems.is_empty(), "%s" % [problems])
+	assert_eq(o.subject, ObjectiveDef.Subject.TICKS)
+	assert_eq(o.value, 6000)
+	# NO id AND NO area. A clock is not measured in a place and names no def, so both stay
+	# empty -- `_NAMES_AN_ID` excludes TICKS and `_read_area` refuses a region on it.
+	assert_eq(o.id, &"")
+	assert_eq(o.area, &"")
+
+
+func test_a_ticks_row_cannot_use_at_most_because_that_is_true_on_tick_one() -> void:
+	# ⚠️ **THE ONE REFUSAL IN THIS VOCABULARY THAT IS ABOUT THE COMPARISON AND NOT A FIELD**
+	# (`ObjectiveDef._read_clock`). The clock starts at 0 and only rises, so `ticks <= N` is
+	# satisfied on tick 1 and never again: as a LOSE row it defeats the player before they have
+	# moved, and as a WIN row it latches instantly and then contributes nothing to the AND.
+	# Both are silent, which is why this is a refusal rather than a comment.
+	for output in ["win", "lose"]:
+		var problems: Array[String] = []
+		var o := ObjectiveDef.from_dict(
+				{"subject": "ticks", "compare": "<=", "value": 6000, "output": output}, problems)
+		assert_null(o, "'ticks <= N' as a %s row must not parse" % output)
+		assert_eq(problems.size(), 1, "%s" % [problems])
+		# ASSERTED ON THE SPELLING IT OFFERS, not merely on there being a complaint. An author
+		# who typed `<=` has a real intention, and a refusal that does not say ">= with output
+		# 'lose'" sends them to re-read the schema instead of to the fix.
+		assert_true(problems[0].contains("'>='"), "it names the comparison that works: %s"
+				% problems[0])
+		assert_true(problems[0].contains("lose"), "and the output a time limit wants: %s"
+				% problems[0])
+
+	# `>=` AND `==` BOTH STILL PARSE. `==` is fragile rather than wrong -- it is satisfied on
+	# exactly one tick, which a lose row acts on and a win row latches -- and refusing it would
+	# be the parser guessing at intent rather than refusing a contradiction.
+	for compare in [">=", "=="]:
+		var ok: Array[String] = []
+		assert_not_null(ObjectiveDef.from_dict(
+				{"subject": "ticks", "compare": compare, "value": 6000, "output": "lose"}, ok),
+				"'ticks %s N' must still parse: %s" % [compare, ok])
 
 
 func test_area_parses_now_and_is_no_longer_refused_as_unbuilt() -> void:

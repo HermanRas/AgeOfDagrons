@@ -6,7 +6,7 @@
 ## project as text, hashes them, and **refuses to save** if any has moved on. *A green tool
 ## that writes a stale format is worse than one that will not start.*
 ##
-## ## WHAT IS CHECKED, AND WHY IT IS SIX FILES AND NOT THREE
+## ## WHAT IS CHECKED, AND WHY IT IS NINE FILES AND NOT THREE
 ##
 ## PLAN.md §16 decision 2 originally named a *"format-critical trio: `map_data.gd`, `iso.gd`
 ## and `atlas_entry.gd`, all three pure `RefCounted` maths with no dependencies"*. Every part
@@ -45,6 +45,27 @@
 ##     when 2.4b's rules change, this guard says so, names the file, and `Boot`'s report says
 ##     what to copy. A drifted opinion says nothing at all.
 ##
+##   - `objective_def.gd` — **the ninth, added 2026-09-12 for 16.6, and the only one that is
+##     genuinely dependency-free.** Decision 2's original *"pure `RefCounted` maths with no
+##     dependencies"* claim was wrong about all three files it named; it is true about this one,
+##     which reaches for nothing but its own enums and says so in its own header (*"this class
+##     must not need the registry -- or the map -- to parse a file"*).
+##
+##     ⚠️ **IT IS IN `COPIES` AND NOT IN `PRESENTATION`, AND THE TEST IS WHETHER DRIFT REACHES
+##     THE FILE.** `atlas_entry.gd` is a note because a drifted icon reader writes a
+##     byte-identical map and costs a wrong picture. A drifted **objective** parser is the
+##     opposite: it decides which condition rows the tool accepts, and those rows are written
+##     into `map.json` and exported into a `scenario.json` by 16.8. A tool one revision behind
+##     the game's vocabulary would author conditions the game then refuses -- which is exactly
+##     *"the tool can author maps the game misreads"*, the sentence PLAN.md 11.8a exists to
+##     prevent.
+##
+##     📝 **AND IT IS THE FIRST COPY THAT IS NOT ABOUT A MAP FILE AT ALL.** Everything above
+##     decides what `map.json` MEANS; this decides what a CONDITION means. It is here for
+##     `map_validator.gd`'s reason exactly -- the alternative was a second implementation inside
+##     the tool, and a parser that disagrees with the game's is worse than one that occasionally
+##     needs re-copying.
+##
 ## `atlas_entry.gd` is deliberately **absent**. It is not format-critical — it is ICON
 ## critical — it drags `PlaceholderSpec` behind it, and nothing before 16.3's palette needs
 ## it. It joins `COPIES` on the day the palette does, which is one row in the table below.
@@ -80,6 +101,7 @@ const COPIES := [
 	{"copy": "res://format/resource_def.gd", "origin": "src/data/resource_def.gd"},
 	{"copy": "res://format/game_defs.gd", "origin": "src/data/game_defs.gd"},
 	{"copy": "res://format/map_validator.gd", "origin": "src/sim/map_validator.gd"},
+	{"copy": "res://format/objective_def.gd", "origin": "src/data/objective_def.gd"},
 ]
 
 ## Copies that decide what a map LOOKS LIKE in this tool, not what it MEANS on disk.

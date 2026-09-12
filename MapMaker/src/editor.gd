@@ -159,6 +159,16 @@ var _save_roots: HBoxContainer = null
 ## Is a modal up? See the note above on why this is a field and not `_open_win.visible`.
 var _dialog_open := false
 
+## The Map Conditions editor (PLAN.md 16.6).
+##
+## ⚠️ **IT IS NOT A `Window` AND IT IS NOT COUNTED BY `_dialog_open`** — it answers for its own
+## modality through `is_open()`, which `dialog_is_up()` folds in. Two reasons, and the second is
+## the one that would have bitten: a `Window` cannot be popped or report itself visible in the
+## suite, which drives this screen outside a tree; and `close_dialog()` is called from the file
+## dialogs' own `canceled` signals, so routing this panel through the same bool would let
+## dismissing a file picker silently close a half-written condition.
+var _conditions: ConditionPanel = null
+
 ## What `refresh_open_list()` last found. **It no longer backs a list widget** — the `FileDialog`
 ## browses the filesystem itself — but it is still the answer to *"what could be opened"*, which
 ## `Boot`, `profile_editor` and `preview_editor` all report and which the dialog's hint line
@@ -259,6 +269,11 @@ func show_document(doc: MapDocument) -> void:
 	_width.set_value_no_signal(doc.data.size.x)
 	_height.set_value_no_signal(doc.data.size.y)
 	_canvas.show_document(doc)
+	# A DIFFERENT MAP HAS DIFFERENT CONDITIONS (16.6). Without this the panel would go on listing
+	# the last map's win rows and an Update would write them into the new document -- the same
+	# class of stale reference `_refresh_inspector()` below is here to clear.
+	if _conditions != null:
+		_conditions.set_document(doc)
 	# A DIFFERENT MAP HAS A DIFFERENT ENTITY LIST, so an inspector still describing the last
 	# map's selection would be showing a thing that is not on screen. `MapDocument.selected`
 	# starts at -1 on a created or opened document, so this reads that rather than clearing it.
@@ -447,8 +462,26 @@ func close_dialog() -> void:
 
 
 ## Is a modal up? What the `Ctrl+Z` guard asks, and the reason it is a bool — see `_dialog_open`.
+##
+## ⚠️ **THE CONDITIONS PANEL COUNTS, AND IT ASKS THE PANEL RATHER THAN SHARING THE BOOL.** Its
+## text fields are covered by `_typing()`, but its pickers and buttons are not: a Ctrl+Z with the
+## Subject dropdown focused would otherwise undo the MAP behind a dialog whose whole subject is
+## something else — which is this function's existing argument, reached by a control that is not a
+## `LineEdit`.
 func dialog_is_up() -> bool:
-	return _dialog_open
+	return _dialog_open or (_conditions != null and _conditions.is_open())
+
+
+## Open the Map Conditions editor (PLAN.md 16.6).
+func conditions_dialog() -> void:
+	if _conditions == null:
+		return
+	_conditions.open()
+
+
+## The panel, for the tests and `preview_editor`. Null before `_build_ui()` has run.
+func conditions_panel() -> ConditionPanel:
+	return _conditions
 
 
 ## Which dialogs have already been given a starting directory, by their own name.
@@ -1312,6 +1345,16 @@ func _build_ui() -> void:
 	# `_add_root_buttons` reads `_startup`.
 	_build_dialogs()
 
+	# ⚠️ **THE CONDITIONS PANEL IS A SIBLING AND IT IS ADDED LAST, WHICH IS WHAT PUTS IT ON TOP.**
+	# Unlike the two file dialogs it is a `Control` rather than a `Window` (see `ConditionPanel`'s
+	# header), so its stacking is the CHILD ORDER's business and not the viewport's -- exactly the
+	# distinction the comment above draws. Anything added after this would draw over it.
+	_conditions = ConditionPanel.new()
+	# THE STATUS LINE CARRIES THE COUNT, so it has to be told when the list changes. The panel
+	# knows nothing about the editor beyond this signal.
+	_conditions.changed.connect(func() -> void: _refresh_status())
+	add_child(_conditions)
+
 
 func _file_row() -> Control:
 	var box := _panel()
@@ -1365,6 +1408,24 @@ func _file_row() -> Control:
 	row.add_child(_label("x"))
 	_height = _spin(MapDocument.MIN_SIZE, MapDocument.MAX_SIZE, 96)
 	row.add_child(_height)
+
+	# ⚠️ **CONDITIONS SITS WITH NAME AND SIZE, NOT IN THE FILE MENU AND NOT ON THE TOOL ROW.**
+	# All three are facts about the MAP rather than acts on it: a tool paints, a file command
+	# writes, and these three say what the thing being written is. Filing it under File would be
+	# `Fit`'s mistake in reverse — the menu nobody can predict — and putting it beside the brushes
+	# would arm nothing.
+	#
+	# 📝 **IT KEEPS ITS WORD AS WELL AS ITS PICTURE**, which is 16.2a's rule about shortcuts
+	# applied to an icon: *"a shortcut nobody can see is a feature nobody uses"*. This is the only
+	# route to the conditions editor, so a bare glyph would make the whole of 16.6 undiscoverable.
+	row.add_child(_separator())
+	var conditions := _button("Conditions…", func() -> void: conditions_dialog())
+	# THE OWNER'S PICK, 2026-09-12: `lobby_victory.png`, copied into this project's own tree
+	# beside the other thirteen. **The name is kept rather than renamed to `mm_conditions`** —
+	# it is the game's own victory icon and these are victory conditions, so the shared name is
+	# the thread back to where the art came from, which a tool-local rename would cut.
+	ToolIcons.apply(conditions, ToolIcons.texture(ToolIcons.CONDITIONS))
+	row.add_child(conditions)
 
 	# `Fit` KEEPS THE FAR END, with its own divider: it acts on the view rather than on the map's
 	# identity, so it belongs beside neither the menu nor the size boxes.
@@ -1798,6 +1859,19 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 		var regions := _document.area_names().size()
 		bits.append("%d area%s in %d rect%s" % [regions, "" if regions == 1 else "s",
 				_document.data.areas.size(), "" if _document.data.areas.size() == 1 else "s"])
+	# ⚠️ **CONDITIONS ARE THE ONE THING ON A MAP THAT IS COMPLETELY INVISIBLE** (16.6), which is
+	# why they get a slot here at all: a region is at least a magenta wash on the canvas and an
+	# entity is a picture, but an author who OPENS a map has no way to tell it carries three win
+	# rows without going looking for them. Absent when there are none, on `areas`' rule — a line
+	# that always says "0 conditions" spends a slot on nothing.
+	#
+	# **THE WIN COUNT RIDES WITH IT AND IS NOT THE SAME FACT**, `seats` versus `starts` again: a
+	# list with no win row among them is the one shape a scenario can never be won in, and it is
+	# what `objective_problems()` complains about.
+	if not _document.objectives.is_empty():
+		var rows := _document.objectives.size()
+		bits.append("%d condition%s, %d win"
+				% [rows, "" if rows == 1 else "s", _document.win_count()])
 	if hover.x >= 0:
 		# THE NAME COMES FROM `MapDocument.terrain_name()`, which is also what labels an undo
 		# step -- so "tile 40,12 — Water Deep" and "undo paint Water Deep" cannot disagree.

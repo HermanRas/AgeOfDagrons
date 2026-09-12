@@ -78,8 +78,8 @@
 ## guard for it, so this reuses it rather than growing a second one.
 ##
 ## **3. `== 0` IS A COMPARISON AN UNIMPLEMENTED SUBJECT PASSES.** Which is why
-## `ObjectiveDef.from_dict` REFUSES `named_unit` and `ticks` rather than letting
-## them count as zero, and why nothing here has a default branch that returns 0 for a
+## `ObjectiveDef.from_dict` REFUSES `named_unit` rather than letting it
+## count as zero, and why nothing here has a default branch that returns 0 for a
 ## subject it does not know. `_count` returns **-1** for a subject it cannot measure and
 ## `_satisfied` fails every comparison against it -- so a fourth subject added to the
 ## enum without a case here makes its rules fail loudly instead of winning on tick 1.
@@ -92,6 +92,13 @@
 ## and never 0, `MapData.has_area()` exists to keep that distinction askable, and
 ## `ScenarioDef.build_config()` refuses the row outright at launch where there is somebody to
 ## tell. Three defences for one trap because it is the trap that ends investigations.
+##
+## ⚠️ **AND `ticks` (16.6) IS THE SECOND, THROUGH THE COMPARISON RATHER THAN THE SUBJECT.** The
+## clock only rises, so `ticks <= N` is satisfied on tick 1 and never again -- a lose row that
+## defeats the player before they move, or a win row that latches instantly and then counts for
+## nothing. Neither says anything on screen. It is refused at load by `ObjectiveDef._read_clock`,
+## which is the one place it can be, because by the time it reaches `_satisfied` it is simply a
+## comparison that is true.
 class_name ObjectiveSystem
 extends SimSystem
 
@@ -246,6 +253,8 @@ static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary, areas: Dict
 			return _stock_of(w, ids, o.id)
 		ObjectiveDef.Subject.AREA:
 			return _in_area(w, o, areas, ids)
+		ObjectiveDef.Subject.TICKS:
+			return _elapsed(w)
 		_:
 			return -1
 
@@ -366,6 +375,32 @@ static func _in_area(w: SimWorld, o: ObjectiveDef, areas: Dictionary, ids: Array
 		else:
 			total += int((entry["defs"] as Dictionary).get(o.id, 0))
 	return total
+
+
+## The match clock, which is what `subject: "ticks"` measures (16.6).
+##
+## ## THE ONLY SUBJECT THAT IGNORES THE OWNER SET, AND THAT IS NOT AN OVERSIGHT
+##
+## Every other row asks *what does somebody have*; this one asks *how long has this been going
+## on*, and the answer is the same number for all eight players. `_count` still resolves `ids`
+## before the match on this branch -- it resolves them for every subject -- and this simply does
+## not read them. Refusing an `owner` on a ticks row was the alternative and is deliberately not
+## done: `owner` DEFAULTS to `self`, unlike `id` and `area`, so refusing it would reject the
+## natural spelling of a row that names no owner at all.
+##
+## ## WHY THERE IS NO NEW STATE HERE, WHICH IS THE WHOLE REASON THIS DEFERRAL WAS CHEAP
+##
+## `SimWorld.tick` is the clock the whole sim already runs on, so this subject adds nothing to
+## `state_hash()`, nothing to the wire and nothing to `SimPlayer`. That is the difference
+## between it and `named_unit` (16.7), which is still refused precisely because it DOES need
+## per-entity state folded into the hash.
+##
+## ⚠️ **IT NEEDS NO GUARD AGAINST AN UNPOPULATED WORLD AND IS STILL COVERED BY ONE.** A clock
+## reads 0 in an empty world, and `>= N` against 0 is false, so this subject cannot produce trap
+## 2's "victory on tick 1" on its own. `process_tick`'s `_world_is_populated` check runs before
+## any of this regardless, which is the belt this subject would not have needed braces for.
+static func _elapsed(w: SimWorld) -> int:
+	return w.tick
 
 
 ## One entity census for the whole tick: `owner_id -> {units, unit_total, buildings,

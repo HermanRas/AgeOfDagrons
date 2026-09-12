@@ -524,6 +524,87 @@ the owner's machine, which is what makes the mistake survivable and worth naming
 from before the project was renamed sits beside the live one, so a session looking in the
 wrong place finds a directory with plausibly stale pictures in it rather than nothing.
 
+### 16.6 — THE MAP CONDITIONS EDITOR, AND `ticks` STOPPED BEING REFUSED. DONE 2026-09-12
+
+Both projects. **Game 2502/2503** (the one failure is §6's `user://content/scenarios/` shadow — the
+owner's data, not a code fault) and **MapMaker 377/377**, up 123.
+
+- ⛔ **THE STORED RECORD IS THE AUTHOR'S WORDS AND NOT `to_dict()`'s INTEGERS, AND GETTING THAT
+  BACKWARDS WOULD NOT HAVE SURFACED UNTIL 16.8.** `ObjectiveDef.to_dict()` is the **wire** form —
+  every enum an int, so the sim never re-parses a `">="`. A `scenario.json` is the opposite and
+  holds words. So `MapDocument.objectives` stores raw dictionaries and `ObjectiveDef.from_dict` is
+  used only to **validate**. Storing parsed defs and writing `to_dict()` back out produces a file
+  of integers the game's own loader cannot read — and the tool looks perfect throughout, because
+  it never re-parses its own output.
+- ⛔ **CONDITIONS LIVE IN THE SIDECAR HEADER, AND `MapData` GAINS NOTHING.** That is the opposite
+  of 16.5's areas and it is the point: a region is part of what a map IS (`MapGen.build_from()`
+  puts it on `SimWorld.areas`), and a win condition is about the MATCH played on it. Nothing in
+  `game/src` reads objectives off a `map.json`; `ScenarioDef` is where the game gets them. A
+  `MapData.objectives` would give the game two sources for one fact — **the two dialects the whole
+  row exists to prevent**, arrived at from the storage side instead of the vocabulary side.
+- ⛔ **`save()` WRITES `"objectives"` EVEN WHEN THE LIST IS EMPTY, AND THE SAVE IS WRONG WITHOUT
+  IT.** `_preserved_header()` filters by what `MapData.to_dict()` derives and it never derives
+  `objectives` — so the OPENED file's rows are sitting in the header at save time. A conditional
+  write means **deleting the author's last condition never reaches the file**: the row returns on
+  reopen, after a save that reported success. This is 16.5's `areas`-written-when-empty trap
+  arriving through the opposite door, and it is the same one line of defence.
+- ⚠️ **`format/objective_def.gd` IS THE NINTH `COPIES` ENTRY AND THE FIRST THAT IS NOT ABOUT A MAP
+  FILE.** It decides what a CONDITION means. It is in `COPIES` and not `PRESENTATION` on one test:
+  **does drift reach the file?** A drifted icon reader costs a wrong picture; a drifted objective
+  parser decides which rows the tool accepts, and those rows are written into `map.json`. It is
+  also the only copy in the tool that is genuinely dependency-free — decision 2's original "pure
+  `RefCounted` maths" claim was wrong about all three files it named and is true about this one.
+- ⚠️ **THE PANEL'S FOUR DROPDOWNS ARE READ OUT OF `ObjectiveDef`'s OWN CONSTANTS, AND THE `_NOT_YET`
+  SUBTRACTION IS THE HALF WORTH COPYING.** `_subject_keys()` is `_SUBJECTS` minus `_NOT_YET`, so a
+  subject the loader refuses cannot be offered and a subject it gains appears **with no edit here**.
+  A written-out list would be the second dialect PLAN.md 11.8a forbids, in the one place nobody
+  would think to diff. Reading a `_`-prefixed const across the project fence is deliberate: the
+  underscore is a convention about the game's own code, and `FormatGuard` makes a rename loud.
+- ⛔ **CONDITIONS ARE IN THE UNDO HISTORY BECAUSE `dirty` WOULD OTHERWISE LIE.** The case against
+  was real — undoing a condition edit changes nothing on the canvas, which is
+  `changes_anything()`'s *"a stack of invisible acts is a Ctrl+Z that appears not to work"*. What
+  settles it is `UndoStack._clean_at`: `undo()` recomputes `dirty` from `at_clean_point()`, so a
+  condition edit outside the stack is erased from that reckoning — **edit a row, paint a tile, undo
+  the tile, and the tool reports no unsaved work with an unsaved condition in it.** An invisible
+  undo step is a confusion; a `dirty` flag that says "saved" about unsaved work is lost work.
+- ⚠️ **`MapEdit` SNAPSHOTS FOUR LISTS NOW AND THE FOURTH IS NOT ON `MapData`**, so `undo_into()` and
+  `redo_into()` **return** the condition list instead of assigning it — and hand the caller's own
+  list straight back when the step recorded nothing, or undoing a paint stroke would delete every
+  condition on the map. One gate for all four (`_lists`), never a flag per list: that file's own ⚠️
+  says a step recording one list and not another would assign an empty entity list on redo.
+- ✅ **`set_objective()` OWED `mark_changed()` AND `MapEdit`'s 📝 NOTE PREDICTED IT A ROW EARLY.**
+  An edit is in place — same list length, same entities, same starts — so `close()`'s size test is
+  blind to it and the step is discarded as a no-op. Second time this project has paid the same
+  toll, after 16.4's move cursor.
+- ⚠️ **`ticks` IS NOW EVALUABLE AND IT IS THE ONLY SUBJECT THAT MOVES IN ONE DIRECTION, WHICH MAKES
+  ONE COMPARISON A TRAP.** `ObjectiveDef._read_clock` **refuses `<=` on a ticks row**: the clock
+  starts at 0, so it is satisfied on tick 1 and never again — instant defeat as a lose row, a dead
+  no-op as a win row, and silent either way. Both working shapes are `>=`: a **time limit** is
+  `>=` + `lose`, *"survive that long"* is `>=` + `win`, and the refusal names both. This is the
+  first refusal in that class about the COMPARISON rather than a field; deleting the function is
+  the whole change if the owner would rather have the footgun.
+- 📝 **THE EVALUATOR IS ONE LINE (`w.tick`) AND THAT IS WHY THIS DEFERRAL WAS THE CHEAPEST OF THE
+  THREE.** No new state, nothing on the wire, nothing in `state_hash()`. `named_unit` is the last
+  one left and is genuinely expensive for the opposite reason. ✅ **Two deferral tests went red on
+  the run it landed in and both named it**, the third and fourth time that mechanism has paid.
+- 📝 **THE TOOL CAN MAKE ONE CHECK NEITHER END OF THE GAME CAN.** `ObjectiveDef` has never seen a
+  map and `ScenarioDef.build_config()` only sees one at launch — so an `area` row naming a region
+  the map has not got reaches a PLAYER there and reaches the **author** here, at the moment they
+  can still fix it. `MapDocument.objective_problems()` is a warning rather than a refusal
+  (16.4b's rule), and it names the regions the map really has, which is what sends somebody to
+  their own typo instead of to the MapMaker.
+- 📝 **THE ICON IS `lobby_victory.png`, THE OWNER'S PICK BY FILENAME** (*"for the icon lets try
+  lobby_victory.png"*). It is the GAME's own victory icon copied into `MapMaker/assets/ui/icons/`,
+  and **the name is deliberately not `mm_conditions`** — the shared name is the thread back to
+  `game/assets/ui/icons/` when the set is next re-cut. A laurel and a crown, and it reads cleanly
+  at `ToolIcons.SIZE`; checked by cropping the shot at 6×, not by assuming.
+- ⛔ **A PARSE ERROR IN `dev/preview_editor.gd` EXITED 0 AND PHOTOGRAPHED NOTHING.** `_editor` is a
+  bare `Node` (`Editor.tscn`'s root has no `class_name`), so every call on it returns an untyped
+  Variant and `var panel := _editor.conditions_panel()` **fails to parse the whole file**. The
+  scene then does not load, `_ready()` never runs — headless that is 16.4c's silent hang, and
+  windowed it is a clean exit 0 with no shots written. **Declare the type; and `2>&1` on the run
+  is what shows the one-line cause.**
+
 ### 16.4c — A WALL'S AXIS REACHES THE FILE. ONE OPTIONAL FIELD, DONE 2026-09-08
 
 The owner asked for both rotations as palette variants and asked *"or is there a deeper data
@@ -2693,24 +2774,23 @@ back into a log of everything shipped, which is the one section where a complete
 costs a reader something. **Do not re-grow it here either.** What follows is a pointer, not a
 copy:
 
-1. **Phase 16, the MapMaker** — where the work is. 16.0, 16.1, 16.2, 16.4b, **16.4a, 16.3 and
-   16.2a (all 2026-09-08)** are done and the owner has authored a map in it. **Next is 16.4** —
-   select / move / edit cursors and drag-to-place walls; single-click placement already landed
-   with the palette, so what is left is the three cursors and `WallPlan`'s axis rule.
-   ⚠️ **16.4's MOVE MUST CALL `MapEdit.mark_changed()`.** It is the first act that edits an
-   entity entry **in place** — same count, same starts, different tile — so the size test that
-   decides whether a step is a no-op cannot see it, and a discarded step is a dragged building
-   that cannot be dragged back. Undo otherwise needs nothing from 16.4: a step records state,
-   so a move, an area and a wall run are all "some tiles and some entities differ".
+1. **Phase 16, the MapMaker** — where the work is, and **the board is the status, not this list**
+   (§2.1). 16.0 through 16.6 are done. What is left in the phase is **16.7** (per-entity overrides
+   and named units — the expensive row, and the only one with real sim cost, since `state_hash()`
+   must fold the overrides in), **16.8** (scenario export, where 15.1's schema gets its second
+   consumer), **16.9** (the HOW-To, written last on purpose) and **16.10**.
+   ⚠️ **`MapEdit.mark_changed()` HAS NOW BEEN OWED TWICE** — by 16.4's move cursor and 16.6's
+   condition edit — and will be owed again. Any act that edits an entry **in place** (same list
+   length, same starts) is invisible to `close()`'s size test, and a discarded step is a change
+   that cannot be taken back. 16.7's whole job is in-place edits, so it owes it on every path.
 2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
    share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
    scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep
    the nest and the mother**, which `test_campaigns` asserts.
 
 Then, in no forced order: Phase 14's AI enemy-blindness; the AI researching anything at all;
-11.2 King of the Hill and Trophy (whose last blocker went with 13.2b's sprite scaling); 12.1b
-reconnect; 12.4 save/load, which is where §11.3's parked Save Game button lives; naval combat;
-a resumable pack download; and 13.2b's claim on the wire.
+11.2 Regicide; 12.1b reconnect; 12.4 save/load, which is where §11.3's parked Save Game button
+lives; naval combat; and a resumable pack download.
 
 ⚠️ **AND THE ONE ITEM WITH A DEADLINE RATHER THAN A WISH: `pack_art_v1.pck` is not built.**
 `build_packs.py` does `campaign` and `map` zips only. The client already handles `art` and

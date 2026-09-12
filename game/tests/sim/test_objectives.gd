@@ -182,6 +182,74 @@ func test_a_resource_row_counts_only_its_own_kind() -> void:
 	assert_eq(w.player_for(1).objective_progress[0], 0)
 
 
+# ── the clock: `subject: "ticks"` (16.6) ────────────────────────────────────────
+
+func test_a_ticks_row_measures_the_match_clock() -> void:
+	# The whole of 16.6's sim half. `SimWorld.tick` is the only thing it reads, which is why
+	# this subject needed no new state, nothing on the wire and nothing in `state_hash()`.
+	w = _world([_row({"subject": "ticks", "value": 5})])
+	_both_armed()
+	for i in range(4):
+		w.step()
+	assert_false(w.match_over, "four ticks is not five")
+	assert_eq(w.player_for(1).objective_progress[0], 4, "and the tracker shows the clock")
+
+	w.step()
+	assert_true(w.match_over, "the clock reached the mark")
+	assert_eq(w.winner_id, 1)
+
+
+func test_a_ticks_lose_row_is_the_time_limit_and_ends_the_match_when_it_runs_out() -> void:
+	# ⚠️ **THE SHAPE `_read_clock`'s REFUSAL POINTS AN AUTHOR AT**, and the reason a time limit
+	# is a LOSE row with `>=` rather than a win row with `<=`: a lose row does not latch, so it
+	# fires on the tick the clock passes the limit, which is what "you have ten minutes" means.
+	w = _world([
+		_row({"subject": "unit", "id": "unit.villager", "value": 99}),
+		_row({"subject": "ticks", "value": 3, "output": "lose"}),
+	])
+	_both_armed()
+	w.step()
+	assert_false(w.match_over, "one tick in, there is still time")
+
+	w.step()
+	w.step()
+	assert_true(w.match_over, "the clock ran out")
+	assert_true(w.player_for(1).defeated)
+	assert_eq(w.player_for(1).defeat_reason, SimPlayer.Defeat.OBJECTIVE_FAILED,
+			"running out of time is failing the objective, not being eliminated")
+	# NOBODY WON. The opponent did not cause this and must not be named the winner --
+	# `_lost`'s existing rule, reached by a new road.
+	assert_eq(w.winner_id, 0)
+
+
+func test_a_ticks_row_is_the_same_number_for_every_player_whatever_the_owner_says() -> void:
+	# ⚠️ **THE ONE SUBJECT THAT IGNORES THE OWNER SET** (`ObjectiveSystem._elapsed`). A clock is
+	# not something somebody HAS, so `enemy` and `self` must read identically -- and if this ever
+	# starts differing, a scenario's time limit has quietly become a per-player thing.
+	var mine := _world([_row({"subject": "ticks", "owner": "self", "value": 4})])
+	var theirs := _world([_row({"subject": "ticks", "owner": "enemy", "value": 4})])
+	_both_armed(mine)
+	_both_armed(theirs)
+	for i in range(3):
+		mine.step()
+		theirs.step()
+	assert_eq(mine.player_for(1).objective_progress[0],
+			theirs.player_for(1).objective_progress[0],
+			"the clock does not belong to anybody")
+	assert_eq(mine.player_for(1).objective_progress[0], 3)
+
+
+func test_an_empty_world_does_not_run_out_the_clock() -> void:
+	# Trap 2 reached through the new subject. Nothing is spawned, so `_world_is_populated` is
+	# false and no row is evaluated at all -- otherwise a bare world would defeat its own player
+	# the moment the tick count passed the limit, with no match in it to lose.
+	w = _world([_row({"subject": "ticks", "value": 2, "output": "lose"})])
+	for i in range(6):
+		w.step()
+	assert_false(w.match_over, "there is no match here to run out of time")
+	assert_false(w.player_for(1).defeated)
+
+
 func test_a_win_row_stays_met_after_the_player_spends_what_met_it() -> void:
 	# ⚠️ **THE RULE THAT COMES FROM A MEASUREMENT RATHER THAN A PREFERENCE.** The pair below
 	# is the one that shipped in scenario 2 for a few hours on 2026-09-02 and was then
@@ -442,11 +510,13 @@ func test_exactly_stops_being_satisfied_when_the_count_passes_it() -> void:
 func test_at_most_zero_is_not_satisfied_by_an_unmeasurable_subject() -> void:
 	# `_count` returns -1 for a subject it cannot measure and `_satisfied` refuses it,
 	# because 0 is a value that PASSES `== 0` and `<= n`. Reached here through a def built
-	# by hand: `ObjectiveDef.from_dict` refuses `named_unit`/`ticks` outright, so this covers
+	# by hand: `ObjectiveDef.from_dict` refuses `named_unit` outright, so this covers
 	# a future subject added to the enum without a case in `_count`.
-	# ⚠️ **THE SUBJECT USED TO BE `AREA` AND 16.5 MADE IT MEASURABLE**, so it is `NAMED_UNIT`
-	# now — a test whose premise is "this subject cannot be counted" has an expiry date, which
-	# is §5's rule about a behaviour test tied to whichever piece of data happens to fit today.
+	# ⚠️ **THE SUBJECT USED TO BE `AREA`, THEN `TICKS`, AND 16.5 AND 16.6 MADE EACH MEASURABLE**,
+	# so it is `NAMED_UNIT` now — a test whose premise is "this subject cannot be counted" has an
+	# expiry date, which is §5's rule about a behaviour test tied to whichever piece of data
+	# happens to fit today. **`named_unit` is the last one there is**, so when 16.7 lands this
+	# test needs a subject that does not exist yet rather than a different member of the enum.
 	var o := ObjectiveDef.new()
 	o.subject = ObjectiveDef.Subject.NAMED_UNIT
 	o.compare = ObjectiveDef.Compare.EXACTLY

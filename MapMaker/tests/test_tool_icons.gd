@@ -1,4 +1,5 @@
-## PLAN.md 16.4d — the 13 committed glyphs, and the four ways wiring them can go wrong quietly.
+## PLAN.md 16.4d — the committed glyphs (13 from the art side's cut, plus 16.6's), and the four
+## ways wiring them can go wrong quietly.
 ##
 ## ## WHY THIS FILE EXISTS AT ALL: `ToolIcons` HAD NO TESTS AND THE ART CHANGED UNDER IT
 ##
@@ -54,7 +55,13 @@ func test_every_declared_glyph_has_a_file_that_loads() -> void:
 	var gone := ToolIcons.missing()
 	assert_true(gone.is_empty(),
 			"missing glyphs %s — run: godot --headless --path MapMaker --import" % [gone])
-	assert_eq(ToolIcons.IDS.size(), 13, "thirteen were cut and committed")
+	# ⚠️ **FOURTEEN, AND THE FOURTEENTH IS NOT FROM THE ART SIDE'S CUT.** Thirteen were cut and
+	# committed for 16.4d; 16.6 added `lobby_victory`, which the owner picked out of the GAME's
+	# icon set by name (2026-09-12) and which was copied into this project's tree beside them.
+	# **The count is asserted rather than the list** so that adding an id without adding a file
+	# fails on the line above rather than here.
+	assert_eq(ToolIcons.IDS.size(), 14, "thirteen cut for 16.4d, plus 16.6's conditions glyph")
+	assert_true(ToolIcons.IDS.has(ToolIcons.CONDITIONS), "%s" % [ToolIcons.IDS])
 
 
 ## Drawn at `SIZE`, square, and not at the source's 100 px.
@@ -92,7 +99,7 @@ func test_an_unknown_id_is_null_rather_than_an_error() -> void:
 
 func test_the_same_id_hands_back_the_same_texture() -> void:
 	assert_eq(ToolIcons.texture(&"mm_undo"), ToolIcons.texture(&"mm_undo"),
-			"cached, so a toolbar redraw does not re-decode and re-filter 13 PNGs")
+			"cached, so a toolbar redraw does not re-decode and re-filter every PNG")
 
 
 # ── the right glyph on the right tool ───────────────────────────────────────

@@ -1,4 +1,4 @@
-## The tool's icon art: 13 pieces, loaded from files (PLAN.md 16.4d).
+## The tool's icon art: 14 pieces, loaded from files (PLAN.md 16.4d, plus 16.6's).
 ##
 ## ## THIS FILE USED TO *DRAW* ITS GLYPHS AND NOW LOADS THEM. THE THREE ARGUMENTS FOR DRAWING
 ## ARE WORTH KEEPING, BECAUSE ONE OF THEM STILL BINDS.
@@ -62,6 +62,14 @@ const SIZE := 24
 const UNDO := &"mm_undo"
 const REDO := &"mm_redo"
 
+## The Map Conditions button (16.6). ⚠️ **THE ONE PIECE IN HERE THAT IS NOT FROM THE ART SIDE'S
+## CUT, AND ITS NAME IS DELIBERATELY NOT `mm_conditions`.** The owner picked it by filename on
+## 2026-09-12 — *"for the icon lets try lobby_victory.png"* — and it is the GAME's own victory
+## icon, copied into this project's tree the way the other thirteen were. Keeping the name is what
+## ties the two copies together: renaming it here would leave a tool-local glyph nobody could
+## match to `game/assets/ui/icons/` when the set is next re-cut.
+const CONDITIONS := &"lobby_victory"
+
 ## Every id this file will answer for, so a typo is a failed test rather than a blank button.
 ## ⚠️ **`cat_buildings_keep` IS IN THE LIST AND IS WIRED TO NOTHING.** The art side's note: Gemini
 ## drew two buildings, the house became `cat_buildings` because a dwelling is what a Buildings tab
@@ -71,6 +79,10 @@ const IDS: Array[StringName] = [
 	UNDO, REDO, &"mm_brush", &"mm_place", &"mm_erase", &"mm_select", &"mm_move",
 	&"cat_buildings", &"cat_units", &"cat_resources", &"cat_terrain", &"cat_areas",
 	&"cat_buildings_keep",
+	# FOURTEEN NOW. `missing()` walks this list and `Boot` prints the result, so a forgotten
+	# `--import` on the new file is visible on the startup report rather than only as a button
+	# with no picture.
+	CONDITIONS,
 ]
 
 ## Resized textures, keyed by id. Built once: `_tool_row()` and the palette each ask for their

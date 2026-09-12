@@ -134,6 +134,54 @@ var selected := -1
 ## remembered exception here.
 var header: Dictionary = {}
 
+## The map's authored win/lose conditions (PLAN.md 16.6), as the AUTHOR'S OWN RECORDS.
+##
+## ## ⚠️ RAW DICTIONARIES AND NOT `ObjectiveDef` OBJECTS, AND THE REASON IS THE WIRE
+##
+## `ObjectiveDef.to_dict()` is the **wire** form: every enum is an int, because the sim must
+## never re-parse a `">="`. A `scenario.json` is the opposite — it holds the words an author
+## typed (`"subject": "unit"`, `"compare": ">="`), and `from_dict` is what turns one into the
+## other. **16.8 exports a `scenario.json`, so what has to survive here is the WORDS.** Storing
+## parsed defs and writing `to_dict()` back out would emit a file of integers that
+## `ObjectiveDef.from_dict` cannot read at all, and the mistake would not show up until the
+## export row.
+##
+## So the records are stored verbatim and `ObjectiveDef.from_dict` is used to **validate** them,
+## never to hold them. That is also what makes `problems()` exact: the tool reports what the
+## game's own loader will say about this file, in the game's own words, rather than an imitation.
+##
+## ## WHERE THEY GO ON DISK, AND WHY IT IS THE SIDECAR HEADER AND NOT `MapData`
+##
+## ⛔ **`MapData` GAINS NOTHING, WHICH IS THE OPPOSITE OF 16.5's AREAS AND DELIBERATE.** A region
+## is part of what a map IS — `MapGen.build_from()` puts it on `SimWorld.areas` and a rule counts
+## what is standing in it. A win condition is about the MATCH played on the map: nothing in
+## `game/src` reads it off a `map.json`, and `ScenarioDef` is where the game gets its objectives
+## from. Putting them in `MapData` would add a field to a hash-copied format file that the game
+## would have two sources for — **the two dialects this whole row exists to prevent**, arrived at
+## from the storage side instead of the vocabulary side.
+##
+## `MapFile.save()` already merges an arbitrary `header` over what it derives, and
+## `_preserved_header()` carries forward every key `to_dict()` does not produce — so `objectives`
+## round-trips through Open → Save with no edit to either. That is the same mechanism `map_type`
+## and `seed` already ride.
+##
+## ⛔ **AND THE TRAP 16.5 PAID FOR, WHICH APPLIES HERE THROUGH THE OTHER DOOR: `save()` WRITES
+## THIS KEY EVEN WHEN THE LIST IS EMPTY.** `_preserved_header()` never filters `objectives` out,
+## because `MapData.to_dict()` does not produce it — so if `save()` wrote the key only when the
+## list had something in it, deleting the author's last condition would leave the OPENED file's
+## conditions in the preserved header, and **the deletion would not reach the file**: the row
+## comes back on reopen after a save that reported success. `MapData.to_dict()` writes `areas`
+## unconditionally for the mirror image of this reason.
+##
+## ## IT IS INERT IN THE GAME UNTIL 16.8, AND THAT IS NOT 16.3's "SILENTLY DROPPED"
+##
+## Nothing in `game/` reads these yet: a saved map carries its conditions and a skirmish played
+## from it is still decided by conquest. **The difference from the Area tab 16.3 refused to ship
+## is that nothing is lost** — the records reach the file, survive a reopen, and are what 16.8
+## writes into a `scenario.json`. What 16.3 forbade was work that vanished behind a successful
+## save. Flagged on the card rather than assumed to be obvious.
+var objectives: Array[Dictionary] = []
+
 
 static func create(size: Vector2i, p_name: String) -> MapDocument:
 	var doc := MapDocument.new()
@@ -184,12 +232,45 @@ static func open(dir_path: String, out_problems: Array[String]) -> MapDocument:
 	# both functions share `_parse_sidecar`, and reaching here means it has already passed.
 	doc.header = MapFile.read_header(dir_path, out_problems)
 	doc.map_name = MapSources.map_name_in(doc.header, dir_path.get_file())
+	doc.objectives = _objectives_in(doc.header)
 	doc.dirty = false
 	# THE FILE IS THE CLEAN POINT, at depth zero. Without this an author who opens a map, makes
 	# two edits and undoes both is told the map is still unsaved -- true of the flag's old
 	# meaning ("has anything been done") and false of the one that matters.
 	doc.history.mark_clean()
 	return doc
+
+
+## The condition rows out of an opened sidecar (16.6). `[]` for a map that has none, which is
+## every map written before this row existed.
+##
+## ## ⚠️ IT TAKES WHAT IT IS GIVEN AND DOES NOT VALIDATE
+##
+## A row that will not parse is **kept and reported**, never dropped. `objective_problems()` and
+## the Conditions panel are where an author is told; silently discarding one would mean opening a
+## hand-written scenario's map, saving it, and finding the condition gone — 16.4a's *"every change
+## made in the tool silently discarded, in a save that reports success"* running the other way.
+## `MapFile` already refuses a sidecar it cannot trust as a whole, so what arrives here is JSON
+## that parsed.
+##
+## ⚠️ **A NON-OBJECT ENTRY IS THE ONE THING DROPPED**, because everything downstream indexes it
+## as a Dictionary and a bare string in that list would crash the panel rather than be reported
+## by it. A map file is untrusted input (`MapFile`'s own header), so this is the boundary.
+##
+## 📝 **JSON GIVES BACK FLOATS AND THAT IS HARMLESS HERE, WHICH IS WORTH SAYING BECAUSE IT
+## USUALLY IS NOT.** `"value": 5` returns as `5.0`, and `ObjectiveDef.from_dict` calls `int()` on
+## it at its own boundary — the conversion is the game's, in the game's file, so the tool does not
+## need a second one. What it does mean is that a re-saved map writes `"value": 5.0`, the same
+## float-widening `16.x-slow-place` found in the preserved `meta` block and flagged for 16.10.
+static func _objectives_in(header: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var raw: Variant = header.get("objectives", [])
+	if not raw is Array:
+		return out
+	for entry in (raw as Array):
+		if entry is Dictionary:
+			out.append((entry as Dictionary).duplicate())
+	return out
 
 
 # ── undo (PLAN.md 16.2a) ────────────────────────────────────────────────────
@@ -230,7 +311,10 @@ func undo() -> String:
 	var step := history.take_undo()
 	if step == null:
 		return ""
-	step.undo_into(data)
+	# THE CONDITIONS COME BACK AS A RETURN VALUE, because they are the one list that is not on
+	# `MapData` -- see `objectives` and `MapEdit.undo_into()`. A step that recorded no lists hands
+	# `objectives` straight back, so a paint step leaves the conditions alone.
+	objectives = step.undo_into(data, objectives)
 	# ⚠️ **THE SELECTION GOES, because a step replaces the entity list from a snapshot** that may
 	# be a different length and a different order. Keeping the index would point the inspector at
 	# whatever now sits at that position -- and the author's next owner change would land on it,
@@ -245,7 +329,7 @@ func redo() -> String:
 	var step := history.take_redo()
 	if step == null:
 		return ""
-	step.redo_into(data)
+	objectives = step.redo_into(data, objectives)
 	clear_selection()                     # same reason as `undo()`
 	dirty = not history.at_clean_point()
 	return step.describe()
@@ -278,7 +362,7 @@ func _flush() -> void:
 	_step = null
 	# SEALED HERE AND NOWHERE ELSE -- `MapEdit.close()` explains why the "after" snapshot cannot
 	# be left to the six mutations to remember.
-	step.close(data)
+	step.close(data, objectives)
 	if step.changes_anything():
 		history.push(step)
 
@@ -338,7 +422,7 @@ func place_start(player: int, centre: Vector2i) -> bool:
 	# a re-placed start restores the cluster that was there instead of leaving the map with
 	# neither. `MapEdit.lists_before()`'s guard is what makes the nesting safe.
 	var mine := _open("place P%d's start" % player)
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	remove_start(player)
 	while data.starts.size() < player:
 		data.starts.append(Vector2i(-1, -1))
@@ -392,7 +476,7 @@ func place_start(player: int, centre: Vector2i) -> bool:
 ## work sixty tiles away is not in that category.
 func remove_start(player: int) -> void:
 	var mine := _open("clear P%d's start" % player)
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	# ⚠️ **READ BEFORE IT IS CLEARED.** The centre below is the OLD one — what the owner clause
 	# measures distance from — and the next three lines are what erase it. `place_start()` writes
 	# the new centre only after this function returns, so this is the one window it is readable in.
@@ -497,7 +581,7 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 	# than an empty step -- the author's next Ctrl+Z should reach the last thing that landed,
 	# not the last thing they tried.
 	var mine := _open("place %s" % GameDataRegistry.display_name(def_id))
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	data.add_entity(def_id, player, tile, size_class, axis)
 	dirty = true
 	if mine:
@@ -536,7 +620,7 @@ func remove_entity_at(tile: Vector2i) -> int:
 		# THE SNAPSHOT IS TAKEN HERE, after `kept` is built and before it is assigned, which is
 		# the only window in which `data.entities` still holds the state to restore.
 		var mine := _open("erase %d thing%s" % [removed, "" if removed == 1 else "s"])
-		_step.lists_before(data)
+		_step.lists_before(data, objectives)
 		data.entities = kept
 		clear_selection()                 # the list shrank; see `selected`
 		dirty = true
@@ -580,7 +664,7 @@ func add_area(name: StringName, rect: Rect2i) -> bool:
 	if not data.in_bounds(rect.position) or not data.in_bounds(rect.end - Vector2i.ONE):
 		return false
 	var mine := _open("area %s" % clean)
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	if not data.add_area(clean, rect):
 		# UNREACHABLE THROUGH THE GUARDS ABOVE, and it still puts the step back rather than
 		# leaving one open: `_flush()` on an empty step pushes nothing (`changes_anything()`),
@@ -607,7 +691,7 @@ func remove_area_at(tile: Vector2i) -> int:
 	if at < 0:
 		return 0
 	var mine := _open("erase area %s" % data.areas[at].get("name", &""))
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	data.areas.remove_at(at)
 	dirty = true
 	if mine:
@@ -633,6 +717,176 @@ func area_index_at(tile: Vector2i) -> int:
 ## Every region name on the map, in first-appearance order. What the palette's Areas tab lists.
 func area_names() -> Array[StringName]:
 	return data.area_names()
+
+
+# ── conditions: the authored win/lose vocabulary (PLAN.md 16.6) ─────────────
+
+## Add one condition row. False and a sentence in `out_problems` when it will not parse.
+##
+## ## ⚠️ IT IS VALIDATED BY THE GAME'S OWN LOADER, WHICH IS THE WHOLE POINT OF THE ROW
+##
+## `format/objective_def.gd` is a hash-checked verbatim copy, so what refuses a bad row here is
+## the exact function that will read the exported `scenario.json` — same messages, same edge
+## cases, same refusals. PLAN.md 11.8a's requirement is *"one language, written down once"*, and
+## a tool that validated with its own imitation of that parser would be the second dialect the
+## requirement forbids, written in the one place nobody would look for it.
+##
+## ## WHY A PARSE FAILURE IS REFUSED HERE AND "NO WIN ROW" IS ONLY WARNED ABOUT ON SAVE
+##
+## 16.4b's rule, applied to a third thing: **a row that cannot parse is a corrupt record and a
+## list with no win row is an unfinished map.** A record `ObjectiveDef` rejects can never mean
+## anything to anybody, and there is a person standing right here to tell — `add_entity()`
+## refusing an overlap is the same call. Whereas an author who adds their lose row before their
+## win row has a perfectly ordinary half-finished list, and a tool that refused it would be
+## refusing to let them work. That one is `objective_problems()`, reported by `save()` beside
+## `MapValidator`'s.
+##
+## ⚠️ **THE REGION ON AN `area` ROW IS NOT CHECKED HERE EITHER, AND THAT IS NOT AN OVERSIGHT.**
+## `ObjectiveDef` has never seen a map and says so at length; an author may also legitimately
+## write the condition before dragging the region. It is `objective_problems()`.
+func add_objective(record: Dictionary, out_problems: Array[String]) -> bool:
+	if not _parses(record, out_problems):
+		return false
+	# OPENED AFTER THE REFUSAL, `add_entity()`'s rule: a rejected row records nothing at all,
+	# so the author's next Ctrl+Z reaches the last thing that actually landed.
+	var mine := _open("add %s condition" % _output_word(record))
+	_step.lists_before(data, objectives)
+	objectives.append(record.duplicate())
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Replace row `at`. False and a sentence when the new record will not parse.
+##
+## ⚠️ **IT CALLS `mark_changed()`, FOR `move_selected()`'s REASON EXACTLY.** This edits a row in
+## place: same list length, same everything else, different fields — and `MapEdit.close()`'s test
+## is a SIZE comparison, which cannot see it. Without this the step is discarded as a no-op and
+## an edited condition cannot be taken back. That file's own 📝 note predicted this row would owe
+## it.
+##
+## **THE LIVE RECORD IS REPLACED RATHER THAN MUTATED**, so a caller holding the old dictionary
+## cannot write through it afterwards and reach the map behind the undo stack — `selected_entity()`
+## hands out a live dictionary deliberately and this deliberately does not, because a condition
+## row has no inspector reading fields off it frame by frame.
+func set_objective(at: int, record: Dictionary, out_problems: Array[String]) -> bool:
+	if at < 0 or at >= objectives.size():
+		return false
+	if not _parses(record, out_problems):
+		return false
+	if objectives[at] == record:
+		# NOT A STEP AND NOT A FAILURE, `move_selected()`'s rule: re-confirming a dialog without
+		# changing anything must not put an invisible entry on the stack.
+		return true
+	var mine := _open("edit %s condition" % _output_word(record))
+	_step.lists_before(data, objectives)
+	objectives[at] = record.duplicate()
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Take row `at` off the map. Returns how many went (0 or 1).
+func remove_objective(at: int) -> int:
+	if at < 0 or at >= objectives.size():
+		return 0
+	var mine := _open("remove %s condition" % _output_word(objectives[at]))
+	_step.lists_before(data, objectives)
+	objectives.remove_at(at)
+	dirty = true
+	if mine:
+		_flush()
+	return 1
+
+
+## Would the game's loader accept this record? The reason goes in `out_problems`.
+##
+## `ObjectiveDef.from_dict` appends every complaint it has rather than returning one, which is
+## why this passes the caller's array straight through — an author fixing one typo per attempt is
+## an author pressing Add five times.
+static func _parses(record: Dictionary, out_problems: Array[String]) -> bool:
+	return ObjectiveDef.from_dict(record, out_problems) != null
+
+
+## `win` / `lose` / `alert` for a step label, defaulting the way `ObjectiveDef` does.
+static func _output_word(record: Dictionary) -> String:
+	return str(record.get("output", "win")).to_lower()
+
+
+## How many rows end the match in the author's favour. `ScenarioDef` refuses a `scenario` with
+## none, so this is the figure the Conditions panel puts in front of a person.
+func win_count() -> int:
+	var n := 0
+	for r in objectives:
+		if _output_word(r) == "win":
+			n += 1
+	return n
+
+
+## What is wrong with the condition list as a whole. Empty is the healthy answer.
+##
+## ## THESE ARE WARNINGS, NOT REFUSALS — `MapDocument.warnings`' distinction, a third time
+##
+## Both checks below describe an unfinished map rather than a corrupt file, and 16.4b's rule is
+## that the tool must not refuse to WRITE over an opinion about the map. An author who closes the
+## tool with one lose row drafted has lost nothing; an author refused a save has lost the session.
+##
+## ## ⚠️ THE FIRST CHECK IS THE CARD'S, AND WHAT IT DELIBERATELY DOES NOT ASK FOR IS A LOSE ROW
+##
+## PLAN.md 16.6: *"it validates that there is at least one WIN and does not ask for a lose — the
+## README's 'at least one lose condition' requirement is dropped, because owning nothing is
+## defeat on every map in this game whatever it declares."* So a map with **no conditions at all**
+## is silent here: its answer is *"beat them"*, which is what `LAST_MAN_STANDING` already means,
+## and `ScenarioDef` refuses a `last_man_standing` scenario that carries objectives. A list that
+## has rows but no win row is the one shape that can never be won.
+##
+## ## ⚠️ AND THE SECOND IS THE ONE ONLY THIS TOOL CAN MAKE EARLY
+##
+## An `area` row naming a region the map has not got counts **0 forever** — `ObjectiveDef`'s own
+## header calls it the `stock.get(&"foood", 0)` failure wearing a place, an unwinnable scenario
+## whose only symptom is that nothing happens. `ScenarioDef.build_config()` already refuses it at
+## launch, which is the defence that reaches a player. **This is the one that reaches the
+## AUTHOR**, at the moment they can still fix it, and it is possible here for the one reason it
+## is impossible in `ObjectiveDef`: this is the only place in either project where the conditions
+## and the map are open in front of the same person.
+##
+## It asks `MapData.has_area()` — the same function `build_config()` asks — so it is one opinion
+## reached from two places rather than a second implementation.
+func objective_problems() -> Array[String]:
+	var out: Array[String] = []
+	if not objectives.is_empty() and win_count() == 0:
+		out.append("this map has %d condition(s) and none of them is a win"
+				% objectives.size()
+				+ " -- a scenario with no win row can never be won."
+				+ " Add one, or remove them all to mean 'beat them'")
+	for i in objectives.size():
+		var record: Dictionary = objectives[i]
+		if str(record.get("subject", "")).to_lower() != "area":
+			continue
+		# STRIPPED THE WAY `ObjectiveDef._read_area` STRIPS IT, and matched verbatim after that.
+		# Folding or trimming differently at either end would author a region the scenario can
+		# never find -- `MapDocument.add_area()`'s note is the other half of this rule.
+		var name := StringName(str(record.get("area", "")).strip_edges())
+		if data.has_area(name):
+			continue
+		var names := data.area_names()
+		var have := "this map declares no regions at all"
+		if not names.is_empty():
+			have = "this map declares %s" % ", ".join(_as_strings(names))
+		out.append("condition %d counts things in '%s' and %s" % [i + 1, name, have])
+	return out
+
+
+## `Array[StringName]` as plain strings, for `join`. `PackedStringArray` will not take
+## StringNames directly.
+static func _as_strings(names: Array[StringName]) -> PackedStringArray:
+	var out := PackedStringArray()
+	for n in names:
+		out.append(String(n))
+	return out
 
 
 # ── select, move, edit: the three cursors (PLAN.md 16.4) ────────────────────
@@ -759,7 +1013,7 @@ func move_selected(to: Vector2i) -> bool:
 	var carried := _starts_inside(e) if _is_town_centre(e) else ([] as Array[int])
 
 	var mine := _open("move %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	# THE LIVE DICTIONARY IS EDITED IN PLACE, which is safe only because `MapEdit._copied()`
 	# duplicates each entity DICTIONARY and not just the array. Without that the snapshot and
 	# the map would share this dictionary and undo would restore the building to where it had
@@ -794,7 +1048,7 @@ func set_selected_owner(player: int) -> bool:
 	if int(e.get("player", 0)) == player:
 		return false
 	var mine := _open("owner of %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	e["player"] = player
 	# IN PLACE AGAIN, so the same rule as `move_selected` applies: the size test is blind to it.
 	_step.mark_changed()
@@ -825,7 +1079,7 @@ func set_selected_size_class(size_class: int) -> bool:
 	if not _fits(probe, e.get("tile", Vector2i.ZERO), selected):
 		return false
 	var mine := _open("size of %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
-	_step.lists_before(data)
+	_step.lists_before(data, objectives)
 	e["size_class"] = size_class
 	_step.mark_changed()
 	dirty = true
@@ -950,6 +1204,14 @@ func save(maps_dir: String) -> Array[String]:
 	# already a row out of date by 16.4a -- a hardcoded phase number in a written file is a
 	# lie with a delay on it, and nothing reads this but a person wondering who wrote the map.
 	side["authored_by"] = AUTHORED_BY
+	# ⛔ **WRITTEN EVEN WHEN EMPTY, AND THE SAVE IS WRONG WITHOUT THAT.** `_preserved_header()`
+	# filters out what `MapData.to_dict()` derives, and it never derives `objectives` -- so the
+	# OPENED file's conditions are sitting in `side` right now. Writing this key only when the
+	# list had something in it would mean deleting the author's last condition never reached the
+	# file: the stale row would be written straight back and would return on reopen, after a save
+	# that reported success. See the `objectives` field, and `MapData.to_dict()`'s `areas`, which
+	# is unconditional for the mirror image of this reason.
+	side["objectives"] = objectives
 	problems = MapFile.save(data, target, side)
 	if problems.is_empty():
 		dir = target
@@ -964,6 +1226,11 @@ func save(maps_dir: String) -> Array[String]:
 		# an opinion, and 16.3's palette is where a deliberate hand-built economy stops
 		# looking thin.
 		warnings = StartLayout.audit(data)
+		# THE CONDITIONS GO BETWEEN THE TWO, which is where they sit on the narrow-to-fatal run
+		# this list is ordered by: an unwinnable scenario is worse than a thin start and better
+		# than a map the lobby will not start at all. See `objective_problems()` for why these
+		# are warnings.
+		warnings.append_array(objective_problems())
 		# ⚠️ **AND THEN THE GAME'S OWN GATE, WHICH IS THE OTHER HALF OF 16.4b AND THE HALF
 		# THAT COULD NOT BE WRITTEN HERE.** `StartLayout.audit` knows whether a start got its
 		# opening; it has no idea whether the two starts can REACH each other, whether two
