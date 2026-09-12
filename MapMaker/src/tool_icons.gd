@@ -189,16 +189,31 @@ static func forget() -> void:
 
 static func _load(id: StringName) -> Texture2D:
 	var path := "%s/%s.png" % [DIR, id]
-	# ⚠️ **`FileAccess.file_exists` AND NOT `ResourceLoader.exists`.** 16.3 measured the second one
-	# answering TRUE for a file `load()` returns null for, and the guard has to be able to tell a
-	# missing PNG (somebody deleted the art) from a missing import (somebody skipped `--import`) —
-	# they want different sentences, and only the first is answerable before the load.
-	if not FileAccess.file_exists(path):
+	# ⚠️ **THE LOAD COMES FIRST AND `FileAccess.file_exists` ONLY PICKS THE SENTENCE, BECAUSE AN
+	# EXPORT DELETES THE `.png`** (measured 2026-09-12 on the owner's exported `MapMaker.exe`).
+	# An export replaces `foo.png` with the imported `.ctex` plus a `foo.png.remap`, so `load()`
+	# works and `FileAccess.file_exists` is FALSE — the guard that used to run first was true for
+	# every one of these fourteen icons in every exported build, and all fourteen buttons fell back
+	# to their word with nothing on screen saying why. It cost nothing in the editor, where the
+	# source PNG is right there, which is exactly why it survived four months.
+	#
+	# ⚠️ **IT TAKES BOTH QUESTIONS TO GET A NO, AND NEITHER ONE ALONE IS TRUSTED.** In an export
+	# `FileAccess` says no and `ResourceLoader` says yes; on a checkout with the art deleted both
+	# say no; and 16.3's measurement — `ResourceLoader.exists` answering TRUE for a file `load()`
+	# returns null for — means a yes from it is not proof either. So the pair is the guard: give
+	# up only when BOTH deny the file, and let `load()` settle every case where they disagree.
+	# That keeps the missing-art path silent (the reason this function did not simply call
+	# `load()` first: an absent file makes the engine log an error before we can say anything
+	# useful about it) while an export, where only `ResourceLoader` can see the icon, still draws.
+	if not ResourceLoader.exists(path) and not FileAccess.file_exists(path):
 		_warn(id, "no file at %s" % path)
 		return null
 	var res := load(path)
 	if res == null or not (res is Texture2D):
-		_warn(id, "%s did not load — run: godot --headless --path MapMaker --import" % path)
+		if not FileAccess.file_exists(path):
+			_warn(id, "no file at %s" % path)
+		else:
+			_warn(id, "%s did not load — run: godot --headless --path MapMaker --import" % path)
 		return null
 	var img := (res as Texture2D).get_image()
 	if img == null:

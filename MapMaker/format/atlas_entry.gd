@@ -226,6 +226,111 @@ func frame_at(name: StringName, facing: int, frame: int) -> Dictionary:
 func texture(page: int) -> Texture2D:
 	if page < 0 or page >= pages.size():
 		return null
-	if _textures[page] == null and ResourceLoader.exists(pages[page]):
-		_textures[page] = load(pages[page]) as Texture2D
+	if _textures[page] == null:
+		_textures[page] = page_texture(pages[page])
 	return _textures[page]
+
+
+## ⛔ **A PAGE IS DECODED FROM ITS PNG AND IS NEVER A `load()`, AND THAT IS THE ART PACK'S
+## DOING.** This was `if ResourceLoader.exists(p): load(p)` until 2026-09-12.
+##
+## `art_base_v1.zip` is a plain zip mounted with `ProjectSettings.load_resource_pack()`
+## -- a `.pck` is Godot's own container and a zip is what the owner asked for, and the engine
+## takes either. **The files inside it are NOT imported resources.** There is no `.import`
+## sidecar and no `.godot/imported/*.ctex`, because nothing in Godot ever saw them: they were
+## zipped by `tools/build_packs.py`, in Python, off the staged tree.
+##
+## Measured on 4.7.1 against a real mounted zip, all four in one run:
+##
+##   | `load_resource_pack()` on a zip   | **true** -- it mounts |
+##   | `FileAccess` / `DirAccess`        | see the files         |
+##   | `Image` decode from the bytes     | 64x64 RGBA8, fine     |
+##   | `ResourceLoader.exists` / `load()`| **false**, and `load()` pushes an engine error |
+##
+## So the old line returned `null` for every pack-delivered page. ⚠️ **AND THE FAILURE WOULD
+## NOT HAVE BEEN THE MAGENTA PLACEHOLDER**, which is the thing that makes it worth this many
+## lines: the placeholder branch is chosen in `GameDataRegistry._resolve` by whether the
+## `.atlas.json` PARSED, and the JSON parses perfectly -- `FileAccess` reads it out of the zip.
+## Every unit in the game would have drawn *nothing at all*, with no warning anywhere.
+##
+## ⚠️ **THE RAW ROUTE IS THE ONLY ROUTE ON PURPOSE, INCLUDING IN THE EDITOR.** Keeping
+## `ResourceLoader` as a first attempt would work here -- the staged tree IS imported on this
+## workstation -- and that is exactly the objection: the editor would take the imported path,
+## the phone would take the zip path, and **nothing anybody runs before shipping would ever
+## execute what ships.** One path, and a red suite is the report. §5's rule about a check that
+## cannot see the fault it is for, applied to a code path instead of a test.
+##
+## Costs nothing measurable: the atlases import at the default 2D settings -- lossless, no
+## mipmaps -- so a `CompressedTexture2D` was already RGBA8 in VRAM by the time it drew.
+static func page_texture(path: String) -> Texture2D:
+	if path.is_empty():
+		return null
+	if _page_cache.has(path):
+		return _page_cache[path]
+	# Asked before loading rather than after: a missing path is an engine error from either
+	# loader, and a clean checkout has no atlases at all -- a normal state (`_load_atlas`'s
+	# rule) that must not fill the log.
+	if not FileAccess.file_exists(path):
+		return null
+
+	# ⛔ **THE BYTES ARE READ AND DECODED, RATHER THAN `Image.load_from_file(path)`.** That
+	# call was the first version and it is wrong here in a way that only shows on a
+	# workstation, which is the worst place for a difference to live.
+	#
+	# `Image::load()` warns *"Loaded resource as image file, this will not work on export"*
+	# whenever `ResourceLoader::exists()` is true of the path -- i.e. whenever an `.import`
+	# sidecar is beside it. On a machine with the staged tree that is EVERY atlas page: 170
+	# warnings a run, each one naming a real hazard that does not apply, burying anything
+	# that does. On a device it never fires, because a zip member has no sidecar.
+	#
+	# So the two environments would have disagreed about the log while agreeing about the
+	# pixels. `FileAccess` + a buffer decode has no such heuristic: it reads the same bytes
+	# from a staged file and from a mounted zip and says nothing about either.
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		push_warning("AtlasEntry: '%s' is empty or unreadable" % path)
+		return null
+	var img := Image.new()
+	var err := _decode(img, path.get_extension().to_lower(), bytes)
+	if err != OK:
+		push_warning("AtlasEntry: '%s' did not decode (error %d)" % [path, err])
+		return null
+	var tex := ImageTexture.create_from_image(img)
+	_page_cache[path] = tex
+	return tex
+
+
+## Decode by EXTENSION, from a table, because the buffer loaders are one per format and
+## there is no sniffing helper. isobake writes PNG and has always written PNG -- the other
+## two rows are here so that changing that is one line rather than a fault that presents as
+## every sprite in the game vanishing at once.
+static func _decode(img: Image, extension: String, bytes: PackedByteArray) -> int:
+	match extension:
+		"png":
+			return img.load_png_from_buffer(bytes)
+		"webp":
+			return img.load_webp_from_buffer(bytes)
+		"jpg", "jpeg":
+			return img.load_jpg_from_buffer(bytes)
+		_:
+			return ERR_FILE_UNRECOGNIZED
+
+
+## Page path -> texture, for the whole process.
+##
+## **This replaces a dedupe that came free and is now ours to do.** `load()` went through
+## Godot's resource cache, so two entries naming one page shared one texture -- which is not
+## a curiosity here: `vis.dragon_baby` and `vis.dragon_rigged` are the same atlas at two
+## scales (13.2b), and every `variants` list is several ids over shared art. Decoding a 7.7 MB
+## page twice is the cost of leaving this out, and nothing would report it.
+##
+## Held for the life of the process, which is the lifetime the old code already had:
+## `GameDataRegistry._resolved` never drops an entry and `_textures` never drops a page.
+static var _page_cache: Dictionary = {}
+
+
+## Drop every decoded page. Called when an art pack is mounted mid-session
+## (`GameDataRegistry.load_all(true)`), because a page cached from the placeholder-era path
+## would otherwise outlive the art arriving.
+static func forget_pages() -> void:
+	_page_cache.clear()

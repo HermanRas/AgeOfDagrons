@@ -1930,7 +1930,17 @@ func _refresh_status(problems: Array[String] = [] as Array[String]) -> void:
 	if not _startup.can_save():
 		# THE REASON, not a generic banner. Three different faults with three different
 		# fixes, and the playtest that found this had the one message blaming the wrong one.
-		bits.append("SAVING DISABLED — %s" % _startup.reason)
+		#
+		# ⚠️ **FIRST IN THE LINE AND NOT LAST, BECAUSE APPENDED IT WAS THE PART THAT GOT CUT
+		# OFF** (owner's exported build, 2026-09-12). The sentence naming the fault was on
+		# screen and unreadable: an exported `MapMaker.exe` could not find the game project,
+		# so the palette held nothing but `Player Start` and every icon fell back to a word,
+		# and the line that said so ran off the right edge of the window as
+		# `… brush: Grass  SAVING DISAB`. It cost half an hour of hunting for a fault the tool
+		# had already diagnosed. The row's own header rejects `clip_text` and `autowrap` for
+		# reasons that still hold; ORDER costs nothing and is not one of them — whatever the
+		# window is too narrow to show, it is no longer the diagnosis.
+		bits.insert(0, "SAVING DISABLED — %s" % _startup.reason)
 	elif _startup.guard != null and not _startup.guard.presentation_ok():
 		# ⚠️ **A NOTE AND NOT A REFUSAL, which is the whole point of `PRESENTATION`.** A
 		# drifted icon reader writes a byte-identical map file; what it costs is a wrong

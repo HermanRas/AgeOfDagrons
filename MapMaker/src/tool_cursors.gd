@@ -228,14 +228,19 @@ static func forget() -> void:
 
 static func _load(id: StringName) -> Texture2D:
 	var path := "%s/%s.png" % [DIR, id]
-	# `FileAccess.file_exists` and NOT `ResourceLoader.exists`, on 16.3's measurement that the
-	# second one answers TRUE for a file `load()` returns null for.
-	if not FileAccess.file_exists(path):
+	# ⚠️ **IT TAKES BOTH QUESTIONS TO GET A NO — AN EXPORT DELETES THE `.png`.**
+	# `ToolIcons._load()` carries the measurement and the argument; this file had the identical
+	# guard and therefore the identical fault, and a cursor that silently stays the arrow is even
+	# quieter than a button showing its word.
+	if not ResourceLoader.exists(path) and not FileAccess.file_exists(path):
 		_warn(id, "no file at %s" % path)
 		return null
 	var res := load(path)
 	if res == null or not (res is Texture2D):
-		_warn(id, "%s did not load — run: godot --headless --path MapMaker --import" % path)
+		if not FileAccess.file_exists(path):
+			_warn(id, "no file at %s" % path)
+		else:
+			_warn(id, "%s did not load — run: godot --headless --path MapMaker --import" % path)
 		return null
 	var img := (res as Texture2D).get_image()
 	if img == null:
