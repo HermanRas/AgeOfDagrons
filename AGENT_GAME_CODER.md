@@ -239,6 +239,15 @@ $py = "C:\Users\herman.ras\Downloads\AOD_game\tools_env\venv\Scripts\python.exe"
   which ADDS. `.../labels/bulk` REPLACES, so sending only the new label would strip
   `game-code` and leave the card unwritable from this tool — the exact clobber
   `vikunja_sync.py` was deleted for.
+- ⚠️ **THE SERVER IS SLOW AND SOMETIMES DROPS THE CALL, AND A TIMEOUT IS NOT A SILENT WRITE.**
+  Measured 2026-09-12: a `list` takes 2–4 minutes, and three calls in one session died with
+  `ConnectionAbortedError`, `getaddrinfo failed` and `TimeoutError: The read operation timed out`.
+  **Every one of them failed before writing anything** — the traceback's last frame says which
+  request died, and a `Board(Api(...))` constructor failure is `GET /projects`, i.e. before your
+  card was ever touched. **Retry rather than reasoning about it**: `move` is idempotent (Vikunja
+  answers 304 to a PATCH whose fields already hold the values sent) and `append` is not, so re-run
+  a failed `move` freely and `show` before re-running a failed `append`. ➡️ Run board calls in the
+  BACKGROUND; a foreground `list` reads as a hang.
 - **The token in `.env` expires.** Vikunja API tokens carry a mandatory expiry, so a 401
   from `list` is routine maintenance and not a broken board; the tool prints the
   re-minting steps rather than a stack trace. `.env` is gitignored as of 2026-09-01 — it
