@@ -265,7 +265,16 @@ func _process(w: SimWorld, u: SimUnit) -> void:
 		u.attack_cooldown -= 1
 
 	var def := w.unit_def(u.def_id)
-	if def == null or def.attack_damage <= 0:
+	# ⛔ **CAN THIS UNIT FIGHT AT ALL, AND THE MAP GETS A VOTE (16.7).** The gate used to read the
+	# def alone, which made both authored answers wrong in opposite directions: a hero given
+	# `attack: 0` on purpose would have gone on swinging for the def's damage, and a unit whose def
+	# carries no attack could never be armed. `attack_base_of` folds the override in at the one
+	# place that decides, so *"is it armed"* and *"how hard does it hit"* can never disagree.
+	#
+	# ⚠️ **A villager armed by a map is deliberately possible.** It is the shape a scripted hero
+	# built on a civilian actor takes, and refusing it here would be this system holding an opinion
+	# about content.
+	if def == null or attack_base_of(u, def) <= 0:
 		u.stop()
 		return
 
@@ -557,11 +566,34 @@ static func _rect_of(e: SimEntity) -> Rect2i:
 ## upgrades are about blades and bows, and `SimBuilding.attack_damage` is copied off the
 ## def at spawn, so a building bonus would have wanted a retroactivity pass this
 ## deliberately does not have.
+## ⛔ **AND THE MAP MAY HAVE SAID OTHERWISE ABOUT THIS ONE UNIT (16.7).** `attack_override` is the
+## BASE, not a cap and not a replacement for the whole sum: a hero authored at 60 whose owner
+## researches Blast Furnace hits for 64, because the override says what he IS and the smithing
+## ladder is a thing his owner did. **This is the only read of a unit's attack base**, which is
+## what makes one line here enough — `spawn_unit` deliberately does not copy the figure onto the
+## entity, so that a tech researched mid-match reaches units already on the board.
 static func _damage_against(w: SimWorld, attacker: SimUnit, target: SimEntity,
 		def: UnitDef) -> int:
-	var damage := def.attack_damage + TechMods.for_unit(
+	var damage := attack_base_of(attacker, def) + TechMods.for_unit(
 			w.mods_of(attacker.owner_id), def, &"attack_damage")
 	return _damage_after_armour(w, target, damage, def.attack_type)
+
+
+## What one unit's blow is worth BEFORE its owner's upgrades and the target's armour: the map's
+## override if there is one, else the def's figure (PLAN.md 16.7).
+##
+## ⚠️ **`>= 0` AND NOT A TRUTHINESS TEST, because 0 is a real answer.** -1 means *"the def
+## decides"*; 0 means an author deliberately disarmed this one, which `_process` reads as *"it
+## cannot fight"* exactly as a civilian def does. `SimEntity.attack_override` carries the split.
+##
+## **PUBLIC AND STATIC SO THE TWO READERS CANNOT DRIFT.** `_process` asks *"is it armed"* and
+## `_damage_against` asks *"how hard"*, and until 16.7 the second read the def and the first read
+## the def — one function is what keeps them the same question. §6's row about a predicate split in
+## two is the standing warning; this is the same shape caught before it was written.
+static func attack_base_of(u: SimUnit, def: UnitDef) -> int:
+	if u.attack_override >= 0:
+		return u.attack_override
+	return def.attack_damage if def != null else 0
 
 
 ## The same rule with the attacker's def unpacked into two plain values, so a

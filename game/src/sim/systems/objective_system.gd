@@ -253,6 +253,8 @@ static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary, areas: Dict
 			return _stock_of(w, ids, o.id)
 		ObjectiveDef.Subject.AREA:
 			return _in_area(w, o, areas, ids)
+		ObjectiveDef.Subject.NAMED_UNIT:
+			return _named_alive(w, o, ids)
 		ObjectiveDef.Subject.TICKS:
 			return _elapsed(w)
 		_:
@@ -374,6 +376,50 @@ static func _in_area(w: SimWorld, o: ObjectiveDef, areas: Dictionary, ids: Array
 			total += int(entry["total"])
 		else:
 			total += int((entry["defs"] as Dictionary).get(o.id, 0))
+	return total
+
+
+## How many of `ids`' entities carry the row's name and are still alive (PLAN.md 16.7).
+##
+## ## ⛔ -1 WHEN THE MAP NEVER DECLARED THE NAME, AND 0 WHEN HE IS DEAD — THE WHOLE SUBJECT IS
+## THAT DISTINCTION
+##
+## *"Protect Sir Roland"* is `named_unit == 0, output: lose`, so **0 has to be a real answer**:
+## it is the tick the row fires. And a row naming somebody the map has never heard of must NOT
+## answer 0, because `== 0` would then defeat the player before they had moved — trap 3, which
+## `_count`'s *"-1, never 0"* rule exists for.
+##
+## A live count cannot tell those two apart, which is exactly `13.x-claim-dead-end`'s open problem
+## (*"`unit.dragon_baby == 0` is true from tick 1"*). The way out is that **a map declares its
+## heroes**: `SimWorld.named_units` is written once at world build, from the FILE, and a dead
+## hero's name is still in it. So the question *"is this name measurable"* is answered by the map
+## and the question *"is he alive"* by the entity list, and neither has to guess at the other.
+##
+## ⚠️ **A NAME NOTHING ON THE MAP CARRIES IS REFUSED EARLIER AND MORE LOUDLY** by
+## `ScenarioDef.build_config()`, which will not launch and lists the heroes the map does have.
+## This is the second defence: it makes such a scenario unwinnable rather than instantly decided.
+##
+## ## IT WALKS THE ENTITY LIST RATHER THAN TAKING A CENSUS, AND THAT IS A COST DECISION
+##
+## `_census` buckets by owner and def for every row at once because unit and building rows are
+## the common case and a map has hundreds of both. Named units are **ones and twos on an authored
+## map** and no rows at all on every skirmish, so bucketing every entity by name each tick would
+## pay a map-sized cost for a scenario-sized question. The same argument `_area_census` makes in
+## reverse — it buckets because a region row asks about a set, and this asks about a person.
+##
+## **Dead things count for nothing**, `_census`' rule, and it is the load-bearing one here.
+## ⚠️ **A building is NOT required to be complete**, unlike in `_census`: a named building is a
+## place in the story (*"hold the Keep"*), and a foundation of it is still the thing the author
+## pointed at. Said out loud because the two rules genuinely differ.
+static func _named_alive(w: SimWorld, o: ObjectiveDef, ids: Array[int]) -> int:
+	if o.unit_name.is_empty() or not w.named_units.has(o.unit_name):
+		return -1
+	var total := 0
+	for e in w.entities.values():
+		if not e.alive or e.entity_name != o.unit_name:
+			continue
+		if ids.has(e.owner_id):
+			total += 1
 	return total
 
 

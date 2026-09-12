@@ -114,6 +114,12 @@ var _entity_owner: OptionButton = null
 var _entity_size: OptionButton = null
 var _entity_size_label: Label = null
 
+## 16.7's second inspector row: the name, and a `SpinBox` per `MapData.OVERRIDE_KEYS` entry keyed
+## by that same string — so adding an override to the format adds a control here without a fourth
+## field being declared and forgotten.
+var _entity_name: LineEdit = null
+var _entity_overrides: Dictionary = {}
+
 ## True while the inspector is being filled FROM the selection, so the writes it makes to its
 ## own controls do not come back as edits.
 ##
@@ -1646,10 +1652,21 @@ func _entity_row() -> Control:
 	# *"split the content in panel 3 50/50 aswell"*). The inspector takes the left half and the
 	# status lines the right, both `SIZE_EXPAND_FILL` at the same stretch ratio — see
 	# `_build_ui()`'s note on what "50/50" can and cannot mean in a `BoxContainer`.
+	# ⛔ **TWO ROWS SINCE 16.7, AND IT IS A SPACE MEASUREMENT RATHER THAN A PREFERENCE.** The left
+	# half is about 800 px at this tool's window size, and the identity label alone is a fixed 260.
+	# A name field plus three number boxes plus their captions does not fit beside the owner and
+	# size pickers — and a `BoxContainer` does not compress past its children's minimums, it
+	# OVERFLOWS (§6), so the controls would have been pushed out of the plate rather than squeezed.
+	# The second row is what makes room, and it groups correctly besides: row one is *what this
+	# entity IS* and row two is *what the map says about this one*.
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 2)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plate_row.add_child(left)
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	plate_row.add_child(row)
+	left.add_child(row)
 
 	_entity_label = Label.new()
 	_entity_label.add_theme_color_override("font_color", _TEXT)
@@ -1690,6 +1707,8 @@ func _entity_row() -> Control:
 		_entity_size.add_item(str(ObjectPalette.SIZE_LABELS[i]), i)
 	_entity_size.item_selected.connect(_on_inspector_size_chosen)
 	row.add_child(_entity_size)
+
+	left.add_child(_authoring_row())
 
 	# ── the status and notice lines, inside this plate ──
 	#
@@ -1776,6 +1795,16 @@ func _refresh_inspector() -> void:
 		_entity_size.disabled = true
 		_entity_size_label.visible = false
 		_entity_size.visible = false
+		# 16.7's ROW GOES BLANK AND DEAD RATHER THAN HOLDING THE LAST SELECTION'S NAME. A field
+		# still showing "Sir Roland" with nothing selected is an invitation to type into it, and
+		# `_commit_entity_name()` would then have nowhere to put the result -- which reads as the
+		# tool losing the name.
+		_entity_name.text = ""
+		_entity_name.editable = false
+		for key in _entity_overrides:
+			var box := _entity_overrides[key] as SpinBox
+			box.set_value_no_signal(MapDocument.unset_override(key))
+			box.editable = false
 	else:
 		var tile: Vector2i = e.get("tile", Vector2i.ZERO)
 		_entity_label.text = "  %s at %d,%d" % [
@@ -1795,6 +1824,23 @@ func _refresh_inspector() -> void:
 		# being broken rather than as the map being odd.
 		_entity_size.select(clampi(int(e.get("size_class", 0)), 0,
 				ObjectPalette.SIZE_LABELS.size() - 1))
+		# ⚠️ **ASSIGNED UNCONDITIONALLY, INCLUDING THE UNSET CASE** — 16.3's rule, and the fault it
+		# is for is exactly this shape: a control filled only when the record HAS the field goes on
+		# showing the previous entity's value, so an author would read one hero's 900 hp off a
+		# villager and, worse, a spin box they never touched would write it there.
+		#
+		# ⚠️ **`set_value_no_signal`, because assigning a `Range` EMITS `value_changed`** — the same
+		# hazard `_filling_inspector` exists for, belt and braces: the flag alone is enough today
+		# and stops being enough the moment anything here awaits.
+		_entity_name.text = String(e.get("name", &""))
+		_entity_name.editable = true
+		for key in _entity_overrides:
+			var box := _entity_overrides[key] as SpinBox
+			box.set_value_no_signal(_document.selected_override(key))
+			# SPEED IS FOR UNITS ONLY, which is what `MapGen._apply_authoring` does with it -- a
+			# castle's speed means nothing. Disabled rather than hidden, `_entity_size`'s rule read
+			# the other way: this row's controls do not move as the selection changes.
+			box.editable = key != "speed" or GameDataRegistry.unit(e.get("def_id", &"")) != null
 	_filling_inspector = false
 
 
@@ -1826,6 +1872,96 @@ func _on_inspector_size_chosen(at: int) -> void:
 			str(ObjectPalette.SIZE_LABELS[clampi(value, 0,
 					ObjectPalette.SIZE_LABELS.size() - 1)]).to_lower()], _WARN)
 	_refresh_inspector()
+
+
+## The inspector's second row: a name and three overrides (PLAN.md 16.7).
+##
+## ## ⛔ THIS IS THE ROW `_entity_row()`'s HEADER SAID COULD NOT EXIST YET, AND THE REASON IS GONE
+##
+## That header's warning was exact: *"offering them here would let an author type a hero's name
+## into a field `MapFile` silently drops"* — 16.3's Area-tab argument, **work lost behind a
+## successful save**. `MapData` carries both keys now and `MapGen.build_from()` applies them, so
+## what the panel offers is what the file keeps and what the match builds.
+##
+## ## ⚠️ SPIN BOXES, AND EACH ONE'S MINIMUM *IS* ITS "UNSET" VALUE
+##
+## `hp` is unset at 0 and the other two at -1, which `MapData.clean_overrides` decides and
+## `MapDocument.unset_override()` is the single reading of. That split is not tidiness: **0 attack
+## and 0 speed are answers an author may mean** — a disarmed unit, a deployed siege engine — and 0
+## hp is not a thing anything alive has. So the attack and speed boxes can reach -1 and the health
+## box cannot, and each box's floor is the value that means *"the def decides"*.
+##
+## 📝 **THE CAPTIONS SAY WHICH FLOOR MEANS WHAT**, because a number box showing 0 is otherwise the
+## same picture on all three rows while meaning two different things. §6's row about a disabled
+## control's reason applies to an enabled one here: the value is visible, the meaning is not.
+func _authoring_row() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+
+	row.add_child(_label("Name"))
+	_entity_name = LineEdit.new()
+	# ⚠️ **SHORT ENOUGH TO FIT 240 px, MEASURED OFF THE SHOT RATHER THAN GUESSED.** The first
+	# version read *"unnamed — a scenario can ask about a named one"* and came out clipped mid-word
+	# at *"…can ask abo"*, which reads as a broken control rather than as a hint. A placeholder that
+	# does not fit is worse than a shorter one, because the half that gets cut is the half that
+	# explains why anybody would type in it.
+	_entity_name.placeholder_text = "unnamed — a scenario can ask"
+	_entity_name.custom_minimum_size = Vector2(240, 0)
+	# ⚠️ **`text_submitted` AND `focus_exited`, NOT `text_changed`.** A name is typed a letter at a
+	# time, and recording each keystroke would put one undo step on the stack PER CHARACTER — which
+	# is 16.2a's *"a stroke across a coastline is hundreds of paint calls"* wearing a text field,
+	# and `UndoStack.LIMIT` would not hold one word. Committing on Enter or on leaving the field is
+	# what makes the whole name one act.
+	_entity_name.text_submitted.connect(func(_t: String) -> void: _commit_entity_name())
+	_entity_name.focus_exited.connect(_commit_entity_name)
+	row.add_child(_entity_name)
+
+	for entry in [
+		{"key": "hp", "caption": "HP", "min": 0, "max": 99999, "hint": "0 = the def's"},
+		{"key": "attack", "caption": "Atk", "min": -1, "max": 9999, "hint": "-1 = the def's"},
+		{"key": "speed", "caption": "Spd", "min": -1, "max": 9999, "hint": "-1 = the def's"},
+	]:
+		var caption := _label("%s" % entry["caption"])
+		caption.tooltip_text = "%s — %s" % [entry["key"], entry["hint"]]
+		row.add_child(caption)
+		var box := SpinBox.new()
+		box.min_value = int(entry["min"])
+		box.max_value = int(entry["max"])
+		box.custom_minimum_size = Vector2(86, 0)
+		box.tooltip_text = caption.tooltip_text
+		var key := str(entry["key"])
+		# `value_changed` IS SAFE HERE AND NOT ON THE NAME FIELD: a spin box commits a whole number
+		# per click or per Enter rather than per keystroke, so one act is one step already.
+		box.value_changed.connect(func(v: float) -> void: _on_override_chosen(key, int(v)))
+		_entity_overrides[key] = box
+		row.add_child(box)
+	return row
+
+
+## Write the name field into the document, if it says something new.
+##
+## Its own function because TWO signals reach it — Enter and leaving the field — and both must do
+## the same thing. `set_selected_name()` answers true for an unchanged name without recording a
+## step, so tabbing through the field costs nothing.
+func _commit_entity_name() -> void:
+	if _filling_inspector or _document == null or _entity_name == null:
+		return
+	if _document.selected_entity().is_empty():
+		return
+	var was := StringName(_document.selected_entity().get("name", &""))
+	if not _document.set_selected_name(StringName(_entity_name.text)):
+		return
+	if StringName(_document.selected_entity().get("name", &"")) != was:
+		_after_entity_edited("NAME")
+
+
+func _on_override_chosen(key: String, value: int) -> void:
+	if _filling_inspector or _document == null:
+		return
+	if _document.selected_entity().is_empty():
+		return
+	if _document.set_selected_override(key, value):
+		_after_entity_edited(key.to_upper())
 
 
 ## After an edit that came from the inspector rather than from the canvas.

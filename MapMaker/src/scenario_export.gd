@@ -421,6 +421,11 @@ func _check_conditions(out: Array[String], doc: MapDocument) -> void:
 	# still carries that scenario's mode, so it would raise a complaint about a file nothing here is
 	# writing. See that function's header for why it is a split rather than a filter.
 	out.append_array(doc.unknown_area_problems())
+	# ⚠️ **AND THE SAME FOR A NAMED HERO (16.7).** `ScenarioDef.build_config()` refuses a row about
+	# somebody the map never named, so exporting one authors a mission whose PLAY button is greyed
+	# — and `ObjectiveSystem` answers -1 rather than 0 for it precisely so the scenario is
+	# unwinnable rather than instantly decided, which is not a state worth shipping either.
+	out.append_array(doc.unknown_name_problems())
 
 
 # ── the two records ─────────────────────────────────────────────────────────

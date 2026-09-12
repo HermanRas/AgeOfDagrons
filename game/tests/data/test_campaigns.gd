@@ -728,29 +728,63 @@ func test_scenario_fives_briefing_does_not_recommend_what_age_1_cannot_build() -
 
 # ── the subjects that must be REFUSED, not defaulted ────────────────────────────
 
-func test_named_unit_is_refused_and_says_what_it_is_waiting_for() -> void:
-	# The most important test in this file. `== 0` is a comparison an unimplemented
-	# subject PASSES, so a subject that silently counted zero would announce victory on
-	# tick 1 of a scenario nobody could win.
-	#
-	# ⚠️ **THIS LIST HAS NOW LOST TWO OF ITS THREE MEMBERS, EACH TO THE ROW THAT BUILT IT, AND
-	# BOTH TIMES THIS TEST WENT RED AND NAMED IT.** `area` went at 16.5 (2026-09-09) and `ticks`
-	# at 16.6 (2026-09-12), each by one line being deleted from `ObjectiveDef._NOT_YET`. That is
-	# the mechanical reminder working exactly as designed, twice. Each has a replacement pair
-	# below: the subject now parses, and the trap MOVED rather than closing --
-	# to "names a region the map has not got" for `area`, and to "the clock only rises, so `<=`
-	# is true on tick 1" for `ticks`.
-	#
-	# **`named_unit` is the last one left**, and it waits on 16.7 because it is the only one of
-	# the three that needs new per-entity state folded into `state_hash()`.
-	for subject in ["named_unit"]:
+## ⛔ **THE LIST IS NOW EMPTY, AND EACH OF ITS THREE MEMBERS LEFT BY MAKING THIS TEST GO RED AND
+## NAME ITSELF.** `area` went at 16.5 (2026-09-09), `ticks` at 16.6 and `named_unit` at 16.7 (both
+## 2026-09-12), each by one line being deleted from `ObjectiveDef._NOT_YET`. **That is the
+## mechanical reminder working exactly as designed, three times for three rows.**
+##
+## The original point stands and is why the mechanism is kept: `== 0` is a comparison an
+## unimplemented subject PASSES, so a subject that silently counted zero would announce victory on
+## tick 1 of a scenario nobody could win.
+##
+## ⚠️ **EACH DEPARTURE HAS A REPLACEMENT PAIR BELOW, BECAUSE THE TRAP MOVED RATHER THAN CLOSING:**
+## *"names a region the map has not got"* for `area`, *"the clock only rises, so `<=` is true on
+## tick 1"* for `ticks`, and *"names somebody the map never called that"* for `named_unit`.
+##
+## ⚠️ **THIS TEST NOW ASSERTS THE EMPTINESS RATHER THAN A MEMBER, and that is not a weaker test.**
+## It is what fails the day a subject is added to `_SUBJECTS` with no evaluator and no entry here —
+## which is the original hazard with the list read from the other end. A test asserting a member
+## would simply have been deleted along with the last one.
+func test_every_declared_subject_is_evaluable_or_refused_by_name() -> void:
+	assert_true(ObjectiveDef._NOT_YET.is_empty(),
+			"a subject waiting on a row must say so: %s" % [ObjectiveDef._NOT_YET])
+	# AND EVERY DECLARED SUBJECT REALLY PARSES, which is the half emptiness alone does not prove:
+	# a subject could be missing from `_NOT_YET` and still have no evaluator. `_count`'s own
+	# `_:` branch answers -1 for that, which is safe and silent, so this is the loud version.
+	for key in ObjectiveDef._SUBJECTS:
+		var row := {"subject": key, "compare": ">=", "value": 1, "output": "win"}
+		# THE THREE SUBJECTS THAT REQUIRE A FIELD OF THEIR OWN get one, because this is asking
+		# whether the SUBJECT is refused as unbuilt rather than whether the row is complete.
+		match ObjectiveDef._SUBJECTS[key]:
+			ObjectiveDef.Subject.AREA:
+				row["area"] = "somewhere"
+			ObjectiveDef.Subject.NAMED_UNIT:
+				row["name"] = "Somebody"
+			ObjectiveDef.Subject.RESOURCE:
+				row["id"] = "food"
 		var problems: Array[String] = []
-		var o := ObjectiveDef.from_dict(
-				{"subject": subject, "compare": "==", "value": 0, "output": "win"}, problems)
-		assert_null(o, "'%s' must not parse into an evaluable objective" % subject)
-		assert_eq(problems.size(), 1, "'%s' reports exactly one reason" % subject)
-		assert_true(problems[0].contains("not evaluable yet"),
-				"'%s' says it is unbuilt rather than unknown: %s" % [subject, problems[0]])
+		var o := ObjectiveDef.from_dict(row, problems)
+		assert_not_null(o, "subject '%s' should parse: %s" % [key, problems])
+		for p in problems:
+			assert_false(p.contains("not evaluable yet"),
+					"subject '%s' is declared but unbuilt: %s" % [key, p])
+
+
+func test_named_unit_parses_now_and_is_no_longer_refused_as_unbuilt() -> void:
+	# `test_ticks_parses_now_...`'s counterpart, and the third of three. 16.7 gave
+	# `ObjectiveSystem` a hero to count, so `named_unit` counts something -- and if it is ever put
+	# back in `_NOT_YET` this fails rather than every authored hero row quietly stopping work.
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "named_unit", "name": "Sir Roland",
+			"compare": "==", "value": 0, "output": "lose", "text": "Keep him alive"}, problems)
+	assert_not_null(o, "a named_unit objective must parse: %s" % [problems])
+	assert_true(problems.is_empty(), "%s" % [problems])
+	assert_eq(o.subject, ObjectiveDef.Subject.NAMED_UNIT)
+	assert_eq(o.unit_name, &"Sir Roland")
+	# NO id AND NO area. A person is not a def and is not a place, so both stay empty --
+	# `_NAMES_AN_ID` excludes NAMED_UNIT and `_read_area` refuses a region on it.
+	assert_eq(o.id, &"")
+	assert_eq(o.area, &"")
 
 
 func test_ticks_parses_now_and_is_no_longer_refused_as_unbuilt() -> void:

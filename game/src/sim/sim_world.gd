@@ -179,6 +179,31 @@ var koth_holder: int = 0
 ## OUTCOME the objectives reach, which is where a disagreement about a region would surface.
 var areas: Dictionary = {}
 
+## THE MAP'S NAMED UNITS (PLAN.md 16.7): every name the map DECLARED -> true.
+##
+## Filled by `MapGen.build_from()` out of the entity records, read by `ObjectiveSystem` and by
+## nothing else. Not in `state_hash()`, on `areas`' footing exactly and for its reason.
+##
+## ## ⛔ WHAT THE MAP DECLARED, NOT WHAT IS ALIVE — AND WITHOUT THAT THE SUBJECT IS UNUSABLE
+##
+## `ObjectiveDef._count` returns **-1, never 0**, for a subject it cannot measure, because *"`== 0`
+## is a comparison an unimplemented or unmeasurable subject passes"* — a named-unit row counting a
+## name nothing on the map carries would otherwise announce **victory on tick 1**, or fire a lose
+## row before the player has moved.
+##
+## But *"protect Sir Roland"* is spelled `named_unit == 0, output: lose`, and its whole point is
+## that the count reaches 0 **when he dies**. So 0 has to be a real answer for a hero who existed
+## and a refusal for a name nobody ever wrote — two facts that a live count cannot tell apart.
+## That is `13.x-claim-dead-end`'s exact trap (*"`unit.dragon_baby == 0` is true from tick 1"*),
+## and the way out is that a map DECLARES its heroes: this set is written once at world build and
+## never changes, so a dead hero's name is still in it.
+##
+## ⚠️ **A NAME THE MAP DOES NOT DECLARE IS CAUGHT EARLIER AND MORE LOUDLY** by
+## `ScenarioDef.build_config()`, which refuses the launch and names the heroes the map does have —
+## `_unknown_areas`' sibling. This is the second defence, and it makes the scenario merely
+## unwinnable rather than instantly won.
+var named_units: Dictionary = {}
+
 var players: Array[SimPlayer] = []
 
 ## player id -> team number, the argument every `Diplomacy` predicate takes.
@@ -233,6 +258,10 @@ func setup(cfg: MatchConfig) -> void:
 	# one, so an authored scenario followed by a skirmish would otherwise leave the skirmish
 	# holding the scenario's regions and an `area` objective measuring a map nobody is playing.
 	areas = {}
+	# AND THE NAMED UNITS, for the identical reason one line up (16.7): a reused world that kept
+	# the last scenario's hero names would let a `named_unit` row measure a map nobody is playing,
+	# and the count it returned would be 0 rather than the -1 that says "unmeasurable".
+	named_units = {}
 	# CLEARED FOR `trophy_def_id`'s REASON, and this one is sharper: a reused world that kept the
 	# last match's hill would arm KotH on a map that never declared one, and score it — the exact
 	# state `koth_zone`'s own note says the emptiness exists to prevent. `preview_ai_match` steps
@@ -1301,7 +1330,21 @@ func state_hash() -> int:
 	var parts: Array = [tick, map.state_hash() if map != null else 0]
 	for id in ids:
 		var e: SimEntity = entities[id]
-		parts.append([e.id, e.def_id, e.owner_id, e.pos.x, e.pos.y, e.hp, e.alive])
+		# ⛔ **THE FOUR AUTHORED FIELDS RIDE ON EVERY ENTITY (16.7), AND THAT IS THE ROW'S WHOLE
+		# RISK.** `SimEntity.entity_name` and the three overrides come out of a `map.json` rather
+		# than out of the roster or out of a system both hosts run, so nothing recomputes them and
+		# nothing else in this hash can report a disagreement about them. Two hosts holding
+		# different hp for a scripted hero agree about every field below until somebody hits him,
+		# and then `hp` reports the divergence long after the cause -- which is the argument every
+		# comment in this function makes, for the one case where the state is not derived at all.
+		#
+		# **ON THE COMMON LINE AND NOT IN THE TWO SUBCLASS BRANCHES.** A resource node cannot be
+		# named by the tool today, so folding it in here costs a StringName and three ints on five
+		# hundred trees for a case that cannot arise -- and the alternative is a rule with a hole
+		# in it the day something else can be authored. `state_hash()` is a determinism check run
+		# by tests and a preview rather than per tick, so the cost is not on any budget.
+		parts.append([e.id, e.def_id, e.owner_id, e.pos.x, e.pos.y, e.hp, e.alive,
+				e.entity_name, e.max_hp_override, e.attack_override, e.speed_override])
 		if e is SimUnit:
 			# Path PROGRESS, not the route itself: two clients that planned
 			# differently diverge in position within a few ticks anyway, but

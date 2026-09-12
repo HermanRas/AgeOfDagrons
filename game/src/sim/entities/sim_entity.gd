@@ -47,6 +47,74 @@ var garrison_cap: int = 0
 ## `SimBuilding`'s note on why the def id is copied rather than looked up.
 var garrison: Array[Dictionary] = []
 
+## ── what a MAP said about THIS ONE entity (PLAN.md 16.7) ────────────────────
+##
+## ## ⛔ AUTHORED STATE, AND THAT IS WHY ALL FOUR ARE IN `state_hash()`
+##
+## Everything else on an entity is either derived from its def -- the same on every client,
+## because the roster ships in the APK -- or changed by a system both hosts run. These four are
+## neither: they come out of a `map.json` that one client may have read and another may not, and
+## nothing recomputes them. **Two hosts disagreeing about how much hp a scripted hero has would
+## agree about every other field until somebody hit him**, and `hp` reports that only after the
+## fact. 16.7's card names this as the row's whole risk.
+##
+## ## ⚠️ THEY ARE THE OVERRIDE AND NOT THE RESULT, WHICH IS WHAT MAKES THE HASH CHEAP AND EXACT
+##
+## `max_hp` and `speed` are live fields that systems already move at runtime -- `SiegeSystem`
+## rewrites `speed` on every pack and unpack -- so hashing THOSE would fold a derived value in
+## beside the thing it is derived from. What can genuinely differ between two clients is what the
+## FILE said, so that is what rides: the consequence is then a function of (def + override), which
+## both hosts compute the same way.
+##
+## ## HERE RATHER THAN ON `SimUnit`, FOR `garrison_cap`'s REASON EXACTLY
+##
+## A building can be named and given hp (*"hold the Keep"*), a unit can be named and given all
+## three, and everything that reads them is asking *"did the map say something about this one"*
+## rather than *"what kind of thing is this"*. The cost is three ints and a StringName on five
+## hundred trees, which is memory only -- `to_snapshot` is per subclass and a node sends none of
+## it.
+##
+## ⚠️ **`speed_override` ON A BUILDING IS MEANINGLESS AND IS NOT REFUSED HERE.** `MapGen.build_from`
+## applies it only to units; the tool offers it only for units. Same trade `garrison_cap` makes by
+## sitting on every resource node in the game.
+
+## This entity's own name, or `&""`. What `subject: "named_unit"` counts (16.7).
+##
+## ⛔ **SIM-ONLY AND DELIBERATELY OFF THE WIRE**, `last_attacker_owner`'s rule and its reasoning:
+## `SnapshotSystem`'s shape tables group `updated` by sorted field names (12.1f), so a name here
+## is a field on every unit, building and tree in the game to carry a string that one or two
+## entities on an authored map actually have. **The objective that reads it is evaluated in the
+## SIM**, on the host, so the wire never needs it.
+##
+## 📝 **THE CONSEQUENCE, SAID OUT LOUD RATHER THAN DISCOVERED: THE HUD CANNOT SHOW IT.** Selecting
+## a named hero shows the def's display name, exactly as before. Putting it on the wire is a real
+## row with a real cost and it is not this one -- 12.1f spent an optimisation pass removing
+## per-entity field names, and a field present on two units and absent on four hundred splits
+## every unit into two shape tables.
+var entity_name: StringName = &""
+
+## Full health as the MAP wrote it, or 0 for "the def decides".
+##
+## **0 AND NOT -1**, unlike the two below: nothing alive has 0 max hp, so the sentinel cannot
+## collide with a value an author might mean. `MapGen.build_from()` sets `hp` to match, because a
+## scripted hero arrives at full health and a map that wanted him wounded would be saying that
+## with a different field.
+var max_hp_override: int = 0
+
+## Damage per blow as the MAP wrote it, or -1 for "the def decides".
+##
+## ⚠️ **-1 AND NOT 0, BECAUSE 0 IS A REAL ANSWER.** `CombatSystem` reads `attack_damage <= 0` as
+## *"this cannot attack"*, which is what a villager is -- so an author disarming a unit deliberately
+## is writing 0 and must not be read as writing nothing.
+var attack_override: int = -1
+
+## Sub-tile units per tick as the MAP wrote it, or -1 for "the def decides".
+##
+## ⚠️ **-1 AND NOT 0 FOR `attack_override`'s REASON, and the example is on the board**: every
+## deployed siege engine declares `speed: 0` on purpose, so 0 means *"this does not move"* and is
+## a thing an author may legitimately want.
+var speed_override: int = -1
+
 
 func tile() -> Vector2i:
 	return pos / SimWorld.SUBTILE

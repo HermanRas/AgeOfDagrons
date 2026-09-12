@@ -310,10 +310,20 @@ func test_the_first_two_plates_share_a_row_at_the_same_ratio() -> void:
 ## and the sentence changes length with the tool, the hover and the selection — left-aligned in the
 ## right half, the text would sit against the inspector with a ragged right edge and no clear seam
 ## between the two halves. Anchored right, the part that moves is the empty middle.
+##
+## ⚠️ **THE HALVES ARE FOUND BY WALKING UP TO THE SHARED ROW, NOT BY ASSUMING A DEPTH.** This test
+## read `_entity_owner.get_parent()` until 16.7 gave the inspector a **second row** — a name and
+## three override boxes, which do not fit beside the owner and size pickers at this window size —
+## and it then failed saying the two halves were not siblings. They were: one of them had simply
+## grown a layer. **What the owner asked for is the 50/50 split**, and that is what this asserts;
+## how the left half arranges itself inside its share is not this test's business.
 func test_the_inspector_plate_splits_its_content_in_two() -> void:
 	var editor := _open_editor()
-	var left: Node = editor._entity_owner.get_parent()
 	var right: Node = editor._status.get_parent()
+	var left := _half_containing(editor._entity_owner, right.get_parent())
+	assert_not_null(left, "the inspector is not inside the plate's split row")
+	if left == null:
+		return
 	assert_false(left == right, "the inspector and the status lines are in one undivided row")
 	assert_eq(left.get_parent(), right.get_parent(), "the two halves are not siblings")
 	assert_eq(editor._notice_label.get_parent(), right, "the notice line left the right half")
@@ -326,6 +336,20 @@ func test_the_inspector_plate_splits_its_content_in_two() -> void:
 	for line in [editor._status, editor._notice_label]:
 		assert_eq((line as Label).horizontal_alignment, int(HORIZONTAL_ALIGNMENT_RIGHT),
 				"this line does not sit against the plate's right edge")
+
+
+## Walk up from `node` until the parent is `row`, and hand back the child of `row` that contains
+## it. Null when `node` is not under `row` at all.
+##
+## What it is for: *"which half of the split is this control in"*, asked without caring how many
+## containers the half has put between itself and the control. See the test above.
+func _half_containing(node: Node, row: Node) -> Node:
+	var at := node
+	while at != null and at.get_parent() != null:
+		if at.get_parent() == row:
+			return at
+		at = at.get_parent()
+	return null
 
 
 ## The nearest `PanelContainer` at or above a control, or null.

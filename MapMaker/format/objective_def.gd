@@ -140,13 +140,17 @@ const RESOURCE_KINDS := ["food", "wood", "gold", "stone"]
 ## Subject -> the row of PLAN.md that has to land before it can be evaluated. Presence
 ## in this map is what makes a subject refused; adding the evaluator means deleting a
 ## line here, which is a smaller and more obvious change than finding a guard.
-const _NOT_YET := {
-	# `Subject.AREA` WAS HERE AND ITS REMOVAL IS 16.5's FIRST COMMIT. `Subject.TICKS` WAS HERE AND
-	# ITS REMOVAL IS 16.6's. Kept as comments rather than deleted silently, because the pattern is
-	# the contract: an evaluator arriving means one line goes from this map, and `test_objectives`
-	# has a case asserting the subject is no longer refused -- so the two halves cannot land apart.
-	Subject.NAMED_UNIT: "16.7, per-entity overrides (state_hash must fold them in)",
-}
+## ⛔ **THIS MAP IS NOW EMPTY, AND THAT IS THE VOCABULARY BEING COMPLETE RATHER THAN THE CHECK
+## BEING GONE.** `Subject.AREA` went at 16.5, `Subject.TICKS` at 16.6 and `Subject.NAMED_UNIT` at
+## 16.7 — every subject the language declares can now be evaluated. The mechanism stays because it
+## is the contract a future subject arrives under: **declare it in `_SUBJECTS`, refuse it here, and
+## delete the line in the same commit as its evaluator.** `test_objectives` asserts both halves, so
+## they cannot land apart.
+##
+## 📝 An empty map means `from_dict` never takes that branch today. It is not dead code, it is a
+## gate with nothing currently behind it — and the day somebody adds `subject: "tech"` to
+## `_SUBJECTS` without an evaluator, this is what refuses the row instead of counting -1 forever.
+const _NOT_YET := {}
 
 const _OWNERS := {"self": Owner.SELF, "enemy": Owner.ENEMY, "ally": Owner.ALLY,
 	"gaia": Owner.GAIA}
@@ -197,6 +201,22 @@ var id: StringName = &""
 ## fuzzy match at either end: a near-miss must be a refusal an author can read rather than a
 ## region that quietly contains nothing.
 var area: StringName = &""
+
+## WHICH NAMED UNIT (16.7), for `Subject.NAMED_UNIT` and for nothing else. `&""` everywhere else,
+## and a row carrying one on another subject is refused -- see `_read_name`.
+##
+## ## ⚠️ ITS OWN FIELD RATHER THAN `id`, WHICH IS `area`'s DECISION READ A SECOND TIME
+##
+## The obvious spelling for *"Sir Roland is still alive"* is to put the name in `id`, and it would
+## have made `id` mean a **def id** on three subjects, a **place** on a fourth and a **person** on
+## a fifth -- so `_NAMES_AN_ID` would have become a lie twice over. `area`'s own note makes the
+## argument in full; this is the second subject to need it, which is what turns a judgement call
+## into a pattern.
+##
+## **Matched VERBATIM against `SimWorld.named_units`**, with the same strip-at-both-ends and no
+## other normalisation `area` gets. A near-miss is a refusal an author can read
+## (`ScenarioDef.build_config`) rather than a hero nothing can ever find.
+var unit_name: StringName = &""
 
 var owner: Owner = Owner.SELF
 
@@ -263,6 +283,9 @@ static func from_dict(d: Dictionary, problems: Array[String]) -> ObjectiveDef:
 		return null
 
 	if not o._read_area(d, subject_key, problems):
+		return null
+
+	if not o._read_name(d, subject_key, problems):
 		return null
 
 	if not o._read_clock(problems):
@@ -343,6 +366,41 @@ func _read_area(d: Dictionary, subject_key: String, problems: Array[String]) -> 
 	if not area.is_empty():
 		problems.append("subject '%s' is not measured in a place, so it cannot name area '%s'"
 				% [subject_key, area] + " -- did you mean subject 'area'?")
+		return false
+	return true
+
+
+## The `name` half of a row: which named unit (PLAN.md 16.7). `_read_area`'s twin, line for line.
+##
+## Two refusals, and they are the same pair one function up:
+##
+##   - a `named_unit` row that names nobody, which cannot be measured at all;
+##   - a name on a subject that counts things rather than a person, which means the author meant
+##     `subject: "named_unit"` and did not say so. Silently ignoring the key is how *"Sir Roland is
+##     alive"* ships as *"you have at least one swordsman"* -- winnable the wrong way, and correct
+##     in the file.
+##
+## ⚠️ **THE NAME IS *NOT* CHECKED AGAINST A MAP HERE, AND CANNOT BE**, exactly as a region is not.
+## `ScenarioDef.build_config()` is the first place a `scenario.json` and a `map.json` are both
+## open, and it is where an unknown hero is refused **by name, listing the ones the map does
+## have**.
+func _read_name(d: Dictionary, subject_key: String, problems: Array[String]) -> bool:
+	# STRIPPED AT BOTH ENDS AND FOLDED NOWHERE, `_read_area`'s rule and the same hazard: a
+	# trailing space is invisible in a text field and would otherwise be a different person.
+	# `MapData.add_entity` strips the map's end identically, which is what makes the two meet.
+	unit_name = StringName(str(d.get("name", "")).strip_edges())
+
+	if subject == Subject.NAMED_UNIT:
+		if unit_name.is_empty():
+			problems.append("a 'named_unit' objective must name the unit in 'name'"
+					+ " -- the name a MapMaker map gives it, spelled exactly")
+			return false
+		return true
+
+	if not unit_name.is_empty():
+		problems.append("subject '%s' counts things rather than somebody in particular,"
+				% subject_key + " so it cannot name '%s'" % unit_name
+				+ " -- did you mean subject 'named_unit'?")
 		return false
 	return true
 
@@ -429,6 +487,10 @@ func to_dict() -> Dictionary:
 		# `_objectives_to_wire()` calls this function. A joining client builds its own world from
 		# the same `MapData` (2.4a), so both ends resolve the same name to the same rectangles.
 		"area": String(area),
+		# AND THE HERO'S NAME (16.7), for the region's reason exactly: `MatchConfig` calls this
+		# function, so a joining client gets the name with no edit there -- and it resolves against
+		# the same `MapData` both ends built their world from.
+		"name": String(unit_name),
 		"owner": int(owner),
 		"owner_index": owner_index,
 		"compare": int(compare),
@@ -446,6 +508,9 @@ static func from_wire(d: Dictionary) -> ObjectiveDef:
 	# `area` subject to select either, so the pair is consistent. `MatchConfig.from_dict`'s
 	# forward-compatibility shape, one level down.
 	o.area = StringName(str(d.get("area", "")))
+	# Absent from a host built before 16.7, which reads as no name -- and such a host has no
+	# `named_unit` subject to select either, so the pair is consistent. `area`'s rule one line up.
+	o.unit_name = StringName(str(d.get("name", "")))
 	o.owner = int(d.get("owner", Owner.SELF)) as Owner
 	o.owner_index = int(d.get("owner_index", 0))
 	o.compare = int(d.get("compare", Compare.AT_LEAST)) as Compare
@@ -470,6 +535,12 @@ func describe() -> String:
 		# Capitalised because a resource id is a bare word ("food") where a unit id is a
 		# namespaced one ("unit.villager"), and "food at least 500" reads as a fragment.
 		what = String(id).capitalize()
+	elif subject == Subject.NAMED_UNIT:
+		# ⚠️ **THE NAME IS THE WHOLE SUBJECT AND `id` IS EMPTY ON EVERY SUCH ROW**, so without this
+		# branch *"Sir Roland at least 1"* would draw as *"units at least 1"* -- `TICKS`' fault one
+		# branch down, and wrong in the same way rather than merely clumsy: the player would read a
+		# row about a person as a row about an army.
+		what = String(unit_name)
 	elif subject == Subject.TICKS:
 		# ⚠️ **NOT OPTIONAL, because `id` is empty on every ticks row** (`_NAMES_AN_ID` refuses
 		# one) and the default above is the word "units" -- so without this branch a time limit

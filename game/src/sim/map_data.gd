@@ -206,8 +206,10 @@ const AXIS_NONE := -1
 ## thing goes on looking like. **`format_version` does not move**, because five committed
 ## `map.json` files and the published `howtoplay` pack are on version 1 and `MapFile.load_map`
 ## refuses a mismatch with no migration.
+## `name` and `overrides` are PLAN.md 16.7's, and both are absent on all but a handful of entities
+## on an authored map -- see `OVERRIDE_KEYS` for what an `overrides` record may hold.
 func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class: int = 0,
-		axis: int = AXIS_NONE) -> void:
+		axis: int = AXIS_NONE, name: StringName = &"", overrides: Dictionary = {}) -> void:
 	var e := {"def_id": def_id, "player": player, "tile": tile, "size_class": size_class}
 	# STORED ONLY WHEN IT MEANS SOMETHING. An `axis: 0` on every villager in a 170-entity map is
 	# 170 keys saying "not applicable", and it would make `axis` look like a field with a default
@@ -215,7 +217,51 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class: int
 	# reads to decide whether to override a footprint at all.
 	if axis != AXIS_NONE:
 		e["axis"] = axis
+	# THE SAME RULE FOR 16.7's TWO (2026-09-12), and it matters more here: a `name: ""` and an
+	# empty `overrides` on every one of a map's 170 entities would treble the size of the entity
+	# list to say "this one is ordinary" 170 times, and the five committed maps would all change
+	# on their next save with nothing having been authored.
+	var clean := StringName(String(name).strip_edges())
+	if not clean.is_empty():
+		e["name"] = clean
+	var kept := clean_overrides(overrides)
+	if not kept.is_empty():
+		e["overrides"] = kept
 	entities.append(e)
+
+
+## The override keys an entity record may carry (PLAN.md 16.7), and what each means.
+##
+## ## ⛔ A WHITELIST, BECAUSE A MAP FILE IS UNTRUSTED INPUT
+##
+## `MapFile`'s own header says so, and the failure without one is quiet: a typo'd `"helth": 900`
+## would be stored, written back out, survive a round trip, show up in the tool's inspector as
+## nothing at all, and leave an author certain they had given their hero 900 hp. Refusing to carry
+## what nothing reads is what turns that into an empty field they can see.
+##
+## **THE VALUES ARE `SimEntity`'s THREE OVERRIDE FIELDS**, named the way an author thinks of them
+## rather than the way the sim stores them: `hp` is `max_hp_override`, because *"how much health
+## does he have"* is the question being answered.
+const OVERRIDE_KEYS := ["hp", "attack", "speed"]
+
+
+## `overrides` with everything unrecognised or unset dropped. `{}` when nothing survives.
+##
+## ⚠️ **`hp` IS DROPPED AT 0 AND THE OTHER TWO AT -1**, which is `SimEntity`'s sentinel split and
+## not a tidy-up: 0 attack and 0 speed are both real answers an author may mean (a disarmed unit,
+## a deployed siege engine), and 0 hp is not a thing anything alive can have.
+static func clean_overrides(overrides: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for key in OVERRIDE_KEYS:
+		if not overrides.has(key):
+			continue
+		# `int()` AT THE BOUNDARY, every time: JSON numbers come back as floats, which is the trap
+		# `from_dict` already documents for `axis` and `size_class`.
+		var value := int(overrides[key])
+		var unset := 0 if key == "hp" else -1
+		if value != unset:
+			out[key] = value
+	return out
 
 
 func player_count() -> int:
@@ -353,6 +399,13 @@ func to_dict() -> Dictionary:
 		# this function, so re-saving an opened map needed no edit for this key.
 		if e.has("axis"):
 			row["axis"] = int(e["axis"])
+		# ABSENT STAYS ABSENT for 16.7's two as well, which is what keeps a map with no named
+		# heroes byte-identical to one written before this row existed -- the same property
+		# `axis` bought one row earlier, and the reason neither FORMAT_VERSION moved.
+		if e.has("name"):
+			row["name"] = String(e["name"])
+		if e.has("overrides"):
+			row["overrides"] = (e["overrides"] as Dictionary).duplicate()
 		out.append(row)
 	var starts_out: Array[Dictionary] = []
 	for s in starts:
@@ -428,10 +481,17 @@ static func from_dict(d: Dictionary) -> MapData:
 		# "a wall, laid east-west, and the caller must be told so" -- and `build_from()` reads
 		# that difference to decide whether to force a facing at all. A `get("axis", 0)` here
 		# would quietly turn every villager on every old map into a directional entity.
+		# ⚠️ **`overrides` IS READ THROUGH `clean_overrides` AND NOT ASSIGNED**, because this is the
+		# boundary a hand-edited or downloaded map crosses: `add_entity` drops every key nothing
+		# reads, so a typo'd `"helth": 900` never reaches the world and never comes back out of a
+		# re-save looking authoritative. A non-Dictionary `overrides` reads as none.
+		var raw: Variant = e.get("overrides", {})
 		m.add_entity(StringName(e.get("def_id", "")), int(e.get("player", 0)),
 				Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
 				int(e.get("size_class", 0)),
-				int(e.get("axis", AXIS_NONE)) if e.has("axis") else AXIS_NONE)
+				int(e.get("axis", AXIS_NONE)) if e.has("axis") else AXIS_NONE,
+				StringName(str(e.get("name", ""))),
+				raw if raw is Dictionary else {})
 	for s in d.get("starts", []):
 		m.starts.append(Vector2i(int(s.get("x", 0)), int(s.get("y", 0))))
 	# ABSENT MEANS NO AREAS, which is what every map written before 16.5 looks like and is the

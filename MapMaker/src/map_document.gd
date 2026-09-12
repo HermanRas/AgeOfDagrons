@@ -928,6 +928,7 @@ func objective_problems() -> Array[String]:
 				+ " -- a scenario with no win row can never be won."
 				+ " Add one, or remove them all to mean 'beat them'")
 	out.append_array(unknown_area_problems())
+	out.append_array(unknown_name_problems())
 	return out
 
 
@@ -962,6 +963,35 @@ func unknown_area_problems() -> Array[String]:
 		if not names.is_empty():
 			have = "this map declares %s" % ", ".join(_as_strings(names))
 		out.append("condition %d counts things in '%s' and %s" % [i + 1, name, have])
+	return out
+
+
+## Every `named_unit` condition naming somebody this map has not got (PLAN.md 16.7).
+##
+## `unknown_area_problems()`'s twin and split out for its reason — `ScenarioExport` wants this half
+## and not the mode complaints beside it. Everything that function's header argues applies here:
+## `ObjectiveDef` has never seen a map, `ScenarioDef.build_config()` catches it at LAUNCH, and this
+## is the one that reaches the AUTHOR while the map and the conditions are open in front of the
+## same person.
+##
+## ⚠️ **IT ASKS THE ENTITY RECORDS, WHICH IS WHERE A NAME IS WRITTEN**, and `entity_names()` is
+## what the panel offers — one source, so the tool cannot warn about a name it is also suggesting.
+func unknown_name_problems() -> Array[String]:
+	var out: Array[String] = []
+	var declared := entity_names()
+	for i in objectives.size():
+		var record: Dictionary = objectives[i]
+		if str(record.get("subject", "")).to_lower() != "named_unit":
+			continue
+		# STRIPPED THE WAY `ObjectiveDef._read_name` STRIPS IT, and matched verbatim after that --
+		# `set_selected_name()`'s note is the other half of the rule.
+		var name := StringName(str(record.get("name", "")).strip_edges())
+		if declared.has(name):
+			continue
+		var have := "this map names nobody at all"
+		if not declared.is_empty():
+			have = "this map names %s" % ", ".join(_as_strings(declared))
+		out.append("condition %d is about '%s' and %s" % [i + 1, name, have])
 	return out
 
 
@@ -1171,6 +1201,127 @@ func set_selected_size_class(size_class: int) -> bool:
 	if mine:
 		_flush()
 	return true
+
+
+# ── per-entity authoring: a name and three overrides (PLAN.md 16.7) ─────────
+
+## Name the selected entity, or clear its name with `&""`. True if it changed.
+##
+## ## ⛔ THE NAME IS THE KEY A SCENARIO MATCHES ON, SO IT IS STORED VERBATIM
+##
+## `ObjectiveSystem._named_alive` matches it against an objective's `name` with **no folding at
+## either end**, which is `add_area()`'s rule for a region and the same hazard: trimming here and
+## not there, or lower-casing in the tool and not in the game, would author a hero the scenario can
+## never find — and the only symptom is a row that never ticks.
+##
+## Whitespace is stripped for `add_area()`'s reason: a trailing space is invisible in a text field
+## and would otherwise be a different person. `MapData.add_entity` strips identically and
+## `ObjectiveDef._read_name` strips the objective's end, so all three meet.
+##
+## ⚠️ **IT CALLS `mark_changed()`** — `move_selected()`'s rule, and `MapEdit`'s own note predicted
+## every 16.7 path would owe it: this edits an entry in place, so the size test cannot see it and
+## the step would be discarded as a no-op. **A named hero could not be un-named.**
+##
+## ⚠️ **AND THE KEY IS ERASED RATHER THAN SET EMPTY.** `MapData.to_dict()` writes `name` only when
+## the record has it, so a `""` left behind would put `"name": ""` into the file on every entity an
+## author had ever typed in and then cleared — and `_unknown_named_units` would then see a declared
+## hero called nothing.
+func set_selected_name(name: StringName) -> bool:
+	var e := selected_entity()
+	if e.is_empty():
+		return false
+	var clean := StringName(String(name).strip_edges())
+	if StringName(e.get("name", &"")) == clean:
+		# NOT A STEP AND NOT A FAILURE, `move_selected()`'s rule: re-confirming a field without
+		# changing it must not put an invisible entry on the stack.
+		return true
+	var mine := _open("name %s" % GameDataRegistry.display_name(e.get("def_id", &"")))
+	_step.lists_before(data, objectives)
+	if clean.is_empty():
+		e.erase("name")
+	else:
+		e["name"] = clean
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## Set one of the selected entity's overrides, or clear it with the key's own unset value.
+##
+## `key` is one of `MapData.OVERRIDE_KEYS` — `hp`, `attack`, `speed`. True if anything changed.
+##
+## ## ⛔ THE UNSET VALUE IS PER KEY, AND COLLAPSING THEM WOULD LOSE A REAL ANSWER
+##
+## `MapData.clean_overrides` drops `hp` at 0 and the other two at -1, because **0 attack and 0
+## speed are answers an author may mean** — a disarmed unit, a deployed siege engine — and 0 hp is
+## not a thing anything alive has. This function hands the whole record to that one filter rather
+## than deciding per key itself, so the tool and the file can never disagree about what "unset"
+## looks like.
+##
+## ⚠️ **THE WHOLE `overrides` DICTIONARY IS REBUILT AND RE-FILTERED**, not edited in place: that is
+## what makes clearing the last override erase the key entirely, which is what keeps a map with
+## nothing authored byte-identical to one written before this row.
+func set_selected_override(key: String, value: int) -> bool:
+	var e := selected_entity()
+	if e.is_empty() or not MapData.OVERRIDE_KEYS.has(key):
+		return false
+	var was: Dictionary = e.get("overrides", {})
+	var wanted := was.duplicate()
+	wanted[key] = value
+	var kept := MapData.clean_overrides(wanted)
+	if kept == was:
+		return true
+	var mine := _open("%s of %s" % [key, GameDataRegistry.display_name(e.get("def_id", &""))])
+	_step.lists_before(data, objectives)
+	if kept.is_empty():
+		e.erase("overrides")
+	else:
+		e["overrides"] = kept
+	_step.mark_changed()
+	dirty = true
+	if mine:
+		_flush()
+	return true
+
+
+## What the selected entity's `key` override says, or the key's unset value.
+##
+## **THE UNSET VALUE AND NOT 0 FOR ALL THREE**, so the inspector's spin box can be filled from this
+## unconditionally — 16.3's rule — and a control showing 0 means *"disarmed"* on the attack row and
+## *"the def decides"* on the health one, exactly as the record does.
+func selected_override(key: String) -> int:
+	var e := selected_entity()
+	var overrides: Dictionary = e.get("overrides", {}) if not e.is_empty() else {}
+	return int(overrides.get(key, unset_override(key)))
+
+
+## What `key` means when nobody has set it. See `MapData.clean_overrides`.
+static func unset_override(key: String) -> int:
+	return 0 if key == "hp" else -1
+
+
+## Every name this map gives something, sorted. What the Conditions panel offers and what a test
+## compares against.
+##
+## ⚠️ **SORTED, AND THE ENTITY LIST'S ORDER IS NOT GOOD ENOUGH.** It is placement order, so a
+## dropdown built from it would reshuffle the moment an author moved a hero — `Array[StringName]`
+## being sorted by IDENTITY is the §6 trap next door, which is why these are compared as Strings.
+func entity_names() -> Array[StringName]:
+	var seen: Dictionary = {}
+	var out: Array[String] = []
+	for e in data.entities:
+		var name := String(e.get("name", ""))
+		if name.is_empty() or seen.has(name):
+			continue
+		seen[name] = true
+		out.append(name)
+	out.sort()
+	var names: Array[StringName] = []
+	for n in out:
+		names.append(StringName(n))
+	return names
 
 
 ## Would `e`'s footprint, placed with its origin at `origin`, be on the map and on clear ground?

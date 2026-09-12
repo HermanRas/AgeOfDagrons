@@ -16,10 +16,15 @@
 ##   | Compare | `_COMPARES`                              |
 ##   | Output  | `_OUTPUTS`                               |
 ##
-## ✅ **AND THE `_NOT_YET` SUBTRACTION IS THE ONE WORTH KEEPING.** `named_unit` is refused by the
-## loader until 16.7, so offering it would be a row an author can select, fill in and be refused
-## on. Deriving the list means the day 16.7 deletes that line, the subject appears in this
-## dropdown **with no edit here** — which is exactly how `area` and `ticks` arrived.
+## ✅ **AND THE `_NOT_YET` SUBTRACTION IS THE ONE WORTH KEEPING.** `area`, `ticks` and then
+## `named_unit` each appeared in this dropdown **with no edit here** on the day their line was
+## deleted from `_NOT_YET` — three times, which is the derivation earning its place rather than a
+## coincidence. `_NOT_YET` is empty today and the subtraction stays: it is what keeps a subject
+## nobody can evaluate out of a form an author would otherwise fill in and be refused on.
+##
+## ⚠️ **THE HALF THE DERIVATION DOES NOT DO FOR YOU IS THE FIELD.** `named_unit` arrived offered
+## and unfillable, because its name lives in its own key — see `_form()`'s `Who` row. A subject
+## that needs a field of its own needs a control of its own, and the dropdown will not say so.
 ##
 ## 📝 **READING A CONST WHOSE NAME STARTS WITH `_` IS DELIBERATE HERE AND IS THE SAFE DIRECTION.**
 ## The underscore is a convention about what the game's own code should reach for, and this is not
@@ -92,6 +97,9 @@ var _value: SpinBox = null
 var _output: OptionButton = null
 var _id_field: LineEdit = null
 var _area_field: LineEdit = null
+
+## 16.7's `named_unit` field. See `_form()` for why it is its own control and not `Which`.
+var _name_field: LineEdit = null
 var _text_field: LineEdit = null
 var _add_button: Button = null
 var _cancel_button: Button = null
@@ -195,7 +203,8 @@ func form_record() -> Dictionary:
 	# owner, which is a confusing message for a perfectly ordinary intention.
 	var owner_key := _selected_key(_owner)
 	record["owner"] = int(_owner_index.value) if owner_key == _OWNER_INDEX_LABEL else owner_key
-	for pair in [["id", _id_field], ["area", _area_field], ["text", _text_field]]:
+	for pair in [["id", _id_field], ["area", _area_field], ["name", _name_field],
+			["text", _text_field]]:
 		var field := pair[1] as LineEdit
 		var typed := field.text.strip_edges()
 		if not typed.is_empty():
@@ -227,6 +236,7 @@ func fill_form(record: Dictionary) -> void:
 		_owner_index.value = 1
 	_id_field.text = str(record.get("id", ""))
 	_area_field.text = str(record.get("area", ""))
+	_name_field.text = str(record.get("name", ""))
 	_text_field.text = str(record.get("text", ""))
 	_filling = false
 	_refresh_form_state()
@@ -524,6 +534,19 @@ func _form() -> Control:
 	_area_field = _line_edit("only for subject 'area' — the region's name, spelled exactly")
 	_add_field(grid, "Region", _area_field)
 
+	# ⛔ **16.7's FIELD, AND WITHOUT IT THE SUBJECT ARRIVES UNFILLABLE.** `_subject_keys()` derives
+	# the dropdown from `ObjectiveDef._SUBJECTS` minus `_NOT_YET`, so `named_unit` appeared here
+	# with no edit the moment its line was deleted — which is the mechanism working, and exactly
+	# half of what is needed. A subject an author can select and cannot complete is worse than one
+	# that is not offered: `_read_name` refuses every row they try, and the refusal is about a
+	# field the form does not have.
+	#
+	# ⚠️ **ITS OWN FIELD RATHER THAN REUSING `Which`**, because the record's is its own key: `id`
+	# means a def id on three subjects and `name` means a person, and `ObjectiveDef._read_name`
+	# refuses the two being confused in either direction.
+	_name_field = _line_edit("only for subject 'named_unit' — the name the map gives it")
+	_add_field(grid, "Who", _name_field)
+
 	_text_field = _line_edit("what the player reads — blank uses the sentence above")
 	_add_field(grid, "Label", _text_field)
 	return grid
@@ -649,6 +672,9 @@ func _refresh_form_state() -> void:
 		return
 	_owner_index.editable = _selected_key(_owner) == _OWNER_INDEX_LABEL
 	_area_field.editable = _selected_key(_subject) == "area"
+	# DISABLED RATHER THAN HIDDEN, the rule two lines up: a disabled control still says what it is
+	# for, and its placeholder names the subject it belongs to.
+	_name_field.editable = _selected_key(_subject) == "named_unit"
 	if _add_button != null:
 		_add_button.text = "Update" if _editing >= 0 else "Add"
 	if _cancel_button != null:

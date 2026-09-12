@@ -635,8 +635,31 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 
 			owner = w.players[index - 1].id
 
+		# ⛔ **16.7's NAME IS DECLARED HERE — AFTER THE PLAYER SKIP AND BEFORE THE SPAWN — AND BOTH
+		# halves of that position are decisions.**
+		#
+		# `w.named_units` is what tells `ObjectiveSystem` *"this map has a hero called X"* apart
+		# from *"nothing here is called X"*: the second answers -1 (unmeasurable) while the first
+		# makes 0 a real count, meaning he died. Getting the set wrong in either direction is a
+		# scenario decided by something nobody wrote.
+		#
+		# ⚠️ **AFTER THE `continue` ABOVE**, so a hero belonging to a player this match has not got
+		# is NOT declared. Declaring him would make him measurable and absent, and
+		# `named_unit == 0, output: lose` would then defeat the human on tick 1 because somebody
+		# else's hero is missing from a match he was never in. -1 leaves such a scenario merely
+		# unwinnable, which is the safe direction, and it agrees with what that skip already means.
+		#
+		# ⚠️ **BEFORE THE SPAWN**, so the set is what the FILE says rather than what happened to be
+		# built. That costs nothing today — `spawn_unit` never answers null and `spawn_building` is
+		# called with `force` here, so it never does either — and it is the order that stays correct
+		# if a spawn ever can fail.
+		var declared := StringName(str(e.get("name", "")))
+		if not declared.is_empty():
+			w.named_units[declared] = true
+
+		var spawned: SimEntity = null
 		if GameDataRegistry.unit(def_id) != null:
-			w.spawn_unit(def_id, owner, tile)
+			spawned = w.spawn_unit(def_id, owner, tile)
 		elif GameDataRegistry.building(def_id) != null:
 			# ⚠️ **A MAP MAY NAME AN AXIS, AND THIS IS THE HALF THAT MAKES THE KEY MEAN
 			# ANYTHING** (16.4c, 2026-09-08). `MapData.AXIS_NONE`'s comment has the full
@@ -653,7 +676,7 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 				# Forced: the map has already decided this is where the building goes, and
 				# `can_place_building()` would refuse a town centre whose own clearing the
 				# generator laid out for it.
-				w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true)
+				spawned = w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true)
 			else:
 				# THE OVERRIDE COMES FROM `MapData.footprint_rect_of`'s OWN RULE, not from a
 				# second transposition written here: one `axis` key, two readers, and the
@@ -662,10 +685,23 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 				var footprint := bd.footprint
 				if axis == WallPlan.AXIS_Y:
 					footprint = Vector2i(footprint.y, footprint.x)
-				w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true,
+				spawned = w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true,
 						footprint, WallPlan.FACING_FOR_AXIS[axis])
 		else:
-			w.spawn_resource_node(def_id, tile, int(e.get("size_class", 0)))
+			spawned = w.spawn_resource_node(def_id, tile, int(e.get("size_class", 0)))
+
+		# ⚠️ **APPLIED AFTER THE SPAWN AND NOT INSIDE IT.** `spawn_unit`/`spawn_building` copy a
+		# def onto a fresh entity and are called from a dozen places — production queues, the
+		# generator, tests — none of which has a map record to hand. Threading an optional
+		# overrides argument through all of them would put a map-authoring concept in the middle
+		# of the spawn path; reading it here keeps it where the map is.
+		#
+		# 📝 **THE NULL GUARD IS DEFENSIVE AND NOTHING REACHES IT TODAY**, which is worth saying so
+		# nobody reads it as evidence that a spawn here can fail: `spawn_building` returns null only
+		# when `force` is false and this path always forces, and `spawn_unit` never returns null at
+		# all. It costs one comparison and it is what keeps this line correct if either changes.
+		if spawned != null:
+			_apply_authoring(spawned, declared, e.get("overrides", {}))
 
 	for p in w.players:
 		for kind in STARTING_STOCK:
@@ -673,6 +709,55 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 
 	if w.paths != null:
 		w.paths.rebuild(w.map, _domains_spawned(w))
+
+
+## Put the map's name and per-entity overrides onto one freshly spawned entity (PLAN.md 16.7).
+##
+## ## ⛔ THE OVERRIDE REPLACES THE BASE, WHEREVER THE BASE HAPPENS TO BE READ — AND IT IS NOT
+## ALWAYS IN THE SAME PLACE
+##
+## `hp` and `speed` are copied off the def by `spawn_unit` and live on the entity, so an override
+## is applied here and there is nothing else to do. **A unit's attack damage is not copied**:
+## `CombatSystem._damage_of` reads `def.attack_damage` at the moment of the blow, deliberately, so
+## that a tech researched mid-match reaches units already on the board. So `attack_override` is
+## stored and read THERE rather than written onto anything here.
+##
+## ⚠️ **A BUILDING'S attack IS THE OTHER WAY ROUND** — `SimBuilding.attack_damage` *is* a copy, and
+## `CombatSystem._fire` reads it — so for a building the override is written onto the copy. Two
+## shapes for one idea, and the reason is which end already held the number. Both are hashed the
+## same way, through `attack_override`, so the authored state is on the wire-check regardless of
+## where its consequence lives.
+##
+## 📝 **TECH STILL APPLIES ON TOP FOR UNITS, AND THAT IS THE INTENDED READING.** A hero authored at
+## 60 damage whose owner researches Blast Furnace hits for 64. The override says what he IS, not
+## what he is capped at.
+static func _apply_authoring(e: SimEntity, name: StringName, raw: Variant) -> void:
+	e.entity_name = name
+	# ⚠️ **THROUGH `clean_overrides` A SECOND TIME.** `MapData.from_dict` already filtered a record
+	# that came off disk, and a `MapData` built in memory — by a test, by `MapGen` itself, by the
+	# MapMaker before a save — has not been through it. One filter, asked wherever the values are
+	# about to be believed.
+	var overrides := MapData.clean_overrides(raw if raw is Dictionary else {})
+	if overrides.has("hp"):
+		# BOTH, AND FULL HEALTH. A scripted hero arrives whole; a map that wanted him wounded would
+		# be saying that with a field it has not got.
+		e.max_hp_override = int(overrides["hp"])
+		e.max_hp = e.max_hp_override
+		e.hp = e.max_hp_override
+	if overrides.has("attack"):
+		e.attack_override = int(overrides["attack"])
+		# THE BUILDING HALF, see the header. A unit has no such field and is read at the blow.
+		if e is SimBuilding:
+			(e as SimBuilding).attack_damage = e.attack_override
+	if overrides.has("speed"):
+		e.speed_override = int(overrides["speed"])
+		# ⚠️ **UNITS ONLY, AND A BUILDING IS SILENTLY UNCHANGED RATHER THAN REFUSED.** `speed` on a
+		# castle means nothing, the tool does not offer it, and a map that carries one anyway is a
+		# hand-edited file — which `MapFile`'s header says to treat as untrusted rather than as
+		# broken. The override is still recorded on the entity so the hash reports the two hosts
+		# that read different files.
+		if e is SimUnit:
+			(e as SimUnit).speed = e.speed_override
 
 
 ## Every movement domain something on this map actually stands in.

@@ -412,6 +412,16 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 		out_problems.append_array(bad_areas)
 		return null
 
+	# ⚠️ **AND THE SAME CHECK FOR NAMED UNITS (16.7).** Its own function for `_unknown_areas`'
+	# reason and with the identical failure behind it: a misspelled hero is a scenario whose only
+	# symptom is that nothing happens. Kept separate so each message can name the right list —
+	# *"this map declares no named units"* sends somebody to the MapMaker, and *"this map declares
+	# Sir Roland"* sends them to their own typo.
+	var bad_names := _unknown_named_units(cfg.map_data)
+	if not bad_names.is_empty():
+		out_problems.append_array(bad_names)
+		return null
+
 	# ⚠️ **THE SCENARIO'S OWN MODE NOW REACHES THE MATCH (15.2).** Until 2026-09-02 this
 	# line was `LAST_MAN_STANDING` unconditionally, above a guard that refused SCENARIO
 	# outright -- which was honest while nothing could evaluate an objective, and is a
@@ -510,6 +520,51 @@ func _unknown_areas(map: MapData) -> Array[String]:
 			have = "this map declares %s" % ", ".join(spellings)
 		out.append("objective '%s' counts things in area '%s', but %s"
 				% [o.describe(), o.area, have])
+	return out
+
+
+## Every `named_unit` objective naming somebody `map` has not got, as sentences (PLAN.md 16.7).
+##
+## `_unknown_areas`' twin, and everything that function's header argues applies here unchanged:
+## `ObjectiveDef` has never seen a map, this is the first moment both halves exist, and the
+## failure it catches is **an unwinnable scenario whose only symptom is that nothing happens**.
+##
+## ⛔ **A REFUSAL RATHER THAN A WARNING, AND THE REASON IS SHARPER HERE THAN FOR A REGION.** A
+## `named_unit` row about somebody nobody is called counts -1 forever if it reaches a match — that
+## is `ObjectiveSystem._named_alive`'s second defence and it makes the mission merely unwinnable.
+## What it cannot do is say so. This can, before the match starts, in the author's own words.
+##
+## **THE NAMES ARE READ OFF THE MAP'S ENTITY RECORDS**, which is where an author writes them, and
+## not off a spawned world: a hero whose footprint will not fit is still a hero the scenario may
+## legitimately ask about, and refusing the launch because a building could not be placed would
+## report the wrong fault entirely.
+func _unknown_named_units(map: MapData) -> Array[String]:
+	var out: Array[String] = []
+	if map == null:
+		return out
+	var declared: Dictionary = {}
+	for e in map.entities:
+		var name := StringName(str(e.get("name", "")).strip_edges())
+		if not name.is_empty():
+			declared[name] = true
+	for o in objectives:
+		if o.subject != ObjectiveDef.Subject.NAMED_UNIT:
+			continue
+		if declared.has(o.unit_name):
+			continue
+		var have := "this map names nobody at all"
+		if not declared.is_empty():
+			var spellings := PackedStringArray()
+			for n in declared:
+				spellings.append(String(n))
+			# SORTED, unlike `_unknown_areas`' list, and the difference is real: `MapData.areas` is
+			# in authoring order and this is a Dictionary, whose key order is insertion order and
+			# therefore the entity list's. Sorting makes the message the same on two machines
+			# reading the same file, which is what a person comparing two logs needs.
+			spellings.sort()
+			have = "this map names %s" % ", ".join(spellings)
+		out.append("objective '%s' is about '%s', but %s"
+				% [o.describe(), o.unit_name, have])
 	return out
 
 

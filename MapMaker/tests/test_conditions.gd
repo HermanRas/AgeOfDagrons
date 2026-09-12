@@ -153,12 +153,17 @@ func test_the_subject_picker_offers_what_the_loader_accepts_and_nothing_it_refus
 	assert_true(offered.has("unit"), "%s" % [offered])
 	assert_true(offered.has("area"), "16.5's subject: %s" % [offered])
 	assert_true(offered.has("ticks"), "16.6's own subject: %s" % [offered])
-	# AND THE ONE STILL DEFERRED IS ABSENT. When 16.7 deletes that line from `_NOT_YET` this
-	# assertion fails and names the row that has to change — which is the same mechanical reminder
-	# `test_campaigns` runs on the game side.
-	assert_false(offered.has("named_unit"),
-			"`named_unit` is refused until 16.7, so offering it would be a row an author"
-			+ " can fill in and be refused on: %s" % [offered])
+	# ✅ **AND `named_unit` ARRIVED HERE WITH NO EDIT TO THE PANEL** when 16.7 deleted its line from
+	# `_NOT_YET` — which is the derivation working for the third time, after `area` and `ticks`.
+	# This assertion used to be its mirror image (*"offering it would be a row an author can fill
+	# in and be refused on"*) and it failed on the run 16.7 landed in, naming the row. A deferral is
+	# a test, not a comment.
+	assert_true(offered.has("named_unit"), "16.7's subject: %s" % [offered])
+	# ⛔ **EVERY DECLARED SUBJECT IS OFFERED NOW**, so the list and the language are the same length
+	# — which is what fails the day somebody adds a subject to `_SUBJECTS` and defers it without
+	# telling the panel.
+	assert_eq(offered.size(), ObjectiveDef._SUBJECTS.size(),
+			"the panel offers every subject the loader accepts: %s" % [offered])
 
 
 # ── the round trip ──────────────────────────────────────────────────────────

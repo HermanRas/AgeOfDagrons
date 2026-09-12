@@ -45,6 +45,20 @@ const SCENARIO_FOLDER := "scenario_1"
 const AREA_NAME := &"the_ford"
 const SIDE := 64
 
+## 16.7's half of the round trip: a named hero with all three overrides on him.
+##
+## ⛔ **HE IS HERE BECAUSE THE NAME IS THE SECOND THING NO SINGLE FILE CAN VALIDATE.** A region was
+## the first — `ObjectiveDef` has never seen a map — and a hero is the same gap one row along:
+## the `named_unit` condition below names him, the map declares him, and **only the game, in the
+## other project, can say the two met.** The overrides ride with him because they are the other
+## half of 16.7 and they are invisible in every file they pass through: a map whose `hp: 900` did
+## not survive the JSON builds a 40 hp militia and every other assertion still passes.
+const HERO_NAME := &"Sir Roland"
+const HERO_DEF := &"unit.militia"
+const HERO_HP := 900
+const HERO_ATTACK := 60
+const HERO_SPEED := 150
+
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -153,6 +167,19 @@ func _author() -> MapDocument:
 	if not doc.add_area(AREA_NAME, Rect2i(mid - 6, mid - 2, 13, 5)):
 		printerr("the region did not go down — the area round trip is not being checked")
 
+	# ⛔ **THE HERO GOES DOWN THROUGH THE REAL MUTATIONS**, including the selection the inspector
+	# acts on — `set_selected_name` and `set_selected_override` are exactly what the panel calls,
+	# so this exercises the tool's own path rather than writing the record by hand.
+	if doc.add_entity(HERO_DEF, 1, Vector2i(mid - 10, mid)):
+		doc.selected = doc.data.entities.size() - 1
+		doc.set_selected_name(HERO_NAME)
+		doc.set_selected_override("hp", HERO_HP)
+		doc.set_selected_override("attack", HERO_ATTACK)
+		doc.set_selected_override("speed", HERO_SPEED)
+		doc.clear_selection()
+	else:
+		printerr("the hero did not go down — 16.7's round trip is not being checked")
+
 	for record in _conditions():
 		var row_problems: Array[String] = []
 		if not doc.add_objective(record, row_problems):
@@ -181,6 +208,15 @@ func _conditions() -> Array[Dictionary]:
 			"subject": "area", "area": String(AREA_NAME), "owner": "self",
 			"compare": ">=", "value": 1, "output": "alert",
 			"text": "Somebody of yours is standing on the ford",
+		},
+		# ⛔ **16.7's ROW, AND IT IS THE SHAPE AN AUTHOR ACTUALLY WANTS: "protect him".** `== 0` with
+		# `output: "lose"` fires on the tick he dies — which is only safe because the map DECLARES
+		# him, so 0 means *gone* rather than *nobody is called that*. Written this way round on
+		# purpose: `>= 1` as a win row would latch on tick 1 and prove nothing.
+		{
+			"subject": "named_unit", "name": String(HERO_NAME), "owner": "self",
+			"compare": "==", "value": 0, "output": "lose",
+			"text": "Sir Roland must survive",
 		},
 	] as Array[Dictionary]
 
@@ -231,10 +267,10 @@ func _verify(doc: MapDocument, campaign_dir: String) -> bool:
 			% [campaign.get("name", "?"), campaign.get(CampaignDef.ORDER_KEY, [])])
 
 	if str(scenario.get("mode", "")) != "scenario":
-		printerr("mode should be derived as 'scenario' from three condition rows")
+		printerr("mode should be derived as 'scenario' from four condition rows")
 		ok = false
-	if (scenario.get("objectives", []) as Array).size() != 3:
-		printerr("three conditions were authored")
+	if (scenario.get("objectives", []) as Array).size() != 4:
+		printerr("four conditions were authored")
 		ok = false
 	# ⛔ **THE AUTHOR'S WORDS AND NOT THE WIRE FORM.** `to_dict()` writes every enum as an int, and a
 	# `scenario.json` of integers is one the game's own loader cannot read at all — while this tool
@@ -264,6 +300,26 @@ func _verify(doc: MapDocument, campaign_dir: String) -> bool:
 	if not back.has_area(AREA_NAME):
 		printerr("the region '%s' did not survive — the area row counts nothing" % AREA_NAME)
 		ok = false
+
+	# ⛔ **THE HERO AND HIS THREE NUMBERS, READ BACK OFF THE FILE** (16.7). Both keys are OPTIONAL,
+	# which is what keeps `FORMAT_VERSION` at 1 — and optional is exactly the shape that can vanish
+	# through a writer without anything failing. A map whose `hp: 900` did not survive builds an
+	# ordinary 40 hp militia, and every other line in this report still reads correctly.
+	var hero: Dictionary = {}
+	for e in back.entities:
+		if StringName(e.get("name", &"")) == HERO_NAME:
+			hero = e
+	if hero.is_empty():
+		printerr("'%s' did not survive the file — the named_unit row counts nobody" % HERO_NAME)
+		ok = false
+	else:
+		var overrides: Dictionary = hero.get("overrides", {})
+		for pair in [["hp", HERO_HP], ["attack", HERO_ATTACK], ["speed", HERO_SPEED]]:
+			var got := int(overrides.get(str(pair[0]), -999))
+			if got != int(pair[1]):
+				printerr("%s override: wrote %d, read back %d" % [pair[0], pair[1], got])
+				ok = false
+		print("  hero           '%s' %s" % [HERO_NAME, overrides])
 	print("  map.json       %dx%d  seats=%d  regions=%s"
 			% [back.size.x, back.size.y, doc.seats(), back.area_names()])
 	return ok

@@ -175,7 +175,65 @@ func _check(s: ScenarioDef) -> bool:
 		if not here:
 			printerr("    an area row names a region the map has not got")
 			ok = false
+
+	# ⛔ **AND THE SAME PAIRING FOR A NAMED HERO (16.7), WHICH IS THE SECOND THING NEITHER PROJECT
+	# CAN CHECK ALONE.** Built into a real world rather than read off the record, because the
+	# question is not *"does the file say 900"* — `export_scenario` already asserted that in the
+	# other process — but *"does the match the game builds from this file give him 900"*. That is
+	# `MapGen._apply_authoring`, and it is the last link in the chain.
+	if not _report_named_units(cfg, on_disk):
+		ok = false
 	return ok
+
+
+## Build the world this config describes and report every named hero in it, with the numbers the
+## SIM ended up giving him.
+##
+## ⚠️ **A REAL `SimWorld`, WHICH NOTHING ELSE IN THIS PREVIEW NEEDS.** Every other check here reads
+## a config or a file; this one has to go one step further, because an override that reached the
+## file and not the entity is invisible in both. `PreviewScenarioWin`'s own argument for standing
+## up the real thing: *a rule that is correct and never reached looks exactly like a rule that is
+## wrong.*
+func _report_named_units(cfg: MatchConfig, on_disk: MapData) -> bool:
+	var wanted: Array[StringName] = []
+	for o in cfg.objectives:
+		if o.subject == ObjectiveDef.Subject.NAMED_UNIT and not wanted.has(o.unit_name):
+			wanted.append(o.unit_name)
+	if wanted.is_empty() and not _map_names_anybody(on_disk):
+		return true
+
+	var w := SimWorld.new()
+	w.setup(cfg)
+	MapGen.build(w, cfg)
+	var ok := true
+	var found: Dictionary = {}
+	for e in w.entities.values():
+		if e.entity_name.is_empty():
+			continue
+		found[e.entity_name] = true
+		print("      '%s' is a %s: hp %d/%d, attack override %d, speed override %d"
+				% [e.entity_name, e.def_id, e.hp, e.max_hp, e.attack_override,
+				e.speed_override])
+	for name in wanted:
+		# THE DECLARED SET AND NOT THE LIVE ONE, because that is what decides whether the row is
+		# measurable at all -- see `SimWorld.named_units`.
+		if not w.named_units.has(name):
+			printerr("    a named_unit row is about '%s' and the world declares nobody by that"
+					% name + " name -- the row would count -1 forever")
+			ok = false
+		elif not found.has(name):
+			# NOT A FAILURE: a hero who is declared and not standing there is a hero who is meant
+			# to arrive, or one belonging to a player this match has not seated. The count is 0,
+			# which is a real answer, and only the scenario's author knows if it is the right one.
+			print("      '%s' is declared and nothing carries it -- that row counts 0" % name)
+	return ok
+
+
+func _map_names_anybody(map: MapData) -> bool:
+	for e in map.entities:
+		if not str(e.get("name", "")).strip_edges().is_empty():
+			return true
+	return false
 
 
 func _folders(c: CampaignDef) -> String:
