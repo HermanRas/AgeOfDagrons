@@ -321,6 +321,11 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --headless --path game --export-pack "Windows Desktop" out.pck   # atlases EXCLUDED
 & $godot --headless --main-pack out.pck res://dev_preview/preview_art_pack.tscn -- --pack <abs zip>
 
+# 0.3a's RESUME. EXIT CODE IS THE ANSWER. Headless, no internet, no screenshots -- a real
+# socket on 127.0.0.1 that DROPS THE CONNECTION on demand, which is the one thing no live
+# server will do when asked. Nine rows; see the scene header for what each one catches.
+& $godot --headless --path game res://dev_preview/preview_resumable_download.tscn
+
 # LAN discovery, TWO PROCESSES — the only thing that exercises the broadcast flag.
 # Start the beacon first; it waits. The exit code is the answer.
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
@@ -687,6 +692,8 @@ carry `age_required`, which is a *gate*, not a skin.
 | **`Set-Content -Encoding utf8` adds a BOM** and has corrupted `project.godot` | Use .NET `WriteAllText`/`WriteAllLines` with `UTF8Encoding($false)`. |
 | **A new `class_name` is invisible until `--import`** | Run it, then the suite. |
 | **EVERY button now has an extra `pressed` connection, and it is FIRST** | `AudioManager` listens on `SceneTree.node_added` and gives every `BaseButton` in the game a click sound from one place, rather than 40 call sites each able to be forgotten. The cost: anything reading `button.pressed.get_connections()` sees `_on_any_button_pressed` at index 0. It already caused one false alarm — `preview_menus` read `[0]` and reported that PLAY and MULTIPLAYER went to the same place. **Filter it** (see `preview_menus._handlers`). Opt a button out with the `no_click_sound` group. |
+| **`HTTPRequest.set_download_file` TRUNCATES, and a dropped connection DELETES the partial file** | Measured on 4.7.1 by `preview_resumable_download`. Both readings reverse what `pack_installer.gd` and card 0.3a had assumed in writing — that a leftover file *"would be appended to"* — so the cheap resume they described does not exist. The engine cannot continue a file for you and will not leave you the bytes of a request that died, which is why a pack is fetched in **bounded chunks** appended by hand: the bound is how much one drop is allowed to cost. ⚠️ **And in-memory chunks mean a server that ignores `Range` hands back the WHOLE pack** — bounded by `body_size_limit`, with a streamed fallback, or a 236 MB response kills the process on a phone. |
+| **A GDScript lambda captures by VALUE** | `var msg := ""` assigned inside a `connect(func(...): msg = x)` never reaches the enclosing scope, so every captured report comes back empty — and an empty complaint reads as "no failure" rather than "not recorded". Accumulate into an `Array`/`Dictionary`, which is a reference. Cost one silent hole in `preview_resumable_download` before it was caught. |
 | **A newly staged `.ogg` is invisible until `--import` too** | Godot imports audio like it imports textures, so `ResourceLoader.exists()` says false for a file plainly on disk. `stage_audio.py` reporting more ids with streams than `preview_audio` finds is this, every time — not a failed fetch. Always **stage → `--import` → run**. |
 | **Staged atlases lag `art_work/out` silently** | A stale-but-valid atlas renders fine and is simply the wrong actor. Read `attribution.actor` out of the staged `.atlas.json` to tell — filenames and mtimes will not show it. |
 | **A building missing a prop it should have** | Blender's COLLADA importer used to drop prop-point transforms, so any actor with stranded attach points quietly rendered those props at its origin. Fixed in isobake 2026-08-17, but only the five actors touched then were rebaked. Report it rather than working around it. |

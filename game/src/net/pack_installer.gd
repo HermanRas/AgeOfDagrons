@@ -26,6 +26,43 @@
 ##      would make an interrupted install indistinguishable from a finished one, and the
 ##      client would then skip re-fetching a pack that is half on disk.
 ##
+## ## A DOWNLOAD RESUMES, AND THE SHAPE OF IT WAS DECIDED BY MEASUREMENT (0.3a)
+##
+## A pack arrives in **bounded chunks** -- `Range: bytes=N-M`, each completed chunk appended
+## to `<id>.part` -- rather than in one request. `.part` survives a failure and a restart, so
+## a dropped connection costs at most `CHUNK_BYTES` instead of the whole pack.
+##
+## ⚠️ **THE OBVIOUS CHEAPER DESIGN DOES NOT EXIST, AND THIS FILE USED TO CLAIM IT DID.**
+## `_download()` carried the comment *"a leftover `.part` would be appended to, not
+## replaced"*, and card 0.3a repeated it as the shape of the fix. **Both were wrong**, and
+## `dev_preview/preview_resumable_download.tscn` is what settled it on 4.7.1:
+##
+##   1. **`set_download_file()` TRUNCATES.** Pointing it at a file holding 500 bytes and
+##      fetching 20,000 leaves a 20,000-byte file, not 20,500. So the engine cannot be made
+##      to continue a file for us, and the append has to be ours.
+##   2. **A DROPPED CONNECTION DELETES ITS OWN PARTIAL FILE.** Not truncates -- removes.
+##      After a cut at 4,096 of 20,000 bytes the download file is not there at all. So
+##      whatever was in flight when the connection died is lost no matter what we do, and
+##      **that is the entire reason the chunks are bounded**: the bound is how much one drop
+##      is allowed to cost. A single-request resume would have resumed from wherever the
+##      *last completed request* ended, which on a first attempt is zero -- exactly the
+##      failure this card exists to fix.
+##
+## The body of each chunk is taken in memory (`set_download_file("")`) and appended with
+## `FileAccess`, so there is no second file on disk to clean up and no byte written twice.
+##
+## ⚠️ **A `.part` IS CLAIMED, BECAUSE RESUMING INTO THE WRONG FILE IS SILENT.** `<id>.part`
+## says nothing about WHICH bytes it is part of, and an `id` outlives its versions -- so a
+## leftover from v1 resumed into v2 would download the remainder, fail the checksum, and
+## throw the whole thing away. `<id>.part.json` records the sha256, size and version the
+## part belongs to and a mismatch discards it BEFORE the fetch rather than after.
+##
+## What makes a resumed file safe to trust is unchanged and is the reason the order below is
+## the order: **size, then hash, on the assembled file.** A resume that went wrong -- a
+## server that quietly changed the bytes, a range that was not honoured -- is caught there,
+## and `_accept()` deletes the part on any failure, so the next attempt starts clean rather
+## than resuming forever into a file that can never verify.
+##
 ## ## ⚠️ EVERY ZIP ENTRY IS CHECKED, NOT JUST THE FOLDER NAME
 ##
 ## `PackDef` whitelists `id` and `folder` because they name a directory. That says nothing
@@ -47,8 +84,13 @@ signal manifest_ready(manifest: PackManifest)
 
 signal pack_started(pack: PackDef)
 
-## `total` is 0 until the server's `Content-Length` arrives, and the bar must cope with
-## that: a percentage of an unknown total is the classic divide-by-zero in a progress UI.
+## `bytes` counts the WHOLE pack, resumed bytes included, and `total` is the manifest's size.
+##
+## ⚠️ **THIS USED TO SAY `total` IS 0 UNTIL `Content-Length` ARRIVES.** Since 0.3a the pack
+## is fetched in chunks, so `Content-Length` describes a 4 MB piece and a bar drawn from it
+## would fill and reset twenty times; the figure now comes from the manifest and is right
+## from the first byte. **A consumer must still cope with 0** -- that is the contract a
+## progress UI is written against, and it costs one guard.
 signal pack_progress(pack: PackDef, bytes: int, total: int)
 
 signal pack_finished(pack: PackDef, ok: bool, message: String)
@@ -63,6 +105,43 @@ const SCRATCH_DIR := "user://downloads/"
 ## final step has to be a rename and a rename cannot cross a filesystem.
 const STAGING_SUFFIX := ".installing"
 
+## The half-downloaded pack, and the note saying which bytes it is half of.
+const PART_SUFFIX := ".part"
+const CLAIM_SUFFIX := ".part.json"
+
+## How much of a pack is asked for in one request -- and therefore **the most that one
+## dropped connection can cost**, since the engine throws away the partial body of a request
+## that dies (see the class comment).
+##
+## The figure is a trade between that loss and the number of round trips: 4 MB is 20 requests
+## for the 80 MB base art pack and about four and a half minutes of a 125 kbps connection to
+## lose, against nine hours for the whole pack today. Smaller would be safer on a bad mobile
+## link and is a one-line change; there is no reason to tune it until somebody measures one.
+const CHUNK_BYTES := 4 * 1024 * 1024
+
+## ⚠️ **THE CEILING ON WHAT ONE RESPONSE MAY BUFFER, AND IT IS A CRASH GUARD.**
+##
+## A chunk's body is taken in MEMORY, which is safe only for as long as the server honours
+## the `Range` -- a cache or proxy that ignores it answers `200` with the **whole pack**, and
+## buffering 236 MB of colour atlases on a phone is not a download that fails, it is a
+## process that dies. Twice the chunk is enough slack for any honest answer to a 4 MB range
+## and far below anything that could hurt; a body over it aborts the request, which
+## `_download()` recognises and answers by falling back to streaming the file to disk in one
+## piece, exactly the way this class worked before 0.3a.
+const BODY_LIMIT_FACTOR := 2
+
+## Consecutive failed chunks before the pack is given up on. **Consecutive** is the load-
+## bearing word: any chunk that lands resets it, so a long download over a flaky link retries
+## forever as long as it is still making progress, while a dead server costs three attempts
+## and not an infinite loop.
+const MAX_CONSECUTIVE_FAILURES := 3
+
+## The chunk size this installer actually uses. A field rather than the constant so a check
+## can turn it down and drive a small fixture through the multi-chunk path -- otherwise
+## every affordable fixture is one chunk and the resume is never exercised at all.
+## Nothing in the game sets it; `CHUNK_BYTES` is the shipping value.
+var chunk_bytes := CHUNK_BYTES
+
 ## The manifest is small and blocks the front door, so it gets a short leash. A DOWNLOAD
 ## gets none (see `_download`): a 400 MB pack on a phone legitimately takes minutes, and a
 ## timeout that fires mid-download would look exactly like a broken server.
@@ -71,6 +150,10 @@ const MANIFEST_TIMEOUT_SECONDS := 15.0
 var _http: HTTPRequest
 var _active: PackDef = null
 var _cancelled := false
+
+## Bytes already on disk when the current chunk started. Progress is reported against the
+## WHOLE pack, so the bar does not restart at zero on every chunk.
+var _part_base := 0
 
 ## ⚠️ ONE `HTTPRequest` MEANS ONE REQUEST AT A TIME, AND THE ENGINE'S REFUSAL IS UGLY.
 ##
@@ -99,12 +182,19 @@ func _ready() -> void:
 	add_child(_http)
 
 
+## ⚠️ PROGRESS IS THE WHOLE PACK'S, NOT THE CHUNK'S, and the total now comes from the
+## MANIFEST rather than from `Content-Length`. Both follow from chunking: `get_body_size()`
+## is the size of the 4 MB piece in flight, so a bar drawn from it would fill and reset
+## twenty times over one download. `pack.size` is known before the first byte arrives, which
+## also retires the divide-by-zero this signal's comment warns about -- `total` is 0 only if
+## a caller hands us a pack with no size, which `PackDef` refuses.
 func _process(_delta: float) -> void:
 	if _active == null:
 		return
 	var got := _http.get_downloaded_bytes()
-	if got >= 0:
-		pack_progress.emit(_active, got, maxi(_http.get_body_size(), 0))
+	if got < 0:
+		got = 0
+	pack_progress.emit(_active, _part_base + got, maxi(_active.size, 0))
 
 
 ## Ask the player's download to stop at the next boundary. Checked between packs and
@@ -127,6 +217,10 @@ func fetch_manifest(url: String = PackManifest.MANIFEST_URL) -> PackManifest:
 
 	_http.timeout = MANIFEST_TIMEOUT_SECONDS
 	_http.set_download_file("")            # into memory; the manifest is a few KB
+	# One `HTTPRequest` is shared with the downloads, and a chunk leaves a body limit on it.
+	# Cleared rather than inherited: the manifest's behaviour must not depend on whether a
+	# pack happened to be fetched first.
+	_http.body_size_limit = -1
 
 	var err := _http.request(url)
 	if err != OK:
@@ -185,22 +279,23 @@ func install(pack: PackDef, index_path: String = PackIndex.USER_FILE) -> bool:
 		return _fail(pack, "manifest entry is unusable: %s" % ", ".join(pack.problems))
 
 	DirAccess.make_dir_recursive_absolute(SCRATCH_DIR)
-	var scratch := SCRATCH_DIR.path_join("%s.part" % pack.id)
+	var scratch := SCRATCH_DIR.path_join("%s%s" % [pack.id, PART_SUFFIX])
+	var claim := SCRATCH_DIR.path_join("%s%s" % [pack.id, CLAIM_SUFFIX])
 
-	var reached := false
-	var last_error := "no urls"
-	for url in pack.urls:
-		if _cancelled:
-			return _fail(pack, "cancelled")
-		last_error = await _download(pack, url, scratch)
-		if last_error.is_empty():
-			reached = true
-			break
-	if not reached:
-		_delete_file(scratch)
-		return _fail(pack, last_error)
+	var problem := await _download(pack, scratch, claim)
+	if not problem.is_empty():
+		# ⚠️ **THE PART AND ITS CLAIM ARE KEPT ON PURPOSE.** This is the whole of 0.3a: a
+		# failed download leaves exactly as much progress on disk as it made, so the retry
+		# -- from DOWNLOAD MORE, or on the next boot -- starts from there. `_accept()`'s
+		# failure paths are what clean up, because those are the ones that mean the bytes
+		# can never be right.
+		return _fail(pack, problem)
 
-	return _accept(pack, scratch, index_path, true)
+	var ok := _accept(pack, scratch, index_path, true)
+	# The claim outlives neither outcome: `_accept` has either consumed the part (unpacked
+	# it, or moved it to `user://packs/`) or deleted it as unusable.
+	_delete_file(claim)
+	return ok
 
 
 ## Verify a pack that is ALREADY on disk, then install or mount it -- steps 1 to 4 of the
@@ -297,16 +392,146 @@ func uninstall(pack: PackDef, index_path: String = PackIndex.USER_FILE) -> bool:
 	return true
 
 
-## One attempt at one URL. Returns "" on success, or the complaint.
-func _download(pack: PackDef, url: String, scratch: String) -> String:
+## Fetch `pack` into `scratch`, continuing whatever a previous attempt left there. Returns ""
+## on success, or the complaint. See the class comment for why this is chunked.
+##
+## The urls are tried in turn as chunks fail, rather than one url being exhausted before the
+## next is reached: a mirror that dies half way through is a reason to ask a different
+## mirror for the NEXT chunk, not a reason to start the pack again.
+func _download(pack: PackDef, scratch: String, claim: String) -> String:
 	if _in_flight:
 		return "a download is already in progress"
+	if pack.urls.is_empty():
+		return "no urls"
 
-	_delete_file(scratch)            # a leftover `.part` would be appended to, not replaced
+	var have := _resume_point(pack, scratch, claim)
+	if have >= pack.size:
+		# Already complete on disk -- an attempt that died between the last byte and the
+		# verify. Nothing to fetch; `_accept()` is the judge of whether it is any good.
+		return ""
+	if have > 0:
+		print("PackInstaller: resuming '%s' at %d of %d bytes" % [pack.id, have, pack.size])
+	_write_claim(pack, claim)
 
+	var attempt := 0
+	var failures := 0
+	var last_error := ""
+	while have < pack.size:
+		if _cancelled:
+			return "cancelled"
+
+		var url: String = pack.urls[attempt % pack.urls.size()]
+		attempt += 1
+		var want := mini(have + maxi(chunk_bytes, 1), pack.size)
+		_part_base = have
+		var piece := await _fetch_chunk(pack, url, have, want - 1)
+
+		if not str(piece["error"]).is_empty():
+			# A cancel makes the request in flight fail, so the error it produces would
+			# otherwise be reported as the reason -- "did not answer (result 2)" for a
+			# download the player stopped on purpose.
+			if _cancelled:
+				return "cancelled"
+			# The server ignored the Range and started sending the whole pack, so the body
+			# ran past what a chunk may buffer. Chunking is impossible against it; stream
+			# the file instead of retrying a request that will always be too big.
+			if int(piece["result"]) == HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
+				return await _download_whole(pack, url, scratch)
+			last_error = str(piece["error"])
+			failures += 1
+			if failures >= MAX_CONSECUTIVE_FAILURES:
+				return last_error
+			continue
+
+		var code := int(piece["code"])
+		var body: PackedByteArray = piece["body"]
+
+		# 416: the server says our part is already at or past the end of the file. Nothing
+		# more to fetch, and the size check in `_accept()` is what decides whether that is
+		# the finished pack or a stale part that lied about its claim.
+		if code == 416:
+			break
+
+		# 200 to a ranged request means the server ignored the Range and sent the WHOLE file.
+		# Appending that to what we had would make a file of plausible length out of the
+		# wrong bytes, so the part is replaced outright. Caches and proxies really do this.
+		if code == 200 and have > 0:
+			push_warning("PackInstaller: %s ignored Range; restarting '%s' from zero"
+					% [url, pack.id])
+			_delete_file(scratch)
+			have = 0
+			_part_base = 0
+
+		if body.is_empty():
+			# A 206 that carried nothing. Counted as a failure rather than looped on, because
+			# the alternative is a tight loop asking for a byte that never comes.
+			last_error = "%s sent an empty range for '%s'" % [url, pack.id]
+			failures += 1
+			if failures >= MAX_CONSECUTIVE_FAILURES:
+				return last_error
+			continue
+
+		var wrote := _append_bytes(scratch, body)
+		if not wrote.is_empty():
+			return wrote                  # a disk fault is not something a retry fixes
+		have += body.size()
+		failures = 0
+
+		# A server sending more than the manifest describes is stopped here rather than at
+		# the checksum, so a wrong or hostile length cannot fill the device first.
+		if have > pack.size:
+			return "the download is larger than the manifest says (%d of %d bytes)" \
+					% [have, pack.size]
+
+	return ""
+
+
+## One ranged request, body kept in memory. Never throws; the complaint is in the result.
+##
+## Keys: `error` ("" on success), `code` (the HTTP status, 0 if there never was one), `body`.
+func _fetch_chunk(pack: PackDef, url: String, first: int, last: int) -> Dictionary:
 	# NO TIMEOUT on a payload -- see MANIFEST_TIMEOUT_SECONDS. Progress is on screen and
 	# `cancel()` is the player's escape.
 	_http.timeout = 0.0
+	_http.set_download_file("")           # in memory; the chunk is bounded by `chunk_bytes`
+	_http.body_size_limit = maxi(chunk_bytes, 1) * BODY_LIMIT_FACTOR
+
+	var err := _http.request(url, PackedStringArray(["Range: bytes=%d-%d" % [first, last]]))
+	if err != OK:
+		return {"error": "cannot reach %s (error %d)" % [url, err], "code": 0,
+				"result": -1, "body": PackedByteArray()}
+
+	_in_flight = true
+	_active = pack
+	set_process(true)
+	var result: Array = await _http.request_completed
+	_active = null
+	set_process(false)
+	_in_flight = false
+
+	var code := int(result[1])
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS:
+		return {"error": "%s did not answer (result %d)" % [url, int(result[0])], "code": code,
+				"result": int(result[0]), "body": PackedByteArray()}
+	if code != 200 and code != 206 and code != 416:
+		return {"error": "%s answered HTTP %d" % [url, code], "code": code,
+				"result": int(result[0]), "body": PackedByteArray()}
+	return {"error": "", "code": code, "result": int(result[0]),
+			"body": result[3] as PackedByteArray}
+
+
+## The pre-0.3a path: one request, streamed straight to disk, no resume. Kept for the one
+## server that makes chunking impossible -- see `BODY_LIMIT_FACTOR`.
+##
+## ⚠️ **THIS OVERWRITES THE PART, AND MUST.** `set_download_file` truncates (measured), so
+## there is no half-file to protect here: the server has already told us it will not serve a
+## range, which means starting again is the only thing it can do.
+func _download_whole(pack: PackDef, url: String, scratch: String) -> String:
+	push_warning("PackInstaller: %s will not serve ranges; '%s' cannot be resumed"
+			% [url, pack.id])
+	_delete_file(scratch)
+	_http.timeout = 0.0
+	_http.body_size_limit = -1
 	_http.set_download_file(scratch)
 
 	var err := _http.request(url)
@@ -315,6 +540,7 @@ func _download(pack: PackDef, url: String, scratch: String) -> String:
 
 	_in_flight = true
 	_active = pack
+	_part_base = 0
 	set_process(true)
 	var result: Array = await _http.request_completed
 	_active = null
@@ -326,6 +552,82 @@ func _download(pack: PackDef, url: String, scratch: String) -> String:
 	var code := int(result[1])
 	if code != 200:
 		return "%s answered HTTP %d" % [url, code]
+	return ""
+
+
+## How many bytes of `pack` are already on disk and may be built on. 0 means start clean, and
+## anything that cannot be PROVEN to belong to this pack is deleted rather than trusted.
+func _resume_point(pack: PackDef, scratch: String, claim: String) -> int:
+	var have := _file_size(scratch)
+	if have <= 0:
+		_discard_part(scratch, claim)
+		return 0
+	if not _claim_matches(pack, claim):
+		# A part from an earlier version of the same id, or one whose note is missing. Both
+		# are unresumable for the same reason: nothing on disk says these bytes are this
+		# pack's, so continuing would buy a checksum failure at the end of a long download.
+		_discard_part(scratch, claim)
+		return 0
+	if have > pack.size:
+		_discard_part(scratch, claim)
+		return 0
+	return have
+
+
+## Write the note that says which bytes `<id>.part` is part of.
+func _write_claim(pack: PackDef, claim: String) -> void:
+	var f := FileAccess.open(claim, FileAccess.WRITE)
+	if f == null:
+		# Not fatal: the cost of losing the claim is a part that cannot be resumed next time,
+		# which is exactly where this feature started.
+		push_warning("PackInstaller: cannot write %s; this download will not be resumable"
+				% claim)
+		return
+	f.store_string(JSON.stringify({
+		"id": pack.id, "version": pack.version, "size": pack.size, "sha256": pack.sha256,
+	}))
+	f.close()
+
+
+## Does the note beside the part describe THIS pack? Anything unreadable, unparseable or
+## disagreeing is a no -- a missing claim is not a reason to guess.
+func _claim_matches(pack: PackDef, claim: String) -> bool:
+	if not FileAccess.file_exists(claim):
+		return false
+	var f := FileAccess.open(claim, FileAccess.READ)
+	if f == null:
+		return false
+	var text := f.get_as_text()
+	f.close()
+	var raw: Variant = JSON.parse_string(text)
+	if not raw is Dictionary:
+		return false
+	var d: Dictionary = raw
+	# `sha256` is the real identity; `size` and `version` are checked too so a republished
+	# pack that kept its checksum by accident still cannot be confused for another version.
+	return str(d.get("sha256", "")).to_lower() == pack.sha256 \
+			and int(d.get("size", -1)) == pack.size \
+			and int(d.get("version", -1)) == pack.version
+
+
+func _discard_part(scratch: String, claim: String) -> void:
+	_delete_file(scratch)
+	_delete_file(claim)
+
+
+## Append `data` to `path`, creating it if this is the first chunk. Returns "" or the
+## complaint.
+##
+## `READ_WRITE` and then `seek_end()`, because `WRITE` truncates -- which is the same engine
+## behaviour that made this whole feature necessary, one layer down.
+static func _append_bytes(path: String, data: PackedByteArray) -> String:
+	var mode := FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE
+	var f := FileAccess.open(path, mode)
+	if f == null:
+		return "cannot write %s (error %d)" % [path, FileAccess.get_open_error()]
+	f.seek_end()
+	f.store_buffer(data)
+	f.close()
 	return ""
 
 

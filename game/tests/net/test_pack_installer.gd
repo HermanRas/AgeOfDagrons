@@ -49,6 +49,13 @@ func _scrub() -> void:
 	for dir in [TARGET, TARGET + PackInstaller.STAGING_SUFFIX, WORK]:
 		if DirAccess.dir_exists_absolute(dir):
 			PackInstaller._remove_tree(dir)
+	# 0.3a's half-downloaded pack and its claim. These live in `user://downloads/`, which is
+	# a real directory a developer's own downloads pass through -- so only the two files this
+	# fixture's id can produce are touched, never the directory.
+	for path in [PackInstaller.SCRATCH_DIR.path_join(FOLDER + PackInstaller.PART_SUFFIX),
+			PackInstaller.SCRATCH_DIR.path_join(FOLDER + PackInstaller.CLAIM_SUFFIX)]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _index() -> String:
@@ -430,3 +437,116 @@ func test_a_NUL_in_an_entry_name_is_truncated_by_the_engine_not_carried() -> voi
 	# AND TRUNCATION CANNOT CREATE AN ESCAPE, which is why dropping the check costs nothing:
 	# a shorter name is not a climbing one.
 	assert_true(PackInstaller._is_safe_entry(decoded))
+
+
+# ── 0.3a: what may be resumed ───────────────────────────────────────────────
+#
+# THE FETCH ITSELF IS STILL NOT TESTED HERE and still cannot be -- `HTTPRequest` needs
+# frames and the runner never awaits. `dev_preview/preview_resumable_download.tscn` drives a
+# real socket for that, dropping the connection on purpose.
+#
+# What IS reachable without a network is the DECISION: given a `.part` on disk, may it be
+# built on, and where does it continue from? That decision is where a resume goes wrong
+# silently -- resuming into the wrong bytes produces a file of exactly the right length that
+# fails its checksum after the whole download has been paid for.
+
+
+## The note that says which bytes a part belongs to.
+func _write_claim_file(pack: PackDef, version: int) -> void:
+	var f := FileAccess.open(_claim(), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"id": pack.id, "version": version,
+			"size": pack.size, "sha256": pack.sha256}))
+	f.close()
+
+
+func _write_part(size: int) -> void:
+	DirAccess.make_dir_recursive_absolute(PackInstaller.SCRATCH_DIR)
+	var data := PackedByteArray()
+	data.resize(size)
+	data.fill(0x41)
+	var f := FileAccess.open(_part(), FileAccess.WRITE)
+	f.store_buffer(data)
+	f.close()
+
+
+func _part() -> String:
+	return PackInstaller.SCRATCH_DIR.path_join("%s%s" % [FOLDER, PackInstaller.PART_SUFFIX])
+
+
+func _claim() -> String:
+	return PackInstaller.SCRATCH_DIR.path_join("%s%s" % [FOLDER, PackInstaller.CLAIM_SUFFIX])
+
+
+## A pack whose id is the fixture name, so its part lands on a path nothing else uses.
+func _resumable_pack(version: int = 4) -> PackDef:
+	return PackDef.from_dict({
+		"id": FOLDER, "kind": "campaign", "folder": FOLDER, "version": version,
+		"size": 100000, "sha256": "ab".repeat(32),
+		"urls": ["https://example.com/x.zip"],
+	})
+
+
+func test_a_part_with_a_matching_claim_resumes_where_it_stopped() -> void:
+	var pack := _resumable_pack()
+	_write_part(4096)
+	_write_claim_file(pack, pack.version)
+	assert_eq(_installer._resume_point(pack, _part(), _claim()), 4096,
+			"a claimed part is exactly what a resume builds on")
+
+
+## ⚠️ THE ONE THAT MATTERS MOST. `<id>.part` says nothing about WHICH bytes it is part of,
+## and an `id` outlives its versions -- so a leftover from v3 resumed into v4 would fetch the
+## remainder, fail the checksum, and throw away a download that cost hours.
+func test_a_part_from_another_version_is_discarded_rather_than_resumed_into() -> void:
+	var pack := _resumable_pack(4)
+	_write_part(4096)
+	_write_claim_file(pack, 3)              # the PREVIOUS version's note
+	assert_eq(_installer._resume_point(pack, _part(), _claim()), 0,
+			"a part belonging to another version may not be built on")
+	assert_false(FileAccess.file_exists(_part()),
+			"and it is deleted, not left to be found again next time")
+
+
+## A part with no note beside it. Unresumable for the same reason and not a judgement call:
+## nothing on disk says those bytes are this pack's.
+func test_an_unclaimed_part_is_discarded() -> void:
+	_write_part(4096)
+	assert_eq(_installer._resume_point(_resumable_pack(), _part(), _claim()), 0)
+	assert_false(FileAccess.file_exists(_part()))
+
+
+## Longer than the manifest says the whole pack is, so it cannot be a prefix of it.
+func test_a_part_longer_than_the_pack_is_discarded() -> void:
+	var pack := _resumable_pack()
+	_write_part(pack.size + 1)
+	_write_claim_file(pack, pack.version)
+	assert_eq(_installer._resume_point(pack, _part(), _claim()), 0)
+
+
+## A part that is exactly the pack's size -- an attempt that died between the last byte and
+## the verify. There is nothing left to fetch, and `_accept()` is what judges the bytes.
+func test_a_complete_part_needs_no_further_fetch() -> void:
+	var pack := _resumable_pack()
+	_write_part(pack.size)
+	_write_claim_file(pack, pack.version)
+	assert_eq(_installer._resume_point(pack, _part(), _claim()), pack.size,
+			"a finished part resumes at the end, which asks for nothing")
+
+
+## ⚠️ **THE ENGINE BEHAVIOUR THAT MADE ALL OF THIS NECESSARY, PINNED ONE LAYER DOWN.**
+## `FileAccess.WRITE` truncates, which is what `HTTPRequest.set_download_file` does to a part
+## it is pointed at -- measured on 4.7.1 and the reason the append is ours. If `_append_bytes`
+## ever loses its `READ_WRITE`/`seek_end()`, every resume silently keeps only the LAST chunk
+## and the checksum failure that follows says nothing about why.
+func test_appending_a_chunk_extends_the_part_rather_than_replacing_it() -> void:
+	DirAccess.make_dir_recursive_absolute(PackInstaller.SCRATCH_DIR)
+	var path := _part()
+	assert_eq(PackInstaller._append_bytes(path, PackedByteArray([1, 2, 3])), "",
+			"the first chunk creates the file")
+	assert_eq(PackInstaller._append_bytes(path, PackedByteArray([4, 5])), "",
+			"the second is added to it")
+	var f := FileAccess.open(path, FileAccess.READ)
+	var got := f.get_buffer(f.get_length())
+	f.close()
+	assert_eq(got, PackedByteArray([1, 2, 3, 4, 5]),
+			"both chunks, in order -- not just the last one")
