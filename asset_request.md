@@ -20,6 +20,96 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
+### [game-code → art] The bridge needs re-cutting as a PER-TILE SET, and your own rule says it gets all 8 directions — 2026-09-19
+
+**This is the "say so and I will" you offered on `vis.bridge_wood`.** Saying so. The owner wants
+the River map's land bridge replaced with real bridge art, and the 22 × 9 m bake cannot do it —
+for a reason that is a measurement rather than a preference.
+
+#### ⛔ THE SPAN IS NOT FIXED. IT IS 9 TILES AT TWO PLAYERS AND 17 AT EIGHT
+
+Measured off the painted terrain, seed 7, one run per player count:
+
+| players | board | river width |
+|---|---|---|
+| 2 | 96 | **9 tiles / 18 m** |
+| 3–4 | 112–128 | 11 tiles / 22 m |
+| 5 | 144 | 13 tiles / 26 m |
+| 6–7 | 160–176 | 15 tiles / 30 m |
+| 8 | 192 | **17 tiles / 34 m** |
+
+`_paint_river`'s half-width is `max(2.5, side × 0.045)` and `side_for()` is
+`ceil(64 × √players / 16) × 16`, so the river scales with the board — **a factor of about two
+across the roster.** There is no single length that spans it. Your instinct on the card
+(*"if the map format wants bridges that span a variable gap, this is the wrong shape and I
+should cut a repeatable segment instead"*) was right, and the numbers are why.
+
+The current bake is wrong in both axes for this job: **22 tiles long** against a 9–17 tile gap,
+and **9 tiles wide** against a crossing corridor that is **5 tiles** (`_paint_river` keeps tiles
+within 2.5 of a crossing point dry).
+
+#### ✅ THE MECHANISM, AND IT IS THE CLIFF ONE — SO ALL 8 DIRECTIONS ARE REACHABLE
+
+**A bridge should be TERRAIN, not an entity standing on a footprint.** A new
+`SimMap.Terrain.BRIDGE` byte in the array `MapData` already carries — exactly the design I sent
+you for cliffs on 2026-09-09, and for the same reasons. That settles the direction question by
+**your** rule, which I am quoting back because it is the most useful thing either of us has
+written here:
+
+> *"8 directions pay off when a facing is derived from NEIGHBOURS. They do not when it is
+> derived from a FOOTPRINT."*
+
+A bridge tile's piece is chosen by its 8-neighbourhood, not by a `Rect2i`. So unlike the walls,
+**every one of the 8 is addressable — bake 8 with confidence.** `TerrainLayer.blend_mask_at()`
+already returns the canonical 8-bit mask; this needs a lookup table on the end of it and nothing
+new.
+
+It also makes the span free: a 17-tile river is 17 tiles of bridge terrain. No footprint, no
+entity per plank, nothing in the snapshot, and no per-map-size variant.
+
+#### WHAT I AM ASKING FOR
+
+**A per-tile piece set at 2.0 m per tile**, the same size decision you landed on for cliffs
+(*"one piece is one tile edge, 2.0 m … that composes into a run of any length under ANY
+encoding"*). What I think it needs, though the set is yours to propose:
+
+- an **interior deck** tile,
+- a **long-side edge** (the rail/parapet running down the bridge's sides),
+- a **ramp end** where the deck meets the bank,
+- whatever **corner** pieces the rail-meets-ramp junction needs.
+
+📝 **Deck WIDTH is not your problem and I should say so explicitly** — under a per-tile encoding
+the bridge is as wide as the number of tiles I paint, so the 5-tile corridor is mine to set or
+change. You are cutting one tile, not a bridge.
+
+#### WHAT I CANNOT WRITE FROM THIS SIDE
+
+Same one thing as the cliffs: **the mask-to-piece table.** Which piece, at which of its 8
+directions, belongs to a tile whose NE/SE/SW/NW neighbours are bridge-or-not. Send it as a
+table and I will wire it; send it as pictures and I will guess wrong.
+
+#### THREE THINGS WORTH KNOWING BEFORE YOU START
+
+- ✅ **The existing `vis.bridge_wood` is NOT wasted and I am not asking you to delete it.** A
+  single 22 × 9 m span is a perfectly good hand-placed decorative bridge for an authored map in
+  the MapMaker, which is a thing 16.x now supports. It is just not what a *generated* river can
+  use. The owner confirmed it looks right (*"the bridge is perfect"*), so it should keep existing.
+- ⚠️ **`licence_audit.py` is still RED on `vis.bridge_wood`** — my 2026-09-11 note further down
+  this file, still open on your card `bridge-wood` (#96). A re-cut is a natural moment to close
+  it, since you will be editing `LICENCES.md` for the new ids anyway.
+- 📝 **The river is CARDINAL ONLY as of today** (2026-09-19, owner's call): `_river_axis` no
+  longer returns the two diagonals. That was taken for the *footprint* version of this work and
+  the terrain design above does not need it — so if the set lands, **say the word and I will put
+  the diagonals back**, because a neighbour mask reaches them fine. I would rather restore them
+  than leave the map type quietly poorer than it was.
+
+#### AND A BUG I FIXED ON THE WAY, BECAUSE IT TOUCHES A NUMBER YOU MIGHT MEASURE
+
+`_paint_river` and `_river_start_positions` each drew their **own** `_river_axis(rng)` from the
+same advancing generator, so the water ran one way and the players were laid out as if it ran
+another. **4 of 20 seeds put both starts on the same bank.** Fixed — one draw, shared. If you
+ever generate a river map to measure against, it behaves differently from yesterday.
+
 ### [game-code] The art packer is written and published. Your three answers were all load-bearing — 2026-09-12
 
 **Nothing is asked of you.** This closes the row below it, and there is one thing in it that

@@ -853,23 +853,80 @@ func test_a_desert_is_mostly_sand_and_a_forest_is_mostly_wood() -> void:
 			"a forest map has %d trees, a desert %d" % [trees, desert_trees])
 
 
-func test_a_river_map_splits_its_players_across_the_water() -> void:
-	# The prototype's river was three disjoint segments with 20-tile gaps, so it read
-	# as three lakes and "opposite sides" meant nothing. It is now continuous with
-	# NARROW land bridges (which the owner likes and which stay), and the players are
-	# on opposite banks -- so a straight line between two starts must cross water.
+## ⛔ **THIS USED TO ASSERT THAT THE STRAIGHT LINE BETWEEN THE TWO STARTS CROSSES WATER,
+## AND THAT PREMISE IS UNSOUND** -- rewritten 2026-09-19. A land bridge is dry ground
+## spanning the river, the test immediately below asserts land bridges exist, and a
+## straight line is perfectly entitled to run over one.
+##
+## **It is not even a coincidence, it is the geometry.** `_bridge_positions` spaces
+## crossings at `(i + 1) / (count + 1)` of the river's length, so an ODD count always puts
+## one at `along = 0`; a two-player map puts BOTH starts at `along = 0` as well. So on
+## every 1-crossing and 3-crossing map the start line runs exactly over the central
+## bridge. Measured: seed 11 (1 crossing) and seed 5 (3 crossings) touch no water at all,
+## seed 1 (2 crossings) touches nine tiles.
+##
+## It passed for years only because the two halves of the river disagreed about which way
+## it ran, so the start line was never aligned with the water's centre. Fixing that
+## (see `_river_axis`) is what exposed this.
+##
+## ➡️ **The "opposite banks" half now belongs to
+## `test_both_banks_of_a_river_get_a_player_and_the_water_agrees`**, which measures the
+## perpendicular offset against the painted water and cannot be fooled by a bridge. What
+## is left here is the OTHER half of the original comment, and it is still worth pinning:
+## the prototype's river was three disjoint lakes, and a continuous band with narrow gaps
+## is what makes "opposite sides" mean anything.
+func test_a_river_is_one_continuous_band_with_narrow_gaps_in_it() -> void:
 	var data := _generate(11, MapGenerator.Type.RIVER)
 	assert_eq(data.starts.size(), 2)
-	var a := Vector2(data.starts[0])
-	var b := Vector2(data.starts[1])
-	var crossings := 0
-	var steps := int(a.distance_to(b))
-	for i in range(steps + 1):
-		var t := Vector2i(a.lerp(b, float(i) / float(maxi(1, steps))))
-		if not data.is_ground_passable(t):
-			crossings += 1
-	assert_true(crossings > 0,
-			"the straight line between the two starts never crosses the river")
+
+	var water: Array[Vector2i] = []
+	for y in range(data.size.y):
+		for x in range(data.size.x):
+			if data.terrain_at(Vector2i(x, y)) == SimMap.Terrain.WATER_SHALLOW:
+				water.append(Vector2i(x, y))
+	assert_true(water.size() > 200, "only %d water tiles" % water.size())
+
+	# Which way the band runs, off the tiles rather than off the seed.
+	var minx := 9999
+	var maxx := -1
+	var miny := 9999
+	var maxy := -1
+	for t in water:
+		minx = mini(minx, t.x)
+		maxx = maxi(maxx, t.x)
+		miny = mini(miny, t.y)
+		maxy = maxi(maxy, t.y)
+	var runs_x := (maxx - minx) > (maxy - miny)
+
+	# Walk the centre line. Dry runs are the crossings; each must be NARROW, and the
+	# water either side of them is what makes the band continuous rather than lakes.
+	var mid := (miny + maxy) / 2 if runs_x else (minx + maxx) / 2
+	var length := data.size.x if runs_x else data.size.y
+
+	# ⚠️ A DRY RUN IS ONLY A CROSSING IF IT DOES NOT TOUCH THE MAP EDGE. Dropping the
+	# first and last run instead -- which is the obvious way to write this -- throws the
+	# crossing away on every river that spans the board edge to edge, and most of them do:
+	# there are then no bank runs to discard and the ONE run in the list is the thing being
+	# looked for. Cost a red run; keeping the reason because it reads as "no crossing".
+	var interior: Array[int] = []
+	var run := 0
+	var run_start := 0
+	for i in range(length):
+		var t := Vector2i(i, mid) if runs_x else Vector2i(mid, i)
+		if data.terrain_at(t) == SimMap.Terrain.WATER_SHALLOW:
+			if run > 0 and run_start > 0:
+				interior.append(run)
+			run = 0
+		else:
+			if run == 0:
+				run_start = i
+			run += 1
+	# A run still open at the end touches the far edge, so it is a bank and not a crossing.
+
+	assert_true(not interior.is_empty(), "a river with no crossing at all")
+	for g in interior:
+		assert_true(g <= 12,
+				"a %d-tile gap in the river is a lake boundary, not a crossing" % g)
 
 
 func test_a_river_still_has_land_bridges() -> void:
@@ -1084,6 +1141,81 @@ func test_a_map_with_more_players_than_the_match_does_not_spawn_a_stranger() -> 
 
 
 # ── the wire format ─────────────────────────────────────────────────────────
+
+# ── the river's two halves agree ────────────────────────────────────────────
+
+## MEASURED OFF THE PAINTED TERRAIN, WHICH IS THE ONLY READING THAT CANNOT BE FOOLED.
+##
+## Asking the generator which axis it used would just replay the bug: `_paint_river` and
+## `_river_start_positions` each drew their own `_river_axis(rng)` until 2026-09-19, and a
+## test that asked either one would agree with itself. So this fits the water band's
+## direction out of the tiles that actually came out blue, and checks the STARTS against
+## that -- two independent readings of one fact.
+##
+## The failure it is for: **both starts at a perpendicular offset of ~0**, i.e. laid out
+## against an axis at right angles to the river, so the pair straddles the water lengthwise
+## instead of facing each other across it. 4 of these 20 seeds did exactly that before the
+## fix, and nothing in the suite could see it.
+func test_both_banks_of_a_river_get_a_player_and_the_water_agrees() -> void:
+	var same_bank: Array[int] = []
+	for seed_value in range(1, 21):
+		var data := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 2, 2)
+
+		var water: Array[Vector2i] = []
+		for y in range(data.size.y):
+			for x in range(data.size.x):
+				var t := Vector2i(x, y)
+				if data.terrain_at(t) == SimMap.Terrain.WATER_SHALLOW:
+					water.append(t)
+		assert_true(water.size() > 20, "seed %d painted no river at all" % seed_value)
+
+		# Centroid and principal direction of the water band.
+		var c := Vector2.ZERO
+		for t in water:
+			c += Vector2(t)
+		c /= float(water.size())
+		var sxx := 0.0
+		var sxy := 0.0
+		var syy := 0.0
+		for t in water:
+			var d := Vector2(t) - c
+			sxx += d.x * d.x
+			sxy += d.x * d.y
+			syy += d.y * d.y
+		var theta := 0.5 * atan2(2.0 * sxy, sxx - syy)
+		var perp := Vector2(-sin(theta), cos(theta))
+
+		var a := (Vector2(data.starts[0]) - c).dot(perp)
+		var b := (Vector2(data.starts[1]) - c).dot(perp)
+		if signf(a) == signf(b):
+			same_bank.append(seed_value)
+
+	assert_true(same_bank.is_empty(),
+			"seeds with both starts on one bank: %s" % [same_bank])
+
+
+## The diagonals are gone (2026-09-19, owner's call for the bridge), so every river is
+## axis-aligned and a crossing is a rect. Asserts the SHAPE rather than which of the two
+## came out, because which one is the rng's business.
+func test_a_river_runs_along_one_of_the_two_cardinal_axes() -> void:
+	for seed_value in range(1, 13):
+		var data := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 2, 2)
+		var xs: Dictionary = {}
+		var ys: Dictionary = {}
+		for y in range(data.size.y):
+			for x in range(data.size.x):
+				if data.terrain_at(Vector2i(x, y)) == SimMap.Terrain.WATER_SHALLOW:
+					xs[x] = true
+					ys[y] = true
+		# A cardinal band spans the map one way and is narrow the other. A diagonal one
+		# would be wide on both counts.
+		var wide := maxi(xs.size(), ys.size())
+		var narrow := mini(xs.size(), ys.size())
+		assert_true(wide > data.size.x / 2,
+				"seed %d: the river does not span the map" % seed_value)
+		assert_true(narrow < data.size.x / 3,
+				"seed %d: the river is wide on both axes, i.e. diagonal" % seed_value)
+
 
 func test_a_map_survives_a_round_trip_through_its_dictionary() -> void:
 	# How a map reaches a joining client (12.1 step b) and how it is saved (2.4c).

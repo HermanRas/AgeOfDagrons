@@ -567,16 +567,21 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 		data.starts = _archipelago_start_positions(data, count, rng)
 		_paint_archipelago(data, wood, rng, data.starts, count)
 	else:
+		# ⛔ ONE AXIS PER MAP, DRAWN HERE AND HANDED TO BOTH HALVES. The water and the
+		# starts are two readings of the same fact, and until 2026-09-19 each drew its
+		# own -- see `_river_axis` for what that cost. Empty for every other type, which
+		# never asks.
+		var river_axis: Array = _river_axis(rng) if resolved == Type.RIVER else []
 		match resolved:
 			Type.ISLAND:
 				_paint_island(data, wood, rng)
 			Type.RIVER:
-				_paint_river(data, wood, rng)
+				_paint_river(data, wood, rng, river_axis)
 			Type.DESERT:
 				_paint_desert(data, wood, rng)
 			_:
 				_paint_forest(data, wood, rng)
-		data.starts = _start_positions(data, resolved, count, rng)
+		data.starts = _start_positions(data, resolved, count, rng, river_axis)
 
 	# Clear every base BEFORE placing anything, so one player's clearing cannot wipe
 	# out the town centre of a neighbour whose start landed close by.
@@ -816,7 +821,7 @@ static func _archipelago_start_positions(data: MapData, count: int,
 ## work for one direction. The direction itself varies -- the prototype hardcoded the
 ## `y = x` diagonal.
 static func _paint_river(data: MapData, wood: PackedByteArray,
-		rng: RandomNumberGenerator) -> void:
+		rng: RandomNumberGenerator, axis: Array) -> void:
 	var side := data.size.x
 	data.fill_terrain(SimMap.Terrain.GRASS)
 	var shape: Dictionary = SHAPE[Type.RIVER]
@@ -826,7 +831,6 @@ static func _paint_river(data: MapData, wood: PackedByteArray,
 			if trees.get_noise_2d(x, y) > float(shape["wood"]):
 				wood[data.index_of(Vector2i(x, y))] = 1
 
-	var axis := _river_axis(rng)
 	var half_width: float = maxf(2.5, float(side) * 0.045)
 	var bridges := _bridge_positions(side, rng)
 
@@ -955,13 +959,35 @@ static func _paint_forest(data: MapData, wood: PackedByteArray,
 
 # ── the river's geometry ────────────────────────────────────────────────────
 
-## One of four directions, as (along, perpendicular) integer vectors.
+## The river's direction, as (along, perpendicular) unit vectors.
+##
+## ⛔ **DRAW THIS ONCE PER MAP AND PASS IT AROUND. IT USED TO BE DRAWN TWICE AND THE TWO
+## DRAWS DISAGREED**, which is the whole of the bug fixed on 2026-09-19. `_paint_river`
+## drew an axis and painted the water along it; `_river_start_positions` then drew again
+## from the same advancing rng -- with `_noise()` and `_bridge_positions()` consuming
+## values in between -- and laid the starts out against whatever came back. They agreed
+## only by luck, and with four directions that is one map in four.
+##
+## **MEASURED OFF THE PAINTED TERRAIN, NOT REASONED ABOUT: 4 of 20 seeds put both
+## starts on the SAME bank**, and the reading that says so is that both starts came out at
+## a perpendicular offset of ~0 from the water's own centre line -- i.e. laid out against
+## an axis at right angles to the river, so the pair straddled the water lengthwise
+## instead of facing each other across it. A map that is supposed to be two banks and a
+## crossing was neither.
+##
+## ➡️ **THIS IS ALMOST CERTAINLY `2.x-river-teams`** -- an allied pair assigned to one
+## bank by `_river_start_positions`'s `per_bank` is only on one bank if the axis that
+## split them is the axis the water was painted on.
+##
+## ⚠️ **CARDINAL ONLY SINCE 2026-09-19** (owner's call, taken for the bridge). The two
+## diagonals are gone because a bridge is a footprint and footprints are axis-aligned
+## rects -- the same limit that has `wall-facings-reachable` blocked. The art has all 8
+## directions baked and is not what is missing; put the diagonals back the day a
+## footprint can lie at 45 degrees, and the rest of this file needs no edit to suit.
 static func _river_axis(rng: RandomNumberGenerator) -> Array:
-	match rng.randi_range(0, 3):
+	match rng.randi_range(0, 1):
 		0: return [Vector2(1, 0), Vector2(0, 1)]        # runs east-west
-		1: return [Vector2(0, 1), Vector2(1, 0)]        # runs north-south
-		2: return [Vector2(1, 1).normalized(), Vector2(1, -1).normalized()]
-		_: return [Vector2(1, -1).normalized(), Vector2(1, 1).normalized()]
+		_: return [Vector2(0, 1), Vector2(1, 0)]        # runs north-south
 
 
 ## Signed perpendicular distance from the river's centre line, in tiles. Its SIGN is
@@ -990,9 +1016,9 @@ static func _bridge_positions(side: int, rng: RandomNumberGenerator) -> Array[fl
 # ── player starts ───────────────────────────────────────────────────────────
 
 static func _start_positions(data: MapData, type: Type, count: int,
-		rng: RandomNumberGenerator) -> Array[Vector2i]:
+		rng: RandomNumberGenerator, river_axis: Array = []) -> Array[Vector2i]:
 	if type == Type.RIVER:
-		return _river_start_positions(data, count, rng)
+		return _river_start_positions(data, count, river_axis)
 
 	# Equally spread around a ring, with a random rotation so the same player count
 	# does not always start in the same corners.
@@ -1012,11 +1038,19 @@ static func _start_positions(data: MapData, type: Type, count: int,
 ##
 ## Players alternate sides, so an even count is balanced and an odd one puts the
 ## extra player on the bank that has fewer -- the owner's rule for 3, 5 and 7.
+##
+## ⛔ **THE AXIS IS THE CALLER'S AND IS NO LONGER DRAWN HERE.** `bank` is measured along
+## `axis[1]`, so this function decides which side of the river a player is on -- and it
+## was answering about a *different* river from the one painted. A falsy `axis` is
+## treated as a caller that forgot rather than quietly re-drawn, because a re-draw is
+## exactly the bug: see `_river_axis`.
+## 📝 It takes no `rng`: every position here is arithmetic off the axis and the count,
+## and the only random thing about a river's starts was the axis it drew for itself.
 static func _river_start_positions(data: MapData, count: int,
-		rng: RandomNumberGenerator) -> Array[Vector2i]:
+		axis: Array) -> Array[Vector2i]:
+	assert(axis.size() == 2, "_river_start_positions needs the axis _paint_river used")
 	var side := data.size.x
 	var centre := Vector2(side, side) * 0.5
-	var axis := _river_axis(rng)
 	var bank := float(side) * 0.26
 	var span := float(side) * 0.55
 
