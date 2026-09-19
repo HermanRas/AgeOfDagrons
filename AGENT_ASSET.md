@@ -7,7 +7,11 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated **2026-09-01** — progress moved to a Kanban board (§1.1), and PLAN.md is
+Last updated **2026-09-19** — the bridge became a per-tile set, which taught §4 that a tile
+piece has only four usable directions and that a neighbour mask cannot tell a ribbon's end from
+its side. Both land on the cliff card next.
+
+Before that, **2026-09-01** — progress moved to a Kanban board (§1.1), and PLAN.md is
 now updated on the owner's request rather than as work lands.
 
 > **§1.1 was written by the GAME-CODE agent, at the owner's instruction of 2026-09-01,
@@ -883,6 +887,49 @@ or count DISTINCT frame indices in the table.** The general lesson is the one th
 entry above teaches too — before quoting a number as evidence, check it is capable of
 varying with the thing you are claiming.
 
+**A TILE PIECE HAS ONLY FOUR USABLE DIRECTIONS, AND THE OTHER FOUR ARE NOT A TILE AT ALL.**
+`directions` rotates the OBJECT, and a 2 m square tile maps onto its own 64x32 diamond only at
+multiples of **90** degrees. At 45 its corners go to (±1.414, 0) and (0, ±1.414), which projects
+to a **45 x 23 px rectangle**. Measured on `vis.bridge_deck`, one variable changed and nothing
+else: **stored 0/2/4/6 come out 46 x 24 px and stored 1/3/5/7 come out 64 x 34.** isobake takes
+only 1, 5 or 8 for `directions` — there is no 4 — so the four bad frames ride along in the
+atlas and the contract is that **nothing may index a tile piece by facing**; only a lookup table
+naming 1, 3, 5, 7.
+
+**This is about to matter for the cliff set, where the card records "8 directions per piece,
+confirmed" as an OWNER ANSWER.** It is not wrong as an answer — the owner was asked how many
+facings a cliff run needs — but a cliff piece sits on the same square tile, so four of its eight
+would be that same rectangle. A diagonal run is a STAIRCASE of tiles whose sides are not tile
+edges: it needs pieces whose face runs along the tile's DIAGONAL, which is different geometry
+(2.83 m long, not 2.0) and a second piece set, **not the other four rotations of the first**.
+Settle that before baking a corner set, not after.
+
+The corroboration is that 0 A.D. hit it too: `art/terrains/special/bridge_wood_{a,b,c}.xml` are
+three PRE-ROTATED plank textures, which is a strange thing to ship until you notice their
+terrain painter cannot rotate a texture per tile either.
+
+> ⚠️ **AND DO NOT DERIVE WHICH EDGE A PART LANDS ON FROM THE YAW — MEASURE IT.** The
+> 8-direction path applies a base yaw of its own on top of the recipe's, so the SAME recipe
+> renders a diamond at `directions = 1` and a 45° rectangle at `directions = 8`. I lost real
+> time reasoning from `yaw_deg()` before checking. Differencing the composed bake against the
+> plain one, frame by frame, settles it in three lines: for `bridge_rail` the kerb lands on the
+> edge **opposite** the direction's name (stored 1 = SW puts it on NE).
+
+**A NEIGHBOUR MASK CANNOT TELL AN END OF A RIBBON FROM ITS SIDE, AND THE PROOF IS ONE LINE.**
+An end tile and a long-side tile of the same rectangle are **90° rotations of each other** —
+end: edges NE/SE/SW present, NW absent; side: edges SE/SW/NW present, NE absent. So any table
+that works under rotation, which is exactly what "which piece at which of its 8 directions"
+means, must give them the same piece. For the bridge that walled off **both ends with a kerb
+across the travelled way**. The fix is one bit of state from the map (the run axis), not a
+cleverer rule.
+
+> ⚠️ **COMPOSE THE WHOLE THING AND LOOK AT IT — A TILE SET'S BUGS ARE ALL BETWEEN TILES.** Every
+> individual piece was perfect and the batch summary was green. A seam, a kerb on the wrong
+> edge, planks running the wrong way and the walled-off ends are **none of them visible in one
+> frame**, which makes a tile set the sharpest case yet of §5's "six bugs reported `ok`". Laying
+> the pieces out over a river took twenty lines of PIL and caught a defect that would otherwise
+> have reached the game side as a table to wire.
+
 **ROTATIONAL SYMMETRY IS NOT MIRROR SYMMETRY, AND `directions = 5` ONLY EVER ASKED ABOUT
 THE SECOND.** 5 stored directions cover 8 facings by MIRRORING, so the question a recipe
 has to answer is "does this subject equal its own reflection", and the thing that gets
@@ -1047,9 +1094,10 @@ with WinError 5. Delete contents, not the directory.
   > a `variant_seed`, or merging age3 and age4 as their own headers once suggested, would
   > silently cost the game three quarters of its field variety. **The fix that is right for
   > a colour set is wrong here; read what the ids are FOR before generating over them.**
-- **193 base recipes**, **168 generated colour recipes** (21 units × 8).
+- **199 base recipes**, **168 generated colour recipes** (21 units × 8). Counted off disk
+  2026-09-19; the line said 193 and was already stale by three before that day's work.
 - **Nothing is running** on the workstation.
-- **Staging is complete and current: 361 atlases.** All eight colours are correct
+- **Staging is complete and current: 367 atlases.** All eight colours are correct
   for all 21 colourable units — `check_colour_consistency.py --staged` reports
   **0 of 21 with pages that disagree and 0 where only the import counts did**.
   > **What the whole set WEIGHS, measured 2026-09-04 for the art-pack question and worth
@@ -1102,7 +1150,7 @@ with WinError 5. Delete contents, not the directory.
   value to write: today's build would assert code that did not run, and would erase
   the only honest signal on disk. Absence already *is* the sentinel.
 
-### isobake: repo `blender_3d_to_2d_isobake`, HEAD `0e48a66`, clean
+### isobake: repo `blender_3d_to_2d_isobake`, HEAD `51123c1`, clean
 
 Its history is a list of silent defects, and every lesson worth re-reading is
 already in §4 rather than here. What that history is FOR is calibration: **six
@@ -1126,6 +1174,30 @@ The one-line index, so a symptom can be matched to a known shape:
 
 ### Known open items
 
+- ✅ **THE BRIDGE IS A PER-TILE SET NOW — baked and staged 2026-09-19, isobake `51123c1`.**
+  `vis.bridge_deck`, `vis.bridge_rail`, `vis.bridge_rail_both`, 93 KB for the three. Card
+  `2.x-river-bridge` is in `Test` and **a tag swap to `game-code` is requested** — the art is
+  done and only the terrain byte, the autotile lookup and the generator placement are left.
+  `vis.bridge_wood` stays as the hand-placed span for an authored MapMaker map; it is not
+  superseded and not to be deleted.
+  > **BLOCKED ON ONE BIT AND IT IS NOT AN ART QUESTION**: the mask-to-piece table needs the
+  > bridge's RUN AXIS from the map, because an end tile and a side tile are 90° rotations of
+  > each other (§4). Asked for as two terrain values, `BRIDGE_X` / `BRIDGE_Y`, in
+  > `asset_request.md` 2026-09-19, which also carries the table itself.
+  >
+  > **No ramp piece exists and that is deliberate** — the deck sits on z = 0, so there is no
+  > height to ramp down from and the ends are plain deck tiles. Raising the deck is a real
+  > change, not a tweak: it would cost a ramp piece and a rethink of the kerb height.
+  >
+  > `texture_metres = 6.0` on `special/bridge_wood_a.xml` is **measured, not chosen** — 0.25 m
+  > boards, 8 per tile. At 2.0 one repeat lands on the tile, which is seamless by construction
+  > and useless: all 24 boards crush into 2–3 px of mush that reads as dirt.
+- ✅ **A COMPOSITE PART CAN BE TILTED — isobake `51123c1`, 2026-09-19.** `pitch_deg` / `roll_deg`
+  beside `yaw_deg`. The terrain adapter's flat quad stood on end is the only non-0 A.D.
+  primitive the pipeline has, and it is what both pending tile sets need: `pitch_deg = 90` is a
+  bridge kerb, a shallower angle is a **cliff face**, so the cliff card no longer needs an
+  extruded-edge primitive written for it. Yaw stays outermost (Blender euler XYZ): tilt to make
+  the piece, yaw to choose which tile edge it sits on.
 - ✅ **`adapters/composite.py` IS WRITTEN — isobake `0e48a66`, 2026-09-09.** A recipe can
   place several sources as one subject: `[[source.parts]]`, each naming an `adapter` and
   that adapter's own source keys plus `offset_m` / `yaw_deg`. Written for the bridge,
