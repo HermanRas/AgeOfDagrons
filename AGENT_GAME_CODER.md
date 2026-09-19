@@ -770,6 +770,9 @@ carry `age_required`, which is a *gate*, not a skin.
 | ⚠️ **A DERIVED CONTROL ARRIVES THE MOMENT ITS SOURCE ALLOWS IT — AND ARRIVES UNFILLABLE IF IT NEEDS A FIELD OF ITS OWN** | `ConditionPanel`'s subject dropdown is built from `ObjectiveDef._SUBJECTS` minus `_NOT_YET`, which is right and has paid off three times: `area`, `ticks` and then `named_unit` each appeared with **no edit to the panel** the day their line was deleted. What the derivation cannot do is notice that the new subject's value lives in its own KEY — `named_unit`'s name is `name`, not `id`, for `area`'s documented reason — so 16.7 offered a subject an author could select, fill in as best they could, and be refused on, with the refusal naming a field the form did not have. ➡️ **When a deferral lifts, ask what the subject needs BESIDES being allowed.** The derivation is still right; it answers "may this be chosen", never "can it be completed". |
 | 📝 **`spawn_building(..., force = true)` NEVER RETURNS NULL, so a `MapGen.build_from` null-check is defensive and not load-bearing** | Its header says *"returns null if the footprint will not fit"*, and that is true only on the un-forced path — `build_from` forces every placement, because the map has already decided where things go. `spawn_unit` never returns null at all. Worth knowing before writing a test whose fixture is *"a building that fails to place"*: there isn't one on that path, and the test will assert its own premise away. |
 | ⛔ **TWO FUNCTIONS THAT BOTH INSTALL A NEW DOCUMENT, WHERE ONE OF THEM IS THE "REAL" ONE** | `Editor._new_map()` set `_document` itself and repeated the three lines of `show_document()` it happened to need — above a comment saying that was *"exactly the kind of second door a state-clearing line gets forgotten at"*. It was right, and one already had been: 16.6's `_conditions.set_document(doc)` is only on the other path, so **File ▸ New left the Conditions panel holding the previous map**, and at startup holding none — the panel reported *"no map open"* about the map filling the screen. Found on 2026-09-12 while wiring 16.8's panel into the same two places. ➡️ **Nothing in the suite could see it**: every conditions test hands the panel a document directly, which is the right way to test a panel and the exact reason the WIRING was the untested half. The fix is one call site, not a third line in the second door. |
+| ⛔ **THE TEST HARNESS HAS SEVEN ASSERTIONS AND `assert_gt` IS NOT ONE OF THEM** | `tests/case.gd` defines `assert_true`, `assert_false`, `assert_eq`, `assert_ne`, `assert_null`, `assert_not_null`, `assert_almost_eq`. **Every comparison goes through `assert_true`.** Reaching for `assert_gt`/`assert_lt` out of habit is not a failed assertion — it is a **parse error**, which fails the WHOLE FILE, so **68 unrelated tests silently vanished from the run** and the summary read `2526 tests, 1 failed` instead of `2594`. Same family as the `{...}[key]` row: the headline names one failure and the cause is one line. **Read the count as well as the result** — a suite that got smaller is a file that did not compile. |
+| ⚠️ **`adb shell` EMITS CRLF, SO A POWERSHELL REGEX ANCHORED WITH `$` NEVER MATCHES** | Parsing `adb shell ls -l` with `...base\.part$` reported *"no file yet"* for 58 seconds while the file was plainly growing, and the download completed underneath the poller **twice** before the parsing was suspected — it reads as "the feature does nothing", not as a bad regex. **Ask the device for the number, not for a line to parse**: `adb shell run-as <pkg> stat -c %s <path>` returns the size alone, and `run-as <pkg> sha256sum <path>` verifies a downloaded file **without trusting the code under test**. The general form is §5's: a check that cannot see the thing it is for reports success. |
+| ⛔ **A TEST THAT ASKS THE PRODUCER WHICH VALUE IT USED CAN ONLY AGREE WITH ITSELF** | The river's water and its start positions each drew their own axis and disagreed, and **no test could have caught it by asking `MapGenerator` which axis it picked** — that question has one answer and both halves would have matched it. The check that works fits the axis out of the **painted terrain** (PCA over the water tiles) and compares the starts against *that*: two independent readings of one fact. ➡️ **Whenever two things are supposed to derive the same value separately, the test must derive it a third way.** Worth reaching for before writing any test of "these two agree". |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
 
 ---
@@ -778,9 +781,19 @@ carry `age_required`, which is a *gate*, not a skin.
 
 ### WHAT IS BUILT — the short version
 
-**Phases 0–13 and 15 are closed; Phase 16 is at 16.6, with 16.7 next.** Suites **game 2508/0** and
-**MapMaker 386/0**, tag `v0.9.8`. **PLAN.md §11 carries every decision and the board carries
-status** — neither of them lives here.
+**Phases 0–13 and 15 are closed; Phase 16 is BUILT THROUGH 16.8, with 16.9 and 16.10 left.**
+Suites **game 2596/0** and **MapMaker 450/0** (2026-09-19). **PLAN.md §11 carries every decision
+and the board carries status** — neither of them lives here.
+
+**16.6, 16.7 and 16.8 sit in `Test` together and all three wait on the owner USING the tool** —
+authoring conditions, playing a named hero, exporting a scenario. None is answerable by a test or
+a screenshot, which is §5's whole argument wearing three cards at once.
+
+**0.3a is closed and closed on hardware** (2026-09-19): a pack download resumes in bounded 4 MiB
+chunks, proven on the phone against the live server across both a process restart and a real
+dropped connection, `sha256` byte-perfect. ⛔ **Two engine facts it bought, both reversing what the
+card assumed:** `set_download_file()` **truncates** rather than appends, and **a dropped connection
+DELETES its own partial file** — which is why the chunks are bounded at all.
 
 *The per-phase build logs that used to sit in this section (the UI overhaul, the four-device
 playtest, teams, LAN discovery, Phase 13, Phase 15 — about 1,900 lines) were history that PLAN.md

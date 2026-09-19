@@ -343,15 +343,22 @@ file's path under `app/` is its URL path — see `web/README.md`):
 `load_resource_pack()` → assets resolve through the seam. If a pack is absent or fails
 verification, **the game runs on placeholders** rather than failing.
 
-✅ **BUILT AND HARDWARE-VERIFIED 2026-09-03 (0.3), WITH ONE HALF MISSING — THE PACKER.** Everything
-above is live for `campaign` and `map` packs: manifest, download, SHA-256 verify, install, mount,
-the boot screen and a browser. **`pack_art_v1.pck` and `pack_audio_v1.pck` do not exist yet**, and
-the gap is `tools/build_packs.py`, which zips content and does not yet build a `.pck` — **the
-client already handles both `art` and `audio`**, so no code here is blocking. The three questions
-that block the packer are with the art side in `asset_request.md`. The placeholder rule above was
-the thing most worth proving and it was proved with the network off: no manifest, no stall, front
-door. See Phase 0's 0.3 row for what is still open, including the resume problem that only appears
-at art-pack sizes.
+✅ **BUILT AND HARDWARE-VERIFIED 2026-09-03 (0.3); THE ART PACK LANDED 2026-09-12 AND THE RESUME
+2026-09-19.** Everything above is live: manifest, download, SHA-256 verify, install, mount, the
+boot screen and a browser. **`art_base_v1.zip` (80.0 MB, `required`) and `art_colours_v1.zip`
+(236.0 MB, optional) are published and fetched by the shipping client** — the split is the art
+side's `base`-against-`colour` axis, which is where three quarters of the bytes are, and it is
+safe because a missing colour atlas falls back to the **untinted** bake rather than to the magenta
+placeholder. `pack_audio_v1` is still unbuilt and nothing waits on it. The placeholder rule above
+was the thing most worth proving and it was proved with the network off: no manifest, no stall,
+front door.
+
+⚠️ **THE REMAINING RISK AT THIS SIZE IS NOT THE DOWNLOAD, IT IS THE MOUNT.** A file inside a
+mounted pack is **not an imported resource**, so `load()` cannot open it and the failure is
+*invisible art rather than a magenta placeholder* — the seam reports a real atlas because the
+`.atlas.json` parses perfectly out of the zip. `FileAccess.get_file_as_bytes` plus
+`Image.load_png_from_buffer` is the route, and it is the one thing here that no test on a
+developer machine can fail, because `res://` beats a mounted pack when the atlases are staged.
 
 ### 3.3 Content delivery — scenarios and maps (new 2026-09-01)
 
@@ -1151,20 +1158,35 @@ exercises the progress reporting and the deliberate absence of a timeout on a pa
 mistaken for a broken server). 2,120 green tests could not have told us the offline boot reaches
 the menu on a real handset.
 
-⚠️ **WHAT IS STILL OPEN IS NOT THIS ROW AND MUST NOT BE READ INTO ITS CLOSURE.** The **content**
-half is delivered; three things are separate work:
+✅ **THE THREE THINGS THIS ROW LEFT OPEN ARE NOW TWO CLOSED AND ONE PERMANENT** (updated
+2026-09-19). Kept rather than deleted, because each one's *reasoning* is what the closure was
+built on:
 
-1. **`pack_art_v1.pck` IS NOT BUILT.** `build_packs.py` does `campaign` and `map` zips only. **The
-   CLIENT already handles `art` and `audio`**, so only the packer blocks art delivery — the three
-   questions for the art side (which directory is authoritative for a bake, one art pack or
-   several, what identifies a bake for a version bump) are in `asset_request.md`. **This is the
-   piece that keeps the APK under 300 MB, so it is the one with a real deadline behind it.**
-2. **No resumable downloads.** The server answers Range with 206 (verified) but
-   `HTTPRequest.set_download_file` cannot append, so an interrupted pack restarts from zero.
-   Irrelevant at 2.2 MB; at 125 kbps a 400 MB art pack is nine hours and one dropped connection
-   means starting again. **Worth its own card before art packs ship.**
-3. **A mounted pack cannot be un-mounted** — Godot has no `unload_resource_pack()` — so DELETE is
-   offered on content and not on art. Not a defect; it constrains what an art-pack UI can promise.
+1. ✅ **THE ART PACK IS BUILT AND PUBLISHED (2026-09-12).** Not a `.pck` in the end: two zips,
+   `art_base_v1` 80.0 MB `required` and `art_colours_v1` 236.0 MB optional. The art side's three
+   answers all held — the authoritative input is the **staged** tree (the "stale manual copy" note
+   had inverted; `art_work/out` is scratch and usually empty), the split axis is **colour** rather
+   than terrain/units/UI because that is where 74% of the bytes are, and the version key is the
+   **packer's own content digest**, since `attribution.actor` never moves on a rebake and
+   `generator.isobake_commit` is absent from 67 atlases. ⚠️ **The packer reads `visuals.json` and
+   never the directory**, so it packs what the seam can ask for and unreferenced bakes drop out by
+   construction. A consequence for the art side: **any rebake that moves a staged byte moves the
+   pack digest and the build refuses to publish until the version is bumped by hand.**
+2. ✅ **RESUMABLE DOWNLOADS SHIPPED 2026-09-15 AND WERE VERIFIED ON HARDWARE 2026-09-19 (0.3a).**
+   A pack arrives in **bounded 4 MiB chunks** appended by hand to `<id>.part`, so a dropped
+   connection costs one chunk instead of the pack. ⛔ **Both premises this row argued from were
+   wrong and were measured before anything was written**: `set_download_file()` **truncates**
+   rather than appends, and **a dropped connection deletes its own partial file**. That second one
+   is the whole design — whatever is in flight when a connection dies is lost regardless, so a
+   single-request resume would restart from zero on a first attempt, which is the failure being
+   fixed. The bound is *how much one drop is allowed to cost*. Proven on the phone against the live
+   server twice: across a process restart (12,582,912 banked = exactly 3 chunks, 15.7% not
+   re-fetched) and across a real wifi drop (froze at exactly 18 chunks, continued from there),
+   `sha256` byte-perfect both times. ⚠️ **A `.part` is CLAIMED** by a sidecar recording sha256,
+   size and version, because resuming into the wrong bytes is silent and would throw away hours.
+3. ⛔ **A mounted pack still cannot be un-mounted** — Godot has no `unload_resource_pack()` — so
+   DELETE is offered on content and not on art. Permanent, not a defect; it constrains what an
+   art-pack UI can promise about retrying.
 
 **Ownership note:** `tools/build_packs.py` + `packs.source.json` are the game-code agent's by the
 owner's decision of 2026-09-03, a fourth named exception inside `tools/`. Flagged in
@@ -1274,6 +1296,28 @@ the code computes 192 and this document is the correct one — the reverse of th
 Generation takes 30–170 ms and every type validates first try. Look at the output with
 `dev_preview/preview_mapgen.tscn`, which writes one PNG per type — it is the only way to judge a
 map layout.
+
+⛔ **THE RIVER'S AXIS IS DRAWN ONCE PER MAP AND PASSED TO BOTH HALVES (fixed 2026-09-19), AND THE
+BUG IT FIXES IS WORTH KEEPING AS A SHAPE.** `_paint_river` drew `_river_axis(rng)` and painted the
+water along it; `_river_start_positions` then drew **again** from the same advancing generator,
+with `_noise()` and `_bridge_positions()` consuming values in between. The two agreed only by
+luck. **Measured off the painted terrain: 4 of 20 seeds put both starts on the same bank** — both
+at a perpendicular offset of ~0 from the water's own centre line, i.e. laid out against an axis at
+right angles to the river, so the pair straddled the water lengthwise instead of facing each other
+across it. *Two readings of one fact, each deriving it separately.* Very likely the cause of
+`2.x-river-teams`.
+
+**Rivers are CARDINAL ONLY** (owner, 2026-09-19): the two diagonals were removed because a
+footprint is an axis-aligned rect, the same limit that has `wall-facings-reachable` blocked. The
+art carries all 8 directions and is not what is missing — **restore them the day a bridge is
+terrain rather than a footprint** (see `2.x-river-bridge`), since a neighbour mask reaches them
+fine.
+
+📝 **A consequence of the axes agreeing, and a design question rather than a defect:**
+`_bridge_positions` spaces crossings at `(i + 1) / (count + 1)`, so an **odd** count always puts
+one at `along = 0` — and a two-player map puts both starts at `along = 0` too. So on every
+1-crossing and 3-crossing map **the two players now face each other directly across the central
+bridge.** Biasing the crossings off-centre is the lever if that is not wanted.
 
 **It also places wildlife, per START rather than per map (2026-08-23).** Sheep herds, deer herds
 and one predator species chosen by map type (`PREDATORS`, keyed by `Type` and read with
@@ -3425,7 +3469,7 @@ Never blocks gameplay phases. Ordered by visual payoff per unit of effort.
 | A.10 | **Building roster, age by age** — ~70 bakes. **The first batch is five buildings, not seventy**: age 1 unlocks only town centre, house, mill, mining camp and lumber camp, which is a complete playable settlement. Age 2 adds eight. Two free savings: composite props are the same gaia assets in all four ages, so bake once and reuse; the five age-3 buildings need only two skins each. Deliberately **not** taken: collapsing ages 1 and 2 (both Celtic, so similar) — it saves ~12 bakes at the cost of the first age transition any player ever sees, which is the entire payoff of the age axis. **Measure all four skins before declaring a footprint** — it is the max across ages and cannot be read off the age-1 bake | ✅ **CLOSED 2026-09-01** on the owner having played it: *"all assets excluding dragon, packed engines looks good."* Every declared building carries a staged atlas and a four-age map. **It had been finished for some time while its card said "running in the background"**, which is what blocked 5.7 and 9.6 for longer than the art did. **Not closed by the facing/colour/clip pass**, so a building bug reopens it rather than contradicting the closure. Fields turned out NOT to age — one of four picked at placement, and `field_age2.toml` records why those three must never be given a `variant_seed` |
 | A.11 | **Walls and gates** — ~16 pieces across three tiers. Unblocked from the footprint side (all pieces share one footprint, all towers another, across every civ) | See the two findings below |
 | A.13 | **Cliffs as an AoE2-style tile set** — straight, outer corner, inner corner, forming a connected edge with a walkable-looking top. Owner's call 2026-09-09 after the survey below | 🔨 **`Doing`, board card `cliff-tiles`. Owner settled the spec 2026-09-09:** a cliff **occludes land units with the same halo buildings already use**; it is **impassable for land and passable for air — the dragon flies over and is not occluded by it**; **8 directions per piece**; and it stands **4.0 m tall, exactly 2 tiles**. **Still open and it is the game side's: how a map MARKS a cliff edge** — `MapData` is `{def_id, player, tile, size_class}` and a cliff is an edge *between* tiles, the same shape as the wall `footprint_override`/`facing` gap. **It does not block the art, and an earlier claim here that it constrained piece length is withdrawn: one piece is one tile edge, 2.0 m**, which composes into any run and either corner under *any* encoding the game side picks — per-edge, per-run or a bitmask. A longer piece would be the thing that bets on an encoding, so the smallest piece is also the safest. **Nothing is prototyped yet**: the survey below is measured, the build plan is not. The next step is deliberately one throwaway probe — a single straight piece at `directions = 1` — because 30° of elevation is a shallow look at a vertical surface and if a 78 px battered face reads as a smear rather than a cliff, the batter angle and the whole piece list change before a corner set is worth building |
-| A.12 | **Wooden bridge** — owner request 2026-09-09, not previously on this track | ✅ **BAKED AND STAGED as `vis.bridge_wood`** — 8 directions, one static anim, one 2048×2048 page, 1.20 MB, isobake `0e48a66`, `dirty=false`. ~44 × 18 m (22 × 9 tiles), 0.618 m tall. **Nothing in 0 A.D. is a bridge:** `bridge_edge_wooden` is a whole *half* bridge (deck, trestle piers, rail, ramp) and `bridge_wood_01` is a flat ground **decal** with no mesh at all, and their own editor composes the two — `maps/scenarios/bridge_demo` places two halves 180° apart with decking painted between. **The composition IS the asset**, which is what the new `composite` adapter exists for. Two placement numbers were traps: the mesh's max Y is a **support post at z = −6.866**, not the edge of the deck, so sizing the centre panels to the bounding box left a 0.14 m slot open down the whole span (a 2–3 px black hairline); and the flat deck is **not centred** (−16.265 … 15.730), so the 180° copy's flat run is the mirror of that and the panels must span the intersection or float over a ramp. **`ground_clip` is ON and I had argued it must be off** — 92% of the mesh is below z = 0 and all of it is structural trestle, so I read it as legs rather than skirt. The fraction was never the test: a baked sprite has no river to span, so the piers draw over our own terrain tiles exactly as a buried wall skirt does. Owner's call on seeing it; 7.291 m → 0.618 m, and it reads better |
+| A.12 | **Wooden bridge** — owner request 2026-09-09, not previously on this track | ✅ **BAKED AND STAGED as `vis.bridge_wood`** — 8 directions, one static anim, one 2048×2048 page, 1.20 MB, isobake `0e48a66`, `dirty=false`. ~44 × 18 m (22 × 9 tiles), 0.618 m tall. **Nothing in 0 A.D. is a bridge:** `bridge_edge_wooden` is a whole *half* bridge (deck, trestle piers, rail, ramp) and `bridge_wood_01` is a flat ground **decal** with no mesh at all, and their own editor composes the two — `maps/scenarios/bridge_demo` places two halves 180° apart with decking painted between. **The composition IS the asset**, which is what the new `composite` adapter exists for. Two placement numbers were traps: the mesh's max Y is a **support post at z = −6.866**, not the edge of the deck, so sizing the centre panels to the bounding box left a 0.14 m slot open down the whole span (a 2–3 px black hairline); and the flat deck is **not centred** (−16.265 … 15.730), so the 180° copy's flat run is the mirror of that and the panels must span the intersection or float over a ramp. **`ground_clip` is ON and I had argued it must be off** — 92% of the mesh is below z = 0 and all of it is structural trestle, so I read it as legs rather than skirt. The fraction was never the test: a baked sprite has no river to span, so the piers draw over our own terrain tiles exactly as a buried wall skirt does. Owner's call on seeing it; 7.291 m → 0.618 m, and it reads better.<br><br>⚠️ **AND THE GAME CANNOT USE IT ON A GENERATED RIVER — RE-CUT AS A PER-TILE SET, 2026-09-19.** Not a defect in the bake, which the owner confirmed by eye (*"the bridge is perfect"*) and which stays as a hand-placed bridge for an authored MapMaker map. **The span is not fixed:** measured, a river is **9 tiles wide at 2 players and 17 at 8**, because `_paint_river`'s half-width is `side × 0.045` and the board scales with the player count. No single length spans it, and 22 tiles spans none of them. The recipe's own note had predicted exactly this (*"if the map format wants bridges that span a variable gap, this is the wrong shape and I should cut a repeatable segment instead"*). ✅ **The re-cut is a per-tile set at 2.0 m, and the encoding is what buys back the directions:** as a `Terrain.BRIDGE` byte the piece is chosen by the **8-neighbourhood** rather than by a `Rect2i`, so all 8 baked directions are reachable — the same reason cliffs get 8 where walls get 4, which is the art side's own rule. Deck **width** stops being an art question entirely, since a bridge is as wide as the number of tiles painted. The one thing the game side cannot write is the **mask-to-piece table**. Card `2.x-river-bridge`; `bridge-wood` (#96) was overturned to this approach and waits on it |
 
 **Three art findings that cost real time and would cost it again.**
 
@@ -3628,20 +3672,31 @@ Live risks only. Retired ones are in `b904b76`.
 actively harmful**, because a reader has to finish the row to learn it is not work. Status lives
 on the board (`AGENT_GAME_CODER.md` §2.1), shipped work is one line each in §12.*
 
-**WHERE THE BUILD IS, 2026-09-12.** `v0.9.8`, 31 commits on at `0cfb6ec`. Suites **game 2508/0**
-and **MapMaker 386/0**, Godot pinned at 4.7.1. The How To Play pack is published at v2 and
-verified end to end against `aod.dragoon.co.za`.
+**WHERE THE BUILD IS, 2026-09-19.** Suites **game 2596/0** and **MapMaker 450/0**, Godot pinned at
+4.7.1. The How To Play pack is published at v4 and the **art packs are live** — `art_base_v1`
+80.0 MB `required`, `art_colours_v1` 236.0 MB optional — all verified end to end against
+`aod.dragoon.co.za`, and the required pack now **downloads, resumes and mounts on a real handset**
+(0.3a, 2026-09-19).
 
 **THE QUEUE, in dependency order.** Every row below is a card on
 [projects.dragoon.co.za/projects/2](https://projects.dragoon.co.za/projects/2) unless it says
 otherwise; what is here is the **order and the reasoning**, not a mirror of card state.
 
-**1. PHASE 16, THE MAPMAKER — where the work is.** 16.0 through 16.6 are done. **16.6 sits in
-`Test`**, waiting on the owner authoring a real map's conditions in the panel — whether seven
-controls and a row list is the shape that makes a scenario easy to write, which is the one
-judgement no test and no screenshot can make. Then **16.7** (per-entity overrides and named units
-— the only row with real sim cost), **16.8** (scenario export), **16.9** (`HOW-To.md`, last on
-purpose), **16.10** (the content the tool exists for).
+**1. PHASE 16, THE MAPMAKER — BUILT THROUGH 16.8; WHAT IS LEFT IS JUDGEMENT AND CONTENT.**
+**16.6, 16.7 and 16.8 all sit in `Test` together**, and every one of them waits on the same kind
+of thing: the owner *using* the tool. 16.6 wants a real map's conditions authored in the panel
+(whether seven controls and a row list is the shape that makes a scenario easy to write), 16.7
+wants a hero authored and played (whether 900 hp and 60 damage reads as scripted or as a bug), and
+16.8 wants a real scenario exported. **No test and no screenshot can answer any of the three.**
+⚠️ **16.7 was taken AFTER 16.8 against this numbering**, because its own card said *"do not start
+here"* and that was right until a map's conditions could reach a campaign at all. Remaining:
+**16.9** (`HOW-To.md`, last on purpose — it is writable now that the tool is feature-complete) and
+**16.10** (the content the tool exists for).
+
+⚠️ **AND ONE THING THE PHASE DELIBERATELY DID NOT DO:** a named hero's name is **sim-only and off
+the wire**, so the HUD shows the def's display name and not "Sir Roland". `SnapshotSystem` groups
+`updated` by sorted field names, so a field on two units and absent on four hundred splits every
+unit into two shape tables — a real cost, and its own row if it is ever wanted.
 
 **2. 16.10 — the content the tool exists for.** Re-author the five How To Play maps for a custom
 look, then **"The Dragon Born"**, authored entirely in the tool. Scenarios **3 and 5** are
@@ -3670,17 +3725,29 @@ arriving as an economy failure with no mention of a dragon in the log.
   invalidates every row of it.**
 - **`cliff-terrain`** — a map must be able to mark a cliff and `MapData` has no edge concept. The
   art half (`cliff-tiles`) is in `Doing`.
-- ⛔ **`wall-facings-reachable` — BLOCKED ON THE OWNER.** Walls draw ~4 of 8 baked facings because
-  the footprint system is axis-aligned. The card is tagged `owner-decision` and asks for the tag
-  to be flipped to `game-code`; it needs an A/B/C ruling first.
+- ⛔ **`wall-facings-reachable` — BLOCKED, and now tagged `game-code`** (the owner flipped it).
+  Walls draw ~4 of 8 baked facings because the footprint system is axis-aligned: **2 are reachable
+  and distinct** (along tile axis X, along tile axis Y), **4 are 180° twins** a symmetric wall
+  draws identically, and **2 are true diagonals no `Rect2i` can ask for**. It still needs an
+  A/B/C ruling. ⚠️ **The art is not what is missing and a re-bake would change nothing** — 20 of
+  22 wall and gate atlases carry a genuine 8 stored directions, counted. ⚠️ **And re-baking walls
+  is never a free move**: `WallPlan.FACING_FOR_AXIS` was derived by *measuring the staged pixels*
+  and `test_wall_facing` re-measures them every run, so a re-bake fails it by design.
 - **`11.x-wonder-victory`** — the wonder as a fourth win condition. **Regicide (11.2)** remains
   declared and inert. The other three are live and none is greyed.
 - **12.1b reconnect.** Discovery landed 2026-08-31 and closed the friction point (typing an IP).
   Getting back *into* a match is the harder half: a returning peer needs the config, a full
   snapshot and its old player id.
 - **12.4 save/load and replays**, which is also where §11.3's parked **Save Game** button lives.
-- **`0.3a` — a resumable pack download.** The one item here with a date behind it rather than a
-  wish; see the gap below. It only bites at art-pack sizes and art packs are coming.
+- **`2.x-river-bridge` — the River map's land bridge becomes real bridge art.** Handed to the art
+  side 2026-09-19. ⛔ **The span is not fixed and that is what shapes it:** measured, the river is
+  **9 tiles wide at 2 players and 17 at 8**, because `half_width` is `side × 0.045` and the board
+  scales with the player count — so the existing 22-tile `vis.bridge_wood` cannot span it and a
+  **per-tile set** was asked for instead. Under a per-tile *terrain* encoding (a `Terrain.BRIDGE`
+  byte, the same design as `cliff-terrain`) the facing comes from the **8-neighbourhood** rather
+  than from a footprint, so all 8 baked directions become reachable — the art side's own rule
+  about cliffs, applied to a bridge. `bridge-wood` (#96) was overturned to the paint-tiles
+  approach and waits on this.
 - **Naval combat.** Ships float and path since 2026-08-23 and transports load since 2026-08-29,
   but nothing has ever fought at sea, so a loaded transport crosses unopposed. Archipelago is what
   demands it, and it is not what makes that map playable.
@@ -3726,12 +3793,13 @@ facing check reads columns **2 and 6** as well. §13.2 item 10 has the full acco
   evidence the shape is affordable — but per player multiplies by player count, not by two.
 - **A static destroyed behind the fog stops being sent** rather than leaving AoE's stale
   ghost, which would need a per-player last-seen copy of every static (§11.4).
-- **A pack download cannot resume** (new 2026-09-03, from 0.3). The server answers Range with
-  206 — verified — but `HTTPRequest.set_download_file` cannot append, so an interrupted
-  download restarts from zero. Invisible at 2.2 MB and unacceptable at 400: the owner's
-  125 kbps test run took ~2.4 minutes for the small pack, which is **nine hours** for an art
-  pack, and one dropped connection would mean starting it again. **Deserves its own card before
-  art packs ship**, and it is the one item on this list with a date attached to it.
+- ~~**A pack download cannot resume.**~~ ✅ **CLOSED 2026-09-19 (0.3a)** — bounded 4 MiB chunks
+  appended by hand, verified on the phone against the live server across both a process restart
+  and a real dropped connection. Left as a line rather than deleted for the engine facts it
+  bought, which outlive it: **`set_download_file()` truncates rather than appends, and a dropped
+  connection DELETES its own partial file.** Both reverse what this entry and the card assumed,
+  and the second is why the chunks are bounded at all — whatever is in flight when a connection
+  dies is gone regardless, so the bound is *how much one drop is allowed to cost*.
 - **A mounted pack cannot be un-mounted.** Godot has no `unload_resource_pack()`, so DELETE is
   offered on installed content and cannot be offered on art. Not a defect — it constrains what
   an art-pack UI is allowed to promise.
