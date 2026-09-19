@@ -199,6 +199,24 @@ func test_both_bridge_bytes_are_one_surface_to_everything_but_the_renderer() -> 
 			"and nothing else answers to it")
 
 
+## The one thing the two bytes DO disagree about, and the only thing.
+##
+## `bridge_run_axis` moved here from the renderer's table because three separate things now
+## act on it -- `TerrainLayer`, `MapCanvas` in the map editor, and the generator that writes
+## the byte in the first place. It is a property of the byte, so this is where it is pinned.
+func test_the_two_bridge_bytes_run_at_right_angles_to_each_other() -> void:
+	var x := SimMap.bridge_run_axis(SimMap.Terrain.BRIDGE_X)
+	var y := SimMap.bridge_run_axis(SimMap.Terrain.BRIDGE_Y)
+	assert_eq(x, Vector2i.RIGHT, "BRIDGE_X runs along grid x, as the enum comment says")
+	assert_eq(y, Vector2i.DOWN, "BRIDGE_Y runs along grid y")
+	assert_eq(x.x * y.x + x.y * y.y, 0, "and the two are square to each other")
+	# TOTAL, like every other classifier here: a caller handed a terrain byte off a file must
+	# get an answer rather than a crash, and zero is the answer that reads as "not a bridge".
+	for kind in [SimMap.Terrain.GRASS, SimMap.Terrain.WATER_DEEP, 99, -1]:
+		assert_eq(SimMap.bridge_run_axis(kind), Vector2i.ZERO,
+				"%d is not a bridge and has no run" % kind)
+
+
 ## And it flies OVER things, not just over ground. A dragon that could cross a forest but not
 ## a town centre would still be walled in by a building line.
 func test_air_ignores_what_is_standing_on_the_ground() -> void:

@@ -176,6 +176,9 @@ var _size: Vector2i = Vector2i.ZERO
 ## pool, which is GameView's next sibling. So it covers the ground and nothing else.
 var _blend: TileMapLayer = null
 
+## THE BRIDGE'S OWN LAYER, ABOVE THE BLEND. See `_ensure_layers()`.
+var _deck: TileMapLayer = null
+
 ## canonical mask -> strip column, and its inverse. Built once for the class: the set
 ## of 47 is a property of the geometry, not of any particular map.
 static var _mask_column: Dictionary = {}
@@ -187,6 +190,9 @@ static var _mask_at_column: Array[int] = []
 func build(size: Vector2i, terrain: PackedByteArray) -> void:
 	_size = size
 	clear()
+	_ensure_layers()
+	_blend.clear()
+	_deck.clear()
 
 	if size.x <= 0 or size.y <= 0 or terrain.size() < size.x * size.y:
 		return
@@ -199,27 +205,79 @@ func build(size: Vector2i, terrain: PackedByteArray) -> void:
 		var row := y * size.x
 		for x in range(size.x):
 			var kind := int(terrain[row + x])
-			if not tile_set.has_source(kind):
+			# The bridge is drawn by `_build_deck` on a layer of its own, and the ground
+			# layer holds nothing at all there -- which changes nothing about what is
+			# BEHIND a deck tile, because a diamond only ever covers its own tile and the
+			# bridge was already the only thing in that one.
+			if SimMap.is_bridge(kind) or not tile_set.has_source(kind):
 				continue
-			var t := Vector2i(x, y)
-			# Every other terrain is one diamond at column 0; a bridge picks one of four
-			# by what its long-side neighbours are. Same source id either way, so a cell
-			# still reads back as its own terrain.
-			var column := 0 if not SimMap.is_bridge(kind) \
-					else bridge_column(kind, _bridge_edges(size, terrain, t))
-			set_cell(t, kind, Vector2i(column, 0))
+			set_cell(Vector2i(x, y), kind, Vector2i.ZERO)
 
 	_build_blend(size, terrain)
+	_build_deck(size, terrain)
 
 
 func size() -> Vector2i:
 	return _size
 
 
+## The three layers, in the order they are DRAWN: ground, then transitions, then the
+## bridge. Godot draws a CanvasItem's children in child order, so this function is the
+## whole of the z-ordering and there is no `z_index` anywhere in this file.
+##
+## ⛔ **THE DECK IS ABOVE THE BLEND BECAUSE OF A BUG THE SUITE CANNOT SEE** (owner,
+## 2026-09-19: *"the bridge corners are blending"*). A rail's kerb stands 8 px ABOVE its
+## own diamond -- it is the one terrain frame that does not fit in its tile -- so those
+## 8 px are drawn inside the NE and NW neighbours' diamonds and inside the tile off the
+## north vertex. Those are ordinary ground tiles, they get ordinary transitions, and a
+## sand-over-water ramp painted on them washed straight across the kerb and over the
+## bridge's corner post.
+##
+## **Skipping the blend on bridge TILES, which `_build_blend` already did, cannot reach
+## this**: there was never a blend cell on the deck. The offending cell is on the tile
+## BEHIND it, is perfectly correct for its own tile, and the bridge is simply in the way.
+## Suppressing those three neighbours instead would punch a hard-edged notch out of the
+## coastline exactly where the bridge lands, which is a worse artefact and a fiddlier one.
+##
+## `preview_bridge.tscn` shoots `bridge_bank` and `bridge_bank_noblend` for this: the pair
+## differs only in whether this layer is visible, which is what told the transition layer
+## apart from the ground layer's own draw order as the cause.
+func _ensure_layers() -> void:
+	if _blend == null:
+		_blend = TileMapLayer.new()
+		add_child(_blend)
+	if _deck == null:
+		_deck = TileMapLayer.new()
+		add_child(_deck)
+	# Asserted rather than assumed: both are created lazily and a future third layer
+	# would otherwise land wherever `add_child` happened to put it.
+	move_child(_blend, 0)
+	move_child(_deck, 1)
+
+
 ## The transition layer, or null before the first `build()`. A test seam: the blend is
 ## invisible to every other caller and there is nothing here to configure.
 func blend_layer() -> TileMapLayer:
 	return _blend
+
+
+## The bridge layer, or null before the first `build()`. The same kind of seam.
+func deck_layer() -> TileMapLayer:
+	return _deck
+
+
+## The terrain painted at `tile`, from whichever layer draws it, or -1 for none.
+##
+## ⚠️ **USE THIS RATHER THAN `get_cell_source_id()` WHEN A MAP MAY CONTAIN A BRIDGE.** The
+## invariant that a cell's source id IS its terrain byte still holds -- it is what lets a
+## painted cell be checked against the sim with no second mapping to get out of step -- but
+## it now holds *per layer*, and the bridge's layer is not this one.
+func terrain_source_at(tile: Vector2i) -> int:
+	if _deck != null:
+		var on_deck := _deck.get_cell_source_id(tile)
+		if on_deck != -1:
+			return on_deck
+	return get_cell_source_id(tile)
 
 
 ## Which neighbours the transition at `tile` is reaching in from, as a canonical mask,
@@ -257,7 +315,58 @@ func _build_tile_set(terrain: PackedByteArray) -> TileSet:
 	# so set_cell() needs no lookup table and a cell can be read back and checked
 	# against the sim without a second mapping to get out of step.
 	for kind in _kinds_used(terrain):
+		if SimMap.is_bridge(kind):
+			continue               # `_build_deck_tile_set`'s, and drawn a layer up
 		var source := _source_for(kind)
+		if source != null:
+			ts.add_source(source, kind)
+	return ts
+
+
+## The bridge layer: one cell per deck tile, and nothing else on it.
+##
+## Its source ids are the terrain bytes exactly as the ground layer's are, so the two
+## together still satisfy "a painted cell IS its terrain" -- `terrain_source_at()` is the
+## one place that has to know which layer to ask.
+func _build_deck(size: Vector2i, terrain: PackedByteArray) -> void:
+	# A child, so it inherits this layer's alignment; see `_build_blend` for why setting
+	# it again would shift every deck tile by one.
+	_deck.position = Vector2.ZERO
+	_deck.rendering_quadrant_size = QUADRANT_TILES
+	_deck.tile_set = _build_deck_tile_set(terrain)
+	if _deck.tile_set == null:
+		return
+
+	for y in range(size.y):
+		var row := y * size.x
+		for x in range(size.x):
+			var kind := int(terrain[row + x])
+			if not SimMap.is_bridge(kind) or not _deck.tile_set.has_source(kind):
+				continue
+			var t := Vector2i(x, y)
+			# Every other terrain is one diamond at column 0; a bridge picks one of four
+			# by what its long-side neighbours are.
+			_deck.set_cell(t, kind, Vector2i(bridge_column(kind,
+					_bridge_edges(size, terrain, t)), 0))
+
+
+## Null on a map with no bridge on it, which is most of them -- so an ordinary map pays
+## for the extra layer with an empty node and no texture.
+func _build_deck_tile_set(terrain: PackedByteArray) -> TileSet:
+	var bridges: Array[int] = []
+	for kind in _kinds_used(terrain):
+		if SimMap.is_bridge(kind):
+			bridges.append(kind)
+	if bridges.is_empty():
+		return null
+
+	var ts := TileSet.new()
+	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
+	ts.tile_offset_axis = TileSet.TILE_OFFSET_AXIS_HORIZONTAL
+	ts.tile_size = Vector2i(Iso.TILE_SIZE)
+	for kind in bridges:
+		var source := _bridge_source_for(kind)
 		if source != null:
 			ts.add_source(source, kind)
 	return ts
@@ -284,10 +393,6 @@ func _kinds_used(terrain: PackedByteArray) -> Array[int]:
 ## other join stays crisp. A second layer per order would fix it and is not worth its
 ## cost until somebody can point at one.
 func _build_blend(size: Vector2i, terrain: PackedByteArray) -> void:
-	if _blend == null:
-		_blend = TileMapLayer.new()
-		add_child(_blend)
-	_blend.clear()
 	# Zero, not `_align_to_iso`: it is a child, so it already inherits this layer's
 	# alignment. Shifting it again would offset every transition by one tile.
 	_blend.position = Vector2.ZERO
@@ -306,6 +411,10 @@ func _build_blend(size: Vector2i, terrain: PackedByteArray) -> void:
 			# had water faded across it from both banks. The blend exists to soften a
 			# staircase between two ground textures; a bridge is a built thing standing
 			# on the ground, and its edge is meant to be crisp.
+			#
+			# ⚠️ **THIS IS NOT WHAT KEEPS THE WASH OFF A BRIDGE'S KERB** -- see
+			# `_ensure_layers()`. It stops a transition on the deck's OWN tile; the one the
+			# owner reported sat on the tile behind it.
 			if SimMap.is_bridge(mine):
 				continue
 			var over := _dominant_neighbour(size, terrain, t, mine)
@@ -669,10 +778,9 @@ static func _facing_for_stored(entry: AtlasEntry, stored: int) -> int:
 	return stored
 
 
+## One GROUND terrain's flat diamond. A bridge never reaches here -- it is four frames
+## rather than one and `_bridge_source_for` packs them.
 func _source_for(kind: int) -> TileSetAtlasSource:
-	if SimMap.is_bridge(kind):
-		return _bridge_source_for(kind)
-
 	var visual_id: StringName = TERRAIN_VISUALS.get(kind, &"")
 	if visual_id == &"":
 		return null

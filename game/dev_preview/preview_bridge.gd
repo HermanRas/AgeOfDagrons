@@ -40,6 +40,11 @@ const SETTLE_FRAMES := 12
 const RUN := 9
 const WIDE := 5
 
+## How far in the bank shots magnify. A tile is 64 x 34 and the kerb stands 8 px of that, so
+## at 1:1 the fault under investigation is a handful of pixels at a join -- large enough to
+## annoy a player and too small to diagnose from a screenshot.
+const BANK_ZOOM := 4.0
+
 var _layer: TerrainLayer = null
 var _step := 0
 var _frames := 0
@@ -79,6 +84,12 @@ func _process(_delta: float) -> void:
 			_build_real_river()
 		3:
 			_shoot("bridge_river_seed_%d" % _seed)
+			_build_bank()
+		4:
+			_shoot("bridge_bank")
+			_hide_the_blend()
+		5:
+			_shoot("bridge_bank_noblend")
 			get_tree().quit()
 	_step += 1
 
@@ -169,6 +180,52 @@ func _build_real_river() -> void:
 	_show(data.size, data.terrain, _first_bridge(data))
 
 
+## ⛔ **THE SHOT THAT CAUGHT THE REPORTED BUG, and the one the first four could not.**
+##
+## The owner's report (2026-09-19): *"the bridge corners are blending"*. Every earlier shot
+## here frames the WHOLE span at 1:1, where the fault is a few pixels at a join and reads as
+## anti-aliasing. It only becomes a bridge-shaped problem at the BANK, magnified, where the
+## deck meets ground rather than water.
+##
+## **The pair is the measurement.** `bridge_bank` and `bridge_bank_noblend` differ in exactly
+## one thing -- whether the transition layer is drawn -- so any pixel that changes ON the deck
+## is the blend reaching a place it has no business being, and any part of the fault that
+## SURVIVES the second shot is the base layer's own draw order instead. Those are different
+## bugs with different fixes and they look identical in a single screenshot.
+func _build_bank() -> void:
+	var data := MapGenerator.generate(_seed, MapGenerator.Type.RIVER, 2)
+	_show(data.size, data.terrain, _bridge_at_the_bank(data), BANK_ZOOM)
+
+
+## A deck tile with dry land on one of its four edges -- the end of the span, where the
+## crossing meets the shore. `_first_bridge` finds a tile in the middle of the river, which is
+## the one place the fault cannot be seen.
+func _bridge_at_the_bank(data: MapData) -> Vector2i:
+	for y in range(data.size.y):
+		for x in range(data.size.x):
+			var t := Vector2i(x, y)
+			if not SimMap.is_bridge(data.terrain_at(t)):
+				continue
+			for offset in TerrainLayer.EDGE_OFFSETS:
+				var n: Vector2i = t + offset
+				if not data.in_bounds(n):
+					continue
+				var kind := data.terrain_at(n)
+				if SimMap.is_bridge(kind) or kind == SimMap.Terrain.WATER_SHALLOW \
+						or kind == SimMap.Terrain.WATER_DEEP:
+					continue
+				return t
+	return _first_bridge(data)
+
+
+func _hide_the_blend() -> void:
+	var blend := _layer.blend_layer()
+	if blend == null:
+		push_warning("no blend layer to hide -- the second shot proves nothing")
+		return
+	blend.visible = false
+
+
 func _first_bridge(data: MapData) -> Vector2i:
 	for y in range(data.size.y):
 		for x in range(data.size.x):
@@ -179,16 +236,28 @@ func _first_bridge(data: MapData) -> Vector2i:
 
 # ── drawing ────────────────────────────────────────────────────────────────
 
-func _show(size: Vector2i, bytes: PackedByteArray, centre_on := Vector2i(-1, -1)) -> void:
+func _show(size: Vector2i, bytes: PackedByteArray, centre_on := Vector2i(-1, -1),
+		zoom := 1.0) -> void:
 	if _layer != null:
 		_layer.queue_free()
 	_layer = TerrainLayer.new()
+	# NEAREST, so a magnified shot shows PIXELS. Under the default linear filter a 4x
+	# blow-up smears every edge, and "the blend reaches 8 px onto the deck" and "the deck
+	# edge is soft" become the same picture -- which is the distinction these shots exist
+	# to draw. Inherited by the blend layer, which is a child of this one.
+	_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_layer)
 	_layer.build(size, bytes)
+	# `build()` leaves the layer aligned to Iso, and that offset is in the layer's own
+	# LOCAL space -- so it has to be subtracted out before the zoom is applied, or a
+	# magnified shot frames a tile some distance from the one asked for.
+	var aligned := _layer.position
+	_layer.scale = Vector2(zoom, zoom)
 	var centre := centre_on if centre_on.x >= 0 else size / 2
 	# The layer draws in Iso's world space; put the tile of interest in the middle of
 	# the window rather than wherever tile (0, 0) happens to project to.
-	_layer.position += Vector2(WINDOW) * 0.5 - Iso.tile_centre_to_world(centre)
+	_layer.position = Vector2(WINDOW) * 0.5 \
+			- (Iso.tile_centre_to_world(centre) - aligned) * zoom
 
 
 func _draw() -> void:

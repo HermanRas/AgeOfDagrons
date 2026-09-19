@@ -373,6 +373,36 @@ func test_a_resize_redraws_the_map() -> void:
 	fresh.free()
 
 
+# ── the terrain palette, and the one byte a colour cannot describe ──────────
+
+## ⛔ **THE TWO BRIDGE BRUSHES ARE THE SAME COLOUR ON PURPOSE, SO SOMETHING ELSE HAS TO TELL
+## THEM APART.** A bridge is a surface plus a DIRECTION — the game kerbs its long sides from
+## the byte — and an author who picks the wrong one of two identical brown squares gets a
+## bridge with its rails across the road, which looks perfectly correct on this canvas and is
+## only visible once the map is loaded in the game. So the run is drawn along each tile, and
+## these pin the three things that would quietly make that mark useless.
+func test_a_bridge_is_told_apart_by_its_run_and_not_by_its_colour() -> void:
+	assert_eq(MapCanvas.TERRAIN_COLOURS[SimMap.Terrain.BRIDGE_X],
+			MapCanvas.TERRAIN_COLOURS[SimMap.Terrain.BRIDGE_Y],
+			"one surface, one colour — the distinction is not a hue")
+	assert_ne(SimMap.bridge_run_axis(SimMap.Terrain.BRIDGE_X),
+			SimMap.bridge_run_axis(SimMap.Terrain.BRIDGE_Y),
+			"and the mark along them is what an author is actually choosing between")
+	assert_ne(MapCanvas.BRIDGE_RUN, MapCanvas.TERRAIN_COLOURS[SimMap.Terrain.BRIDGE_X],
+			"a mark drawn in the deck's own colour is no mark")
+
+
+## ⚠️ **THE `Color.MAGENTA` FALLBACK IN `_draw_terrain` MUST NEVER BE REACHED.** `Terrain` is
+## append-only and grew by two on 2026-09-19; the next member added will paint magenta over
+## every tile carrying it, which is the colour the GAME reserves for *"this is a bug"* and
+## which reads here as the tool having broken rather than as a missing swatch.
+func test_every_terrain_kind_has_a_swatch() -> void:
+	for kind in SimMap.Terrain.values():
+		assert_true(MapCanvas.TERRAIN_COLOURS.has(kind),
+				"%s has no colour and would draw as the bug magenta"
+				% SimMap.Terrain.keys()[kind])
+
+
 # ── the batched projection (16.x-slow-place) ────────────────────────────────
 #
 # ⚠️ **THESE EXIST BECAUSE THE FIX FOR THE SLOWNESS TOUCHED THE ONE THING THIS FILE'S HEADER

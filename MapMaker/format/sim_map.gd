@@ -48,6 +48,22 @@ const BRIDGE_KINDS := [Terrain.BRIDGE_X, Terrain.BRIDGE_Y]
 static func is_bridge(kind: int) -> bool:
 	return kind == Terrain.BRIDGE_X or kind == Terrain.BRIDGE_Y
 
+
+## Which grid axis a bridge byte's deck runs ALONG: `Vector2i.RIGHT` for `BRIDGE_X`,
+## `Vector2i.DOWN` for `BRIDGE_Y`, and `Vector2i.ZERO` for anything that is not a bridge.
+##
+## ⛔ **THE FACT THE SECOND BYTE EXISTS TO CARRY, WRITTEN DOWN ONCE.** The enum comment above
+## says it in prose; three separate things have to act on it and none of them can re-derive
+## it — `TerrainLayer` picks which long sides get a kerb, `MapCanvas` draws it so an author
+## can see which brush they used, and `MapGenerator` writes it because after the tiles are
+## painted it is gone. Three readings of one sentence is three chances to get it a quarter
+## turn out, and each of them would look entirely correct on its own.
+static func bridge_run_axis(kind: int) -> Vector2i:
+	match kind:
+		Terrain.BRIDGE_X: return Vector2i.RIGHT
+		Terrain.BRIDGE_Y: return Vector2i.DOWN
+	return Vector2i.ZERO
+
 ## Which surfaces a unit can cross. `UnitDef.domain` is the string form
 ## ("land"); `from_domain_name()` converts.
 ##

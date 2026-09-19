@@ -70,14 +70,33 @@ const TERRAIN_COLOURS := {
 	SimMap.Terrain.WATER_DEEP: Color(0.18, 0.35, 0.55),
 	SimMap.Terrain.ROCK: Color(0.45, 0.45, 0.48),
 	SimMap.Terrain.FOREST: Color(0.20, 0.34, 0.20),
-	# THE TWO BRIDGE BYTES ARE ONE SURFACE AND GET ONE COLOUR. The axis is which way the
-	# planks run, which is a question for the game's renderer and not for an author
-	# looking at flat swatches -- and two browns a shade apart would read as a mistake in
-	# the palette rather than as a distinction. The palette still lists them separately,
-	# because it comes off the enum and an author does have to pick one.
+	# THE TWO BRIDGE BYTES ARE ONE SURFACE AND GET ONE COLOUR. Two browns a shade apart
+	# would read as a mistake in the palette rather than as a distinction, and the thing
+	# that actually tells them apart is not a hue -- see `BRIDGE_RUN`.
 	SimMap.Terrain.BRIDGE_X: Color(0.63, 0.45, 0.24),
 	SimMap.Terrain.BRIDGE_Y: Color(0.63, 0.45, 0.24),
 }
+
+## The line drawn ALONG a bridge tile, saying which way the deck runs.
+##
+## ⛔ **THIS IS THE ONE PIECE OF TERRAIN WHOSE BYTE IS NOT FULLY DESCRIBED BY A COLOUR, and
+## the tool was unusable for bridges without it.** Every other kind is a surface; a bridge is
+## a surface **plus a direction** — `BRIDGE_X` runs along grid x and `BRIDGE_Y` along grid y —
+## and the game draws the kerbs down the long sides accordingly. An author who paints the
+## wrong one gets a bridge with its rails ACROSS the road, which looks completely correct on
+## a canvas of flat diamonds and is only visible once the map is loaded in the game.
+##
+## So the direction is drawn. Consecutive tiles of the same byte join into one continuous
+## line down the span, which is also what makes a single wrong tile in the middle of a bridge
+## obvious rather than arguable: the line breaks and turns.
+##
+## Still presentational, like every colour in this file — nothing reads it back, and it is
+## not an attempt to draw planks.
+##
+## **Public, like `AREA_COLOUR` and for its reason:** `ObjectPalette` draws the same mark on
+## the two bridge swatches, and a brush whose swatch disagreed with the map would be worse
+## than a swatch with no mark at all.
+const BRIDGE_RUN := Color(0.30, 0.19, 0.08, 0.85)
 
 const _GRID := Color(0, 0, 0, 0.10)
 const _CURSOR := Color(1, 1, 1, 0.85)
@@ -550,6 +569,12 @@ func _draw_terrain(range_rect: Rect2i) -> void:
 	var lines := PackedVector2Array()
 	if show_grid:
 		lines.resize(tiles * 8)
+	# APPENDED RATHER THAN SIZED AND INDEXED, which is the opposite of everything above it
+	# and is the right way round for this one array. The class comment's rule exists because
+	# there are four corners on every one of ~9,000 tiles; bridges are tens of tiles on the
+	# maps that have any and zero on the rest, so sizing this to the cull would allocate
+	# 150 KB a redraw to hold nothing.
+	var runs := PackedVector2Array()
 	var used := 0
 
 	for y in range(range_rect.position.y, range_rect.end.y):
@@ -569,7 +594,21 @@ func _draw_terrain(range_rect: Rect2i) -> void:
 			points[v + 1] = b
 			points[v + 2] = c
 			points[v + 3] = d
-			var colour: Color = TERRAIN_COLOURS.get(data.terrain_at(t), Color.MAGENTA)
+			var kind := data.terrain_at(t)
+			if show_grid and SimMap.is_bridge(kind):
+				# EDGE MIDPOINT TO EDGE MIDPOINT, so the segment spans the whole tile and the
+				# next one of the same byte starts exactly where this one ends. A tick centred
+				# on the tile and half as long would leave a gap at every join, which reads as
+				# a broken bridge rather than as a shorter mark.
+				var mid := a + (ex + ey) * 0.5
+				# THROUGH THE BASIS, like every other point in this function: the byte names
+				# a GRID axis and `ex`/`ey` are that axis projected, so the mark follows the
+				# game's own `Iso` rather than a screen direction written down here.
+				var axis := SimMap.bridge_run_axis(kind)
+				var along := ex * float(axis.x) + ey * float(axis.y)
+				runs.push_back(mid - along * 0.5)
+				runs.push_back(mid + along * 0.5)
+			var colour: Color = TERRAIN_COLOURS.get(kind, Color.MAGENTA)
 			colours[v] = colour
 			colours[v + 1] = colour
 			colours[v + 2] = colour
@@ -615,6 +654,10 @@ func _draw_terrain(range_rect: Rect2i) -> void:
 			get_canvas_item(), indices, points, colours)
 	if show_grid:
 		draw_multiline(lines, _GRID, 1.0)
+	# AFTER THE GRID, so a bridge's direction is not cut by the tile outlines it crosses. One
+	# more command, and only on a map that has a bridge on it.
+	if not runs.is_empty():
+		draw_multiline(runs, BRIDGE_RUN, 2.0)
 
 
 ## The iso projection as an origin and two edge vectors, in this control's local space.

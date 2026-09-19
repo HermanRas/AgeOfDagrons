@@ -284,8 +284,18 @@ func set_koth_zone(zone: Rect2i, colour: Color) -> void:
 	queue_redraw()
 
 
+## ⚠️ **THE BRIDGE IS NAMED HERE RATHER THAN LEFT TO `TERRAIN_VISUALS`, AND IT HAD TO BE.**
+## That table is one visual per terrain and the bridge is four (`TerrainLayer.BRIDGE_PIECES`),
+## so it is deliberately absent from it — which meant a crossing came out of `.get()` as the
+## empty id and drew as the **loud magenta unknown**, a colour that means "this is a bug".
+## A river's crossing is the single thing a player looks for on this picture.
+##
+## `vis.bridge_deck`'s own declared placeholder rather than a colour invented here, so the
+## minimap and the loud-placeholder render of the same tile agree, and `visuals.json` stays
+## the one place a bridge's colour is written down.
 func _terrain_color(kind: int) -> Color:
-	var visual_id: StringName = TerrainLayer.TERRAIN_VISUALS.get(kind, &"")
+	var visual_id: StringName = &"vis.bridge_deck" if SimMap.is_bridge(kind) \
+			else TerrainLayer.TERRAIN_VISUALS.get(kind, &"")
 	if visual_id == &"":
 		return PlaceholderSpec.UNKNOWN_COLOR
 	return GameDataRegistry.placeholder_for(visual_id).color

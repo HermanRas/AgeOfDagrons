@@ -893,7 +893,7 @@ func _picture_for(id: StringName) -> Control:
 		# diamonds in its own presentational colours (its header is emphatic that they are
 		# neither the file's nor the game's art), so a swatch in the SAME colours is the honest
 		# picture -- an author matching a brush to what they see on the canvas.
-		return _swatch(MapCanvas.TERRAIN_COLOURS.get(_kind_of(id), Color.MAGENTA), box)
+		return _terrain_swatch(_kind_of(id), box)
 
 	# THE REAL DEF, so a variant row crops its own def's art. See the comment above.
 	var def_id: StringName = split_variant(id)[0]
@@ -992,6 +992,42 @@ func _swatch(colour: Color, box: Vector2) -> Control:
 	rect.custom_minimum_size = box
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
+
+
+## A terrain brush's swatch: its canvas colour, and for a bridge the direction as well.
+##
+## ⛔ **THE TWO BRIDGE ROWS ARE THE SAME COLOUR AND THE SAME WORD BAR ONE LETTER**, so without
+## this an author choosing between "Bridge x" and "Bridge y" is picking between two identical
+## brown squares. `MapCanvas.BRIDGE_RUN` carries the rest of the argument: the wrong one is a
+## bridge with its rails across the road, and it looks perfectly correct until the map is
+## loaded in the game.
+##
+## The stroke runs the way `MapCanvas` draws it — grid +x projects down-RIGHT on screen and
+## grid +y down-LEFT — so the mark on the swatch is the mark that will appear on the map.
+func _terrain_swatch(kind: int, box: Vector2) -> Control:
+	var rect := _swatch(MapCanvas.TERRAIN_COLOURS.get(kind, Color.MAGENTA), box)
+	if not SimMap.is_bridge(kind):
+		return rect
+	var pen := Control.new()
+	pen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Grid +x projects down-RIGHT on screen and grid +y down-left, so the byte's own axis
+	# decides which diagonal the swatch draws. Asked of `SimMap` rather than restated here.
+	var down_right := SimMap.bridge_run_axis(kind) == Vector2i.RIGHT
+	pen.draw.connect(func() -> void: _draw_run_hint(pen, down_right))
+	rect.add_child(pen)
+	return rect
+
+
+func _draw_run_hint(on: Control, down_right: bool) -> void:
+	# Inset, so the stroke reads as a mark ON the tile rather than as its border.
+	var pad := on.size * 0.22
+	var from := Vector2(pad.x, pad.y)
+	var to := Vector2(on.size.x - pad.x, on.size.y - pad.y)
+	if not down_right:
+		from.x = on.size.x - pad.x
+		to.x = pad.x
+	on.draw_line(from, to, MapCanvas.BRIDGE_RUN, 3.0, true)
 
 
 ## Mark the chosen tile. **Two tiles repainted rather than the grid rebuilt**, because a

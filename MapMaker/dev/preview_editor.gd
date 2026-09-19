@@ -80,7 +80,7 @@ func _process(_delta: float) -> void:
 			# READABLE is the thing worth photographing.
 			_zoom_to(Vector2i(48, 30), 2.0)
 		3:
-			_report("zoomed on the river bank")
+			_report("zoomed on the river crossing")
 			_shoot("editor_zoomed")
 		4:
 			_zoom_to(_editor.document().data.starts[0], 1.2)
@@ -919,6 +919,18 @@ func _build_map() -> MapDocument:
 				doc.paint(Vector2i(x, y), SimMap.Terrain.WATER_SHALLOW)
 			elif d <= 6:
 				doc.paint(Vector2i(x, y), SimMap.Terrain.SAND)
+	# A CROSSING, at the tile `editor_zoomed` frames.
+	#
+	# ⛔ **THE ONE TERRAIN BYTE A FLAT COLOUR CANNOT DESCRIBE**, and therefore the one worth
+	# photographing here. A bridge is a surface plus a DIRECTION: `BRIDGE_X` runs along grid x,
+	# which is across this river, and the game kerbs its long sides from that. A stretch of
+	# `BRIDGE_Y` laid in the same place would be the same brown diamonds on this canvas and a
+	# bridge with its rails across the road in the game — so `MapCanvas` draws a line ALONG each
+	# deck tile, and whether that line is legible at 2x is a question for eyes.
+	for y in range(29, 32):
+		var centre := mid + int(round(sin(float(y) / 9.0) * 5.0))
+		for x in range(centre - 5, centre + 6):
+			doc.paint(Vector2i(x, y), SimMap.Terrain.BRIDGE_X)
 	for y in range(6, 14):
 		for x in range(6, mid - 10):
 			doc.paint(Vector2i(x, y), SimMap.Terrain.ROCK)

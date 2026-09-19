@@ -31,6 +31,23 @@ func test_build_terrain_accepts_a_valid_grid() -> void:
 	assert_not_null(map._terrain_tex)
 
 
+## ⛔ **EVERY TERRAIN BYTE HAS A COLOUR HERE, AND THE BRIDGE DID NOT** (found 2026-09-19,
+## the day after it shipped). `_terrain_color` resolves through `TerrainLayer.TERRAIN_VISUALS`,
+## which is one visual per terrain — and a bridge is four pieces, so it is DELIBERATELY absent
+## from that table. `.get()` answered the empty id and every deck tile on the in-match minimap
+## drew as `PlaceholderSpec.UNKNOWN_COLOR`: the loud magenta that means *"this is a bug"*,
+## painted across the one thing a player scans this picture for.
+##
+## Nothing could have caught it from the table's side — being missing from `TERRAIN_VISUALS`
+## is load-bearing there. So the check belongs here, on the reader, and it is the whole enum
+## rather than the two bridge bytes: `Terrain` is append-only and the next member added will
+## arrive by exactly this route.
+func test_no_terrain_kind_draws_as_the_bug_magenta() -> void:
+	for kind in SimMap.Terrain.values():
+		assert_ne(map._terrain_color(kind), PlaceholderSpec.UNKNOWN_COLOR,
+				"%s has no minimap colour" % SimMap.Terrain.keys()[kind])
+
+
 func test_build_terrain_rejects_a_short_array() -> void:
 	map.build_terrain(Vector2i(4, 4), PackedByteArray([0, 0]))
 	assert_null(map._terrain_tex)
