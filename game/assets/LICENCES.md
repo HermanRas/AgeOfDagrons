@@ -91,6 +91,10 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 | `vis.blacksmith_age4` | `blacksmith_age4.toml` | `art/actors/structures/romans/blacksmith.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.boar` | `boar.toml` | `art/actors/fauna/boar.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.boar_carcass` | `boar_carcass.toml` | `art/actors/fauna/boar.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.bridge_deck` | `bridge_deck.toml` | `art/terrains/special/bridge_wood_a.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.bridge_rail` | `bridge_rail.toml` | `art/terrains/special/bridge_wood_a.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.bridge_rail_both` | `bridge_rail_both.toml` | `art/terrains/special/bridge_wood_a.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.bridge_wood` | `bridge_wood.toml` | `art/actors/props/special/eyecandy/bridge_edge_wooden.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.castle` | `castle.toml` | `art/actors/structures/athenians/fortress.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.castle_age3` | `castle_age3.toml` | `art/actors/structures/iberians/fortress.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.castle_age4` | `castle_age4.toml` | `art/actors/structures/romans/fortress.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |

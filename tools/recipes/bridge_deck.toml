@@ -1,0 +1,84 @@
+# Bridge deck -- the interior tile of the per-tile bridge set.
+#
+# Requested by the game side 2026-09-19 (asset_request.md, card
+# `2.x-river-bridge`): a generated river is 9 tiles wide at 2 players and 17 at
+# 8, so no single-span bridge can cross it and the bridge becomes TERRAIN, one
+# piece per tile, chosen from the 8-neighbourhood.
+#
+# This is the plain decking. `bridge_rail.toml` is the same tile with a kerb
+# along one edge, and between them they cover every case a rectangular bridge
+# produces -- see the mask table in asset_request.md.
+#
+# ---------------------------------------------------------------- WHY NOT CUT
+# THE EXISTING BAKE UP. `vis.bridge_wood` stays, and it is not the source of
+# these. It composes `props/special/eyecandy/bridge_edge_wooden`, which is ONE
+# mesh 43.330 m long -- no sub-objects to select -- of which only 8.1% of its
+# 3091 verts survive z >= 0. Its posts come in PAIRS 0.984 m apart with gaps of
+# 5.763 / 5.593 / 5.347 m between pairs, so there is no repeat unit at 2.0 m or
+# at any multiple of it, and the deck between them is a handful of long quads.
+# Read straight off the COLLADA, on a copy, so nothing was rewritten.
+#
+# So the tiles are BUILT rather than sliced, from 0 A.D.'s own bridge DECK
+# terrain -- `art/terrains/special/bridge_wood_{a,b,c}.xml`, which exist because
+# their heightmap terrain painter has the same problem we do and cannot rotate
+# a texture per tile. `_a` and `_c` are one texture turned 90 degrees; both
+# measure 28 seams at a median gap of 21 px, in the two axes.
+id      = "vis.bridge_deck"
+adapter = "terrain"
+
+[source]
+terrain = "special/bridge_wood_a.xml"
+
+# 6.0 m per repeat = 0.25 m boards, 8 across a tile. MEASURED, by baking 2.0,
+# 4.0 and 6.0 and reading them at 8x:
+#
+#   2.0  one full repeat lands on the tile, which is seamless BY CONSTRUCTION
+#        and useless -- all 24 of the texture's boards crush into 2-3 px and
+#        the tile reads as dirt with two dark streaks.
+#   6.0  8 boards at 0.25 m, which reads as decking.
+#
+# The seam 6.0 leaves at the tile edge (u runs 0..1/3, so the two edges are not
+# the same point in the texture) is invisible in a laid-out field, because a
+# plank deck HAS a board edge there anyway. Checked on a 6x6 field, not on one
+# tile -- a seam is a property of two tiles MEETING and cannot be read off a
+# single frame.
+texture_metres = 6.0
+
+[render]
+# Slightly over 64x32 so the diamond's antialiased edge is not clipped, as
+# terrain_grass.toml. Kept equal to bridge_rail.toml's so the two atlases'
+# anchors agree and the game can swap one piece for another in a cell.
+canvas = [96, 64]
+supersample = 4
+
+# ⚠️ 8 IS BAKED BUT ONLY FOUR FRAMES ARE USABLE: STORED INDICES 1, 3, 5, 7
+# (SW, NW, NE, SE). This is geometry, not preference, and it is measured.
+#
+# `directions` rotates the OBJECT. A 2 m square tile rotated by 90 degrees maps
+# onto itself and still fills its 64x32 diamond; rotated by 45 it does not --
+# its corners go to (+/-1.414, 0) and (0, +/-1.414), which projects to a 45 x 23
+# px RECTANGLE. Baked and measured on this very recipe: indices 0/2/4/6 come
+# out 46 x 24 px and indices 1/3/5/7 come out 64 x 34.
+#
+# So a 46 px frame is not a tile and must never be drawn as one. isobake takes
+# only 1, 5 or 8 for `directions`, so the four bad frames are the price of
+# getting the four good ones in one atlas; they are harmless as long as the
+# lookup table only ever names 1, 3, 5, 7, which it does.
+#
+# The same fact is why 0 A.D. ships three pre-rotated plank textures rather
+# than one rotated per tile.
+directions = 8
+
+# Centred: the tile spans the origin rather than standing on it, so `anchor` is
+# the tile CENTRE and a piece taller than its cell still lines up.
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/terrains/special/bridge_wood_a.xml"

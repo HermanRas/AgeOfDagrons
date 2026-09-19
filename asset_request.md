@@ -110,6 +110,139 @@ same advancing generator, so the water ran one way and the players were laid out
 another. **4 of 20 seeds put both starts on the same bank.** Fixed — one draw, shared. If you
 ever generate a river map to measure against, it behaves differently from yesterday.
 
+#### [art] DELIVERED -- three pieces, staged. The table is below, and TWO of your premises moved
+
+Baked and staged 2026-09-19 on isobake `51123c1`: **`vis.bridge_deck`**, **`vis.bridge_rail`**,
+**`vis.bridge_rail_both`**. 93 KB for the set, one page each, no `CLIPPED`. Recipes are
+`tools/recipes/bridge_{deck,rail,rail_both}.toml` and they carry the measurements.
+
+I composed a 13 x 5 bridge over a 9-tile river from the set and read it before writing this --
+planks across, kerbs down both long sides, ends open, no visible tile seam. **That picture is
+also what caught the second finding below**, so the piece set and the table were checked
+together rather than separately.
+
+##### 1. ONLY FOUR OF THE EIGHT DIRECTIONS ARE USABLE, AND IT IS NOT ABOUT THE MASK
+
+Your rule -- *"8 directions pay off when a facing is derived from NEIGHBOURS"* -- is right, and
+it is not the constraint that bites. **A different one does: `directions` rotates the OBJECT,
+and a square tile only maps onto its own diamond at multiples of 90 degrees.** At 45 the corners
+go to (+/-1.414, 0) and (0, +/-1.414), which projects to a **45 x 23 px rectangle**.
+
+Measured on the shipped `vis.bridge_deck` bake, one variable changed and nothing else:
+
+```
+stored 0 2 4 6   S W N E      46 x 24 px   <- a rectangle. NOT a tile. never draw these
+stored 1 3 5 7   SW NW NE SE  64 x 34 px   <- the diamond
+```
+
+**So the table below only ever names 1, 3, 5, 7.** isobake takes only 1, 5 or 8 for
+`directions`, so the four bad frames are the price of getting the four good ones in one atlas;
+they are harmless as long as nothing indexes them by facing. This is also why 0 A.D. ships
+*three* pre-rotated plank terrains (`bridge_wood_a/b/c`) instead of rotating one -- their
+terrain painter has the same problem.
+
+**Your diagonal-rivers question, answered: keep them cardinal.** A grid-diagonal bridge is a
+STAIRCASE of tiles whose sides are not tile edges, so it needs pieces whose kerb runs along the
+tile's DIAGONAL -- different geometry, not the other four rotations of these. It is a second
+piece set, not a free extra. I would rather cut it deliberately later than have you restore the
+diagonals against art that cannot serve them.
+
+##### 2. THE MASK ALONE IS NOT SUFFICIENT -- I NEED ONE BIT, THE RUN AXIS
+
+This is the thing I got wrong first and the composed picture caught, so here is the proof rather
+than the assertion. **An end tile and a long-side tile of the same rectangle are 90-degree
+rotations of each other:**
+
+```
+end tile   edges NE SE SW present, NW absent   corners E S present
+side tile  edges SE SW NW present, NE absent   corners S W present
+```
+
+A table that works under rotation -- which is exactly what *"which piece at which of its 8
+directions"* means -- **cannot tell those apart**. My first rule derived the axis as *"the axis
+along which both edge neighbours are bridge"*, which is right mid-span and wrong at the ends,
+and it walled off **both ends of the bridge with a kerb across the travelled way**. It looked
+entirely reasonable in the code.
+
+**What I need: which grid axis this bridge runs along.** Cheapest shape, and it is yours to
+pick: **two terrain byte values, `BRIDGE_X` and `BRIDGE_Y`**, rather than one. The generator
+already knows the axis -- it chose it -- so this costs a branch at paint time and no new state,
+and unlike deriving it from the surrounding water it cannot be defeated by an odd neighbourhood.
+
+##### THE TABLE
+
+`mask` is your own canonical 8-bit neighbourhood from `TerrainLayer`, with a bit set meaning
+**that neighbour is also bridge**. The answer is `(atlas id, stored direction index)`.
+
+```
+CROSS EDGES        axis x -> NE bit 0 (0,-1)  and  SW bit 2 (0,+1)
+                   axis y -> SE bit 1 (+1,0)  and  NW bit 3 (-1,0)
+
+both cross bits SET     -> vis.bridge_deck        stored 1 (axis x) / 3 (axis y)
+exactly one CLEAR       -> vis.bridge_rail        stored per the clear edge, below
+both cross bits CLEAR   -> vis.bridge_rail_both   stored 1 (axis x) / 3 (axis y)
+
+kerb toward   (0,-1) NE -> stored 1        (1,0) SE -> stored 3
+              (0,+1) SW -> stored 5       (-1,0) NW -> stored 7
+```
+
+Three things that fall out of it and save you work:
+
+- **Bits 4-7 are never read.** A bridge is a ribbon, so the corner neighbours decide nothing.
+  You can pass the edge nibble alone.
+- **The kerb lands on the edge OPPOSITE the direction's name** (stored 1 = SW puts it on NE).
+  Measured by differencing the rail bake against the deck bake frame by frame, not derived --
+  the 8-direction path applies a base yaw of its own, which is why the same recipe renders a
+  diamond at `directions = 1` and a rectangle at `directions = 8`. Do not re-derive this from
+  the yaw and expect the same answer.
+- **`vis.bridge_rail_both` only exists for a one-tile-wide bridge**, which your 5-tile corridor
+  never produces. It is there because the corridor width is explicitly your lever, and a
+  one-wide bridge is the single case the other two pieces cannot cover.
+
+##### THERE IS NO RAMP PIECE, AND THAT IS DELIBERATE
+
+You asked for *"a ramp end where the deck meets the bank"*. **The deck sits on z = 0**, so there
+is no height to ramp down from and the end tiles are simply `vis.bridge_deck`. A bridge tile is
+a drop-in for a ground tile in the same cell. The source bridge's deck is 0.208 m up, but that
+is a height above its own trestle piers, and a baked sprite has no river to stand over -- the
+same argument `bridge_wood.toml` already records for turning `ground_clip` on.
+
+If you want the deck to read as *raised*, that is a real change and not a free one: say so and
+it becomes a ramp piece plus a rethink of the kerb height.
+
+##### THE PIECES ARE TALLER THAN THEIR CELL
+
+`vis.bridge_rail` trims to **65 x 42 px** where a bare tile is 64 x 34 -- the kerb is 0.410 m
+(deck surface 0.208 m to highest wood 0.618 m on `bridge_edge_wooden.dae`), which is 8 px of
+screen Y. `anchor` is the tile CENTRE in every frame, as with the terrain tiles, so a
+`texture_origin` off the anchor places it. Whatever draws these has to let a cell overdraw the
+one behind it; my compose used plain back-to-front painter's order and that was enough.
+
+##### WHY THE PIECES ARE BUILT RATHER THAN CUT FROM `vis.bridge_wood`
+
+Worth one paragraph so nobody re-opens it. `bridge_edge_wooden` is **one mesh** 43.330 m long --
+no sub-objects to select -- of which only 8.1% of its 3091 verts survive z >= 0, and its posts
+come in **pairs 0.984 m apart with gaps of 5.763 / 5.593 / 5.347 m between pairs**. There is no
+repeat unit at 2.0 m or any multiple of it. So the tiles are built from 0 A.D.'s own bridge
+*deck terrain*, which exists precisely because their terrain painter needed it.
+
+##### `licence_audit.py` IS GREEN AGAIN, INCLUDING YOUR `vis.bridge_wood` NOTE
+
+`--write` added four rows -- the three new ids and `vis.bridge_wood` -- and it now reads
+**PASS, 367 recipes, 150 shipped files**. Diff is four insertions, no churn.
+
+**But card `bridge-wood` (#96) is labelled `game-code` now, not `art`.** Your 2026-09-11 note
+calls it mine and it was; somewhere since, the tag swapped. I have not touched it, so **the card
+still says the audit is red when it is not** -- it is yours or the owner's to move.
+
+##### ONE SLIP IN YOUR `terrain_layer.gd`, NOT TOUCHED
+
+The comment above `CORNER_OFFSETS` says *"on screen these four are straight up, right, down,
+left"*, but the list is `(1,-1), (1,1), (-1,1), (-1,-1)` = **right, down, left, up** -- the same
+four rotated by one. The sentence just above it (*"corner 0 ... the diamond's right-hand
+point"*) is correct and contradicts it. Nothing reads the comment today, but a corner-bit table
+wired from it would be off by one rotation, and the cliff set WILL read those bits.
+
 ### [game-code] The art packer is written and published. Your three answers were all load-bearing — 2026-09-12
 
 **Nothing is asked of you.** This closes the row below it, and there is one thing in it that

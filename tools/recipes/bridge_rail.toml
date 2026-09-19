@@ -1,0 +1,95 @@
+# Bridge edge tile -- decking with a kerb rail along ONE side.
+#
+# The long-side piece of the per-tile bridge set. `bridge_deck.toml` is the
+# same tile without the kerb and carries the reasoning for the plank texture,
+# the 6.0 m repeat and the four usable directions; read it first.
+#
+# ------------------------------------------------------------------ measured
+# Off bridge_edge_wooden.dae, straight from the COLLADA on a copy (no importer,
+# so nothing was rewritten), raw 0 A.D. units halved to metres:
+#
+#   deck surface    z = 0.208 m
+#   highest wood    z = 0.618 m
+#
+# so the kerb stands 0.410 m proud of its own deck. At 19.60 px/m of screen Y
+# (pixels_per_metre 22.627417 x cos 30 deg) that is 8 px, and it is enough --
+# the tile comes out 65 x 42 where a bare one is 64 x 34, and the lip reads
+# clearly as the side of a bridge rather than as a dark edge on the texture.
+#
+# ⚠️ THE DECK SITS ON z = 0, NOT ON THE SOURCE'S 0.208 m, AND THAT IS WHY THIS
+# SET HAS NO RAMP PIECE. The game side asked for a "ramp end where the deck
+# meets the bank". There is no height to ramp down from: a bridge tile is a
+# drop-in for a ground tile in the same cell, so the ends are simply
+# `vis.bridge_deck` and the kerbs are the only thing standing proud. The
+# source's 0.208 m is a height above ITS OWN trestle piers, and a baked sprite
+# has no river to stand over -- the same argument bridge_wood.toml records for
+# turning `ground_clip` on.
+id      = "vis.bridge_rail"
+adapter = "composite"
+
+[[source.parts]]
+name           = "deck"
+adapter        = "terrain"
+terrain        = "special/bridge_wood_a.xml"
+texture_metres = 6.0
+
+# The kerb: the SAME flat quad the terrain adapter makes, stood on end by
+# `pitch_deg` (isobake 51123c1, added for this and for the cliff set).
+# 2.0 m along the tile edge, 0.410 m tall, pushed out to y = -1.0 which is the
+# tile's own boundary, and lifted by half its height so it stands on z = 0.
+#
+# bridge_wood_c rather than _a: it is _a turned 90 degrees, so its boards run
+# ALONG the kerb instead of up it, and it reads as a beam rather than as
+# palings.
+#
+# ⚠️ PLANKS RUN PERPENDICULAR TO THE KERB AND THAT IS LOAD-BEARING, not a
+# detail. bridge_wood_a's boards run along the quad's local +Y and the kerb
+# runs along local X, so the decking crosses the bridge the way a real deck
+# does. It holds under every rotation, which is what lets one recipe serve all
+# four edges -- and it is why `vis.bridge_deck` must be drawn at the SAME
+# stored index as the kerb tiles of its own bridge.
+[[source.parts]]
+name           = "rail"
+adapter        = "terrain"
+terrain        = "special/bridge_wood_c.xml"
+texture_metres = 6.0
+size_metres    = [2.0, 0.41]
+pitch_deg      = 90.0
+offset_m       = [0.0, -1.0, 0.205]
+
+[render]
+canvas = [96, 64]
+supersample = 4
+
+# ⚠️ ONLY STORED INDICES 1, 3, 5, 7 ARE USABLE -- see bridge_deck.toml for the
+# measurement. MEASURED here, by differencing this bake against the plain deck
+# bake frame by frame and reading where the extra mass sits: the kerb lands on
+# the screen edge OPPOSITE the direction's name, because it is placed at the
+# subject's back (-Y) and the direction is the way the subject faces.
+#
+#     stored 1 (SW) -> kerb on the NE edge -> grid neighbour (0, -1)
+#     stored 3 (NW) -> kerb on the SE edge -> grid neighbour (+1, 0)
+#     stored 5 (NE) -> kerb on the SW edge -> grid neighbour (0, +1)
+#     stored 7 (SE) -> kerb on the NW edge -> grid neighbour (-1, 0)
+#
+# The grid column is the game's own TerrainLayer.EDGE_OFFSETS convention.
+# Do not re-derive this from the yaw: the 8-direction path applies a base yaw
+# of its own on top of the recipe's, which is why "S" renders a diamond at
+# `directions = 1` and a 45-degree rectangle at `directions = 8`.
+directions = 8
+
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+# TWO terrains, and `actor` stays a single string because the game side reads
+# it to tell which source is staged. `kerb_actor` records the other so
+# provenance is not lost, exactly as bridge_wood.toml does for its decal.
+actor = "art/terrains/special/bridge_wood_a.xml"
+kerb_actor = "art/terrains/special/bridge_wood_c.xml"

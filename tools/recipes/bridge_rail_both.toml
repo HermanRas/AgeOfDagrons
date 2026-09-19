@@ -1,0 +1,65 @@
+# Bridge tile with a kerb on BOTH long sides -- the one-tile-wide bridge.
+#
+# The third and last piece of the per-tile set. `bridge_deck.toml` carries the
+# reasoning for the plank texture and the four usable directions;
+# `bridge_rail.toml` carries the kerb height and the edge mapping.
+#
+# WHY IT EXISTS, given the game side sets the crossing corridor to 5 tiles and
+# this piece can never occur at that width: a one-wide bridge is the one case
+# the other two pieces CANNOT cover, because its every tile needs kerbs on two
+# opposite edges at once and no combination of deck and single-kerb tiles
+# produces that. The corridor width is explicitly the game side's lever to
+# change (asset_request.md, 2026-09-19), so leaving the hole open would mean
+# the set quietly breaking the day they narrowed it. It is one small bake.
+#
+# TWO DISTINCT FRAMES, NOT FOUR. Kerbs on opposite edges are symmetric under
+# 180 degrees, so stored 1 and stored 5 render the same tile, as do 3 and 7.
+# Use 1 for a bridge running along grid X and 3 for one along grid Y.
+id      = "vis.bridge_rail_both"
+adapter = "composite"
+
+[[source.parts]]
+name           = "deck"
+adapter        = "terrain"
+terrain        = "special/bridge_wood_a.xml"
+texture_metres = 6.0
+
+[[source.parts]]
+name           = "rail_near"
+adapter        = "terrain"
+terrain        = "special/bridge_wood_c.xml"
+texture_metres = 6.0
+size_metres    = [2.0, 0.41]
+pitch_deg      = 90.0
+offset_m       = [0.0, -1.0, 0.205]
+
+# The far kerb. No yaw is needed and none is wanted: the quad is rendered from
+# both sides (the terrain material sets no backface culling), so the same
+# primitive at +1.0 faces the right way without being turned.
+[[source.parts]]
+name           = "rail_far"
+adapter        = "terrain"
+terrain        = "special/bridge_wood_c.xml"
+texture_metres = 6.0
+size_metres    = [2.0, 0.41]
+pitch_deg      = 90.0
+offset_m       = [0.0, 1.0, 0.205]
+
+[render]
+canvas = [96, 64]
+supersample = 4
+# ⚠️ Only stored 1, 3, 5, 7 are usable, and of those only 1 and 3 are distinct.
+# See bridge_deck.toml.
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+source = "0 A.D. (Wildfire Games)"
+licence = "CC-BY-SA 3.0"
+licence_url = "http://creativecommons.org/licenses/by-sa/3.0/"
+author = "Wildfire Games"
+author_url = "http://www.wildfiregames.com/"
+actor = "art/terrains/special/bridge_wood_a.xml"
+kerb_actor = "art/terrains/special/bridge_wood_c.xml"
