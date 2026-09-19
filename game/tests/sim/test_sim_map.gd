@@ -151,6 +151,54 @@ func test_the_air_row_still_covers_every_terrain_kind() -> void:
 				% SimMap.Terrain.keys()[kind])
 
 
+## ⚠️ **EVERY TERRAIN KIND NEEDS A COST OR `set_terrain` CRASHES ON IT.** `fill_terrain` and
+## `set_terrain` index `TERRAIN_COST` directly rather than `.get()`ing it, deliberately -- a
+## terrain with no declared cost is not a terrain -- so a member added to the enum and left out
+## of the table is an invalid-index error the first time anybody paints it. Which, for a kind
+## only one map type produces, could be a long way from where it was added.
+func test_every_terrain_kind_has_a_declared_move_cost() -> void:
+	for kind in SimMap.Terrain.values():
+		assert_true(SimMap.TERRAIN_COST.has(kind),
+				"TERRAIN_COST has no row for %s" % SimMap.Terrain.keys()[kind])
+
+
+# ── the bridge (2026-09-19) ────────────────────────────────────────────────
+
+## ⛔ **A BRIDGE IS LAND AND IS NOT WATER**, which is the one row of `DOMAIN_TERRAIN` that
+## could plausibly have gone the other way. A boat passing UNDER a span is the natural reading
+## of the picture and it is not what the art draws: the deck is baked at z = 0 and covers its
+## whole cell, so a galley on a bridge tile would sail over the planks. It is also what the
+## River map already did -- the crossing was dry ground before it was a bridge.
+func test_a_bridge_carries_land_and_refuses_boats() -> void:
+	for kind in SimMap.BRIDGE_KINDS:
+		m.set_terrain(Vector2i(1, 1), kind)
+		assert_true(m.is_passable(Vector2i(1, 1), SimMap.Domain.LAND),
+				"%s is walkable" % SimMap.Terrain.keys()[kind])
+		assert_false(m.is_passable(Vector2i(1, 1), SimMap.Domain.WATER),
+				"%s is not sailable" % SimMap.Terrain.keys()[kind])
+		assert_true(m.is_passable(Vector2i(1, 1), SimMap.Domain.AIR))
+
+
+func test_crossing_a_bridge_costs_no_more_than_the_ford_it_replaced() -> void:
+	# The crossing used to be grass that the shore pass turned to sand. A bridge that cost
+	# more than that would have the pathfinder route around a river rather than over it --
+	# a regression nothing would report, because the units still get there.
+	for kind in SimMap.BRIDGE_KINDS:
+		assert_true(int(SimMap.TERRAIN_COST[kind]) <= int(SimMap.TERRAIN_COST[SimMap.Terrain.SAND]),
+				"%s must not cost more than the sand ford" % SimMap.Terrain.keys()[kind])
+
+
+func test_both_bridge_bytes_are_one_surface_to_everything_but_the_renderer() -> void:
+	# The axis exists for `TerrainLayer`, which cannot derive it from the neighbourhood.
+	# Anything in the sim that told the two apart would be reading a rendering detail.
+	assert_eq(SimMap.TERRAIN_COST[SimMap.Terrain.BRIDGE_X],
+			SimMap.TERRAIN_COST[SimMap.Terrain.BRIDGE_Y])
+	for kind in SimMap.BRIDGE_KINDS:
+		assert_true(SimMap.is_bridge(kind))
+	assert_false(SimMap.is_bridge(SimMap.Terrain.SAND),
+			"and nothing else answers to it")
+
+
 ## And it flies OVER things, not just over ground. A dragon that could cross a forest but not
 ## a town centre would still be walled in by a building line.
 func test_air_ignores_what_is_standing_on_the_ground() -> void:

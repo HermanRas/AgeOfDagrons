@@ -73,11 +73,19 @@ func test_every_category_comes_back_populated() -> void:
 
 
 ## ⚠️ **THE TERRAIN COUNT IS THE ONE EXACT NUMBER WORTH PINNING**, and it is not content: it
-## is the byte written into `map.png`'s red channel, so an eighth kind is a format change and
-## `MapFile` would reject every existing map. Seven, from the enum in the guarded copy.
-func test_terrain_comes_off_the_enum_and_there_are_seven_kinds() -> void:
+## is the byte written into `map.png`'s red channel. **Nine since 2026-09-19**, when the
+## bridge arrived as `BRIDGE_X` / `BRIDGE_Y`.
+##
+## ⛔ **AND THIS COMMENT USED TO SAY AN EIGHTH KIND "WOULD REJECT EVERY EXISTING MAP", WHICH
+## IS BACKWARDS AND WAS WORTH CORRECTING RATHER THAN DELETING.** `MapFile` refuses a byte
+## ABOVE `Terrain.size() - 1`, so APPENDING raises the ceiling and every map already on disk
+## still loads. The incompatibility runs the other way: a map saved with a bridge in it
+## cannot be opened by a build that predates one. That is why `sim_map.gd`'s enum is marked
+## append-only — the danger is inserting or reordering, which renumbers bytes already
+## written, and no count assertion here could see it. `kinds[0]` is checked for exactly that.
+func test_terrain_comes_off_the_enum_and_there_are_nine_kinds() -> void:
 	var kinds := GameDataRegistry.terrain_kinds()
-	assert_eq(kinds.size(), 7)
+	assert_eq(kinds.size(), 9)
 	assert_eq(kinds.size(), SimMap.Terrain.size(), "read off the enum, not a written list")
 	assert_eq(String(kinds[0]), "GRASS", "and in enum order, which is the on-disk order")
 

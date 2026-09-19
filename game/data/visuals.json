@@ -227,6 +227,52 @@
     "than the bug, which at least is honest about being an art problem."
   ],
 
+  "_note_bridge": [
+    "THE BRIDGE IS THREE PIECES AND NOT ONE SPRITE, and that is why these are `vis.`",
+    "rather than `terrain.` ids. A bridge tile's piece is chosen from its neighbours --",
+    "deck mid-span, rail down each long side -- so `TerrainLayer.BRIDGE_PIECES` maps one",
+    "terrain byte onto four frames of these three atlases. Nothing else in the game",
+    "resolves them, and no `terrain.bridge` id exists on purpose.",
+    "",
+    "ONLY STORED DIRECTIONS 1, 3, 5 AND 7 ARE DRAWABLE. `directions` rotates the object",
+    "and a square tile only lands on its own diamond at multiples of 90 degrees, so",
+    "stored 0/2/4/6 trim to a 46 x 24 rectangle rather than a 64 x 34 tile. They are in",
+    "the atlas and they must never be indexed by a facing.",
+    "",
+    "`vis.bridge_wood` -- the single 22 x 9 m span baked 2026-09-09 -- is STAGED AND NOT",
+    "DECLARED HERE, which is deliberate and not a gap. It is a hand-placed decorative",
+    "bridge for an authored MapMaker map and nothing reaches for it yet; declaring it",
+    "would put 22 tiles of unused art into the required art pack, since `build_packs.py`",
+    "packs what this file can ask for. Declare it the day something places it."
+  ],
+
+  "vis.bridge_deck": {
+    "atlas": "res://assets/atlases/vis.bridge_deck.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#8a6a3c"
+    }
+  },
+
+  "vis.bridge_rail": {
+    "atlas": "res://assets/atlases/vis.bridge_rail.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#8a6a3c"
+    }
+  },
+
+  "vis.bridge_rail_both": {
+    "atlas": "res://assets/atlases/vis.bridge_rail_both.atlas.json",
+    "placeholder": {
+      "shape": "diamond",
+      "footprint_m": [2.0, 2.0],
+      "color": "#8a6a3c"
+    }
+  },
+
   "terrain.grass": {
     "atlas": "res://assets/atlases/terrain.grass.atlas.json",
     "placeholder": {

@@ -600,6 +600,23 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 	_paint_shores(data, wood, rng)
 
 	var claimed: Dictionary = {}
+	# ⛔ **NOTHING STANDS ON A BRIDGE, AND `claimed` IS THE ONE PLACE THAT SAYS IT ONCE.**
+	# Every placer below -- bases, veins, herds, berries, the nest, both tree passes --
+	# already asks `claimed` before it takes a tile, and the alternative is a terrain
+	# check added to nine call sites that each have to be found again next time. It is
+	# also the only thing that catches `_sprinkle_trees`, which ignores the wood mask by
+	# design and filters on `is_ground_passable` alone -- and a bridge IS ground-passable,
+	# so clearing the mask in `_paint_river` stops a COPSE and would not stop a lone oak
+	# growing out of the deck.
+	#
+	# After `_clear_base` and `_paint_shores`, because both rewrite terrain and this reads
+	# the finished map rather than the one the river pass left.
+	for y in range(data.size.y):
+		for x in range(data.size.x):
+			var t := Vector2i(x, y)
+			if SimMap.is_bridge(data.terrain_at(t)):
+				claimed[t] = true
+
 	for i in range(count):
 		_place_base(data, claimed, i + 1, data.starts[i], resolved, rng)
 
@@ -846,6 +863,21 @@ static func _paint_river(data: MapData, wood: PackedByteArray,
 					on_bridge = true
 					break
 			if on_bridge:
+				# ⛳ **THE CROSSING IS A BUILT BRIDGE, NOT A FORD** (2026-09-19). It used
+				# to be the grass this pass simply declined to flood, which the shore
+				# pass then turned into a sandy causeway. Now the same tiles carry a
+				# bridge byte and `TerrainLayer` draws real planks over them.
+				#
+				# **The bridge runs along `axis[1]`, not `axis[0]`** -- it crosses the
+				# water, so its length lies on the river's PERPENDICULAR. Getting this
+				# the other way round costs nothing the eye can see on a square patch
+				# and puts every kerb across the travelled way.
+				data.set_terrain(t, bridge_terrain_for(axis))
+				# No copse on the planks. `_place_trees` reads this mask, and an oak
+				# growing out of a bridge deck reads as a bug rather than as scenery --
+				# the same reason `_paint_shores` clears it on the waterline. The old
+				# grass crossing could and did grow one.
+				wood[data.index_of(t)] = 0
 				continue
 			data.set_terrain(t, SimMap.Terrain.WATER_SHALLOW)
 			wood[data.index_of(t)] = 0
@@ -979,11 +1011,24 @@ static func _paint_forest(data: MapData, wood: PackedByteArray,
 ## bank by `_river_start_positions`'s `per_bank` is only on one bank if the axis that
 ## split them is the axis the water was painted on.
 ##
-## ⚠️ **CARDINAL ONLY SINCE 2026-09-19** (owner's call, taken for the bridge). The two
-## diagonals are gone because a bridge is a footprint and footprints are axis-aligned
-## rects -- the same limit that has `wall-facings-reachable` blocked. The art has all 8
-## directions baked and is not what is missing; put the diagonals back the day a
-## footprint can lie at 45 degrees, and the rest of this file needs no edit to suit.
+## ⛔ **CARDINAL ONLY, AND THE REASON CHANGED THE SAME DAY IT WAS WRITTEN. DO NOT PUT
+## THE DIAGONALS BACK.** The owner dropped them on 2026-09-19 for the FOOTPRINT bridge,
+## and this comment said so and promised them back once the bridge stopped being a
+## footprint. It did -- it is terrain now, and a neighbour mask reaches a diagonal
+## perfectly well -- **and the diagonals still may not come back, for a second and
+## harder reason the art side measured** (asset_request.md, same day):
+##
+## 1. `directions` rotates the OBJECT, and a square tile only maps onto its own diamond
+##    at multiples of 90 degrees. Measured on the shipped `vis.bridge_deck`: stored
+##    1/3/5/7 trim to 64 x 34 -- a tile -- and stored 0/2/4/6 to 46 x 24, a rectangle.
+##    **Only four of the eight frames are a tile at all.**
+## 2. A grid-diagonal bridge is a STAIRCASE of tiles whose sides are not tile edges, so
+##    it wants a kerb running along the tile's diagonal. That is a second piece set to
+##    cut, not four more rotations of this one.
+##
+## So the blocker is no longer the footprint system, and restoring the diagonals against
+## the art that exists would draw a bridge out of 46 x 24 rectangles. It needs an art
+## request first, not an edit here.
 static func _river_axis(rng: RandomNumberGenerator) -> Array:
 	match rng.randi_range(0, 1):
 		0: return [Vector2(1, 0), Vector2(0, 1)]        # runs east-west
@@ -1001,6 +1046,20 @@ static func _river_offset(data: MapData, axis: Array, t: Vector2i) -> float:
 static func _river_along(data: MapData, axis: Array, t: Vector2i) -> float:
 	var centre := Vector2(data.size) * 0.5
 	return (Vector2(t) - centre).dot(axis[0] as Vector2)
+
+
+## Which bridge byte a crossing of this river gets. `axis[1]` is the river's
+## perpendicular, which is the direction a bridge over it RUNS.
+##
+## Public because the test suite has to be able to say which one it expects without
+## re-deriving the relationship, and re-deriving it is exactly the mistake the art side
+## made on their first table.
+static func bridge_terrain_for(axis: Array) -> int:
+	# A cardinal axis, so one component is 1 and the other 0; comparing against x is
+	# enough and does not care about the sign.
+	var across: Vector2 = axis[1]
+	return SimMap.Terrain.BRIDGE_X if absf(across.x) > absf(across.y) \
+			else SimMap.Terrain.BRIDGE_Y
 
 
 static func _bridge_positions(side: int, rng: RandomNumberGenerator) -> Array[float]:

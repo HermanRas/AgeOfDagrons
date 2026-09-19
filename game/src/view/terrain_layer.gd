@@ -24,6 +24,11 @@ extends TileMapLayer
 ## Terrain kind -> visual ID. Spelled out rather than derived from the enum name
 ## so that renaming a Terrain member is a change you have to make here too, in
 ## front of the person making it, instead of silently unmapping a tile.
+##
+## ⚠️ **THE TWO BRIDGE KINDS ARE DELIBERATELY ABSENT.** One terrain, one sprite is the
+## assumption this table encodes, and a bridge breaks it -- see `BRIDGE_PIECES`. Being
+## missing from here is load-bearing rather than an oversight: `_terrain_image()` reads
+## this table and returning null for a bridge is what keeps the blend layer off it.
 const TERRAIN_VISUALS := {
 	SimMap.Terrain.GRASS: &"terrain.grass",
 	SimMap.Terrain.DIRT: &"terrain.dirt",
@@ -95,8 +100,15 @@ const EDGE_SIGNS := [Vector2(1.0, -1.0), Vector2(1.0, 1.0),
 
 ## The four CORNER-sharing neighbours, bits 4-7, each between the two edges of the same
 ## index and the next -- corner 0 sits between edge 0 (NE) and edge 1 (SE), which is the
-## diamond's right-hand point. On screen these four are straight up, right, down, left.
+## diamond's right-hand point. On screen these four are right, down, left, up.
 ##
+## ⚠️ **THAT LAST SENTENCE READ "straight up, right, down, left" UNTIL 2026-09-19 AND WAS
+## ROTATED BY ONE**, contradicting the sentence before it, which was right. Spotted by the
+## art side while cutting the bridge set and confirmed here from the offsets: corner c is
+## `EDGE_OFFSETS[c] + EDGE_OFFSETS[c + 1]`, so corner 0 is `(0,-1) + (1,0) = (1,-1)`, the
+## east point. Nothing read the comment, so nothing was broken -- but **the cliff set will
+## read these bits**, and a corner-bit table wired from the wrong sentence would come out
+## a quarter turn off with every individual piece looking correct.
 ## THEY WERE LEFT OUT OF THE FIRST VERSION and the project owner reported the result in
 ## one word: "the diagonals need work". A tile touching another terrain only at a VERTEX
 ## got no blend at all, so every step of the staircase kept one hard point -- the soft
@@ -113,6 +125,49 @@ const CORNER_OFFSETS := [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vecto
 ## That is what keeps the variant count at 47 rather than 256 -- the classic blob set,
 ## arrived at here for the same reason it exists everywhere else.
 const CORNER_BIT := 4
+
+## THE BRIDGE, and it is the one terrain whose tile is not a single fixed diamond.
+##
+## Every other kind here is one flat sprite repeated. A bridge tile's piece is chosen
+## from its NEIGHBOURS -- a deck mid-span, a kerbed rail down each long side -- so one
+## terrain byte needs four different frames and the cell's atlas coordinate is what
+## picks between them. `_build_tile_set` packs those four into a strip and this table
+## is the strip.
+##
+## ⛔ **THIS TABLE IS THE ART SIDE'S, MEASURED, NOT DERIVED** (asset_request.md,
+## 2026-09-19). Two of its numbers cannot be re-derived from anything on this side:
+##
+## - **Only stored 1, 3, 5 and 7 are usable.** `directions` rotates the object and a
+##   square tile only lands on its own diamond at multiples of 90 degrees, so stored
+##   0/2/4/6 trim to a 46 x 24 RECTANGLE. They are baked, they are in the atlas, and
+##   they must never be drawn.
+## - **The kerb lands on the edge OPPOSITE the direction's name** -- stored 1 is "SW"
+##   and puts the kerb on NE. That was measured by differencing the rail bake against
+##   the deck bake frame by frame, because the 8-direction path applies a base yaw of
+##   its own. **Do not re-derive it from the yaw and expect the same answer.**
+##
+## `cross` names the two EDGE bits facing the bridge's long sides -- the only two bits
+## read. A bridge is a ribbon, so its corner neighbours decide nothing.
+const BRIDGE_PIECES := {
+	SimMap.Terrain.BRIDGE_X: {
+		"cross": [0, 2],                          # NE (0,-1) and SW (0,+1)
+		"columns": [
+			[&"vis.bridge_deck", 1],              # 0: both long sides continue
+			[&"vis.bridge_rail", 1],              # 1: NE is open -- kerb on NE
+			[&"vis.bridge_rail", 5],              # 2: SW is open -- kerb on SW
+			[&"vis.bridge_rail_both", 1],         # 3: a one-tile-wide bridge
+		],
+	},
+	SimMap.Terrain.BRIDGE_Y: {
+		"cross": [1, 3],                          # SE (+1,0) and NW (-1,0)
+		"columns": [
+			[&"vis.bridge_deck", 3],
+			[&"vis.bridge_rail", 3],              # 1: SE is open -- kerb on SE
+			[&"vis.bridge_rail", 7],              # 2: NW is open -- kerb on NW
+			[&"vis.bridge_rail_both", 3],
+		],
+	},
+}
 
 var _size: Vector2i = Vector2i.ZERO
 
@@ -144,8 +199,15 @@ func build(size: Vector2i, terrain: PackedByteArray) -> void:
 		var row := y * size.x
 		for x in range(size.x):
 			var kind := int(terrain[row + x])
-			if tile_set.has_source(kind):
-				set_cell(Vector2i(x, y), kind, Vector2i.ZERO)
+			if not tile_set.has_source(kind):
+				continue
+			var t := Vector2i(x, y)
+			# Every other terrain is one diamond at column 0; a bridge picks one of four
+			# by what its long-side neighbours are. Same source id either way, so a cell
+			# still reads back as its own terrain.
+			var column := 0 if not SimMap.is_bridge(kind) \
+					else bridge_column(kind, _bridge_edges(size, terrain, t))
+			set_cell(t, kind, Vector2i(column, 0))
 
 	_build_blend(size, terrain)
 
@@ -238,6 +300,14 @@ func _build_blend(size: Vector2i, terrain: PackedByteArray) -> void:
 		for x in range(size.x):
 			var t := Vector2i(x, y)
 			var mine: int = terrain[y * size.x + x]
+			# ⛔ **A BRIDGE NEITHER RECEIVES A TRANSITION NOR CASTS ONE**, and the first
+			# half is the one that bites. `BLEND_ORDER` has no bridge row, so a bridge
+			# scores 0 -- below deep water -- and every deck tile in a river would have
+			# had water faded across it from both banks. The blend exists to soften a
+			# staircase between two ground textures; a bridge is a built thing standing
+			# on the ground, and its edge is meant to be crisp.
+			if SimMap.is_bridge(mine):
+				continue
 			var over := _dominant_neighbour(size, terrain, t, mine)
 			if over < 0 or not _blend.tile_set.has_source(over):
 				continue
@@ -461,7 +531,148 @@ func _terrain_image(kind: int) -> Image:
 	return img.get_region(rect)
 
 
+## Which column of `kind`'s strip a tile with this edge nibble draws. `mask` bits are
+## `EDGE_OFFSETS` order, set where that neighbour is ALSO a bridge -- either byte, since
+## the two are one surface and a bend between them is still a continuous deck.
+##
+## Static and public: it is the whole of the art side's table in four lines, and a test
+## can exercise every case of it without a texture, an atlas or a tree.
+static func bridge_column(kind: int, mask: int) -> int:
+	var cross: Array = (BRIDGE_PIECES[kind] as Dictionary)["cross"]
+	var first := mask & (1 << int(cross[0])) != 0
+	var second := mask & (1 << int(cross[1])) != 0
+	if first and second:
+		return 0                       # mid-span: deck
+	if second:
+		return 1                       # cross[0] is the open side
+	if first:
+		return 2                       # cross[1] is the open side
+	return 3                           # open both sides: a one-tile-wide bridge
+
+
+## Which of `t`'s four EDGE neighbours are bridge, as bits 0-3.
+##
+## The corners are not gathered at all, unlike `_edges_facing`. A bridge is a ribbon:
+## the art side's table reads the edge nibble and nothing else, so collecting four more
+## bits would only invite a later reader to believe they mean something.
+func _bridge_edges(size: Vector2i, terrain: PackedByteArray, t: Vector2i) -> int:
+	var bits := 0
+	for i in range(EDGE_OFFSETS.size()):
+		var n: Vector2i = t + EDGE_OFFSETS[i]
+		if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+			continue
+		if SimMap.is_bridge(int(terrain[n.y * size.x + n.x])):
+			bits |= 1 << i
+	return bits
+
+
+## The four pieces of one bridge axis, packed across a single strip -- the same shape
+## `_blend_source_for` uses, and for the same reason: a TileSetAtlasSource addresses one
+## texture by grid coordinate, so four frames means four columns of one image.
+##
+## ⚠️ **THE FRAMES ARE NOT ALL THE SAME SIZE AND ARE NOT ALL TILE-SIZED.** A rail trims
+## to 65 x 42 where a bare tile is 64 x 34, because its kerb stands 0.410 m above the
+## deck and that is 8 px of screen Y. So the cell is sized to hold the largest of them
+## **about their anchors**, and each frame is blitted so its own anchor lands at the
+## cell's centre -- which is where Godot puts a tile's origin. Packing them flush left,
+## or sizing the cell to the largest frame and centring each one in it, both draw a
+## bridge whose kerb shifts by a pixel or two from tile to tile.
+func _bridge_source_for(kind: int) -> TileSetAtlasSource:
+	var columns: Array = (BRIDGE_PIECES[kind] as Dictionary)["columns"]
+
+	# Gathered before anything is sized: the cell has to fit all four at once.
+	var images: Array[Image] = []
+	var anchors: Array[Vector2i] = []
+	for column in columns:
+		var got := _bridge_frame(column[0] as StringName, int(column[1]))
+		if got.is_empty():
+			return null
+		images.append(got["image"] as Image)
+		anchors.append(got["anchor"] as Vector2i)
+
+	var half := Vector2i.ZERO
+	for i in range(images.size()):
+		var img: Image = images[i]
+		var a: Vector2i = anchors[i]
+		half.x = maxi(half.x, maxi(a.x, img.get_width() - a.x))
+		half.y = maxi(half.y, maxi(a.y, img.get_height() - a.y))
+
+	var cell := half * 2
+	var strip := Image.create(cell.x * images.size(), cell.y, false, Image.FORMAT_RGBA8)
+	strip.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for i in range(images.size()):
+		var img: Image = images[i]
+		# `blit_rect` refuses a source in a different format from the destination, and
+		# the four pieces do not have to agree: a staged page arrives in whatever the
+		# importer chose and a placeholder is built RGBA8 here. A bridge with two pieces
+		# baked and one missing is exactly the state a half-finished re-bake leaves.
+		if img.get_format() != Image.FORMAT_RGBA8:
+			img.convert(Image.FORMAT_RGBA8)
+		strip.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()),
+				Vector2i(i * cell.x, 0) + half - anchors[i])
+
+	var source := TileSetAtlasSource.new()
+	source.texture = ImageTexture.create_from_image(strip)
+	source.texture_region_size = cell
+	for i in range(images.size()):
+		source.create_tile(Vector2i(i, 0))
+	return source
+
+
+## One piece's frame as a standalone image plus the anchor within it, or {} if the
+## seam cannot produce one.
+##
+## An undeclared or unbaked piece falls back to the placeholder diamond rather than to
+## nothing, so `atlas_for` stays total here the way it is everywhere else: a bridge with
+## no art is a loud magenta crossing, not a hole in the river.
+func _bridge_frame(visual_id: StringName, stored: int) -> Dictionary:
+	var entry := GameDataRegistry.atlas_for(visual_id)
+	if entry.is_placeholder:
+		var flat := _placeholder_image(entry)
+		return {"image": flat, "anchor": flat.get_size() / 2}
+
+	var f := entry.frame_at(AtlasEntry.STATIC_ANIM, _facing_for_stored(entry, stored), 0)
+	if f.is_empty():
+		return {}
+	var page := entry.texture(int(f["page"]))
+	if page == null:
+		return {}
+	var img := page.get_image()
+	if img == null:
+		return {}
+	if img.is_compressed() and img.decompress() != OK:
+		return {}
+
+	var rect: Rect2i = f["rect"]
+	var cut := img.get_region(rect)
+	var anchor: Vector2 = f["anchor"]
+	# Belt and braces: this bake is `mirror_for_8: false`, so nothing is flipped today.
+	# A re-bake that turned mirroring on would otherwise put every kerb on the wrong
+	# side of the deck silently -- and a kerb on the wrong side is a picture that still
+	# looks like a bridge.
+	if bool(f["flip_x"]):
+		cut.flip_x()
+		anchor.x = float(cut.get_width()) - anchor.x
+	return {"image": cut, "anchor": Vector2i(roundi(anchor.x), roundi(anchor.y))}
+
+
+## The facing index whose entry in the atlas's own direction table stores `stored`.
+##
+## `frame_at` takes a FACING and looks the stored index up; the art side's table names
+## STORED indices, because that is what it measured off the packed page. Searching the
+## table rather than assuming they coincide -- they do in this bake -- is what keeps the
+## two from drifting apart in a re-bake that reorders or mirrors.
+static func _facing_for_stored(entry: AtlasEntry, stored: int) -> int:
+	for i in range(entry.dir_table.size()):
+		if int((entry.dir_table[i] as Dictionary)["stored_index"]) == stored:
+			return i
+	return stored
+
+
 func _source_for(kind: int) -> TileSetAtlasSource:
+	if SimMap.is_bridge(kind):
+		return _bridge_source_for(kind)
+
 	var visual_id: StringName = TERRAIN_VISUALS.get(kind, &"")
 	if visual_id == &"":
 		return null

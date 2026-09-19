@@ -24,7 +24,29 @@
 class_name SimMap
 extends RefCounted
 
-enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST }
+## ⛔ **APPEND ONLY. THE VALUES ARE A SAVED-MAP FORMAT**, the same way `colours.json`'s
+## order is: `MapFile` writes the byte straight into the red channel of `map.png` and
+## reads it straight back, and `map_file.gd` accepts anything up to `Terrain.size() - 1`.
+## Inserting a member renumbers every one after it and silently re-terrains every map
+## already on disk.
+##
+## **BRIDGE_X AND BRIDGE_Y ARE ONE SURFACE AND TWO BYTES, and the second byte buys one
+## bit the neighbourhood cannot supply** (art side, asset_request.md 2026-09-19). A
+## bridge tile's piece is chosen from which of its neighbours are also bridge — but an
+## END tile and a LONG-SIDE tile of the same rectangle are 90-degree rotations of each
+## other, so a rotation-covariant table cannot tell them apart. Deriving the run axis
+## from the surrounding water was tried on the art side and put a kerb across both ends
+## of the bridge. The generator already knows the axis, because it chose it, so it
+## writes it down: `BRIDGE_X` runs along grid x, `BRIDGE_Y` along grid y. They are
+## identical to the sim in every other respect.
+enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST, BRIDGE_X, BRIDGE_Y }
+
+## The two bridge bytes, for the callers that care about the surface and not the axis.
+const BRIDGE_KINDS := [Terrain.BRIDGE_X, Terrain.BRIDGE_Y]
+
+
+static func is_bridge(kind: int) -> bool:
+	return kind == Terrain.BRIDGE_X or kind == Terrain.BRIDGE_Y
 
 ## Which surfaces a unit can cross. `UnitDef.domain` is the string form
 ## ("land"); `from_domain_name()` converts.
@@ -55,17 +77,31 @@ const TERRAIN_COST := {
 	Terrain.WATER_DEEP: 10,
 	Terrain.ROCK: IMPASSABLE,
 	Terrain.FOREST: IMPASSABLE,
+	# Planks, flat and swept: as cheap as grass, and cheaper than the sand the
+	# crossing used to be made of. A bridge that cost more than the ford it replaced
+	# would have the pathfinder route around a river rather than over it.
+	Terrain.BRIDGE_X: 10,
+	Terrain.BRIDGE_Y: 10,
 }
 
 ## Terrain each domain may enter. FOREST and ROCK are absent from LAND and WATER
 ## on purpose -- a forest tile is a tree's footprint, not walkable ground, and the
 ## trees standing on it are separate entities placed at 6.3.
+##
+## ⚠️ **A BRIDGE IS LAND AND IS NOT WATER**, which is the one row here that could
+## plausibly have gone either way. A boat passing UNDER a span is the natural reading
+## of the picture, and it is not what the art draws: the deck is baked at z = 0 and
+## covers its whole cell, so a galley crossing a bridge tile would sail over the
+## planks. It is also what the River map already did — the crossing corridor was dry
+## ground before it was a bridge, and no boat has ever passed through it.
 const DOMAIN_TERRAIN := {
-	Domain.LAND: [Terrain.GRASS, Terrain.DIRT, Terrain.SAND],
+	Domain.LAND: [Terrain.GRASS, Terrain.DIRT, Terrain.SAND,
+			Terrain.BRIDGE_X, Terrain.BRIDGE_Y],
 	Domain.WATER: [Terrain.WATER_SHALLOW, Terrain.WATER_DEEP],
 	Domain.AIR: [
 		Terrain.GRASS, Terrain.DIRT, Terrain.SAND,
 		Terrain.WATER_SHALLOW, Terrain.WATER_DEEP, Terrain.ROCK, Terrain.FOREST,
+		Terrain.BRIDGE_X, Terrain.BRIDGE_Y,
 	],
 }
 

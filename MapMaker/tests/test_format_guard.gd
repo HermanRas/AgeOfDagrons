@@ -174,14 +174,35 @@ func test_a_trailing_newline_is_not_drift() -> void:
 
 ## ...but a change INSIDE the code still is. The pair of tests above could be satisfied by a
 ## guard that compares nothing at all, so this is the one that gives them meaning.
+##
+## ⛔ **THIS TEST SILENTLY STOPPED TESTING ANYTHING ON 2026-09-19 AND THE SUITE CAUGHT IT,
+## WHICH IS THE WHOLE LESSON.** It used to spell the enum out in full and `replace()` that
+## exact string with a longer one. The bridge appended two members, the literal stopped
+## matching, **the replace became a no-op**, and the fixture handed the guard a file identical
+## to the copy — so the guard passed, correctly, and the assertion that it must refuse failed.
+##
+## It failed LOUDLY only by luck of which way round the assertion runs. A fixture built the
+## other way — "prove the guard accepts this" — would have gone on passing while exercising
+## nothing at all, which is §5's rule about fixtures that agree with the bug, one step earlier:
+## **a fixture that quotes the file it mutates rots the moment the file moves.** So the line is
+## now found by its prefix and mutated in place, and `changed` is asserted before the guard is:
+## if the mutation does not happen, that is the failure reported, rather than a confusing claim
+## about the guard.
 func test_a_whitespace_tolerant_guard_still_catches_a_real_change() -> void:
-	var text := FileAccess.get_file_as_string("res://format/sim_map.gd")
+	var lines := FileAccess.get_file_as_string("res://format/sim_map.gd").split("\n")
+	var changed := false
+	for i in range(lines.size()):
+		if not lines[i].begins_with("enum Terrain"):
+			continue
+		lines[i] = lines[i].replace("}", ", LAVA }")
+		changed = true
+		break
+	assert_true(changed, "no `enum Terrain` line to mutate -- this test is testing nothing")
+
 	var guard := FormatGuard.check(_fake_game({
-		"src/sim/sim_map.gd": text.replace(
-				"enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST }",
-				"enum Terrain { GRASS, DIRT, SAND, WATER_SHALLOW, WATER_DEEP, ROCK, FOREST, LAVA }"),
+		"src/sim/sim_map.gd": "\n".join(lines),
 	}))
-	assert_false(guard.passed(), "an eighth terrain kind is exactly what must be caught")
+	assert_false(guard.passed(), "one more terrain kind is exactly what must be caught")
 	assert_true(guard.refusal().contains("sim_map.gd"))
 
 

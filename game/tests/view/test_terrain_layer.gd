@@ -263,3 +263,155 @@ func test_grass_draws_its_baked_atlas_when_the_pack_is_staged() -> void:
 	assert_not_null(source)
 	assert_true(source.texture is AtlasTexture,
 			"the frame is lifted off its page rather than the page being gridded")
+
+
+# ── the bridge (2026-09-19) ────────────────────────────────────────────────
+#
+# The one terrain whose tile is not a single fixed diamond: the piece is chosen from
+# the neighbours, so the cell's ATLAS COORDINATE carries the choice while the source id
+# stays the terrain byte. `TerrainLayer.BRIDGE_PIECES` is the art side's measured table
+# and these pin the reading of it, not the pixels.
+#
+# ⚠️ **THE ASSERTIONS ARE ON COLUMNS AND NOT ON IMAGES ON PURPOSE.** A column is what
+# the table decides; what is drawn in it is the bake's business, and `game/assets/`
+# is gitignored so a clean clone has no pixels to look at. The one thing no assertion
+# here can judge is whether the picture is right -- that is `preview_bridge.tscn`.
+
+## Build a rectangle of bridge over a band of water -- the shape a river crossing
+## actually is: `run` tiles long in the direction the bridge runs, `wide` across it,
+## laid from tile (2, 2) so every deck tile has a real neighbour on all four sides.
+## Returns the deck tiles.
+func _build_bridge(kind: int, run: int, wide: int) -> Array[Vector2i]:
+	var size := Vector2i(wide + 4, run + 4) if kind == SimMap.Terrain.BRIDGE_Y \
+			else Vector2i(run + 4, wide + 4)
+	var bytes := _terrain(size, SimMap.Terrain.WATER_SHALLOW)
+	var deck: Array[Vector2i] = []
+	for i in range(run):
+		for j in range(wide):
+			var t := Vector2i(2 + j, 2 + i) if kind == SimMap.Terrain.BRIDGE_Y \
+					else Vector2i(2 + i, 2 + j)
+			bytes[t.y * size.x + t.x] = kind
+			deck.append(t)
+	layer.build(size, bytes)
+	return deck
+
+
+## ⛔ **THE TEST THE ART SIDE'S FIRST TABLE FAILED, AND THE REASON THIS FILE HAS A BRIDGE
+## SECTION AT ALL.** Their first rule derived the run axis as *"the axis along which both
+## edge neighbours are bridge"*, which is right mid-span and wrong at the ends -- it
+## walled off BOTH ENDS of the bridge with a kerb across the travelled way, and the
+## picture is what caught it rather than the code, which looked entirely reasonable.
+##
+## An end tile and a long-side tile of the same rectangle are 90-degree rotations of
+## each other, so no rotation-covariant table can tell them apart. The terrain BYTE is
+## what tells them apart here, which is the whole reason there are two bridge bytes.
+func test_the_ends_of_a_bridge_are_open_deck_and_not_a_kerb_across_the_road() -> void:
+	for kind in [SimMap.Terrain.BRIDGE_X, SimMap.Terrain.BRIDGE_Y]:
+		# 6 long, 3 wide, laid from tile 2 -- so the centre lane is offset 1 of the
+		# three, and the span runs 2 .. 7 along the bridge's own direction.
+		_build_bridge(kind, 6, 3)
+		var lane: Array[Vector2i] = []
+		for step in range(6):
+			lane.append(Vector2i(2 + step, 3) if kind == SimMap.Terrain.BRIDGE_X \
+					else Vector2i(3, 2 + step))
+
+		assert_eq(layer.get_cell_atlas_coords(lane[3]).x, 0,
+				"%s mid-span is plain deck" % SimMap.Terrain.keys()[kind])
+		# Both ENDS of that same lane. Their long-side neighbours are still deck, so
+		# they are also column 0 -- the bridge simply stops, with nothing across it.
+		for t in [lane[0], lane[5]]:
+			assert_eq(layer.get_cell_atlas_coords(t).x, 0,
+					"%s end tile %s carries no kerb" % [SimMap.Terrain.keys()[kind], t])
+
+
+func test_the_kerb_runs_down_the_long_sides_and_names_the_open_one() -> void:
+	# BRIDGE_Y runs along grid y, so its long sides face -x and +x: bit 3 (NW) and
+	# bit 1 (SE). Column 1 is "cross[0] open" and column 2 is "cross[1] open", and
+	# BRIDGE_Y's cross is [1, 3] -- so the +x lane is 1 and the -x lane is 2.
+	_build_bridge(SimMap.Terrain.BRIDGE_Y, 6, 3)
+
+	assert_eq(layer.get_cell_atlas_coords(Vector2i(4, 4)).x, 1,
+			"the +x lane has open water on its SE side")
+	assert_eq(layer.get_cell_atlas_coords(Vector2i(2, 4)).x, 2,
+			"the -x lane has open water on its NW side")
+	assert_eq(layer.get_cell_atlas_coords(Vector2i(3, 4)).x, 0,
+			"and the lane between them is deck")
+
+
+func test_a_one_tile_wide_bridge_is_the_only_thing_that_uses_the_double_rail() -> void:
+	# The art side cut `vis.bridge_rail_both` for exactly this case and said so: the
+	# generated river's crossing is five tiles wide and never produces it, but the
+	# corridor width is a lever on this side, so the piece exists for the day it moves.
+	for t in _build_bridge(SimMap.Terrain.BRIDGE_Y, 5, 1):
+		assert_eq(layer.get_cell_atlas_coords(t).x, 3,
+				"%s is railed on both sides" % t)
+
+
+## The table itself, every case, with no map and no texture in the way.
+func test_the_piece_table_reads_only_the_two_long_side_bits() -> void:
+	for kind in [SimMap.Terrain.BRIDGE_X, SimMap.Terrain.BRIDGE_Y]:
+		var cross: Array = (TerrainLayer.BRIDGE_PIECES[kind] as Dictionary)["cross"]
+		var both := (1 << int(cross[0])) | (1 << int(cross[1]))
+		# Every one of the 256 neighbourhoods, including the four corner bits, must
+		# answer from the two cross bits alone. A bridge is a ribbon; its corners
+		# decide nothing, and a table that read them would autotile a river junction
+		# that cannot occur.
+		for mask in range(1 << 8):
+			assert_eq(TerrainLayer.bridge_column(kind, mask),
+					TerrainLayer.bridge_column(kind, mask & both),
+					"mask %d must answer as %d does" % [mask, mask & both])
+
+
+func test_the_two_bridge_bytes_disagree_about_which_bits_are_the_long_sides() -> void:
+	# The single bit the neighbourhood cannot supply. If these ever coincided, one of
+	# the two axes would be drawing its kerbs across the road and the suite above
+	# would still pass, because each axis is self-consistent.
+	var x: Array = (TerrainLayer.BRIDGE_PIECES[SimMap.Terrain.BRIDGE_X] as Dictionary)["cross"]
+	var y: Array = (TerrainLayer.BRIDGE_PIECES[SimMap.Terrain.BRIDGE_Y] as Dictionary)["cross"]
+	for bit in x:
+		assert_false(y.has(bit), "bit %d cannot be a long side of both axes" % bit)
+
+
+## ⚠️ **NONE OF THE FOUR 45-DEGREE FRAMES MAY BE NAMED.** `directions` rotates the object
+## and a square tile only lands on its own diamond at multiples of 90 degrees, so stored
+## 0/2/4/6 trim to a 46 x 24 rectangle -- measured by the art side on the shipped bake.
+## They are in the atlas and drawing one puts a rectangle where a tile should be.
+func test_only_the_four_square_on_frames_are_ever_asked_for() -> void:
+	for kind in TerrainLayer.BRIDGE_PIECES:
+		for column in (TerrainLayer.BRIDGE_PIECES[kind] as Dictionary)["columns"]:
+			var stored := int(column[1])
+			assert_eq(stored % 2, 1,
+					"%s asks for stored %d, which is a 46 x 24 rectangle"
+					% [column[0], stored])
+
+
+func test_a_bridge_neither_receives_a_transition_nor_casts_one() -> void:
+	# `BLEND_ORDER` has no bridge row, so a bridge scores 0 -- below deep water -- and
+	# every deck tile would have had water faded across it from both banks. The blend
+	# softens a staircase between two GROUND textures; a bridge stands on the ground.
+	var deck := _build_bridge(SimMap.Terrain.BRIDGE_Y, 4, 3)
+	var blend := layer.blend_layer()
+	if blend == null or blend.tile_set == null:
+		return
+	for t in deck:
+		assert_eq(blend.get_cell_source_id(t), -1, "nothing is faded over %s" % t)
+
+
+func test_a_bridge_cell_still_reads_back_as_its_own_terrain() -> void:
+	# The invariant the rest of this file rests on: the source id IS the terrain byte,
+	# so a cell can be checked against the sim with no second mapping to get out of
+	# step. The bridge varies the atlas COORDINATE instead, which is free.
+	for t in _build_bridge(SimMap.Terrain.BRIDGE_X, 5, 3):
+		assert_eq(layer.get_cell_source_id(t), int(SimMap.Terrain.BRIDGE_X))
+
+
+func test_a_bridge_gets_its_four_columns_with_or_without_baked_art() -> void:
+	# `atlas_for` is total (PLAN.md 3.2) and a bridge must not be the exception: four
+	# columns of loud placeholder beat four holes in the river. Both states are real --
+	# `game/assets/atlases/` is gitignored, so a clean clone takes the second path and
+	# this workstation takes the first.
+	_build_bridge(SimMap.Terrain.BRIDGE_Y, 4, 3)
+	var source := layer.tile_set.get_source(SimMap.Terrain.BRIDGE_Y) as TileSetAtlasSource
+	assert_not_null(source, "the bridge got a source")
+	for i in range(4):
+		assert_true(source.has_tile(Vector2i(i, 0)), "column %d exists" % i)

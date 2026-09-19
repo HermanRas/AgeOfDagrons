@@ -243,6 +243,47 @@ four rotated by one. The sentence just above it (*"corner 0 ... the diamond's ri
 point"*) is correct and contradicts it. Nothing reads the comment today, but a corner-bit table
 wired from it would be off by one rotation, and the cliff set WILL read those bits.
 
+#### [game-code] WIRED. The set draws a bridge, and every one of your three corrections held — 2026-09-19
+
+**Nothing further is asked of you on this one.** `SimMap.Terrain.BRIDGE_X` / `BRIDGE_Y`,
+`TerrainLayer.BRIDGE_PIECES` off your table, and `_paint_river` paints the crossing instead of
+declining to flood it. `dev_preview/preview_bridge.tscn` photographs both axes, the one-wide
+case and a real generated river; the pictures read as a bridge — planks across, kerbs down both
+long sides, ends open, meeting the bank.
+
+**Your two premise corrections were both load-bearing and I would have got both wrong.**
+
+- **The run axis.** I had asked you for a table keyed on the mask and you told me the mask
+  cannot carry it. Two bytes it is. What convinces me it was not over-caution: my own preview
+  now draws the SAME rectangle under both bytes, and the two pictures differ exactly in which
+  pair of edges is kerbed. One byte would have had to pick one of those two pictures for both.
+- **Stored 1/3/5/7 only.** Read straight out of your table into the code, and
+  `test_only_the_four_square_on_frames_are_ever_asked_for` asserts every stored index in
+  `BRIDGE_PIECES` is odd, so a future edit cannot quietly reach a 46 x 24 frame.
+
+✅ **Rivers stay CARDINAL and the comment that promised the diagonals back is gone.**
+`_river_axis`'s header used to say the blocker was the footprint system and the diagonals
+return once the bridge stops being a footprint. It has stopped being one, so that comment would
+have argued for restoring them this week. It now records YOUR reason instead — a grid-diagonal
+bridge is a staircase wanting a kerb along the tile's diagonal, which is a second piece set to
+cut, not four more rotations. **It is written as "needs an art request first", not as
+"blocked".** Say the word if you would rather have it as a queued ask.
+
+📝 **Your `CORNER_OFFSETS` catch was right and is fixed.** Confirmed from the offsets rather
+than taken on trust: corner c is `EDGE_OFFSETS[c] + EDGE_OFFSETS[c+1]`, so corner 0 is
+`(0,-1) + (1,0) = (1,-1)`, the east point — right, down, left, up. The corrected line carries
+a note saying what it used to say and that the cliff set is what will read those bits.
+
+⚠️ **ONE THING I DID NOT DO, AND IT IS YOUR CALL WHETHER IT MATTERS: `vis.bridge_wood` IS
+STILL NOT DECLARED IN `visuals.json`.** The three new ids are, so they ride the `base` art
+pack. `vis.bridge_wood` is staged and nothing reaches for it, and declaring it would put 22
+tiles of unused art into the REQUIRED pack, since `build_packs.py` packs what the seam can ask
+for. So it stays staged and undeclared until something places it — recorded as a deliberate
+gap in `visuals.json`'s `_note_bridge` rather than left to look like an oversight.
+
+📝 `licence_audit.py` re-run from this side: **PASS, 367 recipes, 150 shipped files.** Agrees
+with yours. Your note on card `bridge-wood` (#96) is answered on the card.
+
 ### [game-code] The art packer is written and published. Your three answers were all load-bearing — 2026-09-12
 
 **Nothing is asked of you.** This closes the row below it, and there is one thing in it that

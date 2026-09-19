@@ -938,6 +938,92 @@ func test_a_river_still_has_land_bridges() -> void:
 	assert_true(problems.is_empty(), "a river map is crossable: %s" % [problems])
 
 
+# ── the crossing is a built bridge (2026-09-19) ────────────────────────────
+
+## Every bridge tile on `data`, whichever byte it carries.
+func _bridge_tiles(data: MapData) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for y in range(data.size.y):
+		for x in range(data.size.x):
+			if SimMap.is_bridge(data.terrain_at(Vector2i(x, y))):
+				out.append(Vector2i(x, y))
+	return out
+
+
+func test_a_river_crossing_is_bridge_terrain_and_not_a_ford() -> void:
+	# It used to be the grass `_paint_river` simply declined to flood, which the shore
+	# pass then turned into a sandy causeway. The tiles are the same tiles; what they
+	# carry is what changed, and it is what lets `TerrainLayer` draw planks on them.
+	for p_seed in [1, 5, 11]:
+		var data := _generate(p_seed, MapGenerator.Type.RIVER)
+		var bridge := _bridge_tiles(data)
+		assert_true(bridge.size() >= 20,
+				"seed %d has only %d bridge tiles" % [p_seed, bridge.size()])
+
+
+## ⛔ **THE BRIDGE RUNS ACROSS THE WATER, NOT ALONG IT**, and that is the one thing about
+## the byte that can be wrong while the picture still looks like a bridge from a distance.
+## The axis decides which two edges the art puts a KERB on, so getting it backwards lays a
+## parapet across the travelled way at both ends and leaves the sides open.
+##
+## Measured off the PAINTED WATER rather than asked of the generator: `bridge_terrain_for`
+## is the function under test, so a test that called it would agree with itself.
+func test_the_bridge_runs_perpendicular_to_the_water_it_crosses() -> void:
+	for p_seed in [1, 5, 11, 17]:
+		var data := _generate(p_seed, MapGenerator.Type.RIVER)
+
+		# Which way the water band runs, from its own extent.
+		var wet := Rect2i()
+		var seen := false
+		for y in range(data.size.y):
+			for x in range(data.size.x):
+				if data.terrain_at(Vector2i(x, y)) != SimMap.Terrain.WATER_SHALLOW:
+					continue
+				var t := Vector2i(x, y)
+				wet = Rect2i(t, Vector2i.ONE) if not seen else wet.expand(t)
+				seen = true
+		assert_true(seen, "seed %d painted no water" % p_seed)
+		var river_runs_x := wet.size.x > wet.size.y
+
+		# The bridge byte must name the OTHER axis.
+		var want := SimMap.Terrain.BRIDGE_Y if river_runs_x else SimMap.Terrain.BRIDGE_X
+		for t in _bridge_tiles(data):
+			assert_eq(data.terrain_at(t), int(want),
+					"seed %d: water spans %s, so a crossing runs the other way"
+					% [p_seed, wet.size])
+
+
+func test_nothing_grows_out_of_the_bridge_deck() -> void:
+	# `_place_trees` reads the wood mask and the old GRASS crossing was never cleared of
+	# it, so an oak could and did stand in the middle of the ford. On planks that reads
+	# as a bug rather than as scenery -- the same argument `_paint_shores` makes for the
+	# waterline. Asserted against the placed ENTITIES, not the mask, because the mask is
+	# internal and a sprinkled tree does not read it at all.
+	for p_seed in [1, 5, 11]:
+		var data := _generate(p_seed, MapGenerator.Type.RIVER)
+		var bridge := {}
+		for t in _bridge_tiles(data):
+			bridge[t] = true
+		for e in data.entities:
+			assert_false(bridge.has(e["tile"] as Vector2i),
+					"seed %d stood a %s on the bridge at %s"
+					% [p_seed, e["def_id"], e["tile"]])
+
+
+func test_the_crossing_is_still_what_makes_the_map_passable() -> void:
+	# The bridge replaced the only dry route between the two banks, so if it were
+	# impassable the map would fail its own validator -- and `generate()` retries until
+	# one passes, so the failure would surface as a hang or a wildly different map
+	# rather than as a red assertion. Pinned here where it reads as what it is.
+	for p_seed in [1, 5, 11, 17]:
+		var data := _generate(p_seed, MapGenerator.Type.RIVER)
+		assert_true(MapValidator.problems(data).is_empty(),
+				"seed %d: %s" % [p_seed, MapValidator.problems(data)])
+		for t in _bridge_tiles(data):
+			assert_true(SimMap.DOMAIN_TERRAIN[SimMap.Domain.LAND].has(data.terrain_at(t)),
+					"%s must be walkable" % t)
+
+
 # ── the gate (fix 5) ────────────────────────────────────────────────────────
 
 func test_every_generated_map_passes_validation() -> void:

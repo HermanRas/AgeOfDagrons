@@ -62,6 +62,8 @@ const _TINT := {
 	SimMap.Terrain.WATER_DEEP: [80, 180],
 	SimMap.Terrain.ROCK: [120, 120],
 	SimMap.Terrain.FOREST: [80, 45],
+	SimMap.Terrain.BRIDGE_X: [115, 60],
+	SimMap.Terrain.BRIDGE_Y: [115, 60],
 }
 
 

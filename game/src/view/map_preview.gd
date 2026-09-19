@@ -32,6 +32,12 @@ const C_TOWN := Color("d50000")
 const C_UNIT := Color("ffffff")
 const C_START := Color("00e5ff")
 
+## A crossing has to be findable on the minimap, which is the one picture that shows a
+## whole river at once. Plain wood against `C_WATER` rather than the `C_SAND` the old
+## land-bridge ford inherited: a beach and a bridge are the same question to a player
+## looking for a way across, and they should not be the same colour.
+const C_BRIDGE := Color("a1723c")
+
 
 func _init() -> void:
 	# NEAREST, or a 96-pixel image scaled to fit a panel turns into mush -- and the
@@ -147,6 +153,7 @@ static func terrain_colour(kind: int) -> Color:
 		SimMap.Terrain.ROCK: return C_ROCK
 		SimMap.Terrain.FOREST: return C_TREE
 		SimMap.Terrain.DIRT: return C_SAND.darkened(0.25)
+		SimMap.Terrain.BRIDGE_X, SimMap.Terrain.BRIDGE_Y: return C_BRIDGE
 		_: return C_GRASS
 
 

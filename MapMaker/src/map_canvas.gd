@@ -70,6 +70,13 @@ const TERRAIN_COLOURS := {
 	SimMap.Terrain.WATER_DEEP: Color(0.18, 0.35, 0.55),
 	SimMap.Terrain.ROCK: Color(0.45, 0.45, 0.48),
 	SimMap.Terrain.FOREST: Color(0.20, 0.34, 0.20),
+	# THE TWO BRIDGE BYTES ARE ONE SURFACE AND GET ONE COLOUR. The axis is which way the
+	# planks run, which is a question for the game's renderer and not for an author
+	# looking at flat swatches -- and two browns a shade apart would read as a mistake in
+	# the palette rather than as a distinction. The palette still lists them separately,
+	# because it comes off the enum and an author does have to pick one.
+	SimMap.Terrain.BRIDGE_X: Color(0.63, 0.45, 0.24),
+	SimMap.Terrain.BRIDGE_Y: Color(0.63, 0.45, 0.24),
 }
 
 const _GRID := Color(0, 0, 0, 0.10)
