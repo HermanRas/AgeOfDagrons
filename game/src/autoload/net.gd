@@ -459,15 +459,28 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 ## ⛔ HOW LONG A MATCH HOLDS ITS BREATH FOR A PHONE IN A TUNNEL (12.1b, owner 2026-09-20:
-## *"lets start with 10sec"*).
+## *"lets start with 10sec"*, then **30 after playing it** -- *"10sec disconnect feels too
+## fast"*). The constant did exactly what it was put here to do: it was felt and it moved.
 ##
 ## A dropped player used to concede on the instant. That is right for somebody who has gone for
 ## good and wrong for a phone that lost signal at a traffic light, and the difference is not
-## visible at the moment the socket dies -- which is the whole problem. Ten seconds is the
-## owner's opening number and is meant to be FELT rather than reasoned about: too short and a
-## lift kills your match, too long and the survivors stand around a base that will never fight
-## back. ⚠️ **Expect this to move after a playtest; it is a feel constant, not a protocol one.**
-const DISCONNECT_GRACE := 10.0
+## visible at the moment the socket dies -- which is the whole problem. It is meant to be FELT
+## rather than reasoned about: too short and a lift kills your match, too long and the survivors
+## stand around a base that will never fight back.
+##
+## ## ⚠️ IT COSTS NOTHING IN CORRECTNESS, WHICH IS WHY 30 IS AS CHEAP AS 10
+##
+## The owner's question on raising it was *"will the desync be too much"*. **There is no desync
+## to be had**: a joined client runs no simulation at all (PLAN.md §12.1 -- `SimHost` is
+## host-only), so it cannot drift from a host whose clock it never shares. This fuse is wall
+## clock on the HOST alone, and the `ResignCommand` it fires is queued like every other command
+## and lands on a tick boundary, so every client still sees the defeat at the same tick no
+## matter how long the fuse was. Raising it does not widen a window; there is no window.
+##
+## **The real cost is gameplay, and it is worth stating plainly:** for these seconds the missing
+## player's town does not fight back. Thirty seconds of a free hand on an undefended base is a
+## long time in a fight, and that -- not the network -- is what sets the ceiling on this number.
+const DISCONNECT_GRACE := 30.0
 
 ## player id -> seconds left before the server concedes on their behalf. Server-side only.
 ##

@@ -24,7 +24,12 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 of the three. Everything before this was hosted on a desktop, so the art pack had never been
 updated on a live device mid-session and no laptop had ever been the one to drop.*
 
-- [ ] ⛔ **THE ART PACK UPDATED ON THE PHONE AND THEN NOTHING RENDERED — every unit, building
+**Status: all three fixed in code and in a build on the device.** The art pack is confirmed
+closed on hardware (see below). The other two are **unconfirmed** — they are client-side, so
+they needed a new APK before the phone could show them, and that build has not been played
+yet. They stay open until it is.
+
+- [x] ⛔ **THE ART PACK UPDATED ON THE PHONE AND THEN NOTHING RENDERED — every unit, building
       and tree drew as its placeholder shape.** The owner's note is worth keeping for what it
       says about the design: *"the result in itself was a great result i was still able to
       identify the units and continue with testing"* — PLAN.md §3.2's placeholder rule doing
@@ -40,14 +45,24 @@ updated on a live device mid-session and no laptop had ever been the one to drop
       seam falls back to placeholders — which is worse than the "old art until you restart"
       the comment predicts.
 
-      ➡️ **ONE-MINUTE DIAGNOSTIC, AND IT DISCRIMINATES:** restart the app. If the art comes
-      back, it is this — the v3 bytes are on disk and `mount_all()` finds them clean at boot.
-      If it does **not** come back, the install itself failed and the fix is elsewhere.
+      ✅ **CONFIRMED BY THE DIAGNOSTIC, 2026-09-20.** The test discriminated: restart the app,
+      and if the art returns then the download was fine and the mount was not. The owner
+      restarted and *"the art come back by itself - confirmed"* — the v3 bytes were on disk
+      the whole time and `mount_all()` found them clean at boot. **The install was never the
+      problem**, which is the half that could still have made this the wrong fix.
 
-      **The fix is right either way**, because replacing the backing file of a mounted pack is
-      unsound whichever way it fails: keep the version in the filename, never touch a file
-      that `MountedPacks.is_mounted()` reports, and sweep the old ones at boot when nothing is
-      mounted yet.
+      **The fix would have been right either way**, because replacing the backing file of a
+      mounted pack is unsound whichever way it fails: keep the version in the filename, never
+      touch a file that `MountedPacks.is_mounted()` reports, and sweep the old ones at boot
+      when nothing is mounted yet.
+
+      ⚠️ **THE STANDING HAZARD THAT KEEPS THIS ENTRY ALIVE: `PackInstaller._mount()` IS
+      EXECUTED BY NOTHING IN THE SUITE**, and cannot be — `load_resource_pack()` is
+      irreversible for the life of the process, so no test may call it. That is exactly where
+      this bug lived until a handset found it. `MountedPacks.plan_mounts()` and `kept_name()`
+      were split out as pure functions so the *decisions* are testable even though the act is
+      not; **anything else that moves into that file's untestable half is unguarded**, and the
+      next reader should assume a phone is the only thing that will catch it.
 
 - [ ] **"While hosting you cannot join a game, currently no user feedback — i was stuck for a
       min trying to figure out why i could not join."** Set player 2 to Open, and JOIN goes
@@ -65,6 +80,20 @@ updated on a live device mid-session and no laptop had ever been the one to drop
       SERVERS lists hosts, and every row in it is one this device cannot dial while it is
       hosting. A browser you can open and cannot act on is a longer dead end than a dead
       button.
+
+      ⚠️ **THE FIRST PLACEMENT WAS WRONG AND THE OWNER SENT IT BACK** — *"your hosting press
+      back is messing with the layout, rather add it to chat"* (2026-09-20, with a screenshot).
+      The note went under the JOIN row, where it reads best; **the footer is one row by design**
+      and a second line under it shifts the whole strip. It now sits in the CHAT frame under
+      `_lobby_status`, which is where the dial addresses went on 2026-08-30 under exactly the
+      same squeeze — the chat board has `SIZE_EXPAND_FILL`, so a line beneath it is taken out
+      of the log rather than out of the page. **A one-row footer is a live layout constraint
+      on this screen**, not an accident: the first attempt at it came out 24 px wider than the
+      page and pushed BACK off the edge.
+
+      Not a line in the chat log itself, which is a wireframe with no transport and says so on
+      its face (*"sample messages, not a transcript"*) — a real instruction the player has to
+      act on does not belong in a panel of fake ones.
 
 - [ ] ⛔ **A CLIENT WHOSE HOST VANISHES IS STRANDED IN A DEAD MATCH.** *"I was hosting on
       mobile and dropped the connection on the laptop... on mobile it fired the disconnect

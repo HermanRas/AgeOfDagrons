@@ -356,9 +356,9 @@ var _start_button: Button
 var _slot_rows: Array[Dictionary] = []      # {role: OptionButton, colour: Button}
 var _join_field: TouchLineEdit
 var _join_button: Button
-## Why JOIN and SERVERS are off, when they are. See `_build_join_column` -- the reason and
+## Why JOIN and SERVERS are off, when they are. See `_build_chat_column` -- the reason and
 ## the disabling are two separate facts and only one of them used to be on screen.
-var _join_note: Label
+var _busy_note: Label
 var _lobby_status: Label
 var _reroll_button: Button
 var _count_picker: OptionButton
@@ -608,16 +608,9 @@ func _build_nav() -> Control:
 ## touch, so a plain field never takes focus from a finger and never raises a keyboard
 ## at all. That is the bug that blocked this whole screen.
 func _build_join_column() -> Control:
-	# A COLUMN AROUND THE ROW, so the refusal note can sit under the controls it is about.
-	# The row itself is unchanged -- see `_join_note` at the bottom of this function.
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 2)
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	column.add_child(row)
 
 	# NOT `_label()`, whose 96 px minimum is sized for the settings column. Seven
 	# controls share one row here and every minimum in it is spent twice: the first
@@ -637,24 +630,7 @@ func _build_join_column() -> Control:
 
 	_join_button = _nav_button("JOIN", _on_join_pressed)
 	row.add_child(_join_button)
-
-	# ⛔ **WHY JOIN IS OFF, BESIDE JOIN** (owner's playtest, 2026-09-20: *"blocks join button
-	# but user does not know why"* — a minute lost to it). `_on_join_pressed` has answered
-	# *"already in a session"* since the lobby was written, and `_refresh_lobby` disables the
-	# button, so **the press never arrives and the sentence never prints**. §6's rule, and the
-	# third time it has cost something: a control's being disabled and the reason for it are
-	# two separate facts, and only one of them was ever on screen.
-	#
-	# A LABEL RATHER THAN A TOOLTIP: a disabled `Button` does not show one, and this screen is
-	# used with a thumb, where nothing shows one. NOT `_label()`, whose 96 px minimum is sized
-	# for the settings column -- the note spans the footer's width and takes its own line.
-	_join_note = Label.new()
-	_join_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_join_note.add_theme_font_size_override("font_size", 12)
-	_join_note.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
-	_join_note.visible = false
-	column.add_child(_join_note)
-	return column
+	return row
 
 
 ## The two side doors: somewhere to find a host, and something to read while waiting.
@@ -782,8 +758,8 @@ func _section_heading(text: String) -> Label:
 ## The content is built first and wrapped after, rather than the frame handing back a
 ## box to fill, because the two panels want different vertical behaviour inside the same
 ## frame and threading that through a builder is more argument than it is worth.
-## The chat frame's insides: the board, and under it the line that says what the session
-## is doing.
+## The chat frame's insides: the board, and under it the two lines that say what the
+## session is doing -- what it is up to, and why the footer is refusing things.
 ##
 ## THE DIAL ADDRESSES LIVE HERE NOW (project owner, 2026-08-30: *"text printing ip is
 ## shown in footer, rather put it in chat box. to save sapce"*). They are the one thing
@@ -801,6 +777,35 @@ func _build_chat_column() -> Control:
 	_lobby_status.add_theme_font_size_override("font_size", 14)
 	_lobby_status.add_theme_color_override("font_color", HudStyle.GOLD)
 	column.add_child(_lobby_status)
+
+	# ⛔ **WHY JOIN AND SERVERS ARE OFF** (owner's playtest, 2026-09-20: *"blocks join button
+	# but user does not know why"* — a minute lost to it). `_on_join_pressed` has answered
+	# *"already in a session"* since the lobby was written, and `_refresh_lobby` disables the
+	# button, so **the press never arrives and the sentence never prints**. §6's rule, and the
+	# third time it has cost something: a control's being disabled and the reason for it are
+	# two separate facts, and only one of them was ever on screen.
+	#
+	# ⚠️ **HERE AND NOT UNDER THE JOIN ROW**, where it went first (owner, 2026-09-20: *"your
+	# hosting press back is messing with the layout, rather add it to chat"*). The footer is
+	# ONE ROW by design and a second line under it pushes the whole strip -- the same squeeze
+	# that sent the dial addresses over here on 2026-08-30. The chat board above has
+	# `SIZE_EXPAND_FILL`, so a line added under it is taken out of the LOG rather than out of
+	# the page, and nothing below moves.
+	#
+	# NOT A LINE IN THE LOG ITSELF, which is a wireframe with no transport and says so on its
+	# face (*"sample messages, not a transcript"*). A real instruction the player must act on
+	# does not belong in a panel of fake ones. `_lobby_status` is the session's real voice in
+	# this frame, and this sits with it -- its OWN label, because `_say()` overwrites that one
+	# on every lobby event and would wipe a standing instruction within seconds of a join.
+	#
+	# A LABEL RATHER THAN A TOOLTIP: a disabled `Button` does not show one, and this screen is
+	# used with a thumb, where nothing shows one.
+	_busy_note = Label.new()
+	_busy_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_busy_note.add_theme_font_size_override("font_size", 12)
+	_busy_note.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+	_busy_note.visible = false
+	column.add_child(_busy_note)
 	return column
 
 
@@ -2232,7 +2237,11 @@ func _on_role_selected(item: int, index: int) -> void:
 			# someone who can never arrive. This is how the missing Android INTERNET
 			# permission presented at 0.7: nothing crashed, nothing said why.
 			_roles[index] = Role.HUMAN
-			(_slot_rows[index]["role"] as OptionButton).select(int(Role.HUMAN))
+			# `get_item_index`, not the raw id. They agree today only because `Role.HUMAN`
+			# is 0 and Human is the first item; `select()` takes a POSITION, and every other
+			# call site in this file already goes through the lookup.
+			var picker := _slot_rows[index]["role"] as OptionButton
+			picker.select(picker.get_item_index(int(Role.HUMAN)))
 			_say("could not open a socket: %s" % error_string(err))
 			return
 		_lobby = Lobby.HOSTING
@@ -2604,7 +2613,28 @@ func _refresh_lobby() -> void:
 		var role_picker: OptionButton = _slot_rows[i]["role"]
 		# A slot somebody is standing in cannot be un-opened. Simpler than deciding what
 		# happens to a connected player when their chair is taken away.
-		role_picker.disabled = joined or _slot_peers.has(i)
+		var taken := _slot_peers.has(i)
+		role_picker.disabled = joined or taken
+
+		# ⛔ **AN OCCUPIED SEAT READS "Human", BECAUSE THAT IS WHAT IS SITTING IN IT** (owner's
+		# playtest, 2026-09-20: *"when joining a server the host shows Human + Human, client
+		# side still prints open"*). `Role.OPEN` is the HOST'S standing offer -- *this chair is
+		# advertised* -- and it has to stay OPEN in `_roles` for `unfilled_slots()` and
+		# `_slot_for()` to keep working. But once somebody has taken the offer up, "Open" is a
+		# stale answer to "who is playing here", and the host was the ONLY device still giving
+		# it: a client is sent `build_config()`, which has already resolved the seat to a human,
+		# so the two screens disagreed about the same chair. The identity line underneath
+		# (`_slot_status`) had it right all along -- *"peer 1908038833 — reviewing..."* -- which
+		# is why this survived: every screenshot of it contains its own contradiction.
+		#
+		# **DISPLAY ONLY, AND SAFE ONLY BECAUSE THE PICKER IS DISABLED ON THE LINE ABOVE.**
+		# `select()` does not emit `item_selected`, so `_roles` is untouched and `_on_role_
+		# selected` cannot fire from a control nobody can press. The moment that guard goes,
+		# this becomes a picker whose reading lies about the model behind it -- so the two
+		# belong together, in that order, and `taken` is deliberately one variable feeding both.
+		if not joined:
+			var shown := int(Role.HUMAN) if taken else int(_roles[i])
+			role_picker.select(role_picker.get_item_index(shown))
 		# Your own colour stays live on a joined client. Everyone else's is theirs.
 		(_slot_rows[i]["colour"] as Button).disabled = joined and i != _local_slot()
 		# TEAMS ARE THE HOST'S, INCLUDING YOUR OWN -- unlike the swatch two lines up,
@@ -2634,10 +2664,10 @@ func _refresh_lobby() -> void:
 	_join_button.disabled = busy
 	if _browser_button != null:
 		_browser_button.disabled = busy
-	if _join_note != null:
-		_join_note.visible = busy
+	if _busy_note != null:
+		_busy_note.visible = busy
 		if busy:
-			_join_note.text = ("You are hosting — press BACK to leave and join somebody else."
+			_busy_note.text = ("You are hosting — press BACK to leave and join somebody else."
 					if _lobby == Lobby.HOSTING
 					else "You have joined a match — press BACK to leave it.")
 
