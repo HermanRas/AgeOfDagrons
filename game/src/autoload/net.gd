@@ -458,6 +458,30 @@ func _on_peer_connected(peer_id: int) -> void:
 	peer_joined.emit(peer_id)
 
 
+## ⛔ HOW LONG A MATCH HOLDS ITS BREATH FOR A PHONE IN A TUNNEL (12.1b, owner 2026-09-20:
+## *"lets start with 10sec"*).
+##
+## A dropped player used to concede on the instant. That is right for somebody who has gone for
+## good and wrong for a phone that lost signal at a traffic light, and the difference is not
+## visible at the moment the socket dies -- which is the whole problem. Ten seconds is the
+## owner's opening number and is meant to be FELT rather than reasoned about: too short and a
+## lift kills your match, too long and the survivors stand around a base that will never fight
+## back. ⚠️ **Expect this to move after a playtest; it is a feel constant, not a protocol one.**
+const DISCONNECT_GRACE := 10.0
+
+## player id -> seconds left before the server concedes on their behalf. Server-side only.
+##
+## Keyed on the PLAYER, not the peer, because the peer id is the thing that does not survive a
+## reconnect -- ENet numbers a returning device afresh, so a table keyed by peer could never be
+## matched back up with the seat it is holding open.
+var _conceding: Dictionary = {}
+
+
+## How long this player has before the match gives up on them, or 0.0 if it is not waiting.
+func conceding_in(player_id: int) -> float:
+	return float(_conceding.get(player_id, 0.0))
+
+
 ## A peer went away -- quit, or the network dropped. Its slot goes back in the pool so
 ## the same seat can be taken again, which is what makes a reconnect possible at all
 ## (12.1b owns actually resuming one).
@@ -496,9 +520,15 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# command is the same one and the outcome is the same flag; the reason is what lets
 	# the survivors be told which of the two happened, instead of reading "all opponents
 	# eliminated" about somebody whose phone lost signal. See `SimPlayer.defeat_reason`.
+	#
+	# ⏳ **NOT IMMEDIATELY ANY MORE (12.1b, 2026-09-20).** The concede is now put on a
+	# `DISCONNECT_GRACE` fuse and fired in `_process`, so a phone that loses signal for a
+	# moment has a moment to come back. Everything above is unchanged: the same command, the
+	# same reason, the same tick boundary — only later. ⚠️ **The fuse is only lit inside a
+	# MATCH.** A peer that vanishes from the LOBBY has nothing to concede, and lighting it
+	# there would arm a timer against a world that does not exist yet.
 	if _host != null and _host.world != null and pid > 0:
-		_host.world.queue_command(ResignCommand.new(pid, _host.world.tick,
-				SimPlayer.Defeat.DISCONNECTED))
+		_conceding[pid] = DISCONNECT_GRACE
 
 	peer_left.emit(peer_id)
 
@@ -536,6 +566,15 @@ func _next_free_player_id() -> int:
 	var taken := {}
 	for peer in _peer_players:
 		taken[int(_peer_players[peer])] = true
+	# ⏳ **A SEAT THE MATCH IS STILL HOLDING OPEN IS OFFERED FIRST** (12.1b). Somebody
+	# arriving while a grace period is burning is overwhelmingly likely to BE the player it
+	# is burning for, and handing them any other id would seat them in a stranger's town.
+	# ⚠️ **It is a heuristic and not an identity check, which matters with two simultaneous
+	# drops** — nothing on the wire says who a returning device is, and giving it one needs a
+	# rejoin token that does not exist yet. That token is the rest of this card.
+	for pid in _conceding:
+		if not taken.has(int(pid)):
+			return int(pid)
 	if not _reserved_seats.is_empty():
 		# IN THE ORDER THE RESERVATION LISTS THEM, which for a resumed match is the saved
 		# roster's own order -- so the seats fill the way the file reads rather than the way
@@ -595,6 +634,7 @@ func _begin_when_ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_concedes(delta)
 	# Only ever busy in the seconds between "match built" and "everyone ready".
 	if _host == null or _host.is_running() or _awaiting_ready.is_empty():
 		return
@@ -605,6 +645,38 @@ func _process(delta: float) -> void:
 			% [_awaiting_ready.size(), _awaiting_ready.keys()])
 	_awaiting_ready.clear()
 	_begin_when_ready()
+
+
+## Burn down the grace on every player the match is still waiting for, and concede for the
+## ones whose time is up (12.1b).
+##
+## ⚠️ **WALL CLOCK, NOT TICKS, AND THAT IS CONSISTENT RATHER THAN SLOPPY.** The event this
+## measures from — a socket dying — is itself a wall-clock event the simulation cannot see,
+## and `READY_TIMEOUT` above times the other half of the same lifecycle the same way. What
+## stays deterministic is the part that has to: the *command* lands on a tick boundary like
+## every other one, so every client still sees the defeat at the same tick.
+##
+## ⛔ **THE CONCEDE IS STILL THE ONE THE MATCH CANNOT RESOLVE WITHOUT.** If this loop is ever
+## made to stop firing — a reconnect that clears the fuse without the player actually coming
+## back — the survivors fight an abandoned town forever with no way to win and no way to be
+## told why. That is 12.1e's whole argument and the grace period narrows it rather than
+## repealing it.
+func _tick_concedes(delta: float) -> void:
+	if _conceding.is_empty():
+		return
+	if _host == null or _host.world == null:
+		# The match ended under us. Nothing to concede to, and a fuse left burning would
+		# fire into the next match.
+		_conceding.clear()
+		return
+	for pid in _conceding.keys():
+		var left := float(_conceding[pid]) - delta
+		if left > 0.0:
+			_conceding[pid] = left
+			continue
+		_conceding.erase(pid)
+		_host.world.queue_command(ResignCommand.new(int(pid), _host.world.tick,
+				SimPlayer.Defeat.DISCONNECTED))
 
 
 ## A client telling the host it has built its view and can make sense of a snapshot.
@@ -622,6 +694,19 @@ func _recv_ready() -> void:
 	if _host == null:
 		return
 	var sender := get_tree().get_multiplayer().get_remote_sender_id()
+	# ⏳ **THIS IS WHAT PUTS THE FUSE OUT, AND NOTHING EARLIER DOES** (12.1b). A peer merely
+	# CONNECTING is not proof anybody can play — it has no map, no config and no view, and
+	# clearing the concede on connection alone would leave the survivors fighting an
+	# abandoned town forever, which is precisely the failure 12.1e's concede exists to
+	# prevent. This ack means "I have built my world and a snapshot means something to me",
+	# which is the only honest moment to say the player is back.
+	#
+	# ⛳ **UNREACHABLE TODAY, DELIBERATELY WIRED ANYWAY.** A dropped client tears its own
+	# session down and no path dials back in, so nothing sends this after a drop — that
+	# client half is the rest of 12.1b. The seam is here so the grace period means what it
+	# says the moment it lands, rather than being a timer nobody can ever stop.
+	if not _peer_players.is_empty():
+		_conceding.erase(int(_peer_players.get(sender, 0)))
 	if not _awaiting_ready.erase(sender):
 		return                    # unknown, or already accounted for
 	_begin_when_ready()
@@ -753,6 +838,9 @@ func _teardown() -> void:
 	# whatever the old save's roster was and refuse everybody past it -- a lobby that fills
 	# up two players early, for a file nobody has picked.
 	_reserved_seats.clear()
+	# And every fuse. A grace period is a promise about THIS match; one left burning would
+	# fire a `ResignCommand` into whatever world happened to exist ten seconds later.
+	_conceding.clear()
 	if _host != null:
 		_host.stop()
 		_host.queue_free()

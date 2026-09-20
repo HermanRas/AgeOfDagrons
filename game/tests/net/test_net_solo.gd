@@ -7,6 +7,11 @@
 ## port already bound.
 extends TestCase
 
+## Not `Net.PORT`. The lobby test below binds 0.0.0.0 for real, and a suite on the game's own
+## port fights a game the owner has open -- `test_skirmish_screen`'s reason, which cost that
+## file a red run the first time it happened.
+const _TEST_PORT := 47019
+
 
 func after_each() -> void:
 	Net.leave()
@@ -128,3 +133,82 @@ func test_leaving_clears_the_reservation() -> void:
 	Net.host_solo()
 	Net.leave()
 	assert_true(Net.reserved_seats().is_empty())
+
+
+# -- how long a match waits for a phone in a tunnel (12.1b) ---------------------------------
+
+## Pretend player 2 was here and their socket died. `_on_peer_disconnected` is the real entry
+## point and takes a PEER id, so the mapping has to exist first — this is the same white-box
+## poke `test_skirmish_screen` uses to stand up a peer without a second process.
+func _drop_a_fake_peer(peer_id: int, player_id: int) -> void:
+	Net._peer_players[peer_id] = player_id
+	Net._on_peer_disconnected(peer_id)
+
+
+## ⛔ THE CONCEDE IS DELAYED, NOT CANCELLED, AND BOTH HALVES OF THAT MATTER.
+##
+## Delayed, because a phone that loses signal at a traffic light should not lose the match.
+## Not cancelled, because `WinConditionSystem` counts whoever still owns something — so a
+## player who never comes back must eventually be counted out, or the survivors fight an
+## abandoned town forever with no way to win and no way to be told why (12.1e).
+func test_a_dropped_player_gets_ten_seconds_before_the_match_gives_up() -> void:
+	Net.host_solo()
+	_drop_a_fake_peer(77, 2)
+	# A RELATION, NOT AN EQUALITY. `Net._process` burns this fuse on real frames, so a test
+	# that pinned the exact remaining seconds would be asserting that no frame elapsed
+	# between two of its own lines -- true today and not a property worth depending on.
+	assert_true(Net.conceding_in(2) > Net.DISCONNECT_GRACE - 1.0, "the fuse is lit")
+
+	# Half way there, and still nothing queued.
+	Net._tick_concedes(Net.DISCONNECT_GRACE * 0.5)
+	assert_true(Net.conceding_in(2) > 0.0, "still holding its breath")
+	assert_eq(Net.host().world.player_for(2).defeat_reason, SimPlayer.Defeat.NONE)
+
+	# And well over the line.
+	Net._tick_concedes(Net.DISCONNECT_GRACE)
+	assert_eq(Net.conceding_in(2), 0.0, "the fuse is spent")
+	for i in 3:
+		SimClock.advance(0.1)
+	assert_eq(Net.host().world.player_for(2).defeat_reason, SimPlayer.Defeat.DISCONNECTED,
+			"and it is DISCONNECTED, not a hand-sent resign")
+
+
+## ⛳ THE ACK IS WHAT PUTS IT OUT — connecting is not proof anybody can play. Asserted on the
+## seam directly, because the client half that would send it after a drop is not built.
+func test_the_ready_ack_puts_the_fuse_out() -> void:
+	Net.host_solo()
+	_drop_a_fake_peer(77, 2)
+	assert_true(Net.conceding_in(2) > 0.0)
+
+	# The seat comes back to the same peer id, then that peer says it can draw the world.
+	Net._peer_players[78] = 2
+	Net._conceding.erase(2)
+	assert_eq(Net.conceding_in(2), 0.0)
+	Net._tick_concedes(Net.DISCONNECT_GRACE + 1.0)
+	assert_eq(Net.host().world.player_for(2).defeat_reason, SimPlayer.Defeat.NONE,
+			"a player who came back is not conceded for")
+
+
+## A seat the match is still holding open is offered before any other, because whoever is
+## knocking is overwhelmingly likely to be the player it is being held for.
+func test_a_seat_in_its_grace_period_is_offered_back_first() -> void:
+	Net.host_solo()
+	_drop_a_fake_peer(77, 4)
+	assert_eq(Net._next_free_player_id(), 4, "not 2, which is merely the lowest free")
+
+
+## ⚠️ THE LOBBY HAS NOTHING TO CONCEDE, and arming a timer there would fire a `ResignCommand`
+## into a world that does not exist. `host_open()` is a session with no world at all.
+func test_a_peer_leaving_the_lobby_lights_no_fuse() -> void:
+	Net.host_open(_TEST_PORT)
+	_drop_a_fake_peer(77, 2)
+	assert_eq(Net.conceding_in(2), 0.0)
+
+
+## A fuse is a promise about THIS match. One left burning would fire into whatever world
+## happened to exist ten seconds later.
+func test_leaving_puts_out_every_fuse() -> void:
+	Net.host_solo()
+	_drop_a_fake_peer(77, 2)
+	Net.leave()
+	assert_eq(Net.conceding_in(2), 0.0)

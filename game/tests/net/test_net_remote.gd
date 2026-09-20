@@ -73,9 +73,17 @@ func test_a_client_has_no_identity_until_the_server_names_it() -> void:
 # handler. What is under test is what `Net` DOES about a departure, which is the part that
 # was missing; the socket teardown around it is proven by two processes.
 
-func test_a_peer_that_vanishes_mid_match_concedes() -> void:
-	# Without this the match cannot resolve: WinConditionSystem counts whoever still owns
-	# something, and a player whose phone went into a tunnel still owns their whole base.
+## ⛔ THE MATCH WAITS, AND THEN IT RESOLVES. BOTH HALVES ARE LOAD-BEARING.
+##
+## Without the concede the match cannot resolve at all: `WinConditionSystem` counts whoever
+## still owns something, and a player whose phone went into a tunnel still owns their whole
+## base, so the survivor fights an abandoned town forever with no way to win and no way to be
+## told why. That is 12.1e and it has not changed.
+##
+## ⏳ **WHAT CHANGED ON 2026-09-20 IS THAT IT IS NO LONGER INSTANT** (owner: *"lets start with
+## 10sec"*). This test used to step once and assert the defeat; it now asserts the WAIT first,
+## because a grace period nobody checks is a grace period the next refactor deletes.
+func test_a_peer_that_vanishes_mid_match_concedes_once_the_grace_runs_out() -> void:
 	Net.host_open()
 	Net.start_match(MatchConfig.debug_skirmish())
 	var world := Net.host().world
@@ -83,6 +91,14 @@ func test_a_peer_that_vanishes_mid_match_concedes() -> void:
 
 	assert_false(world.player_for(2).defeated, "player 2 is in the match")
 	Net._on_peer_disconnected(4242)
+
+	# THE HELD BREATH. Stepping here used to be enough to defeat them.
+	world.step()
+	assert_false(world.player_for(2).defeated, "still waiting for them to come back")
+	assert_false(world.match_over, "and the match is emphatically not over yet")
+
+	# And the fuse burns out.
+	Net._tick_concedes(Net.DISCONNECT_GRACE + 1.0)
 	world.step()
 
 	assert_true(world.player_for(2).defeated, "the departed player is out")
