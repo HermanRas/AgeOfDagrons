@@ -138,6 +138,40 @@ and a checksum recorded before the final upload is a checksum for the wrong file
 
 No automation — uploaded by hand, like everything else here (there is no CI, PLAN.md §1.2).
 
+⚠️ **VERIFY THE PAYLOAD ON THE SERVER *BETWEEN* THE TWO STEPS, NOT AFTER BOTH.** `scp`
+reporting success says the bytes left; `sha256sum` on the far end says they arrived. Doing it
+after the manifest is up closes the stable door — every client that checked in the meantime has
+already been told the pack exists.
+
+```powershell
+ssh 100.96.0.2 "sha256sum /opt/aod/app/downloads/art_base_v3.zip"   # must match packs.json
+```
+
+### Retention: keep the current version and ONE previous
+
+Old payloads are not harmful, but they are 80–236 MB each and the box is one disk. The rule
+applied on 2026-09-20, when `art_base_v1` and four superseded campaign zips came off:
+
+- **delete** anything two or more versions behind the live manifest;
+- **keep** the immediately previous version of each pack.
+
+⛔ **KEEPING N−1 IS NOT SENTIMENT, AND IT IS THE ONLY PART OF THIS THAT IS NOT OBVIOUS.** A
+client that began fetching v2 seconds before the manifest flipped to v3 is mid-transfer against
+the v2 URL, and 0.3a's resumable download **fails on a 404 rather than falling back** — it is
+built to survive a dropped connection, not a file that stopped existing. Packs are served
+`immutable` with a one-year cache, so an in-flight fetch has no reason to re-check the manifest
+and discover it is chasing a dead URL. One version of headroom closes that window for nothing.
+
+**Grep the live manifest rather than trusting a list** — the filenames are similar enough to
+fat-finger, and a delete here has no undo:
+
+```bash
+cd /opt/aod/app/downloads
+for f in <candidates>; do
+  if grep -q "$f" packs.json; then echo "REFUSED $f -- still referenced"; else rm -v -- "$f"; fi
+done
+```
+
 ### Files served from downloads/
 
 | File | Fetched by | Notes |
@@ -145,7 +179,7 @@ No automation — uploaded by hand, like everything else here (there is no CI, P
 | `packs.json` | the game | Must never move. Served `no-cache` — a stale copy means the publish did not happen |
 | `campaign_howtoplay_v4.zip` | the game | The tutorial. `required` |
 | `campaign_howtoplay_dummy_v4.zip` | the game | **A TEST PACK.** Optional content that exists only so the browse-and-pick path has something to exercise on a device; delete it once there is a real optional campaign |
-| `art_base_v1.zip` | the game | **The art, 80 MB, `required` and MOUNTED.** Every unit, building, terrain and prop. Without it the game runs on placeholders |
+| `art_base_v3.zip` | the game | **The art, 80 MB, `required` and MOUNTED.** Every unit, building, terrain and prop. Without it the game runs on placeholders. ⚠️ **v2 and v3 both went up on 2026-09-20** — v2 for three bridge atlases, v3 for one foundation pad. Both arrived the same way and it is the property worth knowing: `build_packs.py` resolves a pack from what the **seam** can ask for (`game/data/visuals.json`), never from a directory listing, so **adding one id to that file is a publish**. `preview_art_pack` is what catches it, and it is the only thing that can — this workstation has the staged tree and `res://` beats a mounted pack, so a missing atlas draws perfectly here and magenta on a phone |
 | `art_colours_v1.zip` | the game | **Player colours, 236 MB, optional.** 21 units × 8 colours. Without it units show untinted, which the seam falls back to on its own |
 | `AoD_v*.apk` / `.exe` | humans | Game builds |
 
