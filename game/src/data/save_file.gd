@@ -135,6 +135,50 @@ static func erase(slug: String) -> bool:
 	return gone
 
 
+## Short month names, for `auto_name`. A table rather than a locale lookup: this is one word
+## inside a save's title, and a name that changes with the device's language would make the
+## same match list under two different names on two different phones.
+const _MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+## The name a save gets when nobody typed one (12.4, owner's call 2026-09-20: *auto-named, no
+## typing*). Built from the match rather than from a counter, so a picker row reads as the
+## match it is.
+##
+## ## ⛔ THE TICK IS IN THE NAME, AND IT IS WHAT STOPS A SILENT OVERWRITE
+##
+## `write()` REPLACES a save of the same name -- correctly, since that is what pressing Save on
+## a slot you have used before means. But an auto-named save nobody typed cannot mean that, and
+## a name built from the wall clock alone collides for **every save made inside the same
+## minute**: press Save, change your mind, press Save again, and the first one is gone with
+## nothing on screen to say so.
+##
+## The tick is the match's OWN clock and it is monotonic, so two saves of one match can never
+## share it -- and two saves that DO share it are the same world state, where replacing is the
+## right answer rather than a loss. That is the whole reason it is the tick and not a counter
+## or a random suffix: it makes the collision case correct instead of merely rare.
+##
+## ⚠️ **IT MUST STAY SHORT ENOUGH NOT TO BE TRUNCATED.** `slugify` stops at `MAX_NAME`, and the
+## tick is at the END -- so a name long enough to be cut loses exactly the part that makes it
+## unique. Worst case today is "King of the Hill, 20 Sep 08:14 (tick 999999)", which slugs to
+## 41 characters against a 64 limit. Anything added in front of the tick eats that margin.
+static func auto_name(world: SimWorld, cfg: MatchConfig) -> String:
+	var mode := "Match"
+	if cfg != null:
+		mode = MatchConfig.mode_name(cfg.mode)
+	var tick := 0
+	if world != null:
+		tick = world.tick
+	var t := Time.get_datetime_dict_from_system()
+	var month := "?"
+	var month_index := int(t.get("month", 0)) - 1
+	if month_index >= 0 and month_index < _MONTHS.size():
+		month = _MONTHS[month_index]
+	return "%s, %d %s %02d:%02d (tick %d)" % [
+		mode, int(t.get("day", 0)), month, int(t.get("hour", 0)), int(t.get("minute", 0)), tick]
+
+
 ## A filename from a player's words. Lowercase, letters digits and dashes, nothing that can
 ## climb out of `ROOT` -- `PackDef._is_safe_segment()`'s whitelist argument: naming what IS
 ## allowed is the only version of this check that an encoding nobody thought of cannot get

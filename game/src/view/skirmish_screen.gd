@@ -99,6 +99,17 @@ const _SEED_MAX := 999999
 ## place that decodes it.
 const _SAVED_ITEM_ID_BASE := 1000
 
+## Where the picker's SAVED GAME entries start (12.4), above `_SAVED_ITEM_ID_BASE` for the
+## same reason that one sits above the enum -- and the gap is a thousand because the number
+## of saved MAPS is whatever the player has authored, not a bounded set.
+##
+## ⚠️ **THREE KINDS OF ITEM SHARE ONE PICKER AND ONLY THE ID SAYS WHICH.** A generator type,
+## a saved map (`Custom`), and a saved match (`Saved`). `_saved_index_of` and
+## `_saved_game_index_of` are the only two places that decode it, and each returns -1 for
+## everything that is not its own -- so a caller that forgets one gets "not mine", never a
+## wrong row.
+const _SAVED_GAME_ITEM_ID_BASE := 2000
+
 ## THE LOBBY'S PROPORTIONS. **HALF AND HALF SINCE 2026-08-31** (project owner: *"srink
 ## the chat pannel to 50% and grow game setup and map setup to 50% so the 2 columns is
 ## hald and half"*), where the first spec was *"left 2/3rds of the screen CHAT, right
@@ -266,6 +277,35 @@ var _saved_maps: Array[Dictionary] = []
 ## colour, a team) and would otherwise wipe the reason off a screen whose map is still
 ## broken.
 var _saved_load_error: String = ""
+
+## The saved MATCHES on disk (12.4), from `SaveFile.list()` -- the sidecars only, which is
+## what that split is for.
+##
+## ⚠️ **DISCOVERED ON EVERY `_show()` AND NOT ONCE LIKE `_saved_maps`.** That one's comment
+## argues a player cannot save a map mid-lobby because the button is inside a match -- which
+## is true of maps and is exactly BACKWARDS for games: the Save Game button is also inside a
+## match, and the whole point of it is that you come back to this screen afterwards to resume.
+## A list built once would never show the save you just made.
+var _saved_games: Array[Dictionary] = []
+
+## The chosen saved match's slug, or empty for anything else. The counterpart of `_saved_dir`.
+var _saved_game_slug: String = ""
+
+## The chosen saved match, read whole, and the config it was played under. Both null/empty
+## until a save is picked and cleared the moment anything else is.
+##
+## ⚠️ **HELD RATHER THAN RE-READ AT START, BECAUSE START MUST NOT BE THE FIRST READ.** A save
+## that cannot be parsed has to disable the button, which means the parse has to have happened
+## while the player was still looking at the picker. Reading it again in `_on_start_pressed`
+## would be a second chance to fail, at the one moment there is no screen left to say so on.
+var _saved_game: Dictionary = {}
+var _saved_game_cfg: MatchConfig = null
+
+## Why the chosen saved match would not load, or empty. `_saved_load_error`'s twin, kept apart
+## for the same reason the two lists are: a map's complaint and a match's are different
+## sentences about different files, and one variable would make the last pick overwrite the
+## other's reason.
+var _saved_game_error: String = ""
 
 var _lobby: Lobby = Lobby.LOCAL
 
@@ -812,6 +852,10 @@ func _build_map_setup() -> Control:
 	for type in MapGenerator.real_types():
 		_type_picker.add_item(MapGenerator.type_name(type), int(type))
 	_add_saved_map_items()
+	# AFTER the custom maps, so the picker reads generator types -> Custom -> Saved: the
+	# three groups in increasing order of "this is a specific thing I made earlier", which
+	# is also their id order.
+	_add_saved_game_items()
 	_type_picker.item_selected.connect(_on_type_selected)
 	column.add_child(_setting_row("Map", _type_picker))
 
@@ -867,10 +911,65 @@ func _add_saved_map_items() -> void:
 		push_warning("saved maps: %s" % w)
 	if _saved_maps.is_empty():
 		return
-	_type_picker.add_separator("Saved")
+	# ⚠️ **"Custom", NOT "Saved", SINCE 12.4** (owner, 2026-09-20). The word had to move: a
+	# saved MAP and a saved GAME are both "saved" in English and the picker now offers both,
+	# so the heading that used to be unambiguous became the one thing a player could not tell
+	# apart. A map you authored is CUSTOM content; a match you left half-played is SAVED.
+	_type_picker.add_separator("Custom")
 	for i in _saved_maps.size():
 		var entry: Dictionary = _saved_maps[i]
 		_type_picker.add_item(_saved_item_label(entry), _SAVED_ITEM_ID_BASE + i)
+
+
+## The saved MATCHES, under their own heading (12.4). Nothing is added when there are none,
+## which is `_add_saved_map_items`' rule and is why a player who has never saved sees the
+## picker exactly as it was.
+##
+## ⚠️ **RE-READ EVERY TIME THIS SCREEN IS SHOWN.** See `_saved_games`: the Save Game button is
+## inside a match, so the save a player wants is *by definition* one made since this screen
+## was last built.
+func _add_saved_game_items() -> void:
+	_saved_games = SaveFile.list()
+	if _saved_games.is_empty():
+		return
+	_type_picker.add_separator("Saved")
+	for i in _saved_games.size():
+		_type_picker.add_item(_saved_game_label(_saved_games[i]), _SAVED_GAME_ITEM_ID_BASE + i)
+
+
+## "Last Man Standing, 20 Sep 08:14 (tick 4820)" -- the name the save was given.
+##
+## THE NAME IS ALREADY THE WHOLE ROW, because `SaveFile.auto_name` builds it from the mode,
+## the date and the tick -- so unlike `_saved_item_label` there is nothing to append here.
+## Reading the sidecar's `mode` or `tick` back out and printing them again would say the same
+## thing twice in one line.
+##
+## A save with no name is still offered, on `_saved_item_label`'s rule: refusing to list it
+## would make a broken save indistinguishable from a missing one.
+static func _saved_game_label(row: Dictionary) -> String:
+	var name := str(row.get("name", "")).strip_edges()
+	return name if not name.is_empty() else "Unnamed save"
+
+
+## Which `_saved_games` row a picker id names, or -1 for anything else.
+##
+## Open-ended upwards, unlike `_saved_index_of` -- this is the top range and nothing is above
+## it. When something is, it takes a base above this one and this function grows the same
+## upper bound that one now carries; see its header for what that bound is for.
+static func _saved_game_index_of(item_id: int) -> int:
+	return item_id - _SAVED_GAME_ITEM_ID_BASE if item_id >= _SAVED_GAME_ITEM_ID_BASE else -1
+
+
+## The listing row for the chosen saved match, or `{}`. `_saved_entry()`'s twin, and empty
+## for the same reason that one can be: the slug is held across a refresh and the row behind
+## it may have gone (a save deleted in another screen, a file removed on the device).
+func _saved_game_row() -> Dictionary:
+	if _saved_game_slug.is_empty():
+		return {}
+	for row in _saved_games:
+		if str(row.get("slug", "")) == _saved_game_slug:
+			return row
+	return {}
 
 
 ## "Duel Valley (2p)" -- the name and what it can seat.
@@ -890,9 +989,23 @@ static func _saved_item_label(entry: Dictionary) -> String:
 	return "%s (%dp)" % [str(entry.get("name", "")), players]
 
 
-## Which `_saved_maps` row a picker id names, or -1 for a generator type.
+## Which `_saved_maps` row a picker id names, or -1 for a generator type or a saved MATCH.
+##
+## ⛔ **BOUNDED AT BOTH ENDS SINCE 12.4, AND THE UPPER BOUND IS THE LOAD-BEARING HALF.** This
+## used to ask only `>= _SAVED_ITEM_ID_BASE`, which was total while saved maps were the only
+## thing above the enum. A saved-match id is 2000-and-up, so the old test answered **true for
+## every one of them** and returned an index a thousand rows into a list that has perhaps
+## three entries -- `_saved_maps[1000]`, an out-of-range read on the very first pick.
+##
+## Fixed here rather than by calling `_saved_game_index_of` first, because an ordering rule
+## between two functions is a rule somebody has to keep knowing: a third kind of item, or one
+## new caller that asks the obvious question in the obvious order, and it is wrong again. Each
+## decoder now recognises only its own range and says -1 to everything else, so they may be
+## called in any order or on their own.
 static func _saved_index_of(item_id: int) -> int:
-	return item_id - _SAVED_ITEM_ID_BASE if item_id >= _SAVED_ITEM_ID_BASE else -1
+	if item_id < _SAVED_ITEM_ID_BASE or item_id >= _SAVED_GAME_ITEM_ID_BASE:
+		return -1
+	return item_id - _SAVED_ITEM_ID_BASE
 
 
 ## How many players the chosen saved map can seat, or 0 when there is no saved map chosen
@@ -1367,7 +1480,9 @@ func _nav_button(text: String, on_pressed: Callable) -> Button:
 ## Public because it is the whole behaviour of the screen and a test wants to drive it
 ## without pressing anything.
 func regenerate() -> void:
-	if _saved_dir.is_empty():
+	if not _saved_game_slug.is_empty():
+		_data = _load_saved_game()
+	elif _saved_dir.is_empty():
 		# TWO COUNTS. The map is SIZED for every slot and POPULATED for the players actually
 		# in them, which is what makes "eight players, six closed" a big empty board for two
 		# rather than two starts crammed into one corner of it.
@@ -1404,6 +1519,50 @@ func _load_saved_map() -> MapData:
 	return data
 
 
+## The chosen saved MATCH, read whole (12.4), returning the board to draw in the preview.
+##
+## ## ⛔ THE PREVIEW IS THE MAP THE MATCH WAS STARTED ON, NOT ITS CURRENT STATE
+##
+## A save carries its `MatchConfig`, and that carries the `map_data` the match began with --
+## so the picture is the real board and costs nothing extra to get. What it does NOT show is
+## the half-built settlement on top of it, because that lives in the save's entity list and
+## `MapPreview` draws a `MapData`. **That is the honest thing to draw here**: the alternative
+## is projecting live entities into a thumbnail, which would be a second renderer for the one
+## picture nobody makes a decision from -- the row's own text already says which match it is.
+##
+## ## ⛔ IT IS READ AND PARSED NOW, WHILE THERE IS STILL A SCREEN TO COMPLAIN ON
+##
+## `SaveFile.read()` and `SaveFile.config_of()` both fail on a file a player can edit, and a
+## listed save may still not load -- `SaveFile`'s own header says the sidecar is not proof the
+## body parses. Doing it here means a bad save disables START with a reason under it; doing it
+## in `_on_start_pressed` would mean discovering it after the scene had changed.
+##
+## Null becomes an unstartable lobby, never a crash and never a silent fall back to the
+## generator -- `_load_saved_map`'s rule, and for its reason.
+func _load_saved_game() -> MapData:
+	_saved_game = {}
+	_saved_game_cfg = null
+
+	var problems: Array[String] = []
+	var save := SaveFile.read(_saved_game_slug, problems)
+	if save.is_empty():
+		_saved_game_error = problems[0] if not problems.is_empty() else "could not be read"
+		return null
+
+	var cfg := SaveFile.config_of(save)
+	if cfg == null:
+		# A save with no config half cannot be rebuilt at all: `SimHost.build` needs it to
+		# make the world that `SaveGame.apply` then overwrites. Said plainly rather than
+		# guessed at with a default config, which would resume the match on the wrong map.
+		_saved_game_error = "this save does not say what match it was"
+		return null
+
+	_saved_game = save
+	_saved_game_cfg = cfg
+	_saved_game_error = ""
+	return cfg.map_data
+
+
 ## Grey out the seed controls while a saved map is chosen (16.0).
 ##
 ## **A SEED DESCRIBES A GENERATED MAP AND MEANS NOTHING TO A FILE.** Left live, the box
@@ -1436,6 +1595,27 @@ func _refresh_map_controls() -> void:
 ## for a setting the generator does not take would throw the map away and build the
 ## identical one back, which is what `_on_starting_age_selected` already refuses to do.
 func _refresh_status() -> void:
+	# ⛔ **A SAVED MATCH IS DESCRIBED FIRST AND SEPARATELY, BECAUSE `_data` MEANS SOMETHING
+	# ELSE FOR ONE** (12.4). Everything below this reads `_data` as *the board the lobby will
+	# play on* and counts slots against it -- but for a resumed match `_data` is only the
+	# picture, and a save on the DEBUG map has none at all while resuming perfectly. Falling
+	# through would report "Unreadable map" for a save that is about to load.
+	if not _saved_game_slug.is_empty():
+		if _saved_game_cfg == null:
+			_status.text = "Unreadable save: %s" % _saved_game_error
+			_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+			return
+		if Net.peer_players().size() > 1:
+			# THE UNBUILT HALF, NAMED RATHER THAN LEFT AS A DEAD BUTTON (12.4 item 3). A
+			# player who has set up a lobby and then picked a save deserves the reason;
+			# `can_start()` refuses it either way.
+			_status.text = "A saved match can only be resumed on your own — close the other slots"
+			_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+			return
+		_status.text = "Resuming: %s" % _saved_game_label(_saved_game_row())
+		_status.remove_theme_color_override("font_color")
+		return
+
 	if _data == null:
 		# A CHOSEN SAVED MAP THAT WOULD NOT LOAD (16.0). Before this branch existed the
 		# function returned on a null map and left whatever the last line happened to say,
@@ -1605,6 +1785,28 @@ func map_data() -> MapData:
 ##      from the entities the map lists for their index, so a surplus player opens the
 ##      match owning nothing.
 func can_start() -> bool:
+	# ⛔ **A SAVED MATCH ANSWERS ALL OF THIS ITSELF AND NONE OF THE RULES BELOW APPLY** (12.4).
+	# It is not a board to be seated -- the players, their colours, their teams and the
+	# victory condition are in the file, which is why `SimHost.build` rebuilds them from the
+	# config rather than from this screen. Running the slot rules against it would refuse a
+	# perfectly good 4-player save because the lobby in front of it is set to 2.
+	#
+	# ⚠️ **`_data` IS NOT THE TEST HERE, AND THAT IS NOT AN OVERSIGHT.** A match played on the
+	# debug map has no `map_data` in its config at all -- `MapGen.build` falls back to the
+	# fixed debug map when the config carries none -- so `_load_saved_game` legitimately
+	# returns null for a save that resumes perfectly. `_saved_game_cfg` is what says the file
+	# was read and understood; `_data` only says whether there is a picture.
+	if not _saved_game_slug.is_empty():
+		if _saved_game_cfg == null:
+			return false
+		# ⛔ **SOLO ONLY, BECAUSE THE MULTIPLAYER HANDOFF IS NOT BUILT** (12.4 item 3). A
+		# joined peer is sent the `MatchConfig` and then snapshots; it is never sent the
+		# SAVE, so it would rebuild the world from the config alone -- a fresh match, on the
+		# same map, against a host playing a half-finished one. That is a desync on tick 1
+		# dressed as a working feature, and this card's own bar is that a save which loads
+		# and desyncs is worse than no save. Refused here and said out loud in `_status`.
+		return Net.peer_players().size() <= 1
+
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
 	if _lobby == Lobby.JOINED:
@@ -1732,10 +1934,24 @@ func _age_label(age: int) -> String:
 ## The map itself always travels as `map_data`, so nothing downstream needs a sentinel to
 ## know which of the two it is looking at.
 func _on_type_selected(index: int) -> void:
-	var saved := _saved_index_of(_type_picker.get_item_id(index))
+	var item_id := _type_picker.get_item_id(index)
+	var saved := _saved_index_of(item_id)
+	var saved_game := _saved_game_index_of(item_id)
+
 	_saved_dir = str(_saved_maps[saved].get("dir", "")) if saved >= 0 else ""
-	if saved < 0:
-		_type = _type_picker.get_item_id(index) as MapGenerator.Type
+	# ⚠️ **CLEARED ON EVERY PICK, INCLUDING THE ONES THAT ARE NOT A SAVED MATCH.** The three
+	# kinds are mutually exclusive and only one variable says which is chosen, so a pick that
+	# set `_saved_dir` without clearing this would leave BOTH set -- and `regenerate()` would
+	# then resume a match while the picker read a map's name. Same reason `_saved_dir` is
+	# assigned unconditionally on the line above rather than inside the `if`.
+	_saved_game_slug = str(_saved_games[saved_game].get("slug", "")) if saved_game >= 0 else ""
+	if saved_game < 0:
+		_saved_game = {}
+		_saved_game_cfg = null
+		_saved_game_error = ""
+
+	if saved < 0 and saved_game < 0:
+		_type = item_id as MapGenerator.Type
 	regenerate()
 
 
@@ -2599,6 +2815,24 @@ func _string_arg(name: String, fallback: String) -> String:
 func _on_start_pressed() -> void:
 	if not can_start():
 		return
+
+	# ⛔ **A SAVED MATCH USES THE CONFIG OUT OF THE FILE, NEVER `build_config()`** (12.4).
+	# The lobby in front of you describes a match that was never played: its player count,
+	# colours, teams, victory condition and starting age are this screen's current settings,
+	# and the save's are whatever they were on the day it was made. Rebuilding from the wrong
+	# one would stand up a world the entity list then gets applied on top of -- players with
+	# the wrong colours owning units, or a `players` array too short to hold them.
+	#
+	# It goes down the SOLO path deliberately: `can_start()` has already refused this while
+	# any peer is connected, because the multiplayer handoff is 12.4's unbuilt third item.
+	if not _saved_game_slug.is_empty():
+		Net.pending_match = _saved_game_cfg
+		Net.pending_save = _saved_game
+		start_requested.emit(_saved_game_cfg)
+		_beacon.stop()
+		get_tree().change_scene_to_file(_GAME_SCENE)
+		return
+
 	var cfg := build_config()
 	start_requested.emit(cfg)
 

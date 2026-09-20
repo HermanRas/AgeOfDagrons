@@ -265,6 +265,13 @@ func _ready() -> void:
 			# INTERNET permission presented at 0.7 -- no crash, just a game that never
 			# started and never said why.
 			_error = "host_solo() failed: %s" % error_string(err)
+			# ⚠️ **A REFUSED SAVE SAYS WHY, BECAUSE THE ERROR CODE CANNOT** (12.4). Resuming
+			# is the one path into this branch that fails for a reason the player can act on
+			# -- a file from a newer build, or one they edited -- and `ERR_INVALID_DATA`
+			# printed on its own would read as a bug in the game rather than as a fact about
+			# their file. See `Net.start_problems`.
+			if not Net.start_problems.is_empty():
+				_error = "Could not resume this save: %s" % Net.start_problems[0]
 			_error_label.text = _error
 			_error_label.visible = true
 			return
@@ -579,6 +586,7 @@ func _build_hud() -> void:
 	age_top_row.add_child(_idle_badge)
 
 	_pause_menu = PauseMenu.new()
+	_pause_menu.save_requested.connect(_on_save_requested)
 	hud.add_child(_pause_menu)
 
 	# The three pages behind the other corner buttons (8.2b). Built here rather than
@@ -758,6 +766,51 @@ func _corner_button(spec: Array) -> TextureButton:
 func _on_settings_pressed() -> void:
 	_close_pages()
 	_pause_menu.open()
+
+
+## SAVE GAME from the pause menu (12.4). Writes `user://saves/` and says what happened.
+##
+## ## ⛔ THE HOST'S WORLD, ASKED FOR AGAIN RATHER THAN TRUSTED
+##
+## `PauseMenu._refresh_save` already disabled the button when there is no world -- but a HUD
+## that hides an option must also be refused underneath it (§4, the trust-boundary rule), and
+## this is the underneath. The panel's check runs when the menu OPENS; a session can end while
+## it is open, and a disabled button is not a guarantee about the next frame.
+##
+## ## ⚠️ THE NAME IS GENERATED, ON THE OWNER'S CALL (2026-09-20)
+##
+## *Auto-named, no typing.* A text field inside a match is the worst place in the game to put
+## one: `emulate_mouse_from_touch` is off for the duration of a match (§6), the soft keyboard
+## covers the field, and a tap cannot place the caret -- two bugs open in BUGS.md today. The
+## name carries the tick so that pressing Save twice cannot silently replace the first file;
+## `SaveFile.auto_name` has the argument.
+##
+## ## ⚠️ A PARTIAL SAVE IS REPORTED AS ONE, NOT AS A FAILURE
+##
+## `SaveFile.write()` can return a complaint with the match already safely on disk -- the
+## sidecar failed, so the save exists but will not LIST. Saying "could not save" there would
+## be false and would invite the player to press it again; saying nothing would leave a file
+## they can never find. So the complaint is shown as-is, which is the sentence that file
+## already writes for exactly this case.
+func _on_save_requested() -> void:
+	var host := Net.host()
+	if host == null or host.world == null:
+		_toast.show_message("Only the host can save")
+		return
+	var cfg := Net.match_config()
+	if cfg == null:
+		_toast.show_message("There is no match to save")
+		return
+
+	var world: SimWorld = host.world
+	var name := SaveFile.auto_name(world, cfg)
+	var problems := SaveFile.write(world, cfg, name)
+	if problems.is_empty():
+		_toast.show_message("Saved: %s" % name)
+		return
+	# LONG, because a save failure is a sentence and not a label -- `show_message`'s 320 px
+	# banner would cut it. `NoticeToast` holds its own centre across that swap (§6).
+	_toast.show_long_message(problems[0])
 
 
 func _on_chat_pressed() -> void:

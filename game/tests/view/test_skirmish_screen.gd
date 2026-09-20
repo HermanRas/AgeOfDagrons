@@ -1440,3 +1440,43 @@ func test_saved_ids_cannot_collide_with_a_map_type() -> void:
 				"map type %d must not decode as a saved map" % int(type))
 	assert_eq(SkirmishScreen._saved_index_of(SkirmishScreen._SAVED_ITEM_ID_BASE), 0)
 	assert_eq(SkirmishScreen._saved_index_of(SkirmishScreen._SAVED_ITEM_ID_BASE + 3), 3)
+
+# -- three kinds of item in one picker (12.4) ---------------------------------------------
+
+## ⛔ THE BUG THIS PINS WAS A SILENT OUT-OF-RANGE READ, NOT A WRONG LABEL.
+##
+## `_saved_index_of` asked only `item_id >= _SAVED_ITEM_ID_BASE`, which was total while saved
+## MAPS were the only thing numbered above the generator enum. Saved MATCHES take ids from
+## 2000, so that test answered true for every one of them and returned an index a thousand
+## rows into a list with perhaps three entries -- `_saved_maps[1000]`, on the first pick.
+##
+## Asserted as "each decoder recognises only its own range", which is the property that
+## survives either base being renumbered, rather than as the arithmetic of a particular id.
+func test_each_picker_range_is_decoded_by_exactly_one_reader() -> void:
+	var generator_id := int(MapGenerator.Type.RANDOM)
+	assert_eq(SkirmishScreen._saved_index_of(generator_id), -1, "a map TYPE is neither")
+	assert_eq(SkirmishScreen._saved_game_index_of(generator_id), -1)
+
+	var map_id := SkirmishScreen._SAVED_ITEM_ID_BASE + 2
+	assert_eq(SkirmishScreen._saved_index_of(map_id), 2, "a custom map decodes to its row")
+	assert_eq(SkirmishScreen._saved_game_index_of(map_id), -1,
+			"and the saved-MATCH reader does not claim it")
+
+	var game_id := SkirmishScreen._SAVED_GAME_ITEM_ID_BASE + 2
+	assert_eq(SkirmishScreen._saved_game_index_of(game_id), 2, "a saved match decodes to its row")
+	assert_eq(SkirmishScreen._saved_index_of(game_id), -1,
+			"and the custom-MAP reader must NOT -- this is the out-of-range read")
+
+
+## The two ranges cannot overlap, however many maps a player has authored. A relation rather
+## than a pair of literals: renumbering either base keeps this honest.
+func test_the_saved_ranges_do_not_overlap() -> void:
+	assert_true(SkirmishScreen._SAVED_GAME_ITEM_ID_BASE > SkirmishScreen._SAVED_ITEM_ID_BASE,
+			"saved matches number above saved maps")
+
+
+## An unnamed save is still offered a row, on `_saved_item_label`'s rule: refusing to show it
+## would make a broken save indistinguishable from one that is not there.
+func test_a_save_with_no_name_still_gets_a_row() -> void:
+	assert_eq(SkirmishScreen._saved_game_label({"name": "Dawn Raid"}), "Dawn Raid")
+	assert_false(SkirmishScreen._saved_game_label({}).is_empty())

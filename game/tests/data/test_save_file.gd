@@ -188,3 +188,47 @@ func test_erasing_a_save_takes_its_row_with_it() -> void:
 	assert_false(FileAccess.file_exists(SaveFile.ROOT.path_join(PREFIX + SaveFile.SAVE_SUFFIX)),
 			"the match goes too, not just the row")
 	assert_false(SaveFile.erase(PREFIX), "and erasing what is gone is false, not a crash")
+
+# -- the generated name (12.4, owner's call 2026-09-20: auto-named, no typing) ------------
+
+## THE TICK IS THE PART THAT MAKES IT UNIQUE, and this is the test that says so.
+##
+## `write()` REPLACES a save of the same name, which is right for a name a player typed and
+## is a silent data loss for one nobody did. A name built from the wall clock alone collides
+## for every save made inside the same minute -- press Save, change your mind, press Save
+## again, and the first file is gone. So the tick is in the name, and two DIFFERENT ticks
+## must produce two different names even when the clock has not moved between them.
+func test_two_saves_of_one_match_get_different_names() -> void:
+	var first := SaveFile.auto_name(_world, _cfg)
+	for i in 30:
+		_world.step()
+	var second := SaveFile.auto_name(_world, _cfg)
+	assert_true(first != second,
+			"a later tick is a different save -- '%s' vs '%s'" % [first, second])
+	assert_true(first.contains(str(5)), "the first carries its own tick")
+
+
+## It must survive `slugify` with the tick INTACT: the tick is at the end, so a name long
+## enough to be cut loses exactly the part that makes it unique. Asserted as a relation
+## rather than as a length, so a longer mode name is caught rather than silently truncated.
+func test_the_generated_name_is_short_enough_to_keep_its_tick() -> void:
+	for mode in [MatchConfig.Mode.LAST_MAN_STANDING, MatchConfig.Mode.TROPHY,
+			MatchConfig.Mode.KING_OF_THE_HILL, MatchConfig.Mode.SCENARIO]:
+		_cfg.mode = mode
+		var slug := SaveFile.slugify(SaveFile.auto_name(_world, _cfg))
+		assert_true(slug.length() < SaveFile.MAX_NAME,
+				"%s slugs to %d chars, at the %d limit" % [
+					MatchConfig.mode_name(mode), slug.length(), SaveFile.MAX_NAME])
+		assert_true(slug.ends_with("-5"), "and the tick survives: %s" % slug)
+
+
+## The name says which match it was, so a picker row is readable without opening anything.
+func test_the_generated_name_says_what_the_match_was() -> void:
+	_cfg.mode = MatchConfig.Mode.KING_OF_THE_HILL
+	assert_true(SaveFile.auto_name(_world, _cfg).begins_with("King of the Hill"))
+
+
+## A save made with no world and no config is still NAMEABLE rather than a crash. Reached by
+## nothing today; written because `auto_name` reads two things a caller can hand it null.
+func test_a_nameless_match_still_produces_a_name() -> void:
+	assert_false(SaveFile.auto_name(null, null).is_empty())

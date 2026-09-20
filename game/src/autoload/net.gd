@@ -99,6 +99,24 @@ func is_joined() -> bool:
 ## whatever a screen left behind ten minutes ago.
 var pending_match: MatchConfig = null
 
+## The saved MATCH to resume, beside the config to rebuild it from (12.4). Empty is an
+## ordinary new match, which is every path that existed before saves did.
+##
+## ⚠️ **CONSUMED THE SAME WAY `pending_match` IS, AND FOR A SHARPER REASON.** A config left
+## behind gets you the wrong map; a SAVE left behind resumes somebody's half-finished match
+## in place of the new one they just set up -- on a screen that is showing the new one's
+## settings. `host_solo()` takes a copy and clears this before starting, so the value cannot
+## outlive the one start it was set for.
+var pending_save: Dictionary = {}
+
+## Why the last `host_solo()` refused, when it returned `ERR_INVALID_DATA`. Empty otherwise.
+##
+## An `Error` cannot carry a sentence, and every complaint `SaveGame.apply()` produces IS one
+## -- *"the file is format 3 and this build reads up to 1"* names the fix, where `ERR_INVALID_DATA`
+## names nothing. `GameScene` prints this into the boot error label, which is the one piece of
+## UI in a match that does not fade.
+var start_problems: Array[String] = []
+
 ## What the host says it is SETTING UP, on a joined client, while still in the lobby.
 ##
 ## Separate from `_match_config` on purpose. That one is the settled answer and the
@@ -151,7 +169,18 @@ func host_solo() -> Error:
 	# anybody else, so no other player can be given an order -- not by us (every
 	# command validates ownership) and not by a second client, because there isn't
 	# one. They are scenery until an AI (12.2a) or a second peer drives them.
-	start_match(pending_match if pending_match != null else MatchConfig.debug_skirmish())
+	var save := pending_save
+	pending_save = {}
+	start_problems = start_match(
+			pending_match if pending_match != null else MatchConfig.debug_skirmish(), save)
+	# ⛔ **A SAVE THAT WILL NOT APPLY IS A FAILED HOST, NOT A QUIET ONE** (12.4). `start_match`
+	# has already torn the host back down, so there is no world -- and returning OK here would
+	# hand `GameScene` a session with nothing in it, which is the state its polite refusals
+	# read as *"you are a joined client"*. It would present as a HUD that refuses everything
+	# on a match that never began. The message is in `start_problems`, because an `Error` code
+	# cannot carry "the file is format 3 and this build reads up to 1".
+	if not start_problems.is_empty():
+		return ERR_INVALID_DATA
 	session_started.emit(true)
 	return OK
 
@@ -200,16 +229,41 @@ func _open_server(bind_ip: String, port: int = PORT) -> Error:
 
 ## Stand a world up and start ticking it. Server-side only, and separate from opening
 ## the socket so a lobby can hold the session open while people arrive.
-func start_match(cfg: MatchConfig) -> void:
+##
+## ## ⛔ `save` RESUMES A MATCH INSTEAD OF STARTING A NEW ONE (12.4)
+##
+## A saved match is `cfg` -- which the file carries and `SaveFile.config_of()` reads back --
+## plus the state that mutated since. The config half is REBUILT rather than restored, so this
+## is the ordinary start with one dictionary handed down to `SimHost.build()`; see its header
+## for why the restore happens inside the build and not on the line after this call.
+##
+## Returns the complaints, empty on success. ⚠️ **A FAILED RESUME TEARS THE HOST BACK DOWN**
+## rather than leaving a built-but-broken session standing: `_host` is added as a child before
+## the world exists, so an early return that skipped this would leave `host()` answering a
+## `SimHost` with a null world -- which every polite refusal in `GameScene` reads, and which
+## reads there as *"you are a joined client"*. The failure would present as the HUD quietly
+## refusing everything on a match that never started.
+func start_match(cfg: MatchConfig, save: Dictionary = {}) -> Array[String]:
+	var problems: Array[String] = []
 	if _peer == null or _host != null:
-		return
+		return problems
 	pending_match = null
 	_match_config = cfg
 	_host = SimHost.new()
 	add_child(_host)
 	# BUILT, NOT STARTED (PLAN.md 12.1d). The clock is held until every joined client
 	# has the map and says it is ready; see `_begin_when_ready`.
-	_host.build(cfg, _broadcast_snapshot)
+	problems = _host.build(cfg, _broadcast_snapshot, save)
+	if not problems.is_empty():
+		# DETACHED FIRST, THEN FREED. `queue_free()` is deferred, so a host left in the tree
+		# until the end of the frame is a host `host()` can still be asked for -- and it
+		# answers one whose world is null, which is the state this whole branch exists to
+		# avoid. `remove_child` is immediate and is what makes the next line true.
+		remove_child(_host)
+		_host.queue_free()
+		_host = null
+		_match_config = null
+		return problems
 
 	# Every joined peer gets the config before it gets a snapshot. A client cannot make
 	# sense of a snapshot without it -- it has no map to draw the entities on -- and
@@ -224,6 +278,7 @@ func start_match(cfg: MatchConfig) -> void:
 
 	_ready_waited = 0.0
 	_begin_when_ready()
+	return problems
 
 
 ## The config this match is being played on -- null before one has been settled.

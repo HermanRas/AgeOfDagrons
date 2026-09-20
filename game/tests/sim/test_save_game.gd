@@ -302,3 +302,57 @@ func test_a_save_whose_map_is_a_different_size_is_refused() -> void:
 	var problems := SaveGame.apply(loaded, saved)
 	assert_false(problems.is_empty(), "a map of the wrong size must be refused")
 	assert_true(str(problems[0]).contains("999"), "and the complaint must name what it saw")
+
+# -- the load SEAM: SimHost.build restores, or refuses and leaves nothing (12.4) ----------
+#
+# These are about the one line that turns a format into a feature. `SimHost.build()` is the
+# path a real load takes -- `SimWorld.new()` -> `setup(cfg)` -> `MapGen.build()` ->
+# `SaveGame.apply()` -- and the restore happens INSIDE it because a solo `Net.start_match()`
+# starts the clock before it returns. A caller applying the save on the next line would be
+# overwriting a world that had already stepped.
+
+## The seam does what the round trips above prove the format can do.
+func test_building_a_host_with_a_save_resumes_that_match() -> void:
+	var cfg := _config()
+	var live := SimWorld.new()
+	live.setup(cfg)
+	MapGen.build(live, cfg)
+	for i in WARMUP_TICKS:
+		live.step()
+	var save := SaveGame.capture(live, cfg)
+
+	var host := SimHost.new()
+	var problems := host.build(cfg, Callable(), save)
+	assert_eq(problems, [] as Array[String], "a good save applies cleanly")
+	assert_not_null(host.world)
+	assert_eq(host.world.tick, live.tick, "it resumed where the match was, not at tick 0")
+	assert_eq(host.world.state_hash(), live.state_hash(), "and it is the same match")
+	host.stop()
+
+
+## ⛔ THE REFUSAL, WHICH IS THE HALF THAT PROTECTS THE PLAYER.
+##
+## `SaveGame.apply()`'s contract is that a non-empty complaint means the world is NOT the
+## saved one and must not be played. A half-applied world is the most dangerous thing this
+## seam could hand back -- it has a map, it has entities, it would draw and play, and it is
+## not the match anybody saved. So there must be NO WORLD afterwards, which is what makes the
+## failure impossible to use by accident rather than merely reported.
+func test_a_save_this_build_cannot_read_leaves_no_world_at_all() -> void:
+	var cfg := _config()
+	var host := SimHost.new()
+	var problems := host.build(cfg, Callable(), {"format_version": SaveGame.FORMAT_VERSION + 9})
+	assert_false(problems.is_empty(), "a future format is refused")
+	assert_null(host.world, "and refusing means there is nothing left to play")
+
+
+## An ordinary new match is unaffected -- no save, no complaints, a world as before. The
+## default argument is what every existing caller relies on, so it is asserted rather than
+## assumed.
+func test_building_without_a_save_is_the_ordinary_new_match() -> void:
+	var cfg := _config()
+	var host := SimHost.new()
+	var problems := host.build(cfg, Callable())
+	assert_eq(problems, [] as Array[String])
+	assert_not_null(host.world)
+	assert_eq(host.world.tick, 0)
+	host.stop()

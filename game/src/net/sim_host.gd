@@ -30,15 +30,44 @@ func start(cfg: MatchConfig, on_tick: Callable) -> void:
 ## own view of the map and say they are ready. Snapshots that arrive before a client has
 ## terrain describe a world it cannot draw -- entities on nothing, a camera nowhere --
 ## and every tick spent waiting is a tick of the match the joiner never sees.
-func build(cfg: MatchConfig, on_tick: Callable) -> void:
+##
+## ## ⛔ `save` IS RESTORED HERE AND NOT BY THE CALLER, BECAUSE THE CLOCK IS THE RACE
+##
+## 12.4's load is `SimWorld.new()` -> `setup(cfg)` -> `MapGen.build()` -> `SaveGame.apply()`,
+## which is this function plus one line -- so the saved match is restored INSIDE the build
+## rather than patched in afterwards. That is not tidiness: a solo `Net.start_match()` reaches
+## `_begin_when_ready()` with nobody to wait for and **starts the clock before it returns**, so
+## a caller applying the save on the next line would be overwriting a world that had already
+## stepped. The window is one tick and it is a desync, which is the one failure 12.4 says is
+## worse than having no save at all.
+##
+## ## ⛔ A SAVE THAT DOES NOT APPLY LEAVES NO WORLD, RATHER THAN A HALF-RESTORED ONE
+##
+## `SaveGame.apply()`'s contract: *"a non-empty list means the world is NOT the saved one and
+## the caller must not start a match on it."* A half-applied world is the most dangerous thing
+## this function could return -- it has a map, it has entities, it would draw and play, and it
+## is not the match anybody saved. So the world is dropped and the complaints come back, and
+## the tick handler is never connected: there is nothing to step.
+##
+## Returns the complaints. **Empty for an ordinary new match**, which is every existing caller.
+func build(cfg: MatchConfig, on_tick: Callable, save: Dictionary = {}) -> Array[String]:
 	world = SimWorld.new()
 	world.setup(cfg)
 	# setup() allocates an empty grid; MapGen puts a world in it (2.3/2.4a/2.4b/2.6) --
 	# the config's own map if it carries one, else the fixed debug map. Split so a test
 	# can stand up a bare world without a town centre in the way.
 	MapGen.build(world, cfg)
+
+	var problems: Array[String] = []
+	if not save.is_empty():
+		problems = SaveGame.apply(world, save)
+		if not problems.is_empty():
+			world = null
+			return problems
+
 	_on_tick = on_tick
 	SimClock.tick_advanced.connect(_handle_tick)
+	return problems
 
 
 ## Let it run. Idempotent, because the handshake can reach "everybody is ready" by two
