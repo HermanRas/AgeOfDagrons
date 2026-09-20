@@ -234,3 +234,52 @@ func test_peer_players_is_a_copy_so_a_caller_cannot_rewrite_the_map() -> void:
 	var view := Net.peer_players()
 	view[999] = 7
 	assert_false(Net.peer_players().has(999))
+
+
+# ── how patient a link is (12.1b) ───────────────────────────────────────────
+#
+# ⛔ **WHAT THESE CANNOT DO, SAID PLAINLY.** ENet exposes `set_timeout()` and NO getter, and
+# a link needs two ends that this suite cannot have -- so **nothing here proves the timeout
+# was applied, or that a real blip survives it.** Only two Godot processes can show that
+# (`dev_preview/preview_net_two_process.gd`), and in the end only a phone in a real tunnel.
+#
+# What is left is still worth pinning: the call is reached on both paths, it is safe on the
+# peer ids it will genuinely be handed during a teardown race, and the constants stand in the
+# relation the comment claims. That is the same split as `MountedPacks.plan_mounts` -- test the
+# decision where the act is untestable -- and it is recorded here so the next reader does not
+# mistake a green suite for evidence that reconnection works.
+
+func test_making_a_link_patient_is_safe_when_there_is_no_session() -> void:
+	# Runs during teardown races and in every offline test double. A crash here would take
+	# out the lobby, not the network.
+	Net._set_link_timeout(1)
+	assert_false(Net.is_server(), "no session, and still standing")
+
+
+func test_making_a_link_patient_is_safe_for_a_peer_that_is_already_gone() -> void:
+	# THE CASE THAT ACTUALLY HAPPENS: `_on_peer_connected` sets this, and a peer can drop
+	# between ENet reporting the arrival and the handler running. `get_peer()` returns null
+	# there, which is a state to survive rather than an error.
+	Net.host_open()
+	Net._set_link_timeout(4242)
+	assert_true(Net.is_server(), "an unknown peer id is a no-op, not a fault")
+
+
+func test_a_link_is_given_longer_than_the_blip_that_prompted_it() -> void:
+	# The owner's report was "a short few sec" of lost ping. ENet's own floor is about 5 s,
+	# which is what made an ordinary blip fatal, so anything at or under that changes nothing.
+	assert_true(Net.LINK_TIMEOUT_MIN_MS > 5000,
+			"below ENet's own floor this constant would do nothing at all")
+	assert_true(Net.LINK_TIMEOUT_MAX_MS >= Net.LINK_TIMEOUT_MIN_MS,
+			"the ceiling cannot sit under the floor")
+	assert_true(Net.LINK_TIMEOUT_LIMIT > 0)
+
+
+func test_a_departed_player_is_noticed_before_the_match_could_reasonably_end() -> void:
+	# ⚠️ THE NUMBER A PLAYTEST ACTUALLY JUDGES IS THE SUM. Patience runs BEFORE the grace
+	# fuse rather than instead of it, so a player who has genuinely gone leaves an undefended
+	# town for link-timeout PLUS grace. Neither constant means anything read on its own, and
+	# this is the assertion that will fail if somebody raises one without looking at the other.
+	var worst := float(Net.LINK_TIMEOUT_MAX_MS) / 1000.0 + Net.DISCONNECT_GRACE
+	assert_true(worst <= 45.0,
+			"a town that cannot fight back for %.0f s is a lost fight, not a held seat" % worst)

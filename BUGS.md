@@ -18,6 +18,47 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### ⚠️ TESTING A DROPPED CONNECTION: WIFI-OFF IS NOT A TUNNEL (2026-09-20)
+
+*Not a bug — a live constraint on how every reconnection finding from here on gets measured.
+It cost one playtest already.*
+
+- [ ] **A DROPPED PLAYER HAS TWO FAILURES BEHIND IT AND THEY REACH THE CODE BY DIFFERENT
+      ROUTES.** They look identical on screen, which is exactly why a test has to choose one
+      on purpose.
+
+      | | What the socket sees | What ENet does |
+      |---|---|---|
+      | **Interface down** — wifi toggled, flight mode, app suspended by Android | the interface is gone; the socket errors at once | reports the drop immediately, **no timeout is involved** |
+      | **Packet loss** — tunnel, lift, access-point handover | socket is valid, packets simply vanish | waits out its timeout (~5 s floor by default) |
+
+      ➡️ **HOW TO PRODUCE REAL PACKET LOSS ON WINDOWS**, admin PowerShell — the interface
+      stays up and Windows discards silently, with no ICMP rejection, so the socket never
+      learns anything is wrong:
+
+      ```powershell
+      New-NetFirewallRule -DisplayName "AOD blackout" -Direction Outbound -Protocol UDP -RemotePort 27015 -Action Block
+      Start-Sleep -Seconds 8
+      Remove-NetFirewallRule -DisplayName "AOD blackout"
+      ```
+
+      `clumsy` (WinDivert) is the other option and gives PARTIAL loss and added latency —
+      closer to a weak signal than to no signal. Walking the phone out of range is the
+      genuine article but uncontrolled: held too long, the phone's wifi gives up and it
+      becomes the top row again.
+
+      ⛔ **THE COST OF NOT KNOWING THIS:** `DISCONNECT_GRACE` was raised 10 → 30 on a feel
+      report and reverted the same day, because the test that judged it toggled wifi. That
+      path never reaches the timeout the constant guards, so both values behaved identically
+      and the owner was asked to feel a difference that could not exist.
+
+      **And the deeper reason it could not exist: nothing on the client dials back in.**
+      `_on_server_disconnected` tears the session down and returns to the menu; no code in
+      `game/src/` attempts a re-dial. The grace period holds a SEAT open on the host — a door
+      onto a corridor with nobody in it. Patience (`Net.LINK_TIMEOUT_*`) now stops a blip
+      becoming a disconnection at all, which is the cheap half; **a dead socket still needs a
+      real re-dial and a rejoin token, which is the rest of card 12.1b.**
+
 ### Playtest, 2026-09-20 — PHONE HOSTING A LAPTOP, three findings
 
 *The first session with **the phone as the HOST**, and it is that inversion that produced two

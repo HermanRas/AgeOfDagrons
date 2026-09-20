@@ -227,6 +227,56 @@ func host_open(port: int = PORT) -> Error:
 	return OK
 
 
+## ⛔ HOW LONG A LINK MAY GO SILENT BEFORE ENet DECLARES THE OTHER END GONE.
+##
+## ## WHY THIS IS SET AT ALL (owner's playtest, 2026-09-20)
+##
+## *"even though ping has only dropped for a short few sec and returned, the client does not
+## reconnect, it disconnects instantly."* A phone in a tunnel, a lift, or a handover between
+## access points loses packets for a few seconds and then has them back. **On the default
+## timeouts that is already enough to kill a match**, and killing it is by far the worst of the
+## available answers: the session is fine, both ends are willing, and the only thing that went
+## wrong was some seconds of silence.
+##
+## ⚠️ **PATIENCE IS THE CHEAP HALF OF RECONNECTING, AND IT IS NOT THE SAME THING.** A link that
+## never drops needs no rejoin token, no identity on the wire and no re-seating: the session was
+## never torn down, so there is nothing to restore. That covers PACKET LOSS. It does **not**
+## cover a socket that genuinely dies -- an interface going down, or Android suspending a
+## backgrounded app -- where the peer is unrecoverable and only a fresh dial can help. **That is
+## still the rest of 12.1b** and this constant must not be read as having closed it.
+##
+## ## THE NUMBERS, AND THE PRICE OF RAISING THEM
+##
+## ENet gives up on a silent peer once BOTH `limit`×RTT has been exceeded and `min` has elapsed,
+## or unconditionally once `max` has. The defaults are roughly 32 / 5 s / 30 s, and it is the
+## 5 s floor that makes an ordinary blip fatal.
+##
+## ⚠️ **PATIENCE IS NOT FREE AND THE COST FALLS ON THE OTHER PLAYER.** Every second here is a
+## second before a player who has ACTUALLY gone is noticed, and on the host that time is spent
+## in front of `DISCONNECT_GRACE` rather than instead of it -- **the two add up.** At 15 s and
+## 10 s a genuinely-departed player's town stands undefended for about 25 s before it concedes.
+## That sum is the number a playtest should judge, not either constant on its own.
+const LINK_TIMEOUT_LIMIT := 32
+const LINK_TIMEOUT_MIN_MS := 15000
+const LINK_TIMEOUT_MAX_MS := 30000
+
+
+## Make one ENet link patient. Safe to call on an id that has gone: `get_peer()` returns null
+## for a peer that is not there, which is the ordinary state during a teardown race.
+##
+## Deliberately one function called from both ends. The host sets it on each arrival and the
+## client on the server, and a link where only ONE side is patient is the worst case of all --
+## the patient end waits politely for a peer that has already written it off and is no longer
+## answering, which reads as a freeze rather than as a disconnection.
+func _set_link_timeout(peer_id: int) -> void:
+	if not _peer is ENetMultiplayerPeer:
+		return                    # offline, or a test double
+	var link := (_peer as ENetMultiplayerPeer).get_peer(peer_id)
+	if link == null:
+		return
+	link.set_timeout(LINK_TIMEOUT_LIMIT, LINK_TIMEOUT_MIN_MS, LINK_TIMEOUT_MAX_MS)
+
+
 ## Dial a host. Returns as soon as the socket is opened, NOT when the session is
 ## usable: `connected_to_server` follows, and after it the server sends this peer its
 ## player id. `is_joined()` is the test for "may I act yet", and `session_started(false)`
@@ -443,6 +493,10 @@ func _recv_match_saved() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if not is_server():
 		return                    # a client does not assign anything
+	# BEFORE the roster checks below, and deliberately before the refusal path: a peer this
+	# host is about to turn away still has to be told so, and the message has to survive the
+	# same few seconds of silence as any other.
+	_set_link_timeout(peer_id)
 	if _peer_players.has(peer_id):
 		return
 	var pid := _next_free_player_id()
@@ -458,29 +512,39 @@ func _on_peer_connected(peer_id: int) -> void:
 	peer_joined.emit(peer_id)
 
 
-## ⛔ HOW LONG A MATCH HOLDS ITS BREATH FOR A PHONE IN A TUNNEL (12.1b, owner 2026-09-20:
-## *"lets start with 10sec"*, then **30 after playing it** -- *"10sec disconnect feels too
-## fast"*). The constant did exactly what it was put here to do: it was felt and it moved.
+## ⛔ HOW LONG THE HOST HOLDS A SEAT FOR A PLAYER WHO CANNOT YET COME BACK (12.1b).
 ##
 ## A dropped player used to concede on the instant. That is right for somebody who has gone for
 ## good and wrong for a phone that lost signal at a traffic light, and the difference is not
-## visible at the moment the socket dies -- which is the whole problem. It is meant to be FELT
-## rather than reasoned about: too short and a lift kills your match, too long and the survivors
-## stand around a base that will never fight back.
+## visible at the moment the socket dies -- which is the whole problem.
 ##
-## ## ⚠️ IT COSTS NOTHING IN CORRECTNESS, WHICH IS WHY 30 IS AS CHEAP AS 10
+## ## ⚠️ THIS NUMBER CANNOT BE TUNED BY FEEL YET, AND A PLAYTEST PROVED IT
 ##
-## The owner's question on raising it was *"will the desync be too much"*. **There is no desync
-## to be had**: a joined client runs no simulation at all (PLAN.md §12.1 -- `SimHost` is
-## host-only), so it cannot drift from a host whose clock it never shares. This fuse is wall
-## clock on the HOST alone, and the `ResignCommand` it fires is queued like every other command
-## and lands on a tick boundary, so every client still sees the defeat at the same tick no
-## matter how long the fuse was. Raising it does not widen a window; there is no window.
+## It went 10 -> 30 on a feel report and came straight back (owner, 2026-09-20: first *"10sec
+## disconnect feels too fast"*, then, having played 30, *"the disconnect grace period was not
+## the problem we can revert it back to 10"* -- because *"even though ping has only dropped for
+## a short few sec and returned, the client does not reconnect, it disconnects instantly"*).
 ##
-## **The real cost is gameplay, and it is worth stating plainly:** for these seconds the missing
-## player's town does not fight back. Thirty seconds of a free hand on an undefended base is a
-## long time in a fight, and that -- not the network -- is what sets the ceiling on this number.
-const DISCONNECT_GRACE := 30.0
+## ⛳ **THAT IS THE WHOLE STORY OF THIS CONSTANT: IT IS HALF A MECHANISM.** This fuse holds the
+## SEAT open on the host. **Nothing on the client dials back into it** --
+## `_on_server_disconnected` tears the session down and returns to the menu, and no code
+## anywhere attempts a re-dial (the rest of 12.1b; the only other mentions of "reconnect" in
+## `src/` are comments describing this same gap). So the grace is a door held open onto a
+## corridor with nobody in it: **every value of it produces an identical experience**, because
+## the thing it waits for cannot occur. Raising it only lengthens the time the survivors spend
+## fighting a town that does not fight back.
+##
+## **Ten, therefore, and leave it until a client can return.** A number that changes nothing
+## observable cannot be tuned by playing, and asking the owner to feel the difference between
+## two such numbers is asking them to report on a coin flip. It becomes a real feel constant
+## the day the client half lands, and the question is worth putting again then.
+##
+## For the record, since it was asked (*"will the desync be too much"*): **there is no desync to
+## be had at any value.** A joined client runs no simulation at all (PLAN.md §12.1 -- `SimHost`
+## is host-only), so it has no clock to drift from; this fuse is wall clock on the HOST alone,
+## and the `ResignCommand` it fires is queued like every other command and lands on a tick
+## boundary. Every client sees the defeat at the same tick however long the fuse burned.
+const DISCONNECT_GRACE := 10.0
 
 ## player id -> seconds left before the server concedes on their behalf. Server-side only.
 ##
@@ -548,8 +612,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 ## The socket is up. Still no identity: `_assign_player` is what makes this session
 ## usable, and it is on its way.
+##
+## ⏳ **AND IT IS WHERE THE CLIENT MAKES ITS LINK PATIENT.** Not in `join()`, which returns
+## the moment the socket opens -- `get_peer()` has nothing useful to hand back before the
+## connection is established, so setting it there would silently do nothing. Peer 1 is always
+## the server (`MultiplayerPeer.TARGET_PEER_SERVER`), and it is the only link a client has.
 func _on_connected_to_server() -> void:
-	pass
+	_set_link_timeout(1)
 
 
 func _on_connection_failed() -> void:
