@@ -540,13 +540,20 @@ func _on_connected_to_server() -> void:
 
 
 func _on_connection_failed() -> void:
+	parting_note = "Could not reach that host."
 	_teardown()
 	session_ended.emit("connection failed")
 
 
 ## The host went away. Torn down rather than left holding a dead peer, so the next
 ## `join()` or `host_open()` starts from nothing.
+##
+## ⚠️ **IT CARRIES A SENTENCE NOW (owner's playtest, 2026-09-20).** A laptop whose host
+## vanished sat in a match that had stopped existing — no snapshots, no orders, nothing on
+## screen — because the only thing this emitted was a word for code to branch on. The word
+## still does that; the note is what a person reads when they land back on the menu.
 func _on_server_disconnected() -> void:
+	parting_note = "The host left the match."
 	_teardown()
 	session_ended.emit("host left")
 

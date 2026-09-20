@@ -725,14 +725,22 @@ func _unpack(pack: PackDef, archive: String) -> String:
 func _mount(pack: PackDef, archive: String, owned: bool) -> String:
 	var kept_dir := MountedPacks.KEPT_DIR
 	DirAccess.make_dir_recursive_absolute(kept_dir)
-	var kept := kept_dir.path_join("%s%s" % [pack.id, _container_suffix(pack, archive)])
+	# ⛔ **THE VERSION IS IN THE FILENAME, AND A PLAYTEST IS WHY** (owner, 2026-09-20: the art
+	# pack updated on a phone mid-session and every unit, building and tree drew as its
+	# placeholder). This used to be `<id>.<suffix>` -- one name per pack forever -- so
+	# installing v3 over a running v2 **deleted the exact file the engine was mounted from and
+	# renamed different bytes into its place.** The old pack's offset table then indexes into
+	# the new archive and every lookup misses, which is not "the old art until you restart",
+	# it is no art at all.
+	var kept := kept_dir.path_join(MountedPacks.kept_name(
+			pack.id, pack.version, _container_suffix(pack, archive)))
 
-	# EVERY suffix, not just the one about to be written. An upgrade that changes container --
-	# `art_base.pck` replaced by `art_base.zip` -- would otherwise leave the old file behind,
-	# and `MountedPacks.mount_all()` mounts whatever it finds: the previous version of the art
-	# would be mounted at every boot alongside the new one, first-wins, silently.
-	for suffix in MountedPacks.SUFFIXES:
-		_delete_file(kept_dir.path_join("%s%s" % [pack.id, suffix]))
+	# ⛔ **AND NOTHING OLD IS DELETED HERE ANY MORE.** The sweep moved to
+	# `MountedPacks.mount_all()`, which runs at boot with nothing mounted yet -- the one moment
+	# it is safe. Deleting a superseded pack from this function is exactly the bug above: the
+	# file most likely to be sitting under a live mount is the previous version of the pack
+	# being replaced.
+	#
 	# MOVE what is ours, COPY what is not. A caller who handed us a path did not agree to
 	# have that file disappear -- and a sideloaded pack the player still has in their
 	# downloads folder vanishing would look like the install ate it.
@@ -746,15 +754,22 @@ func _mount(pack: PackDef, archive: String, owned: bool) -> String:
 	if moved != OK:
 		return "cannot store the pack (error %d)" % moved
 
-	# ⚠️ REPLACING A PACK THAT IS ALREADY MOUNTED IS A SUCCESS, NOT A REFUSAL. Godot has no
-	# `unload_resource_pack()`, so a second version of the same pack downloaded in one session
-	# cannot take effect until a restart -- the bytes are on disk and `mount_all()` will find
-	# them next boot. Treating it as a failure would leave `PackIndex` un-recorded and the
-	# client re-downloading the pack on every visit to the browser, forever.
+	# ⚠️ RE-INSTALLING THE SAME VERSION IS A SUCCESS, NOT A REFUSAL. Treating it as a failure
+	# would leave `PackIndex` un-recorded and the client re-downloading the pack on every
+	# visit to the browser, forever. Only reachable now for a genuine re-install of the
+	# version already mounted, because a version upgrade writes a different filename.
 	if MountedPacks.is_mounted(kept):
-		push_warning("PackInstaller: '%s' is already mounted; the new version takes effect"
-				% pack.id + " on the next start")
 		return ""
+
+	# ⛔ **AN UPGRADE MOUNTS ALONGSIDE THE OLD VERSION RATHER THAN REPLACING IT**, and that is
+	# the whole of what Godot's missing `unload_resource_pack()` costs. `replace_files = false`
+	# means the FIRST copy of a path wins, so the running v2 keeps serving every path it
+	# already had and v3 supplies only what is new -- which is why the atlas that prompted
+	# this can appear without a restart while nothing already on screen changes underneath the
+	# player. At the next boot `mount_all()` mounts v3 alone and sweeps v2.
+	#
+	# The old behaviour was to delete v2's file and rename v3 over it, which is what broke the
+	# art on a phone: see the filename comment at the top of this function.
 
 	# `replace_files = false` lives in `MountedPacks.mount_one()` now -- ONE call site for the
 	# engine call, shared with the boot-time mount, so the two cannot disagree about whether a

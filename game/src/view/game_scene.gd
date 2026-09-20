@@ -841,13 +841,24 @@ func _on_save_requested() -> void:
 ## joined player through the RPC that call sends, so both devices leave by the same line of
 ## code and cannot drift into leaving differently.
 ##
-## ⚠️ **EVERY OTHER REASON IS IGNORED, AND THAT IS NOT LAZINESS.** `Net.leave()` emits
-## `"left"` and `ResultScreen` calls it immediately BEFORE changing scene itself -- so acting
-## on that here would be a second scene change racing the first. `"host left"` is a
-## disconnection, which 12.1e already answers with a defeat screen that says so. Saving is
-## the only ending this scene is responsible for.
+## ## ⛔ A MATCH THAT HAS STOPPED EXISTING MUST NOT BE LEFT ON SCREEN
+##
+## Three reasons leave by this door, and the second two were added after a playtest found the
+## hole (owner, 2026-09-20: *"on the pc it was ingame, failing to do anything with no user
+## feedback"*). A client whose host disappears has no session, no snapshots and no way to
+## issue an order — every tap is swallowed by a scene that looks like a live match.
+##
+## ⚠️ **THIS COMMENT USED TO SAY `"host left"` WAS COVERED BY 12.1e's DEFEAT SCREEN, AND THAT
+## WAS WRONG WHEN IT WAS WRITTEN.** `_refresh_result` is driven by SNAPSHOTS, and a client
+## whose host is gone receives none — so the screen it named could never appear. A handler
+## that lists the cases it ignores has to be right about them, and being wrong there is worse
+## than saying nothing, because it stops the next reader looking.
+##
+## ⚠️ **`"left"` IS STILL IGNORED AND THAT ONE IS DELIBERATE.** `ResultScreen` calls
+## `Net.leave()` itself and changes scene on the next line, so acting on it here would be a
+## second scene change racing the first.
 func _on_session_ended(reason: String) -> void:
-	if reason != "saved":
+	if reason == "left":
 		return
 	if not is_inside_tree():
 		return

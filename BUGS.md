@@ -18,6 +18,74 @@ preview, the MTU measurements (now PLAN.md §12.1f), and the AI's building-only 
 
 ## Open
 
+### Playtest, 2026-09-20 — PHONE HOSTING A LAPTOP, three findings
+
+*The first session with **the phone as the HOST**, and it is that inversion that produced two
+of the three. Everything before this was hosted on a desktop, so the art pack had never been
+updated on a live device mid-session and no laptop had ever been the one to drop.*
+
+- [ ] ⛔ **THE ART PACK UPDATED ON THE PHONE AND THEN NOTHING RENDERED — every unit, building
+      and tree drew as its placeholder shape.** The owner's note is worth keeping for what it
+      says about the design: *"the result in itself was a great result i was still able to
+      identify the units and continue with testing"* — PLAN.md §3.2's placeholder rule doing
+      exactly its job, a total art failure costing looks rather than the session.
+
+      ⚠️ **THE MECHANISM IS `PackInstaller._mount()` DELETING THE FILE IT IS MOUNTED FROM.**
+      A kept pack is named for its **id**, not its version — `user://packs/base.zip` — so
+      installing v3 over a running v2 deletes that exact path and renames the new archive
+      into it. Godot has no `unload_resource_pack()`, which the code knows and guards for
+      three lines later; what it does not guard is that **the bytes under a live mount are
+      swapped for different bytes while the engine is still reading them by that path.** The
+      old pack's offset table then indexes into the new archive, every lookup misses, and the
+      seam falls back to placeholders — which is worse than the "old art until you restart"
+      the comment predicts.
+
+      ➡️ **ONE-MINUTE DIAGNOSTIC, AND IT DISCRIMINATES:** restart the app. If the art comes
+      back, it is this — the v3 bytes are on disk and `mount_all()` finds them clean at boot.
+      If it does **not** come back, the install itself failed and the fix is elsewhere.
+
+      **The fix is right either way**, because replacing the backing file of a mounted pack is
+      unsound whichever way it fails: keep the version in the filename, never touch a file
+      that `MountedPacks.is_mounted()` reports, and sweep the old ones at boot when nothing is
+      mounted yet.
+
+- [ ] **"While hosting you cannot join a game, currently no user feedback — i was stuck for a
+      min trying to figure out why i could not join."** Set player 2 to Open, and JOIN goes
+      dead with nothing to say why.
+
+      ⚠️ **THE SENTENCE EXISTS AND IS UNREACHABLE.** `_on_join_pressed` answers *"already in a
+      session -- go Back to leave it"*, and `_refresh_lobby` sets
+      `_join_button.disabled = _lobby != Lobby.LOCAL` — so the press never arrives and the
+      reason never prints. **AGENT_GAME_CODER §6's rule, third time it has bitten**: a
+      control's being disabled and the reason for it are two separate facts, and only one of
+      them is on screen.
+
+      ➡️ **AND THE OWNER ASKS FOR THE SERVER BROWSER TO GO WITH IT** — *"i suggest blocking
+      the servers browser button aswell"*. Right, and for a reason beyond consistency:
+      SERVERS lists hosts, and every row in it is one this device cannot dial while it is
+      hosting. A browser you can open and cannot act on is a longer dead end than a dead
+      button.
+
+- [ ] ⛔ **A CLIENT WHOSE HOST VANISHES IS STRANDED IN A DEAD MATCH.** *"I was hosting on
+      mobile and dropped the connection on the laptop... on mobile it fired the disconnect
+      prompt while on the pc it was ingame, failing to do anything with no user feedback."*
+
+      Two halves, and the **phone's half was correct**: the 10 s grace ran out, the concede
+      landed and the result screen said *"Player 2 has disconnected"* — 12.1e and 12.1b
+      working as designed, because nothing on the laptop dials back in yet.
+
+      **The laptop's half is the bug.** `Net._on_server_disconnected` tears the session down
+      and emits `session_ended("host left")`, and `GameScene._on_session_ended` ignores every
+      reason but `"saved"` — so the scene stays up with no session behind it: snapshots stop,
+      commands go nowhere, and nothing says anything.
+
+      ⚠️ **THE COMMENT ON THAT HANDLER CLAIMED THIS CASE WAS COVERED AND IT WAS WRONG WHEN IT
+      WAS WRITTEN** (game-code, 2026-09-20): *"`host left` is a disconnection, which 12.1e
+      already answers with a defeat screen that says so."* 12.1e's defeat screen is driven by
+      **snapshots**, and a client whose host is gone receives none — so `_refresh_result`
+      never runs and the screen it names never appears. The stranding predates the handler;
+      the false comment does not.
+
 ### Playtest, 2026-08-30 — FOUR DEVICES, six findings, all six closed
 
 *The first session on **two Windows machines, an Android handset and an AI** — and it is

@@ -44,6 +44,107 @@ func test_zip_is_listed_before_pck_because_that_is_what_we_publish() -> void:
 	assert_true(MountedPacks.SUFFIXES.has(".pck"))
 
 
+# ── one version per id (owner's playtest, 2026-09-20) ───────────────────────
+
+## ⛔ THE FILENAME CARRIES THE VERSION BECAUSE OVERWRITING A MOUNTED PACK BROKE THE ART.
+##
+## Installing v3 over a running v2 used to delete the exact file the engine was mounted from
+## and rename different bytes into its place; the old offset table then indexed into the new
+## archive and every lookup missed, so a phone that updated mid-session drew every unit,
+## building and tree as its placeholder. These two readers are what keep the two versions
+## apart on disk.
+func test_a_kept_filename_gives_up_its_id_and_its_version() -> void:
+	assert_eq(MountedPacks.pack_id_of("base.v3.zip"), "base")
+	assert_eq(MountedPacks.pack_version_of("base.v3.zip"), 3)
+	assert_eq(MountedPacks.pack_id_of("colours.v12.pck"), "colours")
+	assert_eq(MountedPacks.pack_version_of("colours.v12.pck"), 12)
+
+
+## ⚠️ THE UNVERSIONED FORM IS NOT LEGACY CRUFT — IT IS WHAT IS ON EVERY DEVICE TODAY.
+##
+## Packs installed before 2026-09-20 are `<id>.<suffix>` with no version in the name, and they
+## must keep mounting: art that stopped working because the naming scheme changed underneath a
+## player would be a worse bug than the one that caused the change. Version 0 is what makes
+## them lose cleanly to the first versioned pack that arrives, rather than competing on a
+## string comparison where "base.zip" sorts before "base.v3.zip".
+func test_a_pack_from_before_this_scheme_still_names_itself() -> void:
+	assert_eq(MountedPacks.pack_id_of("base.zip"), "base")
+	assert_eq(MountedPacks.pack_version_of("base.zip"), 0)
+	assert_true(MountedPacks.pack_version_of("base.v3.zip") > MountedPacks.pack_version_of("base.zip"),
+			"a versioned pack must beat an unversioned one")
+
+
+## An id that happens to contain ".v" is not a version, and the digits are what say so.
+## `my.van.zip` is one pack called `my.van`, not `my` at version "an".
+func test_a_dot_v_that_is_not_a_version_is_left_in_the_id() -> void:
+	assert_eq(MountedPacks.pack_id_of("my.van.zip"), "my.van")
+	assert_eq(MountedPacks.pack_version_of("my.van.zip"), 0)
+
+
+## ⛔ THE NEWEST VERSION MOUNTS AND THE REST ARE SWEPT — one pack per id, never two.
+##
+## Mounting both would be worse than either: `replace_files = false` means the FIRST copy of
+## a path wins, so a v2 sorted ahead of v3 would silently serve the old art out of a directory
+## holding the new. That is the failure with no symptom -- the pack updated, the bytes are on
+## disk, and the screen is a version behind with nothing to say so.
+func test_the_newest_version_of_each_pack_wins_and_the_rest_are_swept() -> void:
+	var plan := MountedPacks.plan_mounts(PackedStringArray(
+			["base.v2.zip", "base.v3.zip", "colours.v1.zip"]))
+	assert_eq(plan["mount"], ["base.v3.zip", "colours.v1.zip"])
+	assert_eq(plan["superseded"], ["base.v2.zip"])
+
+
+## ⚠️ THE MIGRATION EVERY EXISTING DEVICE WILL TAKE, and it has to go the right way round.
+##
+## Packs installed before 2026-09-20 are `<id>.<suffix>`. On the first boot after this change
+## there is only that file, so it mounts and nothing is swept -- a player whose art stopped
+## working because the naming scheme moved underneath them would be worse than the bug that
+## caused the change. The NEXT update writes a versioned name beside it, and only then does
+## the unversioned one go.
+func test_an_unversioned_pack_mounts_alone_and_loses_to_the_next_update() -> void:
+	var before := MountedPacks.plan_mounts(PackedStringArray(["base.zip"]))
+	assert_eq(before["mount"], ["base.zip"], "it is all there is, so it mounts")
+	assert_true((before["superseded"] as Array).is_empty(), "and nothing is deleted")
+
+	var after := MountedPacks.plan_mounts(PackedStringArray(["base.zip", "base.v4.zip"]))
+	assert_eq(after["mount"], ["base.v4.zip"], "the versioned pack wins")
+	assert_eq(after["superseded"], ["base.zip"], "and the old naming is swept")
+
+
+## ⚠️ VERSIONS ARE COMPARED AS NUMBERS, NOT AS FILENAMES, and this is the case that tells the
+## two apart: "base.v10.zip" sorts BEFORE "base.v9.zip" as a string. A string comparison here
+## would pin a device to v9 forever, re-deciding it identically on every boot.
+func test_ten_beats_nine_although_the_filename_sorts_the_other_way() -> void:
+	var plan := MountedPacks.plan_mounts(PackedStringArray(["base.v9.zip", "base.v10.zip"]))
+	assert_eq(plan["mount"], ["base.v10.zip"])
+	assert_eq(plan["superseded"], ["base.v9.zip"])
+
+
+## Things that are not packs are not planned for. A `.part` is a download in flight and
+## mounting one would mount a truncated file; sweeping one would delete a resumable download.
+func test_the_plan_ignores_everything_that_is_not_a_pack() -> void:
+	var plan := MountedPacks.plan_mounts(PackedStringArray(
+			["base.v3.zip", "base.part", "base.part.json", "notes.txt"]))
+	assert_eq(plan["mount"], ["base.v3.zip"])
+	assert_true((plan["superseded"] as Array).is_empty())
+
+
+## ⛔ THE WRITER AND THE TWO READERS MUST AGREE, AND THIS IS THE ONLY THING THAT CAN SAY SO.
+##
+## `PackInstaller._mount()` builds the name and `mount_all()` takes it apart, in two files,
+## across a code path **the suite cannot execute** -- mounting is irreversible, so no test may
+## call it. A name that round-trips wrongly would put both versions of a pack under one id, or
+## neither, and the first anybody would know is a device drawing placeholders. Round-tripped
+## over both container suffixes and a version wide enough to have digits in it.
+func test_the_name_this_writes_is_the_name_these_readers_take_apart() -> void:
+	for suffix in MountedPacks.SUFFIXES:
+		for version in [1, 3, 47]:
+			var name := MountedPacks.kept_name("base", int(version), String(suffix))
+			assert_true(MountedPacks._is_pack(name), "%s must count as a pack" % name)
+			assert_eq(MountedPacks.pack_id_of(name), "base", name)
+			assert_eq(MountedPacks.pack_version_of(name), int(version), name)
+
+
 # ── the sweep ───────────────────────────────────────────────────────────────
 
 func test_no_packs_directory_is_silent_and_normal() -> void:

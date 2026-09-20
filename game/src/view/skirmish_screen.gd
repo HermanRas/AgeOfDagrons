@@ -356,6 +356,9 @@ var _start_button: Button
 var _slot_rows: Array[Dictionary] = []      # {role: OptionButton, colour: Button}
 var _join_field: TouchLineEdit
 var _join_button: Button
+## Why JOIN and SERVERS are off, when they are. See `_build_join_column` -- the reason and
+## the disabling are two separate facts and only one of them used to be on screen.
+var _join_note: Label
 var _lobby_status: Label
 var _reroll_button: Button
 var _count_picker: OptionButton
@@ -605,9 +608,16 @@ func _build_nav() -> Control:
 ## touch, so a plain field never takes focus from a finger and never raises a keyboard
 ## at all. That is the bug that blocked this whole screen.
 func _build_join_column() -> Control:
+	# A COLUMN AROUND THE ROW, so the refusal note can sit under the controls it is about.
+	# The row itself is unchanged -- see `_join_note` at the bottom of this function.
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 2)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_child(row)
 
 	# NOT `_label()`, whose 96 px minimum is sized for the settings column. Seven
 	# controls share one row here and every minimum in it is spent twice: the first
@@ -627,7 +637,24 @@ func _build_join_column() -> Control:
 
 	_join_button = _nav_button("JOIN", _on_join_pressed)
 	row.add_child(_join_button)
-	return row
+
+	# ⛔ **WHY JOIN IS OFF, BESIDE JOIN** (owner's playtest, 2026-09-20: *"blocks join button
+	# but user does not know why"* — a minute lost to it). `_on_join_pressed` has answered
+	# *"already in a session"* since the lobby was written, and `_refresh_lobby` disables the
+	# button, so **the press never arrives and the sentence never prints**. §6's rule, and the
+	# third time it has cost something: a control's being disabled and the reason for it are
+	# two separate facts, and only one of them was ever on screen.
+	#
+	# A LABEL RATHER THAN A TOOLTIP: a disabled `Button` does not show one, and this screen is
+	# used with a thumb, where nothing shows one. NOT `_label()`, whose 96 px minimum is sized
+	# for the settings column -- the note spans the footer's width and takes its own line.
+	_join_note = Label.new()
+	_join_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_join_note.add_theme_font_size_override("font_size", 12)
+	_join_note.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
+	_join_note.visible = false
+	column.add_child(_join_note)
+	return column
 
 
 ## The two side doors: somewhere to find a host, and something to read while waiting.
@@ -2594,8 +2621,25 @@ func _refresh_lobby() -> void:
 				else _invitation_terms(cfg)
 		_status.add_theme_color_override("font_color", HudStyle.GOLD)
 
-	_join_field.editable = _lobby == Lobby.LOCAL
-	_join_button.disabled = _lobby != Lobby.LOCAL
+	# ⛔ **THE THREE WAYS IN ARE SWITCHED OFF TOGETHER, AND THEY SAY WHY** (owner's playtest,
+	# 2026-09-20). The field and the button were already off; what was missing is the sentence,
+	# and the browser.
+	#
+	# **SERVERS GOES WITH THEM, AND NOT ONLY FOR CONSISTENCY** (the owner asked for it): that
+	# panel lists hosts on this network and every row in it is one this device cannot dial
+	# while it is in a session of its own. An openable browser whose every row refuses is a
+	# longer dead end than a dead button -- the player gets all the way to picking a host.
+	var busy := _lobby != Lobby.LOCAL
+	_join_field.editable = not busy
+	_join_button.disabled = busy
+	if _browser_button != null:
+		_browser_button.disabled = busy
+	if _join_note != null:
+		_join_note.visible = busy
+		if busy:
+			_join_note.text = ("You are hosting — press BACK to leave and join somebody else."
+					if _lobby == Lobby.HOSTING
+					else "You have joined a match — press BACK to leave it.")
 
 	_refresh_start_button()
 	_refresh_slot_rows()
