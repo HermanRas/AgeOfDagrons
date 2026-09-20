@@ -260,6 +260,15 @@ func test_making_a_link_patient_is_safe_for_a_peer_that_is_already_gone() -> voi
 	# THE CASE THAT ACTUALLY HAPPENS: `_on_peer_connected` sets this, and a peer can drop
 	# between ENet reporting the arrival and the handler running. `get_peer()` returns null
 	# there, which is a state to survive rather than an error.
+	#
+	# ⚠️ **THIS TEST PRINTS AN ENGINE ERROR AND PASSING IS STILL CORRECT.** `get_peer()` on an
+	# id ENet does not hold emits `Condition "!peers.has(p_id)" is true. Returning: nullptr`
+	# from `enet_multiplayer_peer.cpp` before handing back the null this code then checks. It
+	# is not suppressible from GDScript and it is not a failure -- it is the engine narrating
+	# the very lookup this test exists to survive. Left in rather than tested around, because
+	# the alternative is guarding on `get_peers()` membership, and whether peer 1 is in that
+	# list at `_on_connected_to_server` time is exactly the sort of thing that would silently
+	# stop the timeout being applied at all. A stderr line is cheaper than an unset timeout.
 	Net.host_open()
 	Net._set_link_timeout(4242)
 	assert_true(Net.is_server(), "an unknown peer id is a no-op, not a fault")
@@ -273,6 +282,79 @@ func test_a_link_is_given_longer_than_the_blip_that_prompted_it() -> void:
 	assert_true(Net.LINK_TIMEOUT_MAX_MS >= Net.LINK_TIMEOUT_MIN_MS,
 			"the ceiling cannot sit under the floor")
 	assert_true(Net.LINK_TIMEOUT_LIMIT > 0)
+
+
+# ── the host noticing a quiet peer (8.4b / 12.1b) ───────────────────────────
+
+func test_the_host_reports_a_quiet_peer_long_before_enet_gives_up() -> void:
+	# ⛔ THE BUG THIS FIXES, FROM A SIDE-BY-SIDE PLAYTEST: "the host/server is delayed ... the
+	# client was printing no word from host when the host started printing the client is
+	# disconnecting 9s." The host's only signal WAS ENet giving up, which LINK_TIMEOUT_MIN_MS
+	# deliberately delays — so patience made the notice late as a side effect. Noticing and
+	# giving up are different decisions and now have different clocks.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	Net._peer_players[1041] = 2
+	var heard: Array = []
+	Net.peer_quiet.connect(func(pid: int, s: int) -> void: heard.append([pid, s]))
+
+	Net._tick_heartbeats(2.0)
+	assert_eq(heard, [[2, 2]], "named by PLAYER, and reported at two seconds")
+	assert_true(2.0 < float(Net.LINK_TIMEOUT_MIN_MS) / 1000.0,
+			"the whole point: this lands long before the link is declared dead")
+
+
+func test_a_heartbeat_puts_the_silence_back_to_nothing() -> void:
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	Net._peer_players[1041] = 2
+	var heard: Array = []
+	Net.peer_quiet.connect(func(_pid: int, s: int) -> void: heard.append(s))
+
+	Net._tick_heartbeats(3.0)
+	Net._note_peer_alive(1041)
+	Net._tick_heartbeats(1.5)
+	assert_eq(heard, [3, 1], "the count restarts rather than resuming where it left off")
+
+
+func test_a_quiet_peer_is_reported_once_per_whole_second() -> void:
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	Net._peer_players[1041] = 2
+	var heard: Array = []
+	Net.peer_quiet.connect(func(_pid: int, s: int) -> void: heard.append(s))
+
+	for i in range(9):
+		Net._tick_heartbeats(0.34)
+	assert_eq(heard, [1, 2, 3], "three whole seconds crossed in nine frames, not nine reports")
+
+
+func test_a_peer_that_has_gone_stops_being_reported_quiet() -> void:
+	# ⚠️ THE HANDOVER. Once ENet gives up, `_on_peer_disconnected` lights the grace fuse and
+	# the COUNTDOWN takes over the narration. Leaving the silence watch running would print
+	# "No word from Player 2 — 16s" alongside "Player 2 will be disconnected in 9s", two lines
+	# about the same thing disagreeing about what is happening.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	Net._peer_players[1041] = 2
+	Net._tick_heartbeats(2.0)
+
+	Net._on_peer_disconnected(1041)
+	var heard: Array = []
+	Net.peer_quiet.connect(func(_pid: int, s: int) -> void: heard.append(s))
+	Net._tick_heartbeats(5.0)
+	assert_eq(heard, [], "the grace countdown owns the story from here")
+
+
+func test_a_lobby_reports_nobody_quiet() -> void:
+	# No world means no match to be missing from. A lobby counting silence would announce a
+	# countdown about somebody sitting in a chair looking at the map settings.
+	Net.host_open()
+	Net._peer_players[1041] = 2
+	var heard: Array = []
+	Net.peer_quiet.connect(func(_pid: int, s: int) -> void: heard.append(s))
+	Net._tick_heartbeats(30.0)
+	assert_eq(heard, [])
 
 
 # ── saying the silence out loud (8.4b / 12.1b) ──────────────────────────────

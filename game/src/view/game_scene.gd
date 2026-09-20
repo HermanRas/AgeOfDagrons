@@ -275,6 +275,7 @@ func _ready() -> void:
 	# who is cut off. Both connected here, because either can arrive and neither is an error.
 	Net.grace_tick.connect(_on_grace_tick)
 	Net.link_quiet.connect(_on_link_quiet)
+	Net.peer_quiet.connect(_on_peer_quiet)
 
 	# ONLY HOST IF NOBODY HAS ALREADY SET A SESSION UP. Entering this scene used to mean
 	# "host a solo match", which is right when the main menu's PLAY brought us here and
@@ -502,19 +503,25 @@ func _build_hud() -> void:
 				- Vector2.ONE * CORNER_BUTTON_SIZE * 0.5
 		minimap_area.add_child(corner_btn)
 
-	# ⛳ **BELOW THE CONTROL-GROUP STACK, IN THE LEFT COLUMN.** The stack is five
-	# `ControlGroupSlot`s from y = 12 and the tracker/KOTH slot owns the strip beside it, so
-	# this goes under the stack where nothing else is anchored. It grows DOWNWARD, toward the
-	# selection panel that grows UP from the bottom edge -- which is why `MessageLog.MAX_LINES`
-	# is a hard cap rather than a suggestion: the two would otherwise meet in the middle of
-	# the left column, and the panel is the one carrying buttons.
+	# ⛳ **DIRECTLY ABOVE THE MINIMAP, RIGHT-ALIGNED WITH IT** -- the owner drew the block on a
+	# screenshot (2026-09-20: *"just above the map"*), and "the map" there is the MINIMAP, not
+	# the terrain. That also settles the original request's *"a transparrent block above the
+	# map"*, which I had read as the play area and placed in the left column.
 	#
-	# ⚠️ **EYEBALL THIS ON A HANDSET.** It is placed against the layout arithmetic above and
-	# not against a screenshot; if six lines reach the selection panel on a short viewport,
-	# the cap is the thing to lower.
+	# ⚠️ **BOTH ANCHORS AT THE BOTTOM-RIGHT, SO IT IS PINNED TO THE CORNER IT BELONGS TO.**
+	# The minimap sits `_MINIMAP_MARGIN` in from that corner and is `Minimap.AREA_SIZE` square,
+	# so this stacks directly on top of it with one more margin between. Derived from the same
+	# two constants the minimap uses rather than measured off the screenshot: a viewport of a
+	# different shape -- a phone, which is the point -- moves both together.
+	#
+	# Its own height is reserved and it fills from the BOTTOM (`MessageLog.HEIGHT`), so the
+	# block's lower edge never moves whether it is holding one line or six, and it can never
+	# creep down over the minimap.
 	_message_log = MessageLog.new()
-	_message_log.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_message_log.position = Vector2(12.0, 12.0 + ControlGroupSlot.SIZE * 5.0 + 4.0 * 5.0 + 16.0)
+	_message_log.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_message_log.position = Vector2(
+			-MessageLog.WIDTH - _MINIMAP_MARGIN,
+			-Minimap.AREA_SIZE - _MINIMAP_MARGIN * 2.0 - MessageLog.HEIGHT)
 	hud.add_child(_message_log)
 
 	_toast = NoticeToast.new()
@@ -908,7 +915,12 @@ func _on_grace_tick(player_id: int, seconds_left: int) -> void:
 		return
 	if player_id == Net.local_player_id():
 		return
-	_message_log.say("", "Player %d is losing connection — %ds" % [player_id, seconds_left],
+	# ⚠️ **IT NAMES THE CONSEQUENCE, NOT THE SYMPTOM** (owner, 2026-09-20). *"is losing
+	# connection"* described what was happening to the link and left the reader to work out
+	# what it meant for the match; this says what is about to happen to the PLAYER, which is
+	# the only part the survivor can act on -- and the number now has an unambiguous referent
+	# instead of trailing a symptom.
+	_message_log.say("", "Player %d will be disconnected in %ds" % [player_id, seconds_left],
 			MessageLog.SYSTEM_COLOUR)
 
 
@@ -923,6 +935,24 @@ func _on_link_quiet(seconds: int) -> void:
 	if _message_log == null:
 		return
 	_message_log.say("", "No word from the host — %ds" % seconds, MessageLog.SYSTEM_COLOUR)
+
+
+## The host has heard nothing from a player for `seconds`.
+##
+## ⚠️ **THE MIRROR OF `_on_link_quiet`, AND WORDED THE SAME WAY ON PURPOSE.** The owner ran the
+## two screens side by side, so the wording is read comparatively whether or not anyone intends
+## it to be: *"No word from the host — 3s"* on one and *"No word from Player 2 — 3s"* on the
+## other should be recognisable as the same observation seen from opposite ends.
+##
+## ⛳ **AND IT IS A DIFFERENT SENTENCE FROM `_on_grace_tick`'S, BECAUSE THE NUMBER MEANS THE
+## OPPOSITE THING.** This one counts UP -- how long the silence has lasted, with nothing yet
+## decided. The countdown counts DOWN to a concede that is now certain unless they return. The
+## same words on both would be a number that silently reverses meaning partway through.
+func _on_peer_quiet(player_id: int, seconds: int) -> void:
+	if _message_log == null:
+		return
+	_message_log.say("", "No word from Player %d — %ds" % [player_id, seconds],
+			MessageLog.SYSTEM_COLOUR)
 
 
 func _on_chat_pressed() -> void:
@@ -1048,6 +1078,14 @@ func _start_match() -> void:
 	if cfg != null:
 		_briefing.show_message(cfg.scenario_message)
 		_setup_objectives(cfg)
+	# ⛳ **ONE LINE SO THE PANEL PROVES IT IS THERE** (owner, 2026-09-20: *"i tested it again,
+	# no messages"*). A log that is invisible while empty is correct and is also
+	# indistinguishable from a log that is broken — the same trap as a disabled control with
+	# no reason beside it, which has now cost this project three times. This is the widget's
+	# own "I rendered, I am in the right place, and I will speak when something happens", and
+	# it costs five seconds of screen before the drain takes it.
+	if _message_log != null:
+		_message_log.say("", "Match started.", MessageLog.SYSTEM_COLOUR)
 	if cfg != null and cfg.map_data != null:
 		var md := cfg.map_data
 		# The client's own copy of the GROUND, for the placement ghost. Terrain only --

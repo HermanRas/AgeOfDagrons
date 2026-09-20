@@ -37,6 +37,12 @@ signal grace_tick(player_id: int, seconds_left: int)
 ## locally. Emitted on clients only.
 signal link_quiet(seconds: int)
 
+## The host has heard nothing from this player for this many whole seconds. The mirror of
+## `link_quiet`, and it exists because the two directions are NOT symmetric on their own -- see
+## `HEARTBEAT_EVERY`. Emitted on the host only, and well before `grace_tick`, which cannot
+## start until ENet has actually given up on the link.
+signal peer_quiet(player_id: int, seconds: int)
+
 ## The match config has arrived and a world can be built from it (PLAN.md 12.1b).
 ##
 ## Emitted on the CLIENT, where it is the first moment the scene knows what map it is
@@ -580,6 +586,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# Read BEFORE the erase below, because that is what knows which player this was.
 	var pid := int(_peer_players[peer_id])
 	_peer_players.erase(peer_id)
+	# The silence watch hands over to the grace fuse here. Leaving these behind would have the
+	# host reporting "no word from Player 2" alongside the countdown that replaced it.
+	_peer_silence.erase(peer_id)
+	_peer_quiet_announced.erase(peer_id)
 	# Same rule one stage earlier: a peer that has left the LOBBY is not one still owed a
 	# ready, and leaving their flag behind would let a departed player's stale "yes" count
 	# toward a start -- or their stale "no" block one forever.
@@ -737,6 +747,7 @@ func _begin_when_ready() -> void:
 func _process(delta: float) -> void:
 	_tick_concedes(delta)
 	_tick_link_quiet(delta)
+	_tick_heartbeats(delta)
 	# Only ever busy in the seconds between "match built" and "everyone ready".
 	if _host == null or _host.is_running() or _awaiting_ready.is_empty():
 		return
@@ -973,6 +984,11 @@ func _teardown() -> void:
 	# since the last one's final snapshot.
 	_since_snapshot = 0.0
 	_quiet_announced = 0
+	# Both directions. A stale entry here would have the next match report a peer quiet using
+	# the silence of a peer from the last one.
+	_peer_silence.clear()
+	_peer_quiet_announced.clear()
+	_heartbeat_due = 0.0
 	_awaiting_ready.clear()
 	_ready_waited = 0.0
 	# THE SEATS GO WITH THE SESSION. A reservation made for a resumed match would otherwise
@@ -1005,6 +1021,10 @@ func _recv_command(d: Dictionary) -> void:
 	var pid: int = _local_player_id if sender == 0 else _peer_players.get(sender, 0)
 	if pid == 0:
 		return                                 # unknown sender -- reject, never trust a claimed id
+	# A COMMAND IS PROOF OF LIFE TOO, not just a heartbeat. Without this a player who is busy
+	# issuing orders could still be reported quiet on the strength of a few dropped heartbeats
+	# -- unreliable packets, by design -- while their commands were arriving the whole time.
+	_note_peer_alive(sender)
 	var cmd := Command.from_dict(d)
 	if cmd == null:
 		return
@@ -1039,6 +1059,90 @@ const _STATS_EVERY := 300
 var _snapshots_seen := 0
 var _snapshots_missed := 0
 var _last_snapshot_tick := -1
+
+
+## ⛔ HOW OFTEN A CLIENT SAYS "STILL HERE", AND WHY IT HAS TO SAY ANYTHING AT ALL.
+##
+## Owner's side-by-side test, 2026-09-20: *"the host/server is delayed ... the client was
+## printing no word from host when the host started printing the client is disconnecting 9s."*
+## Both ends were right and the host was fifteen seconds late.
+##
+## **THE TWO DIRECTIONS ARE NOT SYMMETRIC AND NOTHING MADE THEM SO.** A client has a constant
+## stream to miss -- `SimHost` sends it a snapshot every tick -- so it can tell within a second
+## that the host has stopped reaching it. **The host has no such stream coming back.** A client
+## sends a command when the player gives an order and otherwise says nothing at all, so for a
+## quiet player there is nothing whose absence means anything. The host's only signal was ENet
+## giving up, which `LINK_TIMEOUT_MIN_MS` deliberately delays to fifteen seconds -- so making
+## the link patient made the host's *notice* fifteen seconds late as a side effect.
+##
+## ⚠️ **NOTICING AND GIVING UP ARE DIFFERENT DECISIONS AND WANT DIFFERENT CLOCKS.** That is the
+## whole lesson of this round. Patience belongs on GIVING UP, because tearing a session down is
+## unrecoverable and a blip should never cause it. Noticing should be fast, because it costs
+## nothing to be wrong: a player who turns out to be fine has had a line of text on somebody's
+## screen for a second. Conflating them is what put the delay here.
+##
+## Cheaper than it looks: one empty unreliable RPC twice a second, against a snapshot stream
+## running at the tick rate in the other direction.
+const HEARTBEAT_EVERY := 0.5
+
+## peer id -> seconds since anything at all arrived from it. Server-side.
+var _peer_silence: Dictionary = {}
+## peer id -> the last whole second announced for it, so a held peer is reported once a second.
+var _peer_quiet_announced: Dictionary = {}
+var _heartbeat_due := 0.0
+
+
+## A client telling the host it is still on the other end of the link.
+##
+## Empty on purpose -- **the arrival IS the message**, and there is nothing a client could put
+## in it that the host would be entitled to believe. Unreliable for the same reason the grace
+## countdown is: a heartbeat that had to be retransmitted would be reporting on a moment that
+## has passed, and the next one is 500 ms behind it.
+@rpc("any_peer", "unreliable")
+func _recv_heartbeat() -> void:
+	if not is_server():
+		return
+	_note_peer_alive(get_tree().get_multiplayer().get_remote_sender_id())
+
+
+## Anything at all arriving from a peer proves it is there. Called from the heartbeat and from
+## every command, so a busy player is never reported quiet on the strength of a dropped
+## heartbeat alone.
+func _note_peer_alive(peer_id: int) -> void:
+	if peer_id <= 0:
+		return
+	_peer_silence[peer_id] = 0.0
+	_peer_quiet_announced.erase(peer_id)
+
+
+## The host watching for a peer that has gone quiet, and the client sending the heartbeat that
+## makes that possible. Both halves here because they are one mechanism.
+func _tick_heartbeats(delta: float) -> void:
+	if is_server():
+		if _host == null or _host.world == null:
+			return                # only inside a running match; a lobby has nothing to report
+		for peer in _peer_players:
+			var pid := int(peer)
+			if pid == 1:
+				continue          # the host is not a peer of itself
+			var quiet := float(_peer_silence.get(pid, 0.0)) + delta
+			_peer_silence[pid] = quiet
+			if quiet < QUIET_AFTER:
+				continue
+			var whole := int(floor(quiet))
+			if int(_peer_quiet_announced.get(pid, 0)) == whole:
+				continue
+			_peer_quiet_announced[pid] = whole
+			peer_quiet.emit(int(_peer_players[pid]), whole)
+		return
+
+	if not is_joined():
+		return
+	_heartbeat_due -= delta
+	if _heartbeat_due > 0.0:
+		return
+	_heartbeat_due = HEARTBEAT_EVERY
+	rpc_id(1, "_recv_heartbeat")
 
 
 ## Seconds since a snapshot last arrived, and the last whole second announced.

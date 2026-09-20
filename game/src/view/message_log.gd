@@ -56,7 +56,18 @@ const EVICT_SECONDS := 5.0
 const MAX_LINES := 6
 
 ## Wide enough for a sentence, narrow enough to leave the map readable. Lines wrap inside it.
-const WIDTH := 420.0
+##
+## Sized to the block the owner drew on a screenshot (2026-09-20) rather than chosen: it spans
+## from a little wider than the minimap frame out to the right margin.
+const WIDTH := 560.0
+
+## ⛔ **A FIXED HEIGHT, AND THE LINES STACK UPWARD INSIDE IT.** The owner placed this directly
+## ABOVE THE MINIMAP, so its BOTTOM edge is the one that must not move -- a box that grew
+## downward from a fixed top would creep over the minimap as a conversation got longer, and one
+## that grew upward from a fixed bottom without a reserved height would shove whatever sat above
+## it. Reserving `MAX_LINES` worth of room and filling it from the bottom means the block never
+## moves and never overruns, whether it holds one line or six.
+const HEIGHT := 26.0 * MAX_LINES
 
 const _FONT_SIZE := 14
 
@@ -77,16 +88,19 @@ var _since_evict := 0.0
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(WIDTH, 0.0)
+	custom_minimum_size = Vector2(WIDTH, HEIGHT)
+	size = Vector2(WIDTH, HEIGHT)
 
 	_box = VBoxContainer.new()
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_box.add_theme_constant_override("separation", 2)
-	_box.custom_minimum_size = Vector2(WIDTH, 0.0)
-	# GROW DOWNWARD FROM THE TOP so the widget's own anchor is the first line's position.
-	# The owner asked for new lines at the BOTTOM, which is what append order gives; the box
-	# itself still starts where it is put.
-	_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# ⛔ **FILLED FROM THE BOTTOM.** `ALIGNMENT_END` is what makes the newest line sit on the
+	# block's bottom edge with older ones rising above it, rather than the first line sitting
+	# at the top and the block growing down into the minimap. Append order still puts the
+	# newest last, which is what the owner asked for -- this decides which END of the reserved
+	# space that "last" is pinned to.
+	_box.alignment = BoxContainer.ALIGNMENT_END
+	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_box)
 
 

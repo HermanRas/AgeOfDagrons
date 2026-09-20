@@ -34,13 +34,32 @@ It cost one playtest already.*
 
       ➡️ **HOW TO PRODUCE REAL PACKET LOSS ON WINDOWS**, admin PowerShell — the interface
       stays up and Windows discards silently, with no ICMP rejection, so the socket never
-      learns anything is wrong:
+      learns anything is wrong. **Block the PEER BY IP, both directions**, and substitute the
+      other device's address:
 
       ```powershell
-      New-NetFirewallRule -DisplayName "AOD blackout" -Direction Outbound -Protocol UDP -RemotePort 27015 -Action Block
+      $peer = "192.168.0.11"     # the OTHER device
+      New-NetFirewallRule -DisplayName "AOD out" -Direction Outbound -RemoteAddress $peer -Action Block
+      New-NetFirewallRule -DisplayName "AOD in"  -Direction Inbound  -RemoteAddress $peer -Action Block
+      ping -n 2 $peer            # MUST fail. If it replies, the block is not real.
       Start-Sleep -Seconds 8
-      Remove-NetFirewallRule -DisplayName "AOD blackout"
+      Remove-NetFirewallRule -DisplayName "AOD out","AOD in"
+      ping -n 2 $peer            # must succeed again
       ```
+
+      ⛔ **THE `ping` LINES ARE THE POINT, AND LEAVING THEM OUT ALREADY WASTED A PLAYTEST.**
+      The first version of this recipe used `-Protocol UDP -RemotePort 27015 -Direction
+      Outbound` and did nothing at all: `-RemotePort` matches traffic going **to** that port,
+      which is the **host's** port — so the rule bites only when run on the **client**, and on
+      the host its outbound packets go to the client's *ephemeral* port and match nothing.
+      Outbound-only is half a blackout even where it does match, since the blocked side keeps
+      receiving. The owner ran it, played on through it and reported *"the firewall does
+      nothing"*.
+
+      **A null result from an unverified blocker is unreadable** — it cannot be distinguished
+      from a blocker that never engaged. Never conclude anything from a blackout you have not
+      watched fail a ping. (Windows Firewall being *off* is the other way this returns a
+      silent nothing: check with `Get-NetFirewallProfile | Select-Object Name, Enabled`.)
 
       `clumsy` (WinDivert) is the other option and gives PARTIAL loss and added latency —
       closer to a weak signal than to no signal. Walking the phone out of range is the
