@@ -54,3 +54,77 @@ func test_submit_command_reaches_the_world_and_a_snapshot_comes_back() -> void:
 			var pos: Vector2i = entry.get("pos", Vector2i.ZERO)
 			assert_eq(pos.x, 10 * SimWorld.SUBTILE + SimWorld.SUBTILE / 2)
 	assert_true(found, "the moved unit must appear in its own snapshot")
+
+
+# -- saving ends the session, for everybody (12.4) -----------------------------------------
+
+## ⛔ A SAVED MATCH IS OVER HERE TOO, NOT JUST ON THE OTHER DEVICES.
+##
+## The host is the one that pressed the button, and the failure this guards is the quiet one:
+## a host that broadcast the ending and kept its own world would carry on ticking a match
+## every other player had already left, writing snapshots to nobody.
+func test_saving_ends_the_host_session_and_leaves_a_note() -> void:
+	Net.host_solo()
+	var reasons: Array[String] = []
+	Net.session_ended.connect(func(r: String) -> void: reasons.append(r))
+
+	Net.end_match_saved("Saved: Skirmish, 20 Sep 08:14 (tick 120)")
+
+	assert_eq(reasons, ["saved"], "and the reason is not 'left' -- nobody walked out")
+	assert_false(Net.has_session(), "the socket goes with the match")
+	assert_null(Net.host(), "and so does the world")
+	assert_eq(Net.take_parting_note(), "Saved: Skirmish, 20 Sep 08:14 (tick 120)")
+
+
+## ⚠️ READ ONCE. A note left behind would reappear on the main menu after an unrelated match
+## three screens later, attached to nothing that happened.
+func test_the_parting_note_is_taken_rather_than_merely_read() -> void:
+	Net.parting_note = "something happened"
+	assert_eq(Net.take_parting_note(), "something happened")
+	assert_eq(Net.take_parting_note(), "", "the second reader gets nothing")
+
+
+## Only the authority may end everybody's match. A client calling this would tear down its own
+## session while the host carried on -- which is `leave()`, wearing the wrong reason.
+func test_only_the_server_can_end_a_saved_match() -> void:
+	Net.parting_note = ""
+	Net.end_match_saved("no session at all")
+	assert_eq(Net.parting_note, "", "nothing to end, so nothing said")
+
+
+# -- which seat a joiner gets (12.4 item 3 / 12.1b) -----------------------------------------
+
+## The behaviour every path had before saves existed: the lowest id nobody holds.
+func test_without_a_reservation_the_lowest_free_seat_is_handed_out() -> void:
+	Net.host_solo()
+	assert_eq(Net._next_free_player_id(), 2, "the host holds 1")
+
+
+## ⛔ THE FILE NAMES THE SEAT, AND JOIN ORDER DOES NOT GET A VOTE.
+##
+## The friend who was player 3 has to come back as player 3. Without this they are handed 2 --
+## perfectly legal, no error anywhere, and they resume in somebody else's town. It is also how
+## a peer is kept out of a bot's seat: a roster of [1, 3] is a saved match whose player 2 was
+## an AI, and 2 is never offered.
+func test_a_reservation_decides_which_seat_the_next_joiner_takes() -> void:
+	Net.reserve_seats([1, 3])
+	Net.host_solo()
+	assert_eq(Net._next_free_player_id(), 3, "2 belongs to the AI in this save")
+
+
+## A full roster refuses the next arrival rather than seating them somewhere. `_on_peer_connected`
+## disconnects on 0, which is the existing "session is full" path -- so an extra friend is turned
+## away instead of given a town the file says is somebody else's.
+func test_a_full_roster_has_no_seat_left_to_give() -> void:
+	Net.reserve_seats([1])
+	Net.host_solo()
+	assert_eq(Net._next_free_player_id(), 0)
+
+
+## The seats go with the session. A reservation still standing would cap the NEXT ordinary
+## lobby at whatever the old save's roster was and refuse everybody past it.
+func test_leaving_clears_the_reservation() -> void:
+	Net.reserve_seats([1, 2, 3])
+	Net.host_solo()
+	Net.leave()
+	assert_true(Net.reserved_seats().is_empty())

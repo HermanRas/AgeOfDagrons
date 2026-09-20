@@ -46,6 +46,10 @@ func after_each() -> void:
 	# Reset too, or a test that pretends to be player 2 leaves every later test thinking
 	# slot 2 belongs to it -- which is what "(you)" is read from.
 	Net._local_player_id = 0
+	# And the seats (12.4 item 3). A reservation left standing would cap the NEXT test's lobby
+	# at whatever roster the last faked save had, and refuse every player past it -- which
+	# presents as an unrelated test failing on a peer that could not be seated.
+	Net.reserve_seats([])
 	screen.free()
 
 
@@ -1480,3 +1484,86 @@ func test_the_saved_ranges_do_not_overlap() -> void:
 func test_a_save_with_no_name_still_gets_a_row() -> void:
 	assert_eq(SkirmishScreen._saved_game_label({"name": "Dawn Raid"}), "Dawn Raid")
 	assert_false(SkirmishScreen._saved_game_label({}).is_empty())
+
+# -- resuming a match WITH THE PEOPLE WHO WERE IN IT (12.4 item 3 / 12.1b) -----------------
+
+## Stand the screen on a chosen save without one on disk.
+##
+## The file half is `test_save_file`'s and the picker half is above; what these tests are
+## about is the ROSTER -- who the save says was playing -- so the config is written directly
+## rather than round-tripped through `user://saves/`. `_saved_game_slug` is what makes
+## `can_start()` and `_refresh_status()` take the saved branch at all.
+func _fake_saved_pick(ai_flags: Array[bool]) -> void:
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.player_ids = []
+	cfg.colours = []
+	cfg.ai_players = []
+	cfg.ai_levels = []
+	cfg.teams = []
+	for i in ai_flags.size():
+		cfg.player_ids.append(i + 1)
+		cfg.colours.append(i)
+		cfg.ai_players.append(ai_flags[i])
+		cfg.ai_levels.append(int(SimPlayer.AILevel.EASY))
+		cfg.teams.append(i + 1)
+	screen._saved_game_slug = "a-saved-match"
+	screen._saved_game = {"format_version": SaveGame.FORMAT_VERSION}
+	screen._saved_game_cfg = cfg
+	screen._saved_game_error = ""
+	screen._sync_seat_reservation()
+
+
+## ⛔ THE SEATS COME OUT OF THE FILE, AND THE BOTS' ARE NOT OFFERED.
+##
+## `Net` hands a joining peer the lowest free id, which for a resumed match is the wrong
+## question entirely -- and 2 here belongs to an AI. A peer given it would be issuing orders
+## for a player `AISystem` is also driving, which nothing refuses because both are legitimate.
+func test_a_resumed_match_reserves_only_the_seats_people_were_in() -> void:
+	_fake_saved_pick([false, true, false])
+	assert_eq(Net.reserved_seats(), [1, 3], "player 2 was a bot in this save")
+
+
+## Picking anything else gives the seats back. Without this the reservation outlives the pick
+## and caps an ordinary lobby at the old save's roster.
+func test_picking_another_map_gives_the_seats_back() -> void:
+	_fake_saved_pick([false, false])
+	assert_false(Net.reserved_seats().is_empty())
+	screen._saved_game_slug = ""
+	screen._saved_game_cfg = null
+	screen.regenerate()
+	assert_true(Net.reserved_seats().is_empty())
+
+
+## ⛔ A RESUMED MATCH WAITS FOR ITS OWN ROSTER.
+##
+## This is what replaced *"a saved match can only be resumed on your own"*. Starting a
+## two-human save with one human present would not fail anywhere: the absent player's town
+## simply stands there taking no orders, and the match is a different match wearing the same
+## name. Refused, and the status line says how many are missing rather than greying out.
+func test_a_two_player_save_will_not_start_with_one_player_here() -> void:
+	_fake_saved_pick([false, false])
+	screen._refresh_status()
+	assert_false(screen.can_start(), "one of the two humans is not here")
+	assert_true(screen.status_text().contains("of 2"),
+			"it says who is missing: %s" % screen.status_text())
+
+
+## The half that already worked, kept working. A save with one human in it is the solo resume
+## the owner playtested on 2026-09-20, and the host is that human.
+func test_a_solo_save_still_starts_on_its_own() -> void:
+	_fake_saved_pick([false, true])
+	screen._refresh_status()
+	assert_true(screen.can_start(), "refused: %s" % screen.status_text())
+	assert_true(screen.status_text().begins_with("Resuming:"))
+
+
+## ⛔ THE HOST IS ALWAYS PLAYER 1, SO A SAVE WHOSE PLAYER 1 WAS A BOT HAS NO SEAT FOR THEM.
+##
+## `Net._open_server()` names this device player 1 and nothing can change that. Started
+## anyway, the person sitting here would host a match in which their own id belongs to the
+## AI -- a game that plays itself while their orders go nowhere, with no error anywhere.
+func test_a_save_whose_first_player_was_a_bot_has_no_seat_for_the_host() -> void:
+	_fake_saved_pick([true, false])
+	screen._refresh_status()
+	assert_false(screen.can_start())
+	assert_true(screen.status_text().contains("AI"), screen.status_text())

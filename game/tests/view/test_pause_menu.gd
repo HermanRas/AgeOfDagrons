@@ -62,14 +62,30 @@ func test_the_button_count_matches_the_buttons_actually_built() -> void:
 	assert_eq(PauseMenu._BUTTONS, 4, "resume, save, resign, quit")
 
 
-## Pressing SAVE GAME reports it rather than doing the work: this panel owns no world.
+## Pressing SAVE & EXIT reports it rather than doing the work: this panel owns no world.
+##
+## ⚠️ **THE MENU STAYS UP EVEN THOUGH SAVING NOW LEAVES**, and that is the assertion worth
+## having. The leaving is `GameScene`'s and happens only on a SUCCESSFUL write -- so a panel
+## that closed itself here would strand a failed save with nothing on screen and no clock
+## running. The stopped clock also means the world cannot step between the press and
+## `SaveGame.capture()` reading it.
 func test_save_reports_the_press_and_leaves_the_menu_open() -> void:
 	var presses: Array[int] = []
 	menu.save_requested.connect(func() -> void: presses.append(1))
 	menu.open()
 	menu._on_save_pressed()
 	assert_eq(presses.size(), 1)
-	assert_true(menu.visible, "saving is not leaving -- the menu stays up")
+	assert_true(menu.visible, "a failed save has to land back here")
+
+
+## ⛔ THE WORD ON THE BUTTON IS THE HALF PLAYERS ACT ON.
+##
+## Saving ends the match for everybody (owner, 2026-09-20), so a button reading SAVE GAME
+## beside one reading RESUME would promise a bookmark and take the match away. This file's
+## own history is the argument: the resign button wore art saying MAIN MENU for a whole phase
+## after it stopped going there. Pinned here because nothing else can see a label.
+func test_the_save_button_says_that_it_exits() -> void:
+	assert_eq(menu._save_button.text, "SAVE & EXIT")
 
 
 ## ⛔ NO WORLD MEANS THE BUTTON IS OFF **AND** SAYS WHY.

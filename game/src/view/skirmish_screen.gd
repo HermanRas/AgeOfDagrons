@@ -1489,6 +1489,11 @@ func regenerate() -> void:
 		_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
 	else:
 		_data = _load_saved_map()
+	# AFTER the three branches and before anything reads the lobby, because picking a map is
+	# also UN-picking whichever of the three was chosen before -- and a reservation left over
+	# from a save the player has just navigated away from would still be capping the next
+	# lobby. See `_sync_seat_reservation`.
+	_sync_seat_reservation()
 	_preview.show_map(_data)
 	_refresh_status()
 	_refresh_start_button()
@@ -1563,6 +1568,75 @@ func _load_saved_game() -> MapData:
 	return cfg.map_data
 
 
+## Which player ids in the chosen save were played by PEOPLE, in the file's own order.
+##
+## The roster of a resumed match, and the only list on this screen that is not this screen's:
+## a save carries who everybody was, and the lobby in front of it carries who the host feels
+## like playing with today. For a resumed match the file wins -- see `can_start()`.
+##
+## Empty for anything that is not a saved match, and empty is what `Net.reserve_seats` reads
+## as "behave as you always did".
+func _saved_human_seats() -> Array[int]:
+	var out: Array[int] = []
+	if _saved_game_cfg == null:
+		return out
+	for i in _saved_game_cfg.player_ids.size():
+		var is_ai := i < _saved_game_cfg.ai_players.size() \
+				and bool(_saved_game_cfg.ai_players[i])
+		if not is_ai:
+			out.append(int(_saved_game_cfg.player_ids[i]))
+	return out
+
+
+## Tell `Net` which seats joining peers may take, or clear the reservation (12.4 item 3).
+##
+## ## ⛔ THE SEAT IS THE FILE'S, NOT THE JOIN ORDER'S
+##
+## Without this a resumed match seats people the way `_next_free_player_id()` always has --
+## lowest free id, in whatever order phones finished connecting. For a lobby being filled for
+## the first time that is fine, because nobody has a claim on a seat yet. For a match being
+## picked back up it is the one thing that must not happen: the friend who was player 3 comes
+## back as player 2 and finds somebody else's town, somebody else's army and somebody else's
+## unfinished barracks, and nothing anywhere reports an error, because every id involved is
+## perfectly legal. It would simply be the wrong match.
+##
+## It also keeps a peer out of a BOT's seat -- see `Net._reserved_seats`.
+##
+## Called from `regenerate()`, which is every path that changes what is picked, so the
+## reservation and the picker cannot disagree.
+func _sync_seat_reservation() -> void:
+	Net.reserve_seats(_saved_human_seats())
+
+
+## Why a resumed match cannot start yet, or empty (12.4 item 3).
+##
+## ## ⛔ THE HOST IS ALWAYS PLAYER 1, WHICH IS A RULE ABOUT WHO MAY RESUME A SAVE
+##
+## `Net._open_server()` names this device player 1 and nothing can change that. So a save
+## whose player 1 was a BOT has no seat for whoever is sitting here -- they would host a match
+## in which their own id belongs to the AI. Refused with a sentence rather than started,
+## because the symptom otherwise is a match that plays itself while your orders do nothing.
+##
+## In practice this is the same person who pressed SAVE & EXIT: the file is on their device.
+##
+## ## ⚠️ THE HOST COUNTS AS PRESENT WHETHER OR NOT A SOCKET IS OPEN
+##
+## `Net.peer_players()` is empty in a LOCAL lobby -- there is no session at all until a slot
+## is set to Open -- so counting it alone would report "0 of 1 players here" for a solo save
+## and refuse the one case that already worked. The host is in the room by definition.
+func _saved_seat_problem() -> String:
+	var seats := _saved_human_seats()
+	if seats.is_empty():
+		return "this save has nobody in it to play as"
+	if not seats.has(1):
+		# The host holds player 1 and player 1 was a bot in the saved match.
+		return "this save has no seat for the host — player 1 was an AI"
+	var here := maxi(Net.peer_players().size(), 1)
+	if here < seats.size():
+		return "%d of %d players here — open a slot for the rest" % [here, seats.size()]
+	return ""
+
+
 ## Grey out the seed controls while a saved map is chosen (16.0).
 ##
 ## **A SEED DESCRIBES A GENERATED MAP AND MEANS NOTHING TO A FILE.** Left live, the box
@@ -1605,11 +1679,13 @@ func _refresh_status() -> void:
 			_status.text = "Unreadable save: %s" % _saved_game_error
 			_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
 			return
-		if Net.peer_players().size() > 1:
-			# THE UNBUILT HALF, NAMED RATHER THAN LEFT AS A DEAD BUTTON (12.4 item 3). A
-			# player who has set up a lobby and then picked a save deserves the reason;
-			# `can_start()` refuses it either way.
-			_status.text = "A saved match can only be resumed on your own — close the other slots"
+		# WHO IS STILL MISSING, NAMED RATHER THAN LEFT AS A DEAD BUTTON (12.4 item 3). This
+		# used to say a saved match could only be resumed on your own, which was the honest
+		# refusal while the handoff was unbuilt; it is now a roll-call against the file's own
+		# roster. `can_start()` refuses on the same sentence either way.
+		var seat_problem := _saved_seat_problem()
+		if not seat_problem.is_empty():
+			_status.text = seat_problem
 			_status.add_theme_color_override("font_color", HealthDot.CRITICAL_COLOR)
 			return
 		_status.text = "Resuming: %s" % _saved_game_label(_saved_game_row())
@@ -1799,13 +1875,19 @@ func can_start() -> bool:
 	if not _saved_game_slug.is_empty():
 		if _saved_game_cfg == null:
 			return false
-		# ⛔ **SOLO ONLY, BECAUSE THE MULTIPLAYER HANDOFF IS NOT BUILT** (12.4 item 3). A
-		# joined peer is sent the `MatchConfig` and then snapshots; it is never sent the
-		# SAVE, so it would rebuild the world from the config alone -- a fresh match, on the
-		# same map, against a host playing a half-finished one. That is a desync on tick 1
-		# dressed as a working feature, and this card's own bar is that a save which loads
-		# and desyncs is worse than no save. Refused here and said out loud in `_status`.
-		return Net.peer_players().size() <= 1
+		# ⛔ **THE FILE'S ROSTER HAS TO BE IN THE ROOM** (12.4 item 3). This was `Net.
+		# peer_players().size() <= 1` -- solo only, while the multiplayer handoff was unbuilt.
+		# What replaces it is not a loosening: a resumed match must seat EVERY human the save
+		# had, in the seats the save gave them, or it is a different match wearing the same
+		# name. `_saved_seat_problem()` is the sentence, and `_status` prints it.
+		if not _saved_seat_problem().is_empty():
+			return false
+		# A JOINED CLIENT NEVER STARTS ONE. Over here START belongs to the host, and a save
+		# on this device is not the save the host is holding -- resuming it would launch a
+		# second, unrelated match while still connected to somebody else's lobby.
+		if _lobby == Lobby.JOINED:
+			return false
+		return Net.all_peers_ready()
 
 	if _data == null or not (_data.meta.get("problems", []) as Array).is_empty():
 		return false
@@ -2248,6 +2330,11 @@ func _on_peer_joined(peer_id: int) -> void:
 	# THE FIRST THING A NEW ARRIVAL IS OWED. Until this call existed, a joining player
 	# learned nothing about the match until it had already started.
 	Net.broadcast_lobby_config(build_config())
+	# THE MAP PANEL'S LINE MOVES WHEN SOMEBODY ARRIVES, for a resumed match (12.4 item 3):
+	# it is a roll-call against the save's roster, so an arrival is exactly what changes it.
+	# `_refresh_lobby` refreshes the START button and not this line, and a lobby that enabled
+	# START while still saying "1 of 3 players here" would be the two disagreeing on screen.
+	_refresh_status()
 	_refresh_lobby()
 
 	_maybe_autostart()
@@ -2267,6 +2354,9 @@ func _on_peer_left(peer_id: int) -> void:
 		if _slot_peers[slot] == peer_id:
 			_slot_peers.erase(slot)
 			break
+	# The roll-call counts DOWN too -- see `_on_peer_joined`. A resumed match whose third
+	# player wandered off has to stop saying it is ready to start.
+	_refresh_status()
 	_refresh_lobby()
 
 
@@ -2317,6 +2407,18 @@ func _on_lobby_config_received() -> void:
 	# clearing this is the whole of what a joined client has to do about the feature.
 	_saved_dir = ""
 	_saved_load_error = ""
+	# ⚠️ **AND THE SAVED MATCH, FOR THE SHARPER VERSION OF THE SAME REASON** (12.4). A client
+	# that had picked one of its OWN saves before joining would otherwise keep pointing at it,
+	# and `_refresh_status` would print *"Resuming: <that file>"* over a screen showing the
+	# host's board, about a match this device is never going to play. `can_start()` refuses a
+	# JOINED client either way; this is what stops the screen lying while it waits.
+	_saved_game_slug = ""
+	_saved_game = {}
+	_saved_game_cfg = null
+	_saved_game_error = ""
+	# The seats go with it. A reservation is the HOST's business, and one held here would be
+	# this device describing a roster nobody asked it about.
+	Net.reserve_seats([])
 
 	# THE SLOT COUNT FIRST, and rebuild the rows to match it, because a host on eight
 	# slots and a client still showing two would leave six of the host's players with no
@@ -2823,13 +2925,31 @@ func _on_start_pressed() -> void:
 	# one would stand up a world the entity list then gets applied on top of -- players with
 	# the wrong colours owning units, or a `players` array too short to hold them.
 	#
-	# It goes down the SOLO path deliberately: `can_start()` has already refused this while
-	# any peer is connected, because the multiplayer handoff is 12.4's unbuilt third item.
+	# ⚠️ **IT TAKES THE SAME TWO ROUTES AN ORDINARY MATCH DOES** (12.4 item 3), where it used
+	# to take only the solo one. Hosting means the world is stood up HERE, with the save handed
+	# to `start_match` -- the clock is held until every joiner reports ready (12.1d), so a
+	# resumed world waits for them exactly as a generated one does. Nothing else about the two
+	# paths differs, which is the point: there is no second way to start a match.
 	if not _saved_game_slug.is_empty():
-		Net.pending_match = _saved_game_cfg
-		Net.pending_save = _saved_game
-		start_requested.emit(_saved_game_cfg)
 		_beacon.stop()
+		if _lobby == Lobby.HOSTING:
+			var problems := Net.start_match(_saved_game_cfg, _saved_game)
+			if not problems.is_empty():
+				# ⚠️ **A REFUSED RESUME STAYS ON THIS SCREEN**, because this screen is the only
+				# place left that can say why. `Net.start_match` has already torn the host back
+				# down, so there is no match to change scene into -- going anyway would land the
+				# player in `GameScene`'s boot-error branch, which is the right home for a
+				# failure discovered after the lobby is gone and the wrong one for a failure
+				# discovered while it is still standing. `_load_saved_game` catches most of
+				# these at pick time; what reaches here is what only `SaveGame.apply` can see.
+				_say("could not resume: %s" % problems[0])
+				_refresh_beacon()
+				_refresh_lobby()
+				return
+		else:
+			Net.pending_match = _saved_game_cfg
+			Net.pending_save = _saved_game
+		start_requested.emit(_saved_game_cfg)
 		get_tree().change_scene_to_file(_GAME_SCENE)
 		return
 

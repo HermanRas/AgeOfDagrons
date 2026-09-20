@@ -39,6 +39,10 @@ const _CAMPAIGN_SCENE := "res://scenes/menu/Campaign.tscn"
 ## The same panel art `PauseMenu` uses, so the two SETTINGS pages match.
 const _PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 
+## Roughly what the short banner holds -- `GameScene._SHORT_ALERT_CHARS`, restated here
+## rather than reached for across scenes, because it is a measurement of the same widget.
+const _SHORT_NOTE_CHARS := 44
+
 ## THE SIX BUTTONS ARE `Button`s WITH TEXT, and were six `TextureButton`s with the word
 ## painted into the art until 2026-08-30. Nine files in `assets/ui/menu/` differed only
 ## in which word was on them, which meant a new menu entry cost a piece of art, a
@@ -94,6 +98,26 @@ func _ready() -> void:
 	# it mid-phrase; leaving for a MATCH is what replaces it, because
 	# `MatchAudio` calls `play_music` with the age's track on its first snapshot.
 	AudioManager.play_music(&"menu.theme")
+
+	# WHY YOU ARE BACK HERE, when something sent you (12.4). A saved match ends for every
+	# player and drops all of them on this screen, and without a word that is indistinguishable
+	# from the game having thrown them out -- especially on the devices that did not press
+	# anything. `Net.take_parting_note()` clears as it reads, so it says its piece once and a
+	# later visit to the front door is silent.
+	#
+	# THIS IS THE TOAST THE COMMENT ABOVE KEPT A NODE FOR. It had no caller from the day HOW
+	# TO became a real screen, and the reason given for keeping it was that the front door
+	# would want to say something in passing again.
+	#
+	# THE LONG BANNER FOR A SENTENCE, THE SHORT ONE FOR A LABEL, on `GameScene`'s measurement:
+	# the 320 px banner's dark field holds about 44 characters. "Saved: Skirmish, 20 Sep 14:32
+	# (tick 4120)" is a label and fits; what a JOINED player is told is prose and does not.
+	var note := Net.take_parting_note()
+	if not note.is_empty():
+		if note.length() > _SHORT_NOTE_CHARS:
+			_toast.show_long_message(note)
+		else:
+			_toast.show_message(note)
 
 
 ## SETTINGS: the volume panel, in a dim-backed overlay built on first use.

@@ -1310,8 +1310,15 @@ across it. *Two readings of one fact, each deriving it separately.* Very likely 
 **Rivers are CARDINAL ONLY** (owner, 2026-09-19): the two diagonals were removed because a
 footprint is an axis-aligned rect, the same limit that has `wall-facings-reachable` blocked. The
 art carries all 8 directions and is not what is missing — **restore them the day a bridge is
-terrain rather than a footprint** (see `2.x-river-bridge`), since a neighbour mask reaches them
-fine.
+terrain rather than a footprint**, since a neighbour mask reaches them fine.
+
+➡️ **THAT DAY CAME ON 2026-09-19 AND THE DIAGONALS HAVE NOT BEEN RESTORED.** `2.x-river-bridge`
+closed by making a crossing a *terrain byte* — `SimMap.Terrain.BRIDGE_X` / `BRIDGE_Y`, written
+per tile by the generator and by the MapMaker — so the axis-aligned-rect limit this paragraph
+names **no longer applies to a bridge at all**. Restoring the two diagonal rivers is now an
+ordinary generator change rather than a blocked one. Left undone deliberately and recorded here
+rather than filed: nobody has asked for diagonal rivers, and the reason they were removed is the
+only thing that changed.
 
 📝 **A consequence of the axes agreeing, and a design question rather than a defect:**
 `_bridge_positions` spaces crossings at `(i + 1) / (count + 1)`, so an **odd** count always puts
@@ -2213,11 +2220,11 @@ was a score based on most units, some units and no units."*
 | # | Item | Tag |
 |---|---|---|
 | 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
-| 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is still open.** *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
+| 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is still open**, and is now down to two named things — see §12.1. ✅ **Its third thing, the OLD PLAYER ID, was built by 12.4 on 2026-09-20** (`Net.reserve_seats`), which is what this row and 12.4 both said should happen: whichever landed first would build it for both. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
 | 12.2b | ✅ **The AI rule engine — five real difficulties, 2026-08-27.** Five `data/ai_<level>.json` rule sets replacing `AIPlaytest.SCRIPT`, each a flat list of `{do, when}` rules evaluated in order, first match wins, with no step pointer: **the AI's state is the world.** Conditions rather than timeouts, costs read from the real defs, reservation so an expensive goal can save up past a cheap one, and a deterministic hashed reaction delay as the difficulty knob. The owner's spec is `Docs/AI_Player_difficulty.md` and it is the authority on what each tier does.<br><br>⚠️ **AND THE LIST'S PROMISES TOOK UNTIL 2026-09-11 TO BECOME TRUE IN PLAY**, in four rounds against the same complaint. See §12.2's *"The AI plays the game type it was put in"* — a bot that marched on the nearest enemy in every mode; then a clock longer than the match it was in; then an army it could not afford; then a farm it had built and could not work. **Four fixes, and the first three were individually unobservable.** Confirmed by the owner on King of the Hill and Trophy, easy and normal.<br><br>Still open on this row: ⚠️ **no rule researches anything.** Every tier from Easy up says *"can use tech tree upgrades"*, 9.3 built the 27 technologies and `ResearchCommand` waits to be emitted — a rule to write rather than a system to build (card `9.x-ai-research`). ⚠️ **The first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 for the front-door decision. ➡️ **GROWN INTO PHASE 15, 2026-09-01**, on the owner's two new specs (`scenarios/README.md`, `MapMaker/README.md`): this row is one line and the work is nine. Read Phase 15 instead of this row; what stays here is only the fact that PLAY already leads to the frame | |
-| 12.4 | **Save GAME**, and replays *(replay record/play already exists as a test fixture, 0.7)*.<br><br>⚠️ **THE OWNER GAVE THIS ROW ITS PURPOSE ON 2026-09-04 AND IT IS NOT WHAT "save/load" SOUNDED LIKE:** *"Save Game - when a map is interupted by IRL so you can pick it back up with your friends or vs AI later."* So the case that defines the feature is a **multiplayer** match resumed on another day — not a solo autosave — and that is materially harder than the row's one line implies, because everything that makes the sim deterministic has to come back identical on **every** peer: the tick, the full `SimWorld`, each `SimPlayer.id` and its colour index, the AI rungs and their rule state, and `state_hash()` agreeing across all of them on the first tick after the reload. **`colours.json` order being load-bearing (§4) is a save-file constraint, not only a replay one.** Two things already point the way: `Replay` (0.7) proves a match is reproducible from a seed plus a command list, which is one legitimate shape for a save file, and 12.1b's reconnect needs *"the config, a full snapshot and its old player id"* — **the same three things**, so whichever lands first should build them for both.<br><br>**Distinct from Save MAP (11.3), and the two must never be blurred:** a saved *map* is the terrain and start layout a match was STARTED with; a saved *game* is a half-built settlement with rubble in it. 11.3's third bullet has said so since it was written and the owner's 2026-09-04 ruling reaffirms it | |
+| 12.4 | ✅ **Save GAME — BUILT 2026-09-15 → 2026-09-20.** Replays remain a test fixture (0.7) and nothing player-facing plays one.<br><br>⚠️ **THE OWNER GAVE THIS ROW ITS PURPOSE ON 2026-09-04 AND IT IS NOT WHAT "save/load" SOUNDED LIKE:** *"Save Game - when a map is interupted by IRL so you can pick it back up with your friends or vs AI later."* So the case that defines the feature is a **multiplayer** match resumed on another day, not a solo autosave.<br><br>**What it is:** `SaveGame` (src/sim) decides what a saved match IS, `SaveFile` (src/data) where it lives and how a picker lists it — `MapData`/`MapFile`'s split one format on. A load is `SimWorld.new()` → `setup(cfg)` → `MapGen.build()` → `SaveGame.apply()`, i.e. **rebuild everything the `MatchConfig` determines and overwrite only what mutated**, so the file carries no second copy of facts two peers must agree on. Entities are copied field by field and never re-spawned from their def, because several fields are derived at spawn and then rewritten in play. Three things mutate without being hashed and all three are saved: `SimWorld._next_id`, `SimMap`'s four arrays, and `SimPlayer.vision`. **`colours.json` order being load-bearing (§4) is a save-file constraint, not only a replay one.**<br><br>⛔ **THE ROW'S OWN ACCEPTANCE BAR WAS WRONG AND §12.1 ALREADY SAID SO.** It demanded *"`state_hash()` agreeing across all peers on the first tick after the reload"*, which **this architecture cannot perform**: `SimHost` is host-only and `_handle_tick` is connected inside `SimHost.build()`, so a joined device steps no world at all — it draws entities from snapshots and terrain from the config. §12.1's *"desync detection is retired — there is no second simulation to diverge from"* has been the true statement since 12.1b, and this row contradicted it for sixteen days. **The real bar is the one the suite can state**: restore, compare `state_hash()` against the saved world IN ONE PROCESS, then step both on tick for tick — step one alone passes with the entity-id counter dropped entirely.<br><br>➡️ **So the multiplayer half was never world state; it was WHO SITS WHERE.** `Net._next_free_player_id()` hands out the lowest free id in join order, so a returning friend lands in somebody else's town with every id involved perfectly legal, and a peer can be handed a seat `AISystem` is also driving. `Net.reserve_seats()` takes the roster out of the file — **which is 12.1b's *"old player id"*, built once for both** as both rows always said it should be. Terrain needs no transfer because **no system in `src/sim/systems/` writes a terrain tile**; a tree is an entity on walkable ground (2.3).<br><br>**Distinct from Save MAP (11.3), and the two must never be blurred:** a saved *map* is the terrain and start layout a match was STARTED with; a saved *game* is a half-built settlement with rubble in it | |
 
 #### 12.1 Multiplayer — ✅ steps a–g all built and validated phone↔PC on real WiFi
 
@@ -2311,11 +2318,20 @@ rule the view depends on — and then needing reliability after all. Deliberatel
   field the format needed that nothing had, and it is provenance rather than simulation;
   and a browser refuses beacons from its own process, because `Net.has_session()` is true
   for a host the moment a slot is opened and this page is reached from that very screen.
-- **12.1b's other half, RECONNECT, is still open.** A dropped peer concedes
-  (`SimPlayer.defeat_reason`, 12.1e) and there is no way back into a match.
+- **12.1b's other half, RECONNECT, is still open — and is now down to exactly two things.**
+  ✅ The third, **the returning peer's old player id**, was built by 12.4 on 2026-09-20:
+  `Net.reserve_seats()` names which ids a joiner may be given and in what order, so a seat
+  is the file's or the lobby's rather than whoever's phone connected first. What is left:
+  **(1)** a dropped peer **concedes** (`SimPlayer.defeat_reason`, 12.1e) and cannot come back
+  to a match it has already lost, so reconnect needs a grace period before that
+  `ResignCommand` is queued — *how long a match waits for a phone in a tunnel* is an
+  owner-decision, not a code shape; **(2)** no path admits a peer to a world already
+  running — every join lands in the lobby, and the start handshake (12.1d) holds the clock
+  for joiners who have not arrived rather than letting one arrive late.
   *Desync detection is retired* — `Net` has no `SimWorld` on a client and `state_hash()`
   appears only in tests, so with one authoritative sim and full snapshots there is no
-  second simulation to diverge from.
+  second simulation to diverge from. ⚠️ **12.4's row contradicted this sentence for sixteen
+  days** by setting its acceptance bar at cross-peer `state_hash()`; corrected there.
 - **Input delay is parked.** Commands queue for `tick + 1` with no buffer, so a remote
   player's orders land whenever they arrive — fine on LAN, visibly rubber-bandy when
   latency spikes. A fixed 2–3 tick delay is the standard fix, about 2 h, but it changes how
@@ -3423,8 +3439,8 @@ owner's instruction. Each names the phase item that holds its detail.
 | 9.x Ages & tech | High — the age axis carries what factions would have | High: four age skins of every building | **9.3 and 9.4 done 2026-08-29.** What is left is 9.5 (civilisations) and 9.6 (the age re-skin), and both are art-paced rather than code-paced |
 | 5.7 More buildings | High breadth | Low in code; ~70 bakes in art | Art track paces it |
 | **Phase 16 MapMaker** | High — it turns scenarios into content | High; a second Godot project | ⚠️ **NOW UNBLOCKED ON BOTH COUNTS AND THEREFORE UP NEXT** — it waited on Phase 15 and on 2.4c, and both closed. **It starts at 16.0**, which is new and is game-code rather than tool work: the skirmish saved-map picker and the pause-menu Save Map button are both specified in the owner's README, neither is built, and 16.2 cannot be verified without the first of them. 16.2 is still the row that proves the format contract; 16.7 (per-entity overrides) is the only row with real sim cost. **A 2026-09-04 review against the code changed six things in this phase before a line was written** — see §16's decision 2 and 7.<br><br>✅ **16.0, 16.1, 16.2 and 16.4b are done as of 2026-09-04, and the owner has authored a map in it.** What that first authored map taught is the row worth reading before picking the next one: it **saved without a murmur and was unplayable**, so 16.2's placement was hardened and 16.4b was pulled forward to sit behind the Save button. **Next is 16.4a (File ▸ Open), then 16.3 (the palette)** — in that order, because 16.4a is what 16.10's re-authoring needs and because a palette that cannot reopen its own output is a one-shot tool |
-| 12.1b reconnect | Medium | Medium | LAN **discovery** landed 2026-08-31 and closed the friction point (typing an IP). Getting back INTO a match after a drop is what is left, and it is the harder half: a returning peer needs the config, a full snapshot and its old player id |
-| 12.4 Save/load and replays | Medium | Medium | Replay record/play already exists as a test fixture (0.7) |
+| 12.1b reconnect | Medium | **Low-medium, and lower than it was** | LAN **discovery** landed 2026-08-31 and closed the friction point (typing an IP). Getting back INTO a match after a drop is what is left. ✅ **Two of its three things are now built and neither by this row:** the full snapshot is 12.4's save format (2026-09-15) and the **old player id** is `Net.reserve_seats()` (2026-09-20). What remains is **a grace period before a dropped peer concedes** — an owner-decision about how long a match waits for a phone in a tunnel — and **admitting a peer to a world already running**, which no join path does today. §12.1 |
+| ~~12.4 Save/load~~ | — | — | ✅ **Done 2026-09-20.** Save, resume from the Skirmish picker, and a resume that seats the file's own roster. **Replays are NOT done** and are the only part of the original row still open: `Replay` remains a 0.7 test fixture and nothing player-facing records or plays one. If that is wanted it needs its own row, because it shares the format with nothing — a save is a world state and a replay is a command list |
 | **11.2 King of the Hill** | Medium — a second win condition is a second way to play | Low-medium, and lower than it was | **Both open design questions were settled by the owner on 2026-09-01 (§11.9)**: the scoring ladder, and the target as a *duration* — five minutes uncontested, worked back to `KOTH_TARGET_SCORE = 9000`. What is left is three known pieces of work: a zone centre (a line in `MapGenerator`, or 16.5's authored areas), `SimPlayer.score` written **by side**, and the minimap ring. ✅ **TROPHY IS BUILT (2026-09-07) AND THIS ROW IS NOW ONLY ABOUT KotH.** Its blocker had been *"a `unit.dragon_baby` with no def and no bake"*; the bake was never needed and the def landed with 13.2b along with the sprite scaling. ⚠️ **THE WARNING BELOW WAS THE MOST USEFUL SENTENCE IN THIS TABLE, AND IT STILL UNDERSOLD THE DANGER.** *"What Trophy must NOT reuse is the SPAWN RULE — 13.2's hatchling is gaia's, is spawned by a death, and is replaced when it grows; Trophy's is a thing you own from the start and protect. Sharing the def is right, sharing `NestSystem` is not."* Correct on every count — and the real collision was not Trophy reusing `NestSystem`, it was **`NestSystem` reaping Trophy**: it collected hatchlings by def id alone, so every trophy in the game would have been killed on tick 1 and the whole lobby eliminated. Guarded by `owner_id == 0`. **`MapGenerator._place_nest` was also the wrong precedent for placement** — a trophy wants to be near its owner's base, not far from everyone's — so `MapGen._place_trophies` is a post-build pass and no generator arithmetic was reused at all |
 | **13.x Dragons** | The differentiator | — | ✅ **CODE-COMPLETE 2026-09-04/06, AND THE PRIORITY LINE THIS ROW CARRIED WAS WRONG, WHICH IS THE PART WORTH KEEPING.** *"Once the RTS is a game"* assumed dragons were a late luxury paced by rigging. The rig arrived, and the whole phase went in over three days — 13.1 the flying unit, 13.2a the nest and her placement, 13.2b the claim. **None of it needed the RTS to be finished first**, and the air domain became real on the way. What remains is two provisional numbers wanting a playtest and one deliberately unbuilt row (the claim on the wire) — see §13.2b |
 | **Naval combat** | Medium | Medium | Newly *reachable* rather than newly wanted: ships float and path since 2026-08-23. Transports have no load/unload, and nothing has ever fought at sea. Archipelago is what would demand it |
@@ -3672,11 +3688,11 @@ Live risks only. Retired ones are in `b904b76`.
 actively harmful**, because a reader has to finish the row to learn it is not work. Status lives
 on the board (`AGENT_GAME_CODER.md` §2.1), shipped work is one line each in §12.*
 
-**WHERE THE BUILD IS, 2026-09-19.** Suites **game 2596/0** and **MapMaker 450/0**, Godot pinned at
-4.7.1. The How To Play pack is published at v4 and the **art packs are live** — `art_base_v1`
-80.0 MB `required`, `art_colours_v1` 236.0 MB optional — all verified end to end against
-`aod.dragoon.co.za`, and the required pack now **downloads, resumes and mounts on a real handset**
-(0.3a, 2026-09-19).
+**WHERE THE BUILD IS, 2026-09-20.** Suites **game 2652/0** and **MapMaker 450/0**, Godot pinned at
+4.7.1. The How To Play pack is published at v4 and the **art packs are live** — `art_base_v2`
+80.1 MB `required`, `art_colours_v1` 236.0 MB optional — all verified end to end against
+`aod.dragoon.co.za`, and the required pack **downloads, resumes and mounts on a real handset**
+(0.3a, 2026-09-19). `base` went to v2 on 2026-09-20 when the bridge atlases joined it.
 
 **THE QUEUE, in dependency order.** Every row below is a card on
 [projects.dragoon.co.za/projects/2](https://projects.dragoon.co.za/projects/2) unless it says
@@ -3735,32 +3751,31 @@ arriving as an economy failure with no mention of a dragon in the log.
   and `test_wall_facing` re-measures them every run, so a re-bake fails it by design.
 - **`11.x-wonder-victory`** — the wonder as a fourth win condition. **Regicide (11.2)** remains
   declared and inert. The other three are live and none is greyed.
-- **12.1b reconnect.** Discovery landed 2026-08-31 and closed the friction point (typing an IP).
-  Getting back *into* a match is the harder half: a returning peer needs the config, a full
-  snapshot and its old player id.
-- **12.4 save/load and replays**, which is also where §11.3's parked **Save Game** button lives.
-- **`2.x-river-bridge` — the River map's land bridge becomes real bridge art.** Handed to the art
-  side 2026-09-19. ⛔ **The span is not fixed and that is what shapes it:** measured, the river is
-  **9 tiles wide at 2 players and 17 at 8**, because `half_width` is `side × 0.045` and the board
-  scales with the player count — so the existing 22-tile `vis.bridge_wood` cannot span it and a
-  **per-tile set** was asked for instead. Under a per-tile *terrain* encoding (a `Terrain.BRIDGE`
-  byte, the same design as `cliff-terrain`) the facing comes from the **8-neighbourhood** rather
-  than from a footprint, so all 8 baked directions become reachable — the art side's own rule
-  about cliffs, applied to a bridge. `bridge-wood` (#96) was overturned to the paint-tiles
-  approach and waits on this.
+- **12.1b reconnect — two things, and one of them is a ruling rather than code.** Discovery
+  landed 2026-08-31 and closed the friction point (typing an IP); the *config*, the *full
+  snapshot* and the *old player id* it needed are all built now, the last two by 12.4. What is
+  left is **(a)** a grace period before `_on_peer_disconnected` concedes on a dropped player's
+  behalf — an owner-decision about how long a match waits for a phone in a tunnel — and
+  **(b)** admitting a peer to a world already running, which no join path does today.
 - **Naval combat.** Ships float and path since 2026-08-23 and transports load since 2026-08-29,
   but nothing has ever fought at sea, so a loaded transport crosses unopposed. Archipelago is what
   demands it, and it is not what makes that map playable.
+- **Replays.** All that is left of 12.4's original row. `Replay` is a 0.7 test fixture and nothing
+  player-facing records or plays one; it shares no format with the save, since a save is a world
+  state and a replay is a command list.
+- ⚠️ **`vis.foundation_9x9` IS BAKED, STAGED, AND WIRED TO NOTHING — found 2026-09-20 while
+  pruning `asset_request.md`, which is the only reason it was found.** The art side delivered it
+  on 2026-09-06; `visuals.json` has no entry for it and `building.town_center.visual_foundation`
+  still says `vis.foundation_8x8`. **The `_note` beside that field is what kept it that way** —
+  it cited a tracker deleted on 2026-08-16, promised a 10×10 that will never exist, and warned
+  that pointing at it would render magenta. Every clause stale, and together they argued against
+  the fix. Two lines of data; the judgement under it is the owner's, because the town centre's
+  **mesh is 8.99 tiles against a footprint of 10**, so the question is whether the art comes up
+  or the footprint comes down.
 - **`13.x-claim-dead-end`** — killing the hatchling leaves scenario 4 unwinnable and unlosable.
   The nest half is closed (16.6); this half is not expressible, because `unit.dragon_baby == 0` is
   true from tick 1. The card's recommendation is accept, and revisit only if a playtest hits it.
 - **Three match-event sounds** — `7.x-match-events`, dragon slain, dragon tamed.
-
-⛔ **AND THE ONE THING WITH A REAL DEADLINE AND NO CARD: `pack_art_v1.pck` IS NOT BUILT.**
-`build_packs.py` does `campaign` and `map` zips only; the client already handles `art` and
-`audio`, so **only the packer blocks art delivery, and it is what keeps the APK under 300 MB.**
-The three questions it needs from the art side are in `asset_request.md` — which directory is
-authoritative for a bake, one art pack or several, and what identifies a bake for a version bump.
 
 ### What is waiting on art, not on code
 
@@ -3768,7 +3783,6 @@ authoritative for a bake, one art pack or several, and what identifies a bake fo
 for a while and did not stay in step. What belongs here is the **shape of the dependency**, one
 line each.
 
-- ⚠️ **`pack_art_v1.pck` — a QUESTION, not a bake, and the only art-side item with a deadline.**
 - **[P8] 27 technology icons** — backlogged by the owner, filed with 9.3. Every research tile
   draws its name meanwhile; the wiring when they land is data, not code.
 - **[P6] Player colour on two packed siege actors** — a blue player's onager turns plain while it
@@ -3785,9 +3799,6 @@ facing check reads columns **2 and 6** as well. §13.2 item 10 has the full acco
 
 - **A dock built inland before 2026-08-23 stays inland.** `requires_shore` gates new
   placement only; an existing dock will train ships that cannot deliver.
-- **Naval combat does not exist.** Ships float and path since 2026-08-23, but transports
-  have no load/unload and nothing has ever fought at sea. Archipelago is what would demand
-  it, and it is not a prerequisite for the map type to be playable.
 - **An open gate is open to everyone**, besiegers included. Per-player passability needs a
   pathfinding grid per player. §5.8 argues it, and the per-domain split of 2026-08-23 is
   evidence the shape is affordable — but per player multiplies by player count, not by two.

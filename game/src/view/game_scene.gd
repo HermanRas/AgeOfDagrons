@@ -17,6 +17,10 @@
 ## no longer the boot scene itself now that `Boot.tscn`/`MainMenu.tscn` exist.
 extends Control
 
+## Where a match lets go of the player. `ResultScreen` names the same scene for the same
+## reason and this is the second way out of a match (12.4): saving ends it.
+const _MAIN_MENU_SCENE := "res://scenes/menu/MainMenu.tscn"
+
 var _view: GameView
 var _camera: CameraRig
 var _router: InputRouter
@@ -253,6 +257,11 @@ func _ready() -> void:
 	_build_hud()
 
 	Net.snapshot_received.connect(_on_snapshot)
+	# THE ONE WAY OUT THAT IS NOT A RESULT (12.4). Connected for BOTH sides of the wire and
+	# before the session is started, because the host reaches it by pressing SAVE & EXIT and a
+	# joined player reaches it by being told -- and a client that learned about it any other
+	# way would be a client reading "the match saved" as "the host vanished".
+	Net.session_ended.connect(_on_session_ended)
 
 	# ONLY HOST IF NOBODY HAS ALREADY SET A SESSION UP. Entering this scene used to mean
 	# "host a solo match", which is right when the main menu's PLAY brought us here and
@@ -792,6 +801,16 @@ func _on_settings_pressed() -> void:
 ## be false and would invite the player to press it again; saying nothing would leave a file
 ## they can never find. So the complaint is shown as-is, which is the sentence that file
 ## already writes for exactly this case.
+##
+## ## ⛔ A GOOD SAVE ENDS THE MATCH FOR EVERYBODY; A BAD ONE ENDS NOTHING
+##
+## The owner's ruling, 2026-09-20: *"after save end the match for all players and return to
+## main menu"*. `Net.end_match_saved()` carries the argument for why that is right rather
+## than merely tidy. What belongs HERE is the other half of it: **the match is only ended on
+## an empty complaint list.** Every failure branch above leaves the player exactly where they
+## were, with the menu still open and the world still standing, because a match that could
+## not be written down is the last match in the world to throw away -- and the partial-save
+## case is the sharp one, since there the file DOES exist and ending on it would look right.
 func _on_save_requested() -> void:
 	var host := Net.host()
 	if host == null or host.world == null:
@@ -806,11 +825,33 @@ func _on_save_requested() -> void:
 	var name := SaveFile.auto_name(world, cfg)
 	var problems := SaveFile.write(world, cfg, name)
 	if problems.is_empty():
-		_toast.show_message("Saved: %s" % name)
+		# NO TOAST ON THIS BRANCH. The scene is about to change, so a banner here would be a
+		# frame of text nobody can read; the sentence the player actually sees is the parting
+		# note, shown on the menu they land on. The failure branches below keep their toasts
+		# precisely because those stay on this screen.
+		Net.end_match_saved("Saved: %s" % name)
 		return
 	# LONG, because a save failure is a sentence and not a label -- `show_message`'s 320 px
 	# banner would cut it. `NoticeToast` holds its own centre across that swap (§6).
 	_toast.show_long_message(problems[0])
+
+
+## The session ended, on either side of the wire. The ONE route out of a saved match (12.4),
+## and it is one route on purpose: the host reaches it through `Net.end_match_saved()` and a
+## joined player through the RPC that call sends, so both devices leave by the same line of
+## code and cannot drift into leaving differently.
+##
+## ⚠️ **EVERY OTHER REASON IS IGNORED, AND THAT IS NOT LAZINESS.** `Net.leave()` emits
+## `"left"` and `ResultScreen` calls it immediately BEFORE changing scene itself -- so acting
+## on that here would be a second scene change racing the first. `"host left"` is a
+## disconnection, which 12.1e already answers with a defeat screen that says so. Saving is
+## the only ending this scene is responsible for.
+func _on_session_ended(reason: String) -> void:
+	if reason != "saved":
+		return
+	if not is_inside_tree():
+		return
+	get_tree().change_scene_to_file(_MAIN_MENU_SCENE)
 
 
 func _on_chat_pressed() -> void:

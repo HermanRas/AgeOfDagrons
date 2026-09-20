@@ -131,7 +131,14 @@ func _init() -> void:
 	# come back. A player opening this menu because real life interrupted the match wants
 	# this button, and putting it under the two that END a match is an invitation to press
 	# the wrong one.
-	_save_button = _menu_button("SAVE GAME", _on_save_pressed)
+	#
+	# ⚠️ **"SAVE & EXIT", NOT "SAVE GAME", SINCE 2026-09-20.** Saving now ends the match for
+	# every player in it (owner's ruling; `Net.end_match_saved` has the argument), and a button
+	# saying SAVE GAME beside one saying RESUME promises a bookmark you keep playing past.
+	# This file already records what that mistake costs three comments down: the resign button
+	# wore `main_menu_button.png` and said MAIN MENU for a whole phase after it stopped doing
+	# that. The word is the cheap half of a feature and it is the half players act on.
+	_save_button = _menu_button("SAVE & EXIT", _on_save_pressed)
 	buttons.add_child(_save_button)
 	# Held rather than added anonymously, so a preview can press the REAL button. What this
 	# one does changed completely in 12.1e -- it used to leave the match, it now concedes
@@ -215,13 +222,14 @@ func _refresh_save() -> void:
 		_save_note.visible = not why.is_empty()
 
 
-## SAVE GAME. The panel reports the press and `GameScene` does the work -- see the signal.
+## SAVE & EXIT. The panel reports the press and `GameScene` does the work -- see the signal.
 ##
-## ⚠️ **THE MENU STAYS OPEN AND THE CLOCK STAYS STOPPED.** Saving is not leaving, so there is
-## nothing to resume yet, and a player who saves usually wants QUIT next. It also means the
-## world cannot step between the press and `SaveGame.capture()` reading it, which is not
-## something this panel is relying on -- `capture()` is synchronous -- but is worth not
-## breaking by closing the menu here.
+## ⚠️ **THE MENU STAYS OPEN AND THE CLOCK STAYS STOPPED, AND THAT IS STILL RIGHT EVEN THOUGH
+## SAVING NOW LEAVES.** It used to read *"saving is not leaving"*, which stopped being true on
+## 2026-09-20. The behaviour does not change with it, for the other reason the old note gave:
+## the world must not step between this press and `SaveGame.capture()` reading it. And if the
+## save FAILS, `GameScene` leaves the player exactly here -- on a stopped clock with the menu
+## up -- which is only possible because this function did not close anything.
 func _on_save_pressed() -> void:
 	save_requested.emit()
 

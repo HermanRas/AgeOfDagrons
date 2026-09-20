@@ -117,6 +117,35 @@ var pending_save: Dictionary = {}
 ## UI in a match that does not fade.
 var start_problems: Array[String] = []
 
+## The one sentence the NEXT screen should show about the session that just ended, or empty.
+##
+## `session_ended(reason)` already says why in a WORD, and a word is what code branches on;
+## this is the sentence a person reads, and the two are deliberately not the same string --
+## "saved" tells `GameScene` to change scene, and *"The host saved the match"* is what the
+## player on the other device needs in order not to read the same event as a crash.
+##
+## ⚠️ **CONSUMED, on `pending_match`'s rule.** A note left behind would reappear on the main
+## menu after an unrelated match three screens later, attached to nothing. `take_parting_note()`
+## is the only supported read.
+var parting_note: String = ""
+
+## Which player ids a joining peer may be given, or empty for "the lowest one free".
+##
+## ## ⛔ THIS IS 12.1b's "OLD PLAYER ID" AND 12.4's RESUMED SEAT, WHICH ARE ONE FACT
+##
+## `_next_free_player_id()` hands out the lowest id nobody holds. That is right for a lobby
+## being filled for the first time and wrong for every case where somebody is coming BACK:
+## the friend who was player 3 in the saved match has to be player 3 again, or they resume
+## in somebody else's town with somebody else's army. Join order decides it today, and join
+## order is whoever's phone finished connecting first.
+##
+## It also keeps a peer OUT OF A BOT'S SEAT. A resumed match's player 2 may be an AI, and a
+## peer handed that id would be issuing orders for a player `AISystem` is also driving --
+## two authorities on one town, which is not a refusal anywhere because both are legitimate.
+##
+## Empty means "behave exactly as before", which is every path that existed before saves did.
+var _reserved_seats: Array[int] = []
+
 ## What the host says it is SETTING UP, on a joined client, while still in the lobby.
 ##
 ## Separate from `_match_config` on purpose. That one is the settled answer and the
@@ -329,6 +358,80 @@ func leave() -> void:
 	session_ended.emit("left")
 
 
+## Take the parting note and clear it. One reader, once -- see the field.
+func take_parting_note() -> String:
+	var note := parting_note
+	parting_note = ""
+	return note
+
+
+## Which seats joining peers may take, as a copy. Empty is the ordinary "any free one".
+func reserved_seats() -> Array[int]:
+	return _reserved_seats.duplicate()
+
+
+## Say which player ids joining peers may be given, in the order they should be handed out.
+##
+## Set BEFORE anybody connects -- the lobby calls it when a saved match is picked -- because
+## a reservation made after a peer has already been named changes nothing about that peer.
+## An empty array restores the ordinary behaviour, which is what picking any other map does.
+func reserve_seats(ids: Array[int]) -> void:
+	_reserved_seats = ids.duplicate()
+
+
+## ⛔ SAVED, SO THE MATCH IS OVER -- FOR EVERYBODY (12.4; owner, 2026-09-20: *"after save end
+## the match for all players and return to main menu"*).
+##
+## Saving used to be a bookmark you kept playing past. That is wrong for the case this whole
+## feature exists for -- *"when a map is interupted by IRL so you can pick it back up with
+## your friends"* -- and in a NETWORKED match it is worse than untidy: the other players are
+## still in a match whose only written record is already stale, so what gets resumed later is
+## not the match anybody stopped playing, and there is no moment you could point at and call
+## the end of the first sitting.
+##
+## Ending it for everyone makes the save that moment: one tick, one file, nobody playing past
+## it. It is also what makes resuming WITH THOSE PEOPLE meaningful, since the file now
+## describes a board they all just walked away from.
+##
+## ## ⚠️ THE PACKETS GO OUT BEFORE THE SOCKET DOES, AND THE ORDER IS THE WHOLE FUNCTION
+##
+## `_teardown()` sets `multiplayer_peer` to null. An ENet packet handed to the peer is still
+## sitting in the host's outgoing queue until the host is next serviced, which happens in
+## `MultiplayerAPI.poll()` at the end of the frame -- so tearing down on the line after
+## `rpc_id` DROPS the one message this function exists to deliver, and the other players are
+## left staring at a match that has silently stopped ticking. `ENetConnection.flush()` pushes
+## them now, synchronously, which is also what lets this be called and returned from rather
+## than awaited.
+func end_match_saved(note: String = "") -> void:
+	if not is_server():
+		return
+	for peer in _peer_players:
+		if int(peer) != 1:
+			rpc_id(int(peer), "_recv_match_saved")
+	if _peer is ENetMultiplayerPeer:
+		var connection := (_peer as ENetMultiplayerPeer).get_host()
+		if connection != null:
+			connection.flush()
+	parting_note = note
+	_teardown()
+	session_ended.emit("saved")
+
+
+## The host saved the match, so it ends here too (12.4).
+##
+## NOT a disconnection and not a defeat, and it must not be allowed to read as either: this
+## device's player is IN the file, and the match is meant to be picked up again. That is what
+## the parting note is for -- `_on_server_disconnected` would otherwise be the only
+## explanation a player got, and it says "host left".
+@rpc("authority", "reliable")
+func _recv_match_saved() -> void:
+	if _host != null:
+		return                    # the host is the one that sent it
+	parting_note = "The host saved the match — you can pick it up together later."
+	_teardown()
+	session_ended.emit("saved")
+
+
 # ── peer lifecycle (PLAN.md 12.1a) ──────────────────────────────────────────
 
 ## A peer arrived. The SERVER decides who they are and tells them; they never claim it.
@@ -424,10 +527,23 @@ func _on_server_disconnected() -> void:
 ## reuses nothing, so peer 1043 would be player 1043 and index off the end of every
 ## table keyed by player. The lowest free slot also means a player who drops and comes
 ## back finds their seat where they left it, as long as nobody took it first.
+##
+## ⛔ **A RESERVATION OVERRIDES BOTH THE ORDER AND THE CEILING** (12.4/12.1b). See
+## `_reserved_seats`: a resumed match's seats are named by the FILE, and an id it does not
+## name is not a seat at all -- so a peer arriving after the roster is full is refused here
+## and disconnected by the caller, rather than being seated in a bot's town.
 func _next_free_player_id() -> int:
 	var taken := {}
 	for peer in _peer_players:
 		taken[int(_peer_players[peer])] = true
+	if not _reserved_seats.is_empty():
+		# IN THE ORDER THE RESERVATION LISTS THEM, which for a resumed match is the saved
+		# roster's own order -- so the seats fill the way the file reads rather than the way
+		# ENet happened to number the arrivals.
+		for reserved in _reserved_seats:
+			if not taken.has(int(reserved)):
+				return int(reserved)
+		return 0
 	for pid in range(1, MAX_PLAYERS + 1):
 		if not taken.has(pid):
 			return pid
@@ -632,6 +748,11 @@ func _teardown() -> void:
 	_last_snapshot_tick = -1
 	_awaiting_ready.clear()
 	_ready_waited = 0.0
+	# THE SEATS GO WITH THE SESSION. A reservation made for a resumed match would otherwise
+	# still be standing for the next ordinary lobby, where it would cap the player count at
+	# whatever the old save's roster was and refuse everybody past it -- a lobby that fills
+	# up two players early, for a file nobody has picked.
+	_reserved_seats.clear()
 	if _host != null:
 		_host.stop()
 		_host.queue_free()
