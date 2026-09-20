@@ -32,6 +32,10 @@ var _age_badge: AgeBadge
 var _idle_badge: IdleVillagerBadge
 var _minimap: Minimap
 var _toast: NoticeToast
+
+## The running commentary over the map, and the future home of real chat (8.4b). See
+## `MessageLog` for why it is not a second `NoticeToast`.
+var _message_log: MessageLog
 ## The settings/pause overlay. REACHED FROM THE SETTINGS CORNER BUTTON beside the
 ## minimap since 2026-08-21, not from a pause button in the age header -- see
 ## `_build_hud`. Still a `PauseMenu`, because Resume/Resign/Quit is still what it
@@ -263,6 +267,15 @@ func _ready() -> void:
 	# way would be a client reading "the match saved" as "the host vanished".
 	Net.session_ended.connect(_on_session_ended)
 
+	# ⛔ **THE TWO HALVES OF A SILENCE, AND THEY NEVER REACH THE SAME DEVICE** (owner's
+	# playtest, 2026-09-20: a held match and a crashed host look identical, and *"failing to
+	# do anything with no user feedback"* was the result). `grace_tick` is what the SURVIVORS
+	# are told, by the host, about a seat it is holding. `link_quiet` is what the player who
+	# actually dropped works out for themselves -- they cannot be sent anything, being the one
+	# who is cut off. Both connected here, because either can arrive and neither is an error.
+	Net.grace_tick.connect(_on_grace_tick)
+	Net.link_quiet.connect(_on_link_quiet)
+
 	# ONLY HOST IF NOBODY HAS ALREADY SET A SESSION UP. Entering this scene used to mean
 	# "host a solo match", which is right when the main menu's PLAY brought us here and
 	# wrong for a client that has already joined one -- it would host over the top of
@@ -488,6 +501,21 @@ func _build_hud() -> void:
 		corner_btn.position = _MINIMAP_BOSS_CENTRES[i] * Minimap.AREA_SIZE \
 				- Vector2.ONE * CORNER_BUTTON_SIZE * 0.5
 		minimap_area.add_child(corner_btn)
+
+	# ⛳ **BELOW THE CONTROL-GROUP STACK, IN THE LEFT COLUMN.** The stack is five
+	# `ControlGroupSlot`s from y = 12 and the tracker/KOTH slot owns the strip beside it, so
+	# this goes under the stack where nothing else is anchored. It grows DOWNWARD, toward the
+	# selection panel that grows UP from the bottom edge -- which is why `MessageLog.MAX_LINES`
+	# is a hard cap rather than a suggestion: the two would otherwise meet in the middle of
+	# the left column, and the panel is the one carrying buttons.
+	#
+	# ⚠️ **EYEBALL THIS ON A HANDSET.** It is placed against the layout arithmetic above and
+	# not against a screenshot; if six lines reach the selection panel on a short viewport,
+	# the cap is the thing to lower.
+	_message_log = MessageLog.new()
+	_message_log.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_message_log.position = Vector2(12.0, 12.0 + ControlGroupSlot.SIZE * 5.0 + 4.0 * 5.0 + 16.0)
+	hud.add_child(_message_log)
 
 	_toast = NoticeToast.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -863,6 +891,38 @@ func _on_session_ended(reason: String) -> void:
 	if not is_inside_tree():
 		return
 	get_tree().change_scene_to_file(_MAIN_MENU_SCENE)
+
+
+## Somebody's seat is being held open, with `seconds_left` to go.
+##
+## ⚠️ **NAMED, NOT NUMBERED, WHEREVER A NAME EXISTS.** "Player 2" is what the lobby, the
+## colours and the result screen all call them, and a log that said "player id 2" would be the
+## one place on this HUD speaking in the wiring's terms rather than the match's.
+##
+## ⛳ **AND NOT ABOUT YOURSELF.** On a host this fires for the peer that dropped, which is
+## never the host; on a client it fires for whoever the host names, which CAN be this device
+## if its own snapshots are getting through while its acks are not. "You are losing
+## connection" belongs to `_on_link_quiet`, which knows it first-hand.
+func _on_grace_tick(player_id: int, seconds_left: int) -> void:
+	if _message_log == null:
+		return
+	if player_id == Net.local_player_id():
+		return
+	_message_log.say("", "Player %d is losing connection — %ds" % [player_id, seconds_left],
+			MessageLog.SYSTEM_COLOUR)
+
+
+## This device has heard nothing from the host for `seconds`.
+##
+## ⛔ **DELIBERATELY NOT WORDED AS A VERDICT.** The host may be perfectly fine and this device
+## may be the one in the tunnel; from here the two are indistinguishable, and `LINK_TIMEOUT_*`
+## means the session may well recover with nothing lost. So it reports the OBSERVATION -- no
+## word from the host, and for how long -- rather than announcing a disconnection that has not
+## happened. If it really is over, `_on_session_ended` says so and leaves for the menu.
+func _on_link_quiet(seconds: int) -> void:
+	if _message_log == null:
+		return
+	_message_log.say("", "No word from the host — %ds" % seconds, MessageLog.SYSTEM_COLOUR)
 
 
 func _on_chat_pressed() -> void:

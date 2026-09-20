@@ -25,6 +25,18 @@ signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 signal snapshot_received(snap: Dictionary)
 
+## A player's seat is being held open, with this many whole seconds left before the match
+## concedes on their behalf. Emitted once per second per held seat, on EVERY device -- see
+## `_announce_grace` for why a client cannot work this out for itself.
+signal grace_tick(player_id: int, seconds_left: int)
+
+## This device has heard nothing from the host for this many whole seconds, while a match it
+## has joined is supposed to be running. **The other half of the same silence**: `grace_tick`
+## is what the survivors see, and this is what the player who dropped sees -- they get no RPC
+## precisely because they are the one who is cut off, so their own view has to be inferred
+## locally. Emitted on clients only.
+signal link_quiet(seconds: int)
+
 ## The match config has arrived and a world can be built from it (PLAN.md 12.1b).
 ##
 ## Emitted on the CLIENT, where it is the first moment the scene knows what map it is
@@ -724,6 +736,7 @@ func _begin_when_ready() -> void:
 
 func _process(delta: float) -> void:
 	_tick_concedes(delta)
+	_tick_link_quiet(delta)
 	# Only ever busy in the seconds between "match built" and "everyone ready".
 	if _host == null or _host.is_running() or _awaiting_ready.is_empty():
 		return
@@ -761,11 +774,47 @@ func _tick_concedes(delta: float) -> void:
 	for pid in _conceding.keys():
 		var left := float(_conceding[pid]) - delta
 		if left > 0.0:
+			var before := int(ceil(float(_conceding[pid])))
 			_conceding[pid] = left
+			# ⏳ **ONLY WHEN THE WHOLE SECOND CHANGES.** This runs every frame; announcing
+			# every frame would be sixty identical lines a second in the log and sixty RPCs
+			# on the wire. The ceiling is what a countdown reads as -- 10, 9, 8 -- rather
+			# than a floor that would open on 9.
+			var now := int(ceil(left))
+			if now != before and now > 0:
+				_announce_grace(int(pid), now)
 			continue
 		_conceding.erase(pid)
 		_host.world.queue_command(ResignCommand.new(int(pid), _host.world.tick,
 				SimPlayer.Defeat.DISCONNECTED))
+
+
+## Tell everybody a seat is being held, and for how much longer.
+##
+## ⛔ **THE HOST IS THE ONLY DEVICE THAT KNOWS THIS**, so a client learns it here or not at
+## all: `_conceding` is server-side, and a client has no way to tell a held seat from a host
+## that has stopped sending. That was the owner's whole complaint about the silence
+## (2026-09-20) -- a match holding its breath and a match that has crashed look identical
+## from a client, and the difference is knowable only up here.
+##
+## UNRELIABLE, deliberately, which is the opposite of nearly every other RPC in this file. A
+## countdown is a stream of self-superseding values: a dropped "7" costs nothing because "6"
+## is 250 ms behind it, and forcing retransmission of stale numbers would put the log behind
+## the clock it is describing. The thing that MUST arrive -- the concede itself -- is a
+## `ResignCommand` on the tick stream and is unaffected by any of this.
+func _announce_grace(player_id: int, seconds_left: int) -> void:
+	grace_tick.emit(player_id, seconds_left)
+	for peer in _peer_players:
+		if int(peer) != 1:
+			rpc_id(int(peer), "_recv_grace", player_id, seconds_left)
+
+
+## A client hearing that somebody's seat is being held. See `_announce_grace`.
+@rpc("authority", "unreliable")
+func _recv_grace(player_id: int, seconds_left: int) -> void:
+	if _host != null:
+		return                    # the host announced it; never let it round-trip
+	grace_tick.emit(player_id, seconds_left)
 
 
 ## A client telling the host it has built its view and can make sense of a snapshot.
@@ -920,6 +969,10 @@ func _teardown() -> void:
 	_snapshots_seen = 0
 	_snapshots_missed = 0
 	_last_snapshot_tick = -1
+	# And the silence watch with them, or the next match would open still counting the gap
+	# since the last one's final snapshot.
+	_since_snapshot = 0.0
+	_quiet_announced = 0
 	_awaiting_ready.clear()
 	_ready_waited = 0.0
 	# THE SEATS GO WITH THE SESSION. A reservation made for a resumed match would otherwise
@@ -988,7 +1041,44 @@ var _snapshots_missed := 0
 var _last_snapshot_tick := -1
 
 
+## Seconds since a snapshot last arrived, and the last whole second announced.
+##
+## ⛔ **SNAPSHOTS ARE THE ONLY HEARTBEAT A CLIENT ACTUALLY HAS.** ENet's own keepalive is
+## invisible from GDScript, and with `LINK_TIMEOUT_MIN_MS` now deliberately patient the
+## engine will say nothing at all for fifteen seconds -- which is exactly the silence the
+## owner reported sitting in. `SimHost` sends one snapshot per player per tick, so their
+## absence is a direct measure of "the host has stopped reaching me", available without
+## adding a single byte to the wire.
+var _since_snapshot := 0.0
+var _quiet_announced := 0
+
+## How long a gap has to be before it is worth mentioning. Under a second is ordinary jitter
+## and saying so would make the log flicker on a healthy connection.
+const QUIET_AFTER := 1.0
+
+
+## Watch for the host going quiet. Client-side only; a host cannot lose touch with itself.
+func _tick_link_quiet(delta: float) -> void:
+	if _host != null or not is_joined() or _last_snapshot_tick < 0:
+		# Not a client, not in a match, or no snapshot has EVER arrived -- the last case is
+		# the start handshake, where silence is the normal state and not a fault.
+		_since_snapshot = 0.0
+		_quiet_announced = 0
+		return
+	_since_snapshot += delta
+	if _since_snapshot < QUIET_AFTER:
+		return
+	var whole := int(floor(_since_snapshot))
+	if whole != _quiet_announced:
+		_quiet_announced = whole
+		link_quiet.emit(whole)
+
+
 func _count_snapshot(tick: int) -> void:
+	# THE HOST IS REACHING US, so whatever gap was building is over. Reset before anything
+	# else: an early return further down must not leave a stale silence standing.
+	_since_snapshot = 0.0
+	_quiet_announced = 0
 	_snapshots_seen += 1
 	if _last_snapshot_tick >= 0 and tick > _last_snapshot_tick + 1:
 		var lost := tick - _last_snapshot_tick - 1

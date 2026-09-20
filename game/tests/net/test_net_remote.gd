@@ -275,6 +275,75 @@ func test_a_link_is_given_longer_than_the_blip_that_prompted_it() -> void:
 	assert_true(Net.LINK_TIMEOUT_LIMIT > 0)
 
 
+# ── saying the silence out loud (8.4b / 12.1b) ──────────────────────────────
+
+func test_a_held_seat_is_announced_once_per_whole_second_and_not_once_per_frame() -> void:
+	# ⛔ THE WHOLE POINT OF THE CEILING CHECK. `_tick_concedes` runs every frame, so a naive
+	# announcement would be sixty identical lines a second in the log and sixty RPCs on the
+	# wire. Stepping in thirds here: three calls, one crossing.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var heard: Array[int] = []
+	Net.grace_tick.connect(func(_pid: int, left: int) -> void: heard.append(left))
+
+	Net._conceding[2] = 10.0
+	Net._tick_concedes(0.34)
+	Net._tick_concedes(0.34)
+	Net._tick_concedes(0.34)
+	assert_eq(heard, [9], "one crossing of a whole second, not three frames' worth")
+
+
+func test_the_countdown_reads_down_the_way_a_person_would_say_it() -> void:
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var heard: Array[int] = []
+	Net.grace_tick.connect(func(_pid: int, left: int) -> void: heard.append(left))
+
+	Net._conceding[2] = 5.0
+	for i in range(5):
+		Net._tick_concedes(1.0)
+	# The ceiling, so it opens on 4 rather than 5 and never announces a 0 -- zero is the
+	# concede itself, which is a `ResignCommand` and a result screen, not a countdown tick.
+	assert_eq(heard, [4, 3, 2, 1], "counts down, and stops before zero")
+
+
+func test_the_fuse_going_out_stops_the_countdown() -> void:
+	# The reconnect seam: `_recv_ready` clears the fuse. Nothing should still be counting
+	# down for a player who came back.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var heard: Array[int] = []
+	Net.grace_tick.connect(func(_pid: int, left: int) -> void: heard.append(left))
+
+	Net._conceding[2] = 10.0
+	Net._tick_concedes(1.0)
+	Net._conceding.erase(2)
+	Net._tick_concedes(1.0)
+	assert_eq(heard, [9], "nothing is still counting for somebody who is back")
+
+
+func test_a_host_never_reports_itself_as_out_of_touch() -> void:
+	# `_tick_link_quiet` is a client's inference about the host. A host running it against
+	# itself would post "no word from the host" in a match that is perfectly healthy.
+	Net.host_open()
+	Net.start_match(MatchConfig.debug_skirmish())
+	var heard: Array[int] = []
+	Net.link_quiet.connect(func(s: int) -> void: heard.append(s))
+	Net._tick_link_quiet(30.0)
+	assert_eq(heard, [], "a host cannot lose touch with itself")
+
+
+func test_silence_before_the_first_snapshot_is_not_reported() -> void:
+	# ⚠️ THE START HANDSHAKE IS SILENT BY DESIGN. A client sits without snapshots between
+	# joining and the match beginning, and announcing that would open every joined match with
+	# a countdown about a connection that is fine.
+	Net._last_snapshot_tick = -1
+	var heard: Array[int] = []
+	Net.link_quiet.connect(func(s: int) -> void: heard.append(s))
+	Net._tick_link_quiet(10.0)
+	assert_eq(heard, [], "no snapshot has ever arrived; there is nothing to have stopped")
+
+
 func test_a_departed_player_is_noticed_before_the_match_could_reasonably_end() -> void:
 	# ⚠️ THE NUMBER A PLAYTEST ACTUALLY JUDGES IS THE SUM. Patience runs BEFORE the grace
 	# fuse rather than instead of it, so a player who has genuinely gone leaves an undefended
