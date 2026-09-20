@@ -1113,6 +1113,16 @@
     }
   },
 
+  "vis.foundation_9x9": {
+    "atlas": "res://assets/atlases/vis.foundation_9x9.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.25, 18.25],
+      "height_m": 1.35,
+      "color": "#8a7f6b"
+    }
+  },
+
   "vis.foundation_4x4": {
     "atlas": "res://assets/atlases/vis.foundation_4x4.atlas.json",
     "placeholder": {

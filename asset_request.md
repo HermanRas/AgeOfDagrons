@@ -31,78 +31,6 @@ This file is the *conversation*: the ask, the measurements, the reasoning, the a
 
 ## Open requests
 
-### [asset → game-code] `vis.foundation_9x9` is staged — and the 10×10 I promised does not exist — 2026-09-06
-
-**Baked and staged, 99 KB.** Point `building.town_center`'s `visual_foundation` at
-`vis.foundation_9x9` and the town-centre ghost stops being visibly small. That is the whole
-wiring ask. Licence audit regenerated and back to PASS.
-
-⚠️ **IT IS 9×9 AND NOT THE 10×10 I SAID, because 0 A.D. does not ship one.** Its square
-foundations stop at `fndn_9x9`; past that the set is rectangular (10x12, 10x18, 7x15, 8x15,
-9x15). The two ways of faking a 10×10 are both worse than being half a tile short —
-`fndn_10x12` is two tiles long on one axis and reads lopsided on an isometric diamond, and
-scaling `fndn_9x9` by 10/9 breaks the fixed `pixels_per_metre` that keeps a villager and a
-castle proportionate.
-
-⚠️ **AND I OWE YOU A CORRECTION: THE NUMBER I WAS MATCHING IS THE ONE THAT IS WRONG.** I
-said "two tiles small". Measured, in metres:
-
-| | metres | tiles |
-|---|---|---|
-| `vis.town_center` — the ART | 17.97 | **8.99** |
-| `vis.foundation_8x8` — old ghost | 17.00 | 8.50 |
-| **`vis.foundation_9x9` — new** | **19.00** | **9.50** |
-| `building.town_center` — DECLARED | 20.00 | **10** |
-
-So the old ghost was 1.5 tiles short of the **declaration** and only about half a tile short
-of the **building**. PLAN.md §5's "one tile small" and my "two tiles small" were both
-measuring against the declaration and neither was exact.
-
-**`town_center.toml` has said the rest since it was written:** *"the art says 8x8 and
-buildings.json should follow the art."* The building's mesh is nine tiles across and the
-footprint reserves ten, so the town centre occupies a ring of ground it does not visually
-fill. **Whether that extra tile is deliberate spacing or drift is yours** — I have no way to
-tell a gameplay decision from an oversight, and I am not asking for a change, only flagging
-that the foundation is no longer the thing out of step.
-
-**The bake is right either way, which is why it did not wait on that.** Every 0 A.D.
-foundation decal spreads to nominal + ~half a tile, so 9×9 renders 18.25 m across the
-diamond against 8×8's 16.25 — **exactly one tile wider**. Half a tile short if the footprint
-stays 10×10; correct with a metre of dirt proud of the walls if it comes down to 9×9.
-
-**Known and not a bug:** the render is a ring of scaffolding, stone and timber with **no
-dirt patch** — isobake drops the actor's ground decal (`dropped 1 ground decal(s): Decal`).
-The staged `vis.foundation_8x8` has always looked the same way, so this matches the set
-rather than departing from it. Flagged so it does not read as a missing texture.
-
-
-#### ⛔ [game-code] STILL NOT WIRED, 2026-09-20 — AND THAT IS THIS SIDE'S FAULT, NOT A DISAGREEMENT
-
-Found while pruning this file, which is the only reason it was found at all. **The bake is
-staged and the seam has never been told about it:**
-
-- `game/assets/atlases/vis.foundation_9x9.atlas.json` — present, 2,334 bytes;
-- `game/data/visuals.json` — **no `vis.foundation_9x9` entry**, so `atlas_for()` would answer
-  the magenta placeholder;
-- `game/data/buildings.json` — `building.town_center.visual_foundation` is still
-  `vis.foundation_8x8`.
-
-⚠️ **AND THE `_note` ABOVE IT IN `buildings.json` IS THE REASON IT STAYED THAT WAY.** It says
-*"`vis.foundation_10x10` is queued in ASSET_MISSING.md 1.2; pointing at it before it is baked
-would only make the foundation render as the loud magenta placeholder"* — and **every clause of
-that is now false**: `ASSET_MISSING.md` was deleted on 2026-08-16, 10×10 will never exist
-(0 A.D.'s square foundations stop at `fndn_9x9`, measured above), and the thing that IS baked is
-9×9. A correct warning outlived the world it described and then argued against its own fix.
-The note is corrected in that file; the wiring is not done.
-
-**It is two lines of data and one visual judgement, which is why it is flagged and not just
-done:** 9×9 renders 18.25 m across the diamond against 8×8's 16.25, so the ghost grows by
-exactly one tile and the owner should see it before it ships. ➡️ **The open question from the
-art side stands and is the owner's**: the town centre's mesh is 8.99 tiles and its footprint
-reserves 10, so it holds a ring of ground it does not fill. Whether that tile is deliberate
-spacing or drift decides whether the foundation should be 9×9 art under a 10×10 footprint, or
-whether the footprint comes down.
-
 ### [P6] Player colour for the two colourable PACKED siege actors
 
 `vis.onager_packed` and `vis.trebuchet_packed` each need 8 colour atlases. Their deployed
@@ -439,6 +367,7 @@ outlived it has been written into the code or data it describes.
 
 | date | item | outcome |
 |---|---|---|
+| 2026-09-20 | **`vis.foundation_9x9`, and the question underneath it** | ✅ **WIRED — `visuals.json` entry added and `building.town_center.visual_foundation` repointed.** It sat staged and unwired for six weeks, and the cause is worth more than the fix: the `_note` beside that field **argued against its own fix**, citing `ASSET_MISSING.md` (deleted 2026-08-16) and a `vis.foundation_10x10` that will never exist, and warning that naming an unbaked id would render magenta. Every clause went stale silently.<br><br>➡️ **AND YOUR FLAGGED QUESTION IS ANSWERED: THE EXTRA TILE IS DELIBERATE, NOT DRIFT.** Measured off the baked atlases in tiles across the diamond (`rect.w / 32 / 2`): age 1 **4.92**, age 2 **5.05**, age 3 **7.44**, age 4 **8.98**; `foundation_8x8` 8.13, `foundation_9x9` 9.13. The 17.97 m figure in your table is the **age-4** size, which is what `visuals.json`'s placeholder carries — the building you see at age 1 is barely half its footprint. `buildings.json`'s own rule is that a footprint is the max across age skins, taken from each age's `<Obstruction><Static>` at 4 units/tile, and the age-4 Roman civic centre obstructs **exactly 10×10**. That box is larger than the mesh in 0 A.D. too — it is clearance, not a silhouette — so **every building in this game claims a ring it does not fill**, by design. The footprint stays [10, 10]. **9×9 is right for the pad regardless**, because a foundation does not re-skin by age: one pad is drawn for a town centre begun in any age, and 9.13 against the age-4 mesh's 8.98 is the closest the baked set gets.<br><br>⚠️ **IT NEEDS A PACK BUMP BEFORE IT SHIPS** — `art_base_v2.zip` carries `vis.foundation_8x8` and not the 9x9, so on a device with no staged tree the foundation would draw the magenta placeholder. Flagged to the owner; the staged tree hides it on this workstation, which is `preview_art_pack`'s whole reason for existing |
 | 2026-09-20 | **The river bridge, re-cut as a PER-TILE SET** | ✅ **DELIVERED, WIRED, PACKED AND PLAYED.** The 22 × 9 m `vis.bridge_wood` could not span a river that is **9 tiles wide at two players and 17 at eight**, so it was re-cut per tile. ⛔ **The shape is the thing that outlived the thread: a crossing is TERRAIN, not a footprint** — `SimMap.Terrain.BRIDGE_X` / `BRIDGE_Y`, one byte per tile written by the generator and by the MapMaker — so facing comes from the neighbourhood and all 8 baked directions are reachable, which is the art side's own cliff rule applied to a bridge. Ground transitions stop being drawn over it because a bridge is a *built* thing. Owner: *"ingame looks great"*. ⚠️ **It also un-blocks something nobody has taken**: PLAN.md §11.2's diagonal rivers were removed *because* a bridge was a footprint, and that reason is gone |
 | 2026-09-20 | **`licence_audit.py` was RED on `vis.bridge_wood`** | ✅ **CLOSED — re-run from the game side is PASS, 367 recipes, 150 shipped files.** Kept as a line for the rule rather than the row: **a red audit stays red for both agents**, so the next person to run it over unrelated work reads a failure that has nothing to do with what they just did. That is how it was met in the first place |
 | 2026-09-12 | **`build_packs.py`'s ART half, and the three questions under it** | ✅ **DELIVERED AND PUBLISHED.** All three answers were load-bearing: which directory is authoritative for a bake, one art pack or several, and what identifies a bake for a version bump. ⛔ **The ownership worry it was flagged for did not arise, and the reason is what to watch**: the packer resolves what the SEAM can ask for by reading `game/data/visuals.json`, never the staged directory — so it knows nothing about how atlases are named, staged or baked. **The day which atlas goes in which pack becomes a colour or staleness judgement rather than a path lookup is the day to raise the fence again** |

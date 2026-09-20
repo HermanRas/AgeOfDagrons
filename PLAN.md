@@ -2220,7 +2220,7 @@ was a score based on most units, some units and no units."*
 | # | Item | Tag |
 |---|---|---|
 | 12.1a | ✅ `host_open()` on 0.0.0.0 + `join()`, peer lifecycle, player-id assignment — validated phone↔PC on real WiFi with the rest of a–g. See §12.1 | |
-| 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is still open**, and is now down to two named things — see §12.1. ✅ **Its third thing, the OLD PLAYER ID, was built by 12.4 on 2026-09-20** (`Net.reserve_seats`), which is what this row and 12.4 both said should happen: whichever landed first would build it for both. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
+| 12.1b | 🟡 **LAN discovery ✅ 2026-08-31** — `LanBeacon` broadcasts on `Net.PORT + 1`, `LanBrowser` holds a rolling window over it, `ServerBrowserPanel` lists and dials. **Reconnect is down to ONE thing — nothing dials back in.** ✅ The **old player id** was built by 12.4 on 2026-09-20 (`Net.reserve_seats`), which is what this row and 12.4 both said should happen: whichever landed first would build it for both. ✅ The **grace period** landed the same day at `Net.DISCONNECT_GRACE = 10.0` (owner: *"lets start with 10sec"*) — a feel constant, expected to move after a playtest. See §12.1 for the three rules that came with it and for the rejoin token it still wants. *Desync detection retired* (one authoritative sim, nothing to diverge from) and *lag compensation* is the parked input-delay decision at the end of §12.1 | |
 | 12.2a | ✅ **PlayTest AI**, 2026-08-17, plus the **difficulty list** on 2026-08-22. See §12.2 | |
 | 12.2b | ✅ **The AI rule engine — five real difficulties, 2026-08-27.** Five `data/ai_<level>.json` rule sets replacing `AIPlaytest.SCRIPT`, each a flat list of `{do, when}` rules evaluated in order, first match wins, with no step pointer: **the AI's state is the world.** Conditions rather than timeouts, costs read from the real defs, reservation so an expensive goal can save up past a cheap one, and a deterministic hashed reaction delay as the difficulty knob. The owner's spec is `Docs/AI_Player_difficulty.md` and it is the authority on what each tier does.<br><br>⚠️ **AND THE LIST'S PROMISES TOOK UNTIL 2026-09-11 TO BECOME TRUE IN PLAY**, in four rounds against the same complaint. See §12.2's *"The AI plays the game type it was put in"* — a bot that marched on the nearest enemy in every mode; then a clock longer than the match it was in; then an army it could not afford; then a farm it had built and could not work. **Four fixes, and the first three were individually unobservable.** Confirmed by the owner on King of the Hill and Trophy, easy and normal.<br><br>Still open on this row: ⚠️ **no rule researches anything.** Every tier from Easy up says *"can use tech tree upgrades"*, 9.3 built the 27 technologies and `ResearchCommand` waits to be emitted — a rule to write rather than a system to build (card `9.x-ai-research`). ⚠️ **The first rule that researches invalidates every row of BUGS.md's ladder table**, which was measured with neither side researching | |
 | 12.3 | Campaign: scripted triggers/objectives on the host-loopback path. **The screen exists as a placeholder since 2026-08-21** and PLAY on the main menu opens it — see §12.3 for the front-door decision. ➡️ **GROWN INTO PHASE 15, 2026-09-01**, on the owner's two new specs (`scenarios/README.md`, `MapMaker/README.md`): this row is one line and the work is nine. Read Phase 15 instead of this row; what stays here is only the fact that PLAY already leads to the frame | |
@@ -2318,16 +2318,26 @@ rule the view depends on — and then needing reliability after all. Deliberatel
   field the format needed that nothing had, and it is provenance rather than simulation;
   and a browser refuses beacons from its own process, because `Net.has_session()` is true
   for a host the moment a slot is opened and this page is reached from that very screen.
-- **12.1b's other half, RECONNECT, is still open — and is now down to exactly two things.**
-  ✅ The third, **the returning peer's old player id**, was built by 12.4 on 2026-09-20:
-  `Net.reserve_seats()` names which ids a joiner may be given and in what order, so a seat
-  is the file's or the lobby's rather than whoever's phone connected first. What is left:
-  **(1)** a dropped peer **concedes** (`SimPlayer.defeat_reason`, 12.1e) and cannot come back
-  to a match it has already lost, so reconnect needs a grace period before that
-  `ResignCommand` is queued — *how long a match waits for a phone in a tunnel* is an
-  owner-decision, not a code shape; **(2)** no path admits a peer to a world already
-  running — every join lands in the lobby, and the start handshake (12.1d) holds the clock
-  for joiners who have not arrived rather than letting one arrive late.
+- **12.1b's other half, RECONNECT, is still open — and is now down to ONE thing.**
+  ✅ The **old player id** was built by 12.4 on 2026-09-20: `Net.reserve_seats()` names which
+  ids a joiner may be given and in what order, so a seat is the file's or the lobby's rather
+  than whoever's phone connected first.
+  ✅ **The GRACE PERIOD landed the same day at `Net.DISCONNECT_GRACE = 10.0`** — the owner's
+  opening number, and a feel constant rather than a protocol one, so expect it to move after a
+  playtest. A dropped peer's `ResignCommand` (`SimPlayer.defeat_reason`, 12.1e) now goes on a
+  fuse burnt down in `_process` instead of firing on the instant. Three rules came with it:
+  the fuse is lit **only inside a match** (a lobby drop has nothing to concede), a seat in its
+  grace period is **offered back before any other** free id, and only the **ready ack** puts
+  it out — a peer merely connecting is not proof anybody can play, and clearing it there would
+  resurrect the unresolvable match 12.1e exists to prevent.
+  ⛳ **What is left is that nothing dials back in.** Every join lands in the lobby, the start
+  handshake (12.1d) holds the clock for joiners who have not arrived rather than admitting one
+  late, and a dropped client tears its own session down — so the ack above is wired and
+  unreachable until that half is built. It also wants a **rejoin token**: nothing on the wire
+  says who a returning device is, so offering the held seat back is a heuristic that two
+  simultaneous drops would get wrong. ⚠️ **And one thing the playtest will raise**: nothing
+  tells the other players the match is holding its breath, so a silent ten seconds reads as
+  the host having crashed.
   *Desync detection is retired* — `Net` has no `SimWorld` on a client and `state_hash()`
   appears only in tests, so with one authoritative sim and full snapshots there is no
   second simulation to diverge from. ⚠️ **12.4's row contradicted this sentence for sixteen
@@ -3751,27 +3761,31 @@ arriving as an economy failure with no mention of a dragon in the log.
   and `test_wall_facing` re-measures them every run, so a re-bake fails it by design.
 - **`11.x-wonder-victory`** — the wonder as a fourth win condition. **Regicide (11.2)** remains
   declared and inert. The other three are live and none is greyed.
-- **12.1b reconnect — two things, and one of them is a ruling rather than code.** Discovery
-  landed 2026-08-31 and closed the friction point (typing an IP); the *config*, the *full
-  snapshot* and the *old player id* it needed are all built now, the last two by 12.4. What is
-  left is **(a)** a grace period before `_on_peer_disconnected` concedes on a dropped player's
-  behalf — an owner-decision about how long a match waits for a phone in a tunnel — and
-  **(b)** admitting a peer to a world already running, which no join path does today.
+- **12.1b reconnect — down to ONE thing, the client half.** Discovery landed 2026-08-31 and
+  closed the friction point (typing an IP); the *config*, the *full snapshot* and the *old
+  player id* it needed are all built, the last two by 12.4. ✅ **The grace period landed
+  2026-09-20 at `Net.DISCONNECT_GRACE = 10.0`** (owner: *"lets start with 10sec"*) — a dropped
+  player's concede goes on a fuse instead of firing instantly, only inside a match, and the
+  seat is offered back before any other. **What is left is that nothing dials back in**: a
+  dropped client tears its own session down, so no path admits a peer to a world already
+  running. The host-side ack that would put the fuse out is wired and unreachable until that
+  lands. ⚠️ **And one question the playtest will raise**: nothing tells the other players the
+  match is holding its breath, so a silent ten seconds reads as the host having crashed.
 - **Naval combat.** Ships float and path since 2026-08-23 and transports load since 2026-08-29,
   but nothing has ever fought at sea, so a loaded transport crosses unopposed. Archipelago is what
   demands it, and it is not what makes that map playable.
 - **Replays.** All that is left of 12.4's original row. `Replay` is a 0.7 test fixture and nothing
   player-facing records or plays one; it shares no format with the save, since a save is a world
   state and a replay is a command list.
-- ⚠️ **`vis.foundation_9x9` IS BAKED, STAGED, AND WIRED TO NOTHING — found 2026-09-20 while
-  pruning `asset_request.md`, which is the only reason it was found.** The art side delivered it
-  on 2026-09-06; `visuals.json` has no entry for it and `building.town_center.visual_foundation`
-  still says `vis.foundation_8x8`. **The `_note` beside that field is what kept it that way** —
-  it cited a tracker deleted on 2026-08-16, promised a 10×10 that will never exist, and warned
-  that pointing at it would render magenta. Every clause stale, and together they argued against
-  the fix. Two lines of data; the judgement under it is the owner's, because the town centre's
-  **mesh is 8.99 tiles against a footprint of 10**, so the question is whether the art comes up
-  or the footprint comes down.
+- ⛔ **THE ART PACK OWES ONE ATLAS AND CANNOT SHIP WITHOUT IT.** `vis.foundation_9x9` was wired
+  on 2026-09-20 (it had been baked, staged and named by nothing since 2026-09-06), and
+  `art_base_v2.zip` carries `vis.foundation_8x8` and not the 9×9 — so on a device with no
+  staged tree the town-centre foundation draws the **magenta placeholder**. Caught by
+  `preview_art_pack`, which is exactly what it exists for: `res://` beats a mounted pack, so
+  this workstation cannot fail the obvious test. **`base` needs a rebuild to v3 and a
+  republish before the next build goes to a phone.** ⚠️ The general rule, worth more than the
+  row: **adding an id to `visuals.json` is a pack change**, because `build_packs.py` resolves
+  packs from what the seam can ask for rather than from a directory listing.
 - **`13.x-claim-dead-end`** — killing the hatchling leaves scenario 4 unwinnable and unlosable.
   The nest half is closed (16.6); this half is not expressible, because `unit.dragon_baby == 0` is
   true from tick 1. The card's recommendation is accept, and revisit only if a playtest hits it.

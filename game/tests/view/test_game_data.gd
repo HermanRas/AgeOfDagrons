@@ -229,7 +229,7 @@ func test_entity_def_ids_translate_to_visual_ids() -> void:
 func test_a_building_def_resolves_a_different_visual_per_phase() -> void:
 	# Foundation / complete / rubble are three atlases, so the phase has to reach
 	# the lookup or a destroyed building keeps drawing intact.
-	assert_eq(reg.visual_for(&"building.town_center", 0), &"vis.foundation_8x8")
+	assert_eq(reg.visual_for(&"building.town_center", 0), &"vis.foundation_9x9")
 	assert_eq(reg.visual_for(&"building.town_center", 2), &"vis.town_center")
 	assert_eq(reg.visual_for(&"building.town_center", 3), &"vis.rubble_town_center")
 	assert_eq(reg.visual_for(&"building.town_center"), &"vis.town_center",
@@ -319,8 +319,12 @@ func test_every_building_names_a_visual_for_all_three_phases() -> void:
 
 func test_visual_for_phase_maps_construction_phases_onto_the_foundation() -> void:
 	var b: BuildingDef = reg.building(&"building.town_center")
-	assert_eq(b.visual_for_phase(0), &"vis.foundation_8x8", "FOUNDATION")
-	assert_eq(b.visual_for_phase(1), &"vis.foundation_8x8", "UNDER_CONSTRUCTION shares it")
+	# 9x9 since 2026-09-20; it was on the 8x8 pad for six weeks after a better one was baked.
+	# The id is incidental to what this test is about -- that the PHASE reaches the lookup --
+	# but pinning it is what would catch the foundation silently falling back to the complete
+	# building's atlas.
+	assert_eq(b.visual_for_phase(0), &"vis.foundation_9x9", "FOUNDATION")
+	assert_eq(b.visual_for_phase(1), &"vis.foundation_9x9", "UNDER_CONSTRUCTION shares it")
 	assert_eq(b.visual_for_phase(2), &"vis.town_center", "COMPLETE")
 	assert_eq(b.visual_for_phase(3), &"vis.rubble_town_center", "DESTROYED")
 

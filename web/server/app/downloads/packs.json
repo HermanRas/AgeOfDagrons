@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "generated": "2026-09-20T04:54:44Z",
+  "generated": "2026-09-20T08:42:54Z",
   "packs": [
     {
       "id": "howtoplay",
@@ -36,15 +36,15 @@
       "id": "base",
       "kind": "art",
       "folder": "",
-      "version": 2,
+      "version": 3,
       "required": true,
       "title": "Game art",
       "author": "Age of Dragons",
       "description": "Every unit, building, terrain and prop in the game. Without it Age of Dragons draws coloured placeholder shapes -- it runs, but nothing looks like what it is.",
-      "size": 80128837,
-      "sha256": "22f48c9d0299867c0ec1b124576ecf702ab8d6d00f5897aa0ef9e21a9615e89a",
+      "size": 80230976,
+      "sha256": "b8d04bb6bc63cd37c05823ff20a6791195399ce6011bd4ca7e99206878a570dc",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/art_base_v2.zip"
+        "https://aod.dragoon.co.za/downloads/art_base_v3.zip"
       ]
     },
     {
