@@ -12,14 +12,14 @@
   <a href="LICENSE"><img alt="Code licence: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
   <a href="LICENSE-ART.md"><img alt="Art licence: CC BY-SA 3.0" src="https://img.shields.io/badge/art-CC--BY--SA%203.0-lightgrey"></a>
   <img alt="Engine: Godot 4.7.1" src="https://img.shields.io/badge/engine-Godot%204.7.1-478cbf">
-  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta%20(v0.9.9)-orange">
+  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta%20(v0.9.31)-orange">
 </p>
 
 ---
 
 > ### ⚠️ Read this first
 >
-> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.9 — the eighth
+> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.31 — the ninth
 > beta.** The MVP is achieved and the game is played on a phone: a map, units that gather
 > and fight, buildings, five ages, a 27-entry tech tree, control groups, win conditions,
 > multiplayer and five AI difficulties.
@@ -27,11 +27,12 @@
 > **What is missing is named rather than glossed.** Of fifteen phases, four are closed
 > outright and two have not started — **13, the dragons this game is named after, because
 > `vis.dragon` has no rig and cannot walk, attack or die**; and 14, a declared ceiling
-> where no AI rule can see its opponent. Several others are one or two items short. LAN
-> discovery, save/load and chat transport are not built.
+> where no AI rule can see its opponent. Several others are one or two items short. Chat
+> has a layout and no transport, and a client that loses its host for longer than about
+> fifteen seconds cannot dial back in.
 >
-> **[PROGRESS.md](PROGRESS.md) is the status document** and is kept honest, phase by
-> phase. Read it before judging anything here.
+> **[PLAN.md](PLAN.md) is the status document** and is kept honest, phase by phase. Read
+> it before judging anything here.
 
 ---
 
@@ -81,8 +82,7 @@ somewhere to point besides the enemy's front gate.
 Version tags follow `v0.1.0`–`v0.8.9` alpha, `v0.9.x` beta, `v1.0.0` release.
 
 The full phase-by-phase breakdown is in **[Docs/IDEA.md](Docs/IDEA.md)**; the engineering
-plan that implements it is **[PLAN.md](PLAN.md)**; where it has actually got to is
-**[PROGRESS.md](PROGRESS.md)**.
+plan that implements it, and where it has actually got to, is **[PLAN.md](PLAN.md)**.
 
 ---
 
@@ -174,8 +174,8 @@ the device; desktop numbers mean nothing for a mobile budget.**
 
 ## Current state
 
-Summarised from [PROGRESS.md](PROGRESS.md), which is the authoritative version and carries
-the detail of what each 🟢 is still short of.
+Summarised from [PLAN.md](PLAN.md), which is the authoritative version and carries the
+detail of what each 🟢 is still short of.
 
 | Phase | | |
 |---|---|---|
@@ -247,8 +247,7 @@ AgeOfDagrons/
 ├── tools/                asset-pipeline recipes and scripts (isobake is its own repo)
 ├── assets/               source art the pipeline consumes — UI_Gen sheets, HELP_Gen captures
 ├── Docs/                 build, contribute, licence, assets, design docs
-├── PLAN.md               how we're building it — architecture, API, risks
-├── PROGRESS.md           where it actually is, phase by phase
+├── PLAN.md               how we're building it, and where it actually is, phase by phase
 ├── BUGS.md               owner-reported defects
 ├── asset_request.md      art the game side needs, requested per need
 └── CREDITS.md            third-party attribution (a licence obligation, not a courtesy)

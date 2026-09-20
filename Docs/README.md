@@ -15,7 +15,7 @@ Everything you need to clone, build, run, contribute to and re-skin **Age of Dra
 > and the game is played on a phone — menu, map, camera, units, buildings, resources, HUD,
 > ages, a 27-entry tech tree, control groups, win conditions, multiplayer and five AI
 > difficulties. Of fifteen phases, four are closed outright and two have not started.
-> **[PROGRESS.md](../PROGRESS.md) is the status document** and is kept current; this file
+> **[PLAN.md](../PLAN.md) is the status document** and is kept current; this file
 > tells you how to build and contribute, and says plainly when it describes something that
 > does not exist yet.
 
@@ -679,9 +679,8 @@ Because of §6.1, a total conversion is a content job with no code in it:
 
 | Document | What |
 |---|---|
-| [PROGRESS.md](../PROGRESS.md) | **Where the project is, phase by phase.** The status document — start here |
+| [PLAN.md](../PLAN.md) | **How it is built and where it has got to, phase by phase** — architecture, API reference, phase plan, risks. The status document and the authoritative source; start here |
 | [IDEA.md](IDEA.md) | What we're building — the phases, gameplay design |
-| [PLAN.md](../PLAN.md) | How — architecture, API reference, phase plan, risks. The authoritative source |
 | [BUGS.md](../BUGS.md) | Owner-reported defects |
 | [asset_request.md](../asset_request.md) | Art the game side needs, requested per need and answered in place |
 | [ART_PROMPT.md](ART_PROMPT.md) | The 14 generation prompts behind the UI art set |
