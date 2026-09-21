@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_destroy_confirm.gd" id="1_destroyconfirm"]
+
+[node name="PreviewDestroyConfirm" type="Node"]
+script = ExtResource("1_destroyconfirm")

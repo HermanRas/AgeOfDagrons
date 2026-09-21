@@ -42,6 +42,25 @@ var _message_log: MessageLog
 ## holds and renaming the class would only move the mismatch somewhere else.
 var _pause_menu: PauseMenu
 
+## "Are you sure?" in front of Destroy (owner, playtest 2026-09-20: *"currently it's
+## insta death or destroy, sometimes by accident"*; board `8.x-destroy-confirm`).
+##
+## ⚠️ **A HUD AFFORDANCE AND NOT A RULE.** `DebugDestroyCommand` is exactly as
+## trustworthy as it was -- §4's invariant is that the server refuses what it should
+## refuse whatever the HUD does, and a client that never showed this dialog would still
+## be unable to destroy somebody else's barracks.
+var _destroy_confirm: ConfirmOverlay
+
+## Which entity `_destroy_confirm` is currently asking about, or 0.
+##
+## ⛔ **HELD ACROSS A GAP IN WHICH THE WORLD KEEPS MOVING.** The clock does not stop for
+## this dialog (the pages' convention, not `PauseMenu`'s), so between the question and
+## the answer the target can be killed, or the player can lose the match. The id is
+## therefore re-checked against the live snapshot on confirm rather than trusted --
+## `_view.facts_for()` answering nothing means the thing the player was asked about is
+## already gone, and submitting would be acting on a stale question.
+var _pending_destroy_id: int = 0
+
 ## The three full-screen pages behind the minimap's other three corner buttons
 ## (PLAN.md 8.2b). One is a mechanism and two are wireframes; see each class.
 var _chat: ChatPanel
@@ -656,6 +675,22 @@ func _build_hud() -> void:
 	# ended while the briefing was still up, the verdict is what outranks.
 	_briefing = ScenarioBriefing.new()
 	hud.add_child(_briefing)
+
+	# THE DESTROY CONFIRMATION, above the pages for the briefing's first reason -- a
+	# question the player has been asked outranks a market panel they left open -- and
+	# below the result for its second. If the match is decided while this is up, the
+	# verdict wins and the dialog's own guard drops the pending target.
+	#
+	# ⚠️ **EVERY CONTROL ON IT IS A `Button`**, which is what makes it usable on a phone:
+	# `emulate_mouse_from_touch` is off for the length of a match and a `BaseButton` is
+	# the only thing in this project that answers a raw touch. `preview_touch_controls`
+	# is the check, and it is the volume sliders' lesson -- they were inert under a thumb
+	# from the day they landed with every test green. A confirm dialog nobody can dismiss
+	# is worse than no dialog.
+	_destroy_confirm = ConfirmOverlay.new()
+	_destroy_confirm.confirmed.connect(_on_destroy_confirmed)
+	_destroy_confirm.cancelled.connect(_on_destroy_cancelled)
+	hud.add_child(_destroy_confirm)
 
 	# ADDED AFTER ALL OF THEM, so it draws over the lot. If the match is decided
 	# while the player happens to have a page open, the result is the thing that
@@ -1462,6 +1497,21 @@ func _refresh_result(snap: Dictionary) -> void:
 	# frame's border say so, and a sentence long enough to wrap onto three lines
 	# would push the buttons down out of it.
 	_match_over = true
+	# A QUESTION ABOUT A MATCH THAT IS OVER IS NOT A QUESTION ANY MORE. The destroy
+	# dialog is below the result in the HUD's order, so leaving it open would put a live
+	# DESTROY button under a verdict screen -- and answering it would submit an order into
+	# a finished match. Dropped rather than left for `_on_destroy_confirmed`'s own guard,
+	# which catches the command but would still have shown the player a dead modal.
+	#
+	# ⚠️ **NULL-GUARDED, AND NOT MERELY TO KEEP A TEST GREEN.** This function is reachable
+	# on a `GameScene` that never entered the tree and so never ran `_build_hud` --
+	# `test_defeat_notices` does exactly that on purpose, injecting only `_toast` and
+	# `_result`, because everything the verdict depends on is a pure function of a
+	# snapshot. That property is worth more than this line is: an unguarded widget call
+	# here makes `_refresh_result` untestable without a whole HUD.
+	_pending_destroy_id = 0
+	if _destroy_confirm != null:
+		_destroy_confirm.close()
 	var winner := int(snap.get("winner_id", 0))
 	var reason := int(mine.get("defeat_reason", SimPlayer.Defeat.ELIMINATED))
 	# YOUR SIDE WINNING IS YOU WINNING (2026-08-31). `winner_id` names one survivor of
@@ -2606,8 +2656,69 @@ func _on_ungarrison_requested(building_id: int, index: int) -> void:
 	Net.submit_command(UngarrisonCommand.new(Net.local_player_id(), building_id, index))
 
 
+## Destroy ASKS FIRST (owner, playtest 2026-09-20; board `8.x-destroy-confirm`). It went
+## straight to `Net.submit_command` until 2026-09-21, which made demolishing your own town
+## centre a single tap with no way back -- and the owner had already lost buildings to it.
+##
+## ⛔ **NO ESCAPE HATCH, AND THAT IS A DECISION RATHER THAN AN OMISSION.** The card floats a
+## held press or a modifier that skips the dialog. Not invented here: the complaint is
+## *about accidents*, and a skip gesture is a second way to destroy something by accident
+## wearing the disguise of an expert feature. Cheap to add if the confirmation turns out to
+## be tiresome in a real game -- which is a question for a playtest and not for this file.
+##
+## ⚠️ **ONE ENTITY, BECAUSE THAT IS WHAT THE VERB DOES TODAY.** `SelectionPanel` emits
+## `debug_destroy_requested(_selected_id)` -- the PRIMARY -- so selecting twenty villagers
+## and pressing Destroy kills one of them. The dialog names that one thing and does not
+## claim a count it cannot deliver. **Whether Destroy should take the whole selection is a
+## separate question and a real one**; if it ever does, this body is the other half that
+## has to change, and a dialog saying "Destroy 20 Villagers?" is the point of noticing.
 func _on_debug_destroy_requested(target_id: int) -> void:
+	var facts := _view.facts_for(target_id)
+	if facts.is_empty():
+		return
+
+	_pending_destroy_id = target_id
+	_destroy_confirm.open(
+			"Destroy %s?" % _destroy_target_name(facts),
+			"This cannot be undone.",
+			"DESTROY")
+
+
+## What to call the thing about to be destroyed, in the player's words.
+##
+## Falls back to the raw def id rather than to "it": an id on screen is ugly and tells the
+## player exactly what they are about to lose, where a pronoun in a destructive dialog
+## tells them nothing. The same reasoning `ConfirmOverlay.open` gives for a confirm button
+## that says the VERB instead of "YES".
+func _destroy_target_name(facts: Dictionary) -> String:
+	var def_id: StringName = facts.get("def_id", &"")
+	var ud: UnitDef = GameDataRegistry.unit(def_id)
+	if ud != null and not ud.name.is_empty():
+		return ud.name
+	var bd: BuildingDef = GameDataRegistry.building(def_id)
+	if bd != null and not bd.name.is_empty():
+		return bd.name
+	return String(def_id)
+
+
+## ⚠️ **RE-CHECKED, NOT TRUSTED.** The clock runs under this dialog, so the target may have
+## died while the question was on screen -- and the order the player would be confirming is
+## then about something they can no longer see. `DebugDestroyCommand.validate()` refuses a
+## dead entity anyway (§4, and this changes nothing about that); this is about not sending
+## a command whose premise expired, and about the toast telling the truth.
+func _on_destroy_confirmed() -> void:
+	var target_id := _pending_destroy_id
+	_pending_destroy_id = 0
+	if target_id == 0:
+		return
+	if _view.facts_for(target_id).is_empty():
+		_toast.show_message("It is already gone")
+		return
 	Net.submit_command(DebugDestroyCommand.new(Net.local_player_id(), target_id))
+
+
+func _on_destroy_cancelled() -> void:
+	_pending_destroy_id = 0
 
 
 ## Starts the research; `AgeSystem` finishes it some seconds later. The badge's

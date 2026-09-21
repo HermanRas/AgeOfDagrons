@@ -331,6 +331,12 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role browse
 
+# DOES DESTROY ASK FIRST, AND DOES CANCEL ACTUALLY SAVE IT? EXIT CODE IS THE ANSWER, plus
+# one screenshot because whether the dialog reads as a warning is a question for a person.
+# The load-bearing step is the NEGATIVE one: a wiring slip joining both buttons to one
+# handler photographs perfectly and destroys what the player just declined to destroy.
+& $godot --path game res://dev_preview/preview_destroy_confirm.tscn
+
 # WHAT ASKS FOR MORE THAN EIGHT SLOTS, AND WHAT THE CAP THROWS AWAY. EXIT CODE IS THE
 # ANSWER. Headless. Every building x age x phase x rally x garrison x gate x techs and
 # every unit x stance x cooldown -- 4,328 rows -- comparing the UNCAPPED row against what
@@ -370,6 +376,26 @@ setting a match runs under. It was verified against the bug it is for rather tha
 to catch it: swapping the panel back to a plain `HSlider` makes it report NOTHING on three
 of its four rows. **Run it after adding any control that is not a `BaseButton`** — a button
 answers a raw touch and, in this project, nothing else does.
+
+⚠️ **IT COVERS `ConfirmOverlay` SINCE 2026-09-21, AND THE RULE ABOVE WOULD HAVE LET IT
+THROUGH.** Both its controls are `Button`s, which is the class that was always fine. What
+was new is what they sit UNDER — a full-rect `MOUSE_FILTER_STOP` root and backdrop whose
+whole job is to swallow presses aimed at the match behind them. **A backdrop that swallows
+too much is a dialog nobody can answer**, which on a phone is worse than the accidental
+demolition it guards: the match is still running and the player cannot get back to it.
+➡️ So the rule is wider than "not a `BaseButton`" — **also run it for a button placed under
+something that eats input.**
+
+📝 **THE BUTTON PROBE COST THREE WRONG DIAGNOSES AND EVERY ONE WAS IN THE HARNESS**, which
+is worth more than the probe: (1) a GDScript lambda captures a local **by value**, so a
+`presses += 1` counter never moved and every row including the mouse read 0 — a complete
+false alarm about a working dialog; (2) a press CLOSES the dialog, so the second button was
+probed on a hidden overlay; (3) `PRESET_FULL_RECT` resolves against a parent, and against
+the preview's unsized root the dialog centred about the ORIGIN, putting CANCEL's centre at
+**x = −109**, off screen. ⛔ **And the touch rows passed anyway at that negative coordinate
+while the mouse row did not**, so the probe was green for a reason unrelated to what it
+claims to measure. The mouse row is what caught all three — §6's rule about measuring
+rather than reasoning, and the reason `_probe`'s header calls that row "not decoration".
 
 `preview_scenario_hud` launches a real campaign mission through the real path
 (`Net.pending_match`, then `Game.tscn`) and photographs the two things 15.6 added: the
