@@ -256,12 +256,18 @@ func host_open(port: int = PORT) -> Error:
 ## available answers: the session is fine, both ends are willing, and the only thing that went
 ## wrong was some seconds of silence.
 ##
-## ⚠️ **PATIENCE IS THE CHEAP HALF OF RECONNECTING, AND IT IS NOT THE SAME THING.** A link that
-## never drops needs no rejoin token, no identity on the wire and no re-seating: the session was
-## never torn down, so there is nothing to restore. That covers PACKET LOSS. It does **not**
-## cover a socket that genuinely dies -- an interface going down, or Android suspending a
-## backgrounded app -- where the peer is unrecoverable and only a fresh dial can help. **That is
-## still the rest of 12.1b** and this constant must not be read as having closed it.
+## ⛳ **THIS IS THE WHOLE OF THE SUPPORTED RECOVERY STORY (owner's ruling, 2026-09-21).** A link
+## that never drops needs no rejoin token, no identity on the wire and no re-seating: the session
+## was never torn down, so there is nothing to restore. That covers PACKET LOSS -- a tunnel, a
+## lift, an access-point handover -- and packet loss is the case the game supports.
+##
+## It does **not** cover a socket that genuinely dies: an interface going down, flight mode, or
+## Android suspending a backgrounded app. **Those are out of scope, deliberately and for good**
+## (*"we will not support reconnect after grace ... full reconnect after flight mode or app crash
+## is not in scope"*). A peer whose socket dies is out of the match, and the seconds below are
+## the only window in which anything can save them. ⚠️ **So these constants carry more weight
+## than they look like they do** -- they are not the cheap half of a mechanism whose expensive
+## half is coming, they are the mechanism.
 ##
 ## ## THE NUMBERS, AND THE PRICE OF RAISING THEM
 ##
@@ -536,26 +542,41 @@ func _on_peer_connected(peer_id: int) -> void:
 ## good and wrong for a phone that lost signal at a traffic light, and the difference is not
 ## visible at the moment the socket dies -- which is the whole problem.
 ##
-## ## ⚠️ THIS NUMBER CANNOT BE TUNED BY FEEL YET, AND A PLAYTEST PROVED IT
+## ## ⛔ IT IS A NOTICE PERIOD, NOT A RECOVERY WINDOW -- AND THAT IS FINAL (owner, 2026-09-21)
 ##
-## It went 10 -> 30 on a feel report and came straight back (owner, 2026-09-20: first *"10sec
-## disconnect feels too fast"*, then, having played 30, *"the disconnect grace period was not
-## the problem we can revert it back to 10"* -- because *"even though ping has only dropped for
-## a short few sec and returned, the client does not reconnect, it disconnects instantly"*).
+## Read this before changing the number, because the obvious reading of it is wrong and cost a
+## playtest. **Nobody ever comes back through this fuse.** Reconnecting a dead socket is out of
+## scope by the owner's ruling -- *"we will not support reconnect after grace ... full reconnect
+## after flight mode or app crash is not in scope"* -- so `_on_server_disconnected` tearing the
+## session down and returning to the menu is the intended end of that player's match, not a gap
+## waiting to be filled. `_recv_ready`'s `_conceding.erase` is therefore unreachable **by
+## ruling** rather than by omission; it is kept as the honest seam, not as a promise.
 ##
-## ⛳ **THAT IS THE WHOLE STORY OF THIS CONSTANT: IT IS HALF A MECHANISM.** This fuse holds the
-## SEAT open on the host. **Nothing on the client dials back into it** --
-## `_on_server_disconnected` tears the session down and returns to the menu, and no code
-## anywhere attempts a re-dial (the rest of 12.1b; the only other mentions of "reconnect" in
-## `src/` are comments describing this same gap). So the grace is a door held open onto a
-## corridor with nobody in it: **every value of it produces an identical experience**, because
-## the thing it waits for cannot occur. Raising it only lengthens the time the survivors spend
-## fighting a town that does not fight back.
+## ⛳ **SO WHAT THESE TEN SECONDS BUY IS THE SURVIVORS BEING TOLD.** `GameScene` prints *"Player
+## N will be disconnected in Ns"* into the match log every whole second this burns. Without the
+## fuse a player would vanish and be resigned in the same instant, and the only thing anybody
+## would see is a defeat notice for somebody who was alive a frame ago. With it, the countdown
+## is the explanation and the defeat is its conclusion.
 ##
-## **Ten, therefore, and leave it until a client can return.** A number that changes nothing
-## observable cannot be tuned by playing, and asking the owner to feel the difference between
-## two such numbers is asking them to report on a coin flip. It becomes a real feel constant
-## the day the client half lands, and the question is worth putting again then.
+## ## ⚠️ AND THAT MAKES IT TUNABLE BY FEEL FOR THE FIRST TIME, WHICH IT WAS NOT BEFORE
+##
+## It went 10 -> 30 on a feel report and came straight back the same day (owner, 2026-09-20:
+## first *"10sec disconnect feels too fast"*, then, having played 30, *"the disconnect grace
+## period was not the problem we can revert it back to 10"*). **Neither value could have felt
+## like anything**, because back then this was believed to be holding a door open for a returning
+## client and the test that judged it toggled wifi -- a path that reaches neither the link
+## timeout nor a return. A number gating an unbuilt mechanism feels identical at every value.
+##
+## **That objection is now gone.** What the number controls is how long a visible countdown runs,
+## which a player can read off the screen, so a feel report about it now means something. Ten is
+## still the owner's opening figure. ⚠️ **The case for SHORTENING it is the stronger one now** --
+## every second of it is a second of an undefended town bought for a message that is fully
+## delivered in the first second or two -- but that is a judgement, not a defect, and it belongs
+## to whoever plays it next.
+##
+## ⚠️ **NEVER JUDGE IT ALONE.** `LINK_TIMEOUT_MIN_MS` runs in front of it rather than instead of
+## it, so the town stands undefended for their sum -- about 25 s at 15 + 10. That sum is what a
+## playtest is actually feeling.
 ##
 ## For the record, since it was asked (*"will the desync be too much"*): **there is no desync to
 ## be had at any value.** A joined client runs no simulation at all (PLAN.md §12.1 -- `SimHost`
@@ -566,9 +587,12 @@ const DISCONNECT_GRACE := 10.0
 
 ## player id -> seconds left before the server concedes on their behalf. Server-side only.
 ##
-## Keyed on the PLAYER, not the peer, because the peer id is the thing that does not survive a
-## reconnect -- ENet numbers a returning device afresh, so a table keyed by peer could never be
-## matched back up with the seat it is holding open.
+## Keyed on the PLAYER, not the peer. The original reason was that a returning device is
+## renumbered by ENet, and reconnect is out of scope now -- but the key stays where it is,
+## because the simpler reason was always true: `_on_peer_disconnected` erases `_peer_players`
+## before it lights the fuse, so by the time there is anything in here the peer id names
+## nothing. Every reader -- the countdown, `conceding_in`, the `ResignCommand` -- wants the
+## player anyway.
 var _conceding: Dictionary = {}
 
 
@@ -620,12 +644,17 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# the survivors be told which of the two happened, instead of reading "all opponents
 	# eliminated" about somebody whose phone lost signal. See `SimPlayer.defeat_reason`.
 	#
-	# ⏳ **NOT IMMEDIATELY ANY MORE (12.1b, 2026-09-20).** The concede is now put on a
-	# `DISCONNECT_GRACE` fuse and fired in `_process`, so a phone that loses signal for a
-	# moment has a moment to come back. Everything above is unchanged: the same command, the
-	# same reason, the same tick boundary — only later. ⚠️ **The fuse is only lit inside a
-	# MATCH.** A peer that vanishes from the LOBBY has nothing to concede, and lighting it
-	# there would arm a timer against a world that does not exist yet.
+	# ⏳ **NOT IMMEDIATELY: IT GOES ON THE `DISCONNECT_GRACE` FUSE AND FIRES IN `_process`.**
+	# Everything above is unchanged — the same command, the same reason, the same tick
+	# boundary — only some seconds later, and the seconds are spent telling the survivors
+	# rather than waiting for anybody. ⛔ **REACHING THIS LINE ALREADY MEANS THE PLAYER IS
+	# GONE.** A phone that merely loses signal for a moment never gets here: `_set_link_timeout`
+	# absorbs that upstream, and once ENet has given up anyway, reconnect is out of scope
+	# (owner, 2026-09-21). So do not read the fuse as a chance for them to return — see
+	# `DISCONNECT_GRACE`.
+	# ⚠️ **The fuse is only lit inside a MATCH.** A peer that vanishes from the LOBBY has
+	# nothing to concede, and lighting it there would arm a timer against a world that does
+	# not exist yet.
 	if _host != null and _host.world != null and pid > 0:
 		_conceding[pid] = DISCONNECT_GRACE
 
@@ -656,6 +685,16 @@ func _on_connection_failed() -> void:
 ## vanished sat in a match that had stopped existing — no snapshots, no orders, nothing on
 ## screen — because the only thing this emitted was a word for code to branch on. The word
 ## still does that; the note is what a person reads when they land back on the menu.
+##
+## ⛔ **AND GOING BACK TO THE MENU IS THE ANSWER, NOT A PLACEHOLDER FOR ONE** (owner's ruling,
+## 2026-09-21: *"full reconnect after flight mode or app crash is not in scope"*). Nothing here
+## re-dials, and nothing should: a match this device can no longer reach is over for it. The
+## recoverable case — a few seconds of packet loss — is handled before this ever fires, by
+## `LINK_TIMEOUT_MIN_MS` keeping the socket alive through the silence. If this is reached, the
+## socket is dead, and a re-dial would need a rejoin token and a path admitting a peer into a
+## running world, both of which were ruled out with it. **Do not add a retry loop here** without
+## reopening that ruling first; a half-built one lands the player in the lobby of a match they
+## cannot enter, which is worse than the menu.
 func _on_server_disconnected() -> void:
 	parting_note = "The host left the match."
 	_teardown()
@@ -677,12 +716,16 @@ func _next_free_player_id() -> int:
 	var taken := {}
 	for peer in _peer_players:
 		taken[int(_peer_players[peer])] = true
-	# ⏳ **A SEAT THE MATCH IS STILL HOLDING OPEN IS OFFERED FIRST** (12.1b). Somebody
-	# arriving while a grace period is burning is overwhelmingly likely to BE the player it
-	# is burning for, and handing them any other id would seat them in a stranger's town.
-	# ⚠️ **It is a heuristic and not an identity check, which matters with two simultaneous
-	# drops** — nothing on the wire says who a returning device is, and giving it one needs a
-	# rejoin token that does not exist yet. That token is the rest of this card.
+	# ⏳ **A SEAT THE MATCH IS STILL HOLDING OPEN IS OFFERED FIRST.** Somebody arriving while a
+	# grace period is burning is overwhelmingly likely to BE the player it is burning for, and
+	# handing them any other id would seat them in a stranger's town.
+	# ⚠️ **It is a heuristic and not an identity check** — nothing on the wire says who a
+	# returning device is, and the rejoin token that would say so was ruled out of scope with
+	# the rest of reconnect (owner, 2026-09-21). **So this preference is very nearly dead
+	# code**: a fuse only burns inside a match, every join path lands in the lobby, and the
+	# drop that lit it is unrecoverable by ruling. It is kept because it costs one loop and is
+	# the correct answer to the question it asks, so a future arrival mid-match — a spectator,
+	# a resumed save — inherits the right one rather than the lowest free id.
 	for pid in _conceding:
 		if not taken.has(int(pid)):
 			return int(pid)
@@ -769,11 +812,12 @@ func _process(delta: float) -> void:
 ## stays deterministic is the part that has to: the *command* lands on a tick boundary like
 ## every other one, so every client still sees the defeat at the same tick.
 ##
-## ⛔ **THE CONCEDE IS STILL THE ONE THE MATCH CANNOT RESOLVE WITHOUT.** If this loop is ever
-## made to stop firing — a reconnect that clears the fuse without the player actually coming
-## back — the survivors fight an abandoned town forever with no way to win and no way to be
-## told why. That is 12.1e's whole argument and the grace period narrows it rather than
-## repealing it.
+## ⛔ **THE CONCEDE IS THE ONE THE MATCH CANNOT RESOLVE WITHOUT, AND EVERY FUSE LIT HERE NOW
+## REACHES IT.** Reconnect is out of scope (owner, 2026-09-21), so nothing clears a fuse once it
+## is burning and the concede is a certainty rather than a threat — which is what makes the
+## countdown `GameScene` prints off it honest. If this loop is ever made to stop firing, the
+## survivors fight an abandoned town forever with no way to win and no way to be told why: that
+## is 12.1e's whole argument, and the grace period delays it rather than repealing it.
 func _tick_concedes(delta: float) -> void:
 	if _conceding.is_empty():
 		return
@@ -850,10 +894,13 @@ func _recv_ready() -> void:
 	# prevent. This ack means "I have built my world and a snapshot means something to me",
 	# which is the only honest moment to say the player is back.
 	#
-	# ⛳ **UNREACHABLE TODAY, DELIBERATELY WIRED ANYWAY.** A dropped client tears its own
-	# session down and no path dials back in, so nothing sends this after a drop — that
-	# client half is the rest of 12.1b. The seam is here so the grace period means what it
-	# says the moment it lands, rather than being a timer nobody can ever stop.
+	# ⛳ **AND AFTER A DROP IT IS UNREACHABLE BY RULING, NOT BY OMISSION** (owner, 2026-09-21).
+	# A dropped client tears its own session down and nothing dials back in — that is the
+	# intended end of its match, not an unfinished half. This line still fires on the ordinary
+	# path, where a peer acks ready at match start and has no fuse to put out; what will never
+	# happen is it clearing one. **It is kept as the seam rather than deleted** because it is
+	# the hard-won part: if the ruling is ever reopened, *this* is the only honest moment to
+	# say a player is back, and rediscovering that costs more than the two lines below.
 	if not _peer_players.is_empty():
 		_conceding.erase(int(_peer_players.get(sender, 0)))
 	if not _awaiting_ready.erase(sender):

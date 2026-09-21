@@ -1,6 +1,9 @@
 ## One player's persistent state within a match: stock, population, and (later)
 ## age/tech/control groups. Control groups persist here rather than client-side
-## so they survive reconnect (PLAN.md 7.1).
+## so they survive being reloaded with the match (PLAN.md 7.1). ⚠️ The original
+## reason was "so they survive reconnect", which 2026-09-21 ruled out of scope --
+## but the placement stands on `SaveGame`, which captures `SimPlayer` and would
+## restore a save with empty groups if these lived in the view.
 class_name SimPlayer
 extends RefCounted
 

@@ -1,7 +1,9 @@
 ## Assigns the current selection to one of a player's 5 control-group slots
 ## (PLAN.md 10.1/10.2). Sim state, not view state -- unlike an ordinary
-## selection this must survive a reconnect, so it lives on `SimPlayer`
-## (10.6) rather than only in the client's `Selection`.
+## selection this must survive the match being saved and reloaded, so it lives
+## on `SimPlayer` (10.6) rather than only in the client's `Selection`.
+## ⚠️ It used to say "must survive a reconnect"; reconnect went out of scope on
+## 2026-09-21 and `SaveGame` is what the placement rests on now.
 ##
 ## Any owned, alive entity can go in a slot -- a group is "revisit this
 ## selection later," not specifically a squad of units, so nothing here

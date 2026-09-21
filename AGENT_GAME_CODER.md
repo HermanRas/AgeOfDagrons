@@ -1102,9 +1102,20 @@ something. **Do not re-grow it here either.** What follows is a pointer, not a c
    the nest and the mother**, which `test_campaigns` asserts.
 
 Then, in no forced order: Phase 14's AI enemy-blindness; the AI researching anything at all
-(`9.x-ai-research`); `cliff-terrain`; `11.x-wonder-victory` and 11.2 Regicide; 12.1b reconnect
-(down to the client half — the grace period and the seat both landed); naval combat; replays,
-which are all that is left of 12.4's original row; and `13.x-claim-dead-end`.
+(`9.x-ai-research`); `cliff-terrain`; `11.x-wonder-victory` and 11.2 Regicide; naval combat; and
+replays, which are all that is left of 12.4's original row.
+
+⛔ **TWO ROWS LEFT THIS LIST ON 2026-09-21 AND ONE OF THEM IS A RULING WORTH KNOWING COLD.**
+`13.x-claim-dead-end` shipped (`22a6799`, the `CLAIM` subject). **And 12.1b reconnect is CLOSED
+AS OUT OF SCOPE** — owner: *"we will not support reconnect after grace. in tunnel test is fine,
+full reconnect after flight mode or app crash is not in scope."* The supported line: a few
+seconds of **packet loss** survives, because `Net.LINK_TIMEOUT_*` keeps the socket alive; a
+**dead socket** — flight mode, interface down, a suspended app — ends that player's match.
+⚠️ Two things follow that are easy to get wrong later. `LINK_TIMEOUT_*` is no longer "the cheap
+half" of anything, it is **the whole recovery mechanism**, so weakening it now costs matches.
+And `DISCONNECT_GRACE` is a **notice period**, not a recovery window: it is the length of the
+on-screen *"Player N will be disconnected in Ns"* countdown, which is what makes it the first
+version of that constant a playtest can actually judge.
 
 **EIGHT CARDS WERE FILED FROM ONE PLAYTEST SESSION, 2026-09-20** (#109–#116), and they are the
 nearest thing to a current worklist: chat right-align (needs the owner's ruling on whose

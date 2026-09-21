@@ -135,7 +135,12 @@ func test_leaving_clears_the_reservation() -> void:
 	assert_true(Net.reserved_seats().is_empty())
 
 
-# -- how long a match waits for a phone in a tunnel (12.1b) ---------------------------------
+# -- how long the survivors are told before a dropped player is counted out -----------------
+#
+# ⚠️ NOT "how long a match waits for a phone in a tunnel", which is what this header said until
+# 2026-09-21. The tunnel is `Net.LINK_TIMEOUT_*`'s job and it keeps the socket alive so nothing
+# below ever runs. Reaching these tests means the socket died, and reconnecting a dead socket is
+# out of scope by the owner's ruling — so the fuse is a notice period, not a second chance.
 
 ## Pretend player 2 was here and their socket died. `_on_peer_disconnected` is the real entry
 ## point and takes a PEER id, so the mapping has to exist first — this is the same white-box
@@ -147,10 +152,12 @@ func _drop_a_fake_peer(peer_id: int, player_id: int) -> void:
 
 ## ⛔ THE CONCEDE IS DELAYED, NOT CANCELLED, AND BOTH HALVES OF THAT MATTER.
 ##
-## Delayed, because a phone that loses signal at a traffic light should not lose the match.
+## Delayed, because a player vanishing and being resigned in the same instant gives the
+## survivors nothing to read but a defeat notice for somebody who was alive a frame ago — the
+## countdown `GameScene._on_grace_tick` prints is what these seconds are for.
 ## Not cancelled, because `WinConditionSystem` counts whoever still owns something — so a
-## player who never comes back must eventually be counted out, or the survivors fight an
-## abandoned town forever with no way to win and no way to be told why (12.1e).
+## player who is gone must eventually be counted out, or the survivors fight an abandoned town
+## forever with no way to win and no way to be told why (12.1e).
 func test_a_dropped_player_gets_ten_seconds_before_the_match_gives_up() -> void:
 	Net.host_solo()
 	_drop_a_fake_peer(77, 2)
@@ -174,7 +181,9 @@ func test_a_dropped_player_gets_ten_seconds_before_the_match_gives_up() -> void:
 
 
 ## ⛳ THE ACK IS WHAT PUTS IT OUT — connecting is not proof anybody can play. Asserted on the
-## seam directly, because the client half that would send it after a drop is not built.
+## seam directly, because nothing sends it after a drop and nothing will: the client half was
+## ruled out of scope on 2026-09-21. This pins the RULE rather than a live path, so that a
+## reopened ruling inherits the right answer instead of clearing the fuse on connection.
 func test_the_ready_ack_puts_the_fuse_out() -> void:
 	Net.host_solo()
 	_drop_a_fake_peer(77, 2)

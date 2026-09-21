@@ -75,8 +75,16 @@ It cost one playtest already.*
       `_on_server_disconnected` tears the session down and returns to the menu; no code in
       `game/src/` attempts a re-dial. The grace period holds a SEAT open on the host — a door
       onto a corridor with nobody in it. Patience (`Net.LINK_TIMEOUT_*`) now stops a blip
-      becoming a disconnection at all, which is the cheap half; **a dead socket still needs a
-      real re-dial and a rejoin token, which is the rest of card 12.1b.**
+      becoming a disconnection at all, which is the cheap half.
+
+      ✅ **AND THE OWNER RULED ON 2026-09-21 THAT THE OTHER HALF IS NOT WANTED:** *"we will not
+      support reconnect after grace. in tunnel test is fine, full reconnect after flight mode
+      or app crash is not in scope."* So patience is not the cheap half of something bigger —
+      **it is the whole recovery mechanism**, and a dead socket ends that player's match by
+      design. Card 12.1b is closed. ⚠️ The consequence for the number: `DISCONNECT_GRACE` is a
+      **notice period** rather than a recovery window, which is what finally makes it judgeable
+      by playing — it is the length of the *"Player N will be disconnected in Ns"* countdown,
+      and that is on screen.
 
 ### Playtest, 2026-09-20 — PHONE HOSTING A LAPTOP, three findings
 
@@ -161,7 +169,8 @@ yet. They stay open until it is.
 
       Two halves, and the **phone's half was correct**: the 10 s grace ran out, the concede
       landed and the result screen said *"Player 2 has disconnected"* — 12.1e and 12.1b
-      working as designed, because nothing on the laptop dials back in yet.
+      working as designed, because nothing on the laptop dials back in. ✅ **And as of the
+      2026-09-21 ruling nothing ever will**, so that half is not "yet": it is finished.
 
       **The laptop's half is the bug.** `Net._on_server_disconnected` tears the session down
       and emits `session_ended("host left")`, and `GameScene._on_session_ended` ignores every

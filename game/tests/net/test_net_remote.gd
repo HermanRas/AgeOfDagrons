@@ -236,7 +236,13 @@ func test_peer_players_is_a_copy_so_a_caller_cannot_rewrite_the_map() -> void:
 	assert_false(Net.peer_players().has(999))
 
 
-# ── how patient a link is (12.1b) ───────────────────────────────────────────
+# ── how patient a link is ───────────────────────────────────────────────────
+#
+# ⛔ **AND SINCE 2026-09-21 THIS IS THE ENTIRE RECOVERY MECHANISM.** The owner ruled reconnect
+# after a dead socket out of scope, so a match survives a few seconds of silence here or not at
+# all: there is no second chance behind these constants. `Net.DISCONNECT_GRACE` is a notice
+# period, not a fallback. **Weakening anything below therefore costs matches**, where before it
+# only postponed a hole somebody else was going to fill.
 #
 # ⛔ **WHAT THESE CANNOT DO, SAID PLAINLY.** ENet exposes `set_timeout()` and NO getter, and
 # a link needs two ends that this suite cannot have -- so **nothing here proves the timeout
@@ -247,7 +253,7 @@ func test_peer_players_is_a_copy_so_a_caller_cannot_rewrite_the_map() -> void:
 # peer ids it will genuinely be handed during a teardown race, and the constants stand in the
 # relation the comment claims. That is the same split as `MountedPacks.plan_mounts` -- test the
 # decision where the act is untestable -- and it is recorded here so the next reader does not
-# mistake a green suite for evidence that reconnection works.
+# mistake a green suite for evidence that a real blip is survived.
 
 func test_making_a_link_patient_is_safe_when_there_is_no_session() -> void:
 	# Runs during teardown races and in every offline test double. A crash here would take

@@ -956,7 +956,13 @@ func _on_session_ended(reason: String) -> void:
 	get_tree().change_scene_to_file(_MAIN_MENU_SCENE)
 
 
-## Somebody's seat is being held open, with `seconds_left` to go.
+## Somebody is about to be disconnected, with `seconds_left` to go.
+##
+## ⛔ **THIS LINE IS THE WHOLE POINT OF THE GRACE PERIOD, NOT A SIDE EFFECT OF IT** (owner's
+## ruling, 2026-09-21: reconnect after a dead socket is out of scope). Nobody comes back through
+## that countdown, so the seconds exist to be read: without them a player would vanish and be
+## resigned in the same instant, and the survivors' only clue would be a defeat notice for
+## somebody who was alive a frame ago. See `Net.DISCONNECT_GRACE`.
 ##
 ## ⚠️ **NAMED, NOT NUMBERED, WHEREVER A NAME EXISTS.** "Player 2" is what the lobby, the
 ## colours and the result screen all call them, and a log that said "player id 2" would be the
