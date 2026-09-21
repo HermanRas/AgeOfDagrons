@@ -513,11 +513,42 @@ func _show_no_campaign() -> void:
 	_reset_button.disabled = true
 
 
+## The longest text the SMALL banner can hold. Past this it goes in the paragraph banner.
+##
+## ⛔ **A REFUSAL IS A PARAGRAPH AND THE SMALL BANNER IS ONE LINE**, which the owner
+## photographed on 2026-09-21: the def-id refusal printed straight through the gold moulding
+## and over the scenario list behind it, because `show_message` does not resize and a
+## `Label` set to autowrap will happily wrap into space the banner has not got.
+##
+## `NoticeToast` has had the answer since 2026-08-30 and nothing had ever called it --
+## `show_long_message` is documented as *"for a campaign briefing or any other body of text
+## that has to be read rather than noticed"*, which is this exactly. Its own header recorded
+## being unused; it is not any more.
+##
+## ⚠️ **ROUTED ON LENGTH RATHER THAN PER CALLER, deliberately.** The two short notices here
+## are *"X progress reset"* and *"Could not reset progress"*; the long one is whatever
+## `build_config` refused with, and that text is written in `ScenarioDef` -- another file
+## entirely, by somebody not thinking about banners. A rule that lives at the drawing end
+## cannot be forgotten at the writing end.
+##
+## 60 is about two lines in the 205 px dark field at `SIZE`. The paragraph banner holds
+## roughly five lines of 16 px in its 460 px one, so ~275 characters; a refusal longer than
+## that would clip, and `_unknown_def_ids`' sentences are ~215.
+const _SHORT_NOTICE_CHARS := 60
+
+
 func _say(text: String) -> void:
 	# Guarded on the tree, not on the toast: `NoticeToast` fades with a tween and a tween
 	# needs a `SceneTree`, and the suite never parents this screen.
-	if is_inside_tree():
-		_toast.show_message(text)
+	if not is_inside_tree():
+		return
+	if text.length() > _SHORT_NOTICE_CHARS:
+		# And it holds proportionally longer, because `show_long_message` scales its dwell to
+		# reading time -- `DISPLAY_SECONDS`' 2.5 is right for "Not enough resources" and far
+		# too short to read a sentence naming a def id and a suggested subject.
+		_toast.show_long_message(text)
+		return
+	_toast.show_message(text)
 
 
 func _on_back_pressed() -> void:

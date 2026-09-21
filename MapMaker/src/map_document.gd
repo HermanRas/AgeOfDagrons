@@ -929,6 +929,63 @@ func objective_problems() -> Array[String]:
 				+ " Add one, or remove them all to mean 'beat them'")
 	out.append_array(unknown_area_problems())
 	out.append_array(unknown_name_problems())
+	out.append_array(unknown_def_id_problems())
+	return out
+
+
+## Every `unit`/`building` condition naming a def id the game has not got, as sentences. Empty is
+## healthy (board `16.x-unknown-def-id`, 2026-09-21).
+##
+## ## ⛔ THE AUTHORING END OF A TRAP THAT COST A PLAYTEST
+##
+## `{subject: "unit", id: "SirRoland", compare: "==", value: 0, output: "lose"}` was authored in
+## this tool, accepted by it, accepted by `ObjectiveDef.from_dict`, accepted by
+## `ScenarioDef.build_config()`, and counted as **0** at runtime — so the mission was lost on tick
+## 1 and the report was *"either I am doing something wrong or there is a bug"*. The sim and the
+## launcher are both defended now; **this is the only one of the three that catches it while the
+## author is still in the room.**
+##
+## ## ⚠️ IT ASKS THE GAME'S OWN REGISTRY, AND NOTHING WAS COPIED TO MAKE THAT POSSIBLE
+##
+## The card floated two ways to give this panel an id list — a `format/` copy of the registry, or
+## the object palette's id set — and said to decide before writing it. **Neither was needed.**
+## `GameContent` is autoloaded here as `GameDataRegistry` and reads the game's real `units.json`
+## and `buildings.json` from `GameRoot.data_path()` at every launch; `ObjectPalette._ids_for()`
+## has been asking it for the same two lists all along. So this is "one opinion reached from two
+## places" exactly as `unknown_area_problems()` is, with no third copy to drift out of date.
+##
+## ## A WARNING, NOT A REFUSAL — and off the RAW records, for `unknown_area_problems`' reasons
+##
+## Same two as its twin above: *"an author who closes the tool with one lose row drafted has lost
+## nothing; an author refused a save has lost the session"*, and an unparseable row stays in the
+## list so the check reads `record` rather than a parsed def.
+##
+## ⚠️ **AN EMPTY `id` IS LEGAL AND IS SKIPPED**, exactly as the game skips it: it means "any of
+## that subject", which is what *leave the enemy nothing* is written as.
+func unknown_def_id_problems() -> Array[String]:
+	var out: Array[String] = []
+	for i in objectives.size():
+		var record: Dictionary = objectives[i]
+		var subject := str(record.get("subject", "")).to_lower()
+		if subject != "unit" and subject != "building":
+			continue
+		var id := StringName(str(record.get("id", "")).strip_edges())
+		if id.is_empty():
+			continue
+		var known: bool = (GameDataRegistry.unit(id) != null if subject == "unit"
+				else GameDataRegistry.building(id) != null)
+		if known:
+			continue
+		# THE SHAPE OF THE MISTAKE, NOT ONLY THE VALUE. Every def id is `kind.name`, so one with
+		# no dot is not a misspelling of a def — it is a hero's name in the wrong field, which is
+		# the mistake that actually happened. Naming the subject they wanted beats listing 61 ids
+		# they did not.
+		var hint := ""
+		if not String(id).contains("."):
+			hint = " (every def id looks like '%s.something'" % subject \
+					+ " -- for a named hero, use subject 'named unit' instead)"
+		out.append("condition %d counts %ss with def id '%s' and this game has no such %s%s"
+				% [i + 1, subject, id, subject, hint])
 	return out
 
 

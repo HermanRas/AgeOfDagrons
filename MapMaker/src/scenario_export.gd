@@ -426,6 +426,12 @@ func _check_conditions(out: Array[String], doc: MapDocument) -> void:
 	# — and `ObjectiveSystem` answers -1 rather than 0 for it precisely so the scenario is
 	# unwinnable rather than instantly decided, which is not a state worth shipping either.
 	out.append_array(doc.unknown_name_problems())
+	# ⚠️ **AND THE SAME FOR A DEF ID** (board `16.x-unknown-def-id`, 2026-09-21).
+	# `build_config()` refuses these too now, so exporting one writes a mission that will not
+	# start -- and before that refusal existed it wrote one that was LOST ON TICK 1, which is
+	# how the trap was found. Added here as well as in `objective_problems()` because an export
+	# is the moment a draft becomes a shipped mission.
+	out.append_array(doc.unknown_def_id_problems())
 
 
 # ── the two records ─────────────────────────────────────────────────────────

@@ -368,6 +368,67 @@ func test_the_complaint_names_the_regions_the_map_really_has() -> void:
 			"a typo has to be sent to the author's own spelling: %s" % problems[0])
 
 
+# ── a def id the game has not got (board `16.x-unknown-def-id`) ─────────────
+
+## ⛔ **THE ROW THAT COST A PLAYTEST WAS AUTHORED IN THIS TOOL.** Owner, 2026-09-20:
+## `{"subject": "unit", "id": "SirRoland", ...}`, meaning `named_unit` / `"Sir Roland"`. The
+## panel accepted it, the loader accepted it, the launcher accepted it, and the sim counted a
+## def that has never existed as **0** -- so `== 0, lose` fired on tick 1.
+##
+## Three places are defended now and this is the only one that reaches the author while they
+## are still looking at the row.
+func test_a_unit_row_naming_a_def_id_the_game_has_not_got_is_warned_about() -> void:
+	assert_true(_add({"subject": "unit", "id": "SirRoland", "value": 1}))
+	var problems := doc.objective_problems()
+	assert_eq(problems.size(), 1, "%s" % [problems])
+	assert_true(problems[0].contains("SirRoland"), problems[0])
+
+
+## ⚠️ **AND IT NAMES THE MISTAKE'S SHAPE.** Every def id is `kind.name`, so an id with no dot
+## is a hero's name in the wrong field rather than a near miss -- and *"did you mean named
+## unit?"* is the sentence that would have ended the playtest in one read.
+func test_the_warning_points_at_named_unit_when_the_id_has_no_dot() -> void:
+	assert_true(_add({"subject": "unit", "id": "SirRoland", "value": 1}))
+	assert_true(doc.objective_problems()[0].contains("named unit"),
+			"%s" % [doc.objective_problems()[0]])
+
+
+func test_a_dotted_typo_is_warned_about_without_the_named_unit_hint() -> void:
+	# `unit.vilager` is a spelling mistake, not a wrong subject; sending that author to
+	# `named_unit` would send them the wrong way entirely.
+	assert_true(_add({"subject": "unit", "id": "unit.vilager", "value": 1}))
+	var first := doc.objective_problems()[0]
+	assert_true(first.contains("unit.vilager"), first)
+	assert_false(first.contains("named unit"), first)
+
+
+func test_a_real_def_id_is_not_complained_about() -> void:
+	# ⚠️ Reads the GAME's registry, not a copy: `GameContent` loads `units.json` and
+	# `buildings.json` from `GameRoot.data_path()` at launch, which is why no `format/` copy was
+	# needed for this check. If that wiring ever breaks, this test fails rather than the tool
+	# silently warning about every id in the game.
+	assert_true(_add({"subject": "unit", "id": "unit.villager", "value": 1}))
+	assert_true(_add({"subject": "building", "id": "building.town_center", "value": 1}))
+	assert_true(doc.objective_problems().is_empty(), "%s" % [doc.objective_problems()])
+
+
+func test_a_row_with_no_def_id_means_any_of_that_subject_and_is_fine() -> void:
+	# "Leave the enemy nothing" is written with no id at all, so a check that complained about
+	# an empty one would warn about a perfectly good row.
+	assert_true(_add({"subject": "unit", "id": "", "value": 0}))
+	assert_true(doc.objective_problems().is_empty(), "%s" % [doc.objective_problems()])
+
+
+## ⚠️ **A WARNING, NOT A REFUSAL, and the save still goes through** -- `map_document.gd`'s
+## rule: *an author who closes the tool with one lose row drafted has lost nothing; an author
+## refused a save has lost the session.*
+func test_a_bad_def_id_does_not_block_the_save() -> void:
+	assert_true(_add({"subject": "unit", "id": "SirRoland", "value": 1}),
+			"the row is ACCEPTED -- the complaint is separate from the acceptance")
+	assert_false(doc.objective_problems().is_empty(), "and it does complain")
+	assert_eq(doc.objectives.size(), 1, "the row is in the list, ready to be saved")
+
+
 # ── the panel ───────────────────────────────────────────────────────────────
 
 func test_the_form_round_trips_a_record_through_its_controls() -> void:
@@ -505,8 +566,15 @@ func test_the_panel_says_which_file_the_conditions_go_in() -> void:
 	var standalone := ConditionPanel.new()
 	standalone.set_document(doc)
 	assert_true(standalone.home_text().contains("with the map"), standalone.home_text())
-	assert_true(standalone.home_text().contains("16.8"),
+	assert_true(standalone.home_text().contains("nothing plays them yet"),
 			"and that nothing plays them yet: %s" % standalone.home_text())
+	# ⚠️ **IT MUST NAME THE ACTION, NOT A CARD NUMBER.** This asserted `contains("16.8")` until
+	# 2026-09-21 and so pinned the stale wording in place: the sentence went on pointing at an
+	# unbuilt card for a year after that card shipped, and the owner had to ask what it meant.
+	assert_true(standalone.home_text().contains("Export Scenario"),
+			"and says how to fix it, in words from the File menu: %s" % standalone.home_text())
+	assert_false(standalone.home_text().contains("16.8"),
+			"a board reference is not something to show an author: %s" % standalone.home_text())
 	standalone.free()
 
 	var dir := _scenario_folder([])

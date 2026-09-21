@@ -595,6 +595,131 @@ func test_a_region_the_map_does_declare_launches_and_reaches_the_config() -> voi
 	assert_true(cfg.map_data.has_area(&"ford"))
 
 
+## ⛔ **THE REAL ROW, FROM THE REAL PLAYTEST** (board `16.x-unknown-def-id`). Owner,
+## 2026-09-20: `{"subject": "unit", "id": "SirRoland", "compare": "==", "value": 0, "output":
+## "lose"}`, meaning `named_unit` / `"Sir Roland"`. It parsed, it launched, and `_sum` counted
+## a def the game has never had as **0** — so the mission was lost on tick 1.
+##
+## The sim answers -1 for it now, which makes the row inert rather than fatal. This is the
+## half that refuses it outright, at the only moment there is somebody to tell.
+func test_an_objective_naming_a_def_id_the_game_has_not_got_refuses_to_launch() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "id": "SirRoland", "compare": "==", "value": 0,
+			"output": "lose"},
+		{"subject": "unit", "compare": ">=", "value": 1, "output": "win"},
+	]})
+	assert_true(s.is_playable(), "the row itself parses: %s" % [s.problems])
+
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems), "a def id that does not exist must not launch")
+	assert_eq(problems.size(), 1, "%s" % [problems])
+	assert_true(problems[0].contains("SirRoland"), problems[0])
+
+
+## ⚠️ **AND IT NAMES THE MISTAKE'S SHAPE, which is the sentence that would have ended the
+## playtest in one read.** Every def id in the game is `kind.name`, so an id with no dot is not
+## a near miss — it is a hero's name in the wrong field. `ObjectiveDef._read_clock` is the
+## precedent: refuse by naming the spelling that was meant, not by saying no.
+##
+## ⚠️ The win row is not padding: a `scenario` with no win row is refused by an EARLIER check
+## for being unwinnable, and the first draft of this test tripped that instead -- reporting
+## "no win objective" and asserting nothing about def ids at all.
+func test_the_refusal_suggests_named_unit_when_the_id_has_no_dot_in_it() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "id": "SirRoland", "compare": "==", "value": 0,
+			"output": "lose"},
+		{"subject": "unit", "compare": ">=", "value": 1, "output": "win"},
+	]})
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems))
+	assert_true(problems[0].contains("named_unit"),
+			"it points at the subject they meant: %s" % problems[0])
+
+
+## ...and does NOT, for an id that IS shaped like a def id. `unit.vilager` is a typo, not a
+## hero; telling that author about `named_unit` would send them the wrong way entirely.
+func test_a_misspelled_def_id_is_refused_without_the_named_unit_hint() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "id": "unit.vilager", "compare": ">=", "value": 1,
+			"output": "win"},
+	]})
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems))
+	assert_true(problems[0].contains("unit.vilager"), problems[0])
+	assert_false(problems[0].contains("named_unit"),
+			"a dotted id is a spelling mistake, not a wrong subject: %s" % problems[0])
+
+
+func test_a_def_id_the_game_does_have_launches_and_reaches_the_config() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "building", "id": "building.town_center", "compare": ">=", "value": 1,
+			"output": "win"},
+	]})
+	var problems: Array[String] = []
+	var cfg := s.build_config(problems)
+	assert_not_null(cfg, "%s" % [problems])
+	if cfg != null:
+		assert_eq(cfg.objectives[0].id, &"building.town_center")
+
+
+## ⚠️ **AN EMPTY `id` IS LEGAL AND MUST STILL LAUNCH.** It means "any of that subject", which
+## is how PLAN.md 11.8's *leave the enemy nothing* is written -- and it is in shipped campaign
+## files, so a refusal that caught it would break the front door for existing content.
+func test_an_objective_with_no_def_id_at_all_still_launches() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "owner": "enemy", "compare": "==", "value": 0, "output": "win"},
+	]})
+	var problems: Array[String] = []
+	assert_not_null(s.build_config(problems), "%s" % [problems])
+
+
+## ⛔ **EVERY SHIPPED SCENARIO STILL LAUNCHES.** The refusal above is new, and a refusal is the
+## one kind of check that can break content that was working -- so the campaigns on disk are
+## walked rather than assumed. This is the test that would have caught it had `SirRoland`'s own
+## scenario still been in the tree.
+func test_no_shipped_scenario_names_a_def_id_that_does_not_exist() -> void:
+	var campaigns := Campaigns.new().discover()
+	assert_false(campaigns.is_empty(), "there is shipped content to check")
+	for campaign in campaigns:
+		for scenario in campaign.scenarios:
+			var bad := scenario._unknown_def_ids()
+			assert_true(bad.is_empty(),
+					"%s/%s: %s" % [campaign.folder, scenario.folder, " | ".join(bad)])
+
+
+## ⛔ **A REFUSAL HAS TO FIT THE BANNER IT IS SHOWN IN, and this is the seam where that gets
+## forgotten.** The sentence is written here in `ScenarioDef`; it is drawn by `NoticeToast` on
+## another screen, by code that has never read this file. The owner photographed the result on
+## 2026-09-21: the def-id refusal printed straight through the gold moulding and over the
+## scenario list behind it, because `show_message` draws one line and does not resize.
+##
+## `ScenarioScreen._say` routes anything past `_SHORT_NOTICE_CHARS` to the paragraph banner, so
+## what this pins is the PAIR: the message must be long enough to take that route, and short
+## enough to fit when it gets there. A refusal reworded down to 55 characters would silently go
+## back to the one-line banner; one grown past the paragraph budget would clip instead of
+## overflowing, which looks tidier and is just as unreadable.
+func test_a_refusal_is_sized_for_the_banner_that_has_to_draw_it() -> void:
+	# ~5 lines of 16 px in the paragraph banner's ~460 px dark field. Stated here rather than
+	# in `NoticeToast` because it is a fact about MESSAGES, and this is the file that writes
+	# the longest one.
+	const PARAGRAPH_BUDGET := 275
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "id": "SirRoland", "compare": "==", "value": 0,
+			"output": "lose"},
+		{"subject": "unit", "compare": ">=", "value": 1, "output": "win"},
+	]})
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems))
+	assert_false(problems.is_empty())
+
+	var why: String = problems[0]
+	assert_true(why.length() > ScenarioScreen._SHORT_NOTICE_CHARS,
+			"a refusal is a paragraph and must take the paragraph banner (%d chars): %s"
+			% [why.length(), why])
+	assert_true(why.length() <= PARAGRAPH_BUDGET,
+			"and must still fit inside it (%d chars): %s" % [why.length(), why])
+
+
 ## A saved map under `user://` carrying `names` as one-tile regions. Written fresh per call
 ## because the region list is what varies; `_ensure_test_map()`'s cached map has none.
 func _map_with_regions(names: Array[StringName]) -> String:

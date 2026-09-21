@@ -364,17 +364,28 @@ func summary_text() -> String:
 ##
 ## ⛔ **THE TWO HOMES AND WHY THE SENTENCE IS DIFFERENT FOR EACH.** A scenario's conditions are
 ## read by the GAME from that `scenario.json`, so saying so is saying "this is live". A standalone
-## map's are parked until 16.8 promotes it into a scenario, and an author who is not told that
+## map's are parked until it is promoted into a scenario, and an author who is not told that
 ## will reasonably expect a skirmish from this map to obey them — so the second sentence says
 ## plainly that nothing reads them yet. **The inert case is the one that needs the words**, which
 ## is the opposite of what it looks like.
+##
+## ⚠️ **IT NAMED A CARD NUMBER UNTIL 2026-09-21, AND THAT WAS A DEFECT RATHER THAN A STYLE
+## POINT.** The text read *"until 16.8 writes this map a scenario"*, which was written while 16.8
+## was unbuilt and meant "not yet possible". 16.8 shipped, so the sentence went on naming an
+## internal card as though it were future work — for an action the author can take from the File
+## menu right now, two clicks away. The owner read it and asked what 16.8 was, which is the whole
+## evidence needed: **a message that makes its reader ask what it means is not doing its job.**
+##
+## ➡️ So it names the ACTION and where to find it. A card number is a fact about our board and
+## belongs in a comment like this one; a menu path is a fact about the tool in front of them.
 func home_text() -> String:
 	if _document == null:
 		return ""
 	if not _document.scenario_path.is_empty():
 		return "saved into %s beside this map — the game reads its objectives from there" \
 				% _document.scenario_path.get_file()
-	return "saved with the map — nothing plays them yet, until 16.8 writes this map a scenario"
+	return "saved with the map — nothing plays them yet." \
+			+ " Use File ▸ Export Scenario… to turn this map into one the game will read"
 
 
 func _say(text: String, colour: Color) -> void:

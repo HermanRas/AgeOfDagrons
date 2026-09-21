@@ -710,6 +710,78 @@ func test_a_region_the_map_has_not_got_is_unmeasurable_and_not_zero() -> void:
 	assert_false(world.match_over, "and above all it did not win on tick 1")
 
 
+# ── a def id the game has not got (board `16.x-unknown-def-id`) ─────────────
+
+## ⛔ **THE ROW THAT COST A PLAYTEST, RUN AS A TEST.** Owner, 2026-09-20, authoring in the
+## MapMaker: `{"subject": "unit", "id": "SirRoland", "compare": "==", "output": "lose"}`. They
+## meant `named_unit` with `unit_name: "Sir Roland"`. What they got was a count of units whose
+## DEF ID is `SirRoland`, which `_sum` read as **0** — so `== 0, lose` passed and the mission
+## was over on tick 1, reported as *"either I am doing something wrong or there is a bug"*.
+##
+## ⚠️ **BOTH SIDES ARE ARMED, AND THE FIRST DRAFT OF THIS TEST WAS NOT.** With only the enemy
+## on the board, player 1 is eliminated and the match ends on tick 1 anyway -- so the test
+## would have gone red for a reason that has nothing to do with def ids, and its sibling
+## below would have gone GREEN for one. Trap 2 in this system's own header: an unpopulated
+## world must decide nothing.
+func test_a_def_id_the_game_has_not_got_is_unmeasurable_and_not_zero() -> void:
+	var world := _world([{"subject": "unit", "id": "SirRoland", "owner": "enemy",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], -1,
+			"unmeasurable, so no comparison passes")
+	assert_false(world.match_over, "and above all it did not LOSE on tick 1")
+
+
+## ⛔ **THE HALF THAT MAKES THE OTHER ONE HARD, AND THE REASON `_def_exists` ASKS THE REGISTRY
+## RATHER THAN THE CENSUS.** `unit.militia` is a real def; a player with none of them has
+## **0** of them, and *"leave the enemy no militia"* is exactly what this subject is for. Had
+## the check been "is it in the census", every such row would have become unmeasurable at the
+## precise moment it came true — which is worse than the bug it was fixing, and invisible.
+##
+## ⛔ The enemy is armed with a VILLAGER, so they are on the board and in the match -- and
+## have no militia. That is the distinction: 0 because they have none, not 0 because the
+## question was meaningless. An unarmed enemy would have made this pass by elimination,
+## which is the same number arrived at by a completely different route.
+func test_a_real_def_nobody_owns_still_counts_zero() -> void:
+	var world := _world([{"subject": "unit", "id": "unit.militia", "owner": "enemy",
+			"compare": "==", "value": 0, "output": "win"}])
+	_both_armed(world)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0,
+			"a real def nobody has is a count, not a mystery")
+	assert_true(world.match_over, "and the row is genuinely satisfied")
+
+
+func test_a_building_def_id_is_defended_the_same_way() -> void:
+	# Both subjects go through `_sum`, so both had the hole; a test naming only `unit` would
+	# have left `building` open with no sign of it.
+	var world := _world([{"subject": "building", "id": "building.keep_of_doom",
+			"owner": "enemy", "compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], -1)
+	assert_false(world.match_over)
+
+
+## ⚠️ **AN EMPTY `id` IS NOT AN UNKNOWN ONE.** It means "any of that subject" and is how
+## PLAN.md 11.8's *leave the enemy nothing* is written. A defence that refused it would break
+## the shipped campaigns, so the no-id row is pinned beside the bad-id one.
+##
+## Asserted as a COUNT rather than as a win, and the enemy is given two different unit types
+## on purpose: an empty id has to sum ACROSS defs, which a row about an empty enemy could not
+## tell apart from a row that counted nothing at all.
+func test_no_id_at_all_still_means_any_of_that_subject() -> void:
+	var world := _world([{"subject": "unit", "owner": "enemy",
+			"compare": ">=", "value": 99, "output": "win"}])
+	_both_armed(world)
+	world.spawn_unit(&"unit.militia", 2, Vector2i(31, 31))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 2,
+			"a villager and a militia, added together, because no id means any of them")
+	assert_false(world.match_over, "99 is out of reach, so nothing is decided")
+
+
 ## The other half of that: a region that DOES exist and happens to be empty is a real 0, and an
 ## `at_most` row about it is genuinely satisfied. Conflating the two would make one of these two
 ## tests impossible to write.

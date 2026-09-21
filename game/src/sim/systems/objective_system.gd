@@ -99,6 +99,23 @@
 ## nothing. Neither says anything on screen. It is refused at load by `ObjectiveDef._read_clock`,
 ## which is the one place it can be, because by the time it reaches `_satisfied` it is simply a
 ## comparison that is true.
+##
+## ⚠️ **AND `unit`/`building` WERE THE THIRD — THE LAST TWO SUBJECTS WITH NO DEFENCE, CLOSED
+## 2026-09-21** (board `16.x-unknown-def-id`). Their `id` is free text, and an id naming a def
+## the game has never had counted **0** rather than being unmeasurable, so `== 0, lose` fired on
+## tick 1. It defeated the owner instantly in a real playtest on 2026-09-20 and read as "either
+## I am doing something wrong or there is a bug", which is the sentence trap 3 always produces.
+##
+## ➡️ Closed in the same three places `area` is, and the shape is worth copying wholesale for
+## whatever subject is added next: `_def_exists` answers the registry so `_count` returns -1;
+## `ScenarioDef.build_config()` refuses the row at launch where there is somebody to tell; and
+## MapMaker's Conditions panel warns while the author is still typing.
+##
+## ⛔ **SO THE SCORECARD IS NOW CLEAN, and it is the check to run on subject number eight:**
+## every subject can distinguish *"none are left"* from *"there was never such a thing"* --
+## `area` via `w.areas`, `named_unit` via `w.named_units`, `resource` via `RESOURCE_KINDS`,
+## `unit`/`building` via the registry, `ticks` by refusing the comparison, `age` because it is
+## always measurable. A new subject that cannot draw that distinction is not finished.
 class_name ObjectiveSystem
 extends SimSystem
 
@@ -244,8 +261,12 @@ static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary, areas: Dict
 		ids: Array[int]) -> int:
 	match o.subject:
 		ObjectiveDef.Subject.UNIT:
+			if not _def_exists(o.id, true):
+				return -1
 			return _sum(census, ids, "units", "unit_total", o.id)
 		ObjectiveDef.Subject.BUILDING:
+			if not _def_exists(o.id, false):
+				return -1
 			return _sum(census, ids, "buildings", "building_total", o.id)
 		ObjectiveDef.Subject.AGE:
 			return _age_of(w, ids)
@@ -492,6 +513,37 @@ static func _census(w: SimWorld) -> Dictionary:
 	return out
 
 
+## Is `id` a def this game actually has? An EMPTY id is "any of that subject" and is always
+## measurable, so it answers true.
+##
+## ⛔ **THIS IS TRAP 3's LAST HOLE, CLOSED 2026-09-21** (board `16.x-unknown-def-id`). The
+## header above lists four subjects that can tell *"none of them are left"* apart from
+## *"there was never such a thing"* -- `area` via `w.areas`, `named_unit` via
+## `w.named_units`, `resource` via `RESOURCE_KINDS`, `ticks` by refusing `<=`. `unit` and
+## `building` could not, and they are the two an author reaches for first. `_sum` read an
+## absent key as `entry[bucket].get(id, 0)`, so a typo counted **0** and `== 0, lose` fired
+## on tick 1.
+##
+## It cost a real playtest (owner, 2026-09-20: *"either I am doing something wrong or there
+## is a bug"*). The row said `subject: "unit", id: "SirRoland"` and meant
+## `subject: "named_unit", unit_name: "Sir Roland"`; the match was lost instantly.
+##
+## ⚠️ **ASKS THE REGISTRY, NOT THE CENSUS, AND THE DISTINCTION IS THE WHOLE POINT.** A def
+## that is real but absent from the board must still answer **0** -- *"leave the enemy no
+## militia"* is what the subject is FOR, and checking the census would make every such rule
+## unmeasurable the moment it came true. Exactly the reason `_in_area` asks `w.areas` rather
+## than `areas`.
+##
+## Deterministic without qualification: the registry is loaded from the same data files on
+## every host, so both sides of a match answer identically (PLAN.md 7.1).
+static func _def_exists(id: StringName, is_unit: bool) -> bool:
+	if id.is_empty():
+		return true
+	if is_unit:
+		return GameDataRegistry.unit(id) != null
+	return GameDataRegistry.building(id) != null
+
+
 ## `ids`' total for one subject, by def id or across all of them.
 ##
 ## An EMPTY `id` means "any of that subject", which is legal and load bearing: PLAN.md
@@ -499,6 +551,10 @@ static func _census(w: SimWorld) -> Dictionary:
 ## "==", "value": 0}` with no id at all. That is why the totals are kept beside the
 ## per-def buckets rather than summed from them here -- a walk of a dictionary per
 ## objective per tick is the cost `_census` exists to avoid.
+##
+## ⚠️ **AN UNKNOWN `id` NEVER REACHES HERE** since 2026-09-21 -- `_count` answers -1 for it
+## first, via `_def_exists`. Left as it is rather than defended twice: this function cannot
+## tell an unknown def from a known one, because the census only holds what is on the board.
 static func _sum(census: Dictionary, ids: Array[int], bucket_key: String,
 		total_key: String, id: StringName) -> int:
 	var total := 0

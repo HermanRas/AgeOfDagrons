@@ -422,6 +422,15 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 		out_problems.append_array(bad_names)
 		return null
 
+	# ⚠️ **AND THE SAME CHECK FOR DEF IDS** (board `16.x-unknown-def-id`, 2026-09-21). Needs no
+	# map at all, unlike the two above -- the registry is the authority -- but it belongs here
+	# beside them because it is the same trap, the same shape, and an author who has made one
+	# of these mistakes should be told about all of them in one place.
+	var bad_ids := _unknown_def_ids()
+	if not bad_ids.is_empty():
+		out_problems.append_array(bad_ids)
+		return null
+
 	# ⚠️ **THE SCENARIO'S OWN MODE NOW REACHES THE MATCH (15.2).** Until 2026-09-02 this
 	# line was `LAST_MAN_STANDING` unconditionally, above a guard that refused SCENARIO
 	# outright -- which was honest while nothing could evaluate an objective, and is a
@@ -520,6 +529,47 @@ func _unknown_areas(map: MapData) -> Array[String]:
 			have = "this map declares %s" % ", ".join(spellings)
 		out.append("objective '%s' counts things in area '%s', but %s"
 				% [o.describe(), o.area, have])
+	return out
+
+
+## Every `unit`/`building` objective naming a def id the game has not got, as sentences
+## (board `16.x-unknown-def-id`, 2026-09-21).
+##
+## `_unknown_areas`' third twin, in the one subject pair where trap 3 survived longest: the `id`
+## is free text and `ObjectiveSystem._sum` used to read an absent key as **0**, so `== 0, lose`
+## fired on tick 1 and the match was over before the player moved. The sim now answers -1 for
+## these, so the row is merely inert rather than fatal; **this is the half that says so out loud**
+## while there is still somebody to tell.
+##
+## ⚠️ **THE "NO DOT" HINT IS NOT DECORATION — IT IS THE SENTENCE THAT WOULD HAVE ENDED THE
+## PLAYTEST IN ONE READ.** The row that cost 2026-09-20 was `subject: "unit", id: "SirRoland"`
+## and meant `subject: "named_unit", unit_name: "Sir Roland"`. Every def id in the game is
+## `kind.name`, so an id with no dot in it is not a near miss, it is a different KIND of thing —
+## and naming the subject the author probably wanted beats listing 61 ids they did not.
+## `ObjectiveDef._read_clock` is the precedent: refuse by naming the spelling that was meant.
+##
+## ⛔ **AN EMPTY `id` IS LEGAL AND MUST NOT BE REFUSED.** It means "any of that subject", and
+## PLAN.md 11.8's *leave the enemy nothing* is exactly that row. Skipped first, before anything
+## else, because refusing it would break the shipped campaigns.
+func _unknown_def_ids() -> Array[String]:
+	var out: Array[String] = []
+	for o in objectives:
+		var is_unit := o.subject == ObjectiveDef.Subject.UNIT
+		if not is_unit and o.subject != ObjectiveDef.Subject.BUILDING:
+			continue
+		if o.id.is_empty():
+			continue
+		var known: bool = (GameDataRegistry.unit(o.id) != null if is_unit
+				else GameDataRegistry.building(o.id) != null)
+		if known:
+			continue
+		var kind := "unit" if is_unit else "building"
+		var hint := ""
+		if not String(o.id).contains("."):
+			hint = " -- every def id looks like '%s.something', so this may be a name" % kind
+			hint += " rather than a def: did you mean subject 'named_unit'?"
+		out.append("objective '%s' counts %ss with def id '%s', and this game has no such %s%s"
+				% [o.describe(), kind, o.id, kind, hint])
 	return out
 
 
