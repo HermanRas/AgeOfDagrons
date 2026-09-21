@@ -23,6 +23,17 @@ Requests logged here by the game-side agent as MVP work surfaces a real gap. Eac
 > Delivered log — half of them had been appended below it and below the format block, which is
 > how a queue stops looking like a queue. Git has the full threads.
 
+> **A second pass the same day, and it removed a thread that had gone WRONG rather than stale.**
+> The 2026-09-08 `[game-code]` note opened *"A WALL CANNOT BE PUT ON A SAVED MAP TODAY, AND IT
+> WOULD COME OUT NINETY DEGREES WRONG"* — true when written and **false since `16.4c-wall-axis`
+> closed**, which is worse than an entry that is merely finished: a reader would have believed
+> it. Its two durable halves already live elsewhere and were not lost — the `FACING_FOR_AXIS`
+> re-bake warning is repeated verbatim in the wall-directions thread below, and the `IconAtlas`
+> / `ResourceLoader.exists()` trap is written into PLAN.md §11's 16.3 row. ➡️ **The housekeeping
+> rule says delete on delivery; this is the case it does not cover — an entry whose CLAIM expires
+> while the request is still open.** Worth a re-read of any thread whose premise a closed card
+> may have changed.
+
 **The board, not this file, is the status.** projects.dragoon.co.za/projects/2 — `art`
 cards are the art side's, `game-code` the game side's, `owner-decision` neither's.
 This file is the *conversation*: the ask, the measurements, the reasoning, the answer.
@@ -69,37 +80,42 @@ edges. Those were an open art item (A.1) until 2026-08-23 and are now **generate
 time** from the one diamond each terrain already ships — the owner's call, so that a theme
 pack stays one sprite per terrain. Do not bake transition tiles.
 
-## [game-code] 16.4's cursors are in, and one thing the art side may want to know
+## [game-code -> art] Does a villager have anything that reads as FARMING? — asked 2026-09-20
 
-**2026-09-08.** MapMaker has Select and Move cursors and a per-entity inspector (owner, size
-class). Nothing here needs a bake and nothing is asked of the art pipeline — this note is one
-finding that touches the wall art, recorded because it is the pipeline's measurement that settled
-it and it is about to matter again.
+**No bake is being requested yet.** This is a question, and the answer decides whether there is
+one. The immediate fix is game-side and is already filed (`6.x-farm-work-anim`).
 
-⛔ **A WALL CANNOT BE PUT ON A SAVED MAP TODAY, AND IT WOULD COME OUT NINETY DEGREES WRONG.**
-`MapData`'s entity record is `{def_id, player, tile, size_class}`, so there is nowhere to write
-the `footprint_override` (`[9,2]` vs `[2,9]`) or the `facing` that `WallPlan.plan()` produces.
-`MapGen.build_from()` passes neither, so a wall from a file gets the def's **east-west** footprint
-with facing **0** — which `WallPlan.FACING_FOR_AXIS` says is the **north-south** wall.
+**What's needed:** to know whether a farming clip exists in the source actor at all, and what it
+would cost. **Why:** the owner, from play — *"harvesting villagers working fields look idle, we
+need another animation or combination of other animations to allow a player to identify an idle
+villager standing on a farm from a working villager."* Finding the idle worker is a thing players
+do constantly, so this is gameplay rather than polish.
 
-**Why this is the art side's business at all:** `FACING_FOR_AXIS` was derived by *measuring the
-staged atlases* — regressing mean opaque-pixel y against x per direction across twelve wall and
-gate bakes, plus the foundations and the rubble, which all agreed. That measurement is what
-settled the 2026-08-28 report (*"i am dragging NE to SW, the walls look like NW to SE"*) after six
-days of it being got wrong twice. **If the walls are ever re-baked, `test_wall_facing`
-re-measures and will fail** — and the fix would then also have to reach whatever the map format
-ends up storing. Card `16.4c-wall-axis` carries the game-side half; nothing is being asked of you
-now.
+⛔ **THE BUG ITSELF IS MINE AND IS ALREADY DIAGNOSED — DO NOT BAKE ANYTHING ON ACCOUNT OF IT.**
+`AnimationSystem`'s GATHER branch casts the task target to `SimResourceNode`; **a field is a
+`SimBuilding`** (`GatherSystem.is_harvestable()` takes one), so the cast returns null, the
+`if/elif` chain falls through, and the sim sends **`idle`**. The farmer is not *drawn* idle, she
+is *told* to be. That is a three-line fix on my side.
 
-✅ **No shipped map has a wall** (checked: `maps/sample_duel` and all five
-`scenarios/HowToPlay/scenario_*/map.json`), so nothing is broken while this waits.
+**What I actually want from you** is which of these is true, because it decides what I point the
+building case at:
 
-📝 **Unrelated but worth one line, since you read the atlases from the other end:**
-`IconAtlas` in the MapMaker reads `game/assets/atlases/` with `Image.load_from_file` and never
-`load()`, because a staged PNG's `.import` sidecar redirects into the GAME's
-`res://.godot/imported/`, which does not exist from a second project. **`ResourceLoader.exists()`
-answers TRUE for those files and `load()` still returns null with three engine errors.** If
-anything on your side ever loads a staged atlas from outside `game/`, that is the trap.
+1. `vis.villager` stages with `decay, die, idle, walk, walk_carry_{food,gold,wood}, work_build,
+   work_chop, work_hunt, work_mine` — **no farming clip**. Is there one in
+   `art/actors/units/celts/female_citizen.xml` (or its Briton sibling, §9.2.1) that simply was
+   never put in the recipe?
+2. If there is not: **which existing clip reads least wrong on a field?** My instinct is
+   `work_mine` — a downward swing is close to hoeing — but that is a judgement about pixels and
+   you have the contact sheets. `work_chop` and `work_hunt` are the other two candidates.
+3. Is a real `work_farm` worth a bake at all, or is this a case like `run`/`feeding` where an
+   alias is the honest answer? ⚠️ `AtlasEntry._ANIM_ALIAS`'s rule applies: **an alias must fall
+   back to a clip every subject HAS**, which is the test that stopped a bolting sheep standing
+   still while sliding.
+
+📝 **One thing NOT to solve for:** the owner said *"another animation or combination of other
+animations"*, so a farmer alternating a work clip with a step across the plot is on the table and
+needs no new art. I will not build that until 1–3 are answered, because a baked clip makes it
+unnecessary.
 
 ---
 

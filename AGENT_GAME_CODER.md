@@ -774,6 +774,10 @@ carry `age_required`, which is a *gate*, not a skin.
 | ⚠️ **`adb shell` EMITS CRLF, SO A POWERSHELL REGEX ANCHORED WITH `$` NEVER MATCHES** | Parsing `adb shell ls -l` with `...base\.part$` reported *"no file yet"* for 58 seconds while the file was plainly growing, and the download completed underneath the poller **twice** before the parsing was suspected — it reads as "the feature does nothing", not as a bad regex. **Ask the device for the number, not for a line to parse**: `adb shell run-as <pkg> stat -c %s <path>` returns the size alone, and `run-as <pkg> sha256sum <path>` verifies a downloaded file **without trusting the code under test**. The general form is §5's: a check that cannot see the thing it is for reports success. |
 | ⛔ **A TEST THAT ASKS THE PRODUCER WHICH VALUE IT USED CAN ONLY AGREE WITH ITSELF** | The river's water and its start positions each drew their own axis and disagreed, and **no test could have caught it by asking `MapGenerator` which axis it picked** — that question has one answer and both halves would have matched it. The check that works fits the axis out of the **painted terrain** (PCA over the water tiles) and compares the starts against *that*: two independent readings of one fact. ➡️ **Whenever two things are supposed to derive the same value separately, the test must derive it a third way.** Worth reaching for before writing any test of "these two agree". |
 | **A TREE COUNT IS A CPU BUDGET AND A TREE AMOUNT IS FREE** | Both change how much wood a map holds and only one of them costs anything: `AISystem` searches the whole entity list per player per tick, which is what took the 2026-08-28 density work to 24.83 ms against a 20 ms ceiling. So **amount-per-tree is the lever to reach for first** and trees-per-map second. `MapGenerator.SPRINKLE_SPACING` is a dozen or two trees a board on purpose. |
+| ⛔ **AN OBJECTIVE NAMING A DEF ID THAT DOES NOT EXIST COUNTS 0, SO `== 0, lose` FIRES ON TICK 1** | `ObjectiveSystem._sum` reads `entry[bucket].get(id, 0)`, and **nothing asks whether the id is a real def**. So a typo'd or wrong-subject `id` is indistinguishable from "they have none left". Found 2026-09-20 when the owner authored *"protect Sir Roland"* as `subject: "unit", id: "SirRoland"` instead of `subject: "named_unit", unit_name: "Sir Roland"`, and lost the scenario before moving. ➡️ **This is trap 3 of `ObjectiveSystem`'s own header in the one subject still missing its defence**: `area` answers −1 for an unknown region, `resource` pins `RESOURCE_KINDS`, `ticks` refuses `<=`, `named_unit` reads a set DECLARED at world build — and `unit`/`building` take free text, which are the two an author reaches for first. Card `16.x-unknown-def-id`. The general form: **a count that can mean "there was never such a thing" must not answer 0.** |
+| ⛔ **`SelectionActions._capped()` SILENTLY DROPS THE TAIL OF THE ACTION COLUMN, AND THE CASTLE IS ALREADY OVER** | `MAX_ACTIONS` is 8 and two comments in the same file, each right about its own moment, are alarming together: *"4 trains + this + upgrade + repair + destroy = 8 exactly; `_capped` would have dropped Destroy at 9"* and *"the castle already emits nine with a rally point set"*. **Destroy is last, so setting a rally point on a castle appears to delete its demolish button.** Neither comment is wrong and the conclusion between them was never drawn — §6's "two dead guards cancel out" wearing documentation. Card `8.x-action-column-overflow`, and **confirm it in a match before fixing**: it is derived from comments, not yet seen. ➡️ **Before adding any action to a building, count the busiest one**, and treat a silent slice as the defect rather than the cap. |
+| ⛔ **`AnimationSystem`'s GATHER BRANCH ASSUMES A RESOURCE *NODE*, SO A VILLAGER WORKING A FIELD PLAYS `idle`** | A field is a **`SimBuilding`** that `GatherSystem.is_harvestable()` answers for — not a `SimResourceNode` — so `w.get_entity(id) as SimResourceNode` returns **null**, the inner `if` is skipped, and because the chain is `if/elif/elif` the whole thing falls through to the final `return &"idle"`. The owner reported it as *"harvesting villagers working fields look idle"* (2026-09-20) and they are literally idle: the sim is sending the idle clip. ⚠️ **It reads as an art gap and is not one** — the villager atlas carries `work_build`, `work_chop`, `work_hunt`, `work_mine` and simply has no farming clip, so the fix is choosing one of the four for the building case, not a bake. Card `6.x-farm-work-anim`. The general form: **a cast used as a filter inside an `if/elif` chain skips the fallback as well as the branch.** |
+| ⚠️ **A RESUMED MATCH REDRAWS FOG FROM SCRATCH, AND THE SAVE IS NOT WHAT LOST IT** | `SaveGame` stores and restores `SimPlayer.vision` faithfully — it is one of the three unhashed-but-saved things 12.4 names. But **12.1f took fog off the wire**: `ClientFog` accumulates `EXPLORED` itself from tick 1 of the SESSION, and a resume is a fresh session. So the restored grid is correct and is simply not what is drawn. Owner called it acceptable, 2026-09-20; card `12.x-resumed-fog` carries the cheap fix neither option in `ClientFog`'s header covers — **seed the client once at match start** (the ~9 KB 12.1f removed *ten times a second*, paid once), per-player and filtered, or it hands one player a map of where another has been. ➡️ **Worth knowing as a class: a value that is saved, restored and correct can still be invisible, because something downstream stopped reading it.** |
 
 ---
 
@@ -782,12 +786,32 @@ carry `age_required`, which is a *gate*, not a skin.
 ### WHAT IS BUILT — the short version
 
 **Phases 0–13 and 15 are closed; Phase 16 is BUILT THROUGH 16.8, with 16.9 and 16.10 left.**
-Suites **game 2596/0** and **MapMaker 450/0** (2026-09-19). **PLAN.md §11 carries every decision
-and the board carries status** — neither of them lives here.
+Suites **game 2652/0** and **MapMaker 450/0**. **PLAN.md §11 carries every decision and the board
+carries status** — neither of them lives here.
 
-**16.6, 16.7 and 16.8 sit in `Test` together and all three wait on the owner USING the tool** —
-authoring conditions, playing a named hero, exporting a scenario. None is answerable by a test or
-a screenshot, which is §5's whole argument wearing three cards at once.
+✅ **THE `Test` COLUMN IS EMPTY AS OF 2026-09-20.** The owner played all four cards that were in
+it — 16.6, 16.7, 16.8 and 12.4 — and each was waiting on the one check no suite can make. Worth
+recording as evidence for §5 rather than as news: **three of the four passed, and the fourth
+failed in a way that produced a better card than the work itself did.**
+
+- **16.6** — conditions authored, the `<=` refusal read on screen, and the delete-the-last-row
+  trap survived a reopen.
+- **16.7** — a hero authored and played. *"He hits like a truck, one shot my scout."* The
+  disarmed unit standing perfectly still was checked against `map_gen.gd` rather than accepted:
+  the three overrides land on three separate fields, so it is the authored state and not a leak.
+- **16.8** — a campaign exported and played, **and step 9 failed**: the scenario was lost on tick
+  1. Authoring slip (`subject: "unit"` with a def id that does not exist), **and a real hole** —
+  see §6's row and card `16.x-unknown-def-id`.
+- **12.4** — save and multiple replays. ⚠️ **The two-device handoff was NOT part of that** and is
+  recorded on the card as untested: the seat machinery has 13 tests and no hardware. A fault found
+  in the first two-device session is untested ground, not a regression.
+
+📝 **AND THE HABIT THAT PAID FOR ITSELF THREE TIMES IN ONE SESSION:** every owner report was
+checked against the code before being written down. *"The other unit did not move at all"* was
+ambiguous between two faults that differ in code and not in the report; *"fog of war resets"*
+sounded like the save losing it and is `ClientFog`; *"villagers working fields look idle"* sounded
+like missing art and is an `if/elif` falling through. **None of the three was what it sounded
+like.**
 
 **0.3a is closed and closed on hardware** (2026-09-19): a pack download resumes in bounded 4 MiB
 chunks, proven on the phone against the live server across both a process restart and a real
@@ -1038,23 +1062,36 @@ something. **Do not re-grow it here either.** What follows is a pointer, not a c
    the nest and the mother**, which `test_campaigns` asserts.
 
 Then, in no forced order: Phase 14's AI enemy-blindness; the AI researching anything at all
-(`9.x-ai-research`); `cliff-terrain`; `11.x-wonder-victory` and 11.2 Regicide; 12.1b reconnect;
-12.4 save/load, which is where §11.3's parked Save Game button lives; naval combat; `0.3a`, a
-resumable pack download; and `13.x-claim-dead-end`.
+(`9.x-ai-research`); `cliff-terrain`; `11.x-wonder-victory` and 11.2 Regicide; 12.1b reconnect
+(down to the client half — the grace period and the seat both landed); naval combat; replays,
+which are all that is left of 12.4's original row; and `13.x-claim-dead-end`.
 
-⛔ **TWO THINGS ARE WAITING ON THE OWNER AND MUST NOT BE PICKED UP UNPROMPTED.** `16.6` and
-`13.4b-breath-damage` sit in **`Test`** — the first wants the owner authoring a real map's
-conditions in the panel, the second wants somebody burned by 500 damage, and neither is a
-judgement a test or a screenshot of mine can make. **`wall-facings-reachable` is `Blocked` and
-tagged `owner-decision`**; its own description asks the owner to flip the tag to `game-code`, and
-it needs an A/B/C ruling before anything can be done. **Never move or edit an `art` or
+**EIGHT CARDS WERE FILED FROM ONE PLAYTEST SESSION, 2026-09-20** (#109–#116), and they are the
+nearest thing to a current worklist: chat right-align (needs the owner's ruling on whose
+messages), the farm work animation, a destroy confirmation, **the build menu as a modal**
+(designed on the card, see below), the unknown-def-id instant loss, MapMaker keyboard shortcuts,
+the resumed-match fog, and the action-column overflow.
+
+⛔ **`8.x-build-menu-modal` IS DESIGNED AND READY, AND THE DESIGN IS ON THE CARD RATHER THAN
+HERE.** Short version so nobody re-derives it: the **detail grid** (`MAX_DETAILS`) becomes a
+fourth `HudPanel` page beside CHAT, TECH TREE and MARKET; the **action column** (`MAX_ACTIONS`)
+stays. Tiles keep their current size and the `>` pager stays, which means **`MAX_DETAILS` stops
+being a compile-time constant** — pass the slot count into `page_of()`, never read a `Control.size`
+from inside `SelectionActions`, which is pure and headlessly tested on purpose.
+
+⛔ **ONE THING IS WAITING ON THE OWNER AND MUST NOT BE PICKED UP UNPROMPTED.**
+`13.4b-breath-damage` sits in **`Test`** — it wants somebody burned by 500 damage, which is not a
+judgement a test or a screenshot of mine can make. **`wall-facings-reachable` is `Blocked` and is
+now tagged `game-code`** (the owner flipped it); it still needs an A/B/C ruling before anything
+can be done, so the tag changing did not make it startable. **Never move or edit an `art` or
 `owner-decision` card** (§2.1).
 
 ✅ **THE ART PACK IS BUILT AND PUBLISHED (2026-09-12), AND IT IS A `.zip`.** The owner's call —
 *"if pck is just a zip, rather leave it zip"* — and a `.pck` is **not** a zip, but
 `load_resource_pack()` takes either, measured on 4.7.1. So the packer stayed pure Python with no
 Godot export step in it. **Two packs, on the split the art side's figures forced:**
-`art_base_v1.zip` 80 MB `required`, `art_colours_v1.zip` 236 MB optional — the colour variants
+`art_base` 80.1 MB `required` (**at v2**, and see the v3 debt below), `art_colours_v1.zip`
+236.0 MB optional — the colour variants
 are 74% of the bytes, and the split is only safe because `_atlas_path_for_skin` already falls
 back to the untinted bake, which was verified before it was chosen. `exclude_filter` now keeps
 `res://assets/atlases/*` out of both export presets, which is the half that actually shrinks the
@@ -1068,9 +1105,18 @@ every run). ⚠️ **The packer's selection and `GameDataRegistry`'s resolution 
 derivations of one set, and `preview_art_pack` exists to compare them** — 1,535 paths, and if
 they ever drift the pack ships art nothing renders while missing art everything asks for.
 
-⚠️ **STILL OPEN, AND IT MATTERS MORE NOW THAN IT DID:** there is **no resumable download**.
-`HTTPRequest.set_download_file` cannot append, so an interrupted pack restarts at zero — which
-was irrelevant at 2.2 MB and is nine hours of 125 kbps for the colours pack. PLAN.md 0.3a.
+⛔ **THE PACK OWES ONE ATLAS AND CANNOT SHIP WITHOUT IT.** `vis.foundation_9x9` was wired on
+2026-09-20 after sitting staged and named by nothing since 2026-09-06, and **`art_base_v2.zip`
+carries the 8×8 and not the 9×9** — so on a device with no staged tree the town-centre foundation
+draws the magenta placeholder. `base` needs a rebuild to **v3** and a republish before the next
+build reaches a phone. ⚠️ The rule is worth more than the row: **adding an id to `visuals.json` is
+a pack change**, because `build_packs.py` resolves packs from what the seam can ask for rather
+than from a directory listing.
+
+📝 **THE RESUMABLE-DOWNLOAD ENTRY THAT USED TO SIT HERE IS CLOSED** (0.3a, 2026-09-19, proven on
+the handset) and is described at the top of this section. It had gone stale in place — this file
+said "still open" four hundred lines below saying it was done, which is the failure §2 deletes
+whole trackers over.
 
 ---
 
