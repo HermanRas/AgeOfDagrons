@@ -146,6 +146,34 @@ func test_nothing_in_here_can_swallow_a_press() -> void:
 	m.free()
 
 
+# ── which edge the text is pinned to (board `8.x-chat-align`) ───────────────
+
+## ⛔ **RIGHT-ALIGNED, BECAUSE THE BLOCK IS ANCHORED TO THE RIGHT EDGE.** Owner, playtest
+## 2026-09-20: *"message text chat text needs to right align"*, confirmed against a screenshot
+## of the disconnect notices. `GameScene` puts this at `PRESET_BOTTOM_RIGHT` and every line is
+## `WIDTH` wide whatever it says, so left-aligned text left each short line trailing off into
+## the map instead of sitting against the edge the block belongs to.
+##
+## ⚠️ **ASSERTED ON EVERY LINE AND ON BOTH KINDS**, because `say()` sets this per label rather
+## than on the container — the same reason `mouse_filter` is asserted per child above. A
+## property set on `_box` would not reach a `Label` added afterwards, and there is no
+## alignment a `VBoxContainer` can impose on its children's text at all.
+func test_every_line_is_right_aligned_against_the_edge_it_hangs_from() -> void:
+	var m := _log()
+	m.say("P1", "ready to attack")
+	m.say("", "Player 2 will be disconnected in 9s")
+	var checked := 0
+	for child in m._box.get_children():
+		var line := child as Label
+		if line == null:
+			continue
+		assert_eq(line.horizontal_alignment, HORIZONTAL_ALIGNMENT_RIGHT,
+				"'%s' is not pinned to the right edge" % line.text)
+		checked += 1
+	assert_eq(checked, 2, "both a player line and a system line were checked")
+	m.free()
+
+
 func _assert_ignores(node: Node) -> void:
 	for child in node.get_children():
 		if child is Control:

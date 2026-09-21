@@ -117,6 +117,24 @@ func say(speaker: String, text: String, colour: Color = SYSTEM_COLOUR) -> void:
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	line.custom_minimum_size = Vector2(WIDTH, 0.0)
+	# ⛔ **RIGHT, BECAUSE THE BLOCK IS PINNED TO THE RIGHT** (owner, playtest 2026-09-20:
+	# *"message text chat text needs to right align"*, confirmed against a screenshot of the
+	# disconnect notices). `GameScene` anchors this at `PRESET_BOTTOM_RIGHT` and the lines are
+	# `WIDTH` wide whatever they say, so left-aligned text left every short line trailing off
+	# into the map with a ragged right edge against the minimap below it.
+	#
+	# 📝 **AND THE EDGE IT LANDS ON IS THE MINIMAP'S, WHICH IS MEASURED RATHER THAN LUCK.** This
+	# block sits at `-WIDTH - GameScene._MINIMAP_MARGIN`, and the minimap directly beneath it is
+	# `Minimap.AREA_SIZE` square at that same inset — so both right edges are `viewport - 12`.
+	# Right-aligned, the text shares an edge with the panel under it, and the two keep sharing it
+	# if the viewport changes shape because both are derived from the one constant.
+	#
+	# ⚠️ **IT IS EVERY LINE AND NOT "MINE RIGHT, THEIRS LEFT".** That is the chat-bubble idiom
+	# and it is a different feature: it needs the sender compared against the local player, and
+	# nothing here has a sender yet — `say()`'s `speaker` is empty for all of it, because until
+	# 8.6 lands the transport this log is the match talking and not the players. Asked and
+	# settled rather than guessed; revisit when real chat arrives and there is a "mine" to mean.
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	line.text = text if speaker.is_empty() else "%s: %s" % [speaker, text]
 	line.add_theme_font_size_override("font_size", _FONT_SIZE)
 	line.add_theme_color_override("font_color", colour)
