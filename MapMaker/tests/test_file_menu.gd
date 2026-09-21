@@ -394,6 +394,142 @@ func test_the_exit_question_offers_saving_and_does_not_default_to_discarding() -
 	assert_false(win.get_ok_button().text == "OK", "OK is not an answer to this question")
 
 
+# ── the keyboard route to all four (board `16.x-shortcuts`) ─────────────────
+
+## ⛔ **THE CARD'S ONE HARD RULE: A KEY MUST NOT BE A SECOND DOOR.** Each arm of `_input` calls
+## `_on_file_action`, which **is** the menu's `id_pressed` handler — not `save()` and friends
+## behind it. So these tests assert the key reaches the same ACTION the menu item does; what
+## that action then does is the business of the tests above.
+##
+## 📝 Driven straight at `_input`, as `test_undo` does. The ordering that makes `_input` the
+## right binding is Godot's and is argued in the function's header; what is pinned here is that
+## the keys are bound at all and land on the right actions.
+func test_ctrl_n_starts_a_new_map() -> void:
+	var editor := _open_editor()
+	# ⚠️ **TYPED, NOT INFERRED.** `Editor.tscn`'s root has no `class_name`, so `_open_editor()`
+	# hands back a bare `Node` and every call on it returns untyped `Variant` — `:=` cannot
+	# infer from that, and the whole file then fails to parse rather than this one line.
+	var before: MapDocument = editor.document()
+	editor._input(_key(KEY_N))
+	assert_true(editor.document() != before, "Ctrl+N did not replace the document")
+
+
+func test_ctrl_o_raises_the_open_dialog() -> void:
+	var editor := _open_editor()
+	assert_false(editor.dialog_is_up(), "nothing is up to begin with")
+	editor._input(_key(KEY_O))
+	assert_true(editor.dialog_is_up(), "Ctrl+O did not reach open_dialog()")
+
+
+## ⚠️ **SHIFT IS THE WHOLE DIFFERENCE BETWEEN SAVE AND SAVE AS**, and getting it backwards
+## would overwrite the map an author meant to copy — so both halves are asserted, not just
+## that the key did something. `save_as_dialog()` raises a dialog; `save()` never does.
+func test_ctrl_shift_s_is_save_as_and_plain_ctrl_s_is_not() -> void:
+	var editor := _open_editor()
+	editor._input(_key(KEY_S, true))
+	assert_true(editor.dialog_is_up(), "Ctrl+Shift+S did not reach save_as_dialog()")
+
+	# ⚠️ **NAMELESS ON PURPOSE.** The name field defaults to "New Map", so a plain Ctrl+S on a
+	# fresh editor would write a real `maps/new_map` folder into the repo — and `maps/` is
+	# authored content, not a scratch directory (owner, 2026-09-04). Blanking the name makes
+	# `save()` refuse before it writes, which does not weaken the assertion: what is being
+	# checked is that no DIALOG was raised, and `save()` raises none at any point.
+	var other := _open_editor()
+	other._name_field.text = ""
+	other.document().map_name = ""
+	other._input(_key(KEY_S))
+	assert_false(other.dialog_is_up(),
+			"plain Ctrl+S must SAVE, not open the Save As browser")
+
+
+## ⛔ **CTRL+S REACHES `save()` — PROVEN BY ITS REFUSAL, WHICH WRITES NOTHING.**
+##
+## The map is left nameless on purpose. `MapDocument.save()` refuses that with *"the map needs
+## a name before it can be saved"* and `_report_save` puts it on the notice line, so the key is
+## shown to have reached the real save path **without creating a folder in the repo's `maps/`** —
+## which is authored content and not a scratch directory (owner, 2026-09-04).
+##
+## 📝 And it is the reason `Ctrl+S` needs no "Save As if never saved" special case: `save()`
+## derives `maps/<slug>` from the name itself when `dir` is empty, so the only thing standing
+## between a brand-new map and a plain Ctrl+S is having named it — which this refusal says.
+func test_ctrl_s_reaches_the_real_save_and_refuses_a_nameless_map() -> void:
+	var editor := _open_editor()
+	editor._name_field.text = ""
+	editor.document().map_name = ""
+	editor._notice_label.text = ""
+	editor._input(_key(KEY_S))
+	assert_true(editor._notice_label.text.to_lower().contains("name"),
+			"Ctrl+S must reach save() and report its refusal: %s" % editor._notice_label.text)
+	assert_eq(editor.document().dir, "", "and nothing was written")
+
+
+## ⛔ **ONLY THE HISTORY KEYS GIVE WAY TO A FOCUSED TEXT FIELD, AND THIS IS THE ONE PART OF THE
+## RULE A HEADLESS SUITE CAN SEE.** `_typing()` asks the viewport for its focus owner and this
+## harness has no tree, so the decision is split into a pure static to keep it checkable.
+##
+## `LineEdit` implements `Ctrl+Z`/`Ctrl+Y` as its own text undo, so stealing them would break
+## the field. It does **nothing** with `Ctrl+S`/`Ctrl+O`/`Ctrl+N`, so deferring those would not
+## hand them to anybody — it would drop them, and drop them at the moment Ctrl+S matters most,
+## because `save()` reads `_name_field.text` and naming a new map is when that field has focus.
+##
+## ⚠️ **THE BOARD CARD ASKED FOR THE OPPOSITE** (*"the existing guard is there to be reused
+## rather than reasoned about per key"*) and its own preceding sentence is why this reverses it:
+## *"Ctrl+S is not a text-editing key."* Asserted so the reversal is a decision on the record
+## rather than an omission.
+func test_only_the_history_keys_defer_to_a_focused_text_field() -> void:
+	for code in [KEY_Z, KEY_Y]:
+		assert_true(EDITOR.defers_to_text_field(code),
+				"key %d edits text and must give way" % code)
+	for code in [KEY_S, KEY_O, KEY_N]:
+		assert_false(EDITOR.defers_to_text_field(code),
+				"key %d is not a text-editing key, so deferring only loses it" % code)
+
+
+## A modal has to include the keyboard, whatever the key is. Opening a second map behind the
+## unsaved-changes question would change the answer to the question while it was on screen.
+func test_a_file_key_is_ignored_while_a_dialog_is_up() -> void:
+	var editor := _open_editor()
+	# ⚠️ **TYPED, NOT INFERRED.** `Editor.tscn`'s root has no `class_name`, so `_open_editor()`
+	# hands back a bare `Node` and every call on it returns untyped `Variant` — `:=` cannot
+	# infer from that, and the whole file then fails to parse rather than this one line.
+	var before: MapDocument = editor.document()
+	editor.open_dialog()
+	editor._input(_key(KEY_N))
+	assert_eq(editor.document(), before, "Ctrl+N acted behind a modal dialog")
+	editor.close_dialog()
+	editor._input(_key(KEY_N))
+	assert_true(editor.document() != before, "and it works again once the dialog is gone")
+
+
+## The same two guards `Ctrl+Z` has, on the file keys: a bare `N` is somebody typing, and an
+## echo is the keyboard's repeat rate deciding how many maps get thrown away.
+func test_a_file_key_needs_ctrl_and_ignores_key_repeats() -> void:
+	var editor := _open_editor()
+	# ⚠️ **TYPED, NOT INFERRED.** `Editor.tscn`'s root has no `class_name`, so `_open_editor()`
+	# hands back a bare `Node` and every call on it returns untyped `Variant` — `:=` cannot
+	# infer from that, and the whole file then fails to parse rather than this one line.
+	var before: MapDocument = editor.document()
+
+	var bare := _key(KEY_N)
+	bare.ctrl_pressed = false
+	editor._input(bare)
+	assert_eq(editor.document(), before, "a bare N is typing, not a shortcut")
+
+	var echo := _key(KEY_N)
+	echo.echo = true
+	editor._input(echo)
+	assert_eq(editor.document(), before, "a held Ctrl+N must not replace the map repeatedly")
+
+
+static func _key(code: Key, shift: bool = false) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.keycode = code
+	e.pressed = true
+	e.ctrl_pressed = true
+	e.shift_pressed = shift
+	return e
+
+
 # ── the three roots, which a FileDialog cannot show at once ─────────────────
 
 ## ⚠️ THE REFUND FOR WHAT A `FileDialog` COSTS.

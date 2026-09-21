@@ -306,9 +306,9 @@ func show_document(doc: MapDocument) -> void:
 	_refresh_status()
 
 
-# ── undo (PLAN.md 16.2a) ────────────────────────────────────────────────────
+# ── the keyboard (PLAN.md 16.2a, and the file keys from board `16.x-shortcuts`) ──
 
-## `Ctrl+Z`, `Ctrl+Y` and `Ctrl+Shift+Z`.
+## `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`, and `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+O` / `Ctrl+N`.
 ##
 ## ⚠️ **`_input` ON THE SCREEN — NOT `_gui_input` ON THE CANVAS, NOT `_shortcut_input`, NOT
 ## `Button.shortcut`.** 16.2a's card names the trap (*"the palette's search `LineEdit` takes
@@ -325,6 +325,43 @@ func show_document(doc: MapDocument) -> void:
 ## typing*, and stealing it would make those fields feel broken while the map jumped behind
 ## them. Clicking the canvas grabs focus (`MapCanvas._ready()` sets `FOCUS_CLICK`), so touching
 ## the map is what gives the shortcut back to the map — there is no extra rule to remember.
+##
+## ## ⛔ THE FOUR FILE KEYS ROUTE THROUGH `_on_file_action`, NOT THROUGH `save()` AND FRIENDS
+##
+## Board `16.x-shortcuts`: *"each key must route through the same function the menu item does,
+## not through a copy of what it happens to need."* `_on_file_action` **is** that function — it
+## is the menu's own `id_pressed` handler — so the shortcut and the menu item are literally one
+## door rather than two that agree today. The card's example of the alternative is `_new_map()`
+## repeating three lines of `show_document()` and leaving the Conditions panel on the last map.
+##
+## ⚠️ **`Ctrl+S` NEEDS NO "SAVE AS IF NEVER SAVED" SPECIAL CASE, AND THE CARD'S FOOTNOTE SAYING
+## IT DOES IS WRONG ABOUT THIS CODEBASE.** `MapDocument.save()` reads
+## `dir if not dir.is_empty() else maps_dir.path_join(slug())`, so an unsaved map already lands
+## in `maps/<slug>` from its name; a nameless one is refused with *"the map needs a name before
+## it can be saved"*. Special-casing here would have been a second opinion about a decision the
+## document already makes — and a divergence between Ctrl+S and File ▸ Save, which is the one
+## thing the rule above forbids. `can_save()` is likewise `save()`'s to enforce and it does.
+##
+## ## ⛔ AND THE `_typing()` HANDBACK IS PER KEY AFTER ALL — THE CARD SAYS OTHERWISE
+##
+## The card's instruction was *"the existing guard is there to be reused rather than reasoned
+## about per key"*. ➡️ **Reversed deliberately, and the card's own preceding sentence is the
+## reason**: *"Ctrl+S is not a text-editing key."* That is not a footnote, it is the whole
+## distinction. `LineEdit` implements `Ctrl+Z` as its own text undo, so taking it would break
+## the field; `LineEdit` does **nothing** with `Ctrl+S`, `Ctrl+O` or `Ctrl+N`, so handing those
+## back does not give them to anybody — it drops them.
+##
+## ⚠️ **AND IT WOULD DROP THEM AT THE ONE MOMENT THEY ARE MOST LIKELY TO BE PRESSED.**
+## `Editor.save()` opens with `_document.map_name = _name_field.text`: naming a new map and
+## pressing Ctrl+S is *the* first-save gesture, and the name field still has focus while you do
+## it. A guard there would make Ctrl+S silently do nothing on every brand-new map. That is this
+## file's own rule against itself — `undo()`'s *"a keystroke that does nothing looks like a
+## broken tool, and the bottom of the stack is exactly where an author presses hardest."*
+##
+## So the handback is `defers_to_text_field()` — a pure static, which is the only reason the
+## rule is under test at all: `_typing()` needs a viewport to ask for the focus owner and this
+## suite has no tree. **Both kinds still defer to `dialog_is_up()`**, which is about modality
+## rather than about focus, and a modal has to include the keyboard whatever the key is.
 func _input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	# ECHOES DROPPED: a held Ctrl+Z would otherwise unwind the whole stack in a second, which
@@ -341,7 +378,7 @@ func _input(event: InputEvent) -> void:
 	# `_dialog_open`.
 	if dialog_is_up():
 		return
-	if _typing():
+	if defers_to_text_field(key.keycode) and _typing():
 		return
 	match key.keycode:
 		KEY_Z:
@@ -353,11 +390,38 @@ func _input(event: InputEvent) -> void:
 				undo()
 		KEY_Y:
 			redo()
+		# ⚠️ **THE MENU'S OWN HANDLER, NOT THE FOUR FUNCTIONS BEHIND IT** -- see the header. A
+		# `FileAction` id is the whole instruction, so there is nothing here to drift out of
+		# step with File ▸ Save when one of those functions grows a precondition.
+		KEY_S:
+			_on_file_action(FileAction.SAVE_AS if key.shift_pressed else FileAction.SAVE)
+		KEY_O:
+			_on_file_action(FileAction.OPEN)
+		KEY_N:
+			_on_file_action(FileAction.NEW)
 		_:
 			return
 	if is_inside_tree():
 		# CONSUMED, so the keystroke does not also reach anything behind this screen.
 		get_viewport().set_input_as_handled()
+
+
+## Does this shortcut give way to a focused text field? **Only the history keys do.**
+##
+## ⛔ **THE RULE IS "IS IT A TEXT-EDITING KEY", AND IT IS PURE SO IT CAN BE TESTED.** `_typing()`
+## needs a viewport to ask for the focus owner and this suite has no tree, so the decision it
+## gates would otherwise be the one part of `_input` nothing could check. Split out for that
+## reason — see `_input`'s header for the argument, which the board card and this function
+## disagree with each other about on purpose.
+##
+## - `Ctrl+Z` / `Ctrl+Y`: **yes.** `LineEdit` implements them as its own text undo/redo, so
+##   taking them would break the field the author is typing in.
+## - `Ctrl+S` / `Ctrl+O` / `Ctrl+N`: **no.** `LineEdit` does nothing with these, so "handing
+##   them back" hands them to nobody and the keystroke is simply lost — and lost at the one
+##   moment Ctrl+S matters most, since `save()` reads `_name_field.text` and naming a new map
+##   is exactly when that field has focus.
+static func defers_to_text_field(keycode: Key) -> bool:
+	return keycode == KEY_Z or keycode == KEY_Y
 
 
 ## Whether a text field has the keyboard.
@@ -1455,10 +1519,22 @@ func _file_row() -> Control:
 	_file_menu.text = "File"
 	_file_menu.flat = false
 	var menu := _file_menu.get_popup()
-	menu.add_item("New", FileAction.NEW)
-	menu.add_item("Open…", FileAction.OPEN)
-	menu.add_item("Save", FileAction.SAVE)
-	menu.add_item("Save As…", FileAction.SAVE_AS)
+	# ⛔ **THE KEYS ARE IN THE LABEL AND NOT IN `set_item_accelerator`, AND THAT IS A SAFETY
+	# CALL RATHER THAN A TYPOGRAPHIC ONE** (board `16.x-shortcuts`). A real accelerator is
+	# dispatched from `_shortcut_input`, which is a SECOND route to `_on_file_action` that does
+	# not pass `_input`'s guards — so `Ctrl+S` would still save while the unsaved-changes
+	# question or a `FileDialog` was up, which is exactly what `dialog_is_up()` exists to stop.
+	# Whether it fired would depend on `set_input_as_handled()` having consumed the key first,
+	# i.e. on `is_inside_tree()` and on which arm returned early: a guard that holds in most
+	# orderings is not a guard. The text costs nothing and cannot dispatch anything.
+	#
+	# 📝 Same reasoning as the Undo/Redo buttons carrying `Ctrl+Z` in their TOOLTIP rather than
+	# their label — say what the key is where the author is already looking, without making the
+	# statement into a mechanism.
+	menu.add_item("New  (Ctrl+N)", FileAction.NEW)
+	menu.add_item("Open…  (Ctrl+O)", FileAction.OPEN)
+	menu.add_item("Save  (Ctrl+S)", FileAction.SAVE)
+	menu.add_item("Save As…  (Ctrl+Shift+S)", FileAction.SAVE_AS)
 	# ⚠️ **EXPORT IS A FILE COMMAND AND IT SITS WITH THE OTHER FILE COMMANDS**, which is the
 	# opposite call from `Conditions…` two dozen lines down and for the reason given there: those
 	# three controls say what the map IS, and this one WRITES it — to a second place, in a second
