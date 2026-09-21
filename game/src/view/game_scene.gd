@@ -67,6 +67,14 @@ var _chat: ChatPanel
 var _tech_tree: TechTreePanel
 var _market: MarketPanel
 
+## BUILD / RESEARCH / UNITS (board `8.x-build-menu-modal`). One page wearing three titles,
+## opened from the SELECTION rather than from a corner button.
+var _action_page: ActionPage
+## Which action opened the page, and which entity it is about. Both are needed to keep it
+## refreshed and to know when its subject has gone -- see `_refresh_open_page`.
+var _page_action: StringName = &""
+var _page_subject: int = 0
+
 ## The minimap's four corner buttons by name (`chat`/`trade`/`techtree`/`settings`),
 ## so a dev preview can press the real control instead of calling its handler. Public
 ## for the same reason `PauseMenu` holds its resign button: on this screen a button
@@ -408,6 +416,7 @@ func _build_hud() -> void:
 	_panel.cancel_requested.connect(_on_cancel_requested)
 	_panel.ungarrison_requested.connect(_on_ungarrison_requested)
 	_panel.debug_destroy_requested.connect(_on_debug_destroy_requested)
+	_panel.page_requested.connect(_on_page_requested)
 	_panel.place_requested.connect(_enter_placement)
 	_panel.action_requested.connect(_on_action_requested)
 	_panel.clear_requested.connect(_on_clear_pressed)
@@ -668,6 +677,18 @@ func _build_hud() -> void:
 	_market.tribute_requested.connect(_on_tribute_requested)
 	_market.exchange_requested.connect(_on_exchange_requested)
 	hud.add_child(_market)
+
+	# BUILD / RESEARCH / UNITS, the three pages the detail grid moved onto (board
+	# `8.x-build-menu-modal`). ONE page object wearing three titles, because they are the
+	# same grid of `ActionSlot`s over three different lists -- which is the argument
+	# `HudPanel`'s own header makes for the three pages above it.
+	#
+	# ⚠️ **REACHED FROM A SELECTION, NOT FROM A CORNER BUTTON**, unlike the other three.
+	# `SelectionPanel` says which list is wanted and this scene opens it; the press comes
+	# straight back to `handle_detail` so there is exactly one interpretation of a tile.
+	_action_page = ActionPage.new()
+	_action_page.action_pressed.connect(_on_page_action_pressed)
+	hud.add_child(_action_page)
 
 	# THE BRIEFING (15.6), above the pages and below the result. Above them because a
 	# scenario's goal is the first thing the player is owed and a market panel opened
@@ -1512,6 +1533,10 @@ func _refresh_result(snap: Dictionary) -> void:
 	_pending_destroy_id = 0
 	if _destroy_confirm != null:
 		_destroy_confirm.close()
+	# AND THE BUILD PAGE, for the same reason and with the same guard: a grid of live
+	# train tiles under a verdict screen is a set of orders for a match that is over.
+	if _action_page != null:
+		_action_page.close()
 	var winner := int(snap.get("winner_id", 0))
 	var reason := int(mine.get("defeat_reason", SimPlayer.Defeat.ELIMINATED))
 	# YOUR SIDE WINNING IS YOU WINNING (2026-08-31). `winner_id` names one survivor of
@@ -2656,6 +2681,48 @@ func _on_ungarrison_requested(building_id: int, index: int) -> void:
 	Net.submit_command(UngarrisonCommand.new(Net.local_player_id(), building_id, index))
 
 
+## Open the BUILD / RESEARCH / UNITS page for the current selection (board
+## `8.x-build-menu-modal`).
+##
+## The list comes from `SelectionPanel.details_for_action`, which is `details_for()` with
+## the panel's own arguments -- so the page shows exactly what the strip's grid would have
+## shown, sliced at the page's size instead of at `MAX_DETAILS`.
+func _on_page_requested(action_id: StringName) -> void:
+	var title: String = SelectionActions.PAGE_TITLES.get(action_id, "")
+	if title.is_empty():
+		return
+	_page_action = action_id
+	_page_subject = _view.selection.primary()
+	_action_page.show_actions(title, _panel.details_for_action(action_id))
+	_action_page.open()
+
+
+## A tile on the page was pressed. Handed straight back to the panel, which is the one
+## place that knows what a detail tile MEANS.
+##
+## ⛔ **THE TWO EXITS DIFFER, AND THAT IS THE FEATURE** (owner, 2026-09-20: *"for upgrade,
+## goes back to build queue like normal; or for building, it closes the modal and follows
+## the drag to place process like it does now"*).
+##
+## - a **building** tile closes the page, because placement is a gesture on ground the page
+##   would be covering;
+## - a **research** tile also closes it, and that one is not a guess either: `_on_detail_
+##   pressed` has closed the strip's grid after a research since 2026-08-30, on the owner's
+##   report that *"staying on upgrade panel gives the impression the action did not work"*.
+##   The same sentence applies to a page, harder.
+## - a **train** tile leaves the page open, so a castle's four units can be queued without
+##   reopening it each time. That is `place:`'s argument -- a repeated gesture should not
+##   need the tile tapped again -- and it is the one of the three I am least sure of, so it
+##   is written here to be easy to find and reverse.
+func _on_page_action_pressed(action: HudAction) -> void:
+	if action == null:
+		return
+	_panel.handle_detail(action)
+	var id := String(action.id)
+	if id.begins_with("place:") or id.begins_with("research:"):
+		_action_page.close()
+
+
 ## Destroy ASKS FIRST (owner, playtest 2026-09-20; board `8.x-destroy-confirm`). It went
 ## straight to `Net.submit_command` until 2026-09-21, which made demolishing your own town
 ## centre a single tap with no way back -- and the owner had already lost buildings to it.
@@ -3042,7 +3109,31 @@ func _refresh_panel() -> void:
 		_panel.show_entity(facts, _view.selection.size(), is_mine, all_def_ids,
 				_view.age_of(owner_id), int(_view.skin_for(owner_id).get("colour", -1)),
 				_view.researched_of(owner_id))
+	_refresh_open_page(primary)
 	_refresh_waypoint_flag()
+
+
+## Keep an open BUILD / RESEARCH / UNITS page honest, and take it away when its subject is
+## gone (board `8.x-build-menu-modal`).
+##
+## ⛔ **THE CLOCK RUNS UNDER THIS PAGE**, inherited from `HudPanel` rather than chosen, so
+## the world it is describing moves while the player reads it. Two consequences and both
+## are handled here rather than left:
+##
+## - **affordability greying goes stale.** The page is re-read every snapshot, exactly as
+##   the strip's grid is, so a tile the player can suddenly afford lights up under them.
+##   `update_actions` keeps the page NUMBER while doing it -- a refresh that reset to page
+##   0 ten times a second would make page 2 unreadable.
+## - **the selection can change or die.** A page listing a castle's units while the castle
+##   burns down is a set of live buttons attached to nothing; `handle_detail` would refuse
+##   them, but the player would be tapping a lie. Closed instead.
+func _refresh_open_page(primary: int) -> void:
+	if _action_page == null or not _action_page.is_open():
+		return
+	if primary == 0 or primary != _page_subject:
+		_action_page.close()
+		return
+	_action_page.update_actions(_panel.details_for_action(_page_action))
 
 
 ## Show the selected building's rally point, or nothing.

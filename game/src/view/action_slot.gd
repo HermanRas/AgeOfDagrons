@@ -297,6 +297,67 @@ func _init() -> void:
 	pressed.connect(_on_pressed)
 
 
+## Draw this tile at `px` instead of `SIZE`, scaling everything inside it to match
+## (board `8.x-build-menu-modal`; owner, 2026-09-21: *"the entire point of moving to modal
+## is to give better readability on cost to build and bigger buttons to tap"*).
+##
+## ⛔ **EVERY NUMBER IN `_init` IS TUNED FOR 72 px, WHICH IS WHY THIS IS NOT ONE LINE.**
+## Setting `custom_minimum_size` alone gives a big tile with a 10 px icon inset, an 8 pt
+## caption and a 9 pt cost strip — a bigger button that is no more readable, which is
+## precisely the half of the request that matters. The frame and the icon scale on their
+## own (both are `PRESET_FULL_RECT` with `EXPAND_IGNORE_SIZE`); the insets, the fonts and
+## the ring do not.
+##
+## So this multiplies them by `px / SIZE`. Font sizes are rounded rather than floored —
+## at a 1.6x scale an 8 pt caption floors to 12 and rounds to 13, and the rounding is the
+## one that keeps the cost strip legible at arm's length.
+##
+## ⚠️ **IT IS A SCALE, NOT A SECOND LAYOUT.** The proportions that were argued for at 72 px
+## — the caption costing the sprite's foundation, the cost strip costing the sky above the
+## roof, the icon sitting inside the gold border — all still hold, because they are
+## fractions of the tile and this keeps them fractions of the tile.
+func set_tile_size(px: float) -> void:
+	var k := px / SIZE
+	custom_minimum_size = Vector2(px, px)
+
+	var inset := 10.0 * k
+	_icon_rect.offset_left = inset
+	_icon_rect.offset_top = inset
+	_icon_rect.offset_right = -inset
+	_icon_rect.offset_bottom = -inset
+
+	_label.add_theme_font_size_override("font_size", int(roundf(11.0 * k)))
+	_label.offset_left = 4.0 * k
+	_label.offset_right = -4.0 * k
+
+	var cap_inset := CAPTION_INSET * k
+	var cap_height := CAPTION_HEIGHT * k
+	for node in [_caption_bg, _caption]:
+		node.offset_left = cap_inset
+		node.offset_right = -cap_inset
+		node.offset_top = -(cap_inset + cap_height)
+		node.offset_bottom = -cap_inset
+	_caption.add_theme_font_size_override("font_size", int(roundf(8.0 * k)))
+
+	for node in [_cost_bg, _cost]:
+		node.offset_left = cap_inset
+		node.offset_right = -cap_inset
+		node.offset_top = cap_inset
+		node.offset_bottom = cap_inset + cap_height
+	_cost.add_theme_font_size_override("font_size", int(roundf(9.0 * k)))
+
+	_badge.add_theme_font_size_override("font_size", int(roundf(11.0 * k)))
+	_badge.offset_right = -5.0 * k
+	_badge.offset_bottom = -3.0 * k
+
+	# The ring is a StyleBox and cannot be nudged like an offset -- it needs a new box.
+	var ring_box := StyleBoxFlat.new()
+	ring_box.bg_color = Color(0, 0, 0, 0)
+	ring_box.set_border_width_all(maxi(1, int(roundf(SELECTED_BORDER * k))))
+	ring_box.border_color = SELECTED_COLOR
+	_ring.add_theme_stylebox_override("panel", ring_box)
+
+
 ## Repoints this slot at `p_action`, or empties it for `null`. Slots are
 ## rebuilt in place rather than freed and recreated so a selection changing
 ## every snapshot does not churn nodes (the same reason `EntityViewPool`

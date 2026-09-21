@@ -375,30 +375,54 @@ func test_a_group_that_exactly_fills_the_grid_shows_no_overflow() -> void:
 ##
 ## §4's invariant was never in danger: the server refused it, so this was never an
 ## exploit. It was the HUD promising an order the sim would not take.
+## ⚠️ **THE TOWN CENTRE, NOT THE DOCK, AND THE SWAP IS THE INTERESTING PART.** These two
+## used a dock at age 4 until `8.x-build-menu-modal`'s collapse rule landed -- at which
+## point a dock's four train tiles fold into the single `units` tile and there are no
+## per-unit tiles in the column to be greyed at all. The tests failed, correctly, on
+## behaviour that had deliberately changed.
+##
+## A town centre at age 2 trains two things and stays under the cap, so it still shows its
+## train tiles in the column and the phase guard still has something to act on. The
+## collapsed case is covered by `test_the_units_page_is_greyed_on_a_foundation_too`, which
+## is where those tiles went.
 func test_a_foundation_offers_its_train_tiles_greyed_rather_than_live() -> void:
-	var facts := _building_facts(&"building.dock")
+	var facts := _building_facts(&"building.town_center")
 	facts["phase"] = SimBuilding.Phase.FOUNDATION
-	var row := SelectionActions._building_actions(&"building.dock", 4, facts, {})
+	var row := SelectionActions._building_actions(&"building.town_center", 2, facts, {})
 	var found := 0
 	for a in row:
 		if String(a.id).begins_with("train:"):
 			found += 1
 			assert_false(a.enabled,
-					"%s is greyed while the dock is still a foundation" % a.id)
+					"%s is greyed while the town centre is still a foundation" % a.id)
 	assert_true(found > 0, "the tiles are still THERE, just not pressable")
 
 
 func test_a_finished_building_trains_as_it_always_did() -> void:
 	# The other half, and the one that would catch a guard that greyed everything.
-	var facts := _building_facts(&"building.dock")
+	var facts := _building_facts(&"building.town_center")
 	facts["phase"] = SimBuilding.Phase.COMPLETE
-	var row := SelectionActions._building_actions(&"building.dock", 4, facts, {})
+	var row := SelectionActions._building_actions(&"building.town_center", 2, facts, {})
 	var found := 0
 	for a in row:
 		if String(a.id).begins_with("train:"):
 			found += 1
-			assert_true(a.enabled, "%s is live on a finished dock" % a.id)
+			assert_true(a.enabled, "%s is live on a finished town centre" % a.id)
 	assert_true(found > 0)
+
+
+## ⛔ **AND THE GUARD MUST REACH A COLLAPSED BUILDING TOO**, or `8.x-train-on-foundation`
+## comes back for every building big enough to collapse -- which is the four biggest.
+## The `units` tile is the only route to those units, so it is the tile that has to grey.
+func test_a_collapsed_foundation_greys_its_units_tile() -> void:
+	var bd: BuildingDef = GameDataRegistry.building(&"building.dock")
+	assert_true(SelectionActions.trains_collapse(bd, 4), "the dock collapses at age 4")
+	var facts := _building_facts(&"building.dock")
+	facts["phase"] = SimBuilding.Phase.FOUNDATION
+	var row := SelectionActions._building_actions(&"building.dock", 4, facts, {})
+	var tile := _by_id(row, &"units")
+	assert_not_null(tile, "a collapsed dock still offers the page")
+	assert_false(tile.enabled, "and it is greyed while the dock is a foundation")
 
 
 func test_the_row_is_the_same_length_in_both_phases() -> void:
@@ -421,6 +445,124 @@ func test_the_row_is_the_same_length_in_both_phases() -> void:
 				trains_b += 1
 		assert_eq(trains_a, trains_b,
 				"%s offers the same train tiles either way" % building_id)
+
+
+# ── the UNITS page and the collapse rule (8.x-build-menu-modal) ─────────────
+
+func test_a_building_that_trains_anything_offers_the_units_page() -> void:
+	# It is the page's ONLY entry point -- there is no corner button for it, unlike the
+	# other three pages -- so a building that trains and does not offer it has a page
+	# nobody can reach.
+	for building_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(building_id)
+		for age in [1, 2, 3, 4]:
+			var facts := _building_facts(building_id)
+			facts["phase"] = SimBuilding.Phase.COMPLETE
+			var ids := _ids(SelectionActions._building_actions(building_id, age, facts, {}))
+			var trains := 0
+			for u in bd.trains:
+				var ud: UnitDef = GameDataRegistry.unit(u)
+				if ud != null and ud.age_required <= age:
+					trains += 1
+			assert_eq(ids.has(&"units"), trains > 0,
+					"%s at age %d trains %d and %s the units tile"
+					% [building_id, age, trains, "offers" if trains > 0 else "does not offer"])
+
+
+func test_a_building_that_trains_nothing_offers_no_units_page() -> void:
+	var facts := _building_facts(&"building.house")
+	facts["phase"] = SimBuilding.Phase.COMPLETE
+	var ids := _ids(SelectionActions._building_actions(&"building.house", 4, facts, {}))
+	assert_false(ids.has(&"units"), "a house has no roster to show")
+
+
+func test_the_units_page_lists_what_the_column_would_have_trained() -> void:
+	# TWO ROUTES TO ONE COMMAND, and they must not come to disagree. Same ids, same gate.
+	for building_id in GameDataRegistry.building_ids():
+		for age in [1, 2, 3, 4]:
+			var facts := _building_facts(building_id)
+			facts["phase"] = SimBuilding.Phase.COMPLETE
+			var page := _ids(SelectionActions.details_for(&"units", facts, 1, [], age))
+			var bd: BuildingDef = GameDataRegistry.building(building_id)
+			var want: Array = []
+			for u in bd.trains:
+				var ud: UnitDef = GameDataRegistry.unit(u)
+				if ud != null and ud.age_required <= age:
+					want.append(StringName("train:%s" % u))
+			assert_eq(page, want, "%s at age %d" % [building_id, age])
+
+
+func test_the_units_page_is_greyed_on_a_foundation_too() -> void:
+	# The second route must inherit `8.x-train-on-foundation`'s guard, or the bug comes
+	# back by the other door.
+	var facts := _building_facts(&"building.dock")
+	facts["phase"] = SimBuilding.Phase.FOUNDATION
+	var page := SelectionActions.details_for(&"units", facts, 1, [], 4)
+	assert_false(page.is_empty())
+	for a in page:
+		assert_false(a.enabled, "%s is greyed while the dock is a foundation" % a.id)
+
+
+func test_the_collapse_depends_on_the_def_and_the_age_and_nothing_else() -> void:
+	# ⛔ THE ONE THAT MATTERS. The card's warning: computed from the LIVE row, four train
+	# tiles would become one page tile the instant a rally point was set, rearranging the
+	# column under the thumb that just tapped it. So the answer must not move when any
+	# transient verb does.
+	for building_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(building_id)
+		for age in [1, 2, 3, 4]:
+			var want := SelectionActions.trains_collapse(bd, age)
+			for phase in [SimBuilding.Phase.FOUNDATION, SimBuilding.Phase.COMPLETE]:
+				for rally in [false, true]:
+					for full in [false, true]:
+						for locked in [false, true]:
+							var facts := _building_facts(building_id)
+							facts["phase"] = phase
+							facts["garrison_count"] = bd.garrison_cap if full else 0
+							facts["gate_locked"] = locked
+							if rally:
+								facts["waypoint"] = Vector2i(5, 5)
+							var ids := _ids(SelectionActions._building_actions(
+									building_id, age, facts, {}))
+							var has_trains := false
+							for id in ids:
+								if String(id).begins_with("train:"):
+									has_trains = true
+							assert_eq(not has_trains and ids.has(&"units"), want,
+									"%s at age %d collapses the same way in every state"
+									% [building_id, age])
+
+
+func test_a_collapsed_row_still_reaches_every_unit_through_the_page() -> void:
+	# A collapse that hid units without a way to them would be worse than the overflow.
+	for building_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(building_id)
+		for age in [1, 2, 3, 4]:
+			if not SelectionActions.trains_collapse(bd, age):
+				continue
+			var facts := _building_facts(building_id)
+			facts["phase"] = SimBuilding.Phase.COMPLETE
+			var ids := _ids(SelectionActions._building_actions(building_id, age, facts, {}))
+			assert_true(ids.has(&"units"),
+					"%s at age %d collapsed, so the page must be offered" % [building_id, age])
+			var page := SelectionActions.details_for(&"units", facts, 1, [], age)
+			assert_true(page.size() > 1,
+					"%s at age %d: the page holds the units the column gave up" % [building_id, age])
+
+
+func test_one_trainable_unit_never_collapses() -> void:
+	# Replacing one tile with one tile saves nothing and costs a tap.
+	for building_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(building_id)
+		for age in [1, 2, 3, 4]:
+			var trains := 0
+			for u in bd.trains:
+				var ud: UnitDef = GameDataRegistry.unit(u)
+				if ud != null and ud.age_required <= age:
+					trains += 1
+			if trains == 1:
+				assert_false(SelectionActions.trains_collapse(bd, age),
+						"%s at age %d trains one thing" % [building_id, age])
 
 
 func test_a_building_lists_only_the_units_its_owner_has_the_age_for() -> void:
@@ -447,8 +589,24 @@ func test_the_castle_fills_in_across_two_ages() -> void:
 	assert_true(age3.has(&"train:unit.knight"))
 	assert_false(age3.has(&"train:unit.elite_swordsman"))
 
-	var age4 := _ids(SelectionActions.for_selection(
+	# ⛔ **AT AGE 4 THE CASTLE COLLAPSES, so its units are asked for on the PAGE** (board
+	# `8.x-build-menu-modal`). This read the action column at both ages until 2026-09-21 and
+	# began failing when the fourth train tile pushed the castle over the collapse
+	# threshold -- correctly, and the test had to move rather than the rule.
+	#
+	# ⚠️ The intent is unchanged and is the reason this is not simply deleted: what it pins
+	# is the AGE GATE -- knights in age 3, elite swordsmen and the trebuchet in age 4 -- not
+	# which container they are drawn in. So both halves are asserted: the column offers the
+	# way in, and the page behind it offers the three units.
+	var age4_column := _ids(SelectionActions.for_selection(
 			_building_facts(&"building.castle"), 1, true, [], 4))
+	assert_true(age4_column.has(&"units"),
+			"a collapsed castle still offers a way to its units: %s" % [age4_column])
+	assert_false(age4_column.has(&"train:unit.knight"),
+			"and does NOT also list them individually -- that is what collapsing means")
+
+	var age4 := _ids(SelectionActions.details_for(
+			&"units", _building_facts(&"building.castle"), 1, [], 4))
 	for unit_id in [&"train:unit.knight", &"train:unit.elite_swordsman",
 			&"train:unit.trebuchet"]:
 		assert_true(age4.has(unit_id), "age 4 castle offers %s" % unit_id)
@@ -460,13 +618,24 @@ func test_the_castle_fills_in_across_two_ages() -> void:
 ## while her baby grows (PLAN.md 13.2). Pinned as an ABSENCE because a train button is how the
 ## old route would come back by accident — `trainable_at: []` on the unit and a missing entry
 ## in `building.castle.trains` are two places, and this reads the result of both.
+##
+## ⛔ **AND IT READS BOTH CONTAINERS SINCE 2026-09-21, BECAUSE ONE OF THEM STOPPED BEING
+## ABLE TO FAIL.** This walked only the action column. Once `8.x-build-menu-modal` gave the
+## bigger buildings a single `units` tile, a collapsed castle's train ids left the column
+## entirely -- so the column went quiet for exactly the buildings with the widest rosters,
+## and this test would have reported a clean board while a dragon tile sat on the page.
+## A pinned absence that cannot observe the place the thing would be is not a guard.
 func test_no_building_offers_to_train_a_dragon() -> void:
 	for building_id in GameDataRegistry.building_ids():
 		for age in [1, 2, 3, 4]:
-			var ids := _ids(SelectionActions.for_selection(
-					_building_facts(building_id), 1, true, [], age))
+			var facts := _building_facts(building_id)
+			var ids := _ids(SelectionActions.for_selection(facts, 1, true, [], age))
 			assert_false(ids.has(&"train:unit.dragon"),
 					"%s at age %d must not offer a dragon" % [building_id, age])
+			var page := _ids(SelectionActions.details_for(&"units", facts, 1, [], age))
+			assert_false(page.has(&"train:unit.dragon"),
+					"%s at age %d must not offer a dragon on its UNITS page"
+					% [building_id, age])
 
 
 ## ⛔ **THIS ASSERTS THE ROW BEFORE THE CAP, AND THE VERSION THAT DID NOT COULD NOT FAIL.**
@@ -638,6 +807,90 @@ func test_a_page_number_past_the_end_clamps_to_the_last_page() -> void:
 	assert_eq(_ids_of(SelectionActions.page_of(details, 99)),
 			_ids_of(SelectionActions.page_of(details, 1)),
 			"a stale page number lands on the last real page, not an empty grid")
+
+
+# ── paging at a page size that is not MAX_DETAILS (8.x-build-menu-modal) ─────
+#
+# The build PAGE fixes the tile size and varies the page size, so how many fit stops
+# being knowable at compile time. `page_of` is told the count rather than reading one:
+# `SelectionActions` is static and node-free so the action model can be asserted with no
+# tree, and fetching a `Control.size` in here would destroy that for one argument.
+
+func test_the_default_slot_count_is_still_the_strip() -> void:
+	# Every existing caller passes nothing and must get exactly what it always got.
+	var details := _fake_details(19)
+	assert_eq(_ids_of(SelectionActions.page_of(details, 0)),
+			_ids_of(SelectionActions.page_of(details, 0, SelectionActions.MAX_DETAILS)))
+	assert_eq(SelectionActions.page_count(19),
+			SelectionActions.page_count(19, SelectionActions.MAX_DETAILS))
+
+
+func test_a_wider_page_needs_fewer_pages() -> void:
+	# The whole point of the argument: 23 buildings page twice in the strip and fit at
+	# once on a page with room for them.
+	assert_true(SelectionActions.page_count(23, 12) > 1)
+	assert_eq(SelectionActions.page_count(23, 23), 1, "a page that fits needs no arrows")
+	assert_eq(SelectionActions.page_count(23, 40), 1)
+
+
+func test_no_page_overflows_its_own_slot_count_whatever_that_is() -> void:
+	# The strip's invariant, re-asserted across the range of page sizes a phone and a
+	# desktop window actually produce.
+	for slots in [4, 6, 11, 12, 20, 33]:
+		for total in [1, 5, 12, 19, 23, 47]:
+			var details := _fake_details(total)
+			for page in range(SelectionActions.page_count(total, slots)):
+				var got := SelectionActions.page_of(details, page, slots)
+				assert_true(got.size() <= slots,
+						"%d items in %d slots: page %d holds %d"
+						% [total, slots, page, got.size()])
+
+
+func test_every_item_stays_reachable_at_any_page_size() -> void:
+	# Paging that loses an item is the failure a cap already had; at a new page size it
+	# would be a NEW way to have it, and silent.
+	for slots in [4, 6, 11, 12, 20, 33]:
+		for total in [1, 12, 13, 19, 23, 25, 47]:
+			var details := _fake_details(total)
+			var seen: Array = []
+			for page in range(SelectionActions.page_count(total, slots)):
+				for a in SelectionActions.page_of(details, page, slots):
+					if a.id == SelectionActions.PAGE_NEXT \
+							or a.id == SelectionActions.PAGE_PREV:
+						continue
+					assert_false(seen.has(a.id),
+							"%s appears once (%d items, %d slots)" % [a.id, total, slots])
+					seen.append(a.id)
+			assert_eq(seen.size(), total,
+					"all %d items reachable in %d slots" % [total, slots])
+
+
+func test_an_absurdly_small_page_still_terminates() -> void:
+	# ⛔ THE HANG THIS GUARDS AGAINST IS REAL ARITHMETIC, not paranoia -- AND IT CAUGHT ONE.
+	# `_page_offsets` walks the list a page at a time, and a page with room for one item and
+	# only one of the two arrows advances by zero, so `slots` of 2, 1, 0 or negative spins
+	# for ever. The clamp was `maxi(2, ..)` when this was written and **2 is inside the
+	# broken range**, so this test hung the headless suite outright rather than failing it.
+	#
+	# ⚠️ Which is why `2` stays first in the list below: it is the boundary the clamp got
+	# wrong, and a list that started at 1 would have been green on the same broken code.
+	# The caller is a layout measurement and a pathological viewport must give a cramped
+	# page, not a frozen game, so it clamps rather than asserting.
+	#
+	# ⚠️ **A HANG IS NOT A FAILURE AND DOES NOT LOOK LIKE ONE.** This one presented as a
+	# suite that was taking a long time, and was killed as such twice before its stderr was
+	# read. If a run goes quiet for minutes, read the stderr before assuming it is slow.
+	for slots in [2, 1, 0, -4]:
+		var details := _fake_details(9)
+		var pages := SelectionActions.page_count(9, slots)
+		assert_true(pages > 0 and pages <= 9,
+				"%d slots gives a sane page count, got %d" % [slots, pages])
+		var seen: Array = []
+		for page in range(pages):
+			for a in SelectionActions.page_of(details, page, slots):
+				if a.id != SelectionActions.PAGE_NEXT and a.id != SelectionActions.PAGE_PREV:
+					seen.append(a.id)
+		assert_eq(seen.size(), 9, "and still reaches everything at %d slots" % slots)
 
 
 ## The buildings the MENU is supposed to offer at `age` -- every def gated by age and

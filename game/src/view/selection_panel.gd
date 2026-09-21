@@ -59,6 +59,14 @@ signal place_requested(def_id: StringName)
 ## has no combat to bring hp to 0 any other way.
 signal debug_destroy_requested(target_id: int)
 
+## An action tile that opens a full-screen page was pressed -- `build`, `research` or
+## `units` (board `8.x-build-menu-modal`). `GameScene` owns the page and opens it.
+##
+## The panel says WHICH list is wanted and nothing else; what the list contains is still
+## `details_for()`, reached through `details_for_action()` below, so the page and the strip
+## cannot come to disagree about what a building offers.
+signal page_requested(action_id: StringName)
+
 ## The [X] at the top-left was pressed (PLAN.md 8.8) -- drop the selection.
 ##
 ## Its own signal rather than `action_requested(&"clear")`, because that one is
@@ -353,6 +361,35 @@ func _details() -> Array[HudAction]:
 			_all_def_ids, _age, active_formation, _researched)
 
 
+## The whole list a page action wants to show, for `GameScene` to hand to the `ActionPage`.
+##
+## ⛔ **`details_for()` AND NOT A SECOND DERIVATION.** §6's row about a predicate split in
+## two applies squarely here -- it cost this project a soldier opening fire on an ally's
+## barracks. The page is a different CONTAINER for the same list, so it asks the same
+## function with the same arguments this panel would have used; the only difference is that
+## the page slices it at its own size instead of at `MAX_DETAILS`.
+##
+## ⚠️ Uses the live `_facts`, so a page opened on a building shows that building's roster
+## at that owner's age, with affordability and the phase gate already applied by
+## `SelectionActions`. The page never re-derives any of it.
+func details_for_action(action_id: StringName) -> Array[HudAction]:
+	return SelectionActions.details_for(action_id, _facts, _selected_count,
+			_all_def_ids, _age, active_formation, _researched)
+
+
+## Interpret a press that came from the PAGE exactly as one from the strip's own grid.
+##
+## ⛔ **ONE INTERPRETATION, TWO CONTAINERS.** Everything that turns a detail tile into a
+## signal -- `place:`, `research:`, `train:`, `cancel:`, `ungarrison:` and the fall-through
+## -- lives in `_on_detail_pressed` and stays there. A page with its own copy would be the
+## split-predicate trap again, and the half carrying the good reason is the half you read.
+##
+## The arrows never arrive: `ActionPage` swallows them and turns its own page, the same
+## division this panel draws.
+func handle_detail(action: HudAction) -> void:
+	_on_detail_pressed(action)
+
+
 ## How many pages the currently open detail list spans. For tests and for
 ## anything that wants to show a page indicator later.
 func detail_page_count() -> int:
@@ -387,6 +424,19 @@ func _on_clear_pressed() -> void:
 
 
 func _on_action_pressed(action: HudAction) -> void:
+	# THREE OF THE EXPANDING ACTIONS OPEN A PAGE INSTEAD (board `8.x-build-menu-modal`).
+	# Checked before the toggle below, because a page action must not also flip
+	# `_active_action` -- the strip's grid would then fill with the same list the page is
+	# showing, behind it.
+	#
+	# The panel does not own the page and does not open it: it is a full-screen `HudPanel`
+	# and this is a small box anchored to the bottom-left corner, so a child of this node
+	# would be laid out inside a 300 px panel. `GameScene` holds it, the way it holds the
+	# other three pages, and hands the press straight back to `handle_detail` -- see there.
+	if action.expands and SelectionActions.opens_page(action.id):
+		page_requested.emit(action.id)
+		return
+
 	# An expanding action is a VIEW toggle, not an order -- it only decides what
 	# the right grid lists. Tapping the open one again closes it.
 	if action.expands:
@@ -460,6 +510,28 @@ func _on_detail_pressed(action: HudAction) -> void:
 		_active_action = &""
 		_detail_page = 0
 		_refresh_details()
+		return
+	# `train:<unit id>`, WHICH ONLY EVER ARRIVES FROM THE PAGE. Until 2026-09-21 a train
+	# tile existed only in the action column, where `_on_action_pressed` has read it since
+	# 4.x -- so this half of the pair was never written, and the UNITS page shipped a grid
+	# of unit portraits that did nothing when tapped (owner, playtest 2026-09-21:
+	# *"units does not, when you click them nothing happens"*).
+	#
+	# ⚠️ It did not fail LOUDLY, and that is the part worth remembering: `train:` fell
+	# through to `action_requested`, `GameScene._on_action_requested` has no `train:` arm
+	# and its `match` has no default, so a real order evaporated with no error, no warning
+	# and a button that depressed correctly. The same shape as `member:` being unmatched
+	# from 4.3 to 2026-08-30, four paragraphs down.
+	#
+	# Emits the panel's own signal rather than falling through, for the reason the note
+	# below gives: `_building_id` is state this panel owns and GameScene would have to
+	# re-derive it. Identical to the action column's branch, which is the point -- one
+	# unit tile, one meaning, wherever it was drawn.
+	if id.begins_with("train:") and _building_id != 0:
+		train_requested.emit(_building_id, StringName(id.trim_prefix("train:")))
+		# NO CLOSE, unlike `research:` above: a castle's four units are queued by tapping
+		# the same tile repeatedly, which is `place:`'s argument rather than research's.
+		# `GameScene._on_page_action_pressed` decides that for the page and says so there.
 		return
 	# `ungarrison:all` and `ungarrison:<index>` (4.8). "all" is checked as a STRING
 	# rather than relying on `int("all")` returning 0 -- which it does, and which would

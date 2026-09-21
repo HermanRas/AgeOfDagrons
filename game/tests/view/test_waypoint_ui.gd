@@ -154,32 +154,61 @@ func test_a_building_without_one_does_not() -> void:
 	assert_false(_actions(_building_facts(10, &"building.barracks")).has("stop"))
 
 
-## ⚠️ **THE CASTLE NO LONGER OVERFLOWS, so this test no longer tests what it is named for —
-## and the rule it was guarding is pinned below instead.**
+## ⚠️ **THE CASTLE HAS NOW OUTLIVED THIS TEST'S PREMISE TWICE, and the second time is why
+## the counts below are gone.**
 ##
-## It asserted that a castle with a rally point asks for NINE of `MAX_ACTIONS`' eight and that
-## Repair is the one dropped. The castle stopped training the dragon on 2026-09-04 (PLAN.md
-## 13.2: claimed at a nest, never trained), so the row is 3 trains + garrison + upgrade + stop
-## + destroy + repair = **8 exactly** — at the cap, shedding nothing.
+## Round one, 2026-09-04: it asserted a castle with a rally point asks for NINE of
+## `MAX_ACTIONS`' eight and that Repair is the one dropped. The castle stopped training the
+## dragon (PLAN.md 13.2: claimed at a nest, never trained), leaving 3 trains + garrison +
+## upgrade + stop + destroy + repair = 8 exactly. The header was rewritten to say "exactly at
+## the cap" and the number 8 was written back in.
 ##
-## **A DATA EDIT SILENTLY RETIRED A BEHAVIOUR TEST, which is the lesson worth keeping.** No
-## building may now exceed eight, so nothing here exercises `_capped`'s slice at all;
-## `test_the_row_sheds_the_placeholder_before_a_real_verb` below drives the ordering rule
-## directly, where a roster change cannot reach it.
-func test_the_castle_now_sits_exactly_at_the_cap_with_a_rally_point() -> void:
+## Round two, 2026-09-21: `8.x-build-menu-modal` folded a wide roster's train tiles into one
+## `units` tile, so the same castle now asks for 6. The rewritten test failed on the number
+## again.
+##
+## ➡️ **SO IT STOPS ASSERTING ARITHMETIC.** This file already drew the conclusion once — *"a
+## behaviour test tied to whichever piece of data happens to be widest is a test with an
+## expiry date"* — and then immediately pinned a fresh width. A count reached through the
+## roster AND the collapse rule AND the cap has three separate ways to go stale while the
+## behaviour it is named for is perfectly healthy. What the castle is FOR here is being the
+## widest row in the game; what is worth asserting is that the widest row still fits, and
+## that the rally verb comes and goes with the rally point.
+##
+## The dropping rule itself is driven directly by `test_the_row_sheds_the_placeholder_before_
+## a_real_verb` below, where no roster or layout change can reach it.
+func test_the_widest_row_in_the_game_still_fits_with_a_rally_point() -> void:
 	var facts := _building_facts(10, &"building.castle", 1, Vector2i(30, 30))
 	var ids := _actions(facts)
-	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS, str(ids))
+	assert_true(ids.size() <= SelectionActions.MAX_ACTIONS,
+			"the castle fits the column: %s" % str(ids))
 	assert_true(ids.has("stop"), "the rally-clearing verb is there")
 	assert_true(ids.has("destroy"), "and the real command")
-	assert_true(ids.has("repair"), "and at exactly 8 the placeholder survives too")
+	assert_true(ids.has("repair"), "and with room to spare the placeholder survives too")
 
 
-func test_the_castle_has_a_slot_to_spare_without_a_rally_point() -> void:
-	var ids := _actions(_building_facts(10, &"building.castle"))
-	assert_eq(ids.size(), SelectionActions.MAX_ACTIONS - 1, str(ids))
-	assert_true(ids.has("repair"))
-	assert_true(ids.has("destroy"))
+## ⛔ **AND THE HEADROOM IS BOUGHT BY THE COLLAPSE, WHICH IS ASSERTED RATHER THAN ASSUMED.**
+## If `trains_collapse` ever stopped firing for the castle, the row would go back to 8 and
+## the next verb added to a building would silently lose one -- which is `8.x-action-column-
+## overflow` returning by the same door it came in the first time.
+func test_the_castle_owes_its_headroom_to_the_units_tile() -> void:
+	var ids := _actions(_building_facts(10, &"building.castle", 1, Vector2i(30, 30)))
+	assert_true(ids.has("units"), "the castle collapses its roster: %s" % str(ids))
+	for id in ids:
+		assert_false(String(id).begins_with("train:"),
+				"a collapsed row lists no individual train tiles, got %s" % str(ids))
+
+
+func test_the_castle_asks_for_one_less_without_a_rally_point() -> void:
+	# The rally point's ONLY effect on the row is `stop`, so the two rows differ by exactly
+	# one -- a relation that survives every roster and layout change the counts did not.
+	var with_rally := _actions(
+			_building_facts(10, &"building.castle", 1, Vector2i(30, 30)))
+	var without := _actions(_building_facts(10, &"building.castle"))
+	assert_eq(without.size(), with_rally.size() - 1, str(without))
+	assert_false(without.has("stop"), "nothing to clear, so no verb to clear it")
+	assert_true(without.has("repair"))
+	assert_true(without.has("destroy"))
 
 
 ## ⚠️ **THE ORDERING RULE, DRIVEN DIRECTLY RATHER THAN THROUGH A BUILDING.**

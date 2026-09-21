@@ -24,6 +24,20 @@ func _villager_facts(id: int, hp: int = 30, max_hp: int = 30) -> Dictionary:
 			"alive": true, "task": 0, "queue_len": 0, "queue_fraction": 0.0}
 
 
+## A soldier, whose STANCE tile is the expanding action the strip still owns.
+##
+## ⛔ **NEEDED BECAUSE THE VILLAGER STOPPED HAVING ONE** (board `8.x-build-menu-modal`).
+## `build` was this file's way in to every expand/collapse test, and it now opens a
+## full-screen page instead -- so a lone villager has no tile left that expands the strip's
+## own grid, and tests written against one were asserting a toggle that could no longer
+## move. Stance is the replacement because it is the expanding action LEAST likely to be
+## moved next: four fixed options that fit the grid at any age, with no roster behind them
+## to outgrow it.
+func _militia_facts(id: int) -> Dictionary:
+	return {"id": id, "def_id": &"unit.militia", "owner_id": 1, "hp": 40, "max_hp": 40,
+			"alive": true, "task": 0, "stance": 0, "queue_len": 0, "queue_fraction": 0.0}
+
+
 ## Carries `queue` as well as `queue_len`, matching what GameView really builds.
 ## This file's copy of the fixture kept the old count-only shape after the one in
 ## test_selection_actions.gd was fixed -- so the queue slots here silently fell
@@ -154,33 +168,44 @@ func test_a_smaller_selection_does_not_leave_stale_slots_filled() -> void:
 
 # ── expanding an action ─────────────────────────────────────────────────────
 
-func test_pressing_build_expands_the_detail_grid_instead_of_ordering() -> void:
+## ⛔ **BUILD LEAVES THE STRIP ENTIRELY, and the second assertion is the one that matters.**
+## It would be easy to open the page AND expand the grid behind it, and nothing on screen
+## would say so while the page was up -- the player would find the build list still open
+## underneath after closing it, on a panel 300 px wide that was never meant to hold it.
+func test_pressing_build_opens_the_page_instead_of_ordering() -> void:
 	var placed: Array = []
+	var pages: Array = []
 	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
+	panel.page_requested.connect(func(id: StringName) -> void: pages.append(id))
 	panel.show_entity(_villager_facts(1))
 
 	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
 
-	assert_true(placed.is_empty(), "expanding is a view toggle, not an order")
-	assert_true(panel._details_grid.visible)
-	assert_true(_visible(panel._detail_slots) > 0)
+	assert_eq(pages, [&"build"], "the panel asks for the page and nothing else")
+	assert_true(placed.is_empty(), "asking for a menu is not an order")
+	assert_false(panel._details_grid.visible,
+			"and the strip's own grid does NOT also fill with the same list")
 
 
 func test_pressing_the_open_action_again_collapses_it() -> void:
-	panel.show_entity(_villager_facts(1))
-	var build := _slot_with_action(panel._action_slots, &"build").action
-	panel._on_action_pressed(build)
-	panel._on_action_pressed(build)
+	# Stance, not build: see `_militia_facts`. Driven through `build` until 2026-09-21,
+	# after which that press opened a page and this test passed without the toggle ever
+	# moving -- a collapse test on a thing that no longer expands.
+	panel.show_entity(_militia_facts(1))
+	var stance := _slot_with_action(panel._action_slots, &"stance").action
+	panel._on_action_pressed(stance)
+	assert_true(panel._details_grid.visible, "it expands at all")
+	panel._on_action_pressed(stance)
 	assert_false(panel._details_grid.visible)
 
 
 func test_changing_selection_closes_an_expanded_action() -> void:
-	panel.show_entity(_villager_facts(1))
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
+	panel.show_entity(_militia_facts(1))
+	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"stance").action)
 	assert_true(panel._details_grid.visible)
 
-	# A Build grid opened on one villager must not stay open over the next.
-	panel.show_entity(_villager_facts(2))
+	# A stance grid opened on one soldier must not stay open over the next.
+	panel.show_entity(_militia_facts(2))
 	assert_false(panel._details_grid.visible)
 
 
@@ -206,6 +231,48 @@ func test_train_requested_names_the_building_and_the_trainable_unit() -> void:
 	assert_eq(trained, [[5, &"unit.villager"]])
 
 
+## ⛔ **THE ONE THE UNITS PAGE SHIPPED WITHOUT.** `handle_detail` is the page's only way
+## back into this panel, and `train:` was the single prefix `_on_detail_pressed` did not
+## know -- because until the page existed a unit tile was only ever drawn in the action
+## column. Every unit portrait on the page depressed, emitted `action_requested`, and was
+## dropped unmatched at the far end. No error, no warning, no queued unit.
+func test_a_unit_tile_from_the_page_trains_exactly_as_the_column_does() -> void:
+	var trained: Array = []
+	panel.train_requested.connect(func(building_id: int, unit_def_id: StringName) -> void:
+		trained.append([building_id, unit_def_id]))
+	panel.show_entity(_town_center_facts(5))
+
+	# Through `handle_detail`, which is the page's door, rather than the column's handler.
+	panel.handle_detail(HudAction.new(&"train:unit.villager", "Villager"))
+	assert_eq(trained, [[5, &"unit.villager"]])
+
+
+## And the general form, so the next list to move onto a page cannot repeat it: EVERY tile
+## the UNITS page offers must come back as a train order. A test naming one unit would
+## have passed on a castle whose other three tiles were dead.
+##
+## Asserted against `details_for_action`, the same call `GameScene` makes to fill the page,
+## rather than a hand-written list -- a fixture of ids could drift away from what the page
+## actually draws and go on passing.
+func test_every_tile_the_units_page_offers_is_a_live_order() -> void:
+	var trained: Array[StringName] = []
+	panel.train_requested.connect(func(_building_id: int, unit_def_id: StringName) -> void:
+		trained.append(unit_def_id))
+	# Fall-through catcher: this is where the dead tiles WENT, so a test that only counted
+	# train orders would not have said what went wrong.
+	var fell_through: Array[StringName] = []
+	panel.action_requested.connect(func(id: StringName) -> void: fell_through.append(id))
+	panel.show_entity(_town_center_facts(5))
+
+	var tiles := panel.details_for_action(&"units")
+	assert_false(tiles.is_empty(), "a town centre offers units to train")
+	for tile in tiles:
+		panel.handle_detail(tile)
+	assert_eq(trained.size(), tiles.size(), "every tile became a train order")
+	assert_true(fell_through.is_empty(),
+			"no unit tile leaves as an untyped action: %s" % [fell_through])
+
+
 func test_a_plain_verb_reports_itself() -> void:
 	var fired: Array = []
 	panel.action_requested.connect(func(id: StringName) -> void: fired.append(id))
@@ -215,15 +282,18 @@ func test_a_plain_verb_reports_itself() -> void:
 	assert_eq(fired, [&"stop"])
 
 
-func test_picking_a_building_from_the_build_grid_requests_placement() -> void:
+## The build list is reached through `handle_detail` now -- the page's door -- rather than by
+## expanding the strip. What a `place:` tile MEANS is unchanged and deliberately so: one
+## interpretation, two containers (`SelectionPanel.handle_detail`).
+func test_picking_a_building_from_the_build_page_requests_placement() -> void:
 	var placed: Array = []
 	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
 	panel.show_entity(_villager_facts(1))
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
 
-	var first: HudAction = panel._detail_slots[0].action
-	panel._on_detail_pressed(first)
-	assert_eq(placed, [first.payload])
+	var tiles := panel.details_for_action(&"build")
+	assert_false(tiles.is_empty(), "a villager can build something")
+	panel.handle_detail(tiles[0])
+	assert_eq(placed, [tiles[0].payload])
 
 
 func test_cancelling_a_queue_entry_names_the_building_and_index() -> void:
@@ -236,7 +306,30 @@ func test_cancelling_a_queue_entry_names_the_building_and_index() -> void:
 	assert_eq(cancelled, [[5, 0]])
 
 
-# -- paging the build grid ---------------------------------------------------
+# -- what is left in the strip's own grid ------------------------------------
+#
+# ⛔ **THE PAGING TESTS THAT LIVED HERE ARE GONE, AND THE REASON IS WORTH READING BEFORE
+# WRITING NEW ONES.** Nine of them drove `_page_offsets` through the build list expanded in
+# the strip: opens on page one, the two arrows, reaching the wonder on the last page,
+# staying put after a placement, reopening at the top. `8.x-build-menu-modal` moved all
+# three long lists -- build, research and units -- onto `ActionPage`, so `_open_build()`
+# stopped opening anything and every one of those tests was asserting page numbers on a
+# grid that was never shown. They did not fail loudly; most of them simply stopped being
+# able to.
+#
+# ➡️ Their subject moved WITH the lists and is covered in `tests/view/test_action_page.gd`
+# (`test_a_long_list_pages_rather_than_dropping_the_tail`,
+# `test_every_action_is_reachable_by_paging`, `test_the_arrows_turn_the_page_and_are_
+# swallowed`, `test_opening_a_different_list_goes_back_to_page_one`). One of them was not
+# carried over because the owner reversed it: a placement now CLOSES the page rather than
+# staying on its page -- see `GameScene._on_page_action_pressed`.
+#
+# ⚠️ **AND THE STRIP'S PAGER IS NOW UNREACHABLE, which is a finding rather than a tidy-up.**
+# Every list the strip can still show goes through `_capped_details`, so it can never exceed
+# the grid, so `page_count()` is always 1 and neither arrow is ever drawn. The code is still
+# there and still correct. `test_the_strips_own_grid_can_no_longer_overflow` below pins that
+# as the REASON there are no arrows, so that if some future list arrives uncapped, the
+# assertion fails and says which one -- rather than the arrows quietly coming back.
 
 func _press_detail(id: StringName) -> bool:
 	var slot := _slot_with_action(panel._detail_slots, id)
@@ -246,122 +339,35 @@ func _press_detail(id: StringName) -> bool:
 	return true
 
 
-func _open_build(age: int) -> void:
-	panel.show_entity(_villager_facts(1), 1, true, [], age)
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
+func test_the_strips_own_grid_can_no_longer_overflow() -> void:
+	var cases := {
+		"a soldier's stances": [_militia_facts(1), &"stance"],
+		"a building's queue": [_town_center_facts(5, 3), &""],
+		"a villager with nothing expanded": [_villager_facts(1), &""],
+	}
+	for what in cases:
+		var facts: Dictionary = cases[what][0]
+		var action: StringName = cases[what][1]
+		panel.show_entity(facts, 1, true, [], 4)
+		if not action.is_empty():
+			panel._on_action_pressed(_slot_with_action(panel._action_slots, action).action)
+		assert_eq(panel.detail_page_count(), 1,
+				"%s fits the strip in one page" % what)
+		assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT),
+				"%s needs no forward arrow" % what)
+		assert_true(_visible(panel._detail_slots) <= SelectionActions.MAX_DETAILS,
+				"%s fits the grid" % what)
 
 
-## Turn to the page holding `action_id` and return its slot, or null if no page has
-## it. Written because the age-4 roster grows -- it was 19 buildings and one page
-## turn, it is 25 and two since walls landed (PLAN.md 5.8) -- and a test that hunts
-## for the building it wants keeps testing PAGING rather than the roster's size.
-func _find_across_pages(action_id: StringName) -> ActionSlot:
-	for page in range(panel.detail_page_count()):
-		while panel.current_detail_page() < page:
-			if not _press_detail(SelectionActions.PAGE_NEXT):
-				return null
-		var slot := _slot_with_action(panel._detail_slots, action_id)
-		if slot != null:
-			return slot
-	return null
-
-
-func test_the_build_grid_opens_on_page_one() -> void:
-	_open_build(4)
-	assert_eq(panel.current_detail_page(), 0)
-	assert_true(panel.detail_page_count() >= 2,
-			"the age-4 roster does not fit 12 slots, which is why paging exists")
-	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV),
-			"there is nothing before page 1")
-	assert_not_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT))
-
-
-func test_the_forward_arrow_turns_the_page_and_issues_nothing() -> void:
-	# The arrows must not reach place_requested -- tapping > is navigation, and
-	# placing a building because the player turned the page would be a disaster
-	# in a build menu.
-	var placed: Array = []
-	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
-
-	_open_build(4)
-	assert_true(_press_detail(SelectionActions.PAGE_NEXT))
-	assert_eq(panel.current_detail_page(), 1)
-	assert_true(placed.is_empty(), "> is navigation, not an order")
-
-
-func test_the_back_arrow_returns_to_page_one() -> void:
-	_open_build(4)
-	_press_detail(SelectionActions.PAGE_NEXT)
-	assert_not_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV),
-			"page 2 leads with <")
-	assert_true(_press_detail(SelectionActions.PAGE_PREV))
-	assert_eq(panel.current_detail_page(), 0)
-
-
-func test_a_building_past_the_first_page_can_actually_be_placed() -> void:
-	# The whole point: before paging, the buildings past slot 12 were unreachable.
-	# The wonder is the LAST thing in the (age, name) sort at age 4, so it is on
-	# whichever page is last -- which is the case that matters and the one that moves
-	# whenever the roster grows.
-	var placed: Array = []
-	panel.place_requested.connect(func(def_id: StringName) -> void: placed.append(def_id))
-
-	_open_build(4)
-	var wonder := _find_across_pages(&"place:building.wonder")
-	assert_not_null(wonder, "the wonder is reachable by paging")
-	assert_true(panel.current_detail_page() > 0, "and it is not on page 1")
-	if wonder != null:
-		panel._on_detail_pressed(wonder.action)
-	assert_eq(placed, [&"building.wonder"])
-
-
-func test_placing_from_a_later_page_stays_on_that_page() -> void:
-	# Placement leaves build mode open on purpose (coming back for a second house
-	# should not need Build tapped again); the page has to survive with it, or
-	# every placement would bounce the player back to page 1.
-	_open_build(4)
-	var wonder := _find_across_pages(&"place:building.wonder")
-	assert_not_null(wonder)
-	var page := panel.current_detail_page()
-	assert_true(page > 0, "on a page that is not the first")
-	if wonder != null:
-		panel._on_detail_pressed(wonder.action)
-	assert_eq(panel.current_detail_page(), page)
-
-
-func test_reopening_build_starts_at_page_one_again() -> void:
-	_open_build(4)
-	_press_detail(SelectionActions.PAGE_NEXT)
-	assert_eq(panel.current_detail_page(), 1)
-
-	# Close, then reopen.
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"build").action)
-	assert_eq(panel.current_detail_page(), 0,
-			"reopening on page 2 would hide the buildings most used")
-
-
-func test_selecting_something_else_resets_the_page() -> void:
-	_open_build(4)
-	_press_detail(SelectionActions.PAGE_NEXT)
-	panel.show_entity(_villager_facts(2), 1, true, [], 4)
-	assert_eq(panel.current_detail_page(), 0)
-
-
-func test_an_age_one_villager_sees_no_arrows() -> void:
-	_open_build(1)
-	assert_eq(panel.detail_page_count(), 1)
-	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_NEXT))
-	assert_null(_slot_with_action(panel._detail_slots, SelectionActions.PAGE_PREV))
-
-
-func test_no_page_ever_shows_more_slots_than_the_grid_has() -> void:
-	for age in [1, 2, 3, 4]:
-		_open_build(age)
-		for page in range(panel.detail_page_count()):
-			assert_true(_visible(panel._detail_slots) <= SelectionActions.MAX_DETAILS,
-					"age %d page %d fits" % [age, page])
-			_press_detail(SelectionActions.PAGE_NEXT)
+func test_the_three_long_lists_are_all_page_actions() -> void:
+	# The converse of the test above, and the thing that keeps it true: build, research and
+	# units are the three that could outgrow the strip, and all three now leave it. If one
+	# were ever routed back into the grid, the assertion above would start passing for the
+	# wrong reason -- so the split itself is pinned here.
+	for id in [&"build", &"research", &"units"]:
+		assert_true(SelectionActions.opens_page(id), "%s opens a page" % id)
+	assert_false(SelectionActions.opens_page(&"stance"),
+			"stance stays in the strip -- four options fit anywhere")
 
 # -- portraits carry the selection owner's colour ----------------------------
 
@@ -534,17 +540,27 @@ func _caption_of(slots: Array[ActionSlot], id: StringName) -> String:
 
 
 func test_a_portrait_slot_is_captioned_with_its_name() -> void:
-	# A build grid is a dozen brown isometric buildings; the sprite says what
-	# KIND of thing it is and the caption says which one.
-	_open_build(4)
-	assert_eq(_caption_of(panel._detail_slots, &"place:building.house"), "House")
-	assert_eq(_caption_of(panel._detail_slots, &"place:building.town_center"), "Town Center")
+	# A grid of portraits is a row of near-identical figures; the sprite says what KIND of
+	# thing it is and the caption says which one.
+	#
+	# Read off the production QUEUE since 2026-09-21. It was the build grid, which left the
+	# strip with `8.x-build-menu-modal` -- and the caption is `ActionSlot`'s behaviour, not
+	# the build list's, so any list of portraits proves it. The build page's own captions
+	# are photographed by `preview_build_pages`, where a person can see them.
+	panel.show_entity(_town_center_facts(5, 2))
+	assert_eq(_caption_of(panel._detail_slots, &"cancel:0"), "Villager")
+	assert_eq(_caption_of(panel._detail_slots, &"cancel:1"), "Villager")
 
-	# The wonder is last in the age-4 sort, so it is on the last page -- captions
-	# have to survive a page turn, since the slots are reused in place rather than
-	# rebuilt.
-	assert_not_null(_find_across_pages(&"place:building.wonder"))
-	assert_eq(_caption_of(panel._detail_slots, &"place:building.wonder"), "Wonder")
+
+## Captions survive a REFILL, which is the case the build grid's page turn used to cover:
+## slots are reused in place rather than rebuilt, so a caption left behind from the previous
+## occupant is the failure mode.
+func test_a_caption_does_not_outlive_the_slots_previous_occupant() -> void:
+	panel.show_entity(_town_center_facts(5, 2))
+	assert_eq(_caption_of(panel._detail_slots, &"cancel:1"), "Villager")
+	panel.show_entity(_town_center_facts(5, 1))
+	assert_eq(_caption_of(panel._detail_slots, &"cancel:1"), "",
+			"the second queue entry is gone and took its caption with it")
 
 
 # ── research closes the menu it was bought from ─────────────────────────────
@@ -557,20 +573,30 @@ func _blacksmith_facts(queue: Array = []) -> Dictionary:
 			"queue_len": queue.size(), "queue_fraction": 0.3, "queue": queue}
 
 
-func _open_research() -> void:
+## The research list now lives on the page, so it is fetched and pressed through
+## `handle_detail` rather than expanded in the strip. Returns the tile, so a test that
+## cannot find it fails on that rather than on the consequence.
+func _buy_forging() -> bool:
 	panel.show_entity(_blacksmith_facts(), 1, true, [], 2)
-	panel._on_action_pressed(_slot_with_action(panel._action_slots, &"research").action)
+	for tile in panel.details_for_action(&"research"):
+		if tile.id == &"research:tech.forging":
+			panel.handle_detail(tile)
+			return true
+	return false
 
 
 func test_buying_a_technology_drops_back_to_the_production_queue() -> void:
 	# "after an upgrade is clicked ... staying on upgrade panel give the impression the
 	# action did not work" (project owner, 2026-08-30).
+	#
+	# ⚠️ **THE PANEL'S HALF OF THAT IS STILL THE PANEL'S**, which is why this test stays
+	# here after the list moved: `_on_detail_pressed` clears `_active_action` so the strip
+	# behind the page falls back to the queue. `GameScene` closes the page itself, and
+	# `test_action_page` covers that end.
 	var got: Array = []
 	panel.research_requested.connect(func(b: int, t: StringName) -> void: got.append([b, t]))
 
-	_open_research()
-	assert_not_null(_slot_with_action(panel._detail_slots, &"research:tech.forging"))
-	assert_true(_press_detail(&"research:tech.forging"))
+	assert_true(_buy_forging(), "a blacksmith at age 2 offers forging")
 
 	assert_eq(got, [[7, &"tech.forging"]], "the order still went out")
 	assert_eq(panel._active_action, &"", "and the menu closed behind it")
@@ -581,8 +607,7 @@ func test_buying_a_technology_drops_back_to_the_production_queue() -> void:
 func test_the_queue_it_lands_on_is_whatever_the_last_snapshot_said() -> void:
 	# Deliberately NOT optimistic. The entry appears a tick later, when the server
 	# confirms it; a refused research would otherwise have to be un-drawn.
-	_open_research()
-	_press_detail(&"research:tech.forging")
+	assert_true(_buy_forging())
 	assert_eq(_visible(panel._detail_slots), 0,
 			"an empty queue is still an empty queue until the next snapshot")
 
@@ -594,17 +619,32 @@ func test_the_queue_it_lands_on_is_whatever_the_last_snapshot_said() -> void:
 func test_the_research_menu_reopens_at_the_top_after_a_purchase() -> void:
 	# `_detail_page` is reset alongside `_active_action`, so a purchase made on page 2
 	# of some future longer list does not leave the next open scrolled.
-	_open_research()
-	_press_detail(&"research:tech.forging")
+	assert_true(_buy_forging())
 	assert_eq(panel.current_detail_page(), 0)
 
 
-func test_placing_a_building_still_leaves_its_menu_open() -> void:
-	# The opposite call, and the contrast is the point: placement is a repeated gesture
-	# and a second house must not need Build tapped again.
-	_open_build(1)
-	_press_detail(&"place:building.house")
-	assert_eq(panel._active_action, &"build")
+## ⛔ **THE CONTRAST WITH RESEARCH SURVIVED THE MOVE, AND IT IS STILL THE POINT.** Research
+## clears `_active_action` so the strip falls back to the queue; placement does NOT, because
+## placement is a repeated gesture and a second house must not need Build tapped again.
+##
+## ⚠️ What DID change is the page above it: `GameScene._on_page_action_pressed` closes the
+## page on a `place:` so the drag lands on ground the page was covering (owner, 2026-09-20).
+## That is a `GameScene` decision about a container; this is the panel's own state, and the
+## two are deliberately opposite. The old version of this test drove the strip's build grid
+## and asserted `_active_action == &"build"` -- which can no longer be set at all, since
+## `build` never toggles it now.
+func test_placing_a_building_does_not_clear_the_panels_menu_state() -> void:
+	panel.show_entity(_villager_facts(1), 1, true, [], 1)
+	var house: HudAction = null
+	for tile in panel.details_for_action(&"build"):
+		if tile.id == &"place:building.house":
+			house = tile
+	assert_not_null(house, "a villager at age 1 can build a house")
+
+	panel._active_action = &"build"
+	panel.handle_detail(house)
+	assert_eq(panel._active_action, &"build",
+			"placement leaves the menu alone -- unlike research, which closes it")
 
 
 func test_a_train_slot_is_captioned_too() -> void:
@@ -641,7 +681,10 @@ func test_the_caption_makes_room_for_a_badge() -> void:
 func test_an_emptied_slot_leaves_no_caption_behind() -> void:
 	# Slots are reused in place rather than freed, so a strip left visible from a
 	# previous occupant would draw a black bar over the next one's art.
-	_open_build(4)
+	#
+	# Seeded from a production queue rather than the build grid, which left the strip with
+	# `8.x-build-menu-modal`. What matters is only that SOME captioned list was drawn first.
+	panel.show_entity(_town_center_facts(5, 2), 1, true, [], 4)
 	assert_true(panel._detail_slots[0]._caption.visible)
 	panel.show_nothing()
 	panel.show_entity(_villager_facts(1))

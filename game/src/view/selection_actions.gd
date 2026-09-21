@@ -33,6 +33,33 @@ extends RefCounted
 const MAX_ACTIONS := 8
 const MAX_DETAILS := 12
 
+## Which expanding actions open a full-screen `ActionPage` instead of filling the strip's
+## detail grid, and the title each one wears (board `8.x-build-menu-modal`).
+##
+## ⛔ **THIS IS THE LINE THE OWNER DREW, AND IT IS NARROWER THAN "the detail grid moves".**
+## Their two screenshots boxed exactly two things -- the villager's build list, and the
+## town centre's Wheelbarrow/Hand Cart tiles -- and they asked for a units page by name.
+## Nothing else was boxed, so nothing else moved.
+##
+## 📝 **THE LINE ALSO HAPPENS TO BE ONE THE CODE ALREADY DREW**, which is why it is worth
+## trusting: these are three of the four lists `details_for` returns UNCAPPED because they
+## can outgrow the grid. The fourth is `garrison` -- a full castle is 16 occupants against
+## 12 slots -- and it is the obvious next candidate. It stays in the strip until somebody
+## asks, because widening a request is not the same as fulfilling it.
+##
+## Formations, stances and the production queue are `_capped_details` lists of four or
+## fewer and have no business on a full screen.
+const PAGE_TITLES := {
+	&"build": "BUILD",
+	&"research": "RESEARCH",
+	&"units": "UNITS",
+}
+
+
+## Whether tapping this action opens a page rather than expanding the strip's grid.
+static func opens_page(action_id: StringName) -> bool:
+	return PAGE_TITLES.has(action_id)
+
 ## Icon filenames in `res://assets/ui/icons/`, keyed by whatever names the action --
 ## a verb, a technology id, an `UnitDef.ability_id`.
 ##
@@ -54,6 +81,13 @@ const MAX_DETAILS := 12
 ## The chrome arrows are for scrollbars and dropdowns.
 const ICONS := {
 	&"move": "act_move.png",
+	# THE UNITS PAGE (8.x-build-menu-modal). A MapMaker CATEGORY icon reused as a game HUD
+	# VERB, which is the owner's pick and worth naming rather than hiding -- it is not a
+	# stand-in of the kind [P8] cleared out. Copied by hand from
+	# `assets/UI_Gen/sliced/icons/` into the game's icon tree, the move 16.6 made in the
+	# other direction with `lobby_victory.png`, and DELIBERATELY NOT RENAMED: the shared
+	# name is the thread back when that set is next re-cut.
+	&"units": "cat_units.png",
 	&"stop": "act_stop.png",
 	&"attack": "act_attack.png",
 	&"build": "act_build.png",
@@ -241,10 +275,21 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 ## passing nothing. It is the only argument here that is not server truth, and it is the
 ## only one that could not be: 4.14 keeps the formation on the ORDER, so there is nothing
 ## about it in the snapshot to read.
+## `slots` is how many cells the grid this list is going into actually has, and it is
+## APPENDED with `MAX_DETAILS` as the default for the reason `researched` and
+## `active_formation` above give: every existing caller keeps working untouched. The
+## selection strip passes nothing and gets 12; the build page (board
+## `8.x-build-menu-modal`) passes what its own width worked out.
+##
+## ⚠️ **IT ONLY REACHES THE THREE CAPPED BRANCHES AND THE ROSTER.** Build, garrison and
+## research are returned WHOLE however long, deliberately -- see each branch -- and it is
+## `page_of()` that slices those, so those three are unaffected by this argument and must
+## stay that way. A cap applied here would drop what the pager exists to show.
 static func details_for(action_id: StringName, facts: Dictionary,
 		selected_count: int = 1, all_def_ids: Array = [], age: int = 1,
 		active_formation: StringName = &"",
-		researched: Dictionary = {}) -> Array[HudAction]:
+		researched: Dictionary = {},
+		slots: int = MAX_DETAILS) -> Array[HudAction]:
 	if facts.is_empty():
 		return []
 
@@ -266,17 +311,23 @@ static func details_for(action_id: StringName, facts: Dictionary,
 	# and `page_of` already knows what to do instead.
 	if action_id == &"research":
 		return _research_details(facts, age, researched)
+	# THE FOURTH LIST THAT IS RETURNED WHOLE, and it is the UNITS page's (8.x-build-menu-
+	# modal). Uncapped for the reason the three above are: the page slices it with
+	# `page_of()` at whatever size the page turned out to be, and a cap here would drop
+	# units the page exists to show.
+	if action_id == &"units":
+		return _train_details(facts, age)
 	if action_id == &"move":
-		return _capped_details(_formation_details(active_formation))
+		return _capped_details(_formation_details(active_formation), slots)
 	if action_id == &"stance":
-		return _capped_details(_stance_details(facts))
+		return _capped_details(_stance_details(facts), slots)
 
 	# Nothing expanded: the grid falls back to whatever the selection itself
 	# has to show.
 	if selected_count > 1:
-		return _roster_details(all_def_ids)
+		return _roster_details(all_def_ids, slots)
 	if GameDataRegistry.building(facts.get("def_id", &"")) != null:
-		return _capped_details(_queue_details(facts))
+		return _capped_details(_queue_details(facts), slots)
 	return []
 
 
@@ -352,7 +403,8 @@ static func _building_actions(def_id: StringName, age: int = 1,
 	# 📝 It also keeps the row length identical in both phases, so the three buildings
 	# already sitting at `MAX_ACTIONS` do not move. `preview_action_overflow` checks that.
 	var complete := int(facts.get("phase", -1)) == SimBuilding.Phase.COMPLETE
-	for unit_def_id in bd.trains:
+	var collapsed := trains_collapse(bd, age)
+	for unit_def_id in (([] as Array) if collapsed else bd.trains):
 		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
 		if ud != null and ud.age_required > age:
 			continue
@@ -366,6 +418,25 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		if ud != null:
 			a.cost = ud.cost
 		out.append(a)
+
+	# THE UNITS PAGE (owner, 2026-09-20: *"add a new icon `cat_units.png` as a unit modal
+	# showing a large view of the units at this building"*). Offered by ANY building that
+	# trains anything at this age, whether or not the per-unit tiles collapsed, because it
+	# is the page's only entry point -- there is no corner button for it, unlike the other
+	# three pages.
+	#
+	# ⚠️ **TAPPING A UNIT IN THE PAGE TRAINS IT.** Asked and answered, because both
+	# readings were buildable: the page is a bigger, clearer way to do what the tile does,
+	# not a showcase. So affordability, the pop cap and the age gate all have to reach it
+	# -- by ASKING this file, never by re-deriving. See `trains_collapse`'s header.
+	if _trains_at(bd, age) > 0:
+		var page := HudAction.new(&"units", "Units", ICONS.get(&"units", ""), complete)
+		page.expands = true
+		# The badge says how many it can train, which is the only thing a single tile can
+		# say about a list it is standing in for -- and it is what tells a player the
+		# castle's four units did not vanish.
+		page.badge = "%d" % _trains_at(bd, age)
+		out.append(page)
 
 	out.append_array(_upgrade_actions(bd, age, facts))
 
@@ -416,6 +487,106 @@ static func _building_actions(def_id: StringName, age: int = 1,
 	# was always going to cost something.
 	out.append(_act(&"repair", false))
 	return out
+
+
+## Every unit this building can train at `age`, as train tiles for the UNITS page.
+##
+## ⛔ **THE SAME `train:<id>` IDS THE ACTION COLUMN EMITS, ON PURPOSE.** There are now two
+## routes to one command, and §6 has a row about exactly this shape: *"a predicate
+## deliberately split in two has two places to change, and the half carrying the good
+## reason is the half you read"* -- it cost this project an aggressive soldier opening fire
+## on an ally's barracks. Sharing the id means `GameScene` dispatches both routes through
+## one handler and cannot come to treat them differently.
+##
+## ⚠️ **AND THE GATES ARE THIS FILE'S, NOT THE PAGE'S.** Age filtering and the phase check
+## are applied here, so the page cannot disagree with the column about what is offered. §4
+## holds over both regardless: if either greys a unit, `TrainCommand` still refuses it.
+static func _train_details(facts: Dictionary, age: int) -> Array[HudAction]:
+	var out: Array[HudAction] = []
+	var bd: BuildingDef = GameDataRegistry.building(facts.get("def_id", &""))
+	if bd == null:
+		return out
+	var complete := int(facts.get("phase", -1)) == SimBuilding.Phase.COMPLETE
+	for unit_def_id in bd.trains:
+		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
+		if ud != null and ud.age_required > age:
+			continue
+		var a := HudAction.new(&"train:%s" % unit_def_id,
+				ud.name if ud != null and not ud.name.is_empty() else String(unit_def_id),
+				"", complete)
+		a.payload = unit_def_id
+		if ud != null:
+			a.cost = ud.cost
+		out.append(a)
+	return out
+
+
+## How many units this building may train at `age`. Stable for a given def and age.
+static func _trains_at(bd: BuildingDef, age: int) -> int:
+	var n := 0
+	for unit_def_id in bd.trains:
+		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
+		if ud != null and ud.age_required > age:
+			continue
+		n += 1
+	return n
+
+
+## Whether this building's per-unit train tiles fold into the single `units` tile.
+##
+## ⛔ **DECIDED FROM THE DEF AND THE AGE, AND FROM NOTHING ELSE. THAT IS THE WHOLE RULE.**
+##
+## The tempting version computes the live row and collapses when it overflows. It is
+## wrong, and `_building_actions` already refuses to do the same thing one verb over: the
+## garrison slot is *"disabled at 0 rather than hidden, so the slot does not move under the
+## player's thumb as archers walk in and out"*. What a building emits varies with a **rally
+## point** (Stop appears only when there is one to clear), with **garrison occupancy**,
+## with **gate** state and with which **techs** are researched — so a live computation
+## would turn four train tiles into one page tile **the instant the player set a rally
+## point**, rearranging the column under the thumb that just tapped it.
+##
+## ⚠️ **SO THE TRANSIENT VERBS ARE COUNTED AS PRESENT, WORST CASE.** Stop is budgeted for
+## whether or not there is a rally point, and the building is costed as COMPLETE. That is
+## what makes the answer depend only on `(def, age)` and therefore never change during a
+## match except when the owner advances an age — which is a once-a-match event that
+## redraws the panel anyway.
+##
+## 📝 Being worst-case also means it can only ever collapse a row that *might* have
+## overflowed, never fail to collapse one that does. The alternative error is the one that
+## silently loses a verb, which is what `8.x-action-column-overflow` was filed about.
+static func trains_collapse(bd: BuildingDef, age: int) -> bool:
+	var trains := _trains_at(bd, age)
+	if trains <= 1:
+		return false          # one tile cannot be saved by replacing it with one tile
+	return trains > _room_for_trains(bd, age)
+
+
+## How many of `MAX_ACTIONS` are left for per-unit train tiles once everything else this
+## building will ever ask for has been counted, including the `units` tile itself.
+static func _room_for_trains(bd: BuildingDef, age: int) -> int:
+	var fixed := 1                      # the `units` page tile, always offered when it trains
+	if bd.is_gate:
+		fixed += 1
+	if bd.garrison_cap > 0:
+		fixed += 1
+
+	# Upgrades: one tile per reachable target, or the single disabled placeholder that a
+	# building with nowhere to go still shows. `_upgrade_actions` is the authority; this
+	# counts what it would return rather than calling it, because calling it needs `facts`
+	# and this answer must not depend on any.
+	var upgrades := 0
+	for target_id in bd.upgrades_to:
+		var to: BuildingDef = GameDataRegistry.building(target_id)
+		if to != null and to.age_required <= age:
+			upgrades += 1
+	fixed += maxi(1, upgrades)
+
+	if not _techs_here(bd.id, age).is_empty():
+		fixed += 1
+	fixed += 1                          # stop -- budgeted whether or not a rally point is set
+	fixed += 1                          # destroy
+	fixed += 1                          # repair
+	return MAX_ACTIONS - fixed
 
 
 ## Whether these facts describe a building with a rally point set.
@@ -921,15 +1092,16 @@ static func _garrison_details(facts: Dictionary) -> Array[HudAction]:
 ## what it takes, and it is the caller that holds the ids in the same order. That is the
 ## same shape `_garrison_details` uses, for a different reason: a garrisoned unit HAS no
 ## id on the wire, whereas this one has an id the caller can look up.
-static func _roster_details(all_def_ids: Array) -> Array[HudAction]:
+static func _roster_details(all_def_ids: Array,
+		slots: int = MAX_DETAILS) -> Array[HudAction]:
 	var out: Array[HudAction] = []
 	if all_def_ids.is_empty():
 		return out
 
 	var shown := all_def_ids.size()
 	var overflow := 0
-	if shown > MAX_DETAILS:
-		shown = MAX_DETAILS - 1
+	if shown > slots:
+		shown = slots - 1
 		overflow = all_def_ids.size() - shown
 
 	for i in range(shown):
@@ -963,34 +1135,67 @@ static func _roster_details(all_def_ids: Array) -> Array[HudAction]:
 
 
 ## Where each page starts. One entry per page; a single-page list returns [0].
-static func _page_offsets(total: int) -> PackedInt32Array:
+##
+## ⛔ **`slots` IS PASSED IN RATHER THAN READ, AND THAT IS THE WHOLE POINT OF THE
+## ARGUMENT** (board `8.x-build-menu-modal`). `MAX_DETAILS` is the SELECTION STRIP's
+## capacity -- a 4-wide grid three rows deep, authored in the ui_builder HUD mockup -- and
+## it stays the default so every existing caller is unchanged. The build PAGE is a
+## different size: the owner's ruling was *"scale the icons exactly as is"*, so the tile is
+## fixed and the page is not, which means how many fit stops being knowable at compile
+## time. A 1152x648 desktop window and a phone in landscape give the same page very
+## different room, and `window/stretch/aspect` is `expand`.
+##
+## ⚠️ **NEVER READ A `Control.size` FROM INSIDE THIS FILE TO ANSWER IT.** `SelectionActions`
+## is static and node-free precisely so the whole action model can be asserted with no
+## tree; fetching a size here would destroy that property for one argument's convenience.
+## Whoever owns the layout computes the count and passes it. See §6's note that a Control
+## added to a tree has size `(0, 0)` for the rest of that frame, so that caller cannot do
+## it in `_init` or `_ready` either.
+static func _page_offsets(total: int, slots: int = MAX_DETAILS) -> PackedInt32Array:
+	# A page has to hold one item and BOTH arrows, or the walk below never advances and the
+	# loop spins for ever. Clamped rather than asserted: this is view code reached from a
+	# layout measurement, and a pathological viewport should give a cramped page, not a hang.
+	#
+	# ⛔ **THREE, NOT TWO, AND THE DIFFERENCE IS A HUNG SUITE.** This clamp read `maxi(2, ..)`
+	# until 2026-09-21, guarding against exactly the right hazard at exactly the wrong bound:
+	# a MIDDLE page spends a slot on "<" AND a slot on ">", so at `room_for == 2` the `room`
+	# below comes out 0 and `consumed` never moves. `test_an_absurdly_small_page_still_
+	# terminates` passes `slots` of 2 and hung the whole headless run there, allocating until
+	# the process ran out of memory -- which does not read as a failure, it reads as a slow
+	# suite, and it was killed twice as one before anybody looked at the stderr.
+	#
+	# The arithmetic, since a number chosen by feel is how the 2 got here: the loop advances
+	# by `room_for - 2` on any page that needs both arrows, so it needs `room_for >= 3` to
+	# advance at all.
+	var room_for := maxi(3, slots)
 	var offsets := PackedInt32Array([0])
-	if total <= MAX_DETAILS:
+	if total <= room_for:
 		return offsets
 
-	# Page 0 has no "<" but does have ">", so it holds MAX_DETAILS - 1.
-	var consumed := MAX_DETAILS - 1
+	# Page 0 has no "<" but does have ">", so it holds `slots - 1`.
+	var consumed := room_for - 1
 	while consumed < total:
 		offsets.append(consumed)
 		# Every later page spends a slot on "<". It spends another on ">" only if
 		# what is left will not fit without one.
-		var room := MAX_DETAILS - 1
+		var room := room_for - 1
 		if total - consumed > room:
 			room -= 1
 		consumed += room
 	return offsets
 
 
-static func page_count(total: int) -> int:
-	return _page_offsets(total).size()
+static func page_count(total: int, slots: int = MAX_DETAILS) -> int:
+	return _page_offsets(total, slots).size()
 
 
 ## One page of `details`, with its navigation slots in place. `page` is clamped,
 ## so a caller holding a stale page number after the list shrank -- a villager
 ## on page 2 of the age-4 list whose owner somehow drops to age 1 -- lands on the
 ## last real page instead of on an empty grid.
-static func page_of(details: Array[HudAction], page: int) -> Array[HudAction]:
-	var offsets := _page_offsets(details.size())
+static func page_of(details: Array[HudAction], page: int,
+		slots: int = MAX_DETAILS) -> Array[HudAction]:
+	var offsets := _page_offsets(details.size(), slots)
 	var index := clampi(page, 0, offsets.size() - 1)
 
 	var out: Array[HudAction] = []
@@ -1052,5 +1257,6 @@ static func _capped(actions: Array[HudAction], context: String = "") -> Array[Hu
 	return actions.slice(0, MAX_ACTIONS)
 
 
-static func _capped_details(details: Array[HudAction]) -> Array[HudAction]:
-	return details.slice(0, MAX_DETAILS)
+static func _capped_details(details: Array[HudAction],
+		slots: int = MAX_DETAILS) -> Array[HudAction]:
+	return details.slice(0, maxi(1, slots))
