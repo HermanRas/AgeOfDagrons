@@ -331,6 +331,13 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role browse
 
+# WHERE DO BUILDERS STAND when several are sent to one building? EXIT CODE IS THE ANSWER.
+# ⚠️ IT MEASURES ADJACENCY, NOT TIDINESS -- `SeparationSystem` always resolves a pile into
+# DISTINCT tiles, so counting distinct tiles reports a crowd as healthy. What matters is how
+# many are `_adjacent_to_rect` and therefore actually adding progress.
+& $godot --headless --path game res://dev_preview/preview_build_stations.tscn
+& $godot --path game res://dev_preview/preview_build_crowd.tscn   # the same thing, photographed
+
 # DOES DESTROY ASK FIRST, AND DOES CANCEL ACTUALLY SAVE IT? EXIT CODE IS THE ANSWER, plus
 # one screenshot because whether the dialog reads as a warning is a question for a person.
 # The load-bearing step is the NEGATIVE one: a wiring slip joining both buttons to one
