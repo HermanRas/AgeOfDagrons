@@ -412,6 +412,29 @@ func test_a_closed_slot_takes_its_team_out_of_the_config_with_it() -> void:
 			"one team per player, whatever was closed")
 
 
+## ⛔ **THE MAP AND THE MATCH MUST AGREE ABOUT WHO IS ALLIED** (board `2.x-river-teams`). A RIVER
+## map lays its banks out by side now, so `regenerate()` has to hand the generator the same
+## compacted list `build_config()` sends to the match.
+##
+## ⚠️ **AND THE FAILURE IT GUARDS IS SPECIFICALLY A CLOSED SLOT IN THE MIDDLE.** `_teams` is
+## indexed by SLOT and the generator counts PLAYERS, so passing the raw array would be correct
+## for a full lobby and hand the wrong alliance to everybody after the gap — allies split across
+## the water, but only sometimes, which is the worst version of this bug to go looking for.
+func test_the_generator_is_given_the_same_compacted_teams_as_the_match() -> void:
+	_pick_slots(4)
+	for i in range(4):
+		_pick_role(i, SkirmishScreen.Role.PLAYTEST_AI)
+		_pick_team(i, 1 if i < 2 else 2)
+	_pick_role(1, SkirmishScreen.Role.CLOSED)
+
+	var compacted := screen._active_teams()
+	assert_eq(compacted, [1, 2, 2] as Array[int],
+			"slot 1's team went with it, so slot 2's ally is player 1")
+	# ONE LIST, TWO READERS. Asserted against the config rather than restated as a literal,
+	# because the thing that can rot is the two of them DISAGREEING.
+	assert_eq(compacted, screen.build_config().teams, "the generator and the match agree")
+
+
 func test_everybody_on_one_team_is_not_a_match() -> void:
 	# Two presses from the default, and `WinConditionSystem` would find exactly one
 	# standing side on tick 1 -- a match won before anybody moved. Refused here rather

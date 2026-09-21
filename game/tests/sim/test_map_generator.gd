@@ -1280,6 +1280,105 @@ func test_both_banks_of_a_river_get_a_player_and_the_water_agrees() -> void:
 			"seeds with both starts on one bank: %s" % [same_bank])
 
 
+# ── allies share a bank (board `2.x-river-teams`) ──────────────────────────
+
+## Each start's signed offset from the water band's own centre line. **Measured off the tiles
+## that came out blue**, not off `_river_axis` — the two-independent-readings rule
+## `test_both_banks_of_a_river_get_a_player_and_the_water_agrees` is built on, and for its
+## reason: asking the generator which way its river runs makes the test agree with itself.
+func _bank_offsets(data: MapData) -> Array[float]:
+	var water: Array[Vector2i] = []
+	for y in range(data.size.y):
+		for x in range(data.size.x):
+			var t := Vector2i(x, y)
+			if data.terrain_at(t) == SimMap.Terrain.WATER_SHALLOW:
+				water.append(t)
+	assert_true(water.size() > 20, "no river was painted at all")
+	var c := Vector2.ZERO
+	for t in water:
+		c += Vector2(t)
+	c /= float(maxi(1, water.size()))
+	var sxx := 0.0
+	var sxy := 0.0
+	var syy := 0.0
+	for t in water:
+		var d := Vector2(t) - c
+		sxx += d.x * d.x
+		sxy += d.x * d.y
+		syy += d.y * d.y
+	var theta := 0.5 * atan2(2.0 * sxy, sxx - syy)
+	var perp := Vector2(-sin(theta), cos(theta))
+	var out: Array[float] = []
+	for s in data.starts:
+		out.append((Vector2(s) - c).dot(perp))
+	return out
+
+
+## ⛔ **THE BUG: `1,1,2,2` PUT THE TWO ALLIES ON OPPOSITE BANKS.** Banks were assigned by the
+## player's INDEX (`i % 2`), so an allied pair straddled the water with an enemy beside each of
+## them — the exact reverse of what choosing a team means. The ring types never had it: spreading
+## by index puts the same table at 0°/90° against 180°/270° for free.
+##
+## Asserted across twenty seeds, because the river's axis is the rng's business and a fix that
+## only worked on the east-west draw would pass on half of them.
+func test_an_allied_pair_shares_a_bank_and_the_water_agrees() -> void:
+	var split: Array[int] = []
+	for seed_value in range(1, 21):
+		var data := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 4, 4,
+				[1, 1, 2, 2] as Array[int])
+		var offs := _bank_offsets(data)
+		# The pair together, the other pair together, and the two pairs apart. All three,
+		# because "allies together" is also true of a map that put all four on one bank.
+		if signf(offs[0]) != signf(offs[1]) or signf(offs[2]) != signf(offs[3]) \
+				or signf(offs[0]) == signf(offs[2]):
+			split.append(seed_value)
+	assert_true(split.is_empty(), "seeds that split a pair or merged both: %s" % [split])
+
+
+## ⛔ **AND A FREE-FOR-ALL IS BYTE-IDENTICAL TO WHAT IT WAS, WHICH IS THE HALF THAT MAKES THIS
+## FIX SAFE TO SHIP.** `_banks_for` treats every team-0 player as its own side and deals sides
+## alternately, so an unaligned lobby reproduces `i % 2` exactly. Tests pin river starts by seed
+## and the shipped scenario maps were authored off generated output — a fix that quietly moved
+## every free-for-all start would have been a far bigger change than the one asked for.
+##
+## The three spellings a caller can reach for are asserted to agree: no argument at all, an
+## explicit empty list, and an explicit table of zeros.
+func test_a_free_for_all_river_is_untouched_by_the_teams_argument() -> void:
+	for seed_value in range(1, 13):
+		var bare := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 4, 4)
+		var empty := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 4, 4,
+				[] as Array[int])
+		var zeros := MapGenerator.generate(seed_value, MapGenerator.Type.RIVER, 4, 4,
+				[0, 0, 0, 0] as Array[int])
+		assert_eq(empty.starts, bare.starts, "seed %d: empty teams moved a start" % seed_value)
+		assert_eq(zeros.starts, bare.starts,
+				"seed %d: 'no team' is not an alliance" % seed_value)
+
+
+## The table itself, which is where the reasoning lives and the one place it is cheap to assert.
+##
+## ⛔ **TEAM 0 IS "NO TEAM", NOT A TEAM EVERYBODY SHARES** — `Diplomacy`'s rule. Reading it as one
+## side would put all four players of a free-for-all on a single bank and leave the other empty,
+## which is a worse map than the bug this closes.
+func test_banks_are_dealt_by_side_and_team_zero_is_nobody() -> void:
+	assert_eq(MapGenerator._banks_for(4, [] as Array[int]), [0, 1, 0, 1] as Array[int],
+			"no teams at all is the old index rule")
+	assert_eq(MapGenerator._banks_for(4, [0, 0, 0, 0] as Array[int]),
+			[0, 1, 0, 1] as Array[int], "four unaligned players are four sides")
+	assert_eq(MapGenerator._banks_for(4, [1, 1, 2, 2] as Array[int]),
+			[0, 0, 1, 1] as Array[int], "the pair this card is about")
+	assert_eq(MapGenerator._banks_for(4, [1, 2, 1, 2] as Array[int]),
+			[0, 1, 0, 1] as Array[int], "interleaved slots, still two sides")
+	# ODD SPLITS SURVIVE THE OWNER'S RULE: sides are dealt alternately and a side is placed
+	# whole, so the extra player lands on the bank with fewer.
+	assert_eq(MapGenerator._banks_for(4, [1, 1, 1, 2] as Array[int]),
+			[0, 0, 0, 1] as Array[int], "three against one is three against one")
+	# ⚠️ **SIDES ARE ORDERED BY FIRST APPEARANCE, NOT BY TEAM NUMBER**, so picking team 3
+	# instead of team 2 does not move anybody.
+	assert_eq(MapGenerator._banks_for(4, [3, 3, 1, 1] as Array[int]),
+			[0, 0, 1, 1] as Array[int], "team numbers are labels, not an order")
+
+
 ## The diagonals are gone (2026-09-19, owner's call for the bridge), so every river is
 ## axis-aligned and a crossing is a rect. Asserts the SHAPE rather than which of the two
 ## came out, because which one is the rng's business.

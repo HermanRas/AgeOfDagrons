@@ -507,8 +507,29 @@ static func archipelago_side(players: int) -> int:
 ## eight puts them 180 degrees apart, which is.
 ##
 ## 0 means "the same as players", so every existing caller keeps the square map it had.
+##
+## ## `teams` — WHO IS ALLIED, AND IT MATTERS TO EXACTLY ONE MAP TYPE (board `2.x-river-teams`)
+##
+## Positional, matching `MatchConfig.player_ids`, and **0 means "no team"** rather than one team
+## everybody shares — `Diplomacy`'s rule, so a table of zeros is a free-for-all and each player
+## is their own side. Empty means the same thing and is what every caller that does not care
+## passes.
+##
+## ⛔ **ONLY `RIVER` READS IT, AND THE RING TYPES NEED NOTHING.** `_start_positions` spreads
+## players evenly by index, so teams `1,1,2,2` already land at 0°/90° against 180°/270° —
+## allies adjacent, enemies opposite, for free. The river was the exception: it assigned banks
+## by `i % 2`, which for that same table puts the two allies on **opposite** banks with an enemy
+## beside each of them.
+##
+## 📝 **INSERTED BEFORE `attempts` RATHER THAN APPENDED AFTER IT**, which is the opposite of the
+## rule this file follows for enums and wire values, and is safe for the opposite reason: a
+## parameter list is resolved by position at COMPILE time, not carried in saved data, so a
+## missed caller is a parse error rather than a silent reinterpretation. Checked: nothing in
+## either project passes `attempts`, and the MapMaker never calls this at all — it reads
+## `Type` and `MAX_PLAYERS` only.
 static func generate(p_seed: int, type: Type, players: int,
-		size_players: int = 0, attempts: int = MAX_ATTEMPTS) -> MapData:
+		size_players: int = 0, teams: Array[int] = [],
+		attempts: int = MAX_ATTEMPTS) -> MapData:
 	var count := clampi(players, MIN_PLAYERS, MAX_PLAYERS)
 	var size_count := clampi(size_players if size_players > 0 else count,
 			MIN_PLAYERS, MAX_PLAYERS)
@@ -523,7 +544,7 @@ static func generate(p_seed: int, type: Type, players: int,
 		# was shown. Mixed rather than incremented so consecutive seeds do not
 		# produce near-identical maps.
 		var attempt_seed := p_seed ^ (attempt * 0x9E3779B9)
-		last = _generate_once(attempt_seed, type, count, size_count)
+		last = _generate_once(attempt_seed, type, count, size_count, teams)
 		var problems := MapValidator.problems(last)
 		last.meta["seed"] = p_seed
 		last.meta["attempt"] = attempt
@@ -534,7 +555,8 @@ static func generate(p_seed: int, type: Type, players: int,
 	return last
 
 
-static func _generate_once(p_seed: int, type: Type, count: int, size_count: int) -> MapData:
+static func _generate_once(p_seed: int, type: Type, count: int, size_count: int,
+		teams: Array[int] = []) -> MapData:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = p_seed
 
@@ -581,7 +603,7 @@ static func _generate_once(p_seed: int, type: Type, count: int, size_count: int)
 				_paint_desert(data, wood, rng)
 			_:
 				_paint_forest(data, wood, rng)
-		data.starts = _start_positions(data, resolved, count, rng, river_axis)
+		data.starts = _start_positions(data, resolved, count, rng, river_axis, teams)
 
 	# Clear every base BEFORE placing anything, so one player's clearing cannot wipe
 	# out the town centre of a neighbour whose start landed close by.
@@ -1075,9 +1097,10 @@ static func _bridge_positions(side: int, rng: RandomNumberGenerator) -> Array[fl
 # ── player starts ───────────────────────────────────────────────────────────
 
 static func _start_positions(data: MapData, type: Type, count: int,
-		rng: RandomNumberGenerator, river_axis: Array = []) -> Array[Vector2i]:
+		rng: RandomNumberGenerator, river_axis: Array = [],
+		teams: Array[int] = []) -> Array[Vector2i]:
 	if type == Type.RIVER:
-		return _river_start_positions(data, count, river_axis)
+		return _river_start_positions(data, count, river_axis, teams)
 
 	# Equally spread around a ring, with a random rotation so the same player count
 	# does not always start in the same corners.
@@ -1105,23 +1128,34 @@ static func _start_positions(data: MapData, type: Type, count: int,
 ## exactly the bug: see `_river_axis`.
 ## 📝 It takes no `rng`: every position here is arithmetic off the axis and the count,
 ## and the only random thing about a river's starts was the axis it drew for itself.
+##
+## ⛔ **ALLIES SHARE A BANK SINCE 2026-09-21 (board `2.x-river-teams`), AND THIS WAS THE ONE
+## MAP TYPE THAT GOT TEAMS WRONG.** The bank used to be `i % 2` — the player's INDEX — so
+## teams `1,1,2,2` put the two allies on **opposite** banks with an enemy beside each of them,
+## which is the exact reverse of what picking a team means. The ring types never had the bug:
+## spreading by index puts `1,1,2,2` at 0°/90° against 180°/270° for free.
+##
+## ➡️ `_banks_for` decides the side and this function still does the spreading, so the
+## geometry below is untouched and only the assignment moved.
 static func _river_start_positions(data: MapData, count: int,
-		axis: Array) -> Array[Vector2i]:
+		axis: Array, teams: Array[int] = []) -> Array[Vector2i]:
 	assert(axis.size() == 2, "_river_start_positions needs the axis _paint_river used")
 	var side := data.size.x
 	var centre := Vector2(side, side) * 0.5
 	var bank := float(side) * 0.26
 	var span := float(side) * 0.55
 
+	var banks := _banks_for(count, teams)
+
 	# How many land on each bank, so each bank can spread its own players evenly.
 	var per_bank := [0, 0]
 	for i in range(count):
-		per_bank[i % 2] += 1
+		per_bank[banks[i]] += 1
 
 	var placed := [0, 0]
 	var out: Array[Vector2i] = []
 	for i in range(count):
-		var s := i % 2
+		var s: int = banks[i]
 		var n: int = per_bank[s]
 		var fraction := 0.5 if n == 1 else float(placed[s]) / float(n - 1)
 		placed[s] += 1
@@ -1130,6 +1164,48 @@ static func _river_start_positions(data: MapData, count: int,
 		var pos := centre + (axis[0] as Vector2) * along \
 				+ (axis[1] as Vector2) * bank * side_sign
 		out.append(_clamp_start(data, Vector2i(pos)))
+	return out
+
+
+## Which bank each player gets, as `count` entries of 0 or 1 (board `2.x-river-teams`).
+##
+## **Allies share a bank; sides alternate.** A "side" is a team, except that **team 0 means NO
+## team** — `Diplomacy`'s rule, *"team 0 is the ABSENCE of a team rather than one everybody
+## shares"* — so every player on team 0 is a side of their own. Getting that wrong would put
+## all four players of a free-for-all on one bank and leave the other empty, which is a worse
+## map than the bug this fixes.
+##
+## ⛔ **AN EMPTY OR ALL-ZERO `teams` REPRODUCES `i % 2` EXACTLY, AND THAT IS LOAD-BEARING RATHER
+## THAN TIDY.** Every singleton side alternates, which is the old rule — so a free-for-all river
+## map generated from a given seed is **byte-identical to the one it produced before this
+## change**. Tests pin river starts by seed, and the shipped scenario maps were authored off
+## generated output; a fix that quietly moved every free-for-all start would have been a much
+## bigger change than the one asked for.
+##
+## The owner's rule for odd counts survives unchanged: the extra player lands on whichever bank
+## currently has fewer, because sides are dealt alternately and a side is placed whole.
+##
+## 📝 Sides are ordered by FIRST APPEARANCE in `teams`, not by team number, so the result
+## depends only on the lobby's slot order — deterministic across hosts, and it does not shift
+## because somebody picked team 3 instead of team 2.
+static func _banks_for(count: int, teams: Array[int]) -> Array[int]:
+	# Each entry is the list of player indices on that side, in slot order.
+	var sides: Array[Array] = []
+	var side_of_team: Dictionary = {}
+	for i in range(count):
+		var team: int = teams[i] if i < teams.size() else 0
+		if team != 0 and side_of_team.has(team):
+			(sides[side_of_team[team]] as Array).append(i)
+			continue
+		if team != 0:
+			side_of_team[team] = sides.size()
+		sides.append([i] as Array)
+
+	var out: Array[int] = []
+	out.resize(count)
+	for s in range(sides.size()):
+		for i in (sides[s] as Array):
+			out[int(i)] = s % 2
 	return out
 
 

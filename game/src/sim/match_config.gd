@@ -242,7 +242,10 @@ static func debug_generated(p_seed: int = 1,
 
 	c.seed = p_seed
 	c.map_type = type
-	c.map_data = MapGenerator.generate(p_seed, type, c.player_ids.size())
+	# `c.teams` is empty here -- this helper builds a free-for-all -- and it is passed anyway
+	# rather than left off: a RIVER map lays its banks out by side (board `2.x-river-teams`), so
+	# the day this helper learns to make an allied pair, the map has to hear about it.
+	c.map_data = MapGenerator.generate(p_seed, type, c.player_ids.size(), 0, c.teams)
 	c.map_size = c.map_data.size
 	return c
 

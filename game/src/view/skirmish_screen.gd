@@ -1518,7 +1518,12 @@ func regenerate() -> void:
 		# TWO COUNTS. The map is SIZED for every slot and POPULATED for the players actually
 		# in them, which is what makes "eight players, six closed" a big empty board for two
 		# rather than two starts crammed into one corner of it.
-		_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots)
+		# ⛔ **AND THE TEAMS, COMPACTED THE SAME WAY `build_config()` COMPACTS THEM** (board
+		# `2.x-river-teams`). A RIVER map assigns banks by side, so allies share one; passing
+		# the raw `_teams` would index by SLOT while the generator counts PLAYERS, and a lobby
+		# with a closed slot in the middle would hand it somebody else's alliance.
+		_data = MapGenerator.generate(_seed, _type, _active_slots().size(), _slots,
+				_active_teams())
 	else:
 		_data = _load_saved_map()
 	# AFTER the three branches and before anything reads the lobby, because picking a map is
@@ -1808,6 +1813,21 @@ func _publish_lobby() -> void:
 		Net.broadcast_lobby_config(build_config())
 
 
+## The teams of the slots somebody is actually in, compacted exactly as `build_config()`
+## compacts them (board `2.x-river-teams`).
+##
+## ⚠️ **ONE FUNCTION BECAUSE THERE ARE TWO READERS AND THEY MUST AGREE.** `build_config()` sends
+## this list to the match and `regenerate()` sends it to the generator, which lays a river's
+## banks out by side — so a map generated from slot-indexed teams and a match started from
+## compacted ones would disagree about who is allied, and the disagreement would show up as
+## allies on opposite banks only when a closed slot sat in the middle.
+func _active_teams() -> Array[int]:
+	var out: Array[int] = []
+	for i in _active_slots():
+		out.append(_teams[i])
+	return out
+
+
 ## The config this screen would start. Exactly a `MatchConfig`, with no translation.
 func build_config() -> MatchConfig:
 	var cfg := MatchConfig.new()
@@ -1829,9 +1849,14 @@ func build_config() -> MatchConfig:
 		# Position for position with `ai_players`. Humans get a level too and it is
 		# never read -- a hole here would misalign every bot after it.
 		cfg.ai_levels.append(int(AI_ROLE_LEVELS.get(_roles[i], SimPlayer.AILevel.EASY)))
-		# WHOSE SIDE (2026-08-31), compacted with everything else on the row -- a closed
-		# slot's team is nobody's, exactly as its colour is.
-		cfg.teams.append(_teams[i])
+	# WHOSE SIDE (2026-08-31), compacted with everything else on the row -- a closed slot's
+	# team is nobody's, exactly as its colour is.
+	#
+	# ⚠️ **THROUGH `_active_teams()` SINCE 2026-09-21, AND IT IS THE SAME LIST THE GENERATOR
+	# GETS** (board `2.x-river-teams`). It used to be appended in the loop above, which was
+	# correct and was about to become one of TWO compactions of the same fact -- a river's banks
+	# are laid out by side now, so the map and the match have to agree about who is allied.
+	cfg.teams = _active_teams()
 	cfg.seed = _seed
 	cfg.map_type = _type
 	cfg.map_data = _data
