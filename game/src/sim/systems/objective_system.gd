@@ -278,6 +278,8 @@ static func _count(w: SimWorld, o: ObjectiveDef, census: Dictionary, areas: Dict
 			return _named_alive(w, o, ids)
 		ObjectiveDef.Subject.TICKS:
 			return _elapsed(w)
+		ObjectiveDef.Subject.CLAIM:
+			return _dragon_prospects(w, census, ids)
 		_:
 			return -1
 
@@ -511,6 +513,57 @@ static func _census(w: SimWorld) -> Dictionary:
 		var total_key := "unit_total" if is_unit else "building_total"
 		entry[total_key] = int(entry[total_key]) + 1
 	return out
+
+
+## How many ways `ids` can still end up with the map's dragon, counting one they already hold.
+## **0 means the race is over and they did not win it** (board `13.x-claim-dead-end`).
+##
+## ## ⛔ THE CARD PROPOSED READING `claim_owner` + `claim_ticks_left` AND THAT DOES NOT WORK
+##
+## Its words were *"`claim_owner` is set and `claim_ticks_left` is back to -1, which is precisely
+## this nest has spent its dragon and nobody got it"*. ⚠️ **It is not precise — it is the state
+## after a claim MATURES as well.** `_advance_claims` pays out with
+## `nest.claim_ticks_left = -1` and then `spawn_unit(GROWN_DEF, ...)`, leaving `claim_owner` set,
+## which is byte-for-byte the state a denied claim leaves. A rule written off those two fields
+## would have fired **LOSE on the winning tick**, racing the very win row it sits beside.
+##
+## ➡️ So the question is asked from the other end: not *"was the claim denied"*, which the sim
+## cannot answer, but *"is a dragon still reachable"*, which it can — and which is the thing the
+## scenario actually cares about.
+##
+##     a live `unit.dragon` the owner set already holds     -> they got it
+##   + a standing nest nobody has claimed                   -> still open to anyone
+##   + a nest whose RUNNING claim belongs to the owner set  -> in progress
+##
+## Every transition falls out of that without a special case: matured counts **1** through the
+## dragon rather than the nest, so there is no race; a hatchling killed under a standing nest
+## counts **0**, which is the hole this card was filed for; and a grown dragon killed later also
+## counts 0, which is correct — `claim_owner` is never cleared, so there is no second dragon.
+##
+## ⚠️ **AN UNCLAIMED NEST MUST BE `alive`.** A nest carries `leaves_rubble: false`, so
+## `DeathSystem` despawns it on the tick it falls — but on that tick it is still in `entities`
+## with `alive == false`, and counting it would report a prospect through a nest that is rubble.
+##
+## ⚠️ **AND IT NEVER ANSWERS -1 FOR "THIS MAP HAS NO NEST", WHICH LOOKS LIKE TRAP 3 AND IS NOT.**
+## It cannot: a destroyed nest is despawned a tick later, so "no nests on the map" is exactly the
+## state a lost claim leaves behind, and answering unmeasurable there would silence the row on
+## the one event it exists for. The authoring mistake it would otherwise catch — a `claim` row on
+## a map with no nest at all — is refused at LOAD by `ScenarioDef._claims_without_a_nest()`,
+## where there is somebody to tell. Same split as `area`, and for the same reason.
+##
+## Deterministic: one pass of `entities` in id order plus a census read, no floats, no iteration
+## over a Dictionary whose order could differ between hosts.
+static func _dragon_prospects(w: SimWorld, census: Dictionary, ids: Array[int]) -> int:
+	var total := _sum(census, ids, "units", "unit_total", NestSystem.GROWN_DEF)
+	for e in w.entities.values():
+		var nest := e as SimBuilding
+		if nest == null or nest.def_id != NestSystem.NEST_DEF or not nest.alive:
+			continue
+		if nest.claim_owner == 0:
+			total += 1                      # standing and unclaimed: open to anybody
+		elif nest.claim_ticks_left >= 0 and ids.has(nest.claim_owner):
+			total += 1                      # ours, and still growing
+	return total
 
 
 ## Is `id` a def this game actually has? An EMPTY id is "any of that subject" and is always

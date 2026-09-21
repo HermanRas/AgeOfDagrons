@@ -782,6 +782,126 @@ func test_no_id_at_all_still_means_any_of_that_subject() -> void:
 	assert_false(world.match_over, "99 is out of reach, so nothing is decided")
 
 
+# ── the dragon claim (board `13.x-claim-dead-end`) ─────────────────────────
+
+## A standing nest nobody has claimed is a live prospect for everybody, so the dead-end row
+## decides nothing on tick 1. ⚠️ **This is the trap-3 check for the new subject**: `== 0, lose`
+## is the only shape anybody will write, and a count that read 0 before the race had started
+## would defeat the player before they moved — which is the fault this subject was added to fix,
+## arriving through the subject that fixes it.
+func test_a_standing_unclaimed_nest_is_a_prospect_and_decides_nothing() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 1, "the nest is still up for grabs")
+	assert_false(world.match_over, "and above all it did not LOSE on tick 1")
+
+
+## ⛔ **THE HOLE THIS CARD WAS FILED FOR.** The nest is standing and the claim is spent — which
+## is what `_advance_claims` leaves behind when the hatchling is killed under it
+## (`claim_baby_id = 0`, `claim_ticks_left = -1`, and `claim_owner` deliberately NOT cleared,
+## because one dragon per map). There is no second claim, so the mission can never be won; before
+## this subject existed it could not be lost either, and the player stood in it forever.
+func test_a_spent_claim_under_a_standing_nest_is_the_dead_end_and_now_loses() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	var nest := world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	nest.claim_owner = 1
+	nest.claim_baby_id = 0
+	nest.claim_ticks_left = -1
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "no dragon is reachable any more")
+	assert_true(world.match_over, "the dead end is a defeat now, not a hang")
+
+
+## ⛔ **THE TEST THE CARD'S OWN PROPOSAL WOULD HAVE FAILED, AND IT IS DRIVEN THROUGH THE REAL
+## `NestSystem` RATHER THAN POSED.** The card said to read `claim_owner` set with
+## `claim_ticks_left == -1` as "spent and nobody got it". That is **also exactly what a claim
+## that MATURES leaves** — `_advance_claims` pays out by setting -1 and spawning the dragon — so
+## a rule written that way fires LOSE on the winning tick.
+##
+## `claim_ticks_left = 1` so the very next tick is the payout tick: the hatchling is despawned,
+## `unit.dragon` is spawned for player 1, and the row must read **1 through the dragon**, not 0
+## through the nest. Posing the end state by hand would have proved nothing here, because the
+## whole question is what the real payout leaves behind.
+func test_a_matured_claim_counts_through_the_dragon_and_does_not_race_the_win() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	var nest := world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	var baby := world.spawn_unit(NestSystem.BABY_DEF, 0, Vector2i(20, 20))
+	nest.claim_owner = 1
+	nest.claim_baby_id = baby.id
+	nest.claim_ticks_left = 1
+
+	world.step()
+	assert_eq(nest.claim_ticks_left, -1, "the claim really did pay out on this tick")
+	assert_eq(world.player_for(1).objective_progress[0], 1,
+			"the dragon they just won IS the prospect")
+	assert_false(world.match_over, "a lose row firing on the winning tick is the race")
+
+
+## And the far side of it: the dragon grown and then killed is a dead end too, correctly, because
+## `claim_owner` is never cleared and there is no second hatchling. Asserted because it is the one
+## case where "still reachable" has to answer NO about a player who genuinely held the dragon.
+func test_a_dragon_killed_after_it_grew_is_a_dead_end_as_well() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	var nest := world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	nest.claim_owner = 1
+	nest.claim_ticks_left = -1
+	var dragon := world.spawn_unit(NestSystem.GROWN_DEF, 1, Vector2i(21, 21))
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 1, "they hold it, so it is reachable")
+	assert_false(world.match_over)
+
+	dragon.alive = false
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "and now there is no route to one")
+	assert_true(world.match_over)
+
+
+## A rival's running claim is not a prospect of mine. ⚠️ **The nest is NOT open to everybody once
+## somebody holds it** — that is the "one dragon per map" rule, and a count that treated any
+## standing nest as available would have made this row permanently true for the loser of the race.
+func test_a_rivals_running_claim_is_not_a_prospect_of_mine() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	var nest := world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	nest.claim_owner = 2
+	nest.claim_ticks_left = NestSystem.GROW_TICKS
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0,
+			"player 2 is growing it and player 1 can never have it")
+	assert_true(world.match_over)
+
+
+## ⚠️ **A NEST THAT HAS FALLEN IS NOT A PROSPECT, AND IT IS STILL IN `entities` ON THAT TICK.**
+## A nest carries `leaves_rubble: false`, so `DeathSystem` despawns it — but only after this
+## system has run, so for one tick there is a dead nest standing in the entity list. Counting it
+## would report a route to a dragon through rubble.
+func test_a_nest_that_has_fallen_is_not_a_prospect_on_the_tick_it_falls() -> void:
+	var world := _world([{"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}])
+	_both_armed(world)
+	var nest := world.spawn_building(NestSystem.NEST_DEF, 0, Vector2i(20, 20),
+			SimBuilding.Phase.COMPLETE, true)
+	nest.alive = false
+	world.step()
+	assert_eq(world.player_for(1).objective_progress[0], 0, "rubble is not a nest")
+	assert_true(world.match_over)
+
+
 ## The other half of that: a region that DOES exist and happens to be empty is a real 0, and an
 ## `at_most` row about it is genuinely satisfied. Conflating the two would make one of these two
 ## tests impossible to write.
@@ -1112,6 +1232,11 @@ func test_the_declared_subjects_are_in_wire_order() -> void:
 	# `subject` travels as an int, so inserting a member rather than appending one
 	# renumbers the rest and reinterprets every objective already recorded or in flight.
 	# RESOURCE reads better beside AGE and is deliberately not there.
+	# ✅ **AND IT EARNED ITS KEEP ON 2026-09-21**: `CLAIM` went in and this is the test that
+	# made adding it a decision about the WIRE rather than a diff nobody read. Appended, so
+	# every value below it is untouched — which is asserted rather than described, because
+	# "appended" is exactly the claim a careless edit would still make about an insertion.
 	assert_eq(ObjectiveDef.Subject.keys(),
-			["UNIT", "BUILDING", "AGE", "AREA", "NAMED_UNIT", "TICKS", "RESOURCE"])
+			["UNIT", "BUILDING", "AGE", "AREA", "NAMED_UNIT", "TICKS", "RESOURCE", "CLAIM"])
 	assert_eq(int(ObjectiveDef.Subject.RESOURCE), 6, "appended, so the older six keep theirs")
+	assert_eq(int(ObjectiveDef.Subject.CLAIM), 7, "and the older SEVEN keep theirs")

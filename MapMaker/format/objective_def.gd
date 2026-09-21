@@ -85,7 +85,26 @@ extends RefCounted
 ## (*"Gather 500 food, and Age up to Age of Ember"*), which the five existing subjects
 ## could not express at all. It reads `SimPlayer.stock`, which is a BALANCE and not a
 ## running total -- see `ObjectiveSystem._stock_of`, and the latch its header explains.
-enum Subject { UNIT, BUILDING, AGE, AREA, NAMED_UNIT, TICKS, RESOURCE }
+##
+## ## `CLAIM` (2026-09-21, board `13.x-claim-dead-end`) — THE ONE SUBJECT ABOUT ONE FEATURE
+##
+## *"Can this player still end up with the map's dragon?"* 1 while they can, or already have;
+## **0 once it is lost for good.** It exists because 13.2's claim is a one-shot — `claim_owner`
+## is never cleared, by design — so a lost claim makes an authored *"tame the dragon"* scenario
+## **unwinnable and unlosable at the same time**, and PLAN.md 11.8's vocabulary had no way to
+## notice. `11.x-koth`'s rule: *a hang is not the safe direction, it is a slower way of being
+## broken.*
+##
+## ⚠️ **APPENDED, AND THAT IS NOT COSMETIC.** The enum's VALUES go on the wire in
+## `ObjectiveDef.to_wire`, so inserting a name in the middle would renumber every subject after
+## it and silently re-point every saved and in-flight objective. Same hazard `FileAction` and
+## `enum Type` carry in the MapMaker.
+##
+## ⛔ **AND IT IS DELIBERATELY NOT GENERIC, WHICH IS THE REAL ARGUMENT AGAINST IT.** Every other
+## subject counts something the whole game has; this one knows about nests. It was taken anyway
+## because the alternative priced up worse: a general *"has this ever been true"* modifier needs
+## per-row latched state folded into `state_hash()`, for a question one scenario asks.
+enum Subject { UNIT, BUILDING, AGE, AREA, NAMED_UNIT, TICKS, RESOURCE, CLAIM }
 
 ## Whose things are counted. `INDEX` means an explicit player number in `owner_index`.
 ##
@@ -127,6 +146,7 @@ const _SUBJECTS := {
 	"named_unit": Subject.NAMED_UNIT,
 	"ticks": Subject.TICKS,
 	"resource": Subject.RESOURCE,
+	"claim": Subject.CLAIM,
 }
 
 ## The resource kinds a `resource` row may name, which are `SimPlayer.stock`'s keys.
@@ -165,7 +185,14 @@ const _OWNERS := {"self": Owner.SELF, "enemy": Owner.ENEMY, "ally": Owner.ALLY,
 ## forever. That is trap 3 (*`== 0` is a comparison an unimplemented subject passes*) coming
 ## back through the OWNER axis instead of the subject one, so it is refused at load in
 ## exactly the same place and for exactly the same reason.
-const _NOT_ABOUT_GAIA: Array[Subject] = [Subject.AGE, Subject.RESOURCE]
+##
+## ⛔ **`CLAIM` IS IN HERE FOR A SHARPER REASON THAN THE OTHER TWO, AND IT IS A COLLISION OF
+## SENTINELS.** `Owner.GAIA` resolves to the literal `[0]`, and `SimBuilding.claim_owner` uses
+## **0 to mean "no claim"** — so *"gaia's claim"* would match every UNCLAIMED nest on the map
+## and read as gaia claiming the dragon it already guards. Not a nonsense answer an author could
+## spot: a plausible one, pointing the wrong way. The two zeros mean different things and only
+## this list keeps them apart.
+const _NOT_ABOUT_GAIA: Array[Subject] = [Subject.AGE, Subject.RESOURCE, Subject.CLAIM]
 
 const _COMPARES := {">=": Compare.AT_LEAST, "<=": Compare.AT_MOST, "==": Compare.EXACTLY}
 
@@ -552,6 +579,13 @@ func describe() -> String:
 		# converting here would put a second unit in front of the one person -- the author --
 		# who has to type the number in the first place.
 		what = "Elapsed ticks"
+	elif subject == Subject.CLAIM:
+		# ⚠️ **THE THIRD SUBJECT THAT CARRIES NO `id`**, so it falls into the same hole `TICKS`
+		# and `NAMED_UNIT` are pulled out of one branch up: the default is the word "units", and
+		# a dead-end row would have drawn on the tracker as *"units exactly 0"* — a sentence
+		# about an army, on a line about a dragon. `_NAMES_AN_ID` excludes `CLAIM`, which is what
+		# guarantees `id` is empty here rather than merely likely.
+		what = "Your claim on the dragon"
 	# A `match` rather than subscripting a dictionary literal: GDScript will not compile
 	# `{...}[key]` inline, and the failure is a whole-file compilation error that makes
 	# every static on this class vanish -- so `ObjectiveDef.from_dict` reported

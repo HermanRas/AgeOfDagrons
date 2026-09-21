@@ -431,6 +431,16 @@ func build_config(out_problems: Array[String]) -> MatchConfig:
 		out_problems.append_array(bad_ids)
 		return null
 
+	# ⚠️ **AND A `claim` ROW NEEDS A NEST TO BE ABOUT** (board `13.x-claim-dead-end`, 2026-09-21).
+	# The sim deliberately does NOT answer -1 for a nestless world -- see
+	# `ObjectiveSystem._dragon_prospects`, which cannot, because a destroyed nest is despawned and
+	# "no nests" is exactly what a lost claim leaves behind. So the authoring mistake is caught
+	# here instead, which is where `area` and the def ids are caught and for the same reason.
+	var bad_claims := _claims_without_a_nest(cfg.map_data)
+	if not bad_claims.is_empty():
+		out_problems.append_array(bad_claims)
+		return null
+
 	# ⚠️ **THE SCENARIO'S OWN MODE NOW REACHES THE MATCH (15.2).** Until 2026-09-02 this
 	# line was `LAST_MAN_STANDING` unconditionally, above a guard that refused SCENARIO
 	# outright -- which was honest while nothing could evaluate an objective, and is a
@@ -588,6 +598,44 @@ func _unknown_def_ids() -> Array[String]:
 ## not off a spawned world: a hero whose footprint will not fit is still a hero the scenario may
 ## legitimately ask about, and refusing the launch because a building could not be placed would
 ## report the wrong fault entirely.
+## Every `claim` objective on a map with no dragon nest on it, as sentences
+## (board `13.x-claim-dead-end`, 2026-09-21).
+##
+## `_unknown_areas`' fourth twin. A `claim` row asks whether this player can still end up with
+## the map's dragon; on a map with no nest the honest answer is **0 from the first tick**, so
+## `{"subject": "claim", "compare": "==", "value": 0, "output": "lose"}` — which is the only
+## shape anybody will ever write — defeats the player before they move. Trap 3 again, reached
+## through the MAP rather than through a typo.
+##
+## ⛔ **THE SIM CANNOT CATCH THIS ONE AND THAT IS NOT AN OVERSIGHT.** The obvious defence is for
+## `_dragon_prospects` to answer -1 when there are no nests, and it is wrong: a nest carries
+## `leaves_rubble: false`, so `DeathSystem` despawns it the tick after it falls, and **"this
+## world has no nests" is precisely the state a destroyed nest leaves behind.** Unmeasurable
+## there would silence the row on the one event it was written for. The distinction the sim
+## cannot draw — *no nest ever* versus *no nest any more* — is trivial here, because the map
+## file is the record of what the match STARTED with.
+##
+## 📝 Checked against the built `MapData` rather than the authored file, so a generated map and a
+## saved one are judged the same way.
+func _claims_without_a_nest(map: MapData) -> Array[String]:
+	var out: Array[String] = []
+	if map == null:
+		return out
+	var has_nest := false
+	for e in map.entities:
+		if StringName(str(e.get("def_id", ""))) == NestSystem.NEST_DEF:
+			has_nest = true
+			break
+	if has_nest:
+		return out
+	for o in objectives:
+		if o.subject != ObjectiveDef.Subject.CLAIM:
+			continue
+		out.append("objective '%s' is about claiming the dragon, but this map has no dragon nest"
+				% o.describe())
+	return out
+
+
 func _unknown_named_units(map: MapData) -> Array[String]:
 	var out: Array[String] = []
 	if map == null:

@@ -362,19 +362,46 @@ func test_scenario_four_can_be_lost_when_the_nest_falls() -> void:
 	if s == null:
 		return
 
-	var losses: Array[ObjectiveDef] = []
+	# ⛔ **TWO LOSE ROWS SINCE 2026-09-21, AND THEY ARE FOUND BY ROLE RATHER THAN BY INDEX.**
+	# This asserted a bare `size() == 1`, which is the shape `test_waypoint_ui` already paid for
+	# twice — *"a behaviour test tied to whichever piece of data happens to be widest is a test
+	# with an expiry date"*. What matters is that each of the two dead ends is covered, not how
+	# many rows it takes, so each row is located by what it is about.
+	var nest_rows: Array[ObjectiveDef] = []
+	var claim_rows: Array[ObjectiveDef] = []
 	for o in s.objectives:
-		if o.output == ObjectiveDef.Output.LOSE:
-			losses.append(o)
-	assert_eq(losses.size(), 1, "one lose row: the nest is what has to survive")
-	assert_eq(losses[0].subject, ObjectiveDef.Subject.BUILDING)
-	assert_eq(losses[0].id, &"building.dragon_nest")
+		if o.output != ObjectiveDef.Output.LOSE:
+			continue
+		if o.subject == ObjectiveDef.Subject.CLAIM:
+			claim_rows.append(o)
+		elif o.subject == ObjectiveDef.Subject.BUILDING:
+			nest_rows.append(o)
+		else:
+			fail("an unexpected lose row: %s" % o.describe())
+
+	assert_eq(nest_rows.size(), 1, "the nest is what has to survive")
+	assert_eq(nest_rows[0].id, &"building.dragon_nest")
 	# GAIA'S. The nest is never re-owned — `_advance_claims` records `claim_owner` on it and
 	# hands over a UNIT, so a row counting the player's nests would count zero forever and
 	# defeat them on tick 1.
-	assert_eq(losses[0].owner, ObjectiveDef.Owner.GAIA)
-	assert_eq(losses[0].value, 0)
-	assert_false(losses[0].text.is_empty())
+	assert_eq(nest_rows[0].owner, ObjectiveDef.Owner.GAIA)
+	assert_eq(nest_rows[0].value, 0)
+
+	# ⛔ **AND THE ROW THAT CLOSES THE OTHER DEAD END** (board `13.x-claim-dead-end`): kill the
+	# hatchling WITHOUT touching the nest and the row above never fires, because the nest is
+	# still standing. `claim == 0` is the general "no dragon is reachable any more", which
+	# covers that, the nest falling, and a grown dragon killed afterwards.
+	#
+	# 📝 It OVERLAPS the nest row on purpose and both firing together is harmless — lose rows
+	# are ORed. The nest row is kept because it NAMES THE THING TO DEFEND, which is guidance
+	# the general row cannot give.
+	assert_eq(claim_rows.size(), 1, "one claim row: the dragon must stay reachable")
+	assert_eq(claim_rows[0].owner, ObjectiveDef.Owner.SELF)
+	assert_eq(claim_rows[0].value, 0)
+	assert_eq(claim_rows[0].id, &"", "a claim row is about no def")
+
+	for o in nest_rows + claim_rows:
+		assert_false(o.text.is_empty(), "the tracker has a line to draw for every row")
 
 
 ## ⚠️ **THE HALF THAT MAKES THE ROW ABOVE SAFE RATHER THAN CATASTROPHIC, AND IT IS A PROPERTY OF
@@ -1006,6 +1033,45 @@ func test_gaia_is_refused_for_the_subjects_that_read_a_player() -> void:
 		assert_true(problems[0].contains("gaia is not a player"), problems[0])
 		assert_true(problems[0].contains(subject),
 				"the message names the subject to change: %s" % problems[0])
+
+
+## ⛔ **`claim` IS REFUSED ABOUT GAIA FOR A SHARPER REASON THAN `age` AND `resource`, AND IT IS A
+## COLLISION OF SENTINELS RATHER THAN A NULL PLAYER.** `Owner.GAIA` resolves to the literal `[0]`
+## and `SimBuilding.claim_owner` uses **0 to mean "no claim"** — so *"gaia's claim"* would match
+## every UNCLAIMED nest on the map and read as gaia claiming the dragon she already guards. Not a
+## nonsense answer somebody would spot: a plausible one, pointing the wrong way.
+func test_a_claim_row_cannot_be_asked_about_gaia() -> void:
+	var problems: Array[String] = []
+	assert_null(ObjectiveDef.from_dict({"subject": "claim", "owner": "gaia",
+			"compare": "==", "value": 0}, problems),
+			"the two zeros mean different things and must not be conflated")
+	assert_eq(problems.size(), 1, _joined(problems))
+	assert_true(problems[0].contains("claim"),
+			"the message names the subject to change: %s" % problems[0])
+
+
+## A claim row carries no `id` at all — it is not about a def — and it survives the wire.
+##
+## ⚠️ **AND `describe()` MUST NOT FALL THROUGH TO THE WORD "units".** That default is what makes
+## an id-less subject draw on 15.6's tracker as *"units exactly 0"* — a sentence about an army on
+## a line about a dragon. `ticks` and `named_unit` each needed the same branch and each needed it
+## for the same reason.
+func test_a_claim_row_names_no_id_and_describes_itself_as_a_claim() -> void:
+	var problems: Array[String] = []
+	var o := ObjectiveDef.from_dict({"subject": "claim", "owner": "self",
+			"compare": "==", "value": 0, "output": "lose"}, problems)
+	assert_not_null(o, _joined(problems))
+	if o == null:
+		return
+	assert_eq(o.id, &"", "a claim row is about no def")
+	var drawn := o.describe()
+	assert_false(drawn.contains("units"), "it must not read as an army: %s" % drawn)
+	assert_true(drawn.to_lower().contains("claim"), drawn)
+
+	var back := ObjectiveDef.from_wire(o.to_dict())
+	assert_eq(back.subject, ObjectiveDef.Subject.CLAIM,
+			"the subject survives the wire -- it is appended to the enum for exactly this")
+	assert_eq(back.output, ObjectiveDef.Output.LOSE)
 
 
 func test_an_id_less_row_means_any_of_that_subject() -> void:

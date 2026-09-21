@@ -722,6 +722,60 @@ func test_a_refusal_is_sized_for_the_banner_that_has_to_draw_it() -> void:
 
 ## A saved map under `user://` carrying `names` as one-tile regions. Written fresh per call
 ## because the region list is what varies; `_ensure_test_map()`'s cached map has none.
+# ── a claim row needs a nest to be about (board `13.x-claim-dead-end`) ─────────
+
+## ⛔ **THE SIM DELIBERATELY CANNOT CATCH THIS ONE, SO THE LAUNCHER HAS TO.**
+## `ObjectiveSystem._dragon_prospects` answers a straight 0 on a map with no nest, and that is
+## not an oversight: a nest carries `leaves_rubble: false`, so `DeathSystem` despawns it the
+## tick after it falls — **"this world has no nests" is precisely the state a lost claim leaves
+## behind**, and answering "unmeasurable" there would silence the row on the one event it exists
+## for. The distinction the sim cannot draw — *no nest ever* versus *no nest any more* — is
+## trivial here, because the map file records what the match STARTED with.
+##
+## Without this, `{"subject": "claim", "==": 0, "lose"}` on a nestless map defeats the player on
+## tick 1: trap 3 reached through the MAP instead of through a typo.
+func test_a_claim_objective_on_a_map_with_no_nest_refuses_to_launch() -> void:
+	var s := _scenario({"mode": "scenario", "objectives": [
+		{"subject": "unit", "id": "unit.villager", "compare": ">=", "value": 1,
+			"output": "win"},
+		{"subject": "claim", "owner": "self", "compare": "==", "value": 0,
+			"output": "lose"},
+	]})
+	assert_true(s.is_playable(), "the row itself parses: %s" % [s.problems])
+
+	var problems: Array[String] = []
+	assert_null(s.build_config(problems), "a claim row about no nest must not launch")
+	assert_eq(problems.size(), 1, "%s" % [problems])
+	assert_true(problems[0].contains("no dragon nest"),
+			"the refusal has to name what the map is missing: %s" % problems[0])
+
+
+## And the positive half, which is what stops the guard being "refuse every claim row": a map
+## that really carries a nest launches. Written as its own map rather than borrowing scenario 4's,
+## so it cannot break when the owner re-rolls authored content.
+func test_a_claim_objective_launches_on_a_map_that_has_a_nest() -> void:
+	var dir := "user://test_scenario_maps/scenario_nest"
+	if not MapFile.exists_in(dir):
+		var data := MapData.create(Vector2i(16, 16), SimMap.Terrain.GRASS)
+		data.add_entity(NestSystem.NEST_DEF, 0, Vector2i(8, 8))
+		var wrote := MapFile.save(data, dir, {"name": "nest", "players": 2})
+		if not wrote.is_empty():
+			fail("could not write the nest map: %s" % " | ".join(wrote))
+	var s := ScenarioDef.from_dict("scenario_n", {
+		"name": "N", "mode": "scenario", "map": {"type": "river", "seed": 1},
+		"opponents": ["passive"],
+		"objectives": [
+			{"subject": "unit", "id": "unit.villager", "compare": ">=", "value": 1,
+				"output": "win"},
+			{"subject": "claim", "owner": "self", "compare": "==", "value": 0,
+				"output": "lose"},
+		],
+	}, dir)
+	var problems: Array[String] = []
+	assert_not_null(s.build_config(problems),
+			"a nest is on the map, so the row is about something: %s" % [problems])
+
+
 func _map_with_regions(names: Array[StringName]) -> String:
 	var dir := "user://test_scenario_maps/scenario_r_%d" % names.size()
 	var data := MapData.create(Vector2i(16, 16), SimMap.Terrain.GRASS)
