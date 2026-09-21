@@ -411,16 +411,39 @@ func test_no_building_offers_to_train_a_dragon() -> void:
 					"%s at age %d must not offer a dragon" % [building_id, age])
 
 
-func test_a_train_row_never_overflows_its_grid_at_any_age() -> void:
-	# The reason units are OMITTED above their age rather than shown disabled:
-	# an age-4 castle trains four things and still has to fit `upgrade`, `repair`
-	# and `destroy` into the same 8 slots.
+## ⛔ **THIS ASSERTS THE ROW BEFORE THE CAP, AND THE VERSION THAT DID NOT COULD NOT FAIL.**
+##
+## It read `for_selection(...).size() <= MAX_ACTIONS` until 2026-09-21. That is an
+## assertion about `_capped()`, which slices to exactly that number -- so it was green for
+## every building that has ever existed and would have stayed green if one emitted forty
+## actions. Board card `8.x-action-column-overflow`.
+##
+## Its fixture hid the rest: `_building_facts` carries no `phase`, so the gate, garrison
+## and research branches all fell to `!= COMPLETE` and never ran. Every building was
+## measured in its thinnest possible state, with no rally point either -- which is the one
+## axis the card was about.
+##
+## So this one asks `_building_actions` for the UNCAPPED row, in the states that make it
+## longest. `dev_preview/preview_action_overflow.tscn` is the exhaustive form and prints
+## the headroom; this is the half that fails a suite.
+func test_no_building_row_outgrows_its_column_uncapped() -> void:
 	for building_id in GameDataRegistry.building_ids():
+		var bd: BuildingDef = GameDataRegistry.building(building_id)
 		for age in [1, 2, 3, 4]:
-			var actions := SelectionActions.for_selection(
-					_building_facts(building_id), 1, true, [], age)
-			assert_true(actions.size() <= SelectionActions.MAX_ACTIONS,
-					"%s in age %d fits its action column" % [building_id, age])
+			for phase in [SimBuilding.Phase.FOUNDATION, SimBuilding.Phase.COMPLETE]:
+				var facts := _building_facts(building_id)
+				facts["phase"] = phase
+				facts["garrison_count"] = bd.garrison_cap
+				facts["gate_locked"] = false
+				# The axis the card was filed about: Stop appears only when there is a
+				# rally point to clear, so a castle is one tile longer than it looks.
+				facts["waypoint"] = Vector2i(5, 5)
+				var row := SelectionActions._building_actions(building_id, age, facts, {})
+				assert_true(row.size() <= SelectionActions.MAX_ACTIONS,
+						"%s at age %d (%s, rally set) asks for %d of %d slots: %s"
+						% [building_id, age,
+						"complete" if phase == SimBuilding.Phase.COMPLETE else "foundation",
+						row.size(), SelectionActions.MAX_ACTIONS, _ids(row)])
 
 
 func test_the_build_menu_gates_on_age() -> void:

@@ -221,11 +221,12 @@ static func for_selection(facts: Dictionary, selected_count: int = 1,
 		group_stance.badge = _stance_badge(int(facts.get("stance", SimUnit.Stance.PASSIVE)))
 		return _capped([
 			group_move, _act(&"stop"), _act(&"attack"), group_stance, _act(&"destroy"),
-		])
+		], "a group of %d" % selected_count)
 
 	if GameDataRegistry.building(def_id) != null:
-		return _capped(_building_actions(def_id, age, facts, researched))
-	return _capped(_unit_actions(def_id, facts))
+		return _capped(_building_actions(def_id, age, facts, researched),
+				"%s at age %d" % [def_id, age])
+	return _capped(_unit_actions(def_id, facts), String(def_id))
 
 
 ## What tapping an `expands` action fills the detail grid with; `[]` for an
@@ -308,9 +309,15 @@ static func _building_actions(def_id: StringName, age: int = 1,
 				ICONS.get(&"exit" if locked else &"enter", ""), true))
 
 	# WHO IS INSIDE, AND A WAY OUT (PLAN.md 4.8). Only for a building that can hold
-	# anybody at all -- three of the 31 -- so 28 buildings are unchanged and the
-	# castle's row stays inside its 8 slots (4 trains + this + upgrade + repair +
-	# destroy = 8 exactly; `_capped` would have dropped Destroy at 9).
+	# anybody at all -- three of the 31 -- so 28 buildings are unchanged.
+	#
+	# ⚠️ **THIS COMMENT USED TO DO THE CASTLE'S ARITHMETIC AND THE ARITHMETIC WENT STALE.**
+	# It read "4 trains + this + upgrade + repair + destroy = 8 exactly", counting the
+	# dragon among the castle's trains; that route was removed on 2026-09-04 and nothing
+	# re-counted. Measured 2026-09-21, an age-4 castle with a rally point emits 8 with
+	# three train tiles. **The count now lives in `preview_action_overflow.tscn` and in
+	# `test_no_building_row_outgrows_its_column_uncapped`**, which re-derive it every run
+	# rather than asserting a number somebody wrote down.
 	#
 	# The badge is the count against the cap, which is the only place in the HUD that
 	# says how full a tower is. Disabled at 0 rather than hidden, so the slot does not
@@ -350,8 +357,15 @@ static func _building_actions(def_id: StringName, age: int = 1,
 	#
 	# OFFERED ONLY BY A BUILDING THAT ACTUALLY HAS TECHS, which is seven of the
 	# thirty-one, so the other twenty-four rows are unchanged and none of them is
-	# pushed past `_capped`'s slice. That mattered: the castle already emits nine with
-	# a rally point set, and it has no techs precisely so it still emits nine.
+	# pushed past `_capped`'s slice.
+	#
+	# ⚠️ **THIS SAID "the castle already emits nine with a rally point set" AND IT DOES
+	# NOT** -- it emits 8, since the dragon left its train row (see the garrison note
+	# above). The conclusion the sentence was reaching for still holds and is the reason
+	# to keep it: **the castle has no techs, and if it ever gains one it goes over.**
+	# It is one of three buildings sitting at exactly `MAX_ACTIONS` today -- castle,
+	# dock and siege workshop -- so this is the branch to check first when a row
+	# overflows. `_capped` now says so out loud in a debug build.
 	var research := _research_action(bd, age, facts, researched)
 	if research != null:
 		out.append(research)
@@ -985,7 +999,37 @@ static func _act(id: StringName, enabled: bool = true) -> HudAction:
 	return HudAction.new(id, String(id).capitalize(), ICONS.get(id, ""), enabled)
 
 
-static func _capped(actions: Array[HudAction]) -> Array[HudAction]:
+## The eight slots, and a complaint about anything that did not fit.
+##
+## ⛔ **THE SILENT SLICE WAS THE DEFECT, NOT THE CAP** (board `8.x-action-column-overflow`).
+## The cap is right -- the column is a 4-wide grid two rows deep and a ninth tile has
+## nowhere to go. What was wrong is that losing a verb looked exactly like never having
+## offered one, so the only record of the risk was a pair of comments in this file that
+## each stayed true while the fact they jointly described went stale.
+##
+## ⚠️ **AND THEY DID GO STALE, WHICH IS THE ARGUMENT FOR SAYING IT IN CODE INSTEAD.** One
+## comment counted a castle at "4 trains ... = 8 exactly" and the next read it as nine with
+## a rally point set; the card filed off them said a castle silently loses Destroy.
+## Measured, it emits **8** -- the fourth train tile was the dragon, and that route was
+## removed on 2026-09-04 (`test_no_building_offers_to_train_a_dragon`). The comments were
+## written before the removal and nothing re-counted them afterwards. A warning counts
+## every time the row is built.
+##
+## `context` names the row, because "9 actions" with no subject is not actionable: the
+## caller knows the def id and the age and this function cannot.
+##
+## Debug builds only. A player's console is not where this belongs, and the audience is
+## whoever just added a verb to a building -- `dev_preview/preview_action_overflow.tscn`
+## is the exhaustive form, and `test_no_row_outgrows_its_column_uncapped` is the one that
+## fails the suite.
+static func _capped(actions: Array[HudAction], context: String = "") -> Array[HudAction]:
+	if OS.is_debug_build() and actions.size() > MAX_ACTIONS:
+		var lost: Array[String] = []
+		for i in range(MAX_ACTIONS, actions.size()):
+			lost.append(String(actions[i].id))
+		push_warning("SelectionActions: %s asks for %d actions and the column holds %d -- dropping %s"
+				% [context if not context.is_empty() else "a selection", actions.size(),
+				MAX_ACTIONS, ", ".join(lost)])
 	return actions.slice(0, MAX_ACTIONS)
 
 

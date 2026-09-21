@@ -331,6 +331,13 @@ C:\Users\herman.ras\Downloads\Godot_v4.7.1\Godot_v4.7.1-stable_win64_console.exe
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role beacon
 & $godot --headless --path game res://dev_preview/preview_lan_discovery.tscn -- --role browse
 
+# WHAT ASKS FOR MORE THAN EIGHT SLOTS, AND WHAT THE CAP THROWS AWAY. EXIT CODE IS THE
+# ANSWER. Headless. Every building x age x phase x rally x garrison x gate x techs and
+# every unit x stance x cooldown -- 4,328 rows -- comparing the UNCAPPED row against what
+# `for_selection` returns. It prints the HEADROOM for every row, not only the failures,
+# which is the number `8.x-build-menu-modal` needs before it adds a tile.
+& $godot --headless --path game res://dev_preview/preview_action_overflow.tscn
+
 # The facing trio — how a re-baked atlas gets checked (see §6, the mirror item)
 & $godot --path game res://dev_preview/preview_facing_chart.tscn -- --units unit.swordsman,unit.knight
 & $godot --path game res://dev_preview/preview_combat_facing.tscn  # eight attackers in a ring

@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_action_overflow.gd" id="1_overflow"]
+
+[node name="PreviewActionOverflow" type="Node"]
+script = ExtResource("1_overflow")
