@@ -365,6 +365,64 @@ func test_a_group_that_exactly_fills_the_grid_shows_no_overflow() -> void:
 
 # -- age gating (Task C) -----------------------------------------------------
 
+## ⛔ **A BUILDING STILL GOING UP CANNOT TRAIN, AND IT USED TO OFFER TO** (board
+## `8.x-train-on-foundation`, found 2026-09-21 by `preview_action_overflow`).
+##
+## `TrainCommand.validate()` refuses a building that is `not b.is_complete()`, and the
+## train loop was the one branch in `_building_actions` with no phase check -- the gate,
+## garrison, research and upgrade branches all had one. So a half-built dock showed four
+## live train buttons that did nothing at all when pressed.
+##
+## §4's invariant was never in danger: the server refused it, so this was never an
+## exploit. It was the HUD promising an order the sim would not take.
+func test_a_foundation_offers_its_train_tiles_greyed_rather_than_live() -> void:
+	var facts := _building_facts(&"building.dock")
+	facts["phase"] = SimBuilding.Phase.FOUNDATION
+	var row := SelectionActions._building_actions(&"building.dock", 4, facts, {})
+	var found := 0
+	for a in row:
+		if String(a.id).begins_with("train:"):
+			found += 1
+			assert_false(a.enabled,
+					"%s is greyed while the dock is still a foundation" % a.id)
+	assert_true(found > 0, "the tiles are still THERE, just not pressable")
+
+
+func test_a_finished_building_trains_as_it_always_did() -> void:
+	# The other half, and the one that would catch a guard that greyed everything.
+	var facts := _building_facts(&"building.dock")
+	facts["phase"] = SimBuilding.Phase.COMPLETE
+	var row := SelectionActions._building_actions(&"building.dock", 4, facts, {})
+	var found := 0
+	for a in row:
+		if String(a.id).begins_with("train:"):
+			found += 1
+			assert_true(a.enabled, "%s is live on a finished dock" % a.id)
+	assert_true(found > 0)
+
+
+func test_the_row_is_the_same_length_in_both_phases() -> void:
+	# DISABLED RATHER THAN OMITTED, and this is the property that choice buys: the slot
+	# does not move under the player's thumb at the moment construction finishes, and the
+	# three buildings already at MAX_ACTIONS do not change length. `_building_actions`
+	# records the garrison slot as the precedent.
+	for building_id in GameDataRegistry.building_ids():
+		var a := _building_facts(building_id)
+		a["phase"] = SimBuilding.Phase.FOUNDATION
+		var b := _building_facts(building_id)
+		b["phase"] = SimBuilding.Phase.COMPLETE
+		var trains_a := 0
+		var trains_b := 0
+		for x in SelectionActions._building_actions(building_id, 4, a, {}):
+			if String(x.id).begins_with("train:"):
+				trains_a += 1
+		for x in SelectionActions._building_actions(building_id, 4, b, {}):
+			if String(x.id).begins_with("train:"):
+				trains_b += 1
+		assert_eq(trains_a, trains_b,
+				"%s offers the same train tiles either way" % building_id)
+
+
 func test_a_building_lists_only_the_units_its_owner_has_the_age_for() -> void:
 	# An archery range trains archers from age 2 and crossbowmen from age 3
 	# (Age & Unit Planning.md). Both live in one `trains` list; the gate is the

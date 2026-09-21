@@ -334,12 +334,31 @@ static func _building_actions(def_id: StringName, age: int = 1,
 		g.expands = true
 		out.append(g)
 
+	# ⛔ **A FOUNDATION CANNOT TRAIN, AND UNTIL 2026-09-21 IT OFFERED TO** (board
+	# `8.x-train-on-foundation`). `TrainCommand.validate()` refuses a building that is
+	# `not b.is_complete()`, and this loop was the ONE branch in this function with no
+	# phase check -- the gate, garrison, research and upgrade branches all have one. So a
+	# half-built dock showed four live train buttons that did nothing when pressed.
+	#
+	# ⚠️ **DISABLED, NOT OMITTED, AND THE PRECEDENT IS TWELVE LINES UP.** The garrison slot
+	# is "disabled at 0 rather than hidden, so the slot does not move under the player's
+	# thumb". A foundation completes seconds later, so hiding the tiles would make the row
+	# grow under the thumb at the moment the player is most likely to be tapping it.
+	#
+	# ⚠️ **NOT the age gate's rule, which is the opposite and sits just below**: an
+	# above-age unit is OMITTED because "a disabled Crossbowman in age 2 would be a promise
+	# about a future age". A foundation is not a future age -- it is this building, shortly.
+	#
+	# 📝 It also keeps the row length identical in both phases, so the three buildings
+	# already sitting at `MAX_ACTIONS` do not move. `preview_action_overflow` checks that.
+	var complete := int(facts.get("phase", -1)) == SimBuilding.Phase.COMPLETE
 	for unit_def_id in bd.trains:
 		var ud: UnitDef = GameDataRegistry.unit(unit_def_id)
 		if ud != null and ud.age_required > age:
 			continue
 		var a := HudAction.new(&"train:%s" % unit_def_id,
-				ud.name if ud != null and not ud.name.is_empty() else String(unit_def_id))
+				ud.name if ud != null and not ud.name.is_empty() else String(unit_def_id),
+				"", complete)
 		a.payload = unit_def_id          # ActionSlot crops the unit's own portrait
 		# What it costs, along the top of the tile (project owner, 2026-08-22). Handed
 		# over as the def's own dictionary rather than a formatted string; `ActionSlot`
