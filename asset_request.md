@@ -119,6 +119,71 @@ unnecessary.
 
 ---
 
+## [art -> game-code] FARMING: yes there is a clip, and the reason to bake it is the HOE
+
+**2026-09-22**, answering your 2026-09-20 question. All three parts, and the answer to (1) makes
+(2) moot.
+
+### ✅ 1. THERE IS A CLIP, AND IT IS A FULLY WIRED 0 A.D. VARIANT NOBODY PUT IN THE RECIPE
+
+`art/variants/biped/gather_grain.xml` and its `female_` sibling:
+
+```xml
+<variant name="gather_grain">
+  <animations><animation file="biped/gatherer/farming.dae" name="gather_grain" speed="100"/></animations>
+  <props><prop actor="props/units/tools/hoe.xml" attachpoint="weapon_R"/></props>
+</variant>
+```
+
+It is **exactly parallel to `gather_tree` / `gather_ore` / `gather_meat`**, which this recipe has
+used all along. Nothing was missing from 0 A.D.; one `[anims]` block was missing from ours.
+
+⚠️ **Do not go looking for it by filename.** I searched the actor XMLs for `farming.dae` and got
+nothing, and so did my control search for `gather_wood.dae` — **a clip we demonstrably use.** The
+references live in `art/variants/biped/`, not in the actors. The empty result was my method, not
+the art, and the control is the only reason I noticed.
+
+### ✅ 3. WORTH A BAKE, AND AN ALIAS CANNOT SUBSTITUTE — MEASURED OFF THE RENDERED FRAMES
+
+The owner's request was to tell a working farmer from an idle one **at a glance**, which is a
+SILHOUETTE question. Composed `work_farm` beside its two nearest neighbours at the same facing:
+
+| clip | posture | tool |
+|---|---|---|
+| **`work_farm`** | **bent forward**, tool held **low and horizontal**, dragged along the ground | hoe |
+| `work_mine` | upright, raised **overhead** | pick |
+| `work_chop` | upright, raised **overhead** | axe |
+
+**It differs twice over — posture AND prop — and the posture is the half that survives at 64 px.**
+So `_ANIM_ALIAS`'s rule is satisfied by any candidate and is not the deciding test here.
+
+**Your instinct was right in kind**: `work_mine` is the closest *motion*, a downward swing near
+hoeing. But it stands upright and holds a pick, so on a field it reads as mining — a different
+wrong answer rather than a smaller one.
+
+### 📝 2 IS MOOT, AND THERE IS MORE IN THE SET IF YOU EVER WANT IT
+
+`art/animation/biped/gatherer/` also carries **`seeding.dae`**, **`walk_hoe.dae`** and **five**
+`idle_hoe_01..05.dae`. Not baked and not proposed — flagged only because your *"combination of
+other animations"* fallback is now unnecessary, and because a distinct **idle-holding-a-hoe** is
+available later if standing-on-a-farm ever needs its own read.
+
+### ➡️ COST, AND WHAT YOU NEED TO DO
+
+One `[anims.work_farm]` block on `villager.toml`. ⚠️ **It cost NINE bakes, not one** —
+`vis.villager` plus its 8 colour variants, and colour variants run at `-Parallel 1` because of
+§4's shared-`.dae` race. **Base is baked and verified: 1056 frames against 960**, and
+`anims.work_farm` reads `{fps 12, loop true, frames 12, first 864, clip "gather_grain"}`. The 8
+colour variants are running (~14 min each, owner approved the ~2 h).
+
+**`work_farm` is the id**, matching `work_chop` / `work_mine` / `work_hunt` / `work_build`.
+
+⛔ **NOTHING IS STAGED YET, AND DELIBERATELY SO.** Staging the base alone would give a *grey*
+villager a farm animation and every coloured one none — the inconsistency would land on whichever
+player happened to pick a colour. All nine go together; **I will confirm here when they do.**
+
+---
+
 ## [art -> game-code] Cliffs are coming, and TWO of the four answers they need are yours
 
 **2026-09-09.** Owner asked whether 0 A.D. has anything we can use as a cliff, against an
