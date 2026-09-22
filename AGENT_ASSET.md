@@ -7,7 +7,14 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated **2026-09-22** — the owner settled the cliff as a FLAT drop-in (no plateau, so one
+Last updated **2026-09-22 (evening)** — ⛔ **the owner switched accounts with a bake running, so
+[§5's WHERE TO CONTINUE block](#5-state-as-of-2026-09-22) is the first thing to read: restore the
+art sources, then restart eight villager colour bakes that completed zero of eight.** The cliff
+set shipped complete and staged (16 atlases, card #97 flipped to `game-code`) and the villager
+gained a farming animation. §4 gained the killed-bake hazard, the fast restore tool, and why an
+empty search result needs a control.
+
+Earlier the same day — the owner settled the cliff as a FLAT drop-in (no plateau, so one
 bake per piece rather than one per terrain) and bought a second, DIAGONAL tile set for cliffs,
 bridges, walls and the shoreline. §4's four-usable-directions entry is now settled rather than
 open, and carries which half of a diagonal piece is free and which is not.
@@ -398,6 +405,32 @@ Keep emitting all of this; the game side depends on it.
   take colour needs `"colours": false`, which is mine to tell them.
 
 ## 4. Hard-won things that will bite you
+
+✅ **`restore_art_sources.ps1` IS THE ONE TO REACH FOR, NOT THE `.sh` — 2 minutes against 30–45,
+and it is a speed tool rather than a compatibility one.** It reads every LFS pointer out of ONE
+`git cat-file --batch` instead of forking `git show` 5 525 times, and compares by **hash**: a
+pointer's `oid` IS the sha256 of the pristine content, so "modified" is a proof rather than a
+guess. Read its header once — it documents how its own first version was wrong in a way that
+would have destroyed the whole checkout while reporting 5 517 successful restores.
+
+⚠️ **AND A TIMESTAMP IS NOT EVIDENCE EITHER WAY.** 2026-09-22: a killed bake left 11 `.dae`
+files carrying that day's mtime and the hash check still reported **5 525 pristine, 0
+modified** — the mtimes were isobake's own restore. Do not conclude damage from an mtime, and
+do not skip the check because nothing looks touched.
+
+⛔ **ENDING A SESSION KILLS A RUNNING BATCH, AND A KILLED BAKE SKIPS THE RESTORE.** This is the
+one failure the automatic restore cannot cover, because `preserve_sources()` runs in a `finally`
+that a hard kill never reaches. It happened twice on 2026-09-22 — once to a `villager` bake, once
+to eight colour variants that completed **zero** of eight. **So: run long batches in the
+background, and check `restore_art_sources.ps1` first thing in any session that follows an
+interrupted one.**
+
+📌 **A CONTROL SEARCH IS HOW YOU KNOW AN EMPTY RESULT IS REAL.** Hunting the villager's farming
+clip I searched the actor XMLs for `farming.dae`, got nothing, and was one sentence from
+reporting it as an orphan 0 A.D. never wired. The control — searching for `gather_wood.dae`, a
+clip this project **demonstrably uses** — also returned nothing. Animation references live in
+`art/variants/biped/`, not in the actors. **An absence is a claim about the search as much as
+about the art**, and it costs one extra query to tell those apart.
 
 **Restore the art checkout after every batch.** The Pyrogenesis importer rewrites
 every `.dae` it loads, in place. isobake undoes this via `preserve_sources()`, but
@@ -1097,7 +1130,74 @@ by PowerShell quoting, and `bash --flag` passes the flag to bash, not your scrip
 **Google Drive** holds directory handles; `shutil.rmtree` on a repo folder fails
 with WinError 5. Delete contents, not the directory.
 
-## 5. State as of 2026-09-01
+## 5. State as of 2026-09-22
+
+> ## ▶ WHERE TO CONTINUE — written 2026-09-22 because the owner switched accounts MID-BATCH
+>
+> **Do these two in order before anything else. Both exist because ending a session kills a
+> running bake, and that had already happened once today before I caught it.**
+>
+> **1. ⛔ RESTORE THE ART SOURCES FIRST.** A killed bake skips isobake's `preserve_sources()`,
+> so the 0 A.D. `.dae` files it rewrote stay rewritten. Dry run, then apply only if it reports
+> anything:
+>
+> ```powershell
+> powershell -File tools\restore_art_sources.ps1 -Quiet          # reports; safe
+> powershell -File tools\restore_art_sources.ps1 -Quiet -Apply   # only if modified > 0
+> ```
+>
+> ⚠️ **Timestamps lie here and the hash is the authority.** When I checked today, 11 `.dae`
+> files carried that day's mtime and the tool still reported **5 525 pristine, 0 modified** —
+> the mtimes were isobake's own restore. Do not conclude damage from a timestamp, and do not
+> skip the check because the files *look* untouched either.
+>
+> ⚠️ **NEVER `git checkout` in that repo from Windows** — git-lfs is WSL-only and a checkout
+> writes 136-byte pointers over real geometry. `restore_art_sources.ps1` exists precisely to
+> avoid that; read its header before doubting it. The checkout also carries **~30 000 staged
+> deletions** from its LFS setup — that is pre-existing, the files are all on disk, and it is
+> not yours to fix.
+>
+> **2. ⛔ RESTART THE VILLAGER COLOUR BAKES — 0 of 8 completed.** The owner approved the ~2 h
+> cost; the batch died with nothing to show, so it starts from the beginning:
+>
+> ```powershell
+> powershell -File tools\bake_batch.ps1 -RecipeDir recipes/player -Only "villager__" -Parallel 1
+> ```
+>
+> **`-Parallel 1` is not negotiable** for colour variants — all eight load an identical mesh
+> set and collide on every file (§4's race). ~14 min each. **Run it in the background and do
+> not let the session end while it runs**, which is the whole reason this block exists.
+>
+> **3. THEN stage all nine together and say so on `asset_request.md`.**
+> `python tools\stage_atlases.py --only vis.villager` — never `--clean`.
+> ⛔ **Do not stage the base alone.** It would give a grey villager a farm animation and every
+> coloured one none, and the inconsistency would land on whoever picked a colour.
+>
+> ### What is DONE and needs nothing
+>
+> - **The cliff set is complete, staged (16 atlases) and handed over.** Board card `cliff-tiles`
+>   (#97) has been flipped to `game-code` by the owner. Three placement rules, one pair of
+>   diagonal pieces, all in `asset_request.md`. Commits `32f528a`, `0df97d4`, `2000525`,
+>   `fe43487`.
+> - **`licence_audit.py` is PASS** — 383 recipes. The game side cleared its own
+>   `ui/icons/cat_units.png` failure in `a2a6586`, so the long-standing red flag is gone.
+> - **Farming answered and the base villager is baked** (`0b78e6b`): 1056 frames against 960,
+>   `anims.work_farm` → `clip "gather_grain"` at index 864. Only the 8 colours are owed.
+>
+> ### What is next, after the colours are staged
+>
+> `diagonal-tiles` (#119) is in **Doing** and its cliff quarter is delivered; what remains under
+> it is `bridge-diagonal` (#120) and `shore-diagonal` (#121), which share the diagonal-cut tile
+> primitive — write it once on #121 as the superset. `generated-art-attribution` (#123) is still
+> open and is now overdue: `LICENCES.md`'s generated table is headed *"everything below derives
+> from 0 A.D."* and **24 cliff rows make that false.**
+
+> ### ⚠️ SUPERSEDED 2026-09-22: `art_work/out` IS NO LONGER EMPTY, SO THE INVERSION BELOW HAS
+> ### INVERTED BACK. A bare `stage_atlases.py` now copies real files again.
+>
+> `out` holds the 16 cliff atlases, `vis.villager` and the probe set. **So scope every stage
+> with `--only`, as §3 always said.** `--clean` remains the unrecoverable one and the reasoning
+> below still stands in full — only the "a bare run copies nothing" clause is dead.
 
 > ### ⚠️ `art_work/out` IS EMPTY. `game/assets/atlases` IS NOW THE ONLY COPY OF THE ART.
 >
