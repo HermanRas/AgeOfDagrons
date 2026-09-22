@@ -1,0 +1,40 @@
+# Cliff FAR edge, DIAGONAL SHORT -- 3 diagonal steps.
+#
+# `cliff_back_diag.toml` carries the whole argument: why a diagonal piece exists, why its
+# span is a tile diagonal and its offset a half-diagonal, and that only the four
+# 45-degree frames are usable. `cliff_face_short.toml` carries why the set has
+# lengths at all. Neither is repeated here -- only `size_metres[0]` and
+# `canvas` differ from the one-step piece.
+#
+# 3 diagonal steps = 8.485 m, against the axis set's 3 tiles = 6.0 m. The two
+# ladders are the same COUNT and different lengths, which is #122's diagonal
+# arithmetic showing up again: a diagonal step is 2.83 m where an axis step is 2.0.
+id      = "vis.cliff_back_diag_short"
+adapter = "composite"
+
+[[source.parts]]
+name    = "crest"
+adapter = "terrain"
+texture = "Cliff_Gen/cliff_v2_s1_back.png"
+
+size_metres    = [8.485, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.414, -1.96]
+
+[render]
+canvas = [384, 384]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"

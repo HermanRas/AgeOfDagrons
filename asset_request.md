@@ -603,17 +603,31 @@ not a dependency of the art. ⚠️ **If you would rather the sim store runs ins
 before it is built** — that is a different data model and it would change what the art side owes
 you at the ends of a run.
 
-### ⬜ AND ONE THING GOT BIGGER, NOT SMALLER: THE OUTER CORNER IS A WHOLE DIRECTION
+### ✅ AND THE E–W / DIAGONAL EDGE IS NOW ANSWERED TOO — `vis.cliff_face_diag`
 
-Composing all four run orientations turned up something the single-plateau test could not: on the
-**anti-diagonal** (screen E–W), *every* boundary tile has **both** its `+x` and `+y` neighbours
-low. So every tile is an outer corner, and the run comes out as a sawtooth with low ground
-showing between every pair of faces — the corner gap repeated the length of the ridge, not a
-wedge at one point.
+On the **anti-diagonal** (screen E–W) *every* boundary tile has **both** its `+x` and `+y`
+neighbours low, so the axis pieces gave a sawtooth: the outer-corner gap repeated the whole
+length of the ridge. **Fixed with a piece that spans a tile DIAGONAL (2.83 m) and stands on the
+tile's CORNER**, not its edge. Owner confirmed against a painted reference.
 
-**Nothing is asked of you yet.** It needs its own recipe and probably no new art, and it is mine.
-Flagged here only so that **a diagonal cliff is not wired until that piece exists**, because the
-table above will happily produce the sawtooth.
+| the LOW tile's HIGH neighbours | piece |
+|---|---|
+| `-x` **and** `-y` (a bottom notch, near E–W) | `vis.cliff_face_diag` **stored 4** |
+| `+x` **and** `+y` (a top notch, far E–W) | `vis.cliff_back_diag` **stored 4** |
+
+⚠️ **Note the addressing is by the LOW tile, not the high one** — a diagonal piece belongs to the
+notch between two high tiles, where the axis pieces belong to a high tile's edge. Both tables are
+live at once and a tile can want entries from each.
+
+Same four lengths, counted in **diagonal steps** of 2.83 m: `_diag` 1, `_diag_short` 3,
+`_diag_medium` 6, `_diag_long` 9.
+
+### ⛔ AND THE THING NOT TO SPEND TIME ON: THERE IS NO N–S CLIFF PIECE, AND THERE CANNOT BE
+
+A face along the main diagonal has normal `(1, -1, 0)`; the camera looks along `(1, 1, ·)`; the
+dot product is **zero**. That face is invisible **at any span** — which is why the 45° frames
+came back as slivers. **So the axis staircase on an N–S edge is not a stopgap**: the `+x` faces
+and `-y` crests it already draws are exactly what is visible there. Do not wait for a piece.
 
 ---
 

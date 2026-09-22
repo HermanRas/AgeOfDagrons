@@ -1,0 +1,39 @@
+# Cliff FAR edge, DIAGONAL -- the crest across a tile diagonal, no face.
+#
+# `cliff_face_diag.toml` says why a diagonal piece has to exist and how its span
+# and corner offset are derived; `cliff_back.toml` says why a far edge draws a
+# crest and not a face. This file is the intersection and repeats neither.
+#
+# A screen-axis plateau has FOUR edges and they are not alike: the near E-W edge
+# takes a diagonal FACE, the far E-W edge takes this, and the two N-S edges are
+# half of each because their low neighbours are one near and one far. Which
+# stored frame goes on which is measured by composing, never derived.
+id      = "vis.cliff_back_diag"
+adapter = "composite"
+
+[[source.parts]]
+name    = "crest"
+adapter = "terrain"
+texture = "Cliff_Gen/cliff_v2_s1_back.png"
+
+size_metres    = [2.828, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.414, -1.96]
+
+[render]
+canvas = [224, 288]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"
