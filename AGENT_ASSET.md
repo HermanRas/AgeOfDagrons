@@ -7,9 +7,14 @@ Its counterpart is [AGENT_GAME_CODER.md](AGENT_GAME_CODER.md). **Read both.** Th
 two agents share one working tree and one repo, and each owns a side of the fence
 described below.
 
-Last updated **2026-09-19** — the bridge became a per-tile set, which taught §4 that a tile
+Last updated **2026-09-22** — the owner settled the cliff as a FLAT drop-in (no plateau, so one
+bake per piece rather than one per terrain) and bought a second, DIAGONAL tile set for cliffs,
+bridges, walls and the shoreline. §4's four-usable-directions entry is now settled rather than
+open, and carries which half of a diagonal piece is free and which is not.
+
+Before that, **2026-09-19** — the bridge became a per-tile set, which taught §4 that a tile
 piece has only four usable directions and that a neighbour mask cannot tell a ribbon's end from
-its side. Both land on the cliff card next.
+its side. Both landed on the cliff card.
 
 Before that, **2026-09-01** — progress moved to a Kanban board (§1.1), and PLAN.md is
 now updated on the owner's request rather than as work lands.
@@ -902,11 +907,46 @@ facings a cliff run needs — but a cliff piece sits on the same square tile, so
 would be that same rectangle. A diagonal run is a STAIRCASE of tiles whose sides are not tile
 edges: it needs pieces whose face runs along the tile's DIAGONAL, which is different geometry
 (2.83 m long, not 2.0) and a second piece set, **not the other four rotations of the first**.
-Settle that before baking a corner set, not after.
 
-The corroboration is that 0 A.D. hit it too: `art/terrains/special/bridge_wood_{a,b,c}.xml` are
-three PRE-ROTATED plank textures, which is a strange thing to ship until you notice their
-terrain painter cannot rotate a texture per tile either.
+> ✅ **SETTLED 2026-09-22: THE OWNER BOUGHT THE SECOND SET**, for cliffs, bridges, walls and the
+> shoreline — board cards #119–#122, contract on `diagonal-tiles`. **And it RECONCILES the owner
+> answer rather than overturning it: four axis facings plus four diagonal facings IS the eight**,
+> delivered as two atlases instead of one. The construction splits in two, and only one half
+> costs anything:
+>
+> - **A STANDING part** — a cliff face, a bridge kerb, a wall — is thin, so it takes
+>   `yaw_deg = 45` on the composite PART while the subject still renders at the 90° multiples
+>   that keep the tile a diamond. `size_metres` goes 2.0 → 2.83. Free on `0e48a66` + `51123c1`.
+> - **A FLAT tile surface** cannot be rotated at all, so it needs either a pre-rotated texture
+>   or a diagonal-CUT tile — two triangles, two textures — which `_ground_tile` cannot make.
+>
+> ⚠️ **And a diagonal run of tiles meets only at a POINT**, so whether consecutive pieces butt
+> or read as disconnected stubs is unproven for every one of them. Compose a run and look at it.
+
+**The corroboration is that 0 A.D. hit it too, and its third texture is the measurement worth
+keeping.** `art/terrains/special/bridge_wood_{a,b,c}.xml` are three PRE-ROTATED plank textures —
+a strange thing to ship until you notice their terrain painter cannot rotate a texture per tile
+either. **`_b` is the 45° one**, measured 2026-09-22 as mean absolute luminance gradient per
+axis, wrapped because they tile:
+
+```
+                       |dx|    |dy|    diag NE-SW  diag NW-SE
+bridge_wood_a  512px   14.67    4.79      15.21       15.39
+bridge_wood_c  512px    4.79   14.67      15.39       15.21
+bridge_wood_b 1024px   16.53   16.67       8.32       25.36
+```
+
+**The discriminator is the SPLIT between the two diagonals, not their size.** A diagonal step
+crosses both axes and picks up `dx` either way, so `_a` and `_c` score high on both and agree
+within 1%; `_b` splits three to one, and the LOW side is the direction the boards RUN. It is
+also 1024 where the others are 512, which is what keeps board width at 45°.
+
+⚠️ **BUT THE DIAGONAL IS ONLY FREE WHERE THE THING THAT RUNS DIAGONALLY IS A REPEATING TEXTURE.**
+A BOUNDARY between two different terrains cannot be pre-rotated into existence, so a diagonal
+shoreline gets no such gift: 0 A.D.'s `_25`/`_50`/`_75` terrains are blend **DENSITIES, not
+directions**, because its engine alpha-blends terrain edges at draw time. Checked 2026-09-22
+across every `shoreline/` and `*_50` terrain. **Read the bridge's luck as a property of plank
+textures, not of diagonals.**
 
 > ⚠️ **AND DO NOT DERIVE WHICH EDGE A PART LANDS ON FROM THE YAW — MEASURE IT.** The
 > 8-direction path applies a base yaw of its own on top of the recipe's, so the SAME recipe

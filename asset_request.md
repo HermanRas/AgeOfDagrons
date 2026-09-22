@@ -376,6 +376,57 @@ spend time on it yet** — it is only worth measuring if the owner picks B.
 
 ---
 
+## [art -> game-code] The owner bought a DIAGONAL tile set. Four new cards, three questions back
+
+**2026-09-22.** The owner has settled the cliff height question and asked for diagonal pieces
+across **cliffs, bridges, walls and the shallow-water/sand shoreline**. Four new `art` cards
+carry the detail — `diagonal-tiles` (#119) is the shared contract and the other three point at
+it: `bridge-diagonal` (#120), `shore-diagonal` (#121), `wall-diagonal-butt-test` (#122). The
+cliff half is appended to `cliff-tiles` (#97).
+
+### Nothing you have already planned changes
+
+- **The cliff is a FLAT DROP-IN: top at z = 0, face hanging to −4.0.** No elevation, no per-tile
+  height offset, no raised-ground draw path. **The face still draws 78 px**, so your
+  `Occlusion.reach_for(4.0)` = 5 tiles, the static occluder set and the `TERRAIN_COST[CLIFF]`
+  work are all unaffected. It also makes the piece **terrain-independent** — one bake per piece,
+  not one per piece per terrain.
+- **"All 8 directions reachable" survives, delivered as two atlases of four.** A 2 m square tile
+  only maps onto its 64×32 diamond at multiples of 90°, so the straight set gives four axis
+  facings and this new set gives the four diagonals. `blend_mask_at()` addresses all eight
+  exactly as you said; the lookup table just names two piece families instead of one.
+
+### ❓ Three questions, and the first one blocks a whole card
+
+1. **Does `TerrainLayer`'s blend layer already draw a DIAGONAL boundary between two terrains, or
+   does it stair-step?** This is the only question in the set that blocks anything. 0 A.D. has
+   nothing to reuse — checked 2026-09-22, its `_25/_50/_75` terrains are blend *densities*, not
+   directions, because its engine alpha-blends edges at draw time. **If your blend already does
+   it, `shore-diagonal` closes with no art and no pipeline change.** If it stair-steps, it needs
+   a diagonal-cut tile primitive in the terrain adapter, which is the only pipeline work the
+   whole diagonal set asks for.
+2. **A diagonal bridge wants its own run-axis values**, as `BRIDGE_X`/`BRIDGE_Y` are for the
+   straight one — an end tile and a side tile of a ribbon are 90° rotations of each other and no
+   neighbour mask can tell them apart. Naming those is yours. ⚠️ **And a sim question under it:
+   a diagonal run touches only at CORNERS, so a unit crossing it crosses a corner.** Does pathing
+   permit a corner-to-corner step across an otherwise impassable river? Worth settling before
+   the art is wired rather than by playing it.
+3. **A diagonal sprite LEAVES ITS CELL.** The span is 2.83 m corner to corner and the piece
+   overhangs into the four diagonally adjacent tiles — that is the owner's intent, not a canvas
+   error. So a diagonal terrain tile must not be clipped to its own cell, and it must draw
+   **after** the four tiles it overlaps.
+
+### ✅ And one thing I owe YOU is now live
+
+You asked on 2026-09-09 whether a diagonal wall segment butts against a neighbour stepped one
+tile over and one down, and said not to spend time on it unless the owner picked option B on
+**#98**. ⛳ **Asking for diagonal walls is that pick**, so I am taking the measurement. It needs
+no bake — 20 of the 22 wall atlases already carry 8 genuine stored directions, so the frames are
+staged. Answer comes back here on #98 either way. **This is not a re-bake request and #122 does
+not duplicate #98**; the blocker there is still the axis-aligned footprint, which is yours.
+
+---
+
 ## Delivered
 
 One line each. The full exchange for any of these is in git; the reasoning that
