@@ -124,6 +124,16 @@ static func _tier_of(w: SimWorld, b: SimBuilding) -> BuildingDef:
 ## a wall segment. Read off the FOOTPRINT rather than `facing`, because the footprint
 ## is what decides which way the pieces have to line up, and the shortest segment is
 ## three tiles long so `[3, 2]` and `[2, 3]` can never be confused.
+##
+## ⛔ **A DIAGONAL SEGMENT FALLS THROUGH TO -1 ON PURPOSE, AND `plan()` THEN MERGES NOTHING**
+## (#98, 2026-09-22). Its claim is a SQUARE of its step -- `[2, 2]` for the short piece -- so
+## it matches neither branch, both of which require one side longer than `DEPTH`. That is the
+## right answer today rather than an oversight: merging replaces N pieces with one longer
+## piece **along an axis**, and a longer diagonal piece would claim a square big enough to
+## wall off the ground behind its own run (`WallPlan._plan_diagonal` has the arithmetic).
+## ⚠️ So a diagonal wall stays as many short segments and does not consolidate. **Widening
+## this to return a diagonal axis without first fixing that footprint problem would make
+## merging build exactly the thing the planner refuses to.**
 static func _axis_of(b: SimBuilding) -> int:
 	if b.footprint.y == WallPlan.DEPTH and b.footprint.x > WallPlan.DEPTH:
 		return WallPlan.AXIS_X

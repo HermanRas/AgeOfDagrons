@@ -683,7 +683,13 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 				# validator's opinion about what is in the way therefore matches what gets built.
 				var bd: BuildingDef = GameDataRegistry.building(def_id)
 				var footprint := bd.footprint
-				if axis == WallPlan.AXIS_Y:
+				# A DIAGONAL CLAIMS A SQUARE OF ITS STEP (#98) -- the same rule
+				# `MapData.footprint_rect_of` applies, taken from the same place, so the
+				# validator's opinion about what is in the way still matches what gets built.
+				if WallPlan.is_diagonal(axis):
+					var side := WallPlan.diagonal_step(footprint.x)
+					footprint = Vector2i(side, side)
+				elif axis == WallPlan.AXIS_Y:
 					footprint = Vector2i(footprint.y, footprint.x)
 				spawned = w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true,
 						footprint, WallPlan.FACING_FOR_AXIS[axis])

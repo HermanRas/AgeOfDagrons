@@ -41,12 +41,159 @@ func test_a_mostly_vertical_drag_makes_a_vertical_wall() -> void:
 	assert_eq(int(plan["axis"]), WallPlan.AXIS_Y)
 
 
-func test_a_square_drag_falls_to_the_x_axis() -> void:
-	# `>=` in the comparison, so an exactly-45-degree drag has a defined answer
-	# rather than depending on float noise. Which axis it picks matters less than
-	# that both hosts pick the same one.
+## ⛔ THIS ASSERTED `AXIS_X` UNTIL 2026-09-22, AND THE FLIP IS THE WHOLE OF #98.
+##
+## A 45-degree drag used to fall to the x axis because a diagonal wall could not be built:
+## the old comment said *"which axis it picks matters less than that both hosts pick the
+## same one"*, which was the honest answer while both choices were wrong. The owner's option
+## B made the diagonal a real wall, so the drag a player plainly meant as diagonal now lays
+## one. Kept as an edit rather than a new test so the reversal is visible in the diff.
+func test_a_square_drag_is_a_diagonal_wall() -> void:
 	var plan := WallPlan.plan(Vector2i(0, 0), Vector2i(9, 9), LENGTHS)
-	assert_eq(int(plan["axis"]), WallPlan.AXIS_X)
+	assert_eq(int(plan["axis"]), WallPlan.AXIS_D1)
+
+
+# ── the diagonals (#98) ─────────────────────────────────────────────────────
+
+## The sign pair is the only thing separating the two diagonals, and getting it backwards
+## draws a wall the mirror of the drag -- the same class of fault as the 2026-08-28 ninety
+## degrees, and just as invisible in a footprint.
+func test_the_sign_pair_picks_which_diagonal() -> void:
+	assert_eq(int(WallPlan.plan(Vector2i(0, 0), Vector2i(9, 9), LENGTHS)["axis"]),
+			WallPlan.AXIS_D1, "down-right is D1")
+	assert_eq(int(WallPlan.plan(Vector2i(0, 9), Vector2i(9, 0), LENGTHS)["axis"]),
+			WallPlan.AXIS_D2, "up-right is D2")
+	# And backwards along each, which must name the SAME axis -- the wall does not care
+	# which end the finger started at.
+	assert_eq(int(WallPlan.plan(Vector2i(9, 9), Vector2i(0, 0), LENGTHS)["axis"]),
+			WallPlan.AXIS_D1)
+	assert_eq(int(WallPlan.plan(Vector2i(9, 0), Vector2i(0, 9), LENGTHS)["axis"]),
+			WallPlan.AXIS_D2)
+
+
+## ⛔ THE BAND HAS TO HAVE EDGES, OR EVERY SLOPPY DRAG BECOMES A STAIRCASE.
+##
+## `test_a_mostly_horizontal_drag` above is the feature this could break: a wall dragged
+## roughly along an axis must stay an axis wall, because that is what almost every drag is.
+## The boundary is `tan(22.5°)`, the half-way line between an axis and a diagonal.
+func test_a_gentle_slope_is_still_an_axis_wall() -> void:
+	# 16 across and 4 down is well inside the axis half.
+	assert_eq(int(WallPlan.plan(Vector2i(0, 0), Vector2i(16, 4), LENGTHS)["axis"]),
+			WallPlan.AXIS_X)
+	# 12 across and 5 down is just past the line and is a diagonal.
+	assert_eq(int(WallPlan.plan(Vector2i(0, 0), Vector2i(12, 5), LENGTHS)["axis"]),
+			WallPlan.AXIS_D1)
+
+
+## ⛔ THE MEASURED TABLE, PINNED. These three numbers are the art side's, taken across all 20
+## eight-direction wall, gate and reinforced atlases on #122 -- `floor(length / sqrt(2))`.
+##
+## **Laid at the AXIS count instead, a diagonal run leaves a 50 px hole between every
+## segment.** That is the failure #98 named as the risk and the reason the card existed, so
+## it is pinned here rather than left to the drawing.
+func test_the_diagonal_step_is_the_measured_two_thirds() -> void:
+	assert_eq(WallPlan.diagonal_step(3), 2)
+	assert_eq(WallPlan.diagonal_step(6), 4)
+	assert_eq(WallPlan.diagonal_step(9), 6)
+
+
+## Integer, not `sqrt()`: the sim stays off floats (PLAN.md 7.1) and two hosts must agree
+## exactly. This holds the property the integer form is standing in for.
+##
+## ⚠️ **FROM 2 UPWARDS, BECAUSE LENGTH 1 IS CLAMPED AND THE CLAMP IS THE POINT.** This test
+## originally ran from 1 and failed, which is how the clamp came to be written down: a 1-tile
+## piece truly reaches `floor(1 / sqrt(2))` = 0, and `_plan_diagonal` advances its cursor by
+## this number, so the honest answer is a loop that never ends. The next test holds the clamp.
+func test_the_diagonal_step_never_exceeds_the_true_length() -> void:
+	for length in range(2, 40):
+		var s := WallPlan.diagonal_step(length)
+		assert_true(2 * s * s <= length * length,
+				"a %d-tile piece cannot reach %d diagonal tiles" % [length, s])
+		assert_true(2 * (s + 1) * (s + 1) > length * length,
+				"a %d-tile piece reaches further than %d" % [length, s])
+
+
+## ⛔ THE STEP IS NEVER ZERO, WHICH IS A LIVENESS PROPERTY AND NOT AN ARITHMETIC ONE.
+##
+## `_plan_diagonal` advances `offset` by the step until it reaches the run, so a step of 0
+## hangs the sim inside a tick. The shipped lengths are 3/6/9 and never reach this, so the
+## guard exists purely against a `wall_lengths` somebody adds later -- exactly the sort of
+## thing that is never exercised until it is, and by then it is a freeze rather than a bug.
+func test_the_step_is_never_zero_however_short_the_piece() -> void:
+	for length in range(0, 4):
+		assert_true(WallPlan.diagonal_step(length) >= 1,
+				"a %d-tile piece still advances the run" % length)
+
+
+## A diagonal segment claims a SQUARE, not a transposed box. `DEPTH` does not appear: at the
+## step actually laid, the square IS the two-tile band.
+func test_a_diagonal_segment_claims_a_square_of_its_step() -> void:
+	var plan := WallPlan.plan(Vector2i(0, 0), Vector2i(12, 12), LENGTHS)
+	for seg in plan["segments"]:
+		var f: Vector2i = seg["footprint"]
+		assert_eq(f.x, f.y, "a diagonal claim is square")
+		assert_eq(f.x, WallPlan.diagonal_step(int(seg["length"])))
+
+
+## ⛔ SHORTEST PIECE ONLY, AND IT IS A FOOTPRINT RULE RATHER THAN AN ART ONE.
+##
+## The medium and long pieces butt on a diagonal too -- the art measured all three -- so this
+## looks like an art limit and is not. A long piece steps 6, so it would claim a **36-tile**
+## square for a band of roughly 17, and the 19 spare tiles are the triangular corners OUTSIDE
+## the wall line: it would wall off the ground behind your own wall.
+func test_a_diagonal_run_uses_only_the_shortest_piece() -> void:
+	var plan := WallPlan.plan(Vector2i(0, 0), Vector2i(30, 30), LENGTHS)
+	assert_true(plan["segments"].size() > 1, "a long drag is several pieces")
+	for seg in plan["segments"]:
+		assert_eq(int(seg["length"]), 3, "every diagonal piece is the short one")
+
+
+## ⛔ THE PROPERTY THE WHOLE STAIRCASE RESTS ON: consecutive squares touch at a CORNER, with
+## no gap and no overlap.
+##
+## A gap is a wall a unit walks through. An overlap is a segment `can_place_building` refuses,
+## so the second half of the wall silently does not get built. Neither is visible in a
+## screenshot of one segment, which is why this is measured rather than looked at.
+##
+## ⚠️ **AND THE CORNER IS ONLY SEALED BECAUSE `PathService` USES
+## `DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES`** -- the diagonal move across the join has both of its
+## orthogonal neighbours inside these two squares. If that mode ever changes, this geometry
+## stops being a wall and nothing here will say so.
+func test_consecutive_diagonal_segments_touch_at_exactly_one_corner() -> void:
+	for target in [Vector2i(24, 24), Vector2i(24, -24)]:
+		var plan := WallPlan.plan(Vector2i(0, 0), target, LENGTHS)
+		var segs: Array = plan["segments"]
+		assert_true(segs.size() > 1)
+		for i in range(1, segs.size()):
+			var a := Rect2i(segs[i - 1]["origin"], segs[i - 1]["footprint"])
+			var b := Rect2i(segs[i]["origin"], segs[i]["footprint"])
+			assert_false(a.intersects(b),
+					"%s overlaps %s -- the second would be refused placement" % [a, b])
+			# Grown by one, they DO meet: that is corner contact rather than a gap.
+			assert_true(a.grow(1).intersects(b),
+					"%s and %s leave a hole a unit walks through" % [a, b])
+
+
+## All four axes draw a different one of the eight bakes. Two sharing a facing is a wall lying
+## across its own footprint -- and the diagonals are the pair most likely to be given the axis
+## table's entries by a later edit, because the constant is indexed by axis.
+func test_every_axis_gets_its_own_facing() -> void:
+	var seen: Dictionary = {}
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y, WallPlan.AXIS_D1, WallPlan.AXIS_D2]:
+		var facing: int = WallPlan.FACING_FOR_AXIS[axis]
+		assert_false(seen.has(facing), "axis %d reuses facing %d" % [axis, facing])
+		seen[facing] = true
+
+
+## ⛔ THESE ARE NUMBERS IN A FILE FORMAT, NOT NAMES IN CODE. `axis` is written into
+## `map.json` (16.4c) and indexes `FACING_FOR_AXIS`, so renumbering would silently rotate
+## every wall on every saved map. APPENDED for that reason, and `FormatGuard` checks all four
+## against the MapMaker's stand-in.
+func test_the_axis_values_are_the_ones_saved_maps_carry() -> void:
+	assert_eq(WallPlan.AXIS_X, 0)
+	assert_eq(WallPlan.AXIS_Y, 1)
+	assert_eq(WallPlan.AXIS_D1, 2)
+	assert_eq(WallPlan.AXIS_D2, 3)
 
 
 func test_the_footprint_is_transposed_for_a_vertical_wall() -> void:

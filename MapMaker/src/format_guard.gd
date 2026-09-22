@@ -193,7 +193,25 @@ const DECLARATIONS := [
 	{
 		"origin": "src/sim/wall_plan.gd",
 		"prefix": "const FACING_FOR_AXIS",
-		"expected": "const FACING_FOR_AXIS := [6, 0]",
+		"expected": "const FACING_FOR_AXIS := [6, 0, 5, 7]",
+		"used_by": "res://format/wall_plan.gd",
+	},
+	# ⚠️ **THE TWO DIAGONALS (#98, 2026-09-22), AND THEY ARE CHECKED FOR THE SAME REASON THE
+	# TWO ABOVE ARE: THEY ARE NUMBERS IN A FILE FORMAT.** `axis` in a saved `map.json` is an
+	# index into `FACING_FOR_AXIS`, so 2 and 3 now mean "a wall laid as a staircase down or
+	# across the screen". Appended rather than inserted, deliberately — every map written
+	# before today holds 0 or 1, and renumbering would rotate all of them at once, which is
+	# exactly what the `enum Type` row two entries up exists to catch.
+	{
+		"origin": "src/sim/wall_plan.gd",
+		"prefix": "const AXIS_D1",
+		"expected": "const AXIS_D1 := 2",
+		"used_by": "res://format/wall_plan.gd",
+	},
+	{
+		"origin": "src/sim/wall_plan.gd",
+		"prefix": "const AXIS_D2",
+		"expected": "const AXIS_D2 := 3",
 		"used_by": "res://format/wall_plan.gd",
 	},
 ]
