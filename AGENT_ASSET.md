@@ -954,6 +954,19 @@ textures, not of diagonals.**
 > time reasoning from `yaw_deg()` before checking. Differencing the composed bake against the
 > plain one, frame by frame, settles it in three lines: for `bridge_rail` the kerb lands on the
 > edge **opposite** the direction's name (stored 1 = SW puts it on NE).
+>
+> ✅ **AND THERE IS A CHEAPER INSTRUMENT THAN DIFFERENCING, STOLEN FROM THE GAME SIDE'S WALL
+> CHECK: THE SLOPE OF THE PIECE'S TOP EDGE.** A step along grid X is (+32, +16) screen px and
+> along grid Y is (−32, +16), so an edge running along X regresses to **slope +0.5** and one
+> along Y to **−0.5**. Take the topmost opaque pixel per column, trim the ends (the short
+> vertical sides are not the top edge), `polyfit` degree 1. It needs **one** bake rather than
+> two, and unlike differencing it works on a piece that has no plain counterpart.
+>
+> ⚠️ **It caught me on the cliff probe, where the recipe was RIGHT and my label was wrong.** The
+> face is authored at `offset_m = [0, −1, −2]` spanning bake-X, which reads as the −Y tile edge;
+> it measures **−0.497**, so **bake X maps to grid Y**. Two compositions built on the wrong axis
+> produced a row of fins that looked exactly like a bake fault. **When a composed run comes out
+> as fins, suspect your own axis before the bake's.**
 
 **A NEIGHBOUR MASK CANNOT TELL AN END OF A RIBBON FROM ITS SIDE, AND THE PROOF IS ONE LINE.**
 An end tile and a long-side tile of the same rectangle are **90° rotations of each other** —
