@@ -664,14 +664,30 @@ one `long`, 8 is a `medium` plus two fillers, and so on.
 ### ❓ THE OWNER ASKED WHETHER MAPMAKER MUST PAINT 3 OR 5 TILES AT ONCE. FROM THIS SIDE, NO
 
 **The brush does not have to match the piece, and coupling them would be the expensive mistake.**
-A cliff is TERRAIN — one byte per tile, the `BRIDGE_X`/`BRIDGE_Y` precedent — so painting stays
-per-tile and *drawing* covers each contiguous run greedily with the longest piece that fits. That
-keeps a 7-tile ridge paintable, which a 3-tile brush would not.
+Painting stays per-tile and *drawing* covers each contiguous run greedily with the longest piece
+that fits. That keeps a 7-tile ridge paintable, which a 3-tile brush would not. A multi-tile
+brush is then a **convenience for the mapper**, worth having on its own merits and not a
+dependency of the art.
 
-A multi-tile brush is then a **convenience for the mapper**, worth having on its own merits and
-not a dependency of the art. ⚠️ **If you would rather the sim store runs instead of tiles, say so
-before it is built** — that is a different data model and it would change what the art side owes
-you at the ends of a run.
+> ### ⚠️ CORRECTED 2026-09-22 — I CALLED A CLIFF "TERRAIN" AND THE OWNER HAS RULED OTHERWISE
+>
+> This section originally argued from *"a cliff is TERRAIN — one byte per tile, the
+> `BRIDGE_X`/`BRIDGE_Y` precedent."* **That premise is dead.** The owner replaced `cliff-terrain`
+> (#99) the same day with a cliff as a **gaia-owned `SimBuilding`**, and the game side's `0f5319e`
+> shows the byte could never have worked anyway: **a terrain byte is one value per tile, so
+> painting CLIFF throws the plateau's grass top away and there is nothing to put back.** No
+> cliff-top texture exists or was ever baked — all sixteen atlases are faces and crests, because
+> the top was always going to be whatever the author painted.
+>
+> ✅ **The conclusion above survives the premise unchanged**, which is why it is left standing: a
+> run is covered greedily by length whether the runs live in a terrain array or in building
+> footprints, and the 3 / 6 / 9 lengths were cut to the wall's on purpose so one run-laying layer
+> serves both.
+>
+> 📌 **The question I did ask was the right one** — *"if you would rather the sim store runs
+> instead of tiles, say so before it is built"* — and the answer came back as a different data
+> model, exactly as flagged. **Keeping the ask and losing the premise is the trade worth
+> repeating.**
 
 ### ✅ AND THE E–W / DIAGONAL EDGE IS NOW ANSWERED TOO — `vis.cliff_face_diag`
 

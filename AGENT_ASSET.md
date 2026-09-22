@@ -425,6 +425,21 @@ to eight colour variants that completed **zero** of eight. **So: run long batche
 background, and check `restore_art_sources.ps1` first thing in any session that follows an
 interrupted one.**
 
+⛔ **A GENERATED COLOUR RECIPE DOES NOT FOLLOW ITS PARENT. REGENERATE BEFORE YOU BAKE.**
+`recipes/player/*.toml` are written by `gen_player_colour_recipes.py` and then sit on disk
+unchanged for ever. Add an `[anims]` block to `villager.toml` and the eight colour recipes still
+carry the old set — dated **2026-08-28** when I hit this on 2026-09-22, four weeks stale.
+
+⚠️ **AND THE BAKE REPORTS `ok`, because a smaller anim set is not an error.** The tell is the
+FRAME COUNT against the parent: base `vis.villager` came out at **1056 frames** and
+`villager__blue` at **960** — exactly one 12-frame animation × 8 directions missing. Nothing else
+in the summary differs. **Compare the colour variant's frame count to the base's after any recipe
+change**, the same way §4 compares a WARN against the same recipe's previous log.
+
+```powershell
+python tools\gen_player_colour_recipes.py     # rewrites all 168; only the changed unit's 8 move
+```
+
 📌 **A CONTROL SEARCH IS HOW YOU KNOW AN EMPTY RESULT IS REAL.** Hunting the villager's farming
 clip I searched the actor XMLs for `farming.dae`, got nothing, and was one sentence from
 reporting it as an orphan 0 A.D. never wired. The control — searching for `gather_wood.dae`, a
@@ -1157,15 +1172,19 @@ with WinError 5. Delete contents, not the directory.
 > deletions** from its LFS setup — that is pre-existing, the files are all on disk, and it is
 > not yours to fix.
 >
-> **2. ⛔ RESTART THE VILLAGER COLOUR BAKES — 0 of 8 completed.** The owner approved the ~2 h
-> cost; the batch died with nothing to show, so it starts from the beginning:
+> **2. ⛔ REGENERATE THE COLOUR RECIPES, *THEN* BAKE. ~~0 of 8 completed~~ — DONE 2026-09-22,
+> and the first attempt was baking the WRONG THING.** Two of the eight had completed before
+> the account switch and both were useless: `recipes/player/*.toml` do not follow
+> `villager.toml`, so they still carried the pre-`work_farm` anim set from **2026-08-28**. The
+> bakes reported `ok`; the tell was **960 frames against the base's 1056**. See §4.
 >
 > ```powershell
+> python tools\gen_player_colour_recipes.py     # FIRST. Never skip after a parent change.
 > powershell -File tools\bake_batch.ps1 -RecipeDir recipes/player -Only "villager__" -Parallel 1
 > ```
 >
 > **`-Parallel 1` is not negotiable** for colour variants — all eight load an identical mesh
-> set and collide on every file (§4's race). ~14 min each. **Run it in the background and do
+> set and collide on every file (§4's race). ~10–14 min each. **Run it in the background and do
 > not let the session end while it runs**, which is the whole reason this block exists.
 >
 > **3. THEN stage all nine together and say so on `asset_request.md`.**

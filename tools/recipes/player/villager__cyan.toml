@@ -147,6 +147,38 @@ frames = 12
 fps = 12
 loop = true
 
+# Farming. Asked by the game side on 2026-09-20 -- "harvesting villagers working
+# fields look idle" -- and the answer to "is there a clip at all" is yes: 0 A.D.
+# has a FULLY WIRED `gather_grain` variant (`art/variants/biped/gather_grain.xml`
+# and its `female_` sibling) that nobody put in this recipe. It is exactly
+# parallel to the gather_tree / gather_ore / gather_meat above.
+#
+# ✅ AND IT IS WORTH A BAKE RATHER THAN AN ALIAS FOR A REASON MEASURED OFF THE
+# FRAMES, not assumed. The owner's request was to tell a working farmer from an
+# idle one AT A GLANCE, which is a SILHOUETTE question, and this clip differs
+# from its neighbours in the silhouette twice over:
+#
+#     work_farm   BENT FORWARD, hoe held LOW and horizontal, dragged along
+#                 the ground
+#     work_mine   upright, pick raised OVERHEAD
+#     work_chop   upright, axe raised OVERHEAD
+#
+# So `work_mine` was the game side's instinct and is the right instinct on
+# MOTION -- a downward swing is close to hoeing -- but it stands upright and
+# holds a pick, and reads as mining on a field. The posture separates them at
+# any zoom where the prop does not.
+#
+# ⚠️ `clip` names the VARIANT, and four variants declare the name `gather_grain`
+# (plain, `female_`, and two `_han`). Same trap as `carry_metal` above, but a
+# milder one than it looks: the `_han` pair differ only by a rice hat on the
+# `helmet` attachpoint, NOT by the tool, so a wrong pick here costs a hat rather
+# than the whole read. Checked on the frames -- hoe present, no hat.
+[anims.work_farm]
+clip = "gather_grain"
+frames = 12
+fps = 12
+loop = true
+
 [anims.die]
 clip = "Death"
 frames = 10
