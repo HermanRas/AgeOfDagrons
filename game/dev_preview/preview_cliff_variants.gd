@@ -395,27 +395,56 @@ func _pedestal(data: MapData, c: Vector2i, hu: int, hv: int) -> int:
 			var hnx := _high(t + Vector2i(-1, 0), c, hu, hv)
 			var hny := _high(t + Vector2i(0, -1), c, hu, hv)
 
+			# WHICH SCREEN SIDE ACTUALLY GOT A FACE. `+x` and `-y` are BOTH the screen-right
+			# side of a tile -- its lower-right and upper-right edges -- and `+y` and `-x` are
+			# both the screen-left. A grid-aligned plateau never has a drop on both edges of
+			# one side, so the two halves can be classified independently there. This shape
+			# does, on every tile of both N-S runs, which is the artifact the owner reported.
+			#
+			# ⚠️ **SET BY THE BRANCH THAT RUNS, NOT BY THE NEIGHBOUR TEST.** Reading them off
+			# `hx`/`hy` says "this side would have taken a face", which is a different claim at
+			# a near corner: there both neighbours are low, so the corner branch runs and lays
+			# a DIAGONAL or nothing at all -- and suppressing the crest on the strength of a
+			# face that was never laid is what emptied the two near corners.
+			var faced_right := false
+			var faced_left := false
+
 			if not hx and not hy:
-				if not _near_notch(t + Vector2i(1, 0), c, hu, hv) \
-						and not _near_notch(t + Vector2i(0, 1), c, hu, hv):
+				# ⛔ **SUPPRESSED ONLY WHEN BOTH SIDES ARE NOTCHES, NOT EITHER.** A notch beside
+				# this tile covers the gap on THAT side alone. Along the near run both sides
+				# have one and the corner piece really is redundant; at the run's END one side
+				# is off the plateau and has none, so the old `and` of two `not`s stood the
+				# whole corner down over a single covered side. That is the missing corner.
+				if not (_near_notch(t + Vector2i(1, 0), c, hu, hv) \
+						and _near_notch(t + Vector2i(0, 1), c, hu, hv)):
 					data.add_entity(&"building.cliff_face_diag", 0, t, 0, WallPlan.AXIS_D2)
 					laid += 1
 			elif not hx:
 				data.add_entity(&"building.cliff_face", 0, t, 0, WallPlan.AXIS_Y)
+				faced_right = true
 				laid += 1
 			elif not hy:
 				data.add_entity(&"building.cliff_face", 0, t, 0, WallPlan.AXIS_X)
+				faced_left = true
 				laid += 1
 
 			if not hnx and not hny:
-				if not _far_notch(t + Vector2i(-1, 0), c, hu, hv) \
-						and not _far_notch(t + Vector2i(0, -1), c, hu, hv):
+				# The crest's own corner, and the same `both` rule for the same reason.
+				if not (_far_notch(t + Vector2i(-1, 0), c, hu, hv) \
+						and _far_notch(t + Vector2i(0, -1), c, hu, hv)):
 					data.add_entity(&"building.cliff_back_diag", 0, t, 0, WallPlan.AXIS_D2)
 					laid += 1
-			elif not hnx:
+			# ⛔ **A CREST IS SUPPRESSED WHERE ITS OWN SCREEN SIDE ALREADY CARRIES A FACE**, and
+			# without this every tile of an N-S run draws both, from the same anchor. Measured
+			# off the atlas: `cliff_face` stored 3 is 54 px wide and reaches 103 px below its
+			# anchor while the run advances only 32 px a tile, so the faces alone overlap more
+			# than 3:1 and already cover the side solid. The crest laid over them is the
+			# repeating rubble seam down the middle of the owner's red boxes -- it was never a
+			# gap being filled, it is a second piece on top of a finished wall.
+			elif not hnx and not faced_left:
 				data.add_entity(&"building.cliff_back", 0, t, 0, WallPlan.AXIS_Y)
 				laid += 1
-			elif not hny:
+			elif not hny and not faced_right:
 				data.add_entity(&"building.cliff_back", 0, t, 0, WallPlan.AXIS_X)
 				laid += 1
 	return laid
