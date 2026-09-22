@@ -93,10 +93,18 @@ const ROW_AT := [0, 4, 11, 21]
 ## The same offsets down the column, which needs more room because the gate is 9 tall there.
 const COL_AT := [4, 8, 15, 25]
 
-## Player 1's town centre, and player 2's mirrored across the board. Far from every plot:
-## the walls are the thing being looked at and a base parked among them is clutter.
-const BASE_1 := Vector2i(12, 12)
-const BASE_2 := Vector2i(106, 106)
+## Player 1's town centre, and player 2's well away from it.
+##
+## ⚠️ **PLAYER 1 SITS DIRECTLY NORTH OF THE FIRST PLOT ON PURPOSE.** The camera opens on
+## player 1's start, so a base in the far corner would open the review on empty grass with the
+## thing being reviewed somewhere off screen -- a scroll on a desktop and a chore on a phone.
+## Fifteen tiles is close enough to see the wood plot from the opening frame and far enough
+## that the base is not standing in the shot.
+const BASE_1 := Vector2i(8, 28)
+
+## The opposite corner, because slot 2 is an AI in a two-player lobby and a review is not a
+## fight. Nothing about the map stops one -- it is a real match -- but the walk is long.
+const BASE_2 := Vector2i(100, 108)
 
 ## What each start gets standing next to it. Enough for `MapValidator.MIN_NEARBY` (4 wood,
 ## 1 gold, 1 stone, 1 food) with room to spare, so the map is a playable match and not just a
@@ -344,10 +352,20 @@ func _bases(data: MapData) -> void:
 
 		# Laid in a block beside the base rather than scattered: this is a review board, and
 		# where the trees are is the least interesting thing on it.
+		#
+		# ⛔ **BOUNDS-CHECKED, AND THAT IS NOT DEFENSIVE.** The first draft put player 2 in the
+		# far corner and this block ran two tiles off the east edge: `MapValidator` passed it,
+		# because it has no bounds rule for entities, and the nodes simply never spawned. So
+		# player 2 was quietly one gold short on a map that reported itself clean -- the exact
+		# failure `_check_world` exists to catch, arriving through the half of the map nobody
+		# was looking at. A refusal that says so is what turns it back into something visible.
 		var at := tc + Vector2i(13, 8)
 		var offset := 0
 		for row in NEARBY:
 			for i in int(row[1]):
-				data.add_entity(row[0] as StringName, 0,
-						at + Vector2i((offset % 6) * 2, (offset / 6) * 2))
+				var t := at + Vector2i((offset % 6) * 2, (offset / 6) * 2)
+				if not data.in_bounds(t):
+					print("  ! player %d's %s at %v is off the board" % [player, row[0], t])
+				else:
+					data.add_entity(row[0] as StringName, 0, t)
 				offset += 1
