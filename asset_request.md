@@ -563,9 +563,14 @@ that lands on the low ground in front, and on a far edge the identical fall land
 plateau's own tiles**. No yaw fixes it — it is gravity in screen space. A plateau therefore shows
 a face on its two near sides only, which is what AoE2 does.
 
-**CORNERS ARE STILL NOT CUT** — see the next section, where they turn out to be bigger than a
-corner. **The cliff set is deliberately NOT STAGED** until it is complete, because staging a
-partial set puts art in the game your table cannot address.
+✅ **THE SET IS COMPLETE AND STAGED — 16 atlases, `game/assets/atlases`, 2026-09-22.** Corners
+included; see the next section for the third rule and for the one piece that will never exist.
+Staging waited until the set was complete on purpose, because a partial set puts art in the game
+your table cannot address.
+
+⚠️ **IT IS STAGED, NOT WIRED, AND NOT PACKED.** `visuals.json` and the pack bump are yours — the
+same trap `vis.foundation_9x9` fell into, where a staged-but-unpacked asset draws correctly on
+this workstation and magenta on a device.
 
 ---
 

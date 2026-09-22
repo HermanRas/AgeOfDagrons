@@ -79,6 +79,24 @@ GAIN = 1.15
 #: here with a gain of 1.0 rather than left out, so the intent stays visible.
 TONE = {"v1": True, "v2": True, "v3": False}
 
+#: How much of the strip's TOP becomes the crest -- the far-edge piece, which
+#: shows the rocky lip of a plateau and nothing below it. Owner 2026-09-22.
+#:
+#: ⚠️ IT REPLACES A HAND CUT, and the two faults that cut had are both why this
+#: is a build step now rather than a file:
+#:   - 0.89 m tall, which is 25 px on screen against a 32 px tile diamond. It
+#:     read as a dark smear rather than a rim.
+#:   - 27% of its columns carried under a quarter of the lip's height, in two
+#:     holes 2.34 m and 1.88 m wide. The face strip has NO such columns, so
+#:     cutting from the toned face strip inherits its continuity for free.
+#: A one-tile piece showed 181 px of the strip and could sit between those holes
+#: forever, which is why they only appeared once the pieces got longer.
+CREST_METRES = 1.88
+#: The bottom of that, dissolved rather than ruled off. A straight horizontal cut
+#: reads as a sliced band; this one breaks up through the rock's own dark
+#: crevices, so the edge follows the stone.
+CREST_DISSOLVE_M = 0.60
+
 W = np.array([0.2126, 0.7152, 0.0722])
 
 
@@ -101,6 +119,42 @@ def tone(rgb: np.ndarray, a01: np.ndarray) -> np.ndarray:
     lum = rgb @ W
     want = np.clip((lum - lum[op].mean()) * GAIN + TARGET_MEAN, 1, 255)
     return np.clip(rgb * (want / np.maximum(lum, 1e-3))[..., None], 0, 255)
+
+
+def crest(rgb: np.ndarray, a01: np.ndarray, rows_per_m: float) -> np.ndarray:
+    """Alpha for the far-edge piece: the top `CREST_METRES`, dissolved at the foot.
+
+    Returns an alpha the same shape as the strip, so the crest and the face share
+    one canvas and one `texture_metres`. That shared canvas is what makes a near
+    edge and a far edge of the same plateau register by construction -- every
+    geometry number in cliff_back*.toml is copied from cliff_face*.toml and this
+    is the reason it may be.
+
+    The dissolve keeps the BRIGHTEST pixels longest, so the band breaks up
+    through shadowed crevices and leaves lit boulder tops standing. Thresholding
+    on the image's own luminance rather than on noise is what makes the edge
+    follow the stone instead of cutting across it.
+    """
+    h = a01.shape[0]
+    keep_rows = min(h, int(round(CREST_METRES * rows_per_m)))
+    band = max(1, int(round(CREST_DISSOLVE_M * rows_per_m)))
+    solid = max(0, keep_rows - band)
+
+    out = np.zeros_like(a01)
+    out[:solid] = a01[:solid]
+
+    if keep_rows > solid:
+        lum = rgb[solid:keep_rows] @ W
+        op = a01[solid:keep_rows] > 0.5
+        if op.any():
+            lo, hi = np.percentile(lum[op], [5, 95])
+            score = np.clip((lum - lo) / max(hi - lo, 1e-3), 0, 1)
+            t = np.linspace(0.0, 1.0, keep_rows - solid)[:, None]
+            out[solid:keep_rows] = np.where(score > t, a01[solid:keep_rows], 0.0)
+
+    # One blur pass so the dissolve is not single-pixel confetti, then clamp back
+    # under the strip's own alpha so it can never invent coverage.
+    return np.minimum(box_blur3(out), a01)
 
 
 def strips(a01: np.ndarray) -> list[tuple[int, int]]:
@@ -153,6 +207,15 @@ def main() -> int:
                 band_rgb, np.clip(band_a * 255, 0, 255)]).astype(np.uint8), "RGBA"
             ).save(OUT / f"{name}.png")
 
+            # The far-edge piece, cut from the TONED strip so it carries the same
+            # value as the face it meets at a corner. The hand cut it replaces was
+            # made before the tone curve and sat 11 points darker.
+            rows_per_m = h / (4.0 * h / face_px)
+            crest_a = crest(band_rgb, band_a, rows_per_m)
+            Image.fromarray(np.dstack([
+                band_rgb, np.clip(crest_a * 255, 0, 255)]).astype(np.uint8), "RGBA"
+            ).save(OUT / f"{name}_crest.png")
+
             lum = band_rgb @ W
             op = band_a > 0.5
             face_lum = float(lum[fy0:fy1][op[fy0:fy1]].mean())
@@ -168,6 +231,14 @@ def main() -> int:
                 "strip_m": round(4.0 * h / face_px, 3),
                 "face_luminance": round(face_lum, 1),
                 "separation_from_grass": round(abs(face_lum - 139.4), 1),
+                "crest_m": CREST_METRES,
+                "crest_px": int((crest_a > 0.5).any(axis=1).sum()),
+                # Columns carrying under a quarter of the tallest one. This is
+                # the number the hand cut failed on (27%), and it only shows up
+                # once a piece is long enough to cross a hole.
+                "crest_thin_cols_pct": round(100.0 * float(
+                    ((crest_a > 0.5).sum(axis=0)
+                     < 0.25 * max(1, (crest_a > 0.5).sum(axis=0).max())).mean()), 1),
             }
             r = report[name]
             print(f"  {name}: {r['strip_m']:.2f} m tall "

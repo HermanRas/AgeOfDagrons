@@ -21,29 +21,35 @@
 # MEASURED, not assumed: composed on a real far boundary.
 #
 # ------------------------------------------------------------------- THE ART
-# `assets/Cliff_Gen/cliff_v2_s1_back.png`, made by the owner from
-# `prepared/cliff_v2_s1.png` -- same 1024 x 423 canvas, opaque rows 0-70 only,
-# fully transparent below. **The shared canvas is what makes this work**: every
-# number below is copied from cliff_face.toml unchanged, so the crest lands in
-# exactly the same screen position as the face's own lip and a near edge and a
-# far edge of one plateau agree by construction rather than by adjustment.
+# `prepared/cliff_v2_s1_crest.png` -- the top 1.88 m of the TONED face strip,
+# dissolved at its foot, cut by `tools/prepare_cliff_faces.py` (`CREST_METRES`).
+# Same 1024 x 423 canvas as the face. **The shared canvas is what makes this
+# work**: every number below is copied from cliff_face.toml unchanged, so the
+# crest lands in exactly the same screen position as the face's own lip, and a
+# near edge and a far edge of one plateau agree by construction rather than by
+# adjustment.
 #
-# ⚠️ IT IS ~11 POINTS OF LUMINANCE DARKER THAN THE FACE'S LIP (111.6 against
-# 122.8 over the same rows), because it was cut before the tone curve rather
-# than after. On a crest ~14 px tall that is not expected to read; if it ever
-# does, re-cut it from the toned strip rather than toning this file twice.
+# ⚠️ IT REPLACES A HAND CUT (`assets/Cliff_Gen/cliff_v2_s1_back.png`, still
+# committed, no longer read), and both of that cut's faults are why this is a
+# build step now. Owner picked 1.88 m on 2026-09-22 after seeing both measured:
 #
-# ⚠️ AND IT IS A HAND-MADE MASTER, NOT A BUILD PRODUCT. It arrived in
-# `prepared/`, which is gitignored and rewritten by tools/prepare_cliff_faces.py,
-# so it was copied up beside the sheets where it is committed and safe. Do not
-# move it back.
+#   - 0.89 m tall = 25 px on screen against a 32 px tile diamond, so it read as
+#     a dark smear rather than a rim. 1.88 m is 149 rows against 71.
+#   - 27% of its columns carried under a quarter of the lip's height, in two
+#     holes 2.34 m and 1.88 m wide. The new cut measures 0.0%, because the face
+#     strip it comes from has no thin columns anywhere and it inherits that.
+#     ⚠️ Those holes were INVISIBLE until the pieces got longer: a one-tile
+#     piece shows 181 px of the strip and can sit between them forever.
+#
+# Cutting from the toned strip also closes the 11-point luminance gap the hand
+# cut carried, because it is now the same pixels as the face it meets.
 id      = "vis.cliff_back"
 adapter = "composite"
 
 [[source.parts]]
 name    = "crest"
 adapter = "terrain"
-texture = "Cliff_Gen/cliff_v2_s1_back.png"
+texture = "Cliff_Gen/prepared/cliff_v2_s1_crest.png"
 
 # EVERY NUMBER HERE IS cliff_face.toml's, DELIBERATELY UNCHANGED. Do not "tidy"
 # them to suit a piece that is only 71 px tall -- the shared geometry is the
@@ -68,4 +74,4 @@ licence = "Project asset"
 licence_url = "https://policies.google.com/terms"
 author = "Herman Ras (project owner)"
 author_url = "https://github.com/HermanRas/AgeOfDagrons"
-actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1, crest cut)"

@@ -15,7 +15,7 @@ adapter = "composite"
 [[source.parts]]
 name    = "crest"
 adapter = "terrain"
-texture = "Cliff_Gen/cliff_v2_s1_back.png"
+texture = "Cliff_Gen/prepared/cliff_v2_s1_crest.png"
 
 size_metres    = [8.485, 5.30]
 texture_metres = [16.0, 5.30]
@@ -37,4 +37,4 @@ licence = "Project asset"
 licence_url = "https://policies.google.com/terms"
 author = "Herman Ras (project owner)"
 author_url = "https://github.com/HermanRas/AgeOfDagrons"
-actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1, crest cut)"
