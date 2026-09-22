@@ -619,6 +619,19 @@ tile's CORNER**, not its edge. Owner confirmed against a painted reference.
 notch between two high tiles, where the axis pieces belong to a high tile's edge. Both tables are
 live at once and a tile can want entries from each.
 
+✅ **AND THE SAME TWO PIECES CLOSE THE OUTER CORNER, which is the last hole in the set.** A
+near-near corner has no notch tile — both its diagonal neighbours are low — so it is addressed by
+the **HIGH** corner instead. The piece stands 1.414 m toward `+x+y` of its anchor, which is that
+tile's south vertex, which is exactly where the wedge was:
+
+| a HIGH tile with | piece |
+|---|---|
+| `+x` **and** `+y` low (near-near corner) | `vis.cliff_face_diag` **stored 4** |
+| `-x` **and** `-y` low (far-far corner) | `vis.cliff_back_diag` **stored 4** |
+
+**So there are three rules, not four, and one pair of pieces serves all of them.** Composed and
+looked at on both plateau orientations.
+
 Same four lengths, counted in **diagonal steps** of 2.83 m: `_diag` 1, `_diag_short` 3,
 `_diag_medium` 6, `_diag_long` 9.
 
