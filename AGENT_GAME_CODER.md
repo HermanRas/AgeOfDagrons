@@ -823,11 +823,132 @@ carry `age_required`, which is a *gate*, not a skin.
 
 ## 7. Where things stand
 
+### ⏳ IN FLIGHT — WHERE TO PICK UP (2026-09-22, written at the owner's request)
+
+⚠️ **§2.1 says not to put a status narrative here, and this is not one — it is the half of the
+current work that is NOT on the board.** The owner asked for it explicitly (*"document progress in
+AGENT_GAME_CODER.md, i am going switch account, then you will know where to continue from"*), so it
+is agreement rather than drift, the same way §1's `tools/` rows are. **Status is still the board.**
+Everything below is either a decision that SUPERSEDES what a card says, or a measurement that cost
+real time to get.
+
+#### ⛔ THE ONE THAT WILL BITE: `cliff-terrain` (#99) NO LONGER DESCRIBES WHAT WE ARE BUILDING
+
+**#99's card says a cliff is a `SimMap.Terrain.CLIFF` byte and that *"MapData gains NOTHING"*. The
+owner reversed that on 2026-09-22 and the card has not been rewritten.** A session that reads #99
+and starts typing will build the wrong thing.
+
+> *"i am happy to use cliff like a wall for gaia and just make it un killable if its easier to
+> build, the footprint 3,6,9 is more like a building than a terrain, also impassable, so it will
+> play nice with pathfinding for free?"*
+
+**A cliff is a GAIA-OWNED `SimBuilding`, like a wall.** It is easier, and it is the only one of the
+two that works at all:
+
+⛔ **THE TERRAIN BYTE CANNOT WORK, AND THE REASON IS IN THE ART.** The owner's composed samples show
+a **grass plateau top with sand around it** — the top is ordinary terrain. A terrain byte is one
+value per tile, so painting `CLIFF` throws the surface away, and **there is no cliff-top texture to
+replace it with**: 7 `terrain.*` visuals are staged and all 16 cliff atlases are faces and crests.
+This was found by listing the staged atlases, not by reasoning, and it is the fact that killed the
+plan #99 spent two sessions writing.
+
+**Everything the entity route needs is already free. Verified against the code, not assumed:**
+
+| need | why it is free |
+|---|---|
+| blocks land pathing | `blocks_movement: true` → `blocking[i]=1`; `SimMap.is_passable` is `occupancy==0 or blocking==0` |
+| the dragon flies over | `is_passable` returns true for `Domain.AIR` **before** it reads occupancy (`sim_map.gd`, the 2026-09-04 fix) |
+| unkillable | `Diplomacy.is_enemy` returns `e is SimUnit` for owner 0 — a gaia **building** cannot be targeted. `AISystem` skips `owner_id == 0`; `AbilitySystem` requires `owner_id != 0` |
+| occludes units | entities are already in the occluder set built from the snapshot. ⛳ **This deletes one of the only two items #99 listed as "not free"** — the static occluder set |
+| "a cliff clean across the map" refused on save | `MapValidator` already floods around blocking buildings |
+| the plateau keeps its own surface | nothing touches the terrain array at all |
+
+📌 **THE PRECEDENT, AND IT SETTLES THE WHOLE SHAPE: `building.dragon_nest` IS ALREADY A GAIA
+`SimBuilding`** — `buildable: false`, `cost: {}`, `build_time_ticks: 0`, `blocks_movement: false`. A
+cliff is that def with `blocks_movement: true`. Gaia buildings are a solved case, not a new one.
+
+#### ⛳ THE BUILD ORDER, AND WHY #98 COMES FIRST NOW
+
+**#98 → #97/#99 → #120.** Doing cliffs as entities makes `wall-facings-reachable` (#98) the
+**shared foundation** rather than a parallel task, because a footprint is an axis-aligned `Rect2i`:
+the four AXIS cliff edges are fine, and the `_diag` pieces need exactly the staircase #98 is for.
+One run-laying layer serves walls and cliffs both, and **the 3 / 6 / 9 lengths are already the same
+numbers** — the art side cut the cliff pieces to `wall_short` / `_medium` / `_long` deliberately.
+
+**#98 is owner-ruled OPTION B (the staircase diagonal), 2026-09-22**, first as *"not right now, just
+update the card"* and then *"lets get going"*. The card carries the pricing; what it did not have
+until this week is the step:
+
+⛔ **THE DIAGONAL STEP IS NOT THE AXIS STEP — `floor(axis_tiles / sqrt(2))`.** Short 3→**2**, medium
+6→**4**, long/gate 9→**6**. A diagonal tile step is 2.83 m where an axis step is 2.0 m, so a piece
+laid at the axis count leaves a **50 px hole between every segment** — the "row of disconnected
+stubs" failure. Measured by the art side across all 20 eight-direction wall atlases; every length
+overlaps rather than gaps at the right step.
+
+**#120 is LAST because its art does not exist.** The diagonal deck texture is measured
+(`bridge_wood_b`, the 45° plank set 0 A.D. already ships) but nothing is baked or staged.
+
+#### 📐 THE CLIFF PLACEMENT RULES — the art side's, and NOT derivable from this side
+
+Three rules, one pair of diagonal pieces. ⚠️ **The addressing differs per rule and that is the part
+that will be got wrong**: two are keyed on the HIGH tile and one on the LOW notch, and both tables
+are live at once so one tile can want entries from each.
+
+| rule | addressed by | piece |
+|---|---|---|
+| axis edge | the **HIGH** tile's edge | `vis.cliff_face` stored 5 (`+y` low) / 3 (`+x` low), `vis.cliff_back` 1 (`−y`) / 7 (`−x`) |
+| E–W run | the **LOW** notch tile | `vis.cliff_face_diag` / `_back_diag` stored 4 |
+| outer corner | the **HIGH** corner tile | `vis.cliff_face_diag` / `_back_diag` stored 4 |
+
+✅ **Two things not to re-open:** the two FAR edges get **no face** — the fall projects straight down
+the screen, so on a far edge it would land on the plateau's own tiles, and no yaw fixes gravity in
+screen space. And there is **no N–S piece and cannot be** — that face's normal is perpendicular to
+the view direction, so it is invisible at any span. The axis staircase on an N–S edge is correct,
+not a stopgap.
+
+#### ⬜ OPEN, AND EACH IS ONE LINE FROM THE OWNER
+
+- **The hatchling and occlusion.** The owner ruled AIR is exempt from occlusion **everywhere**, not
+  just behind cliffs (*"full grown dragon in flight should not clip behind a towncentre or wall"*).
+  But *"full grown"* and `domain == AIR` are not the same set — `unit.dragon_baby` is also `air`.
+  Exempting the domain exempts the hatchling too. My lean is to exempt both; the alternative is a
+  `def_id == &"unit.dragon"` special case, which should be written deliberately if wanted. #99 has
+  the table.
+- **A pack bump for the 16 cliff atlases.** Staged is not packed, and staged-but-unpacked is exactly
+  what bit `vis.foundation_9x9`: correct on this workstation, **magenta on a device**.
+  `preview_art_pack` is the check that sees it.
+- **Cliff selectability.** I said I would make them unselectable unless told otherwise — the nest is
+  selectable only because 13.2c gave it a panel, and a cliff has nothing to say.
+
+#### ✅ LANDED THIS SESSION — three commits, suite green at 2764/2764
+
+- **`794e8cf` — 2.4c, SAVE MAP on the pause menu.** Writes `MatchConfig.map_data` (**never**
+  `world.map`, which is the board after an hour of play) to `user://maps/` via `MapFile.save`,
+  auto-named `Desert 2p 96x96 (seed 1)`. ⚠️ **It also moved the volume sliders OUT of the pause menu
+  into a shared `SoundOverlay`** that the front door now uses too: the sixth button and a 185 px
+  slider block came to **721 px in a 648 px viewport**, and the owner chose to keep the 76 px thumb
+  targets. Both SETTINGS buttons open one page now. The button **closes the menu**, because `_toast`
+  is added to the HUD long before the pause menu and a banner raised under it draws behind the dim.
+- **`be531dc` — `WallPlan.FACING_FOR_AXIS` is right, and its comment was not.** `[6, 0]` are **SIM**
+  facings; `Iso.sim_facing_to_sprite` is `posmod(7 - facing, 8)`, so they resolve to sprites **1
+  (SW)** and **7 (SE)**, the axis-aligned frames. Read as stored indices they are E and S, two of the
+  flat diagonals, and the constant looks backwards — which is how the art side came to raise it.
+  Nothing behavioural changed; the header now states the conversion.
+- **`a2a6586` — `licence_audit.py` is PASS again.** `ui/icons/cat_units.png` shipped in `085f83c`
+  undeclared. ⚠️ **`--write` cannot fix that class of row** — it regenerates from recipes and this
+  icon has none. **A red audit is red for BOTH agents**, which is why it is worth clearing the day it
+  is reported rather than when its feature is next touched.
+
 ### WHAT IS BUILT — the short version
 
 **Phases 0–13 and 15 are closed; Phase 16 is BUILT THROUGH 16.8, with 16.9 and 16.10 left.**
-Suites **game 2652/0** and **MapMaker 450/0**. **PLAN.md §11 carries every decision and the board
-carries status** — neither of them lives here.
+Suites **game 2764/0** (2026-09-22) and **MapMaker 450/0**. **PLAN.md §11 carries every decision and
+the board carries status** — neither of them lives here.
+
+⚠️ **A FULL GAME SUITE TAKES 8–16 MINUTES AND IS TIMING-SENSITIVE.** `test_tick_cost` asserts a
+wall-clock budget (`ms < 15.0`), so **a loaded workstation fails it and nothing is wrong**: it went
+red once on 2026-09-22 in a run that took 935 s against the usual 480 s, and passed on a quiet
+re-run with no code change. Run it in the BACKGROUND and do not run previews alongside it.
 
 ✅ **THE `Test` COLUMN IS EMPTY AS OF 2026-09-20.** The owner played all four cards that were in
 it — 16.6, 16.7, 16.8 and 12.4 — and each was waiting on the one check no suite can make. Worth
