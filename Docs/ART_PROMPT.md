@@ -1772,3 +1772,183 @@ get right are recorded above rather than here: `--import` before `load()`,
 `icon_normal_color` set to white so the theme cannot tint gold art, and
 `ToolIcons.SIZE` growing past 16 px at the reskin. `ToolIcons.for_tool()` is the whole
 seam.
+
+---
+
+# Part three — cliff faces (2026-09-22)
+
+The owner looked at the cliff probe (`cliff-tiles` #97) and rejected it: *"it does not
+look like a rock barrier, it looks more like a flat cliff that will be hard to blend to
+the terrains above and below it."* Both halves of that are correct and this part is the
+answer to them.
+
+## ⛔ READ THIS FIRST — A CLIFF IS NOT LIKE ANYTHING ELSE IN THIS FILE
+
+**Every other prompt here produces art with no geometric registration requirement.** An
+icon floats in its cell and only has to look good. A nine-patch has stretch margins, but
+those are one-dimensional and forgiving.
+
+**A cliff tile has to butt against its own neighbour pixel for pixel**, sit on an exact
+anchor, lie along a tile edge at the isometric 2:1 slope, and do all of that in four
+orientations that agree with each other. **Gemini cannot do that**, and no prompt will
+make it. AoE2's cliff tiles — the reference the owner sent — were *rendered from 3D
+geometry*, which is precisely why they tile.
+
+**So the split is: Gemini makes the MATERIAL, the bake makes the GEOMETRY.** We generate
+a cliff face as a flat, horizontally tileable strip with an alpha silhouette, and the
+terrain adapter maps it onto the quad it already places, orients and anchors. The
+pipeline keeps everything it already solves — tiling, anchor, 8 directions, the atlas
+contract, `attribution` — and Gemini supplies the only thing it is short of, which is
+how the rock looks.
+
+`TerrainAdapter` already accepts `source.texture` as a direct path beside
+`source.terrain`, so **this is a one-line recipe change**, not a pipeline feature.
+
+### ✅ AND THE ALPHA IS WHAT ANSWERS THE OWNER'S SECOND COMPLAINT
+
+A flat quad reads flat because its silhouette is a rectangle. Give the strip an
+irregular alpha and the silhouette stops being a rectangle:
+
+- **an irregular rocky LIP along the top**, breaking upward above the cliff edge, so the
+  rock grows out of the terrain above instead of meeting it at a ruled line;
+- **a broken BASE of boulders and scree** spilling downward onto the ground below, so
+  the bottom fades into the low terrain instead of stopping dead.
+
+That is exactly what the AoE2 reference does, and it costs nothing but transparency.
+
+### THE BAND GEOMETRY, because the strip is not just a picture
+
+Each strip is **16.0 m of cliff run by 6.0 m of height**, and the 6.0 m is divided:
+
+| part of the strip | world | why |
+|---|---|---|
+| top 1.0 m | **above** the cliff edge (z = 0 to +1.0) | the lip that overhangs the high ground |
+| middle 4.0 m | the face (z = 0 to −4.0) | the cliff proper — the owner's confirmed height |
+| bottom 1.0 m | **below** the face (z = −4.0 to −5.0) | scree and boulders on the low ground |
+
+So the recipe carries `size_metres = [2.0, 6.0]`, `texture_metres = [16.0, 6.0]` and an
+offset putting the quad's top at z = +1.0. **Eight tiles of cliff run per strip**, so a
+long run repeats every eight tiles rather than every one.
+
+### PALETTE — MEASURED OFF OUR OWN STAGED TERRAIN, NOT GUESSED
+
+This is the part most likely to go wrong, because **our terrain is pale and very flat**
+and the AoE2 reference is dark and high-contrast. Copied straight, a cliff looks pasted
+on. Read off the staged atlases 2026-09-22 (shadow / mid / highlight of the opaque
+pixels):
+
+| tile | shadow | mid | highlight |
+|---|---|---|---|
+| `terrain.grass` | `#708A3E` | `#819549` | `#939F54` |
+| `terrain.sand` | `#DBC284` | `#DEC587` | `#E1C78A` |
+| `terrain.rock` | `#D9D5CA` | `#DFDBD0` | `#E6E2D7` |
+| `terrain.dirt` | `#D2B97D` | `#D7BE81` | `#DEC587` |
+
+**Our ground tiles span barely 13 points of value.** A cliff FACE must have more range
+than that or it has no form — but its mid tone belongs in the `terrain.rock` family so
+it reads as the same world. The prompt below asks for a mid tone at `#CFC9BC` with
+shadows to `#6E6A61`, which is darker than any ground tile and still lighter than the
+reference.
+
+---
+
+## sheet_cliff_faces
+
+**Two strips. `assets/Cliff_Gen/sheet_cliff_faces.png`.**
+
+A new directory beside `assets/UI_Gen/`, same convention. Two variants rather than one
+because a forty-tile run of a single strip reads as stamped; mirroring each gives four
+apparent variations for two generations.
+
+⚠️ **Generate both strips in one pass and never re-roll one.** The rule from the UI
+sheets applies with more force here: two cliff strips lit differently, meeting in the
+middle of one run, is worse than one weaker strip.
+
+```
+A 1024x1024 image containing TWO wide horizontal strips of rocky cliff face, stacked.
+The FIRST strip occupies the band from y=0 to y=384. The SECOND strip occupies the band
+from y=384 to y=768. The entire bottom 256 pixels of the canvas is completely empty
+flat pure black.
+
+WHAT THIS IS: the rock face of a cliff, painted FLAT ON, as a straight orthographic
+elevation - like a photograph taken square to a cliff wall. This is a texture that will
+be wrapped onto 3D geometry later.
+
+ABSOLUTELY NOT ISOMETRIC. NO perspective, NO vanishing point, NO three-quarter view, NO
+ground plane, NO horizon, NO sky, NO top-down view. Do not draw a cliff sitting in a
+landscape. Draw only the wall of rock itself, square to the viewer.
+
+EACH STRIP HAS THREE HORIZONTAL ZONES, and the zones matter more than the detail:
+  - The TOP ~60 pixels: an IRREGULAR BROKEN LIP of rock. Knobbly outcrops, tufts of
+    rock and small boulders breaking upward with a ragged, uneven, natural upper
+    edge. This edge must be clearly irregular - never a straight line, never a smooth
+    curve. Flat pure black above it.
+  - The MIDDLE ~260 pixels: the cliff face proper. Weathered stone with strong
+    horizontal bedding, deep vertical cracks and fissures, chunky blocky forms with
+    real depth, deep shadow in the recesses and bright catchlights on the edges. It
+    must read unmistakably as a RUGGED ROCK BARRIER - something you could not walk up.
+    Not a smooth wall, not masonry, not a quarry cut, not brickwork.
+  - The BOTTOM ~60 pixels: a BROKEN BASE of loose fallen boulders, rubble and scree
+    piling downward and outward, with a ragged uneven lower edge that breaks up into
+    separate scattered rocks and stones. Flat pure black below and between them.
+
+SEAMLESS TILING, and this is a hard requirement: each strip must tile SEAMLESSLY left
+to right. The artwork running off the right edge continues exactly into the artwork
+entering from the left edge, so many copies placed end to end form one unbroken cliff
+with no visible repeat point, no seam and no mirrored symmetry.
+
+LIGHTING: a single soft sun from the upper left. Form shading is painted IN - deep
+ambient occlusion inside every crack and under every ledge, bright warm catchlights
+along the upper edges of the blocks. The rock must look three-dimensional and heavy.
+
+PALETTE: pale weathered limestone. Mid tone #CFC9BC, highlights up to #E6E2D7, shadows
+down to #6E6A61 in the deepest cracks. Faint warm sand #DEC587 dust in the lower
+recesses and on the scree. A very little muted lichen green #708A3E in a few damp
+crevices only. Overall the rock is LIGHT and CHALKY, never dark grey, never brown,
+never black rock.
+
+STYLE: richly rendered semi-realistic painted game art, smooth gradients, crisp
+anti-aliased edges. NOT pixel art. NOT flat vector. NOT cel-shaded outline art. NOT
+photographic.
+
+THE TWO STRIPS DIFFER only in the arrangement of their rock forms - one with taller
+narrower vertical columns and deeper fissures, one with broader flatter horizontal
+ledges and more fallen rubble at its base. Identical palette, identical lighting,
+identical level of detail, identical zone heights.
+
+BACKGROUND: flat pure black #000000 above each strip's lip, below each strip's scree,
+and across the whole bottom 256 pixel band. No gradient, no vignette, no glow, no
+texture in the black.
+
+ABSOLUTELY NO TEXT of any kind: no labels, no captions, no numbers, no letters, no
+watermark, no grid lines, no borders, no frames.
+```
+
+## What happens to the sheet after it comes back
+
+1. **Key the black to alpha**, exactly as `slice_ui_sheets.py` does — a flood of dark
+   reachable from the border, so enclosed dark crack pixels stay opaque.
+2. ⚠️ **CHECK THE TILING AND EXPECT TO FIX IT.** Gemini will very likely not deliver a
+   seamless left-right join; it is the single requirement above that it is worst at.
+   **Measure it** — difference the leftmost column against the rightmost and compare to
+   the noise floor — and if it fails, heal the seam by offsetting the strip by half its
+   width and painting out the join. A visible repeat is the one defect that a composed
+   run shows and a single frame never will.
+3. **Compose a run and look at it**, over real grass and sand, before anything is baked.
+   Twenty lines of PIL. Every lesson on `cliff-tiles` and `diagonal-tiles` says a tile
+   set's faults live between tiles.
+4. Point the recipe at it and bake.
+
+## ⚠️ ONE SMALL PIPELINE CHANGE THIS NEEDS, and it is the only one
+
+`TerrainAdapter` resolves a relative `source.texture` **against `paths.art_source`** —
+the 0 A.D. checkout — so a committed recipe cannot name our own generated art without an
+absolute machine-local path. It needs a root of its own in `isobake.local.toml`,
+mirroring `paths.models`. Small, and it is the same shape of change that let the generic
+adapter name a `.blend`.
+
+## 📌 AND THE ATTRIBUTION BLOCK CHANGES, which is easy to forget
+
+A cliff baked from this sheet is **not** 0 A.D. art. Its `[attribution]` must stop
+claiming Wildfire Games and CC-BY-SA, or `licence_audit.py` is being told something
+false. Generated art is ours — that was [P8]'s whole win.
