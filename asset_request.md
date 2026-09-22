@@ -399,18 +399,24 @@ cliff half is appended to `cliff-tiles` (#97).
 ### ❓ Three questions, and the first one blocks a whole card
 
 1. **Does `TerrainLayer`'s blend layer already draw a DIAGONAL boundary between two terrains, or
-   does it stair-step?** This is the only question in the set that blocks anything. 0 A.D. has
-   nothing to reuse — checked 2026-09-22, its `_25/_50/_75` terrains are blend *densities*, not
-   directions, because its engine alpha-blends edges at draw time. **If your blend already does
-   it, `shore-diagonal` closes with no art and no pipeline change.** If it stair-steps, it needs
-   a diagonal-cut tile primitive in the terrain adapter, which is the only pipeline work the
-   whole diagonal set asks for.
+   does it stair-step?** 0 A.D. has nothing to reuse — checked 2026-09-22, its `_25/_50/_75`
+   terrains are blend *densities*, not directions, because its engine alpha-blends edges at draw
+   time. If it stair-steps, a diagonal-cut tile primitive goes in the terrain adapter.
+   > ⚠️ **CORRECTION, same day: a "yes" SCOPES that work, it no longer cancels it.** I first
+   > wrote that the shoreline was the only item in the set needing a pipeline change. The owner
+   > has since settled the diagonal bridge as **2–3 tiles wide of full tiles with HALF TILES
+   > along each diagonal edge**, and a half tile is the same diagonal-cut primitive. **A bridge
+   > deck is a built thing that terrain blending never touches**, so the primitive gets written
+   > either way. Your answer still decides whether `shore-diagonal` closes with no art.
 2. **A diagonal bridge wants its own run-axis values**, as `BRIDGE_X`/`BRIDGE_Y` are for the
    straight one — an end tile and a side tile of a ribbon are 90° rotations of each other and no
-   neighbour mask can tell them apart. Naming those is yours. ⚠️ **And a sim question under it:
-   a diagonal run touches only at CORNERS, so a unit crossing it crosses a corner.** Does pathing
-   permit a corner-to-corner step across an otherwise impassable river? Worth settling before
-   the art is wired rather than by playing it.
+   neighbour mask can tell them apart. Naming those is yours, and it now needs to distinguish a
+   **full** deck tile from a **half** edge tile. ✅ **The passability question under it is
+   answered and costs you nothing new:** the owner's rule is that only full tiles are passable,
+   so half tiles are decorative and a single-wide diagonal bridge is not a crossing at all.
+   Per-tile passability as today; no corner-step rule to write. **The same answer confirms a
+   diagonal CLIFF and a diagonal WALL block properly** — nothing squeezes through the corner gap
+   in a staircase run.
 3. **A diagonal sprite LEAVES ITS CELL.** The span is 2.83 m corner to corner and the piece
    overhangs into the four diagonally adjacent tiles — that is the owner's intent, not a canvas
    error. So a diagonal terrain tile must not be clipped to its own cell, and it must draw
