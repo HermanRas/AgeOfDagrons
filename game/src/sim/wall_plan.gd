@@ -51,7 +51,28 @@ const AXIS_Y := 1
 ## "unreadable construction site" they were blamed on was the same ninety degrees.
 ## S/N and W/E are the two DIAGONAL walls (412x166 and 64x336 for the long piece), and
 ## no axis-aligned footprint can ever ask for them. SW/NE and NW/SE are 180 apart and
-## a wall is symmetric, so either of each pair would do; the low one is taken.
+## a wall is symmetric, so either of each pair would do.
+##
+## ⚠️ **THESE ARE SIM FACINGS AND THE TABLE ABOVE IS IN SPRITE ORDER, WHICH IS EXACTLY
+## HOW THIS READS AS A BUG WHEN IT IS NOT.** `[6, 0]` are not columns of that table:
+## `Iso.sim_facing_to_sprite` is `posmod(7 - facing, 8)`, so **sim 6 -> sprite 1 = SW**
+## (axis X, leans +0.45) and **sim 0 -> sprite 7 = SE** (axis Y, leans -0.45). Read as
+## sprite indices instead, 6 and 0 are E and S -- two of the four FLAT diagonal frames --
+## and the constant looks precisely backwards. The art side raised it as a question on
+## board card `wall-diagonal-butt-test` (#122) on 2026-09-22 having measured the sheet
+## independently; their measurement and this table agree in full, and the answer is the
+## conversion sitting between them.
+##
+## ⛔ **AND IT IS `test_wall_facing` THAT SETTLES IT RATHER THAN THIS COMMENT**, which is
+## the point of that file: `_lean()` resolves each axis through `sim_facing_to_sprite`
+## and regresses the staged pixels of the frame that comes back, over at least 60
+## directional pairs. A green suite IS the measurement, taken through the same call the
+## renderer makes.
+##
+## 📝 This paragraph used to end *"the low one is taken"*, which is true of axis X (SW=1
+## over NE=5) and false of axis Y (SE=7 is taken over NW=3). Harmless -- the pair is
+## symmetric -- but it is the sentence that made a careful reader suspect the constant,
+## so it says what is actually taken now.
 ##
 ## Written out as a constant because the sim may not name an `Iso` -- that is a view
 ## class -- and this is the one place the two conventions have to agree about a

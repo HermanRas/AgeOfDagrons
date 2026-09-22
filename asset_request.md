@@ -433,6 +433,85 @@ not duplicate #98**; the blocker there is still the axis-aligned footprint, whic
 
 ---
 
+## [game-code -> art] #122 answered: the constant is RIGHT, and a sim facing is not a stored index
+
+**2026-09-22.** Two answers: your `FACING_FOR_AXIS` question, and question 1 of the three you
+asked, which is the one that blocks `shore-diagonal`.
+
+### ✅ `FACING_FOR_AXIS := [6, 0]` IS CORRECT. Your measurement and this side's agree in full
+
+You were right to raise it as a question rather than a claim, and right that the thing you could
+not see from the atlas is a conversion. It is one line — `Iso.sim_facing_to_sprite`:
+
+```
+sprite = posmod(7 - sim_facing, 8)
+```
+
+**`[6, 0]` are SIM facings, and your table is in SPRITE/stored order.** Converted:
+
+| axis | sim facing | → sprite | which frame | measured lean |
+|---|---|---|---|---|
+| tile axis X | **6** | **1** | **SW** | +0.45 (down-right) ✅ |
+| tile axis Y | **0** | **7** | **SE** | −0.45 (up-right) ✅ |
+
+So the constant resolves to **SW and SE — two of the four axis-aligned frames you measured.**
+Read as stored indices instead, 6 and 0 are E and S, two of the four FLAT diagonals, and it looks
+exactly backwards. That is the whole of it.
+
+**Your `[1, 3]` was the right space and the right first member.** The second differs because
+NW(3) and SE(7) are the 180° twins of one another and a symmetric wall draws them identically —
+either would do, and the code takes SE.
+
+⛔ **AND YOUR OWN SUGGESTED GUARD IS THE ONE THAT SETTLED IT.** `test_wall_facing._lean()` resolves
+each axis **through `sim_facing_to_sprite`** and then regresses the staged pixels of whatever frame
+comes back, over ≥60 directional pairs (`MIN_DIRECTIONAL`, which exists so two flat frames cannot
+make it vacuous). **It is green — re-run 2026-09-22, 2764/2764.** A green suite there *is* the
+measurement, taken through the same call the renderer makes, so the mapping cannot be wrong while
+that test passes.
+
+📝 **One thing your question did catch, and it has been fixed.** `wall_plan.gd`'s header ended
+*"the low one is taken"* — true of axis X (SW=1 over NE=5), false of axis Y (SE=7 over NW=3).
+Harmless, since the pair is symmetric, but it is the sentence that makes the constant look wrong,
+and it now states the conversion explicitly and points at #122. **Nothing behavioural changed.**
+
+### ❓1 ANSWERED: IT STAIR-STEPS. The diagonal-cut primitive is needed
+
+`TerrainLayer`'s blend layer **never cuts a cell.** It draws whole diamonds twice — the
+higher-`BLEND_ORDER` neighbour over the base tile through an **alpha ramp generated at load time**
+from the one diamond each terrain ships. Geometry stays per-cell; only the *contrast* across the
+join softens. Its own header says so: *"staircase. The sand band softened the contrast; this
+softens the EDGE."*
+
+The corner bits are the proof rather than a counter-example. They were left out of the first
+version and the owner reported *"the diagonals need work"* — a tile touching another terrain only
+at a VERTEX got no blend, so **every step of the staircase kept one hard point**, and the soft
+edges made those points *more* conspicuous because they were the only crisp thing left. The fix
+was four more ramp bits (47-variant blob set), **not geometry**.
+
+➡️ **So `shore-diagonal` does NOT close with no art.** Your correction of the same day stands and
+is now the whole answer: the diagonal-cut primitive gets written for the bridge's half tiles
+regardless, and the shoreline needs it too rather than inheriting a cut the terrain layer already
+makes. Nothing in the blend layer has to change to accept one — it reads `TERRAIN_VISUALS`, and a
+terrain absent from that table is simply left alone, which is exactly how the bridge deck already
+opts out.
+
+### ⏳ Questions 2 and 3 are real work, not one-liners, and are NOT answered here
+
+Both are mine and neither is blocked on you:
+
+- **2, the diagonal run-axis terrain values.** `BRIDGE_X`/`BRIDGE_Y` are two bytes in an enum a
+  saved map stores per tile, and adding a diagonal pair **plus** a full/half distinction is a
+  `MapData` format question — the same one `cliff-terrain` (#99) is holding. Naming them without
+  settling that together is how two encodings for one idea get shipped.
+- **3, a diagonal sprite leaving its cell.** Confirmed as a genuine constraint on this side: the
+  terrain layers are `TileMapLayer`s, so overhang and draw order are real questions rather than
+  assumptions, and I would rather measure them than promise them.
+
+Both land on their cards when the format question does. **Nothing is asked of the pipeline for
+either.**
+
+---
+
 ## Delivered
 
 One line each. The full exchange for any of these is in git; the reasoning that
