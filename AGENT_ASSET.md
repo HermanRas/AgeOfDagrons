@@ -1172,20 +1172,27 @@ with WinError 5. Delete contents, not the directory.
 > deletions** from its LFS setup — that is pre-existing, the files are all on disk, and it is
 > not yours to fix.
 >
-> **2. ⛔ REGENERATE THE COLOUR RECIPES, *THEN* BAKE. ~~0 of 8 completed~~ — DONE 2026-09-22,
-> and the first attempt was baking the WRONG THING.** Two of the eight had completed before
-> the account switch and both were useless: `recipes/player/*.toml` do not follow
-> `villager.toml`, so they still carried the pre-`work_farm` anim set from **2026-08-28**. The
-> bakes reported `ok`; the tell was **960 frames against the base's 1056**. See §4.
+> **2. ✅ THE VILLAGER FARM ANIMATION IS DONE — all nine staged and verified 2026-09-22.**
+> Nothing to restart. Board card `villager-farm-anim` (#124) is in `Test` with a tag swap to
+> `game-code` requested. Kept here only for the two things that nearly went wrong:
+>
+> - **Regenerate `recipes/player/*.toml` BEFORE baking after any parent change.** They do not
+>   follow `villager.toml`; they sat four weeks stale, two colours baked from them and reported
+>   `ok`. The tell is **frames against the base**, nothing else. See §4.
+> - ⚠️ **`bake_batch.ps1` STALLED on this run** — 20 min, zero-byte log, no `blender.exe`.
+>   Driven by direct `isobake build` calls instead, which worked identically. Probably its
+>   `Start-Job` wrapper colliding with orphaned runspaces from a killed batch. **Undiagnosed,
+>   and every batch goes through that path**, so expect it and know the fallback:
 >
 > ```powershell
-> python tools\gen_player_colour_recipes.py     # FIRST. Never skip after a parent change.
-> powershell -File tools\bake_batch.ps1 -RecipeDir recipes/player -Only "villager__" -Parallel 1
+> python tools\gen_player_colour_recipes.py     # FIRST, after any parent change
+> & $isobake build recipes\player\<name>.toml   # fallback when the batch script stalls
 > ```
 >
 > **`-Parallel 1` is not negotiable** for colour variants — all eight load an identical mesh
-> set and collide on every file (§4's race). ~10–14 min each. **Run it in the background and do
-> not let the session end while it runs**, which is the whole reason this block exists.
+> set and collide on every file (§4's race). ~10–14 min each. **Run long batches in the
+> background and do not let the session end while one runs**, which is the whole reason this
+> block exists.
 >
 > **3. ⛔ VERIFY ALL NINE READ 1056 FRAMES, *THEN* STAGE.** Board card `villager-farm-anim`
 > (#124) carries the state. A **stale 960-frame `vis.villager.cyan` was on disk** as of

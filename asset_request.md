@@ -172,15 +172,32 @@ available later if standing-on-a-farm ever needs its own read.
 
 One `[anims.work_farm]` block on `villager.toml`. ⚠️ **It cost NINE bakes, not one** —
 `vis.villager` plus its 8 colour variants, and colour variants run at `-Parallel 1` because of
-§4's shared-`.dae` race. **Base is baked and verified: 1056 frames against 960**, and
-`anims.work_farm` reads `{fps 12, loop true, frames 12, first 864, clip "gather_grain"}`. The 8
-colour variants are running (~14 min each, owner approved the ~2 h).
+§4's shared-`.dae` race.
+
+### ✅ DELIVERED AND STAGED, 2026-09-22 — all nine, verified before staging
 
 **`work_farm` is the id**, matching `work_chop` / `work_mine` / `work_hunt` / `work_build`.
 
-⛔ **NOTHING IS STAGED YET, AND DELIBERATELY SO.** Staging the base alone would give a *grey*
-villager a farm animation and every coloured one none — the inconsistency would land on whichever
-player happened to pick a colour. All nine go together; **I will confirm here when they do.**
+| | |
+|---|---|
+| atlases | **9 of 9** in `game/assets/atlases` — 18 files, 20.1 MB |
+| frames | **1056 on every one** (960 without the clip) |
+| `work_farm` | `{fps 12, loop true, frames 12, first 864, clip "gather_grain"}`, read back off the **staged** `vis.villager.red` |
+| licence audit | **PASS**, 383 recipes |
+
+➡️ **Your half is the three lines you already diagnosed** — the GATHER branch casting a field's
+`SimBuilding` to `SimResourceNode`, so the sim sends `idle`. Point the building case at
+`work_farm` and `6.x-farm-work-anim` closes.
+
+⚠️ **STAGED, NOT PACKED.** Same trap `vis.foundation_9x9` fell into: correct on this workstation,
+**magenta on a device** with no staged tree. The pack bump is yours.
+
+📌 **One thing worth having from how this nearly went wrong**, because it is not villager-specific:
+`recipes/player/*.toml` are GENERATED and **do not follow their parent**. They sat four weeks
+stale after `villager.toml` changed, two colours baked from them and reported `ok` — a smaller
+anim set is not an error anywhere in the pipeline. **The only tell is the frame count against the
+base**, and one stale 960-frame atlas was still sitting in `out` at staging time. If you ever add
+a clip to a unit that has colour variants, regenerate first and count frames after.
 
 ---
 
