@@ -1,0 +1,137 @@
+# Cliff edge tile -- one battered rock face standing on one tile edge.
+#
+# The straight piece of the AoE2-style cliff set (board card `cliff-tiles`).
+# `diagonal-tiles` (#119) carries the diagonal half, which is this piece with
+# `yaw_deg = 45` on the part and a 2.83 m span.
+#
+# ---------------------------------------------------------------- THE MODEL
+# FLAT DROP-IN, owner 2026-09-22, against a raised-plateau alternative. The tile
+# top stays at z = 0 and the FACE HANGS DOWN. Consequences, both good:
+#
+#   - no elevation anywhere, so the game needs no per-tile height offset and no
+#     raised-ground draw path. The plateau interior is ordinary terrain.
+#   - the piece carries NO TOP QUAD, so it is TERRAIN-INDEPENDENT: one bake per
+#     piece, not one per piece per terrain.
+#
+# That is what AoE2 actually does -- the cliff reads as a cliff because of the
+# face, not because the ground behind it is higher.
+#
+# ⛔ THE SPRITE LEAVES ITS CELL, and the game side must honour it. The face hangs
+# ~78 px BELOW its own tile, so a cliff tile must NOT be clipped to its cell and
+# must draw AFTER the tiles it overlaps. Composed in one painter pass it comes
+# out as triangular teeth -- ground first, faces second.
+id      = "vis.cliff_face"
+adapter = "composite"
+
+# ------------------------------------------------------------------ the art
+# OUR OWN ART, and this is the first baked asset in the project that is not
+# 0 A.D. material. `assets/Cliff_Gen/sheet_cliff_faces_v2.jpg` is the committed
+# master (owner-generated, Google Gemini, Docs/ART_PROMPT.md Part three);
+# `prepared/` is a gitignored build step -- regenerate with
+#
+#     <venv>\python.exe tools\prepare_cliff_faces.py
+#
+# Resolved against `paths.art_gen`, added to isobake for exactly this.
+#
+# ⚠️ WHY v2_s1 AND NOT v1, MEASURED. A cliff has to SEPARATE from the ground it
+# stands on, because it is impassable and the player reads it at a glance:
+#
+#       sheet   face lum   face sd (form)   separation from grass (139.4)
+#       v1        141.1        43.8            1.7   <- the SAME VALUE as grass
+#       v2        147.6        48.9            8.2
+#       v3         57.3        27.8           82.1   <- darker than anything we ship
+#
+# v1 is unusable at any silhouette. v2 has the most form of the three and only
+# the wrong value, which is the half a tone curve can fix -- `prepare_cliff_faces.py`
+# takes it to lum 100.1, separation 39.3 and sd 55, i.e. MORE form than it
+# started with, because the gain expands contrast rather than flattening it.
+#
+# ⚠️ AND THE STRIP TILES, which Docs/ART_PROMPT.md predicted it would not. Wrap
+# seam x0.73-x1.10 of the ordinary adjacent-column difference on all six strips.
+# Nothing was healed by hand. Read that warning as "check it", not "expect it".
+[[source.parts]]
+name    = "face"
+adapter = "terrain"
+texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
+
+# MEASURED off the prepared strip (`prepared/zones.json`), not chosen. The strip
+# is three zones and only the middle one is the cliff:
+#
+#     lip   0.69 m   broken rock ABOVE the edge, growing out of the terrain above
+#     face  4.00 m   the cliff proper -- the owner's confirmed height
+#     scree 0.61 m   fallen boulders BELOW, breaking into the ground below
+#
+# so the quad is 5.30 m tall and its top sits at z = +0.69, putting the cliff
+# edge on z = 0 where it belongs. The lip and the scree are what answer the
+# owner's "hard to blend to the terrains above and below it": the silhouette
+# stops being a rectangle, which is the whole reason the art carries alpha.
+size_metres    = [2.0, 5.30]
+# 16.0 m of run per repeat = EIGHT TILES, so a long cliff repeats every eight
+# rather than every one. Vertically one repeat covers the whole strip.
+texture_metres = [16.0, 5.30]
+# 75 degrees, not 90. Probed both against real terrain: vertical reads as
+# masonry, battered reads as rock and shows a little of the face receding.
+pitch_deg      = 75.0
+# y = -1.0 is the tile boundary; z = -1.96 centres a 5.30 m quad whose top is at
+# +0.69. ⚠️ Which EDGE that lands on is measured below, never derived.
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+# The tile diamond is 64 x 32 and the face adds ~78 px below it, plus the lip
+# above. Interpolated and left generous; the clip-check is the authority.
+canvas = [192, 256]
+supersample = 4
+
+# ⚠️ 8 IS BAKED AND **TWO** FRAMES ARE USABLE, NOT FOUR. MEASURED BY COMPOSING
+# EVERY FRAME ONTO A REAL BOUNDARY, both ways round:
+#
+#     low ground on +Y  ->  stored 5 (NE)
+#     low ground on +X  ->  stored 3 (NW)
+#     low ground on -Y  ->  NO PIECE   (see below)
+#     low ground on -X  ->  NO PIECE
+#
+# Stored 0/2/4/6 are the 45-degree rotations and are not a tile edge at all --
+# the `vis.bridge_deck` rule. Stored 1 and 7 ARE tile-aligned, and they are the
+# 180-degree twins of 5 and 3, and they are still unusable:
+#
+# ⛔ A FACE ALWAYS FALLS DOWN-SCREEN, SO ONLY THE TWO NEAR EDGES CAN CARRY ONE.
+# The face runs from z = 0 to z = -4.6, which projects straight down the screen.
+# On a near edge (+X, +Y) that lands on the low ground in front, which is right.
+# On a FAR edge (-X, -Y) the same fall lands on the PLATEAU'S OWN TILES -- the
+# cliff hangs backwards into the high ground it belongs to. Composed and looked
+# at; it is unmistakable and no yaw fixes it, because it is gravity in screen
+# space and not an orientation.
+#
+# So a plateau shows a face on its two near sides only, which is what AoE2 does.
+# ⚠️ WHAT THE TWO FAR EDGES SHOULD DRAW IS AN OPEN QUESTION and it is not the
+# art's to settle alone: nothing at all (the terrain change carries it), or a
+# thin lip piece with no face. Raised on `cliff-tiles` (#97).
+directions = 8
+
+# Centred: the piece spans the origin rather than standing on it, so `anchor` is
+# the tile CENTRE and a face taller than its cell still lines up. Same as the
+# bridge set, deliberately, so a cliff and a bridge tile agree in a cell.
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# ⚠️ NOT 0 A.D. ART -- the first baked asset in the project that is not. These
+# five keys are the project's existing written-down position for generated art
+# (game/assets/LICENCES.md, evidence in GeminiCopyRight.md), not a placeholder.
+#
+# The TOOLING around it is board card `generated-art-attribution` (#123) and
+# deliberately out of scope here: `LICENCES.md`'s generated table is headed
+# "everything below derives from 0 A.D.", which these rows make false, and
+# `licence_audit.py --write` cannot know that.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+# `actor` is what `licence_audit.py` prints in the Origin column
+# (`attribution.actor or source.terrain`), and this recipe has neither an actor
+# nor a terrain -- it names a texture. Without this the row reads `--`, which is
+# true and useless. Filling it with the real origin is honest; whether the FIELD
+# should be called `actor` for a non-actor source is #123's to settle.
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1)"

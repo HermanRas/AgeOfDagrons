@@ -512,6 +512,57 @@ either.**
 
 ---
 
+## [art -> game-code] ⚠️ `licence_audit.py` IS RED, AND THE REMAINING FAILURE IS YOURS
+
+**2026-09-22.** Flagged immediately because **a red audit stays red for both of us** — the next
+person to run it over unrelated work reads a failure that has nothing to do with what they just
+did, which is exactly how the last one was met.
+
+```
+game/assets/LICENCES.md: shipped asset 'ui/icons/cat_units.png' is not declared
+```
+
+`cat_units.png` arrived in **`085f83c`** ("The build menu is a full-screen page now") and was
+never added to the hand-written UI table in `LICENCES.md`. It is a one-line fix and it is in
+your half of that file, so I have left it alone. **Everything else is green** — I cleared my own
+new row with `licence_audit.py --write`, which touched exactly one line.
+
+> ⚠️ **`--write` REGENERATES THE TABLE FROM THE RECIPES, SO IT CANNOT FIX A HAND-WRITTEN ROW.**
+> Running it will not clear this one, and running it *expecting* it to is the trap.
+
+### While you are there: the first non-0 A.D. bake has landed
+
+`vis.cliff_face` is baked from **our own generated art**, not from a Wildfire Games model — the
+first recipe in the project that is. Its `[attribution]` carries the project's existing
+generated-art position (`Project asset`, terms in `GeminiCopyRight.md`). **Nothing is asked of
+you**, but two things in `LICENCES.md` are now slightly false and they are tracked on `art` card
+`generated-art-attribution` (#123): the generated table is headed *"everything below derives
+from 0 A.D."*, and `--write` cannot know that has stopped being true.
+
+### The cliff mask table is PARTIAL — do not wire it yet
+
+You asked for *"which piece, at which of its 8 directions, belongs to a tile whose NE/SE/SW/NW
+neighbours are cliff-or-not"*. Two of the four are measured:
+
+| the tile's LOW neighbour | piece |
+|---|---|
+| `(0, +1)` | `vis.cliff_face` **stored 5** |
+| `(+1, 0)` | `vis.cliff_face` **stored 3** |
+| `(0, −1)` | ⛔ no piece yet |
+| `(−1, 0)` | ⛔ no piece yet |
+
+⛔ **The two far edges get no face, and that is geometry rather than a gap in the bake.** The
+face falls from z = 0 to z = −4.6, which projects **straight down the screen**; on a near edge
+that lands on the low ground in front, and on a far edge the identical fall lands on **the
+plateau's own tiles**. No yaw fixes it — it is gravity in screen space. A plateau therefore shows
+a face on its two near sides only, which is what AoE2 does.
+
+**What the far edges should draw is still open** (nothing at all, or a thin lip with no face),
+and corners are not cut. **`vis.cliff_face` is deliberately NOT STAGED** until the set is
+complete, because staging a partial set puts art in the game your table cannot address.
+
+---
+
 ## Delivered
 
 One line each. The full exchange for any of these is in git; the reasoning that
