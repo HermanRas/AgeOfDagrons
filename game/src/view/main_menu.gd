@@ -36,8 +36,6 @@ const _CREDITS_SCENE := "res://scenes/menu/Credits.tscn"
 const _HELP_SCENE := "res://scenes/menu/Help.tscn"
 const _SKIRMISH_SCENE := "res://scenes/menu/Skirmish.tscn"
 const _CAMPAIGN_SCENE := "res://scenes/menu/Campaign.tscn"
-## The same panel art `PauseMenu` uses, so the two SETTINGS pages match.
-const _PANEL_BG_PATH := "res://assets/ui/chrome/panel_hud.png"
 
 ## Roughly what the short banner holds -- `GameScene._SHORT_ALERT_CHARS`, restated here
 ## rather than reached for across scenes, because it is a measurement of the same widget.
@@ -73,8 +71,14 @@ const _SHORT_NOTE_CHARS := 44
 @onready var _title: Label = $PanelRoot/Title
 
 ## The SETTINGS overlay, built on first press and kept. See `_on_settings_pressed`.
-var _settings_overlay: CanvasLayer = null
-var _volume: VolumePanel = null
+##
+## ⚠️ **IT IS `SoundOverlay` SINCE 2026-09-22, AND IT USED TO BE 100 LINES OF THIS FILE.**
+## `PauseMenu` needed the same page when 2.4c's sixth button pushed the sliders out of it, so
+## the builder moved to its own class rather than being copied -- with every comment in it,
+## each of which records a layout mistake somebody already paid for. Both SETTINGS buttons in
+## the game now open the same page, which is what `VolumePanel`'s header always said was the
+## intent.
+var _settings_overlay: SoundOverlay = null
 
 
 func _ready() -> void:
@@ -128,130 +132,9 @@ func _ready() -> void:
 ## should not drift. A panel made in code cannot be silently reformatted.
 func _on_settings_pressed() -> void:
 	if _settings_overlay == null:
-		_settings_overlay = _build_settings_overlay()
+		_settings_overlay = SoundOverlay.new()
 		add_child(_settings_overlay)
-	_volume.refresh()
-	_settings_overlay.visible = true
-
-
-## A CanvasLayer, not a Control, and every bit of that matters -- the first
-## version of this was a plain `Control` child of the menu and produced a
-## screenshot with the volume labels sitting on top of fully-lit PLAY and
-## MULTIPLAYER buttons, unreadable.
-##
-## TWO SEPARATE MISTAKES, both worth naming because both look like z-order and
-## neither is:
-##
-## 1. **`set_anchors_preset` does not resize anything.** It sets the anchors and
-##    then adjusts the OFFSETS to preserve the control's current rect -- and a
-##    fresh `Control.new()` has a rect of zero. So the overlay was 0x0, its dim
-##    `ColorRect` was 0x0 and invisible, while the centered `VBoxContainer` still
-##    drew, because Godot does not clip children to a parent's rect unless asked.
-##    Content with no backdrop. `set_anchors_and_offsets_preset` sets both.
-## 2. **There was no panel behind the content.** `PauseMenu` draws
-##    `panel_background.png`; this drew straight onto the menu. A dim alone is not
-##    enough when what is underneath is bright gold lettering.
-##
-## A `CanvasLayer` on top of that makes the stacking explicit rather than
-## dependent on being the last child added, which is the sort of thing a later
-## `add_child` quietly breaks.
-func _build_settings_overlay() -> CanvasLayer:
-	var layer := CanvasLayer.new()
-	layer.layer = 10
-
-	var overlay := Control.new()
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# STOP, not IGNORE: the overlay has to swallow taps, or a thumb landing
-	# beside the panel presses the menu button behind it.
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.add_child(overlay)
-
-	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.72)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(dim)
-
-	# DERIVED, not guessed. The first attempt hardcoded 300 and the screenshot
-	# showed the Effects slider and the CLOSE button hanging out of the bottom of
-	# the frame -- the same class of mistake as PauseMenu's original 320. The
-	# panel is whatever its contents need, so adding a fourth row cannot repeat it.
-	const _TITLE_H := 24.0
-	const _SEP := 16.0
-	const _CLOSE_H := 44.0
-	const _CONTENT_TOP := 28.0
-	# 28, DOWN FROM 72, AND THE OLD NUMBER'S REASONING IS WORTH KEEPING because the
-	# trap it describes is real and this art simply does not have it. Kibyra's
-	# `panel_background.png` carried transparent padding, so its visible gold border
-	# sat roughly 36 px inside the rect it was stretched into: content that stayed
-	# inside the RECT still landed on top of the border, and the number had to be
-	# measured off a screenshot rather than reasoned about. `chrome/panel_hud.png` is
-	# a nine-patch with a 12 px border and no padding, so what content must clear is
-	# 12 -- and 28 leaves a comfortable gutter inside it at every panel size.
-	const _BOTTOM_MARGIN := 28.0
-	var content_height := (_TITLE_H + _SEP + VolumePanel.height()
-			+ _SEP + _CLOSE_H)
-	var panel_size := Vector2(
-		340.0, _CONTENT_TOP + content_height + _BOTTOM_MARGIN)
-
-	# ANCHORS AND OFFSETS SET BY HAND, not via PRESET_CENTER. Setting `position`
-	# and `size` after a preset does not stick: the preset has already written
-	# offsets for a zero-size rect and the next layout pass re-derives the rect
-	# from those, so the panel came out 308 px tall instead of the 379 asked for
-	# and the CLOSE button fell through the bottom of the frame. Four offsets
-	# against a 0.5/0.5 anchor fully determine the rect and nothing recomputes it.
-	var panel := Control.new()
-	panel.anchor_left = 0.5
-	panel.anchor_top = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_bottom = 0.5
-	panel.offset_left = -panel_size.x * 0.5
-	panel.offset_top = -panel_size.y * 0.5
-	panel.offset_right = panel_size.x * 0.5
-	panel.offset_bottom = panel_size.y * 0.5
-	overlay.add_child(panel)
-
-	if ResourceLoader.exists(_PANEL_BG_PATH):
-		var bg := NinePatchRect.new()
-		bg.texture = load(_PANEL_BG_PATH)
-		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-		bg.patch_margin_left = HudStyle.PANEL_MARGIN
-		bg.patch_margin_right = HudStyle.PANEL_MARGIN
-		bg.patch_margin_top = HudStyle.PANEL_MARGIN
-		bg.patch_margin_bottom = HudStyle.PANEL_MARGIN
-		bg.size = panel_size
-		panel.add_child(bg)
-	else:
-		# The panel art was gitignored third-party until 2026-08-30 and a fresh
-		# checkout genuinely had none. It commits now, so this branch has stopped
-		# being a routine state -- it is kept because it is one line and because
-		# without it the sliders draw straight onto the menu, which is the bug this
-		# whole comment is about.
-		var solid := ColorRect.new()
-		solid.color = Color(0.12, 0.10, 0.08, 0.98)
-		solid.size = panel_size
-		panel.add_child(solid)
-
-	var content_width := 240.0
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", int(_SEP))
-	box.position = Vector2((panel_size.x - content_width) * 0.5, _CONTENT_TOP)
-	panel.add_child(box)
-
-	var title := Label.new()
-	title.text = "SOUND"
-	UiFont.title(title, 20)
-	box.add_child(title)
-
-	_volume = VolumePanel.new(content_width)
-	box.add_child(_volume)
-
-	var close := Button.new()
-	close.text = "CLOSE"
-	close.custom_minimum_size = Vector2(content_width, _CLOSE_H)
-	close.pressed.connect(func() -> void: _settings_overlay.visible = false)
-	box.add_child(close)
-
-	return layer
+	_settings_overlay.open()
 
 
 ## PLAY is the campaign (12.3), which does not exist -- and the screen it opens says so

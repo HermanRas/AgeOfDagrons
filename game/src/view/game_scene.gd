@@ -659,6 +659,7 @@ func _build_hud() -> void:
 
 	_pause_menu = PauseMenu.new()
 	_pause_menu.save_requested.connect(_on_save_requested)
+	_pause_menu.save_map_requested.connect(_on_save_map_requested)
 	hud.add_child(_pause_menu)
 
 	# The three pages behind the other corner buttons (8.2b). Built here rather than
@@ -924,6 +925,61 @@ func _on_save_requested() -> void:
 		return
 	# LONG, because a save failure is a sentence and not a label -- `show_message`'s 320 px
 	# banner would cut it. `NoticeToast` holds its own centre across that swap (§6).
+	_toast.show_long_message(problems[0])
+
+
+## SAVE MAP (2.4c, unparked 2026-09-22). Writes the MAP to `user://maps/` and leaves the
+## match running.
+##
+## ## ⛔ THE CONFIG'S MAP, NEVER `host.world.map` -- AND THE TWO ARE NOT THE SAME FILE
+##
+## The card's rule, and it is the whole correctness argument. `cfg.map_data` is the map the
+## match STARTED on: the terrain, the starting positions and the entities an author or the
+## generator laid down. `world.map` is that map after an hour of play -- trees felled, mines
+## exhausted, buildings burnt down and foundations everywhere. Saving the live world would
+## write "a map layout you liked" as a scarred battlefield with somebody's half-built castle
+## in it, which is not what the owner asked for and is not reproducible as a starting
+## position for anybody.
+##
+## It also means this works on a JOINED CLIENT, unlike `_on_save_requested` above: the config
+## travels to every player, so there is no host to be. `PauseMenu._refresh_save` has the
+## longer note on why that is not the §6 trap it resembles.
+##
+## ## ⚠️ THE MATCH KEEPS RUNNING, WHICH IS THE OPPOSITE OF SAVE & EXIT
+##
+## No `Net.end_match_saved()` here, on the owner's split of 2026-09-04: Save Map is the one
+## you press *while playing* because you liked the board, and Save Game is the one for when
+## real life interrupts. Ending a match to bookmark its terrain would take the thing the
+## player was enjoying away as the price of keeping it.
+##
+## ## ⛔ THE MENU HAS ALREADY CLOSED BY THE TIME THIS RUNS, AND THE TOAST DEPENDS ON IT
+##
+## `PauseMenu._on_save_map_pressed` hides itself and restarts the clock BEFORE emitting. That
+## is not tidiness -- `_toast` is added to the HUD at the top of this file and the pause menu
+## a hundred lines later, so a banner raised under an open pause menu draws behind its dim and
+## cannot be read. The owner found it in a playtest: *"the menu remains open covering the
+## message behind it showing the map saved."* Every branch below answers with a toast and
+## nothing else, so if that panel is ever made to stay open again, this whole function goes
+## silent without a single line of it changing.
+func _on_save_map_requested() -> void:
+	var cfg := Net.match_config()
+	if cfg == null or cfg.map_data == null:
+		# A HUD that disables an option must also refuse underneath it (§4, the trust-boundary
+		# rule) -- `_on_save_requested`'s reasoning, for the same reason: the panel answered
+		# this when it OPENED, and a disabled button is not a guarantee about the next frame.
+		_toast.show_message("There is no map to save")
+		return
+
+	var name := SavedMaps.auto_name(cfg.map_data)
+	var problems := SavedMaps.save(cfg.map_data, name)
+	if problems.is_empty():
+		# A TOAST ON THE SUCCESS PATH HERE, unlike SAVE & EXIT, and the difference is that
+		# nothing is about to change scene: this is the only thing that will ever tell the
+		# player the press worked. "Saved map: Highlands 2p 128x128" is a label and fits the
+		# short banner's ~44 characters; the seed in the name is what pushes it over, so the
+		# banner takes the name without it.
+		_toast.show_message("Saved map: %s" % name.get_slice(" (seed", 0))
+		return
 	_toast.show_long_message(problems[0])
 
 

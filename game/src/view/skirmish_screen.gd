@@ -270,6 +270,13 @@ var _saved_dir: String = ""
 ## Discovered ONCE, when the panel is built. A player who saves a map mid-lobby is a case
 ## that cannot arise -- the Save Map button is on the pause menu, inside a match (11.3) --
 ## and re-scanning on every repaint would put a filesystem walk behind a preview refresh.
+##
+## ⚠️ **"ONCE" MEANS ONCE PER SCREEN, AND THAT IS WHAT MAKES 2.4c VISIBLE AT ALL.** The front
+## door reaches this screen with `change_scene_to_file`, so every visit constructs a new
+## `SkirmishScreen` and runs this again -- which is why a map saved during the last match is
+## in the picker when the player comes back for the next one. If this screen is ever CACHED
+## and re-shown instead, this line has to move to `_show()` the way `_saved_games` already
+## has, or a freshly saved map will be invisible until the game is restarted.
 var _saved_maps: Array[Dictionary] = []
 
 ## Why the chosen saved map would not load, or empty. Held rather than pushed straight into
@@ -928,10 +935,13 @@ func _build_map_setup() -> Control:
 ## wrong board. 1000 is far above any plausible enum and `_saved_index_of()` is the only
 ## thing that decodes it.
 ##
-## **NOTHING IS ADDED WHEN THERE ARE NO SAVED MAPS**, which is today: `maps/` does not exist
-## in a fresh clone, the Save Map button is parked (11.3), and no pack ships maps yet. So a
-## player who has never authored one sees the picker exactly as it was -- no separator, no
-## empty heading, nothing to explain.
+## **NOTHING IS ADDED WHEN THERE ARE NO SAVED MAPS**, which is a fresh clone: `maps/` does not
+## exist there and no pack ships maps yet. So a player who has never saved or authored one
+## sees the picker exactly as it was -- no separator, no empty heading, nothing to explain.
+##
+## ⚠️ **IT IS NO LONGER ALWAYS EMPTY.** This used to say "the Save Map button is parked
+## (11.3)"; it was unparked on 2026-09-22 and `SavedMaps.save()` now writes `user://maps/`, so
+## the Custom group is a routine sight rather than a branch nothing reaches.
 func _add_saved_map_items() -> void:
 	var loader := SavedMaps.new()
 	_saved_maps = loader.discover()

@@ -17,12 +17,39 @@ const ROOT := "user://test_saved_maps"
 var _n := 0
 
 
+## ⛔ THE CASE DIRECTORY IS WIPED, AND IT HAS TO BE -- `case_N` IS A RUN-TO-RUN NAME.
+##
+## `_n` is a test INDEX, and `user://` survives between runs, so `case_3` is whatever the
+## third test wrote *last time* until this run overwrites it. That is stable only while the
+## file's test list never changes -- and the moment 2.4c added tests, the third test became a
+## different test and inherited a stale map from the old one. It failed as
+## *"expected From Meta, got Lopsided"*: a map from another test, in another run, read back as
+## this one's.
+##
+## ⚠️ **A LEFTOVER DIRECTORY IS THEREFORE A FALSE PASS AS EASILY AS A FALSE FAILURE** -- a
+## test asserting a map IS listed would have been handed one by its predecessor. Wiping first
+## rather than cleaning up afterwards is what makes that independent of how the last run ended,
+## including a crash.
 func before_each() -> void:
 	_n += 1
+	_wipe(_root())
 
 
 func _root() -> String:
 	return "%s/case_%d" % [ROOT, _n]
+
+
+## Remove a directory and everything under it. `DirAccess.remove_absolute` refuses a
+## non-empty directory, so the files go first and the walk is depth-first.
+func _wipe(path: String) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	for file in dir.get_files():
+		DirAccess.remove_absolute(path.path_join(file))
+	for sub in dir.get_directories():
+		_wipe(path.path_join(sub))
+	DirAccess.remove_absolute(path)
 
 
 ## Write a map into `<root>/<folder>`, with `header` merged into its sidecar.
@@ -224,6 +251,133 @@ func test_the_roots_are_ordered_dev_then_content_then_saves() -> void:
 func test_the_save_root_is_not_inside_the_content_root() -> void:
 	assert_false(SavedMaps.SAVE_ROOT.begins_with(SavedMaps.CONTENT_ROOT),
 			"a player's saves must not live under installed content -- see PLAN.md 11.3")
+
+
+# ── writing one (2.4c) ──────────────────────────────────────────────────────
+
+## ⚠️ **THESE ARE THE ONLY TESTS HERE THAT TOUCH A REAL SHIPPING DIRECTORY.** Everything above
+## works in a scratch root, because `maps_in()` takes one; `save()` deliberately does not --
+## its whole job is to put a file where the game will find it, and a version that took a root
+## could be pointed at `res://` by a caller and would prove nothing about the rule it exists
+## to keep. So these write into `user://maps/` for real and `after_each` removes what they
+## wrote. The names are prefixed so a leftover is obvious rather than mistaken for a map the
+## developer saved while playing.
+const _TEST_MAP_NAME := "ZZ Test Fixture"
+
+func after_each() -> void:
+	var slug := SaveFile.slugify(_TEST_MAP_NAME)
+	if not slug.is_empty():
+		_wipe(SavedMaps.SAVE_ROOT.path_join(slug))
+
+
+## The round trip the button is for: save a map, and find it in the picker's own listing.
+##
+## ⛔ **`maps_in(SAVE_ROOT)` AND NOT A `FileAccess.file_exists`.** The claim worth testing is
+## not "two files appeared", it is "the picker will offer this" -- and those differ, because a
+## listing version-checks the sidecar and drops anything it cannot read. A map written in a
+## shape `read_header` rejects would pass a file-exists check and be invisible in the game.
+func test_a_saved_map_is_listed_by_the_loader_that_feeds_the_picker() -> void:
+	assert_eq(SavedMaps.save(_two_player_map(), _TEST_MAP_NAME), [] as Array[String])
+	var rows := SavedMaps.new().maps_in(SavedMaps.SAVE_ROOT)
+	var found := rows.filter(func(r: Dictionary) -> bool:
+		return str(r["name"]) == _TEST_MAP_NAME)
+	assert_eq(found.size(), 1, "the saved map should be offered exactly once")
+	assert_eq(int(found[0]["players"]), 2, "and with the seat count it can actually field")
+
+
+## What was written is the map that went in, terrain and all.
+##
+## `preview_saved_map`'s load-bearing step in miniature: a saver that wrote a DIFFERENT map
+## and a picker that listed it look identical from outside, and the only way to tell is to
+## read the file back and compare it to what was handed over.
+func test_the_written_map_reads_back_as_the_map_that_was_saved() -> void:
+	var original := _two_player_map()
+	assert_eq(SavedMaps.save(original, _TEST_MAP_NAME), [] as Array[String])
+
+	var problems: Array[String] = []
+	var back := MapFile.load_map(
+			SavedMaps.SAVE_ROOT.path_join(SaveFile.slugify(_TEST_MAP_NAME)), problems)
+	assert_eq(problems, [] as Array[String])
+	assert_not_null(back)
+	if back == null:
+		return
+	assert_eq(back.size, original.size)
+	assert_eq(back.terrain, original.terrain)
+	assert_eq(back.starts, original.starts)
+
+
+## ⛔ IT WRITES `user://maps/` AND NOTHING ELSE, WHICH IS 11.3's RULE AND NOT A DEFAULT.
+##
+## The dev override is repo-root `maps/` -- authored content under version control, and
+## editor-only. A save landing there would be a player's file in somebody's git status, and in
+## an exported build that root does not exist at all.
+func test_a_saved_map_lands_in_the_save_root() -> void:
+	assert_eq(SavedMaps.save(_two_player_map(), _TEST_MAP_NAME), [] as Array[String])
+	var dir := SavedMaps.SAVE_ROOT.path_join(SaveFile.slugify(_TEST_MAP_NAME))
+	assert_true(MapFile.exists_in(dir), "expected the pair in %s" % dir)
+
+
+## Saving twice REPLACES, and that is the point of naming a map after itself.
+##
+## `SaveFile.auto_name` puts the tick in a saved GAME's name so two presses cannot overwrite
+## each other; this does the opposite deliberately. A map does not change while the match runs,
+## so a second press describes the same map -- and a tick here would fill the picker with
+## identical rows the player then has to tell apart.
+func test_saving_the_same_map_twice_leaves_one_row() -> void:
+	assert_eq(SavedMaps.save(_two_player_map(), _TEST_MAP_NAME), [] as Array[String])
+	assert_eq(SavedMaps.save(_two_player_map(), _TEST_MAP_NAME), [] as Array[String])
+	var rows := SavedMaps.new().maps_in(SavedMaps.SAVE_ROOT).filter(
+			func(r: Dictionary) -> bool: return str(r["name"]) == _TEST_MAP_NAME)
+	assert_eq(rows.size(), 1, "the same map saved twice is one map")
+
+
+## A name with nothing to build a folder out of is REFUSED, not guessed at. `SaveFile.slugify`
+## is a whitelist, so this is also the test that a name of pure punctuation cannot reach the
+## filesystem at all.
+func test_a_name_with_no_letters_or_digits_is_refused() -> void:
+	var problems := SavedMaps.save(_two_player_map(), "...///...")
+	assert_eq(problems.size(), 1)
+	assert_true(problems[0].contains("no letters or digits"), problems[0])
+
+
+func test_saving_nothing_is_refused_rather_than_crashing() -> void:
+	var problems := SavedMaps.save(null, _TEST_MAP_NAME)
+	assert_eq(problems.size(), 1)
+
+
+# ── the automatic name (2.4c) ───────────────────────────────────────────────
+
+## ⛔ THE NAME DESCRIBES THE MAP, NOT THE MOMENT -- so it is STABLE across calls.
+##
+## This is the assertion that would fail if somebody added a timestamp or a tick to make names
+## unique, which is `SaveFile.auto_name`'s rule and is the wrong one here. Two presses in one
+## match must produce one name, or `test_saving_the_same_map_twice_leaves_one_row` becomes a
+## lie the moment the clock ticks over.
+func test_the_automatic_name_is_the_same_for_the_same_map() -> void:
+	var m := _two_player_map()
+	m.meta = {"type": int(MapGenerator.Type.RIVER), "players": 2, "seed": 4821}
+	assert_eq(SavedMaps.auto_name(m), SavedMaps.auto_name(m))
+
+
+## Everything a player needs to tell two saved maps apart, in one line: what kind of map, how
+## many seats, how big, and which seed made it.
+func test_the_automatic_name_carries_the_type_seats_size_and_seed() -> void:
+	var m := _two_player_map()
+	m.meta = {"type": int(MapGenerator.Type.RIVER), "players": 2, "seed": 4821}
+	var name := SavedMaps.auto_name(m)
+	assert_eq(name, "River 2p 12x10 (seed 4821)", name)
+
+
+## A map with no generator metadata -- one authored in the MapMaker, say -- still gets a
+## usable name rather than an empty one or a crash. "Random" is what `MapGenerator.type_name`
+## calls an unknown type and there is no point inventing a second word for it here.
+func test_a_map_with_no_metadata_still_gets_a_name() -> void:
+	var m := _two_player_map()
+	m.meta = {}
+	var name := SavedMaps.auto_name(m)
+	assert_false(name.strip_edges().is_empty())
+	assert_false(name.contains("seed"), "no seed is not a seed of zero: " + name)
+	assert_false(SaveFile.slugify(name).is_empty(), "and it must survive to a folder name")
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────

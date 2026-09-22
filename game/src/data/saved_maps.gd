@@ -23,10 +23,12 @@
 ##      never be able to overwrite somebody's save, and uninstalling it must never delete
 ##      one.
 ##
-## ⚠️ **ROOT 3 IS LISTED BEFORE ANYTHING WRITES TO IT.** The pause-menu Save Map button is
-## parked (11.3, the owner's ruling of 2026-09-04), so today this root is always empty. It
-## is here anyway because a picker that knows two of the three directories is a picker
-## somebody has to come back and extend, and the cost of the third is one array entry.
+## ✅ **ROOT 3 IS WRITTEN BY `save()` BELOW, AS OF 2026-09-22 (card 2.4c-save-button).** It
+## was listed for eighteen days before anything wrote to it, because the pause-menu Save Map
+## button was parked (11.3, the owner's ruling of 2026-09-04) -- listed anyway on the
+## argument that a picker knowing two of the three directories is one somebody has to come
+## back and extend. That bet paid: unparking the button added a writer here and changed
+## nothing about the reading side or the picker.
 ##
 ## ## THE OVERRIDE NEEDS NO CONFIG FILE
 ##
@@ -178,6 +180,83 @@ func maps_in(root: String, source: Source = Source.SAVE) -> Array[Dictionary]:
 			"source": source,
 		})
 	return out
+
+
+# ── writing one (2.4c, unparked 2026-09-22) ──────────────────────────────────────────────
+
+
+## The name a map saved from a match is given, with no typing (2.4c).
+##
+## ## ⛔ AUTO-NAMED, ON THE OWNER'S 12.4 RULING, AND THE CARD PREDATES IT
+##
+## `2.4c-save-button`'s own description still proposes "a name field". It was written on
+## 2026-09-04 and the owner settled the opposite on 2026-09-20 for the Save GAME button
+## beside this one: *auto-named, no typing.* A text field inside a match is the worst place
+## in the game to put one -- `emulate_mouse_from_touch` is off for the duration of a match,
+## the soft keyboard covers the field, and a tap cannot place the caret (two bugs open in
+## BUGS.md). Every word of that applies here, to a button on the same panel.
+##
+## ## ⚠️ THE NAME IS THE MAP'S IDENTITY, NOT THE MOMENT -- AND THAT IS THE DIFFERENCE
+##
+## `SaveFile.auto_name` puts the TICK in a saved game's name, so pressing Save twice cannot
+## silently replace the first file. This does the opposite on purpose: a map does not change
+## as the match runs, so two presses in one match describe the *same map*, and a tick here
+## would litter `user://maps/` with identical copies a player then has to tell apart in a
+## picker. Naming it after what it IS -- type, seats, size, seed -- means the second press
+## overwrites the first with an identical file, which is the outcome that needs no thought.
+##
+## `meta.players` is the count that STARTED here and `meta.size_players` is what it was sized
+## for; `MapGenerator` records both, and its own comment says a saved map that kept only one
+## "could not be reopened as the map it was". The name carries the seats, and the sidecar
+## carries both regardless.
+static func auto_name(data: MapData) -> String:
+	if data == null:
+		return ""
+	var type_id := int(data.meta.get("type", MapGenerator.Type.RANDOM))
+	var type := MapGenerator.type_name(type_id as MapGenerator.Type)
+	var players := int(data.meta.get("players", 0))
+	var seed_note := ""
+	if data.meta.has("seed"):
+		seed_note = " (seed %d)" % int(data.meta["seed"])
+	return "%s %dp %dx%d%s" % [type, players, data.size.x, data.size.y, seed_note]
+
+
+## Write `data` into `SAVE_ROOT` under `name`. Returns the complaints; empty means it is on
+## disk and `discover()` will list it.
+##
+## ## ⛔ `user://maps/`, NEVER `res://` -- AND THAT IS A RULE, NOT A DEFAULT
+##
+## The dev override (`roots()[0]`, repo-root `maps/`) is AUTHORED CONTENT UNDER VERSION
+## CONTROL and editor-only. A player's save has no business there, and in an exported build
+## that root does not exist at all. 11.3's rule is the one being kept: installing or
+## replacing content must never overwrite somebody's save, and uninstalling it must never
+## delete one -- which only holds while the two live in different directories.
+##
+## ## THE SLUG IS `SaveFile`'s, DELIBERATELY SHARED
+##
+## `SaveFile.slugify` is a pure whitelist -- lowercase letters, digits and dashes, nothing
+## that can climb out of a root -- and it is the check `PackDef._is_safe_segment()` argues
+## for. A second copy here would be a second thing to fix when somebody finds an encoding
+## that gets past it, which is exactly the duplication this repo has paid for four times.
+static func save(data: MapData, name: String) -> Array[String]:
+	var problems: Array[String] = []
+	if data == null:
+		problems.append("there is no map to save")
+		return problems
+	var slug := SaveFile.slugify(name)
+	if slug.is_empty():
+		problems.append("'%s' has no letters or digits in it to name a folder with" % name)
+		return problems
+
+	# MERGED OVER the derived fields by `MapFile.save`, which is what its `header` argument
+	# is for: the sidecar's TOP level gets the name a picker shows, while `meta` keeps the
+	# generator's own record (seed, type, both player counts) untouched underneath it.
+	# `SavedMaps._name_in` reads either, so neither placement is load-bearing -- but the top
+	# level is where a human editing the file by hand would look for it.
+	return MapFile.save(data, SAVE_ROOT.path_join(slug), {
+		"name": name,
+		"saved_at": int(Time.get_unix_time_from_system()),
+	})
 
 
 ## How many players this map can actually field.
