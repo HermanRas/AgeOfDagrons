@@ -310,19 +310,45 @@ func test_the_shims_say_what_the_guard_expects() -> void:
 				assert_eq(str(entry["expected"]), "const AXIS_X := %d" % WallPlan.AXIS_X)
 			"const AXIS_Y":
 				assert_eq(str(entry["expected"]), "const AXIS_Y := %d" % WallPlan.AXIS_Y)
+			# ⚠️ **THE TWO DIAGONALS (#98, 2026-09-22), AND THE NUMBERING IS THE WHOLE POINT.**
+			# `MapData`'s per-entity `axis` is an int that saved maps already contain, so these
+			# were APPENDED as 2 and 3 rather than inserted. A shim that disagreed about which
+			# number means which diagonal would rotate every diagonal wall on every map that
+			# has one, silently, with the footprint still correct.
+			"const AXIS_D1":
+				assert_eq(str(entry["expected"]), "const AXIS_D1 := %d" % WallPlan.AXIS_D1)
+			"const AXIS_D2":
+				assert_eq(str(entry["expected"]), "const AXIS_D2 := %d" % WallPlan.AXIS_D2)
 			"const FACING_FOR_AXIS":
 				# ⚠️ **REBUILT FROM THE SHIM'S OWN ARRAY**, `enum Type`'s reason: comparing the
 				# two as text would pass if both sides carried the same transposition, and a
 				# swapped facing table draws every authored wall ninety degrees out while every
 				# footprint stays right. **The index is the `axis` written into map files**, so
 				# this pair is a file format and not just a pair of numbers.
+				#
+				# ⛔ **AND IT IS BUILT FROM THE WHOLE ARRAY NOW, NOT FROM TWO NAMED ENTRIES.**
+				# It read `[%d, %d]` off `AXIS_X` and `AXIS_Y` alone, which was exact while
+				# there were two axes and became a HOLE the moment #98 added two more: the
+				# diagonal facings could have been anything, or missing, and this would have
+				# gone on passing. Building it from `size()` means the next axis is covered
+				# without anybody remembering to come back here.
+				var facings: Array[String] = []
+				for f in WallPlan.FACING_FOR_AXIS:
+					facings.append(str(int(f)))
 				assert_eq(str(entry["expected"]),
-						"const FACING_FOR_AXIS := [%d, %d]"
-						% [WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_X],
-						WallPlan.FACING_FOR_AXIS[WallPlan.AXIS_Y]])
+						"const FACING_FOR_AXIS := [%s]" % ", ".join(PackedStringArray(facings)))
 			_:
 				fail("declaration '%s' has no agreement test" % prefix)
 	for wanted in ["const SUBTILE", "enum Type", "const AXIS_X", "const AXIS_Y",
-			"const FACING_FOR_AXIS"]:
+			"const AXIS_D1", "const AXIS_D2", "const FACING_FOR_AXIS"]:
 		assert_true(seen.has(wanted),
 				"%s is missing from the guard's table, got %s" % [wanted, seen])
+	# ⛔ **EVERY AXIS THE GAME HAS IS GUARDED, counted rather than listed.** The check above
+	# is a fixed list and a fixed list is what went stale when #98 landed -- `AXIS_D1` and
+	# `AXIS_D2` existed in both projects for a day with no row asking whether they agreed.
+	var axis_rows := 0
+	for prefix in seen:
+		if prefix.begins_with("const AXIS_"):
+			axis_rows += 1
+	assert_eq(axis_rows, WallPlan.FACING_FOR_AXIS.size(),
+			"one guarded declaration per axis the game knows about")

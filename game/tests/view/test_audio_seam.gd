@@ -167,6 +167,22 @@ func test_every_unit_and_building_in_the_roster_has_a_sound() -> void:
 		assert_ne(reg.entity_sfx(id, &"death"), &"",
 				"%s has a death sound" % id)
 	for id in reg.building_ids():
+		# ⛔ **A CLIFF IS SILENT BECAUSE BOTH EVENTS ARE UNREACHABLE, AND THAT IS ASSERTED
+		# RATHER THAN ASSUMED** (#97, 2026-09-22). `complete` fires when a villager finishes
+		# a building and `select` when a player taps one; a cliff is placed COMPLETE by the
+		# map and cannot be tapped at all. A completion sound on one would be a sound that
+		# can never play, which is the same dead weight `test_the_entity_map_only_names_defs
+		# _that_exist` two tests up exists to refuse from the other direction.
+		#
+		# ⚠️ The two `assert_false`s are what keep this from being a hole: the exemption is
+		# only legitimate while those two properties hold, so a cliff that became selectable
+		# or buildable tomorrow lands back in the coverage rule instead of quietly staying
+		# out of it.
+		var bd: BuildingDef = reg.building(id)
+		if String(id).begins_with("building.cliff"):
+			assert_false(bd.selectable, "%s is exempt because nothing can select it" % id)
+			assert_false(bd.buildable, "%s is exempt because nothing builds it" % id)
+			continue
 		assert_ne(reg.entity_sfx(id, &"complete"), &"",
 				"%s has a completion sound" % id)
 		assert_ne(reg.entity_sfx(id, &"select"), &"",

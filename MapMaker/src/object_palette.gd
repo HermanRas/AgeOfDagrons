@@ -167,9 +167,17 @@ const START_LABEL := "Player Start"
 ##
 ## **Keyed by `WallPlan.AXIS_X` / `AXIS_Y`**, which are what `MapData`'s `axis` key holds and
 ## what `MapGen.build_from()` reads. There is no third naming of an axis anywhere.
+## ⚠️ **THE TWO DIAGONALS JOINED IT ON 2026-09-22 (#98/#97), AND THEIR NAMES ARE DERIVED THE
+## SAME WAY.** `Iso._project` is `((x - y) * 32, (x + y) * 16)`, so a step of **(+1, +1) is
+## (0, +32) — straight DOWN the screen**, and **(+1, -1) is (+64, 0) — straight ACROSS it**.
+## A run along `AXIS_D1` therefore reads as north–south on screen and one along `AXIS_D2` as
+## east–west, which is the opposite of what their tile-space names suggest and is exactly why
+## these are computed from the projection rather than named after the axis.
 const AXIS_LABELS := {
 	0: "NW-SE",                            # WallPlan.AXIS_X
 	1: "NE-SW",                            # WallPlan.AXIS_Y
+	2: "N-S",                              # WallPlan.AXIS_D1 -- steps (+1, +1), down-screen
+	3: "E-W",                              # WallPlan.AXIS_D2 -- steps (+1, -1), across
 }
 
 ## Suffix on a wall variant's id, so the two rotations are two rows with one def behind them.
@@ -601,7 +609,7 @@ func available_ids() -> Array[StringName]:
 		# variants rather than joined by them -- an author must choose a direction, because the
 		# map has to record one.
 		if _is_directional(id):
-			for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y]:
+			for axis in axes_for(id):
 				out.append(variant_id(id, axis))
 			continue
 		out.append(id)
@@ -623,6 +631,45 @@ func available_ids() -> Array[StringName]:
 ## `axis_variants: true` in `game/data/buildings.json`, on the twelve walls and gates.
 static func _is_directional(id: StringName) -> bool:
 	return GameDataRegistry.axis_variants(id)
+
+
+## Which axes this def gets a row for, in order.
+##
+## ## ⛔ IT WAS A FIXED PAIR AND THE OWNER FOUND BOTH WAYS THAT WAS WRONG (2026-09-22)
+##
+## *"i am also not seeing diagonal variations, both wall and cliff variants are missing some
+## option in mapmaker."* Two separate faults behind one sentence, and a hard-coded
+## `[AXIS_X, AXIS_Y]` caused both:
+##
+##   - **a wall has FOUR axes since #98** -- the staircase diagonals -- and the palette went
+##     on offering two, so the feature was reachable from a drag in game and from nothing at
+##     all in the tool that authors maps.
+##   - **a cliff has TWO or ONE depending on the piece.** There is no north-south cliff face
+##     and there cannot be one (that face's normal is perpendicular to the view direction),
+##     and the `_diag` pieces have a single usable frame however they are laid. A palette
+##     that offered four rows for those would be offering rows that draw the same picture.
+##
+## ✅ **SO IT IS DERIVED FROM THE DEF RATHER THAN LISTED.** `can_face` says which axes the
+## art exists for and `facing_for` says what each draws; two axes that resolve to the SAME
+## frame are one row, because two rows an author cannot tell apart is the fault this palette
+## already paid for once (see `TILE`'s note on the two label lines). A wall declares no
+## `facings`, so it gets all four and they are all distinct -- which is the old behaviour
+## plus the two #98 added, with nothing to keep in step by hand.
+static func axes_for(id: StringName) -> Array[int]:
+	var out: Array[int] = []
+	var bd: BuildingDef = GameDataRegistry.building(id)
+	if bd == null:
+		return out
+	var seen: Dictionary = {}
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y, WallPlan.AXIS_D1, WallPlan.AXIS_D2]:
+		if not bd.can_face(axis):
+			continue
+		var facing := bd.facing_for(axis)
+		if seen.has(facing):
+			continue
+		seen[facing] = true
+		out.append(axis)
+	return out
 
 
 ## `building.wall_stone_long` + `AXIS_Y` -> `building.wall_stone_long@axis1`.

@@ -162,6 +162,54 @@ var wall_lengths: Array[StringName] = []
 ## `PlaceWallCommand` is a perfectly legal placement of a def the menu will not show.
 var buildable: bool = true
 
+## Whether tapping this may select it. True for every building a player owns or could
+## ever care about, and false for a CLIFF (#97, 2026-09-22).
+##
+## ⚠️ **NOT THE SAME QUESTION AS `buildable`, and the dragon nest is the case that proves
+## it.** The nest is `buildable: false` and selectable, because 13.2c gave it a panel with
+## something to say — how long the claim has left. A cliff has nothing to say: no hp worth
+## reading (it cannot be attacked), no production, no garrison, no claim. Selecting one
+## would put an empty panel on screen and, worse, would eat the tap that was meant to
+## deselect: a plateau is a long line of entities and a player working next to one would
+## keep catching it.
+##
+## **IT IS A VIEW RULE AND IT IS ENFORCED IN `GameView.pick()` ALONE.** Nothing in the sim
+## reads it, deliberately — an order naming a cliff is already refused by `Diplomacy`, so
+## this is about what a tap resolves to and not about what the server will accept. That is
+## the same division `buildable` draws two lines up: the menu decides what it draws, and
+## `PlaceBuildingCommand` does not consult it.
+var selectable: bool = true
+
+## `{axis: sim facing}` for a def whose art is NOT symmetric about its run. Empty for
+## every wall and every other building, which is what makes this free.
+##
+## ## ⛔ WHY `WallPlan.FACING_FOR_AXIS` COULD NOT SIMPLY BE EXTENDED
+##
+## That table is ONE table for the whole game because a wall is symmetric: a segment baked
+## at sprite SW and the same segment at NE are the same wall, so either of each
+## 180-degree pair will do and one entry per axis is enough. **A cliff is one-sided.** Its
+## face hangs 4 m DOWN THE SCREEN, so the frame that is right on a plateau's near edge is
+## wrong on the far edge, where the identical fall would land on the high ground itself —
+## and `vis.cliff_face` and `vis.cliff_back` are therefore different art wanting different
+## frames on the SAME axis. No single table indexed by axis can say that; it has to be
+## indexed by axis AND by def, which is this.
+##
+## ## A DICTIONARY, BECAUSE AN ABSENT KEY IS A REAL ANSWER
+##
+## It means **this piece has no art for that axis**, which is a thing that is true and
+## worth being able to say: there is no N–S cliff face and there cannot be one (that
+## face's normal is perpendicular to the view direction, so it is invisible at any span),
+## and the axis families have nothing for a diagonal. A four-entry list would have to hold
+## *something* in those slots, and whatever went there would draw a frame that is merely
+## wrong rather than a mistake somebody can see. `MapValidator` reports a map that places
+## one on an axis its def cannot draw.
+##
+## ⚠️ **THE VALUES ARE SIM FACINGS.** The art side's table is in stored/sprite order and
+## the two run opposite ways (`Iso.sim_facing_to_sprite` is `posmod(7 - facing, 8)`), which
+## is exactly the trap `WallPlan`'s header records for `[6, 0]`. buildings.json's
+## `_note_cliffs` carries the conversion for all five frames.
+var facings: Dictionary = {}
+
 ## Whether a destroyed one leaves wreckage for a minute before clearing (13.2b). True
 ## for every building in the roster except `building.dragon_nest`.
 ##
@@ -287,6 +335,17 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 
 	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
 	b.buildable = bool(d.get("buildable", true))
+	b.selectable = bool(d.get("selectable", true))
+	# ⚠️ **KEYS AND VALUES BOTH FORCED TO INT, and neither is paranoia.** A JSON object's
+	# keys are STRINGS, so `{"0": 2}` arrives with the key `"0"` and `facings[0]` would find
+	# nothing — the axis is an int everywhere else in the codebase. And JSON numbers decode
+	# as floats, which is the trap `MapData.from_dict` already documents for `axis` and
+	# `size_class`: a facing of `2.0` reaches `spawn_building` and indexes nothing.
+	var raw_facings: Variant = d.get("facings", {})
+	b.facings = {}
+	if raw_facings is Dictionary:
+		for key in (raw_facings as Dictionary):
+			b.facings[int(str(key))] = int((raw_facings as Dictionary)[key])
 	b.leaves_rubble = bool(d.get("leaves_rubble", true))
 	b.is_gate = bool(d.get("is_gate", false))
 	# A LIST, and a BARE STRING IS STILL READ as a one-target list. `GameDefs.name_list`
@@ -329,6 +388,39 @@ func accepts_drop_off(kind: StringName) -> bool:
 ## Whether a drag lays this down as a run of segments rather than placing one.
 func is_wall_run() -> bool:
 	return not wall_lengths.is_empty()
+
+
+## Whether this def has art for a run along `axis` (`WallPlan.AXIS_*`).
+##
+## ⚠️ **TRUE FOR EVERY BUILDING THAT DECLARES NO `facings`, INCLUDING ON A DIAGONAL.** A
+## wall really can be laid four ways — that is what #98 built — and everything else in the
+## roster is placed without an axis at all, so it is never asked. Only a def that has
+## *said* which axes it can draw gets held to the list.
+func can_face(axis: int) -> bool:
+	return facings.is_empty() or facings.has(axis)
+
+
+## The SIM facing to spawn this at when it is laid along `axis`.
+##
+## ⛔ **THE FALLBACK IS `WallPlan.FACING_FOR_AXIS`, AND IT IS WHAT KEEPS THIS CHANGE FREE.**
+## Twelve wall defs, six committed maps and every `PlaceWallCommand` go on reading exactly
+## the table they always did, because an empty `facings` is what they all have.
+##
+## ⚠️ **AN AXIS THIS DEF CANNOT DRAW FALLS BACK TO ITS LOWEST DECLARED ONE RATHER THAN
+## FAILING**, because this runs inside `MapGen.build_from` where there is nobody to tell:
+## a map that names an impossible axis still has to build into a world, or a hand-edited
+## file takes the whole match down. **`MapValidator` is where that map is caught**, with an
+## author in front of it and a sentence to read — the same division `MapData.from_dict`
+## draws when it silently drops an override key nothing reads. Lowest-declared rather than
+## a default, so two hosts building the same bad map still build the same world.
+func facing_for(axis: int) -> int:
+	if facings.is_empty():
+		return int(WallPlan.FACING_FOR_AXIS[axis])
+	if facings.has(axis):
+		return int(facings[axis])
+	var keys := facings.keys()
+	keys.sort()
+	return int(facings[keys[0]])
 
 
 ## Whether a villager can harvest this building at all -- true for a field and

@@ -1062,3 +1062,66 @@ func test_a_snapshot_that_says_nothing_about_the_claim_keeps_the_last_one() -> v
 	assert_true(view.claim_running(), "still running")
 	assert_eq(view.claim_owner(), 2)
 	assert_almost_eq(view.claim_progress(), 0.5, 0.001)
+
+
+# ── scenery: what a tap may land on, and what may be hidden (#97) ────────────
+
+
+## A cliff is scenery, so a tap goes through it (`BuildingDef.selectable`).
+##
+## ⚠️ **THE CASE THAT MATTERS IS THE ONE BELOW IT, NOT THIS ONE.** An empty selection panel
+## is merely untidy; a plateau is a LONG LINE of entities, so a player working beside one
+## would keep catching a cliff with the tap that was meant to deselect.
+func test_a_cliff_cannot_be_tapped() -> void:
+	view.apply_snapshot(_snapshot_of(1, "building.cliff_face_long", Vector2i(6, 6),
+			{"phase": SimBuilding.Phase.COMPLETE}))
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(6, 6))), 0,
+			"the tap goes through it")
+
+
+func test_an_ordinary_building_on_the_same_tile_still_can_be() -> void:
+	# The control: without it the test above passes just as well on a `pick()` that has
+	# stopped resolving anything at all.
+	view.apply_snapshot(_snapshot_of(2, "building.market", Vector2i(6, 6),
+			{"phase": SimBuilding.Phase.COMPLETE}))
+	assert_eq(view.pick(Iso.tile_centre_to_world(Vector2i(6, 6))), 2)
+
+
+## ⛔ THE OWNER'S RULE IS EVERYWHERE, NOT JUST BEHIND CLIFFS (2026-09-22): *"full grown
+## dragon in flight should not clip behind a towncentre or wall."*
+##
+## Asserted against a TOWN CENTRE deliberately, because that is the half of the rule a
+## cliff-shaped fix would have missed — leaving cliffs out of the occluder set would have
+## looked like it worked and been wrong about every other building in the game.
+func test_a_flier_is_never_hidden_behind_a_building() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		_entry(1, "building.town_center", Vector2i(10, 10),
+				{"phase": SimBuilding.Phase.COMPLETE}),
+		_entry(2, "unit.dragon", Vector2i(3, 3)),
+	], "removed": []})
+	assert_false(view.pool.get_view(2).occluded, "it is over the board, not behind it")
+
+
+## ⚠️ **AND THE HATCHLING IS EXEMPT TOO, WHICH IS A DECISION AND NOT A SIDE EFFECT.**
+## *"Full grown"* and `domain == air` are not the same set. Exempting the DOMAIN is the rule
+## that stays true when a second flier is added, where a `def_id == &"unit.dragon"` special
+## case would quietly not cover it — and a hatchling that vanishes behind a house while its
+## mother does not would read as a bug in the one that works. The owner has the alternative.
+func test_the_hatchling_is_exempt_on_the_same_rule_as_its_mother() -> void:
+	view.apply_snapshot({"tick": 1, "updated": [
+		_entry(1, "building.town_center", Vector2i(10, 10),
+				{"phase": SimBuilding.Phase.COMPLETE}),
+		_entry(2, "unit.dragon_baby", Vector2i(3, 3)),
+	], "removed": []})
+	assert_false(view.pool.get_view(2).occluded)
+
+
+func test_a_land_unit_behind_the_same_building_is_still_hidden() -> void:
+	# The control again, and the one that would catch an exemption written too wide: a
+	# villager behind a town centre is exactly what the halo exists for.
+	view.apply_snapshot({"tick": 1, "updated": [
+		_entry(1, "building.town_center", Vector2i(10, 10),
+				{"phase": SimBuilding.Phase.COMPLETE}),
+		_entry(2, "unit.villager", Vector2i(3, 3)),
+	], "removed": []})
+	assert_true(view.pool.get_view(2).occluded, "a walker really is behind it")

@@ -336,6 +336,204 @@
     }
   },
 
+  "_note_cliffs": [
+    "A CLIFF IS A GAIA BUILDING, NOT A TERRAIN BYTE (owner, 2026-09-22, reversing what",
+    "board card #99 still says). `vis.` rather than `terrain.` for that reason, and these",
+    "are resolved by the ordinary building path -- there is no BRIDGE_PIECES-style table",
+    "and TerrainLayer never sees them.",
+    "",
+    "WHY THE BYTE COULD NOT WORK, since the card still argues for it: the owner's samples",
+    "show a grass plateau with sand around it, so the TOP is ordinary terrain. A terrain",
+    "byte is one value per tile, so painting CLIFF throws that surface away -- and there",
+    "is no cliff-top texture to replace it with. All 16 atlases below are faces and",
+    "crests; the seven `terrain.*` ids above are the whole terrain set.",
+    "",
+    "FOUR FAMILIES x FOUR LENGTHS. `face` is the near side -- 4.0 m of rock hanging down",
+    "the screen -- and `back` is the far side, where the same fall would land on the high",
+    "ground itself, so it draws a 1.88 m crest and no face. `_diag` is the E-W run and the",
+    "outer corner, which the axis pieces cannot cover because the tiles on that boundary",
+    "touch only at their corners. The lengths are 1 / 3 / 6 / 9 tiles, which are the",
+    "WALL's lengths on the owner's instruction to 'match a medium or long wall'.",
+    "",
+    "THE LENGTH IS NOT ABOUT COVERING GROUND, IT IS ABOUT THE REPEAT. Every piece shows a",
+    "window onto one 16 m strip, so a 1-tile piece shows the same 2 m of rock on every",
+    "tile of a run -- one rock column stamped every 64 px. `long` is the only length that",
+    "shows the whole strip. The 1-tile piece stays as the FILLER that lets a run of any",
+    "length close.",
+    "",
+    "ONLY SOME STORED DIRECTIONS ARE DRAWABLE, exactly as `_note_bridge` records for the",
+    "deck: the axis families use stored 5 / 3 (face) and 1 / 7 (back), and the `_diag`",
+    "families use stored 4 alone. `building.cliff_*` in buildings.json carries the sim",
+    "facings that resolve to those, and `_note_cliffs` there has the conversion.",
+    "",
+    "ALL SIXTEEN ARE DECLARED AND ONLY TEN HAVE A BUILDING DEF, which is deliberate: a",
+    "`_diag` piece claims a SQUARE of its own run, so the 3 / 6 / 9 diagonal lengths would",
+    "claim 9, 36 and 81 tiles for a band of about 4, 17 and 25 -- the same over-claim that",
+    "`WallPlan._plan_diagonal` refuses the long wall pieces for. They are declared so the",
+    "art pack carries them and so the day a non-rectangular footprint lands they are a",
+    "buildings.json row rather than a bake."
+  ],
+
+  "vis.cliff_face": {
+    "atlas": "res://assets/atlases/vis.cliff_face.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.0, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_short": {
+    "atlas": "res://assets/atlases/vis.cliff_face_short.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_medium": {
+    "atlas": "res://assets/atlases/vis.cliff_face_medium.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_long": {
+    "atlas": "res://assets/atlases/vis.cliff_face_long.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back": {
+    "atlas": "res://assets/atlases/vis.cliff_back.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.0, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_short": {
+    "atlas": "res://assets/atlases/vis.cliff_back_short.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [6.0, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_medium": {
+    "atlas": "res://assets/atlases/vis.cliff_back_medium.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [12.0, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_long": {
+    "atlas": "res://assets/atlases/vis.cliff_back_long.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [18.0, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_diag": {
+    "atlas": "res://assets/atlases/vis.cliff_face_diag.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.83, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_diag_short": {
+    "atlas": "res://assets/atlases/vis.cliff_face_diag_short.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [8.49, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_diag_medium": {
+    "atlas": "res://assets/atlases/vis.cliff_face_diag_medium.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.97, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_face_diag_long": {
+    "atlas": "res://assets/atlases/vis.cliff_face_diag_long.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [25.46, 2.0],
+      "height_m": 4.0,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_diag": {
+    "atlas": "res://assets/atlases/vis.cliff_back_diag.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [2.83, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_diag_short": {
+    "atlas": "res://assets/atlases/vis.cliff_back_diag_short.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [8.49, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_diag_medium": {
+    "atlas": "res://assets/atlases/vis.cliff_back_diag_medium.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [16.97, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
+  "vis.cliff_back_diag_long": {
+    "atlas": "res://assets/atlases/vis.cliff_back_diag_long.atlas.json",
+    "placeholder": {
+      "shape": "box",
+      "footprint_m": [25.46, 2.0],
+      "height_m": 1.88,
+      "color": "#6f6a60"
+    }
+  },
+
   "vis.villager": {
     "atlas": "res://assets/atlases/vis.villager.atlas.json",
     "colours": true,

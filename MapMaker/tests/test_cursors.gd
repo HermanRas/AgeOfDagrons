@@ -737,32 +737,87 @@ func test_the_axis_labels_match_the_projection() -> void:
 	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_X]), "NW-SE")
 	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_Y]), "NE-SW")
 
+	# ⛔ **AND THE TWO DIAGONALS, WHOSE NAMES ARE THE OPPOSITE OF WHAT THEIR TILE-SPACE NAMES
+	# SUGGEST** (#98/#97, 2026-09-22). This is precisely the trap the paragraph above was
+	# written for, one level further in: `AXIS_D1` steps (+1, +1), which in a projection that
+	# halves y is **(0, +32) — straight DOWN the screen**, so the run reads north–south. And
+	# `AXIS_D2` steps (+1, -1), which is **(+64, 0) — straight ACROSS**, so it reads east–west.
+	# Naming D1 "E-W" because its tile step looks diagonal is the mistake, and an author would
+	# trust it.
+	var along_d1 := Iso.tile_to_world_f(Vector2(1.0, 1.0)) - Iso.tile_to_world_f(Vector2.ZERO)
+	var along_d2 := Iso.tile_to_world_f(Vector2(1.0, -1.0)) - Iso.tile_to_world_f(Vector2.ZERO)
+	assert_almost_eq(along_d1.x, 0.0, 0.001, "(+1, +1) moves straight down the screen")
+	assert_true(along_d1.y > 0.0)
+	assert_almost_eq(along_d2.y, 0.0, 0.001, "(+1, -1) moves straight across it")
+	assert_true(along_d2.x > 0.0)
+	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_D1]), "N-S")
+	assert_eq(str(ObjectPalette.AXIS_LABELS[WallPlan.AXIS_D2]), "E-W")
 
-## Only the twelve walls and gates are offered per axis.
+	# ⚠️ **AND EVERY AXIS HAS A LABEL AT ALL**, counted off the facing table rather than
+	# listed: a fifth axis with no name would draw a row whose direction line is blank, which
+	# is the one thing `TILE`'s note says the two rows cannot be told apart without.
+	assert_eq(ObjectPalette.AXIS_LABELS.size(), WallPlan.FACING_FOR_AXIS.size(),
+			"one screen name per axis the game knows about")
+
+
+## Only buildings the axis actually changes something for are offered per axis.
 ##
 ## ⚠️ **THE FIRST CUT ASKED WHETHER THE FOOTPRINT WAS NON-SQUARE AND CAUGHT TWENTY BUILDINGS** —
 ## an archery range, a dock, a field and a mill are all oblong and none of them has art that
 ## rotates, so they would have transposed their footprint while their sprite stayed put. The
 ## flag is `axis_variants` in `game/data/buildings.json`; this asserts the MECHANISM rather than
 ## a list, so a wall added to the roster is covered and a mill is not.
+##
+## ## ⛔ AND THE NON-SQUARE TEST ITSELF WAS WRONG, WHICH CLIFFS FOUND (2026-09-22, #97)
+##
+## `building.cliff_face_short` is **3 x 3**. It is square and it is unarguably directional:
+## the axis decides which way the rock FACE looks, and the piece has a different stored frame
+## per axis. The old assertion would have failed it, and the fix would have been to unflag a
+## def that genuinely needs an author to choose — i.e. the test would have argued the tool
+## into a bug.
+##
+## ✅ **SO THE PROPERTY IS "THE AXIS CHANGES SOMETHING", asked of both things it can change:**
+## the footprint transposes, or the def declares its own `facings`. A mill satisfies neither
+## and is correctly unflagged; a square cliff satisfies the second.
+##
+## 📝 **THE COUNT IS NO LONGER PINNED AT TWELVE**, because it now moves whenever art lands —
+## 22 today. What is pinned instead is that every wall is still in it, which is the part that
+## was ever worth asserting.
 func test_only_flagged_buildings_are_offered_per_axis() -> void:
 	var flagged := 0
+	var walls := 0
 	for id in GameDataRegistry.building_ids():
 		var bd: BuildingDef = GameDataRegistry.building(id)
-		if GameDataRegistry.axis_variants(id):
-			flagged += 1
-			assert_true(bd.footprint.x != bd.footprint.y,
-					"%s is flagged directional and is square, which cannot be right" % id)
-	assert_eq(flagged, 12, "the twelve walls and gates, and nothing else")
+		if String(id).begins_with("building.wall"):
+			walls += 1
+			assert_true(GameDataRegistry.axis_variants(id),
+					"%s is a wall and must still be offered per axis" % id)
+		if not GameDataRegistry.axis_variants(id):
+			continue
+		flagged += 1
+		assert_true(bd.footprint.x != bd.footprint.y or not bd.facings.is_empty(),
+				"%s is flagged directional but the axis changes neither its footprint nor "
+						% id + "its facing, so the two rows would be the same row")
+	assert_eq(walls, 12, "the twelve walls and gates")
+	assert_true(flagged > walls, "and the cliffs, which are flagged for their facing")
 
 
 ## Any flagged wall from the roster, found rather than named.
 ##
 ## §5's rule: a test pinned to whichever def happens to be handy has an expiry date, and
 ## `building.wall_stone_long` is not guaranteed to outlive the roster.
+##
+## ⚠️ **AN OBLONG ONE, AND THAT QUALIFIER IS NOT COSMETIC** (#97, 2026-09-22). This returned
+## the first def carrying `axis_variants`, which was a wall for as long as walls were the
+## only flagged thing. Cliffs are flagged too now and `building.cliff_back` sorts first, so
+## it started handing a **1x1** def to `test_a_wall_on_the_y_axis_claims_transposed_ground`
+## -- a test whose whole subject is that the footprint TRANSPOSES, which a square does not.
+## The failure named the square rather than the lookup, which is how it read as a data bug.
 func _a_wall() -> StringName:
 	for id in GameDataRegistry.building_ids():
-		if GameDataRegistry.axis_variants(id):
+		var bd: BuildingDef = GameDataRegistry.building(id)
+		if GameDataRegistry.axis_variants(id) and bd != null \
+				and bd.footprint.x != bd.footprint.y:
 			return id
 	return &""
 

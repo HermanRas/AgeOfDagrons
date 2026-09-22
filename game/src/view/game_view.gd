@@ -971,6 +971,14 @@ func pick(local: Vector2, owner: int = 0) -> int:
 			continue          # a corpse or rubble is unselectable (4.7, 5.5)
 		if bool(f.get("is_effect", false)):
 			continue          # an arrow in flight is scenery, not a target (4.13)
+		# A CLIFF IS SCENERY TOO, and for the same reason one line up rather than a new
+		# one: it has nothing to say to a selection panel -- no hp worth reading (it
+		# cannot be attacked), no production, no garrison. Worse than the empty panel is
+		# that a plateau is a LONG LINE of entities, so a player working beside one would
+		# keep catching it with the tap that was meant to deselect. `BuildingDef.selectable`
+		# has the full argument and why it is not the same question as `buildable`.
+		if not _is_selectable(f):
+			continue
 		if owner != 0 and int(f["owner_id"]) != owner:
 			continue
 		if not _covers(f, tile):
@@ -1619,6 +1627,13 @@ func _refresh_occlusion(occluders: Array[Dictionary]) -> void:
 		if not bool(f.get("is_unit", false)) or not bool(f.get("alive", true)):
 			view.occluded = false
 			continue
+		# A FLIER IS OVER THE BOARD, NOT BEHIND THE BUILDING (the owner's rule, 2026-09-22).
+		# Tested here rather than by leaving cliffs out of the occluder set, because the
+		# rule is about the unit and not about what it passes: a dragon must not clip behind
+		# a town centre or a wall either.
+		if _flies(StringName(f.get("def_id", &""))):
+			view.occluded = false
+			continue
 
 		var tile: Vector2i = f["tile"]
 		var hidden := false
@@ -1629,6 +1644,36 @@ func _refresh_occlusion(occluders: Array[Dictionary]) -> void:
 		view.occluded = hidden
 		if hidden:
 			view.outline_colour = _outline_colour_for(int(f.get("owner_id", 0)))
+
+
+## Whether a tap may land on this entity at all (#97). Everything but a cliff today.
+##
+## ASKED OF THE REGISTRY rather than stored in `_facts`, on the rule `is_unit` two fields
+## along already follows: `_facts` carries what the SNAPSHOT said, and whether a def is
+## selectable is a property of the data both sides already have. It also means a client
+## needs nothing new on the wire.
+func _is_selectable(f: Dictionary) -> bool:
+	var bd: BuildingDef = GameDataRegistry.building(StringName(f.get("def_id", &"")))
+	return bd == null or bd.selectable
+
+
+## Whether this entity flies, and is therefore never hidden behind anything.
+##
+## ⛔ **THE OWNER'S RULE IS EVERYWHERE, NOT JUST BEHIND CLIFFS** (2026-09-22): *"full grown
+## dragon in flight should not clip behind a towncentre or wall."* A flier is ABOVE the
+## board, so a building standing between it and the camera is not standing in front of it
+## in any sense the player can act on -- haloing it would say "something is back there"
+## about something that is over the top.
+##
+## ⚠️ **AND IT EXEMPTS `unit.dragon_baby` TOO, WHICH IS A DECISION AND NOT A SIDE EFFECT.**
+## *"Full grown"* and `domain == air` are not the same set; the hatchling is `air` as well.
+## Exempting the DOMAIN is the rule that stays true when a second flier is added, where a
+## `def_id == &"unit.dragon"` special case would quietly not cover it -- and a hatchling
+## that disappears behind a house while its mother does not would read as a bug in the one
+## that works. **Raised with the owner as the alternative; this is the reversible half.**
+func _flies(def_id: StringName) -> bool:
+	var ud: UnitDef = GameDataRegistry.unit(def_id)
+	return ud != null and ud.domain == &"air"
 
 
 ## The rim colour for an owner: their player colour, so the outline says WHOSE

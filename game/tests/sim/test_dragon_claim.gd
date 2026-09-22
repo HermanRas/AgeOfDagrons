@@ -329,11 +329,33 @@ func test_everything_else_still_leaves_its_rubble() -> void:
 	assert_not_null(w.get_entity(house.id), "a house is wreckage for a minute")
 	assert_eq(house.phase, SimBuilding.Phase.DESTROYED)
 
-	var missing := 0
+	# ⚠️ **THE NAMED SET RATHER THAN A COUNT, SINCE 2026-09-22 (#97).** It was `== 1`, which
+	# said "one def carries it and it is the nest" without ever checking WHICH -- so a second
+	# def turning its rubble off would have failed this with a number, and a def swapping
+	# places with the nest would not have failed it at all. Cliffs made the first case real:
+	# ten of them arrived and the count went to 11, which is a true report of a change that
+	# is entirely correct.
+	#
+	# A CLIFF LEAVES NO RUBBLE FOR A STRONGER REASON THAN THE NEST'S. The nest can be razed
+	# and simply has no honest wreckage frame; a cliff cannot be destroyed at all --
+	# `Diplomacy.is_enemy` returns `e is SimUnit` for gaia, so nothing can target one -- and
+	# the rubble phase it would otherwise carry is 600 ticks of an entity that can never
+	# reach it. Asserted here, not merely excluded.
+	var no_rubble: Array[StringName] = []
 	for id in GameDataRegistry.building_ids():
 		if not GameDataRegistry.building(id).leaves_rubble:
-			missing += 1
-	assert_eq(missing, 1, "exactly one building in the roster has no rubble, and it is the nest")
+			no_rubble.append(id)
+	no_rubble.sort_custom(func(a, b): return String(a) < String(b))
+
+	var expected: Array[StringName] = [&"building.dragon_nest"]
+	for id in GameDataRegistry.building_ids():
+		if String(id).begins_with("building.cliff"):
+			expected.append(id)
+	expected.sort_custom(func(a, b): return String(a) < String(b))
+
+	assert_eq(no_rubble, expected,
+			"the nest and the cliffs, and nothing else, leave no rubble")
+	assert_true(no_rubble.size() > 1, "the cliffs are really in the roster to be counted")
 	assert_false(GameDataRegistry.building(NEST_DEF).leaves_rubble)
 
 

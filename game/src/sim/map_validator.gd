@@ -58,6 +58,8 @@ static func problems(data: MapData) -> Array[String]:
 	if overlaps > 0:
 		found.append("%d entity tiles overlap another entity" % overlaps)
 
+	found.append_array(_undrawable_axes(data))
+
 	var blocked := _blocked_tiles(data)
 	var sources := _start_sources(data)
 	for i in range(data.starts.size()):
@@ -320,15 +322,88 @@ static func _nearby_resource_counts(data: MapData, blocked: Dictionary,
 	return counts
 
 
+## Entities laid along an axis their art cannot draw (#97, 2026-09-22).
+##
+## ## ⛔ THIS IS THE ONLY PLACE THE MISTAKE CAN BE CAUGHT, AND IT IS SILENT EVERYWHERE ELSE
+##
+## `BuildingDef.facing_for` falls back rather than failing, because it runs inside
+## `MapGen.build_from` where a refusal would take the whole match down over one bad entity
+## — so a cliff face laid on a diagonal **builds, blocks, and draws a frame that is merely
+## wrong**. Nothing crashes, nothing warns, and the only symptom is a piece of scenery that
+## looks slightly off in a screenshot nobody is studying. This is the half that turns it
+## back into a sentence an author reads before they save.
+##
+## ⚠️ **`can_face` IS TRUE FOR EVERYTHING THAT DECLARES NO `facings`**, so this costs every
+## existing map nothing: twelve wall defs, six committed maps, every generated board. Only
+## a def that has said which axes it has art for is held to what it said.
+##
+## THE MESSAGE NAMES THE TILE, because a plateau is a long line of near-identical entities
+## and "a cliff is on the wrong axis" would send an author looking through all of them.
+static func _undrawable_axes(data: MapData) -> Array[String]:
+	var found: Array[String] = []
+	for e in data.entities:
+		if not e.has("axis"):
+			continue
+		var bd: BuildingDef = GameDataRegistry.building(StringName(e["def_id"]))
+		if bd == null:
+			continue
+		var axis := int(e["axis"])
+		if bd.can_face(axis):
+			continue
+		var tile: Vector2i = e.get("tile", Vector2i.ZERO)
+		found.append("%s at %d,%d is laid on axis %d, which it has no art for"
+				% [String(e["def_id"]), tile.x, tile.y, axis])
+	return found
+
+
 ## Tiles claimed by more than one entity. The generator's own `claimed` set should
 ## make this impossible; asserting it is what keeps a future placement rule from
 ## quietly dropping a node on top of a town centre.
+##
+## ## ✅ EXCEPT THAT TWO CLIFFS MAY SHARE A TILE (#97, 2026-09-22), AND THE RING NEEDS IT
+##
+## The art side's three placement rules were written for a TERRAIN model where both tables
+## are live at once: a corner tile draws a face on each of its edges AND the diagonal piece
+## over its point. Moving cliffs to entities put one entity per tile in the way of that, and
+## the shape of a plateau over-constrains it -- four edges that each want a whole number of
+## one length, plus a corner piece, cannot all fit without a tile being wanted twice. The
+## owner photographed what happens when you give the corner away instead: *"the east corner
+## has a gap, i see single tile cliffs in that spot."*
+##
+## ⚠️ **IT IS SAFE FOR CLIFFS SPECIFICALLY AND WOULD NOT BE FOR ANYTHING ELSE.** What
+## `occupancy` holds is ONE entity id per tile, and the reason that normally matters is that
+## despawning the entity clears the cell -- so a stacked pair would leave a hole under a
+## building that is still standing. **A cliff never despawns**: it cannot be attacked
+## (`Diplomacy`), it is never sold, built over or upgraded, and it leaves no rubble. Both
+## occupants block, so whichever id the cell ends up holding gives the same answer to every
+## question anything asks it.
+##
+## ⛔ **NARROW ON PURPOSE -- EVERY occupant of the tile has to be a cliff.** A cliff sharing
+## with a house is still an overlap and still reported, because the house can be destroyed
+## and would take the cliff's claim with it.
 static func _overlapping_entities(data: MapData) -> int:
 	var seen: Dictionary = {}
 	var overlaps := 0
 	for e in data.entities:
+		var cliff := _is_cliff(e)
 		for t in MapData.footprint_rect_of(e):
 			if seen.has(t):
+				if cliff and bool(seen[t]):
+					continue
 				overlaps += 1
-			seen[t] = true
+			# Stays true only while EVERY entity on this tile has been one, so a house
+			# landing on a cliff turns the tile back into an ordinary overlap for whatever
+			# arrives after it as well.
+			seen[t] = cliff and bool(seen.get(t, true))
 	return overlaps
+
+
+## Whether this entity record is a cliff piece.
+##
+## 📝 **BY DEF ID PREFIX, WHICH IS A COMPROMISE AND IS WRITTEN DOWN AS ONE.** The honest test
+## would be a `BuildingDef` flag, and there is no field that means "scenery that can never be
+## removed" -- `selectable` is a view rule and `buildable` is shared with every wall segment.
+## Adding one for a single caller is the heavier change; if a second kind of permanent
+## scenery ever lands, that flag is what this should become.
+static func _is_cliff(e: Dictionary) -> bool:
+	return String(e.get("def_id", "")).begins_with("building.cliff")

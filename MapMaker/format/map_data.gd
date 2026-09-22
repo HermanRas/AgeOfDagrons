@@ -363,7 +363,17 @@ static func footprint_rect_of(e: Dictionary) -> Array[Vector2i]:
 		# TRANSPOSED HERE AND IN `build_from()`, from the same key -- there is no third place to
 		# forget. `WallPlan.footprint_for()` is the same transposition expressed for a length,
 		# and it stays the authority for an in-game drag.
-		if int(e.get("axis", AXIS_NONE)) == WallPlan.AXIS_Y:
+		#
+		# ⛔ **A DIAGONAL AXIS CLAIMS A SQUARE, NOT A TRANSPOSED BOX** (#98, 2026-09-22). A
+		# staircase segment reaches `diagonal_step(length)` tiles in BOTH directions, so its
+		# claim is that square -- and the number comes from `WallPlan` rather than being
+		# recomputed here, because this function, `build_from()` and the MapMaker's collision
+		# test all have to agree about it or a map validates and cannot be built.
+		var wall_axis := int(e.get("axis", AXIS_NONE))
+		if WallPlan.is_diagonal(wall_axis):
+			var side := WallPlan.diagonal_step(footprint.x)
+			footprint = Vector2i(side, side)
+		elif wall_axis == WallPlan.AXIS_Y:
 			footprint = Vector2i(footprint.y, footprint.x)
 	else:
 		var rd: ResourceDef = GameDataRegistry.resource_def(def_id)

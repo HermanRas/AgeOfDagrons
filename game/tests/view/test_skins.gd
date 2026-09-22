@@ -145,11 +145,24 @@ func test_every_building_with_a_baked_age_variant_declares_the_age_map() -> void
 	## rather than merely skipped.
 	const UNOWNED_POI := [&"building.dragon_nest"]
 
+	## ⚠️ **AND CLIFFS ARE THE THIRD KIND, ADDED 2026-09-22 (#97).** Matched by PREFIX rather
+	## than listed, which is the opposite of the rule two exemptions up -- and deliberately,
+	## because these are not one def that needed thinking about but a SET whose membership is
+	## the art's ladder of lengths. Naming ten ids here would mean this test failing every
+	## time a length was added or dropped, which is a test that trains you to edit it.
+	##
+	## The exemption is the nest's, word for word: the rule is *"it must modernise as its
+	## owner advances"*, and nobody owns a cliff. Rock does not get rebuilt in brick when Rome
+	## arrives. The `assert_false`s below are what keep it honest -- a cliff that became
+	## buildable lands back in the coverage rule instead of quietly staying out of it.
+	var is_cliff := func(id: StringName) -> bool:
+		return String(id).begins_with("building.cliff")
+
 	var aged := _entries_with("ages")
 	var varied := _entries_with("variants")
 	for building_id in reg.building_ids():
 		var bd: BuildingDef = reg.building(building_id)
-		if UNOWNED_POI.has(building_id):
+		if UNOWNED_POI.has(building_id) or is_cliff.call(building_id):
 			assert_false(bd.buildable,
 					"%s is exempt because nobody owns it, so it must not be buildable"
 					% building_id)

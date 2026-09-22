@@ -692,7 +692,7 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 				elif axis == WallPlan.AXIS_Y:
 					footprint = Vector2i(footprint.y, footprint.x)
 				spawned = w.spawn_building(def_id, owner, tile, SimBuilding.Phase.COMPLETE, true,
-						footprint, WallPlan.FACING_FOR_AXIS[axis])
+						footprint, bd.facing_for(axis))
 		else:
 			spawned = w.spawn_resource_node(def_id, tile, int(e.get("size_class", 0)))
 

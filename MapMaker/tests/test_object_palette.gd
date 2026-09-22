@@ -124,19 +124,30 @@ func test_each_category_lists_its_own_roster() -> void:
 	if not _has_game():
 		return
 	palette.set_category(ObjectPalette.Category.BUILDING)
-	# ⚠️ **THE BUILDING TAB IS NOT ONE ROW PER DEF ANY MORE, AND THE ARITHMETIC IS WRITTEN OUT
-	# RATHER THAN COUNTED.** Every def gets a row, **a directional def gets two** (16.4c: a wall
-	# is offered per axis, because the map records one), and the player start adds one that is
-	# not a def at all. Derived from the roster so it survives a building being added; the point
-	# of the test is that nothing ELSE creeps in.
+	# ⚠️ **THE BUILDING TAB IS NOT ONE ROW PER DEF, AND IT IS NOT TWO PER WALL EITHER ANY MORE.**
+	# It was `+ directional` when every directional def meant exactly two rows. That stopped
+	# being true on 2026-09-22: #98 gave a wall FOUR axes (the staircase diagonals) and #97
+	# gave cliffs pieces with two or even one, since there is no north-south cliff face and the
+	# `_diag` pieces draw one frame however they are laid. The owner reported the visible half
+	# of it -- *"i am also not seeing diagonal variations"* -- and a `+ directional` count here
+	# would have gone on passing while the palette offered two rows out of four.
+	#
+	# So the expectation is summed from `axes_for`, which is the same function the palette
+	# builds the rows with. ⛔ **That makes this test a CONSISTENCY check and not an
+	# independent one**, so it cannot catch `axes_for` being wrong -- `test_cursors` asserts
+	# the per-def rule and `preview_editor` photographs the labels. What it still catches is
+	# exactly what it was written for: something ELSE creeping into the tab.
+	var rows := 0
 	var directional := 0
 	for id in GameDataRegistry.building_ids():
 		if GameDataRegistry.axis_variants(id):
 			directional += 1
+			rows += ObjectPalette.axes_for(id).size()
+		else:
+			rows += 1
 	assert_true(directional > 0, "no directional buildings -- has the flag gone from the data?")
-	assert_eq(palette.listed_ids().size(),
-			GameDataRegistry.building_ids().size() + directional + 1,
-			"one row per building, two per directional one, plus the player start")
+	assert_eq(palette.listed_ids().size(), rows + 1,
+			"one row per axis a def can draw, plus the player start")
 	palette.set_category(ObjectPalette.Category.UNIT)
 	assert_eq(palette.listed_ids().size(), GameDataRegistry.unit_ids().size())
 	palette.set_category(ObjectPalette.Category.TERRAIN)

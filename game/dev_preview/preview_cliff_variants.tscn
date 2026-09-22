@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/preview_cliff_variants.gd" id="1_cliffs"]
+
+[node name="PreviewCliffVariants" type="Node"]
+script = ExtResource("1_cliffs")

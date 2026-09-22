@@ -108,6 +108,21 @@ func test_the_full_roster_is_present() -> void:
 		&"building.wall_stone_long", &"building.wall_stone_gate",
 		&"building.wall_reinforced_short", &"building.wall_reinforced_medium",
 		&"building.wall_reinforced_long", &"building.wall_reinforced_gate",
+		# CLIFFS (#97/#99, 2026-09-22). Gaia scenery, like the nest above and for the same
+		# reason it is in this list: the list is "every building def that exists".
+		#
+		# ⚠️ **TEN DEFS FOR SIXTEEN STAGED ATLASES, AND THE SIX MISSING ONES ARE THE POINT
+		# OF THIS COMMENT** -- the 3/6/9 DIAGONAL lengths are declared in visuals.json and
+		# have no def, because a diagonal piece claims a SQUARE of its own run and those
+		# three would claim 9, 36 and 81 tiles for bands of roughly 4, 17 and 25. If a
+		# `building.cliff_face_diag_long` ever appears here, that decision was reversed and
+		# `MapData.footprint_rect_of` had better have been taught a non-rectangular claim
+		# first. buildings.json `_note_cliffs` has the arithmetic.
+		&"building.cliff_face", &"building.cliff_face_short",
+		&"building.cliff_face_medium", &"building.cliff_face_long",
+		&"building.cliff_back", &"building.cliff_back_short",
+		&"building.cliff_back_medium", &"building.cliff_back_long",
+		&"building.cliff_face_diag", &"building.cliff_back_diag",
 	]
 	assert_eq(_by_content(reg.building_ids()), _by_content(expected_buildings),
 			"every age-skinned building has a definition, and nothing extra")
