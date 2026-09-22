@@ -193,6 +193,10 @@ ehthumbs.db
 
 # Derived UI slices -- regenerate with tools/slice_ui_sheets.py, do not commit
 assets/UI_Gen/sliced/
+
+# Derived cliff faces -- regenerate with tools/prepare_cliff_faces.py. The
+# sheet_cliff_faces_*.jpg masters beside it ARE committed; these are a build step.
+assets/Cliff_Gen/prepared/
 AgeOfDragons.console.exe
 AgeOfDragons.exe
 
