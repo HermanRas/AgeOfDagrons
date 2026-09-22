@@ -1,0 +1,71 @@
+# Cliff FAR edge -- the rocky crest of a plateau seen from behind, no face.
+#
+# The answer to the open question on `cliff_face.toml`: what the two FAR edges
+# of a plateau draw. Owner's call 2026-09-22, as a test.
+#
+# ----------------------------------------------------------------- WHY IT EXISTS
+# A cliff face runs z = 0 -> -4.6 and that projects STRAIGHT DOWN THE SCREEN. On
+# a near edge (+X, +Y) it lands on the low ground in front, which is right; on a
+# FAR edge the identical fall lands on the plateau's own tiles and the cliff
+# hangs backwards into the high ground it belongs to. Measured by composing
+# every stored frame onto a real boundary -- see cliff_face.toml.
+#
+# So a far edge cannot show a face, and what it CAN show is the crest: the same
+# broken rock lip, with nothing below it. That is what AoE2 draws, and it is why
+# `cliff_v2_s1_back.png` is the face strip with everything but the lip removed.
+#
+# ⚠️ WHICH IS ALSO WHY THIS PIECE CAN USE THE FRAMES THE FACE CANNOT. Stored 1
+# and 7 are properly tile-aligned and were unusable for `vis.cliff_face` only
+# because its face fell into the plateau. This piece HAS no face to fall -- it
+# is transparent below the lip -- so that objection does not apply to it.
+# MEASURED, not assumed: composed on a real far boundary.
+#
+# ------------------------------------------------------------------- THE ART
+# `assets/Cliff_Gen/cliff_v2_s1_back.png`, made by the owner from
+# `prepared/cliff_v2_s1.png` -- same 1024 x 423 canvas, opaque rows 0-70 only,
+# fully transparent below. **The shared canvas is what makes this work**: every
+# number below is copied from cliff_face.toml unchanged, so the crest lands in
+# exactly the same screen position as the face's own lip and a near edge and a
+# far edge of one plateau agree by construction rather than by adjustment.
+#
+# ⚠️ IT IS ~11 POINTS OF LUMINANCE DARKER THAN THE FACE'S LIP (111.6 against
+# 122.8 over the same rows), because it was cut before the tone curve rather
+# than after. On a crest ~14 px tall that is not expected to read; if it ever
+# does, re-cut it from the toned strip rather than toning this file twice.
+#
+# ⚠️ AND IT IS A HAND-MADE MASTER, NOT A BUILD PRODUCT. It arrived in
+# `prepared/`, which is gitignored and rewritten by tools/prepare_cliff_faces.py,
+# so it was copied up beside the sheets where it is committed and safe. Do not
+# move it back.
+id      = "vis.cliff_back"
+adapter = "composite"
+
+[[source.parts]]
+name    = "crest"
+adapter = "terrain"
+texture = "Cliff_Gen/cliff_v2_s1_back.png"
+
+# EVERY NUMBER HERE IS cliff_face.toml's, DELIBERATELY UNCHANGED. Do not "tidy"
+# them to suit a piece that is only 71 px tall -- the shared geometry is the
+# whole registration story.
+size_metres    = [2.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+canvas = [192, 256]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"

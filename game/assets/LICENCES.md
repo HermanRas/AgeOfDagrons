@@ -101,6 +101,7 @@ One row per recipe. Regenerate with `python tools/licence_audit.py --write`.
 | `vis.cattle` | `cattle.toml` | `art/actors/fauna/zebu_wild.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.cattle_carcass` | `cattle_carcass.toml` | `art/actors/fauna/zebu_wild.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.cavalry_archer` | `cavalry_archer.toml` | `art/actors/units/achaemenids/cavalry_archer_b_m.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| `vis.cliff_back` | `cliff_back.toml` | `assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)` | [Project asset](https://policies.google.com/terms) |
 | `vis.cliff_face` | `cliff_face.toml` | `assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1)` | [Project asset](https://policies.google.com/terms) |
 | `vis.crossbowman` | `crossbowman.toml` | `art/actors/units/han/infantry_crossbowman_a.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
 | `vis.deer` | `deer.toml` | `art/actors/fauna/deer.xml` | [CC-BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
