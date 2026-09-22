@@ -1187,10 +1187,18 @@ with WinError 5. Delete contents, not the directory.
 > set and collide on every file (§4's race). ~10–14 min each. **Run it in the background and do
 > not let the session end while it runs**, which is the whole reason this block exists.
 >
-> **3. THEN stage all nine together and say so on `asset_request.md`.**
-> `python tools\stage_atlases.py --only vis.villager` — never `--clean`.
-> ⛔ **Do not stage the base alone.** It would give a grey villager a farm animation and every
-> coloured one none, and the inconsistency would land on whoever picked a colour.
+> **3. ⛔ VERIFY ALL NINE READ 1056 FRAMES, *THEN* STAGE.** Board card `villager-farm-anim`
+> (#124) carries the state. A **stale 960-frame `vis.villager.cyan` was on disk** as of
+> 2026-09-22 19:59 from the first killed batch, so `out` holds a mix until every colour has
+> been rebaked. Staging that ships a villager missing the animation, silently.
+>
+> ```powershell
+> python -c "import json,glob,os; [print(os.path.basename(p), len(json.load(open(p))['frames'])) for p in sorted(glob.glob('C:/Users/herman.ras/Downloads/AOD_game/art_work/out/vis.villager*/*.atlas.json'))]"
+> python tools\stage_atlases.py --only vis.villager      # never --clean
+> ```
+>
+> ⛔ **Do not stage the base alone either.** It would give a grey villager a farm animation and
+> every coloured one none, and the inconsistency would land on whoever picked a colour.
 >
 > ### What is DONE and needs nothing
 >

@@ -577,7 +577,14 @@ either.**
 
 ---
 
-## [art -> game-code] ⚠️ `licence_audit.py` IS RED, AND THE REMAINING FAILURE IS YOURS
+## [art -> game-code] ✅ `licence_audit.py` was RED — CLOSED, and the cliff table it carried
+
+> ### ✅ CLOSED 2026-09-22. THE AUDIT IS **PASS** — 383 recipes, re-run from this side.
+>
+> The game side cleared `ui/icons/cat_units.png` in **`a2a6586`**. **The heading above said
+> "IS RED" and that stopped being true**, which is the one failure this file's own housekeeping
+> note calls out as worse than a stale entry — *"an entry whose CLAIM expires while the request
+> is still open"*. Corrected rather than deleted, because the cliff table below is still live.
 
 **2026-09-22.** Flagged immediately because **a red audit stays red for both of us** — the next
 person to run it over unrelated work reads a failure that has nothing to do with what they just
@@ -589,11 +596,11 @@ game/assets/LICENCES.md: shipped asset 'ui/icons/cat_units.png' is not declared
 
 `cat_units.png` arrived in **`085f83c`** ("The build menu is a full-screen page now") and was
 never added to the hand-written UI table in `LICENCES.md`. It is a one-line fix and it is in
-your half of that file, so I have left it alone. **Everything else is green** — I cleared my own
-new row with `licence_audit.py --write`, which touched exactly one line.
+your half of that file, so I have left it alone.
 
 > ⚠️ **`--write` REGENERATES THE TABLE FROM THE RECIPES, SO IT CANNOT FIX A HAND-WRITTEN ROW.**
-> Running it will not clear this one, and running it *expecting* it to is the trap.
+> Running it will not clear this one, and running it *expecting* it to is the trap. **Kept
+> because it is still true** and it is why the fix had to come from the game side.
 
 ### While you are there: the first non-0 A.D. bake has landed
 
@@ -604,10 +611,13 @@ you**, but two things in `LICENCES.md` are now slightly false and they are track
 `generated-art-attribution` (#123): the generated table is headed *"everything below derives
 from 0 A.D."*, and `--write` cannot know that has stopped being true.
 
-### The cliff mask table is PARTIAL — do not wire it yet
+### ✅ The cliff mask table — COMPLETE, and safe to wire
+
+*(This heading read "PARTIAL — do not wire it yet" until 2026-09-22. It is not partial any more,
+and the three full placement rules are in the diagonal section further down.)*
 
 You asked for *"which piece, at which of its 8 directions, belongs to a tile whose NE/SE/SW/NW
-neighbours are cliff-or-not"*. Two of the four are measured:
+neighbours are cliff-or-not"*. All four axis edges:
 
 | the tile's LOW neighbour | piece |
 |---|---|
