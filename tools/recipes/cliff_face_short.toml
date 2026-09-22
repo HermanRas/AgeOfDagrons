@@ -1,0 +1,64 @@
+# Cliff edge, SHORT -- the straight face at 3 tiles of run.
+#
+# The same piece as `cliff_face.toml`. ONLY `size_metres[0]` and `canvas` differ,
+# and every other number is copied unchanged on purpose. All the reasoning -- the
+# flat drop-in model, why sheet v2 strip 1, the 75-degree batter, which stored
+# frames are usable, why the sprite leaves its cell, the attribution position --
+# lives in that file and is not repeated here.
+#
+# ------------------------------------------------ WHY A LENGTH SET EXISTS AT ALL
+# Owner, 2026-09-22, looking at a composed run: *"the footprint is way too short,
+# the current repeat is too close."* Correct, and the cause is not the art:
+#
+#   a ONE-TILE piece shows 2.0 m of a 16.0 m strip, and every tile of the run
+#   shows THE SAME 2.0 m. A cliff of any length is one rock column stamped over
+#   and over at 2 m intervals.
+#
+# Lengthening the piece adds no art and costs no generation -- it widens the
+# window onto the strip already baked, so the repeat period moves 2 m -> 6 m here
+# and -> 16 m at `long`, where the run finally shows the whole strip.
+#
+# ⚠️ THE LENGTHS ARE THE WALL'S LENGTHS, on the owner's instruction to *"match a
+# medium or long wall"*: 3 / 6 / 9 tiles, the same three as `wall_short.toml`,
+# `wall_medium.toml` and `wall_long.toml`. That is deliberate beyond tidiness --
+# the game already lays a wall run out of three lengths, and a cliff edge is the
+# same problem with the same arithmetic. `cliff_face.toml` (1 tile) stays in the
+# set as the FILLER that lets a run of any length close; 1+3 covers 4, 1+1+3
+# covers 5, and so on.
+id      = "vis.cliff_face_short"
+adapter = "composite"
+
+[[source.parts]]
+name    = "face"
+adapter = "terrain"
+texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
+
+# 6.0 m = 3 tiles of run. Height, texture size, batter and offset are
+# cliff_face.toml's, unchanged -- a short piece and a long one have to register
+# against each other in the same run, and the shared numbers are what makes that
+# true by construction rather than by adjustment.
+size_metres    = [6.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+# Centred on the anchor like the wall set, so the piece spans 3 tiles either side
+# of its own cell rather than starting at it. Interpolated from cliff_face.toml's
+# 192 x 256 by the run: 3 tiles lean (96, 48) px, and the unused 45-degree frames
+# are the WIDE case at 6.0 m x 22.627 = 136 px. The clip-check is the authority.
+canvas = [256, 288]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1)"

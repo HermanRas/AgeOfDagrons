@@ -1,0 +1,44 @@
+# Cliff edge, LONG -- the straight face at 9 tiles of run.
+#
+# The same piece as `cliff_face.toml`; only `size_metres[0]` and `canvas` differ.
+# `cliff_face_short.toml` carries the argument for why the set has lengths at all
+# and why they are the WALL's lengths. Read that one first.
+id      = "vis.cliff_face_long"
+adapter = "composite"
+
+[[source.parts]]
+name    = "face"
+adapter = "terrain"
+texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
+
+# 18.0 m = 9 tiles, matching `wall_long.toml`. This is the only length that
+# EXCEEDS the 16 m strip, so it shows the whole strip once and then 2 m of the
+# start again -- the wrap seam falls INSIDE the piece rather than between pieces.
+#
+# ✅ Which is survivable only because the strip tiles, measured when it was cut:
+# the wrap seam is x0.73-x1.10 of the ordinary adjacent-column difference on all
+# six strips, i.e. no more visible than any other column boundary in the rock.
+# If a future strip does not tile, `long` is the length that breaks first.
+size_metres    = [18.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+# 9 tiles lean (288, 144) px; the unused 45-degree frames are the wide case at
+# 18.0 m x 22.627 = 407 px. The clip-check is the authority.
+canvas = [512, 416]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1)"

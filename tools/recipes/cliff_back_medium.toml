@@ -1,0 +1,34 @@
+# Cliff FAR edge, MEDIUM -- the crest at 6 tiles of run, no face.
+#
+# `cliff_back.toml` says why a far edge draws a crest; `cliff_face_short.toml`
+# says why the set has lengths; `cliff_back_short.toml` records that length fixes
+# the repeat and NOT the crest's height. None of that is repeated here.
+id      = "vis.cliff_back_medium"
+adapter = "composite"
+
+[[source.parts]]
+name    = "crest"
+adapter = "terrain"
+texture = "Cliff_Gen/cliff_v2_s1_back.png"
+
+size_metres    = [12.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+canvas = [384, 352]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"

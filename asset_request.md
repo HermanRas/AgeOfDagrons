@@ -548,8 +548,14 @@ neighbours are cliff-or-not"*. Two of the four are measured:
 |---|---|
 | `(0, +1)` | `vis.cliff_face` **stored 5** |
 | `(+1, 0)` | `vis.cliff_face` **stored 3** |
-| `(0, −1)` | ⛔ no piece yet |
-| `(−1, 0)` | ⛔ no piece yet |
+| `(0, −1)` | `vis.cliff_back` **stored 1** |
+| `(−1, 0)` | `vis.cliff_back` **stored 7** |
+
+✅ **UPDATED 2026-09-22 — ALL FOUR EDGES ARE NOW MEASURED**, by composing a whole plateau rather
+than one boundary. `vis.cliff_back` is the same strip with everything but the rocky crest
+removed, which is what a far edge can show. **It also rescues the two frames the face could not
+use**: stored 1 and 7 are properly tile-aligned and were unusable only because the *face* fell
+backwards into the plateau, and a crest has no face to fall.
 
 ⛔ **The two far edges get no face, and that is geometry rather than a gap in the bake.** The
 face falls from z = 0 to z = −4.6, which projects **straight down the screen**; on a near edge
@@ -557,9 +563,57 @@ that lands on the low ground in front, and on a far edge the identical fall land
 plateau's own tiles**. No yaw fixes it — it is gravity in screen space. A plateau therefore shows
 a face on its two near sides only, which is what AoE2 does.
 
-**What the far edges should draw is still open** (nothing at all, or a thin lip with no face),
-and corners are not cut. **`vis.cliff_face` is deliberately NOT STAGED** until the set is
-complete, because staging a partial set puts art in the game your table cannot address.
+**CORNERS ARE STILL NOT CUT** — see the next section, where they turn out to be bigger than a
+corner. **The cliff set is deliberately NOT STAGED** until it is complete, because staging a
+partial set puts art in the game your table cannot address.
+
+---
+
+## [art -> game-code] A cliff edge is laid like a WALL RUN, and your paint tool does not have to change
+
+**2026-09-22.** The owner looked at a composed cliff and said the footprint was too short and the
+repeat too close. Both were true and the cause was one number: **a one-tile piece shows 2.0 m of
+a 16.0 m strip, and every tile shows THE SAME 2.0 m**, so one rock column was stamped every 64 px
+across the screen.
+
+The fix needed no new art — a longer piece just widens the window onto the strip already baked.
+There are now **four lengths, and they are deliberately the WALL's lengths**:
+
+| id | run | repeat | strip used |
+|---|---|---|---|
+| `vis.cliff_face` / `vis.cliff_back` | 1 tile | 2 m | 12% |
+| `…_short` | **3 tiles** | 6 m | 38% |
+| `…_medium` | **6 tiles** | 12 m | 75% |
+| `…_long` | **9 tiles** | 18 m | 112% (wraps once) |
+
+3 / 6 / 9 are `wall_short`, `wall_medium` and `wall_long` exactly. **That is the point of this
+note: you already lay a wall run out of three lengths, and a cliff edge is the same problem.**
+The 1-tile piece stays in the set as the FILLER that lets a run of any length close — 9 tiles is
+one `long`, 8 is a `medium` plus two fillers, and so on.
+
+### ❓ THE OWNER ASKED WHETHER MAPMAKER MUST PAINT 3 OR 5 TILES AT ONCE. FROM THIS SIDE, NO
+
+**The brush does not have to match the piece, and coupling them would be the expensive mistake.**
+A cliff is TERRAIN — one byte per tile, the `BRIDGE_X`/`BRIDGE_Y` precedent — so painting stays
+per-tile and *drawing* covers each contiguous run greedily with the longest piece that fits. That
+keeps a 7-tile ridge paintable, which a 3-tile brush would not.
+
+A multi-tile brush is then a **convenience for the mapper**, worth having on its own merits and
+not a dependency of the art. ⚠️ **If you would rather the sim store runs instead of tiles, say so
+before it is built** — that is a different data model and it would change what the art side owes
+you at the ends of a run.
+
+### ⬜ AND ONE THING GOT BIGGER, NOT SMALLER: THE OUTER CORNER IS A WHOLE DIRECTION
+
+Composing all four run orientations turned up something the single-plateau test could not: on the
+**anti-diagonal** (screen E–W), *every* boundary tile has **both** its `+x` and `+y` neighbours
+low. So every tile is an outer corner, and the run comes out as a sawtooth with low ground
+showing between every pair of faces — the corner gap repeated the length of the ridge, not a
+wedge at one point.
+
+**Nothing is asked of you yet.** It needs its own recipe and probably no new art, and it is mine.
+Flagged here only so that **a diagonal cliff is not wired until that piece exists**, because the
+table above will happily produce the sawtooth.
 
 ---
 

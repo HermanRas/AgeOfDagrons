@@ -1,0 +1,47 @@
+# Cliff FAR edge, SHORT -- the crest at 3 tiles of run, no face.
+#
+# `cliff_back.toml` says why a far edge draws a crest and not a face, and why
+# this piece may use the stored frames the face cannot. `cliff_face_short.toml`
+# says why the set has lengths. Neither argument is repeated here.
+#
+# ⚠️ LENGTH FIXES THE REPEAT, IT DOES NOT FIX THE HEIGHT. The owner's second
+# question on 2026-09-22 was whether the crest is *"just too short to
+# recognise"*, and lengthening the piece cannot answer it: the crest is 71 of the
+# source's 423 rows -- 0.89 m of the 5.30 m strip -- and that is a VERTICAL
+# measurement this file does not touch. What length changes is how much DIFFERENT
+# rock you see along the run, which is a fair share of why it read as a dark
+# smear. Judge the height again once the repeat is gone; if it still does not
+# read, the fix is re-cutting the master taller from the toned strip.
+id      = "vis.cliff_back_short"
+adapter = "composite"
+
+[[source.parts]]
+name    = "crest"
+adapter = "terrain"
+texture = "Cliff_Gen/cliff_v2_s1_back.png"
+
+# 6.0 m = 3 tiles. Everything else is cliff_face_short.toml's, unchanged, for the
+# same reason cliff_back.toml copies cliff_face.toml: a near edge and a far edge
+# of ONE plateau have to register, and shared geometry is what makes that
+# automatic rather than a thing to keep re-checking.
+size_metres    = [6.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+canvas = [256, 288]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/cliff_v2_s1_back.png (crest cut from strip 1)"

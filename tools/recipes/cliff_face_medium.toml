@@ -1,0 +1,39 @@
+# Cliff edge, MEDIUM -- the straight face at 6 tiles of run.
+#
+# The same piece as `cliff_face.toml`; only `size_metres[0]` and `canvas` differ.
+# `cliff_face_short.toml` carries the argument for why the set has lengths at all
+# and why they are the WALL's lengths. Read that one first.
+id      = "vis.cliff_face_medium"
+adapter = "composite"
+
+[[source.parts]]
+name    = "face"
+adapter = "terrain"
+texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
+
+# 12.0 m = 6 tiles, matching `wall_medium.toml`. Three quarters of the 16 m
+# strip, so the run reaches the parts of the rock the one-tile piece never showed
+# and still stops short of the wrap seam.
+size_metres    = [12.0, 5.30]
+texture_metres = [16.0, 5.30]
+pitch_deg      = 75.0
+offset_m       = [0.0, -1.0, -1.96]
+
+[render]
+# 6 tiles lean (192, 96) px; the unused 45-degree frames are wider still at
+# 12.0 m x 22.627 = 271 px. Generous, and the clip-check is the authority.
+canvas = [384, 352]
+supersample = 4
+directions = 8
+frame_origin_at = 0.5
+engine = "eevee"
+samples = 32
+
+[attribution]
+# Not 0 A.D. art. See cliff_face.toml and board card #123.
+source = "Age of Dragons -- AI-generated with Google Gemini (paid account)"
+licence = "Project asset"
+licence_url = "https://policies.google.com/terms"
+author = "Herman Ras (project owner)"
+author_url = "https://github.com/HermanRas/AgeOfDagrons"
+actor = "assets/Cliff_Gen/sheet_cliff_faces_v2.jpg (strip 1)"
