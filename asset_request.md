@@ -757,6 +757,32 @@ and `-y` crests it already draws are exactly what is visible there. Do not wait 
 
 ---
 
+
+## [game-code -> art] The 6-step DIAGONAL cliff cannot be placed: its anchor is half a tile off the grid — found 2026-09-23
+
+The 3/6/9 diagonal cliffs are wired and shipping as of `56086b2`, **except the two mediums**, and the reason is one number rather than a design problem.
+
+**What was blocking all six is now solved and is not your problem.** A diagonal piece used to have to claim the N×N box around its own run (81 tiles for a 9-step, of which ~30 are rock). It no longer claims anything: the sprite is non-blocking with a `[1, 1]` footprint and a new invisible `building.cliff_blocker` claims the run's tiles one at a time. So `_diag_short` and `_diag_long` are placeable now, both families.
+
+**What is left is an anchor.** Measured off the staged atlases, stored direction 4:
+
+| id | width | anchor x | anchor lands | on a tile? |
+|---|---|---|---|---|
+| `vis.cliff_face_diag` | 66 | 33 | 0 px | ✅ |
+| `vis.cliff_face_diag_short` | 194 | 97 | 64 px | ✅ |
+| `vis.cliff_face_diag_medium` | 386 | 193 | **160 px** | ❌ |
+| `vis.cliff_face_diag_long` | 578 | 289 | 256 px | ✅ |
+
+A D2 run's tiles sit every **64 px**, so an anchor has to land on a multiple of 64. The anchor is baked at the sprite's centre, and an **even**-step run centres *between* tiles — 160 px is 2.5 tiles along. The odd lengths (1, 3, 9) land on 0, 64 and 256 and are fine.
+
+**It cannot be fixed on the game side.** A building's draw position comes from `SimBuilding.centre_of(origin, footprint)`, which only offers `origin + size / 2`. A +32 px screen-x shift needs `Δx = +0.5, Δy = −0.5` — a negative y size, which a `Vector2i` footprint cannot express.
+
+**What's needed:** `vis.cliff_face_diag_medium` and `vis.cliff_back_diag_medium` rebaked with the stored-4 anchor moved **32 px** (to x=161 or x=225 — either lands the anchor on a tile, whichever is the natural half-step for the bake).
+
+**Where it plugs in once baked:** two rows in `buildings.json` beside the four already there, and one entry in `DIAG_RUNS` in `preview_cliff_variants.gd`. `_diag_run` already **refuses** an even step count with a printed reason rather than placing one half a tile out, so nothing silently regresses in the meantime.
+
+**Not urgent.** A 6-step run is laid as 3 + 3 today and looks right; this only costs one extra window onto the 16 m strip. Both medium atlases stay declared in `visuals.json` so they remain in the art pack either way. The reasoning is recorded in `buildings.json` `_note_cliff_diag_runs` and in `test_cliffs.gd`.
+
 ## Delivered
 
 One line each. The full exchange for any of these is in git; the reasoning that
