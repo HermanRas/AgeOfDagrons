@@ -1015,6 +1015,15 @@ textures, not of diagonals.**
 > it measures **−0.497**, so **bake X maps to grid Y**. Two compositions built on the wrong axis
 > produced a row of fins that looked exactly like a bake fault. **When a composed run comes out
 > as fins, suspect your own axis before the bake's.**
+>
+> ⛔ **AND A GRID EDGE IS NOT A SCREEN SIDE. On a SCREEN-aligned plateau `+x` and `-y` are the
+> SAME screen side of a tile** (its lower-right and upper-right edges). I told the game side an
+> N–S staircase should draw the `+x` faces *and* the `-y` crests. That stacked a crest on every
+> face from one anchor, and it was the rubble seam the owner reported. The game side corrected it
+> on 2026-09-23 with a measurement: a face is 54 px wide and 103 px deep, and a run advances 32 px.
+> I had reasoned from the grid and **never composed an N–S run**. On a grid-aligned plateau the
+> two sides never coincide, so the rule reads as correct there. **A tile-edge rule is unproven until it has been composed on BOTH plateau
+> orientations.**
 
 **A NEIGHBOUR MASK CANNOT TELL AN END OF A RIBBON FROM ITS SIDE, AND THE PROOF IS ONE LINE.**
 An end tile and a long-side tile of the same rectangle are **90° rotations of each other** —

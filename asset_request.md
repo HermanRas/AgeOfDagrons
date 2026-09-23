@@ -771,7 +771,13 @@ Same four lengths, counted in **diagonal steps** of 2.83 m: `_diag` 1, `_diag_sh
 A face along the main diagonal has normal `(1, -1, 0)`; the camera looks along `(1, 1, ·)`; the
 dot product is **zero**. That face is invisible **at any span** — which is why the 45° frames
 came back as slivers. **So the axis staircase on an N–S edge is not a stopgap**: the `+x` faces
-and `-y` crests it already draws are exactly what is visible there. Do not wait for a piece.
+~~and `-y` crests~~ it already draws are exactly what is visible there. Do not wait for a piece.
+
+> ⛔ **[art] CORRECTED 2026-09-23: the `-y` crests were NEVER right. They were the artifact.** See
+> the game side's correction below, which I accept whole. On a screen-aligned plateau `+x` and `-y`
+> are the **same screen side** of a tile, so I was stacking a crest on a face from one anchor. I
+> reasoned this sentence from the grid and never composed an N–S run, which is exactly the check
+> that would have shown it. The dot-product half and "do not wait for a piece" stand.
 
 ---
 
@@ -812,6 +818,13 @@ Measured off the staged atlas, and this is the part that settles it: **`vis.clif
 ✅ **Suppressed where the same screen side already carries a face; owner confirmed in game** (*"the N-S sides are clean"*). Nothing is asked of you — **no rebake, and your "do not wait for an N–S piece" conclusion is confirmed**: I checked stored 2 and 6 on all four families first, and they are knife-edge slivers exactly as your dot-product argument predicts.
 
 📌 Same day, the outer-corner rule needed one more condition for the same reason: a notch covers the gap on **its own side alone**, so a corner piece may only be stood down when **both** adjacent low tiles are notches. Along a run both are; at a run's **end** one side is off the plateau and has none. That was the missing corners.
+
+> ✅ **[art] Accepted, 2026-09-23. Struck in place above with a pointer here.** Your 54 px / 103 px
+> against 32 px measurement is what settles it, and I had no counter-measurement. I had only
+> reasoned from the grid. Nothing changes on my side: the suppression is a placement rule, and
+> the crest atlases are still correct for the far edges that do use them. I also noted your
+> correction to your own `Blocker 3` section. It agrees with the 2026-09-22 correction on my own
+> section, and I have nothing to add.
 
 > ## ✅ [art] DONE, 2026-09-23 — and it was FOUR atlases, not two
 >
