@@ -109,6 +109,20 @@ const COPIES := [
 	{"copy": "res://format/game_defs.gd", "origin": "src/data/game_defs.gd"},
 	{"copy": "res://format/map_validator.gd", "origin": "src/sim/map_validator.gd"},
 	{"copy": "res://format/objective_def.gd", "origin": "src/data/objective_def.gd"},
+	# ⛔ **THE TENTH, ADDED 2026-09-23 FOR THE PLATEAU TOOL, AND IT IS IN `COPIES` RATHER THAN
+	# `PRESENTATION` BY THIS FILE'S OWN TEST: does drift reach the FILE?** It does, and hard.
+	# `CliffPlan` decides which forty entities a plateau gesture writes into `map.json` — a tool
+	# one revision behind the game's rules would author a cliff ring the game draws differently,
+	# or with a hole in it. That is *"the tool can author maps the game misreads"* exactly.
+	#
+	# ⚠️ **AND THE DRIFT IT GUARDS IS NOT HYPOTHETICAL.** Every one of this class's three run
+	# rules was got wrong once and each fault was invisible to anything that counted entities:
+	# a diagonal walked from its far end, a corner dropped out of its own edge, a crest
+	# suppressed per tile instead of per run. All three end in the same place — a run that
+	# quietly reverts to 1-tile pieces — which is a picture the owner reports and nothing else
+	# catches. A second implementation of those rules in this tool is the exact thing this
+	# mechanism exists to stop.
+	{"copy": "res://format/cliff_plan.gd", "origin": "src/sim/cliff_plan.gd"},
 ]
 
 ## Copies that decide what a map LOOKS LIKE in this tool, not what it MEANS on disk.

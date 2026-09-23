@@ -625,6 +625,76 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 	return true
 
 
+## Raise `rect` to high ground and lay the cliff ring around it. One undo step for the lot.
+##
+## Returns `{"ok": bool, "pieces": int, "reason": String, "runs": Array}` — `runs` being
+## `CliffPlan.runs_of`, so the editor can tell an author *"this edge is 8 tiles, so it is laid
+## in ones; make it 9"* without planning the shape a second time to find out.
+##
+## ## ⛔ WHY THIS DOES NOT GO THROUGH `add_entity()` FORTY TIMES
+##
+## That function refuses a tile anything already claims, and **a plateau shares tiles on
+## purpose**: its near corner carries both edge faces AND the diagonal that covers the wedge
+## between them, and a merged diagonal run stands its art on top of the blockers that own the
+## ground. Feeding forty pieces through a one-at-a-time collision test would refuse most of the
+## ring and leave a plateau with holes in it, which is worse than refusing the whole gesture.
+##
+## ⚠️ **THE EXCEPTION IS EXACTLY `MapValidator`'s AND IS NOT A SECOND OPINION.** That file
+## already allows two CLIFFS to share a tile and nothing else — *"a cliff never despawns, so
+## nothing depends on which of the two ids the occupancy cell ends up holding, and both of them
+## block anyway."* So a cliff may land on another cliff here, and on nothing else: dropping a
+## plateau over a town centre is refused outright rather than half-applied.
+##
+## ⚠️ **THE WHOLE GESTURE IS CHECKED BEFORE ANY OF IT IS WRITTEN.** A partial plateau is the one
+## outcome with no honest report — the author sees a ring with a gap and cannot tell a refusal
+## from a bug in the rules — so every tile is tested first and the step is opened after.
+func add_plateau(rect: Rect2i) -> Dictionary:
+	var high: Dictionary = {}
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var t := Vector2i(x, y)
+			if not data.in_bounds(t):
+				return {"ok": false, "pieces": 0, "runs": [],
+						"reason": "the plateau runs off the map"}
+			high[t] = true
+	if high.is_empty():
+		return {"ok": false, "pieces": 0, "runs": [], "reason": "nothing to raise"}
+
+	var plan := CliffPlan.plan(high)
+	var occupied: Dictionary = {}
+	for e in data.entities:
+		var cliff := MapValidator.is_cliff(e)
+		for t in MapData.footprint_rect_of(e):
+			# False wins: one non-cliff occupant is enough to make the tile unusable, whatever
+			# else is standing there.
+			occupied[t] = cliff and bool(occupied.get(t, true))
+
+	for r in plan:
+		for t in MapData.footprint_rect_of(r):
+			if not data.in_bounds(t):
+				return {"ok": false, "pieces": 0, "runs": [],
+						"reason": "the cliff around it would run off the map"}
+			if occupied.has(t) and not bool(occupied[t]):
+				return {"ok": false, "pieces": 0, "runs": [],
+						"reason": "something is standing at %d,%d" % [t.x, t.y]}
+
+	var mine := _open("raise a plateau")
+	_step.lists_before(data, objectives)
+	for t in high:
+		var tile: Vector2i = t
+		if data.terrain_at(tile) != SimMap.Terrain.GRASS:
+			_step.terrain_change(data.index_of(tile), data.terrain_at(tile),
+					SimMap.Terrain.GRASS)
+			data.set_terrain(tile, SimMap.Terrain.GRASS)
+	for r in plan:
+		data.add_entity(r["def_id"], 0, r["tile"], 0, int(r["axis"]))
+	dirty = true
+	if mine:
+		_flush()
+	return {"ok": true, "pieces": plan.size(), "reason": "",
+			"runs": CliffPlan.runs_of(high)}
+
+
 ## Take whatever is standing on `tile` back off the map. Returns how many entries went.
 ##
 ## **BY CLAIMED TILES AND NOT BY ORIGIN**, because an author clicking the middle of a 10x10

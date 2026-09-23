@@ -88,7 +88,11 @@ const _DIM := UiChrome.DIM
 ## CLICK, exactly like placing a building — so PLACE could carry it and three controls went away.
 ## A region is a **drag** that produces a rectangle, which is not something any other tool's click
 ## can express. `Category.AREA` arms this the way `Category.TERRAIN` arms `PAINT`.
-enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE, AREA }
+## ⚠️ **PLATEAU IS APPENDED, FOR THE REASON `Tool.START`'s REMOVAL TAUGHT ON 2026-09-08**: it
+## renumbered every member after it, and a test driving tools by literal went on passing while
+## exercising the wrong ones. Nothing persists a tool value, so appending costs nothing and
+## inserting would cost that again.
+enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE, AREA, PLATEAU }
 
 var _canvas: MapCanvas = null
 var _palette: ObjectPalette = null
@@ -1011,6 +1015,12 @@ func apply_tool(tile: Vector2i) -> void:
 			# document is written once, on release, by `_finish_area()`. Same reason SELECT is
 			# not on the `changed` path: nothing about the map has changed yet.
 			_area_sample(tile)
+		Tool.PLATEAU:
+			# THE SAME RECTANGLE GESTURE, sharing `_area_sample`'s anchor and preview rather than
+			# keeping a second pair of drag variables in step with it. The two tools cannot be
+			# armed at once, so there is nothing for them to collide over, and the preview the
+			# author sees is exactly the ground that is about to be raised.
+			_area_sample(tile)
 	if changed:
 		# REDRAWN AND RE-REPORTED ONLY ON A REAL CHANGE, which is why `paint()` returns a
 		# bool: a drag delivers the same tile dozens of times and repainting the canvas on
@@ -1144,6 +1154,53 @@ func _finish_area() -> void:
 	_notice("AREA \"%s\" — added a %dx%d rectangle at %d,%d (drag again to extend it)"
 			% [name, rect.size.x, rect.size.y, rect.position.x, rect.position.y], _GOOD)
 	_canvas.queue_redraw()
+	_refresh_status()
+
+
+## The release: raise the dragged rectangle and lay its cliff ring.
+##
+## ⚠️ **CALLED BEFORE `MapDocument.end_stroke()`** — `_finish_area()`'s rule, and for the same
+## reason: this is the gesture's only write.
+##
+## ## 📐 THE REPORT NAMES THE RUN LENGTH, WHICH IS THE ONE THING AN AUTHOR CANNOT SEE
+##
+## A cliff run is covered by ONE rung of the 1/3/6/9 ladder and never by a greedy mix, because
+## every piece is a window onto the same 16 m strip and two lengths in a run restart the rock at
+## unrelated places. So a 9-tile edge is one long piece and an 8-tile edge is **eight fillers** —
+## the same rock stamped every 64 px, which is the artefact the ladder exists to avoid.
+##
+## Nothing on screen says which happened, and the fix is to resize by a tile. So the notice says
+## it: *"edges of 8 are laid in 1s — try 9"*. Without that line the tool silently produces its
+## worst output at most sizes and looks like it is working.
+func _finish_plateau() -> void:
+	if _document == null or _area_from.x < 0:
+		return
+	var rect := _area_rect()
+	# READ BEFORE THE STATE GOES, exactly as `_finish_area()` does: a refused gesture is still
+	# finished, and a live anchor would make the next drag start where this one did.
+	_cancel_area_drag()
+
+	var result := _document.add_plateau(rect)
+	if not bool(result["ok"]):
+		_notice("WILL NOT RAISE a %dx%d plateau at %d,%d — %s"
+				% [rect.size.x, rect.size.y, rect.position.x, rect.position.y,
+				result["reason"]], _WARN)
+		return
+
+	# The rungs actually chosen, worst first, so the sentence names the edge worth fixing.
+	var stamped := 0
+	for run in result["runs"] as Array:
+		if int(run["piece"]) == 1 and int(run["span"]) > 1:
+			stamped = maxi(stamped, int(run["span"]))
+	var tail := ""
+	if stamped > 0:
+		tail = " — an edge of %d has no matching piece, so it is laid in 1s (try a multiple of 3)" \
+				% stamped
+	_notice("PLATEAU — %dx%d raised at %d,%d, %d cliff pieces%s"
+			% [rect.size.x, rect.size.y, rect.position.x, rect.position.y,
+			int(result["pieces"]), tail], _GOOD if stamped == 0 else _WARN)
+	_canvas.queue_redraw()
+	_canvas.redraw_overlay()
 	_refresh_status()
 
 
@@ -1437,6 +1494,10 @@ func _build_ui() -> void:
 			# Ctrl+Z would appear to do nothing at all.
 			if _tool == Tool.AREA:
 				_finish_area()
+			# Same rule, same reason: the plateau's ONLY write is here, so landing it after the
+			# seal would put forty pieces in a step of their own.
+			if _tool == Tool.PLATEAU:
+				_finish_plateau()
 			if _document != null:
 				_document.end_stroke()
 			# ⚠️ **THE GRAB IS RELEASED HERE AND NOWHERE ELSE.** `MapCanvas._button` guarantees
@@ -1667,6 +1728,11 @@ func _tool_row() -> Control:
 		# 16.5's region tool. LAST, matching the palette's tab order and for its reason: a region
 		# is drawn over ground that already has things on it.
 		{"tool": Tool.AREA, "label": "Area"},
+		# ⛳ **WITH AREA AND NOT WITH PLACE** (owner, 2026-09-23: *"the tool can live under area"*).
+		# It is the same GESTURE -- drag a rectangle, one write on release -- and that is what a
+		# toolbar groups by. It is not a `PLACE` variant: place puts down the one thing the
+		# palette is showing, and this puts down forty pieces the author never chose.
+		{"tool": Tool.PLATEAU, "label": "Plateau"},
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])
