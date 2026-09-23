@@ -1146,9 +1146,22 @@ func validate() -> void:
 
 	for id in _buildings:
 		var b: BuildingDef = _buildings[id]
-		_require_visual(b.visual, "building '%s'" % id)
-		_require_visual(b.visual_foundation, "building '%s' foundation" % id)
-		_require_visual(b.visual_rubble, "building '%s' rubble" % id)
+		# ⛔ **A DEF THAT DRAWS NOTHING SAYS SO, AND IS THEN HELD TO IT.** Without the flag
+		# this stays exactly the check it has always been, so a def that simply forgot its
+		# art is as loud as it ever was; with it, naming a visual anyway is the mistake --
+		# a sprite nothing will ever draw, since `EntityView._draw` returns on the empty id.
+		# Checking both directions is what stops the flag becoming a way to silence the
+		# warning rather than a statement about the entity.
+		if b.draws_nothing:
+			for what in [[b.visual, ""], [b.visual_foundation, " foundation"],
+					[b.visual_rubble, " rubble"]]:
+				if not StringName(what[0]).is_empty():
+					load_warnings.append("building '%s'%s draws nothing and still names visual '%s'"
+							% [id, what[1], what[0]])
+		else:
+			_require_visual(b.visual, "building '%s'" % id)
+			_require_visual(b.visual_foundation, "building '%s' foundation" % id)
+			_require_visual(b.visual_rubble, "building '%s' rubble" % id)
 		_require_kinds(b.cost, "building '%s' cost" % id)
 		if b.footprint.x < 1 or b.footprint.y < 1:
 			load_warnings.append("building '%s' has a degenerate footprint %s" % [id, b.footprint])

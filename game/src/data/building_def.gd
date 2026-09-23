@@ -178,6 +178,25 @@ var buildable: bool = true
 ## this is about what a tap resolves to and not about what the server will accept. That is
 ## the same division `buildable` draws two lines up: the menu decides what it draws, and
 ## `PlaceBuildingCommand` does not consult it.
+## Whether this def draws NO sprite at all, at any phase.
+##
+## ## ⛔ A DECLARATION, NOT THE ABSENCE OF ONE
+##
+## Leaving the three `visual` keys out is how a def ends up with no art, and on its own that
+## is indistinguishable from a def somebody forgot to finish -- which is why
+## `GameDataRegistry.validate()` warns about it and five separate tests assert it never
+## happens. This flag is what separates the two, so the invariant survives: a def drawing
+## nothing has to SAY so, and one that merely forgot still fails everything it used to.
+##
+## ⚠️ **THE TWO HAVE TO AGREE AND `validate()` CHECKS BOTH WAYS.** A def with this flag and
+## a visual is a sprite nothing will ever draw; a def without it and no visual is the
+## original mistake. Either is reported.
+##
+## It exists for `building.cliff_blocker`, which claims the tiles under a long diagonal
+## cliff whose own footprint is its `[1, 1]` anchor. See buildings.json
+## `_note_cliff_diag_runs`.
+var draws_nothing: bool = false
+
 var selectable: bool = true
 
 ## `{axis: sim facing}` for a def whose art is NOT symmetric about its run. Empty for
@@ -335,6 +354,7 @@ static func from_dict(p_id: StringName, d: Dictionary) -> BuildingDef:
 
 	b.wall_lengths = GameDefs.name_list(d.get("wall_lengths", []))
 	b.buildable = bool(d.get("buildable", true))
+	b.draws_nothing = bool(d.get("draws_nothing", false))
 	b.selectable = bool(d.get("selectable", true))
 	# ⚠️ **KEYS AND VALUES BOTH FORCED TO INT, and neither is paranoia.** A JSON object's
 	# keys are STRINGS, so `{"0": 2}` arrives with the key `"0"` and `facings[0]` would find

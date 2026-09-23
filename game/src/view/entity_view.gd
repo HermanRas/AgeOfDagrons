@@ -481,6 +481,23 @@ func _draw_health_dot() -> void:
 
 
 func _draw() -> void:
+	# ⛔ **A DEF THAT NAMES NO VISUAL DRAWS NOTHING, and that is a DECLARATION rather than
+	# a missing asset.** Every other absent id resolves to the loud magenta unknown on
+	# purpose, so a typo is seen instead of silently skipped. The empty id cannot be a
+	# typo: buildings.json has to omit the key to produce it, and
+	# `test_every_building_names_a_visual_for_all_three_phases` fails anything that does
+	# so without being named in its exemption.
+	#
+	# It exists for `building.cliff_blocker`. A diagonal run's art is ONE long sprite, and
+	# it cannot claim the tiles under it -- a rectangular footprint around a 1-tile
+	# diagonal line is the NxN box, which is 81 tiles for a 9-step run and about 30 of
+	# them rock. So the art is non-blocking and the tiles are claimed by invisible 1x1
+	# entities standing beneath it. They still OCCLUDE, which is the point: occlusion is
+	# built from footprints, so per-tile blockers give the run the per-tile occlusion a
+	# single 1x1 art entity could not.
+	if visual_id.is_empty():
+		return
+
 	if selected:
 		_draw_selection_ring()
 	_draw_health_dot()

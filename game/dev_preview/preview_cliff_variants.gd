@@ -97,6 +97,9 @@ const WATCH_TOWERS := [
 	Vector2i(12, 28), Vector2i(32, 28), Vector2i(54, 30), Vector2i(60, 36),
 	Vector2i(12, 48), Vector2i(30, 46),
 	Vector2i(39, 65),
+	# The four diagonal runs, which have no interior to stand in: these sit beside them on
+	# open sand, one per pair, close enough that `los: 10` reaches both ends of a 9-step run.
+	Vector2i(74, 41), Vector2i(76, 23),
 ]
 
 ## The four lengths, for the ladders. A RUN uses exactly one of them -- see `_row`.
@@ -134,6 +137,24 @@ const PEDESTAL_AT := Vector2i(40, 66)
 const PEDESTAL_HALF_U := 10
 const PEDESTAL_HALF_V := 6
 
+## The tiles of a diagonal run are claimed by this, one each, and it draws nothing.
+const BLOCKER_DEF := &"building.cliff_blocker"
+
+## The long diagonal runs, which are the point of #97's last open question: a 3 and a 9 of
+## each family, laid on open sand east of the plateaus so the ART is judged on its own.
+##
+## ⚠️ **NO 6 IN THIS LIST AND IT IS NOT AN OVERSIGHT.** An even-step run centres BETWEEN
+## tiles, and `vis.cliff_*_diag_medium` is baked with its anchor at the sprite's centre --
+## 160 px along a run whose tiles sit every 64 px. Half a tile off the grid, and no
+## footprint can shift it back. `_diag_run` refuses an even count rather than placing one
+## half a tile out, which is a fault that reads as a bad bake.
+const DIAG_RUNS := [
+	{"art": &"building.cliff_face_diag_long", "at": Vector2i(68, 46), "steps": 9},
+	{"art": &"building.cliff_back_diag_long", "at": Vector2i(68, 34), "steps": 9},
+	{"art": &"building.cliff_face_diag_short", "at": Vector2i(72, 26), "steps": 3},
+	{"art": &"building.cliff_back_diag_short", "at": Vector2i(72, 20), "steps": 3},
+]
+
 const BASE_1 := Vector2i(6, 6)
 const BASE_2 := Vector2i(70, 74)
 
@@ -162,6 +183,8 @@ func _ready() -> void:
 	for p in PLATEAUS:
 		cliffs += _plateau(data, p["high"] as Rect2i, int(p["length"]), bool(p["corner"]))
 	cliffs += _pedestal(data, PEDESTAL_AT, PEDESTAL_HALF_U, PEDESTAL_HALF_V)
+	for r in DIAG_RUNS:
+		cliffs += _diag_run(data, r["art"] as StringName, r["at"] as Vector2i, int(r["steps"]))
 
 	print("Cliff variants map: %dx%d, %d cliff entities, %d entities in all"
 			% [data.size.x, data.size.y, cliffs, data.entities.size()])
@@ -298,6 +321,49 @@ func _col(data: MapData, family: Dictionary, axis: int, at: Vector2i, span: int,
 		offset += piece
 		laid += 1
 	return laid
+
+
+## One diagonal run: the long piece's ART at the run's centre tile, a BLOCKER on every tile.
+##
+## ## ⛔ TWO KINDS OF ENTITY FOR ONE WALL, AND THAT IS THE FIX RATHER THAN A WORKAROUND
+##
+## A footprint is a rectangle, and the rectangle around a 1-tile-wide DIAGONAL line is the
+## box around it. The owner asked the right question -- the largest axis piece claims 9x3 =
+## 27, so why is a diagonal 81 worse? Because the axis rectangle IS the rock: 9 wide by the
+## 3.4 tiles the face measurably hangs. The diagonal square is a box around a line, and of
+## its 81 tiles about 30 are rock. The other 51 are two triangles: 36 tiles of the plateau
+## TOP behind the cliff and 15 of open ground past its base, none of them near any rock and
+## all of them unwalkable.
+##
+## So the art stopped claiming ground. A run is one non-blocking sprite plus `steps`
+## invisible 1x1 blockers, and the claim is exactly the line.
+##
+## ## 📐 WHY A LONG SPRITE IS SAFE HERE AND WOULD NOT BE ON AN AXIS RUN
+##
+## Every tile of an `AXIS_D2` run has the same `x + y`, so the run is a line of CONSTANT
+## DEPTH: one sprite anchored anywhere on it sorts correctly against every unit for its
+## whole length. An axis run or the N-S staircase spans many depths and a single sprite
+## would sort wrong at one end of it.
+func _diag_run(data: MapData, art: StringName, at: Vector2i, steps: int) -> int:
+	# An even run has no centre TILE -- see `DIAG_RUNS`. Refused rather than rounded,
+	# because half a tile out looks like a bad bake and would be chased in the wrong place.
+	if steps % 2 == 0:
+		print("  ! a %d-step run has no centre tile to anchor %s on" % [steps, art])
+		return 0
+	var dir := WallPlan.step_dir(WallPlan.AXIS_D2)
+	# ⛔ **THE ART GOES DOWN FIRST, AND THE ORDER IS LOAD-BEARING FOR BLOCKING.**
+	# `SimMap.set_occupied` writes `blocking[i] = 1 if (id != 0 and blocks) else 0`, so it
+	# does not OR into the tile -- it assigns. A non-blocking entity spawned onto a tile a
+	# blocker already holds therefore CLEARS the blocking byte, and the run reports itself
+	# complete while a hole opens at the one tile the art is anchored on.
+	#
+	# Found by `_check_world`, which named the blocker AND the art piece on the same tile;
+	# the first version of this function laid the art last on a guess about draw order that
+	# was worth nothing -- a blocker draws nothing, so nothing was being ordered.
+	data.add_entity(art, 0, at + dir * (steps / 2), 0, WallPlan.AXIS_D2)
+	for i in range(steps):
+		data.add_entity(BLOCKER_DEF, 0, at + dir * i)
+	return steps + 1
 
 
 # ── the pedestal: a plateau square on the SCREEN rather than on the grid ────

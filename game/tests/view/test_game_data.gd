@@ -111,18 +111,26 @@ func test_the_full_roster_is_present() -> void:
 		# CLIFFS (#97/#99, 2026-09-22). Gaia scenery, like the nest above and for the same
 		# reason it is in this list: the list is "every building def that exists".
 		#
-		# ⚠️ **TEN DEFS FOR SIXTEEN STAGED ATLASES, AND THE SIX MISSING ONES ARE THE POINT
-		# OF THIS COMMENT** -- the 3/6/9 DIAGONAL lengths are declared in visuals.json and
-		# have no def, because a diagonal piece claims a SQUARE of its own run and those
-		# three would claim 9, 36 and 81 tiles for bands of roughly 4, 17 and 25. If a
-		# `building.cliff_face_diag_long` ever appears here, that decision was reversed and
-		# `MapData.footprint_rect_of` had better have been taught a non-rectangular claim
-		# first. buildings.json `_note_cliffs` has the arithmetic.
+		# ⚠️ **THE FOUR LONG DIAGONALS ARE HERE NOW, AND NOT BECAUSE `footprint_rect_of`
+		# LEARNED A NON-RECTANGULAR CLAIM.** An earlier version of this comment said they
+		# could only arrive that way. They arrived the other way instead (owner,
+		# 2026-09-22): the art stopped claiming its own ground. A `_diag_short`/`_diag_long`
+		# def is `blocks_movement: false` with a [1, 1] footprint, and the run's tiles are
+		# claimed by `building.cliff_blocker`, one per tile, which draws nothing. So the
+		# square claim this list used to be guarding against is not made by anything.
+		#
+		# **THE 6-STEP PAIR IS STILL ABSENT AND THAT IS NOW AN ART FACT, NOT A SIM ONE** --
+		# an even-step run centres BETWEEN tiles, so the baked anchor sits half a tile off
+		# the grid and no footprint can shift it back. buildings.json `_note_cliff_diag_runs`
+		# has both sets of arithmetic.
 		&"building.cliff_face", &"building.cliff_face_short",
 		&"building.cliff_face_medium", &"building.cliff_face_long",
 		&"building.cliff_back", &"building.cliff_back_short",
 		&"building.cliff_back_medium", &"building.cliff_back_long",
 		&"building.cliff_face_diag", &"building.cliff_back_diag",
+		&"building.cliff_face_diag_short", &"building.cliff_face_diag_long",
+		&"building.cliff_back_diag_short", &"building.cliff_back_diag_long",
+		&"building.cliff_blocker",
 	]
 	assert_eq(_by_content(reg.building_ids()), _by_content(expected_buildings),
 			"every age-skinned building has a definition, and nothing extra")
@@ -258,6 +266,11 @@ func test_every_def_resolves_to_a_declared_visual() -> void:
 		var vis: StringName = reg.visual_for(id)
 		assert_true(reg.visual_ids().has(vis), "%s -> '%s' is declared" % [id, vis])
 	for id in reg.building_ids():
+		# A def that DECLARES it draws nothing has no hop to land: the empty id is the
+		# answer, and `EntityView._draw` returns on it. Read off the flag rather than off
+		# the id, so this cannot start excusing a def that merely forgot its art.
+		if reg.building(id).draws_nothing:
+			continue
 		for phase in [0, 1, 2, 3]:
 			var vis: StringName = reg.visual_for(id, phase)
 			assert_true(reg.visual_ids().has(vis),
@@ -321,15 +334,58 @@ func test_footprints_are_the_max_across_all_four_age_skins() -> void:
 			Vector2i(4, 4), "house is 4x4, matching its 4x4 foundation")
 
 
+## Nothing but the cliff blocker, and it is named rather than pattern-matched so that a
+## second one cannot join it by accident. Drawing nothing is its whole job: it claims the
+## tiles under a long diagonal piece whose own footprint is [1, 1], and `EntityView._draw`
+## returns early on an empty visual id for it alone.
+const DRAWS_NOTHING := [&"building.cliff_blocker"]
+
+
 func test_every_building_names_a_visual_for_all_three_phases() -> void:
 	# SimBuilding.Phase is foundation / under-construction / complete / destroyed,
 	# and the first two share art. A building missing one would render nothing at
 	# that phase.
+	var declared: Array[StringName] = []
 	for id in reg.building_ids():
 		var b: BuildingDef = reg.building(id)
+		if b.draws_nothing:
+			declared.append(id)
+			continue
 		assert_false(b.visual.is_empty(), "%s has a complete visual" % id)
 		assert_false(b.visual_foundation.is_empty(), "%s has a foundation visual" % id)
 		assert_false(b.visual_rubble.is_empty(), "%s has a rubble visual" % id)
+
+	# ⚠️ **THE EXEMPTION IS BY FLAG, SO THE ROSTER COULD GROW ONE WITHOUT THIS FILE NOTICING.**
+	# Pinning the membership is what makes that a failure rather than a silent new hole: a
+	# second def drawing nothing is a decision somebody should have to come here and make.
+	assert_eq(declared, DRAWS_NOTHING,
+			"exactly these defs draw nothing, and a new one is a deliberate addition")
+
+
+## The other half of the exemption above, and the reason it is safe: the one def allowed to
+## name no visual must actually name none, at every phase. Without this the flag would also
+## excuse a cliff blocker that had been given art by mistake and was quietly drawing a second
+## sprite over the strip it stands under.
+func test_the_cliff_blocker_names_no_visual_at_any_phase() -> void:
+	var b: BuildingDef = reg.building(&"building.cliff_blocker")
+	assert_not_null(b, "the blocker is declared")
+	assert_true(b.draws_nothing, "and it says so, rather than being caught by an empty key")
+	for phase in [0, 1, 2, 3]:
+		assert_true(b.visual_for_phase(phase).is_empty(),
+				"the cliff blocker draws nothing at phase %d" % phase)
+	assert_true(b.blocks_movement, "it exists to block, so blocking is the one thing it does")
+	assert_false(b.selectable, "and it cannot be clicked, having nothing to click on")
+
+
+## ⛔ **THE FLAG MUST NOT BECOME A WAY TO SILENCE THE WARNING.** `validate()` checks it in both
+## directions, and this is the direction with no natural failure to catch it: a def that says
+## it draws nothing and names a visual anyway would load clean under a one-way check, and the
+## sprite would simply never appear.
+func test_declaring_no_art_and_naming_some_anyway_is_reported() -> void:
+	var b := BuildingDef.from_dict(&"building.test_contradiction", {
+		"draws_nothing": true, "visual": "vis.villager"})
+	assert_true(b.draws_nothing)
+	assert_eq(b.visual, &"vis.villager", "the loader keeps both, and validate() is what objects")
 
 
 func test_visual_for_phase_maps_construction_phases_onto_the_foundation() -> void:

@@ -45,6 +45,15 @@ const BACK_DEFS := [
 ]
 const DIAG_DEFS := [&"building.cliff_face_diag", &"building.cliff_back_diag"]
 
+## The long diagonal pieces, which are ART ONLY: `blocks_movement` false, footprint [1, 1].
+## A run's ground is claimed by `BLOCKER` instead, one per tile. See `_note_cliff_diag_runs`.
+const DIAG_RUN_DEFS := [
+	&"building.cliff_face_diag_short", &"building.cliff_face_diag_long",
+	&"building.cliff_back_diag_short", &"building.cliff_back_diag_long",
+]
+
+const BLOCKER := &"building.cliff_blocker"
+
 ## Every atlas the art side staged, including the six that deliberately have no def.
 const ALL_VISUALS := [
 	&"vis.cliff_face", &"vis.cliff_face_short", &"vis.cliff_face_medium",
@@ -58,20 +67,28 @@ const ALL_VISUALS := [
 ]
 
 
+## The pieces that both DRAW and BLOCK, which was every cliff until the long diagonals
+## landed. Most claims below are about these and would be false of the other two kinds.
 func _defs() -> Array:
 	return FACE_DEFS + BACK_DEFS + DIAG_DEFS
+
+
+## Every cliff def of any kind: the ones that draw and block, the long diagonals that only
+## draw, and the blocker that only blocks.
+func _all_defs() -> Array:
+	return _defs() + DIAG_RUN_DEFS + [BLOCKER]
 
 
 # ── the shape of a gaia cliff ───────────────────────────────────────────────
 
 
 func test_every_cliff_piece_is_declared() -> void:
-	for id in _defs():
+	for id in _all_defs():
 		assert_not_null(GameDataRegistry.building(id), "%s is in buildings.json" % id)
 
 
 func test_a_cliff_is_placed_by_a_map_and_never_by_a_player() -> void:
-	for id in _defs():
+	for id in _all_defs():
 		var bd: BuildingDef = GameDataRegistry.building(id)
 		assert_false(bd.buildable, "%s is never offered in the build menu" % id)
 		assert_true(bd.cost.is_empty(), "%s costs nothing -- nobody buys one" % id)
@@ -82,12 +99,26 @@ func test_a_cliff_is_placed_by_a_map_and_never_by_a_player() -> void:
 
 
 func test_a_cliff_blocks_and_has_nothing_to_say() -> void:
-	for id in _defs():
+	for id in _all_defs():
 		var bd: BuildingDef = GameDataRegistry.building(id)
-		assert_true(bd.blocks_movement, "%s stops land movement" % id)
 		assert_false(bd.selectable, "%s cannot be tapped -- it has no panel" % id)
 		assert_eq(bd.los, 0, "%s gives nobody vision" % id)
 		assert_false(bd.leaves_rubble, "%s leaves no wreckage" % id)
+
+	# ⛔ **BLOCKING IS NOW A PROPERTY OF THE KIND, NOT OF BEING A CLIFF**, and asserting it
+	# of every cliff is what this test used to do. A long diagonal draws a run it does not
+	# own: its footprint is the [1, 1] anchor, so claiming the ground would mean claiming
+	# the NxN box around a 1-tile line. Split rather than dropped, because "the art piece
+	# blocks nothing" is the half that is easy to lose and expensive to notice -- a run
+	# that blocked from its anchor would look right and let units walk through the rock.
+	for id in _defs():
+		assert_true(GameDataRegistry.building(id).blocks_movement,
+				"%s draws its own tile, so it blocks it" % id)
+	for id in DIAG_RUN_DEFS:
+		assert_false(GameDataRegistry.building(id).blocks_movement,
+				"%s is art over ground it does not own" % id)
+	assert_true(GameDataRegistry.building(BLOCKER).blocks_movement,
+			"the blocker is the half that does own it")
 
 
 ## ⛔ THE WHOLE OF "UNKILLABLE", AND IT IS NOT A FLAG ANYWHERE.
@@ -129,7 +160,7 @@ func test_the_axis_pieces_resolve_to_the_frames_the_art_side_measured() -> void:
 ## It is a quad through the notch tile's top vertex and there is nothing to turn: the other
 ## seven frames of that atlas are the same geometry pointed at nothing the camera can see.
 func test_a_diagonal_piece_draws_the_same_frame_whichever_axis_it_is_laid_on() -> void:
-	for id in DIAG_DEFS:
+	for id in DIAG_DEFS + DIAG_RUN_DEFS:
 		var bd: BuildingDef = GameDataRegistry.building(id)
 		for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y, WallPlan.AXIS_D1, WallPlan.AXIS_D2]:
 			assert_true(bd.can_face(axis), "%s can be laid on axis %d" % [id, axis])
@@ -201,6 +232,66 @@ func test_the_face_claims_the_ground_its_rock_covers() -> void:
 		assert_eq(bd.footprint.y, 1, "%s is a rim and covers only its own tile" % id)
 	assert_eq(int(GameDataRegistry.building(&"building.wall_stone_long").footprint.y),
 			WallPlan.DEPTH, "a wall is still two, and is a different kind of object")
+
+
+## ⛔ **THE WHOLE POINT OF THE LONG DIAGONALS, IN ONE NUMBER.** A 9-step run claims 9 tiles,
+## not 81. The old arrangement gave the art a footprint and got the box around its line: 81
+## tiles of which about 30 are rock, the rest two triangles -- 36 tiles of the plateau top
+## behind the cliff and 15 of open ground past its base.
+##
+## ⚠️ **ASSERTED THROUGH `MapData.footprint_rect_of` RATHER THAN OFF `bd.footprint`.** That
+## function is the rule the validator and `MapGen.build_from` both read, and reading the def
+## directly would pass while the thing that actually claims ground still squared the run --
+## which is precisely the failure this arrangement exists to prevent.
+func test_a_long_diagonal_claims_its_line_and_not_the_square_around_it() -> void:
+	var art := MapData.footprint_rect_of({
+		"def_id": &"building.cliff_face_diag_long", "tile": Vector2i(10, 20),
+		"axis": WallPlan.AXIS_D2})
+	assert_eq(art.size(), 1, "the art owns its anchor tile and nothing else")
+
+	# The run the art is drawn over, laid the way a map lays it: one blocker a tile.
+	var claimed: Dictionary = {}
+	for step in range(9):
+		var t := Vector2i(10 + step, 20 - step)
+		for tile in MapData.footprint_rect_of({"def_id": BLOCKER, "tile": t}):
+			claimed[tile] = true
+	assert_eq(claimed.size(), 9, "nine tiles for a nine-step run, one deep")
+	assert_true(claimed.has(Vector2i(10, 20)), "it starts where the art is anchored")
+	assert_true(claimed.has(Vector2i(18, 12)), "and reaches the far end of the run")
+	# The two corners of the box that used to be claimed and are the reason this changed:
+	# one is the plateau top behind the cliff, the other open ground past its base.
+	assert_false(claimed.has(Vector2i(10, 12)), "nothing taken on the high side")
+	assert_false(claimed.has(Vector2i(18, 20)), "nothing taken out past the base")
+
+
+## ⛔ **`set_occupied` ASSIGNS THE BLOCKING BYTE, IT DOES NOT MERGE INTO IT** -- so a
+## non-blocking cliff spawned onto a tile a blocker already holds OPENS that tile.
+##
+## This is the whole risk the two-entity arrangement takes on, and it is invisible: the run
+## still reports every piece standing, the art still draws, and a single tile at the middle
+## of the wall -- the one the art is anchored on -- is walkable. `_check_world` in
+## `preview_cliff_variants` caught it by naming both entities on the tile, and the fix is
+## that a run lays its ART FIRST and its blockers after.
+##
+## Asserted against `SimMap` rather than against the preview, because this is a property of
+## the occupancy grid and would be just as true of any other pair of entities sharing a tile.
+func test_a_later_non_blocking_claim_clears_an_earlier_blocking_one() -> void:
+	var m := SimMap.create(Vector2i(8, 8), SimMap.Terrain.GRASS)
+	var one := Rect2i(3, 3, 1, 1)
+
+	m.set_occupied(one, 11, true)
+	assert_false(m.is_passable(Vector2i(3, 3), SimMap.Domain.LAND),
+			"the blocker holds the tile")
+
+	m.set_occupied(one, 12, false)
+	assert_true(m.is_passable(Vector2i(3, 3), SimMap.Domain.LAND),
+			"and art landing on top of it opens the tile again -- assignment, not a merge")
+
+	# The order a run actually uses, which is the other way round and holds.
+	m.set_occupied(one, 13, false)
+	m.set_occupied(one, 14, true)
+	assert_false(m.is_passable(Vector2i(3, 3), SimMap.Domain.LAND),
+			"art first, blocker second: the tile stays shut")
 
 
 func test_the_axis_ladder_is_the_walls_ladder_plus_a_filler() -> void:
@@ -319,12 +410,16 @@ func _mentions(problems: Array[String], text: String) -> bool:
 
 ## All sixteen, including the six with no building def.
 ##
-## ⚠️ **THE SIX ARE DECLARED ON PURPOSE AND THIS IS WHERE THAT IS RECORDED.** The 3/6/9
-## DIAGONAL lengths are staged and packed and have no def, because a diagonal segment claims
-## a SQUARE of its own run -- so they would claim 9, 36 and 81 tiles for bands of roughly 4,
-## 17 and 25. Declaring them keeps them in the art pack (`build_packs.py` resolves `base`
-## out of visuals.json) so the day a footprint can be something other than a box they are a
-## buildings.json row rather than a bake.
+## ⚠️ **TWO OF THE SIXTEEN STILL HAVE NO DEF, AND THE REASON CHANGED ON 2026-09-22.** It used
+## to be all six diagonal lengths, because a diagonal segment claims a SQUARE of its own run.
+## That is no longer how a run is built -- the art claims nothing and `cliff_blocker` claims
+## the tiles -- so the 3 and the 9 now have defs.
+##
+## The two `_diag_medium` atlases remain defless for an unrelated reason that no footprint can
+## fix: 386 px wide with the anchor at 193 puts it 160 px along a run whose tiles sit every
+## 64 px, half a tile off the grid, because an EVEN-step run centres between tiles. Declaring
+## them still keeps them in the art pack (`build_packs.py` resolves `base` out of visuals.json)
+## so that a 32 px anchor shift is a rebake and not a rediscovery.
 func test_every_cliff_atlas_resolves_to_real_art() -> void:
 	for id in ALL_VISUALS:
 		var entry: AtlasEntry = GameDataRegistry.atlas_for(id, 1)
@@ -335,7 +430,9 @@ func test_every_cliff_atlas_resolves_to_real_art() -> void:
 ## The frames the tables above index have to EXIST, which is a different question from the
 ## atlas resolving: a rebake at `directions = 1` would resolve perfectly and have one frame.
 func test_the_frames_the_facing_tables_index_are_really_there() -> void:
-	for id in _defs():
+	# `BLOCKER` is left out and cannot simply be added: it names no visual, so `atlas_for`
+	# would hand back the magenta unknown and this would assert against that.
+	for id in _defs() + DIAG_RUN_DEFS:
 		var bd: BuildingDef = GameDataRegistry.building(id)
 		var entry: AtlasEntry = GameDataRegistry.atlas_for(bd.visual, 1)
 		assert_not_null(entry)

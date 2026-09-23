@@ -140,6 +140,12 @@ func test_each_category_lists_its_own_roster() -> void:
 	var rows := 0
 	var directional := 0
 	for id in GameDataRegistry.building_ids():
+		# ⚠️ **THE PALETTE FILTERS AT THE POINT OF LISTING, SO THE EXPECTATION HAS TO TOO.**
+		# `building_ids()` is the roster and deliberately unfiltered. Until 2026-09-23 no
+		# BUILDING was ever flagged, so summing the whole roster happened to agree; the cliff
+		# run pieces are the first, and without this the count is over by exactly those.
+		if not GameDataRegistry.placeable(id):
+			continue
 		if GameDataRegistry.axis_variants(id):
 			directional += 1
 			rows += ObjectPalette.axes_for(id).size()
@@ -261,11 +267,37 @@ func test_every_carcass_in_the_roster_is_flagged_unplaceable() -> void:
 ## ⚠️ **ABSENT MEANS PLACEABLE**, so nothing had to be edited for the other ten files. A flag
 ## that had to be spelled out everywhere is a flag somebody forgets on the next entry, and the
 ## failure would be a new building missing from the palette.
+## ⛔ **THE BUILDINGS THAT DO SPELL IT OUT, AND THE ONLY ONES.** A diagonal cliff run is TWO
+## kinds of entity -- a non-blocking sprite and the invisible blockers that claim its tiles --
+## and this tool places one thing per click. Offering either half alone would hand an author a
+## wall that draws rock and blocks nothing, or blocks nothing visible: a map that validates,
+## looks right in the editor, and lets units walk through a cliff. They come back as a PAIR
+## when the palette can place one. buildings.json `_note_cliff_diag_runs` has the rest.
+##
+## Named rather than pattern-matched on "cliff", because the other ten cliff defs ARE placeable
+## and a prefix would quietly hide the whole family.
+const UNPLACEABLE_BUILDINGS := [
+	&"building.cliff_blocker",
+	&"building.cliff_face_diag_short", &"building.cliff_face_diag_long",
+	&"building.cliff_back_diag_short", &"building.cliff_back_diag_long",
+]
+
+
 func test_absent_means_placeable() -> void:
 	if not _has_game():
 		return
+	var flagged := 0
 	for id in GameDataRegistry.building_ids():
+		if UNPLACEABLE_BUILDINGS.has(id):
+			flagged += 1
+			assert_false(GameDataRegistry.placeable(id),
+					"'%s' is listed here and is still offered" % id)
+			continue
 		assert_true(GameDataRegistry.placeable(id), "'%s' vanished from the palette" % id)
+	# Both directions, so the list cannot go stale in either: a def dropped from the roster
+	# stops being counted here, and one that quietly regained its flag fails above.
+	assert_eq(flagged, UNPLACEABLE_BUILDINGS.size(),
+			"every id listed above is still in the roster")
 	assert_true(GameDataRegistry.placeable(&"nothing.at.all"),
 			"an unknown id must not be hidden -- a typo would look like the flag working")
 
