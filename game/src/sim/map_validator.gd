@@ -385,7 +385,7 @@ static func _overlapping_entities(data: MapData) -> int:
 	var seen: Dictionary = {}
 	var overlaps := 0
 	for e in data.entities:
-		var cliff := _is_cliff(e)
+		var cliff := is_cliff(e)
 		for t in MapData.footprint_rect_of(e):
 			if seen.has(t):
 				if cliff and bool(seen[t]):
@@ -405,5 +405,8 @@ static func _overlapping_entities(data: MapData) -> int:
 ## removed" -- `selectable` is a view rule and `buildable` is shared with every wall segment.
 ## Adding one for a single caller is the heavier change; if a second kind of permanent
 ## scenery ever lands, that flag is what this should become.
-static func _is_cliff(e: Dictionary) -> bool:
+## ⚠️ **PUBLIC BECAUSE THE MAP EDITOR ASKS IT TOO**, and it must get the same answer: its
+## plateau tool lays a ring whose corners share tiles on purpose, and it decides what may
+## overlap what by calling this rather than by matching the id prefix a second time.
+static func is_cliff(e: Dictionary) -> bool:
 	return String(e.get("def_id", "")).begins_with("building.cliff")
