@@ -337,6 +337,24 @@ python -c "import json,glob,os; [print(os.path.basename(p), sorted({e['stored_in
 have planned: **one piece = one tile edge still composes, and all 8 directions stay reachable.**
 Board card `cliff-terrain` (#99) carries the wiring; this is the part you need.
 
+> ### ⛔ CORRECTED 2026-09-23 — THE TERRAIN PREMISE BELOW IS DEAD, AND IT WAS MINE
+>
+> You annotated your own section the day this changed; this one had no marker and has been
+> sitting here asserting the opposite ever since. **A cliff is a gaia-owned `SimBuilding`, not a
+> `SimMap.Terrain.CLIFF` byte** (owner, 2026-09-22), and your diagnosis of why is the one that
+> holds: a terrain byte is one value per tile, so painting CLIFF throws the plateau's grass top
+> away and there is no cliff-top texture to put back — all sixteen atlases are faces and crests.
+>
+> ✅ **What survives unchanged is everything you built against it**, which is why the section is
+> left standing rather than deleted: one piece per tile edge still composes, all 8 directions are
+> still reachable, the 3 / 6 / 9 lengths are still the wall's, and a run is still covered greedily
+> by length. Only *where the run is stored* changed — building footprints instead of a terrain
+> array. **Nothing baked was wasted.**
+>
+> ⚠️ The one claim below that is now simply wrong: *"`MapData` gains NOTHING"*. It gained per-piece
+> entities, which is what let a cliff pick up blocking, air passage, unkillability and occlusion
+> from rules that already existed.
+
 ### The proposal, in one line
 
 **A map marks a cliff by painting a tile, not by describing an edge.** A new
@@ -782,6 +800,18 @@ A D2 run's tiles sit every **64 px**, so an anchor has to land on a multiple of 
 **Where it plugs in once baked:** two rows in `buildings.json` beside the four already there, and one entry in `DIAG_RUNS` in `preview_cliff_variants.gd`. `_diag_run` already **refuses** an even step count with a printed reason rather than placing one half a tile out, so nothing silently regresses in the meantime.
 
 **Not urgent.** A 6-step run is laid as 3 + 3 today and looks right; this only costs one extra window onto the 16 m strip. Both medium atlases stay declared in `visuals.json` so they remain in the art pack either way. The reasoning is recorded in `buildings.json` `_note_cliff_diag_runs` and in `test_cliffs.gd`.
+
+### ⚠️ And one correction owed to you: the N–S staircase draws the `+x` faces and NOT the `-y` crests
+
+Your note above ends *"the `+x` faces and `-y` crests it already draws are exactly what is visible there. Do not wait for a piece."* **The first half is right and the conclusion is right — the second half is not, and it was the artifact the owner reported** (*"the up and down piece still has artifacts or something wrong down the side"*).
+
+On a **screen-aligned** plateau, `+x` and `-y` are both the *same* screen side of a tile — its lower-right and upper-right edges. So every tile of an N–S run has a drop on both and was taking a face **and** a crest from the same anchor, overlapping. On a grid-aligned plateau that never happens, which is why the rule read as correct.
+
+Measured off the staged atlas, and this is the part that settles it: **`vis.cliff_face` stored 3 is 54 px wide and reaches 103 px below its anchor, while an N–S run advances only 32 px per tile.** The faces alone overlap better than 3:1 and already cover the side solid. The crest laid over them was the repeating rubble seam down the middle of it — never a gap being filled.
+
+✅ **Suppressed where the same screen side already carries a face; owner confirmed in game** (*"the N-S sides are clean"*). Nothing is asked of you — **no rebake, and your "do not wait for an N–S piece" conclusion is confirmed**: I checked stored 2 and 6 on all four families first, and they are knife-edge slivers exactly as your dot-product argument predicts.
+
+📌 Same day, the outer-corner rule needed one more condition for the same reason: a notch covers the gap on **its own side alone**, so a corner piece may only be stood down when **both** adjacent low tiles are notches. Along a run both are; at a run's **end** one side is off the plateau and has none. That was the missing corners.
 
 > ## ✅ [art] DONE, 2026-09-23 — and it was FOUR atlases, not two
 >
