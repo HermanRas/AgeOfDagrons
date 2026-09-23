@@ -434,21 +434,35 @@ static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictio
 			var rec := _rec(ladder[piece] if not ladder.is_empty() else def_id, tile, axis)
 			# A MERGED diagonal is the only piece that draws without claiming: the 1-tile one
 			# blocks on its own and must not be given blockers as well.
+			# WHAT THIS PIECE ALREADY CLAIMS, which is what decides where its rock still falls
+			# unheld. A diagonal claims its LINE and only its line -- `[1, 1]` standing alone,
+			# one blocker a tile when merged -- while an axis piece claims a `[length, DEPTH]`
+			# rectangle, `perp` being the direction `MapData.footprint_rect_of` transposes into.
+			var claimed: Dictionary = {}
+			var perp := Vector2i.ONE - step
+			for i in range(piece):
+				if art_only:
+					claimed[tile + step * i] = true
+				else:
+					for j in range(DEPTH):
+						claimed[tile + step * i + perp * j] = true
+
 			if art_only and piece > 1:
 				art.append(rec)
 				for i in range(piece):
-					if not blocked.has(tile + step * i):
-						blocked[tile + step * i] = true
-						out.append(_rec(BLOCKER, tile + step * i, WallPlan.AXIS_X))
+					_block(out, blocked, tile + step * i)
 			else:
 				out.append(rec)
-				# The face is the only family whose rock outruns its rectangle: the crest is one
-				# tile deep, so its claim and its coverage are the same single row.
-				if ladder == FACE:
-					for t in _shear_gap(tile, axis, piece, high):
-						if not blocked.has(t):
-							blocked[t] = true
-							out.append(_rec(BLOCKER, t, WallPlan.AXIS_X))
+
+			# ⛔ **BOTH FACE FAMILIES SHEAR, AND THE DIAGONAL IS THE WORSE OF THE TWO.** Its art
+			# is `height_m` 4.0, the same wall of rock as an axis face, but its claim is a single
+			# tile per step rather than a 3-deep rectangle -- so EVERY diagonal piece left two
+			# tiles of rock walkable, the whole length of every screen-horizontal run. The owner
+			# rode along one. The crests shear too and do not care: 1.88 m of rim covers the tile
+			# it stands on and nothing below it.
+			if ladder == FACE or ladder == FACE_DIAG:
+				for t in _shear_gap(tile, step, piece, claimed, high):
+					_block(out, blocked, t)
 			offset += piece
 	return art + out
 
@@ -468,11 +482,18 @@ static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictio
 ## therefore covers `start + step * i + (1, 1) * d`. **The claim is a rectangle and the coverage
 ## is that rectangle SHEARED along the run**, and the two agree on one row only.
 ##
-## 📐 It is worst exactly where the owner found it. An N-S side is a staircase, so every piece is
-## a run of ONE, and a 1-tile face claims `T`, `T+(1,0)`, `T+(2,0)` while its rock covers `T`,
-## `T+(1,1)`, `T+(2,2)`: **one tile in common and two tiles of solid rock left walkable, per
-## piece, down the whole side.** A 9-tile E-W run fares better -- the shear only overhangs its
-## far end -- and loses 3.
+## 📐 An N-S side is a staircase, so every piece is a run of ONE, and a 1-tile face claims `T`,
+## `T+(1,0)`, `T+(2,0)` while its rock covers `T`, `T+(1,1)`, `T+(2,2)`: **one tile in common and
+## two tiles of solid rock left walkable, per piece, down the whole side.** A 9-tile E-W run
+## fares better -- the shear only overhangs its far end -- and loses 3.
+##
+## ⛔ **AND THE DIAGONALS ARE WORSE, WHICH IS THE HALF THIS MISSED FIRST TIME ROUND.** A
+## screen-horizontal cliff is a line of constant `x + y`, so it is an `AXIS_D2` run and is made
+## ENTIRELY of `_diag` pieces -- and a diagonal claims its line and nothing under it, one tile
+## per step, while `visuals.json` gives its art the same `height_m` 4.0 as an axis face. So every
+## diagonal piece left two tiles of rock open, the full length of every horizontal run. The owner
+## rode a scout along one and photographed it. Both face families are sheared here now; `claimed`
+## is passed in because the two describe what they hold differently.
 ##
 ## 📌 **THE OVER-CLAIM IS LEFT ALONE.** The tiles the rectangle holds without rock over them are
 ## the mirror of this, and un-claiming them would mean taking the footprints away from the face
@@ -483,22 +504,24 @@ static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictio
 ## ⚠️ **A HIGH TILE IS NEVER BLOCKED.** On any plateau we lay, down-screen of a near face is off
 ## the plateau, so this never fires; on a painted concave blob it would, and walling off the top
 ## of someone's own plateau is not a thing this should be able to do.
-static func _shear_gap(tile: Vector2i, axis: int, length: int, high: Dictionary) -> Array[Vector2i]:
-	var step := step_of(axis)
-	var perp := Vector2i.ONE - step
-	var claimed: Dictionary = {}
-	for i in range(length):
-		for j in range(DEPTH):
-			claimed[tile + step * i + perp * j] = true
-
+static func _shear_gap(tile: Vector2i, step: Vector2i, length: int, claimed: Dictionary,
+		high: Dictionary) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for i in range(length):
-		# `d` opens at 1: the run's own line is `d == 0` and every footprint holds it already.
+		# `d` opens at 1: the run's own line is `d == 0` and every piece holds that already.
 		for d in range(1, DEPTH):
 			var t := tile + step * i + Vector2i.ONE * d
 			if not claimed.has(t) and not high.has(t):
 				out.append(t)
 	return out
+
+
+## One blocker on `t`, unless something already put one there.
+static func _block(out: Array[Dictionary], blocked: Dictionary, t: Vector2i) -> void:
+	if blocked.has(t):
+		return
+	blocked[t] = true
+	out.append(_rec(BLOCKER, t, WallPlan.AXIS_X))
 
 
 ## What `plan()` chose for each run. For a tool that wants to tell an author *"this edge is 8

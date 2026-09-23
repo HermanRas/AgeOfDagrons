@@ -238,13 +238,19 @@ func _length_of(def_id: StringName, ladder: Dictionary) -> int:
 ##
 ## ⚠️ **DERIVED FROM `step_of` AND `(1, 1)` RATHER THAN FROM `_shear_gap`**, so this is an
 ## independent statement of where the rock falls and not a restatement of the fix.
+##
+## ⛔ **BOTH FACE FAMILIES, AND ASKING ONLY ABOUT `FACE` IS HOW THIS SHIPPED HALF-DONE.** A
+## screen-horizontal cliff is a line of constant `x + y` -- an `AXIS_D2` run, made entirely of
+## `_diag` pieces, which claim their line and nothing under it. This test passed, the probe
+## passed, and the owner rode a scout the length of one.
 func _under_rock(plan: Array[Dictionary]) -> Dictionary:
 	var out: Dictionary = {}
 	for r in plan:
-		if CliffPlan.ladder_of(r["def_id"]) != CliffPlan.FACE:
+		var ladder := CliffPlan.ladder_of(r["def_id"])
+		if ladder != CliffPlan.FACE and ladder != CliffPlan.FACE_DIAG:
 			continue
 		var step := CliffPlan.step_of(int(r["axis"]))
-		for i in range(_length_of(r["def_id"], CliffPlan.FACE)):
+		for i in range(_length_of(r["def_id"], ladder)):
 			for d in range(CliffPlan.DEPTH):
 				out[(r["tile"] as Vector2i) + step * i + Vector2i.ONE * d] = true
 	return out
@@ -268,7 +274,11 @@ func test_no_tile_a_face_is_drawn_over_is_left_walkable() -> void:
 
 	var blocked: Dictionary = {}
 	for r in plan:
-		if CliffPlan.ART_ONLY.has(CliffPlan.ladder_of(r["def_id"])):
+		var ladder := CliffPlan.ladder_of(r["def_id"])
+		# ⚠️ **ONLY THE MERGED DIAGONALS ARE ART-ONLY.** `ART_ONLY` names the LADDER, and its
+		# 1-tile rung blocks on its own -- skipping the whole family here would drop a real
+		# claim and fail the test on a tile that is properly held.
+		if CliffPlan.ART_ONLY.has(ladder) and r["def_id"] != ladder[1]:
 			continue
 		for t in MapData.footprint_rect_of(r):
 			blocked[t] = true

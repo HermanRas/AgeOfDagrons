@@ -134,11 +134,15 @@ func _report_fresh() -> bool:
 
 
 ## Every tile a face's rock is painted over, from the run geometry rather than the footprint.
+##
+## ⚠️ **BOTH FACE FAMILIES.** Asking only about `FACE` is what let the first round of this report
+## "all clear" while the owner rode a scout along a screen-horizontal run: that run is constant
+## `x + y`, so it is `AXIS_D2` and every piece of it is a `_diag`.
 func _rock_tiles(data: MapData) -> Dictionary:
 	var out: Dictionary = {}
 	for e in data.entities:
 		var ladder := CliffPlan.ladder_of(e.get("def_id", &""))
-		if ladder != CliffPlan.FACE:
+		if ladder != CliffPlan.FACE and ladder != CliffPlan.FACE_DIAG:
 			continue
 		var length := 1
 		for rung in ladder:
