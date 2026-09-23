@@ -20,10 +20,15 @@ texture = "Cliff_Gen/prepared/cliff_v2_s1_crest.png"
 size_metres    = [16.971, 5.30]
 texture_metres = [16.0, 5.30]
 pitch_deg      = 75.0
-offset_m       = [0.0, -1.414, -1.96]
+# x = 1.414, not 0.0. An EVEN-step run anchors between tiles; half a diagonal
+# step moves it onto one. `cliff_face_diag_medium.toml` carries the arithmetic,
+# why the game side cannot fix it, and why `frame_origin_at` is the wrong knob.
+# ⚠️ This piece must move with the face's -- a near edge and a far edge of one
+# plateau register by construction only while their geometry matches.
+offset_m       = [1.414, -1.414, -1.96]
 
 [render]
-canvas = [512, 512]
+canvas = [576, 512]
 supersample = 4
 directions = 8
 frame_origin_at = 0.5

@@ -17,12 +17,24 @@ texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
 size_metres    = [12.0, 5.30]
 texture_metres = [16.0, 5.30]
 pitch_deg      = 75.0
-offset_m       = [0.0, -1.0, -1.96]
+# ⛔ x IS 1.0 HERE AND 0.0 ON EVERY OTHER LENGTH, for the same reason
+# `cliff_face_diag_medium.toml` sets 1.414 — read that file for the arithmetic.
+# Short version: `frame_origin_at = 0.5` anchors at k/2 tiles from the run's
+# start, tile CENTRES are at 0.5, 1.5, 2.5 ..., so **only an ODD k lands on
+# one**. 6 lands on 3.0, a tile boundary. Half an axis tile is 1.0 m.
+#
+# ⚠️ FOUND BY PARITY, NOT BY A BUG REPORT. The game side hit this on the
+# DIAGONAL medium (2026-09-23) because that is the family they wired first; this
+# one had the identical defect and nothing had asked for it yet. **Any even
+# length added to this set later needs the same half-step**, and the check is
+# one line: is the step count odd?
+offset_m       = [1.0, -1.0, -1.96]
 
 [render]
 # 6 tiles lean (192, 96) px; the unused 45-degree frames are wider still at
-# 12.0 m x 22.627 = 271 px. Generous, and the clip-check is the authority.
-canvas = [384, 352]
+# 12.0 m x 22.627 = 271 px. +64 px over the centred version, because the art now
+# reaches half a tile further from the origin on one side.
+canvas = [448, 352]
 supersample = 4
 directions = 8
 frame_origin_at = 0.5

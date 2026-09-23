@@ -20,10 +20,34 @@ texture = "Cliff_Gen/prepared/cliff_v2_s1.png"
 size_metres    = [16.971, 5.30]
 texture_metres = [16.0, 5.30]
 pitch_deg      = 75.0
-offset_m       = [0.0, -1.414, -1.96]
+# ⛔ x IS 1.414 HERE AND 0.0 ON EVERY OTHER LENGTH. AN EVEN-STEP RUN ANCHORS
+# BETWEEN TILES, AND THAT IS ARITHMETIC RATHER THAN A BUG IN THIS BAKE.
+#
+# `frame_origin_at = 0.5` puts the anchor at the piece's centre, which is k/2
+# steps from the run's start. A run's tile CENTRES are at 0.5, 1.5, 2.5 ...
+# steps, so the anchor lands on one only when **k is ODD**:
+#
+#     k = 1  ->  0.5 steps  ✅        k = 6  ->  3.0 steps  ⛔ a tile BOUNDARY
+#     k = 3  ->  1.5 steps  ✅        k = 9  ->  4.5 steps  ✅
+#
+# Half a diagonal step is 1.414 m (32 px), and shifting the QUAD by that much
+# along its own length moves the anchor to 2.5 steps, which is a tile centre.
+#
+# ⚠️ IT CANNOT BE FIXED ON THE GAME SIDE, which is why it is fixed here: a
+# building's draw position comes from `SimBuilding.centre_of(origin, footprint)`
+# and that only offers `origin + size / 2`. The +32 px screen-x nudge needs
+# `dx = +0.5, dy = -0.5` -- a NEGATIVE y size, which a `Vector2i` cannot hold.
+# Reported by the game side 2026-09-23 against `vis.cliff_face_diag_medium`.
+#
+# ⚠️ AND `frame_origin_at` IS THE WRONG KNOB for it. It moves the camera along
+# its own UP vector (isobake `scene.py`: `offset = (0.5 - frame_origin_at) *
+# vertical_extent`), so it frames vertically and cannot move an anchor sideways.
+offset_m       = [1.414, -1.414, -1.96]
 
 [render]
-canvas = [512, 512]
+# +64 px of width over the centred version: the art now reaches half a step
+# further from the origin on one side, and the camera still centres on the origin.
+canvas = [576, 512]
 supersample = 4
 directions = 8
 frame_origin_at = 0.5

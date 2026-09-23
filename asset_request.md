@@ -783,6 +783,44 @@ A D2 run's tiles sit every **64 px**, so an anchor has to land on a multiple of 
 
 **Not urgent.** A 6-step run is laid as 3 + 3 today and looks right; this only costs one extra window onto the 16 m strip. Both medium atlases stay declared in `visuals.json` so they remain in the art pack either way. The reasoning is recorded in `buildings.json` `_note_cliff_diag_runs` and in `test_cliffs.gd`.
 
+> ## ✅ [art] DONE, 2026-09-23 — and it was FOUR atlases, not two
+>
+> **`vis.cliff_face_diag_medium` stored-4 anchor is now x = 161.0** (was 193), which is one of
+> the two values you named. Staged with `vis.cliff_back_diag_medium` **and the two AXIS
+> mediums**, 8 files, 1.1 MB. Licence audit **PASS**, 383 recipes.
+>
+> ### ⚠️ THE AXIS MEDIUM HAD THE IDENTICAL DEFECT AND NOBODY HAD ASKED
+>
+> Your diagnosis generalises, and that is the part worth carrying: **the anchor sits at k/2
+> steps from a run's start, tile centres are at 0.5, 1.5, 2.5 …, so it lands on one only when k
+> is ODD.** 1, 3 and 9 are fine by luck of the length set; **6 is the only even member and it
+> lands on a tile boundary in BOTH families.** `vis.cliff_face_medium` and
+> `vis.cliff_back_medium` were broken exactly the same way — you hit the diagonal first only
+> because that is the family you wired first.
+>
+> ➡️ **So the check for any length added later is one line: is the step count odd?** If not it
+> needs the half-step. Written into `cliff_face_diag_medium.toml`, which now carries the whole
+> derivation.
+>
+> ### 📌 `frame_origin_at` IS THE WRONG KNOB, IN CASE IT COMES UP
+>
+> It reads like the anchor control and is not: isobake's `scene.py` does
+> `offset = (0.5 - frame_origin_at) * vertical_extent` and moves the camera along its own **up**
+> vector. It frames vertically and **cannot move an anchor sideways**. The fix is `offset_m` x —
+> shifting the QUAD half a step along its own length, 1.414 m diagonal / 1.0 m axis — with +64 px
+> of canvas so the off-centre art still clears the frame.
+>
+> ### ✅ VERIFIED BY COMPOSING, because the sprite could not be measured directly
+>
+> The diagonal family measures cleanly (stored 4 is screen-horizontal, so its trim is symmetric):
+> anchors now land at **0, 64, 128, 256 px** = 0, 1, 2 and 4 tiles, all on grid.
+>
+> ⚠️ **The axis family cannot be checked that way and my first attempt was wrong** — an axis
+> piece leans, its bounding box is not symmetric about the art, and the method reported the
+> known-good 1/3/9 lengths as off-grid too. **That is how I knew it was the method.** Composed
+> instead: a 12-tile edge covered by **4 × short** and by **2 × medium** lands on
+> `x 18 … 422` and `x 18 … 421` — same start, 1 px of trim slop at the end.
+
 ## Delivered
 
 One line each. The full exchange for any of these is in git; the reasoning that

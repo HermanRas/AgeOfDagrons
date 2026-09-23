@@ -14,10 +14,14 @@ texture = "Cliff_Gen/prepared/cliff_v2_s1_crest.png"
 size_metres    = [12.0, 5.30]
 texture_metres = [16.0, 5.30]
 pitch_deg      = 75.0
-offset_m       = [0.0, -1.0, -1.96]
+# x = 1.0, not 0.0. An EVEN-step run anchors between tiles; half an axis tile
+# moves it onto one. `cliff_face_diag_medium.toml` carries the arithmetic.
+# ⚠️ This piece must move with the face's -- a near edge and a far edge of one
+# plateau register by construction only while their geometry matches.
+offset_m       = [1.0, -1.0, -1.96]
 
 [render]
-canvas = [384, 352]
+canvas = [448, 352]
 supersample = 4
 directions = 8
 frame_origin_at = 0.5
