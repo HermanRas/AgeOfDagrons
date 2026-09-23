@@ -262,6 +262,34 @@ var _area := &""
 var _area_field: LineEdit = null
 var _area_row: Control = null
 
+## What the Area drag PRODUCES (owner, 2026-09-23).
+##
+## ## ⛔ A MODE ON ONE TOOL, AND NOT A SECOND TOOL
+##
+## A plateau shipped first as its own toolbar button and the owner moved it here: *"under the
+## current area tab, i would like a drop down, default is 'Named Area', the current area, next
+## option is Plato N<->S and the last one is Plato NE<->SW."* The reading that makes it obvious
+## is that all three are **the same gesture** — drag a rectangle, write once on release — and
+## what differs is only what the rectangle MEANS. A toolbar groups by gesture; a mode picker
+## answers "and what does this one do".
+##
+## ⚠️ **THE TWO PLATEAU LABELS NAME WHAT THEY DRAW, NOT WHAT THEY ARE.** `N<->S` is a box on the
+## SCREEN and a diamond in tiles; `NE<->SW` is a box on the grid and a diamond on screen. An
+## author is looking at the canvas, so the screen is the honest frame of reference — and naming
+## them the other way round is the exact confusion `WallPlan.AXIS_LABELS` derives from the
+## projection to avoid.
+enum AreaMode { NAMED, PLATEAU_SCREEN, PLATEAU_GRID }
+
+const AREA_MODES := [
+	{"id": AreaMode.NAMED, "label": "Named Area"},
+	{"id": AreaMode.PLATEAU_SCREEN, "label": "Plato N<->S"},
+	{"id": AreaMode.PLATEAU_GRID, "label": "Plato NE<->SW"},
+]
+
+var _area_mode: int = AreaMode.NAMED
+var _area_mode_picker: OptionButton = null
+var _area_name_row: Control = null
+
 ## Region names in the document being edited, pushed in by `set_area_names()`. Held rather than
 ## asked for, because this panel must not reach a `MapDocument` — see the class comment.
 var _area_names: Array[StringName] = []
@@ -395,6 +423,33 @@ func area_name() -> StringName:
 	if _area_field != null:
 		return StringName(_area_field.text.strip_edges())
 	return StringName(String(_area).strip_edges())
+
+
+## What the next Area drag will produce. One of `AreaMode`.
+func area_mode() -> int:
+	return _area_mode
+
+
+## Choose what the next Area drag produces. The public door for a test and `dev/`.
+##
+## ⚠️ **AN UNKNOWN VALUE FALLS BACK TO `NAMED` RATHER THAN BEING STORED**, `set_size_class`'s
+## rule: a mode nobody can see selected is a drag whose result nobody can predict, and the
+## named region is the only one of the three that cannot silently rewrite forty tiles.
+func set_area_mode(mode: int) -> void:
+	var known := false
+	for entry in AREA_MODES:
+		if int(entry["id"]) == mode:
+			known = true
+			break
+	_area_mode = mode if known else int(AreaMode.NAMED)
+	if _area_mode_picker != null:
+		for i in range(_area_mode_picker.item_count):
+			if _area_mode_picker.get_item_id(i) == _area_mode:
+				_area_mode_picker.selected = i
+				break
+	# A plateau has no name, so the box that asks for one goes with it.
+	if _area_name_row != null:
+		_area_name_row.visible = _area_mode == int(AreaMode.NAMED)
 
 
 ## Type a region name. The public door for a test, `dev/`, and a row in the grid.
@@ -1180,10 +1235,29 @@ func _build() -> void:
 	# field at minimum"*, and it turns out to be the maximum too: a region's whole content is a
 	# name and some rectangles, the rectangles come from the drag, and every other property the
 	# owner's README imagines ("size, shape, and properties") is either the drag or 16.7's.
-	var area_row := HBoxContainer.new()
+	var area_row := VBoxContainer.new()
 	_area_row = area_row
 	area_row.add_theme_constant_override("separation", 4)
-	area_row.add_child(_label("Area"))
+
+	# ── what the drag produces (owner, 2026-09-23) ──
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 4)
+	mode_row.add_child(_label("Draw"))
+	_area_mode_picker = OptionButton.new()
+	_area_mode_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for entry in AREA_MODES:
+		_area_mode_picker.add_item(str(entry["label"]), int(entry["id"]))
+	# FROM THE TABLE AND NOT A SECOND LIST, the tint picker's scar one row up: that control was
+	# built with ids the API then stored differently and rendered blank, and it was not connected
+	# at all -- an inert control that also looks empty reads as one fault.
+	_area_mode_picker.item_selected.connect(func(at: int) -> void:
+			set_area_mode(_area_mode_picker.get_item_id(at)))
+	mode_row.add_child(_area_mode_picker)
+	area_row.add_child(mode_row)
+
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 4)
+	name_row.add_child(_label("Area"))
 	_area_field = LineEdit.new()
 	_area_field.placeholder_text = "region name"
 	_area_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1192,7 +1266,12 @@ func _build() -> void:
 	# — silently, since both are legal states. `text_changed` is also why `_typing()` in
 	# `Editor._input` matters more now: this is a third `LineEdit` that must keep `Ctrl+Z`.
 	_area_field.text_changed.connect(func(t: String) -> void: set_area_name(StringName(t)))
-	area_row.add_child(_area_field)
+	name_row.add_child(_area_field)
+	# ⚠️ **THE NAME BOX BELONGS TO ONE MODE AND HIDES WITH THE OTHERS**, the size row's rule
+	# applied one level down: a plateau has no name, and a name box left showing beside it would
+	# be a promise the gesture cannot keep. `_area_name_row` is held so `set_area_mode` can.
+	_area_name_row = name_row
+	area_row.add_child(name_row)
 	# HIDDEN UNTIL THE AREAS TAB IS CHOSEN, the size row's rule: a control that is present and
 	# inert invites somebody to set it.
 	area_row.visible = false

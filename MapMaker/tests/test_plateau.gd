@@ -42,8 +42,13 @@ func _cliffs() -> int:
 # ── the write ───────────────────────────────────────────────────────────────
 
 
+## The grid-aligned shape, which is what "Plato NE<->SW" draws.
+func _grid(a: Vector2i, b: Vector2i) -> Dictionary:
+	return CliffPlan.grid_aligned_tiles(a, b)
+
+
 func test_a_plateau_raises_its_ground_and_rings_it_with_cliff() -> void:
-	var result := doc.add_plateau(Rect2i(20, 20, 9, 9))
+	var result := doc.add_plateau(_grid(Vector2i(20, 20), Vector2i(28, 28)))
 	assert_true(bool(result["ok"]), "the gesture landed: %s" % result["reason"])
 	assert_true(int(result["pieces"]) > 0, "pieces were laid")
 	assert_eq(_cliffs(), int(result["pieces"]), "and the count it reports is what is on the map")
@@ -60,7 +65,7 @@ func test_undo_takes_back_the_ring_and_the_ground_together() -> void:
 	var before_entities := doc.data.entities.size()
 
 	doc.begin_stroke()
-	doc.add_plateau(Rect2i(20, 20, 9, 9))
+	doc.add_plateau(_grid(Vector2i(20, 20), Vector2i(28, 28)))
 	doc.end_stroke()
 	assert_true(_cliffs() > 0, "the fixture actually built something to undo")
 
@@ -76,7 +81,7 @@ func test_undo_takes_back_the_ring_and_the_ground_together() -> void:
 
 func test_a_plateau_that_runs_off_the_map_is_refused_whole() -> void:
 	var before := doc.data.entities.size()
-	var result := doc.add_plateau(Rect2i(60, 60, 9, 9))
+	var result := doc.add_plateau(_grid(Vector2i(60, 60), Vector2i(68, 68)))
 	assert_false(bool(result["ok"]), "it will not fit")
 	assert_false(String(result["reason"]).is_empty(), "and it says why")
 	assert_eq(doc.data.entities.size(), before,
@@ -89,7 +94,7 @@ func test_a_plateau_will_not_be_dropped_over_a_building() -> void:
 	assert_true(doc.add_entity(&"building.town_center", 1, Vector2i(22, 22)),
 			"the fixture's building went down")
 	var before := doc.data.entities.size()
-	var result := doc.add_plateau(Rect2i(20, 20, 9, 9))
+	var result := doc.add_plateau(_grid(Vector2i(20, 20), Vector2i(28, 28)))
 	assert_false(bool(result["ok"]), "the town centre is in the way")
 	assert_eq(doc.data.entities.size(), before, "and the map is untouched")
 
@@ -97,13 +102,13 @@ func test_a_plateau_will_not_be_dropped_over_a_building() -> void:
 ## The other half of that exception: the ring's own shared tiles must NOT read as a collision,
 ## or the tool would refuse every plateau it was asked to build.
 func test_the_rings_own_shared_tiles_are_not_treated_as_a_collision() -> void:
-	var result := doc.add_plateau(Rect2i(20, 20, 9, 9))
+	var result := doc.add_plateau(_grid(Vector2i(20, 20), Vector2i(28, 28)))
 	assert_true(bool(result["ok"]),
 			"a plateau's corners share tiles by design and that is not an overlap")
 
 	# A SECOND plateau, well clear of the first, still lands -- so the exception is about what
 	# is on the tile and not about the map having any cliff on it at all.
-	assert_true(bool(doc.add_plateau(Rect2i(40, 40, 9, 9))["ok"]), "and a second one is fine")
+	assert_true(bool(doc.add_plateau(_grid(Vector2i(40, 40), Vector2i(48, 48)))["ok"]), "and a second one is fine")
 
 
 # ── what the author is told ─────────────────────────────────────────────────
@@ -113,14 +118,14 @@ func test_the_rings_own_shared_tiles_are_not_treated_as_a_collision() -> void:
 ## 8-tile edge is eight fillers showing the same 2 m of rock. `runs_of` is reported so the
 ## editor can say which happened and what to change.
 func test_the_result_reports_the_rung_each_run_was_laid_on() -> void:
-	var good := doc.add_plateau(Rect2i(20, 20, 9, 9))
+	var good := doc.add_plateau(_grid(Vector2i(20, 20), Vector2i(28, 28)))
 	var stamped := 0
 	for run in good["runs"] as Array:
 		if int(run["piece"]) == 1 and int(run["span"]) > 1:
 			stamped += 1
 	assert_eq(stamped, 0, "a 9x9 plateau divides cleanly, so no edge falls to fillers")
 
-	var awkward := doc.add_plateau(Rect2i(40, 40, 8, 8))
+	var awkward := doc.add_plateau(_grid(Vector2i(40, 40), Vector2i(47, 47)))
 	assert_true(bool(awkward["ok"]), "an 8x8 is still a legal plateau")
 	var fillers := 0
 	for run in awkward["runs"] as Array:
@@ -130,22 +135,52 @@ func test_the_result_reports_the_rung_each_run_was_laid_on() -> void:
 			"an 8-tile edge has no rung, and the result says so rather than hiding it")
 
 
-# ── the tool is reachable ───────────────────────────────────────────────────
+# ── the mode, which is how an author reaches it ─────────────────────────────
 
 
-## ⚠️ **NAMED AND NEVER NUMBERED**, `test_cursors`' scar: `Tool.START`'s removal renumbered every
-## member after it and tests driving tools by literal went on passing while exercising the wrong
-## ones. `Tool.PLATEAU` is the seventh member and the sixth time that class of value has moved.
-func test_the_plateau_tool_exists_and_is_its_own_member() -> void:
-	assert_true(EDITOR.Tool.has("PLATEAU"), "the enum carries it")
-	assert_true(int(EDITOR.Tool.PLATEAU) != int(EDITOR.Tool.AREA),
-			"it is not an alias of the region tool it sits beside")
+## ⛔ **IT IS A MODE ON THE AREA TOOL AND NOT A SEVENTH TOOL** (owner, 2026-09-23). It shipped as
+## a toolbar button for half a day; this asserts the shape it settled into, so a future
+## `Tool.PLATEAU` has to come back through this test rather than quietly beside it.
+func test_a_plateau_is_a_mode_of_the_area_tool_and_not_a_tool() -> void:
+	assert_false(EDITOR.Tool.has("PLATEAU"),
+			"the toolbar has one rectangle gesture, not two")
+	var palette := ObjectPalette.new()
+	assert_eq(palette.area_mode(), int(ObjectPalette.AreaMode.NAMED),
+			"and a fresh palette draws a named region, which is the mode that writes least")
+	palette.free()
 
 
-## It shares AREA's rectangle gesture, so it must share AREA's cursor answer too: no custom
-## cursor, which is what makes the canvas fall back to the system crosshair every editor uses
-## for dragging out a rectangle.
-func test_the_plateau_tool_drags_with_the_crosshair_like_the_region_tool() -> void:
-	assert_eq(ToolCursors.for_tool(int(EDITOR.Tool.PLATEAU)),
-			ToolCursors.for_tool(int(EDITOR.Tool.AREA)),
-			"the same gesture gets the same cursor")
+## The three the owner asked for, in the order they were asked for, labelled by what they DRAW.
+func test_the_area_tab_offers_the_three_modes() -> void:
+	var labels: Array[String] = []
+	for entry in ObjectPalette.AREA_MODES:
+		labels.append(str(entry["label"]))
+	assert_eq(labels, ["Named Area", "Plato N<->S", "Plato NE<->SW"] as Array[String],
+			"the dropdown says what each one draws")
+
+
+func test_a_mode_can_be_chosen_and_an_unknown_one_falls_back() -> void:
+	var palette := ObjectPalette.new()
+	palette.set_area_mode(int(ObjectPalette.AreaMode.PLATEAU_SCREEN))
+	assert_eq(palette.area_mode(), int(ObjectPalette.AreaMode.PLATEAU_SCREEN))
+	# ⚠️ **AN UNKNOWN VALUE MUST NOT BE STORED.** A mode nobody can see selected is a drag whose
+	# result nobody can predict, and two of the three rewrite forty tiles.
+	palette.set_area_mode(99)
+	assert_eq(palette.area_mode(), int(ObjectPalette.AreaMode.NAMED),
+			"an unknown mode falls back to the one that cannot surprise anybody")
+	palette.free()
+
+
+## Both plateau modes have to reach real ground, and they must not describe the same ground --
+## a dropdown offering one shape twice is worse than offering one.
+func test_both_modes_raise_a_plateau_and_they_are_different_shapes() -> void:
+	var screen := CliffPlan.screen_aligned_tiles(Vector2i(20, 20), Vector2i(28, 12))
+	var grid := CliffPlan.grid_aligned_tiles(Vector2i(20, 20), Vector2i(28, 28))
+	assert_true(screen != grid, "the two modes describe different tiles")
+
+	assert_true(bool(doc.add_plateau(screen)["ok"]), "the screen-aligned one lands")
+	var after_screen := _cliffs()
+	assert_true(after_screen > 0, "and it laid a ring")
+
+	assert_true(bool(doc.add_plateau(grid)["ok"]), "and so does the grid-aligned one")
+	assert_true(_cliffs() > after_screen, "which laid a ring of its own")

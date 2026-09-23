@@ -88,11 +88,12 @@ const _DIM := UiChrome.DIM
 ## CLICK, exactly like placing a building — so PLACE could carry it and three controls went away.
 ## A region is a **drag** that produces a rectangle, which is not something any other tool's click
 ## can express. `Category.AREA` arms this the way `Category.TERRAIN` arms `PAINT`.
-## ⚠️ **PLATEAU IS APPENDED, FOR THE REASON `Tool.START`'s REMOVAL TAUGHT ON 2026-09-08**: it
-## renumbered every member after it, and a test driving tools by literal went on passing while
-## exercising the wrong ones. Nothing persists a tool value, so appending costs nothing and
-## inserting would cost that again.
-enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE, AREA, PLATEAU }
+## ⛔ **THERE IS NO `PLATEAU` MEMBER AND THAT IS THE OWNER'S CALL, 2026-09-23.** It shipped as a
+## seventh tool for half a day and moved into the Areas tab as a mode: *"under the current area
+## tab, i would like a drop down."* All three things an Area drag can produce are **the same
+## gesture** — drag a rectangle, write once on release — and what differs is only what the
+## rectangle means. A toolbar groups by gesture; `ObjectPalette.AreaMode` answers the rest.
+enum Tool { PAINT, PLACE, ERASE, SELECT, MOVE, AREA }
 
 var _canvas: MapCanvas = null
 var _palette: ObjectPalette = null
@@ -1015,12 +1016,6 @@ func apply_tool(tile: Vector2i) -> void:
 			# document is written once, on release, by `_finish_area()`. Same reason SELECT is
 			# not on the `changed` path: nothing about the map has changed yet.
 			_area_sample(tile)
-		Tool.PLATEAU:
-			# THE SAME RECTANGLE GESTURE, sharing `_area_sample`'s anchor and preview rather than
-			# keeping a second pair of drag variables in step with it. The two tools cannot be
-			# armed at once, so there is nothing for them to collide over, and the preview the
-			# author sees is exactly the ground that is about to be raised.
-			_area_sample(tile)
 	if changed:
 		# REDRAWN AND RE-REPORTED ONLY ON A REAL CHANGE, which is why `paint()` returns a
 		# bool: a drag delivers the same tile dozens of times and repainting the canvas on
@@ -1081,7 +1076,11 @@ func _cancel_area_drag() -> void:
 	_area_from = Vector2i(-1, -1)
 	_area_last = Vector2i(-1, -1)
 	if _canvas != null:
+		# BOTH, always. Only one is ever set at a time, but clearing the one the last drag
+		# happened to use would leave the other painted on the overlay until something else
+		# redrew it -- a rectangle hanging over the map with no gesture behind it.
 		_canvas.pending_area = Rect2i()
+		_canvas.pending_area_uv = Rect2i()
 		_canvas.redraw_overlay()
 
 
@@ -1101,8 +1100,29 @@ func _area_sample(tile: Vector2i) -> void:
 	_area_last = tile
 	# THE PREVIEW GOES ON THE OVERLAY, not the map layer: this changes many times a second and
 	# 16.x-slow-place's rule is that the expensive layer is invalidated only when the MAP changes.
-	_canvas.pending_area = _area_rect()
+	#
+	# ⛔ **AND IT HAS TO MATCH THE MODE, WHICH IS WHAT THE OWNER CAUGHT**: *"the drag display does
+	# not match the area it generates."* A screen-aligned plateau is a box in `(u, v)`, so the
+	# normalised tile rectangle drawn as a parallelogram is not an approximation of it -- it is a
+	# different shape in a different place. The other two modes ARE that rectangle.
+	if _palette != null and _palette.area_mode() == ObjectPalette.AreaMode.PLATEAU_SCREEN:
+		_canvas.pending_area = Rect2i()
+		_canvas.pending_area_uv = _area_uv_box()
+	else:
+		_canvas.pending_area_uv = Rect2i()
+		_canvas.pending_area = _area_rect()
 	_canvas.redraw_overlay()
+
+
+## The `(u, v)` box the two drag ends describe, for the screen-aligned plateau preview.
+##
+## ⛔ **`CliffPlan`'s OWN FUNCTION, NOT A SECOND DERIVATION OF IT.** The preview and the write are
+## the same four numbers or they are a bug, and this is the bug the owner reported. Writing the
+## arithmetic out here a second time is how it would come back.
+func _area_uv_box() -> Rect2i:
+	if _area_from.x < 0 or _area_last.x < 0:
+		return Rect2i()
+	return CliffPlan.screen_box_of(_area_from, _area_last)
 
 
 ## The rectangle the two ends describe, normalised so a drag works in any direction.
@@ -1132,6 +1152,14 @@ func _area_rect() -> Rect2i:
 ## rectangle running off the map is the other, which `MapDocument.add_area()` is what refuses.
 func _finish_area() -> void:
 	if _document == null or _area_from.x < 0:
+		return
+	# ⛔ **THE TWO PLATEAU MODES BRANCH BEFORE ANYTHING ELSE AND TAKE THE RAW DRAG ENDS.**
+	# `_area_rect()` normalises the gesture into a `Rect2i`, which is exactly right for a named
+	# region and lossy for the screen-aligned plateau: that shape is a box in `(u, v)`, and the
+	# corners of the normalised tile box are not the corners the author dragged between.
+	var mode := _palette.area_mode()
+	if mode != ObjectPalette.AreaMode.NAMED:
+		_finish_plateau(_area_from, _area_last, mode)
 		return
 	var rect := _area_rect()
 	var name := _palette.area_name()
@@ -1172,19 +1200,22 @@ func _finish_area() -> void:
 ## Nothing on screen says which happened, and the fix is to resize by a tile. So the notice says
 ## it: *"edges of 8 are laid in 1s — try 9"*. Without that line the tool silently produces its
 ## worst output at most sizes and looks like it is working.
-func _finish_plateau() -> void:
-	if _document == null or _area_from.x < 0:
-		return
-	var rect := _area_rect()
+func _finish_plateau(from: Vector2i, to: Vector2i, mode: int) -> void:
+	# THE SHAPE COMES FROM `CliffPlan` AND NOT FROM GEOMETRY WRITTEN HERE. Both builders are in
+	# the verbatim `format/` copy beside the placement rules, so the tool and the game cannot
+	# disagree about which tiles a drag meant any more than about which pieces they need.
+	var high := CliffPlan.screen_aligned_tiles(from, to) \
+			if mode == ObjectPalette.AreaMode.PLATEAU_SCREEN \
+			else CliffPlan.grid_aligned_tiles(from, to)
+	var shape := "N<->S" if mode == ObjectPalette.AreaMode.PLATEAU_SCREEN else "NE<->SW"
 	# READ BEFORE THE STATE GOES, exactly as `_finish_area()` does: a refused gesture is still
 	# finished, and a live anchor would make the next drag start where this one did.
 	_cancel_area_drag()
 
-	var result := _document.add_plateau(rect)
+	var result := _document.add_plateau(high)
 	if not bool(result["ok"]):
-		_notice("WILL NOT RAISE a %dx%d plateau at %d,%d — %s"
-				% [rect.size.x, rect.size.y, rect.position.x, rect.position.y,
-				result["reason"]], _WARN)
+		_notice("WILL NOT RAISE a %s plateau of %d tiles — %s"
+				% [shape, high.size(), result["reason"]], _WARN)
 		return
 
 	# The rungs actually chosen, worst first, so the sentence names the edge worth fixing.
@@ -1196,9 +1227,9 @@ func _finish_plateau() -> void:
 	if stamped > 0:
 		tail = " — an edge of %d has no matching piece, so it is laid in 1s (try a multiple of 3)" \
 				% stamped
-	_notice("PLATEAU — %dx%d raised at %d,%d, %d cliff pieces%s"
-			% [rect.size.x, rect.size.y, rect.position.x, rect.position.y,
-			int(result["pieces"]), tail], _GOOD if stamped == 0 else _WARN)
+	_notice("PLATEAU %s — %d tiles raised, %d cliff pieces%s"
+			% [shape, high.size(), int(result["pieces"]), tail],
+			_GOOD if stamped == 0 else _WARN)
 	_canvas.queue_redraw()
 	_canvas.redraw_overlay()
 	_refresh_status()
@@ -1494,10 +1525,6 @@ func _build_ui() -> void:
 			# Ctrl+Z would appear to do nothing at all.
 			if _tool == Tool.AREA:
 				_finish_area()
-			# Same rule, same reason: the plateau's ONLY write is here, so landing it after the
-			# seal would put forty pieces in a step of their own.
-			if _tool == Tool.PLATEAU:
-				_finish_plateau()
 			if _document != null:
 				_document.end_stroke()
 			# ⚠️ **THE GRAB IS RELEASED HERE AND NOWHERE ELSE.** `MapCanvas._button` guarantees
@@ -1728,11 +1755,6 @@ func _tool_row() -> Control:
 		# 16.5's region tool. LAST, matching the palette's tab order and for its reason: a region
 		# is drawn over ground that already has things on it.
 		{"tool": Tool.AREA, "label": "Area"},
-		# ⛳ **WITH AREA AND NOT WITH PLACE** (owner, 2026-09-23: *"the tool can live under area"*).
-		# It is the same GESTURE -- drag a rectangle, one write on release -- and that is what a
-		# toolbar groups by. It is not a `PLACE` variant: place puts down the one thing the
-		# palette is showing, and this puts down forty pieces the author never chose.
-		{"tool": Tool.PLATEAU, "label": "Plateau"},
 	]:
 		var b := Button.new()
 		b.text = str(entry["label"])

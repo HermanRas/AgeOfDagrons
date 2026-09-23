@@ -197,6 +197,26 @@ var document: MapDocument = null
 ## `redraw_overlay()`'s note explains why both live on the cheap layer.
 var pending_area := Rect2i()
 
+## The `(u, v)` box a SCREEN-ALIGNED plateau drag is describing, where `u = x + y` runs down the
+## screen and `v = x - y` across it. Empty means the drag is not that kind. Positions are tile
+## ORIGINS, exactly as `pending_area`'s are tiles.
+##
+## ## ⛔ WHY A SECOND FIELD AND NOT A FLAG ON THE FIRST
+##
+## `pending_area` is a `Rect2i` in TILE space, and `_area_quad` draws it as the parallelogram
+## `_draw_areas()` produces — which is right for a named region and for the grid-aligned
+## plateau, and wrong for this one. A screen-aligned plateau is a box in `(u, v)`: the corners
+## of the normalised tile box are not the corners the author dragged between, so there is no
+## flag that could reinterpret the same numbers correctly. The owner reported the gap plainly —
+## *"the drag display does not match the area it generates"*.
+##
+## ⚠️ **AND IT IS A BOX RATHER THAN THE TILES, WHICH IS A DELIBERATE HALF-TILE APPROXIMATION.**
+## The real boundary zigzags by half a tile, because `u` and `v` share a parity and only half
+## the pairs in the box are tiles. Drawing the true edge means a fill per tile on the layer this
+## file's whole performance story is about — two owner slowness reports live in that path — and
+## it would buy half a tile of precision on a preview. Four points, exact to the bounding box.
+var pending_area_uv := Rect2i()
+
 ## What the last `_draw()` cost, in microseconds, split by phase, plus how many tiles the cull
 ## covered. Written on every redraw and read by `dev/profile_editor.gd`.
 ##
@@ -523,6 +543,10 @@ func _draw_overlay() -> void:
 		var box := _area_quad(pending_area)
 		_overlay.draw_colored_polygon(box, _AREA_FILL)
 		_overlay.draw_polyline(box + PackedVector2Array([box[0]]), AREA_COLOUR, 2.0)
+	if pending_area_uv.size.x > 0 and pending_area_uv.size.y > 0:
+		var uv := _uv_quad(pending_area_uv)
+		_overlay.draw_colored_polygon(uv, _AREA_FILL)
+		_overlay.draw_polyline(uv + PackedVector2Array([uv[0]]), AREA_COLOUR, 2.0)
 	if _hover.x < 0:
 		return
 	var poly := _diamond(_hover)
@@ -832,6 +856,33 @@ func _area_quad(rect: Rect2i) -> PackedVector2Array:
 		_to_screen_f(hi),
 		_to_screen_f(Vector2(lo.x, hi.y)),
 	])
+
+
+## The outer edge of every tile whose ORIGIN falls in a `(u, v)` box — an axis-aligned rectangle
+## on screen, which is the whole point of the shape.
+##
+## ## 📐 THE PADDING, WHICH IS THE ONLY FIDDLY PART
+##
+## The box holds tile ORIGINS, and a tile occupies the diamond reaching out from its origin: one
+## full step of `u` in each direction down-screen and one of `v` to each side. So the drawn edge
+## runs from `u0` to `u1 + 2` and from `v0 - 1` to `v1 + 1`, which for a single tile comes back
+## as exactly that tile's diamond — the case worth checking by hand, and the one that catches a
+## sign error immediately.
+func _uv_quad(uv: Rect2i) -> PackedVector2Array:
+	var u0 := float(uv.position.x)
+	var u1 := float(uv.end.x) + 1.0          # end is u1 + 1 already, so this is u1 + 2
+	var v0 := float(uv.position.y) - 1.0
+	var v1 := float(uv.end.y)                # end is v1 + 1
+	return PackedVector2Array([
+		_uv_to_screen(u0, v0), _uv_to_screen(u0, v1),
+		_uv_to_screen(u1, v1), _uv_to_screen(u1, v0),
+	])
+
+
+## `(u, v)` back to the fractional tile coordinate the projection takes: `x = (u + v) / 2` and
+## `y = (u - v) / 2`, which is the inverse of `u = x + y`, `v = x - y`.
+func _uv_to_screen(u: float, v: float) -> Vector2:
+	return _to_screen_f(Vector2((u + v) * 0.5, (u - v) * 0.5))
 
 
 func _outline(t: Vector2i, colour: Color, width: float) -> void:

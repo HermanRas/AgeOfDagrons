@@ -197,30 +197,201 @@ func test_a_diagonal_run_merges_rather_than_collapsing_to_fillers() -> void:
 			"the E-W notch chain is found as one run, not as %d runs of one" % longest)
 
 
-## A merged diagonal is ART ONLY, so it brings its own blockers -- and they come AFTER it,
-## because `SimMap.set_occupied` assigns the blocking byte rather than merging into it.
-func test_a_merged_diagonal_brings_blockers_and_the_art_goes_first() -> void:
+## ⛔ REGRESSION, owner 2026-09-23: *"the horse can still walk on the 3 high cliffs."*
+##
+## `SimMap.set_occupied` ASSIGNS the blocking byte, so a non-blocking entity spawned onto a
+## blocked tile re-opens it. The first version ordered art before blockers WITHIN a run, which
+## looked right and was not enough: a plateau's runs share tiles at every corner, so one run's
+## art landed on an earlier run's blockers and quietly unblocked them.
+##
+## ⚠️ **ASSERTED AS THE GLOBAL SPLIT, NOT AS "THE NEXT RECORD IS A BLOCKER".** The old test
+## checked the weaker local property and passed all the way through the fault the owner then
+## found by walking a scout up a cliff.
+func test_every_non_blocking_piece_is_emitted_before_every_blocking_one() -> void:
 	var high := _pedestal(Vector2i(40, 40), 10, 6)
 	var plan := CliffPlan.plan(high)
 
-	var art := -1
+	var art_only := [&"building.cliff_face_diag_short", &"building.cliff_face_diag_long",
+			&"building.cliff_back_diag_short", &"building.cliff_back_diag_long"]
+	var last_art := -1
+	var first_blocking := plan.size()
 	for i in range(plan.size()):
-		if plan[i]["def_id"] == &"building.cliff_face_diag_short" \
-				or plan[i]["def_id"] == &"building.cliff_face_diag_long":
-			art = i
-			break
-	if art < 0:
-		return          # this shape merged nothing; the run test above is what guards that
-	assert_eq(plan[art + 1]["def_id"], CliffPlan.BLOCKER,
-			"the blockers follow the art immediately, so they cannot be cleared by it")
+		if art_only.has(plan[i]["def_id"]):
+			last_art = maxi(last_art, i)
+		else:
+			first_blocking = mini(first_blocking, i)
+	assert_true(last_art >= 0, "this shape merged at least one diagonal, or it proves nothing")
+	assert_true(last_art < first_blocking,
+			"art at %d comes after a blocking piece at %d -- it would unblock it"
+			% [last_art, first_blocking])
+
+
+## The rung a piece sits on, so a test can recover a record's length from its def id alone.
+func _length_of(def_id: StringName, ladder: Dictionary) -> int:
+	for rung in ladder:
+		if ladder[rung] == def_id:
+			return int(rung)
+	return 1
+
+
+## Every tile a face's rock is painted over, from the run's own geometry.
+##
+## ⚠️ **DERIVED FROM `step_of` AND `(1, 1)` RATHER THAN FROM `_shear_gap`**, so this is an
+## independent statement of where the rock falls and not a restatement of the fix.
+func _under_rock(plan: Array[Dictionary]) -> Dictionary:
+	var out: Dictionary = {}
+	for r in plan:
+		if CliffPlan.ladder_of(r["def_id"]) != CliffPlan.FACE:
+			continue
+		var step := CliffPlan.step_of(int(r["axis"]))
+		for i in range(_length_of(r["def_id"], CliffPlan.FACE)):
+			for d in range(CliffPlan.DEPTH):
+				out[(r["tile"] as Vector2i) + step * i + Vector2i.ONE * d] = true
+	return out
+
+
+## ⛔ REGRESSION, owner 2026-09-23: *"the horse / scoute can still walk on the 3 high cliffs."*
+##
+## A probe of the owner's saved map cleared the collision data -- all 362 pieces blocked every
+## tile they CLAIMED. The fault is the claim: a footprint is a rectangle and a face's rock is
+## that rectangle sheared `(+1, +1)` down the screen, so an N-S side's 1-tile pieces claimed
+## `T`, `T+(1,0)`, `T+(2,0)` while their rock covered `T`, `T+(1,1)`, `T+(2,2)`. One tile in
+## common, two walkable tiles of solid rock per piece, all the way down the side the owner
+## photographed. See `CliffPlan._shear_gap`.
+##
+## ⚠️ **ASKED THROUGH `MapData.footprint_rect_of`**, which is the rule the validator and
+## `MapGen.build_from` both read. Asking `bd.footprint` would pass on an arrangement that still
+## claimed the wrong tiles, which is the whole shape of the bug.
+func test_no_tile_a_face_is_drawn_over_is_left_walkable() -> void:
+	var high := _pedestal(Vector2i(40, 40), 10, 6)
+	var plan := CliffPlan.plan(high)
+
+	var blocked: Dictionary = {}
+	for r in plan:
+		if CliffPlan.ART_ONLY.has(CliffPlan.ladder_of(r["def_id"])):
+			continue
+		for t in MapData.footprint_rect_of(r):
+			blocked[t] = true
+
+	var checked := 0
+	for t in _under_rock(plan):
+		# The plateau TOP is deliberately never blocked -- see `_shear_gap`. Its own lip is
+		# blocked, and that is the documented price of the art and the collision agreeing.
+		if high.has(t):
+			continue
+		checked += 1
+		assert_true(blocked.has(t),
+				"%v has a cliff face painted over it and nothing claims it" % [t])
+	assert_true(checked > 0, "this shape put rock on open ground, or it proves nothing")
 
 
 ## A 1-tile diagonal blocks on its own and must NOT be given blockers as well.
+##
+## ⚠️ **NO LONGER "ZERO BLOCKERS".** It was, and that was only ever true because a face's shear
+## went unclaimed; a grid-aligned plateau's faces now bring blockers of their own. The property
+## that survives is the one the test was always about: on a shape whose diagonals are every one
+## of them a single corner, NO blocker can come from a diagonal.
 func test_an_unmerged_diagonal_is_left_alone() -> void:
 	var high := _rect(Vector2i(10, 10), Vector2i(9, 9))
 	var plan := CliffPlan.plan(high)
-	assert_eq(_count(plan, CliffPlan.BLOCKER), 0,
-			"a plateau whose diagonals are all single corners needs no blockers")
+
+	var under_rock := _under_rock(plan)
+	var blockers := 0
+	for r in plan:
+		if r["def_id"] != CliffPlan.BLOCKER:
+			continue
+		blockers += 1
+		assert_true(under_rock.has(r["tile"]),
+				"the blocker at %v is under no face's rock, so a 1-tile diagonal was given one"
+				% [r["tile"]])
+	assert_true(blockers > 0, "this shape's faces do shear, or the loop asserted nothing")
+
+
+# ── the two shapes a drag can describe ──────────────────────────────────────
+
+
+func test_a_grid_aligned_drag_fills_the_box_between_its_two_tiles() -> void:
+	var high := CliffPlan.grid_aligned_tiles(Vector2i(10, 10), Vector2i(18, 18))
+	assert_eq(high.size(), 81, "nine by nine")
+	assert_true(high.has(Vector2i(10, 18)), "and it is a box, so the off corners are in it")
+	# BACKWARDS TOO: a drag runs whichever way the author's finger went.
+	assert_eq(CliffPlan.grid_aligned_tiles(Vector2i(18, 18), Vector2i(10, 10)).size(), 81)
+
+
+## ⛔ THE SCREEN-ALIGNED SHAPE IS A BOX IN `(u, v)` AND A DIAMOND IN TILES, so the assertions
+## are about `u` and `v` rather than about a tile count -- the count depends on the parity rule
+## and restating it here would just be the implementation written twice.
+func test_a_screen_aligned_drag_fills_the_box_in_u_and_v() -> void:
+	var a := Vector2i(30, 30)
+	var b := Vector2i(40, 20)          # same u + v span either side of it
+	var high := CliffPlan.screen_aligned_tiles(a, b)
+	assert_false(high.is_empty(), "the drag describes something")
+
+	var u0 := mini(a.x + a.y, b.x + b.y)
+	var u1 := maxi(a.x + a.y, b.x + b.y)
+	var v0 := mini(a.x - a.y, b.x - b.y)
+	var v1 := maxi(a.x - a.y, b.x - b.y)
+	for t in high:
+		var tile: Vector2i = t
+		var u := tile.x + tile.y
+		var v := tile.x - tile.y
+		assert_true(u >= u0 and u <= u1 and v >= v0 and v <= v1,
+				"%v is inside the screen box" % tile)
+	assert_true(high.has(a), "both dragged corners are in it")
+	assert_true(high.has(b))
+
+
+## ⛔ REGRESSION, owner 2026-09-23: *"the drag display does not match the area it generates."*
+## The editor draws the preview from `screen_box_of` and the write comes from
+## `screen_aligned_tiles`, so the two must be the same four numbers. Asserted as a CONTAINMENT
+## both ways rather than by re-deriving the box, which would only test my arithmetic twice.
+func test_the_previewed_box_is_exactly_the_ground_that_gets_raised() -> void:
+	for ends in [[Vector2i(30, 30), Vector2i(40, 20)], [Vector2i(5, 9), Vector2i(1, 1)],
+			[Vector2i(7, 7), Vector2i(7, 7)]]:
+		var a: Vector2i = ends[0]
+		var b: Vector2i = ends[1]
+		var box := CliffPlan.screen_box_of(a, b)
+		var tiles := CliffPlan.screen_aligned_tiles(a, b)
+		assert_false(tiles.is_empty(), "%v..%v describes ground" % [a, b])
+
+		# Every raised tile is inside the rectangle the author was shown.
+		for t in tiles:
+			var tile: Vector2i = t
+			assert_true(box.has_point(Vector2i(tile.x + tile.y, tile.x - tile.y)),
+					"%v is inside the previewed box" % tile)
+
+		# And the rectangle is TIGHT -- every one of its four sides is touched by a real tile,
+		# so the preview cannot be drawn larger than the ground it promises.
+		var us: Array[int] = []
+		var vs: Array[int] = []
+		for t in tiles:
+			var tile: Vector2i = t
+			us.append(tile.x + tile.y)
+			vs.append(tile.x - tile.y)
+		us.sort()
+		vs.sort()
+		assert_eq(us[0], box.position.x, "the box starts where the tiles do, in u")
+		assert_eq(us[us.size() - 1], box.end.x - 1, "and ends where they do")
+		assert_eq(vs[0], box.position.y, "the same across the screen")
+		assert_eq(vs[vs.size() - 1], box.end.y - 1)
+
+
+## The two shapes must be genuinely different, or the dropdown offers one thing twice.
+func test_the_two_plateau_shapes_are_not_the_same_ground() -> void:
+	var a := Vector2i(30, 30)
+	var b := Vector2i(38, 38)
+	assert_true(CliffPlan.grid_aligned_tiles(a, b) != CliffPlan.screen_aligned_tiles(a, b),
+			"a box on the grid and a box on the screen are different tiles")
+
+
+## And both are plannable -- the rules take a tile SET, so neither shape is special to them.
+func test_both_shapes_plan_a_complete_ring() -> void:
+	for high in [CliffPlan.grid_aligned_tiles(Vector2i(20, 20), Vector2i(28, 28)),
+			CliffPlan.screen_aligned_tiles(Vector2i(50, 50), Vector2i(58, 42))]:
+		var plan := CliffPlan.plan(high)
+		assert_true(plan.size() > 0, "the shape produced pieces")
+		for r in plan:
+			assert_false(StringName(r["def_id"]).is_empty(), "every record names a def")
 
 
 func test_an_empty_plateau_plans_nothing() -> void:

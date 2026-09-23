@@ -648,17 +648,18 @@ func add_entity(def_id: StringName, player: int, tile: Vector2i, size_class := 0
 ## ⚠️ **THE WHOLE GESTURE IS CHECKED BEFORE ANY OF IT IS WRITTEN.** A partial plateau is the one
 ## outcome with no honest report — the author sees a ring with a gap and cannot tell a refusal
 ## from a bug in the rules — so every tile is tested first and the step is opened after.
-func add_plateau(rect: Rect2i) -> Dictionary:
-	var high: Dictionary = {}
-	for y in range(rect.position.y, rect.end.y):
-		for x in range(rect.position.x, rect.end.x):
-			var t := Vector2i(x, y)
-			if not data.in_bounds(t):
-				return {"ok": false, "pieces": 0, "runs": [],
-						"reason": "the plateau runs off the map"}
-			high[t] = true
+func add_plateau(high: Dictionary) -> Dictionary:
+	# ⚠️ **A TILE SET AND NOT A `Rect2i`, because there are two plateau SHAPES and only one of
+	# them is a rectangle in tiles.** The screen-aligned one is a box in `(u, v)` and a diamond
+	# on the grid, so a rect parameter would force the caller to flatten it and lose the shape.
+	# `CliffPlan` builds both and this takes whatever they produce -- the same reason `plan()`
+	# itself takes a set.
 	if high.is_empty():
 		return {"ok": false, "pieces": 0, "runs": [], "reason": "nothing to raise"}
+	for t in high:
+		if not data.in_bounds(t):
+			return {"ok": false, "pieces": 0, "runs": [],
+					"reason": "the plateau runs off the map"}
 
 	var plan := CliffPlan.plan(high)
 	var occupied: Dictionary = {}

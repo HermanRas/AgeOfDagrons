@@ -46,7 +46,14 @@
 ## which is the stamped look, and is why `runs_of` reports the length it chose so a caller can
 ## tell an author to resize.
 ##
-## ## 📌 A MERGED DIAGONAL BRINGS ITS OWN BLOCKERS
+## ## 📌 TWO PIECES IN THREE BRING THEIR OWN BLOCKERS, FOR TWO UNRELATED REASONS
+##
+## A rectangular footprint cannot describe either of the shapes a cliff is actually drawn over,
+## and `building.cliff_blocker` -- a 1x1 that blocks and draws nothing -- is how both are said.
+## A **merged diagonal** claims too much and is therefore given none, laying blockers instead
+## (below); a **face** claims a rectangle where its rock covers a SHEARED one, and is given the
+## few tiles the shear leaves behind (`_shear_gap`). The crest needs neither: it is one tile
+## deep, so its claim and its coverage are the same row.
 ##
 ## The long `_diag` pieces are art only: `blocks_movement` false with a `[1, 1]` footprint,
 ## because the rectangle around a 1-tile-wide diagonal is the N x N box around it. So merging
@@ -56,8 +63,15 @@
 class_name CliffPlan
 extends RefCounted
 
-## The blocker that claims the ground under a long diagonal. Draws nothing (`draws_nothing`).
+## The blocker that claims the ground a piece is drawn over but its footprint cannot reach.
+## Draws nothing (`draws_nothing`).
 const BLOCKER := &"building.cliff_blocker"
+
+## How far down the screen a face's rock reaches, in tiles. The same 3 the face defs carry, and
+## it is here as well because this file lays the blockers that make the two agree -- see
+## `_shear_gap`. Measured off the atlas in `buildings.json`'s `_note_cliffs`: 110 px of art below
+## the anchor over a 32 px down-screen step.
+const DEPTH := 3
 
 ## The near side: 4 m of rock hanging down the screen. Keyed by run length in tiles.
 const FACE := {
@@ -97,13 +111,75 @@ const BACK_DIAG := {
 const ART_ONLY := [FACE_DIAG, BACK_DIAG]
 
 
+## The plateau that is a box ON THE GRID, from the two tiles a drag ran between.
+##
+## ⚠️ **THIS IS THE ONE THAT LOOKS LIKE A DIAMOND**, because `Iso._project` turns the tile axes
+## into the screen's NE-SW and NW-SE. An author dragging it is describing the ground in tile
+## terms and watching a diamond grow, which is why the editor labels it by what it DRAWS
+## ("Plato NE<->SW") rather than by what it is.
+static func grid_aligned_tiles(a: Vector2i, b: Vector2i) -> Dictionary:
+	var out: Dictionary = {}
+	for y in range(mini(a.y, b.y), maxi(a.y, b.y) + 1):
+		for x in range(mini(a.x, b.x), maxi(a.x, b.x) + 1):
+			out[Vector2i(x, y)] = true
+	return out
+
+
+## The `(u, v)` box two dragged tiles describe, as a `Rect2i` over tile ORIGINS: `position` is
+## `(u0, v0)` and `end` is one past `(u1, v1)`, the way a `Rect2i` always reads.
+##
+## ⛔ **PUBLIC BECAUSE THE EDITOR DRAWS THE DRAG PREVIEW FROM IT AND MUST NOT WORK IT OUT
+## SEPARATELY.** The owner reported the first version of exactly that fault -- *"the drag display
+## does not match the area it generates"* -- when the preview was the normalised TILE rectangle
+## and the write was this box. Two derivations of one shape is the same class of bug one level
+## down, and this is the function that makes it impossible: the rectangle an author sees and the
+## tiles they get are the same four numbers.
+##
+## ⚠️ **FROM THE RAW DRAG ENDS.** Normalising into a tile `Rect2i` first loses it: the corners of
+## that box are not the corners the finger went between.
+static func screen_box_of(a: Vector2i, b: Vector2i) -> Rect2i:
+	var u0 := mini(a.x + a.y, b.x + b.y)
+	var u1 := maxi(a.x + a.y, b.x + b.y)
+	var v0 := mini(a.x - a.y, b.x - b.y)
+	var v1 := maxi(a.x - a.y, b.x - b.y)
+	return Rect2i(Vector2i(u0, v0), Vector2i(u1 - u0 + 1, v1 - v0 + 1))
+
+
+## The plateau that is a box ON SCREEN: a rectangle in `(u, v) = (x + y, x - y)`, where `u` runs
+## down the screen and `v` across it.
+##
+## ⚠️ **THIS IS THE ONE THAT LOOKS LIKE A SQUARE**, and it is the shape the owner's reference
+## pedestal is. Its N-S sides are the axis staircase and its E-W sides are chains of notches, so
+## it exercises every rule in this file at once -- which is also why it was where both placement
+## faults showed up.
+##
+## ⛔ **`u` AND `v` ALWAYS SHARE A PARITY** (`u + v = 2x`), so half the pairs in the box are not
+## tiles at all. Iterated in tile space and filtered rather than walked in `(u, v)`, which is
+## what makes that impossible to get wrong; the range is widened by one because integer division
+## truncates toward zero and the corners can be negative.
+static func screen_aligned_tiles(a: Vector2i, b: Vector2i) -> Dictionary:
+	var box := screen_box_of(a, b)
+	var u0 := box.position.x
+	var u1 := box.end.x - 1
+	var v0 := box.position.y
+	var v1 := box.end.y - 1
+	var out: Dictionary = {}
+	for y in range((u0 - v1) / 2 - 1, (u1 - v0) / 2 + 2):
+		for x in range((u0 + v0) / 2 - 1, (u1 + v1) / 2 + 2):
+			var u := x + y
+			var v := x - y
+			if u >= u0 and u <= u1 and v >= v0 and v <= v1:
+				out[Vector2i(x, y)] = true
+	return out
+
+
 ## Every piece a plateau of `high` tiles needs, as `{def_id, tile, axis}` records ready for
 ## `MapData.add_entity`.
 ##
 ## The order is load-bearing in one place and one only: a merged diagonal's art record comes
 ## immediately before the blockers that claim its tiles. See the class comment.
 static func plan(high: Dictionary) -> Array[Dictionary]:
-	return _merge(_drop_shadowed_runs(_classify(high)))
+	return _merge(_drop_shadowed_runs(_classify(high)), high)
 
 
 ## One record per boundary tile, before any run is merged. Split out so a caller that wants
@@ -261,9 +337,16 @@ static func step_of(axis: int) -> Vector2i:
 
 
 ## The ladder a def belongs to, or `{}` for one that is not a cliff piece.
+##
+## ⚠️ **EVERY RUNG, NOT JUST THE 1-TILE ONE.** It matched `ladder[1]` alone for as long as its
+## only callers were `_runs` and `_merge`, which ask before anything is merged and therefore
+## never hold a `_long` or `_short` id. That is invisible until something asks about a FINISHED
+## plan -- a test, a validator, an editor's overlay -- and then it answers `{}` for a real cliff
+## piece, which reads as "not a cliff" rather than as a question it cannot answer. It cost a
+## false failure the first time a test walked a merged plan.
 static func ladder_of(def_id: StringName) -> Dictionary:
 	for ladder in [FACE, BACK, FACE_DIAG, BACK_DIAG]:
-		if (ladder as Dictionary)[1] == def_id:
+		if (ladder as Dictionary).values().has(def_id):
 			return ladder
 	return {}
 
@@ -320,8 +403,24 @@ static func _runs(singles: Array[Dictionary]) -> Array[Dictionary]:
 	return out
 
 
-static func _merge(singles: Array[Dictionary]) -> Array[Dictionary]:
+## ⛔ **EVERY ART-ONLY PIECE IS EMITTED BEFORE EVERY BLOCKING ONE, ACROSS THE WHOLE PLATEAU.**
+##
+## `SimMap.set_occupied` ASSIGNS the blocking byte rather than merging into it, so a
+## non-blocking entity spawned onto a tile something already blocks re-OPENS that tile. The
+## first version of this only ordered art before blockers *within a run*, which is not enough
+## and shipped: a plateau's runs share tiles at every corner, so one run's art landed on the
+## previous run's blockers and quietly unblocked them. The owner walked a scout up a cliff.
+##
+## A global split is the whole fix and costs one extra array: after it, no non-blocking piece
+## can ever follow a blocking one, whatever order the runs come out in. Draw order is unaffected
+## because the pieces that move are the ones that draw nothing.
+static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictionary]:
+	var art: Array[Dictionary] = []
 	var out: Array[Dictionary] = []
+	# Blockers are deduplicated because two sources now lay them -- a merged diagonal and a
+	# face's shear -- and both reach the tiles around a corner. A second blocker on a tile is
+	# harmless to collision and is still an entity the map carries and the view iterates.
+	var blocked: Dictionary = {}
 	for run in _runs(singles):
 		var def_id: StringName = run["def_id"]
 		var axis := int(run["axis"])
@@ -332,13 +431,73 @@ static func _merge(singles: Array[Dictionary]) -> Array[Dictionary]:
 		var offset := 0
 		while offset < int(run["span"]):
 			var tile: Vector2i = run["start"] + step * offset
-			# The ART FIRST and its blockers after, so the non-blocking piece cannot clear a
-			# blocking byte the blocker beneath it has already set.
-			out.append(_rec(ladder[piece] if not ladder.is_empty() else def_id, tile, axis))
+			var rec := _rec(ladder[piece] if not ladder.is_empty() else def_id, tile, axis)
+			# A MERGED diagonal is the only piece that draws without claiming: the 1-tile one
+			# blocks on its own and must not be given blockers as well.
 			if art_only and piece > 1:
+				art.append(rec)
 				for i in range(piece):
-					out.append(_rec(BLOCKER, tile + step * i, WallPlan.AXIS_X))
+					if not blocked.has(tile + step * i):
+						blocked[tile + step * i] = true
+						out.append(_rec(BLOCKER, tile + step * i, WallPlan.AXIS_X))
+			else:
+				out.append(rec)
+				# The face is the only family whose rock outruns its rectangle: the crest is one
+				# tile deep, so its claim and its coverage are the same single row.
+				if ladder == FACE:
+					for t in _shear_gap(tile, axis, piece, high):
+						if not blocked.has(t):
+							blocked[t] = true
+							out.append(_rec(BLOCKER, t, WallPlan.AXIS_X))
 			offset += piece
+	return art + out
+
+
+## The tiles a face's ROCK covers that its rectangular footprint cannot reach.
+##
+## ## ⛔ A FOOTPRINT IS A RECTANGLE AND A CLIFF FACE IS A SHEARED ONE
+##
+## ⚠️ **THE OWNER RODE A SCOUT UP A THREE-TILE CLIFF (2026-09-23)**, and the collision data was
+## innocent: a probe of their saved map found all 362 pieces blocking every tile they claim. The
+## fault is that a face is drawn over tiles it never claimed.
+##
+## A footprint claims `start + step * i + perp * j` -- `perp` being `+y` for an `AXIS_X` run and
+## `+x` for an `AXIS_Y` one, which is what `MapData.footprint_rect_of`'s transposition means. But
+## the rock is a flat quad hanging STRAIGHT DOWN THE SCREEN, and down-screen is `(+1, +1)`: both
+## `+x` and `+y` add 16 px of depth, so only their sum falls with no sideways drift. The rock
+## therefore covers `start + step * i + (1, 1) * d`. **The claim is a rectangle and the coverage
+## is that rectangle SHEARED along the run**, and the two agree on one row only.
+##
+## 📐 It is worst exactly where the owner found it. An N-S side is a staircase, so every piece is
+## a run of ONE, and a 1-tile face claims `T`, `T+(1,0)`, `T+(2,0)` while its rock covers `T`,
+## `T+(1,1)`, `T+(2,2)`: **one tile in common and two tiles of solid rock left walkable, per
+## piece, down the whole side.** A 9-tile E-W run fares better -- the shear only overhangs its
+## far end -- and loses 3.
+##
+## 📌 **THE OVER-CLAIM IS LEFT ALONE.** The tiles the rectangle holds without rock over them are
+## the mirror of this, and un-claiming them would mean taking the footprints away from the face
+## defs and laying every piece on blockers. That is a much larger change for a wholly invisible
+## reward: a player cannot tell that a tile beside a cliff is denied for a slightly wrong reason,
+## and they can certainly tell that a horse is standing inside a rock.
+##
+## ⚠️ **A HIGH TILE IS NEVER BLOCKED.** On any plateau we lay, down-screen of a near face is off
+## the plateau, so this never fires; on a painted concave blob it would, and walling off the top
+## of someone's own plateau is not a thing this should be able to do.
+static func _shear_gap(tile: Vector2i, axis: int, length: int, high: Dictionary) -> Array[Vector2i]:
+	var step := step_of(axis)
+	var perp := Vector2i.ONE - step
+	var claimed: Dictionary = {}
+	for i in range(length):
+		for j in range(DEPTH):
+			claimed[tile + step * i + perp * j] = true
+
+	var out: Array[Vector2i] = []
+	for i in range(length):
+		# `d` opens at 1: the run's own line is `d == 0` and every footprint holds it already.
+		for d in range(1, DEPTH):
+			var t := tile + step * i + Vector2i.ONE * d
+			if not claimed.has(t) and not high.has(t):
+				out.append(t)
 	return out
 
 
