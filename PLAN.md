@@ -1429,11 +1429,13 @@ point old maps quietly become walkable again.
 not use** — lockstep needs a deterministic integer grid and a hand-rolled A\* (§7.1). The terrain
 byte is this project's equivalent, and it was already there.
 
-➡️ **OPEN — OCCLUSION BEHIND A MERGED DIAGONAL.** The blockers used to occlude with a 5-tile reach,
-so a unit behind a cliff was outlined. Axis faces still do, on their `[length, 3]` footprint; a
-merged diagonal has a `[1, 1]`, so units on a plateau behind a screen-horizontal run may now go
-un-outlined. The fix is a measured occlusion band from the run length, the way resource nodes
-already get one (`Occlusion.column_pad_for`) — and it reintroduces no entities.
+➡️ **OPEN — OCCLUSION BEHIND A MERGED DIAGONAL** (`cliff-diag-occlusion`). The blockers used to
+occlude with a 5-tile reach, so a unit behind a cliff was outlined. Axis faces still do, on their
+`[length, 3]` footprint; a merged diagonal has a `[1, 1]`, so units on a plateau behind a
+screen-horizontal run may now go un-outlined. The fix is a measured occlusion band, the way
+resource nodes already get one (`Occlusion.column_pad_for`) — and it reintroduces no entities.
+⚠️ **Measure before widening that rule to every building**: a flat reach on nodes once rimmed a
+knight standing in the clear four tiles behind a gold seam.
 
 ➡️ **OPEN — the N-S sides can only be 1-tile pieces**, repeating every 32 px against merged 9-tile
 E-W runs, which the owner has reported as the left edge looking wrong. Likely inherent to the art
