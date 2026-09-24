@@ -12,17 +12,18 @@
   <a href="LICENSE"><img alt="Code licence: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
   <a href="LICENSE-ART.md"><img alt="Art licence: CC BY-SA 3.0" src="https://img.shields.io/badge/art-CC--BY--SA%203.0-lightgrey"></a>
   <img alt="Engine: Godot 4.7.1" src="https://img.shields.io/badge/engine-Godot%204.7.1-478cbf">
-  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta%20(v0.9.31)-orange">
+  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta%20(v0.9.81)-orange">
 </p>
 
 ---
 
 > ### ⚠️ Read this first
 >
-> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.31 — the ninth
+> **It is playable, and it is a beta, not a release.** AOD is tagged **v0.9.81 — the tenth
 > beta.** The MVP is achieved and the game is played on a phone: a map, units that gather
 > and fight, buildings, five ages, a 27-entry tech tree, control groups, win conditions,
-> multiplayer and five AI difficulties.
+> multiplayer and five AI difficulties. Maps are hand-drawn in the MapMaker, plateaus and
+> all, and a cliff is now rock a unit cannot walk into rather than rock it walks through.
 >
 > **What is missing is named rather than glossed.** Of fifteen phases, four are closed
 > outright and two have not started — **13, the dragons this game is named after, because
@@ -195,7 +196,7 @@ detail of what each 🟢 is still short of.
 | **13** | ⛔ | **Dragons — not started, blocked on art.** `vis.dragon` has one clip, `static`. The unit is real and trainable from age 4 and has its fire breath; it cannot walk, attack or die |
 | 14 | ⛔ | AI enemy-blindness — a declared ceiling, not a defect: no rule can see the opponent |
 
-**1779 tests, 208,740 assertions, 0 failures.**
+**2824 tests, 230,803 assertions, 0 failures** in the game, and 475 more in the MapMaker.
 
 > **On phase 13, because it is the one this game is named after.** The dragon's mesh has no
 > rig — verified against pristine upstream art, not inferred. It is 0 A.D.'s own model and
