@@ -77,6 +77,11 @@ publishing a pack is an `scp` instead of an image rebuild carrying a 400 MB laye
 scp -r web\server\* 100.96.0.2:/opt/aod/
 ssh 100.96.0.2 "cd /opt/aod && docker compose up -d"
 
+# ⚠️ THEN FIX THE MODES. Google Drive marks every local directory read-only, and `scp -r`
+# carries that across as `dr-x------` -- which the container's nginx user cannot enter, so
+# every file under a new directory is a 403. Seen on the first site deploy, 2026-09-24.
+ssh 100.96.0.2 "find /opt/aod/app -type d -exec chmod 775 {} + ; find /opt/aod/app -type f -exec chmod 664 {} +"
+
 # after a config-only change, a reload is enough and drops no connections
 ssh 100.96.0.2 "docker exec ageOfDagons-web nginx -t && docker exec ageOfDagons-web nginx -s reload"
 ```

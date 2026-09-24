@@ -20,7 +20,7 @@
     });
   }
 
-  // THE AI NOTICE. Opens on arriving at the index page and closes itself after 30 s, or on
+  // THE AI NOTICE. Opens on arriving at the index page and closes itself after 5 s, or on
   // Continue, Escape or a click outside it. Once per tab: a dismissed notice does not come
   // back when the visitor returns from the credits page. sessionStorage is a convenience
   // only -- if it throws (private mode, blocked storage) the notice simply shows again.
@@ -29,7 +29,7 @@
     var seen = false;
     try { seen = sessionStorage.getItem("aod-ai-notice") === "1"; } catch (e) {}
     if (!seen) {
-      var left = 30;
+      var left = 5;
       var count = document.getElementById("ai-notice-count");
       var ok = document.getElementById("ai-notice-ok");
       var timer = null;
