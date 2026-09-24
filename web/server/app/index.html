@@ -1,1 +1,429 @@
-placeholder for website landing page.
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Age of Dragon</title>
+  <meta name="description" content="Age of Dragon is an open-source real-time strategy game built for the phone first: villagers, five ages, a tech tree, armies — and a dragon. Free beta for Android and Windows.">
+  <meta property="og:title" content="Age of Dragon — A Renaissance of Fire">
+  <meta property="og:description" content="A real-time strategy epic, built for the phone first. Free open-source beta for Android and Windows.">
+  <meta property="og:image" content="https://aod.dragoon.co.za/assets/img/splash.jpg">
+  <meta name="theme-color" content="#1c130d">
+  <link rel="icon" href="/assets/img/icon.png">
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/img/icon.png" alt="">Age of Dragon</a>
+    <button class="nav-toggle" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav">
+      <a href="#game">The game</a>
+      <a href="#maps">Maps</a>
+      <a href="#single">Single player</a>
+      <a href="#multi">Multiplayer</a>
+      <a href="#content">Content</a>
+      <a href="#download">Download</a>
+      <a href="#bugs">Report a bug</a>
+      <a href="/credits.html">Credits</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ── hero ─────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">A Renaissance of Fire</span>
+      <h1>Age of Dragon</h1>
+      <p class="tagline">A real-time strategy epic, built for the phone first.</p>
+      <p class="dim">Gather, build and climb five ages. Raise an army and find your enemy. And somewhere
+        on the map, a dragon waits in her nest. Take the nest, and the hatchling is yours.</p>
+      <div class="cta-row">
+        <a class="btn" href="https://github.com/HermanRas/AgeOfDagrons/releases/latest">
+          <img src="/assets/img/pack_download.png" alt="">Download the beta
+        </a>
+        <a class="btn secondary" href="#game">See the game</a>
+      </div>
+      <p class="faint">
+        <span class="badge red">Beta · v0.9.81</span>&nbsp;
+        Free and open source · Android and Windows
+      </p>
+    </div>
+    <div class="hero-art">
+      <img src="/assets/img/splash.jpg" alt="Age of Dragon: a golden dragon breathes fire around a castle" width="1100" height="614">
+    </div>
+  </div>
+</section>
+
+<!-- ── the game ─────────────────────────────────────────────────────── -->
+<section id="game">
+  <div class="wrap">
+    <span class="eyebrow">The game</span>
+    <h2>Age of Empires II, with dragons, on a phone</h2>
+    <p class="lede">The strategy formula you know (villagers, resources, build queues, ages, tech trees,
+      armies), rebuilt for a landscape touchscreen instead of a mouse and keyboard.</p>
+
+    <figure style="margin: 32px 0 40px">
+      <img class="shot" src="/assets/img/shot_hud.jpg" alt="The in-game HUD: a blacksmith selected, showing its technologies" width="1100" height="619" loading="lazy">
+      <figcaption>A capture of the running game, not a mockup. Control groups on the left, age and idle villagers at the top, resources top right, the ornate minimap bottom right.</figcaption>
+    </figure>
+
+    <div class="grid grid-3">
+      <div class="feature">
+        <img class="icon" src="/assets/img/res_wood.png" alt="">
+        <div><h3>Four resources</h3><p>Wood, food, gold and stone. Chop forests, hunt deer, farm the fields, mine gold and stone.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/age_4.png" alt="">
+        <div><h3>Five ages</h3><p>Advance your civilisation. Every age costs resources and time, and changes what you can build.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/hud_techtree.png" alt="">
+        <div><h3>A real tech tree</h3><p>27 technologies across seven buildings, from better axes to plate mail.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/act_build.png" alt="">
+        <div><h3>23 buildings</h3><p>Houses, fields, barracks, docks and castles, with upgrades, and walls whose gates open for your own troops.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/form_vee.png" alt="">
+        <div><h3>Command an army</h3><p>Four stances, four formations, siege engines to pack and unpack, and five control groups under your thumb.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/abil_fire_breath.png" alt="">
+        <div><h3>The dragon</h3><p>She has a castle's hit points, flies over any terrain and breathes fire. Kill the mother, hold her nest, and her hatchling grows into yours.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── maps ─────────────────────────────────────────────────────────── -->
+<section id="maps">
+  <div class="wrap">
+    <span class="eyebrow">Maps</span>
+    <h2>Six map types, 2 to 8 players</h2>
+    <p class="lede">Every skirmish can be a freshly generated map. The player count sets the size: a duel is
+      96&times;96 tiles, an eight-player war is 192&times;192. Fog of war hides everything you haven't scouted.</p>
+
+    <div class="grid grid-3 maps" style="margin-top: 32px">
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/island_2p.png" alt="Island map: one landmass ringed by beach and sea" loading="lazy"></div>
+        <h3>Island</h3>
+        <p>One landmass with a beach and open sea all around. Palms on the shore.</p>
+      </article>
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/river_2p.png" alt="River map: a river splits the map, crossed by two fords" loading="lazy"></div>
+        <h3>River</h3>
+        <p>A river cuts the land in two. Whoever holds the crossings holds the map.</p>
+      </article>
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/desert_2p.png" alt="Desert map" loading="lazy"></div>
+        <h3>Desert</h3>
+        <p>Open sand, sparse dead wood and little cover. Every tree is worth fighting over.</p>
+      </article>
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/forest_2p.png" alt="Forest map: dense woodland between the players" loading="lazy"></div>
+        <h3>Forest</h3>
+        <p>Dense woodland between the players. Plenty of wood, and plenty of places to hide.</p>
+      </article>
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/archipelago_2p.png" alt="Archipelago map: each player on their own island" loading="lazy"></div>
+        <h3>Archipelago</h3>
+        <p>Each player starts on an island of their own, with deep water between.</p>
+      </article>
+      <article class="panel map-card">
+        <div class="thumb"><img src="/assets/img/maps/island_8p.png" alt="An eight-player island map" loading="lazy"></div>
+        <h3>Random</h3>
+        <p>Let the generator pick. This one is an Island for eight players at 192&times;192.</p>
+      </article>
+    </div>
+
+    <div class="legend" aria-label="Map picture legend">
+      <span style="--c:#4caf50">Grass</span>
+      <span style="--c:#fff8e7">Sand</span>
+      <span style="--c:#0288d1">Water</span>
+      <span style="--c:#01579b">Deep water</span>
+      <span style="--c:#1b5e20">Trees</span>
+      <span style="--c:#ffd700">Gold</span>
+      <span style="--c:#9e9e9e">Stone</span>
+      <span style="--c:#e91e63">Food</span>
+      <span style="--c:#d50000">Town centre</span>
+      <span style="--c:#00e5ff">Start clearing</span>
+      <span style="--c:#a1723c">Ford</span>
+      <span style="--c:#ffffff">Units</span>
+    </div>
+    <p class="faint" style="margin-top: 6px">These are the pictures the skirmish screen shows before a match, one pixel per tile.</p>
+
+    <div class="split" style="margin-top: 48px">
+      <div>
+        <h3>Hand-drawn maps, plateaus and all</h3>
+        <p class="dim">Besides the generator there is the <strong>MapMaker</strong>, a separate editor for drawing
+          maps by hand: terrain, rivers, forests, starting positions, and raised plateaus ringed by cliffs that
+          no unit can walk through.</p>
+        <p class="dim">Want to see what cliffs and plateaus look like? Download the <strong>PlatoSample</strong>
+          map from <em>Download More</em> in the game. It is fully playable, but it's there to show the terrain off.</p>
+      </div>
+      <div class="panel">
+        <ul class="ticks" style="margin: 0">
+          <li>Five biomes, each with its own trees</li>
+          <li>Rivers with fords and bridges</li>
+          <li>Plateaus and cliff walls that block movement</li>
+          <li>Gold and stone veins near every start</li>
+          <li>One dragon nest per map</li>
+          <li>Save any match's map and play it again</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── single player ────────────────────────────────────────────────── -->
+<section id="single">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <span class="eyebrow">Single player</span>
+        <h2>Learn it, then beat the AI</h2>
+        <p class="lede">Start with the <strong>How To Play</strong> campaign: five short scenarios that take you
+          from your first villager to a real duel.</p>
+        <ol class="steps">
+          <li>Gather and build</li>
+          <li>Climb the ages</li>
+          <li>Find your opponent</li>
+          <li>Tame a dragon</li>
+          <li>Survive a real duel across one ford</li>
+        </ol>
+        <p class="dim">Then open a skirmish against AI opponents on any map type and any win condition.
+          There are five difficulties. A harder AI mostly reacts faster; only Unfair also starts with extra units:</p>
+        <div class="chips">
+          <span class="chip">Passive</span>
+          <span class="chip">Easy</span>
+          <span class="chip">Normal</span>
+          <span class="chip">Hard</span>
+          <span class="chip">Unfair</span>
+        </div>
+        <p class="faint">Save a game from the pause menu and pick it up later.</p>
+      </div>
+      <figure>
+        <img class="shot" src="/assets/img/shot_menu.jpg" alt="The main menu inside an ornate dragon frame" width="820" height="461" loading="lazy">
+        <figcaption>The main menu. Every pixel of chrome is the project's own art.</figcaption>
+      </figure>
+    </div>
+
+    <h3 style="margin-top: 56px">How to play, in six pictures</h3>
+    <p class="dim">The same pages the game shows under <em>How To</em>.</p>
+    <div class="gallery">
+      <figure><img src="/assets/img/help_move_and_gather.jpg" alt="Move and gather" loading="lazy"><figcaption>Tap a villager, then tap a tree, mine or deer to gather.</figcaption></figure>
+      <figure><img src="/assets/img/help_drag_select.jpg" alt="Drag select" loading="lazy"><figcaption>Pull two fingers apart to box-select a crowd.</figcaption></figure>
+      <figure><img src="/assets/img/help_control_groups.jpg" alt="Control groups" loading="lazy"><figcaption>Five control-group slots down the left edge.</figcaption></figure>
+      <figure><img src="/assets/img/help_age_up.jpg" alt="Advancing an age" loading="lazy"><figcaption>Advance an age from the town centre.</figcaption></figure>
+      <figure><img src="/assets/img/help_zoom_and_pan.jpg" alt="Zoom and pan" loading="lazy"><figcaption>Pan and zoom with your thumbs.</figcaption></figure>
+      <figure><img src="/assets/img/help_minimap_and_panels.jpg" alt="Minimap and panels" loading="lazy"><figcaption>Tap the minimap to move there.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── multiplayer ──────────────────────────────────────────────────── -->
+<section id="multi">
+  <div class="wrap">
+    <span class="eyebrow">Multiplayer</span>
+    <h2>Up to eight players on your network</h2>
+    <p class="lede">One player hosts and everyone else joins. Games on your local network show up in the
+      server browser by themselves: no IP addresses, no setup. Fill empty seats with AI.</p>
+
+    <div class="grid grid-3" style="margin: 32px 0">
+      <div class="panel mode">
+        <h3><img src="/assets/img/victory_regicide.png" alt="">Conquest</h3>
+        <p>The classic rule. Lose every unit and building and you're out; the last player standing wins.</p>
+      </div>
+      <div class="panel mode">
+        <h3><img src="/assets/img/victory_trophy.png" alt="">Trophy</h3>
+        <p>Every player starts with a baby dragon. Lose yours and you're out. Guard it, or hunt theirs.</p>
+      </div>
+      <div class="panel mode">
+        <h3><img src="/assets/img/lobby_gametype.png" alt="">King of the Hill</h3>
+        <p>Stand in the zone to score, and hold it alone to score three times as fast. First to the target wins.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="feature">
+        <img class="icon" src="/assets/img/net_host.png" alt="">
+        <div><h3>Host</h3><p>Pick the map type, size, win condition and starting age, then open the lobby. Seats, colours and teams are set there.</p></div>
+      </div>
+      <div class="feature">
+        <img class="icon" src="/assets/img/net_join.png" alt="">
+        <div><h3>Join</h3><p>Open <em>Multiplayer</em>. Games on your Wi-Fi are listed with their map, size, mode and free seats. Tap one to join.</p></div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p><strong>One thing to know:</strong> the host's device runs the match. If the host drops out, the match
+        ends. Playing over the internet (a master server and browser) is not built yet; today multiplayer means
+        the same local network.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── content ──────────────────────────────────────────────────────── -->
+<section id="content">
+  <div class="wrap">
+    <span class="eyebrow">Content</span>
+    <h2>Campaigns, maps and art packs</h2>
+    <p class="lede">The download is kept small: art, campaigns and maps arrive as packs, fetched by the game
+      itself. Packs marked <em>Included</em> download on first launch. <em>Optional</em> ones, including
+      community content, are under <strong>Download More</strong> on the campaign screen.</p>
+
+    <p class="packs-status" id="pack-status">Loading the content list…</p>
+    <div class="packs" id="pack-list">
+      <noscript><p class="dim">Enable JavaScript to see the live content list, or open <em>Download More</em> in the game.</p></noscript>
+    </div>
+
+    <div class="split" style="margin-top: 48px">
+      <div>
+        <h3>Share your own map or campaign</h3>
+        <p class="dim">Made something in the MapMaker? Community maps and campaigns can be published here as optional
+          content, and every player can then download them in the game.</p>
+        <ol class="steps">
+          <li>Open a new issue on GitHub and start the title with <code>#content</code>.</li>
+          <li>Say what it is (map or campaign), how many players, and what makes it worth playing.</li>
+          <li>Attach the map folder (<code>map.json</code> and <code>map.png</code>) or the campaign folder as a zip.</li>
+          <li>Confirm it is your own work and you're happy for it to be shared under CC BY-SA 3.0, the same licence as the game's art.</li>
+        </ol>
+        <div class="cta-row">
+          <a class="btn" href="https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23content%3A%20&amp;body=**What%20is%20it%3F**%20(map%20or%20campaign)%3A%0A%0A**Name%3A**%0A%0A**Players%3A**%0A%0A**Description%20(shown%20in%20Download%20More)%3A**%0A%0A**Files%3A**%20attach%20a%20zip%20of%20the%20map%20or%20campaign%20folder%0A%0A-%20%5B%20%5D%20This%20is%20my%20own%20work%20and%20I%20agree%20to%20share%20it%20under%20CC%20BY-SA%203.0">
+            <img src="/assets/img/file_save.png" alt="">Submit content
+          </a>
+          <a class="btn secondary" href="https://github.com/HermanRas/AgeOfDagrons/issues?q=is%3Aissue+%22%23content%22">See submissions</a>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>What gets accepted</h3>
+        <ul class="ticks">
+          <li>It loads and can be played from start to finish</li>
+          <li>Starting positions are fair for every seat</li>
+          <li>Title and description say what it is</li>
+          <li>Nothing copied from somewhere it isn't allowed to be</li>
+        </ul>
+        <p class="faint" style="margin: 0">Accepted content is packed and published as an optional download.
+          An update to it is a new version, and players who have it are offered the update.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── download ─────────────────────────────────────────────────────── -->
+<section id="download">
+  <div class="wrap">
+    <div class="panel-ornate">
+      <div style="text-align: center">
+        <span class="eyebrow">Download</span>
+        <h2>Play the beta</h2>
+        <p class="lede" style="margin: 0 auto 8px">Free and open source. The latest builds are on the GitHub releases page.</p>
+        <div class="cta-row" style="justify-content: center">
+          <a class="btn" href="https://github.com/HermanRas/AgeOfDagrons/releases/latest">
+            <img src="/assets/img/pack_download.png" alt="">Latest release
+          </a>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top: 28px">
+        <div>
+          <h3>Android</h3>
+          <p class="dim">Download the <code>.apk</code> on your phone and open it. Android will ask you to allow
+            installs from your browser or file manager. Landscape only.</p>
+        </div>
+        <div>
+          <h3>Windows</h3>
+          <p class="dim">Download the <code>.exe</code> and run it. Nothing to install. Windows may warn about an
+            unrecognised app; choose <em>More info → Run anyway</em>.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>On first launch</strong> the game downloads its art, about 80 MB. Player colours are an
+          optional 227 MB extra; without them every army shows in its base colours. Both downloads resume
+          if the connection drops.</p>
+      </div>
+
+      <p class="faint" style="text-align: center; margin: 0">
+        This is a beta: playable and played, but not finished. Want the source?
+        <a href="https://github.com/HermanRas/AgeOfDagrons">Build it yourself from GitHub</a> with Godot 4.7.1.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── bugs ─────────────────────────────────────────────────────────── -->
+<section id="bugs">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <span class="eyebrow">Report a bug</span>
+        <h2>Found something broken?</h2>
+        <p class="lede">Tell us on GitHub. Start the issue title with <code>#Bug</code> so it's picked up.</p>
+        <p class="dim">A good report says:</p>
+        <ul class="ticks">
+          <li>which version you downloaded, and which phone or Windows version you play on</li>
+          <li>what you did, step by step</li>
+          <li>what you expected, and what happened instead</li>
+          <li>a screenshot, if it's something you can see</li>
+        </ul>
+        <div class="cta-row">
+          <a class="btn" href="https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23Bug%3A%20&amp;body=**Version%3A**%20v0.9.%0A**Device%20%2F%20OS%3A**%0A%0A**What%20I%20did%3A**%0A1.%0A2.%0A3.%0A%0A**What%20I%20expected%3A**%0A%0A**What%20happened%3A**%0A%0A**Screenshot%20(optional)%3A**">
+            <img src="/assets/img/hud_alert.png" alt="">Report a bug
+          </a>
+          <a class="btn secondary" href="https://github.com/HermanRas/AgeOfDagrons/issues?q=is%3Aissue+%22%23Bug%22">Known bugs</a>
+        </div>
+        <p class="faint">Check the known bugs first. If yours is there, a comment with your device helps too.</p>
+      </div>
+      <div class="panel">
+        <h3>Ideas and questions</h3>
+        <p class="dim">Not a bug? Suggestions and questions are welcome on the same issue tracker. Just leave the
+          <code>#Bug</code> off the title.</p>
+        <h3 style="margin-top: 1.2em">Contribute</h3>
+        <p class="dim" style="margin: 0">The code is MIT and the art is CC BY-SA 3.0. The repository has build
+          instructions for desktop and Android, and the full plan of what's done and what's left.</p>
+        <p style="margin: 12px 0 0"><a href="https://github.com/HermanRas/AgeOfDagrons">github.com/HermanRas/AgeOfDagrons</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <h3>Age of Dragon</h3>
+      <p style="margin: 0">Code is <a href="https://github.com/HermanRas/AgeOfDagrons/blob/main/LICENSE">MIT</a>; art and audio are
+        <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Sprites are rendered from
+        <a href="https://play0ad.com">0 A.D.</a> models by <a href="http://www.wildfiregames.com/">Wildfire Games</a>.
+        Made with the <a href="https://godotengine.org">Godot Engine</a>.</p>
+    </div>
+    <div>
+      <h3>Play</h3>
+      <ul>
+        <li><a href="https://github.com/HermanRas/AgeOfDagrons/releases/latest">Download</a></li>
+        <li><a href="#content">Content packs</a></li>
+        <li><a href="/credits.html">Credits</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Community</h3>
+      <ul>
+        <li><a href="https://github.com/HermanRas/AgeOfDagrons/issues">Issue tracker</a></li>
+        <li><a href="#bugs">Report a bug</a></li>
+        <li><a href="#content">Submit content</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

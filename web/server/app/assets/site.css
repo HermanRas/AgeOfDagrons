@@ -1,0 +1,310 @@
+/* Age of Dragon website. Colours, type and chrome are the game's own:
+   gold #E5B842 on dark brown #2B1D14 (MainMenu.tscn), button text from aod_theme.tres,
+   New Rocker for sentences and Cinzel Decorative for names -- the split UiFont makes. */
+
+@font-face {
+  font-family: "New Rocker";
+  src: url("fonts/NewRocker-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cinzel Decorative";
+  src: url("fonts/CinzelDecorative-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cinzel Decorative";
+  src: url("fonts/CinzelDecorative-Black.ttf") format("truetype");
+  font-weight: 900;
+  font-display: swap;
+}
+
+:root {
+  --bg: #1c130d;
+  --bg-panel: #2b1d14;
+  --bg-deep: #120c08;
+  --gold: #e5b842;
+  --gold-soft: #c9a14a;
+  --text: #f5e6bf;
+  --text-dim: #c8b893;
+  --text-faint: #8f7f63;
+  --red: #8e2a22;
+  --line: rgba(229, 184, 66, 0.28);
+  --radius: 6px;
+  --maxw: 1120px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  background-image: radial-gradient(ellipse at top, #34231a 0%, var(--bg) 60%);
+  background-attachment: fixed;
+  color: var(--text);
+  font: 17px/1.6 "New Rocker", Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* height:auto, or an <img> carrying width/height attributes keeps its height while the
+   width shrinks to fit, and the picture squashes. */
+img { max-width: 100%; height: auto; display: block; }
+
+/* New Rocker has ONE weight. A browser asked for bold smears a fake one, which at this
+   face's thin strokes reads as a blot -- so emphasis is colour, not weight. */
+body { font-synthesis: none; }
+strong, b { font-weight: inherit; color: #fff3cf; }
+
+a { color: var(--gold); text-underline-offset: 3px; }
+a:hover { color: #ffd76a; }
+
+h1, h2, h3 {
+  font-family: "Cinzel Decorative", Georgia, serif;
+  color: var(--gold);
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+  letter-spacing: 0.01em;
+}
+h1 { font-weight: 900; font-size: clamp(2.2rem, 5vw, 3.6rem); }
+h2 { font-weight: 900; font-size: clamp(1.6rem, 3.4vw, 2.3rem); }
+h3 { font-weight: 700; font-size: 1.2rem; }
+
+p { margin: 0 0 1em; }
+.dim { color: var(--text-dim); }
+.faint { color: var(--text-faint); font-size: 0.9rem; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 16px; }
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(18, 12, 8, 0.94);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+.topbar .wrap {
+  display: flex; align-items: center; gap: 16px;
+  min-height: 60px;
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-family: "Cinzel Decorative", serif; font-weight: 900;
+  color: var(--gold); text-decoration: none; font-size: 1.1rem;
+  white-space: nowrap;
+}
+.brand img { width: 34px; height: 34px; border-radius: 6px; }
+.nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.nav a {
+  color: var(--text-dim); text-decoration: none;
+  padding: 6px 10px; border-radius: var(--radius); font-size: 0.95rem;
+}
+.nav a:hover, .nav a[aria-current="page"] { color: var(--gold); background: rgba(229, 184, 66, 0.08); }
+.nav-toggle {
+  display: none; margin-left: auto;
+  background: none; border: 1px solid var(--line); color: var(--gold);
+  border-radius: var(--radius); padding: 6px 10px; font: inherit; cursor: pointer;
+}
+@media (max-width: 900px) {
+  .nav-toggle { display: block; }
+  .nav {
+    display: none; position: absolute; left: 0; right: 0; top: 60px;
+    flex-direction: column; background: var(--bg-deep);
+    border-bottom: 1px solid var(--line); padding: 8px 16px 16px;
+  }
+  .nav.open { display: flex; }
+  .nav a { padding: 10px; }
+}
+
+/* ── game chrome ─────────────────────────────────────────────────────── */
+
+/* The red menu button, nine-sliced exactly as aod_theme.tres slices it (14/8). */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 52px; padding: 8px 30px;
+  border: 14px solid transparent; border-width: 8px 14px;
+  border-image: url("img/button_normal.png") 8 14 fill stretch;
+  color: #f5e6bf; text-decoration: none; text-transform: uppercase;
+  font-family: "New Rocker", serif; font-size: 1.1rem; letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: transform 0.08s ease;
+}
+.btn:hover { color: #fff2d1; filter: brightness(1.08); }
+.btn:active { border-image-source: url("img/button_pressed.png"); color: #ffde80; transform: translateY(1px); }
+.btn img { width: 28px; height: 28px; }
+.btn.secondary {
+  border: 1px solid var(--gold-soft); border-image: none; border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.25); color: var(--gold); padding: 12px 22px;
+}
+.btn.secondary:hover { background: rgba(229, 184, 66, 0.1); }
+
+/* The HUD panel: thin gold frame with corner rivets. */
+.panel {
+  border: 16px solid transparent;
+  border-image: url("img/panel_hud.png") 22 fill stretch;
+  padding: 10px 12px;
+}
+/* The main menu's frame, dragons in the corners. Slice 90 is MainMenu.tscn's. */
+.panel-ornate {
+  border: 44px solid transparent;
+  border-image: url("img/panel_ornate.png") 90 fill stretch;
+  padding: 18px 16px;
+}
+@media (min-width: 720px) {
+  .panel-ornate { border-width: 64px; padding: 20px 28px; }
+}
+
+.icon { width: 44px; height: 44px; flex: none; }
+
+/* ── sections ────────────────────────────────────────────────────────── */
+
+section { padding: 72px 0; border-top: 1px solid rgba(229, 184, 66, 0.12); }
+section:first-of-type { border-top: none; }
+.lede { font-size: 1.15rem; color: var(--text-dim); max-width: 760px; }
+.eyebrow {
+  display: inline-block; font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--gold-soft); margin-bottom: 8px;
+}
+
+/* hero */
+.hero { padding: 40px 0 64px; }
+.hero-grid { display: grid; gap: 32px; align-items: center; }
+@media (min-width: 920px) { .hero-grid { grid-template-columns: 1.15fr 1fr; } }
+.hero-art { border-radius: 10px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6); border: 1px solid var(--line); }
+.hero h1 { margin-bottom: 0.25em; }
+.tagline { font-size: 1.3rem; color: var(--text); margin-bottom: 1.2em; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 12px; }
+.badge {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  border: 1px solid var(--gold-soft); color: var(--gold); font-size: 0.85rem;
+}
+.badge.red { border-color: #c0574a; color: #f0a092; }
+.badge.plain { border-color: var(--line); color: var(--text-dim); }
+
+/* grids */
+.grid { display: grid; gap: 20px; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+/* Fixed column counts at desktop, so six items land as 3+3 rather than 4+2. */
+.grid-3 { grid-template-columns: 1fr; }
+@media (min-width: 640px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 980px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+
+.feature { display: flex; gap: 14px; align-items: flex-start; }
+.feature h3 { margin-bottom: 0.2em; }
+.feature p { margin: 0; color: var(--text-dim); font-size: 0.97rem; }
+
+.split { display: grid; gap: 36px; align-items: center; }
+@media (min-width: 900px) { .split { grid-template-columns: 1fr 1fr; } .split.flip > :first-child { order: 2; } }
+
+.shot { border-radius: 8px; border: 1px solid var(--line); box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5); }
+figure { margin: 0; }
+figcaption { font-size: 0.9rem; color: var(--text-faint); margin-top: 8px; }
+
+ul.ticks { list-style: none; padding: 0; margin: 0 0 1em; }
+ul.ticks li { padding-left: 28px; position: relative; margin-bottom: 0.5em; }
+ul.ticks li::before {
+  content: ""; position: absolute; left: 4px; top: 0.55em;
+  width: 9px; height: 9px; transform: rotate(45deg);
+  background: var(--gold); box-shadow: 0 0 0 3px rgba(229, 184, 66, 0.18);
+}
+
+/* map cards */
+.map-card { display: flex; flex-direction: column; }
+/* Two per row even on a phone: one full-width card per map is six screens of scrolling. */
+.grid-3.maps { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 980px) { .grid-3.maps { grid-template-columns: repeat(3, 1fr); gap: 20px; } }
+@media (max-width: 640px) {
+  .maps .panel { border-width: 10px; padding: 6px; }
+  .maps .map-card p { font-size: 0.85rem; }
+}
+.map-card .thumb {
+  aspect-ratio: 1; background: var(--bg-deep); border-radius: 4px; overflow: hidden;
+  display: grid; place-items: center;
+}
+.map-card .thumb img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.map-card h3 { margin: 12px 0 4px; }
+.map-card p { margin: 0; color: var(--text-dim); font-size: 0.95rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.88rem; color: var(--text-faint); margin-top: 18px; }
+.legend span::before {
+  content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 6px;
+  vertical-align: -1px; border-radius: 2px; background: var(--c);
+}
+
+/* modes / difficulty */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 18px; }
+.chip {
+  padding: 4px 12px; border-radius: 999px; background: rgba(229, 184, 66, 0.08);
+  border: 1px solid var(--line); font-size: 0.93rem; color: var(--text);
+}
+.mode h3 { display: flex; align-items: center; gap: 10px; }
+.mode h3 img { width: 34px; height: 34px; }
+.mode p { color: var(--text-dim); margin: 0; font-size: 0.97rem; }
+
+/* how to play gallery */
+.gallery { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.gallery figure img { border-radius: 6px; border: 1px solid var(--line); width: 100%; }
+
+/* content packs (live from packs.json) */
+.packs { display: grid; gap: 14px; }
+.pack { display: grid; gap: 4px 16px; grid-template-columns: 1fr auto; align-items: start; }
+.pack h3 { margin: 0; font-size: 1.1rem; }
+.pack .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+.pack p { grid-column: 1 / -1; margin: 4px 0 0; color: var(--text-dim); font-size: 0.95rem; }
+@media (max-width: 560px) { .pack { grid-template-columns: 1fr; } .pack .meta { justify-content: flex-start; } }
+.packs-status { color: var(--text-faint); font-size: 0.95rem; }
+
+/* steps */
+ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0 0 1em; }
+ol.steps li { counter-increment: step; position: relative; padding-left: 46px; margin-bottom: 14px; }
+ol.steps li::before {
+  content: counter(step); position: absolute; left: 0; top: -2px;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: "Cinzel Decorative", serif; font-weight: 900; font-size: 0.95rem;
+  color: var(--bg-deep); background: var(--gold);
+}
+
+code, kbd {
+  font-family: ui-monospace, Consolas, monospace; font-size: 0.88em;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 4px; color: var(--text);
+}
+
+/* callout */
+.callout {
+  border-left: 3px solid var(--gold); background: rgba(229, 184, 66, 0.06);
+  padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; margin: 18px 0;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+/* credits page */
+.prose { max-width: 820px; }
+.prose h2 { margin-top: 1.6em; }
+.prose h3 { margin-top: 1.4em; }
+.prose blockquote {
+  margin: 1em 0; padding: 10px 16px; border-left: 3px solid var(--gold-soft);
+  background: rgba(0, 0, 0, 0.2); color: var(--text-dim);
+}
+.prose dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+.prose dt { color: var(--text-faint); }
+.prose dd { margin: 0; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--gold); font-family: "Cinzel Decorative", serif; font-weight: 700; }
+
+/* footer */
+footer {
+  border-top: 1px solid var(--line); background: var(--bg-deep);
+  padding: 36px 0 44px; color: var(--text-faint); font-size: 0.92rem;
+}
+footer .wrap { display: grid; gap: 20px; }
+@media (min-width: 800px) { footer .wrap { grid-template-columns: 2fr 1fr 1fr; } }
+footer h3 { font-size: 1rem; margin-bottom: 0.4em; }
+footer ul { list-style: none; margin: 0; padding: 0; }
+footer li { margin-bottom: 4px; }
+footer a { color: var(--text-dim); }

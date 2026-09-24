@@ -19,9 +19,13 @@ web/
     ├── nginx.conf                     -> /opt/aod/nginx.conf
     └── app/                           -> /opt/aod/app/   THE DOCUMENT ROOT
         ├── index.html                 -> https://aod.dragoon.co.za/index.html
+        ├── credits.html               -> /credits.html   (mirrors CREDITS.md -- change that first)
         ├── player-colour-ladder.html  -> /player-colour-ladder.html
+        ├── assets/                    -> /assets/
+        │   ├── site.css, site.js      hand-written
+        │   └── fonts/, img/           STAGED by tools/stage_site_assets.py, committed
         └── downloads/
-            ├── index.html             -> /downloads/index.html
+            ├── index.html             -> /downloads/index.html   (redirects to /#download)
             ├── packs.json             -> /downloads/packs.json   (built, COMMITTED)
             └── *.zip / *.pck          -> /downloads/...          (built, gitignored)
 ```
@@ -30,7 +34,25 @@ web/
 and `docker-compose.yml` sit *beside* `app/` and are never served — that is what makes the
 mirror safe. Anything dropped inside `app/` is public the moment it is copied up.
 
-Both pages are placeholders right now.
+## The site (2026-09-24)
+
+One landing page (game, maps, single player, multiplayer, content, download, bugs) and a
+credits page. **It uses the game's own fonts, chrome and screenshots**: the red button and
+the gold frames are `game/assets/ui/chrome/` nine-sliced with the margins `aod_theme.tres`
+and `MainMenu.tscn` use. Re-stage after the UI art or the screenshots change:
+
+```powershell
+godot --headless --path game res://dev_preview/preview_mapgen.tscn   # the map-type pictures
+& $py tools\stage_site_assets.py
+```
+
+- **The content list is read live from `/downloads/packs.json`**, the same manifest the
+  game reads, so publishing a pack updates the page with no edit here.
+- **Download links go to GitHub's `releases/latest`.** Builds are not hosted on this box.
+- **Bugs and content submissions go to the GitHub issue tracker**, titles starting with
+  `#Bug` and `#content`. The buttons pre-fill the title and a body template.
+- **`credits.html` mirrors `CREDITS.md`**, which is the licence-obligation copy. Edit that
+  first, then this page to match.
 
 ## The server
 
@@ -181,7 +203,8 @@ done
 | `campaign_howtoplay_dummy_v4.zip` | the game | **A TEST PACK.** Optional content that exists only so the browse-and-pick path has something to exercise on a device; delete it once there is a real optional campaign |
 | `art_base_v3.zip` | the game | **The art, 80 MB, `required` and MOUNTED.** Every unit, building, terrain and prop. Without it the game runs on placeholders. ⚠️ **v2 and v3 both went up on 2026-09-20** — v2 for three bridge atlases, v3 for one foundation pad. Both arrived the same way and it is the property worth knowing: `build_packs.py` resolves a pack from what the **seam** can ask for (`game/data/visuals.json`), never from a directory listing, so **adding one id to that file is a publish**. `preview_art_pack` is what catches it, and it is the only thing that can — this workstation has the staged tree and `res://` beats a mounted pack, so a missing atlas draws perfectly here and magenta on a phone |
 | `art_colours_v1.zip` | the game | **Player colours, 236 MB, optional.** 21 units × 8 colours. Without it units show untinted, which the seam falls back to on its own |
-| `AoD_v*.apk` / `.exe` | humans | Game builds |
+| `map_platosample_v2.zip` | the game | The cliffs-and-plateaus feature demo map. Optional |
+| ~~`AoD_v*.apk` / `.exe`~~ | — | **Not hosted here.** Builds are GitHub releases; the site links `releases/latest` |
 
 ⚠️ **THE ART PACK IS A `.zip`, NOT THE `.pck` THIS TABLE PROMISED FOR A WEEK.** A `.pck` is
 Godot's own container and would need a Godot export step in the publish pipeline;
