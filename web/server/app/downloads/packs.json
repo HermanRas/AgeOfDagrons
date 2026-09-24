@@ -1,35 +1,35 @@
 {
   "format_version": 1,
-  "generated": "2026-09-24T09:51:10Z",
+  "generated": "2026-09-24T09:53:59Z",
   "packs": [
     {
       "id": "howtoplay",
       "kind": "campaign",
       "folder": "HowToPlay",
-      "version": 4,
+      "version": 5,
       "required": true,
       "title": "How To Play",
       "author": "Age of Dragons",
       "description": "Five short lessons: gather and build, climb the ages, find your opponent, tame a dragon, then survive a real duel.",
-      "size": 2238663,
-      "sha256": "a054689bccdedfb2446406987571e4ff5324e80c28a24191c2642a7a8750d0c6",
+      "size": 2239332,
+      "sha256": "e488e55af4ba15e09c5b2fb7cdf34f0da9ccc3097e74e16cef36297f9161f30f",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/campaign_howtoplay_v4.zip"
+        "https://aod.dragoon.co.za/downloads/campaign_howtoplay_v5.zip"
       ]
     },
     {
       "id": "howtoplay_dummy",
       "kind": "campaign",
       "folder": "HowToPlayDummy",
-      "version": 4,
+      "version": 5,
       "required": false,
       "title": "How To Play (Dummy)",
       "author": "Age of Dragons",
       "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content.",
-      "size": 2238136,
-      "sha256": "b8265f755e92de547de7dabfdcce51a11744feeca51850965af3e9247240e2a6",
+      "size": 2238805,
+      "sha256": "c8af82853867d12e00f107fca6b9d191da41a67584a2350f582a4ee9ab5ec9dc",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/campaign_howtoplay_dummy_v4.zip"
+        "https://aod.dragoon.co.za/downloads/campaign_howtoplay_dummy_v5.zip"
       ]
     },
     {
@@ -51,30 +51,30 @@
       "id": "base",
       "kind": "art",
       "folder": "",
-      "version": 3,
+      "version": 4,
       "required": true,
       "title": "Game art",
       "author": "Age of Dragons",
       "description": "Every unit, building, terrain and prop in the game. Without it Age of Dragons draws coloured placeholder shapes -- it runs, but nothing looks like what it is.",
-      "size": 80230976,
-      "sha256": "b8d04bb6bc63cd37c05823ff20a6791195399ce6011bd4ca7e99206878a570dc",
+      "size": 83978606,
+      "sha256": "2aed3031ea1ad6744fe99ac7706496030715a6dd2f003e168b3f9bbe539ea291",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/art_base_v3.zip"
+        "https://aod.dragoon.co.za/downloads/art_base_v4.zip"
       ]
     },
     {
       "id": "colours",
       "kind": "art",
       "folder": "",
-      "version": 1,
+      "version": 2,
       "required": false,
       "title": "Player colours",
       "author": "Age of Dragons",
       "description": "Tinted art for all eight player colours. Without it every unit shows in its base colours and you tell armies apart by position rather than by sight.",
-      "size": 236032045,
-      "sha256": "91bcab254a24be2b8848203067485ad82b8aacfb82e4a86c17c09f5425c1c42a",
+      "size": 237773951,
+      "sha256": "e2d75ff91a436bb561f3d3caba6df35797aafa29fde8f4051146b914d338df72",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/art_colours_v1.zip"
+        "https://aod.dragoon.co.za/downloads/art_colours_v2.zip"
       ]
     }
   ]

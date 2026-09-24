@@ -72,11 +72,16 @@
         "worth knowing that a build-script change can cost one. If it ever matters, the",
         "lever is the compression policy and not the guard."
       ],
+      "_note_v5": [
+        "V5, 2026-09-24: scenario 4's conditions fix (22a6799, 2026-09-21) -- the mission",
+        "could be neither won nor lost once the hatchling died. Only scenario_4/scenario.json",
+        "moved; published ahead of the beta build that expects it."
+      ],
       "id": "howtoplay",
       "kind": "campaign",
       "folder": "HowToPlay",
       "source": "scenarios/HowToPlay",
-      "version": 4,
+      "version": 5,
       "required": true,
       "author": "Age of Dragons"
     },
@@ -127,7 +132,10 @@
         "name": "How To Play (Dummy)",
         "description": "A test copy of How To Play, published as optional content so the download path can be exercised end to end on a device. Not new content."
       },
-      "version": 4,
+      "_note_v5": [
+        "V5, 2026-09-24: followed howtoplay v5 (scenario 4), the standing cost of `derive`."
+      ],
+      "version": 5,
       "required": false,
       "author": "Age of Dragons"
     },
@@ -259,6 +267,11 @@
         "what bit `vis.foundation_9x9` at v3 -- correct on this workstation, magenta on a",
         "device -- because res:// beats a mounted pack and the staged tree is only here."
       ],
+      "_note_v4_published": [
+        "PUBLISHED 2026-09-24, and it carries one thing the note above does not name: the",
+        "villager rebake of 2026-09-22 (vis.villager atlas + page). That rebake is also why",
+        "`colours` moved to v2 alongside this one."
+      ],
       "id": "base",
       "kind": "art",
       "select": "base",
@@ -282,10 +295,15 @@
         "choose their opponents' colours, and an AI match hands them out. So the set a",
         "device needs is not knowable at download time, which is why it is one pack today."
       ],
+      "_note_v2": [
+        "V2, 2026-09-24: the villager was rebaked (2026-09-22), and its eight tinted siblings",
+        "moved with it -- 16 of 336 members, nothing added or removed. The whole 236 MB is",
+        "re-fetched for one unit; the pack cannot be republished in part."
+      ],
       "id": "colours",
       "kind": "art",
       "select": "colours",
-      "version": 1,
+      "version": 2,
       "required": false,
       "author": "Age of Dragons",
       "title": "Player colours",
