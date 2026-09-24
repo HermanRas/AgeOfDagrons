@@ -25,12 +25,12 @@
 > multiplayer and five AI difficulties. Maps are hand-drawn in the MapMaker, plateaus and
 > all, and a cliff is now rock a unit cannot walk into rather than rock it walks through.
 >
-> **What is missing is named rather than glossed.** Of fifteen phases, four are closed
-> outright and two have not started — **13, the dragons this game is named after, because
-> `vis.dragon` has no rig and cannot walk, attack or die**; and 14, a declared ceiling
-> where no AI rule can see its opponent. Several others are one or two items short. Chat
-> has a layout and no transport, and a client that loses its host for longer than about
-> fifteen seconds cannot dial back in.
+> **What is missing is named rather than glossed.** Of seventeen phases, nine are closed
+> outright and **one has not started — 14, a declared ceiling where no AI rule can see its
+> opponent.** The rest are one or two items short: chat has a layout and no transport, no AI
+> rule researches anything, and the MapMaker still owes the campaign it was built to author.
+> **Losing your host ends your match** — reconnecting is out of scope by decision, not
+> unfinished work.
 >
 > **[PLAN.md](PLAN.md) is the status document** and is kept honest, phase by phase. Read
 > it before judging anything here.
@@ -180,28 +180,32 @@ detail of what each 🟢 is still short of.
 
 | Phase | | |
 |---|---|---|
-| 0 | 🟢 | Foundation — sim, networking, `state_hash()`, replays, asset seam, licence audit. Left: `AssetPacks` (download, verify, mount) |
-| 1 | 🟢 | Main menu, settings, credits, HOW TO PLAY, lobby. Left: server browser |
-| 2 | 🟢 | Map generation, five biomes, Archipelago. Left: save map |
-| 3 | 🟢 | Camera & world view. Left: camera-follow, tap-minimap-to-move |
+| **0** | ✅ | **Foundation** — sim, networking, `state_hash()`, replays, asset seam, licence audit, and `AssetPacks` (download, resume, verify, mount) |
+| 1 | 🟢 | Main menu, settings, credits, HOW TO PLAY, lobby, LAN server browser. Left: an *internet* server browser — master server, host naming and version negotiation, none of it scoped |
+| **2** | ✅ | **Map** — generation, five biomes, Archipelago, save/load, fog of war, the terrain tile set, and hand-drawn maps with plateaus |
+| 3 | 🟢 | Camera & world view, tap-minimap-to-move. Left: camera-follow |
 | **4** | ✅ | **Units** — movement, combat, abilities, four stances, four formations, siege pack/unpack |
-| 5 | 🟡 | Buildings — **up next**, and art-paced: 23 more buildings behind ~70 bakes |
+| **5** | ✅ | **Buildings** — placement, construction, destruction, 23 reachable kinds, upgrades, and walls with gates that open |
 | **6** | ✅ | **Resources & wildlife** |
 | **7** | ✅ | **Resource HUD** |
 | 8 | 🟢 | Main game interface. Left: chat has a wireframe but no transport |
 | 9 | 🟢 | Ages cost resources and advance on a timer; 27 technologies at seven buildings. Left: civilisations, age re-skin — both art-paced |
 | **10** | ✅ | **Control groups** |
-| 11 | 🟢 | Win conditions — Conquest works; Regicide and Trophy are declared and inert |
-| 12 | 🟡 | Multiplayer & five AI difficulties. Left: LAN discovery, campaign, save/load |
-| **13** | ⛔ | **Dragons — not started, blocked on art.** `vis.dragon` has one clip, `static`. The unit is real and trainable from age 4 and has its fire breath; it cannot walk, attack or die |
+| 11 | 🟢 | Win conditions — Conquest, Trophy and King of the Hill all live. Left: Regicide, declared and inert, and the wonder |
+| 12 | 🟢 | Multiplayer, LAN discovery, save/load and five AI difficulties. Left: no AI rule researches anything. *Reconnecting after a dropped socket is out of scope by decision, not unfinished* |
+| **13** | ✅ | **Dragons** — one per map, guarded by her nest. Kill the mother, hold the nest, and a hatchling grows into yours. Fire breath on a 120 s cooldown |
 | 14 | ⛔ | AI enemy-blindness — a declared ceiling, not a defect: no rule can see the opponent |
+| **15** | ✅ | **Scenarios & campaigns** — "How To Play", five scenarios, objectives, briefings, unlock and reset |
+| 16 | 🟢 | The MapMaker — a second Godot project that authors maps and campaigns. Left: its HOW-TO, and the content it exists to make |
 
 **2824 tests, 230,803 assertions, 0 failures** in the game, and 475 more in the MapMaker.
 
-> **On phase 13, because it is the one this game is named after.** The dragon's mesh has no
-> rig — verified against pristine upstream art, not inferred. It is 0 A.D.'s own model and
-> CC-BY-SA, so rigging it is permitted and the mesh is only 454 triangles, but it is
-> modelling work rather than a pipeline setting. See `asset_request.md` [P7].
+> **On phase 13, because it is the one this game is named after.** The dragon flew once her
+> mesh was rigged — 0 A.D.'s own model, CC-BY-SA, 454 triangles, with a commissioned armature
+> carrying all five clips. **One thing about her is still open and it is a licence question
+> rather than code:** the mesh and texture are 0 A.D.'s and the baked frames inherit that, but
+> **the rig and the clips are not 0 A.D.**, and the attribution table is narrower than that
+> truth. Settled before any public build.
 
 ---
 

@@ -1291,7 +1291,7 @@ from either picture alone.
 | # | Item | Tag |
 |---|---|---|
 | 2.1–2.6 | ✅ `SimMap`, all three domains, footprints, the generator, the save format, fog and starting conditions. The rules they fixed are below | `[MVP]` |
-| 2.7 | Real terrain tileset (art track A.1) | |
+| 2.7 | ✅ Real terrain tileset (art track A.1, closed). ⚠️ **The 47 transitions per terrain and the shoreline are NOT art** — `TerrainLayer` generates them from the one diamond each terrain ships, and the shore is a sand band the generator paints. The owner's call: more sprites make theme packs harder | |
 
 **The constraints from this phase that still bind:**
 
