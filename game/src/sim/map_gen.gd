@@ -657,6 +657,31 @@ static func build_from(w: SimWorld, data: MapData) -> void:
 		if not declared.is_empty():
 			w.named_units[declared] = true
 
+		# ⛔ **A CLIFF BLOCKER IS A FACT ABOUT THE GROUND, AND SPAWNING IT AS AN ENTITY COST 6 ms A
+		# TICK.** A plateau's rock band is one invisible 1x1 per tile -- 621 of them on the owner's
+		# `platotest3`, against 292 of everything else on the whole map -- and each one is an entity
+		# that every system walking the entity list pays a slice for. Measured with
+		# `probe_map_cost.tscn`: 9.20 ms a tick with them and 3.24 ms without, spread across vision,
+		# population, combat, death, gather, separation and garrison rather than sitting in one hot
+		# loop. The world build went 336 ms -> 54 ms. On the view side each was also a y-sorted node
+		# AND an occluder in a per-frame units x occluders pass.
+		#
+		# None of that buys anything, because the only question a blocker answers is *"may a unit
+		# stand here"* -- and `SimMap.terrain` already answers exactly that, one byte a tile, with
+		# `ROCK` already `IMPASSABLE` for every domain, already in the pathfinder's cost table and
+		# already excluded from `is_buildable`. The byte array is the same size whether a tile is
+		# grass or cliff, so the whole band is free. (The owner asked whether a mask would not beat
+		# per-tile entities. It does, and the mask was already here.)
+		#
+		# ⚠️ **CONVERTED ON LOAD RATHER THAN AT AUTHORING TIME, AND THAT IS THE POINT.** MapMaker
+		# still writes the blockers, `CliffPlan` still plans them, and `MapValidator` still sees
+		# them -- so every map already saved gets this without being repainted, which is the third
+		# repaint this fix would otherwise have cost. The terrain pass above runs BEFORE this loop,
+		# so a tile painted here is not overwritten.
+		if def_id == CliffPlan.BLOCKER:
+			w.map.set_terrain(tile, SimMap.Terrain.ROCK)
+			continue
+
 		var spawned: SimEntity = null
 		if GameDataRegistry.unit(def_id) != null:
 			spawned = w.spawn_unit(def_id, owner, tile)

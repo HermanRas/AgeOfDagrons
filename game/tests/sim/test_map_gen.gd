@@ -610,3 +610,88 @@ func test_a_building_with_no_build_time_is_already_finished() -> void:
 	# buildings.json says, but a def with no build time must not divide by zero.
 	var b := SimBuilding.new()
 	assert_almost_eq(b.build_fraction(), 1.0)
+
+
+# ── a cliff's rock band is terrain, not entities ────────────────────────────
+
+## A world built from `data`, the way a saved map is loaded.
+func _world_from(data: MapData) -> SimWorld:
+	var cfg := MatchConfig.debug_skirmish()
+	cfg.map_size = data.size
+	cfg.map_data = data
+	var out := SimWorld.new()
+	out.setup(cfg)
+	MapGen.build(out, cfg)
+	return out
+
+
+func _count_of(world: SimWorld, def_id: StringName) -> int:
+	var n := 0
+	for e in world.entities.values():
+		if e.def_id == def_id:
+			n += 1
+	return n
+
+
+## ⛔ **THE BAND A CLIFF DENIES IS A TERRAIN FACT AND MUST NOT COST AN ENTITY A TILE.**
+##
+## `CliffPlan` lays one invisible 1x1 per tile of rock -- 621 of them on the owner's
+## `platotest3`, against 292 of everything else on the whole map. Measured with
+## `probe_map_cost.tscn`, spawning them cost 9.20 ms a tick against 3.24 ms without, and a
+## 336 ms world build against 54 ms. The owner reported it as *"something on the last update
+## broke the game, its very very slow"*, which is the only symptom this has: the cliffs were
+## correct and the map was unplayable.
+##
+## ⚠️ **THE FILE IS UNCHANGED, WHICH IS WHY THIS TEST WRITES A BLOCKER AND LOOKS FOR TERRAIN.**
+## The conversion is on LOAD, so every map already saved gets it without a repaint -- and the
+## thing that would silently undo it is somebody "tidying up" by making MapMaker stop writing
+## blockers, at which point old maps quietly become walkable again.
+func test_a_cliff_blocker_is_loaded_as_rock_terrain_rather_than_spawned() -> void:
+	var data := MapData.create(Vector2i(32, 32))
+	data.add_entity(CliffPlan.BLOCKER, 0, Vector2i(10, 10))
+	var world := _world_from(data)
+
+	assert_eq(_count_of(world, CliffPlan.BLOCKER), 0,
+			"the blocker costs no entity")
+	assert_eq(world.map.terrain_at(Vector2i(10, 10)), SimMap.Terrain.ROCK,
+			"it is a byte in the terrain mask instead")
+	assert_false(world.map.is_passable(Vector2i(10, 10), SimMap.Domain.LAND),
+			"and the ground it claimed is still denied, which is the whole point")
+	assert_true(world.map.is_passable(Vector2i(11, 10), SimMap.Domain.LAND),
+			"only its own tile, not a smear")
+
+
+## The other half: a blocker is the ONLY def treated this way. A cliff's ART is a real building
+## with a real footprint, and turning the whole family into terrain would take the rock off the
+## screen.
+func test_the_cliff_ART_is_still_a_spawned_building() -> void:
+	var data := MapData.create(Vector2i(32, 32))
+	data.add_entity(CliffPlan.FACE[1], 0, Vector2i(10, 10), 0, WallPlan.AXIS_X)
+	var world := _world_from(data)
+
+	assert_eq(_count_of(world, CliffPlan.FACE[1]), 1, "the face is drawn, so it is an entity")
+	assert_eq(world.map.terrain_at(Vector2i(10, 10)), SimMap.Terrain.GRASS,
+			"and it does not paint the ground it stands on")
+
+
+## ⛔ **A FLIER STILL CROSSES A CLIFF, AND THAT IS UNCHANGED RATHER THAN NEW.**
+##
+## The two designs deny air for different reasons and arrive at the same answer, which is the
+## sort of coincidence worth pinning rather than assuming. A blocker ENTITY never stopped a
+## flier -- `is_passable` returns true for `AIR` before it looks at occupancy at all, which is
+## what "over" means. `ROCK` does not stop one either: `DOMAIN_TERRAIN[AIR]` lists every terrain
+## and `is_terrain_passable` short-circuits on it.
+##
+## So this asserts a PROPERTY that survived the swap, and it is the one a careless reading of
+## "rock is impassable to everything" would have broken -- painting the band as something
+## genuinely impassable would wall a dragon out of half the map.
+func test_the_swap_denies_the_ground_without_grounding_a_flier() -> void:
+	var data := MapData.create(Vector2i(32, 32))
+	data.add_entity(CliffPlan.BLOCKER, 0, Vector2i(10, 10))
+	var world := _world_from(data)
+	var rock := Vector2i(10, 10)
+
+	assert_false(world.map.is_passable(rock, SimMap.Domain.LAND), "a horse may not")
+	assert_false(world.map.is_passable(rock, SimMap.Domain.WATER), "nor a boat")
+	assert_true(world.map.is_passable(rock, SimMap.Domain.AIR),
+			"a dragon flies over it, exactly as it did when this was an entity")

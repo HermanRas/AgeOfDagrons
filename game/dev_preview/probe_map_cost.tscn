@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://dev_preview/probe_map_cost.gd" id="1_cost"]
+
+[node name="ProbeMapCost" type="Node"]
+script = ExtResource("1_cost")
