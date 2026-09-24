@@ -9,6 +9,15 @@
 </p>
 
 <p align="center">
+  <a href="https://aod.dragoon.co.za/"><strong>Website</strong></a> ·
+  <a href="https://github.com/HermanRas/AgeOfDagrons/releases/latest"><strong>Download</strong></a> ·
+  <a href="https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23Bug%3A%20">Report a bug</a> ·
+  <a href="https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23content%3A%20">Submit a map</a>
+</p>
+
+<p align="center">
+  <a href="https://aod.dragoon.co.za/"><img alt="Website: aod.dragoon.co.za" src="https://img.shields.io/badge/website-aod.dragoon.co.za-e5b842"></a>
+  <a href="https://github.com/HermanRas/AgeOfDagrons/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/HermanRas/AgeOfDagrons?label=download"></a>
   <a href="LICENSE"><img alt="Code licence: MIT" src="https://img.shields.io/badge/code-MIT-blue"></a>
   <a href="LICENSE-ART.md"><img alt="Art licence: CC BY-SA 3.0" src="https://img.shields.io/badge/art-CC--BY--SA%203.0-lightgrey"></a>
   <img alt="Engine: Godot 4.7.1" src="https://img.shields.io/badge/engine-Godot%204.7.1-478cbf">
@@ -34,6 +43,25 @@
 >
 > **[PLAN.md](PLAN.md) is the status document** and is kept honest, phase by phase. Read
 > it before judging anything here.
+
+---
+
+## Play it
+
+**[aod.dragoon.co.za](https://aod.dragoon.co.za/)** is the game's home page: map types,
+single player and multiplayer, the content packs, and the download.
+
+| | |
+|---|---|
+| **Download** | [The latest release](https://github.com/HermanRas/AgeOfDagrons/releases/latest): `AgeOfDragons.apk` for Android, `AgeOfDragons.exe` for Windows |
+| **First launch** | The game fetches its art, about 80 MB. Player colours are an optional extra. Both resume if the connection drops |
+| **More content** | Optional campaigns and maps, such as the PlatoSample cliffs-and-plateaus demo, are under **Download More** in the game, and listed live [on the website](https://aod.dragoon.co.za/#content) |
+| **Found a bug?** | [Open an issue](https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23Bug%3A%20) with a title starting `#Bug` |
+| **Made a map?** | [Open an issue](https://github.com/HermanRas/AgeOfDagrons/issues/new?title=%23content%3A%20) with a title starting `#content` and attach it. Accepted content is published as an optional download |
+
+> **Made with AI, and said so up front.** The icons and UI art are generated with Google
+> Gemini and the code is written by Claude. The website opens with that notice, and
+> [CREDITS.md](CREDITS.md) records exactly what was made how.
 
 ---
 
@@ -164,12 +192,12 @@ budgets are still the budgets, not because they describe today's build.
 | Sim tick cost | 0.39 ms avg | < 5 ms per 100 ms tick |
 | Frame rate | 60 fps | 60 fps |
 | Draw calls | 209 | < 200 |
-| APK size | **320.6 MB** (2026-08-27) | < 300 MB |
+| APK size | **116.8 MB** (v0.9.81, 2026-09-24) | < 300 MB |
 
-⚠️ **Two of those want re-measuring before anyone quotes them.** The APK was over budget
-when last built, and that build itself predates two art deliveries, three phases and the
-whole UI overhaul. Draw calls were over budget at 0.7 with no art at all. **Re-measure on
-the device; desktop numbers mean nothing for a mobile budget.**
+The APK is the one row measured recently. It was 320.6 MB on 2026-08-27; the export
+presets now exclude `assets/atlases/`, which ships as the downloadable art pack instead. **Draw calls still want
+re-measuring**: they were over budget at 0.7 with no art at all. **Re-measure on the
+device; desktop numbers mean nothing for a mobile budget.**
 
 ---
 
@@ -252,6 +280,7 @@ AgeOfDagrons/
 ├── tools/                asset-pipeline recipes and scripts (isobake is its own repo)
 ├── assets/               source art the pipeline consumes — UI_Gen sheets, HELP_Gen captures
 ├── Docs/                 build, contribute, licence, assets, design docs
+├── web/                  the website and the content-pack host (web/README.md)
 ├── PLAN.md               how we're building it, and where it actually is, phase by phase
 ├── BUGS.md               owner-reported defects
 ├── asset_request.md      art the game side needs, requested per need
@@ -282,7 +311,8 @@ requires.
 ## Credits
 
 AOD stands on [0 A.D.](https://play0ad.com) by **Wildfire Games** and the
-[Godot Engine](https://godotengine.org). The UI art is the project's own; the typefaces
+[Godot Engine](https://godotengine.org). The code is written by **Claude** (Anthropic)
+and the UI art is generated with **Google Gemini**; both are the project's own. The typefaces
 are **New Rocker** and **Cinzel Decorative**, both under the SIL Open Font License.
 UI chrome came from [Kibyra](https://kibyra.itch.io/) until 2026-08-30 and no longer does.
 Full attribution: [CREDITS.md](CREDITS.md).
