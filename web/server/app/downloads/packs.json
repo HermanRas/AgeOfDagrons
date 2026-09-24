@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "generated": "2026-09-20T08:42:54Z",
+  "generated": "2026-09-24T09:47:05Z",
   "packs": [
     {
       "id": "howtoplay",
@@ -30,6 +30,21 @@
       "sha256": "b8265f755e92de547de7dabfdcce51a11744feeca51850965af3e9247240e2a6",
       "urls": [
         "https://aod.dragoon.co.za/downloads/campaign_howtoplay_dummy_v4.zip"
+      ]
+    },
+    {
+      "id": "platosample",
+      "kind": "map",
+      "folder": "platosample",
+      "version": 1,
+      "required": false,
+      "title": "PlatoSample",
+      "author": "Age of Dragons",
+      "description": "",
+      "size": 4898,
+      "sha256": "fbb5733a5c33e51b5b849be09f4d02b821cb37cc58e99d701f2fdaa2d0baa0e1",
+      "urls": [
+        "https://aod.dragoon.co.za/downloads/map_platosample_v1.zip"
       ]
     },
     {

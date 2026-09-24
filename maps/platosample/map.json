@@ -1,0 +1,7037 @@
+{
+  "w": 96,
+  "h": 96,
+  "entities": [
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 2,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 3,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 4,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 5,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 6,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 7,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 8,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 9,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 10,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 11,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 12,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 13,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 14,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 15,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 16,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 17,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 18,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 19,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 20,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 21,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 22,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 23,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 24,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 25,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 26,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 2,
+      "y": 27,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back_long",
+      "player": 0,
+      "x": 2,
+      "y": 2,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back_long",
+      "player": 0,
+      "x": 11,
+      "y": 2,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back_long",
+      "player": 0,
+      "x": 20,
+      "y": 2,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back_diag",
+      "player": 0,
+      "x": 2,
+      "y": 2,
+      "size_class": 0,
+      "axis": 3
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 2,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 1,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 3,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 4,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 3,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 4,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 5,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 3,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 2,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 4,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 5,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 6,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 4,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 3,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 5,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 6,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 7,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 5,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 4,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 6,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 7,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 8,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 6,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 5,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 7,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 8,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 9,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 7,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 6,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 8,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 9,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 10,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 8,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 7,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 9,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 10,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 11,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 9,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 8,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 10,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 11,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 12,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 10,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 9,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 11,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 12,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 11,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 10,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 12,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 12,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 11,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 12,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 20,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 20,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 21,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 20,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 21,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 22,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 20,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 21,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 22,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 23,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 21,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 20,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 22,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 23,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 24,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 22,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 21,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 23,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 24,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 25,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 23,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 22,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 24,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 25,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 26,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 24,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 23,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 25,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 26,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 25,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 24,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 26,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 26,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 25,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 29,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 28,
+      "y": 27,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 26,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 29,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 32,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face_long",
+      "player": 0,
+      "x": 2,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 1,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 3,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 4,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 4,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 5,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 5,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 6,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 6,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 7,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 7,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 8,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 8,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 9,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 9,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 10,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 10,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 10,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 20,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 20,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 21,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 20,
+      "y": 29,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 21,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 22,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face_long",
+      "player": 0,
+      "x": 20,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 22,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 23,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 23,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 24,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 24,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 25,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 25,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 26,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 26,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 27,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 27,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 28,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 28,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 29,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 31,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face_diag",
+      "player": 0,
+      "x": 28,
+      "y": 27,
+      "size_class": 0,
+      "axis": 3
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 30,
+      "y": 29,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 31,
+      "y": 30,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 29,
+      "y": 27,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 28,
+      "y": 28,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 55,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 56,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 57,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 58,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 59,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 60,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 61,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 62,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 63,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 64,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 65,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 66,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 67,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 68,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 77,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 78,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 79,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 80,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 81,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 82,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 83,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 84,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 85,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 86,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 87,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 88,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 89,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 56,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 57,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 58,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 59,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 60,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 61,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 62,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 63,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 64,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 65,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 66,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 67,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 68,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 77,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 78,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 79,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 80,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 81,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 82,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 83,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 84,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 85,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 86,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 87,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 88,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 89,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back",
+      "player": 0,
+      "x": 90,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_back_diag",
+      "player": 0,
+      "x": 56,
+      "y": 55,
+      "size_class": 0,
+      "axis": 3
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 55,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 54,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 56,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 57,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 56,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 57,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 58,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 56,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 55,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 57,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 58,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 59,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 57,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 56,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 58,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 59,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 60,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 58,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 57,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 59,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 60,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 61,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 59,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 58,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 60,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 61,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 62,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 60,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 59,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 61,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 62,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 63,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 61,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 60,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 62,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 63,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 64,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 62,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 61,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 63,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 64,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 65,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 63,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 62,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 64,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 65,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 66,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 64,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 63,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 65,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 66,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 67,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 65,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 64,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 66,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 67,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 68,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 66,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 65,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 67,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 68,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 69,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 67,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 66,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 68,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 69,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 70,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 68,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 67,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 69,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 70,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 71,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 69,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 68,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 70,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 71,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 72,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 70,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 69,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 71,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 72,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 73,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 71,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 70,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 72,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 73,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 74,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 72,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 71,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 73,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 74,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 75,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 73,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 72,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 74,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 75,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 76,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 74,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 73,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 75,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 76,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 77,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 75,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 74,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 76,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 77,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 78,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 76,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 75,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 77,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 78,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 79,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 77,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 76,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 78,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 79,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 80,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 78,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 77,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 79,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 80,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 81,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 79,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 78,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 80,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 81,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 82,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 80,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 79,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 81,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 82,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 83,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 81,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 80,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 82,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 83,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 84,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 82,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 81,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 83,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 84,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 85,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 83,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 82,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 84,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 85,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 86,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 84,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 83,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 85,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 86,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 87,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 85,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 84,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 86,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 87,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 88,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 86,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 85,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 87,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 88,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 87,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 86,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 88,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 88,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 87,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 89,
+      "size_class": 0,
+      "axis": 1
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 88,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 94,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 56,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 55,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 57,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 58,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 57,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 58,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 59,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 57,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 56,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 58,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 59,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 60,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 58,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 57,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 59,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 60,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 61,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 59,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 58,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 60,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 61,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 62,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 60,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 59,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 61,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 62,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 63,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 61,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 60,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 62,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 63,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 64,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 62,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 61,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 63,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 64,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 65,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 63,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 62,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 64,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 65,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 66,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 64,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 63,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 65,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 66,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 67,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 65,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 64,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 66,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 67,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 68,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 66,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 65,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 67,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 68,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 69,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 67,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 66,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 68,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 69,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 70,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 68,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 67,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 69,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 70,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 71,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 69,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 68,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 70,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 71,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 72,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 70,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 69,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 71,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 72,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 73,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 71,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 70,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 72,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 73,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 74,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 72,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 71,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 73,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 74,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 75,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 73,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 72,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 74,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 75,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 76,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 74,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 73,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 75,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 76,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 77,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 75,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 74,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 76,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 77,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 78,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 76,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 75,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 77,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 78,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 79,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 77,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 76,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 78,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 79,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 80,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 78,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 77,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 79,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 80,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 81,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 79,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 78,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 80,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 81,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 82,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 80,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 79,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 81,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 82,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 83,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 81,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 80,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 82,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 83,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 84,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 82,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 81,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 83,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 84,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 85,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 83,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 82,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 84,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 85,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 86,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 84,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 83,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 85,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 86,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 87,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 85,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 84,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 86,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 87,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 88,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 86,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 85,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 87,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 88,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 89,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 87,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 86,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 88,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 89,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 90,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 88,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 87,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 89,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 90,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 89,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 88,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 90,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face",
+      "player": 0,
+      "x": 90,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 89,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 93,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_face_diag",
+      "player": 0,
+      "x": 90,
+      "y": 89,
+      "size_class": 0,
+      "axis": 3
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 92,
+      "y": 91,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 93,
+      "y": 92,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 91,
+      "y": 89,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.cliff_blocker",
+      "player": 0,
+      "x": 90,
+      "y": 90,
+      "size_class": 0,
+      "axis": 0
+    },
+    {
+      "def_id": "building.town_center",
+      "player": 1,
+      "x": 9,
+      "y": 9,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 7,
+      "y": 7,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 16,
+      "y": 7,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 21,
+      "y": 11,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 21,
+      "y": 21,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 1,
+      "x": 12,
+      "y": 21,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.scout_cavalry",
+      "player": 1,
+      "x": 7,
+      "y": 17,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 4,
+      "y": 4,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 20,
+      "y": 4,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 24,
+      "y": 16,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 16,
+      "y": 24,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 4,
+      "y": 20,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 14,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 26,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 14,
+      "y": 26,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 3,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 4,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 5,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 6,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 26,
+      "y": 7,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 0,
+      "y": 0,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 1,
+      "y": 0,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 29,
+      "y": 0,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 29,
+      "y": 13,
+      "size_class": 0
+    },
+    {
+      "def_id": "building.town_center",
+      "player": 2,
+      "x": 69,
+      "y": 69,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 67,
+      "y": 67,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 76,
+      "y": 67,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 81,
+      "y": 71,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 81,
+      "y": 81,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.villager",
+      "player": 2,
+      "x": 72,
+      "y": 81,
+      "size_class": 0
+    },
+    {
+      "def_id": "unit.scout_cavalry",
+      "player": 2,
+      "x": 67,
+      "y": 77,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 64,
+      "y": 64,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 80,
+      "y": 64,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 84,
+      "y": 76,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 76,
+      "y": 84,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.berry_bush",
+      "player": 0,
+      "x": 64,
+      "y": 80,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 62,
+      "y": 62,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 74,
+      "y": 62,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 86,
+      "y": 62,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 86,
+      "y": 74,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 86,
+      "y": 86,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 74,
+      "y": 86,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 62,
+      "y": 86,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 62,
+      "y": 74,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 60,
+      "y": 60,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 88,
+      "y": 88,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 59,
+      "y": 59,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 60,
+      "y": 59,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 20,
+      "y": 83,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 11,
+      "y": 63,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 36,
+      "y": 69,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 32,
+      "y": 48,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 59,
+      "y": 29,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 73,
+      "y": 39,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 82,
+      "y": 13,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 89,
+      "y": 22,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 47,
+      "y": 9,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 64,
+      "y": 7,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 69,
+      "y": 21,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 47,
+      "y": 35,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 62,
+      "y": 45,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.gold_mine",
+      "player": 0,
+      "x": 10,
+      "y": 41,
+      "size_class": 0
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 6,
+      "y": 88,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 8,
+      "y": 48,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 44,
+      "y": 91,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 43,
+      "y": 62,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 44,
+      "y": 22,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 88,
+      "y": 44,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.stone",
+      "player": 0,
+      "x": 90,
+      "y": 4,
+      "size_class": 1
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 13,
+      "y": 74,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 77,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 32,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 20,
+      "y": 59,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 32,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 78,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 79,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 32,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 31,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 31,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 30,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 30,
+      "y": 80,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 32,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 81,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 82,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 85,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 85,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 85,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 85,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 85,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 84,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 83,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 86,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 17,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 16,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 16,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 16,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 16,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 17,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 85,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 74,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 77,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 17,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 74,
+      "y": 18,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 75,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 28,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 86,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 21,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 20,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 19,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 37,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 36,
+      "y": 38,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 39,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 40,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 41,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 42,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 43,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 44,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 45,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 46,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 47,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 48,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 45,
+      "y": 49,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 46,
+      "y": 50,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 47,
+      "y": 51,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 47,
+      "y": 52,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 48,
+      "y": 53,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 49,
+      "y": 53,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 49,
+      "y": 54,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 50,
+      "y": 54,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 51,
+      "y": 55,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 51,
+      "y": 56,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 52,
+      "y": 56,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 52,
+      "y": 55,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 51,
+      "y": 54,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 50,
+      "y": 53,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 49,
+      "y": 52,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 48,
+      "y": 51,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 48,
+      "y": 50,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 47,
+      "y": 49,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 46,
+      "y": 48,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 46,
+      "y": 47,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 45,
+      "y": 46,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 45,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 44,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 42,
+      "y": 44,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 42,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 41,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 36,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 35,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 34,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 33,
+      "y": 34,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 34,
+      "y": 36,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 35,
+      "y": 37,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 37,
+      "y": 40,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 38,
+      "y": 41,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 39,
+      "y": 42,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 43,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 40,
+      "y": 44,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 41,
+      "y": 45,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 43,
+      "y": 46,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 44,
+      "y": 47,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 48,
+      "y": 52,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 32,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 33,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 33,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 32,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 32,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 31,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 29,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 79,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 80,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 30,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 84,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 22,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 81,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 82,
+      "y": 24,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 83,
+      "y": 27,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 78,
+      "y": 23,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 26,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 25,
+      "size_class": 2
+    },
+    {
+      "def_id": "res.tree",
+      "player": 0,
+      "x": 76,
+      "y": 24,
+      "size_class": 2
+    }
+  ],
+  "starts": [
+    {
+      "x": 14,
+      "y": 14
+    },
+    {
+      "x": 74,
+      "y": 74
+    }
+  ],
+  "areas": [],
+  "meta": {
+    "format_version": 1
+  },
+  "format_version": 1,
+  "created": "2026-09-24T09:41:10",
+  "name": "PlatoSample",
+  "players": 2,
+  "authored_by": "MapMaker",
+  "objectives": []
+}

@@ -133,6 +133,21 @@
     },
     {
       "_note": [
+        "THE FIRST MAP PACK, 2026-09-24. The owner's custom 96x96 two-player map, built in",
+        "the MapMaker and published as optional content. Installs to",
+        "user://content/maps/platosample/, which SavedMaps lists as a CONTENT row; in an",
+        "editor run the repo copy in maps/platosample shadows it by folder name."
+      ],
+      "id": "platosample",
+      "kind": "map",
+      "folder": "platosample",
+      "source": "maps/platosample",
+      "version": 1,
+      "required": false,
+      "author": "Age of Dragons"
+    },
+    {
+      "_note": [
         "THE ART, 2026-09-12, AND IT IS TWO PACKS BECAUSE OF WHERE THE BYTES ARE.",
         "",
         "The art agent measured the staged tree on 2026-09-04: 314 MB, of which the",

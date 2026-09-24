@@ -518,6 +518,11 @@ def _member_name(res: str) -> str:
 
 def _titles(src: Path, kind: str) -> tuple[str, str]:
     """Title and description, read from the content itself -- never from the source file."""
+    if kind == "map":
+        # The sidecar's `name` is what the in-game picker shows (`SavedMaps._name_in`), so the
+        # store row uses the same one rather than the folder.
+        data = _read_json(src / "map.json") or {}
+        return str(data.get("name", src.name)), str(data.get("description", ""))
     if kind != "campaign":
         return src.name, ""
     data = _read_json(src / "campaign.json") or {}
