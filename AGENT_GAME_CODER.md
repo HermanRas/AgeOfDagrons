@@ -823,474 +823,146 @@ carry `age_required`, which is a *gate*, not a skin.
 
 ## 7. Where things stand
 
-### ⏳ IN FLIGHT — WHERE TO PICK UP (2026-09-22, written at the owner's request)
+⛔ **STATUS IS THE BOARD'S AND THIS SECTION DOES NOT MIRROR IT** (§2.1). This section grew into a
+shipped-list twice and was cut back both times; PLAN.md §15 has the same habit and the same rule.
+**A completed item here is actively harmful, because a reader has to finish the row to learn it is
+not work.** What belongs here is only what the board cannot hold: a gap with a diagnosis already
+attached.
 
-⚠️ **§2.1 says not to put a status narrative here, and this is not one — it is the half of the
-current work that is NOT on the board.** The owner asked for it explicitly (*"document progress in
-AGENT_GAME_CODER.md, i am going switch account, then you will know where to continue from"*), so it
-is agreement rather than drift, the same way §1's `tools/` rows are. **Status is still the board.**
-Everything below is either a decision that SUPERSEDES what a card says, or a measurement that cost
-real time to get.
+**The queue and its reasoning are PLAN.md §15.** Read that, then the card.
 
-#### ⛔ THE ONE THAT WILL BITE: `cliff-terrain` (#99) NO LONGER DESCRIBES WHAT WE ARE BUILDING
-
-**#99's card says a cliff is a `SimMap.Terrain.CLIFF` byte and that *"MapData gains NOTHING"*. The
-owner reversed that on 2026-09-22 and the card has not been rewritten.** A session that reads #99
-and starts typing will build the wrong thing.
-
-> *"i am happy to use cliff like a wall for gaia and just make it un killable if its easier to
-> build, the footprint 3,6,9 is more like a building than a terrain, also impassable, so it will
-> play nice with pathfinding for free?"*
-
-**A cliff is a GAIA-OWNED `SimBuilding`, like a wall.** It is easier, and it is the only one of the
-two that works at all:
-
-⛔ **THE TERRAIN BYTE CANNOT WORK, AND THE REASON IS IN THE ART.** The owner's composed samples show
-a **grass plateau top with sand around it** — the top is ordinary terrain. A terrain byte is one
-value per tile, so painting `CLIFF` throws the surface away, and **there is no cliff-top texture to
-replace it with**: 7 `terrain.*` visuals are staged and all 16 cliff atlases are faces and crests.
-This was found by listing the staged atlases, not by reasoning, and it is the fact that killed the
-plan #99 spent two sessions writing.
-
-**Everything the entity route needs is already free. Verified against the code, not assumed:**
-
-| need | why it is free |
-|---|---|
-| blocks land pathing | `blocks_movement: true` → `blocking[i]=1`; `SimMap.is_passable` is `occupancy==0 or blocking==0` |
-| the dragon flies over | `is_passable` returns true for `Domain.AIR` **before** it reads occupancy (`sim_map.gd`, the 2026-09-04 fix) |
-| unkillable | `Diplomacy.is_enemy` returns `e is SimUnit` for owner 0 — a gaia **building** cannot be targeted. `AISystem` skips `owner_id == 0`; `AbilitySystem` requires `owner_id != 0` |
-| occludes units | entities are already in the occluder set built from the snapshot. ⛳ **This deletes one of the only two items #99 listed as "not free"** — the static occluder set |
-| "a cliff clean across the map" refused on save | `MapValidator` already floods around blocking buildings |
-| the plateau keeps its own surface | nothing touches the terrain array at all |
-
-📌 **THE PRECEDENT, AND IT SETTLES THE WHOLE SHAPE: `building.dragon_nest` IS ALREADY A GAIA
-`SimBuilding`** — `buildable: false`, `cost: {}`, `build_time_ticks: 0`, `blocks_movement: false`. A
-cliff is that def with `blocks_movement: true`. Gaia buildings are a solved case, not a new one.
-
-#### ⛳ THE BUILD ORDER, AND WHY #98 COMES FIRST NOW
-
-**#98 → #97/#99 → #120.** Doing cliffs as entities makes `wall-facings-reachable` (#98) the
-**shared foundation** rather than a parallel task, because a footprint is an axis-aligned `Rect2i`:
-the four AXIS cliff edges are fine, and the `_diag` pieces need exactly the staircase #98 is for.
-One run-laying layer serves walls and cliffs both, and **the 3 / 6 / 9 lengths are already the same
-numbers** — the art side cut the cliff pieces to `wall_short` / `_medium` / `_long` deliberately.
-
-**#98 is owner-ruled OPTION B (the staircase diagonal), 2026-09-22**, first as *"not right now, just
-update the card"* and then *"lets get going"*. The card carries the pricing; what it did not have
-until this week is the step:
-
-⛔ **THE DIAGONAL STEP IS NOT THE AXIS STEP — `floor(axis_tiles / sqrt(2))`.** Short 3→**2**, medium
-6→**4**, long/gate 9→**6**. A diagonal tile step is 2.83 m where an axis step is 2.0 m, so a piece
-laid at the axis count leaves a **50 px hole between every segment** — the "row of disconnected
-stubs" failure. Measured by the art side across all 20 eight-direction wall atlases; every length
-overlaps rather than gaps at the right step.
-
-**#120 is LAST because its art does not exist.** The diagonal deck texture is measured
-(`bridge_wood_b`, the 45° plank set 0 A.D. already ships) but nothing is baked or staged.
-
-#### 📐 THE CLIFF PLACEMENT RULES — the art side's, and NOT derivable from this side
-
-Three rules, one pair of diagonal pieces. ⚠️ **The addressing differs per rule and that is the part
-that will be got wrong**: two are keyed on the HIGH tile and one on the LOW notch, and both tables
-are live at once so one tile can want entries from each.
-
-| rule | addressed by | piece |
-|---|---|---|
-| axis edge | the **HIGH** tile's edge | `vis.cliff_face` stored 5 (`+y` low) / 3 (`+x` low), `vis.cliff_back` 1 (`−y`) / 7 (`−x`) |
-| E–W run | the **LOW** notch tile | `vis.cliff_face_diag` / `_back_diag` stored 4 |
-| outer corner | the **HIGH** corner tile | `vis.cliff_face_diag` / `_back_diag` stored 4 |
-
-✅ **Two things not to re-open:** the two FAR edges get **no face** — the fall projects straight down
-the screen, so on a far edge it would land on the plateau's own tiles, and no yaw fixes gravity in
-screen space. And there is **no N–S piece and cannot be** — that face's normal is perpendicular to
-the view direction, so it is invisible at any span. The axis staircase on an N–S edge is correct,
-not a stopgap.
-
-#### ⬜ OPEN, AND EACH IS ONE LINE FROM THE OWNER
-
-- **The hatchling and occlusion.** The owner ruled AIR is exempt from occlusion **everywhere**, not
-  just behind cliffs (*"full grown dragon in flight should not clip behind a towncentre or wall"*).
-  But *"full grown"* and `domain == AIR` are not the same set — `unit.dragon_baby` is also `air`.
-  Exempting the domain exempts the hatchling too. My lean is to exempt both; the alternative is a
-  `def_id == &"unit.dragon"` special case, which should be written deliberately if wanted. #99 has
-  the table.
-- **A pack bump for the 16 cliff atlases.** Staged is not packed, and staged-but-unpacked is exactly
-  what bit `vis.foundation_9x9`: correct on this workstation, **magenta on a device**.
-  `preview_art_pack` is the check that sees it.
-- **Cliff selectability.** I said I would make them unselectable unless told otherwise — the nest is
-  selectable only because 13.2c gave it a panel, and a cliff has nothing to say.
-
-#### ✅ LANDED THIS SESSION — three commits, suite green at 2764/2764
-
-- **`794e8cf` — 2.4c, SAVE MAP on the pause menu.** Writes `MatchConfig.map_data` (**never**
-  `world.map`, which is the board after an hour of play) to `user://maps/` via `MapFile.save`,
-  auto-named `Desert 2p 96x96 (seed 1)`. ⚠️ **It also moved the volume sliders OUT of the pause menu
-  into a shared `SoundOverlay`** that the front door now uses too: the sixth button and a 185 px
-  slider block came to **721 px in a 648 px viewport**, and the owner chose to keep the 76 px thumb
-  targets. Both SETTINGS buttons open one page now. The button **closes the menu**, because `_toast`
-  is added to the HUD long before the pause menu and a banner raised under it draws behind the dim.
-- **`be531dc` — `WallPlan.FACING_FOR_AXIS` is right, and its comment was not.** `[6, 0]` are **SIM**
-  facings; `Iso.sim_facing_to_sprite` is `posmod(7 - facing, 8)`, so they resolve to sprites **1
-  (SW)** and **7 (SE)**, the axis-aligned frames. Read as stored indices they are E and S, two of the
-  flat diagonals, and the constant looks backwards — which is how the art side came to raise it.
-  Nothing behavioural changed; the header now states the conversion.
-- **`a2a6586` — `licence_audit.py` is PASS again.** `ui/icons/cat_units.png` shipped in `085f83c`
-  undeclared. ⚠️ **`--write` cannot fix that class of row** — it regenerates from recipes and this
-  icon has none. **A red audit is red for BOTH agents**, which is why it is worth clearing the day it
-  is reported rather than when its feature is next touched.
-
-### WHAT IS BUILT — the short version
-
-**Phases 0–13 and 15 are closed; Phase 16 is BUILT THROUGH 16.8, with 16.9 and 16.10 left.**
-Suites **game 2764/0** (2026-09-22) and **MapMaker 450/0**. **PLAN.md §11 carries every decision and
-the board carries status** — neither of them lives here.
-
-⚠️ **A FULL GAME SUITE TAKES 8–16 MINUTES AND IS TIMING-SENSITIVE.** `test_tick_cost` asserts a
-wall-clock budget (`ms < 15.0`), so **a loaded workstation fails it and nothing is wrong**: it went
-red once on 2026-09-22 in a run that took 935 s against the usual 480 s, and passed on a quiet
-re-run with no code change. Run it in the BACKGROUND and do not run previews alongside it.
-
-✅ **THE `Test` COLUMN IS EMPTY AS OF 2026-09-20.** The owner played all four cards that were in
-it — 16.6, 16.7, 16.8 and 12.4 — and each was waiting on the one check no suite can make. Worth
-recording as evidence for §5 rather than as news: **three of the four passed, and the fourth
-failed in a way that produced a better card than the work itself did.**
-
-- **16.6** — conditions authored, the `<=` refusal read on screen, and the delete-the-last-row
-  trap survived a reopen.
-- **16.7** — a hero authored and played. *"He hits like a truck, one shot my scout."* The
-  disarmed unit standing perfectly still was checked against `map_gen.gd` rather than accepted:
-  the three overrides land on three separate fields, so it is the authored state and not a leak.
-- **16.8** — a campaign exported and played, **and step 9 failed**: the scenario was lost on tick
-  1. Authoring slip (`subject: "unit"` with a def id that does not exist), **and a real hole** —
-  see §6's row and card `16.x-unknown-def-id`.
-- **12.4** — save and multiple replays. ⚠️ **The two-device handoff was NOT part of that** and is
-  recorded on the card as untested: the seat machinery has 13 tests and no hardware. A fault found
-  in the first two-device session is untested ground, not a regression.
-
-📝 **AND THE HABIT THAT PAID FOR ITSELF THREE TIMES IN ONE SESSION:** every owner report was
-checked against the code before being written down. *"The other unit did not move at all"* was
-ambiguous between two faults that differ in code and not in the report; *"fog of war resets"*
-sounded like the save losing it and is `ClientFog`; *"villagers working fields look idle"* sounded
-like missing art and is an `if/elif` falling through. **None of the three was what it sounded
-like.**
-
-**0.3a is closed and closed on hardware** (2026-09-19): a pack download resumes in bounded 4 MiB
-chunks, proven on the phone against the live server across both a process restart and a real
-dropped connection, `sha256` byte-perfect. ⛔ **Two engine facts it bought, both reversing what the
-card assumed:** `set_download_file()` **truncates** rather than appends, and **a dropped connection
-DELETES its own partial file** — which is why the chunks are bounded at all.
-
-*The per-phase build logs that used to sit in this section (the UI overhaul, the four-device
-playtest, teams, LAN discovery, Phase 13, Phase 15 — about 1,900 lines) were history that PLAN.md
-and `git log` already hold, and the durable half of each is a row in §6. They were removed
-2026-09-12 on the owner's instruction to keep only core decisions and needed information.*
-
-**THE OPEN ENDS THEY LEFT, which are recorded nowhere else:**
-
-- **Committed chrome that nothing references.** `badge_round`, `checkbox_*`, `radio_*`,
-  `tab_plate`, `bar_fill_health`, `banner_age` and the four `arrow_*`. ⚠️ **`bar_fill_health` is
-  unused because the owner picked something else for the health bar** — worth knowing before
-  "fixing" it back. ⚠️ **`badge_round` needs a DECISION rather than work**: `res_*` icons are drawn
-  at 24 px, where a ring leaves almost no glyph, so either the icon grows or the ring does not
-  happen. Raised in `asset_request.md`.
-- **`scenes/ui_builder/*.tscn` are REPOINTED, NOT UPDATED.** They reference the current art so
-  nothing dangles, but their layout is the pre-overhaul HUD and nothing instantiates them. Whether
-  they survive is the owner's call — the same call that retired `UI_Design.md`.
-- **`ART_PROMPT.md`'s upcoming set** is drawn and committed for features that do not exist — voice
-  chat, the server browser, the lobby, save/load, replay. None of it can be wired and none of it
-  should hold anything up.
-
-### Owner-reported and open (BUGS.md is authoritative)
-
-Listed here so this file does not read as though the game were finished. Do not
-re-diagnose these from scratch — each already has a diagnosis.
-
-- ~~**Double-tap to clear the selection is unreliable on the phone.**~~ **ANSWERED
-  2026-08-28 by the [X] button**. `InputRouter.TAP_SLOP`/`TAP_TIME_MS` is still the
-  root and is still a separate job. Awaiting the owner's device confirmation.
-- **The soft keyboard covers the address field** and **a tap cannot place the caret**
-  in a text field. Both are consequences of there finally being a keyboard, both are
-  survivable in the debug screen, and both bite the moment a real lobby lays out a
-  field. See the `TouchLineEdit` row in §6.
-- **The AI's biggest gap: a build step gives up when short of resources.** p2 abandoned
-  a barracks 73 wood short, never built one, and died holding 950 wood — a person waits
-  for the wood, and the timeout should not count affordability. **The speed halving
-  amplified this into the baseline's worst result** (seed 4 no longer resolves), so it
-  has gone from a known flaw to the thing standing between the AI table and being
-  evidence again. Also open: `MAX_PLACEMENT_RADIUS` 26 → 14 now blocks 6×6 placements,
-  and **nobody has checked what `AISystem`'s standing order 3 still needs to do** now
-  that `CombatSystem` re-targets (which itself reversed PLAN.md 4.13 — see BUGS.md
-  "Reversed decisions"). The AI-vs-AI baseline table in BUGS.md exists so a regression
-  is visible; keep it.
-- **No wall corner piece** — 0 A.D. has none either, it puts a `wall_tower` at every
-  corner and we already have that art as `building.guard_tower`. What is missing is
-  anything that *detects* a corner.
-
-**Three owner requests filed 2026-08-23 and deliberately NOT built** — PLAN.md §13.2
-items 12, 13 and 14. Each was researched before filing, so the entry names where it
-plugs in; read the row rather than re-deriving it:
-
-- **12 — double-tap a unit selects every unit of that type ON SCREEN.** Both halves
-  exist: `DoubleTapDetector` is real, and "on screen" is literally
-  `GameView.units_in_box()` handed the viewport's rect instead of a dragged one
-  ([game_scene.gd:1640](game/src/view/game_scene.gd#L1640)). Only the `def_id` filter is
-  missing. **Do not build it on the ground-tap detector** — that one is entangled with
-  the open double-tap-to-clear bug, so `InputRouter.TAP_SLOP` is arguably a prerequisite
-  here. That is the *opposite* of the call made for 8.8, where a button sidesteps the
-  router; nothing sidesteps this.
-- **13 — an arrow should leave the bow when the fire animation finishes.** Damage is
-  explicitly out of scope. `CombatSystem` spawns on the tick its cooldown hits zero
-  while `EntityView` advances frames at the atlas' declared fps — two clocks, drifting
-  by design. Recommended fix is one line in the *view*: drive the attack clip's rate
-  from `attack_cooldown_ticks`. Rejected: authoring cooldowns from clip lengths, which
-  would make balance a function of the bake.
-- **14 — a finished resource building puts its builders to work on what it collects.**
-  The farm half already does this ([build_system.gd:74](game/src/sim/systems/build_system.gd#L74),
-  since 2026-08-17), and `BuildingDef.drop_off` already declares which kinds each
-  building serves, so "gold or stone" needs no new data. Four traps recorded in the
-  row: it **must be deterministic or it is a desync**; its priority against
-  `_next_foundation` is a real decision (if the resource scan wins, finishing a lumber
-  camp mid-wall-drag pulls that builder off the wall); `_nearest_node` searches the
-  whole map where `_next_foundation` is bounded by `SAME_WORK_RADIUS` (10) and wants the
-  same bound; and `building.town_center` declares all four kinds without being a camp,
-  so keying off "has a `drop_off`" would auto-task builders at every town centre.
+⚠️ **A `Done` CARD IS NOT NECESSARILY A BUILT CARD.** The board has one bucket for "off the queue"
+and three reasons land in it — shipped, *needed no code*, and **discarded by the owner**. Two live
+examples: `12.x-resumed-fog` (*"we will not add fog calculations"*) and `12.1b` reconnect, which is
+**out of scope by ruling**, so *nothing dials back in* is the finished behaviour.
 
 ### Known gaps — do not work around these silently
 
-- ~~**Only `red` and `yellow` colour bakes are trustworthy.**~~ **CLOSED 2026-08-27** —
-  **develop against any player.** What is worth keeping is the failure shape: for months
-  60 colour atlases were *stale, not absent* — present, parsing, drawing, and wrong,
-  because pipeline defects were fixed mid-roster. `stale_colour_atlases()` and
-  `missing_colour_atlases()` are the queries that catch it and both are empty; a
-  mid-roster pipeline fix is not a rare event, so keep them. **Their known blind spot:
-  `stale_colour_atlases()` compares the eight colours against each other and ignores the
-  base**, so eight agreeing at build 36 look healthy under a base at 37. A
-  base-ahead-of-its-colours check is game-side work that has not been written.
-- **Walls are DONE** (PLAN.md 5.8, 2026-08-22) — this entry used to say they had
-  no defs, and also that all the pieces were "baked and declared in
-  `visuals.json`". Half of that was wrong: they were **staged but never
-  declared**, which is exactly the failure mode that reports nothing (an
-  undeclared id resolves to the magenta placeholder, and no def was pointing at
-  one). Worth remembering as a class: *staged* and *wired* are different states,
-  and only a def reaching for an id proves the second.
-  **A GATE IS AN UPGRADE, NOT A PLACEMENT** (2026-08-22). It shipped as a menu
-  entry placed by tapping and the owner found the hole in a day: a gate is [9,2],
-  `PlaceBuildingCommand` carries no facing and never transposes a footprint, so
-  every tap-placed gate lay east-west and **a north-south wall could not have one
-  at all**. Now all three gates are `buildable: false` and you tap a finished long
-  segment and press its upgrade button — the wall already knows its axis and the
-  gate inherits it, so there is nothing to rotate. `BuildingDef.upgrades_to` +
-  `UpgradeBuildingCommand` + `SimWorld.convert_building`, which mutates in place
-  and keeps the entity id (a respawn would empty the panel the player just pressed
-  and report a *destruction* to every other client).
-  Worth remembering as a class: **the placement path has exactly one orientation**,
-  so anything non-square that needs a second one cannot be tap-placed. Walls get
-  theirs from the drag; the gate now gets it by inheriting.
-  **FINISHED SHORT PIECES MERGE** (2026-08-22, the owner's design): on completion a
-  segment looks along its axis, and a contiguous stretch of same-tier neighbours that
-  adds up to a declared length becomes that one piece — `WallMerge`, called from
-  `BuildSystem._finished`. Only COMPLETE pieces (absorbing a foundation would delete
-  what a builder is walking to), the survivor is the piece at the low end of the run so
-  nothing moves a corner backwards, health is the exact sum, and it is silent and free.
-  Most of its 21 tests are about what must *not* be merged, because every one of those
-  mistakes presents as a building that vanished. A merged long can then be upgraded to a
-  gate, which is how a wall built in short pieces gets a door at all.
-  What remains unbuilt around them: **no corner piece** (0 A.D. has none either — it
-  puts a `wall_tower` at every corner, which is art we already have as
-  `building.guard_tower`; what is missing is anything that detects a corner), **no
-  diagonal walls** (six of the eight baked directions are unreachable — a [9,2] box does
-  not tile a square grid at 45°),
-  **no garrison on a wall — now a DECISION, not a gap** (the owner ruled walls out of 4.8
-  by name on 2026-08-27, so 0 A.D.'s eight turret points per medium wall stay unused; the
-  wall turret you *can* garrison is `building.guard_tower`), and **an open gate is open to everyone**
-  because per-player passability needs a pathfinding grid per player. There is no
-  wall-tower def and none is needed: `building.guard_tower` already *is* the wall
-  turret, baked from achaemenid/roman `wall_tower`.
-- ~~**THE UNIT ATLASES ARE MIRRORED, NOT ROTATED.**~~ **CLOSED 2026-08-28**, in the
-  pipeline and not in any recipe: isobake `e6fc052` negated the compass step in
-  `directions.py:yaw_deg()`. `ORDER_8` is documented clockwise from screen-down and
-  `+i * 45°` about +Z walks it counter-clockwise, so the render swept the opposite way to
-  the labels it was writing. 252 atlases at build 38, staged and verified. **Nothing in
-  `game/` changed**, which was the whole point of the 2026-08-22 revert.
+**Walls**
 
-  Three things outlived it and are the reason this entry is still here at all:
+- **No corner piece.** 0 A.D. has none either — it puts a `wall_tower` at every corner, and we
+  already have that art as `building.guard_tower`. **What is missing is anything that DETECTS a
+  corner.** There is no wall-tower def and none is needed.
+- **No diagonal walls.** Six of eight baked directions are unreachable: a `[9,2]` box does not tile
+  a square grid at 45°. This is `wall-facings-reachable`, and it is **blocked on an A/B/C ruling,
+  not on art** — 20 of 22 wall and gate atlases carry a genuine 8 stored directions, counted.
+  ➡️ **`CliffPlan` (PLAN.md §11.10) is the worked precedent** for the same axis-aligned-rect
+  problem.
+- **An open gate is open to everyone**, because per-player passability needs a pathfinding grid per
+  player.
+- **No garrison on a wall is a DECISION, not a gap** — the owner ruled walls out of 4.8 by name, so
+  0 A.D.'s eight turret points per medium wall stay unused. The wall turret you *can* garrison is
+  `building.guard_tower`.
+- ⛔ **THE PLACEMENT PATH HAS EXACTLY ONE ORIENTATION**, so anything non-square needing a second one
+  **cannot be tap-placed**. `PlaceBuildingCommand` carries no facing and never transposes a
+  footprint — which is why every tap-placed gate lay east-west and a north-south wall could not
+  have one at all. Walls get their orientation from the drag; a gate gets it by **inheriting**
+  (`upgrades_to` + `UpgradeBuildingCommand` + `SimWorld.convert_building`, which mutates **in
+  place** and keeps the entity id — a respawn would empty the panel the player just pressed and
+  report a *destruction* to every other client).
+- **Finished short pieces MERGE** (`WallMerge`, from `BuildSystem._finished`). Only COMPLETE pieces
+  — absorbing a foundation would delete what a builder is walking to — the survivor is the piece at
+  the low end of the run so nothing moves a corner backwards, and health is the exact sum. **Most
+  of its 21 tests are about what must NOT be merged, because every one of those mistakes presents
+  as a building that vanished.**
 
-  - **A reflection is not a rotation, so no `yaw_offset_deg` could ever have fixed it** —
-    a half-turn only slides the mirror's axis from E–W (reads as "faces backwards") to
-    N–S (reads as "left and right swapped"). The 180° on the 82 recipes **stayed on** and
-    is half the correction, because index 0 is a fixed point of the sign flip. I asked
-    for its removal twice and was wrong both times.
-  - **The walls were mirrored all along**, and `preview_walls` passing was not evidence
-    they were not: each swapped pair has the same silhouette, so the swap changes which
-    face of the palisade is lit and never the direction it lies. An achiral subject
-    cannot fail a chirality test.
-  - **`directions = 1` atlases cannot be reached by any of this**, and that is worth
-    knowing because it was nearly forgotten: `yaw_deg` returns the offset alone at index
-    0. The 89 buildings were correctly excluded from the 242, and when 21 ground pieces
-    were later reported as "still mirrored, all `directions = 8`" they turned out to be
-    `stored = 1` to a file — a batch that was proposed and did not need running.
+**Art and the seam**
 
-  The check that can see this fault is in §3 and is **all four columns**. Two of them
-  cannot see it, which is the §6 row about verifications that are blind to what they are
-  for; this is where that row came from.
-- **`elite_swordsman` renders two overlapping bodies during death.** Known,
-  diagnosed, importer-level. Do not try to fix it in the game layer.
-- **SHIPS are static** — no walk clip, so they slide rather than row. This entry used to name
-  the three siege engines and the dragon too and can name neither now: the engines' **packed**
-  actors carry `idle` and `walk` since 2026-08-28 (which is what made 4.13 possible, and
-  `UnitDef.packing` is the second speed — a *deployed* engine still carries `speed: 0` and still
-  should), and **`vis.dragon_rigged` bakes all five clips** as of 2026-09-04. ⚠️ **`unit.dragon`
-  is NOT trainable at the castle** — that line was here for months and was one of the two
-  contradictory routes 13.2 settled. There is one dragon per map, she is gaia's, and you claim
-  one by killing her and holding the nest (13.2b).
-- **Chat is a wireframe** (PLAN.md §8.2b) and says so on screen: no transport at all,
-  and its SEND/CLEAR buttons are disabled rather than made to work locally. **The
-  tech-tree page stopped being one on 2026-08-29** — its renderer was always real and
-  9.3 gave it 27 technologies to render.
-- **HUD portraits, minimap and control groups** are wired for colour; nothing
-  else tints, because colour is in the pixels — **there is no tint shader and
-  must not be one.**
-- **AUDIO IS BUILT (2026-08-23), and the gap left is BYTES, not code.** PLAN.md
-  §7.5 claimed an `AudioManager` existed for months when there was no such file
-  and zero call sites; that is now real — `src/autoload/audio_manager.gd`,
-  `src/view/match_audio.gd`, `data/audio_map.json`, `tools/stage_audio.py`, and
-  131 sound ids mapped to 0 A.D. sound groups. Four things worth knowing before
-  touching it:
-  - **The sim does not and must not make sound.** `src/sim/` cannot load an asset
-    or touch the tree, and a sim that made noise would make it during a headless
-    AI-vs-AI run. `MatchAudio` **diffs consecutive snapshots** instead, which also
-    means it works identically on a host and a joined client with no event
-    forwarding. Its header documents the three traps in doing that (the first
-    snapshot must be swallowed, absence from `updated` is ambiguous between death
-    and fog, and a remembered entity carries no live fields).
-  - **`task_target_id` is NOT on the wire**, so the sound a villager makes is
-    found by *position* — nearest resource node or building within four tiles.
-    Do not add the field for audio: 12.1f spent an optimisation pass removing
-    per-entity field names, and a field present on working units and absent on
-    idle ones splits every unit into two shape tables.
-  - **Silence is a legitimate state and is reported.** An empty `streams` list
-    plays nothing; an *undeclared* id calls `push_error` once. Keeping those
-    apart is the whole contract, and `GameDataRegistry.silent_sfx_ids()` names
-    the first case so nobody has to diagnose it by ear.
-  - **THE REPEAT RATE IS TWO LIMITS, NOT ONE** (added `962b1c5`, and PLAN.md §7.5
-    decision 3 still describes only the first — it predates this). `throttle_ms` is
-    the gap for **one source**, a unit's own cadence, and `MatchAudio` passes the
-    entity id so it has something to key on; `crowd_ms` is the gap for the sound
-    **at all**, however many units are making it. One global number cannot do both
-    jobs: small, it lets a single unit fire eleven times a second; raised to 2000 ms,
-    it reduces a battle of ten swordsmen to one clang every two seconds while ten men
-    visibly swing. The rates now come from `units.json`'s real `cooldown_ticks`.
-  - **Music defaults to 0.5**, on the owner's report that they had to drop it ~80% to
-    hear anything else. A saved value still wins, so anyone who has moved the slider
-    keeps theirs.
-  - **`game/assets/audio/` is gitignored build output** like the atlases, and the
-    fetch is rate-limited by 0 A.D.'s server (see §3). A clean checkout has no
-    audio and the game is expected to run silently — the suite asserts the seam,
-    never that bytes are present.
-- **Three gaps PLAN.md records rather than files**, all cheap to trip over: **a dock built
-  inland before 2026-08-23 stays inland** (`requires_shore` gates new placement only, so an old
-  dock trains ships that cannot deliver); **naval combat does not exist** — ships float and path,
-  and transports have loaded and unloaded since 2026-08-29, but nothing has ever fought at sea,
-  so a loaded transport crosses unopposed; and **a static destroyed behind the fog stops being
-  sent** rather than leaving AoE's stale ghost, which would need a per-player last-seen copy of
-  every static (§11.4).
+- ⚠️ **`stale_colour_atlases()` COMPARES THE EIGHT COLOURS AGAINST EACH OTHER AND IGNORES THE
+  BASE**, so eight agreeing at build 36 look healthy under a base at 37. A base-ahead-of-its-colours
+  check is game-side work that has not been written. Keep both that query and
+  `missing_colour_atlases()`: for months 60 colour atlases were **stale, not absent** — present,
+  parsing, drawing, and wrong — because pipeline defects were fixed mid-roster, and that is not a
+  rare event.
+- ⛔ **STAGED AND WIRED ARE DIFFERENT STATES, and only a def reaching for an id proves the second.**
+  An undeclared id resolves to the magenta placeholder and nothing reports it. The walls were
+  staged but never declared for weeks on exactly this.
+- ⛔ **A REFLECTION IS NOT A ROTATION, so no `yaw_offset_deg` could ever have fixed the mirrored
+  atlases** — a half-turn only slides the mirror's axis from E–W ("faces backwards") to N–S ("left
+  and right swapped"). **The 180° on the 82 recipes STAYED ON** and is half the correction, because
+  index 0 is a fixed point of the sign flip. I asked for its removal twice and was wrong both
+  times. ⚠️ **`preview_walls` passing was not evidence** — each swapped pair has the same
+  silhouette, so **an achiral subject cannot fail a chirality test**. The check that can see this
+  is in §3 and is **all four columns**.
+- **`directions = 1` atlases cannot be reached by any of this** (`yaw_deg` returns the offset alone
+  at index 0), which was nearly forgotten: 21 ground pieces reported as "still mirrored, all
+  `directions = 8`" turned out to be `stored = 1`.
+- **`elite_swordsman` renders two overlapping bodies during death.** Diagnosed, importer-level.
+  **Do not try to fix it in the game layer.**
+- **SHIPS are static** — no walk clip, so they slide rather than row.
+- **Nothing tints but HUD portraits, minimap and control groups**, because colour is in the pixels:
+  **there is no tint shader and must not be one.**
+- ⚠️ **ADDING AN ID TO `visuals.json` IS A PACK CHANGE.** `build_packs.py` packs what the **seam**
+  can ask for, not a directory listing. `res://` beats a mounted pack, so this workstation cannot
+  fail the obvious test — `preview_art_pack` is what catches it.
 
-### Where the queue points
+**Committed chrome that nothing references:** `badge_round`, `checkbox_*`, `radio_*`, `tab_plate`,
+`bar_fill_health`, `banner_age`, the four `arrow_*`. ⚠️ **`bar_fill_health` is unused because the
+owner picked something else** — worth knowing before "fixing" it back. ⚠️ **`badge_round` needs a
+DECISION rather than work**: `res_*` icons draw at 24 px, where a ring leaves almost no glyph.
+**`scenes/ui_builder/*.tscn` are REPOINTED, NOT UPDATED** — current art, pre-overhaul layout,
+nothing instantiates them; whether they survive is the owner's call. **`ART_PROMPT.md`'s upcoming
+set** is drawn for features that do not exist (voice chat, server browser, lobby, save/load,
+replay) and should hold nothing up.
 
-**PLAN.md §15 is the authority and has been swept three times** — it grows back into a log of
-everything shipped, which is the one section where a completed item actively costs a reader
-something. **Do not re-grow it here either.** What follows is a pointer, not a copy:
+**Audio**
 
-1. **Phase 16, the MapMaker** — where the work is, and **the board is the status, not this list**
-   (§2.1). **16.0 through 16.8 are done** — 16.8 and 16.7 both landed 2026-09-12. What is left in
-   the phase is **16.9** (the HOW-To, written last on purpose) and **16.10** (the content the tool
-   exists for). ⚠️ **THE TOOL IS FEATURE-COMPLETE**, which is what makes 16.9 writable at last: its
-   own row says a guide to an interface still being built is a guide that will be wrong.
-   ⚠️ **16.8 WAS TAKEN BEFORE 16.7 DELIBERATELY**, against PLAN.md's numbering: 16.6 authored
-   conditions that **nothing in the game could read** — its own panel said so on screen — and 16.8
-   is the row that closes that loop. 16.7's card said *"DO NOT START HERE"* and was right until
-   16.8 existed.
-   📝 **`ObjectiveDef._NOT_YET` IS NOW EMPTY** — every subject the vocabulary declares can be
-   evaluated (`area` 16.5, `ticks` 16.6, `named_unit` 16.7). The mechanism stays as the contract a
-   future subject arrives under, and `test_campaigns` asserts the emptiness rather than a member.
-   ⚠️ **`MapEdit.mark_changed()` HAS NOW BEEN OWED TWICE** — by 16.4's move cursor and 16.6's
-   condition edit — and will be owed again. Any act that edits an entry **in place** (same list
-   length, same starts) is invisible to `close()`'s size test, and a discarded step is a change
-   that cannot be taken back. 16.7's whole job is in-place edits, so it owes it on every path.
-2. **16.10** — re-author the five How To Play maps, then "The Dragon Born". **Scenarios 3 and 5
-   share one map**, so one good duel map covers two rows. It was three until 2026-09-06, when
-   scenario 4 got its own map with a nest on it — **and anybody re-authoring that map must keep
-   the nest and the mother**, which `test_campaigns` asserts.
+- ⛔ **THE SIM DOES NOT AND MUST NOT MAKE SOUND.** `src/sim/` cannot load an asset or touch the
+  tree, and a sim that made noise would make it during a headless AI-vs-AI run. `MatchAudio`
+  **diffs consecutive snapshots** instead, which also makes it work identically on a host and a
+  joined client with no event forwarding. Its header documents the three traps: the first snapshot
+  must be swallowed, absence from `updated` is ambiguous between death and fog, and a remembered
+  entity carries no live fields.
+- ⚠️ **`task_target_id` IS NOT ON THE WIRE**, so a villager's sound is found by *position* — nearest
+  node or building within four tiles. **Do not add the field for audio**: 12.1f removed per-entity
+  field names, and a field present on working units and absent on idle ones splits every unit into
+  two shape tables.
+- **Silence is a legitimate state and is reported.** An empty `streams` list plays nothing; an
+  *undeclared* id calls `push_error` once. `silent_sfx_ids()` names the first case so nobody has to
+  diagnose it by ear.
+- **THE REPEAT RATE IS TWO LIMITS, NOT ONE.** `throttle_ms` is the gap for **one source** (keyed on
+  entity id); `crowd_ms` is the gap for the sound **at all**. One global number cannot do both:
+  small, a single unit fires eleven times a second; at 2000 ms, ten swordsmen visibly swinging give
+  one clang every two seconds.
+- **`game/assets/audio/` is gitignored build output** like the atlases. A clean checkout has no
+  audio and the game is expected to run silently — the suite asserts the seam, never that bytes are
+  present.
 
-Then, in no forced order: Phase 14's AI enemy-blindness; the AI researching anything at all
-(`9.x-ai-research`); `cliff-terrain`; `11.x-wonder-victory` and 11.2 Regicide; naval combat; and
-replays, which are all that is left of 12.4's original row.
+**Three gaps recorded rather than filed**
 
-⛔ **TWO ROWS LEFT THIS LIST ON 2026-09-21 AND ONE OF THEM IS A RULING WORTH KNOWING COLD.**
-`13.x-claim-dead-end` shipped (`22a6799`, the `CLAIM` subject). **And 12.1b reconnect is CLOSED
-AS OUT OF SCOPE** — owner: *"we will not support reconnect after grace. in tunnel test is fine,
-full reconnect after flight mode or app crash is not in scope."* The supported line: a few
-seconds of **packet loss** survives, because `Net.LINK_TIMEOUT_*` keeps the socket alive; a
-**dead socket** — flight mode, interface down, a suspended app — ends that player's match.
-⚠️ Two things follow that are easy to get wrong later. `LINK_TIMEOUT_*` is no longer "the cheap
-half" of anything, it is **the whole recovery mechanism**, so weakening it now costs matches.
-And `DISCONNECT_GRACE` is a **notice period**, not a recovery window: it is the length of the
-on-screen *"Player N will be disconnected in Ns"* countdown, which is what makes it the first
-version of that constant a playtest can actually judge.
+- **A dock built inland before `requires_shore` stays inland** — that gate covers new placement
+  only, so an old dock trains ships that cannot deliver.
+- **Naval combat does not exist.** Ships float and path and transports load, but nothing has ever
+  fought at sea, so a loaded transport crosses unopposed.
+- **A static destroyed behind the fog stops being sent**, rather than leaving AoE's stale ghost.
+  Fixing it needs a per-player last-seen copy of every static (PLAN.md §11.4).
 
-**EIGHT CARDS WERE FILED FROM ONE PLAYTEST SESSION, 2026-09-20** (#109–#116), and they are the
-nearest thing to a current worklist: chat right-align (needs the owner's ruling on whose
-messages), the farm work animation, a destroy confirmation, **the build menu as a modal**
-(designed on the card, see below), the unknown-def-id instant loss, MapMaker keyboard shortcuts,
-the resumed-match fog, and the action-column overflow.
+### Owner-reported and open (BUGS.md is authoritative)
 
-⛔ **`8.x-build-menu-modal` IS DESIGNED AND READY, AND THE DESIGN IS ON THE CARD RATHER THAN
-HERE.** Short version so nobody re-derives it: the **detail grid** (`MAX_DETAILS`) becomes a
-fourth `HudPanel` page beside CHAT, TECH TREE and MARKET; the **action column** (`MAX_ACTIONS`)
-stays. Tiles keep their current size and the `>` pager stays, which means **`MAX_DETAILS` stops
-being a compile-time constant** — pass the slot count into `page_of()`, never read a `Control.size`
-from inside `SelectionActions`, which is pure and headlessly tested on purpose.
+Listed so this file does not read as though the game were finished. **Each already has a diagnosis
+— do not re-derive them.**
 
-⛔ **ONE THING IS WAITING ON THE OWNER AND MUST NOT BE PICKED UP UNPROMPTED.**
-`13.4b-breath-damage` sits in **`Test`** — it wants somebody burned by 500 damage, which is not a
-judgement a test or a screenshot of mine can make. **`wall-facings-reachable` is `Blocked` and is
-now tagged `game-code`** (the owner flipped it); it still needs an A/B/C ruling before anything
-can be done, so the tag changing did not make it startable. **Never move or edit an `art` or
-`owner-decision` card** (§2.1).
+- **The soft keyboard covers the address field**, and **a tap cannot place the caret** in a text
+  field. Both are consequences of there finally being a keyboard, both are survivable in the debug
+  screen, and **both bite the moment a real lobby lays out a field.** See the `TouchLineEdit` row
+  in §6.
+- **`InputRouter.TAP_SLOP`/`TAP_TIME_MS` is still the root of unreliable double-tap on a phone.**
+  The [X] button answered the selection case by sidestepping the router; the root is a separate job
+  and **nothing sidesteps it for double-tap-to-select-type** (PLAN.md §13.2 item 12).
+- ⛔ **THE AI'S BIGGEST GAP: A BUILD STEP GIVES UP WHEN SHORT OF RESOURCES.** A bot abandoned a
+  barracks 73 wood short, never built one, and died holding 950 wood. **A person waits for the
+  wood, and the timeout should not count affordability.** Also open on the same system:
+  `MAX_PLACEMENT_RADIUS` at 14 blocks 6×6 placements, and **nobody has checked what `AISystem`'s
+  standing order 3 still needs to do** now that `CombatSystem` re-targets. **Keep BUGS.md's
+  AI-vs-AI baseline table** — it exists so a regression is visible, and it is only valid while
+  neither side researches.
 
-✅ **THE ART PACK IS BUILT AND PUBLISHED (2026-09-12), AND IT IS A `.zip`.** The owner's call —
-*"if pck is just a zip, rather leave it zip"* — and a `.pck` is **not** a zip, but
-`load_resource_pack()` takes either, measured on 4.7.1. So the packer stayed pure Python with no
-Godot export step in it. **Two packs, on the split the art side's figures forced:**
-`art_base` 80.1 MB `required` (**at v2**, and see the v3 debt below), `art_colours_v1.zip`
-236.0 MB optional — the colour variants
-are 74% of the bytes, and the split is only safe because `_atlas_path_for_skin` already falls
-back to the untinted bake, which was verified before it was chosen. `exclude_filter` now keeps
-`res://assets/atlases/*` out of both export presets, which is the half that actually shrinks the
-APK: a measured export-pack went to **66 MB**.
-
-**What it packs is `visuals.json`, not a directory** — the union of every declared `atlas`, every
-`ages` value and every tinted sibling of those. That is the art side's own suggestion inverted
-into the design it should have been: a retired bake leaves the pack the moment nothing points at
-it, with no skip list to maintain (26 staged atlases are in no pack today, and the build says so
-every run). ⚠️ **The packer's selection and `GameDataRegistry`'s resolution are two independent
-derivations of one set, and `preview_art_pack` exists to compare them** — 1,535 paths, and if
-they ever drift the pack ships art nothing renders while missing art everything asks for.
-
-⛔ **THE PACK OWES ONE ATLAS AND CANNOT SHIP WITHOUT IT.** `vis.foundation_9x9` was wired on
-2026-09-20 after sitting staged and named by nothing since 2026-09-06, and **`art_base_v2.zip`
-carries the 8×8 and not the 9×9** — so on a device with no staged tree the town-centre foundation
-draws the magenta placeholder. `base` needs a rebuild to **v3** and a republish before the next
-build reaches a phone. ⚠️ The rule is worth more than the row: **adding an id to `visuals.json` is
-a pack change**, because `build_packs.py` resolves packs from what the seam can ask for rather
-than from a directory listing.
-
-📝 **THE RESUMABLE-DOWNLOAD ENTRY THAT USED TO SIT HERE IS CLOSED** (0.3a, 2026-09-19, proven on
-the handset) and is described at the top of this section. It had gone stale in place — this file
-said "still open" four hundred lines below saying it was done, which is the failure §2 deletes
-whole trackers over.
-
----
+**Three owner requests are filed and deliberately NOT built** — PLAN.md §13.2 items **12** (double-
+tap selects every unit of that type on screen), **13** (an arrow leaves the bow when the fire
+animation finishes) and **14** (a finished resource building puts its builders to work). Each was
+researched before filing and each row names where it plugs in, the traps, and what was rejected.
+**Read the row rather than re-deriving it** — in particular, 14 **must be deterministic or it is a
+desync**, not a cosmetic bug.
 
 ## 8. For the art agent
 
