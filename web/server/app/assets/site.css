@@ -70,8 +70,12 @@ h1, h2, h3 {
   letter-spacing: 0.01em;
 }
 h1 { font-weight: 900; font-size: clamp(2.2rem, 5vw, 3.6rem); }
-h2 { font-weight: 900; font-size: clamp(1.6rem, 3.4vw, 2.3rem); }
-h3 { font-weight: 700; font-size: 1.2rem; }
+/* Section headings are Title Case, and Cinzel Decorative CANNOT show that: its lowercase
+   is drawn as small capitals, so "Five Ages" still reads FIVE AGES. They are New Rocker,
+   which has a real lowercase. Cinzel keeps the names -- the h1 and the brand. */
+h2, h3 { font-family: "New Rocker", Georgia, serif; font-weight: normal; letter-spacing: 0.01em; }
+h2 { font-size: clamp(1.8rem, 3.6vw, 2.5rem); }
+h3 { font-size: 1.35rem; }
 
 p { margin: 0 0 1em; }
 .dim { color: var(--text-dim); }
