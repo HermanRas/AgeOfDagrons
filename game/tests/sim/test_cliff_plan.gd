@@ -236,23 +236,21 @@ func _length_of(def_id: StringName, ladder: Dictionary) -> int:
 
 ## Every tile a face's rock is painted over, from the run's own geometry.
 ##
-## ⚠️ **DERIVED FROM `step_of` AND `(1, 1)` RATHER THAN FROM `_shear_gap`**, so this is an
-## independent statement of where the rock falls and not a restatement of the fix.
-##
-## ⛔ **BOTH FACE FAMILIES, AND ASKING ONLY ABOUT `FACE` IS HOW THIS SHIPPED HALF-DONE.** A
-## screen-horizontal cliff is a line of constant `x + y` -- an `AXIS_D2` run, made entirely of
-## `_diag` pieces, which claim their line and nothing under it. This test passed, the probe
-## passed, and the owner rode a scout the length of one.
+## ⚠️ **FROM `CliffPlan.rock_tiles`, WHICH IS THE SAME TABLE THE FIX LAYS BLOCKERS FROM**, and
+## that is deliberate after three rounds of the alternative. An independently written copy here
+## only ever agreed with a wrong table -- it did so twice, and both times this test passed while
+## the owner rode a scout along the rock. **What the table is checked against is the ART**, in
+## `test_cliffs.test_the_cover_tables_are_what_the_atlas_says`. This file's job is the different
+## one: given where the rock falls, is all of it claimed by something.
 func _under_rock(plan: Array[Dictionary]) -> Dictionary:
 	var out: Dictionary = {}
 	for r in plan:
 		var ladder := CliffPlan.ladder_of(r["def_id"])
 		if ladder != CliffPlan.FACE and ladder != CliffPlan.FACE_DIAG:
 			continue
-		var step := CliffPlan.step_of(int(r["axis"]))
-		for i in range(_length_of(r["def_id"], ladder)):
-			for d in range(CliffPlan.DEPTH):
-				out[(r["tile"] as Vector2i) + step * i + Vector2i.ONE * d] = true
+		for t in CliffPlan.rock_tiles(r["tile"] as Vector2i, int(r["axis"]), ladder,
+				_length_of(r["def_id"], ladder)):
+			out[t] = true
 	return out
 
 
@@ -263,7 +261,7 @@ func _under_rock(plan: Array[Dictionary]) -> Dictionary:
 ## that rectangle sheared `(+1, +1)` down the screen, so an N-S side's 1-tile pieces claimed
 ## `T`, `T+(1,0)`, `T+(2,0)` while their rock covered `T`, `T+(1,1)`, `T+(2,2)`. One tile in
 ## common, two walkable tiles of solid rock per piece, all the way down the side the owner
-## photographed. See `CliffPlan._shear_gap`.
+## photographed. See `CliffPlan.rock_tiles` and its `COVER_` tables.
 ##
 ## ⚠️ **ASKED THROUGH `MapData.footprint_rect_of`**, which is the rule the validator and
 ## `MapGen.build_from` both read. Asking `bd.footprint` would pass on an arrangement that still
@@ -285,7 +283,7 @@ func test_no_tile_a_face_is_drawn_over_is_left_walkable() -> void:
 
 	var checked := 0
 	for t in _under_rock(plan):
-		# The plateau TOP is deliberately never blocked -- see `_shear_gap`. Its own lip is
+		# The plateau TOP is deliberately never blocked -- see `rock_tiles`. Its own lip is
 		# blocked, and that is the documented price of the art and the collision agreeing.
 		if high.has(t):
 			continue

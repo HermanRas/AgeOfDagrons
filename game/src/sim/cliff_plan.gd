@@ -67,11 +67,42 @@ extends RefCounted
 ## Draws nothing (`draws_nothing`).
 const BLOCKER := &"building.cliff_blocker"
 
-## How far down the screen a face's rock reaches, in tiles. The same 3 the face defs carry, and
-## it is here as well because this file lays the blockers that make the two agree -- see
-## `_shear_gap`. Measured off the atlas in `buildings.json`'s `_note_cliffs`: 110 px of art below
-## the anchor over a 32 px down-screen step.
-const DEPTH := 3
+## ## ⛔ WHERE A PIECE'S ROCK ACTUALLY FALLS, MEASURED AND NOT DERIVED
+##
+## Every tile a 1-tile piece is drawn over, as offsets from the tile it stands on. A run covers
+## the union of these over its own tiles, which is exact rather than approximate: a longer piece
+## is the same 16 m strip of rock through a wider window, so its art is the union of the 1-tile
+## windows it replaces. See `rock_tiles`.
+##
+## ⚠️ **THESE NUMBERS CAME OUT OF THE ATLAS AND THE PROJECTION, AND THREE HAND-DERIVATIONS
+## BEFORE THEM WERE WRONG.** "3 tiles straight down" shipped twice and neither the tests nor the
+## probe caught it, because all three carried the same premises. The premises that were wrong:
+##
+##   - **a sprite is anchored at its footprint's CENTRE**, not at the tile it stands on, so an
+##     offset counted from the origin tile is already shifted before any projection;
+##   - **the rock is two tiles wide, and a diagonal's is three** -- it was modelled as the single
+##     `(1, 1)` line, which is where the horse was standing beside;
+##   - **`AXIS_Y` is not `AXIS_X` mirrored.** Its band starts a tile to the `+x` side, so the
+##     blockers for an N-S run were laid on tiles the rock never touched while the tiles it did
+##     touch stayed open. That is the one the owner rode along after the first two fixes.
+##
+## ⛔ **`test_the_cover_tables_are_what_the_atlas_says` RE-MEASURES ALL OF THIS FROM THE STAGED
+## ART** and is what keeps the table honest; this comment is only the reason it exists. Re-read
+## them any time with `probe_saved_map.tscn -- coverage`.
+const COVER_DEPTH := 4
+
+## How deep a face def's own footprint reaches, from `buildings.json`. Named here because
+## `_merge` has to know what a piece already holds before it can say what is still open.
+const FOOTPRINT_DEPTH := 3
+
+## The near face, by the axis it is laid on. Two columns, each `COVER_DEPTH` steps of `(1, 1)`.
+const COVER_FACE := {
+	WallPlan.AXIS_X: [Vector2i(-1, 1), Vector2i(0, 1)],
+	WallPlan.AXIS_Y: [Vector2i(1, -1), Vector2i(1, 0)],
+}
+
+## The diagonal, which draws the same frame on every axis and is a column wider than a face.
+const COVER_FACE_DIAG := [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]
 
 ## The near side: 4 m of rock hanging down the screen. Keyed by run length in tiles.
 const FACE := {
@@ -444,7 +475,7 @@ static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictio
 				if art_only:
 					claimed[tile + step * i] = true
 				else:
-					for j in range(DEPTH):
+					for j in range(FOOTPRINT_DEPTH):
 						claimed[tile + step * i + perp * j] = true
 
 			if art_only and piece > 1:
@@ -461,58 +492,41 @@ static func _merge(singles: Array[Dictionary], high: Dictionary) -> Array[Dictio
 			# rode along one. The crests shear too and do not care: 1.88 m of rim covers the tile
 			# it stands on and nothing below it.
 			if ladder == FACE or ladder == FACE_DIAG:
-				for t in _shear_gap(tile, step, piece, claimed, high):
-					_block(out, blocked, t)
+				for t in rock_tiles(tile, axis, ladder, piece):
+					if not claimed.has(t) and not high.has(t):
+						_block(out, blocked, t)
 			offset += piece
 	return art + out
 
 
-## The tiles a face's ROCK covers that its rectangular footprint cannot reach.
+## Every tile a run of `length` pieces is DRAWN over, from `COVER_FACE` / `COVER_FACE_DIAG`.
 ##
-## ## ⛔ A FOOTPRINT IS A RECTANGLE AND A CLIFF FACE IS A SHEARED ONE
+## ## ⛔ WHY A RUN IS THE UNION OF ITS 1-TILE WINDOWS
 ##
-## ⚠️ **THE OWNER RODE A SCOUT UP A THREE-TILE CLIFF (2026-09-23)**, and the collision data was
-## innocent: a probe of their saved map found all 362 pieces blocking every tile they claim. The
-## fault is that a face is drawn over tiles it never claimed.
+## A merged piece is not different art: it is the same continuous 16 m strip of rock seen through
+## a wider window, opened at the same `u = 0`. So a 9-tile face covers exactly what nine 1-tile
+## faces laid along it would, and one measured table serves every rung. That also side-steps the
+## trap in measuring a long frame directly -- a long diagonal's frame RECT is a huge box that is
+## mostly transparent, and taking the rect for the rock would deny a quarter of the map.
 ##
-## A footprint claims `start + step * i + perp * j` -- `perp` being `+y` for an `AXIS_X` run and
-## `+x` for an `AXIS_Y` one, which is what `MapData.footprint_rect_of`'s transposition means. But
-## the rock is a flat quad hanging STRAIGHT DOWN THE SCREEN, and down-screen is `(+1, +1)`: both
-## `+x` and `+y` add 16 px of depth, so only their sum falls with no sideways drift. The rock
-## therefore covers `start + step * i + (1, 1) * d`. **The claim is a rectangle and the coverage
-## is that rectangle SHEARED along the run**, and the two agree on one row only.
+## 📌 **THE OVER-CLAIM IS LEFT ALONE.** A face's `[length, 3]` footprint holds tiles with no rock
+## over them -- its own lip among them -- and un-claiming those would mean taking the footprints
+## off the defs and laying every piece on blockers. Much larger change, invisible reward: nobody
+## can tell that a tile beside a cliff is denied for a slightly wrong reason, and anybody can tell
+## that a horse is standing inside a rock.
 ##
-## 📐 An N-S side is a staircase, so every piece is a run of ONE, and a 1-tile face claims `T`,
-## `T+(1,0)`, `T+(2,0)` while its rock covers `T`, `T+(1,1)`, `T+(2,2)`: **one tile in common and
-## two tiles of solid rock left walkable, per piece, down the whole side.** A 9-tile E-W run
-## fares better -- the shear only overhangs its far end -- and loses 3.
-##
-## ⛔ **AND THE DIAGONALS ARE WORSE, WHICH IS THE HALF THIS MISSED FIRST TIME ROUND.** A
-## screen-horizontal cliff is a line of constant `x + y`, so it is an `AXIS_D2` run and is made
-## ENTIRELY of `_diag` pieces -- and a diagonal claims its line and nothing under it, one tile
-## per step, while `visuals.json` gives its art the same `height_m` 4.0 as an axis face. So every
-## diagonal piece left two tiles of rock open, the full length of every horizontal run. The owner
-## rode a scout along one and photographed it. Both face families are sheared here now; `claimed`
-## is passed in because the two describe what they hold differently.
-##
-## 📌 **THE OVER-CLAIM IS LEFT ALONE.** The tiles the rectangle holds without rock over them are
-## the mirror of this, and un-claiming them would mean taking the footprints away from the face
-## defs and laying every piece on blockers. That is a much larger change for a wholly invisible
-## reward: a player cannot tell that a tile beside a cliff is denied for a slightly wrong reason,
-## and they can certainly tell that a horse is standing inside a rock.
-##
-## ⚠️ **A HIGH TILE IS NEVER BLOCKED.** On any plateau we lay, down-screen of a near face is off
-## the plateau, so this never fires; on a painted concave blob it would, and walling off the top
-## of someone's own plateau is not a thing this should be able to do.
-static func _shear_gap(tile: Vector2i, step: Vector2i, length: int, claimed: Dictionary,
-		high: Dictionary) -> Array[Vector2i]:
+## ⚠️ **A HIGH TILE IS NEVER BLOCKED** by the caller. On any plateau we lay, down-screen of a near
+## face is off the plateau, so it never fires; on a painted concave blob it would, and walling off
+## the top of someone's own plateau is not a thing this should be able to do.
+static func rock_tiles(tile: Vector2i, axis: int, ladder: Dictionary,
+		length: int = 1) -> Array[Vector2i]:
+	var bases: Array = COVER_FACE_DIAG if ladder == FACE_DIAG else COVER_FACE.get(axis, [])
+	var step := step_of(axis)
 	var out: Array[Vector2i] = []
 	for i in range(length):
-		# `d` opens at 1: the run's own line is `d == 0` and every piece holds that already.
-		for d in range(1, DEPTH):
-			var t := tile + step * i + Vector2i.ONE * d
-			if not claimed.has(t) and not high.has(t):
-				out.append(t)
+		for b in bases:
+			for d in range(COVER_DEPTH):
+				out.append(tile + step * i + (b as Vector2i) + Vector2i.ONE * d)
 	return out
 
 

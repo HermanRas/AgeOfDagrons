@@ -471,3 +471,63 @@ func _bare_map() -> MapData:
 	data.starts.append(Vector2i(4, 4))
 	data.starts.append(Vector2i(35, 35))
 	return data
+
+# ── the cover tables ────────────────────────────────────────────────────────
+
+
+## The tiles one piece's art is drawn over, measured off the STAGED ATLAS and the real
+## projection, exactly as `EntityView` places a frame.
+func _measured_cover(def_id: StringName, axis: int) -> Array[Vector2i]:
+	var bd: BuildingDef = GameDataRegistry.building(def_id)
+	var vis := GameDataRegistry.atlas_for(bd.visual)
+	var footprint := bd.footprint
+	if WallPlan.is_diagonal(axis):
+		var side := WallPlan.diagonal_step(footprint.x)
+		footprint = Vector2i(side, side)
+	elif axis == WallPlan.AXIS_Y:
+		footprint = Vector2i(footprint.y, footprint.x)
+
+	var origin := Vector2i(20, 20)
+	# The anchor lands on the projected footprint CENTRE -- which is the premise three
+	# hand-derivations of this got wrong, so it is spelt out rather than folded in.
+	var at := Iso.sub_to_world(SimBuilding.centre_of(origin, footprint))
+	var f := vis.frame_at(&"idle", Iso.sim_facing_to_sprite(int(bd.facings[axis])), 0)
+	var rect: Rect2i = f["rect"]
+	var box := Rect2(at - (f["anchor"] as Vector2), Vector2(rect.size))
+
+	var out: Array[Vector2i] = []
+	for dy in range(-6, 10):
+		for dx in range(-6, 10):
+			if box.has_point(Iso.tile_centre_to_world(origin + Vector2i(dx, dy))):
+				out.append(Vector2i(dx, dy))
+	out.sort()
+	return out
+
+
+## ⛔ REGRESSION, and the one that would have caught all three rounds of this.
+##
+## `CliffPlan` lays its blockers from a hand-written table of where a piece's rock falls, and
+## that table was wrong three times running -- "3 tiles straight down", then the same again
+## with the diagonals added, then an `AXIS_Y` band a tile off the rock it was meant to hold.
+## ⚠️ **EVERY TIME, THE FIX, THE UNIT TEST AND THE PROBE SHARED THE PREMISE**, so all three
+## agreed and the fault reached the owner, who rode a scout along it and photographed it.
+##
+## This asks the ART instead. Nothing here is derived from `COVER_FACE`: the frame comes from
+## the staged atlas, the anchor from `SimBuilding.centre_of`, the placement from `Iso`, and a
+## tile counts as covered when the point the sim stands a unit on lands inside the frame. A
+## re-bake that moves an anchor fails this rather than shipping a walkable cliff.
+func test_the_cover_tables_are_what_the_atlas_says() -> void:
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y]:
+		var want := _measured_cover(CliffPlan.FACE[1], axis)
+		var got := CliffPlan.rock_tiles(Vector2i.ZERO, axis, CliffPlan.FACE)
+		got.sort()
+		assert_eq(got, want, "cliff_face on axis %d covers %s, and COVER_FACE says %s"
+				% [axis, want, got])
+
+	# The diagonal draws one frame on every axis, so every axis must agree with it.
+	for axis in [WallPlan.AXIS_X, WallPlan.AXIS_Y, WallPlan.AXIS_D1, WallPlan.AXIS_D2]:
+		var want := _measured_cover(CliffPlan.FACE_DIAG[1], axis)
+		var got := CliffPlan.rock_tiles(Vector2i.ZERO, axis, CliffPlan.FACE_DIAG)
+		got.sort()
+		assert_eq(got, want, "cliff_face_diag on axis %d covers %s, and COVER_FACE_DIAG says %s"
+				% [axis, want, got])

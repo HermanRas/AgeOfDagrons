@@ -34,6 +34,9 @@ const DEFAULT_MAP := "platotest"
 ## The word that means "do not read a file, lay a plateau and probe that instead".
 const FRESH := "plateau"
 
+## The word that means "tell me which tiles each cliff piece's ART actually covers".
+const COVERAGE := "coverage"
+
 
 ## Where a map saved by the tool or by a preview lands. Both are tried, because the MapMaker
 ## writes into the REPO's `maps/` and the previews write into `user://maps/`.
@@ -55,6 +58,10 @@ func _ready() -> void:
 	if name == FRESH:
 		get_tree().quit(0 if _report_fresh() else 1)
 		return
+	if name == COVERAGE:
+		_report_coverage()
+		get_tree().quit(0)
+		return
 
 	var data := _load(name)
 	if data == null:
@@ -66,6 +73,11 @@ func _ready() -> void:
 			data.entities.size()])
 	_report_sharers(data)
 	var ok := _report_world(data)
+	# ⚠️ **WITH NO `high` SET, AND THAT IS SOUND HERE.** A saved map does not record which tiles
+	# were raised, but a FACE's rock at `d >= 1` always falls AWAY from its own plateau -- down
+	# the screen, off the edge it stands on. So every tile this reports is a real gap unless a
+	# second plateau's top happens to sit directly below a first one's face.
+	ok = _report_rock(data, {}) and ok
 	get_tree().quit(0 if ok else 1)
 
 
@@ -105,7 +117,18 @@ func _report_fresh() -> bool:
 			data.entities.size())
 	_report_sharers(data)
 	var ok := _report_world(data)
+	return _report_rock(data, high) and ok
 
+
+## Walk the ROCK -- every tile a face is drawn over -- and ask the built world about each.
+##
+## ⛔ **THIS IS THE QUESTION `_report_world` CANNOT ASK.** That one walks the tiles each piece
+## CLAIMS, and on the owner's map all 448 came back blocked while a scout stood in a cliff. A
+## footprint is a rectangle; the rock is that rectangle sheared `(+1, +1)` down the screen.
+##
+## `high` is the raised set when the caller knows it, and `{}` for a saved map that does not
+## record one -- see the call in `_ready`.
+func _report_rock(data: MapData, high: Dictionary) -> bool:
 	var w := SimWorld.new()
 	var cfg := MatchConfig.debug_skirmish()
 	cfg.map_size = data.size
@@ -116,21 +139,104 @@ func _report_fresh() -> bool:
 
 	var walkable := 0
 	var under := 0
-	for t in _rock_tiles(data):
+	var by_source: Dictionary = {}
+	var rock := _rock_tiles(data)
+	for t in rock:
 		# The plateau TOP is walkable on purpose; only the ground the rock falls ONTO is asked
 		# about. A face's own lip is high and is blocked, which is the documented price.
 		if high.has(t):
 			continue
 		under += 1
-		if w.map.is_passable(t, SimMap.Domain.LAND):
-			walkable += 1
-			if walkable <= 20:
-				print("  ! %v has rock over it and a unit can stand there" % [t])
+		if not w.map.is_passable(t, SimMap.Domain.LAND):
+			continue
+		walkable += 1
+		# WHICH PIECE PUT ROCK THERE, AND HOW FAR DOWN. Naming the source is what turned the
+		# last round from a guess into a fix: the def id says which family is short, and `d`
+		# says whether the depth is wrong or the shear is.
+		var src: String = rock[t]
+		by_source[src] = int(by_source.get(src, 0)) + 1
+		if walkable <= 12:
+			print("  ! %v is under %s and a unit can stand there" % [t, src])
 	if walkable > 0:
 		print("  ! %d of %d tiles under a cliff face are walkable" % [walkable, under])
+		var keys := by_source.keys()
+		keys.sort()
+		for k in keys:
+			print("    %-40s %d" % [k, by_source[k]])
 		return false
 	print("  all %d tiles a cliff face is DRAWN over are blocked too" % under)
-	return ok
+	return true
+
+
+## Which tiles each cliff piece's ART covers, asked of the ATLAS and the PROJECTION.
+##
+## ## ⛔ WHY THIS EXISTS: THREE HAND-DERIVATIONS, THREE WRONG
+##
+## The rock's reach was worked out on paper three times and shipped wrong three times -- "3 tiles
+## down the screen", then "3 tiles down and the diagonals too", and both were a 1-tile-wide band
+## when the art is two and three tiles wide. The mistakes were never in the arithmetic; they were
+## in the premises, and the worst of them is silent: **a sprite is anchored at its footprint's
+## CENTRE**, not at its origin tile, so every offset computed from the origin was already shifted
+## before the projection was applied.
+##
+## So nothing here is derived. `Iso.sub_to_world` places the anchor exactly as `EntityView` does,
+## `Iso.tile_centre_to_world` puts each tile's ground point exactly where the sim stands a unit,
+## and a tile is covered when the second lands inside the first's frame rect. The output is a
+## table meant to be READ INTO `CliffPlan.COVER` by a person, with the numbers written down -- a
+## sim rule must not depend on an atlas at runtime, but it can be checked against one.
+func _report_coverage() -> void:
+	for ladder in [CliffPlan.FACE, CliffPlan.FACE_DIAG]:
+		for rung in ladder:
+			var def_id: StringName = ladder[rung]
+			var bd: BuildingDef = GameDataRegistry.building(def_id)
+			if bd == null:
+				continue
+			for axis in bd.facings:
+				var offsets := _cover_of(def_id, bd, int(axis))
+				if offsets.is_empty():
+					continue
+				var parts: Array[String] = []
+				for o in offsets:
+					parts.append("(%d,%d)" % [o.x, o.y])
+				print("  %-32s axis %d  %d tiles: %s"
+						% [String(def_id).trim_prefix("building."), int(axis), offsets.size(),
+						String(", ").join(parts)])
+
+
+## The tile offsets, from the piece's ORIGIN tile, that its art is drawn over.
+func _cover_of(def_id: StringName, bd: BuildingDef, axis: int) -> Array[Vector2i]:
+	var vis := GameDataRegistry.atlas_for(bd.visual)
+	if vis == null or vis.is_placeholder:
+		return [] as Array[Vector2i]
+
+	# The same transposition `MapData.footprint_rect_of` applies, which is what the world builds.
+	var footprint := bd.footprint
+	if WallPlan.is_diagonal(axis):
+		var side := WallPlan.diagonal_step(footprint.x)
+		footprint = Vector2i(side, side)
+	elif axis == WallPlan.AXIS_Y:
+		footprint = Vector2i(footprint.y, footprint.x)
+	var origin := Vector2i(32, 32)
+	# The anchor lands where `EntityView` puts it: the projection of the footprint CENTRE.
+	var at := Iso.sub_to_world(SimBuilding.centre_of(origin, footprint))
+	# ⚠️ **`facings` HOLDS SIM FACINGS AND `frame_at` WANTS SPRITE ORDER**, and the two run
+	# opposite ways. `GameView` converts before it ever reaches `EntityView.play_anim`; passing
+	# the raw number here measured `cliff_face` as a 4-tile thread, because sim 2 resolves to
+	# stored 2 -- the knife-edge sliver of a wall seen end-on -- instead of stored 5.
+	var f := vis.frame_at(&"idle", Iso.sim_facing_to_sprite(int(bd.facings[axis])), 0)
+	if f.is_empty():
+		return [] as Array[Vector2i]
+	var rect: Rect2i = f["rect"]
+	var anchor: Vector2 = f["anchor"]
+	var box := Rect2(at - anchor, Vector2(rect.size))
+
+	var out: Array[Vector2i] = []
+	for dy in range(-6, 10):
+		for dx in range(-6, 10):
+			var t := origin + Vector2i(dx, dy)
+			if box.has_point(Iso.tile_centre_to_world(t)):
+				out.append(Vector2i(dx, dy))
+	return out
 
 
 ## Every tile a face's rock is painted over, from the run geometry rather than the footprint.
@@ -148,10 +254,14 @@ func _rock_tiles(data: MapData) -> Dictionary:
 		for rung in ladder:
 			if ladder[rung] == e["def_id"]:
 				length = int(rung)
-		var step := CliffPlan.step_of(int(e.get("axis", 0)))
-		for i in range(length):
-			for d in range(CliffPlan.DEPTH):
-				out[(e["tile"] as Vector2i) + step * i + Vector2i.ONE * d] = true
+		var axis := int(e.get("axis", 0))
+		# ⚠️ **FROM `CliffPlan.rock_tiles`, DELIBERATELY THE SAME TABLE THE FIX USES.** An
+		# independent copy here is what made the last two rounds agree with themselves and ship;
+		# the table is checked against the ART by `test_the_cover_tables_are_what_the_atlas_says`
+		# and by this file's own `coverage` mode, which is where that job belongs.
+		for t in CliffPlan.rock_tiles(e["tile"] as Vector2i, axis, ladder, length):
+			if not out.has(t):
+				out[t] = "%s axis %d" % [String(e["def_id"]).trim_prefix("building."), axis]
 	return out
 
 
