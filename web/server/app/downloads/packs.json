@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "generated": "2026-09-24T09:47:05Z",
+  "generated": "2026-09-24T09:51:10Z",
   "packs": [
     {
       "id": "howtoplay",
@@ -36,15 +36,15 @@
       "id": "platosample",
       "kind": "map",
       "folder": "platosample",
-      "version": 1,
+      "version": 2,
       "required": false,
       "title": "PlatoSample",
       "author": "Age of Dragons",
-      "description": "",
-      "size": 4898,
-      "sha256": "fbb5733a5c33e51b5b849be09f4d02b821cb37cc58e99d701f2fdaa2d0baa0e1",
+      "description": "A feature demo: see what cliffs and plateaus look like, in the map editor and in a match. Fully playable as a two-player map, but it is here to show the terrain off.",
+      "size": 5059,
+      "sha256": "9989d511435e7a2dc2f71a434f7af4e6dfbb0b39cb2447ada80e9e779f90e8ca",
       "urls": [
-        "https://aod.dragoon.co.za/downloads/map_platosample_v1.zip"
+        "https://aod.dragoon.co.za/downloads/map_platosample_v2.zip"
       ]
     },
     {

@@ -138,11 +138,16 @@
         "user://content/maps/platosample/, which SavedMaps lists as a CONTENT row; in an",
         "editor run the repo copy in maps/platosample shadows it by folder name."
       ],
+      "_note_v2": [
+        "V2, 2026-09-24, same day: v1 shipped with an empty store description. Added to",
+        "map.json -- the owner's words: fully playable, but the true intent is a feature",
+        "demo of cliffs and plateaus -- and bumped because the zip's bytes moved."
+      ],
       "id": "platosample",
       "kind": "map",
       "folder": "platosample",
       "source": "maps/platosample",
-      "version": 1,
+      "version": 2,
       "required": false,
       "author": "Age of Dragons"
     },

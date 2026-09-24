@@ -7031,6 +7031,7 @@
   "format_version": 1,
   "created": "2026-09-24T09:41:10",
   "name": "PlatoSample",
+  "description": "A feature demo: see what cliffs and plateaus look like, in the map editor and in a match. Fully playable as a two-player map, but it is here to show the terrain off.",
   "players": 2,
   "authored_by": "MapMaker",
   "objectives": []
