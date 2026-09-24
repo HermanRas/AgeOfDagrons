@@ -20,6 +20,39 @@
     });
   }
 
+  // THE AI NOTICE. Opens on arriving at the index page and closes itself after 30 s, or on
+  // Continue, Escape or a click outside it. Once per tab: a dismissed notice does not come
+  // back when the visitor returns from the credits page. sessionStorage is a convenience
+  // only -- if it throws (private mode, blocked storage) the notice simply shows again.
+  var notice = document.getElementById("ai-notice");
+  if (notice) {
+    var seen = false;
+    try { seen = sessionStorage.getItem("aod-ai-notice") === "1"; } catch (e) {}
+    if (!seen) {
+      var left = 30;
+      var count = document.getElementById("ai-notice-count");
+      var ok = document.getElementById("ai-notice-ok");
+      var timer = null;
+      var close = function () {
+        if (notice.hidden) return;
+        notice.hidden = true;
+        clearInterval(timer);
+        document.removeEventListener("keydown", onKey);
+        try { sessionStorage.setItem("aod-ai-notice", "1"); } catch (e) {}
+      };
+      var onKey = function (e) { if (e.key === "Escape") close(); };
+      notice.hidden = false;
+      if (ok) { ok.addEventListener("click", close); ok.focus(); }
+      notice.addEventListener("click", function (e) { if (e.target === notice) close(); });
+      document.addEventListener("keydown", onKey);
+      timer = setInterval(function () {
+        left -= 1;
+        if (count) count.textContent = String(left);
+        if (left <= 0) close();
+      }, 1000);
+    }
+  }
+
   var list = document.getElementById("pack-list");
   if (!list) return;
 

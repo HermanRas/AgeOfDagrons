@@ -79,6 +79,21 @@ and is not the one a specimen sheet answers.
 
 ---
 
+## Code
+
+### Claude — Anthropic
+
+**Used for:** all of the code: the game, the MapMaker, the asset pipeline scripts, the
+tests and the website.
+**How:** written by **Claude** through [Claude Code](https://claude.com/claude-code),
+directed by the project owner.
+**Licence:** the code is released under [MIT](LICENSE).
+
+Recorded for the reason the Gemini entry above is: *how* something was made is part of its
+provenance. The website says so up front, in a notice on the landing page.
+
+---
+
 ## Engine & libraries
 
 ### Godot Engine

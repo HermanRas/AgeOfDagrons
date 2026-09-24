@@ -424,6 +424,25 @@
   </div>
 </footer>
 
+<!-- The AI notice. Shown on arriving, closes itself after 30 s (site.js). -->
+<div class="notice-backdrop" id="ai-notice" hidden>
+  <div class="panel-ornate notice" role="dialog" aria-modal="true" aria-labelledby="ai-notice-title">
+    <h2 id="ai-notice-title">Made With AI</h2>
+    <p>Before you go further: Age of Dragon is built with AI.</p>
+    <ul class="ticks">
+      <li>The icons, UI art, splash and how-to pages were generated with <strong>Google Gemini</strong>.</li>
+      <li>The code is <strong>100% written by Claude</strong>, Anthropic's AI, directed by the project owner.</li>
+    </ul>
+    <p class="dim">If that isn't for you, no hard feelings. Feel free to leave. The
+      <a href="/credits.html#ai">credits</a> say exactly what was made how.</p>
+    <div class="cta-row" style="justify-content: center; margin-bottom: 0">
+      <button class="btn" type="button" id="ai-notice-ok">Continue</button>
+      <a class="btn secondary" href="/credits.html#ai">Read the credits</a>
+    </div>
+    <p class="faint" style="text-align: center; margin: 10px 0 0" aria-live="off">Closes in <span id="ai-notice-count">30</span>s</p>
+  </div>
+</div>
+
 <script src="/assets/site.js"></script>
 </body>
 </html>

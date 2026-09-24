@@ -301,6 +301,24 @@ table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--gold); font-family: "Cinzel Decorative", serif; font-weight: 700; }
 
+/* AI notice */
+.notice-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(8, 5, 3, 0.82);
+}
+.notice-backdrop[hidden] { display: none; }
+.notice { max-width: 620px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; }
+.notice h2 { text-align: center; }
+/* On a phone the 44px dragon frame leaves a 230px text column; thin it for the notice. */
+@media (max-width: 560px) {
+  .notice.panel-ornate { border-width: 26px; padding: 10px 6px; }
+  .notice .btn { padding-left: 18px; padding-right: 18px; }
+}
+button.btn { font: inherit; font-size: 1.1rem; cursor: pointer; background: none; }
+.btn:focus { outline: none; }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }
+
 /* footer */
 footer {
   border-top: 1px solid var(--line); background: var(--bg-deep);
